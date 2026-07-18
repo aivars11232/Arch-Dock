@@ -2,6 +2,8 @@
 #include <QQmlApplicationEngine>
 #include <QUrl>
 
+#include "panel/PanelManager.h"
+
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
@@ -10,6 +12,7 @@ int main(int argc, char *argv[])
     QGuiApplication::setOrganizationName(QStringLiteral("Arch Dock"));
 
     QQmlApplicationEngine engine;
+    PanelManager panelManager(engine);
 
     QObject::connect(
         &engine,

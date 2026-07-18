@@ -20,6 +20,8 @@ qt_standard_project_setup(REQUIRES 6.8)
 
 qt_add_executable(arch-dock
     src/main.cpp
+    src/panel/PanelManager.h
+    src/panel/PanelManager.cpp
 )
 
 qt_add_qml_module(arch-dock
