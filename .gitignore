@@ -1,0 +1,29 @@
+# Build directories
+build/
+
+# CMake
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+
+# Qt Creator
+*.pro.user
+*.user
+*.user.*
+
+# VS Code
+.vscode/
+
+# KDE
+.directory
+
+# Generated
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.exe
+
+# Logs
+*.log
