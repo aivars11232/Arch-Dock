@@ -1,0 +1,17 @@
+{
+    "KPlugin": {
+        "Id": "org.archdock.windowwatcher",
+        "Name": "Arch Dock Window Watcher",
+        "Description": "Sends KWin window events to Arch Dock over D-Bus.",
+        "Version": "1.0.0",
+        "License": "MIT",
+        "Authors": [
+            {
+                "Name": "Aivars Rocens"
+            }
+        ]
+    },
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js",
+    "KPackageStructure": "KWin/Script"
+}
