@@ -19,8 +19,12 @@ public:
         ResourceClassRole,
         ResourceNameRole,
         CaptionRole,
+        FrameGeometryRole,
+        ScreenIndexRole,
         ActiveRole,
-        MinimizedRole
+        MinimizedRole,
+        MaximizedRole,
+        FullScreenRole
     };
     Q_ENUM(Role)
 
@@ -31,6 +35,11 @@ public:
     bool removeWindow(const QString &internalId);
     bool updateWindow(const WindowItem &window);
     void clearWindows();
+
+    [[nodiscard]] const QList<WindowItem> &windows() const
+    {
+        return m_windows;
+    }
 
     int rowCount(
         const QModelIndex &parent = QModelIndex()) const override;

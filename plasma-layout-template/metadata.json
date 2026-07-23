@@ -1,0 +1,23 @@
+{
+    "KPackageStructure": "Plasma/LayoutTemplate",
+    "KPlugin": {
+        "Id": "org.archdock.plasma.desktop.emptyPanel",
+        "Name": "Empty Arch Dock Panel",
+        "Description": "Creates a native empty Arch Dock panel with no applets.",
+        "Icon": "preferences-desktop-theme-global",
+        "Version": "1.0.0",
+        "License": "MIT",
+        "Authors": [
+            {
+                "Name": "Arch Dock"
+            }
+        ],
+        "ServiceTypes": [
+            "Plasma/LayoutTemplate"
+        ]
+    },
+    "X-Plasma-ContainmentCategories": [
+        "panel"
+    ],
+    "X-Plasma-Shell": "plasmashell"
+}

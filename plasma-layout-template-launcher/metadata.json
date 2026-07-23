@@ -1,0 +1,14 @@
+{
+    "KPackageStructure": "Plasma/LayoutTemplate",
+    "KPlugin": {
+        "Id": "org.archdock.plasma.desktop.launcherPanel",
+        "Name": "Arch Dock Launcher Panel",
+        "Description": "Creates a native Plasma panel with Arch Dock launchers.",
+        "Icon": "system-run",
+        "Version": "1.0.0",
+        "License": "MIT",
+        "ServiceTypes": ["Plasma/LayoutTemplate"]
+    },
+    "X-Plasma-ContainmentCategories": ["panel"],
+    "X-Plasma-Shell": "plasmashell"
+}

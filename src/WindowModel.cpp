@@ -66,8 +66,12 @@ bool WindowModel::updateWindow(const WindowItem &window)
              ResourceClassRole,
              ResourceNameRole,
              CaptionRole,
+             FrameGeometryRole,
+             ScreenIndexRole,
              ActiveRole,
-             MinimizedRole});
+             MinimizedRole,
+             MaximizedRole,
+             FullScreenRole});
 
         return true;
     }
@@ -120,11 +124,23 @@ QVariant WindowModel::data(const QModelIndex &index, int role) const
     case CaptionRole:
         return window.caption;
 
+    case FrameGeometryRole:
+        return window.frameGeometry;
+
+    case ScreenIndexRole:
+        return window.screenIndex;
+
     case ActiveRole:
         return window.active;
 
     case MinimizedRole:
         return window.minimized;
+
+    case MaximizedRole:
+        return window.maximized;
+
+    case FullScreenRole:
+        return window.fullScreen;
 
     default:
         return {};
@@ -140,6 +156,10 @@ QHash<int, QByteArray> WindowModel::roleNames() const
         {ResourceClassRole, "resourceClass"},
         {ResourceNameRole, "resourceName"},
         {CaptionRole, "caption"},
+        {FrameGeometryRole, "frameGeometry"},
+        {ScreenIndexRole, "screenIndex"},
         {ActiveRole, "active"},
-        {MinimizedRole, "minimized"}};
+        {MinimizedRole, "minimized"},
+        {MaximizedRole, "maximized"},
+        {FullScreenRole, "fullScreen"}};
 }

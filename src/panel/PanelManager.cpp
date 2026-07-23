@@ -7,3 +7,13 @@ PanelManager::PanelManager(QQmlApplicationEngine &engine, QObject *parent)
 {
 }
 PanelManager::~PanelManager() = default;
+
+void PanelManager::showSettings()
+{
+    m_panelWindow->showSettings();
+}
+
+void PanelManager::toggleAutoHide()
+{
+    m_panelWindow->toggleAutoHide();
+}

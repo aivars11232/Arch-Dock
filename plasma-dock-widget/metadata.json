@@ -1,0 +1,23 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Id": "org.archdock.dock",
+        "Name": "Arch Dock",
+        "Description": "A native Plasma dock backed by the Arch Dock service.",
+        "Icon": "applications-system",
+        "Version": "1.0.0",
+        "License": "MIT",
+        "ServiceTypes": [
+            "Plasma/Applet"
+        ],
+        "Authors": [
+            {
+                "Name": "Arch Dock"
+            }
+        ]
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-API": "declarativeappletscript",
+    "X-Plasma-MainScript": "ui/main.qml",
+    "X-Plasma-RootPath": "contents"
+}

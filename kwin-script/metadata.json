@@ -3,7 +3,7 @@
         "Id": "org.archdock.windowwatcher",
         "Name": "Arch Dock Window Watcher",
         "Description": "Sends KWin window events to Arch Dock over D-Bus.",
-        "Version": "1.0.0",
+        "Version": "1.1.0",
         "License": "MIT",
         "Authors": [
             {

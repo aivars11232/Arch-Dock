@@ -1,0 +1,8 @@
+[Unit]
+Description=Arch Dock panel service
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/arch-dock

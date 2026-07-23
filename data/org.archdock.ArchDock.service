@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.archdock.ArchDock
+Exec=/usr/bin/env arch-dock

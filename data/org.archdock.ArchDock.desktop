@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Arch Dock
+Comment=Glass application dock for KDE Plasma
+Exec=arch-dock
+Icon=plasma
+Terminal=false
+Categories=Utility;System;
+StartupNotify=false
+StartupWMClass=arch-dock

@@ -4,6 +4,7 @@
 
 #include <QDBusConnection>
 #include <QDBusError>
+#include <QDBusInterface>
 #include <QDebug>
 #include <QFileInfo>
 #include <QSettings>
@@ -74,14 +75,6 @@ WindowWatcher::WindowWatcher(WindowModel &windowModel,
 {
     auto sessionBus = QDBusConnection::sessionBus();
 
-    if (!sessionBus.registerService(
-            QStringLiteral("org.archdock.ArchDock")))
-    {
-        qWarning() << "Failed to register Arch Dock D-Bus service:"
-                   << sessionBus.lastError().message();
-        return;
-    }
-
     if (!sessionBus.registerObject(
             QStringLiteral("/WindowWatcher"),
             this,
@@ -90,6 +83,8 @@ WindowWatcher::WindowWatcher(WindowModel &windowModel,
         qWarning() << "Failed to register WindowWatcher D-Bus object:"
                    << sessionBus.lastError().message();
     }
+
+    loadKWinScript();
 }
 
 void WindowWatcher::windowAdded(const QString &internalId,
@@ -98,7 +93,14 @@ void WindowWatcher::windowAdded(const QString &internalId,
                                 const QString &resourceName,
                                 const QString &caption,
                                 bool active,
-                                bool minimized)
+                                bool minimized,
+                                int frameX,
+                                int frameY,
+                                int frameWidth,
+                                int frameHeight,
+                                int screenIndex,
+                                bool maximized,
+                                bool fullScreen)
 {
     qDebug() << "Window added:"
              << "id:" << internalId
@@ -119,7 +121,8 @@ void WindowWatcher::windowAdded(const QString &internalId,
         return;
     }
 
-    if (resourceClass == QStringLiteral("org.kde.plasmashell"))
+    if (resourceClass == QStringLiteral("org.kde.plasmashell") ||
+        resourceClass == QStringLiteral("plasmashell"))
     {
         qDebug() << "Ignoring Plasma shell window:" << internalId;
         return;
@@ -140,8 +143,12 @@ void WindowWatcher::windowAdded(const QString &internalId,
     window.resourceClass = resourceClass;
     window.resourceName = resourceName;
     window.caption = caption;
+    window.frameGeometry = QRect(frameX, frameY, qMax(0, frameWidth), qMax(0, frameHeight));
+    window.screenIndex = screenIndex;
     window.active = active;
     window.minimized = minimized;
+    window.maximized = maximized;
+    window.fullScreen = fullScreen;
 
     m_windowModel.addWindow(window);
 }
@@ -157,7 +164,14 @@ void WindowWatcher::windowUpdated(const QString &internalId,
                                   const QString &resourceName,
                                   const QString &caption,
                                   bool active,
-                                  bool minimized)
+                                  bool minimized,
+                                  int frameX,
+                                  int frameY,
+                                  int frameWidth,
+                                  int frameHeight,
+                                  int screenIndex,
+                                  bool maximized,
+                                  bool fullScreen)
 {
     WindowItem window;
     window.internalId = internalId;
@@ -166,8 +180,53 @@ void WindowWatcher::windowUpdated(const QString &internalId,
     window.resourceClass = resourceClass;
     window.resourceName = resourceName;
     window.caption = caption;
+    window.frameGeometry = QRect(frameX, frameY, qMax(0, frameWidth), qMax(0, frameHeight));
+    window.screenIndex = screenIndex;
     window.active = active;
     window.minimized = minimized;
+    window.maximized = maximized;
+    window.fullScreen = fullScreen;
 
     m_windowModel.updateWindow(window);
+}
+
+void WindowWatcher::loadKWinScript()
+{
+    const QString installedScriptPath = QStandardPaths::locate(
+        QStandardPaths::GenericDataLocation,
+        QStringLiteral("kwin/scripts/org.archdock.windowwatcher/contents/code/main.js"));
+    const QString scriptPath = installedScriptPath.isEmpty()
+                                   ? QString::fromUtf8(ARCHDOCK_SOURCE_KWIN_SCRIPT_PATH)
+                                   : installedScriptPath;
+    if (!QFileInfo::exists(scriptPath))
+    {
+        qWarning() << "Arch Dock KWin script is unavailable:" << scriptPath;
+        return;
+    }
+
+    QDBusInterface scripting(
+        QStringLiteral("org.kde.KWin"),
+        QStringLiteral("/Scripting"),
+        QStringLiteral("org.kde.kwin.Scripting"),
+        QDBusConnection::sessionBus());
+    if (!scripting.isValid())
+    {
+        qWarning() << "KWin scripting D-Bus interface is unavailable.";
+        return;
+    }
+
+    const QString pluginName = QStringLiteral("org.archdock.windowwatcher");
+    scripting.call(QStringLiteral("unloadScript"), pluginName);
+    const QDBusMessage loadReply = scripting.call(
+        QStringLiteral("loadScript"),
+        scriptPath,
+        pluginName);
+    if (loadReply.type() == QDBusMessage::ErrorMessage)
+    {
+        qWarning() << "Failed to load Arch Dock KWin script:"
+                   << loadReply.errorMessage();
+        return;
+    }
+
+    scripting.call(QStringLiteral("start"));
 }
