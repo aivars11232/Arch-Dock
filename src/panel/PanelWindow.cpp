@@ -141,6 +141,23 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
                 ++m_dockRevision;
                 emit dockRevisionChanged();
             });
+    connect(&m_panelRegistry, &PanelRegistry::revisionChanged, this, [this]
+            {
+                ++m_dockRevision;
+                emit dockRevisionChanged();
+            });
+    const auto notifyGlobalVisualChange = [this]
+    {
+        ++m_dockRevision;
+        emit dockRevisionChanged();
+    };
+    connect(&m_settings, &DockSettings::magnificationChanged, this, notifyGlobalVisualChange);
+    connect(&m_settings, &DockSettings::magnificationEnabledChanged, this, notifyGlobalVisualChange);
+    connect(&m_settings, &DockSettings::showReflectionsChanged, this, notifyGlobalVisualChange);
+    connect(&m_settings, &DockSettings::showIndicatorsChanged, this, notifyGlobalVisualChange);
+    connect(&m_settings, &DockSettings::showTooltipsChanged, this, notifyGlobalVisualChange);
+    connect(&m_settings, &DockSettings::animationDurationChanged, this, notifyGlobalVisualChange);
+    connect(&m_settings, &DockSettings::reducedMotionChanged, this, notifyGlobalVisualChange);
     connect(&m_panelRegistry, &PanelRegistry::panelsChanged, this, &PanelWindow::updateDesktopSuite);
     const auto updateVisibility = [this]
     {
@@ -187,6 +204,35 @@ int PanelWindow::visibilityRevision() const
 qulonglong PanelWindow::dockRevision() const
 {
     return m_dockRevision;
+}
+
+QVariantMap PanelWindow::dockConfiguration(const QString &panelId) const
+{
+    const auto panel = [this, &panelId](const char *key, const QVariant &fallback)
+    {
+        const QVariant value = m_panelRegistry.panelValue(panelId, QString::fromLatin1(key));
+        return value.isValid() ? value : fallback;
+    };
+    return {
+        {QStringLiteral("iconSize"), panel("iconSize", m_settings.iconSize())},
+        {QStringLiteral("spacing"), panel("spacing", m_settings.spacing())},
+        {QStringLiteral("opacity"), panel("opacity", m_settings.panelOpacity())},
+        {QStringLiteral("shape"), panel("shape", m_settings.panelShape())},
+        {QStringLiteral("iconShape"), panel("iconShape", m_settings.iconTileShape())},
+        {QStringLiteral("appearance"), panel("appearance", m_settings.appearancePreset())},
+        {QStringLiteral("layout"), panel("layout", QStringLiteral("adaptive"))},
+        {QStringLiteral("iconAnimation"), panel("iconAnimation", QStringLiteral("scale"))},
+        {QStringLiteral("animationTrigger"), panel("animationTrigger", QStringLiteral("hover"))},
+        {QStringLiteral("animationSpeed"), panel("animationSpeed", 1.0)},
+        {QStringLiteral("animationIntensity"), panel("animationIntensity", 1.0)},
+        {QStringLiteral("acceptDrops"), panel("acceptDrops", true)},
+        {QStringLiteral("magnification"), m_settings.magnification()},
+        {QStringLiteral("magnificationEnabled"), m_settings.magnificationEnabled()},
+        {QStringLiteral("showReflections"), m_settings.showReflections()},
+        {QStringLiteral("showIndicators"), m_settings.showIndicators()},
+        {QStringLiteral("showTooltips"), m_settings.showTooltips()},
+        {QStringLiteral("animationDuration"), m_settings.animationDuration()},
+        {QStringLiteral("reducedMotion"), m_settings.reducedMotion()}};
 }
 
 QVariantList PanelWindow::dockEntries(const QString &panelType) const

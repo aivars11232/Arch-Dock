@@ -5,6 +5,7 @@
 #include <QStringList>
 #include <QUrl>
 #include <QVariantList>
+#include <QVariantMap>
 
 #include "../DockModel.h"
 #include "../DockSettings.h"
@@ -40,6 +41,7 @@ public slots:
     void showPanelSettings(const QString &panelId);
     QString createNativePanel(const QString &edge, const QString &type);
     bool setNativePanelType(const QString &panelId, const QString &type);
+    QVariantMap dockConfiguration(const QString &panelId) const;
     QVariantList dockEntries(const QString &panelType) const;
     bool activateDockEntry(const QString &appId);
     bool activateDockWindow(const QString &appId, const QString &windowId);
