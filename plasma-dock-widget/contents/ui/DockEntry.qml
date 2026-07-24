@@ -35,13 +35,27 @@ Item {
         ? 0 : Math.max(0, 1 - indexDistance / 2.4)
     readonly property real hoverScale: 1 + (Math.max(1, magnification) - 1) * influence
     property bool clickPulse: false
+    property bool triggerPulse: false
     property bool dragging: false
     readonly property bool motionActive: !reducedMotion && (
         (motionTrigger === "hover" && hoverArea.containsMouse)
         || (motionTrigger === "running" && entry.running)
+        || ((motionTrigger === "click" || motionTrigger === "launch") && triggerPulse)
+        || (motionTrigger === "drop" && (dragging || triggerPulse))
         || motionTrigger === "idle")
-    readonly property real effectScale: motion === "pulse" && motionActive ? 1.07 * motionIntensity
-        : motion === "scale" && motionActive ? 1 + 0.08 * motionIntensity : 1
+    readonly property real amplitude: baseSize * 0.12 * motionIntensity
+    readonly property real scaleAmplitude: 0.1 * motionIntensity
+    readonly property int cycleDuration: Math.max(80, motionDuration)
+
+    function resetMotionLayer() {
+        motionLayer.x = 0;
+        motionLayer.y = 0;
+        motionLayer.scale = 1;
+        motionLayer.rotation = 0;
+    }
+
+    onMotionChanged: resetMotionLayer()
+    onMotionActiveChanged: if (!motionActive) resetMotionLayer()
 
     width: baseSize * hoverScale
     height: width
@@ -56,31 +70,126 @@ Item {
         NumberAnimation { duration: root.motionDuration; easing.type: Easing.OutCubic }
     }
 
-    IconVisual {
-        id: visual
-        anchors.fill: parent
-        entry: root.entry
-        iconSize: root.baseSize
-        tileShape: root.tileShape
-        appearance: root.appearance
-        hovered: hoverArea.containsMouse
-        pressed: hoverArea.pressed
-        showReflection: root.showReflection
-        glowAmount: root.motion === "glow" && root.motionActive ? 1 : 0
-        scale: root.effectScale * (root.clickPulse ? 0.84 : 1)
-        rotation: 0
-        y: root.motion === "bounce" && root.motionActive ? -root.baseSize * 0.12 * root.motionIntensity : 0
+    Item {
+        id: motionLayer
+        width: parent.width
+        height: parent.height
 
-        Behavior on scale { NumberAnimation { duration: root.motionDuration; easing.type: Easing.OutBack } }
-        Behavior on y { NumberAnimation { duration: root.motionDuration; easing.type: Easing.OutBack } }
-        Behavior on glowAmount { NumberAnimation { duration: root.motionDuration } }
-        RotationAnimation on rotation {
+        IconVisual {
+            id: visual
+            anchors.fill: parent
+            entry: root.entry
+            iconSize: root.baseSize
+            tileShape: root.tileShape
+            appearance: root.appearance
+            hovered: hoverArea.containsMouse
+            pressed: hoverArea.pressed || root.clickPulse
+            showReflection: root.showReflection
+            glowAmount: root.motion === "glow" && root.motionActive ? 1 : 0
+            glowAnimating: root.motion === "glow" && root.motionActive
+            glowDuration: root.cycleDuration
+        }
+
+        SequentialAnimation {
+            running: root.motionActive && root.motion === "bounce"
+            loops: Animation.Infinite
+            YAnimator { target: motionLayer; from: 0; to: -root.amplitude; duration: root.cycleDuration / 2; easing.type: Easing.OutCubic }
+            YAnimator { target: motionLayer; from: -root.amplitude; to: 0; duration: root.cycleDuration / 2; easing.type: Easing.InCubic }
+        }
+        SequentialAnimation {
+            running: root.motionActive && root.motion === "elastic"
+            loops: Animation.Infinite
+            YAnimator { target: motionLayer; from: 0; to: -root.amplitude * 1.25; duration: root.cycleDuration * 0.35; easing.type: Easing.OutCubic }
+            YAnimator { target: motionLayer; from: -root.amplitude * 1.25; to: root.amplitude * 0.28; duration: root.cycleDuration * 0.3 }
+            YAnimator { target: motionLayer; from: root.amplitude * 0.28; to: 0; duration: root.cycleDuration * 0.35; easing.type: Easing.OutBack }
+        }
+        SequentialAnimation {
+            running: root.motionActive && ["float", "wave"].includes(root.motion)
+            loops: Animation.Infinite
+            YAnimator { target: motionLayer; from: 0; to: -root.amplitude * 0.65; duration: root.cycleDuration; easing.type: Easing.InOutSine }
+            YAnimator { target: motionLayer; from: -root.amplitude * 0.65; to: 0; duration: root.cycleDuration; easing.type: Easing.InOutSine }
+        }
+        SequentialAnimation {
+            running: root.motionActive && root.motion === "spring"
+            loops: Animation.Infinite
+            YAnimator { target: motionLayer; from: 0; to: -root.amplitude; duration: root.cycleDuration * 0.3; easing.type: Easing.OutCubic }
+            YAnimator { target: motionLayer; from: -root.amplitude; to: root.amplitude * 0.2; duration: root.cycleDuration * 0.35; easing.type: Easing.OutBack }
+            YAnimator { target: motionLayer; from: root.amplitude * 0.2; to: 0; duration: root.cycleDuration * 0.35 }
+        }
+        SequentialAnimation {
+            running: root.motionActive && ["pulse", "scale", "breathe", "ripple", "magnetic"].includes(root.motion)
+            loops: Animation.Infinite
+            ScaleAnimator {
+                target: motionLayer
+                from: 1
+                to: 1 + root.scaleAmplitude * (root.motion === "magnetic" ? 1.6 : root.motion === "ripple" ? 1.3 : 1)
+                duration: root.motion === "breathe" ? root.cycleDuration * 2 : root.cycleDuration
+                easing.type: Easing.InOutSine
+            }
+            ScaleAnimator {
+                target: motionLayer
+                from: 1 + root.scaleAmplitude * (root.motion === "magnetic" ? 1.6 : root.motion === "ripple" ? 1.3 : 1)
+                to: 1
+                duration: root.motion === "breathe" ? root.cycleDuration * 2 : root.cycleDuration
+                easing.type: Easing.InOutSine
+            }
+        }
+        RotationAnimator {
+            target: motionLayer
             running: root.motionActive && (root.motion === "spin" || root.motion === "idle-rotate")
             from: 0
             to: 360
-            duration: root.motion === "idle-rotate" ? root.motionDuration * 8 : root.motionDuration * 2
-            loops: root.motionTrigger === "idle" ? Animation.Infinite : 1
+            duration: root.motion === "idle-rotate" ? root.cycleDuration * 8 : root.cycleDuration * 2
+            loops: Animation.Infinite
         }
+        SequentialAnimation {
+            running: root.motionActive && ["swing", "wobble", "wiggle", "shake"].includes(root.motion)
+            loops: Animation.Infinite
+            RotationAnimator {
+                target: motionLayer
+                from: root.motion === "shake" ? -5 * root.motionIntensity : -12 * root.motionIntensity
+                to: root.motion === "shake" ? 5 * root.motionIntensity : 12 * root.motionIntensity
+                duration: root.motion === "wiggle" || root.motion === "shake" ? root.cycleDuration * 0.35 : root.cycleDuration
+            }
+            RotationAnimator {
+                target: motionLayer
+                from: root.motion === "shake" ? 5 * root.motionIntensity : 12 * root.motionIntensity
+                to: root.motion === "shake" ? -5 * root.motionIntensity : -12 * root.motionIntensity
+                duration: root.motion === "wiggle" || root.motion === "shake" ? root.cycleDuration * 0.35 : root.cycleDuration
+            }
+        }
+        SequentialAnimation {
+            running: root.motionActive && root.motion === "orbit"
+            loops: Animation.Infinite
+            ParallelAnimation {
+                XAnimator { target: motionLayer; from: 0; to: root.amplitude; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+                YAnimator { target: motionLayer; from: -root.amplitude; to: 0; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+            }
+            ParallelAnimation {
+                XAnimator { target: motionLayer; from: root.amplitude; to: 0; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+                YAnimator { target: motionLayer; from: 0; to: root.amplitude; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+            }
+            ParallelAnimation {
+                XAnimator { target: motionLayer; from: 0; to: -root.amplitude; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+                YAnimator { target: motionLayer; from: root.amplitude; to: 0; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+            }
+            ParallelAnimation {
+                XAnimator { target: motionLayer; from: -root.amplitude; to: 0; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+                YAnimator { target: motionLayer; from: 0; to: -root.amplitude; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+            }
+        }
+    }
+
+    Timer {
+        id: triggerTimer
+        interval: Math.max(120, root.cycleDuration * 2)
+        onTriggered: root.triggerPulse = false
+    }
+
+    function fireTrigger() {
+        triggerPulse = false;
+        triggerPulse = true;
+        triggerTimer.restart();
     }
 
     RunningIndicator {
@@ -111,6 +220,7 @@ Item {
         onClicked: mouse => {
             if (root.dragging)
                 return;
+            root.fireTrigger();
             if (mouse.button === Qt.RightButton)
                 contextMenu.open();
             else
@@ -145,6 +255,8 @@ Item {
         enabled: root.acceptDrops && root.inputEnabled
         keys: ["application/x-archdock-app", "text/uri-list"]
         onEntered: drag => {
+            if (root.motionTrigger === "drop")
+                root.fireTrigger();
             if (drag.source && drag.source.entry)
                 root.reorder(drag.source.entry.appId, root.entry.appId);
         }

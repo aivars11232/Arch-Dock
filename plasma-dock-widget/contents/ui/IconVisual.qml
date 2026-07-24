@@ -12,6 +12,8 @@ Item {
     required property bool pressed
     required property bool showReflection
     property real glowAmount: 0
+    property bool glowAnimating: false
+    property int glowDuration: 170
 
     function alphaColor(color, alpha) {
         return Qt.rgba(color.r, color.g, color.b, alpha);
@@ -63,6 +65,7 @@ Item {
     }
 
     Rectangle {
+        id: glowRing
         anchors.centerIn: parent
         width: parent.width * 0.94
         height: width
@@ -71,5 +74,12 @@ Item {
         border.width: root.glowAmount * 3
         border.color: root.alphaColor(Kirigami.Theme.highlightColor, root.glowAmount * 0.75)
         visible: root.glowAmount > 0.01
+
+        SequentialAnimation {
+            running: root.glowAnimating
+            loops: Animation.Infinite
+            OpacityAnimator { target: glowRing; from: 0.25; to: 1; duration: root.glowDuration }
+            OpacityAnimator { target: glowRing; from: 1; to: 0.25; duration: root.glowDuration }
+        }
     }
 }
