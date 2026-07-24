@@ -28,6 +28,7 @@ class PanelWindow final : public QObject
     Q_PROPERTY(int screenRevision READ screenRevision NOTIFY screenRevisionChanged)
     Q_PROPERTY(int visibilityRevision READ visibilityRevision NOTIFY visibilityRevisionChanged)
     Q_PROPERTY(qulonglong dockRevision READ dockRevision NOTIFY dockRevisionChanged)
+    Q_PROPERTY(qulonglong dockEntriesRevision READ dockEntriesRevision NOTIFY dockEntriesRevisionChanged)
 
 public:
     explicit PanelWindow(QQmlApplicationEngine &engine,
@@ -36,6 +37,7 @@ public:
     [[nodiscard]] int screenRevision() const;
     [[nodiscard]] int visibilityRevision() const;
     [[nodiscard]] qulonglong dockRevision() const;
+    [[nodiscard]] qulonglong dockEntriesRevision() const;
     bool setDockConfiguration(const QString &panelId, const QString &key, const QVariant &value);
 
 public slots:
@@ -92,6 +94,7 @@ signals:
     void screenRevisionChanged();
     void visibilityRevisionChanged();
     void dockRevisionChanged();
+    void dockEntriesRevisionChanged();
     void nativePanelRecoveryFinished();
 
 private:
@@ -119,6 +122,7 @@ private:
     bool removeLegacyControlApplets(const QString &panelId, int containmentId);
     bool attachNativeDockApplet(const QString &panelId, int containmentId);
     void notifyDockRevision();
+    void notifyDockEntriesRevision();
     int evaluatePlasmaScript(const QString &script) const;
     QWindow *createUtilityWindow(const QUrl &source);
     void presentUtilityWindow(QWindow *window);
@@ -137,6 +141,7 @@ private:
     int m_screenRevision = 0;
     int m_visibilityRevision = 0;
     qulonglong m_dockRevision = 0;
+    qulonglong m_dockEntriesRevision = 0;
     int m_nativePanelRecoveryGeneration = 0;
     bool m_nativePanelRecoveryActive = false;
 };

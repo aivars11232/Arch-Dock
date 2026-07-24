@@ -171,7 +171,7 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     connect(&m_settings, &DockSettings::sideRailVisibleChanged, this, &PanelWindow::updateDesktopSuite);
     connect(&m_dockModel, &DockModel::countChanged, this, [this]
             {
-                notifyDockRevision();
+                notifyDockEntriesRevision();
             });
     connect(&m_panelRegistry, &PanelRegistry::revisionChanged, this, [this]
             {
@@ -238,6 +238,11 @@ qulonglong PanelWindow::dockRevision() const
     return m_dockRevision;
 }
 
+qulonglong PanelWindow::dockEntriesRevision() const
+{
+    return m_dockEntriesRevision;
+}
+
 void PanelWindow::notifyDockRevision()
 {
     ++m_dockRevision;
@@ -249,6 +254,21 @@ void PanelWindow::notifyDockRevision()
         QStringLiteral("PropertiesChanged"));
     propertiesChanged << QStringLiteral("local.PanelWindow")
                       << QVariantMap{{QStringLiteral("dockRevision"), m_dockRevision}}
+                      << QStringList{};
+    QDBusConnection::sessionBus().send(propertiesChanged);
+}
+
+void PanelWindow::notifyDockEntriesRevision()
+{
+    ++m_dockEntriesRevision;
+    emit dockEntriesRevisionChanged();
+
+    QDBusMessage propertiesChanged = QDBusMessage::createSignal(
+        QStringLiteral("/Control"),
+        QStringLiteral("org.freedesktop.DBus.Properties"),
+        QStringLiteral("PropertiesChanged"));
+    propertiesChanged << QStringLiteral("local.PanelWindow")
+                      << QVariantMap{{QStringLiteral("dockEntriesRevision"), m_dockEntriesRevision}}
                       << QStringList{};
     QDBusConnection::sessionBus().send(propertiesChanged);
 }

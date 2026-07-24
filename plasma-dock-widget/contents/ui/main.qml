@@ -99,15 +99,13 @@ PlasmoidItem {
         return reply;
     }
 
-    function refresh() {
+    function refreshConfiguration() {
         if (panelId.length === 0) {
-            entries = [];
             requestFailed = false;
             bootstrapFreeDock();
             return;
         }
         if (!dockService.registered) {
-            entries = [];
             requestFailed = false;
             return;
         }
@@ -116,6 +114,14 @@ PlasmoidItem {
             if (value && typeof value === "object")
                 configuration = value;
         });
+    }
+
+    function refreshEntries() {
+        if (panelId.length === 0 || !dockService.registered) {
+            entries = [];
+            requestFailed = false;
+            return;
+        }
         callDock("dockEntriesForPanel", [panelId, panelType], function(reply) {
             const value = normalizeReply(reply);
             entries = Array.isArray(value) ? value : [];
@@ -124,6 +130,11 @@ PlasmoidItem {
             entries = [];
             requestFailed = true;
         });
+    }
+
+    function refresh() {
+        refreshConfiguration();
+        refreshEntries();
     }
 
     function bootstrapFreeDock() {
@@ -451,6 +462,8 @@ PlasmoidItem {
         onPropertiesChanged: function(interfaceName, changedProperties) {
             if (changedProperties.dockRevision !== undefined)
                 root.refresh();
+            else if (changedProperties.dockEntriesRevision !== undefined && !root.freeSurface)
+                root.refreshEntries();
         }
         onRefreshed: root.refresh()
     }

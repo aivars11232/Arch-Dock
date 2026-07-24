@@ -14,24 +14,6 @@ KCM.SimpleKCM {
     property bool cfg_bootstrapFreeDock: false
     property bool cfg_bootstrapFreeDockDefault: false
 
-    function typeIndex(panelType) {
-        return ["launcher", "tasks", "hybrid"].indexOf(panelType)
-    }
-
-    function synchronizeManagedPanelType(panelType) {
-        const panelId = plasmoid.configuration.panelId || "";
-        if (panelId.length === 0)
-            return;
-        const message = new PlasmaDBus.dbusMessage({
-            service: "org.archdock.ArchDock",
-            path: "/Control",
-            member: "setNativePanelType"
-        });
-        message.iface = "local.PanelWindow";
-        message.arguments = [panelId, panelType];
-        PlasmaDBus.SessionBus.asyncCall(message);
-    }
-
     function openPanelStudio() {
         const panelId = plasmoid.configuration.panelId || "";
         const message = new PlasmaDBus.dbusMessage({
@@ -54,25 +36,8 @@ KCM.SimpleKCM {
 
         QQC2.Label {
             Kirigami.FormData.isSection: true
-            text: qsTr("Native panel integration")
-        }
-
-        QQC2.ComboBox {
-            id: panelType
-
-            Kirigami.FormData.label: qsTr("Panel type")
-            model: [
-                { label: qsTr("Launcher"), value: "launcher" },
-                { label: qsTr("Tasks"), value: "tasks" },
-                { label: qsTr("Hybrid"), value: "hybrid" }
-            ]
-            textRole: "label"
-            valueRole: "value"
-            currentIndex: Math.max(0, root.typeIndex(root.cfg_panelType))
-            onActivated: {
-                root.cfg_panelType = currentValue;
-                root.synchronizeManagedPanelType(currentValue);
-            }
+            text: qsTr("Layout, themes, animations, behavior, and panel content are managed in Panel Studio. KDE Edit Mode continues to manage the widget's desktop position and size.")
+            wrapMode: Text.WordWrap
         }
     }
 }

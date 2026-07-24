@@ -55,6 +55,22 @@ bool WindowModel::updateWindow(const WindowItem &window)
             continue;
         }
 
+        const WindowItem &current = m_windows.at(row);
+        if (current.desktopFileName == window.desktopFileName &&
+            current.iconName == window.iconName &&
+            current.resourceClass == window.resourceClass &&
+            current.resourceName == window.resourceName &&
+            current.caption == window.caption &&
+            current.frameGeometry == window.frameGeometry &&
+            current.screenIndex == window.screenIndex &&
+            current.active == window.active &&
+            current.minimized == window.minimized &&
+            current.maximized == window.maximized &&
+            current.fullScreen == window.fullScreen)
+        {
+            return true;
+        }
+
         m_windows[row] = window;
 
         const QModelIndex modelIndex = index(row);
