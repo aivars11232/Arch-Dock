@@ -38,8 +38,12 @@ PlasmoidItem {
         iconSize: 52,
         spacing: 8,
         opacity: 0.9,
+        color: "",
         iconShape: "rounded",
         appearance: "glass",
+        themeAsset: "",
+        themeFit: "cover",
+        themeStatus: "",
         iconAnimation: "scale",
         animationTrigger: "hover",
         animationSpeed: 1,
@@ -241,98 +245,128 @@ PlasmoidItem {
                 width: parent ? parent.width : 0
                 height: parent ? parent.height : 0
 
-                Canvas {
-                    id: freeSurfaceCanvas
+                Item {
+                    id: freeGeometryLayer
 
-                    anchors.fill: parent
-                    opacity: root.panelOpacity
-                    onPaint: {
-                        const context = getContext("2d");
-                        context.reset();
-                        const layout = representation.freeLayout;
-                        const appearance = root.configuration.appearance || "glass";
-                        context.lineWidth = Math.max(18, root.iconSize * 0.48);
-                        context.strokeStyle = appearance === "neon" ? "#50e6ff"
-                            : appearance === "futuristic" ? "#b030d8"
-                            : appearance === "metallic" ? "#aeb9c4"
-                            : appearance === "organic" ? "#57c98b"
-                            : appearance === "platform" ? "#6e7884"
-                            : appearance === "crystal" ? "#9eeeff"
-                            : appearance === "lime" ? "#7dff58"
-                            : appearance === "minimal" ? "#4c5966"
-                            : "#334862";
-                        context.shadowColor = appearance === "neon"
-                            || appearance === "futuristic" ? "#35cfff"
-                            : appearance === "lime" ? "#7dff58"
-                            : "#000000";
-                        context.shadowBlur = appearance === "minimal" ? 0
-                            : appearance === "futuristic" ? 28 : 18;
-                        context.lineCap = "round";
-                        context.lineJoin = "round";
-                        const surface = DockGeometry.surface(
-                            layout,
-                            representation.freeGeometry,
-                            Number(root.configuration.layoutAngle || 0),
-                            Number(root.configuration.pathSides || 6));
-                        context.beginPath();
-                        if (surface.points.length > 0) {
-                            context.moveTo(surface.points[0].x, surface.points[0].y);
-                            for (let index = 1; index < surface.points.length; ++index)
-                                context.lineTo(surface.points[index].x, surface.points[index].y);
-                            if (surface.closed)
-                                context.closePath();
-                        }
-                        context.stroke();
+                    anchors.centerIn: parent
+                    width: representation.freeGeometry.width
+                    height: representation.freeGeometry.height
+
+                    Image {
+                        id: themeArtwork
+
+                        visible: false
+                        asynchronous: true
+                        cache: false
+                        source: root.configuration.themeAsset || ""
+                        sourceSize.width: Math.ceil(freeGeometryLayer.width)
+                        sourceSize.height: Math.ceil(freeGeometryLayer.height)
+                        onStatusChanged: freeSurfaceCanvas.requestPaint()
                     }
 
-                    Connections {
-                        target: root
-                        function onConfigurationChanged() {
-                            freeSurfaceCanvas.requestPaint();
+                    Canvas {
+                        id: freeSurfaceCanvas
+
+                        anchors.fill: parent
+                        opacity: root.panelOpacity
+                        renderStrategy: Canvas.Cooperative
+                        onPaint: {
+                            const context = getContext("2d");
+                            context.reset();
+                            const appearance = root.configuration.appearance || "glass";
+                            const style = DockGeometry.themeStyle(
+                                appearance,
+                                String(root.configuration.color || ""),
+                                representation.freeGeometry.iconSize);
+                            const hasArtwork = themeArtwork.status === Image.Ready;
+                            if (!hasArtwork && !style.trackVisible)
+                                return;
+
+                            context.lineWidth = style.lineWidth;
+                            context.strokeStyle = style.stroke;
+                            if (hasArtwork) {
+                                try {
+                                    context.strokeStyle = context.createPattern(
+                                        themeArtwork, "no-repeat");
+                                } catch (error) {
+                                    context.strokeStyle = style.stroke;
+                                }
+                            }
+                            context.shadowColor = style.shadow;
+                            context.shadowBlur = style.blur;
+                            context.lineCap = "round";
+                            context.lineJoin = "round";
+                            const surface = DockGeometry.surface(
+                                representation.freeLayout,
+                                representation.freeGeometry,
+                                Number(root.configuration.layoutAngle || 0),
+                                Number(root.configuration.pathSides || 6));
+                            context.beginPath();
+                            if (surface.points.length > 0) {
+                                context.moveTo(surface.points[0].x, surface.points[0].y);
+                                for (let index = 1; index < surface.points.length; ++index)
+                                    context.lineTo(surface.points[index].x, surface.points[index].y);
+                                if (surface.closed)
+                                    context.closePath();
+                            }
+                            context.stroke();
+                        }
+
+                        Connections {
+                            target: root
+                            function onConfigurationChanged() {
+                                freeSurfaceCanvas.requestPaint();
+                            }
                         }
                     }
-                }
 
-                Repeater {
-                    model: root.entries
+                    Repeater {
+                        model: root.entries
 
-                    delegate: DockEntry {
-                        required property var modelData
-                        required property int index
-                        readonly property var point: DockGeometry.position(
-                            representation.freeLayout, index, root.entries.length,
-                            representation.freeGeometry,
-                            Number(root.configuration.layoutAngle || 0),
-                            Number(root.configuration.pathSides || 6),
-                            root.configuration.pathOrientation || "upright")
+                        delegate: Item {
+                            required property var modelData
+                            required property int index
+                            readonly property var point: DockGeometry.position(
+                                representation.freeLayout, index, root.entries.length,
+                                representation.freeGeometry,
+                                Number(root.configuration.layoutAngle || 0),
+                                Number(root.configuration.pathSides || 6),
+                                root.configuration.pathOrientation || "upright")
 
-                        x: (parent.width - representation.freeGeometry.width) / 2 + point.x
-                        y: (parent.height - representation.freeGeometry.height) / 2 + point.y
-                        rotation: point.rotation
-                        entry: modelData
-                        entryIndex: index
-                        vertical: false
-                        baseSize: root.iconSize
-                        magnification: root.magnification
-                        magnificationEnabled: root.configuration.magnificationEnabled
-                        hoveredIndex: root.hoveredIndex
-                        tileShape: root.configuration.iconShape
-                        appearance: root.configuration.appearance
-                        showReflection: root.configuration.showReflections
-                        showIndicator: root.configuration.showIndicators
-                        showTooltip: root.configuration.showTooltips
-                        motion: root.configuration.iconAnimation
-                        motionTrigger: root.configuration.animationTrigger
-                        motionIntensity: root.configuration.animationIntensity
-                        motionDuration: root.motionDuration
-                        reducedMotion: root.configuration.reducedMotion
-                        inputEnabled: dockService.registered && !root.plasmaEditMode
-                        acceptDrops: root.configuration.acceptDrops
-                        invoke: root.invokeEntry
-                        reorder: root.reorderEntry
-                        pinUrls: root.pinDroppedUrls
-                        setHoveredIndex: function(value) { root.hoveredIndex = value }
-                        openPanelStudio: root.openPanelStudio
+                            x: point.x
+                            y: point.y
+                            width: representation.freeGeometry.iconSize
+                            height: width
+                            rotation: point.rotation
+
+                            DockEntry {
+                                anchors.centerIn: parent
+                                entry: parent.modelData
+                                entryIndex: parent.index
+                                vertical: false
+                                baseSize: representation.freeGeometry.iconSize
+                                magnification: root.magnification
+                                magnificationEnabled: root.configuration.magnificationEnabled
+                                hoveredIndex: root.hoveredIndex
+                                tileShape: root.configuration.iconShape
+                                appearance: root.configuration.appearance
+                                showReflection: root.configuration.showReflections
+                                showIndicator: root.configuration.showIndicators
+                                showTooltip: root.configuration.showTooltips
+                                motion: root.configuration.iconAnimation
+                                motionTrigger: root.configuration.animationTrigger
+                                motionIntensity: root.configuration.animationIntensity
+                                motionDuration: root.motionDuration
+                                reducedMotion: root.configuration.reducedMotion
+                                inputEnabled: dockService.registered && !root.plasmaEditMode
+                                acceptDrops: root.configuration.acceptDrops
+                                invoke: root.invokeEntry
+                                reorder: root.reorderEntry
+                                pinUrls: root.pinDroppedUrls
+                                setHoveredIndex: function(value) { root.hoveredIndex = value }
+                                openPanelStudio: root.openPanelStudio
+                            }
+                        }
                     }
                 }
             }

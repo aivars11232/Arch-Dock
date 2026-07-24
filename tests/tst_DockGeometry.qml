@@ -68,4 +68,21 @@ TestCase {
             "hexagon", 1, 6, geometry, 0, 6, "upright");
         verify(first.x !== second.x || first.y !== second.y);
     }
+
+    function test_plasmaWidgetThemesRemainDistinct() {
+        const glass = PlasmaDockGeometry.themeStyle("glass", "", 52);
+        const floating = PlasmaDockGeometry.themeStyle("floating-glass", "", 52);
+        const plate = PlasmaDockGeometry.themeStyle("plate", "", 52);
+        const pedestal = PlasmaDockGeometry.themeStyle("pedestal", "", 52);
+
+        verify(glass.trackVisible);
+        verify(floating.trackVisible);
+        verify(!plate.trackVisible);
+        verify(!pedestal.trackVisible);
+        verify(glass.stroke !== floating.stroke);
+        verify(glass.lineWidth !== plate.lineWidth);
+
+        const custom = PlasmaDockGeometry.themeStyle("glass", "#123456", 52);
+        compare(custom.stroke, "#123456");
+    }
 }

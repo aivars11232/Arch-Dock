@@ -33,7 +33,8 @@ Item {
         anchors.fill: parent
         anchors.margins: Math.max(1, root.iconSize * 0.04)
         radius: root.tileRadius()
-        visible: root.appearance === "plates" || root.appearance === "platform"
+        visible: root.appearance === "plate" || root.appearance === "platform"
+                 || root.appearance === "floating-glass"
                  || root.hovered || root.entry.active
         color: root.entry.active
             ? root.alphaColor(Kirigami.Theme.highlightColor, 0.28)
@@ -41,6 +42,35 @@ Item {
         border.width: 1
         border.color: root.alphaColor(Kirigami.Theme.textColor, root.hovered ? 0.28 : 0.12)
         scale: root.pressed ? 0.92 : 1
+    }
+
+    Item {
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        width: parent.width * 0.92
+        height: parent.height * 0.32
+        visible: root.appearance === "pedestal"
+
+        Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            width: parent.width
+            height: parent.height * 0.52
+            radius: height / 2
+            color: root.alphaColor(Kirigami.Theme.backgroundColor, 0.72)
+            border.width: 1
+            border.color: root.alphaColor(Kirigami.Theme.textColor, 0.28)
+        }
+
+        Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: parent.height * 0.34
+            width: parent.width * 0.38
+            height: parent.height * 0.56
+            radius: width * 0.22
+            color: root.alphaColor(Kirigami.Theme.backgroundColor, 0.62)
+        }
     }
 
     Kirigami.Icon {

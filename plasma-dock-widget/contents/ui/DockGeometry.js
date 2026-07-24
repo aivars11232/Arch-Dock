@@ -323,3 +323,70 @@ function surface(layout, geometry, angle, polygonSides) {
     }
     return { points: points, closed: closed };
 }
+
+function themeStyle(appearance, customColor, iconSize) {
+    const preset = appearance || "glass";
+    const styles = {
+        "glass": {
+            stroke: "rgba(64, 91, 118, 0.78)",
+            shadow: "rgba(0, 0, 0, 0.78)", width: 0.48, blur: 16
+        },
+        "crystal": {
+            stroke: "rgba(158, 238, 255, 0.90)",
+            shadow: "rgba(158, 238, 255, 0.72)", width: 0.38, blur: 17
+        },
+        "neon": {
+            stroke: "#50e6ff",
+            shadow: "#35cfff", width: 0.25, blur: 25
+        },
+        "minimal": {
+            stroke: "rgba(76, 89, 102, 0.88)",
+            shadow: "transparent", width: 0.18, blur: 0
+        },
+        "plasma": {
+            stroke: "#895cff",
+            shadow: "#d94cff", width: 0.40, blur: 23
+        },
+        "lime": {
+            stroke: "#7dff58",
+            shadow: "#7dff58", width: 0.30, blur: 22
+        },
+        "floating-glass": {
+            stroke: "rgba(109, 181, 225, 0.58)",
+            shadow: "rgba(67, 152, 218, 0.62)", width: 0.50, blur: 20
+        },
+        "metallic": {
+            stroke: "#aeb9c4",
+            shadow: "rgba(0, 0, 0, 0.72)", width: 0.52, blur: 8
+        },
+        "futuristic": {
+            stroke: "#b030d8",
+            shadow: "#35cfff", width: 0.38, blur: 28
+        },
+        "organic": {
+            stroke: "#57c98b",
+            shadow: "rgba(44, 133, 83, 0.74)", width: 0.46, blur: 13
+        },
+        "platform": {
+            stroke: "#6e7884",
+            shadow: "rgba(0, 0, 0, 0.72)", width: 0.32, blur: 9
+        },
+        "plate": {
+            stroke: "rgba(76, 89, 102, 0.36)",
+            shadow: "rgba(0, 0, 0, 0.45)", width: 0.14, blur: 4
+        },
+        "pedestal": {
+            stroke: "rgba(83, 105, 122, 0.32)",
+            shadow: "rgba(0, 0, 0, 0.48)", width: 0.12, blur: 5
+        }
+    };
+    const result = styles[preset] || styles.glass;
+    return {
+        stroke: customColor && customColor.length > 0
+            ? customColor : result.stroke,
+        shadow: result.shadow,
+        lineWidth: Math.max(3, iconSize * result.width),
+        blur: result.blur,
+        trackVisible: preset !== "plate" && preset !== "pedestal"
+    };
+}
