@@ -28,13 +28,7 @@ function sendWindowAdded(window) {
         window.caption,
         window.active,
         window.minimized,
-        String(state.x),
-        String(state.y),
-        String(state.width),
-        String(state.height),
-        String(state.screen),
-        state.maximized,
-        state.fullScreen
+        JSON.stringify(state)
     );
 }
 
@@ -52,13 +46,7 @@ function sendWindowUpdated(window) {
         window.caption,
         window.active,
         window.minimized,
-        String(state.x),
-        String(state.y),
-        String(state.width),
-        String(state.height),
-        String(state.screen),
-        state.maximized,
-        state.fullScreen
+        JSON.stringify(state)
     );
 }
 

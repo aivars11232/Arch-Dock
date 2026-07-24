@@ -21,13 +21,7 @@ public slots:
                      const QString &caption,
                      bool active,
                      bool minimized,
-                     const QString &frameX,
-                     const QString &frameY,
-                     const QString &frameWidth,
-                     const QString &frameHeight,
-                     const QString &screenIndex,
-                     bool maximized,
-                     bool fullScreen);
+                     const QString &stateJson);
 
     void windowRemoved(const QString &internalId);
 
@@ -38,13 +32,7 @@ public slots:
                        const QString &caption,
                        bool active,
                        bool minimized,
-                       const QString &frameX,
-                       const QString &frameY,
-                       const QString &frameWidth,
-                       const QString &frameHeight,
-                       const QString &screenIndex,
-                       bool maximized,
-                       bool fullScreen);
+                       const QString &stateJson);
 
 private:
     void loadKWinScript();

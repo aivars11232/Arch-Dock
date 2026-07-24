@@ -7,6 +7,8 @@
 #include <QDBusInterface>
 #include <QDebug>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSettings>
 #include <QStandardPaths>
 
@@ -68,11 +70,10 @@ namespace
         return {};
     }
 
-    int dbusInteger(const QString &value, int fallback = 0)
+    QJsonObject windowState(const QString &stateJson)
     {
-        bool valid = false;
-        const double number = value.toDouble(&valid);
-        return valid ? qRound(number) : fallback;
+        const QJsonDocument document = QJsonDocument::fromJson(stateJson.toUtf8());
+        return document.isObject() ? document.object() : QJsonObject{};
     }
 }
 
@@ -101,13 +102,7 @@ void WindowWatcher::windowAdded(const QString &internalId,
                                 const QString &caption,
                                 bool active,
                                 bool minimized,
-                                const QString &frameX,
-                                const QString &frameY,
-                                const QString &frameWidth,
-                                const QString &frameHeight,
-                                const QString &screenIndex,
-                                bool maximized,
-                                bool fullScreen)
+                                const QString &stateJson)
 {
     qDebug() << "Window added:"
              << "id:" << internalId
@@ -144,21 +139,22 @@ void WindowWatcher::windowAdded(const QString &internalId,
     }
 
     WindowItem window;
+    const QJsonObject state = windowState(stateJson);
     window.internalId = internalId;
     window.desktopFileName = desktopFileName;
     window.iconName = resolveIconName(desktopFileName, resourceClass);
     window.resourceClass = resourceClass;
     window.resourceName = resourceName;
     window.caption = caption;
-    window.frameGeometry = QRect(dbusInteger(frameX),
-                                 dbusInteger(frameY),
-                                 qMax(0, dbusInteger(frameWidth)),
-                                 qMax(0, dbusInteger(frameHeight)));
-    window.screenIndex = qMax(0, dbusInteger(screenIndex));
+    window.frameGeometry = QRect(qRound(state.value(QStringLiteral("x")).toDouble()),
+                                 qRound(state.value(QStringLiteral("y")).toDouble()),
+                                 qMax(0, qRound(state.value(QStringLiteral("width")).toDouble())),
+                                 qMax(0, qRound(state.value(QStringLiteral("height")).toDouble())));
+    window.screenIndex = qMax(0, state.value(QStringLiteral("screen")).toInt());
     window.active = active;
     window.minimized = minimized;
-    window.maximized = maximized;
-    window.fullScreen = fullScreen;
+    window.maximized = state.value(QStringLiteral("maximized")).toBool();
+    window.fullScreen = state.value(QStringLiteral("fullScreen")).toBool();
 
     m_windowModel.addWindow(window);
 }
@@ -175,30 +171,25 @@ void WindowWatcher::windowUpdated(const QString &internalId,
                                   const QString &caption,
                                   bool active,
                                   bool minimized,
-                                  const QString &frameX,
-                                  const QString &frameY,
-                                  const QString &frameWidth,
-                                  const QString &frameHeight,
-                                  const QString &screenIndex,
-                                  bool maximized,
-                                  bool fullScreen)
+                                  const QString &stateJson)
 {
     WindowItem window;
+    const QJsonObject state = windowState(stateJson);
     window.internalId = internalId;
     window.desktopFileName = desktopFileName;
     window.iconName = resolveIconName(desktopFileName, resourceClass);
     window.resourceClass = resourceClass;
     window.resourceName = resourceName;
     window.caption = caption;
-    window.frameGeometry = QRect(dbusInteger(frameX),
-                                 dbusInteger(frameY),
-                                 qMax(0, dbusInteger(frameWidth)),
-                                 qMax(0, dbusInteger(frameHeight)));
-    window.screenIndex = qMax(0, dbusInteger(screenIndex));
+    window.frameGeometry = QRect(qRound(state.value(QStringLiteral("x")).toDouble()),
+                                 qRound(state.value(QStringLiteral("y")).toDouble()),
+                                 qMax(0, qRound(state.value(QStringLiteral("width")).toDouble())),
+                                 qMax(0, qRound(state.value(QStringLiteral("height")).toDouble())));
+    window.screenIndex = qMax(0, state.value(QStringLiteral("screen")).toInt());
     window.active = active;
     window.minimized = minimized;
-    window.maximized = maximized;
-    window.fullScreen = fullScreen;
+    window.maximized = state.value(QStringLiteral("maximized")).toBool();
+    window.fullScreen = state.value(QStringLiteral("fullScreen")).toBool();
 
     m_windowModel.updateWindow(window);
 }
