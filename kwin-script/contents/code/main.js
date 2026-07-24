@@ -28,11 +28,11 @@ function sendWindowAdded(window) {
         window.caption,
         window.active,
         window.minimized,
-        state.x,
-        state.y,
-        state.width,
-        state.height,
-        state.screen,
+        String(state.x),
+        String(state.y),
+        String(state.width),
+        String(state.height),
+        String(state.screen),
         state.maximized,
         state.fullScreen
     );
@@ -52,11 +52,11 @@ function sendWindowUpdated(window) {
         window.caption,
         window.active,
         window.minimized,
-        state.x,
-        state.y,
-        state.width,
-        state.height,
-        state.screen,
+        String(state.x),
+        String(state.y),
+        String(state.width),
+        String(state.height),
+        String(state.screen),
         state.maximized,
         state.fullScreen
     );

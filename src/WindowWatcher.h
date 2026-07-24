@@ -21,11 +21,11 @@ public slots:
                      const QString &caption,
                      bool active,
                      bool minimized,
-                     double frameX,
-                     double frameY,
-                     double frameWidth,
-                     double frameHeight,
-                     double screenIndex,
+                     const QString &frameX,
+                     const QString &frameY,
+                     const QString &frameWidth,
+                     const QString &frameHeight,
+                     const QString &screenIndex,
                      bool maximized,
                      bool fullScreen);
 
@@ -38,11 +38,11 @@ public slots:
                        const QString &caption,
                        bool active,
                        bool minimized,
-                       double frameX,
-                       double frameY,
-                       double frameWidth,
-                       double frameHeight,
-                       double screenIndex,
+                       const QString &frameX,
+                       const QString &frameY,
+                       const QString &frameWidth,
+                       const QString &frameHeight,
+                       const QString &screenIndex,
                        bool maximized,
                        bool fullScreen);
 
