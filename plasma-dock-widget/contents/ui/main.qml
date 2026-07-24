@@ -184,6 +184,13 @@ PlasmoidItem {
                  panelId.length > 0 ? [panelId] : []);
     }
 
+    PlasmaCore.Action {
+        id: configurePanelStudioAction
+        text: qsTr("Configure Arch Dock…")
+        icon.name: "configure"
+        onTriggered: root.openPanelStudio()
+    }
+
     Component {
         id: dockRepresentation
 
@@ -481,6 +488,7 @@ PlasmoidItem {
     }
 
     Component.onCompleted: {
+        Plasmoid.setInternalAction("configure", configurePanelStudioAction);
         root.bootstrapFreeDock();
         root.refresh();
     }
