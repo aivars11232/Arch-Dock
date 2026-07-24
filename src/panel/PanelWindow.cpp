@@ -10,6 +10,7 @@
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
 #include <QDBusInterface>
+#include <QDBusMessage>
 #include <QDBusReply>
 #include <QDebug>
 #include <QDir>
@@ -170,18 +171,15 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     connect(&m_settings, &DockSettings::sideRailVisibleChanged, this, &PanelWindow::updateDesktopSuite);
     connect(&m_dockModel, &DockModel::countChanged, this, [this]
             {
-                ++m_dockRevision;
-                emit dockRevisionChanged();
+                notifyDockRevision();
             });
     connect(&m_panelRegistry, &PanelRegistry::revisionChanged, this, [this]
             {
-                ++m_dockRevision;
-                emit dockRevisionChanged();
+                notifyDockRevision();
             });
     const auto notifyGlobalVisualChange = [this]
     {
-        ++m_dockRevision;
-        emit dockRevisionChanged();
+        notifyDockRevision();
     };
     connect(&m_settings, &DockSettings::magnificationChanged, this, notifyGlobalVisualChange);
     connect(&m_settings, &DockSettings::magnificationEnabledChanged, this, notifyGlobalVisualChange);
@@ -238,6 +236,21 @@ int PanelWindow::visibilityRevision() const
 qulonglong PanelWindow::dockRevision() const
 {
     return m_dockRevision;
+}
+
+void PanelWindow::notifyDockRevision()
+{
+    ++m_dockRevision;
+    emit dockRevisionChanged();
+
+    QDBusMessage propertiesChanged = QDBusMessage::createSignal(
+        QStringLiteral("/Control"),
+        QStringLiteral("org.freedesktop.DBus.Properties"),
+        QStringLiteral("PropertiesChanged"));
+    propertiesChanged << QStringLiteral("local.PanelWindow")
+                      << QVariantMap{{QStringLiteral("dockRevision"), m_dockRevision}}
+                      << QStringList{};
+    QDBusConnection::sessionBus().send(propertiesChanged);
 }
 
 QVariantMap PanelWindow::dockConfiguration(const QString &panelId) const

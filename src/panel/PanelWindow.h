@@ -118,6 +118,7 @@ private:
     bool synchronizeNativePanelScreen(const QString &panelId) const;
     bool removeLegacyControlApplets(const QString &panelId, int containmentId);
     bool attachNativeDockApplet(const QString &panelId, int containmentId);
+    void notifyDockRevision();
     int evaluatePlasmaScript(const QString &script) const;
     QWindow *createUtilityWindow(const QUrl &source);
     void presentUtilityWindow(QWindow *window);
