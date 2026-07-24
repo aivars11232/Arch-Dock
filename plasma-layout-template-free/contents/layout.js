@@ -1,15 +1,17 @@
-// Plasma exposes only native containment templates in its Add Panel menu.
-// This tiny containment is an authenticated bridge: Arch Dock creates the
-// requested free surface and immediately removes this temporary panel.
-const panel = new Panel;
-panel.location = "bottom";
-panel.height = Math.round(gridUnit);
-panel.lengthMode = "fit";
-
-const token = "archdock-free-template-" + panel.id;
-const bridge = panel.addWidget("org.archdock.control");
-bridge.currentConfigGroup = ["General"];
-bridge.writeConfig("bootstrapAction", "create-circular-free-panel");
-bridge.writeConfig("bootstrapToken", token);
-bridge.writeConfig("bootstrapPanelId", panel.id);
-bridge.reloadConfig();
+// Free docks are real desktop widgets. Plasma owns their geometry, movement,
+// persistence, Activities integration, and Edit Mode controls.
+const activityDesktops = desktopsForActivity(currentActivity());
+if (activityDesktops.length > 0) {
+    const desktop = activityDesktops[0];
+    const size = Math.round(gridUnit * 22);
+    const dock = desktop.addWidget(
+        "org.archdock.dock",
+        Math.round(gridUnit * 9),
+        Math.round(gridUnit * 7),
+        size,
+        size);
+    dock.currentConfigGroup = ["General"];
+    dock.writeConfig("bootstrapFreeDock", true);
+    dock.writeConfig("panelType", "hybrid");
+    dock.reloadConfig();
+}

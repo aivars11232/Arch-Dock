@@ -5,6 +5,7 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.workspace.dbus as PlasmaDBus
+import "DockGeometry.js" as DockGeometry
 
 PlasmoidItem {
     id: root
@@ -13,6 +14,7 @@ PlasmoidItem {
     readonly property string configuredPanelType: Plasmoid.configuration.panelType || "hybrid"
     readonly property string panelType: ["launcher", "tasks", "hybrid"].includes(configuredPanelType)
         ? configuredPanelType : "hybrid"
+    readonly property bool freeSurface: panelId.startsWith("free-")
     readonly property bool vertical: Plasmoid.formFactor === PlasmaCore.Types.Vertical
     readonly property bool plasmaEditMode: {
         const containment = Plasmoid.containment;
@@ -51,9 +53,12 @@ PlasmoidItem {
     })
     property int hoveredIndex: -1
     property bool requestFailed: false
+    property bool bootstrapRequested: false
 
     Plasmoid.title: qsTr("Arch Dock")
     Plasmoid.icon: "applications-system"
+    Plasmoid.backgroundHints: root.freeSurface
+        ? PlasmaCore.Types.NoBackground : PlasmaCore.Types.StandardBackground
     preferredRepresentation: fullRepresentation
     switchWidth: Kirigami.Units.gridUnit * 24
     switchHeight: Kirigami.Units.gridUnit * 4
@@ -66,15 +71,29 @@ PlasmoidItem {
         });
         message.iface = "local.PanelWindow";
         message.arguments = parameters || [];
-        PlasmaDBus.SessionBus.asyncCall(
-            message,
-            onResolved || function() {},
-            onRejected || function() {});
+        const reply = PlasmaDBus.SessionBus.asyncCall(message)
+            as PlasmaDBus.DBusPendingReply;
+        reply.finished.connect(function() {
+            if (onResolved) {
+                const value = JSON.parse(JSON.stringify(reply.value));
+                onResolved(value);
+            }
+            reply.destroy();
+        });
     }
 
     function normalizeReply(reply) {
-        if (Array.isArray(reply) && reply.length === 1)
-            return reply[0];
+        if (Array.isArray(reply))
+            return reply.map(normalizeReply);
+        if (reply && typeof reply === "object") {
+            const keys = Object.keys(reply);
+            if (keys.length === 1 && keys[0] === "value")
+                return normalizeReply(reply.value);
+            const result = {};
+            for (const key of keys)
+                result[key] = normalizeReply(reply[key]);
+            return result;
+        }
         return reply;
     }
 
@@ -96,6 +115,25 @@ PlasmoidItem {
         }, function() {
             entries = [];
             requestFailed = true;
+        });
+    }
+
+    function bootstrapFreeDock() {
+        if (bootstrapRequested || panelId.length > 0 ||
+            !Plasmoid.configuration.bootstrapFreeDock || !dockService.registered)
+            return;
+        bootstrapRequested = true;
+        callDock("createFreePanel", [], function(reply) {
+            const value = normalizeReply(reply);
+            if (typeof value === "string" && value.length > 0) {
+                Plasmoid.configuration.panelId = value;
+                Plasmoid.configuration.bootstrapFreeDock = false;
+                refresh();
+            } else {
+                bootstrapRequested = false;
+            }
+        }, function() {
+            bootstrapRequested = false;
         });
     }
 
@@ -122,23 +160,28 @@ PlasmoidItem {
                  panelId.length > 0 ? [panelId] : []);
     }
 
-    compactRepresentation: Kirigami.Icon {
-        implicitWidth: Kirigami.Units.iconSizes.medium
-        implicitHeight: implicitWidth
-        source: "applications-system"
-    }
+    Component {
+        id: dockRepresentation
 
-    fullRepresentation: Item {
+        Item {
+            id: representation
+
+        readonly property string freeLayout: root.configuration.layout || "circular"
+        readonly property var freeGeometry: DockGeometry.metrics(
+            root.entries.length, root.iconSize, root.spacing,
+            Number(root.configuration.layoutScale || 1),
+            Number(root.configuration.layoutRadius || 150),
+            Number(root.configuration.layoutPadding || 18))
         readonly property real magnifiedCell: root.baseCellSize
             * (root.configuration.magnificationEnabled ? Math.max(1, root.magnification) : 1)
-        implicitWidth: root.vertical
+        implicitWidth: root.freeSurface ? freeGeometry.width : root.vertical
             ? magnifiedCell + Kirigami.Units.largeSpacing * 2
             : Math.max(root.baseCellSize + Kirigami.Units.largeSpacing * 2,
                        root.entries.length * root.baseCellSize
                            + Math.max(0, root.entries.length - 1) * root.spacing
                            + (magnifiedCell - root.baseCellSize) * 2
                            + Kirigami.Units.largeSpacing * 2)
-        implicitHeight: root.vertical
+        implicitHeight: root.freeSurface ? freeGeometry.height : root.vertical
             ? Math.max(root.baseCellSize + Kirigami.Units.largeSpacing * 2,
                        root.entries.length * root.baseCellSize
                            + Math.max(0, root.entries.length - 1) * root.spacing
@@ -151,8 +194,90 @@ PlasmoidItem {
 
         Loader {
             anchors.centerIn: parent
-            active: root.entries.length > 0
-            sourceComponent: root.vertical ? verticalEntries : horizontalEntries
+            width: parent.width
+            height: parent.height
+            active: root.freeSurface || root.entries.length > 0
+            sourceComponent: root.freeSurface
+                ? freeEntries : root.vertical ? verticalEntries : horizontalEntries
+        }
+
+        Component {
+            id: freeEntries
+
+            Item {
+                width: parent ? parent.width : 0
+                height: parent ? parent.height : 0
+
+                Canvas {
+                    anchors.fill: parent
+                    opacity: root.panelOpacity
+                    onPaint: {
+                        const context = getContext("2d");
+                        context.reset();
+                        const cx = width / 2;
+                        const cy = height / 2;
+                        const radius = Math.min(
+                            Number(root.configuration.layoutRadius || 150)
+                                * Number(root.configuration.layoutScale || 1),
+                            Math.min(width, height) / 2 - root.iconSize / 2);
+                        const layout = representation.freeLayout;
+                        context.lineWidth = Math.max(18, root.iconSize * 0.48);
+                        context.strokeStyle = root.configuration.appearance === "neon"
+                            ? "#a850e6ff" : "#78334862";
+                        context.shadowColor = root.configuration.appearance === "neon"
+                            ? "#8a35cfff" : "#55000000";
+                        context.shadowBlur = 18;
+                        context.beginPath();
+                        if (layout === "ellipse") {
+                            context.ellipse(cx, cy, radius, radius * 0.62, 0, 0, Math.PI * 2);
+                        } else {
+                            context.arc(cx, cy, radius, 0, Math.PI * 2);
+                        }
+                        context.stroke();
+                    }
+                }
+
+                Repeater {
+                    model: root.entries
+
+                    delegate: DockEntry {
+                        required property var modelData
+                        required property int index
+                        readonly property var point: DockGeometry.position(
+                            representation.freeLayout, index, root.entries.length,
+                            representation.freeGeometry,
+                            Number(root.configuration.layoutAngle || 0),
+                            Number(root.configuration.pathSides || 6))
+
+                        x: (parent.width - representation.freeGeometry.width) / 2 + point.x
+                        y: (parent.height - representation.freeGeometry.height) / 2 + point.y
+                        entry: modelData
+                        entryIndex: index
+                        vertical: false
+                        baseSize: root.iconSize
+                        magnification: root.magnification
+                        magnificationEnabled: root.configuration.magnificationEnabled
+                        hoveredIndex: root.hoveredIndex
+                        tileShape: root.configuration.iconShape
+                        appearance: root.configuration.appearance
+                        showReflection: root.configuration.showReflections
+                        showIndicator: root.configuration.showIndicators
+                        showTooltip: root.configuration.showTooltips
+                        motion: root.configuration.iconAnimation
+                        motionTrigger: root.configuration.animationTrigger
+                        motionIntensity: root.configuration.animationIntensity
+                        motionDuration: root.motionDuration
+                        reducedMotion: root.configuration.reducedMotion
+                        inputEnabled: dockService.registered && !root.plasmaEditMode
+                        acceptDrops: root.configuration.acceptDrops
+                        invoke: root.invokeEntry
+                        reorder: root.reorderEntry
+                        pinUrls: root.pinDroppedUrls
+                        setHoveredIndex: function(value) { root.hoveredIndex = value }
+                        openPanelStudio: root.openPanelStudio
+                    }
+                }
+            }
         }
 
         Component {
@@ -265,13 +390,20 @@ PlasmoidItem {
                 drop.acceptProposedAction();
             }
         }
+        }
     }
+
+    compactRepresentation: dockRepresentation
+    fullRepresentation: dockRepresentation
 
     PlasmaDBus.DBusServiceWatcher {
         id: dockService
         busType: PlasmaDBus.BusType.Session
         watchedService: "org.archdock.ArchDock"
-        onRegisteredChanged: root.refresh()
+        onRegisteredChanged: {
+            root.bootstrapFreeDock();
+            root.refresh();
+        }
     }
 
     PlasmaDBus.Properties {
@@ -286,5 +418,8 @@ PlasmoidItem {
         onRefreshed: root.refresh()
     }
 
-    Component.onCompleted: root.refresh()
+    Component.onCompleted: {
+        root.bootstrapFreeDock();
+        root.refresh();
+    }
 }

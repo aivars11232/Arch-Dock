@@ -29,10 +29,15 @@ PlasmoidItem {
         });
         message.iface = "local.PanelWindow";
         message.arguments = parameters || [];
-        PlasmaDBus.SessionBus.asyncCall(
-            message,
-            onResolved || function() {},
-            onRejected || function() {});
+        const reply = PlasmaDBus.SessionBus.asyncCall(message)
+            as PlasmaDBus.DBusPendingReply;
+        reply.finished.connect(function() {
+            if (onResolved) {
+                const value = JSON.parse(JSON.stringify(reply.value));
+                onResolved(value);
+            }
+            reply.destroy();
+        });
     }
 
     function openPanelSettings() {

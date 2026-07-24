@@ -224,6 +224,13 @@ QVariantMap PanelWindow::dockConfiguration(const QString &panelId) const
         {QStringLiteral("iconShape"), panel("iconShape", m_settings.iconTileShape())},
         {QStringLiteral("appearance"), panel("appearance", m_settings.appearancePreset())},
         {QStringLiteral("layout"), panel("layout", QStringLiteral("adaptive"))},
+        {QStringLiteral("layoutScale"), panel("layoutScale", 1.0)},
+        {QStringLiteral("layoutAngle"), panel("layoutAngle", 0.0)},
+        {QStringLiteral("layoutRadius"), panel("layoutRadius", 150)},
+        {QStringLiteral("layoutRows"), panel("layoutRows", 2)},
+        {QStringLiteral("layoutPadding"), panel("layoutPadding", 18)},
+        {QStringLiteral("pathSides"), panel("pathSides", 6)},
+        {QStringLiteral("pathOrientation"), panel("pathOrientation", QStringLiteral("upright"))},
         {QStringLiteral("iconAnimation"), panel("iconAnimation", QStringLiteral("scale"))},
         {QStringLiteral("animationTrigger"), panel("animationTrigger", QStringLiteral("hover"))},
         {QStringLiteral("animationSpeed"), panel("animationSpeed", 1.0)},
@@ -634,61 +641,10 @@ void PanelWindow::updateDesktopSuite()
 
 void PanelWindow::synchronizeFreePanels()
 {
-    QSet<QString> activeIds;
-    for (const QString &panelId : m_panelRegistry.panelIds())
-    {
-        if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() != QStringLiteral("free"))
-            continue;
-        activeIds.insert(panelId);
-        QWindow *window = m_freePanelWindows.value(panelId);
-        if (!window)
-        {
-            window = createUtilityWindow(
-                QUrl(QStringLiteral("qrc:/qt/qml/ArchDock/qml/runtime/FreePanelWindow.qml")));
-            if (!window)
-                continue;
-            window->setProperty("panelId", panelId);
-            m_freePanelWindows.insert(panelId, window);
-        }
-        const bool visible = m_panelRegistry.panelValue(panelId, QStringLiteral("visible")).toBool();
-        const int width = m_panelRegistry.panelValue(panelId, QStringLiteral("width")).toInt();
-        const int height = m_panelRegistry.panelValue(panelId, QStringLiteral("height")).toInt();
-        const QString layout = m_panelRegistry.panelValue(panelId, QStringLiteral("layout")).toString();
-        const int iconSize = m_panelRegistry.panelValue(panelId, QStringLiteral("iconSize")).toInt();
-        const QRect bounds(0, 0, qMax(160, width), qMax(160, height));
-        if (layout == QStringLiteral("circular") || layout == QStringLiteral("ring") ||
-            layout == QStringLiteral("ellipse") || layout == QStringLiteral("radial"))
-        {
-            QRect track = bounds.adjusted(iconSize / 4, iconSize / 4,
-                                          -iconSize / 4, -iconSize / 4);
-            if (layout == QStringLiteral("ellipse"))
-                track.adjust(0, track.height() / 6, 0, -track.height() / 6);
-            QRegion mask(track, QRegion::Ellipse);
-            const int inset = qMax(iconSize, 42);
-            mask -= QRegion(track.adjusted(inset, inset, -inset, -inset), QRegion::Ellipse);
-            const int handle = 64;
-            mask += QRegion(QRect(bounds.center().x() - handle / 2,
-                                  bounds.center().y() - handle / 2, handle, handle),
-                            QRegion::Ellipse);
-            window->setMask(mask);
-        }
-        else
-        {
-            window->setMask(QRegion(bounds));
-        }
-        window->setVisible(visible);
-    }
-
-    for (auto iterator = m_freePanelWindows.begin(); iterator != m_freePanelWindows.end();)
-    {
-        if (!activeIds.contains(iterator.key()))
-        {
-            delete iterator.value();
-            iterator = m_freePanelWindows.erase(iterator);
-        }
-        else
-            ++iterator;
-    }
+    // Free docks are hosted by Plasma desktop containments. Remove any legacy
+    // utility windows left alive by an older Arch Dock process.
+    qDeleteAll(m_freePanelWindows);
+    m_freePanelWindows.clear();
 }
 
 void PanelWindow::syncRegistryFromLegacySettings()
@@ -799,7 +755,6 @@ QString PanelWindow::createNativePanel(const QString &edge, const QString &type)
 QString PanelWindow::createFreePanel()
 {
     const QString panelId = m_panelRegistry.addFreePanel();
-    synchronizeFreePanels();
     showPanelSettings(panelId);
     return panelId;
 }
@@ -839,7 +794,6 @@ print(verified);
     }
 
     const QString panelId = m_panelRegistry.addFreePanel();
-    synchronizeFreePanels();
 
     const int removed = evaluatePlasmaScript(
         QStringLiteral("const bridgePanel = panelById(%1); "
