@@ -275,6 +275,33 @@ Window {
         return String(fieldValue(field));
     }
 
+    function readOnlyRow(label, value, description) {
+        return {
+            kind: "readonly",
+            label: label,
+            value: value,
+            description: description || ""
+        };
+    }
+
+    function optionLabel(options, value) {
+        const index = optionIndex(options, value);
+        if (options.length > 0 && options[index].value === value)
+            return options[index].label;
+        return titleCase(value);
+    }
+
+    function onOff(value) {
+        return value ? qsTr("On") : qsTr("Off");
+    }
+
+    function selectedScreenLabel() {
+        const index = panelScreenIndex(selectedPanelId);
+        if (index >= 0 && index < screenOptions.length)
+            return screenOptions[index].label;
+        return qsTr("Display %1").arg(index + 1);
+    }
+
     function performStudioAction(action, data) {
         if (action === "create-free") {
             openPanelEditor(panelController.createFreePanel());
@@ -371,69 +398,98 @@ Window {
     }
 
     function overviewPanelRows() {
-        const edgeEditable = !panelRegistry.isBuiltIn(selectedPanelId)
-            && panelValue("edge", "bottom") !== "free";
+        const edge = panelValue("edge", "bottom");
+        const alignment = panelValue("alignment", "center");
+        const freePanel = edge === "free";
+        const position = freePanel
+            ? qsTr("Free on desktop")
+            : optionLabel(edgeOptions, edge) + " · "
+                + optionLabel(alignmentOptions, alignment);
+        const visibility = panelValue("visible", true)
+            ? optionLabel(visibilityOptions,
+                panelValue("visibilityMode", "always"))
+            : qsTr("Hidden");
+        const color = String(panelValue("color", "")).trim();
+        const themeSource = String(panelValue("themeSource", ""));
+        const themePackage = String(panelValue("themePackageName", "")).trim();
+        const artwork = themePackage.length > 0
+            ? themePackage
+            : (themeSource.length > 0 ? qsTr("Imported artwork") : qsTr("None"));
         return [
-            section(qsTr("Panel"), qsTr("The essential controls for the selected panel."), true),
-            panelField("combo", qsTr("Type"), "type", "empty",
-                { options: panelTypeOptions }),
-            panelField("combo", qsTr("Position"), "edge", "bottom",
-                {
-                    options: edgeOptions,
-                    available: edgeEditable,
-                    description: edgeEditable ? "" : qsTr("Fixed for this panel type")
-                }),
-            {
-                kind: "readonly",
-                label: qsTr("Size"),
-                value: panelValue("width", 720) + " × " + panelValue("height", 76)
-            },
-            {
-                kind: "readonly",
-                label: qsTr("Behavior"),
-                value: titleCase(panelValue("visibilityMode", "always"))
-            },
+            section(qsTr("Panel"),
+                qsTr("Settings currently applied to the selected panel. Edit them under Panels."),
+                true),
+            readOnlyRow(qsTr("Name"), panelRegistry.panelName(selectedPanelId)),
+            readOnlyRow(qsTr("Type"),
+                optionLabel(panelTypeOptions, panelValue("type", "empty"))),
+            readOnlyRow(qsTr("Position"), position),
+            readOnlyRow(qsTr("Display"), selectedScreenLabel()),
+            readOnlyRow(qsTr("Size"),
+                panelValue("width", 720) + " × " + panelValue("height", 76)
+                    + qsTr(" px")),
+            readOnlyRow(qsTr("Sizing"),
+                panelValue("dynamic", true) ? qsTr("Dynamic") : qsTr("Static")),
+            readOnlyRow(qsTr("Visibility"), visibility),
+            readOnlyRow(qsTr("Accept drops"),
+                onOff(panelValue("acceptDrops", true))),
             section(qsTr("Appearance"),
-                qsTr("Shape, color, opacity, theme, and imported artwork.")),
-            panelField("combo", qsTr("Shape"), "shape", "pill",
-                { options: panelShapeOptions }),
-            panelField("text", qsTr("Color"), "color", "",
-                { placeholder: qsTr("Preset color or #AARRGGBB") }),
-            panelField("slider", qsTr("Opacity"), "opacity", 0.9,
-                { from: 0, to: 1, step: 0.05, decimals: 0, suffix: "%" ,
-                  displayScale: 100 }),
-            panelField("combo", qsTr("Theme"), "appearance", "glass",
-                { options: materialOptions }),
-            {
-                kind: "actions",
-                label: qsTr("Artwork"),
-                actions: [
-                    { label: qsTr("Import"), icon: "document-import",
-                      action: "import-theme" },
-                    { label: qsTr("Clear"), icon: "edit-clear",
-                      action: "clear-theme" }
-                ]
-            },
-            notice(qsTr("Texture is reserved for the surface-rendering feature. It is not exposed as a non-working control."))
+                qsTr("The active surface and geometry settings.")),
+            readOnlyRow(qsTr("Layout"),
+                optionLabel(layoutOptions, panelValue("layout", "adaptive"))),
+            readOnlyRow(qsTr("Shape"),
+                optionLabel(panelShapeOptions, panelValue("shape", "pill"))),
+            readOnlyRow(qsTr("Theme"),
+                optionLabel(materialOptions, panelValue("appearance", "glass"))),
+            readOnlyRow(qsTr("Color"),
+                color.length > 0 ? color : qsTr("Theme default")),
+            readOnlyRow(qsTr("Opacity"),
+                Math.round(Number(panelValue("opacity", 0.9)) * 100) + "%"),
+            readOnlyRow(qsTr("Artwork"), artwork)
         ];
     }
 
     function overviewIconRows() {
+        const animation = optionLabel(
+            motionOptions,
+            panelValue("iconAnimation", "scale"));
+        const trigger = optionLabel(
+            triggerOptions,
+            panelValue("animationTrigger", "hover")).toLowerCase();
+        const animationSummary = animation + " · " + trigger + " · "
+            + Number(panelValue("animationSpeed", 1)).toFixed(1) + "×";
+        const appearance = panelValue("appearance", "glass");
+        const tileAppearances = ["plate", "platform", "pedestal"];
         return [
-            section(qsTr("Icons"), qsTr("The essential icon controls for the selected panel."), true),
-            panelField("spin", qsTr("Size"), "iconSize", 52,
-                { from: 24, to: 128, step: 2 }),
-            panelField("combo", qsTr("Behavior"), "iconAnimation", "scale",
-                { options: motionOptions }),
-            panelField("combo", qsTr("Style"), "iconShape", "rounded",
-                { options: iconShapeOptions }),
+            section(qsTr("Icons"),
+                qsTr("Icon settings currently applied to the selected panel. Edit them under Icons."),
+                true),
+            readOnlyRow(qsTr("Size"),
+                panelValue("iconSize", 52) + qsTr(" px")),
+            readOnlyRow(qsTr("Spacing"),
+                Math.round(Number(panelValue("spacing", 8))) + qsTr(" px")),
+            readOnlyRow(qsTr("Shape"),
+                optionLabel(iconShapeOptions,
+                    panelValue("iconShape", "rounded"))),
+            readOnlyRow(qsTr("Animation"), animationSummary),
+            readOnlyRow(qsTr("Motion intensity"),
+                Number(panelValue("animationIntensity", 1)).toFixed(1) + "×"),
             section(qsTr("Appearance"),
-                qsTr("Visual controls with working renderer support.")),
-            panelField("combo", qsTr("Shape"), "iconShape", "rounded",
-                { options: iconShapeOptions }),
-            settingsField("switch", qsTr("Reflection"), "showReflections"),
-            settingsField("switch", qsTr("Indicators"), "showIndicators"),
-            notice(qsTr("Per-icon opacity, glow, shadow, and tile styling need renderer support before controls can be enabled."))
+                qsTr("Active global and theme-driven icon effects.")),
+            readOnlyRow(qsTr("Surface style"),
+                optionLabel(materialOptions, appearance)),
+            readOnlyRow(qsTr("Reflections"), onOff(settings.showReflections),
+                qsTr("Applies to all Arch Dock panels")),
+            readOnlyRow(qsTr("Indicators"), onOff(settings.showIndicators),
+                qsTr("Applies to all Arch Dock panels")),
+            readOnlyRow(qsTr("Magnification"),
+                settings.magnificationEnabled
+                    ? Number(settings.magnification).toFixed(2) + "×"
+                    : qsTr("Off"),
+                qsTr("Applies to all Arch Dock panels")),
+            readOnlyRow(qsTr("Icon tiles"),
+                tileAppearances.includes(appearance)
+                    ? optionLabel(materialOptions, appearance)
+                    : qsTr("Off"))
         ];
     }
 
