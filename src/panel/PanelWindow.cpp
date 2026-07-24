@@ -235,6 +235,50 @@ QVariantMap PanelWindow::dockConfiguration(const QString &panelId) const
         {QStringLiteral("reducedMotion"), m_settings.reducedMotion()}};
 }
 
+bool PanelWindow::setDockConfiguration(const QString &panelId,
+                                       const QString &key,
+                                       const QVariant &value)
+{
+    if (!m_panelRegistry.panelIds().contains(panelId))
+    {
+        return false;
+    }
+
+    if (key == QStringLiteral("magnification"))
+        m_settings.setMagnification(value.toReal());
+    else if (key == QStringLiteral("magnificationEnabled"))
+        m_settings.setMagnificationEnabled(value.toBool());
+    else if (key == QStringLiteral("showReflections"))
+        m_settings.setShowReflections(value.toBool());
+    else if (key == QStringLiteral("showIndicators"))
+        m_settings.setShowIndicators(value.toBool());
+    else if (key == QStringLiteral("showTooltips"))
+        m_settings.setShowTooltips(value.toBool());
+    else if (key == QStringLiteral("animationDuration"))
+        m_settings.setAnimationDuration(value.toInt());
+    else if (key == QStringLiteral("reducedMotion"))
+        m_settings.setReducedMotion(value.toBool());
+    else
+    {
+        static const QSet<QString> panelKeys{
+            QStringLiteral("iconSize"),
+            QStringLiteral("spacing"),
+            QStringLiteral("opacity"),
+            QStringLiteral("shape"),
+            QStringLiteral("iconShape"),
+            QStringLiteral("appearance"),
+            QStringLiteral("iconAnimation"),
+            QStringLiteral("animationTrigger"),
+            QStringLiteral("animationSpeed"),
+            QStringLiteral("animationIntensity"),
+            QStringLiteral("acceptDrops")};
+        if (!panelKeys.contains(key))
+            return false;
+        m_panelRegistry.setPanelValue(panelId, key, value);
+    }
+    return true;
+}
+
 QVariantList PanelWindow::dockEntries(const QString &panelType) const
 {
     return m_dockModel.panelEntries(panelType);

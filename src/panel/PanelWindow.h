@@ -42,6 +42,7 @@ public slots:
     QString createNativePanel(const QString &edge, const QString &type);
     bool setNativePanelType(const QString &panelId, const QString &type);
     QVariantMap dockConfiguration(const QString &panelId) const;
+    bool setDockConfiguration(const QString &panelId, const QString &key, const QVariant &value);
     QVariantList dockEntries(const QString &panelType) const;
     bool activateDockEntry(const QString &appId);
     bool activateDockWindow(const QString &appId, const QString &windowId);
