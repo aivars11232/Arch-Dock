@@ -18,6 +18,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMimeDatabase>
 #include <QProcess>
 #include <QRegion>
 #include <QRegularExpression>
@@ -79,6 +80,36 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     m_actionBridge(this),
       m_windowWatcher(m_windowModel)
 {
+    for (const QString &panelId : m_panelRegistry.panelIds())
+    {
+        if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() !=
+            QStringLiteral("free"))
+        {
+            continue;
+        }
+        const QStringList legacyIds = m_panelRegistry.panelValue(
+            panelId, QStringLiteral("contentAppIds")).toStringList();
+        if (legacyIds.isEmpty())
+        {
+            continue;
+        }
+        QStringList urls = m_panelRegistry.panelValue(
+            panelId, QStringLiteral("contentUrls")).toStringList();
+        for (const QString &appId : legacyIds)
+        {
+            const QUrl url = m_dockModel.urlForApplicationId(appId);
+            if (url.isValid() && !urls.contains(url.toString()))
+            {
+                urls.append(url.toString());
+            }
+        }
+        m_panelRegistry.updatePanel(
+            panelId,
+            {{QStringLiteral("contentUrls"), urls},
+             {QStringLiteral("contentAppIds"), QStringList{}}});
+        m_dockModel.removePinnedApplications(legacyIds);
+    }
+
     connect(&m_dockModel,
         &DockModel::windowActionRequested,
         &m_actionBridge,
@@ -300,14 +331,67 @@ QVariantList PanelWindow::dockEntriesForPanel(const QString &panelId,
     if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() ==
         QStringLiteral("free"))
     {
-        return m_dockModel.panelEntriesForIds(
-            m_panelRegistry.panelValue(panelId, QStringLiteral("contentAppIds")).toStringList());
+        QVariantList entries;
+        const QStringList urls = m_panelRegistry.panelValue(
+            panelId, QStringLiteral("contentUrls")).toStringList();
+        QMimeDatabase mimeDatabase;
+        for (const QString &urlString : urls)
+        {
+            const QUrl url(urlString);
+            if (!url.isLocalFile())
+            {
+                continue;
+            }
+            const QFileInfo info(url.toLocalFile());
+            if (!info.exists())
+            {
+                continue;
+            }
+            QString iconName;
+            QString displayName = info.fileName();
+            if (info.isDir())
+            {
+                iconName = QStringLiteral("folder");
+            }
+            else if (info.suffix().compare(QStringLiteral("desktop"), Qt::CaseInsensitive) == 0)
+            {
+                QSettings desktopEntry(info.absoluteFilePath(), QSettings::IniFormat);
+                desktopEntry.beginGroup(QStringLiteral("Desktop Entry"));
+                displayName = desktopEntry.value(QStringLiteral("Name"), info.completeBaseName()).toString();
+                iconName = desktopEntry.value(QStringLiteral("Icon"), QStringLiteral("application-x-executable")).toString();
+                desktopEntry.endGroup();
+            }
+            else
+            {
+                iconName = mimeDatabase.mimeTypeForFile(info).iconName();
+            }
+            entries.append(QVariantMap{
+                {QStringLiteral("appId"), QStringLiteral("free-url:") +
+                    QString::fromUtf8(url.toEncoded())},
+                {QStringLiteral("desktopFileName"), QString{}},
+                {QStringLiteral("iconName"), iconName},
+                {QStringLiteral("displayName"), displayName},
+                {QStringLiteral("pinned"), true},
+                {QStringLiteral("running"), false},
+                {QStringLiteral("active"), false},
+                {QStringLiteral("minimized"), false},
+                {QStringLiteral("windowCount"), 0},
+                {QStringLiteral("windowIds"), QStringList{}},
+                {QStringLiteral("windowTitles"), QStringList{}},
+                {QStringLiteral("isFolder"), info.isDir()}});
+        }
+        return entries;
     }
     return m_dockModel.panelEntries(panelType);
 }
 
 bool PanelWindow::activateDockEntry(const QString &appId)
 {
+    if (appId.startsWith(QStringLiteral("free-url:")))
+    {
+        return m_dockModel.openUrl(
+            QUrl::fromEncoded(appId.mid(9).toUtf8()));
+    }
     return m_dockModel.activateApplication(appId);
 }
 
@@ -368,27 +452,27 @@ bool PanelWindow::pinPanelUrls(const QString &panelId, const QStringList &urls)
         return pinDockUrls(urls);
     }
 
-    QStringList contentIds = m_panelRegistry.panelValue(
-        panelId, QStringLiteral("contentAppIds")).toStringList();
+    QStringList contentUrls = m_panelRegistry.panelValue(
+        panelId, QStringLiteral("contentUrls")).toStringList();
     bool addedAny = false;
     for (const QString &urlString : urls)
     {
         const QUrl url = QUrl::fromUserInput(urlString);
-        const QString appId = m_dockModel.applicationIdForUrl(url);
-        if (appId.isEmpty() || !m_dockModel.pinUrl(url))
+        if (!url.isLocalFile() || !QFileInfo::exists(url.toLocalFile()))
         {
             continue;
         }
-        if (!contentIds.contains(appId))
+        const QString normalized = url.toString();
+        if (!contentUrls.contains(normalized))
         {
-            contentIds.append(appId);
+            contentUrls.append(normalized);
         }
         addedAny = true;
     }
     if (addedAny)
     {
         m_panelRegistry.setPanelValue(
-            panelId, QStringLiteral("contentAppIds"), contentIds);
+            panelId, QStringLiteral("contentUrls"), contentUrls);
     }
     return addedAny;
 }

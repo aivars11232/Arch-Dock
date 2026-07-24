@@ -743,6 +743,7 @@ QString PanelRegistry::addFreePanel()
     panel.insert(QStringLiteral("visible"), true);
     panel.insert(QStringLiteral("type"), QStringLiteral("empty"));
     panel.insert(QStringLiteral("contentAppIds"), QStringList{});
+    panel.insert(QStringLiteral("contentUrls"), QStringList{});
     panel.insert(QStringLiteral("layout"), QStringLiteral("circular"));
     panel.insert(QStringLiteral("width"), 420);
     panel.insert(QStringLiteral("height"), 420);
@@ -1130,6 +1131,20 @@ QVariant PanelRegistry::normalizeValue(const QString &key, const QVariant &value
         }
         return result;
     }
+    if (key == QStringLiteral("contentUrls"))
+    {
+        QStringList result;
+        for (const QString &url : value.toStringList())
+        {
+            const QUrl normalized(url);
+            if (normalized.isValid() && !normalized.isEmpty() &&
+                !result.contains(normalized.toString()))
+            {
+                result.append(normalized.toString());
+            }
+        }
+        return result;
+    }
     if (key == QStringLiteral("shape"))
     {
         const QString shape = value.toString().trimmed().toLower();
@@ -1375,6 +1390,7 @@ void PanelRegistry::setPanelValues(const QString &panelId, const QVariantMap &va
     }
 
     bool didChange = false;
+    bool contentOnly = true;
     for (auto iterator = values.cbegin(); iterator != values.cend(); ++iterator)
     {
         if (iterator.key() == QStringLiteral("id") || iterator.key() == QStringLiteral("builtIn"))
@@ -1389,11 +1405,21 @@ void PanelRegistry::setPanelValues(const QString &panelId, const QVariantMap &va
         }
         panel->insert(iterator.key(), normalized);
         didChange = true;
+        if (iterator.key() != QStringLiteral("contentUrls") &&
+            iterator.key() != QStringLiteral("contentAppIds"))
+        {
+            contentOnly = false;
+        }
     }
     if (didChange)
     {
         save();
-        changed();
+        ++m_revision;
+        if (!contentOnly)
+        {
+            emit panelsChanged();
+        }
+        emit revisionChanged();
     }
 }
 

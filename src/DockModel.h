@@ -57,6 +57,8 @@ public:
     Q_INVOKABLE void clearCustomIcon(int row);
     Q_INVOKABLE bool pinUrl(const QUrl &url);
     [[nodiscard]] QString applicationIdForUrl(const QUrl &url) const;
+    [[nodiscard]] QUrl urlForApplicationId(const QString &appId) const;
+    void removePinnedApplications(const QStringList &appIds);
     Q_INVOKABLE bool isFolder(int row) const;
     Q_INVOKABLE QVariantList folderEntries(int row) const;
     Q_INVOKABLE bool openUrl(const QUrl &url) const;

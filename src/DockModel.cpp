@@ -453,6 +453,44 @@ QString DockModel::applicationIdForUrl(const QUrl &url) const
     return QStringLiteral("file:") + fileInfo.canonicalFilePath();
 }
 
+QUrl DockModel::urlForApplicationId(const QString &appId) const
+{
+    if (appId.startsWith(QStringLiteral("file:")))
+    {
+        return QUrl::fromLocalFile(appId.mid(5));
+    }
+    for (const PinnedApplication &application : m_pinnedApplications)
+    {
+        if (application.appId == appId)
+        {
+            const QString path = desktopFilePath(application.desktopFileName);
+            return path.isEmpty() ? QUrl{} : QUrl::fromLocalFile(path);
+        }
+    }
+    return {};
+}
+
+void DockModel::removePinnedApplications(const QStringList &appIds)
+{
+    const QSet<QString> removed(appIds.cbegin(), appIds.cend());
+    const qsizetype oldSize = m_pinnedApplications.size();
+    m_pinnedApplications.removeIf(
+        [&removed](const PinnedApplication &application)
+        {
+            return removed.contains(application.appId);
+        });
+    if (m_pinnedApplications.size() == oldSize)
+    {
+        return;
+    }
+    for (const QString &appId : removed)
+    {
+        m_order.removeAll(appId);
+    }
+    savePinnedApplications();
+    rebuild();
+}
+
 bool DockModel::isFolder(int row) const
 {
     return row >= 0 && row < m_items.size() && !folderPath(m_items.at(row)).isEmpty();
