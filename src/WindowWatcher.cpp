@@ -94,11 +94,11 @@ void WindowWatcher::windowAdded(const QString &internalId,
                                 const QString &caption,
                                 bool active,
                                 bool minimized,
-                                int frameX,
-                                int frameY,
-                                int frameWidth,
-                                int frameHeight,
-                                int screenIndex,
+                                double frameX,
+                                double frameY,
+                                double frameWidth,
+                                double frameHeight,
+                                double screenIndex,
                                 bool maximized,
                                 bool fullScreen)
 {
@@ -143,8 +143,11 @@ void WindowWatcher::windowAdded(const QString &internalId,
     window.resourceClass = resourceClass;
     window.resourceName = resourceName;
     window.caption = caption;
-    window.frameGeometry = QRect(frameX, frameY, qMax(0, frameWidth), qMax(0, frameHeight));
-    window.screenIndex = screenIndex;
+    window.frameGeometry = QRect(qRound(frameX),
+                                 qRound(frameY),
+                                 qMax(0, qRound(frameWidth)),
+                                 qMax(0, qRound(frameHeight)));
+    window.screenIndex = qMax(0, qRound(screenIndex));
     window.active = active;
     window.minimized = minimized;
     window.maximized = maximized;
@@ -165,11 +168,11 @@ void WindowWatcher::windowUpdated(const QString &internalId,
                                   const QString &caption,
                                   bool active,
                                   bool minimized,
-                                  int frameX,
-                                  int frameY,
-                                  int frameWidth,
-                                  int frameHeight,
-                                  int screenIndex,
+                                  double frameX,
+                                  double frameY,
+                                  double frameWidth,
+                                  double frameHeight,
+                                  double screenIndex,
                                   bool maximized,
                                   bool fullScreen)
 {
@@ -180,8 +183,11 @@ void WindowWatcher::windowUpdated(const QString &internalId,
     window.resourceClass = resourceClass;
     window.resourceName = resourceName;
     window.caption = caption;
-    window.frameGeometry = QRect(frameX, frameY, qMax(0, frameWidth), qMax(0, frameHeight));
-    window.screenIndex = screenIndex;
+    window.frameGeometry = QRect(qRound(frameX),
+                                 qRound(frameY),
+                                 qMax(0, qRound(frameWidth)),
+                                 qMax(0, qRound(frameHeight)));
+    window.screenIndex = qMax(0, qRound(screenIndex));
     window.active = active;
     window.minimized = minimized;
     window.maximized = maximized;
