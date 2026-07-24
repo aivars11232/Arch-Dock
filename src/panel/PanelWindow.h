@@ -36,6 +36,7 @@ public:
     [[nodiscard]] int screenRevision() const;
     [[nodiscard]] int visibilityRevision() const;
     [[nodiscard]] qulonglong dockRevision() const;
+    bool setDockConfiguration(const QString &panelId, const QString &key, const QVariant &value);
 
 public slots:
     void showSettings();
@@ -46,7 +47,10 @@ public slots:
     void saveFreePanelPosition(const QString &panelId, int x, int y);
     bool setNativePanelType(const QString &panelId, const QString &type);
     QVariantMap dockConfiguration(const QString &panelId) const;
-    bool setDockConfiguration(const QString &panelId, const QString &key, const QVariant &value);
+    bool setDockStringConfiguration(const QString &panelId, const QString &key, const QString &value);
+    bool setDockIntegerConfiguration(const QString &panelId, const QString &key, int value);
+    bool setDockRealConfiguration(const QString &panelId, const QString &key, double value);
+    bool setDockBooleanConfiguration(const QString &panelId, const QString &key, bool value);
     QVariantList dockEntries(const QString &panelType) const;
     QVariantList dockEntriesForPanel(const QString &panelId, const QString &panelType) const;
     bool activateDockEntry(const QString &appId);

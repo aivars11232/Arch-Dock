@@ -320,6 +320,34 @@ bool PanelWindow::setDockConfiguration(const QString &panelId,
     return true;
 }
 
+bool PanelWindow::setDockStringConfiguration(const QString &panelId,
+                                             const QString &key,
+                                             const QString &value)
+{
+    return setDockConfiguration(panelId, key, value);
+}
+
+bool PanelWindow::setDockIntegerConfiguration(const QString &panelId,
+                                              const QString &key,
+                                              int value)
+{
+    return setDockConfiguration(panelId, key, value);
+}
+
+bool PanelWindow::setDockRealConfiguration(const QString &panelId,
+                                           const QString &key,
+                                           double value)
+{
+    return setDockConfiguration(panelId, key, value);
+}
+
+bool PanelWindow::setDockBooleanConfiguration(const QString &panelId,
+                                              const QString &key,
+                                              bool value)
+{
+    return setDockConfiguration(panelId, key, value);
+}
+
 QVariantList PanelWindow::dockEntries(const QString &panelType) const
 {
     return m_dockModel.panelEntries(panelType);

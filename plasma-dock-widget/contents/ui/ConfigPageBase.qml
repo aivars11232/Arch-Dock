@@ -33,7 +33,13 @@ KCM.SimpleKCM {
         const next = Object.assign({}, root.values);
         next[key] = value;
         root.values = next;
-        callDock("setDockConfiguration", [panelId, key, value], root.refresh);
+        let member = "setDockStringConfiguration";
+        if (typeof value === "boolean")
+            member = "setDockBooleanConfiguration";
+        else if (typeof value === "number")
+            member = Number.isInteger(value)
+                ? "setDockIntegerConfiguration" : "setDockRealConfiguration";
+        callDock(member, [panelId, key, value], root.refresh);
     }
 
     Component.onCompleted: refresh()

@@ -68,19 +68,18 @@ Item {
         showReflection: root.showReflection
         glowAmount: root.motion === "glow" && root.motionActive ? 1 : 0
         scale: root.effectScale * (root.clickPulse ? 0.84 : 1)
-        rotation: (root.motion === "spin" && root.motionActive) ? 360
-            : (root.motion === "idle-rotate" && root.motionActive) ? 360 : 0
+        rotation: 0
         y: root.motion === "bounce" && root.motionActive ? -root.baseSize * 0.12 * root.motionIntensity : 0
 
         Behavior on scale { NumberAnimation { duration: root.motionDuration; easing.type: Easing.OutBack } }
         Behavior on y { NumberAnimation { duration: root.motionDuration; easing.type: Easing.OutBack } }
         Behavior on glowAmount { NumberAnimation { duration: root.motionDuration } }
-        RotationAnimator on rotation {
+        RotationAnimation on rotation {
             running: root.motionActive && (root.motion === "spin" || root.motion === "idle-rotate")
             from: 0
             to: 360
             duration: root.motion === "idle-rotate" ? root.motionDuration * 8 : root.motionDuration * 2
-            loops: root.motion === "idle-rotate" ? Animation.Infinite : 1
+            loops: root.motionTrigger === "idle" ? Animation.Infinite : 1
         }
     }
 
