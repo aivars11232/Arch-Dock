@@ -138,6 +138,10 @@ PlasmoidItem {
     }
 
     function invokeEntry(methodName, appId) {
+        if (freeSurface && methodName === "togglePinnedDockEntry") {
+            callDock("removePanelContent", [panelId, appId], refresh);
+            return;
+        }
         callDock(methodName, [appId], refresh);
     }
 

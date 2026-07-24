@@ -477,6 +477,27 @@ bool PanelWindow::pinPanelUrls(const QString &panelId, const QStringList &urls)
     return addedAny;
 }
 
+bool PanelWindow::removePanelContent(const QString &panelId, const QString &entryId)
+{
+    if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() !=
+            QStringLiteral("free") ||
+        !entryId.startsWith(QStringLiteral("free-url:")))
+    {
+        return false;
+    }
+
+    const QUrl url = QUrl::fromEncoded(entryId.mid(9).toUtf8());
+    QStringList contentUrls = m_panelRegistry.panelValue(
+        panelId, QStringLiteral("contentUrls")).toStringList();
+    if (contentUrls.removeAll(url.toString()) == 0)
+    {
+        return false;
+    }
+    m_panelRegistry.setPanelValue(
+        panelId, QStringLiteral("contentUrls"), contentUrls);
+    return true;
+}
+
 QVariantList PanelWindow::dockFolderEntries(const QString &appId) const
 {
     QVariantList entries = m_dockModel.folderEntriesForApplication(appId);

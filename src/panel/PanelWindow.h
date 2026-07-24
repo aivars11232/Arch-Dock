@@ -59,6 +59,7 @@ public slots:
     bool pinDockUrl(const QString &url);
     bool pinDockUrls(const QStringList &urls);
     bool pinPanelUrls(const QString &panelId, const QStringList &urls);
+    bool removePanelContent(const QString &panelId, const QString &entryId);
     QVariantList dockFolderEntries(const QString &appId) const;
     bool openDockUrl(const QString &url);
     QStringList availableKdeWidgets() const;
