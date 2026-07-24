@@ -134,6 +134,7 @@ private:
     QPointer<QWindow> m_settingsWindow;
     QPointer<QWindow> m_iconPropertiesWindow;
     QHash<QString, QPointer<QWindow>> m_freePanelWindows;
+    QHash<QString, QPointer<QWindow>> m_freePanelEditWindows;
     int m_screenRevision = 0;
     int m_visibilityRevision = 0;
     qulonglong m_dockRevision = 0;

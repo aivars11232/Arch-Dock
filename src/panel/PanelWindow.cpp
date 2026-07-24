@@ -205,6 +205,8 @@ PanelWindow::~PanelWindow()
 {
     qDeleteAll(m_freePanelWindows);
     m_freePanelWindows.clear();
+    qDeleteAll(m_freePanelEditWindows);
+    m_freePanelEditWindows.clear();
     delete m_settingsWindow;
     delete m_iconPropertiesWindow;
 }
@@ -242,10 +244,6 @@ void PanelWindow::refreshPlasmaEditMode()
     m_plasmaEditMode = editMode;
     emit plasmaEditModeChanged();
     synchronizeFreePanels();
-    QTimer::singleShot(150, this, [this, editMode]
-    {
-        m_actionBridge.setFreePanelsEditMode(editMode);
-    });
 }
 
 void PanelWindow::handlePlasmaPropertiesChanged(
@@ -263,10 +261,6 @@ void PanelWindow::handlePlasmaPropertiesChanged(
             m_plasmaEditMode = editMode;
             emit plasmaEditModeChanged();
             synchronizeFreePanels();
-            QTimer::singleShot(150, this, [this, editMode]
-            {
-                m_actionBridge.setFreePanelsEditMode(editMode);
-            });
         }
     }
     else if (invalidatedProperties.contains(QStringLiteral("editMode")))
@@ -282,10 +276,6 @@ void PanelWindow::setPlasmaEditMode(bool editMode)
     m_plasmaEditMode = editMode;
     emit plasmaEditModeChanged();
     synchronizeFreePanels();
-    QTimer::singleShot(150, this, [this, editMode]
-    {
-        m_actionBridge.setFreePanelsEditMode(editMode);
-    });
 }
 
 QVariantMap PanelWindow::dockConfiguration(const QString &panelId) const
@@ -755,7 +745,23 @@ void PanelWindow::synchronizeFreePanels()
         {
             window->setMask(QRegion(bounds));
         }
-        window->setVisible(visible || m_plasmaEditMode);
+        window->setVisible(visible && !m_plasmaEditMode);
+        if (m_plasmaEditMode)
+        {
+            QWindow *editWindow = m_freePanelEditWindows.value(panelId);
+            if (!editWindow)
+            {
+                editWindow = createUtilityWindow(
+                    QUrl(QStringLiteral("qrc:/qt/qml/ArchDock/qml/runtime/FreePanelEditWindow.qml")));
+                if (editWindow)
+                {
+                    editWindow->setProperty("panelId", panelId);
+                    m_freePanelEditWindows.insert(panelId, editWindow);
+                }
+            }
+            if (editWindow)
+                editWindow->setVisible(true);
+        }
     }
 
     for (auto iterator = m_freePanelWindows.begin(); iterator != m_freePanelWindows.end();)
@@ -764,6 +770,17 @@ void PanelWindow::synchronizeFreePanels()
         {
             delete iterator.value();
             iterator = m_freePanelWindows.erase(iterator);
+        }
+        else
+            ++iterator;
+    }
+
+    for (auto iterator = m_freePanelEditWindows.begin(); iterator != m_freePanelEditWindows.end();)
+    {
+        if (!m_plasmaEditMode || !activeIds.contains(iterator.key()))
+        {
+            delete iterator.value();
+            iterator = m_freePanelEditWindows.erase(iterator);
         }
         else
             ++iterator;
