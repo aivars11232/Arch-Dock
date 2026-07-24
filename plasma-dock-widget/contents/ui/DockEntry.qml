@@ -43,8 +43,11 @@ Item {
         || ((motionTrigger === "click" || motionTrigger === "launch") && triggerPulse)
         || (motionTrigger === "drop" && (dragging || triggerPulse))
         || motionTrigger === "idle")
-    readonly property real amplitude: baseSize * 0.12 * motionIntensity
-    readonly property real scaleAmplitude: 0.1 * motionIntensity
+    readonly property real amplitude: baseSize * 0.22 * motionIntensity
+    readonly property real scaleAmplitude: 0.16 * motionIntensity
+    readonly property real rotationAmplitude: motion === "swing" ? 14
+        : motion === "wobble" ? 9
+        : motion === "wiggle" ? 6 : 3
     readonly property int cycleDuration: Math.max(80, motionDuration)
 
     function resetMotionLayer() {
@@ -85,7 +88,8 @@ Item {
             hovered: hoverArea.containsMouse
             pressed: hoverArea.pressed || root.clickPulse
             showReflection: root.showReflection
-            glowAmount: root.motion === "glow" && root.motionActive ? 1 : 0
+            glowAmount: root.motion === "glow" && root.motionActive
+                ? Math.min(1, root.motionIntensity) : 0
             glowAnimating: root.motion === "glow" && root.motionActive
             glowDuration: root.cycleDuration
         }
@@ -106,8 +110,9 @@ Item {
         SequentialAnimation {
             running: root.motionActive && ["float", "wave"].includes(root.motion)
             loops: Animation.Infinite
-            YAnimator { target: motionLayer; from: 0; to: -root.amplitude * 0.65; duration: root.cycleDuration; easing.type: Easing.InOutSine }
-            YAnimator { target: motionLayer; from: -root.amplitude * 0.65; to: 0; duration: root.cycleDuration; easing.type: Easing.InOutSine }
+            PauseAnimation { duration: root.motion === "wave" ? root.entryIndex * 45 : 0 }
+            YAnimator { target: motionLayer; from: 0; to: -root.amplitude * (root.motion === "wave" ? 0.9 : 0.65); duration: root.cycleDuration; easing.type: Easing.InOutSine }
+            YAnimator { target: motionLayer; from: -root.amplitude * (root.motion === "wave" ? 0.9 : 0.65); to: 0; duration: root.cycleDuration; easing.type: Easing.InOutSine }
         }
         SequentialAnimation {
             running: root.motionActive && root.motion === "spring"
@@ -147,14 +152,14 @@ Item {
             loops: Animation.Infinite
             RotationAnimator {
                 target: motionLayer
-                from: root.motion === "shake" ? -5 * root.motionIntensity : -12 * root.motionIntensity
-                to: root.motion === "shake" ? 5 * root.motionIntensity : 12 * root.motionIntensity
+                from: -root.rotationAmplitude * root.motionIntensity
+                to: root.rotationAmplitude * root.motionIntensity
                 duration: root.motion === "wiggle" || root.motion === "shake" ? root.cycleDuration * 0.35 : root.cycleDuration
             }
             RotationAnimator {
                 target: motionLayer
-                from: root.motion === "shake" ? 5 * root.motionIntensity : 12 * root.motionIntensity
-                to: root.motion === "shake" ? -5 * root.motionIntensity : -12 * root.motionIntensity
+                from: root.rotationAmplitude * root.motionIntensity
+                to: -root.rotationAmplitude * root.motionIntensity
                 duration: root.motion === "wiggle" || root.motion === "shake" ? root.cycleDuration * 0.35 : root.cycleDuration
             }
         }

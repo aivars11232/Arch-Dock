@@ -62,7 +62,6 @@ function sendWindowRemoved(window) {
 
 function watchWindow(window) {
     sendWindowAdded(window);
-    window.captionChanged.connect(function() { sendWindowUpdated(window); });
     window.activeChanged.connect(function() { sendWindowUpdated(window); });
     window.minimizedChanged.connect(function() { sendWindowUpdated(window); });
     window.desktopFileNameChanged.connect(function() { sendWindowUpdated(window); });
