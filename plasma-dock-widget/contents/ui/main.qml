@@ -214,6 +214,8 @@ PlasmoidItem {
                 height: parent ? parent.height : 0
 
                 Canvas {
+                    id: freeSurfaceCanvas
+
                     anchors.fill: parent
                     opacity: root.panelOpacity
                     onPaint: {
@@ -226,12 +228,23 @@ PlasmoidItem {
                                 * Number(root.configuration.layoutScale || 1),
                             Math.min(width, height) / 2 - root.iconSize / 2);
                         const layout = representation.freeLayout;
+                        const appearance = root.configuration.appearance || "glass";
                         context.lineWidth = Math.max(18, root.iconSize * 0.48);
-                        context.strokeStyle = root.configuration.appearance === "neon"
-                            ? "#a850e6ff" : "#78334862";
-                        context.shadowColor = root.configuration.appearance === "neon"
-                            ? "#8a35cfff" : "#55000000";
-                        context.shadowBlur = 18;
+                        context.strokeStyle = appearance === "neon" ? "#50e6ff"
+                            : appearance === "futuristic" ? "#b030d8"
+                            : appearance === "metallic" ? "#aeb9c4"
+                            : appearance === "organic" ? "#57c98b"
+                            : appearance === "platform" ? "#6e7884"
+                            : appearance === "crystal" ? "#9eeeff"
+                            : appearance === "lime" ? "#7dff58"
+                            : appearance === "minimal" ? "#4c5966"
+                            : "#334862";
+                        context.shadowColor = appearance === "neon"
+                            || appearance === "futuristic" ? "#35cfff"
+                            : appearance === "lime" ? "#7dff58"
+                            : "#000000";
+                        context.shadowBlur = appearance === "minimal" ? 0
+                            : appearance === "futuristic" ? 28 : 18;
                         context.beginPath();
                         if (layout === "ellipse") {
                             context.ellipse(cx, cy, radius, radius * 0.62, 0, 0, Math.PI * 2);
@@ -239,6 +252,13 @@ PlasmoidItem {
                             context.arc(cx, cy, radius, 0, Math.PI * 2);
                         }
                         context.stroke();
+                    }
+
+                    Connections {
+                        target: root
+                        function onConfigurationChanged() {
+                            freeSurfaceCanvas.requestPaint();
+                        }
                     }
                 }
 
