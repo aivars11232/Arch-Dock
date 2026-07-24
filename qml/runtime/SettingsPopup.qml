@@ -4,6 +4,7 @@ import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
 import org.kde.kirigami as Kirigami
+import "StudioNavigation.js" as StudioNavigation
 
 Window {
     id: root
@@ -11,129 +12,174 @@ Window {
     property var settings: dockSettings
     property string selectedPanelId: panelRegistry.activePanelId
     property bool showPanels: false
+    property int mainTabIndex: 0
+    property int subTabIndex: 0
+    property var subTabMemory: [0, 0, 0, 0, 0]
+    property string pendingProfile: "aurora"
+    property string pendingIconStyleName: ""
+
     readonly property int panelRevision: panelRegistry.revision
     readonly property int screenRevision: panelController.screenRevision
     readonly property var screenOptions: {
         const revision = screenRevision;
         return panelController.availableScreens();
     }
-    readonly property var kdeWidgetIds: panelController.availableKdeWidgets()
-    readonly property var visibilityOptions: [
-        { label: qsTr("Always visible"), value: "always" },
-        { label: qsTr("Auto-hide"), value: "auto-hide" },
-        { label: qsTr("Dodge active window"), value: "dodge" },
-        { label: qsTr("Hide under active window"), value: "cover" }
+    readonly property var currentSubtabs: StudioNavigation.subtabsFor(mainTabIndex)
+    readonly property var mainTabLabels: StudioNavigation.mainLabels()
+    readonly property var mainTabIcons: [
+        "view-dashboard",
+        "preferences-desktop-display",
+        "preferences-desktop-icons",
+        "draw-rectangle",
+        "document-save"
     ]
+    readonly property var visibilityOptions: [
+        option(qsTr("Always visible"), "always"),
+        option(qsTr("Auto-hide"), "auto-hide"),
+        option(qsTr("Dodge active window"), "dodge"),
+        option(qsTr("Hide under active window"), "cover")
+    ]
+    readonly property var panelTypeOptions: [
+        option(qsTr("Empty"), "empty"),
+        option(qsTr("Launchers"), "launcher"),
+        option(qsTr("Tasks"), "tasks"),
+        option(qsTr("Hybrid"), "hybrid")
+    ]
+    readonly property var edgeOptions: [
+        option(qsTr("Top"), "top"),
+        option(qsTr("Bottom"), "bottom"),
+        option(qsTr("Left"), "left"),
+        option(qsTr("Right"), "right"),
+        option(qsTr("Free"), "free")
+    ]
+    readonly property var alignmentOptions: [
+        option(qsTr("Start"), "start"),
+        option(qsTr("Center"), "center"),
+        option(qsTr("End"), "end")
+    ]
+    readonly property var panelShapeOptions: choices(["pill", "rounded", "hexagon"])
+    readonly property var iconShapeOptions: choices(["circle", "rounded", "hexagon"])
     readonly property var pathAnchorOptions: [
-        { label: qsTr("Top left"), value: "top-left" },
-        { label: qsTr("Top"), value: "top" },
-        { label: qsTr("Top right"), value: "top-right" },
-        { label: qsTr("Left"), value: "left" },
-        { label: qsTr("Center"), value: "center" },
-        { label: qsTr("Right"), value: "right" },
-        { label: qsTr("Bottom left"), value: "bottom-left" },
-        { label: qsTr("Bottom"), value: "bottom" },
-        { label: qsTr("Bottom right"), value: "bottom-right" }
+        option(qsTr("Top left"), "top-left"),
+        option(qsTr("Top"), "top"),
+        option(qsTr("Top right"), "top-right"),
+        option(qsTr("Left"), "left"),
+        option(qsTr("Center"), "center"),
+        option(qsTr("Right"), "right"),
+        option(qsTr("Bottom left"), "bottom-left"),
+        option(qsTr("Bottom"), "bottom"),
+        option(qsTr("Bottom right"), "bottom-right")
     ]
     readonly property var pathOrientationOptions: [
-        { label: qsTr("Keep icons upright"), value: "upright" },
-        { label: qsTr("Follow path tangent"), value: "tangent" },
-        { label: qsTr("Point away from center"), value: "radial" }
+        option(qsTr("Keep icons upright"), "upright"),
+        option(qsTr("Follow path tangent"), "tangent"),
+        option(qsTr("Point away from center"), "radial")
     ]
     readonly property var layoutOptions: [
-        { label: qsTr("Adaptive row / column"), value: "adaptive" },
-        { label: qsTr("Horizontal"), value: "horizontal" },
-        { label: qsTr("Vertical"), value: "vertical" },
-        { label: qsTr("Diagonal"), value: "diagonal" },
-        { label: qsTr("Circular"), value: "circular" },
-        { label: qsTr("Ellipse"), value: "ellipse" },
-        { label: qsTr("Ring"), value: "ring" },
-        { label: qsTr("Radial"), value: "radial" },
-        { label: qsTr("Arc"), value: "arc" },
-        { label: qsTr("Semicircle"), value: "semicircle" },
-        { label: qsTr("Fan"), value: "fan" },
-        { label: qsTr("Spiral"), value: "spiral" },
-        { label: qsTr("Ribbon"), value: "ribbon" },
-        { label: qsTr("Horizontal curve"), value: "horizontal-curve" },
-        { label: qsTr("Vertical curve"), value: "vertical-curve" },
-        { label: qsTr("Polygon path"), value: "polygon" },
-        { label: qsTr("Triangle"), value: "triangle" },
-        { label: qsTr("Square"), value: "square" },
-        { label: qsTr("Pentagon"), value: "pentagon" },
-        { label: qsTr("Hexagon"), value: "hexagon" },
-        { label: qsTr("Octagon"), value: "octagon" },
-        { label: qsTr("Star"), value: "star" },
-        { label: qsTr("Multi-row grid"), value: "grid" },
-        { label: qsTr("Floating cluster"), value: "floating" }
+        option(qsTr("Adaptive row / column"), "adaptive"),
+        option(qsTr("Horizontal"), "horizontal"),
+        option(qsTr("Vertical"), "vertical"),
+        option(qsTr("Diagonal"), "diagonal"),
+        option(qsTr("Circular"), "circular"),
+        option(qsTr("Ellipse"), "ellipse"),
+        option(qsTr("Ring"), "ring"),
+        option(qsTr("Radial"), "radial"),
+        option(qsTr("Arc"), "arc"),
+        option(qsTr("Semicircle"), "semicircle"),
+        option(qsTr("Fan"), "fan"),
+        option(qsTr("Spiral"), "spiral"),
+        option(qsTr("Ribbon"), "ribbon"),
+        option(qsTr("Horizontal curve"), "horizontal-curve"),
+        option(qsTr("Vertical curve"), "vertical-curve"),
+        option(qsTr("Polygon path"), "polygon"),
+        option(qsTr("Triangle"), "triangle"),
+        option(qsTr("Square"), "square"),
+        option(qsTr("Pentagon"), "pentagon"),
+        option(qsTr("Hexagon"), "hexagon"),
+        option(qsTr("Octagon"), "octagon"),
+        option(qsTr("Star"), "star"),
+        option(qsTr("Multi-row grid"), "grid"),
+        option(qsTr("Floating cluster"), "floating")
     ]
     readonly property var materialOptions: [
-        { label: qsTr("Glass"), value: "glass" },
-        { label: qsTr("Crystal"), value: "crystal" },
-        { label: qsTr("Neon"), value: "neon" },
-        { label: qsTr("Minimal"), value: "minimal" },
-        { label: qsTr("Plasma"), value: "plasma" },
-        { label: qsTr("Lime"), value: "lime" },
-        { label: qsTr("Floating glass"), value: "floating-glass" },
-        { label: qsTr("Metallic"), value: "metallic" },
-        { label: qsTr("Futuristic"), value: "futuristic" },
-        { label: qsTr("Organic"), value: "organic" },
-        { label: qsTr("Platform bases"), value: "platform" },
-        { label: qsTr("Individual plates"), value: "plate" },
-        { label: qsTr("Pedestals"), value: "pedestal" }
+        option(qsTr("Glass"), "glass"),
+        option(qsTr("Crystal"), "crystal"),
+        option(qsTr("Neon"), "neon"),
+        option(qsTr("Minimal"), "minimal"),
+        option(qsTr("Plasma"), "plasma"),
+        option(qsTr("Lime"), "lime"),
+        option(qsTr("Floating glass"), "floating-glass"),
+        option(qsTr("Metallic"), "metallic"),
+        option(qsTr("Futuristic"), "futuristic"),
+        option(qsTr("Organic"), "organic"),
+        option(qsTr("Platform bases"), "platform"),
+        option(qsTr("Individual plates"), "plate"),
+        option(qsTr("Pedestals"), "pedestal")
     ]
     readonly property var motionOptions: [
-        { label: qsTr("None"), value: "none" },
-        { label: qsTr("Bounce"), value: "bounce" },
-        { label: qsTr("Elastic bounce"), value: "elastic" },
-        { label: qsTr("Pulse"), value: "pulse" },
-        { label: qsTr("Scale"), value: "scale" },
-        { label: qsTr("Spin"), value: "spin" },
-        { label: qsTr("Slow rotation"), value: "idle-rotate" },
-        { label: qsTr("Orbit"), value: "orbit" },
-        { label: qsTr("Swing"), value: "swing" },
-        { label: qsTr("Wobble"), value: "wobble" },
-        { label: qsTr("Wiggle"), value: "wiggle" },
-        { label: qsTr("Shake"), value: "shake" },
-        { label: qsTr("Glow"), value: "glow" },
-        { label: qsTr("Breathing"), value: "breathe" },
-        { label: qsTr("Floating"), value: "float" },
-        { label: qsTr("Hover wave"), value: "wave" },
-        { label: qsTr("Ripple"), value: "ripple" },
-        { label: qsTr("Magnetic"), value: "magnetic" },
-        { label: qsTr("Spring"), value: "spring" }
+        option(qsTr("None"), "none"),
+        option(qsTr("Bounce"), "bounce"),
+        option(qsTr("Elastic bounce"), "elastic"),
+        option(qsTr("Pulse"), "pulse"),
+        option(qsTr("Scale"), "scale"),
+        option(qsTr("Spin"), "spin"),
+        option(qsTr("Slow rotation"), "idle-rotate"),
+        option(qsTr("Orbit"), "orbit"),
+        option(qsTr("Swing"), "swing"),
+        option(qsTr("Wobble"), "wobble"),
+        option(qsTr("Wiggle"), "wiggle"),
+        option(qsTr("Shake"), "shake"),
+        option(qsTr("Glow"), "glow"),
+        option(qsTr("Breathing"), "breathe"),
+        option(qsTr("Floating"), "float"),
+        option(qsTr("Hover wave"), "wave"),
+        option(qsTr("Ripple"), "ripple"),
+        option(qsTr("Magnetic"), "magnetic"),
+        option(qsTr("Spring"), "spring")
     ]
     readonly property var triggerOptions: [
-        { label: qsTr("Hover"), value: "hover" },
-        { label: qsTr("Click"), value: "click" },
-        { label: qsTr("Launch"), value: "launch" },
-        { label: qsTr("Running"), value: "running" },
-        { label: qsTr("Drag and drop"), value: "drop" },
-        { label: qsTr("Reveal"), value: "reveal" },
-        { label: qsTr("Always on"), value: "idle" }
+        option(qsTr("Hover"), "hover"),
+        option(qsTr("Click"), "click"),
+        option(qsTr("Launch"), "launch"),
+        option(qsTr("Running"), "running"),
+        option(qsTr("Drag and drop"), "drop"),
+        option(qsTr("Reveal"), "reveal"),
+        option(qsTr("Always on"), "idle")
     ]
-    readonly property var folderLayoutOptions: [
-        { label: qsTr("Fan"), value: "fan" },
-        { label: qsTr("Grid"), value: "grid" },
-        { label: qsTr("Stack"), value: "stack" },
-        { label: qsTr("Arc"), value: "arc" },
-        { label: qsTr("Spiral"), value: "spiral" },
-        { label: qsTr("Circular"), value: "circular" },
-        { label: qsTr("Radial"), value: "radial" },
-        { label: qsTr("Vertical cascade"), value: "vertical" },
-        { label: qsTr("Horizontal cascade"), value: "horizontal" },
-        { label: qsTr("Elastic unfold"), value: "elastic" },
-        { label: qsTr("Physics spread"), value: "physics" }
+    readonly property var folderLayoutOptions: choices([
+        "fan", "grid", "stack", "arc", "spiral", "circular", "radial",
+        "vertical", "horizontal", "elastic", "physics"
+    ])
+    readonly property var profileOptions: [
+        option(qsTr("Aurora desktop"), "aurora"),
+        option(qsTr("Crystal shelf"), "crystal"),
+        option(qsTr("RocketDock glass"), "rocket"),
+        option(qsTr("Midnight Waybar"), "waybar"),
+        option(qsTr("Neon prism"), "neon"),
+        option(qsTr("Plasma Breeze"), "plasma"),
+        option(qsTr("Lime outline"), "lime")
     ]
+
+    function option(label, value) {
+        return { label: label, value: value };
+    }
+
+    function titleCase(value) {
+        const text = String(value).replace(/-/g, " ");
+        return text.length === 0
+            ? text
+            : text.charAt(0).toUpperCase() + text.slice(1);
+    }
+
+    function choices(values) {
+        return values.map(function(value) {
+            return option(titleCase(value), value);
+        });
+    }
 
     function panelValue(key, fallback) {
         const revision = panelRevision;
         const candidate = panelRegistry.panelValue(selectedPanelId, key);
-        return candidate === undefined || candidate === null ? fallback : candidate;
-    }
-
-    function bottomPanelValue(key, fallback) {
-        const revision = panelRevision;
-        const candidate = panelRegistry.panelValue("bottom", key);
         return candidate === undefined || candidate === null ? fallback : candidate;
     }
 
@@ -152,38 +198,585 @@ Window {
     }
 
     function selectPanel(panelId) {
-        if (panelId.length === 0)
+        if (!panelId || panelId.length === 0)
             return;
         selectedPanelId = panelId;
         panelRegistry.setActivePanelId(panelId);
-        sectionTabs.currentIndex = 4;
+    }
+
+    function openPanelEditor(panelId) {
+        selectPanel(panelId);
+        setMainTab(1);
+        setSubTab(0);
+    }
+
+    function setMainTab(index) {
+        const next = StudioNavigation.clampSectionIndex(index);
+        mainTabIndex = next;
+        subTabIndex = StudioNavigation.clampSubtabIndex(
+            next,
+            subTabMemory[next] || 0);
+    }
+
+    function setSubTab(index) {
+        const next = StudioNavigation.clampSubtabIndex(mainTabIndex, index);
+        subTabIndex = next;
+        const memory = subTabMemory.slice();
+        memory[mainTabIndex] = next;
+        subTabMemory = memory;
+    }
+
+    function fieldValue(field) {
+        const scope = field.scope || "panel";
+        if (scope === "settings")
+            return settings[field.key];
+        if (scope === "screen")
+            return panelScreenIndex(selectedPanelId);
+        if (scope === "local")
+            return root[field.key];
+        if (scope === "mode")
+            return panelValue("visibilityMode", "always") === field.mode;
+        return panelValue(field.key, field.fallback);
+    }
+
+    function setFieldValue(field, value) {
+        const scope = field.scope || "panel";
+        if (scope === "settings") {
+            settings[field.key] = value;
+        } else if (scope === "screen") {
+            panelController.setPanelScreen(selectedPanelId, Number(value));
+        } else if (scope === "local") {
+            root[field.key] = value;
+        } else if (scope === "mode") {
+            const current = panelValue("visibilityMode", "always");
+            panelController.setPanelVisibilityMode(
+                selectedPanelId,
+                value ? field.mode : (current === field.mode ? "always" : current));
+        } else {
+            panelRegistry.setPanelValue(selectedPanelId, field.key, value);
+        }
+    }
+
+    function fieldOptionIndex(field) {
+        return optionIndex(field.options || [], fieldValue(field));
+    }
+
+    function formatFieldValue(field, value) {
+        const decimals = field.decimals === undefined ? 0 : field.decimals;
+        const numeric = Number(value)
+            * (field.displayScale === undefined ? 1 : field.displayScale);
+        const text = decimals > 0 ? numeric.toFixed(decimals) : Math.round(numeric);
+        return (field.prefix || "") + text + (field.suffix || "");
+    }
+
+    function displayFieldValue(field) {
+        if (field.value !== undefined)
+            return String(field.value);
+        return String(fieldValue(field));
+    }
+
+    function performStudioAction(action, data) {
+        if (action === "create-free") {
+            openPanelEditor(panelController.createFreePanel());
+        } else if (action === "remove-panel") {
+            const removed = selectedPanelId;
+            panelController.removePanel(removed);
+            selectPanel(panelRegistry.activePanelId);
+        } else if (action === "import-theme") {
+            themeDialog.open();
+        } else if (action === "clear-theme") {
+            panelRegistry.clearTheme(selectedPanelId);
+        } else if (action === "render-theme") {
+            panelRegistry.renderTheme(
+                selectedPanelId,
+                Number(panelValue("width", 720)),
+                Number(panelValue("height", 76)),
+                Screen.devicePixelRatio,
+                true);
+        } else if (action === "reset-layout") {
+            panelRegistry.updatePanel(selectedPanelId, {
+                layoutScale: 1.0,
+                layoutAngle: 0.0,
+                layoutRadius: 150,
+                layoutRows: 2,
+                layoutPadding: 18,
+                pathSides: 6,
+                pathOrientation: "upright",
+                pathAnchor: "center"
+            });
+        } else if (action === "apply-profile") {
+            panelController.applyProfile(pendingProfile);
+        } else if (action === "reset-all") {
+            panelController.resetSettings();
+        } else if (action === "create-native-panel") {
+            panelController.createNativeKdePanel(selectedPanelId);
+        } else if (action === "remove-native-panel") {
+            panelController.removeNativeKdePanel(selectedPanelId);
+        }
+    }
+
+    function section(label, description, first) {
+        return {
+            kind: "section",
+            label: label,
+            description: description || "",
+            first: first === true
+        };
+    }
+
+    function notice(text, warning) {
+        return { kind: "notice", text: text, warning: warning === true };
+    }
+
+    function panelField(kind, label, key, fallback, extra) {
+        const row = {
+            kind: kind,
+            label: label,
+            key: key,
+            fallback: fallback,
+            scope: "panel"
+        };
+        if (extra) {
+            for (const propertyName in extra)
+                row[propertyName] = extra[propertyName];
+        }
+        return row;
+    }
+
+    function settingsField(kind, label, key, extra) {
+        const row = {
+            kind: kind,
+            label: label,
+            key: key,
+            scope: "settings",
+            description: qsTr("Applies to all Arch Dock panels")
+        };
+        if (extra) {
+            for (const propertyName in extra)
+                row[propertyName] = extra[propertyName];
+        }
+        return row;
+    }
+
+    function screenField() {
+        return {
+            kind: "combo",
+            label: qsTr("Display"),
+            key: "screen",
+            scope: "screen",
+            options: screenOptions.map(function(display, index) {
+                return option(display.label, index);
+            })
+        };
+    }
+
+    function overviewPanelRows() {
+        const edgeEditable = !panelRegistry.isBuiltIn(selectedPanelId)
+            && panelValue("edge", "bottom") !== "free";
+        return [
+            section(qsTr("Panel"), qsTr("The essential controls for the selected panel."), true),
+            panelField("combo", qsTr("Type"), "type", "empty",
+                { options: panelTypeOptions }),
+            panelField("combo", qsTr("Position"), "edge", "bottom",
+                {
+                    options: edgeOptions,
+                    available: edgeEditable,
+                    description: edgeEditable ? "" : qsTr("Fixed for this panel type")
+                }),
+            {
+                kind: "readonly",
+                label: qsTr("Size"),
+                value: panelValue("width", 720) + " × " + panelValue("height", 76)
+            },
+            {
+                kind: "readonly",
+                label: qsTr("Behavior"),
+                value: titleCase(panelValue("visibilityMode", "always"))
+            },
+            section(qsTr("Appearance"),
+                qsTr("Shape, color, opacity, theme, and imported artwork.")),
+            panelField("combo", qsTr("Shape"), "shape", "pill",
+                { options: panelShapeOptions }),
+            panelField("text", qsTr("Color"), "color", "",
+                { placeholder: qsTr("Preset color or #AARRGGBB") }),
+            panelField("slider", qsTr("Opacity"), "opacity", 0.9,
+                { from: 0, to: 1, step: 0.05, decimals: 0, suffix: "%" ,
+                  displayScale: 100 }),
+            panelField("combo", qsTr("Theme"), "appearance", "glass",
+                { options: materialOptions }),
+            {
+                kind: "actions",
+                label: qsTr("Artwork"),
+                actions: [
+                    { label: qsTr("Import"), icon: "document-import",
+                      action: "import-theme" },
+                    { label: qsTr("Clear"), icon: "edit-clear",
+                      action: "clear-theme" }
+                ]
+            },
+            notice(qsTr("Texture is reserved for the surface-rendering feature. It is not exposed as a non-working control."))
+        ];
+    }
+
+    function overviewIconRows() {
+        return [
+            section(qsTr("Icons"), qsTr("The essential icon controls for the selected panel."), true),
+            panelField("spin", qsTr("Size"), "iconSize", 52,
+                { from: 24, to: 128, step: 2 }),
+            panelField("combo", qsTr("Behavior"), "iconAnimation", "scale",
+                { options: motionOptions }),
+            panelField("combo", qsTr("Style"), "iconShape", "rounded",
+                { options: iconShapeOptions }),
+            section(qsTr("Appearance"),
+                qsTr("Visual controls with working renderer support.")),
+            panelField("combo", qsTr("Shape"), "iconShape", "rounded",
+                { options: iconShapeOptions }),
+            settingsField("switch", qsTr("Reflection"), "showReflections"),
+            settingsField("switch", qsTr("Indicators"), "showIndicators"),
+            notice(qsTr("Per-icon opacity, glow, shadow, and tile styling need renderer support before controls can be enabled."))
+        ];
+    }
+
+    function panelsGeneralRows() {
+        const freePanel = panelValue("edge", "bottom") === "free";
+        const edgeEditable = !panelRegistry.isBuiltIn(selectedPanelId) && !freePanel;
+        const orientation = freePanel
+            ? titleCase(panelValue("layout", "adaptive"))
+            : (["left", "right"].includes(panelValue("edge", "bottom"))
+                ? qsTr("Vertical") : qsTr("Horizontal"));
+        return [
+            section(qsTr("General"), qsTr("Identity and placement of the selected panel."), true),
+            {
+                kind: "actions",
+                label: qsTr("Panel"),
+                actions: [
+                    { label: qsTr("Add free panel"), icon: "list-add",
+                      action: "create-free" },
+                    { label: panelRegistry.isBuiltIn(selectedPanelId)
+                        ? qsTr("Hide panel") : qsTr("Remove panel"),
+                      icon: panelRegistry.isBuiltIn(selectedPanelId)
+                        ? "view-hidden" : "edit-delete",
+                      action: "remove-panel" }
+                ]
+            },
+            panelField("combo", qsTr("Panel Type"), "type", "empty",
+                { options: panelTypeOptions }),
+            panelField("combo", qsTr("Position"), "edge", "bottom",
+                {
+                    options: edgeOptions,
+                    available: edgeEditable,
+                    description: edgeEditable ? "" : qsTr("Fixed for this panel type")
+                }),
+            panelField("combo", qsTr("Alignment"), "alignment", "center",
+                { options: alignmentOptions }),
+            { kind: "readonly", label: qsTr("Orientation"), value: orientation },
+            screenField(),
+            panelField("combo", qsTr("Screen Edge"), "edge", "bottom",
+                {
+                    options: edgeOptions,
+                    available: edgeEditable,
+                    description: edgeEditable ? "" : qsTr("Fixed for this panel type")
+                }),
+            notice(qsTr("Lock Position will be added with live native-panel geometry synchronization.")),
+            section(qsTr("KDE integration")),
+            {
+                kind: "actions",
+                label: qsTr("Native KDE panel"),
+                actions: [
+                    { label: qsTr("Create"), icon: "list-add",
+                      action: "create-native-panel" },
+                    { label: qsTr("Remove"), icon: "edit-delete",
+                      action: "remove-native-panel" }
+                ]
+            }
+        ];
+    }
+
+    function panelsSizeRows() {
+        return [
+            section(qsTr("Size"), qsTr("Panel dimensions and dynamic sizing."), true),
+            panelField("spin", qsTr("Width"), "width", 720,
+                { from: 48, to: 4096, step: 4 }),
+            panelField("spin", qsTr("Height"), "height", 76,
+                { from: 48, to: 4096, step: 4 }),
+            {
+                kind: "readonly",
+                label: qsTr("Length"),
+                value: ["left", "right"].includes(panelValue("edge", "bottom"))
+                    ? panelValue("height", 76) : panelValue("width", 720),
+                description: qsTr("Derived from orientation")
+            },
+            panelField("switch", qsTr("Dynamic Size"), "dynamic", true),
+            notice(qsTr("Floating Margin needs a placement adapter before it can safely change native and free panels."))
+        ];
+    }
+
+    function panelsAppearanceRows() {
+        return [
+            section(qsTr("Appearance"), qsTr("Surface styling for the selected panel."), true),
+            panelField("combo", qsTr("Shape"), "shape", "pill",
+                { options: panelShapeOptions }),
+            panelField("text", qsTr("Color"), "color", "",
+                { placeholder: qsTr("Preset color or #AARRGGBB") }),
+            panelField("slider", qsTr("Opacity"), "opacity", 0.9,
+                { from: 0, to: 1, step: 0.05, decimals: 2 }),
+            panelField("combo", qsTr("Theme"), "appearance", "glass",
+                { options: materialOptions }),
+            panelField("combo", qsTr("Artwork fit"), "themeFit", "cover",
+                { options: choices(["cover", "contain", "stretch", "tile"]) }),
+            {
+                kind: "actions",
+                label: qsTr("Artwork"),
+                description: String(panelValue("themeStatus", qsTr("Preset surface active."))),
+                actions: [
+                    { label: qsTr("Import"), icon: "document-import",
+                      action: "import-theme" },
+                    { label: qsTr("Re-render"), icon: "view-refresh",
+                      action: "render-theme" },
+                    { label: qsTr("Clear"), icon: "edit-clear",
+                      action: "clear-theme" }
+                ]
+            },
+            notice(qsTr("Texture, Border, Shadow, and Blur will appear here once their renderer path is implemented."))
+        ];
+    }
+
+    function panelsBehaviorRows() {
+        return [
+            section(qsTr("Behavior"), qsTr("Visibility and interaction rules."), true),
+            panelField("switch", qsTr("Visible"), "visible", true),
+            {
+                kind: "switch",
+                label: qsTr("Auto Hide"),
+                scope: "mode",
+                mode: "auto-hide"
+            },
+            {
+                kind: "switch",
+                label: qsTr("Dodge Windows"),
+                scope: "mode",
+                mode: "dodge"
+            },
+            panelField("switch", qsTr("Dynamic / Static"), "dynamic", true,
+                { description: qsTr("On is dynamic; off is static") }),
+            panelField("switch", qsTr("Accept files, folders, and apps"),
+                "acceptDrops", true),
+            panelField("switch", qsTr("Spring rearrangement"),
+                "physicsEnabled", false),
+            panelField("combo", qsTr("Folder expansion"), "folderLayout", "fan",
+                { options: folderLayoutOptions }),
+            panelField("spin", qsTr("Folder animation speed"), "folderSpeed", 260,
+                { from: 80, to: 1200, step: 20 }),
+            panelField("switch", qsTr("Open folders on click"),
+                "folderExpandOnClick", true)
+        ];
+    }
+
+    function panelsLayoutRows() {
+        return [
+            section(qsTr("Layout"), qsTr("Shape geometry and content placement."), true),
+            panelField("combo", qsTr("Dock layout"), "layout", "adaptive",
+                { options: layoutOptions }),
+            panelField("slider", qsTr("Layout scale"), "layoutScale", 1.0,
+                { from: 0.5, to: 2.5, step: 0.05, decimals: 2, suffix: "×" }),
+            panelField("spin", qsTr("Radius"), "layoutRadius", 150,
+                { from: 48, to: 2048, step: 2 }),
+            panelField("spin", qsTr("Layout angle"), "layoutAngle", 0,
+                { from: -180, to: 180, step: 1 }),
+            panelField("spin", qsTr("Polygon sides"), "pathSides", 6,
+                { from: 3, to: 12, step: 1 }),
+            panelField("combo", qsTr("Content Alignment"), "pathAnchor", "center",
+                { options: pathAnchorOptions }),
+            panelField("combo", qsTr("Icon path orientation"),
+                "pathOrientation", "upright",
+                { options: pathOrientationOptions }),
+            panelField("spin", qsTr("Grid rows"), "layoutRows", 2,
+                { from: 1, to: 8, step: 1 }),
+            panelField("spin", qsTr("Panel Padding"), "layoutPadding", 18,
+                { from: 0, to: 240, step: 1 }),
+            {
+                kind: "action",
+                label: qsTr("Reset Layout"),
+                buttonText: qsTr("Reset geometry"),
+                icon: "edit-undo",
+                action: "reset-layout"
+            },
+            notice(qsTr("Content Margins, Start Offset, and End Offset need geometry support before they can be enabled."))
+        ];
+    }
+
+    function panelsSegmentsRows() {
+        return [
+            section(qsTr("Segments"), qsTr("Independent panel surface sections."), true),
+            notice(qsTr("Segments are not rendered yet. Enabled / Disabled, spacing, style, width, color, opacity, glow, corner radius, and padding will be added together so the controls cannot silently do nothing."), true)
+        ];
+    }
+
+    function iconsAppearanceRows() {
+        return [
+            section(qsTr("Appearance"), qsTr("Icon geometry and live global effects."), true),
+            panelField("combo", qsTr("Shape"), "iconShape", "rounded",
+                { options: iconShapeOptions }),
+            panelField("spin", qsTr("Size"), "iconSize", 52,
+                { from: 24, to: 128, step: 2 }),
+            panelField("slider", qsTr("Spacing"), "spacing", 8,
+                { from: 0, to: 48, step: 1, decimals: 0 }),
+            settingsField("switch", qsTr("Reflection"), "showReflections"),
+            notice(qsTr("Opacity, Glow, Shadow, Attention Color, and independent Icon Style require the icon renderer work planned for this section."))
+        ];
+    }
+
+    function iconsBehaviorRows() {
+        return [
+            section(qsTr("Hover and Click"),
+                qsTr("Select an animation and the event that triggers it."), true),
+            panelField("combo", qsTr("Animation"), "iconAnimation", "scale",
+                { options: motionOptions }),
+            panelField("combo", qsTr("Trigger"), "animationTrigger", "hover",
+                { options: triggerOptions }),
+            panelField("slider", qsTr("Animation Speed"), "animationSpeed", 1.0,
+                { from: 0.2, to: 3, step: 0.1, decimals: 1, suffix: "×" }),
+            panelField("slider", qsTr("Motion intensity"), "animationIntensity", 1.0,
+                { from: 0.1, to: 2.5, step: 0.1, decimals: 1 }),
+            section(qsTr("Magnification"),
+                qsTr("These controls currently apply to all panels.")),
+            settingsField("switch", qsTr("Enabled"), "magnificationEnabled"),
+            settingsField("slider", qsTr("Size"), "magnification",
+                { from: 1, to: 2.4, step: 0.05, decimals: 2, suffix: "×" }),
+            settingsField("slider", qsTr("Speed"), "animationDuration",
+                { from: 80, to: 500, step: 10, decimals: 0, suffix: qsTr(" ms") }),
+            settingsField("switch", qsTr("Reduce motion"), "reducedMotion"),
+            notice(qsTr("Separate Hover Glow, Click Color/Shade, Lift, and Attention controls need per-state renderer support."))
+        ];
+    }
+
+    function iconsIndicatorRows() {
+        return [
+            section(qsTr("Indicators"), qsTr("Running and attention markers."), true),
+            settingsField("switch", qsTr("Enabled"), "showIndicators"),
+            notice(qsTr("Shape, Color, Size, Style, and Attention styling are currently renderer-defined. They will be exposed together with per-panel indicators."))
+        ];
+    }
+
+    function iconsNotificationRows() {
+        return [
+            section(qsTr("Notifications"), qsTr("Badges and transient icon notices."), true),
+            notice(qsTr("Notifications are not implemented yet. Enabled, Show on Hover, Duration, and Position will be added with the notification source and renderer."), true)
+        ];
+    }
+
+    function iconStyleRows() {
+        return [
+            section(qsTr("Icon Style"), qsTr("Reusable sets of icon appearance settings."), true),
+            notice(qsTr("Name, Save, Load, Import, and Export require an Icon Style store. They are intentionally not presented as non-working buttons."), true)
+        ];
+    }
+
+    function iconTileRows() {
+        return [
+            section(qsTr("Icon Tiles"), qsTr("The surface behind each icon."), true),
+            panelField("combo", qsTr("Shape"), "iconShape", "rounded",
+                { options: iconShapeOptions }),
+            notice(qsTr("Enabled, Color, and Opacity need an independent tile renderer. Shape remains connected to the current working icon-shape setting."))
+        ];
+    }
+
+    function quickProfileRows() {
+        return [
+            section(qsTr("Quick Profile"), qsTr("Built-in Arch Dock desktop-suite profiles."), true),
+            {
+                kind: "combo",
+                label: qsTr("Current Profile"),
+                key: "pendingProfile",
+                scope: "local",
+                options: profileOptions
+            },
+            {
+                kind: "action",
+                label: qsTr("Apply Profile"),
+                buttonText: qsTr("Apply"),
+                icon: "dialog-ok-apply",
+                action: "apply-profile"
+            },
+            notice(qsTr("The existing quick profiles apply to the Arch Dock desktop suite. Selected-panel profiles, Recent Profiles, and Favorites need a dedicated profile store."))
+        ];
+    }
+
+    function manageProfileRows() {
+        return [
+            section(qsTr("Manage"), qsTr("Saved Panel Studio profiles."), true),
+            notice(qsTr("Save, Rename, and Delete will be enabled with the profile store so complete settings can be restored safely.")),
+            {
+                kind: "action",
+                label: qsTr("Reset"),
+                buttonText: qsTr("Reset all Arch Dock settings"),
+                icon: "edit-undo",
+                action: "reset-all"
+            }
+        ];
+    }
+
+    function shortcutRows() {
+        return [
+            section(qsTr("Shortcuts"), qsTr("Apply Profile 1–4."), true),
+            notice(qsTr("Profile shortcuts will use KDE GlobalAccel. Arch Dock will not install a keyboard-event watcher because that can interfere with Plasma and animated wallpapers."), true)
+        ];
+    }
+
+    function rowsForCurrentPage() {
+        if (mainTabIndex === 0)
+            return subTabIndex === 0 ? overviewPanelRows() : overviewIconRows();
+        if (mainTabIndex === 1) {
+            const panelPages = [
+                panelsGeneralRows,
+                panelsSizeRows,
+                panelsAppearanceRows,
+                panelsBehaviorRows,
+                panelsLayoutRows,
+                panelsSegmentsRows
+            ];
+            return panelPages[subTabIndex]();
+        }
+        if (mainTabIndex === 2) {
+            const iconPages = [
+                iconsAppearanceRows,
+                iconsBehaviorRows,
+                iconsIndicatorRows,
+                iconsNotificationRows,
+                iconStyleRows
+            ];
+            return iconPages[subTabIndex]();
+        }
+        if (mainTabIndex === 3)
+            return iconTileRows();
+        const profilePages = [quickProfileRows, manageProfileRows, shortcutRows];
+        return profilePages[subTabIndex]();
     }
 
     onSelectedPanelIdChanged: {
         if (selectedPanelId.length > 0)
             panelRegistry.setActivePanelId(selectedPanelId);
-        sectionTabs.currentIndex = 4;
     }
 
     onShowPanelsChanged: {
         if (showPanels)
-            sectionTabs.currentIndex = 4;
+            setMainTab(1);
     }
 
-    width: 720
-    height: 780
-    x: 320
-    y: 180
+    width: 980
+    height: 820
+    minimumWidth: 820
+    minimumHeight: 640
+    x: 260
+    y: 120
     visible: false
     color: "transparent"
     flags: Qt.Tool | Qt.FramelessWindowHint
-    title: qsTr("Arch Dock Settings")
+    title: qsTr("Arch Dock Panel Studio")
 
     onVisibleChanged: {
-        if (!visible)
-            return;
-
-        requestActivate();
+        if (visible)
+            requestActivate();
     }
 
     Rectangle {
@@ -192,24 +785,8 @@ Window {
         border.width: 1
         border.color: "#75d9edf2"
         gradient: Gradient {
-            GradientStop {
-                position: 0
-                color: "#f62a3848"
-            }
-            GradientStop {
-                position: 1
-                color: "#f1081018"
-            }
-        }
-
-        Rectangle {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.margins: 1
-            height: 1
-            radius: 1
-            color: "#aaffffff"
+            GradientStop { position: 0; color: "#f62a3848" }
+            GradientStop { position: 1; color: "#f1081018" }
         }
     }
 
@@ -219,9 +796,7 @@ Window {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.topMargin: 1
-        anchors.leftMargin: 1
-        anchors.rightMargin: 1
+        anchors.margins: 1
         height: 38
         color: "#e8182b3b"
         clip: true
@@ -239,7 +814,6 @@ Window {
             anchors.leftMargin: 12
             anchors.verticalCenter: parent.verticalCenter
             spacing: 8
-            z: 1
 
             Kirigami.Icon {
                 width: 18
@@ -274,13 +848,12 @@ Window {
             anchors.centerIn: parent
             text: {
                 const revision = root.panelRevision;
-                const panelName = panelRegistry.panelName(root.selectedPanelId);
-                return panelName.length > 0 ? panelName : qsTr("Panel Editor");
+                const name = panelRegistry.panelName(root.selectedPanelId);
+                return name.length > 0 ? name : qsTr("Panel Editor");
             }
             color: "#d5e5ed"
             font.pixelSize: 12
             elide: Text.ElideRight
-            z: 1
         }
 
         DragHandler {
@@ -291,1084 +864,235 @@ Window {
             }
         }
 
-        Row {
+        ToolButton {
             anchors.right: parent.right
             anchors.rightMargin: 4
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 2
-            z: 2
+            width: 30
+            height: 30
+            icon.name: "window-close"
+            onClicked: root.close()
 
-            ToolButton {
-                width: 30
-                height: 30
-                icon.name: "window-close"
-                onClicked: root.close()
+            background: Rectangle {
+                radius: 4
+                color: parent.hovered ? "#b94b526f" : "transparent"
+            }
 
-                background: Rectangle {
-                    radius: 4
-                    color: parent.hovered ? "#b94b526f" : "transparent"
+            ToolTip.visible: hovered
+            ToolTip.text: qsTr("Close Panel Studio")
+        }
+    }
+
+    RowLayout {
+        anchors.top: titleStrip.bottom
+        anchors.bottom: footer.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.topMargin: 10
+        anchors.leftMargin: 10
+        anchors.rightMargin: 14
+        anchors.bottomMargin: 10
+        spacing: 12
+
+        Rectangle {
+            Layout.fillHeight: true
+            Layout.preferredWidth: 164
+            radius: 8
+            color: "#4a101a23"
+            border.width: 1
+            border.color: "#263d5361"
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 8
+                spacing: 4
+
+                Label {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 8
+                    Layout.topMargin: 4
+                    Layout.bottomMargin: 6
+                    text: qsTr("STUDIO")
+                    color: "#718995"
+                    font.pixelSize: 10
+                    font.weight: Font.DemiBold
+                    font.letterSpacing: 1.2
                 }
 
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Close settings")
+                Repeater {
+                    model: root.mainTabLabels
+
+                    delegate: ItemDelegate {
+                        required property string modelData
+                        required property int index
+
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 48
+                        text: modelData
+                        icon.name: root.mainTabIcons[index]
+                        checkable: true
+                        checked: root.mainTabIndex === index
+                        onClicked: root.setMainTab(index)
+
+                        contentItem: RowLayout {
+                            spacing: 10
+
+                            Kirigami.Icon {
+                                Layout.preferredWidth: 20
+                                Layout.preferredHeight: 20
+                                source: parent.parent.icon.name
+                                color: parent.parent.checked ? "#7ce7fa" : "#9db0ba"
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: parent.parent.text
+                                color: parent.parent.checked ? "#f4fbff" : "#b2c1c8"
+                                font.weight: parent.parent.checked
+                                    ? Font.DemiBold : Font.Normal
+                            }
+                        }
+
+                        background: Rectangle {
+                            radius: 6
+                            color: parent.checked ? "#4b23627a"
+                                : (parent.hovered ? "#26384a56" : "transparent")
+                            border.width: parent.checked ? 1 : 0
+                            border.color: "#5e73cfe7"
+
+                            Rectangle {
+                                visible: parent.parent.checked
+                                anchors.left: parent.left
+                                anchors.leftMargin: 1
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 3
+                                height: 24
+                                radius: 2
+                                color: "#70e5f8"
+                            }
+                        }
+                    }
+                }
+
+                Item {
+                    Layout.fillHeight: true
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    Layout.margins: 7
+                    text: qsTr("Changes apply immediately")
+                    color: "#617985"
+                    font.pixelSize: 9
+                    wrapMode: Text.Wrap
+                }
+            }
+        }
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 8
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Label {
+                    text: qsTr("Panel")
+                    color: "#91a8b5"
+                }
+
+                ComboBox {
+                    id: panelSelector
+
+                    Layout.fillWidth: true
+                    model: panelRegistry.panelIds
+                    currentIndex: Math.max(0, model.indexOf(root.selectedPanelId))
+                    displayText: panelRegistry.panelName(currentText)
+                    delegate: ItemDelegate {
+                        required property string modelData
+
+                        width: panelSelector.width
+                        text: panelRegistry.panelName(modelData)
+                    }
+                    onActivated: {
+                        focus = false;
+                        root.selectPanel(currentText);
+                    }
+                }
+
+                Button {
+                    icon.name: "list-add"
+                    text: qsTr("Free panel")
+                    onClicked: root.openPanelEditor(panelController.createFreePanel())
+                }
+            }
+
+            TabBar {
+                id: subTabs
+
+                visible: root.currentSubtabs.length > 0
+                Layout.fillWidth: true
+                currentIndex: root.subTabIndex
+
+                Repeater {
+                    model: root.currentSubtabs
+
+                    delegate: TabButton {
+                        required property string modelData
+                        required property int index
+
+                        text: modelData
+                        width: Math.max(104, implicitWidth)
+                        onClicked: root.setSubTab(index)
+                    }
+                }
+            }
+
+            Rectangle {
+                visible: root.currentSubtabs.length === 0
+                Layout.fillWidth: true
+                height: 1
+                color: "#31526472"
+            }
+
+            StudioForm {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                studio: root
+                rows: root.rowsForCurrentPage()
             }
         }
     }
 
-    ColumnLayout {
-        anchors.top: titleStrip.bottom
+    RowLayout {
+        id: footer
+
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.topMargin: 12
-        anchors.bottomMargin: 18
-        anchors.leftMargin: 18
-        anchors.rightMargin: 18
-        spacing: 14
+        anchors.leftMargin: 12
+        anchors.rightMargin: 14
+        anchors.bottomMargin: 10
+        height: 38
 
-        TabBar {
-            id: sectionTabs
-
-            Layout.fillWidth: true
-            TabButton {
-                text: qsTr("Layout")
-            }
-
-            TabButton {
-                text: qsTr("Appearance")
-            }
-
-            TabButton {
-                text: qsTr("Behavior")
-            }
-
-            TabButton {
-                text: qsTr("Modules")
-                visible: false
-            }
-
-            TabButton {
-                text: qsTr("Panels")
-            }
+        Label {
+            text: root.mainTabLabels[root.mainTabIndex]
+                + (root.currentSubtabs.length > 0
+                    ? "  /  " + root.currentSubtabs[root.subTabIndex] : "")
+            color: "#69808d"
+            font.pixelSize: 10
         }
 
-        StackLayout {
-            currentIndex: sectionTabs.currentIndex
+        Item {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-
-            ScrollView {
-                clip: true
-                contentWidth: availableWidth
-
-                GridLayout {
-                    width: parent.width
-                    columns: 2
-                    columnSpacing: 18
-                    rowSpacing: 14
-
-                    Label { text: qsTr("Edge"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: ["bottom", "top", "left", "right"]
-                        currentIndex: model.indexOf(root.bottomPanelValue("edge", "bottom"))
-                        onActivated: panelRegistry.setPanelValue("bottom", "edge", currentText)
-                    }
-
-                    Label { text: qsTr("Alignment"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: ["start", "center", "end"]
-                        currentIndex: model.indexOf(root.bottomPanelValue("alignment", "center"))
-                        onActivated: panelRegistry.setPanelValue("bottom", "alignment", currentText)
-                    }
-
-                    Label { text: qsTr("Display"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: root.screenOptions
-                        textRole: "label"
-                        currentIndex: root.panelScreenIndex("bottom")
-                        onActivated: panelController.setPanelScreen("bottom", currentIndex)
-                    }
-
-                    Label { text: qsTr("Icon size"); color: "#cbd8e2" }
-
-                    SpinBox {
-                        Layout.fillWidth: true
-                        from: 32
-                        to: 96
-                        stepSize: 2
-                        editable: true
-                        value: root.bottomPanelValue("iconSize", 52)
-                        onValueModified: panelRegistry.setPanelValue("bottom", "iconSize", value)
-                    }
-
-                    Label { text: qsTr("Spacing"); color: "#cbd8e2" }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        Slider {
-                            Layout.fillWidth: true
-                            from: 0
-                            to: 28
-                            stepSize: 1
-                            value: root.bottomPanelValue("spacing", 8)
-                            onMoved: panelRegistry.setPanelValue("bottom", "spacing", value)
-                        }
-
-                        Label {
-                            text: Math.round(root.bottomPanelValue("spacing", 8))
-                            color: "#f4f8fb"
-                            Layout.minimumWidth: 24
-                        }
-                    }
-                }
-            }
-
-            ScrollView {
-                clip: true
-                contentWidth: availableWidth
-
-                GridLayout {
-                    width: parent.width
-                    columns: 2
-                    columnSpacing: 18
-                    rowSpacing: 14
-
-                    Label { text: qsTr("Quick profile"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: [
-                            qsTr("Aurora desktop"),
-                            qsTr("Crystal shelf"),
-                            qsTr("RocketDock glass"),
-                            qsTr("Midnight Waybar"),
-                            qsTr("Neon prism"),
-                            qsTr("Plasma Breeze"),
-                            qsTr("Lime outline")
-                        ]
-                        onActivated: {
-                            const profiles = ["aurora", "crystal", "rocket", "waybar", "neon", "plasma", "lime"];
-                            panelController.applyProfile(profiles[currentIndex]);
-                        }
-                    }
-
-                    Label { text: qsTr("Surface"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: ["glass", "crystal", "neon", "minimal", "plasma", "lime"]
-                        currentIndex: model.indexOf(root.bottomPanelValue("appearance", "glass"))
-                        onActivated: panelRegistry.setPanelValue("bottom", "appearance", currentText)
-                    }
-
-                    Label { text: qsTr("Panel opacity"); color: "#cbd8e2" }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        Slider {
-                            Layout.fillWidth: true
-                            from: 0.35
-                            to: 1.0
-                            stepSize: 0.05
-                            value: root.bottomPanelValue("opacity", 0.9)
-                            onMoved: panelRegistry.setPanelValue("bottom", "opacity", value)
-                        }
-
-                        Label {
-                            text: Math.round(root.bottomPanelValue("opacity", 0.9) * 100) + "%"
-                            color: "#f4f8fb"
-                            Layout.minimumWidth: 38
-                        }
-                    }
-
-                    Label { text: qsTr("Magnification"); color: "#cbd8e2" }
-
-                    Switch {
-                        checked: root.settings.magnificationEnabled
-                        onToggled: root.settings.magnificationEnabled = checked
-                    }
-
-                    Label {
-                        text: qsTr("Magnification amount")
-                        color: root.settings.magnificationEnabled ? "#cbd8e2" : "#647681"
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        enabled: root.settings.magnificationEnabled
-
-                        Slider {
-                            Layout.fillWidth: true
-                            from: 1.0
-                            to: 2.4
-                            stepSize: 0.05
-                            value: root.settings.magnification
-                            onMoved: root.settings.magnification = value
-                        }
-
-                        Label {
-                            text: root.settings.magnification.toFixed(2) + "x"
-                            color: "#f4f8fb"
-                            Layout.minimumWidth: 38
-                        }
-                    }
-
-                    Label { text: qsTr("Reflections"); color: "#cbd8e2" }
-
-                    Switch {
-                        checked: root.settings.showReflections
-                        onToggled: root.settings.showReflections = checked
-                    }
-
-                    Label { text: qsTr("Running indicators"); color: "#cbd8e2" }
-
-                    Switch {
-                        checked: root.settings.showIndicators
-                        onToggled: root.settings.showIndicators = checked
-                    }
-                }
-            }
-
-            ScrollView {
-                clip: true
-                contentWidth: availableWidth
-
-                GridLayout {
-                    width: parent.width
-                    columns: 2
-                    columnSpacing: 18
-                    rowSpacing: 14
-
-                    Label { text: qsTr("Auto-hide"); color: "#cbd8e2" }
-
-                    Switch {
-                        checked: root.bottomPanelValue("visibilityMode", "always") === "auto-hide"
-                        onToggled: panelController.setPanelVisibilityMode(
-                            "bottom",
-                            checked ? "auto-hide" : "always")
-                    }
-
-                    Label { text: qsTr("Tooltips"); color: "#cbd8e2" }
-
-                    Switch {
-                        checked: root.settings.showTooltips
-                        onToggled: root.settings.showTooltips = checked
-                    }
-
-                    Label { text: qsTr("Animation speed"); color: "#cbd8e2" }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        Slider {
-                            Layout.fillWidth: true
-                            from: 80
-                            to: 500
-                            stepSize: 10
-                            value: root.settings.animationDuration
-                            onMoved: root.settings.animationDuration = value
-                        }
-
-                        Label {
-                            text: root.settings.animationDuration + qsTr(" ms")
-                            color: "#f4f8fb"
-                            Layout.minimumWidth: 52
-                        }
-                    }
-
-                    Label { text: qsTr("Reduce motion"); color: "#cbd8e2" }
-
-                    Switch {
-                        checked: root.settings.reducedMotion
-                        onToggled: root.settings.reducedMotion = checked
-                    }
-
-                }
-            }
-
-            ScrollView {
-                clip: true
-                contentWidth: availableWidth
-
-                GridLayout {
-                    width: parent.width
-                    columns: 2
-                    columnSpacing: 18
-                    rowSpacing: 14
-
-                    Label { text: qsTr("Clock module"); color: "#cbd8e2" }
-
-                    Switch {
-                        checked: root.settings.showStatusModule
-                        onToggled: root.settings.showStatusModule = checked
-                    }
-
-                    Label {
-                        text: qsTr("Date in clock")
-                        color: root.settings.showStatusModule ? "#cbd8e2" : "#647681"
-                    }
-
-                    Switch {
-                        enabled: root.settings.showStatusModule
-                        checked: root.settings.showDate
-                        onToggled: root.settings.showDate = checked
-                    }
-
-                    Label {
-                        text: qsTr("Network module")
-                        color: root.settings.showStatusModule ? "#cbd8e2" : "#647681"
-                    }
-
-                    Switch {
-                        enabled: root.settings.showStatusModule
-                        checked: root.settings.showNetworkModule
-                        onToggled: root.settings.showNetworkModule = checked
-                    }
-
-                    Label {
-                        text: qsTr("Battery module")
-                        color: root.settings.showStatusModule ? "#cbd8e2" : "#647681"
-                    }
-
-                    Switch {
-                        enabled: root.settings.showStatusModule
-                        checked: root.settings.showBatteryModule
-                        onToggled: root.settings.showBatteryModule = checked
-                    }
-
-                    Label {
-                        text: qsTr("CPU and memory")
-                        color: root.settings.showStatusModule ? "#cbd8e2" : "#647681"
-                    }
-
-                    Switch {
-                        enabled: root.settings.showStatusModule
-                        checked: root.settings.showPerformanceModule
-                        onToggled: root.settings.showPerformanceModule = checked
-                    }
-                }
-            }
-
-            ScrollView {
-                clip: true
-                contentWidth: availableWidth
-
-                GridLayout {
-                    width: parent.width
-                    columns: 2
-                    columnSpacing: 18
-                    rowSpacing: 14
-
-                    Label { text: qsTr("Panel"); color: "#cbd8e2" }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        ComboBox {
-                            id: panelSelector
-
-                            Layout.fillWidth: true
-                            model: panelRegistry.panelIds
-                            currentIndex: Math.max(0, model.indexOf(root.selectedPanelId))
-                            displayText: panelRegistry.panelName(currentText)
-                            delegate: ItemDelegate {
-                                required property string modelData
-
-                                width: panelSelector.width
-                                text: panelRegistry.panelName(modelData)
-                            }
-                            onActivated: root.selectPanel(currentText)
-                        }
-
-                        Button {
-                            icon.name: "list-add"
-                            text: qsTr("Free panel")
-                            onClicked: root.selectPanel(panelController.createFreePanel())
-                        }
-                    }
-
-                    Label { text: qsTr("Visible"); color: "#cbd8e2" }
-
-                    Switch {
-                        checked: root.panelValue("visible", true)
-                        onToggled: panelRegistry.setPanelValue(root.selectedPanelId, "visible", checked)
-                    }
-
-                    Label { text: qsTr("Visibility"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: root.visibilityOptions
-                        textRole: "label"
-                        valueRole: "value"
-                        currentIndex: root.optionIndex(
-                            root.visibilityOptions,
-                            root.panelValue("visibilityMode", "always"))
-                        onActivated: panelController.setPanelVisibilityMode(
-                            root.selectedPanelId,
-                            currentValue)
-                    }
-
-                    Label { text: qsTr("Edge reveal zone"); color: "#cbd8e2" }
-
-                    SpinBox {
-                        Layout.fillWidth: true
-                        from: 1
-                        to: 64
-                        value: root.panelValue("revealZone", 10)
-                        onValueModified: panelRegistry.setPanelValue(
-                            root.selectedPanelId,
-                            "revealZone",
-                            value)
-                    }
-
-                    Label { text: qsTr("Panel edge"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        enabled: !panelRegistry.isBuiltIn(root.selectedPanelId)
-                            && root.panelValue("edge", "bottom") !== "free"
-                        model: ["top", "bottom", "left", "right", "free"]
-                        currentIndex: Math.max(0, model.indexOf(root.panelValue("edge", "bottom")))
-                        onActivated: panelRegistry.setPanelValue(root.selectedPanelId, "edge", currentText)
-                    }
-
-                    Label { text: qsTr("Panel alignment"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: ["start", "center", "end"]
-                        currentIndex: model.indexOf(root.panelValue("alignment", "center"))
-                        onActivated: panelRegistry.setPanelValue(root.selectedPanelId, "alignment", currentText)
-                    }
-
-                    Label { text: qsTr("Display"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: root.screenOptions
-                        textRole: "label"
-                        currentIndex: root.panelScreenIndex(root.selectedPanelId)
-                        onActivated: panelController.setPanelScreen(root.selectedPanelId, currentIndex)
-                    }
-
-                    Label { text: qsTr("Content"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: ["empty", "launcher", "tasks", "hybrid"]
-                        currentIndex: model.indexOf(root.panelValue("type", "hybrid"))
-                        onActivated: panelRegistry.setPanelValue(root.selectedPanelId, "type", currentText)
-                    }
-
-                    Label { text: qsTr("Dynamic length"); color: "#cbd8e2" }
-
-                    Switch {
-                        checked: root.panelValue("dynamic", true)
-                        onToggled: panelRegistry.setPanelValue(root.selectedPanelId, "dynamic", checked)
-                    }
-
-                    Label { text: qsTr("Width"); color: "#cbd8e2" }
-
-                    SpinBox {
-                        Layout.fillWidth: true
-                        from: 48
-                        to: 4096
-                        editable: true
-                        value: root.panelValue("width", 720)
-                        onValueModified: panelRegistry.setPanelValue(root.selectedPanelId, "width", value)
-                    }
-
-                    Label { text: qsTr("Height"); color: "#cbd8e2" }
-
-                    SpinBox {
-                        Layout.fillWidth: true
-                        from: 48
-                        to: 4096
-                        editable: true
-                        value: root.panelValue("height", 76)
-                        onValueModified: panelRegistry.setPanelValue(root.selectedPanelId, "height", value)
-                    }
-
-                    Label { text: qsTr("Icon size"); color: "#cbd8e2" }
-
-                    SpinBox {
-                        Layout.fillWidth: true
-                        from: 24
-                        to: 128
-                        editable: true
-                        value: root.panelValue("iconSize", 52)
-                        onValueModified: panelRegistry.setPanelValue(root.selectedPanelId, "iconSize", value)
-                    }
-
-                    Label { text: qsTr("Icon spacing"); color: "#cbd8e2" }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        Slider {
-                            Layout.fillWidth: true
-                            from: 0
-                            to: 48
-                            stepSize: 1
-                            value: root.panelValue("spacing", 8)
-                            onMoved: panelRegistry.setPanelValue(root.selectedPanelId, "spacing", value)
-                        }
-
-                        Label {
-                            text: Math.round(root.panelValue("spacing", 8))
-                            color: "#f4f8fb"
-                            Layout.minimumWidth: 26
-                        }
-                    }
-
-                    Label { text: qsTr("Opacity"); color: "#cbd8e2" }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        Slider {
-                            Layout.fillWidth: true
-                            from: 0
-                            to: 1
-                            stepSize: 0.05
-                            value: root.panelValue("opacity", 0.9)
-                            onMoved: panelRegistry.setPanelValue(root.selectedPanelId, "opacity", value)
-                        }
-
-                        Label {
-                            text: Math.round(root.panelValue("opacity", 0.9) * 100) + "%"
-                            color: "#f4f8fb"
-                            Layout.minimumWidth: 38
-                        }
-                    }
-
-                    Label { text: qsTr("Surface theme"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: root.materialOptions
-                        textRole: "label"
-                        valueRole: "value"
-                        currentIndex: root.optionIndex(root.materialOptions, root.panelValue("appearance", "glass"))
-                        onActivated: panelRegistry.setPanelValue(root.selectedPanelId, "appearance", currentValue)
-                    }
-
-                    Label { text: qsTr("Dock layout"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: root.layoutOptions
-                        textRole: "label"
-                        valueRole: "value"
-                        currentIndex: root.optionIndex(root.layoutOptions, root.panelValue("layout", "adaptive"))
-                        onActivated: panelRegistry.setPanelValue(root.selectedPanelId, "layout", currentValue)
-                    }
-
-                    Label { text: qsTr("Layout scale"); color: "#cbd8e2" }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        Slider {
-                            Layout.fillWidth: true
-                            from: 0.5
-                            to: 2.5
-                            stepSize: 0.05
-                            value: root.panelValue("layoutScale", 1.0)
-                            onMoved: panelRegistry.setPanelValue(root.selectedPanelId, "layoutScale", value)
-                        }
-
-                        Label {
-                            text: Number(root.panelValue("layoutScale", 1.0)).toFixed(2) + "x"
-                            color: "#f4f8fb"
-                            Layout.minimumWidth: 38
-                        }
-                    }
-
-                    Label { text: qsTr("Radius"); color: "#cbd8e2" }
-
-                    SpinBox {
-                        Layout.fillWidth: true
-                        from: 48
-                        to: 2048
-                        editable: true
-                        value: root.panelValue("layoutRadius", 150)
-                        onValueModified: panelRegistry.setPanelValue(root.selectedPanelId, "layoutRadius", value)
-                    }
-
-                    Label { text: qsTr("Layout angle"); color: "#cbd8e2" }
-
-                    SpinBox {
-                        Layout.fillWidth: true
-                        from: -180
-                        to: 180
-                        editable: true
-                        value: root.panelValue("layoutAngle", 0)
-                        onValueModified: panelRegistry.setPanelValue(root.selectedPanelId, "layoutAngle", value)
-                    }
-
-                    Label { text: qsTr("Polygon sides"); color: "#cbd8e2" }
-
-                    SpinBox {
-                        Layout.fillWidth: true
-                        enabled: ["polygon", "star"].includes(
-                            root.panelValue("layout", "adaptive"))
-                        from: 3
-                        to: 12
-                        value: root.panelValue("pathSides", 6)
-                        onValueModified: panelRegistry.setPanelValue(root.selectedPanelId, "pathSides", value)
-                    }
-
-                    Label { text: qsTr("Path anchor"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: root.pathAnchorOptions
-                        textRole: "label"
-                        valueRole: "value"
-                        currentIndex: root.optionIndex(
-                            root.pathAnchorOptions,
-                            root.panelValue("pathAnchor", "center"))
-                        onActivated: panelRegistry.setPanelValue(
-                            root.selectedPanelId,
-                            "pathAnchor",
-                            currentValue)
-                    }
-
-                    Label { text: qsTr("Icon path orientation"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: root.pathOrientationOptions
-                        textRole: "label"
-                        valueRole: "value"
-                        currentIndex: root.optionIndex(
-                            root.pathOrientationOptions,
-                            root.panelValue("pathOrientation", "upright"))
-                        onActivated: panelRegistry.setPanelValue(
-                            root.selectedPanelId,
-                            "pathOrientation",
-                            currentValue)
-                    }
-
-                    Label { text: qsTr("Grid rows"); color: "#cbd8e2" }
-
-                    SpinBox {
-                        Layout.fillWidth: true
-                        from: 1
-                        to: 8
-                        value: root.panelValue("layoutRows", 2)
-                        onValueModified: panelRegistry.setPanelValue(root.selectedPanelId, "layoutRows", value)
-                    }
-
-                    Label { text: qsTr("Spring rearrangement"); color: "#cbd8e2" }
-
-                    Switch {
-                        checked: root.panelValue("physicsEnabled", false)
-                        onToggled: panelRegistry.setPanelValue(root.selectedPanelId, "physicsEnabled", checked)
-                    }
-
-                    Label { text: qsTr("Icon animation"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: root.motionOptions
-                        textRole: "label"
-                        valueRole: "value"
-                        currentIndex: root.optionIndex(root.motionOptions, root.panelValue("iconAnimation", "scale"))
-                        onActivated: panelRegistry.setPanelValue(root.selectedPanelId, "iconAnimation", currentValue)
-                    }
-
-                    Label { text: qsTr("Animation trigger"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: root.triggerOptions
-                        textRole: "label"
-                        valueRole: "value"
-                        currentIndex: root.optionIndex(root.triggerOptions, root.panelValue("animationTrigger", "hover"))
-                        onActivated: panelRegistry.setPanelValue(root.selectedPanelId, "animationTrigger", currentValue)
-                    }
-
-                    Label { text: qsTr("Motion speed"); color: "#cbd8e2" }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        Slider {
-                            Layout.fillWidth: true
-                            from: 0.2
-                            to: 3.0
-                            stepSize: 0.1
-                            value: root.panelValue("animationSpeed", 1.0)
-                            onMoved: panelRegistry.setPanelValue(root.selectedPanelId, "animationSpeed", value)
-                        }
-
-                        Label {
-                            text: Number(root.panelValue("animationSpeed", 1.0)).toFixed(1) + "x"
-                            color: "#f4f8fb"
-                            Layout.minimumWidth: 34
-                        }
-                    }
-
-                    Label { text: qsTr("Motion intensity"); color: "#cbd8e2" }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        Slider {
-                            Layout.fillWidth: true
-                            from: 0.1
-                            to: 2.5
-                            stepSize: 0.1
-                            value: root.panelValue("animationIntensity", 1.0)
-                            onMoved: panelRegistry.setPanelValue(root.selectedPanelId, "animationIntensity", value)
-                        }
-
-                        Label {
-                            text: Number(root.panelValue("animationIntensity", 1.0)).toFixed(1)
-                            color: "#f4f8fb"
-                            Layout.minimumWidth: 28
-                        }
-                    }
-
-                    Label { text: qsTr("Folder expansion"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: root.folderLayoutOptions
-                        textRole: "label"
-                        valueRole: "value"
-                        currentIndex: root.optionIndex(root.folderLayoutOptions, root.panelValue("folderLayout", "fan"))
-                        onActivated: panelRegistry.setPanelValue(root.selectedPanelId, "folderLayout", currentValue)
-                    }
-
-                    Label { text: qsTr("Folder animation speed"); color: "#cbd8e2" }
-
-                    SpinBox {
-                        Layout.fillWidth: true
-                        from: 80
-                        to: 1200
-                        stepSize: 20
-                        value: root.panelValue("folderSpeed", 260)
-                        onValueModified: panelRegistry.setPanelValue(root.selectedPanelId, "folderSpeed", value)
-                    }
-
-                    Label { text: qsTr("Open folders on click"); color: "#cbd8e2" }
-
-                    Switch {
-                        checked: root.panelValue("folderExpandOnClick", true)
-                        onToggled: panelRegistry.setPanelValue(root.selectedPanelId, "folderExpandOnClick", checked)
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    Button {
-                        Layout.alignment: Qt.AlignLeft
-                        text: qsTr("Apply live preview")
-                        icon.name: "media-playback-start"
-                        onClicked: {
-                            panelRegistry.setPanelValue(root.selectedPanelId, "layout", "arc");
-                            panelRegistry.setPanelValue(root.selectedPanelId, "layoutRadius", 180);
-                            panelRegistry.setPanelValue(root.selectedPanelId, "appearance", "futuristic");
-                            panelRegistry.setPanelValue(root.selectedPanelId, "iconAnimation", "glow");
-                            panelRegistry.setPanelValue(root.selectedPanelId, "animationTrigger", "idle");
-                        }
-                    }
-
-                    Label { text: qsTr("Panel shape"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: ["pill", "rounded", "hexagon"]
-                        currentIndex: model.indexOf(root.panelValue("shape", "pill"))
-                        onActivated: panelRegistry.setPanelValue(root.selectedPanelId, "shape", currentText)
-                    }
-
-                    Label { text: qsTr("Icon tile shape"); color: "#cbd8e2" }
-
-                    ComboBox {
-                        Layout.fillWidth: true
-                        model: ["rounded", "circle", "hexagon"]
-                        currentIndex: model.indexOf(root.panelValue("iconShape", "rounded"))
-                        onActivated: panelRegistry.setPanelValue(root.selectedPanelId, "iconShape", currentText)
-                    }
-
-                    Label { text: qsTr("Panel color"); color: "#cbd8e2" }
-
-                    TextField {
-                        Layout.fillWidth: true
-                        text: root.panelValue("color", "")
-                        placeholderText: qsTr("#RRGGBB or transparent")
-                        selectByMouse: true
-                        onEditingFinished: panelRegistry.setPanelValue(root.selectedPanelId, "color", text)
-                    }
-
-                    Label { text: qsTr("Drop apps and files"); color: "#cbd8e2" }
-
-                    Switch {
-                        checked: root.panelValue("acceptDrops", true)
-                        onToggled: panelRegistry.setPanelValue(root.selectedPanelId, "acceptDrops", checked)
-                    }
-
-                    Label { text: qsTr("Theme package"); color: "#cbd8e2" }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        Label {
-                            Layout.fillWidth: true
-                            text: root.panelValue("themePackageName", "").toString().length > 0
-                                ? qsTr("%1 (v%2)")
-                                    .arg(root.panelValue("themePackageName", ""))
-                                    .arg(root.panelValue("themePackageVersion", 1))
-                                : qsTr("Preset surface")
-                            color: "#a9bfcb"
-                            elide: Text.ElideMiddle
-                        }
-
-                        Button {
-                            icon.name: "document-open"
-                            text: qsTr("Import package or artwork")
-                            onClicked: themeDialog.open()
-                        }
-                    }
-
-                    Label { text: qsTr("Import analysis"); color: "#cbd8e2" }
-
-                    Label {
-                        Layout.fillWidth: true
-                        readonly property string sourceKind: root.panelValue("themeSourceKind", "").toString()
-                        readonly property string sourceFormat: root.panelValue("themeSourceFormat", "").toString()
-                        readonly property int sourceWidth: root.panelValue("themeSourceWidth", 0)
-                        readonly property int sourceHeight: root.panelValue("themeSourceHeight", 0)
-                        readonly property bool sourceHasAlpha: root.panelValue("themeSourceHasAlpha", false)
-                        text: sourceKind.length === 0
-                            ? qsTr("No imported source")
-                            : qsTr("%1 %2 source, %3 x %4%5")
-                                .arg(sourceKind)
-                                .arg(sourceFormat.toUpperCase())
-                                .arg(sourceWidth)
-                                .arg(sourceHeight)
-                                .arg(sourceHasAlpha ? qsTr(", alpha") : "")
-                        color: "#a9bfcb"
-                        wrapMode: Text.Wrap
-                    }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 118
-                        radius: 6
-                        color: "#26121b24"
-                        border.width: 1
-                        border.color: "#40536a78"
-
-                        readonly property string previewSource: root.panelValue("themePreview", "").toString().length > 0
-                            ? root.panelValue("themePreview", "")
-                            : root.panelValue("themeAsset", "")
-
-                        Image {
-                            anchors.fill: parent
-                            anchors.margins: 8
-                            source: parent.previewSource
-                            fillMode: Image.PreserveAspectFit
-                            smooth: true
-                            mipmap: true
-                            asynchronous: true
-                            visible: source.toString().length > 0
-                        }
-
-                        Label {
-                            anchors.centerIn: parent
-                            width: parent.width - 24
-                            text: root.panelValue("themeAnalysisStatus", qsTr("No preview available."))
-                            color: "#a9bfcb"
-                            horizontalAlignment: Text.AlignHCenter
-                            wrapMode: Text.Wrap
-                            visible: parent.previewSource.length === 0
-                        }
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: root.panelValue("themeAnalysisStatus", "")
-                        color: "#a9bfcb"
-                        wrapMode: Text.Wrap
-                        visible: text.length > 0
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        readonly property bool isScene: root.panelValue("themeSourceKind", "") === "scene"
-                        readonly property bool conversionAvailable: root.panelValue("themeConversionAvailable", false)
-                        text: conversionAvailable
-                            ? qsTr("Blender rendering is available.")
-                            : qsTr("Blender rendering is unavailable; the source remains saved.")
-                        color: conversionAvailable ? "#a9bfcb" : "#d9c58a"
-                        wrapMode: Text.Wrap
-                        visible: isScene
-                    }
-
-                    Label { text: qsTr("Artwork fit"); color: "#cbd8e2" }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        ComboBox {
-                            id: themeFitSelector
-
-                            Layout.fillWidth: true
-                            model: ["cover", "contain", "stretch", "tile"]
-                            currentIndex: model.indexOf(root.panelValue("themeFit", "cover"))
-                            onActivated: {
-                                panelRegistry.setPanelValue(root.selectedPanelId, "themeFit", currentText);
-                                panelRegistry.renderTheme(
-                                    root.selectedPanelId,
-                                    root.panelValue("width", 720),
-                                    root.panelValue("height", 76),
-                                    0,
-                                    true);
-                            }
-                        }
-
-                        Button {
-                            icon.name: "view-refresh"
-                            text: qsTr("Render")
-                            enabled: root.panelValue("themeSource", "").toString().length > 0
-                            onClicked: panelRegistry.renderTheme(
-                                root.selectedPanelId,
-                                root.panelValue("width", 720),
-                                root.panelValue("height", 76),
-                                0,
-                                true)
-                        }
-
-                        Button {
-                            icon.name: "edit-clear"
-                            text: qsTr("Clear")
-                            enabled: root.panelValue("themeSource", "").toString().length > 0
-                            onClicked: panelRegistry.clearTheme(root.selectedPanelId)
-                        }
-                    }
-
-                    Button {
-                        Layout.alignment: Qt.AlignLeft
-                        icon.name: "dialog-ok-apply"
-                        text: qsTr("Use suggested fit")
-                        enabled: root.panelValue("themeSource", "").toString().length > 0
-                        onClicked: {
-                            const suggestedFit = root.panelValue("themeSuggestedFit", "cover");
-                            panelRegistry.setPanelValue(root.selectedPanelId, "themeFit", suggestedFit);
-                            panelRegistry.renderTheme(
-                                root.selectedPanelId,
-                                root.panelValue("width", 720),
-                                root.panelValue("height", 76),
-                                0,
-                                true);
-                        }
-                    }
-
-                    Label { text: qsTr("Render status"); color: "#cbd8e2" }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: root.panelValue("themeStatus", qsTr("Preset surface active."))
-                        color: root.panelValue("themeAsset", "").toString().length > 0
-                            ? "#a9bfcb" : "#d9c58a"
-                        wrapMode: Text.Wrap
-                    }
-
-                    Label { text: qsTr("KDE widget plugin"); color: "#cbd8e2" }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        ComboBox {
-                            id: kdeWidgetPlugin
-
-                            Layout.fillWidth: true
-                            editable: true
-                            model: root.kdeWidgetIds
-                            currentIndex: -1
-                            displayText: editText.length > 0
-                                ? editText : qsTr("Choose a Plasma widget")
-                        }
-
-                        Button {
-                            icon.name: "media-playback-start"
-                            text: qsTr("Add")
-                            enabled: kdeWidgetPlugin.currentText.length > 0
-                            onClicked: panelController.addKdeWidget(
-                                root.selectedPanelId,
-                                kdeWidgetPlugin.currentText)
-                        }
-
-                        Button {
-                            icon.name: "view-preview"
-                            enabled: kdeWidgetPlugin.currentText.length > 0
-                            onClicked: panelController.openKdeWidgetPreview(
-                                root.selectedPanelId,
-                                kdeWidgetPlugin.currentText)
-                        }
-                    }
-
-                    Label { text: qsTr("Native KDE panel"); color: "#cbd8e2" }
-
-                    Button {
-                        Layout.alignment: Qt.AlignLeft
-                        text: root.panelValue("nativePanelId", -1) >= 0
-                            ? qsTr("KDE panel linked") : qsTr("Create KDE panel")
-                        onClicked: panelController.createNativeKdePanel(root.selectedPanelId)
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    Button {
-                        Layout.alignment: Qt.AlignRight
-                        visible: root.panelValue("nativePanelId", -1) >= 0
-                        text: qsTr("Remove KDE panel")
-                        onClicked: panelController.removeNativeKdePanel(root.selectedPanelId)
-                    }
-
-                    Button {
-                        Layout.alignment: Qt.AlignRight
-                        text: panelRegistry.isBuiltIn(root.selectedPanelId)
-                            ? qsTr("Hide panel") : qsTr("Remove panel")
-                        onClicked: {
-                            panelController.removePanel(root.selectedPanelId);
-                            root.selectPanel(panelRegistry.activePanelId);
-                        }
-                    }
-                }
-            }
         }
 
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.topMargin: 2
-
-            Item {
-                Layout.fillWidth: true
-            }
-
-            Button {
-                text: qsTr("Reset")
-                onClicked: panelController.resetSettings()
-            }
-
-            Button {
-                text: qsTr("Done")
-                onClicked: root.close()
-            }
+        Button {
+            text: qsTr("Done")
+            icon.name: "dialog-ok"
+            onClicked: root.close()
         }
     }
 

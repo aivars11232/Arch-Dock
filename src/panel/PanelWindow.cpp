@@ -955,7 +955,8 @@ void PanelWindow::showPanelSettings(const QString &panelId)
     if (m_settingsWindow)
     {
         m_settingsWindow->setProperty("selectedPanelId", panelId);
-        m_settingsWindow->setProperty("showPanels", true);
+        m_settingsWindow->setProperty("mainTabIndex", 1);
+        m_settingsWindow->setProperty("subTabIndex", 0);
     }
     presentUtilityWindow(m_settingsWindow);
 }
