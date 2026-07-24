@@ -267,6 +267,15 @@ void PanelWindow::handlePlasmaPropertiesChanged(
     }
 }
 
+void PanelWindow::setPlasmaEditMode(bool editMode)
+{
+    if (m_plasmaEditMode == editMode)
+        return;
+    m_plasmaEditMode = editMode;
+    emit plasmaEditModeChanged();
+    synchronizeFreePanels();
+}
+
 QVariantMap PanelWindow::dockConfiguration(const QString &panelId) const
 {
     const auto panel = [this, &panelId](const char *key, const QVariant &fallback)
