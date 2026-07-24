@@ -18,10 +18,18 @@ ConfigPageBase {
             Kirigami.FormData.label: qsTr("Material")
             model: [
                 { label: qsTr("Glass"), value: "glass" },
+                { label: qsTr("Crystal"), value: "crystal" },
+                { label: qsTr("Neon"), value: "neon" },
                 { label: qsTr("Minimal"), value: "minimal" },
+                { label: qsTr("Plasma"), value: "plasma" },
+                { label: qsTr("Lime"), value: "lime" },
                 { label: qsTr("Floating glass"), value: "floating-glass" },
-                { label: qsTr("Platform"), value: "platform" },
-                { label: qsTr("Individual plates"), value: "plate" }
+                { label: qsTr("Metallic"), value: "metallic" },
+                { label: qsTr("Futuristic"), value: "futuristic" },
+                { label: qsTr("Organic"), value: "organic" },
+                { label: qsTr("Platform bases"), value: "platform" },
+                { label: qsTr("Individual plates"), value: "plate" },
+                { label: qsTr("Pedestals"), value: "pedestal" }
             ]
             textRole: "label"
             currentIndex: root.optionIndex(model, root.values.appearance || "glass")

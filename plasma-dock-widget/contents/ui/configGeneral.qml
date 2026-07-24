@@ -7,7 +7,12 @@ import org.kde.plasma.workspace.dbus as PlasmaDBus
 KCM.SimpleKCM {
     id: root
 
+    property string cfg_panelId: ""
+    property string cfg_panelIdDefault: ""
     property string cfg_panelType: "hybrid"
+    property string cfg_panelTypeDefault: "hybrid"
+    property bool cfg_bootstrapFreeDock: false
+    property bool cfg_bootstrapFreeDockDefault: false
 
     function typeIndex(panelType) {
         return ["launcher", "tasks", "hybrid"].indexOf(panelType)
