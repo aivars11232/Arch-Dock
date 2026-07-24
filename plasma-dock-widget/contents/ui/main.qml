@@ -22,6 +22,8 @@ PlasmoidItem {
     readonly property real spacing: Number(configuration.spacing || 8)
     readonly property real baseCellSize: iconSize + Math.max(4, spacing)
     readonly property real magnification: Number(configuration.magnification || 1.65)
+    readonly property real panelOpacity: configuration.opacity === undefined
+        ? 0.9 : Number(configuration.opacity)
     readonly property int motionDuration: configuration.reducedMotion
         ? 0 : Math.max(80, Math.min(1200,
             Number(configuration.animationDuration || 170)
@@ -115,6 +117,11 @@ PlasmoidItem {
             callDock("pinDockUrls", [values], refresh);
     }
 
+    function openPanelStudio() {
+        callDock(panelId.length > 0 ? "showPanelSettings" : "showSettings",
+                 panelId.length > 0 ? [panelId] : []);
+    }
+
     compactRepresentation: Kirigami.Icon {
         implicitWidth: Kirigami.Units.iconSizes.medium
         implicitHeight: implicitWidth
@@ -140,7 +147,7 @@ PlasmoidItem {
             : magnifiedCell + Kirigami.Units.largeSpacing * 2
         Layout.minimumWidth: implicitWidth
         Layout.minimumHeight: implicitHeight
-        opacity: root.configuration.opacity
+        opacity: root.panelOpacity
 
         Loader {
             anchors.centerIn: parent
@@ -178,6 +185,7 @@ PlasmoidItem {
                         reorder: root.reorderEntry
                         pinUrls: root.pinDroppedUrls
                         setHoveredIndex: function(value) { root.hoveredIndex = value }
+                        openPanelStudio: root.openPanelStudio
                     }
                 }
             }
@@ -213,6 +221,7 @@ PlasmoidItem {
                         reorder: root.reorderEntry
                         pinUrls: root.pinDroppedUrls
                         setHoveredIndex: function(value) { root.hoveredIndex = value }
+                        openPanelStudio: root.openPanelStudio
                     }
                 }
             }

@@ -28,6 +28,7 @@ Item {
     required property var reorder
     required property var pinUrls
     required property var setHoveredIndex
+    required property var openPanelStudio
 
     readonly property int indexDistance: hoveredIndex < 0 ? 99 : Math.abs(hoveredIndex - entryIndex)
     readonly property real influence: !magnificationEnabled || hoveredIndex < 0
@@ -163,6 +164,12 @@ Item {
 
     QQC2.Menu {
         id: contextMenu
+        QQC2.MenuItem {
+            text: qsTr("Open Panel Studio…")
+            icon.name: "configure"
+            onTriggered: root.openPanelStudio()
+        }
+        QQC2.MenuSeparator {}
         QQC2.MenuItem {
             text: entry.pinned ? qsTr("Unpin") : qsTr("Pin")
             onTriggered: root.invoke("togglePinnedDockEntry", entry.appId)

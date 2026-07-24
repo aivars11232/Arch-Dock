@@ -27,7 +27,31 @@ KCM.SimpleKCM {
         PlasmaDBus.SessionBus.asyncCall(message);
     }
 
+    function openPanelStudio() {
+        const panelId = plasmoid.configuration.panelId || "";
+        const message = new PlasmaDBus.dbusMessage({
+            service: "org.archdock.ArchDock",
+            path: "/Control",
+            member: panelId.length > 0 ? "showPanelSettings" : "showSettings"
+        });
+        message.iface = "local.PanelWindow";
+        message.arguments = panelId.length > 0 ? [panelId] : [];
+        PlasmaDBus.SessionBus.asyncCall(message);
+    }
+
     Kirigami.FormLayout {
+        QQC2.Button {
+            Kirigami.FormData.label: qsTr("Arch Dock")
+            text: qsTr("Open Panel Studio")
+            icon.name: "configure"
+            onClicked: root.openPanelStudio()
+        }
+
+        QQC2.Label {
+            Kirigami.FormData.isSection: true
+            text: qsTr("Native panel integration")
+        }
+
         QQC2.ComboBox {
             id: panelType
 
