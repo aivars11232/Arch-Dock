@@ -1,0 +1,14 @@
+{
+    "KPackageStructure": "Plasma/LayoutTemplate",
+    "KPlugin": {
+        "Id": "org.archdock.plasma.desktop.circularFreeDock",
+        "Name": "Arch Dock Circular Free Dock",
+        "Description": "Creates an optional circular Arch Dock that can be moved anywhere on the desktop.",
+        "Icon": "media-playlist-repeat",
+        "Version": "1.0.0",
+        "License": "MIT",
+        "ServiceTypes": ["Plasma/LayoutTemplate"]
+    },
+    "X-Plasma-ContainmentCategories": ["panel"],
+    "X-Plasma-Shell": "plasmashell"
+}

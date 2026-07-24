@@ -153,6 +153,9 @@ install(
   DIRECTORY plasma-layout-template-hybrid/
   DESTINATION share/plasma/layout-templates/org.archdock.plasma.desktop.hybridPanel)
 install(
+  DIRECTORY plasma-layout-template-free/
+  DESTINATION share/plasma/layout-templates/org.archdock.plasma.desktop.circularFreeDock)
+install(
   FILES data/org.archdock.ArchDock.service
   DESTINATION share/dbus-1/services)
 install(

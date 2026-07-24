@@ -7,5 +7,14 @@
         <entry name="panelId" type="String">
             <default></default>
         </entry>
+        <entry name="bootstrapAction" type="String">
+            <default></default>
+        </entry>
+        <entry name="bootstrapToken" type="String">
+            <default></default>
+        </entry>
+        <entry name="bootstrapPanelId" type="Int">
+            <default>-1</default>
+        </entry>
     </group>
 </kcfg>

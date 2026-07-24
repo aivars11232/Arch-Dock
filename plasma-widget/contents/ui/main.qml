@@ -16,6 +16,10 @@ PlasmoidItem {
     switchHeight: Kirigami.Units.gridUnit * 6
 
     readonly property string panelId: Plasmoid.configuration.panelId || ""
+    readonly property string bootstrapAction: Plasmoid.configuration.bootstrapAction || ""
+    readonly property string bootstrapToken: Plasmoid.configuration.bootstrapToken || ""
+    readonly property int bootstrapPanelId: Plasmoid.configuration.bootstrapPanelId
+    property bool bootstrapRequested: false
 
     function callDock(methodName, parameters, onResolved, onRejected) {
         const message = new PlasmaDBus.dbusMessage({
@@ -42,11 +46,30 @@ PlasmoidItem {
         callDock("createNativePanel", [edge, type]);
     }
 
+    function tryBootstrap() {
+        if (bootstrapRequested || !dockService.registered ||
+            bootstrapAction !== "create-circular-free-panel" ||
+            bootstrapPanelId < 0 || bootstrapToken.length === 0)
+            return;
+        bootstrapRequested = true;
+        callDock("createFreePanelFromTemplate", [bootstrapPanelId, bootstrapToken],
+            function(result) {
+                if (!result || result.length === 0)
+                    bootstrapRequested = false;
+            },
+            function() {
+                bootstrapRequested = false;
+            });
+    }
+
+    Component.onCompleted: Qt.callLater(tryBootstrap)
+
     PlasmaDBus.DBusServiceWatcher {
         id: dockService
 
         busType: PlasmaDBus.BusType.Session
         watchedService: "org.archdock.ArchDock"
+        onRegisteredChanged: root.tryBootstrap()
     }
 
     compactRepresentation: MouseArea {

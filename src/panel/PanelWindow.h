@@ -42,6 +42,7 @@ public slots:
     void showPanelSettings(const QString &panelId);
     QString createNativePanel(const QString &edge, const QString &type);
     QString createFreePanel();
+    QString createFreePanelFromTemplate(int containmentId, const QString &ownershipToken);
     void saveFreePanelPosition(const QString &panelId, int x, int y);
     bool setNativePanelType(const QString &panelId, const QString &type);
     QVariantMap dockConfiguration(const QString &panelId) const;

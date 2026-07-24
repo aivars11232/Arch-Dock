@@ -804,6 +804,57 @@ QString PanelWindow::createFreePanel()
     return panelId;
 }
 
+QString PanelWindow::createFreePanelFromTemplate(int containmentId,
+                                                 const QString &ownershipToken)
+{
+    if (containmentId < 0 ||
+        !ownershipToken.startsWith(QStringLiteral("archdock-free-template-")) ||
+        ownershipToken.size() > 96)
+    {
+        qWarning() << "Rejected invalid free-panel template request";
+        return {};
+    }
+
+    const QString token = plasmaScriptStringLiteral(ownershipToken);
+    const QString verifyScript = QStringLiteral(R"JS(
+const bridgePanel = panelById(%1);
+let verified = 0;
+if (bridgePanel) {
+    const controls = bridgePanel.widgets("org.archdock.control");
+    for (let index = 0; index < controls.length; ++index) {
+        controls[index].currentConfigGroup = ["General"];
+        if (controls[index].readConfig("bootstrapAction") === "create-circular-free-panel" &&
+            controls[index].readConfig("bootstrapToken") === %2) {
+            verified = 1;
+            break;
+        }
+    }
+}
+print(verified);
+)JS").arg(containmentId).arg(token);
+    if (evaluatePlasmaScript(verifyScript) != 1)
+    {
+        qWarning() << "Rejected unverified free-panel template bridge" << containmentId;
+        return {};
+    }
+
+    const QString panelId = m_panelRegistry.addFreePanel();
+    synchronizeFreePanels();
+
+    const int removed = evaluatePlasmaScript(
+        QStringLiteral("const bridgePanel = panelById(%1); "
+                       "if (bridgePanel) { bridgePanel.remove(); print(1); } "
+                       "else { print(0); }")
+            .arg(containmentId));
+    if (removed != 1)
+    {
+        qWarning() << "Free panel created, but its temporary Plasma bridge was not removed"
+                   << containmentId;
+    }
+    showPanelSettings(panelId);
+    return panelId;
+}
+
 void PanelWindow::saveFreePanelPosition(const QString &panelId, int x, int y)
 {
     if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() != QStringLiteral("free"))
