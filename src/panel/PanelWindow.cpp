@@ -723,10 +723,8 @@ void PanelWindow::synchronizeFreePanels()
         const QString layout = m_panelRegistry.panelValue(panelId, QStringLiteral("layout")).toString();
         const int iconSize = m_panelRegistry.panelValue(panelId, QStringLiteral("iconSize")).toInt();
         const QRect bounds(0, 0, qMax(160, width), qMax(160, height));
-        if (!m_plasmaEditMode &&
-            (layout == QStringLiteral("circular") || layout == QStringLiteral("ring") ||
+        if (layout == QStringLiteral("circular") || layout == QStringLiteral("ring") ||
             layout == QStringLiteral("ellipse") || layout == QStringLiteral("radial"))
-           )
         {
             QRect track = bounds.adjusted(iconSize / 4, iconSize / 4,
                                           -iconSize / 4, -iconSize / 4);

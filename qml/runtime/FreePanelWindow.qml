@@ -37,7 +37,8 @@ Window {
     height: Math.max(160, value("height", Math.ceil(geometry.height)))
     visible: false
     color: "transparent"
-    flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnBottomHint
+    flags: Qt.Tool | Qt.FramelessWindowHint
+        | (editMode ? Qt.WindowStaysOnTopHint : Qt.WindowStaysOnBottomHint)
     title: "Arch Dock Free Panel — " + panelId
 
     Component.onCompleted: {
@@ -145,16 +146,6 @@ Window {
         }
     }
 
-    Rectangle {
-        anchors.fill: parent
-        visible: root.editMode
-        color: "transparent"
-        radius: 18
-        border.width: 2
-        border.color: "#78a9dcff"
-        opacity: 0.9
-    }
-
     Repeater {
         model: dockModel
 
@@ -203,7 +194,6 @@ Window {
                 id: mouse
                 anchors.fill: parent
                 hoverEnabled: true
-                enabled: !root.editMode
                 onClicked: dockModel.activate(entry.index)
             }
             ToolTip.visible: mouse.containsMouse
@@ -220,7 +210,6 @@ Window {
         color: handleMouse.containsMouse || root.moving ? "#b8324658" : "#78303d49"
         border.width: 1
         border.color: "#86d8efff"
-        visible: root.editMode
 
         Kirigami.Icon {
             anchors.centerIn: parent
@@ -243,29 +232,5 @@ Window {
         }
         ToolTip.visible: handleMouse.containsMouse
         ToolTip.text: qsTr("Drag free panel")
-    }
-
-    Column {
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.rightMargin: 8
-        spacing: 8
-        visible: root.editMode
-
-        RoundButton {
-            icon.name: "settings-configure"
-            display: AbstractButton.IconOnly
-            onClicked: panelController.showPanelSettings(root.panelId)
-            ToolTip.visible: hovered
-            ToolTip.text: qsTr("Configure free panel")
-        }
-
-        RoundButton {
-            icon.name: "edit-delete"
-            display: AbstractButton.IconOnly
-            onClicked: panelController.removePanel(root.panelId)
-            ToolTip.visible: hovered
-            ToolTip.text: qsTr("Remove free panel")
-        }
     }
 }
