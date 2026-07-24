@@ -110,6 +110,13 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
             QDBusConnection::ExportAllSlots |
                 QDBusConnection::ExportAllSignals |
                 QDBusConnection::ExportAllProperties);
+        sessionBus.connect(
+            QStringLiteral("org.kde.plasmashell"),
+            QStringLiteral("/PlasmaShell"),
+            QStringLiteral("org.freedesktop.DBus.Properties"),
+            QStringLiteral("PropertiesChanged"),
+            this,
+            SLOT(handlePlasmaPropertiesChanged(QString,QVariantMap,QStringList)));
         if (QDBusConnectionInterface *interface = sessionBus.interface())
         {
             connect(interface,
@@ -127,8 +134,15 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
                         if (newOwner.isEmpty())
                         {
                             ++m_nativePanelRecoveryGeneration;
+                            if (m_plasmaEditMode)
+                            {
+                                m_plasmaEditMode = false;
+                                emit plasmaEditModeChanged();
+                                synchronizeFreePanels();
+                            }
                             return;
                         }
+                        refreshPlasmaEditMode();
                         scheduleNativePanelRecovery();
                     });
         }
@@ -183,6 +197,7 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     }
 
     synchronizeScreenAssignments();
+    refreshPlasmaEditMode();
     scheduleNativePanelRecovery();
 }
 
@@ -207,6 +222,49 @@ int PanelWindow::visibilityRevision() const
 qulonglong PanelWindow::dockRevision() const
 {
     return m_dockRevision;
+}
+
+bool PanelWindow::plasmaEditMode() const
+{
+    return m_plasmaEditMode;
+}
+
+void PanelWindow::refreshPlasmaEditMode()
+{
+    QDBusInterface shell(
+        QStringLiteral("org.kde.plasmashell"),
+        QStringLiteral("/PlasmaShell"),
+        QStringLiteral("org.kde.PlasmaShell"),
+        QDBusConnection::sessionBus());
+    const bool editMode = shell.isValid() && shell.property("editMode").toBool();
+    if (m_plasmaEditMode == editMode)
+        return;
+    m_plasmaEditMode = editMode;
+    emit plasmaEditModeChanged();
+    synchronizeFreePanels();
+}
+
+void PanelWindow::handlePlasmaPropertiesChanged(
+    const QString &interfaceName,
+    const QVariantMap &changedProperties,
+    const QStringList &invalidatedProperties)
+{
+    if (interfaceName != QStringLiteral("org.kde.PlasmaShell"))
+        return;
+    if (changedProperties.contains(QStringLiteral("editMode")))
+    {
+        const bool editMode = changedProperties.value(QStringLiteral("editMode")).toBool();
+        if (m_plasmaEditMode != editMode)
+        {
+            m_plasmaEditMode = editMode;
+            emit plasmaEditModeChanged();
+            synchronizeFreePanels();
+        }
+    }
+    else if (invalidatedProperties.contains(QStringLiteral("editMode")))
+    {
+        refreshPlasmaEditMode();
+    }
 }
 
 QVariantMap PanelWindow::dockConfiguration(const QString &panelId) const
@@ -656,8 +714,10 @@ void PanelWindow::synchronizeFreePanels()
         const QString layout = m_panelRegistry.panelValue(panelId, QStringLiteral("layout")).toString();
         const int iconSize = m_panelRegistry.panelValue(panelId, QStringLiteral("iconSize")).toInt();
         const QRect bounds(0, 0, qMax(160, width), qMax(160, height));
-        if (layout == QStringLiteral("circular") || layout == QStringLiteral("ring") ||
+        if (!m_plasmaEditMode &&
+            (layout == QStringLiteral("circular") || layout == QStringLiteral("ring") ||
             layout == QStringLiteral("ellipse") || layout == QStringLiteral("radial"))
+           )
         {
             QRect track = bounds.adjusted(iconSize / 4, iconSize / 4,
                                           -iconSize / 4, -iconSize / 4);
@@ -676,7 +736,7 @@ void PanelWindow::synchronizeFreePanels()
         {
             window->setMask(QRegion(bounds));
         }
-        window->setVisible(visible);
+        window->setVisible(visible || m_plasmaEditMode);
     }
 
     for (auto iterator = m_freePanelWindows.begin(); iterator != m_freePanelWindows.end();)

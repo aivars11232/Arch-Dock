@@ -28,6 +28,7 @@ class PanelWindow final : public QObject
     Q_PROPERTY(int screenRevision READ screenRevision NOTIFY screenRevisionChanged)
     Q_PROPERTY(int visibilityRevision READ visibilityRevision NOTIFY visibilityRevisionChanged)
     Q_PROPERTY(qulonglong dockRevision READ dockRevision NOTIFY dockRevisionChanged)
+    Q_PROPERTY(bool plasmaEditMode READ plasmaEditMode NOTIFY plasmaEditModeChanged)
 
 public:
     explicit PanelWindow(QQmlApplicationEngine &engine,
@@ -36,6 +37,7 @@ public:
     [[nodiscard]] int screenRevision() const;
     [[nodiscard]] int visibilityRevision() const;
     [[nodiscard]] qulonglong dockRevision() const;
+    [[nodiscard]] bool plasmaEditMode() const;
 
 public slots:
     void showSettings();
@@ -86,8 +88,13 @@ signals:
     void visibilityRevisionChanged();
     void dockRevisionChanged();
     void nativePanelRecoveryFinished();
+    void plasmaEditModeChanged();
 
 private:
+    void refreshPlasmaEditMode();
+    Q_SLOT void handlePlasmaPropertiesChanged(const QString &interfaceName,
+                                              const QVariantMap &changedProperties,
+                                              const QStringList &invalidatedProperties);
     void updateDesktopSuite();
     void syncRegistryFromLegacySettings();
     void synchronizeScreenAssignments();
@@ -131,4 +138,5 @@ private:
     qulonglong m_dockRevision = 0;
     int m_nativePanelRecoveryGeneration = 0;
     bool m_nativePanelRecoveryActive = false;
+    bool m_plasmaEditMode = false;
 };
