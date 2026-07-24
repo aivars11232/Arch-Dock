@@ -47,6 +47,7 @@ public slots:
 
 signals:
     void panelsChanged();
+    void nativePanelTopologyChanged();
     void activePanelIdChanged();
     void revisionChanged();
 
@@ -73,7 +74,7 @@ private:
     void finishRender(const RenderRequest &request, bool success, const QString &message);
     void load();
     void save() const;
-    void changed();
+    void changed(bool nativeTopologyChanged);
 
     QList<QVariantMap> m_panels;
     QHash<QString, RenderRequest> m_activeRenders;

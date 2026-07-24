@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtTest 1.3
 import "../qml/runtime/DockGeometry.js" as DockGeometry
+import "../plasma-dock-widget/contents/ui/DockGeometry.js" as PlasmaDockGeometry
 
 TestCase {
     name: "DockGeometry"
@@ -45,5 +46,26 @@ TestCase {
 
         compare(offset.x, 196);
         compare(offset.y, 116);
+    }
+
+    function test_plasmaWidgetRendersSelectedSurfaceShape() {
+        const geometry = PlasmaDockGeometry.metrics(
+            "hexagon", 6, 40, 8, 1, 120, 2, 12, false, 0, 6);
+        const hexagon = PlasmaDockGeometry.surface("hexagon", geometry, 0, 6);
+        compare(hexagon.closed, true);
+        compare(hexagon.points.length, 6);
+
+        const arc = PlasmaDockGeometry.surface("arc",
+            PlasmaDockGeometry.metrics(
+                "arc", 6, 40, 8, 1, 120, 2, 12, false, 0, 6),
+            0, 6);
+        compare(arc.closed, false);
+        verify(arc.points.length > 20);
+
+        const first = PlasmaDockGeometry.position(
+            "hexagon", 0, 6, geometry, 0, 6, "upright");
+        const second = PlasmaDockGeometry.position(
+            "hexagon", 1, 6, geometry, 0, 6, "upright");
+        verify(first.x !== second.x || first.y !== second.y);
     }
 }

@@ -17,6 +17,7 @@
 #include <QJsonObject>
 #include <QPainter>
 #include <QSettings>
+#include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
@@ -82,6 +83,7 @@ private slots:
     void concealsOnlyForRelevantActiveWindows();
     void persistsReducedMotionPreference();
     void normalizesLayoutAndMotionValues();
+    void separatesVisualChangesFromPanelTopology();
     void filtersEntriesByPanelContentType();
     void exposesStablePanelEntrySnapshots();
     void targetsStableApplicationWindowIds();
@@ -416,6 +418,29 @@ void PanelRegistryTest::normalizesLayoutAndMotionValues()
              QStringLiteral("upright"));
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("pathAnchor")).toString(),
              QStringLiteral("bottom-right"));
+}
+
+void PanelRegistryTest::separatesVisualChangesFromPanelTopology()
+{
+    PanelRegistry registry;
+    const QString panelId = registry.addFreePanel();
+    QSignalSpy topologySpy(&registry, &PanelRegistry::nativePanelTopologyChanged);
+    QSignalSpy revisionSpy(&registry, &PanelRegistry::revisionChanged);
+
+    registry.setPanelValue(panelId, QStringLiteral("layout"), QStringLiteral("hexagon"));
+    registry.setPanelValue(panelId, QStringLiteral("shape"), QStringLiteral("hexagon"));
+    registry.setPanelValue(panelId, QStringLiteral("appearance"), QStringLiteral("futuristic"));
+
+    QCOMPARE(topologySpy.count(), 0);
+    QCOMPARE(revisionSpy.count(), 3);
+
+    registry.setPanelValue(panelId, QStringLiteral("screen"), 1);
+    QCOMPARE(topologySpy.count(), 0);
+    QCOMPARE(revisionSpy.count(), 4);
+
+    registry.setPanelValue(QStringLiteral("bottom"), QStringLiteral("screen"), 1);
+    QCOMPARE(topologySpy.count(), 1);
+    QCOMPARE(revisionSpy.count(), 5);
 }
 
 void PanelRegistryTest::filtersEntriesByPanelContentType()

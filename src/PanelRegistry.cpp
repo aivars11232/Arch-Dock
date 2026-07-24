@@ -15,6 +15,7 @@
 #include <QProcess>
 #include <QSaveFile>
 #include <QScreen>
+#include <QSet>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QtGlobal>
@@ -724,7 +725,7 @@ QString PanelRegistry::addPanel(const QString &edge, const QString &type)
     m_activePanelId = id;
     save();
     emit activePanelIdChanged();
-    changed();
+    changed(true);
     return id;
 }
 
@@ -754,7 +755,7 @@ QString PanelRegistry::addFreePanel()
     m_activePanelId = id;
     save();
     emit activePanelIdChanged();
-    changed();
+    changed(false);
     return id;
 }
 
@@ -768,6 +769,8 @@ void PanelRegistry::removePanel(const QString &panelId)
             continue;
         }
 
+        const bool nativePanel = panel.value(QStringLiteral("edge")).toString() !=
+            QStringLiteral("free");
         if (panel.value(QStringLiteral("builtIn")).toBool())
         {
             panel.insert(QStringLiteral("visible"), false);
@@ -783,7 +786,7 @@ void PanelRegistry::removePanel(const QString &panelId)
             emit activePanelIdChanged();
         }
         save();
-        changed();
+        changed(nativePanel);
         return;
     }
 }
@@ -1389,8 +1392,23 @@ void PanelRegistry::setPanelValues(const QString &panelId, const QVariantMap &va
         return;
     }
 
+    const bool wasNativePanel = panel->value(QStringLiteral("edge")).toString() !=
+        QStringLiteral("free");
     bool didChange = false;
     bool contentOnly = true;
+    bool topologyChanged = false;
+    static const QSet<QString> topologyKeys{
+        QStringLiteral("visible"),
+        QStringLiteral("edge"),
+        QStringLiteral("alignment"),
+        QStringLiteral("screen"),
+        QStringLiteral("screenId"),
+        QStringLiteral("visibilityMode"),
+        QStringLiteral("revealZone"),
+        QStringLiteral("dynamic"),
+        QStringLiteral("width"),
+        QStringLiteral("height"),
+        QStringLiteral("type")};
     for (auto iterator = values.cbegin(); iterator != values.cend(); ++iterator)
     {
         if (iterator.key() == QStringLiteral("id") || iterator.key() == QStringLiteral("builtIn"))
@@ -1405,6 +1423,7 @@ void PanelRegistry::setPanelValues(const QString &panelId, const QVariantMap &va
         }
         panel->insert(iterator.key(), normalized);
         didChange = true;
+        topologyChanged = topologyChanged || topologyKeys.contains(iterator.key());
         if (iterator.key() != QStringLiteral("contentUrls") &&
             iterator.key() != QStringLiteral("contentAppIds"))
         {
@@ -1418,6 +1437,12 @@ void PanelRegistry::setPanelValues(const QString &panelId, const QVariantMap &va
         if (!contentOnly)
         {
             emit panelsChanged();
+        }
+        const bool isNativePanel = panel->value(QStringLiteral("edge")).toString() !=
+            QStringLiteral("free");
+        if (topologyChanged && (wasNativePanel || isNativePanel))
+        {
+            emit nativePanelTopologyChanged();
         }
         emit revisionChanged();
     }
@@ -1772,9 +1797,13 @@ void PanelRegistry::save() const
     settings.sync();
 }
 
-void PanelRegistry::changed()
+void PanelRegistry::changed(bool nativeTopologyChanged)
 {
     ++m_revision;
     emit panelsChanged();
+    if (nativeTopologyChanged)
+    {
+        emit nativePanelTopologyChanged();
+    }
     emit revisionChanged();
 }

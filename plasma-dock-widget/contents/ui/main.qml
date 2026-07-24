@@ -199,10 +199,14 @@ PlasmoidItem {
 
         readonly property string freeLayout: root.configuration.layout || "circular"
         readonly property var freeGeometry: DockGeometry.metrics(
-            root.entries.length, root.iconSize, root.spacing,
+            freeLayout, root.entries.length, root.iconSize, root.spacing,
             Number(root.configuration.layoutScale || 1),
             Number(root.configuration.layoutRadius || 150),
-            Number(root.configuration.layoutPadding || 18))
+            Number(root.configuration.layoutRows || 2),
+            Number(root.configuration.layoutPadding || 18),
+            false,
+            Number(root.configuration.layoutAngle || 0),
+            Number(root.configuration.pathSides || 6))
         readonly property real magnifiedCell: root.baseCellSize
             * (root.configuration.magnificationEnabled ? Math.max(1, root.magnification) : 1)
         implicitWidth: root.freeSurface ? freeGeometry.width : root.vertical
@@ -245,12 +249,6 @@ PlasmoidItem {
                     onPaint: {
                         const context = getContext("2d");
                         context.reset();
-                        const cx = width / 2;
-                        const cy = height / 2;
-                        const radius = Math.min(
-                            Number(root.configuration.layoutRadius || 150)
-                                * Number(root.configuration.layoutScale || 1),
-                            Math.min(width, height) / 2 - root.iconSize / 2);
                         const layout = representation.freeLayout;
                         const appearance = root.configuration.appearance || "glass";
                         context.lineWidth = Math.max(18, root.iconSize * 0.48);
@@ -269,11 +267,20 @@ PlasmoidItem {
                             : "#000000";
                         context.shadowBlur = appearance === "minimal" ? 0
                             : appearance === "futuristic" ? 28 : 18;
+                        context.lineCap = "round";
+                        context.lineJoin = "round";
+                        const surface = DockGeometry.surface(
+                            layout,
+                            representation.freeGeometry,
+                            Number(root.configuration.layoutAngle || 0),
+                            Number(root.configuration.pathSides || 6));
                         context.beginPath();
-                        if (layout === "ellipse") {
-                            context.ellipse(cx, cy, radius, radius * 0.62, 0, 0, Math.PI * 2);
-                        } else {
-                            context.arc(cx, cy, radius, 0, Math.PI * 2);
+                        if (surface.points.length > 0) {
+                            context.moveTo(surface.points[0].x, surface.points[0].y);
+                            for (let index = 1; index < surface.points.length; ++index)
+                                context.lineTo(surface.points[index].x, surface.points[index].y);
+                            if (surface.closed)
+                                context.closePath();
                         }
                         context.stroke();
                     }
@@ -296,10 +303,12 @@ PlasmoidItem {
                             representation.freeLayout, index, root.entries.length,
                             representation.freeGeometry,
                             Number(root.configuration.layoutAngle || 0),
-                            Number(root.configuration.pathSides || 6))
+                            Number(root.configuration.pathSides || 6),
+                            root.configuration.pathOrientation || "upright")
 
                         x: (parent.width - representation.freeGeometry.width) / 2 + point.x
                         y: (parent.height - representation.freeGeometry.height) / 2 + point.y
+                        rotation: point.rotation
                         entry: modelData
                         entryIndex: index
                         vertical: false

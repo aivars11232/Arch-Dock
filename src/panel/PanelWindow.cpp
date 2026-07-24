@@ -188,7 +188,8 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     connect(&m_settings, &DockSettings::showTooltipsChanged, this, notifyGlobalVisualChange);
     connect(&m_settings, &DockSettings::animationDurationChanged, this, notifyGlobalVisualChange);
     connect(&m_settings, &DockSettings::reducedMotionChanged, this, notifyGlobalVisualChange);
-    connect(&m_panelRegistry, &PanelRegistry::panelsChanged, this, &PanelWindow::updateDesktopSuite);
+    connect(&m_panelRegistry, &PanelRegistry::nativePanelTopologyChanged,
+            this, &PanelWindow::updateDesktopSuite);
     const auto updateVisibility = [this]
     {
         ++m_visibilityRevision;
@@ -830,6 +831,22 @@ void PanelWindow::recoverNativePanels()
             {
                 removeNativeKdePanel(panelId);
             }
+            continue;
+        }
+
+        const int containmentId = nativePanelId(panelId);
+        if (containmentId < 0)
+        {
+            continue;
+        }
+        if (!nativePanelExists(containmentId))
+        {
+            m_panelRegistry.updatePanel(
+                panelId,
+                {{QStringLiteral("nativePanelId"), -1},
+                 {QStringLiteral("nativeControlAppletId"), -1},
+                 {QStringLiteral("nativeDockAppletId"), -1},
+                 {QStringLiteral("nativeOwnershipToken"), QString{}}});
             continue;
         }
 
