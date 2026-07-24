@@ -73,7 +73,7 @@ private slots:
     void cleanup();
     void provisionsPanelFamiliesAndNativeBridgeState();
     void migratesLegacyBottomPanelSettings();
-    void migratesLegacyFreePanelToNativeEdge();
+    void preservesFreePanelForFreeSurface();
     void migratesLegacyThemeSource();
     void batchesNormalizedPanelUpdates();
     void reconcilesNativeContainmentLifecycle();
@@ -174,7 +174,7 @@ void PanelRegistryTest::migratesLegacyBottomPanelSettings()
     QCOMPARE(registry.panelValue(QStringLiteral("side"), QStringLiteral("screen")).toInt(), 2);
 }
 
-void PanelRegistryTest::migratesLegacyFreePanelToNativeEdge()
+void PanelRegistryTest::preservesFreePanelForFreeSurface()
 {
     QJsonArray panels;
     panels.append(QJsonObject::fromVariantMap(
@@ -191,7 +191,7 @@ void PanelRegistryTest::migratesLegacyFreePanelToNativeEdge()
     PanelRegistry registry;
 
     QCOMPARE(registry.panelValue(QStringLiteral("free"), QStringLiteral("edge")).toString(),
-             QStringLiteral("bottom"));
+             QStringLiteral("free"));
     QCOMPARE(registry.panelValue(QStringLiteral("free"), QStringLiteral("type")).toString(),
              QStringLiteral("launcher"));
 }
@@ -397,7 +397,10 @@ void PanelRegistryTest::normalizesLayoutAndMotionValues()
     QCOMPARE(registry.panelValue(emptyPanelId, QStringLiteral("type")).toString(),
              QStringLiteral("empty"));
     QVERIFY(!registry.panelValue(emptyPanelId, QStringLiteral("dynamic")).toBool());
-    QVERIFY(registry.addPanel(QStringLiteral("free"), QStringLiteral("empty")).isEmpty());
+    const QString freePanelId = registry.addPanel(QStringLiteral("free"), QStringLiteral("empty"));
+    QVERIFY(!freePanelId.isEmpty());
+    QCOMPARE(registry.panelValue(freePanelId, QStringLiteral("edge")).toString(),
+             QStringLiteral("free"));
 
     registry.setPanelValue(QStringLiteral("bottom"), QStringLiteral("layout"), QStringLiteral("polygon"));
     registry.setPanelValue(QStringLiteral("bottom"), QStringLiteral("pathSides"), 99);

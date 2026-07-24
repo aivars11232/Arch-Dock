@@ -19,6 +19,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QRegion>
 #include <QRegularExpression>
 #include <QScreen>
 #include <QSet>
@@ -187,6 +188,8 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
 
 PanelWindow::~PanelWindow()
 {
+    qDeleteAll(m_freePanelWindows);
+    m_freePanelWindows.clear();
     delete m_settingsWindow;
     delete m_iconPropertiesWindow;
 }
@@ -485,6 +488,10 @@ QList<ArchDock::EdgePanel> PanelWindow::edgePanels() const
     for (const QString &panelId : panelIds)
     {
         const QString edge = m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString();
+        if (!isNativeDockPanelEdge(edge))
+        {
+            continue;
+        }
         const bool vertical = edge == QStringLiteral("left") || edge == QStringLiteral("right");
         panels.append({panelId,
                        edge,
@@ -594,6 +601,10 @@ void PanelWindow::recoverNativePanels()
     for (const QString &panelId : m_panelRegistry.panelIds())
     {
         const QString edge = m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString();
+        if (edge == QStringLiteral("free"))
+        {
+            continue;
+        }
         const bool visible = m_panelRegistry.panelValue(panelId, QStringLiteral("visible")).toBool();
         if (!visible)
         {
@@ -610,13 +621,74 @@ void PanelWindow::recoverNativePanels()
         }
     }
     m_nativePanelRecoveryActive = false;
+    synchronizeFreePanels();
 }
 
 void PanelWindow::updateDesktopSuite()
 {
+    synchronizeFreePanels();
     scheduleNativePanelRecovery();
     ++m_visibilityRevision;
     emit visibilityRevisionChanged();
+}
+
+void PanelWindow::synchronizeFreePanels()
+{
+    QSet<QString> activeIds;
+    for (const QString &panelId : m_panelRegistry.panelIds())
+    {
+        if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() != QStringLiteral("free"))
+            continue;
+        activeIds.insert(panelId);
+        QWindow *window = m_freePanelWindows.value(panelId);
+        if (!window)
+        {
+            window = createUtilityWindow(
+                QUrl(QStringLiteral("qrc:/qt/qml/ArchDock/qml/runtime/FreePanelWindow.qml")));
+            if (!window)
+                continue;
+            window->setProperty("panelId", panelId);
+            m_freePanelWindows.insert(panelId, window);
+        }
+        const bool visible = m_panelRegistry.panelValue(panelId, QStringLiteral("visible")).toBool();
+        const int width = m_panelRegistry.panelValue(panelId, QStringLiteral("width")).toInt();
+        const int height = m_panelRegistry.panelValue(panelId, QStringLiteral("height")).toInt();
+        const QString layout = m_panelRegistry.panelValue(panelId, QStringLiteral("layout")).toString();
+        const int iconSize = m_panelRegistry.panelValue(panelId, QStringLiteral("iconSize")).toInt();
+        const QRect bounds(0, 0, qMax(160, width), qMax(160, height));
+        if (layout == QStringLiteral("circular") || layout == QStringLiteral("ring") ||
+            layout == QStringLiteral("ellipse") || layout == QStringLiteral("radial"))
+        {
+            QRect track = bounds.adjusted(iconSize / 4, iconSize / 4,
+                                          -iconSize / 4, -iconSize / 4);
+            if (layout == QStringLiteral("ellipse"))
+                track.adjust(0, track.height() / 6, 0, -track.height() / 6);
+            QRegion mask(track, QRegion::Ellipse);
+            const int inset = qMax(iconSize, 42);
+            mask -= QRegion(track.adjusted(inset, inset, -inset, -inset), QRegion::Ellipse);
+            const int handle = 64;
+            mask += QRegion(QRect(bounds.center().x() - handle / 2,
+                                  bounds.center().y() - handle / 2, handle, handle),
+                            QRegion::Ellipse);
+            window->setMask(mask);
+        }
+        else
+        {
+            window->setMask(QRegion(bounds));
+        }
+        window->setVisible(visible);
+    }
+
+    for (auto iterator = m_freePanelWindows.begin(); iterator != m_freePanelWindows.end();)
+    {
+        if (!activeIds.contains(iterator.key()))
+        {
+            delete iterator.value();
+            iterator = m_freePanelWindows.erase(iterator);
+        }
+        else
+            ++iterator;
+    }
 }
 
 void PanelWindow::syncRegistryFromLegacySettings()
@@ -722,6 +794,23 @@ QString PanelWindow::createNativePanel(const QString &edge, const QString &type)
 
     m_panelRegistry.removePanel(panelId);
     return {};
+}
+
+QString PanelWindow::createFreePanel()
+{
+    const QString panelId = m_panelRegistry.addFreePanel();
+    synchronizeFreePanels();
+    showPanelSettings(panelId);
+    return panelId;
+}
+
+void PanelWindow::saveFreePanelPosition(const QString &panelId, int x, int y)
+{
+    if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() != QStringLiteral("free"))
+        return;
+    m_panelRegistry.updatePanel(panelId, {
+        {QStringLiteral("x"), qMax(0, x)},
+        {QStringLiteral("y"), qMax(0, y)}});
 }
 
 bool PanelWindow::setNativePanelType(const QString &panelId, const QString &type)
@@ -1306,7 +1395,14 @@ void PanelWindow::removePanel(const QString &panelId)
 
     if (!m_panelRegistry.isBuiltIn(panelId))
     {
-        removeNativeKdePanel(panelId);
+        if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() == QStringLiteral("free"))
+        {
+            delete m_freePanelWindows.take(panelId);
+        }
+        else
+        {
+            removeNativeKdePanel(panelId);
+        }
     }
     m_panelRegistry.removePanel(panelId);
     updateDesktopSuite();

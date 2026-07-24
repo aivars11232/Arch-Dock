@@ -17,6 +17,27 @@ TestCase {
         compare(Math.round(first.rotation), 45);
     }
 
+    function test_freePanelShapeFamiliesProduceDistinctPaths() {
+        const ellipse = DockGeometry.metrics(
+            "ellipse", 8, 40, 8, 1, 120, 2, 12, false, 0, 6);
+        const ellipseTop = DockGeometry.position("ellipse", 0, 8, ellipse, 0, 6, "upright");
+        const ellipseSide = DockGeometry.position("ellipse", 2, 8, ellipse, 0, 6, "upright");
+        verify(Math.abs(ellipseSide.x - ellipse.width / 2) > 80);
+        verify(Math.abs(ellipseTop.y - ellipse.height / 2) < 100);
+
+        const triangle = DockGeometry.metrics(
+            "triangle", 6, 40, 8, 1, 120, 2, 12, false, 0, 6);
+        const first = DockGeometry.position("triangle", 0, 6, triangle, 0, 6, "tangent");
+        const second = DockGeometry.position("triangle", 1, 6, triangle, 0, 6, "tangent");
+        verify(first.rotation !== second.rotation || first.x !== second.x);
+
+        const spiral = DockGeometry.metrics(
+            "spiral", 8, 40, 8, 1, 120, 2, 12, false, 0, 6);
+        const inner = DockGeometry.position("spiral", 0, 8, spiral, 0, 6, "upright");
+        const outer = DockGeometry.position("spiral", 7, 8, spiral, 0, 6, "upright");
+        verify(Math.abs(outer.x - spiral.width / 2) > Math.abs(inner.x - spiral.width / 2));
+    }
+
     function test_pathAnchorAlignsGeometryInsideLargerSurface() {
         const geometry = DockGeometry.metrics(
             "polygon", 4, 40, 8, 1, 120, 2, 12, false, 0, 4);

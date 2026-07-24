@@ -26,7 +26,8 @@ bool isEdge(const QString &edge)
     return edge == QStringLiteral("top") ||
            edge == QStringLiteral("bottom") ||
            edge == QStringLiteral("left") ||
-           edge == QStringLiteral("right");
+           edge == QStringLiteral("right") ||
+           edge == QStringLiteral("free");
 }
 
 bool isPanelType(const QString &type)
@@ -47,6 +48,8 @@ bool isPanelShape(const QString &shape)
 bool isIconShape(const QString &shape)
 {
     return shape == QStringLiteral("rounded") ||
+           shape == QStringLiteral("square") ||
+           shape == QStringLiteral("squircle") ||
            shape == QStringLiteral("circle") ||
            shape == QStringLiteral("hexagon");
 }
@@ -75,11 +78,23 @@ bool isLayout(const QString &layout)
            layout == QStringLiteral("vertical") ||
            layout == QStringLiteral("diagonal") ||
            layout == QStringLiteral("circular") ||
+           layout == QStringLiteral("ellipse") ||
+           layout == QStringLiteral("ring") ||
            layout == QStringLiteral("radial") ||
            layout == QStringLiteral("arc") ||
+           layout == QStringLiteral("semicircle") ||
            layout == QStringLiteral("fan") ||
+           layout == QStringLiteral("spiral") ||
            layout == QStringLiteral("ribbon") ||
+           layout == QStringLiteral("vertical-curve") ||
+           layout == QStringLiteral("horizontal-curve") ||
            layout == QStringLiteral("polygon") ||
+           layout == QStringLiteral("triangle") ||
+           layout == QStringLiteral("square") ||
+           layout == QStringLiteral("pentagon") ||
+           layout == QStringLiteral("hexagon") ||
+           layout == QStringLiteral("octagon") ||
+           layout == QStringLiteral("star") ||
            layout == QStringLiteral("grid") ||
            layout == QStringLiteral("floating");
 }
@@ -705,6 +720,34 @@ QString PanelRegistry::addPanel(const QString &edge, const QString &type)
     {
         panel.insert(QStringLiteral("dynamic"), false);
     }
+    m_panels.append(panel);
+    m_activePanelId = id;
+    save();
+    emit activePanelIdChanged();
+    changed();
+    return id;
+}
+
+QString PanelRegistry::addFreePanel()
+{
+    int sequence = 1;
+    QString id;
+    do
+    {
+        id = QStringLiteral("free-%1").arg(sequence++);
+    } while (record(id));
+
+    QVariantMap panel = makePanel(id, tr("Free panel %1").arg(sequence - 1),
+                                  QStringLiteral("bottom"), false);
+    panel.insert(QStringLiteral("edge"), QStringLiteral("free"));
+    panel.insert(QStringLiteral("visible"), true);
+    panel.insert(QStringLiteral("type"), QStringLiteral("hybrid"));
+    panel.insert(QStringLiteral("layout"), QStringLiteral("circular"));
+    panel.insert(QStringLiteral("width"), 420);
+    panel.insert(QStringLiteral("height"), 420);
+    panel.insert(QStringLiteral("layoutRadius"), 145);
+    panel.insert(QStringLiteral("x"), 240);
+    panel.insert(QStringLiteral("y"), 180);
     m_panels.append(panel);
     m_activePanelId = id;
     save();

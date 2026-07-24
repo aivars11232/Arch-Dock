@@ -1,0 +1,2001 @@
+1. Native Plasma integration
+
+This was one of your biggest goals.
+
+Native KDE Plasma panel, not a fake dock window.
+Works with Plasma 6 on Wayland.
+Uses real Plasma panels and containments.
+Supports Plasma Edit Mode naturally.
+Users can move/configure panels with normal Plasma tools.
+Survives plasmashell restarts.
+Handles monitor changes gracefully.
+Owns only Arch Dock panels without interfering with normal Plasma panels.
+2. Dock layouts
+
+Multiple panel types.
+
+Empty panel
+Launcher dock
+Task dock
+Hybrid launcher + tasks
+Multiple Arch Dock panels
+Horizontal and vertical
+Multiple monitor support
+Alignment options
+Floating
+Thickness
+Length
+Margins
+Screen edge selection
+3. Appearance system
+
+This is much bigger than a normal dock.
+
+Surface
+Blur
+Transparency
+Tint
+Gradients
+Shadows
+Corner radius
+Floating effect
+Glass styles
+Material presets
+Dock styling
+Theme profiles
+Background artwork
+Border options
+Reflection effects
+Running indicators
+Surface presets
+Light/Dark adaptation
+Icon styling
+
+Every icon should have its own visual treatment.
+
+Things we've discussed include
+
+icon plates
+rounded plates
+square plates
+circles
+opacity
+glow
+shadows
+gradients
+reflections
+scaling
+4. Icon behavior
+
+This is one of the largest parts.
+
+Not just magnification.
+
+The whole interaction system.
+
+Hover
+smooth scaling
+neighboring icons react
+configurable magnification
+configurable influence radius
+Click
+press animation
+release animation
+launch feedback
+Running applications
+indicators
+active state
+attention state
+minimized state
+Dragging
+reorder icons
+drag feedback
+insertion animation
+Badges
+progress
+notifications
+counts
+5. Animation engine
+
+This wasn't "add animations."
+
+It was
+
+make the dock feel alive.
+
+Examples we've discussed include
+
+smooth easing
+configurable animation speed
+hover interpolation
+icon movement
+launch animation
+minimize animation
+appearance transitions
+hide/show transitions
+popup transitions
+spring-like movement
+animations that don't fight Plasma
+6. Behavior
+
+A very large category.
+
+Auto hide
+Dodge windows
+Intelligent visibility
+Tooltips
+Native context menus
+Popup handling
+Window activation
+Multi-click behavior
+Task grouping
+Launcher pinning
+Startup behavior
+Session restoration
+7. Panel Studio
+
+This is where I think the biggest remaining work is.
+
+Current:
+
+Functional
+Feature rich
+
+Target:
+
+Not merely tabs.
+
+A polished configuration application.
+
+The mega prompt (from what you've described) aimed for
+
+better categorization
+progressive disclosure
+cards/sections
+visual hierarchy
+presets
+contextual controls
+advanced pages
+easier discoverability
+less overwhelming configuration
+
+Basically something that feels like a KDE System Settings module rather than a developer settings window.
+
+8. Customization philosophy
+
+One thing that stood out consistently wasn't any single feature.
+
+It was the philosophy.
+
+Arch Dock wasn't meant to copy Latte Dock.
+
+It was meant to let users build their dock.
+
+Meaning
+
+nearly every visual element configurable
+behavior configurable
+animation configurable
+layouts configurable
+presets
+themes
+profiles
+What I think is still missing
+
+Based on everything we've discussed, I'd estimate:
+
+Core engine: ~90–95%
+Native Plasma integration: mostly there
+Appearance engine: mostly there
+Animation engine: probably close but needs refinement
+Panel Studio UX: around 50–60% of the intended design
+
+The reason the project doesn't yet feel finished isn't because it lacks functionality. It's because the last stage—the one you and I were discussing in those "mega prompts"—was about turning a powerful set of features into a cohesive, polished product.
+
+
+
+Bottom line
+
+The current repository has a substantially rebuilt native Plasma architecture, but it does not yet deliver the full Arch Dock experience you designed in the conversations.
+
+The backend, native panel lifecycle, persistence, DBus service and settings framework are far ahead. The actual visible dock, advanced layouts, animation system, previews, drag-and-drop workflow, panel styling and final desktop-suite behaviour are still incomplete or disconnected from the live Plasma applet.
+
+My best estimate:
+
+Area	Completion
+Native Plasma architecture	90%
+Panel creation, ownership and recovery	85–95%
+Backend window/application model	70–85%
+Settings architecture	75–85%
+Actual dock visuals	30–40%
+Icon animation system	15–30%
+Window previews	10–20%
+Drag-and-drop	10–20%
+Advanced layouts	10–25%
+Complete desktop replacement	35–50%
+Public release readiness	20–30%
+Overall against the final vision	about 50–60%
+1. Final Arch Dock vision from our discussions
+
+The latest consistent vision was:
+
+Arch Dock uses native Plasma panels, not a separate fake dock window.
+Multiple independent panels can exist.
+Panels can serve as:
+launcher panel;
+task panel;
+hybrid panel;
+empty native panel.
+Eventually Arch Dock should replace your normal Plasma panels in your own workflow.
+It must support floating and highly customizable panel appearances.
+It should be Wayland-first and integrate properly with KWin and Plasma.
+It should remain lighter than KDE panels combined with heavy third-party visual effects.
+Dock-specific animation belongs inside Arch Dock.
+Whole application-window opening/minimize effects should be handled separately by KWin later.
+Icons should support:
+sizing;
+spacing;
+magnification;
+plates or bases;
+running indicators;
+hover motion;
+click motion;
+launch motion;
+persistent running motion;
+drag-and-drop motion;
+slow rotation/spinning where configured.
+Panels should support multiple visual themes and materials.
+Window previews should appear when hovering running applications.
+Multiple windows belonging to one app should be selectable individually.
+Dock behaviour should include Plasma/macOS-style hiding, reveal and dodge behaviour.
+The right-side dock should remain visible normally but hide or react appropriately around maximized windows.
+Top and bottom panels should support overlay-style auto-hide.
+There should be proper panel-editing and icon-property interfaces.
+The finished repository must eventually include installation documentation and packaging.
+
+That is the target I used below.
+
+2. What is already properly implemented
+Native Plasma-panel architecture
+
+This major architectural decision is complete.
+
+The service no longer creates its own primary visual QWindow. The visible dock is a real Plasma applet inside a real Plasma panel containment.
+
+That matches the later decision to abandon the older standalone surface architecture.
+
+Multiple native panel types
+
+The backend supports explicit panel types:
+
+empty;
+launcher;
+tasks;
+hybrid.
+
+Owned panels contain the expected Arch Dock applet, and containment ownership is tracked persistently.
+
+This matches the requirement for independent panels with different purposes.
+
+Safe panel ownership and recovery
+
+PanelRegistry records containment IDs, ownership tokens and dock applet IDs. Recovery verifies ownership before changing or deleting a panel.
+
+This is important because Arch Dock should not damage unrelated KDE panels.
+
+Plasma edit-mode compatibility
+
+The dock applet reads Plasma's actual edit-mode state. Input to Arch Dock entries is disabled while Plasma edit mode is active, allowing Plasma to retain native applet movement, removal and configuration behaviour.
+
+That resolves a significant integration requirement.
+
+Persistence and lifecycle validation
+
+The current progress report claims passing tests for:
+
+panel types;
+managed type changes;
+output disable and restoration;
+containment replacement;
+PlasmaShell restart recovery;
+preservation of unrelated panels.
+
+This indicates that the architecture is no longer merely conceptual.
+
+Build and install structure
+
+CMake installs:
+
+the Arch Dock executable;
+KWin script;
+control applet;
+visible dock applet;
+four native panel templates;
+DBus service;
+systemd user service.
+
+The deployment foundation is therefore mostly present.
+
+3. Features whose settings exist but whose visible implementation is incomplete
+
+This is one of the largest discrepancies in the repository.
+
+The project already defines many settings in the backend, including:
+
+icon size;
+icon spacing;
+magnification amount;
+magnification enabled;
+panel opacity;
+reflections;
+indicators;
+tooltips;
+status modules;
+animation duration;
+reduced motion;
+auto-hide;
+panel shape;
+icon-tile shape;
+panel types.
+
+Default values also exist for many of these concepts.
+
+However, the current visible Plasma applet still uses hard-coded values:
+
+readonly property int cellSize:
+    Kirigami.Units.iconSizes.medium
+    + Kirigami.Units.smallSpacing * 2
+
+It does not appear to consume the full settings model for icon size, magnification, reflections, shape, opacity or animations.
+
+Conclusion
+
+These features are mostly settings architecture, not completed user-facing functionality.
+
+Codex must connect the settings to the real Plasma dock applet rather than assuming they are finished because properties exist.
+
+4. Settings application: advanced concepts are designed, not necessarily implemented
+
+The settings interface contains a much broader design system than the current dock renderer.
+
+Advanced layouts already listed
+
+The settings UI includes options for:
+
+adaptive;
+horizontal;
+vertical;
+diagonal;
+circular;
+radial;
+arc;
+fan;
+ribbon;
+polygon path;
+multi-row grid;
+floating cluster.
+
+But the live dock applet currently renders only:
+
+a standard Row for horizontal panels;
+a standard Column for vertical panels.
+
+Therefore:
+
+horizontal: implemented;
+vertical: implemented;
+adaptive: partially implicit;
+diagonal/circle/radial/arc/fan/ribbon/polygon/grid/floating: not implemented in the visible applet, unless hidden implementation exists elsewhere that is not currently connected.
+Theme/material options already listed
+
+The settings interface contains:
+
+glass;
+crystal;
+neon;
+minimal;
+Plasma;
+lime;
+floating glass;
+metallic;
+futuristic;
+organic;
+platform bases;
+individual plates;
+pedestals.
+
+The current live applet has no corresponding renderer for this material system. The icon itself is simply a Kirigami.Icon, and the surrounding Plasma panel provides most of the visual shell.
+
+So the theme catalogue is currently mostly a design/configuration surface, not a fully rendered result.
+
+5. Icon animation system: planned extensively, mostly unfinished
+
+The settings UI defines many motion types:
+
+bounce;
+elastic bounce;
+pulse;
+scale;
+spin;
+slow rotation;
+orbit;
+swing;
+wobble;
+wiggle;
+shake;
+glow;
+breathing;
+floating;
+hover wave;
+ripple;
+magnetic;
+spring.
+
+It also defines triggers:
+
+hover;
+click;
+launch;
+running;
+drag and drop;
+reveal;
+always-on/idle.
+
+These correspond strongly with what you discussed: icon scaling, spinning, rotating, hover effects, launch effects and animated running states.
+
+But in the actual dock entry delegate there are no visible:
+
+Behavior;
+NumberAnimation;
+RotationAnimator;
+ScaleAnimator;
+spring animation;
+hover-wave propagation;
+launch state;
+running animation state;
+configurable motion trigger.
+
+The current hover state only activates the standard tooltip and context menu.
+
+Still needed
+
+Codex must implement a reusable animation layer, not hard-code eighteen independent effects into main.qml.
+
+A good structure would be:
+
+plasma-dock-widget/contents/ui/
+    main.qml
+    DockEntry.qml
+    IconMotionController.qml
+    IconVisual.qml
+    RunningIndicator.qml
+
+The motion engine should map:
+
+trigger + selected effect + intensity + duration
+
+to a controlled transform state.
+
+It must also respect reducedMotion.
+
+6. Icon magnification and neighbour response are missing
+
+Magnification was part of the intended dock identity and already exists as a setting:
+
+magnification;
+magnificationEnabled.
+
+The current dock uses identical fixed-size cells.
+
+There is no:
+
+cursor-distance calculation;
+centre icon enlargement;
+progressive scaling of adjacent icons;
+animated layout displacement;
+smooth return to base size.
+
+This is one of the main missing user-facing behaviours.
+
+It should be completed early because it affects layout, hitboxes, preview positioning and panel size calculations.
+
+7. Icon plates, bases, reflections and visual states are unfinished
+
+You specifically discussed icon plates and different visual supports.
+
+The settings currently expose:
+
+panelShape;
+iconTileShape;
+showReflections;
+appearance presets;
+platform/plate/pedestal materials.
+
+The live icon delegate contains no plate, reflection or shape renderer. It contains only:
+
+icon;
+small running indicator;
+mouse area;
+tooltip;
+menu.
+Still needed
+rounded plate behind icons;
+configurable tile geometry;
+platform or pedestal mode;
+hover-highlight state;
+pressed state;
+active-window state;
+urgent/attention state;
+reflection rendering, preferably lightweight;
+optional glow;
+theme-consistent borders and shadows.
+
+Hardware cost should be controlled. Reflections, blur and animated glow should be optional and disabled under reduced-motion or performance profiles.
+
+8. Running indicators are only minimally implemented
+
+The current indicator is a small highlighted rectangle. Active applications get a wider rectangle than inactive running applications.
+
+That gives basic running/active distinction, but it does not fulfil the broader indicator system discussed.
+
+Still needed
+selectable indicator styles;
+dot, line, pill or glow variants;
+multiple-window count representation;
+active, running and urgent states;
+orientation-aware positioning;
+colour/theme integration;
+optional animation;
+indicator disable setting actually connected.
+
+The setting showIndicators exists, but the current QML indicator is always controlled only by entry.running, not by the user setting.
+
+9. Window previews are not finished
+
+This was a clear Arch Dock requirement.
+
+The current hover result is only a textual tooltip:
+
+Application name
+Application name (3 windows)
+
+There is no visual preview popup.
+
+Still needed
+delayed hover detection;
+thumbnail popup;
+one preview card per window;
+title and application icon;
+active-window indication;
+close button per preview;
+click to activate a specific window;
+multi-monitor-safe popup placement;
+popup dismissal behaviour;
+support for vertical and horizontal docks;
+fallback when live thumbnail capture is unavailable.
+
+The preview system likely needs backend DBus methods exposing individual windows, not merely aggregated app entries.
+
+10. Multi-window handling is incomplete
+
+The dock entry model already knows windowCount, but the UI treats an application as one aggregated object.
+
+Left-click calls:
+
+activateDockEntry(appId)
+
+There is no per-window selector.
+
+Still needed
+expose individual window IDs and metadata;
+cycle windows on repeated click, or open preview chooser;
+support individual close/minimize/restore;
+distinguish active versus most-recent window;
+handle windows across virtual desktops and activities;
+support multiple windows with identical titles;
+ensure Wayland/KWin-compatible activation.
+11. Context menus are too limited
+
+The current context menu contains:
+
+Pin/Unpin;
+Minimize/Restore;
+Close.
+Missing likely final actions
+New window / launch another instance;
+list all windows;
+close a specific window;
+close all windows;
+application icon properties;
+edit custom icon;
+reset icon;
+move/reorder;
+remove launcher;
+keep launcher pinned;
+open application location or desktop file;
+panel-specific properties;
+animation assignment;
+motion trigger assignment.
+
+The repository still includes IconProperties.qml and IconPropertiesWindow.qml, but the visible dock menu does not expose them.
+
+That integration remains unfinished.
+
+12. Drag-and-drop is not complete
+
+Drag-and-drop was part of the intended icon interaction model, and the settings UI explicitly includes a drag-and-drop animation trigger.
+
+The current visible dock delegate contains no DragHandler, DropArea, reordering model or launcher drop handling.
+
+Still needed
+reorder pinned icons;
+persist icon order;
+drag application launchers onto the dock;
+remove icons by dragging out, if desired;
+visible insertion marker;
+hover displacement while dragging;
+prevent accidental activation;
+support dragging files onto applications;
+app-specific file acceptance;
+drag animation trigger;
+compatibility with Plasma edit mode.
+13. Folder and stack behaviour is designed but not implemented
+
+The settings include folder layouts:
+
+fan;
+grid;
+stack;
+arc;
+spiral;
+circular;
+radial;
+vertical cascade;
+horizontal cascade;
+elastic unfold;
+physics spread.
+
+There is no evidence of a working folder/stack UI in the current visible dock.
+
+This should be classified as future advanced functionality, not required for the first stable release unless you still want it in version 1.0.
+
+A practical release order would be:
+
+simple folder/group popup;
+grid;
+fan;
+advanced physics layouts later.
+14. Panel visibility behaviour needs completion and real-machine verification
+
+The settings UI defines:
+
+always visible;
+auto-hide;
+dodge active window;
+hide under active window.
+
+The backend contains placement and visibility classes.
+
+However, the exact desktop behaviour you wanted still needs real validation:
+
+Right-side dock
+
+Required behaviour:
+
+visible during normal work;
+react to maximized windows;
+hide or dodge according to selected policy;
+reveal reliably at the screen edge;
+not interfere with fullscreen applications;
+retain correct screen assignment.
+Top and bottom panels
+
+Required behaviour:
+
+overlay-style auto-hide;
+smooth reveal;
+no geometry jump;
+no permanent reserved screen area while hidden;
+correct behaviour around maximized/fullscreen windows.
+Multi-monitor
+
+Must test:
+
+panel bound to selected display;
+display disconnect;
+display reconnect;
+primary-display change;
+different scaling factors;
+different resolutions;
+panels on several displays simultaneously.
+
+The lifecycle tests cover some recovery scenarios, but they do not prove that the interaction feels correct in your actual KDE session.
+
+15. Panel geometry and free-form layouts were changed
+
+An older part of the concept included more arbitrary positioning.
+
+The latest architecture intentionally retired arbitrary free-coordinate panels because Plasma's native public panel API does not support them reliably. Legacy free panels migrate to the bottom edge.
+
+Therefore:
+
+free-floating arbitrary coordinate panels: superseded;
+native floating-looking panels attached to an edge: still valid;
+curved, arc and unusual icon layouts inside a native panel: potentially valid, but currently not rendered.
+
+This should not be reintroduced as a standalone LayerShell dock unless you deliberately reverse the architecture decision.
+
+16. Panel Studio exists, but it is ahead of the renderer
+
+The settings window is already substantial and includes:
+
+layout controls;
+appearance controls;
+behaviour controls;
+panel selection;
+screen selection;
+many advanced design options.
+
+It is presented as “Panel Studio.”
+
+This is positive, but it creates a dangerous mismatch:
+
+The UI allows users to select capabilities that the live dock may not actually render.
+
+Before release, every exposed option must be one of:
+
+fully operational;
+visibly marked experimental;
+disabled;
+removed until implemented.
+
+Otherwise Arch Dock will appear broken even though the settings save correctly.
+
+17. Status modules were planned but are currently hidden/incomplete
+
+The backend defines options for:
+
+date;
+network;
+battery;
+performance;
+general status module.
+
+But the Settings Modules tab is currently hidden:
+
+visible: false
+
+This indicates the module system is intentionally unfinished.
+
+Decision needed later
+
+Either:
+
+finish modules and expose the tab; or
+defer modules until after the dock core is stable.
+
+Given your goal of finishing Arch Dock sooner, modules should come after the essential dock interaction system.
+
+18. KWin responsibilities are correctly separated
+
+The final decision was:
+
+Inside Arch Dock
+panel reveal/hide animation;
+icon hover effects;
+magnification;
+click and launch feedback;
+icon rotation/spinning;
+running indicators;
+previews;
+panel background, blur and opacity;
+panel layout transitions.
+Separate KWin effect later
+whole application-window opening animation;
+minimize-to-dock visual;
+whole-window close animation;
+global window transformation effects.
+
+This separation remains correct.
+
+Do not ask Codex to build full application-window animation into the dock applet now.
+
+The repository still installs a KWin script, but that should be treated as integration/window-watching support, not a reason to couple all visual window effects into Arch Dock.
+
+19. Performance optimisation is not yet proven
+
+You were concerned that spinning/rotating icons and visual effects might make Arch Dock as heavy as Plasma plus Colorizer.
+
+Current good signs:
+
+native Plasma containment;
+no parallel LayerShell surface;
+relatively simple current applet;
+DBus-driven architecture.
+
+However, future effects could still become expensive.
+
+Still needed
+avoid per-frame JavaScript loops;
+prefer QML animators over property animations where possible;
+pause idle effects when the panel is hidden;
+pause animations for off-screen icons;
+disable reflection or blur in performance mode;
+avoid a shader per icon;
+cache static visual elements;
+avoid five-second polling if signals are reliable;
+measure CPU/GPU usage with multiple panels;
+test on your Ryzen 5 7520U / Radeon 610M.
+
+The current applet refreshes every five seconds in addition to DBus change notifications.
+
+That is not catastrophic, but Codex should verify whether the timer is necessary.
+
+20. Error handling and diagnostics are unfinished
+
+When DBus is unavailable or a call fails, entries are simply cleared.
+
+There is no visible distinction between:
+
+empty dock;
+stopped Arch Dock service;
+failed DBus request;
+invalid panel configuration;
+service restarting.
+Still needed
+service unavailable placeholder;
+optional retry action;
+logging;
+diagnostic command;
+version information;
+clear startup failure reporting;
+graceful configuration migration;
+recovery when the applet starts before the service.
+21. Testing is strong for architecture, weak for visual behaviour
+
+Current CMake tests include:
+
+panel registry;
+dock geometry;
+motion policy.
+
+The progress document also claims lifecycle testing in an isolated Plasma session.
+
+Still missing
+animation state tests;
+settings-to-renderer integration tests;
+preview interaction tests;
+drag reordering tests;
+multi-window tests;
+context-menu tests;
+icon-property integration tests;
+visual regression screenshots;
+long-running resource test;
+real-machine Wayland test checklist.
+
+The existing motion-policy-test does not mean that all motion effects are visually implemented. It only proves whatever policy logic that test currently covers.
+
+22. Installation and public release work remains
+
+The repository currently lacks the finished public-facing release layer.
+
+Still needed
+README.md;
+screenshots;
+short demo GIF/video;
+supported Plasma/Qt version;
+dependency list;
+build commands;
+installation;
+startup;
+panel creation instructions;
+uninstall;
+troubleshooting;
+reset configuration;
+license;
+PKGBUILD;
+GitHub Actions;
+tagged releases;
+changelog;
+known limitations.
+
+The project version is still 0.1.0.
+
+That is appropriate for the current state.
+
+What should be considered intentionally postponed
+
+These should not block the core dock unless you explicitly promote them to version 1.0:
+
+full application-window animations;
+arbitrary free-coordinate panel windows;
+embedded VS Code application preview;
+advanced folder physics;
+every one of the exotic layouts;
+performance/date/network/battery modules;
+full desktop replacement presets for every possible KDE setup;
+public packaging for distributions other than Arch.
+Exact remaining implementation order
+Phase 1 — Connect settings to the live applet
+
+First fix the architectural disconnect.
+
+The real dock must consume per-panel configuration for:
+
+icon size;
+spacing;
+opacity;
+indicator visibility;
+tooltip visibility;
+tile shape;
+material;
+animation duration;
+reduced motion;
+magnification.
+
+Without this, later features will be built on hard-coded values.
+
+Main files
+plasma-dock-widget/contents/ui/main.qml
+plasma-dock-widget/contents/config/*
+src/PanelRegistry.*
+src/panel/PanelWindow.*
+Phase 2 — Refactor the icon delegate
+
+Extract the current nested delegate from main.qml.
+
+Create:
+
+DockEntry.qml
+IconVisual.qml
+RunningIndicator.qml
+
+Implement:
+
+base plate;
+hover state;
+pressed state;
+active state;
+running state;
+urgent state;
+configurable size;
+configurable spacing.
+
+Do not add all advanced animations yet.
+
+Phase 3 — Implement magnification correctly
+
+Build:
+
+cursor-distance scaling;
+adjacent icon scaling;
+animated displacement;
+panel-size compensation;
+vertical and horizontal support;
+reduced-motion fallback.
+
+This should be completed before previews because previews must anchor to the final icon geometry.
+
+Phase 4 — Implement basic animation engine
+
+Start with six reliable effects:
+
+scale;
+bounce;
+pulse;
+spin;
+slow rotation;
+glow.
+
+Support triggers:
+
+hover;
+click;
+launch;
+running;
+idle.
+
+Then add the more exotic effects later.
+
+Phase 5 — Complete drag-and-drop
+
+Implement:
+
+icon reordering;
+order persistence;
+insertion indicator;
+drag-out behaviour;
+Plasma edit-mode protection;
+launchers dropped onto the panel.
+Phase 6 — Implement per-window backend API
+
+Expose:
+
+window identifier;
+title;
+app ID;
+icon;
+active/minimized state;
+desktop/activity;
+preview handle or capture method;
+individual activate/minimize/close methods.
+
+Do this before constructing the preview QML.
+
+Phase 7 — Build window previews
+
+Implement:
+
+preview popup;
+one or many window cards;
+hover delay;
+close buttons;
+specific-window activation;
+safe positioning on every panel edge.
+Phase 8 — Complete context menus and icon properties
+
+Connect:
+
+new instance;
+window list;
+close all;
+pin/unpin;
+icon properties;
+custom icon;
+animation assignment;
+reset icon;
+launcher removal.
+Phase 9 — Finish panel appearance presets
+
+Implement a small stable set first:
+
+Glass;
+Minimal;
+Floating glass;
+Individual plates;
+Platform.
+
+Hide or mark the others experimental until operational.
+
+Phase 10 — Validate visibility policies
+
+Test on your actual KDE Wayland system:
+
+right-side dock;
+top overlay panel;
+bottom overlay panel;
+maximized windows;
+fullscreen;
+multiple screens;
+display disconnect/reconnect;
+Plasma restart;
+logout/login.
+Phase 11 — Performance pass
+
+Measure:
+
+idle CPU;
+idle GPU;
+hover CPU/GPU;
+several rotating icons;
+three panels;
+twenty running applications;
+repeated preview opening;
+hidden panel resource use.
+
+Set explicit performance limits.
+
+Phase 12 — Release preparation
+
+Only after the above:
+
+README;
+license;
+PKGBUILD;
+GitHub Actions;
+clean install test;
+uninstall test;
+screenshots;
+release notes;
+version bump.
+The practical Codex division
+Codex Task 1
+
+Repository audit and settings integration only.
+
+Codex Task 2
+
+Dock entry visual refactor only.
+
+Codex Task 3
+
+Magnification only.
+
+Codex Task 4
+
+Basic animation engine only.
+
+Codex Task 5
+
+Drag-and-drop only.
+
+Codex Task 6
+
+Per-window backend API only.
+
+Codex Task 7
+
+Preview UI only.
+
+Codex Task 8
+
+Menus and icon properties only.
+
+Codex Task 9
+
+Appearance presets only.
+
+Codex Task 10
+
+Visibility and multi-monitor bug fixing only.
+
+Do not give one agent a “finish everything autonomously” prompt now. The repository has too many partially represented features, and an unrestricted agent may confuse settings definitions with completed rendering or rebuild working native architecture unnecessarily.
+
+Final assessment
+
+The hardest architectural rewrite is mostly complete.
+
+What remains is not primarily “more backend.” It is:
+
+connecting the existing configuration system to the live dock;
+building the actual icon renderer;
+implementing the animation and magnification experience;
+exposing individual windows;
+building previews;
+completing drag-and-drop and menus;
+validating real KDE behaviour;
+packaging it for release.
+
+So Arch Dock is not nearly finished visually, but it is also not far from being structurally capable of becoming the dock you designed. The current codebase is at the point where Codex should finish it in controlled feature phases rather than perform another architectural rewrite.
+
+
+
+
+ARCH DOCK — AUTONOMOUS DEVELOPMENT MASTER PROMPT
+
+PROJECT LOCATION — CRITICAL
+
+The current and only valid project root is:
+
+/mnt/F/Arch Dock
+
+The previous location:
+
+/run/media/aivars/F/Arch Dock
+
+is obsolete.
+
+Never use, restore, generate, document, cache, or reference the old path.
+
+Search the entire project before beginning and replace any remaining hardcoded references to:
+
+/run/media/aivars/F/Arch Dock
+/run/media/aivars/F
+
+with the correct current location where appropriate:
+
+/mnt/F/Arch Dock
+/mnt/F
+
+This applies to:
+
+- source code
+- CMake files
+- scripts
+- build directories
+- VS Code configuration
+- launch.json
+- tasks.json
+- documentation
+- test files
+- generated configuration
+- cached commands
+- shell scripts
+- comments and examples
+
+Do not move the project back to the old location.
+
+======================================================================
+OPERATING MODE
+======================================================================
+
+Work autonomously.
+
+You have permission to:
+
+- inspect the complete repository
+- read all relevant source files
+- modify project files
+- create new source files
+- update build files
+- run builds
+- run tests
+- inspect compiler output
+- inspect runtime logs
+- research KDE and Qt APIs
+- inspect installed KDE/Plasma development files
+- inspect DBus interfaces
+- inspect Plasma packages and metadata
+- create safe compatibility layers
+- implement workarounds when KDE does not expose a direct API
+- repeatedly build, test, diagnose, and repair your work
+
+Do not repeatedly ask for confirmation for ordinary implementation work.
+
+Only stop and ask before actions that could:
+
+- delete important user data
+- overwrite unrelated system configuration
+- damage the Plasma desktop session
+- remove existing Arch Dock features
+- require a major irreversible architecture replacement
+- modify privileged system files without a reversible plan
+
+All ordinary project-level work should proceed autonomously.
+
+======================================================================
+AI CREDIT EFFICIENCY
+======================================================================
+
+Minimize AI-credit usage.
+
+Do not immediately generate large speculative implementations.
+
+Use this order:
+
+1. Inspect the existing repository.
+2. Identify the current architecture and implemented features.
+3. Search the repository for related code before writing anything.
+4. Inspect installed KDE, Plasma, Qt and Wayland APIs locally.
+5. Consult authoritative KDE and Qt documentation only when local evidence
+   is insufficient.
+6. Identify the smallest viable implementation path.
+7. Implement it.
+8. Build and test it.
+9. Read actual errors and logs.
+10. Repair based on evidence rather than guessing.
+
+Do not spend tokens repeatedly explaining the same architecture.
+
+Maintain a concise internal working record containing:
+
+- what was inspected
+- what was discovered
+- what was changed
+- what remains
+- build or test results
+- unresolved KDE limitations
+- workarounds selected
+
+Reuse previous findings rather than researching the same subject repeatedly.
+
+Do not regenerate entire files when a focused patch is sufficient.
+
+======================================================================
+CORE PRODUCT VISION
+======================================================================
+
+Arch Dock is not merely an application launcher.
+
+It is intended to become a deeply integrated KDE Plasma panel and dock
+framework supporting conventional panels, dock-style panels, freeform
+geometries, animation systems, themes, imported visual assets and KDE-native
+editing.
+
+Existing dock applications may be used as functional and visual reference
+points.
+
+Relevant references include:
+
+- ObjectDock
+- RocketDock
+- Nexus Dock
+- Circle Dock
+- Cairo-Dock
+- Latte Dock
+- Docky
+- Plank
+- older experimental 2D and 3D desktop docks
+- Alienware-style and science-fiction panel skins
+- circular, vertical, horizontal and irregular dock systems
+
+These references may be studied closely.
+
+Arch Dock may reproduce useful interaction concepts, layout behavior,
+animation styles and visual structures, but must not blindly copy copyrighted
+assets or source code.
+
+The goal is functionally close reference-based implementation with an original,
+maintainable Arch Dock codebase.
+
+======================================================================
+FOUR PANEL TYPES
+======================================================================
+
+The system should support four principal panel types.
+
+PANEL TYPES 1–3: CURRENT PANEL FAMILIES
+
+Inspect the three panel forms currently present in the project and desktop
+configuration.
+
+Treat those existing three forms as the first three official Arch Dock panel
+types.
+
+Do not replace or discard them.
+
+Determine their actual structure from the repository and current implementation
+instead of inventing new definitions.
+
+They broadly represent conventional edge-attached panel and dock arrangements,
+including horizontal and vertical configurations.
+
+These types should support:
+
+- top, bottom, left or right screen attachment where applicable
+- configurable alignment
+- configurable length
+- fit-content and fixed-length modes
+- margins
+- floating mode
+- opacity
+- blur
+- shadows
+- rounded corners
+- icon sizing
+- icon spacing
+- separators
+- launchers
+- running application indicators
+- task-management behavior
+- pinned applications
+- drag-and-drop reordering
+- multi-monitor placement
+- per-monitor configuration
+- DPI-aware scaling
+- auto-hide
+- dodge windows
+- windows-can-cover
+- always-visible mode
+- intelligent visibility
+- reveal pressure or activation zones
+- smooth reveal and conceal animations
+- optional icon magnification
+- keyboard focus and accessibility
+
+PANEL TYPE 4: FREE PANEL
+
+Create a freeform panel type that is not restricted to a screen edge or a
+rectangular bar.
+
+The free panel must support arbitrary placement and geometry.
+
+Geometry options should eventually include:
+
+- circle
+- ellipse
+- arc
+- semicircle
+- ring
+- spiral
+- polygon
+- triangle
+- square
+- rectangle
+- pentagon
+- hexagon
+- octagon
+- star
+- curved path
+- vertical curve
+- horizontal curve
+- user-defined path
+- imported shape
+- custom 2D mesh
+- custom 3D-backed presentation
+
+The free panel should allow:
+
+- free desktop positioning
+- rotation
+- scale
+- independent width and height
+- radial icon placement
+- path-based icon placement
+- inside-edge placement
+- outside-edge placement
+- multiple concentric icon rings
+- custom anchor points
+- configurable start angle
+- configurable sweep angle
+- clockwise or counter-clockwise ordering
+- snapping
+- optional screen-edge attachment
+- optional free-floating mode
+- per-item orientation
+- orientation following the path tangent
+- independent icon rotation
+- animated geometry transitions
+
+The free panel is the primary location for experimental and advanced animation.
+
+======================================================================
+ANIMATION SYSTEM
+======================================================================
+
+Create a reusable animation architecture rather than hardcoding animations into
+individual panel types.
+
+Supported animation categories should include:
+
+- icon magnification
+- wave magnification
+- spring movement
+- bounce
+- pulse
+- glow
+- hover lift
+- hover tilt
+- rotation
+- orbit
+- radial expansion
+- fan-out
+- stack expansion
+- folding and unfolding
+- launcher activation effects
+- running application effects
+- attention-demand effects
+- panel reveal
+- panel conceal
+- panel morphing
+- geometry transitions
+- separator animation
+- drag-and-drop feedback
+- panel reconfiguration transitions
+- theme-specific effects
+
+For normal edge panels, prioritize practical animations:
+
+- auto-hide
+- reveal
+- slide
+- fade
+- dodge
+- icon magnification
+- launch feedback
+- running indicators
+
+For free panels, additionally support expressive effects:
+
+- circular expansion
+- radial menus
+- orbiting icons
+- curved unfolding
+- spiral opening
+- 2D-to-3D transitions
+- shape morphing
+- layered animation
+- animated imported themes
+
+Animations must remain configurable and disableable.
+
+Respect reduced-motion and accessibility preferences.
+
+Avoid CPU-heavy per-frame layout rebuilding.
+
+Use Qt Quick scene graph and GPU compositing appropriately.
+
+======================================================================
+KDE PLASMA INTEGRATION
+======================================================================
+
+Arch Dock must integrate with KDE Plasma rather than behaving like an unrelated
+overlay application.
+
+The panels must participate in KDE's panel-management experience as deeply as
+the available KDE APIs permit.
+
+The target UX is visible in the supplied screenshots:
+
+- KDE Plasma global Edit Mode
+- “Add or Manage Widgets”
+- “Add Panel”
+- “Manage Desktops and Panels”
+- KDE panel settings interface
+- position controls
+- alignment controls
+- height or size controls
+- visibility controls
+- opacity controls
+- floating controls
+- panel width or length controls
+- focus shortcut
+- clone panel
+- delete panel
+- exit edit mode
+
+Arch Dock must not present an empty or disconnected custom edit mode.
+
+When Plasma enters Edit Mode, Arch Dock panels should enter their editable
+state.
+
+When Plasma exits Edit Mode, Arch Dock panels should leave their editable
+state.
+
+Investigate all viable integration mechanisms, including:
+
+- Plasma containment APIs
+- Plasma applet APIs
+- Plasma shell packages
+- KPackage
+- Plasma scripting
+- DBus interfaces
+- KWin interfaces
+- Wayland layer-shell mechanisms
+- KDE private APIs where unavoidable
+- Plasma configuration files
+- containment metadata
+- shell edit-mode state
+- panel geometry and strut management
+- screen and activity integration
+
+Prefer public KDE APIs.
+
+If KDE blocks a required feature or does not expose a public API:
+
+1. prove the limitation by inspecting current KDE source, headers,
+   documentation or runtime interfaces;
+2. identify the least invasive workaround;
+3. isolate that workaround behind a compatibility interface;
+4. document the KDE version dependency;
+5. ensure failures degrade safely;
+6. avoid silently breaking the Plasma session.
+
+Potential workaround categories may include:
+
+- a Plasma containment or applet bridge
+- an Arch Dock Plasma integration plugin
+- a DBus bridge
+- a KWin effect or script
+- a shell-package extension
+- a compatibility daemon
+- a version-specific adapter
+- a controlled private-API integration
+
+Do not abandon integration merely because the first public API is insufficient.
+
+Research alternatives first.
+
+======================================================================
+EDIT MODE REQUIREMENTS
+======================================================================
+
+Arch Dock edit controls must be meaningful and populated.
+
+Never show a blank edit window.
+
+When an Arch Dock panel is selected in Plasma Edit Mode, expose relevant
+controls such as:
+
+- panel type
+- position
+- monitor
+- alignment
+- geometry
+- length
+- width
+- height
+- icon size
+- spacing
+- margins
+- visibility mode
+- auto-hide behavior
+- reveal sensitivity
+- floating mode
+- opacity
+- blur
+- shadow
+- corner radius
+- theme
+- animation preset
+- animation speed
+- free-panel shape
+- free-panel rotation
+- free-panel path settings
+- launcher management
+- widget management
+- import theme
+- duplicate panel
+- delete panel
+- reset panel
+
+Use KDE-native visual conventions where practical.
+
+Do not create a second edit experience that conflicts with Plasma Edit Mode.
+
+A specialized Arch Dock configuration page is acceptable for advanced settings,
+but entry into it must be integrated into the KDE panel editing workflow.
+
+======================================================================
+THEME SYSTEM
+======================================================================
+
+Implement an extensible panel theme system.
+
+Themes should control more than a background image.
+
+A theme may define:
+
+- panel body
+- borders
+- masks
+- corners
+- edge decorations
+- separators
+- reflections
+- shadows
+- lighting
+- icon frames
+- running indicators
+- launcher effects
+- hover effects
+- animation parameters
+- 2D geometry
+- 3D geometry
+- materials
+- textures
+- scalable regions
+- attachment points
+- content-safe regions
+- free-panel paths
+- metadata
+- author information
+- licensing information
+- supported panel types
+
+Theme references include designs such as:
+
+- Alienware-style panels
+- science-fiction platforms
+- holographic launch pads
+- glass docks
+- metallic docks
+- neon docks
+- floating shelves
+- circular interfaces
+- ring interfaces
+- curved launcher structures
+- multi-level dock platforms
+- futuristic control surfaces
+
+These are reference points for the desired capability.
+
+======================================================================
+ASSET IMPORT AND ADAPTIVE RENDERING
+======================================================================
+
+Users should be able to import visual files into Arch Dock.
+
+Initially investigate support for formats including:
+
+2D raster:
+- PNG
+- JPG
+- JPEG
+- WebP
+
+2D vector:
+- SVG
+- SVGZ
+
+3D and scene formats where technically feasible:
+- glTF
+- GLB
+- OBJ
+- FBX where supported through an appropriate importer
+- Blender .blend files through a controlled conversion pipeline
+- other practical Qt Quick 3D or Assimp-compatible formats
+
+Do not simply paste or stretch the imported asset directly onto the panel.
+
+The importer should analyze and adapt the asset into an Arch Dock theme.
+
+The import pipeline should, where applicable:
+
+1. identify whether the file is 2D or 3D;
+2. inspect dimensions, alpha channels, masks and geometry;
+3. detect likely borders, center regions and decorative sections;
+4. determine content-safe areas;
+5. determine scalable and non-scalable regions;
+6. preserve aspect ratio where appropriate;
+7. crop or pad intelligently;
+8. generate panel masks;
+9. create nine-patch or scalable sections where suitable;
+10. fit the visual design to the selected panel geometry;
+11. generate horizontal, vertical or freeform variants where possible;
+12. adapt corner and edge treatment;
+13. place icons within safe bounds;
+14. produce a preview;
+15. allow user adjustment;
+16. save the result as a reusable Arch Dock theme package.
+
+For 3D assets, investigate:
+
+- scene normalization
+- mesh scaling
+- camera fitting
+- material extraction
+- texture import
+- lighting presets
+- panel-content attachment surfaces
+- icon anchor extraction
+- mesh clipping
+- geometry deformation
+- performance-oriented mesh simplification
+- static rendering fallback
+- animated model support where safe
+
+A .blend file may require Blender to run as a background conversion tool.
+
+Do not pretend Qt can directly consume unsupported formats.
+
+Detect available import tools and provide a clean, optional conversion pipeline.
+
+Imported assets must be transformed into usable panel dimensions and behavior,
+not shown unchanged as a raw image or model.
+
+======================================================================
+THEME PACKAGE FORMAT
+======================================================================
+
+Design a versioned Arch Dock theme package format.
+
+It should be capable of containing:
+
+- metadata
+- preview images
+- source asset references
+- processed textures
+- vector assets
+- 3D models
+- material definitions
+- panel masks
+- scalable-region definitions
+- geometry definitions
+- icon anchor definitions
+- animation configuration
+- per-panel-type variants
+- fallback assets
+- compatibility version
+- licensing metadata
+
+The format must allow future migration.
+
+Do not lock the project into one hardcoded skin layout.
+
+======================================================================
+PERFORMANCE AND STABILITY
+======================================================================
+
+The previous desktop session experienced instability.
+
+Therefore, development must be defensive.
+
+Before running a new panel build:
+
+- validate QML where possible
+- validate metadata
+- validate theme packages
+- check for null object access
+- check ownership and lifetime
+- avoid infinite bindings
+- avoid recursive geometry updates
+- avoid unbounded timers
+- avoid repeatedly rebuilding scenes
+- avoid blocking the Plasma UI thread
+- avoid excessive DBus calls
+- avoid continuously writing configuration
+- avoid uncontrolled GPU resource allocation
+
+Use:
+
+- bounded animation loops
+- cached textures
+- cached geometry
+- asynchronous asset processing
+- incremental previews
+- safe fallback rendering
+- crash logging
+- structured diagnostic output
+- feature flags for experimental functionality
+
+Do not test unstable code by replacing the user's working Plasma configuration
+without a rollback procedure.
+
+Create isolated test modes where possible.
+
+Maintain a known-good configuration.
+
+Before modifying live Plasma integration:
+
+1. back up relevant project and Plasma configuration;
+2. record the exact change;
+3. provide or create a rollback path;
+4. test the smallest integration surface;
+5. inspect logs after each step.
+
+======================================================================
+WAYLAND AND KDE VERSION TARGET
+======================================================================
+
+Primary environment:
+
+- Arch Linux
+- KDE Plasma 6.7.x
+- Wayland
+- Qt 6
+- AMD Radeon 610M
+- current Arch Linux KDE packages
+
+Design for Wayland first.
+
+Do not rely on X11-only behavior as the primary architecture.
+
+Where Wayland protocols or KDE APIs restrict arbitrary positioning, panel
+reservation, global input or window management, research KDE-supported methods
+and implement compatibility adapters.
+
+======================================================================
+PROJECT PRESERVATION RULES
+======================================================================
+
+Do not:
+
+- restart the project from scratch
+- discard working implementations
+- replace the architecture without evidence
+- remove any current panel type
+- remove current functionality to make implementation easier
+- create fake placeholder features and report them as completed
+- invent KDE APIs
+- suppress errors without diagnosing them
+- hardcode the desktop geometry
+- assume one monitor
+- assume one scale factor
+- assume only horizontal panels
+- assume all themes are rectangular
+- return to the obsolete project path
+
+Extend the current codebase.
+
+When current code is inadequate, refactor only the affected subsystem and keep
+the migration controlled.
+
+======================================================================
+IMPLEMENTATION STRATEGY
+======================================================================
+
+Begin by conducting a repository audit.
+
+Create or update a concise project implementation document inside the
+repository containing:
+
+1. current architecture
+2. current three panel implementations
+3. current edit-mode behavior
+4. existing KDE integration
+5. current rendering pipeline
+6. current theme support
+7. current animation support
+8. current path assumptions
+9. build and runtime status
+10. missing components
+11. identified KDE limitations
+12. proposed staged implementation plan
+
+Then proceed autonomously in stages.
+
+Recommended stages:
+
+Stage 1:
+- verify and clean all project paths
+- restore a reproducible build
+- inspect crash risks
+- establish logging
+- identify current panel classes
+
+Stage 2:
+- formalize the existing three panel types
+- create a common panel interface
+- preserve current behavior
+- add tests for geometry and configuration
+
+Stage 3:
+- investigate and implement KDE Plasma Edit Mode integration
+- eliminate empty or disconnected edit experiences
+- create the necessary Plasma bridge or containment integration
+
+Stage 4:
+- implement normal panel visibility behavior
+- auto-hide
+- dodge windows
+- reveal zones
+- positioning
+- monitor handling
+
+Stage 5:
+- implement the free-panel geometry engine
+- begin with circle, arc and polygon
+- generalize to user-defined paths
+
+Stage 6:
+- implement the reusable animation system
+- connect standard animations to normal panels
+- connect advanced animations to free panels
+
+Stage 7:
+- implement the theme package format
+- support native Arch Dock themes
+
+Stage 8:
+- implement 2D asset import and adaptive panel shaping
+
+Stage 9:
+- implement optional 3D import and Qt Quick 3D presentation
+
+Stage 10:
+- optimize performance
+- harden Plasma integration
+- test multi-monitor and scaling behavior
+- document installation and rollback
+
+Do not attempt every stage in one uncontrolled change.
+
+Work continuously, but preserve buildable checkpoints.
+
+======================================================================
+CURRENT FIRST ACTION
+======================================================================
+
+Start now by:
+
+1. changing directory to:
+
+   /mnt/F/Arch Dock
+
+2. verifying that this is the Git repository root;
+
+3. searching for every reference to the obsolete path;
+
+4. inspecting the current source tree and current three panel implementations;
+
+5. identifying why the current panel edit mode is empty or disconnected from
+   KDE Plasma Edit Mode;
+
+6. examining the KDE Plasma 6.7 integration options available on this installed
+   system;
+
+7. writing a concise audit and implementation plan;
+
+8. proceeding with the smallest foundational implementation needed for proper
+   KDE-integrated panel editing;
+
+9. building and testing the result;
+
+10. continuing autonomously based on real findings.
+
+Do not begin by generating another generic dock prototype.
+
+Do not ask me to restate the project vision.
+
+This prompt defines the project vision.

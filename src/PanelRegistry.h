@@ -32,6 +32,7 @@ public:
     Q_INVOKABLE void setPanelValue(const QString &panelId, const QString &key, const QVariant &value);
     Q_INVOKABLE void updatePanel(const QString &panelId, const QVariantMap &values);
     QString addPanel(const QString &edge, const QString &type);
+    QString addFreePanel();
     Q_INVOKABLE void removePanel(const QString &panelId);
     Q_INVOKABLE bool importTheme(const QString &panelId, const QUrl &sourceUrl);
     Q_INVOKABLE bool renderTheme(const QString &panelId,

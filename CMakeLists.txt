@@ -53,6 +53,8 @@ qt_add_qml_module(
   1.0
   NO_IMPORT_SCAN
   QML_FILES
+  qml/runtime/DockGeometry.js
+  qml/runtime/FreePanelWindow.qml
   qml/runtime/IconProperties.qml
   qml/runtime/IconPropertiesWindow.qml
   qml/runtime/SettingsPopup.qml)

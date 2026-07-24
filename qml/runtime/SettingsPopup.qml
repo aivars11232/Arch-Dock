@@ -46,11 +46,23 @@ Window {
         { label: qsTr("Vertical"), value: "vertical" },
         { label: qsTr("Diagonal"), value: "diagonal" },
         { label: qsTr("Circular"), value: "circular" },
+        { label: qsTr("Ellipse"), value: "ellipse" },
+        { label: qsTr("Ring"), value: "ring" },
         { label: qsTr("Radial"), value: "radial" },
         { label: qsTr("Arc"), value: "arc" },
+        { label: qsTr("Semicircle"), value: "semicircle" },
         { label: qsTr("Fan"), value: "fan" },
+        { label: qsTr("Spiral"), value: "spiral" },
         { label: qsTr("Ribbon"), value: "ribbon" },
+        { label: qsTr("Horizontal curve"), value: "horizontal-curve" },
+        { label: qsTr("Vertical curve"), value: "vertical-curve" },
         { label: qsTr("Polygon path"), value: "polygon" },
+        { label: qsTr("Triangle"), value: "triangle" },
+        { label: qsTr("Square"), value: "square" },
+        { label: qsTr("Pentagon"), value: "pentagon" },
+        { label: qsTr("Hexagon"), value: "hexagon" },
+        { label: qsTr("Octagon"), value: "octagon" },
+        { label: qsTr("Star"), value: "star" },
         { label: qsTr("Multi-row grid"), value: "grid" },
         { label: qsTr("Floating cluster"), value: "floating" }
     ]
@@ -657,20 +669,30 @@ Window {
 
                     Label { text: qsTr("Panel"); color: "#cbd8e2" }
 
-                    ComboBox {
-                        id: panelSelector
-
+                    RowLayout {
                         Layout.fillWidth: true
-                        model: panelRegistry.panelIds
-                        currentIndex: Math.max(0, model.indexOf(root.selectedPanelId))
-                        displayText: panelRegistry.panelName(currentText)
-                        delegate: ItemDelegate {
-                            required property string modelData
 
-                            width: panelSelector.width
-                            text: panelRegistry.panelName(modelData)
+                        ComboBox {
+                            id: panelSelector
+
+                            Layout.fillWidth: true
+                            model: panelRegistry.panelIds
+                            currentIndex: Math.max(0, model.indexOf(root.selectedPanelId))
+                            displayText: panelRegistry.panelName(currentText)
+                            delegate: ItemDelegate {
+                                required property string modelData
+
+                                width: panelSelector.width
+                                text: panelRegistry.panelName(modelData)
+                            }
+                            onActivated: root.selectPanel(currentText)
                         }
-                        onActivated: root.selectPanel(currentText)
+
+                        Button {
+                            icon.name: "list-add"
+                            text: qsTr("Free panel")
+                            onClicked: root.selectPanel(panelController.createFreePanel())
+                        }
                     }
 
                     Label { text: qsTr("Visible"); color: "#cbd8e2" }
@@ -713,8 +735,9 @@ Window {
                     ComboBox {
                         Layout.fillWidth: true
                         enabled: !panelRegistry.isBuiltIn(root.selectedPanelId)
-                        model: ["top", "bottom", "left", "right"]
-                        currentIndex: model.indexOf(root.panelValue("edge", "bottom"))
+                            && root.panelValue("edge", "bottom") !== "free"
+                        model: ["top", "bottom", "left", "right", "free"]
+                        currentIndex: Math.max(0, model.indexOf(root.panelValue("edge", "bottom")))
                         onActivated: panelRegistry.setPanelValue(root.selectedPanelId, "edge", currentText)
                     }
 
@@ -897,7 +920,8 @@ Window {
 
                     SpinBox {
                         Layout.fillWidth: true
-                        enabled: root.panelValue("layout", "adaptive") === "polygon"
+                        enabled: ["polygon", "star"].includes(
+                            root.panelValue("layout", "adaptive"))
                         from: 3
                         to: 12
                         value: root.panelValue("pathSides", 6)

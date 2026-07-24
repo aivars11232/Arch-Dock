@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QPointer>
+#include <QHash>
 #include <QStringList>
 #include <QUrl>
 #include <QVariantList>
@@ -40,6 +41,8 @@ public slots:
     void showSettings();
     void showPanelSettings(const QString &panelId);
     QString createNativePanel(const QString &edge, const QString &type);
+    QString createFreePanel();
+    void saveFreePanelPosition(const QString &panelId, int x, int y);
     bool setNativePanelType(const QString &panelId, const QString &type);
     QVariantMap dockConfiguration(const QString &panelId) const;
     bool setDockConfiguration(const QString &panelId, const QString &key, const QVariant &value);
@@ -90,6 +93,7 @@ private:
     void handleScreensChanged();
     void scheduleNativePanelRecovery();
     void recoverNativePanels();
+    void synchronizeFreePanels();
     [[nodiscard]] QScreen *screenForPanel(const QString &panelId) const;
     [[nodiscard]] QString screenIdForIndex(int screenIndex) const;
     [[nodiscard]] QList<ArchDock::EdgePanel> edgePanels() const;
@@ -120,6 +124,7 @@ private:
     WindowWatcher m_windowWatcher;
     QPointer<QWindow> m_settingsWindow;
     QPointer<QWindow> m_iconPropertiesWindow;
+    QHash<QString, QPointer<QWindow>> m_freePanelWindows;
     int m_screenRevision = 0;
     int m_visibilityRevision = 0;
     qulonglong m_dockRevision = 0;

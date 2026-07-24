@@ -70,9 +70,9 @@ theme pipeline; copyrighted reference artwork is not bundled.
 
 ## Paths, Build, And Runtime
 
-The Git root and only project location is `/mnt/F/Arch Dock`. No source,
-documentation, build configuration, or editor setting contains the obsolete
-`/run/media/aivars/F` path. CMake builds the service and tests with Qt 6.11 and
+The Git root and only project location is `/mnt/F/Arch Dock`. Source,
+documentation, build configuration, and editor settings use that canonical
+location. CMake builds the service and tests with Qt 6.11 and
 the installed Plasma 6.7/KWin 6.7 stack. The registry, dock-geometry, and motion
 tests pass. A user installation lives under `~/.local`.
 
@@ -83,9 +83,10 @@ tests pass. A user installation lives under `~/.local`.
 - Wayland task identifiers exposed by `TaskManager` are process-local. The
   existing KWin script exports stable internal UUIDs to the Arch Dock service.
 - Arbitrary free panels cannot safely reserve space or participate as native
-  panels. A future free-panel adapter must use an isolated KWin/Wayland surface,
-  remain optional, expose Plasma edit state through the bridge, avoid struts by
-  default, and fail without affecting native panels.
+  Plasma panel containments. Arch Dock therefore isolates them in independent
+  Qt Quick utility surfaces, uses the compositor-supported interactive system
+  move operation, persists their geometry, avoids struts, and applies shaped
+  input regions so transparent corners do not block desktop interaction.
 - Live thumbnails and some panel-shell behavior rely on Plasma/KWin private
   implementation details. Version-specific use must stay behind adapters.
 
@@ -97,10 +98,11 @@ tests pass. A user installation lives under `~/.local`.
 2. Complete native visibility mappings, alignment, length, margins, floating
    appearance, monitor handling, and isolated lifecycle tests.
 3. Formalize shared panel/render interfaces and add settings-to-renderer tests.
-4. Prototype the free-panel geometry engine in an isolated test surface,
-   beginning with circle, arc, and polygon paths.
-5. Add the optional free-panel KWin/Wayland adapter with explicit feature
-   gating and rollback.
+4. Extend the isolated free-panel surface beyond its current circle, ellipse,
+   ring, arc, spiral, curve, polygon, regular-shape, and star paths to
+   user-defined/imported paths and multiple concentric tracks.
+5. Connect free-panel editing to the Plasma edit-state bridge and add snapping,
+   rotation-aware input masks, and multi-screen placement recovery.
 6. Expand reusable animations and theme rendering, then implement adaptive 2D
    imports and optional 3D conversion/presentation.
 7. Finish performance measurements, accessibility, packaging, installation,
