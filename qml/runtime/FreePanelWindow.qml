@@ -19,7 +19,6 @@ Window {
     readonly property real layoutAngle: value("layoutAngle", 0)
     readonly property int polygonSides: value("pathSides", 6)
     readonly property string pathOrientation: value("pathOrientation", "upright")
-    readonly property bool editMode: panelController.plasmaEditMode
     readonly property var geometry: DockGeometry.metrics(
         layout, entryCount, iconSize, spacing, layoutScale, radiusValue,
         value("layoutRows", 2), value("layoutPadding", 18), false,
@@ -37,8 +36,7 @@ Window {
     height: Math.max(160, value("height", Math.ceil(geometry.height)))
     visible: false
     color: "transparent"
-    flags: Qt.Tool | Qt.FramelessWindowHint
-        | (editMode ? Qt.WindowStaysOnTopHint : Qt.WindowStaysOnBottomHint)
+    flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnBottomHint
     title: "Arch Dock Free Panel — " + panelId
 
     Component.onCompleted: {

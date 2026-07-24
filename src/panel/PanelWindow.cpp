@@ -242,6 +242,10 @@ void PanelWindow::refreshPlasmaEditMode()
     m_plasmaEditMode = editMode;
     emit plasmaEditModeChanged();
     synchronizeFreePanels();
+    QTimer::singleShot(150, this, [this, editMode]
+    {
+        m_actionBridge.setFreePanelsEditMode(editMode);
+    });
 }
 
 void PanelWindow::handlePlasmaPropertiesChanged(
@@ -259,6 +263,10 @@ void PanelWindow::handlePlasmaPropertiesChanged(
             m_plasmaEditMode = editMode;
             emit plasmaEditModeChanged();
             synchronizeFreePanels();
+            QTimer::singleShot(150, this, [this, editMode]
+            {
+                m_actionBridge.setFreePanelsEditMode(editMode);
+            });
         }
     }
     else if (invalidatedProperties.contains(QStringLiteral("editMode")))
@@ -274,6 +282,10 @@ void PanelWindow::setPlasmaEditMode(bool editMode)
     m_plasmaEditMode = editMode;
     emit plasmaEditModeChanged();
     synchronizeFreePanels();
+    QTimer::singleShot(150, this, [this, editMode]
+    {
+        m_actionBridge.setFreePanelsEditMode(editMode);
+    });
 }
 
 QVariantMap PanelWindow::dockConfiguration(const QString &panelId) const

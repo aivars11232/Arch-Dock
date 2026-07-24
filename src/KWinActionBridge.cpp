@@ -48,6 +48,11 @@ void KWinActionBridge::focusWindow(const QString &resourceClass, const QString &
     runScript(focusScript(resourceClass, caption));
 }
 
+void KWinActionBridge::setFreePanelsEditMode(bool editMode)
+{
+    runScript(freePanelEditScript(editMode));
+}
+
 void KWinActionBridge::runScript(const QString &source)
 {
     const QString cacheDirectory = QStandardPaths::writableLocation(
@@ -145,4 +150,22 @@ for (let index = windows.length - 1; index >= 0; --index) {
 }
 )")
         .arg(javascriptString(resourceClass), javascriptString(caption));
+}
+
+QString KWinActionBridge::freePanelEditScript(bool editMode)
+{
+    return QStringLiteral(R"(
+const editing = %1;
+const windows = workspace.windowList();
+for (let index = 0; index < windows.length; ++index) {
+    const window = windows[index];
+    if (window.resourceClass !== "arch-dock" ||
+        !window.caption.startsWith("Arch Dock Free Panel")) {
+        continue;
+    }
+    window.keepBelow = !editing;
+    window.keepAbove = editing;
+}
+)")
+        .arg(editMode ? QStringLiteral("true") : QStringLiteral("false"));
 }
