@@ -12,9 +12,11 @@ PlasmoidItem {
 
     readonly property string panelId: Plasmoid.configuration.panelId || ""
     readonly property string configuredPanelType: Plasmoid.configuration.panelType || "hybrid"
-    readonly property string panelType: ["launcher", "tasks", "hybrid"].includes(configuredPanelType)
+    readonly property string panelType: ["empty", "launcher", "tasks", "hybrid"].includes(configuredPanelType)
         ? configuredPanelType : "hybrid"
-    readonly property bool freeSurface: panelId.startsWith("free-")
+    readonly property bool bootstrapPending: panelId.length === 0
+        && Boolean(Plasmoid.configuration.bootstrapFreeDock)
+    readonly property bool freeSurface: panelId.startsWith("free-") || bootstrapPending
     readonly property bool vertical: Plasmoid.formFactor === PlasmaCore.Types.Vertical
     readonly property bool plasmaEditMode: {
         const containment = Plasmoid.containment;
@@ -98,6 +100,12 @@ PlasmoidItem {
     }
 
     function refresh() {
+        if (panelId.length === 0) {
+            entries = [];
+            requestFailed = false;
+            bootstrapFreeDock();
+            return;
+        }
         if (!dockService.registered) {
             entries = [];
             requestFailed = false;
@@ -195,8 +203,6 @@ PlasmoidItem {
             : magnifiedCell + Kirigami.Units.largeSpacing * 2
         Layout.minimumWidth: implicitWidth
         Layout.minimumHeight: implicitHeight
-        opacity: root.panelOpacity
-
         Loader {
             anchors.centerIn: parent
             width: parent.width
@@ -447,6 +453,18 @@ PlasmoidItem {
                 root.refresh();
         }
         onRefreshed: root.refresh()
+    }
+
+    Connections {
+        target: Plasmoid.configuration
+
+        function onBootstrapFreeDockChanged() {
+            root.bootstrapFreeDock();
+        }
+
+        function onPanelIdChanged() {
+            root.refresh();
+        }
     }
 
     Component.onCompleted: {

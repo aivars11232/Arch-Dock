@@ -1192,7 +1192,7 @@ QVariant PanelRegistry::normalizeValue(const QString &key, const QVariant &value
     }
     if (key == QStringLiteral("opacity"))
     {
-        return qBound<qreal>(0.1, value.toReal(), 1.0);
+        return qBound<qreal>(0.0, value.toReal(), 1.0);
     }
     if (key == QStringLiteral("iconSize"))
     {

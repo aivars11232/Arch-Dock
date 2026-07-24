@@ -376,6 +376,7 @@ void PanelRegistryTest::normalizesLayoutAndMotionValues()
     registry.setPanelValue(QStringLiteral("bottom"), QStringLiteral("folderSpeed"), 20);
     registry.setPanelValue(QStringLiteral("bottom"), QStringLiteral("appearance"), QStringLiteral("floating-glass"));
     registry.setPanelValue(QStringLiteral("bottom"), QStringLiteral("type"), QStringLiteral("empty"));
+    registry.setPanelValue(QStringLiteral("bottom"), QStringLiteral("opacity"), 0.0);
 
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("layout")).toString(),
              QStringLiteral("circular"));
@@ -392,6 +393,7 @@ void PanelRegistryTest::normalizesLayoutAndMotionValues()
              QStringLiteral("floating-glass"));
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("type")).toString(),
              QStringLiteral("empty"));
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("opacity")).toReal(), 0.0);
 
     const QString emptyPanelId = registry.addPanel(QStringLiteral("top"), QStringLiteral("empty"));
     QCOMPARE(registry.panelValue(emptyPanelId, QStringLiteral("type")).toString(),

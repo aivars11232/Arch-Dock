@@ -36,7 +36,7 @@ ConfigPageBase {
         }
         QQC2.Slider {
             Kirigami.FormData.label: qsTr("Opacity")
-            from: 0.1
+            from: 0
             to: 1
             stepSize: 0.05
             value: root.values.opacity === undefined ? 0.9 : Number(root.values.opacity)

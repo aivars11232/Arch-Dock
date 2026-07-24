@@ -837,7 +837,7 @@ Window {
 
                         Slider {
                             Layout.fillWidth: true
-                            from: 0.1
+                            from: 0
                             to: 1
                             stepSize: 0.05
                             value: root.panelValue("opacity", 0.9)
