@@ -12,6 +12,6 @@ if (activityDesktops.length > 0) {
         size);
     dock.currentConfigGroup = ["General"];
     dock.writeConfig("bootstrapFreeDock", true);
-    dock.writeConfig("panelType", "hybrid");
+    dock.writeConfig("panelType", "empty");
     dock.reloadConfig();
 }

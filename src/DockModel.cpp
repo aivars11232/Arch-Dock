@@ -435,6 +435,24 @@ bool DockModel::pinUrl(const QUrl &url)
     return true;
 }
 
+QString DockModel::applicationIdForUrl(const QUrl &url) const
+{
+    if (!url.isLocalFile())
+    {
+        return {};
+    }
+    const QFileInfo fileInfo(url.toLocalFile());
+    if (!fileInfo.exists())
+    {
+        return {};
+    }
+    if (fileInfo.suffix().compare(QStringLiteral("desktop"), Qt::CaseInsensitive) == 0)
+    {
+        return normalizedDesktopId(fileInfo.absoluteFilePath());
+    }
+    return QStringLiteral("file:") + fileInfo.canonicalFilePath();
+}
+
 bool DockModel::isFolder(int row) const
 {
     return row >= 0 && row < m_items.size() && !folderPath(m_items.at(row)).isEmpty();
@@ -571,6 +589,20 @@ QVariantList DockModel::panelEntries(const QString &panelType) const
             {QStringLiteral("windowIds"), windowIds},
             {QStringLiteral("windowTitles"), windowTitles},
             {QStringLiteral("isFolder"), !folderPath(application).isEmpty()}});
+    }
+    return entries;
+}
+
+QVariantList DockModel::panelEntriesForIds(const QStringList &appIds) const
+{
+    const QSet<QString> requested(appIds.cbegin(), appIds.cend());
+    QVariantList entries;
+    for (const QVariant &entry : panelEntries(QStringLiteral("launcher")))
+    {
+        if (requested.contains(entry.toMap().value(QStringLiteral("appId")).toString()))
+        {
+            entries.append(entry);
+        }
     }
     return entries;
 }

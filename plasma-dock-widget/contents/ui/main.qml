@@ -108,7 +108,7 @@ PlasmoidItem {
             if (value && typeof value === "object")
                 configuration = value;
         });
-        callDock("dockEntries", [panelType], function(reply) {
+        callDock("dockEntriesForPanel", [panelId, panelType], function(reply) {
             const value = normalizeReply(reply);
             entries = Array.isArray(value) ? value : [];
             requestFailed = false;
@@ -152,7 +152,8 @@ PlasmoidItem {
         for (const url of urls)
             values.push(url.toString());
         if (values.length > 0)
-            callDock("pinDockUrls", [values], refresh);
+            callDock(root.freeSurface ? "pinPanelUrls" : "pinDockUrls",
+                     root.freeSurface ? [panelId, values] : [values], refresh);
     }
 
     function openPanelStudio() {
@@ -287,6 +288,9 @@ PlasmoidItem {
                 Repeater {
                     model: root.entries
                     delegate: DockEntry {
+                        required property var modelData
+                        required property int index
+
                         entry: modelData
                         entryIndex: index
                         vertical: false
@@ -323,6 +327,9 @@ PlasmoidItem {
                 Repeater {
                     model: root.entries
                     delegate: DockEntry {
+                        required property var modelData
+                        required property int index
+
                         entry: modelData
                         entryIndex: index
                         vertical: true

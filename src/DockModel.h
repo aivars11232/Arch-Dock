@@ -56,6 +56,7 @@ public:
     Q_INVOKABLE void setCustomIcon(int row, const QString &iconName);
     Q_INVOKABLE void clearCustomIcon(int row);
     Q_INVOKABLE bool pinUrl(const QUrl &url);
+    [[nodiscard]] QString applicationIdForUrl(const QUrl &url) const;
     Q_INVOKABLE bool isFolder(int row) const;
     Q_INVOKABLE QVariantList folderEntries(int row) const;
     Q_INVOKABLE bool openUrl(const QUrl &url) const;
@@ -63,6 +64,7 @@ public:
     Q_INVOKABLE int panelEntryPosition(int row, const QString &panelType) const;
     Q_INVOKABLE int panelEntryCount(const QString &panelType) const;
     [[nodiscard]] QVariantList panelEntries(const QString &panelType) const;
+    [[nodiscard]] QVariantList panelEntriesForIds(const QStringList &appIds) const;
     bool activateApplication(const QString &appId);
     bool activateApplicationWindow(const QString &appId, const QString &windowId);
     bool minimizeApplication(const QString &appId);

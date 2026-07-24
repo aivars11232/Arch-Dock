@@ -48,6 +48,7 @@ public slots:
     QVariantMap dockConfiguration(const QString &panelId) const;
     bool setDockConfiguration(const QString &panelId, const QString &key, const QVariant &value);
     QVariantList dockEntries(const QString &panelType) const;
+    QVariantList dockEntriesForPanel(const QString &panelId, const QString &panelType) const;
     bool activateDockEntry(const QString &appId);
     bool activateDockWindow(const QString &appId, const QString &windowId);
     bool minimizeDockEntry(const QString &appId);
@@ -57,6 +58,7 @@ public slots:
     bool moveDockEntryBefore(const QString &appId, const QString &beforeAppId);
     bool pinDockUrl(const QString &url);
     bool pinDockUrls(const QStringList &urls);
+    bool pinPanelUrls(const QString &panelId, const QStringList &urls);
     QVariantList dockFolderEntries(const QString &appId) const;
     bool openDockUrl(const QString &url);
     QStringList availableKdeWidgets() const;

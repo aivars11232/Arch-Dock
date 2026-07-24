@@ -294,6 +294,18 @@ QVariantList PanelWindow::dockEntries(const QString &panelType) const
     return m_dockModel.panelEntries(panelType);
 }
 
+QVariantList PanelWindow::dockEntriesForPanel(const QString &panelId,
+                                              const QString &panelType) const
+{
+    if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() ==
+        QStringLiteral("free"))
+    {
+        return m_dockModel.panelEntriesForIds(
+            m_panelRegistry.panelValue(panelId, QStringLiteral("contentAppIds")).toStringList());
+    }
+    return m_dockModel.panelEntries(panelType);
+}
+
 bool PanelWindow::activateDockEntry(const QString &appId)
 {
     return m_dockModel.activateApplication(appId);
@@ -346,6 +358,39 @@ bool PanelWindow::pinDockUrls(const QStringList &urls)
         }
     }
     return pinnedAny;
+}
+
+bool PanelWindow::pinPanelUrls(const QString &panelId, const QStringList &urls)
+{
+    if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() !=
+        QStringLiteral("free"))
+    {
+        return pinDockUrls(urls);
+    }
+
+    QStringList contentIds = m_panelRegistry.panelValue(
+        panelId, QStringLiteral("contentAppIds")).toStringList();
+    bool addedAny = false;
+    for (const QString &urlString : urls)
+    {
+        const QUrl url = QUrl::fromUserInput(urlString);
+        const QString appId = m_dockModel.applicationIdForUrl(url);
+        if (appId.isEmpty() || !m_dockModel.pinUrl(url))
+        {
+            continue;
+        }
+        if (!contentIds.contains(appId))
+        {
+            contentIds.append(appId);
+        }
+        addedAny = true;
+    }
+    if (addedAny)
+    {
+        m_panelRegistry.setPanelValue(
+            panelId, QStringLiteral("contentAppIds"), contentIds);
+    }
+    return addedAny;
 }
 
 QVariantList PanelWindow::dockFolderEntries(const QString &appId) const

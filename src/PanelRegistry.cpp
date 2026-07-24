@@ -741,7 +741,8 @@ QString PanelRegistry::addFreePanel()
                                   QStringLiteral("bottom"), false);
     panel.insert(QStringLiteral("edge"), QStringLiteral("free"));
     panel.insert(QStringLiteral("visible"), true);
-    panel.insert(QStringLiteral("type"), QStringLiteral("hybrid"));
+    panel.insert(QStringLiteral("type"), QStringLiteral("empty"));
+    panel.insert(QStringLiteral("contentAppIds"), QStringList{});
     panel.insert(QStringLiteral("layout"), QStringLiteral("circular"));
     panel.insert(QStringLiteral("width"), 420);
     panel.insert(QStringLiteral("height"), 420);
@@ -1115,6 +1116,19 @@ QVariant PanelRegistry::normalizeValue(const QString &key, const QVariant &value
     {
         const QString type = value.toString().trimmed().toLower();
         return isPanelType(type) ? type : QStringLiteral("hybrid");
+    }
+    if (key == QStringLiteral("contentAppIds"))
+    {
+        QStringList result;
+        for (const QString &id : value.toStringList())
+        {
+            const QString normalized = id.trimmed();
+            if (!normalized.isEmpty() && !result.contains(normalized))
+            {
+                result.append(normalized);
+            }
+        }
+        return result;
     }
     if (key == QStringLiteral("shape"))
     {
