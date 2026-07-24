@@ -57,6 +57,7 @@ qt_add_qml_module(
   qml/runtime/FreePanelWindow.qml
   qml/runtime/IconProperties.qml
   qml/runtime/IconPropertiesWindow.qml
+  qml/runtime/StudioDraft.js
   qml/runtime/StudioForm.qml
   qml/runtime/StudioNavigation.js
   qml/runtime/SettingsPopup.qml)
@@ -134,6 +135,14 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_StudioNavigation.qml)
   set_tests_properties(
     studio-navigation-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME studio-draft-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_StudioDraft.qml)
+  set_tests_properties(
+    studio-draft-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()
 

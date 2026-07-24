@@ -207,6 +207,52 @@ ScrollView {
                                 text)
                         }
 
+                        RowLayout {
+                            visible: rowDelegate.kind === "color"
+                            enabled: rowDelegate.fieldAvailable
+                            Layout.preferredWidth: 270
+                            spacing: 8
+
+                            Rectangle {
+                                Layout.preferredWidth: 28
+                                Layout.preferredHeight: 28
+                                radius: 4
+                                color: root.studio.colorPreviewValue(
+                                    rowDelegate.modelData)
+                                border.width: 1
+                                border.color: "#8195a1"
+
+                                Kirigami.Icon {
+                                    visible: parent.color.a === 0
+                                    anchors.centerIn: parent
+                                    width: 16
+                                    height: 16
+                                    source: "edit-clear"
+                                    color: "#8799a3"
+                                }
+                            }
+
+                            Button {
+                                Layout.fillWidth: true
+                                text: root.studio.colorDisplayValue(
+                                    rowDelegate.modelData)
+                                icon.name: "color-picker"
+                                onClicked: root.studio.openColorEditor(
+                                    rowDelegate.modelData)
+                            }
+
+                            ToolButton {
+                                enabled: String(root.studio.fieldValue(
+                                    rowDelegate.modelData)).trim().length > 0
+                                icon.name: "edit-clear"
+                                onClicked: root.studio.setFieldValue(
+                                    rowDelegate.modelData, "")
+
+                                ToolTip.visible: hovered
+                                ToolTip.text: qsTr("Use theme default")
+                            }
+                        }
+
                         Button {
                             visible: rowDelegate.kind === "action"
                             enabled: rowDelegate.fieldAvailable

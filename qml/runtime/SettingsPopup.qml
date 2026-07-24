@@ -4,6 +4,7 @@ import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
 import org.kde.kirigami as Kirigami
+import "StudioDraft.js" as StudioDraft
 import "StudioNavigation.js" as StudioNavigation
 
 Window {
@@ -15,11 +16,53 @@ Window {
     property int mainTabIndex: 0
     property int subTabIndex: 0
     property var subTabMemory: [0, 0, 0, 0, 0]
-    property string pendingProfile: "aurora"
-    property string pendingIconStyleName: ""
+    property var panelDrafts: ({})
+    property var settingsDraft: ({})
+    property var screenDrafts: ({})
+    property var themeDrafts: ({})
+    property string themeTargetPanelId: ""
+    property var colorField: null
+    property string colorTargetPanelId: ""
+    property string studioError: ""
 
     readonly property int panelRevision: panelRegistry.revision
     readonly property int screenRevision: panelController.screenRevision
+    readonly property bool hasPendingChanges: StudioDraft.isSessionDirty(
+        panelDrafts, settingsDraft, screenDrafts, themeDrafts)
+    readonly property var editablePanelKeys: [
+        "visible",
+        "edge",
+        "alignment",
+        "visibilityMode",
+        "dynamic",
+        "width",
+        "height",
+        "type",
+        "appearance",
+        "shape",
+        "iconShape",
+        "iconSize",
+        "spacing",
+        "layout",
+        "layoutScale",
+        "layoutAngle",
+        "layoutRadius",
+        "layoutRows",
+        "layoutPadding",
+        "pathSides",
+        "pathOrientation",
+        "pathAnchor",
+        "iconAnimation",
+        "animationTrigger",
+        "animationSpeed",
+        "animationIntensity",
+        "physicsEnabled",
+        "folderLayout",
+        "folderSpeed",
+        "opacity",
+        "color",
+        "themeFit"
+    ]
     readonly property var screenOptions: {
         const revision = screenRevision;
         return panelController.availableScreens();
@@ -51,6 +94,12 @@ Window {
         option(qsTr("Left"), "left"),
         option(qsTr("Right"), "right"),
         option(qsTr("Free"), "free")
+    ]
+    readonly property var nativeEdgeOptions: [
+        option(qsTr("Top"), "top"),
+        option(qsTr("Bottom"), "bottom"),
+        option(qsTr("Left"), "left"),
+        option(qsTr("Right"), "right")
     ]
     readonly property var alignmentOptions: [
         option(qsTr("Start"), "start"),
@@ -150,16 +199,6 @@ Window {
         "fan", "grid", "stack", "arc", "spiral", "circular", "radial",
         "vertical", "horizontal", "elastic", "physics"
     ])
-    readonly property var profileOptions: [
-        option(qsTr("Aurora desktop"), "aurora"),
-        option(qsTr("Crystal shelf"), "crystal"),
-        option(qsTr("RocketDock glass"), "rocket"),
-        option(qsTr("Midnight Waybar"), "waybar"),
-        option(qsTr("Neon prism"), "neon"),
-        option(qsTr("Plasma Breeze"), "plasma"),
-        option(qsTr("Lime outline"), "lime")
-    ]
-
     function option(label, value) {
         return { label: label, value: value };
     }
@@ -177,16 +216,50 @@ Window {
         });
     }
 
-    function panelValue(key, fallback) {
+    function panelValueFor(panelId, key, fallback) {
         const revision = panelRevision;
-        const candidate = panelRegistry.panelValue(selectedPanelId, key);
+        const candidate = panelRegistry.panelValue(panelId, key);
         return candidate === undefined || candidate === null ? fallback : candidate;
+    }
+
+    function panelValue(key, fallback) {
+        return panelValueFor(selectedPanelId, key, fallback);
+    }
+
+    function panelDraft(panelId) {
+        return StudioDraft.nestedMap(panelDrafts, panelId);
+    }
+
+    function effectivePanelValueFor(panelId, key, fallback) {
+        return StudioDraft.value(
+            panelDraft(panelId),
+            key,
+            panelValueFor(panelId, key, fallback));
+    }
+
+    function effectivePanelValue(key, fallback) {
+        return effectivePanelValueFor(selectedPanelId, key, fallback);
     }
 
     function panelScreenIndex(panelId) {
         const revision = panelRevision;
         const displays = screenRevision;
         return panelController.screenIndexForPanel(panelId);
+    }
+
+    function effectivePanelScreenIndex(panelId) {
+        const draft = StudioDraft.nestedMap(screenDrafts, panelId);
+        if (StudioDraft.keyCount(draft) === 0)
+            return panelScreenIndex(panelId);
+
+        const stableId = String(draft.id || "");
+        if (stableId.length > 0) {
+            for (let index = 0; index < screenOptions.length; ++index) {
+                if (String(screenOptions[index].id || "") === stableId)
+                    return index;
+            }
+        }
+        return Number(draft.index);
     }
 
     function optionIndex(options, value) {
@@ -201,7 +274,6 @@ Window {
         if (!panelId || panelId.length === 0)
             return;
         selectedPanelId = panelId;
-        panelRegistry.setActivePanelId(panelId);
     }
 
     function openPanelEditor(panelId) {
@@ -229,32 +301,91 @@ Window {
     function fieldValue(field) {
         const scope = field.scope || "panel";
         if (scope === "settings")
-            return settings[field.key];
+            return StudioDraft.value(
+                settingsDraft, field.key, settings[field.key]);
         if (scope === "screen")
-            return panelScreenIndex(selectedPanelId);
-        if (scope === "local")
-            return root[field.key];
+            return effectivePanelScreenIndex(selectedPanelId);
         if (scope === "mode")
-            return panelValue("visibilityMode", "always") === field.mode;
-        return panelValue(field.key, field.fallback);
+            return effectivePanelValue("visibilityMode", "always") === field.mode;
+        if (scope === "length") {
+            const edge = effectivePanelValue("edge", "bottom");
+            const width = Number(effectivePanelValue("width", 720));
+            const height = Number(effectivePanelValue("height", 76));
+            if (edge === "free")
+                return Math.max(width, height);
+            return ["left", "right"].includes(edge) ? height : width;
+        }
+        return effectivePanelValue(field.key, field.fallback);
+    }
+
+    function setPanelDraftValue(panelId, key, value, fallback) {
+        const updated = StudioDraft.setComparedValue(
+            panelDraft(panelId),
+            key,
+            value,
+            panelValueFor(panelId, key, fallback));
+        panelDrafts = StudioDraft.setNestedMap(panelDrafts, panelId, updated);
+        studioError = "";
+    }
+
+    function stagePanelValues(panelId, values) {
+        let updated = panelDraft(panelId);
+        const keys = Object.keys(values);
+        for (let index = 0; index < keys.length; ++index) {
+            const key = keys[index];
+            updated = StudioDraft.setComparedValue(
+                updated,
+                key,
+                values[key],
+                panelValueFor(panelId, key, values[key]));
+        }
+        panelDrafts = StudioDraft.setNestedMap(panelDrafts, panelId, updated);
+        studioError = "";
     }
 
     function setFieldValue(field, value) {
         const scope = field.scope || "panel";
         if (scope === "settings") {
-            settings[field.key] = value;
+            settingsDraft = StudioDraft.setComparedValue(
+                settingsDraft,
+                field.key,
+                value,
+                settings[field.key]);
         } else if (scope === "screen") {
-            panelController.setPanelScreen(selectedPanelId, Number(value));
-        } else if (scope === "local") {
-            root[field.key] = value;
+            const screenIndex = Number(value);
+            const draft = screenIndex === panelScreenIndex(selectedPanelId)
+                ? {}
+                : {
+                    index: screenIndex,
+                    id: screenIndex >= 0 && screenIndex < screenOptions.length
+                        ? String(screenOptions[screenIndex].id || "") : ""
+                };
+            screenDrafts = StudioDraft.setNestedMap(
+                screenDrafts, selectedPanelId, draft);
         } else if (scope === "mode") {
-            const current = panelValue("visibilityMode", "always");
-            panelController.setPanelVisibilityMode(
+            const current = effectivePanelValue("visibilityMode", "always");
+            setPanelDraftValue(
                 selectedPanelId,
-                value ? field.mode : (current === field.mode ? "always" : current));
+                "visibilityMode",
+                value ? field.mode
+                    : (current === field.mode ? "always" : current),
+                "always");
+        } else if (scope === "length") {
+            const edge = effectivePanelValue("edge", "bottom");
+            const length = Number(value);
+            if (edge === "free") {
+                setPanelDraftValue(selectedPanelId, "width", length, 420);
+                setPanelDraftValue(selectedPanelId, "height", length, 420);
+            } else if (["left", "right"].includes(edge)) {
+                setPanelDraftValue(selectedPanelId, "height", length, 420);
+            } else {
+                setPanelDraftValue(selectedPanelId, "width", length, 720);
+            }
         } else {
-            panelRegistry.setPanelValue(selectedPanelId, field.key, value);
+            setPanelDraftValue(
+                selectedPanelId, field.key, value, field.fallback);
         }
+        studioError = "";
     }
 
     function fieldOptionIndex(field) {
@@ -273,6 +404,25 @@ Window {
         if (field.value !== undefined)
             return String(field.value);
         return String(fieldValue(field));
+    }
+
+    function colorDisplayValue(field) {
+        const value = String(fieldValue(field)).trim();
+        return value.length > 0 ? value : qsTr("Theme default");
+    }
+
+    function colorPreviewValue(field) {
+        const value = String(fieldValue(field)).trim();
+        return /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value)
+            ? value : "transparent";
+    }
+
+    function openColorEditor(field) {
+        colorField = field;
+        colorTargetPanelId = selectedPanelId;
+        const current = String(fieldValue(field)).trim();
+        colorDialog.selectedColor = current.length > 0 ? current : "#334455";
+        colorDialog.open();
     }
 
     function readOnlyRow(label, value, description) {
@@ -302,7 +452,216 @@ Window {
         return qsTr("Display %1").arg(index + 1);
     }
 
+    function stageThemeAction(panelId, action, sourceUrl) {
+        let draft = {};
+        if (action === "import") {
+            draft = { action: action, sourceUrl: sourceUrl };
+        } else if (action === "clear") {
+            const hasAppliedTheme =
+                String(panelValueFor(panelId, "themeSource", "")).length > 0
+                || String(panelValueFor(panelId, "themeAsset", "")).length > 0;
+            if (hasAppliedTheme)
+                draft = { action: action };
+        } else if (action === "render") {
+            const existing = StudioDraft.nestedMap(themeDrafts, panelId);
+            if (existing.action === "import")
+                return;
+            if (String(panelValueFor(panelId, "themeSource", "")).length > 0)
+                draft = { action: action };
+        }
+        themeDrafts = StudioDraft.setNestedMap(themeDrafts, panelId, draft);
+        studioError = "";
+    }
+
+    function themeActionDescription(panelId) {
+        const draft = StudioDraft.nestedMap(themeDrafts, panelId);
+        if (draft.action === "import")
+            return qsTr("Artwork import pending");
+        if (draft.action === "clear")
+            return qsTr("Artwork removal pending");
+        if (draft.action === "render")
+            return qsTr("Artwork re-render pending");
+        return String(panelValueFor(
+            panelId, "themeStatus", qsTr("Preset surface active.")));
+    }
+
+    function resetSelectedPanelDraft() {
+        const panelId = selectedPanelId;
+        const edge = panelValueFor(panelId, "edge", "bottom");
+        const freePanel = edge === "free";
+        const vertical = ["left", "right"].includes(edge);
+        stagePanelValues(panelId, {
+            visible: edge === "bottom" || freePanel,
+            alignment: "center",
+            visibilityMode: "always",
+            dynamic: freePanel ? false : edge !== "bottom",
+            width: freePanel ? 420 : (vertical ? 76 : 720),
+            height: freePanel ? 420 : (vertical ? 420 : 76),
+            type: freePanel ? "empty" : "hybrid",
+            appearance: "glass",
+            shape: "pill",
+            iconShape: "rounded",
+            iconSize: 52,
+            spacing: 8,
+            layout: freePanel ? "circular" : "adaptive",
+            layoutScale: 1.0,
+            layoutAngle: 0.0,
+            layoutRadius: freePanel ? 145 : 150,
+            layoutRows: 2,
+            layoutPadding: 18,
+            pathSides: 6,
+            pathOrientation: "upright",
+            pathAnchor: "center",
+            iconAnimation: "scale",
+            animationTrigger: "hover",
+            animationSpeed: 1.0,
+            animationIntensity: 1.0,
+            physicsEnabled: false,
+            folderLayout: "fan",
+            folderSpeed: 260,
+            opacity: 0.9,
+            color: "",
+            themeFit: "cover"
+        });
+        stageThemeAction(panelId, "clear", "");
+    }
+
+    function filteredPanelDraft(draft) {
+        const result = {};
+        for (let index = 0; index < editablePanelKeys.length; ++index) {
+            const key = editablePanelKeys[index];
+            if (key !== "visibilityMode" && StudioDraft.hasValue(draft, key))
+                result[key] = draft[key];
+        }
+        return result;
+    }
+
+    function draftPanelIds() {
+        const found = {};
+        const collections = [panelDrafts, screenDrafts, themeDrafts];
+        for (let collectionIndex = 0;
+             collectionIndex < collections.length;
+             ++collectionIndex) {
+            const ids = Object.keys(collections[collectionIndex]);
+            for (let index = 0; index < ids.length; ++index)
+                found[ids[index]] = true;
+        }
+        return Object.keys(found);
+    }
+
+    function discardStudioChanges() {
+        panelDrafts = StudioDraft.clear();
+        settingsDraft = StudioDraft.clear();
+        screenDrafts = StudioDraft.clear();
+        themeDrafts = StudioDraft.clear();
+        themeTargetPanelId = "";
+        colorField = null;
+        colorTargetPanelId = "";
+        studioError = "";
+    }
+
+    function applyStudioChanges() {
+        studioError = "";
+        const panelIds = draftPanelIds();
+        const existingPanelIds = panelRegistry.panelIds;
+        for (let index = 0; index < panelIds.length; ++index) {
+            if (existingPanelIds.indexOf(panelIds[index]) < 0) {
+                studioError = qsTr(
+                    "A panel changed outside Panel Studio. Cancel and reopen it before applying.");
+                return false;
+            }
+        }
+
+        for (let index = 0; index < panelIds.length; ++index) {
+            const panelId = panelIds[index];
+            const draft = panelDraft(panelId);
+            const values = filteredPanelDraft(draft);
+            if (StudioDraft.keyCount(values) > 0)
+                panelRegistry.updatePanel(panelId, values);
+            if (StudioDraft.hasValue(draft, "visibilityMode")) {
+                panelController.setPanelVisibilityMode(
+                    panelId, String(draft.visibilityMode));
+            }
+        }
+
+        const settingKeys = Object.keys(settingsDraft);
+        for (let index = 0; index < settingKeys.length; ++index) {
+            const key = settingKeys[index];
+            settings[key] = settingsDraft[key];
+        }
+
+        const screenPanelIds = Object.keys(screenDrafts);
+        for (let index = 0; index < screenPanelIds.length; ++index) {
+            const panelId = screenPanelIds[index];
+            panelController.setPanelScreen(
+                panelId, effectivePanelScreenIndex(panelId));
+        }
+
+        let themeSucceeded = true;
+        for (let index = 0; index < panelIds.length; ++index) {
+            const panelId = panelIds[index];
+            const themeDraft = StudioDraft.nestedMap(themeDrafts, panelId);
+            const action = String(themeDraft.action || "");
+            if (action === "clear") {
+                panelRegistry.clearTheme(panelId);
+            } else if (action === "import") {
+                themeSucceeded = panelRegistry.importTheme(
+                    panelId, themeDraft.sourceUrl) && themeSucceeded;
+            } else if (action === "render") {
+                themeSucceeded = panelRegistry.renderTheme(
+                    panelId,
+                    Number(panelValueFor(panelId, "width", 720)),
+                    Number(panelValueFor(panelId, "height", 76)),
+                    Screen.devicePixelRatio,
+                    true) && themeSucceeded;
+            } else {
+                const draft = panelDraft(panelId);
+                const geometryChanged =
+                    StudioDraft.hasValue(draft, "width")
+                    || StudioDraft.hasValue(draft, "height")
+                    || StudioDraft.hasValue(draft, "themeFit");
+                if (geometryChanged
+                        && String(panelValueFor(
+                            panelId, "themeSource", "")).length > 0) {
+                    themeSucceeded = panelRegistry.renderTheme(
+                        panelId,
+                        Number(panelValueFor(panelId, "width", 720)),
+                        Number(panelValueFor(panelId, "height", 76)),
+                        Screen.devicePixelRatio,
+                        true) && themeSucceeded;
+                }
+            }
+        }
+
+        panelDrafts = StudioDraft.clear();
+        settingsDraft = StudioDraft.clear();
+        screenDrafts = StudioDraft.clear();
+        themeDrafts = StudioDraft.clear();
+        themeTargetPanelId = "";
+        colorField = null;
+        colorTargetPanelId = "";
+        if (!themeSucceeded) {
+            studioError = qsTr(
+                "The settings were applied, but an artwork operation failed.");
+            return false;
+        }
+        return true;
+    }
+
+    function acceptStudioChanges() {
+        if ((!hasPendingChanges || applyStudioChanges()))
+            close();
+    }
+
+    function cancelStudioChanges() {
+        discardStudioChanges();
+        close();
+    }
+
     function performStudioAction(action, data) {
+        if ((action === "create-free" || action === "remove-panel")
+                && hasPendingChanges)
+            return;
         if (action === "create-free") {
             openPanelEditor(panelController.createFreePanel());
         } else if (action === "remove-panel") {
@@ -310,35 +669,14 @@ Window {
             panelController.removePanel(removed);
             selectPanel(panelRegistry.activePanelId);
         } else if (action === "import-theme") {
+            themeTargetPanelId = selectedPanelId;
             themeDialog.open();
         } else if (action === "clear-theme") {
-            panelRegistry.clearTheme(selectedPanelId);
+            stageThemeAction(selectedPanelId, "clear", "");
         } else if (action === "render-theme") {
-            panelRegistry.renderTheme(
-                selectedPanelId,
-                Number(panelValue("width", 720)),
-                Number(panelValue("height", 76)),
-                Screen.devicePixelRatio,
-                true);
-        } else if (action === "reset-layout") {
-            panelRegistry.updatePanel(selectedPanelId, {
-                layoutScale: 1.0,
-                layoutAngle: 0.0,
-                layoutRadius: 150,
-                layoutRows: 2,
-                layoutPadding: 18,
-                pathSides: 6,
-                pathOrientation: "upright",
-                pathAnchor: "center"
-            });
-        } else if (action === "apply-profile") {
-            panelController.applyProfile(pendingProfile);
-        } else if (action === "reset-all") {
-            panelController.resetSettings();
-        } else if (action === "create-native-panel") {
-            panelController.createNativeKdePanel(selectedPanelId);
-        } else if (action === "remove-native-panel") {
-            panelController.removeNativeKdePanel(selectedPanelId);
+            stageThemeAction(selectedPanelId, "render", "");
+        } else if (action === "reset-panel") {
+            resetSelectedPanelDraft();
         }
     }
 
@@ -415,23 +753,24 @@ Window {
         const artwork = themePackage.length > 0
             ? themePackage
             : (themeSource.length > 0 ? qsTr("Imported artwork") : qsTr("None"));
-        return [
+        const rows = [
             section(qsTr("Panel"),
                 qsTr("Settings currently applied to the selected panel. Edit them under Panels."),
                 true),
             readOnlyRow(qsTr("Name"), panelRegistry.panelName(selectedPanelId)),
             readOnlyRow(qsTr("Type"),
                 optionLabel(panelTypeOptions, panelValue("type", "empty"))),
-            readOnlyRow(qsTr("Position"), position),
-            readOnlyRow(qsTr("Display"), selectedScreenLabel()),
+            readOnlyRow(qsTr("Position"), position)
+        ];
+        if (!freePanel)
+            rows.push(readOnlyRow(qsTr("Display"), selectedScreenLabel()));
+        rows.push(
             readOnlyRow(qsTr("Size"),
                 panelValue("width", 720) + " × " + panelValue("height", 76)
                     + qsTr(" px")),
             readOnlyRow(qsTr("Sizing"),
                 panelValue("dynamic", true) ? qsTr("Dynamic") : qsTr("Static")),
             readOnlyRow(qsTr("Visibility"), visibility),
-            readOnlyRow(qsTr("Accept drops"),
-                onOff(panelValue("acceptDrops", true))),
             section(qsTr("Appearance"),
                 qsTr("The active surface and geometry settings.")),
             readOnlyRow(qsTr("Layout"),
@@ -444,8 +783,8 @@ Window {
                 color.length > 0 ? color : qsTr("Theme default")),
             readOnlyRow(qsTr("Opacity"),
                 Math.round(Number(panelValue("opacity", 0.9)) * 100) + "%"),
-            readOnlyRow(qsTr("Artwork"), artwork)
-        ];
+            readOnlyRow(qsTr("Artwork"), artwork));
+        return rows;
     }
 
     function overviewIconRows() {
@@ -494,58 +833,53 @@ Window {
     }
 
     function panelsGeneralRows() {
-        const freePanel = panelValue("edge", "bottom") === "free";
+        const edge = effectivePanelValue("edge", "bottom");
+        const freePanel = edge === "free";
         const edgeEditable = !panelRegistry.isBuiltIn(selectedPanelId) && !freePanel;
         const orientation = freePanel
-            ? titleCase(panelValue("layout", "adaptive"))
-            : (["left", "right"].includes(panelValue("edge", "bottom"))
+            ? titleCase(effectivePanelValue("layout", "adaptive"))
+            : (["left", "right"].includes(edge)
                 ? qsTr("Vertical") : qsTr("Horizontal"));
-        return [
+        const rows = [
             section(qsTr("General"), qsTr("Identity and placement of the selected panel."), true),
             {
                 kind: "actions",
                 label: qsTr("Panel"),
                 actions: [
                     { label: qsTr("Add free panel"), icon: "list-add",
-                      action: "create-free" },
+                      action: "create-free", available: !hasPendingChanges },
                     { label: panelRegistry.isBuiltIn(selectedPanelId)
                         ? qsTr("Hide panel") : qsTr("Remove panel"),
                       icon: panelRegistry.isBuiltIn(selectedPanelId)
                         ? "view-hidden" : "edit-delete",
-                      action: "remove-panel" }
+                      action: "remove-panel", available: !hasPendingChanges }
                 ]
             },
             panelField("combo", qsTr("Panel Type"), "type", "empty",
                 { options: panelTypeOptions }),
             panelField("combo", qsTr("Position"), "edge", "bottom",
                 {
-                    options: edgeOptions,
+                    options: freePanel ? edgeOptions : nativeEdgeOptions,
                     available: edgeEditable,
                     description: edgeEditable ? "" : qsTr("Fixed for this panel type")
                 }),
             panelField("combo", qsTr("Alignment"), "alignment", "center",
                 { options: alignmentOptions }),
-            { kind: "readonly", label: qsTr("Orientation"), value: orientation },
-            screenField(),
-            panelField("combo", qsTr("Screen Edge"), "edge", "bottom",
+            { kind: "readonly", label: qsTr("Orientation"), value: orientation }
+        ];
+        if (!freePanel) {
+            rows.push(
+                screenField(),
+                panelField("combo", qsTr("Screen Edge"), "edge", "bottom",
                 {
-                    options: edgeOptions,
+                    options: nativeEdgeOptions,
                     available: edgeEditable,
                     description: edgeEditable ? "" : qsTr("Fixed for this panel type")
-                }),
-            notice(qsTr("Lock Position will be added with live native-panel geometry synchronization.")),
-            section(qsTr("KDE integration")),
-            {
-                kind: "actions",
-                label: qsTr("Native KDE panel"),
-                actions: [
-                    { label: qsTr("Create"), icon: "list-add",
-                      action: "create-native-panel" },
-                    { label: qsTr("Remove"), icon: "edit-delete",
-                      action: "remove-native-panel" }
-                ]
-            }
-        ];
+                }));
+        }
+        rows.push(notice(qsTr(
+            "Lock Position will be added with live panel-geometry synchronization.")));
+        return rows;
     }
 
     function panelsSizeRows() {
@@ -556,11 +890,15 @@ Window {
             panelField("spin", qsTr("Height"), "height", 76,
                 { from: 48, to: 4096, step: 4 }),
             {
-                kind: "readonly",
+                kind: "spin",
                 label: qsTr("Length"),
-                value: ["left", "right"].includes(panelValue("edge", "bottom"))
-                    ? panelValue("height", 76) : panelValue("width", 720),
-                description: qsTr("Derived from orientation")
+                scope: "length",
+                from: 48,
+                to: 4096,
+                step: 4,
+                description: effectivePanelValue("edge", "bottom") === "free"
+                    ? qsTr("Sets both width and height")
+                    : qsTr("Along the panel orientation")
             },
             panelField("switch", qsTr("Dynamic Size"), "dynamic", true),
             notice(qsTr("Floating Margin needs a placement adapter before it can safely change native and free panels."))
@@ -572,8 +910,7 @@ Window {
             section(qsTr("Appearance"), qsTr("Surface styling for the selected panel."), true),
             panelField("combo", qsTr("Shape"), "shape", "pill",
                 { options: panelShapeOptions }),
-            panelField("text", qsTr("Color"), "color", "",
-                { placeholder: qsTr("Preset color or #AARRGGBB") }),
+            panelField("color", qsTr("Color"), "color", ""),
             panelField("slider", qsTr("Opacity"), "opacity", 0.9,
                 { from: 0, to: 1, step: 0.05, decimals: 2 }),
             panelField("combo", qsTr("Theme"), "appearance", "glass",
@@ -583,7 +920,7 @@ Window {
             {
                 kind: "actions",
                 label: qsTr("Artwork"),
-                description: String(panelValue("themeStatus", qsTr("Preset surface active."))),
+                description: themeActionDescription(selectedPanelId),
                 actions: [
                     { label: qsTr("Import"), icon: "document-import",
                       action: "import-theme" },
@@ -615,16 +952,12 @@ Window {
             },
             panelField("switch", qsTr("Dynamic / Static"), "dynamic", true,
                 { description: qsTr("On is dynamic; off is static") }),
-            panelField("switch", qsTr("Accept files, folders, and apps"),
-                "acceptDrops", true),
             panelField("switch", qsTr("Spring rearrangement"),
                 "physicsEnabled", false),
             panelField("combo", qsTr("Folder expansion"), "folderLayout", "fan",
                 { options: folderLayoutOptions }),
             panelField("spin", qsTr("Folder animation speed"), "folderSpeed", 260,
-                { from: 80, to: 1200, step: 20 }),
-            panelField("switch", qsTr("Open folders on click"),
-                "folderExpandOnClick", true)
+                { from: 80, to: 1200, step: 20 })
         ];
     }
 
@@ -650,13 +983,6 @@ Window {
                 { from: 1, to: 8, step: 1 }),
             panelField("spin", qsTr("Panel Padding"), "layoutPadding", 18,
                 { from: 0, to: 240, step: 1 }),
-            {
-                kind: "action",
-                label: qsTr("Reset Layout"),
-                buttonText: qsTr("Reset geometry"),
-                icon: "edit-undo",
-                action: "reset-layout"
-            },
             notice(qsTr("Content Margins, Start Offset, and End Offset need geometry support before they can be enabled."))
         ];
     }
@@ -701,7 +1027,6 @@ Window {
                 { from: 1, to: 2.4, step: 0.05, decimals: 2, suffix: "×" }),
             settingsField("slider", qsTr("Speed"), "animationDuration",
                 { from: 80, to: 500, step: 10, decimals: 0, suffix: qsTr(" ms") }),
-            settingsField("switch", qsTr("Reduce motion"), "reducedMotion"),
             notice(qsTr("Separate Hover Glow, Click Color/Shade, Lift, and Attention controls need per-state renderer support."))
         ];
     }
@@ -739,22 +1064,9 @@ Window {
 
     function quickProfileRows() {
         return [
-            section(qsTr("Quick Profile"), qsTr("Built-in Arch Dock desktop-suite profiles."), true),
-            {
-                kind: "combo",
-                label: qsTr("Current Profile"),
-                key: "pendingProfile",
-                scope: "local",
-                options: profileOptions
-            },
-            {
-                kind: "action",
-                label: qsTr("Apply Profile"),
-                buttonText: qsTr("Apply"),
-                icon: "dialog-ok-apply",
-                action: "apply-profile"
-            },
-            notice(qsTr("The existing quick profiles apply to the Arch Dock desktop suite. Selected-panel profiles, Recent Profiles, and Favorites need a dedicated profile store."))
+            section(qsTr("Quick Profile"),
+                qsTr("Reusable profiles for the selected panel."), true),
+            notice(qsTr("Recent panel profiles and Favorites will appear here after the panel-profile store is implemented."))
         ];
     }
 
@@ -765,9 +1077,9 @@ Window {
             {
                 kind: "action",
                 label: qsTr("Reset"),
-                buttonText: qsTr("Reset all Arch Dock settings"),
+                buttonText: qsTr("Reset selected panel"),
                 icon: "edit-undo",
-                action: "reset-all"
+                action: "reset-panel"
             }
         ];
     }
@@ -809,11 +1121,6 @@ Window {
         return profilePages[subTabIndex]();
     }
 
-    onSelectedPanelIdChanged: {
-        if (selectedPanelId.length > 0)
-            panelRegistry.setActivePanelId(selectedPanelId);
-    }
-
     onShowPanelsChanged: {
         if (showPanels)
             setMainTab(1);
@@ -833,6 +1140,12 @@ Window {
     onVisibleChanged: {
         if (visible)
             requestActivate();
+    }
+    onClosing: discardStudioChanges()
+
+    Shortcut {
+        sequences: [StandardKey.Cancel]
+        onActivated: root.cancelStudioChanges()
     }
 
     Rectangle {
@@ -927,7 +1240,7 @@ Window {
             width: 30
             height: 30
             icon.name: "window-close"
-            onClicked: root.close()
+            onClicked: root.cancelStudioChanges()
 
             background: Rectangle {
                 radius: 4
@@ -1037,7 +1350,7 @@ Window {
                 Label {
                     Layout.fillWidth: true
                     Layout.margins: 7
-                    text: qsTr("Changes apply immediately")
+                    text: qsTr("Changes are held until Apply or OK")
                     color: "#617985"
                     font.pixelSize: 9
                     wrapMode: Text.Wrap
@@ -1081,7 +1394,8 @@ Window {
                 Button {
                     icon.name: "list-add"
                     text: qsTr("Free panel")
-                    onClicked: root.openPanelEditor(panelController.createFreePanel())
+                    enabled: !root.hasPendingChanges
+                    onClicked: root.performStudioAction("create-free", {})
                 }
             }
 
@@ -1141,14 +1455,43 @@ Window {
             font.pixelSize: 10
         }
 
+        Label {
+            visible: root.studioError.length > 0
+            Layout.maximumWidth: 360
+            text: root.studioError
+            color: "#ff8c8c"
+            font.pixelSize: 10
+            elide: Text.ElideRight
+        }
+
+        Label {
+            visible: root.hasPendingChanges && root.studioError.length === 0
+            text: qsTr("Pending changes")
+            color: "#80de70"
+            font.pixelSize: 10
+        }
+
         Item {
             Layout.fillWidth: true
         }
 
         Button {
-            text: qsTr("Done")
+            text: qsTr("OK")
             icon.name: "dialog-ok"
-            onClicked: root.close()
+            onClicked: root.acceptStudioChanges()
+        }
+
+        Button {
+            text: qsTr("Apply")
+            icon.name: "dialog-ok-apply"
+            enabled: root.hasPendingChanges
+            onClicked: root.applyStudioChanges()
+        }
+
+        Button {
+            text: qsTr("Cancel")
+            icon.name: "dialog-cancel"
+            onClicked: root.cancelStudioChanges()
         }
     }
 
@@ -1162,6 +1505,38 @@ Window {
             qsTr("Design files (*.png *.jpg *.jpeg *.webp *.avif *.heif *.heic *.jxl *.svg *.svgz *.tif *.tiff *.pdf *.psd *.xcf *.blend)"),
             qsTr("All files (*)")
         ]
-        onAccepted: panelRegistry.importTheme(root.selectedPanelId, selectedFile)
+        onAccepted: {
+            if (root.themeTargetPanelId.length > 0) {
+                root.stageThemeAction(
+                    root.themeTargetPanelId, "import", selectedFile);
+            }
+            root.themeTargetPanelId = "";
+        }
+        onRejected: root.themeTargetPanelId = ""
+    }
+
+    ColorDialog {
+        id: colorDialog
+
+        title: qsTr("Choose panel color")
+        parentWindow: root
+        modality: Qt.WindowModal
+        options: ColorDialog.ShowAlphaChannel
+        onAccepted: {
+            if (root.colorField !== null
+                    && root.colorTargetPanelId.length > 0) {
+                root.setPanelDraftValue(
+                    root.colorTargetPanelId,
+                    root.colorField.key,
+                    selectedColor.toString(),
+                    root.colorField.fallback);
+            }
+            root.colorField = null;
+            root.colorTargetPanelId = "";
+        }
+        onRejected: {
+            root.colorField = null;
+            root.colorTargetPanelId = "";
+        }
     }
 }
