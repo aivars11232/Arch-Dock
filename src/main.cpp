@@ -12,7 +12,6 @@
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
-    QGuiApplication::setQuitOnLastWindowClosed(false);
 
     QGuiApplication::setApplicationName(QStringLiteral("Arch Dock"));
     QGuiApplication::setOrganizationName(QStringLiteral("Arch Dock"));

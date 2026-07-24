@@ -78,13 +78,6 @@ PlasmoidItem {
         return reply;
     }
 
-    function synchronizePlasmaEditMode() {
-        if (dockService.registered)
-            callDock("setPlasmaEditMode", [plasmaEditMode]);
-    }
-
-    onPlasmaEditModeChanged: synchronizePlasmaEditMode()
-
     function refresh() {
         if (!dockService.registered) {
             entries = [];
@@ -278,10 +271,7 @@ PlasmoidItem {
         id: dockService
         busType: PlasmaDBus.BusType.Session
         watchedService: "org.archdock.ArchDock"
-        onRegisteredChanged: {
-            root.refresh();
-            root.synchronizePlasmaEditMode();
-        }
+        onRegisteredChanged: root.refresh()
     }
 
     PlasmaDBus.Properties {
@@ -296,8 +286,5 @@ PlasmoidItem {
         onRefreshed: root.refresh()
     }
 
-    Component.onCompleted: {
-        root.refresh();
-        Qt.callLater(root.synchronizePlasmaEditMode);
-    }
+    Component.onCompleted: root.refresh()
 }

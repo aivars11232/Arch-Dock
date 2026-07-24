@@ -110,13 +110,6 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
             QDBusConnection::ExportAllSlots |
                 QDBusConnection::ExportAllSignals |
                 QDBusConnection::ExportAllProperties);
-        sessionBus.connect(
-            QStringLiteral("org.kde.plasmashell"),
-            QStringLiteral("/PlasmaShell"),
-            QStringLiteral("org.freedesktop.DBus.Properties"),
-            QStringLiteral("PropertiesChanged"),
-            this,
-            SLOT(handlePlasmaPropertiesChanged(QString,QVariantMap,QStringList)));
         if (QDBusConnectionInterface *interface = sessionBus.interface())
         {
             connect(interface,
@@ -134,15 +127,8 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
                         if (newOwner.isEmpty())
                         {
                             ++m_nativePanelRecoveryGeneration;
-                            if (m_plasmaEditMode)
-                            {
-                                m_plasmaEditMode = false;
-                                emit plasmaEditModeChanged();
-                                synchronizeFreePanels();
-                            }
                             return;
                         }
-                        refreshPlasmaEditMode();
                         scheduleNativePanelRecovery();
                     });
         }
@@ -197,7 +183,6 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     }
 
     synchronizeScreenAssignments();
-    refreshPlasmaEditMode();
     scheduleNativePanelRecovery();
 }
 
@@ -205,8 +190,6 @@ PanelWindow::~PanelWindow()
 {
     qDeleteAll(m_freePanelWindows);
     m_freePanelWindows.clear();
-    qDeleteAll(m_freePanelEditWindows);
-    m_freePanelEditWindows.clear();
     delete m_settingsWindow;
     delete m_iconPropertiesWindow;
 }
@@ -224,58 +207,6 @@ int PanelWindow::visibilityRevision() const
 qulonglong PanelWindow::dockRevision() const
 {
     return m_dockRevision;
-}
-
-bool PanelWindow::plasmaEditMode() const
-{
-    return m_plasmaEditMode;
-}
-
-void PanelWindow::refreshPlasmaEditMode()
-{
-    QDBusInterface shell(
-        QStringLiteral("org.kde.plasmashell"),
-        QStringLiteral("/PlasmaShell"),
-        QStringLiteral("org.kde.PlasmaShell"),
-        QDBusConnection::sessionBus());
-    const bool editMode = shell.isValid() && shell.property("editMode").toBool();
-    if (m_plasmaEditMode == editMode)
-        return;
-    m_plasmaEditMode = editMode;
-    emit plasmaEditModeChanged();
-    synchronizeFreePanels();
-}
-
-void PanelWindow::handlePlasmaPropertiesChanged(
-    const QString &interfaceName,
-    const QVariantMap &changedProperties,
-    const QStringList &invalidatedProperties)
-{
-    if (interfaceName != QStringLiteral("org.kde.PlasmaShell"))
-        return;
-    if (changedProperties.contains(QStringLiteral("editMode")))
-    {
-        const bool editMode = changedProperties.value(QStringLiteral("editMode")).toBool();
-        if (m_plasmaEditMode != editMode)
-        {
-            m_plasmaEditMode = editMode;
-            emit plasmaEditModeChanged();
-            synchronizeFreePanels();
-        }
-    }
-    else if (invalidatedProperties.contains(QStringLiteral("editMode")))
-    {
-        refreshPlasmaEditMode();
-    }
-}
-
-void PanelWindow::setPlasmaEditMode(bool editMode)
-{
-    if (m_plasmaEditMode == editMode)
-        return;
-    m_plasmaEditMode = editMode;
-    emit plasmaEditModeChanged();
-    synchronizeFreePanels();
 }
 
 QVariantMap PanelWindow::dockConfiguration(const QString &panelId) const
@@ -745,23 +676,7 @@ void PanelWindow::synchronizeFreePanels()
         {
             window->setMask(QRegion(bounds));
         }
-        window->setVisible(visible && !m_plasmaEditMode);
-        if (m_plasmaEditMode)
-        {
-            QWindow *editWindow = m_freePanelEditWindows.value(panelId);
-            if (!editWindow)
-            {
-                editWindow = createUtilityWindow(
-                    QUrl(QStringLiteral("qrc:/qt/qml/ArchDock/qml/runtime/FreePanelEditWindow.qml")));
-                if (editWindow)
-                {
-                    editWindow->setProperty("panelId", panelId);
-                    m_freePanelEditWindows.insert(panelId, editWindow);
-                }
-            }
-            if (editWindow)
-                editWindow->setVisible(true);
-        }
+        window->setVisible(visible);
     }
 
     for (auto iterator = m_freePanelWindows.begin(); iterator != m_freePanelWindows.end();)
@@ -770,17 +685,6 @@ void PanelWindow::synchronizeFreePanels()
         {
             delete iterator.value();
             iterator = m_freePanelWindows.erase(iterator);
-        }
-        else
-            ++iterator;
-    }
-
-    for (auto iterator = m_freePanelEditWindows.begin(); iterator != m_freePanelEditWindows.end();)
-    {
-        if (!m_plasmaEditMode || !activeIds.contains(iterator.key()))
-        {
-            delete iterator.value();
-            iterator = m_freePanelEditWindows.erase(iterator);
         }
         else
             ++iterator;

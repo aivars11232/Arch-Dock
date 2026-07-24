@@ -54,7 +54,6 @@ qt_add_qml_module(
   NO_IMPORT_SCAN
   QML_FILES
   qml/runtime/DockGeometry.js
-  qml/runtime/FreePanelEditWindow.qml
   qml/runtime/FreePanelWindow.qml
   qml/runtime/IconProperties.qml
   qml/runtime/IconPropertiesWindow.qml
