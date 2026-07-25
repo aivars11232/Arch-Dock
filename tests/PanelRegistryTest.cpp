@@ -101,6 +101,7 @@ private:
 void PanelRegistryTest::initTestCase()
 {
     QVERIFY(m_settingsDirectory.isValid());
+    QStandardPaths::setTestModeEnabled(false);
     QSettings::setPath(
         QSettings::NativeFormat,
         QSettings::UserScope,

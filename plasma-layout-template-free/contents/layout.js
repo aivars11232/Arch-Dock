@@ -1,17 +1,17 @@
-// Free docks are real desktop widgets. Plasma owns their geometry, movement,
-// persistence, Activities integration, and Edit Mode controls.
-const activityDesktops = desktopsForActivity(currentActivity());
-if (activityDesktops.length > 0) {
-    const desktop = activityDesktops[0];
-    const size = Math.round(gridUnit * 22);
-    const dock = desktop.addWidget(
-        "org.archdock.dock",
-        Math.round(gridUnit * 9),
-        Math.round(gridUnit * 7),
-        size,
-        size);
-    dock.currentConfigGroup = ["General"];
-    dock.writeConfig("bootstrapFreeDock", true);
-    dock.writeConfig("panelType", "empty");
-    dock.reloadConfig();
-}
+// KDE's Add Panel menu accepts panel-containment templates only. A short-lived
+// native panel securely transfers its screen to Arch Dock; the service creates
+// the real desktop widget there and removes this bridge after verification.
+const bridgePanel = new Panel;
+bridgePanel.height = Math.max(1, Math.round(gridUnit));
+bridgePanel.lengthMode = "fit";
+
+const token = "archdock-free-template-" + bridgePanel.id
+    + ":" + currentActivity()
+    + ":" + Date.now().toString(36)
+    + ":" + Math.random().toString(36).slice(2);
+const bridge = bridgePanel.addWidget("org.archdock.control");
+bridge.currentConfigGroup = ["General"];
+bridge.writeConfig("bootstrapAction", "create-circular-free-panel");
+bridge.writeConfig("bootstrapToken", token);
+bridge.writeConfig("bootstrapPanelId", bridgePanel.id);
+bridge.reloadConfig();

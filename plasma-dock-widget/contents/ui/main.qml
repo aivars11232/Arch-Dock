@@ -6,6 +6,7 @@ import org.kde.plasma.core as PlasmaCore
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.workspace.dbus as PlasmaDBus
 import "DockGeometry.js" as DockGeometry
+import "FreeEntryPolicy.js" as FreeEntryPolicy
 
 PlasmoidItem {
     id: root
@@ -80,11 +81,26 @@ PlasmoidItem {
         const reply = PlasmaDBus.SessionBus.asyncCall(message)
             as PlasmaDBus.DBusPendingReply;
         reply.finished.connect(function() {
-            if (onResolved) {
-                const value = JSON.parse(JSON.stringify(reply.value));
-                onResolved(value);
+            try {
+                if (reply.isError) {
+                    const error = {
+                        name: reply.error.name,
+                        message: reply.error.message
+                    };
+                    if (onRejected)
+                        onRejected(error);
+                    else
+                        console.warn("Arch Dock D-Bus call failed:", methodName,
+                                     error.name, error.message);
+                    return;
+                }
+                if (onResolved) {
+                    const value = JSON.parse(JSON.stringify(reply.value));
+                    onResolved(value);
+                }
+            } finally {
+                reply.destroy();
             }
-            reply.destroy();
         });
     }
 
@@ -121,8 +137,14 @@ PlasmoidItem {
     }
 
     function refreshEntries() {
-        if (panelId.length === 0 || !dockService.registered) {
+        if (panelId.length === 0) {
             entries = [];
+            requestFailed = false;
+            return;
+        }
+        if (!dockService.registered) {
+            if (!freeSurface)
+                entries = [];
             requestFailed = false;
             return;
         }
@@ -131,7 +153,8 @@ PlasmoidItem {
             entries = Array.isArray(value) ? value : [];
             requestFailed = false;
         }, function() {
-            entries = [];
+            if (!FreeEntryPolicy.keepEntriesOnServiceFailure(root.freeSurface))
+                entries = [];
             requestFailed = true;
         });
     }
@@ -161,6 +184,14 @@ PlasmoidItem {
     }
 
     function invokeEntry(methodName, appId) {
+        if (freeSurface && methodName === "activateDockEntry") {
+            const targetUrl = FreeEntryPolicy.encodedUrl(appId);
+            if (targetUrl.length > 0) {
+                if (!Qt.openUrlExternally(targetUrl) && dockService.registered)
+                    callDock(methodName, [appId]);
+                return;
+            }
+        }
         if (freeSurface && methodName === "togglePinnedDockEntry") {
             callDock("removePanelContent", [panelId, appId], refresh);
             return;
@@ -358,7 +389,8 @@ PlasmoidItem {
                                 motionIntensity: root.configuration.animationIntensity
                                 motionDuration: root.motionDuration
                                 reducedMotion: root.configuration.reducedMotion
-                                inputEnabled: dockService.registered && !root.plasmaEditMode
+                                inputEnabled: FreeEntryPolicy.interactionEnabled(
+                                    root.plasmaEditMode)
                                 acceptDrops: root.configuration.acceptDrops
                                 invoke: root.invokeEntry
                                 reorder: root.reorderEntry

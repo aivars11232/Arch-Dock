@@ -19,7 +19,6 @@ PlasmoidItem {
     readonly property string bootstrapAction: Plasmoid.configuration.bootstrapAction || ""
     readonly property string bootstrapToken: Plasmoid.configuration.bootstrapToken || ""
     readonly property int bootstrapPanelId: Plasmoid.configuration.bootstrapPanelId
-    property bool bootstrapRequested: false
 
     function callDock(methodName, parameters, onResolved, onRejected) {
         const message = new PlasmaDBus.dbusMessage({
@@ -32,12 +31,38 @@ PlasmoidItem {
         const reply = PlasmaDBus.SessionBus.asyncCall(message)
             as PlasmaDBus.DBusPendingReply;
         reply.finished.connect(function() {
-            if (onResolved) {
-                const value = JSON.parse(JSON.stringify(reply.value));
-                onResolved(value);
+            try {
+                if (reply.isError) {
+                    const error = {
+                        name: reply.error.name,
+                        message: reply.error.message
+                    };
+                    if (onRejected)
+                        onRejected(error);
+                    else
+                        console.warn("Arch Dock D-Bus call failed:", methodName,
+                                     error.name, error.message);
+                    return;
+                }
+                if (onResolved) {
+                    const value = JSON.parse(JSON.stringify(reply.value));
+                    onResolved(value);
+                }
+            } finally {
+                reply.destroy();
             }
-            reply.destroy();
         });
+    }
+
+    function normalizeReply(reply) {
+        if (Array.isArray(reply))
+            return reply.map(normalizeReply);
+        if (reply && typeof reply === "object") {
+            const keys = Object.keys(reply);
+            if (keys.length === 1 && keys[0] === "value")
+                return normalizeReply(reply.value);
+        }
+        return reply;
     }
 
     function openPanelSettings() {
@@ -51,30 +76,35 @@ PlasmoidItem {
         callDock("createNativePanel", [edge, type]);
     }
 
-    function tryBootstrap() {
-        if (bootstrapRequested || !dockService.registered ||
-            bootstrapAction !== "create-circular-free-panel" ||
-            bootstrapPanelId < 0 || bootstrapToken.length === 0)
-            return;
-        bootstrapRequested = true;
-        callDock("createFreePanelFromTemplate", [bootstrapPanelId, bootstrapToken],
-            function(result) {
-                if (!result || result.length === 0)
-                    bootstrapRequested = false;
-            },
-            function() {
-                bootstrapRequested = false;
-            });
-    }
+    BootstrapCoordinator {
+        id: bootstrapCoordinator
 
-    Component.onCompleted: Qt.callLater(tryBootstrap)
+        action: root.bootstrapAction
+        token: root.bootstrapToken
+        panelId: root.bootstrapPanelId
+        onRequest: function(panelId, token) {
+            root.callDock("createFreePanelFromTemplate", [panelId, token],
+                function(result) {
+                    const value = root.normalizeReply(result);
+                    bootstrapCoordinator.resolved(
+                        Array.isArray(value) && value.length === 1
+                            ? value[0] : value);
+                },
+                function() {
+                    bootstrapCoordinator.rejected();
+                });
+        }
+    }
 
     PlasmaDBus.DBusServiceWatcher {
         id: dockService
 
         busType: PlasmaDBus.BusType.Session
         watchedService: "org.archdock.ArchDock"
-        onRegisteredChanged: root.tryBootstrap()
+        onRegisteredChanged: {
+            if (registered)
+                bootstrapCoordinator.nudge();
+        }
     }
 
     compactRepresentation: MouseArea {

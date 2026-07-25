@@ -124,6 +124,7 @@ private:
     void notifyDockRevision();
     void notifyDockEntriesRevision();
     int evaluatePlasmaScript(const QString &script) const;
+    int evaluatePlasmaScriptResult(const QString &script) const;
     QWindow *createUtilityWindow(const QUrl &source);
     void presentUtilityWindow(QWindow *window);
 

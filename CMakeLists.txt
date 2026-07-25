@@ -26,6 +26,8 @@ qt_add_executable(
   src/PanelRegistry.cpp
   src/NativeContainmentLifecycle.h
   src/NativeContainmentLifecycle.cpp
+  src/PlasmaScriptResult.h
+  src/PlasmaScriptResult.cpp
   src/PanelPlacement.h
   src/PanelPlacement.cpp
   src/PanelVisibility.h
@@ -111,7 +113,24 @@ if(BUILD_TESTING)
   add_test(NAME panel-registry-test COMMAND panel-registry-test)
   set_tests_properties(
     panel-registry-test
-    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    PROPERTIES ENVIRONMENT
+               "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-data/panel-registry")
+
+  qt_add_executable(
+    plasma-script-result-test
+    tests/PlasmaScriptResultTest.cpp
+    src/PlasmaScriptResult.h
+    src/PlasmaScriptResult.cpp)
+  target_include_directories(
+    plasma-script-result-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    plasma-script-result-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(
+    NAME plasma-script-result-test
+    COMMAND plasma-script-result-test)
 
   add_test(
     NAME dock-geometry-test
@@ -128,6 +147,28 @@ if(BUILD_TESTING)
   set_tests_properties(
     motion-policy-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME free-entry-policy-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_FreeEntryPolicy.qml)
+  set_tests_properties(
+    free-entry-policy-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME bootstrap-coordinator-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_BootstrapCoordinator.qml)
+  set_tests_properties(
+    bootstrap-coordinator-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME plasma-template-contract-test
+    COMMAND ${CMAKE_COMMAND}
+            -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ValidatePlasmaTemplate.cmake)
 
   add_test(
     NAME studio-navigation-test
@@ -156,6 +197,10 @@ install(
 install(
   DIRECTORY plasma-widget/
   DESTINATION share/plasma/plasmoids/org.archdock.control)
+install(CODE [[
+  file(REMOVE_RECURSE
+    "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/share/plasma/plasmoids/org.archdock.templatebootstrap")
+]])
 install(
   DIRECTORY plasma-dock-widget/
   DESTINATION share/plasma/plasmoids/org.archdock.dock)

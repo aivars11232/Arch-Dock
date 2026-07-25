@@ -2,6 +2,7 @@
 
 #include "../NativeContainmentLifecycle.h"
 #include "../PanelPlacement.h"
+#include "../PlasmaScriptResult.h"
 #include "../ScreenIdentity.h"
 
 #include <QQmlApplicationEngine>
@@ -1006,32 +1007,94 @@ QString PanelWindow::createFreePanelFromTemplate(int containmentId,
     const QString token = plasmaScriptStringLiteral(ownershipToken);
     const QString verifyScript = QStringLiteral(R"JS(
 const bridgePanel = panelById(%1);
-let verified = 0;
+let verifiedScreen = -1;
 if (bridgePanel) {
     const controls = bridgePanel.widgets("org.archdock.control");
     for (let index = 0; index < controls.length; ++index) {
         controls[index].currentConfigGroup = ["General"];
         if (controls[index].readConfig("bootstrapAction") === "create-circular-free-panel" &&
-            controls[index].readConfig("bootstrapToken") === %2) {
-            verified = 1;
+            controls[index].readConfig("bootstrapToken") === %2 &&
+            Number(controls[index].readConfig("bootstrapPanelId")) === %1) {
+            const screen = Number(bridgePanel.screen);
+            if (screen >= 0)
+                verifiedScreen = screen;
             break;
         }
     }
 }
-print(verified);
+print("ARCHDOCK_RESULT:" + String(verifiedScreen + 1));
 )JS").arg(containmentId).arg(token);
-    if (evaluatePlasmaScript(verifyScript) != 1)
+    const int screenMarker = evaluatePlasmaScriptResult(verifyScript);
+    if (screenMarker < 1)
     {
         qWarning() << "Rejected unverified free-panel template bridge" << containmentId;
         return {};
     }
+    const int screenIndex = screenMarker - 1;
 
     const QString panelId = m_panelRegistry.addFreePanel();
+    if (panelId.isEmpty())
+    {
+        return {};
+    }
+    m_panelRegistry.updatePanel(
+        panelId,
+        {{QStringLiteral("screen"), screenIndex},
+         {QStringLiteral("screenId"), screenIdForIndex(screenIndex)}});
 
-    const int removed = evaluatePlasmaScript(
+    const QString createHostScript = QStringLiteral(R"JS(
+const desktop = desktopForScreen(%1);
+let created = 0;
+if (desktop) {
+    const size = Math.round(gridUnit * 22);
+    let dock = null;
+    try {
+        dock = desktop.addWidget(
+            "org.archdock.dock",
+            Math.round(gridUnit * 9),
+            Math.round(gridUnit * 7),
+            size,
+            size);
+    } catch (error) {
+        dock = null;
+    }
+    if (dock) {
+        try {
+            dock.currentConfigGroup = ["General"];
+            dock.writeConfig("panelId", %2);
+            dock.writeConfig("panelType", "empty");
+            dock.writeConfig("bootstrapFreeDock", false);
+            dock.reloadConfig();
+            const configuredPanelId = String(dock.readConfig("panelId", ""));
+            const configuredPanelType = String(dock.readConfig("panelType", ""));
+            if (configuredPanelId === %2 && configuredPanelType === "empty")
+                created = 1;
+        } catch (error) {
+            created = 0;
+        }
+        if (created === 0) {
+            try {
+                dock.remove();
+            } catch (error) {
+            }
+        }
+    }
+}
+print("ARCHDOCK_RESULT:" + String(created));
+)JS").arg(screenIndex).arg(plasmaScriptStringLiteral(panelId));
+    if (evaluatePlasmaScriptResult(createHostScript) != 1)
+    {
+        qWarning() << "Could not create the free-panel Plasma desktop host on screen"
+                   << screenIndex;
+        m_panelRegistry.removePanel(panelId);
+        return {};
+    }
+
+    const int removed = evaluatePlasmaScriptResult(
         QStringLiteral("const bridgePanel = panelById(%1); "
-                       "if (bridgePanel) { bridgePanel.remove(); print(1); } "
-                       "else { print(0); }")
+                       "if (bridgePanel) { bridgePanel.remove(); "
+                       "print('ARCHDOCK_RESULT:1'); } "
+                       "else { print('ARCHDOCK_RESULT:0'); }")
             .arg(containmentId));
     if (removed != 1)
     {
@@ -1165,6 +1228,35 @@ int PanelWindow::evaluatePlasmaScript(const QString &script) const
     const QRegularExpressionMatch match = QRegularExpression(QStringLiteral("(-?\\d+)"))
         .match(reply.value());
     return match.hasMatch() ? match.captured(1).toInt() : -1;
+}
+
+int PanelWindow::evaluatePlasmaScriptResult(const QString &script) const
+{
+    QDBusInterface shell(
+        QStringLiteral("org.kde.plasmashell"),
+        QStringLiteral("/PlasmaShell"),
+        QStringLiteral("org.kde.PlasmaShell"),
+        QDBusConnection::sessionBus());
+    if (!shell.isValid())
+    {
+        return -1;
+    }
+
+    const QDBusReply<QString> reply = shell.call(QStringLiteral("evaluateScript"), script);
+    if (!reply.isValid())
+    {
+        qWarning() << "Plasma panel script failed:" << reply.error().message();
+        return -1;
+    }
+
+    const std::optional<int> result = ArchDock::parsePlasmaScriptResult(reply.value());
+    if (!result.has_value())
+    {
+        qWarning() << "Plasma panel script returned an unverified result:"
+                   << reply.value().trimmed();
+        return -1;
+    }
+    return *result;
 }
 
 bool PanelWindow::nativePanelExists(int panelId) const

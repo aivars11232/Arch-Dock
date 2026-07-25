@@ -59,6 +59,13 @@ Item {
 
     onMotionChanged: resetMotionLayer()
     onMotionActiveChanged: if (!motionActive) resetMotionLayer()
+    onInputEnabledChanged: {
+        if (!inputEnabled) {
+            dragging = false;
+            clickPulse = false;
+            setHoveredIndex(-1);
+        }
+    }
 
     width: baseSize * hoverScale
     height: width
