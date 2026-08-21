@@ -36,6 +36,19 @@ public:
         int containmentId,
         int dockAppletId,
         const QString &ownershipToken);
+    [[nodiscard]] bool rebindRecoveredNativePanelAssociation(
+        const QString &panelId,
+        int containmentId,
+        int dockAppletId,
+        const QString &ownershipToken);
+    [[nodiscard]] bool detachMissingNativePanelAssociation(
+        const QString &panelId,
+        const QString &ownershipToken,
+        bool recordVisible);
+    [[nodiscard]] bool recordNativePanelRecoveryConflict(
+        const QString &panelId,
+        const QString &ownershipToken,
+        const QString &errorCode);
     [[nodiscard]] bool recordNativePanelRecoveryFailure(
         const QString &panelId,
         const QString &errorCode);

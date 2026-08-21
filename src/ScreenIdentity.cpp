@@ -28,27 +28,40 @@ QString persistentScreenId(const QScreen *screen)
     return outputName.isEmpty() ? QString{} : QStringLiteral("output:") + outputName;
 }
 
+ScreenResolution resolveScreen(const QStringList &screenIds,
+                               const QString &requestedScreenId,
+                               int fallbackIndex)
+{
+    if (screenIds.isEmpty())
+    {
+        return {};
+    }
+
+    const int boundedFallback = qBound(0, fallbackIndex, screenIds.size() - 1);
+    if (!requestedScreenId.isEmpty())
+    {
+        if (screenIds.at(boundedFallback) == requestedScreenId)
+        {
+            return {boundedFallback, ScreenResolutionReason::StableIdMatch, false};
+        }
+
+        const int matchedIndex = screenIds.indexOf(requestedScreenId);
+        if (matchedIndex >= 0)
+        {
+            return {matchedIndex, ScreenResolutionReason::StableIdMatch, false};
+        }
+    }
+
+    const ScreenResolutionReason reason = fallbackIndex == boundedFallback
+        ? ScreenResolutionReason::StoredIndexFallback
+        : ScreenResolutionReason::BoundedIndexFallback;
+    return {boundedFallback, reason, true};
+}
+
 int resolvedScreenIndex(const QStringList &screenIds,
                         const QString &requestedScreenId,
                         int fallbackIndex)
 {
-    if (screenIds.isEmpty())
-    {
-        return -1;
-    }
-
-    const int boundedFallback = qBound(0, fallbackIndex, screenIds.size() - 1);
-    if (requestedScreenId.isEmpty())
-    {
-        return boundedFallback;
-    }
-
-    if (screenIds.at(boundedFallback) == requestedScreenId)
-    {
-        return boundedFallback;
-    }
-
-    const int matchedIndex = screenIds.indexOf(requestedScreenId);
-    return matchedIndex >= 0 ? matchedIndex : boundedFallback;
+    return resolveScreen(screenIds, requestedScreenId, fallbackIndex).index;
 }
 }

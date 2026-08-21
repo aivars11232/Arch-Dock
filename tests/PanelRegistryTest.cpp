@@ -27,6 +27,7 @@
 #include <array>
 #include <cerrno>
 #include <csignal>
+#include <optional>
 #include <utility>
 
 namespace
@@ -79,7 +80,9 @@ private slots:
     void migratesLegacyThemeSource();
     void batchesNormalizedPanelUpdates();
     void persistsNativePanelRecoveryOutcomes();
+    void persistsNativePanelRediscoveryOutcomes();
     void reconcilesNativeContainmentLifecycle();
+    void classifiesNativeContainmentMatches();
     void selectsNativeContainmentLifecycleIntent();
     void resolvesStableScreenIdentityBeforeFallbackIndex();
     void reservesAndOffsetsOnlySameScreenPanels();
@@ -337,6 +340,72 @@ void PanelRegistryTest::persistsNativePanelRecoveryOutcomes()
              QString{});
 }
 
+void PanelRegistryTest::persistsNativePanelRediscoveryOutcomes()
+{
+    PanelRegistry registry;
+    QVERIFY(registry.commitVerifiedNativePanelAssociation(
+        QStringLiteral("bottom"), 42, 73, QStringLiteral("token-a")));
+
+    const int initialRevision = registry.revision();
+    QVERIFY(!registry.rebindRecoveredNativePanelAssociation(
+        QStringLiteral("bottom"), 84, -1, QStringLiteral("wrong-token")));
+    QVERIFY(!registry.recordNativePanelRecoveryConflict(
+        QStringLiteral("bottom"), QStringLiteral("wrong-token"),
+        QStringLiteral("multiple-owned-hosts")));
+    QCOMPARE(registry.revision(), initialRevision);
+
+    QVERIFY(registry.rebindRecoveredNativePanelAssociation(
+        QStringLiteral("bottom"), 84, -1, QStringLiteral("token-a")));
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativePanelId")).toInt(), 84);
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeDockAppletId")).toInt(), -1);
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeOwnershipToken")).toString(),
+             QStringLiteral("token-a"));
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryState")).toString(),
+             QStringLiteral("recovering"));
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryError")).toString(),
+             QString{});
+
+    QVERIFY(registry.recordNativePanelRecoveryConflict(
+        QStringLiteral("bottom"), QStringLiteral("token-a"),
+        QStringLiteral("multiple-owned-hosts")));
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativePanelId")).toInt(), 84);
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeDockAppletId")).toInt(), -1);
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeOwnershipToken")).toString(),
+             QStringLiteral("token-a"));
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryState")).toString(),
+             QStringLiteral("conflict"));
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryError")).toString(),
+             QStringLiteral("multiple-owned-hosts"));
+
+    PanelRegistry persistedConflict;
+    QCOMPARE(persistedConflict.panelValue(QStringLiteral("bottom"), QStringLiteral("nativePanelId")).toInt(), 84);
+    QCOMPARE(persistedConflict.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeOwnershipToken")).toString(),
+             QStringLiteral("token-a"));
+    QCOMPARE(persistedConflict.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryState")).toString(),
+             QStringLiteral("conflict"));
+
+    QVERIFY(persistedConflict.detachMissingNativePanelAssociation(
+        QStringLiteral("bottom"), QStringLiteral("token-a"), true));
+    QCOMPARE(persistedConflict.panelValue(QStringLiteral("bottom"), QStringLiteral("nativePanelId")).toInt(), -1);
+    QCOMPARE(persistedConflict.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeDockAppletId")).toInt(), -1);
+    QCOMPARE(persistedConflict.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeOwnershipToken")).toString(),
+             QString{});
+    QCOMPARE(persistedConflict.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryState")).toString(),
+             QStringLiteral("recovering"));
+    QCOMPARE(persistedConflict.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryError")).toString(),
+             QStringLiteral("owned-host-not-found"));
+
+    QVERIFY(persistedConflict.commitVerifiedNativePanelAssociation(
+        QStringLiteral("bottom"), 91, 102, QStringLiteral("token-hidden")));
+    persistedConflict.setPanelValue(QStringLiteral("bottom"), QStringLiteral("visible"), false);
+    QVERIFY(persistedConflict.detachMissingNativePanelAssociation(
+        QStringLiteral("bottom"), QStringLiteral("token-hidden"), false));
+    QCOMPARE(persistedConflict.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryState")).toString(),
+             QStringLiteral("detached"));
+    QCOMPARE(persistedConflict.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryError")).toString(),
+             QStringLiteral("owned-host-not-found"));
+}
+
 void PanelRegistryTest::reconcilesNativeContainmentLifecycle()
 {
     const ArchDock::NativeContainmentAssociation active =
@@ -363,6 +432,36 @@ void PanelRegistryTest::reconcilesNativeContainmentLifecycle()
         ArchDock::reconciledNativeContainmentAssociation(42, 73, true, false);
     QCOMPARE(unowned.containmentId, -1);
     QCOMPARE(unowned.controlAppletId, -1);
+}
+
+void PanelRegistryTest::classifiesNativeContainmentMatches()
+{
+    using MatchStatus = ArchDock::NativeContainmentMatchStatus;
+
+    const ArchDock::NativeContainmentMatch queryFailed =
+        ArchDock::classifyNativeContainmentMatch(std::nullopt);
+    QCOMPARE(queryFailed.status, MatchStatus::QueryFailed);
+    QCOMPARE(queryFailed.containmentId, -1);
+
+    const ArchDock::NativeContainmentMatch missing =
+        ArchDock::classifyNativeContainmentMatch(-1);
+    QCOMPARE(missing.status, MatchStatus::Missing);
+    QCOMPARE(missing.containmentId, -1);
+
+    const ArchDock::NativeContainmentMatch unique =
+        ArchDock::classifyNativeContainmentMatch(42);
+    QCOMPARE(unique.status, MatchStatus::Unique);
+    QCOMPARE(unique.containmentId, 42);
+
+    const ArchDock::NativeContainmentMatch conflict =
+        ArchDock::classifyNativeContainmentMatch(-2);
+    QCOMPARE(conflict.status, MatchStatus::Conflict);
+    QCOMPARE(conflict.containmentId, -1);
+
+    const ArchDock::NativeContainmentMatch malformed =
+        ArchDock::classifyNativeContainmentMatch(-3);
+    QCOMPARE(malformed.status, MatchStatus::QueryFailed);
+    QCOMPARE(malformed.containmentId, -1);
 }
 
 void PanelRegistryTest::selectsNativeContainmentLifecycleIntent()
@@ -455,17 +554,48 @@ void PanelRegistryTest::selectsNativeContainmentLifecycleIntent()
 
 void PanelRegistryTest::resolvesStableScreenIdentityBeforeFallbackIndex()
 {
+    using Reason = ArchDock::ScreenResolutionReason;
+
     const QStringList firstOrder{QStringLiteral("output:DP-1"), QStringLiteral("output:HDMI-A-1")};
-    QCOMPARE(ArchDock::resolvedScreenIndex(firstOrder, QStringLiteral("output:HDMI-A-1"), 0), 1);
+    const ArchDock::ScreenResolution firstMatch = ArchDock::resolveScreen(
+        firstOrder, QStringLiteral("output:HDMI-A-1"), 0);
+    QCOMPARE(firstMatch.index, 1);
+    QCOMPARE(firstMatch.reason, Reason::StableIdMatch);
+    QVERIFY(!firstMatch.usedFallback);
 
     const QStringList reordered{QStringLiteral("output:HDMI-A-1"), QStringLiteral("output:DP-1")};
-    QCOMPARE(ArchDock::resolvedScreenIndex(reordered, QStringLiteral("output:HDMI-A-1"), 1), 0);
-    QCOMPARE(ArchDock::resolvedScreenIndex(reordered, QStringLiteral("output:missing"), 1), 1);
-    QCOMPARE(ArchDock::resolvedScreenIndex(reordered, QStringLiteral("output:DP-1"), 9), 1);
+    const ArchDock::ScreenResolution reorderedMatch = ArchDock::resolveScreen(
+        reordered, QStringLiteral("output:HDMI-A-1"), 1);
+    QCOMPARE(reorderedMatch.index, 0);
+    QCOMPARE(reorderedMatch.reason, Reason::StableIdMatch);
+    QVERIFY(!reorderedMatch.usedFallback);
+
+    const ArchDock::ScreenResolution storedFallback = ArchDock::resolveScreen(
+        reordered, QStringLiteral("output:missing"), 1);
+    QCOMPARE(storedFallback.index, 1);
+    QCOMPARE(storedFallback.reason, Reason::StoredIndexFallback);
+    QVERIFY(storedFallback.usedFallback);
+
+    const ArchDock::ScreenResolution stableMatchAfterBounding = ArchDock::resolveScreen(
+        reordered, QStringLiteral("output:DP-1"), 9);
+    QCOMPARE(stableMatchAfterBounding.index, 1);
+    QCOMPARE(stableMatchAfterBounding.reason, Reason::StableIdMatch);
+    QVERIFY(!stableMatchAfterBounding.usedFallback);
+
+    const ArchDock::ScreenResolution boundedFallback = ArchDock::resolveScreen(
+        reordered, QStringLiteral("output:missing"), 9);
+    QCOMPARE(boundedFallback.index, 1);
+    QCOMPARE(boundedFallback.reason, Reason::BoundedIndexFallback);
+    QVERIFY(boundedFallback.usedFallback);
 
     const QStringList duplicated{QStringLiteral("output:DP-1"), QStringLiteral("output:DP-1")};
     QCOMPARE(ArchDock::resolvedScreenIndex(duplicated, QStringLiteral("output:DP-1"), 1), 1);
-    QCOMPARE(ArchDock::resolvedScreenIndex({}, QStringLiteral("output:DP-1"), 0), -1);
+
+    const ArchDock::ScreenResolution noScreens = ArchDock::resolveScreen(
+        {}, QStringLiteral("output:DP-1"), 0);
+    QCOMPARE(noScreens.index, -1);
+    QCOMPARE(noScreens.reason, Reason::NoScreens);
+    QVERIFY(!noScreens.usedFallback);
 }
 
 void PanelRegistryTest::reservesAndOffsetsOnlySameScreenPanels()

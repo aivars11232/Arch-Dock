@@ -90,6 +90,101 @@ panel_ids() {
         "var ids = []; var all = panels(); for (var index = 0; index < all.length; ++index) { ids.push(String(all[index].id)); } ids.sort(); print(ids.join(','));"
 }
 
+panel_count() {
+    local ids
+    ids="$(panel_ids)"
+    if [[ -z "$ids" ]]; then
+        printf '0\n'
+    else
+        awk -F, '{ print NF }' <<<"$ids"
+    fi
+}
+
+arch_dock_settings_file() {
+    printf '%s/Arch Dock/Arch Dock.conf\n' "$XDG_CONFIG_HOME"
+}
+
+panel_registry_json() {
+    local encoded
+    encoded="$(kreadconfig6 \
+        --file "$(arch_dock_settings_file)" \
+        --group dock \
+        --key panels)"
+    if [[ "${encoded:0:1}" == '"' ]]; then
+        encoded="$(jq -er '.' <<<"$encoded")"
+    fi
+    [[ "$encoded" == '@ByteArray('*')' ]] || {
+        printf 'Arch Dock panel registry is not a QSettings byte array.\n' >&2
+        return 1
+    }
+    encoded="${encoded#@ByteArray(}"
+    encoded="${encoded%)}"
+    jq -ce 'if type == "array" then . else error("panel registry is not an array") end' \
+        <<<"$encoded"
+}
+
+write_panel_registry_json() {
+    local registry_json
+    registry_json="$(jq -ce \
+        'if type == "array" then . else error("panel registry is not an array") end' \
+        <<<"$1")"
+    python - "$(arch_dock_settings_file)" "$registry_json" <<'PY'
+import sys
+
+from PySide6.QtCore import QByteArray, QSettings
+
+settings = QSettings(sys.argv[1], QSettings.IniFormat)
+settings.beginGroup("dock")
+settings.setValue("panels", QByteArray(sys.argv[2].encode("utf-8")))
+settings.endGroup()
+settings.sync()
+if settings.status() != QSettings.Status.NoError:
+    raise SystemExit(1)
+PY
+}
+
+panel_registry_value() {
+    local panel_id="$1"
+    local key="$2"
+    panel_registry_json | jq -er \
+        --arg panel_id "$panel_id" \
+        --arg key "$key" \
+        'first(.[] | select(.id == $panel_id) | .[$key])'
+}
+
+set_stale_native_ids() {
+    local panel_id="$1"
+    local containment_id="$2"
+    local dock_applet_id="$3"
+    local registry_json
+    registry_json="$(panel_registry_json | jq -ce \
+        --arg panel_id "$panel_id" \
+        --argjson containment_id "$containment_id" \
+        --argjson dock_applet_id "$dock_applet_id" \
+        'map(if .id == $panel_id then
+            .nativePanelId = $containment_id |
+            .nativeControlAppletId = -1 |
+            .nativeDockAppletId = $dock_applet_id
+        else . end)')"
+    write_panel_registry_json "$registry_json"
+}
+
+wait_for_panel_registry_value() {
+    local panel_id="$1"
+    local key="$2"
+    local expected="$3"
+    local attempt
+    local actual=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        actual="$(panel_registry_value "$panel_id" "$key" 2>/dev/null || true)"
+        [[ "$actual" == "$expected" ]] && return
+        sleep 0.1
+    done
+    printf 'Timed out waiting for registry value: panel=%s key=%s expected=%s actual=%s\n' \
+        "$panel_id" "$key" "$expected" "${actual:-unavailable}" >&2
+    return 1
+}
+
 available_screen_count() {
     panel_call availableScreens | grep -o "'index'" | wc -l
 }
@@ -128,6 +223,14 @@ owned_panel_record() {
     local panel_id="$1"
     plasma_script \
         "var target = '$panel_id'; var found = -1; var token = ''; var all = panels(); for (var index = 0; index < all.length; ++index) { var panel = all[index]; panel.currentConfigGroup = ['ArchDock']; if (panel.readConfig('panelId', '') === target) { found = panel.id; token = panel.readConfig('ownerToken', ''); break; } } print(found + '|' + token);" |
+        gvariant_string
+}
+
+owned_panel_match_count() {
+    local panel_id="$1"
+    local ownership_token="$2"
+    plasma_script \
+        "var count = 0; var all = panels(); for (var index = 0; index < all.length; ++index) { var panel = all[index]; panel.currentConfigGroup = ['ArchDock']; if (panel.readConfig('panelId', '') === '$panel_id' && panel.readConfig('ownerToken', '') === '$ownership_token') { ++count; } } print(count);" |
         gvariant_string
 }
 
@@ -229,6 +332,29 @@ start_plasmashell() {
     gdbus wait --session --timeout=20 org.kde.plasmashell
 }
 
+arch_dock_service_pid() {
+    gdbus call \
+        --session \
+        --dest org.freedesktop.DBus \
+        --object-path /org/freedesktop/DBus \
+        --method org.freedesktop.DBus.GetConnectionUnixProcessID \
+        org.archdock.ArchDock |
+        sed -n 's/^(uint32 \([0-9]\+\),)$/\1/p'
+}
+
+start_arch_dock() {
+    local log_name="$1"
+    "$ARCHDOCK_TEST_BINARY" >"$ARCHDOCK_TEST_LOG_DIR/$log_name" 2>&1 &
+    local launched_pid=$!
+    gdbus wait --session --timeout=20 org.archdock.ArchDock
+    ARCHDOCK_SESSION_ARCH_DOCK_PID="$(arch_dock_service_pid)"
+    [[ "$ARCHDOCK_SESSION_ARCH_DOCK_PID" =~ ^[0-9]+$ ]] || {
+        printf 'Could not resolve the Arch Dock D-Bus service process.\n' >&2
+        stop_process "$launched_pid"
+        return 1
+    }
+}
+
 start_compositor() {
     kwin_wayland \
         --virtual \
@@ -296,9 +422,7 @@ run_session() {
     start_plasmashell plasmashell.log
 
     log_session_phase 'starting Arch Dock'
-    "$ARCHDOCK_TEST_BINARY" >"$ARCHDOCK_TEST_LOG_DIR/arch-dock.log" 2>&1 &
-    ARCHDOCK_SESSION_ARCH_DOCK_PID=$!
-    gdbus wait --session --timeout=20 org.archdock.ArchDock
+    start_arch_dock arch-dock.log
 
     gdbus introspect \
         --session \
@@ -505,6 +629,12 @@ run_session() {
         printf 'Native panel did not move to virtual output 1: %s\n' "$reassigned_screen" >&2
         exit 1
     }
+    local requested_screen_id
+    requested_screen_id="$(panel_registry_value "$panel_id" screenId)"
+    [[ -n "$requested_screen_id" ]] || {
+        printf 'Native panel did not persist a stable output identity.\n' >&2
+        exit 1
+    }
 
     local enabled_outputs
     enabled_outputs="$(enabled_output_names)"
@@ -524,7 +654,11 @@ run_session() {
         exit 1
     }
     wait_for_native_panel_screen "$first_containment_id" 0
-
+    [[ "$(panel_registry_value "$panel_id" screen)" == '0' &&
+        "$(panel_registry_value "$panel_id" screenId)" == "$requested_screen_id" ]] || {
+        printf 'Screen fallback did not record index 0 while retaining the stable output identity.\n' >&2
+        exit 1
+    }
     log_session_phase 'restoring secondary virtual output'
     kscreen-doctor "output.$secondary_output.enable" >/dev/null
     wait_for_screen_count 2
@@ -549,6 +683,10 @@ run_session() {
         printf 'KScreen outputs after restore: %s\n' "$(enabled_output_names | paste -sd ',' -)" >&2
         exit 1
     fi
+    [[ "$(panel_registry_value "$panel_id" screenId)" == "$requested_screen_id" ]] || {
+        printf 'Restoring the output replaced the requested stable output identity.\n' >&2
+        exit 1
+    }
 
     local externally_removed
     externally_removed="$(plasma_script "var panel = panelById($first_containment_id); if (panel === null) { print(0); } else { panel.currentConfigGroup = ['ArchDock']; var owned = panel.readConfig('panelId', '') === '$panel_id' && panel.readConfig('ownerToken', '') === '$first_token'; if (owned) { panel.remove(); print(1); } else { print(0); } }" | gvariant_string)"
@@ -589,6 +727,124 @@ run_session() {
     }
     log_session_phase 'repeated missing-host synchronization remained idempotent'
 
+    local hidden_panel_id
+    hidden_panel_id="$(panel_call createNativePanel top launcher | gvariant_string)"
+    [[ -n "$hidden_panel_id" ]] || {
+        printf 'Could not create a hidden-detach test panel.\n' >&2
+        exit 1
+    }
+    local hidden_record
+    hidden_record="$(owned_panel_record "$hidden_panel_id")"
+    local hidden_containment_id="${hidden_record%%|*}"
+    local hidden_token="${hidden_record#*|}"
+    [[ "$hidden_containment_id" =~ ^[0-9]+$ && "$hidden_token" =~ ^[0-9a-f-]+$ ]] || {
+        printf 'Hidden-detach panel ownership marker was not persisted: %s\n' "$hidden_record" >&2
+        exit 1
+    }
+    require_true_reply "$(panel_call setPanelVisible "$hidden_panel_id" false)"
+    local hidden_removed
+    hidden_removed="$(plasma_script "var panel = panelById($hidden_containment_id); if (!panel) { print(0); } else { panel.currentConfigGroup = ['ArchDock']; var owned = panel.readConfig('panelId', '') === '$hidden_panel_id' && panel.readConfig('ownerToken', '') === '$hidden_token'; if (owned) { panel.remove(); print(1); } else { print(0); } }" | gvariant_string)"
+    [[ "$hidden_removed" == '1' ]] || {
+        printf 'Could not remove the verified hidden-detach test host.\n' >&2
+        exit 1
+    }
+    local ids_after_hidden_removal
+    ids_after_hidden_removal="$(panel_ids)"
+    require_true_reply "$(panel_call setPanelVisible "$hidden_panel_id" false)"
+    [[ "$(panel_ids)" == "$ids_after_hidden_removal" &&
+        "$(owned_panel_match_count "$hidden_panel_id" "$hidden_token")" == '0' ]] || {
+        printf 'Hidden zero-match recovery created or retained an owned host.\n' >&2
+        exit 1
+    }
+    [[ "$(panel_registry_value "$hidden_panel_id" nativePanelId)" == '-1' &&
+        "$(panel_registry_value "$hidden_panel_id" nativeDockAppletId)" == '-1' &&
+        -z "$(panel_registry_value "$hidden_panel_id" nativeOwnershipToken)" &&
+        "$(panel_registry_value "$hidden_panel_id" nativeRecoveryState)" == 'detached' &&
+        "$(panel_registry_value "$hidden_panel_id" nativeRecoveryError)" == 'owned-host-not-found' ]] || {
+        printf 'Hidden zero-match recovery did not persist a safe detached state.\n' >&2
+        exit 1
+    }
+    panel_call removePanel "$hidden_panel_id" >/dev/null
+    log_session_phase 'safely detached hidden panel with no owned host'
+
+    local panel_count_before_stale_rebind
+    panel_count_before_stale_rebind="$(panel_count)"
+    stop_process "$ARCHDOCK_SESSION_PLASMASHELL_PID"
+    ARCHDOCK_SESSION_PLASMASHELL_PID=''
+    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    set_stale_native_ids "$panel_id" 999999999 999999998
+    [[ "$(panel_registry_value "$panel_id" nativeOwnershipToken)" == "$replacement_token" ]] || {
+        printf 'Stale-id fixture changed the ownership token.\n' >&2
+        exit 1
+    }
+    start_arch_dock arch-dock-stale-rebind.log
+    start_signal_monitor nativePanelRecoveryFinished
+    start_plasmashell plasmashell-stale-rebind.log
+    wait_for_signal_monitor nativePanelRecoveryFinished
+    wait_for_owned_panel "$panel_id"
+    replacement_record="$(owned_panel_record "$panel_id")"
+    replacement_containment_id="${replacement_record%%|*}"
+    local rebound_token="${replacement_record#*|}"
+    [[ "$replacement_containment_id" =~ ^[0-9]+$ &&
+        "$rebound_token" == "$replacement_token" ]] || {
+        printf 'Stale-id restart did not recover the original ownership token: %s\n' \
+            "$replacement_record" >&2
+        exit 1
+    }
+    replacement_dock_id="$(owned_dock_id "$replacement_containment_id" "$panel_id")"
+    wait_for_panel_registry_value "$panel_id" nativePanelId "$replacement_containment_id"
+    wait_for_panel_registry_value "$panel_id" nativeDockAppletId "$replacement_dock_id"
+    ids_after_replacement="$(panel_ids)"
+    [[ "$(panel_registry_value "$panel_id" nativeOwnershipToken)" == "$replacement_token" &&
+        "$(panel_registry_value "$panel_id" nativeRecoveryState)" == 'ready' &&
+        -z "$(panel_registry_value "$panel_id" nativeRecoveryError)" &&
+        "$(owned_panel_record "$panel_id")" == "$replacement_record" &&
+        "$(owned_panel_match_count "$panel_id" "$replacement_token")" == '1' &&
+        "$(panel_count)" == "$panel_count_before_stale_rebind" ]] || {
+        printf 'Unique ownership-token rediscovery did not rebind the stale registry exactly once.\n' >&2
+        exit 1
+    }
+    log_session_phase 'rebound stale native ids to one verified token match'
+
+    local duplicate_containment_id
+    duplicate_containment_id="$(plasma_script "var panel = new Panel; if (!panel || panel.id < 0) { print(-1); } else { panel.currentConfigGroup = ['ArchDock']; panel.writeConfig('ownerToken', '$replacement_token'); panel.writeConfig('panelId', '$panel_id'); panel.writeConfig('temporaryHidden', '0'); panel.reloadConfig(); print(panel.id); }" | gvariant_string)"
+    [[ "$duplicate_containment_id" =~ ^[0-9]+$ ]] || {
+        printf 'Could not create a duplicate ownership-token conflict fixture: %s\n' \
+            "$duplicate_containment_id" >&2
+        exit 1
+    }
+    local ids_with_conflict
+    ids_with_conflict="$(panel_ids)"
+    require_false_reply "$(panel_call setPanelVisible "$panel_id" true)"
+    [[ "$(panel_ids)" == "$ids_with_conflict" &&
+        "$(owned_panel_match_count "$panel_id" "$replacement_token")" == '2' &&
+        "$(panel_registry_value "$panel_id" nativePanelId)" == "$replacement_containment_id" &&
+        "$(panel_registry_value "$panel_id" nativeDockAppletId)" == "$replacement_dock_id" &&
+        "$(panel_registry_value "$panel_id" nativeOwnershipToken)" == "$replacement_token" &&
+        "$(panel_registry_value "$panel_id" nativeRecoveryState)" == 'conflict' &&
+        "$(panel_registry_value "$panel_id" nativeRecoveryError)" == 'multiple-owned-hosts' ]] || {
+        printf 'Multiple ownership matches were not preserved as a non-mutating conflict.\n' >&2
+        exit 1
+    }
+    local duplicate_removed
+    duplicate_removed="$(plasma_script "var panel = panelById($duplicate_containment_id); if (!panel) { print(0); } else { panel.currentConfigGroup = ['ArchDock']; var owned = panel.readConfig('panelId', '') === '$panel_id' && panel.readConfig('ownerToken', '') === '$replacement_token'; if (owned) { panel.remove(); print(1); } else { print(0); } }" | gvariant_string)"
+    [[ "$duplicate_removed" == '1' ]] || {
+        printf 'Could not remove the exact duplicate conflict fixture.\n' >&2
+        exit 1
+    }
+    require_true_reply "$(panel_call setPanelVisible "$panel_id" true)"
+    [[ "$(panel_ids)" == "$ids_after_replacement" &&
+        "$(owned_panel_match_count "$panel_id" "$replacement_token")" == '1' &&
+        "$(panel_registry_value "$panel_id" nativeRecoveryState)" == 'ready' &&
+        -z "$(panel_registry_value "$panel_id" nativeRecoveryError)" ]] || {
+        printf 'Native panel did not converge after the duplicate conflict was removed.\n' >&2
+        exit 1
+    }
+    log_session_phase 'preserved multiple token matches as an explicit conflict'
+
+    local panel_count_before_restart
+    panel_count_before_restart="$(panel_count)"
     start_signal_monitor nativePanelRecoveryFinished
     restart_plasmashell
     wait_for_signal_monitor nativePanelRecoveryFinished
@@ -602,6 +858,18 @@ run_session() {
         exit 1
     }
     require_visual_dock "$restarted_containment_id" "$panel_id" hybrid
+    local restarted_dock_id
+    restarted_dock_id="$(owned_dock_id "$restarted_containment_id" "$panel_id")"
+    [[ "$restarted_token" == "$replacement_token" &&
+        "$(owned_panel_match_count "$panel_id" "$replacement_token")" == '1' &&
+        "$(panel_count)" == "$panel_count_before_restart" &&
+        "$(panel_registry_value "$panel_id" nativePanelId)" == "$restarted_containment_id" &&
+        "$(panel_registry_value "$panel_id" nativeDockAppletId)" == "$restarted_dock_id" &&
+        "$(panel_registry_value "$panel_id" nativeOwnershipToken)" == "$replacement_token" &&
+        "$(panel_registry_value "$panel_id" nativeRecoveryState)" == 'ready' ]] || {
+        printf 'PlasmaShell restart duplicated the managed panel or lost its token-bound association.\n' >&2
+        exit 1
+    }
     local restarted_screen
     restarted_screen="$(plasma_script "var panel = panelById($restarted_containment_id); print(panel ? panel.screen : -1);" | gvariant_string)"
     local restarted_expected_screen
@@ -643,11 +911,17 @@ run_outer() {
     require_command dbus-run-session
     require_command gdbus
     require_command jq
+    require_command kreadconfig6
     require_command kscreen-doctor
     require_command kwin_wayland
     require_command plasmashell
+    require_command python
     require_command stdbuf
     require_command timeout
+    python -c 'from PySide6.QtCore import QByteArray, QSettings' || {
+        printf 'Required Python module is unavailable: PySide6.QtCore\n' >&2
+        exit 1
+    }
 
     local build_dir="${ARCHDOCK_BUILD_DIR:-$project_root/build}"
     local binary_path="$build_dir/arch-dock"

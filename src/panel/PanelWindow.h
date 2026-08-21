@@ -13,6 +13,7 @@
 #include "../DockModel.h"
 #include "../DockSettings.h"
 #include "../KWinActionBridge.h"
+#include "../NativeContainmentLifecycle.h"
 #include "../PanelPlacement.h"
 #include "../PanelRegistry.h"
 #include "../SystemStatus.h"
@@ -101,12 +102,28 @@ signals:
     void nativePanelRecoveryFinished();
 
 private:
+    enum class NativePanelDiscoveryStatus
+    {
+        QueryFailed,
+        Missing,
+        Unique,
+        HostConflict,
+        RendererConflict,
+    };
+
+    struct NativePanelDiscoveryResult
+    {
+        NativePanelDiscoveryStatus status = NativePanelDiscoveryStatus::QueryFailed;
+        int containmentId = -1;
+        int dockAppletId = -1;
+    };
+
     void updateDesktopSuite();
     void syncRegistryFromLegacySettings();
     void synchronizeScreenAssignments();
     void handleScreensChanged();
     void scheduleNativePanelRecovery();
-    void recoverNativePanels();
+    void recoverNativePanels(bool allowMissingHostRecovery);
     void synchronizeFreePanels();
     [[nodiscard]] QScreen *screenForPanel(const QString &panelId) const;
     [[nodiscard]] QString screenIdForIndex(int screenIndex) const;
@@ -116,11 +133,15 @@ private:
     int nativeDockAppletId(const QString &panelId) const;
     [[nodiscard]] QString nativeOwnershipToken(const QString &panelId) const;
     int nativePanelOffset(const QString &panelId) const;
-    bool nativePanelExists(int panelId) const;
+    [[nodiscard]] std::optional<bool> nativePanelExistence(int panelId) const;
     bool nativePanelIsOwned(const QString &panelId, int containmentId) const;
     bool nativePanelIsOwned(const QString &panelId,
                             int containmentId,
                             const QString &ownershipToken) const;
+    [[nodiscard]] NativePanelDiscoveryResult discoverNativePanel(
+        const QString &panelId,
+        const QString &ownershipToken,
+        const QString &panelType) const;
     int createNativePanelCandidate(const QString &panelId,
                                    const QString &ownershipToken,
                                    QString *errorCode) const;
@@ -139,7 +160,9 @@ private:
     bool setNativePanelTemporarilyHidden(const QString &panelId,
                                          int containmentId,
                                          bool hidden);
-    bool synchronizeNativePanelVisibility(const QString &panelId, bool visible);
+    bool synchronizeNativePanelVisibility(const QString &panelId,
+                                          bool visible,
+                                          bool allowMissingHostRecovery = true);
     bool adoptNativePanelOwnership(const QString &panelId, int containmentId);
     bool synchronizeNativePanelScreen(const QString &panelId) const;
     bool removeLegacyControlApplets(const QString &panelId, int containmentId);
@@ -147,6 +170,8 @@ private:
     void notifyDockRevision();
     void notifyDockEntriesRevision();
     int evaluatePlasmaScript(const QString &script) const;
+    [[nodiscard]] std::optional<int> evaluatePlasmaScriptResultOptional(
+        const QString &script) const;
     int evaluatePlasmaScriptResult(const QString &script) const;
     QWindow *createUtilityWindow(const QUrl &source);
     void presentUtilityWindow(QWindow *window);

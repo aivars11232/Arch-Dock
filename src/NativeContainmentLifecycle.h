@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 namespace ArchDock
 {
 enum class NativeContainmentHostStatus
@@ -46,6 +48,23 @@ struct NativeContainmentAssociation
     int containmentId = -1;
     int controlAppletId = -1;
 };
+
+enum class NativeContainmentMatchStatus
+{
+    QueryFailed,
+    Missing,
+    Unique,
+    Conflict,
+};
+
+struct NativeContainmentMatch
+{
+    NativeContainmentMatchStatus status = NativeContainmentMatchStatus::QueryFailed;
+    int containmentId = -1;
+};
+
+[[nodiscard]] NativeContainmentMatch classifyNativeContainmentMatch(
+    std::optional<int> queryResult);
 
 [[nodiscard]] NativeContainmentLifecycleIntent nativeContainmentLifecycleIntent(
     NativeContainmentLifecycleRequest request,

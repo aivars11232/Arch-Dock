@@ -9,10 +9,10 @@
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QDBusConnection>
-#include <QDBusConnectionInterface>
 #include <QDBusInterface>
 #include <QDBusMessage>
 #include <QDBusReply>
+#include <QDBusServiceWatcher>
 #include <QDebug>
 #include <QDir>
 #include <QFile>
@@ -68,6 +68,22 @@ bool panelTypeNeedsDockApplet(const QString &type)
     return type == QStringLiteral("launcher") ||
         type == QStringLiteral("tasks") ||
         type == QStringLiteral("hybrid");
+}
+
+QString screenResolutionReasonName(ArchDock::ScreenResolutionReason reason)
+{
+    switch (reason)
+    {
+    case ArchDock::ScreenResolutionReason::NoScreens:
+        return QStringLiteral("no-screens");
+    case ArchDock::ScreenResolutionReason::StableIdMatch:
+        return QStringLiteral("stable-id-match");
+    case ArchDock::ScreenResolutionReason::StoredIndexFallback:
+        return QStringLiteral("stored-index-fallback");
+    case ArchDock::ScreenResolutionReason::BoundedIndexFallback:
+        return QStringLiteral("bounded-index-fallback");
+    }
+    return QStringLiteral("unknown");
 }
 }
 
@@ -144,28 +160,27 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
             QDBusConnection::ExportAllSlots |
                 QDBusConnection::ExportAllSignals |
                 QDBusConnection::ExportAllProperties);
-        if (QDBusConnectionInterface *interface = sessionBus.interface())
-        {
-            connect(interface,
-                    &QDBusConnectionInterface::serviceOwnerChanged,
-                    this,
-                    [this](const QString &service,
-                           const QString &oldOwner,
-                           const QString &newOwner)
+        auto *plasmaShellWatcher = new QDBusServiceWatcher(
+            QStringLiteral("org.kde.plasmashell"),
+            sessionBus,
+            QDBusServiceWatcher::WatchForOwnerChange,
+            this);
+        connect(plasmaShellWatcher,
+                &QDBusServiceWatcher::serviceOwnerChanged,
+                this,
+                [this](const QString &, const QString &oldOwner, const QString &newOwner)
+                {
+                    if (oldOwner == newOwner)
                     {
-                        if (service != QStringLiteral("org.kde.plasmashell") ||
-                            oldOwner == newOwner)
-                        {
-                            return;
-                        }
-                        if (newOwner.isEmpty())
-                        {
-                            ++m_nativePanelRecoveryGeneration;
-                            return;
-                        }
-                        scheduleNativePanelRecovery();
-                    });
-        }
+                        return;
+                    }
+                    if (newOwner.isEmpty())
+                    {
+                        ++m_nativePanelRecoveryGeneration;
+                        return;
+                    }
+                    scheduleNativePanelRecovery();
+                });
 
     connect(&m_settings, &DockSettings::desktopSuiteChanged, this, &PanelWindow::updateDesktopSuite);
     connect(&m_settings, &DockSettings::monitorIndexChanged, this, &PanelWindow::updateDesktopSuite);
@@ -771,7 +786,18 @@ void PanelWindow::synchronizeScreenAssignments()
     {
         const int storedIndex = m_panelRegistry.panelValue(panelId, QStringLiteral("screen")).toInt();
         const QString storedId = m_panelRegistry.panelValue(panelId, QStringLiteral("screenId")).toString();
-        const int resolvedIndex = ArchDock::resolvedScreenIndex(screenIds, storedId, storedIndex);
+        const ArchDock::ScreenResolution resolution = ArchDock::resolveScreen(
+            screenIds, storedId, storedIndex);
+        const int resolvedIndex = resolution.index;
+        if (resolution.usedFallback)
+        {
+            qInfo() << "Arch Dock screen fallback for" << panelId
+                    << "requested stable id" << storedId
+                    << "requested index" << storedIndex
+                    << "resolved stable id" << screenIds.at(resolvedIndex)
+                    << "resolved index" << resolvedIndex
+                    << "reason" << screenResolutionReasonName(resolution.reason);
+        }
         QVariantMap updates;
         if (storedIndex != resolvedIndex)
         {
@@ -819,7 +845,7 @@ void PanelWindow::scheduleNativePanelRecovery()
                     return;
                 }
 
-                recoverNativePanels();
+                recoverNativePanels(finalAttempt);
                 if (finalAttempt)
                 {
                     emit nativePanelRecoveryFinished();
@@ -828,7 +854,7 @@ void PanelWindow::scheduleNativePanelRecovery()
     }
 }
 
-void PanelWindow::recoverNativePanels()
+void PanelWindow::recoverNativePanels(bool allowMissingHostRecovery)
 {
     QDBusInterface plasmaShell(
         QStringLiteral("org.kde.plasmashell"),
@@ -849,7 +875,8 @@ void PanelWindow::recoverNativePanels()
             continue;
         }
         const bool visible = m_panelRegistry.panelValue(panelId, QStringLiteral("visible")).toBool();
-        if (!synchronizeNativePanelVisibility(panelId, visible))
+        if (!synchronizeNativePanelVisibility(
+                panelId, visible, allowMissingHostRecovery))
         {
             qWarning() << "Could not synchronize the native Plasma panel for" << panelId;
         }
@@ -1234,7 +1261,7 @@ int PanelWindow::evaluatePlasmaScript(const QString &script) const
     return match.hasMatch() ? match.captured(1).toInt() : -1;
 }
 
-int PanelWindow::evaluatePlasmaScriptResult(const QString &script) const
+std::optional<int> PanelWindow::evaluatePlasmaScriptResultOptional(const QString &script) const
 {
     QDBusInterface shell(
         QStringLiteral("org.kde.plasmashell"),
@@ -1243,14 +1270,14 @@ int PanelWindow::evaluatePlasmaScriptResult(const QString &script) const
         QDBusConnection::sessionBus());
     if (!shell.isValid())
     {
-        return -1;
+        return std::nullopt;
     }
 
     const QDBusReply<QString> reply = shell.call(QStringLiteral("evaluateScript"), script);
     if (!reply.isValid())
     {
         qWarning() << "Plasma panel script failed:" << reply.error().message();
-        return -1;
+        return std::nullopt;
     }
 
     const std::optional<int> result = ArchDock::parsePlasmaScriptResult(reply.value());
@@ -1258,22 +1285,31 @@ int PanelWindow::evaluatePlasmaScriptResult(const QString &script) const
     {
         qWarning() << "Plasma panel script returned an unverified result:"
                    << reply.value().trimmed();
-        return -1;
+        return std::nullopt;
     }
-    return *result;
+    return result;
 }
 
-bool PanelWindow::nativePanelExists(int panelId) const
+int PanelWindow::evaluatePlasmaScriptResult(const QString &script) const
+{
+    return evaluatePlasmaScriptResultOptional(script).value_or(-1);
+}
+
+std::optional<bool> PanelWindow::nativePanelExistence(int panelId) const
 {
     if (panelId < 0)
     {
         return false;
     }
 
-    const int result = evaluatePlasmaScriptResult(
+    const std::optional<int> result = evaluatePlasmaScriptResultOptional(
         QStringLiteral("print('ARCHDOCK_RESULT:' + String(panelById(%1) ? 1 : 0));")
             .arg(panelId));
-    return result == 1;
+    if (!result.has_value() || (*result != 0 && *result != 1))
+    {
+        return std::nullopt;
+    }
+    return *result == 1;
 }
 
 bool PanelWindow::nativePanelIsOwned(const QString &panelId, int containmentId) const
@@ -1303,6 +1339,102 @@ bool PanelWindow::nativePanelIsOwned(const QString &panelId,
             .arg(containmentId)
             .arg(plasmaScriptStringLiteral(ownershipToken))
             .arg(plasmaScriptStringLiteral(panelId))) == 1;
+}
+
+PanelWindow::NativePanelDiscoveryResult PanelWindow::discoverNativePanel(
+    const QString &panelId,
+    const QString &ownershipToken,
+    const QString &panelType) const
+{
+    if (panelId.isEmpty() || ownershipToken.isEmpty() || !isNativeDockPanelType(panelType))
+    {
+        return {};
+    }
+
+    const std::optional<int> hostQuery = evaluatePlasmaScriptResultOptional(
+        QStringLiteral(
+            "var result = (function() {"
+            "try {"
+            "var candidates = panels();"
+            "var matches = 0;"
+            "var matchedId = -1;"
+            "for (var index = 0; index < candidates.length; ++index) {"
+            "var candidate = candidates[index];"
+            "candidate.currentConfigGroup = ['ArchDock'];"
+            "if (String(candidate.readConfig('ownerToken', '')) === %1 && "
+            "String(candidate.readConfig('panelId', '')) === %2) {"
+            "++matches; matchedId = candidate.id;"
+            "}"
+            "}"
+            "return matches === 0 ? -1 : (matches === 1 ? matchedId : -2);"
+            "} catch (error) { return -3; }"
+            "})();"
+            "print('ARCHDOCK_RESULT:' + String(result));")
+            .arg(plasmaScriptStringLiteral(ownershipToken))
+            .arg(plasmaScriptStringLiteral(panelId)));
+    const ArchDock::NativeContainmentMatch hostMatch =
+        ArchDock::classifyNativeContainmentMatch(hostQuery);
+    switch (hostMatch.status)
+    {
+    case ArchDock::NativeContainmentMatchStatus::QueryFailed:
+        return {};
+    case ArchDock::NativeContainmentMatchStatus::Missing:
+        return {NativePanelDiscoveryStatus::Missing, -1, -1};
+    case ArchDock::NativeContainmentMatchStatus::Conflict:
+        return {NativePanelDiscoveryStatus::HostConflict, -1, -1};
+    case ArchDock::NativeContainmentMatchStatus::Unique:
+        break;
+    }
+
+    const QString rendererQuery = panelTypeNeedsDockApplet(panelType)
+        ? QStringLiteral(
+              "var result = (function() {"
+              "try {"
+              "var panel = panelById(%1);"
+              "if (!panel) { return -3; }"
+              "var docks = panel.widgets('org.archdock.dock');"
+              "if (docks.length === 0) { return -1; }"
+              "if (docks.length !== 1) { return -2; }"
+              "var dock = docks[0];"
+              "dock.currentConfigGroup = ['General'];"
+              "return String(dock.readConfig('panelId', '')) === %2 && "
+              "String(dock.readConfig('panelType', '')) === %3 ? dock.id : -2;"
+              "} catch (error) { return -3; }"
+              "})();"
+              "print('ARCHDOCK_RESULT:' + String(result));")
+              .arg(hostMatch.containmentId)
+              .arg(plasmaScriptStringLiteral(panelId))
+              .arg(plasmaScriptStringLiteral(panelType))
+        : QStringLiteral(
+              "var result = (function() {"
+              "try {"
+              "var panel = panelById(%1);"
+              "if (!panel) { return -3; }"
+              "return panel.widgets('org.archdock.dock').length === 0 ? -1 : -2;"
+              "} catch (error) { return -3; }"
+              "})();"
+              "print('ARCHDOCK_RESULT:' + String(result));")
+              .arg(hostMatch.containmentId);
+    const ArchDock::NativeContainmentMatch rendererMatch =
+        ArchDock::classifyNativeContainmentMatch(
+            evaluatePlasmaScriptResultOptional(rendererQuery));
+    switch (rendererMatch.status)
+    {
+    case ArchDock::NativeContainmentMatchStatus::QueryFailed:
+        return {};
+    case ArchDock::NativeContainmentMatchStatus::Conflict:
+        return {NativePanelDiscoveryStatus::RendererConflict,
+                hostMatch.containmentId,
+                -1};
+    case ArchDock::NativeContainmentMatchStatus::Missing:
+        return {NativePanelDiscoveryStatus::Unique, hostMatch.containmentId, -1};
+    case ArchDock::NativeContainmentMatchStatus::Unique:
+        return {NativePanelDiscoveryStatus::Unique,
+                hostMatch.containmentId,
+                rendererMatch.containmentId};
+    }
+
+    return {};
 }
 
 int PanelWindow::createNativePanelCandidate(const QString &panelId,
@@ -1504,7 +1636,8 @@ bool PanelWindow::rollbackNativePanelCandidate(const QString &panelId,
             .arg(containmentId)
             .arg(plasmaScriptStringLiteral(ownershipToken))
             .arg(plasmaScriptStringLiteral(panelId)));
-    return removed == 1 && !nativePanelExists(containmentId);
+    const std::optional<bool> containmentExists = nativePanelExistence(containmentId);
+    return removed == 1 && containmentExists.has_value() && !*containmentExists;
 }
 
 bool PanelWindow::nativeControlAppletIsOwned(const QString &panelId,
@@ -1661,24 +1794,116 @@ bool PanelWindow::setNativePanelTemporarilyHidden(const QString &panelId,
     return true;
 }
 
-bool PanelWindow::synchronizeNativePanelVisibility(const QString &panelId, bool visible)
+bool PanelWindow::synchronizeNativePanelVisibility(const QString &panelId,
+                                                   bool visible,
+                                                   bool allowMissingHostRecovery)
 {
-    const int containmentId = nativePanelId(panelId);
+    int containmentId = nativePanelId(panelId);
+    const QString type = m_panelRegistry.panelValue(
+        panelId, QStringLiteral("type")).toString();
+    QString ownershipToken = nativeOwnershipToken(panelId).trimmed();
+    bool ownedFromDiscovery = false;
+
+    if (!ownershipToken.isEmpty())
+    {
+        const NativePanelDiscoveryResult discovery = discoverNativePanel(
+            panelId, ownershipToken, type);
+        switch (discovery.status)
+        {
+        case NativePanelDiscoveryStatus::QueryFailed:
+            qWarning() << "Could not query owned native panels for" << panelId;
+            return false;
+        case NativePanelDiscoveryStatus::HostConflict:
+            if (!m_panelRegistry.recordNativePanelRecoveryConflict(
+                    panelId, ownershipToken, QStringLiteral("multiple-owned-hosts")))
+            {
+                qWarning() << "Could not persist native host conflict for" << panelId;
+            }
+            return false;
+        case NativePanelDiscoveryStatus::RendererConflict:
+            if (!m_panelRegistry.recordNativePanelRecoveryConflict(
+                    panelId, ownershipToken, QStringLiteral("multiple-or-unverified-renderers")))
+            {
+                qWarning() << "Could not persist native renderer conflict for" << panelId;
+            }
+            return false;
+        case NativePanelDiscoveryStatus::Missing:
+            if (!allowMissingHostRecovery)
+            {
+                return true;
+            }
+            if (!m_panelRegistry.detachMissingNativePanelAssociation(
+                    panelId, ownershipToken, visible))
+            {
+                qWarning() << "Could not detach the missing native panel association for"
+                           << panelId;
+                return false;
+            }
+            containmentId = -1;
+            ownershipToken.clear();
+            break;
+        case NativePanelDiscoveryStatus::Unique:
+            if (!m_panelRegistry.rebindRecoveredNativePanelAssociation(
+                    panelId,
+                    discovery.containmentId,
+                    discovery.dockAppletId,
+                    ownershipToken))
+            {
+                qWarning() << "Could not persist the recovered native panel association for"
+                           << panelId;
+                return false;
+            }
+            containmentId = discovery.containmentId;
+            ownedFromDiscovery = true;
+            break;
+        }
+    }
+
+    if (ownedFromDiscovery && !allowMissingHostRecovery)
+    {
+        return true;
+    }
+
     ArchDock::NativeContainmentLifecycleState state;
     state.recordVisible = visible;
 
-    if (containmentId < 0 || !nativePanelExists(containmentId))
+    if (containmentId < 0)
     {
         state.hostStatus = ArchDock::NativeContainmentHostStatus::Missing;
     }
-    else if (adoptNativePanelOwnership(panelId, containmentId))
+    else if (ownedFromDiscovery)
     {
         state.hostStatus = ArchDock::NativeContainmentHostStatus::Owned;
-        const QString type = m_panelRegistry.panelValue(
-            panelId, QStringLiteral("type")).toString();
+    }
+    else
+    {
+        const std::optional<bool> containmentExists = nativePanelExistence(containmentId);
+        if (!containmentExists.has_value())
+        {
+            qWarning() << "Could not query the stored native panel for" << panelId;
+            return false;
+        }
+        if (!*containmentExists)
+        {
+            state.hostStatus = ArchDock::NativeContainmentHostStatus::Missing;
+        }
+        else if (adoptNativePanelOwnership(panelId, containmentId))
+        {
+            state.hostStatus = ArchDock::NativeContainmentHostStatus::Owned;
+        }
+        else
+        {
+            state.hostStatus = ArchDock::NativeContainmentHostStatus::UnownedOrUnverified;
+        }
+    }
+
+    if (state.hostStatus == ArchDock::NativeContainmentHostStatus::Owned)
+    {
         state.rendererAttached = !panelTypeNeedsDockApplet(type) ||
-            nativeDockAppletIsOwned(
-                panelId, containmentId, nativeDockAppletId(panelId));
+            (ownedFromDiscovery
+                 ? nativeDockAppletId(panelId) >= 0
+                 : nativeDockAppletIsOwned(
+                       panelId, containmentId, nativeDockAppletId(panelId)));
         const std::optional<bool> temporarilyHidden =
             nativePanelTemporarilyHidden(panelId, containmentId);
         if (!temporarilyHidden.has_value())
@@ -1689,9 +1914,11 @@ bool PanelWindow::synchronizeNativePanelVisibility(const QString &panelId, bool 
             ? ArchDock::NativeContainmentPresentation::Hidden
             : ArchDock::NativeContainmentPresentation::Shown;
     }
-    else
+
+    if (state.hostStatus == ArchDock::NativeContainmentHostStatus::Missing &&
+        !allowMissingHostRecovery)
     {
-        state.hostStatus = ArchDock::NativeContainmentHostStatus::UnownedOrUnverified;
+        return true;
     }
 
     ArchDock::NativeContainmentLifecycleIntent intent =
@@ -1702,6 +1929,18 @@ bool PanelWindow::synchronizeNativePanelVisibility(const QString &panelId, bool 
     {
         if (!attachNativeDockApplet(panelId, containmentId))
         {
+            return false;
+        }
+        const std::optional<int> verifiedDockApplet = verifiedNativeDockAppletId(
+            panelId, containmentId, type);
+        if (!verifiedDockApplet.has_value() || *verifiedDockApplet < 0 ||
+            !m_panelRegistry.commitVerifiedNativePanelAssociation(
+                panelId,
+                containmentId,
+                *verifiedDockApplet,
+                nativeOwnershipToken(panelId)))
+        {
+            qWarning() << "Could not commit the recovered native renderer for" << panelId;
             return false;
         }
         state.rendererAttached = true;
@@ -1909,6 +2148,9 @@ bool PanelWindow::attachNativeDockApplet(const QString &panelId, int containment
             "var panel = panelById(%1);"
             "if (!panel) { print(-1); }"
             "else {"
+            "var existing = panel.widgets('org.archdock.dock');"
+            "if (existing.length !== 0) { print(-2); }"
+            "else {"
             "var dock = panel.addWidget('org.archdock.dock');"
             "if (!dock) { print(-1); }"
             "else {"
@@ -1918,13 +2160,17 @@ bool PanelWindow::attachNativeDockApplet(const QString &panelId, int containment
             "dock.reloadConfig();"
             "print(dock.id);"
             "}"
+            "}"
             "}")
             .arg(containmentId)
             .arg(plasmaScriptStringLiteral(panelId))
             .arg(plasmaScriptStringLiteral(type)));
     if (dockId < 0)
     {
-        qWarning() << "Could not attach the Arch Dock visual applet to panel" << panelId;
+        qWarning() << (dockId == -2
+                           ? "Refusing to attach another Arch Dock visual applet to panel"
+                           : "Could not attach the Arch Dock visual applet to panel")
+                   << panelId;
         return false;
     }
 
@@ -1945,8 +2191,74 @@ bool PanelWindow::createNativeKdePanel(const QString &panelId)
         return false;
     }
 
-    const int storedContainmentId = nativePanelId(panelId);
-    if (nativePanelExists(storedContainmentId))
+    int storedContainmentId = nativePanelId(panelId);
+    const QString panelType = m_panelRegistry.panelValue(
+        panelId, QStringLiteral("type")).toString();
+    const QString storedOwnershipToken = nativeOwnershipToken(panelId).trimmed();
+    if (!storedOwnershipToken.isEmpty() &&
+        !nativePanelIsOwned(panelId, storedContainmentId, storedOwnershipToken))
+    {
+        const NativePanelDiscoveryResult discovery = discoverNativePanel(
+            panelId, storedOwnershipToken, panelType);
+        switch (discovery.status)
+        {
+        case NativePanelDiscoveryStatus::QueryFailed:
+            qWarning() << "Could not query owned native panels before creation for" << panelId;
+            return false;
+        case NativePanelDiscoveryStatus::HostConflict:
+            if (!m_panelRegistry.recordNativePanelRecoveryConflict(
+                    panelId, storedOwnershipToken, QStringLiteral("multiple-owned-hosts")))
+            {
+                qWarning() << "Could not persist native host conflict for" << panelId;
+            }
+            return false;
+        case NativePanelDiscoveryStatus::RendererConflict:
+            if (!m_panelRegistry.recordNativePanelRecoveryConflict(
+                    panelId,
+                    storedOwnershipToken,
+                    QStringLiteral("multiple-or-unverified-renderers")))
+            {
+                qWarning() << "Could not persist native renderer conflict for" << panelId;
+            }
+            return false;
+        case NativePanelDiscoveryStatus::Missing:
+        {
+            const bool visible = m_panelRegistry.panelValue(
+                panelId, QStringLiteral("visible")).toBool();
+            if (!m_panelRegistry.detachMissingNativePanelAssociation(
+                    panelId, storedOwnershipToken, visible))
+            {
+                return false;
+            }
+            if (!visible)
+            {
+                return true;
+            }
+            storedContainmentId = -1;
+            break;
+        }
+        case NativePanelDiscoveryStatus::Unique:
+            if (!m_panelRegistry.rebindRecoveredNativePanelAssociation(
+                    panelId,
+                    discovery.containmentId,
+                    discovery.dockAppletId,
+                    storedOwnershipToken))
+            {
+                return false;
+            }
+            storedContainmentId = discovery.containmentId;
+            break;
+        }
+    }
+
+    const std::optional<bool> storedContainmentExists = nativePanelExistence(
+        storedContainmentId);
+    if (!storedContainmentExists.has_value())
+    {
+        qWarning() << "Could not query the stored native panel before creation for" << panelId;
+        return false;
+    }
+    if (*storedContainmentExists)
     {
         if (!adoptNativePanelOwnership(panelId, storedContainmentId))
         {
@@ -2006,8 +2318,6 @@ bool PanelWindow::createNativeKdePanel(const QString &panelId)
             createdId, ownershipToken, QStringLiteral("ownership-verification-failed"));
     }
 
-    const QString panelType = m_panelRegistry.panelValue(
-        panelId, QStringLiteral("type")).toString();
     const std::optional<int> dockAppletId = verifiedNativeDockAppletId(
         panelId, createdId, panelType);
     if (!dockAppletId.has_value())

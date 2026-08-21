@@ -4,6 +4,31 @@
 
 namespace ArchDock
 {
+NativeContainmentMatch classifyNativeContainmentMatch(std::optional<int> queryResult)
+{
+    if (!queryResult.has_value())
+    {
+        return {};
+    }
+
+    if (*queryResult >= 0)
+    {
+        return {NativeContainmentMatchStatus::Unique, *queryResult};
+    }
+
+    if (*queryResult == -1)
+    {
+        return {NativeContainmentMatchStatus::Missing, -1};
+    }
+
+    if (*queryResult == -2)
+    {
+        return {NativeContainmentMatchStatus::Conflict, -1};
+    }
+
+    return {};
+}
+
 NativeContainmentLifecycleIntent nativeContainmentLifecycleIntent(
     NativeContainmentLifecycleRequest request,
     const NativeContainmentLifecycleState &state)

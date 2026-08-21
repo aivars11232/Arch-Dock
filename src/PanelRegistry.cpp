@@ -737,6 +737,87 @@ bool PanelRegistry::commitVerifiedNativePanelAssociation(
          {QStringLiteral("nativeRecoveryError"), QString{}}});
 }
 
+bool PanelRegistry::rebindRecoveredNativePanelAssociation(
+    const QString &panelId,
+    int containmentId,
+    int dockAppletId,
+    const QString &ownershipToken)
+{
+    const QVariantMap *panel = record(panelId);
+    const QString normalizedToken = ownershipToken.trimmed();
+    if (!panel || panel->value(QStringLiteral("edge")).toString() == QStringLiteral("free") ||
+        containmentId < 0 || dockAppletId < -1 || normalizedToken.isEmpty() ||
+        panel->value(QStringLiteral("nativeOwnershipToken")).toString().trimmed() != normalizedToken)
+    {
+        return false;
+    }
+
+    const QString type = panel->value(QStringLiteral("type")).toString();
+    if (!isPanelType(type) || (type == QStringLiteral("empty") && dockAppletId != -1))
+    {
+        return false;
+    }
+
+    const bool rendererReady = type == QStringLiteral("empty") || dockAppletId >= 0;
+    return setPanelValuesChecked(
+        panelId,
+        {{QStringLiteral("nativePanelId"), containmentId},
+         {QStringLiteral("nativeControlAppletId"), -1},
+         {QStringLiteral("nativeDockAppletId"), dockAppletId},
+         {QStringLiteral("nativeOwnershipToken"), normalizedToken},
+         {QStringLiteral("nativeRecoveryState"), rendererReady
+              ? QStringLiteral("ready")
+              : QStringLiteral("recovering")},
+         {QStringLiteral("nativeRecoveryError"), QString{}}});
+}
+
+bool PanelRegistry::detachMissingNativePanelAssociation(
+    const QString &panelId,
+    const QString &ownershipToken,
+    bool recordVisible)
+{
+    const QVariantMap *panel = record(panelId);
+    const QString normalizedToken = ownershipToken.trimmed();
+    if (!panel || panel->value(QStringLiteral("edge")).toString() == QStringLiteral("free") ||
+        normalizedToken.isEmpty() ||
+        panel->value(QStringLiteral("nativeOwnershipToken")).toString().trimmed() != normalizedToken)
+    {
+        return false;
+    }
+
+    return setPanelValuesChecked(
+        panelId,
+        {{QStringLiteral("nativePanelId"), -1},
+         {QStringLiteral("nativeControlAppletId"), -1},
+         {QStringLiteral("nativeDockAppletId"), -1},
+         {QStringLiteral("nativeOwnershipToken"), QString{}},
+         {QStringLiteral("nativeRecoveryState"), recordVisible
+              ? QStringLiteral("recovering")
+              : QStringLiteral("detached")},
+         {QStringLiteral("nativeRecoveryError"), QStringLiteral("owned-host-not-found")}});
+}
+
+bool PanelRegistry::recordNativePanelRecoveryConflict(
+    const QString &panelId,
+    const QString &ownershipToken,
+    const QString &errorCode)
+{
+    const QVariantMap *panel = record(panelId);
+    const QString normalizedToken = ownershipToken.trimmed();
+    const QString normalizedError = errorCode.trimmed();
+    if (!panel || panel->value(QStringLiteral("edge")).toString() == QStringLiteral("free") ||
+        normalizedToken.isEmpty() || normalizedError.isEmpty() ||
+        panel->value(QStringLiteral("nativeOwnershipToken")).toString().trimmed() != normalizedToken)
+    {
+        return false;
+    }
+
+    return setPanelValuesChecked(
+        panelId,
+        {{QStringLiteral("nativeRecoveryState"), QStringLiteral("conflict")},
+         {QStringLiteral("nativeRecoveryError"), normalizedError}});
+}
+
 bool PanelRegistry::recordNativePanelRecoveryFailure(
     const QString &panelId,
     const QString &errorCode)
