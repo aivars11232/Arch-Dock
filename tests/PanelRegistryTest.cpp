@@ -24,6 +24,7 @@
 #include <QUrl>
 #include <QtGlobal>
 
+#include <array>
 #include <cerrno>
 #include <csignal>
 #include <utility>
@@ -78,6 +79,7 @@ private slots:
     void migratesLegacyThemeSource();
     void batchesNormalizedPanelUpdates();
     void reconcilesNativeContainmentLifecycle();
+    void selectsNativeContainmentLifecycleIntent();
     void resolvesStableScreenIdentityBeforeFallbackIndex();
     void reservesAndOffsetsOnlySameScreenPanels();
     void concealsOnlyForRelevantActiveWindows();
@@ -288,6 +290,94 @@ void PanelRegistryTest::reconcilesNativeContainmentLifecycle()
         ArchDock::reconciledNativeContainmentAssociation(42, 73, true, false);
     QCOMPARE(unowned.containmentId, -1);
     QCOMPARE(unowned.controlAppletId, -1);
+}
+
+void PanelRegistryTest::selectsNativeContainmentLifecycleIntent()
+{
+    using HostStatus = ArchDock::NativeContainmentHostStatus;
+    using Intent = ArchDock::NativeContainmentLifecycleIntent;
+    using Presentation = ArchDock::NativeContainmentPresentation;
+    using Request = ArchDock::NativeContainmentLifecycleRequest;
+    using State = ArchDock::NativeContainmentLifecycleState;
+
+    struct LifecycleCase
+    {
+        const char *name;
+        Request request;
+        State state;
+        Intent expectedIntent;
+    };
+
+    const std::array<LifecycleCase, 15> cases{{
+        {"create a new missing host",
+         Request::CreateNew,
+         {true, HostStatus::Missing, false, Presentation::Hidden},
+         Intent::CreateHost},
+        {"attach renderer before showing an owned host",
+         Request::Synchronize,
+         {true, HostStatus::Owned, false, Presentation::Hidden},
+         Intent::AttachRenderer},
+        {"show an owned renderer host for a visible record",
+         Request::Synchronize,
+         {true, HostStatus::Owned, true, Presentation::Hidden},
+         Intent::ShowHost},
+        {"hide an owned renderer host for a hidden record",
+         Request::Synchronize,
+         {false, HostStatus::Owned, true, Presentation::Shown},
+         Intent::HideHost},
+        {"recreate a missing host for a visible record",
+         Request::Synchronize,
+         {true, HostStatus::Missing, false, Presentation::Hidden},
+         Intent::RecreateMissingHost},
+        {"permanently remove an owned host",
+         Request::RemovePermanently,
+         {false, HostStatus::Owned, false, Presentation::Hidden},
+         Intent::RemoveHostPermanently},
+        {"leave a hidden missing host absent",
+         Request::Synchronize,
+         {false, HostStatus::Missing, false, Presentation::Hidden},
+         Intent::NoAction},
+        {"leave a removed missing host absent",
+         Request::RemovePermanently,
+         {false, HostStatus::Missing, false, Presentation::Hidden},
+         Intent::NoAction},
+        {"leave a converged visible host unchanged",
+         Request::Synchronize,
+         {true, HostStatus::Owned, true, Presentation::Shown},
+         Intent::NoAction},
+        {"leave a converged hidden host unchanged",
+         Request::Synchronize,
+         {false, HostStatus::Owned, true, Presentation::Hidden},
+         Intent::NoAction},
+        {"do not attach a renderer to an unowned host",
+         Request::Synchronize,
+         {true, HostStatus::UnownedOrUnverified, false, Presentation::Hidden},
+         Intent::NoAction},
+        {"do not show an unowned host",
+         Request::Synchronize,
+         {true, HostStatus::UnownedOrUnverified, true, Presentation::Hidden},
+         Intent::NoAction},
+        {"do not hide an unowned host",
+         Request::Synchronize,
+         {false, HostStatus::UnownedOrUnverified, true, Presentation::Shown},
+         Intent::NoAction},
+        {"do not remove an unowned host",
+         Request::RemovePermanently,
+         {false, HostStatus::UnownedOrUnverified, true, Presentation::Shown},
+         Intent::NoAction},
+        {"do not replace an unowned host during creation",
+         Request::CreateNew,
+         {true, HostStatus::UnownedOrUnverified, false, Presentation::Hidden},
+         Intent::NoAction},
+    }};
+
+    for (const LifecycleCase &testCase : cases)
+    {
+        const Intent actualIntent = ArchDock::nativeContainmentLifecycleIntent(
+            testCase.request,
+            testCase.state);
+        QVERIFY2(actualIntent == testCase.expectedIntent, testCase.name);
+    }
 }
 
 void PanelRegistryTest::resolvesStableScreenIdentityBeforeFallbackIndex()

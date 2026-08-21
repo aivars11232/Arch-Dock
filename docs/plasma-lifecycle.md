@@ -21,6 +21,51 @@ legacy widget whose `General/panelId` matches the registry panel. Any other
 mismatch clears Arch Dock's stored association without changing the Plasma
 containment.
 
+## Native Panel Lifecycle Decision Contract
+
+The lifecycle helper defines a pure decision contract. `PanelWindow` does not
+yet execute these intents; TASK-0007 through TASK-0010 own the corresponding
+Plasma mutations, recovery transactions, and runtime evidence.
+
+The contract uses these state terms:
+
+- **Record visibility** is the saved Arch Dock request: visible or hidden. It is
+  independent from whether a Plasma host exists.
+- **Host status** is `Missing`, `Owned`, or `UnownedOrUnverified`. `Owned` means
+  the current observation verified the exact Arch Dock ownership token and panel
+  id. An `UnownedOrUnverified` host is never a mutation target.
+- **Renderer state** records whether the owned host has its Arch Dock renderer
+  attached.
+- **Presentation** is `Hidden` or `Shown`. It describes the configured host
+  presentation used by the decision contract, not a momentary auto-hide
+  animation.
+
+Callers request `CreateNew`, `Synchronize`, or `RemovePermanently`. The helper
+returns exactly one lifecycle intent:
+
+| Request and observed state | Resulting intent |
+| --- | --- |
+| `RemovePermanently` with an `Owned` host | `RemoveHostPermanently` |
+| `RemovePermanently` with a `Missing` or `UnownedOrUnverified` host | `NoAction` |
+| `CreateNew` with a `Missing` host | `CreateHost` |
+| `Synchronize`, visible record, `Missing` host | `RecreateMissingHost` |
+| `Synchronize`, hidden record, `Missing` host | `NoAction` |
+| Any non-removal request with an `UnownedOrUnverified` host | `NoAction` |
+| Existing `Owned` host without its renderer | `AttachRenderer` |
+| Visible record with an attached, `Owned`, `Hidden` host | `ShowHost` |
+| Hidden record with an attached, `Owned`, `Shown` host | `HideHost` |
+| An `Owned` host already matching the record | `NoAction` |
+
+Permanent removal is evaluated first. Unowned or unverified hosts are then
+rejected before attachment or presentation decisions. Missing-host creation or
+recreation precedes renderer attachment, which precedes show/hide convergence.
+
+`HideHost` is temporary: it must preserve the containment association, renderer
+association, and ownership token. `RemoveHostPermanently` is destructive,
+requires an explicit removal request plus verified ownership, and remains a
+separate operation. `CreateHost` and `RecreateMissingHost` may create a new
+owned host only when no existing host is being targeted.
+
 ## Runtime Behavior
 
 - Screen add/remove signals cause Arch Dock to resolve each saved stable screen
