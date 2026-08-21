@@ -509,3 +509,93 @@ systemctl --user is-active/is-enabled arch-dock.service
 No command in this audit establishes build success, test success, installed
 runtime behavior, or live panel behavior. Those claims remain explicitly
 unverified until their owning tasks run in the required environment.
+
+## TASK-0002 post-audit repository and resource disposition
+
+### Evidence boundary
+
+- Disposition capture: 2026-08-21T16:24:05+02:00, Europe/Amsterdam.
+- Repository root: `/mnt/F/Arch Dock`.
+- Baseline for TASK-0002: `11d66e7304cca3875640afa55c80d846424b9d4a`
+  on `main`, with `origin/main` as upstream and a clean working tree.
+- The comparison against `origin/main` used the locally stored remote-tracking
+  ref; no fetch or other network Git operation was performed.
+- This addendum preserves the TASK-0001 observations above as a historical
+  snapshot. It records their later disposition instead of rewriting them as if
+  the repository had already been clean during that audit.
+- TASK-0002 changes no C++, QML, CMake, JSON, test, installed package, or live
+  desktop behavior. No build, test, install, service activation, PlasmaShell
+  restart, KWin mutation, panel mutation, Git staging, commit, or push is part
+  of this disposition.
+
+### Audited working-tree disposition
+
+Commit `11d66e7` recorded the complete seven-path non-ignored working-tree set
+listed at lines 152-170 together with this audit. The mixed historical commit is
+not rewritten or split by TASK-0002; its contents are made explicit below.
+
+| Audited path | Final repository/resource decision |
+| --- | --- |
+| `Arch dock features.txt` | Deliberately remains deleted. It was an obsolete, internally mixed requirements/status document and must not be recreated as a competing source of truth. TASK-0003 owns installation of the version-2 master plan and current-state documentation. |
+| `CMakeLists.txt` | Preserve the six substantive local additions. The file embeds and installs the built-in theme catalog. |
+| `qml/runtime/SettingsPopup.qml` | Preserve the 66 substantive local additions exactly; TASK-0002 makes no runtime/UI change. |
+| `qml/runtime/StudioForm.qml` | Preserve the 71 substantive local additions exactly; TASK-0002 makes no runtime/UI change. |
+| `src/PanelRegistry.cpp` | Preserve the 63 substantive local additions exactly; TASK-0002 makes no runtime change. |
+| `src/PanelRegistry.h` | Preserve the four substantive local additions exactly; TASK-0002 makes no interface change. |
+| `data/themes/builtin-themes.json` | Retain and track the catalog as a required runtime resource. At this baseline it is Git blob `28b416a09dfbe5cebb5fe92d622e365de5b00cfd`. |
+
+The commit's per-path line counts match the TASK-0001 audit: 210 additions
+across the five substantive CMake/QML/C++ paths, deletion of all 2,001 lines of
+the obsolete requirements file, and addition of the 11-line catalog. No
+substantive local work from the audited set was discarded to obtain a clean
+status.
+
+### Runtime-resource truth
+
+- `CMakeLists.txt` embeds `data/themes/builtin-themes.json` in the
+  `theme-catalog` Qt resource under `/archdock` and installs the same source file
+  to `share/arch-dock/themes`.
+- A fresh TASK-0002 inventory found 51 literal CMake file inputs and eight
+  installed package directories. Every input exists in the working tree and
+  every file is tracked.
+- `data/themes/builtin-themes.json` parses as JSON, declares format
+  `org.archdock.theme-catalog` version 1, and contains five unique built-in
+  theme identifiers.
+- This five-theme catalog is not the separate 15 Panel Presets plus 15 Icon
+  Presets required by the version-2 plan. It must not be relabelled or counted
+  as those later resources.
+
+### Generated-output and staged-install policy
+
+- `.gitignore` excludes the observed `build/`, `build-agent/`, root
+  `CMakeFiles/`, local editor configuration, and KDE directory metadata.
+- No file below `build/` or root `CMakeFiles/` is tracked at this baseline.
+- Fresh verification builds and staged installs must use the disposable
+  out-of-source location specified at lines 448-470 above. A staged-install
+  tree must not be created or consumed as repository source.
+- Because the observed generated trees are already ignored and the approved
+  staged-install route is outside the repository, TASK-0002 adds no speculative
+  ignore pattern for an unapproved in-repository staging convention.
+
+### Deliberate deferrals
+
+- TASK-0003 remains responsible for adding the authoritative version-2 master
+  plan/current-state documents and resolving contradictory architecture text.
+- TASK-0004 remains responsible for fresh configure, build, CTest, and staged
+  installation evidence. The bundled `build/` tree remains inadmissible as
+  proof.
+- Theme rendering correctness, three-dimensional capability truthfulness, and
+  later preset catalogs remain owned by their later tasks. Repository tracking
+  in TASK-0002 does not certify those behaviors.
+- The external task pack's stale checksum/index/ledger state is recorded above
+  but is outside the selected Arch Dock repository and is not modified here.
+
+### TASK-0002 acceptance mapping
+
+| TASK-0002 acceptance criterion | Evidence and result |
+| --- | --- |
+| Every required runtime resource is tracked or deliberately dereferenced | Confirmed for the current CMake graph: all 51 literal file inputs and all files in eight installed package directories exist and are tracked; the theme catalog is tracked and remains referenced. |
+| No substantive local source work is lost | Confirmed by the audited path-to-commit mapping and matching per-path line counts above. |
+| Generated build products are excluded from the source checkpoint | Confirmed: `build/` and root `CMakeFiles/` have zero tracked files, their observed contents are ignored, and staged verification is required outside the repository. |
+| `git diff --check` reports no whitespace errors | Confirmed at the TASK-0002 baseline and required again after this addendum. |
+| The remaining working tree is understandable from the diff and TASK-0001 audit | Confirmed by this explicit post-audit disposition; the only planned TASK-0002 working-tree change is this addendum. |
