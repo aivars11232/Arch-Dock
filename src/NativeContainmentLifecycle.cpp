@@ -35,7 +35,8 @@ NativeContainmentLifecycleIntent nativeContainmentLifecycleIntent(
 {
     if (request == NativeContainmentLifecycleRequest::RemovePermanently)
     {
-        return state.hostStatus == NativeContainmentHostStatus::Owned
+        return state.hostStatus == NativeContainmentHostStatus::Owned &&
+                state.rendererAttached
             ? NativeContainmentLifecycleIntent::RemoveHostPermanently
             : NativeContainmentLifecycleIntent::NoAction;
     }

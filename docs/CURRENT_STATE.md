@@ -6,25 +6,28 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-08-21T18:01:21+02:00 (Europe/Amsterdam). Static
-implementation statements come from repository and source inspection. Build,
-test, and stage-install statements come from the fresh TASK-0004 evidence
-identified below; no live Plasma runtime evidence is claimed.
+**Evidence snapshot:** 2026-08-21T23:24:36+02:00 (Europe/Amsterdam). Static
+implementation statements come from the current checkout. Build and test
+statements come from the fresh TASK-0010 build described below. Runtime claims
+come only from its disposable private D-Bus, virtual KWin Wayland, and private
+PlasmaShell session; no personal desktop session was contacted.
 
 ## Repository state
 
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`
-- Pre-checkpoint `HEAD`: `2fb46c8a65c7c2ce7e5f25296b0812d75a08e058`
-  (`Task4`)
+- TASK-0010 baseline `HEAD`: `e7a764476359ba87176e2638f249297f3576b158`
+  (`Task9`)
 - Locally recorded `origin/main`:
   `11d66e7304cca3875640afa55c80d846424b9d4a`
-- `HEAD...origin/main` count: three local commits ahead, zero behind. No network
+- `HEAD...origin/main` count: seven local commits ahead, zero behind. No network
   fetch was performed, so this describes the locally recorded remote reference.
-- TASK-0005 began with a clean non-ignored working tree. Its expected working
-  tree changes are exactly `docs/BASELINE_CHECKPOINT.md` and this file. Codex
-  did not stage, commit, push, globally install, or mutate the live Plasma
-  session while creating this checkpoint.
+- TASK-0010 began with a clean non-ignored working tree. Its expected source and
+  documentation changes are limited to `tests/PanelRegistryTest.cpp`,
+  `src/NativeContainmentLifecycle.cpp`, `src/panel/PanelWindow.cpp`,
+  `tests/run-plasma-lifecycle.sh`, `docs/plasma-lifecycle.md`, and this file.
+  Codex did not stage, commit, push, globally install, or mutate the live Plasma
+  session.
 
 ## Inspected platform
 
@@ -35,9 +38,10 @@ identified below; no live Plasma runtime evidence is claimed.
 - Qt base `6.11.2-2`
 - KDE Frameworks Core Addons and Kirigami `6.29.0-1`
 
-These versions describe the inspection host only. TASK-0004 used a disposable
-build and staging root but did not globally install, restart PlasmaShell, or run
-Arch Dock in the live desktop session.
+These versions describe the inspection and verification host. TASK-0010 used a
+fresh build directory and a disposable staged private session; it did not
+globally install, restart the live PlasmaShell, or run Arch Dock against the
+personal desktop session.
 
 ## Documentation authority map
 
@@ -68,17 +72,27 @@ second authority.
 
 ## Verified current implementation
 
-The following implementation statements were verified by inspecting the source
-at the pre-checkpoint commit above. Unless a bullet explicitly cites build or
-test evidence, it is not a claim that the behavior was exercised in a live
-Plasma session.
+The following implementation statements were verified in the TASK-0010
+checkout. Native lifecycle statements marked as runtime-verified were exercised
+in the disposable private Plasma Wayland session, not inferred from inspection.
 
 - `src/main.cpp` creates a Qt Quick/Kirigami application, owns the session-bus
   name `org.archdock.ArchDock`, and delegates panel behavior to `PanelManager`.
 - Native edge panels use Plasma containments. Creation records an Arch Dock
   ownership token and panel id, attaches an `org.archdock.dock` visual applet,
   removes matching legacy `org.archdock.control` applets, and checks ownership
-  before moving or removing a containment.
+  before moving or presenting a containment. Missing visible hosts are recreated,
+  hidden missing hosts remain detached, token-bound stale ids are rediscovered,
+  and repeated recovery converges without duplication. These paths are
+  runtime-verified in the isolated lifecycle harness.
+- Permanent native removal requires both the exact containment ownership token
+  and the expected dock-applet association. The destructive Plasma script
+  rechecks both immediately before removal and verifies absence afterward.
+  Wrong-token and wrong-renderer runtime cases preserve the containment, applet,
+  and full registry record; `removePanel` also preserves the record on refusal.
+- Temporary hide/show changes verified Plasma presentation on the existing
+  containment and keeps the containment id, dock applet id, and ownership token
+  stable. It does not implement visibility by deleting and recreating the host.
 - Free panels are **not retired**. The Plasma layout-template route verifies a
   temporary bridge, creates an `org.archdock.dock` applet in the target desktop
   containment, configures it as a free/empty panel, and removes the bridge.
@@ -86,10 +100,10 @@ Plasma session.
   an embedded catalog of five themes: Obsidian Glass, Neon Segments, Metallic
   Shelf, Holographic Ring, and Minimal Underline.
 - CMake declares the application, QML and theme resources, Plasma applets and
-  templates, D-Bus and systemd metadata, and nine tests. TASK-0004 completed a
-  fresh 68-step build, passed all nine declared CTests with zero failures or
-  skips, and produced a 37-file stage-install manifest; see the
-  [build report](audits/BASELINE_BUILD_REPORT.md) for commands and limitations.
+  templates, D-Bus and systemd metadata, and nine tests. TASK-0010 configured and
+  built the current checkout in `build-codex-task-0010`, passed its focused
+  lifecycle test, passed all nine CTests with zero failures or skips, and passed
+  the staged isolated Plasma lifecycle session.
 
 ## Known defects and incomplete behavior
 
@@ -110,9 +124,9 @@ Plasma session.
   installation strategy is not yet aligned.
 - Settings expose panel and icon 3D values, but the shared true-3D scene and
   renderer architecture required by the master plan is not present.
-- No live Plasma lifecycle run has been performed for this baseline. The exact
-  deferred harness command and the distinction between automated and live
-  evidence are recorded in the build report and canonical checkpoint.
+- Physical monitor disconnect/reconnect behavior and the personal desktop
+  session were not exercised. Output fallback and restoration were verified on
+  two virtual KWin Wayland outputs in the disposable lifecycle session.
 
 ## Planned but not implemented
 
@@ -133,17 +147,25 @@ not be interpreted as completion of those v2 systems.
 
 ## Verification boundary
 
-TASK-0004 supplies the fresh automated configure, build, nine-test CTest, and
-stage-install evidence. TASK-0005 is documentation-only and indexes that
-evidence in the canonical checkpoint, with documentation-link, source/resource,
-and Git-scope checks rerun against the checkpoint working tree. No acceptance
-criterion was directly observed in a running Arch Dock or Plasma session.
+TASK-0010 supplies fresh evidence from `build-codex-task-0010`: the focused
+`panel-registry-test` passed, the complete CTest suite passed 9/9 with no skips,
+and the isolated Plasma lifecycle script completed successfully. That runtime
+session directly observed hide/show identity stability, visible missing-host
+recreation, hidden missing-host detach, screen fallback/restoration, stale-id
+rebind, repeated-recovery idempotence, conflict refusal/convergence,
+PlasmaShell restart recovery, destructive wrong-token and wrong-renderer
+refusal, verified permanent removal, and an unchanged unrelated containment and
+digital-clock applet after every managed phase. `git diff --check` is part of
+the final task gate.
+
+This evidence is representative of the required Arch Linux, Plasma 6, Qt 6,
+Wayland integration, but it remains an isolated virtual session. It does not
+claim hardware-specific monitor behavior or mutation of a user's live desktop.
 
 ## Next task boundary
 
-The task pack identifies **TASK-0006 — Define the native panel lifecycle
-contract** as the next sequential planning target. TASK-0005's approval does not
-authorize TASK-0006 implementation. TASK-0006 may begin only after the user
-creates the exact TASK-0005 checkpoint commit, verifies its hash and a clean
-working tree, then completes TASK-0006's own read-only Stage A plan and exact
+The task pack identifies **TASK-0011 — Persist ownership-verifiable free-host
+associations** as the next sequential planning target. It begins the separate
+AD-0003 free-panel lifecycle work package; TASK-0010 does not authorize it.
+TASK-0011 may begin only through its own read-only Stage A inspection and exact
 implementation approval gate.

@@ -10,23 +10,23 @@ the containment's `ArchDock` configuration group:
 - `panelId`: the matching Arch Dock registry panel id.
 
 The same token is stored as `nativeOwnershipToken` in the registry. Before Arch
-Dock changes a native panel's screen, attaches or repairs its visual dock
-applet, or removes the panel, it reads both containment values and requires an
-exact match. This prevents a recycled Plasma containment id from targeting a
-user-owned panel.
+Dock changes a native panel's screen or attaches or repairs its visual dock
+applet, it reads both containment values and requires an exact match. Permanent
+removal additionally verifies the exact expected renderer association and
+repeats both proofs inside the destructive Plasma script. This prevents a
+recycled Plasma containment id from targeting a user-owned panel.
 
 Legacy associations without a token are adopted only when the recorded applet
 is either an `org.archdock.dock` visual applet or an `org.archdock.control`
 legacy widget whose `General/panelId` matches the registry panel. Any other
-mismatch remains unchanged and is not used as a mutation or replacement target;
-TASK-0009 owns token-based discovery and stale-association repair.
+mismatch remains unchanged and is not used as a mutation or replacement target.
 
 ## Native Panel Lifecycle Decision Contract
 
 The lifecycle helper defines a pure decision contract. `PanelWindow` executes
 the `ShowHost` and `HideHost` intents for temporary native presentation and the
-`RecreateMissingHost` intent for verified missing-host recovery. TASK-0009 and
-TASK-0010 own stale-association recovery and the remaining lifecycle closure.
+`RecreateMissingHost` intent for verified missing-host recovery and the
+`RemoveHostPermanently` intent for explicitly verified destructive removal.
 
 The contract uses these state terms:
 
@@ -46,7 +46,8 @@ returns exactly one lifecycle intent:
 
 | Request and observed state | Resulting intent |
 | --- | --- |
-| `RemovePermanently` with an `Owned` host | `RemoveHostPermanently` |
+| `RemovePermanently` with an `Owned` host and verified expected renderer | `RemoveHostPermanently` |
+| `RemovePermanently` with an `Owned` host but no verified expected renderer | `NoAction` |
 | `RemovePermanently` with a `Missing` or `UnownedOrUnverified` host | `NoAction` |
 | `CreateNew` with a `Missing` host | `CreateHost` |
 | `Synchronize`, visible record, `Missing` host | `RecreateMissingHost` |
@@ -63,9 +64,11 @@ recreation precedes renderer attachment, which precedes show/hide convergence.
 
 `HideHost` is temporary: it must preserve the containment association, renderer
 association, and ownership token. `RemoveHostPermanently` is destructive,
-requires an explicit removal request plus verified ownership, and remains a
-separate operation. `CreateHost` and `RecreateMissingHost` may create a new
-owned host only when no existing host is being targeted.
+requires an explicit removal request, verified ownership, and the expected
+renderer association, and remains a separate operation. For an `empty` panel,
+renderer verification means proving that no `org.archdock.dock` applet is
+attached. `CreateHost` and `RecreateMissingHost` may create a new owned host only
+when no existing host is being targeted.
 
 ## Temporary Native Presentation
 
@@ -96,7 +99,7 @@ A visible native record whose saved containment id is absent or no longer
 resolves is recreated through a candidate transaction. A hidden record with no
 host remains unhosted. A saved id that resolves to a present but unverified
 containment is not a missing host: Arch Dock leaves it and its registry
-association untouched for TASK-0009.
+association untouched for diagnosis.
 
 The candidate transaction generates a fresh ownership token and asks Plasma to
 create one real panel containment. Before the association is published, the
@@ -115,6 +118,27 @@ id. A rollback that cannot be verified records `candidate-rollback-failed` and
 suppresses another automatic candidate rather than risking a duplicate or an
 unrelated containment.
 
+## Permanent Native Removal
+
+Permanent removal first validates that the registry record is a native-edge
+panel with a supported panel type. A missing stored containment completes
+without a Plasma mutation and clears only the stale native association. A
+present containment remains untouched unless legacy adoption or the stored
+token proves the exact `ArchDock/ownerToken` and `ArchDock/panelId` pair.
+
+For `launcher`, `tasks`, and `hybrid`, the stored dock applet id must resolve to
+the sole `org.archdock.dock` applet and its `General/panelId` and
+`General/panelType` must match the registry. An `empty` panel must have no such
+applet and a stored dock id of `-1`. The removal script rechecks the containment
+token, panel id, exact applet id/type/configuration, or verified empty state in
+the same script immediately before `panel.remove()`. Arch Dock then verifies the
+containment is absent before clearing its association.
+
+Any query failure, ownership mismatch, renderer mismatch, Plasma refusal, or
+failed absence check returns failure without clearing the registry evidence.
+The higher-level `removePanel` path preserves the complete panel record when
+native removal is refused.
+
 ## Runtime Behavior
 
 - Screen add/remove signals cause Arch Dock to resolve each saved stable screen
@@ -126,6 +150,8 @@ unrelated containment.
   another containment or renderer.
 - A stale or unverified native association is never removed, reconfigured, or
   used as the target for applet attachment or replacement.
+- Repeated recovery converges on one token-bound containment and renderer; it
+  does not duplicate either object.
 - When Plasma Shell acquires a new D-Bus owner, Arch Dock retries recovery of
   stored native associations after the shell has rebuilt its layout. A later
   shell disappearance cancels pending retries, and recovery first verifies that
@@ -147,15 +173,25 @@ XDG and D-Bus environment, and starts two virtual KWin outputs:
 bash tests/run-plasma-lifecycle.sh
 ```
 
-It verifies cold recovery of a visible record with missing ids, native
-containment creation, exact ownership markers, visual dock applet attachment,
-temporary hide/show with stable containment/applet ids, safe rejection of an
-unsupported temporary transition, legacy-control cleanup, fallback during
-virtual-output removal, stable-id restoration after KWin reorders outputs,
-missing-host replacement, repeated synchronization without duplication,
-PlasmaShell restart recovery, verified removal, and preservation of pre-existing
-non-Arch-Dock panel ids. It deletes its temporary state after a normal exit and
-never contacts the running desktop session.
+It creates an explicitly tracked unrelated Plasma panel with a standard digital
+clock before Arch Dock starts. After every managed lifecycle phase it compares
+that containment's id, location, hiding mode, screen, complete widget id/type
+inventory, and empty Arch Dock ownership fields with the original snapshot.
+
+The managed cases cover cold recovery of a visible record with missing ids,
+native containment creation, exact ownership markers, visual dock applet
+attachment, temporary hide/show with stable containment/applet ids, safe
+rejection of an unsupported temporary transition, legacy-control cleanup,
+fallback during virtual-output removal, stable-id restoration after KWin
+reorders outputs, visible missing-host replacement, hidden missing-host detach,
+repeated synchronization without duplication, stale-id token rediscovery,
+multiple-token conflict refusal and convergence, PlasmaShell restart recovery,
+and verified permanent removal. Destructive negative cases alter the disposable
+managed containment's token or renderer type and prove that both direct removal
+and the higher-level record-removal path preserve the containment, applet, and
+full registry record until the exact association is restored. The harness
+deletes its temporary state after a normal exit and never contacts the running
+desktop session.
 
 The registry test suite also uses a controlled long-running renderer to verify
 that registry teardown kills and reaps it. Use a physical disposable Wayland
@@ -167,5 +203,5 @@ validated beyond the virtual KWin backend.
 Stop the Arch Dock user service and restore the backed-up Arch Dock QSettings
 file. Use Arch Dock's native-panel removal path only for a panel whose ownership
 marker it verifies. A present but unverified association is left unchanged for
-TASK-0009 rather than being cleared or replaced; remove a non-Arch-Dock panel
+diagnosis rather than being cleared or replaced; remove a non-Arch-Dock panel
 through Plasma's own edit mode instead.

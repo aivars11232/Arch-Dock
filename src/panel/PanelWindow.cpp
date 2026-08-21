@@ -2386,13 +2386,21 @@ bool PanelWindow::addKdeWidget(const QString &panelId, const QString &appletId)
 
 bool PanelWindow::removeNativeKdePanel(const QString &panelId)
 {
-    const int containmentId = nativePanelId(panelId);
-    if (containmentId < 0)
+    if (!m_panelRegistry.panelIds().contains(panelId))
     {
-        return true;
+        return false;
     }
 
-    if (!adoptNativePanelOwnership(panelId, containmentId))
+    const QString edge = m_panelRegistry.panelValue(
+        panelId, QStringLiteral("edge")).toString();
+    const QString panelType = m_panelRegistry.panelValue(
+        panelId, QStringLiteral("type")).toString();
+    if (!isNativeDockPanelEdge(edge) || !isNativeDockPanelType(panelType))
+    {
+        return false;
+    }
+
+    const auto clearNativeAssociation = [this, &panelId]
     {
         m_panelRegistry.updatePanel(
             panelId,
@@ -2400,25 +2408,115 @@ bool PanelWindow::removeNativeKdePanel(const QString &panelId)
              {QStringLiteral("nativeControlAppletId"), -1},
              {QStringLiteral("nativeDockAppletId"), -1},
              {QStringLiteral("nativeOwnershipToken"), QString{}}});
+    };
+
+    const int containmentId = nativePanelId(panelId);
+    if (containmentId < 0)
+    {
+        clearNativeAssociation();
         return true;
     }
 
-    const int removed = evaluatePlasmaScript(
-        QStringLiteral(
-            "var panel = panelById(%1);"
-            "if (panel) { panel.remove(); print(1); } else { print(1); }")
-            .arg(containmentId));
-    if (removed != 1)
+    const std::optional<bool> containmentExists = nativePanelExistence(containmentId);
+    if (!containmentExists.has_value())
     {
+        qWarning() << "Could not query the native panel before permanent removal for"
+                   << panelId;
+        return false;
+    }
+    if (!*containmentExists)
+    {
+        clearNativeAssociation();
+        return true;
+    }
+
+    if (!adoptNativePanelOwnership(panelId, containmentId))
+    {
+        qWarning() << "Refusing to permanently remove an unowned native panel for"
+                   << panelId;
         return false;
     }
 
-    m_panelRegistry.updatePanel(
-        panelId,
-        {{QStringLiteral("nativePanelId"), -1},
-         {QStringLiteral("nativeControlAppletId"), -1},
-         {QStringLiteral("nativeDockAppletId"), -1},
-         {QStringLiteral("nativeOwnershipToken"), QString{}}});
+    const QString ownershipToken = nativeOwnershipToken(panelId).trimmed();
+    if (ownershipToken.isEmpty() ||
+        !nativePanelIsOwned(panelId, containmentId, ownershipToken))
+    {
+        qWarning() << "Refusing permanent removal without a verified ownership token for"
+                   << panelId;
+        return false;
+    }
+
+    const int storedDockAppletId = nativeDockAppletId(panelId);
+    const std::optional<int> verifiedDockAppletId = verifiedNativeDockAppletId(
+        panelId, containmentId, panelType);
+    const bool rendererAttached = verifiedDockAppletId.has_value() &&
+        (panelTypeNeedsDockApplet(panelType)
+             ? storedDockAppletId >= 0 && *verifiedDockAppletId == storedDockAppletId
+             : storedDockAppletId == -1 && *verifiedDockAppletId == -1);
+    const ArchDock::NativeContainmentLifecycleState state{
+        false,
+        ArchDock::NativeContainmentHostStatus::Owned,
+        rendererAttached,
+        ArchDock::NativeContainmentPresentation::Hidden,
+    };
+    if (ArchDock::nativeContainmentLifecycleIntent(
+            ArchDock::NativeContainmentLifecycleRequest::RemovePermanently,
+            state) != ArchDock::NativeContainmentLifecycleIntent::RemoveHostPermanently)
+    {
+        qWarning() << "Refusing permanent removal without the expected native renderer for"
+                   << panelId;
+        return false;
+    }
+
+    const QString rendererVerification = panelTypeNeedsDockApplet(panelType)
+        ? QStringLiteral(
+              "var docks = panel.widgets('org.archdock.dock');"
+              "if (docks.length !== 1) { return 0; }"
+              "var dock = panel.widgetById(%1);"
+              "if (!dock || dock.id !== %1 || dock.type !== 'org.archdock.dock') "
+              "{ return 0; }"
+              "dock.currentConfigGroup = ['General'];"
+              "if (String(dock.readConfig('panelId', '')) !== %2 || "
+              "String(dock.readConfig('panelType', '')) !== %3) { return 0; }")
+              .arg(storedDockAppletId)
+              .arg(plasmaScriptStringLiteral(panelId))
+              .arg(plasmaScriptStringLiteral(panelType))
+        : QStringLiteral(
+              "if (panel.widgets('org.archdock.dock').length !== 0) { return 0; }");
+    const int removed = evaluatePlasmaScriptResult(
+        QStringLiteral(
+            "var result = (function() {"
+            "try {"
+            "var panel = panelById(%1);"
+            "if (!panel) { return 1; }"
+            "panel.currentConfigGroup = ['ArchDock'];"
+            "if (String(panel.readConfig('ownerToken', '')) !== %2 || "
+            "String(panel.readConfig('panelId', '')) !== %3) { return 0; }"
+            "%4"
+            "panel.remove();"
+            "return 1;"
+            "} catch (error) { return -1; }"
+            "})();"
+            "print('ARCHDOCK_RESULT:' + String(result));")
+            .arg(containmentId)
+            .arg(plasmaScriptStringLiteral(ownershipToken))
+            .arg(plasmaScriptStringLiteral(panelId))
+            .arg(rendererVerification));
+    if (removed != 1)
+    {
+        qWarning() << "Plasma refused the verified permanent native panel removal for"
+                   << panelId;
+        return false;
+    }
+
+    const std::optional<bool> removedContainmentExists = nativePanelExistence(containmentId);
+    if (!removedContainmentExists.has_value() || *removedContainmentExists)
+    {
+        qWarning() << "Could not verify permanent native panel removal for" << panelId;
+        return false;
+    }
+
+    clearNativeAssociation();
     return true;
 }
 
@@ -2445,7 +2543,12 @@ void PanelWindow::removePanel(const QString &panelId)
     }
     else
     {
-        removeNativeKdePanel(panelId);
+        if (!removeNativeKdePanel(panelId))
+        {
+            qWarning() << "Preserving the panel record after native removal was refused for"
+                       << panelId;
+            return;
+        }
     }
     m_panelRegistry.removePanel(panelId);
     updateDesktopSuite();

@@ -480,7 +480,7 @@ void PanelRegistryTest::selectsNativeContainmentLifecycleIntent()
         Intent expectedIntent;
     };
 
-    const std::array<LifecycleCase, 15> cases{{
+    const std::array<LifecycleCase, 16> cases{{
         {"create a new missing host",
          Request::CreateNew,
          {true, HostStatus::Missing, false, Presentation::Hidden},
@@ -503,8 +503,12 @@ void PanelRegistryTest::selectsNativeContainmentLifecycleIntent()
          Intent::RecreateMissingHost},
         {"permanently remove an owned host",
          Request::RemovePermanently,
-         {false, HostStatus::Owned, false, Presentation::Hidden},
+         {false, HostStatus::Owned, true, Presentation::Hidden},
          Intent::RemoveHostPermanently},
+        {"do not remove an owned host without a verified renderer association",
+         Request::RemovePermanently,
+         {false, HostStatus::Owned, false, Presentation::Hidden},
+         Intent::NoAction},
         {"leave a hidden missing host absent",
          Request::Synchronize,
          {false, HostStatus::Missing, false, Presentation::Hidden},

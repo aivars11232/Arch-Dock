@@ -152,6 +152,13 @@ panel_registry_value() {
         'first(.[] | select(.id == $panel_id) | .[$key])'
 }
 
+panel_registry_record_snapshot() {
+    local panel_id="$1"
+    panel_registry_json | jq -cSe \
+        --arg panel_id "$panel_id" \
+        'first(.[] | select(.id == $panel_id))'
+}
+
 set_stale_native_ids() {
     local panel_id="$1"
     local containment_id="$2"
@@ -277,6 +284,39 @@ native_widget_count() {
     local containment_id="$1"
     plasma_script "var panel = panelById($containment_id); print(panel ? panel.widgets().length : -1);" |
         gvariant_string
+}
+
+create_unrelated_panel_fixture() {
+    plasma_script \
+        "var result = (function() { var panel = null; try { panel = new Panel; if (!panel || panel.id < 0) { return -1; } panel.screen = 0; var widget = panel.addWidget('org.kde.plasma.digitalclock'); if (!widget) { panel.remove(); return -2; } return panel.id; } catch (error) { if (panel) { panel.remove(); } return -3; } })(); print(result);" |
+        gvariant_string
+}
+
+unrelated_panel_archdock_marker() {
+    local containment_id="$1"
+    plasma_script \
+        "var panel = panelById($containment_id); if (!panel) { print('missing'); } else { panel.currentConfigGroup = ['ArchDock']; print(String(panel.readConfig('ownerToken', '')) + '|' + String(panel.readConfig('panelId', ''))); }" |
+        gvariant_string
+}
+
+unrelated_panel_snapshot() {
+    local containment_id="$1"
+    plasma_script \
+        "var panel = panelById($containment_id); if (!panel) { print('missing'); } else { var widgets = panel.widgets(); var inventory = []; for (var index = 0; index < widgets.length; ++index) { inventory.push(String(widgets[index].id) + ':' + String(widgets[index].type)); } inventory.sort(); panel.currentConfigGroup = ['ArchDock']; var ownerToken = String(panel.readConfig('ownerToken', '')); var panelId = String(panel.readConfig('panelId', '')); var temporaryHidden = String(panel.readConfig('temporaryHidden', '')); print([String(panel.id), String(panel.location), String(panel.hiding), String(panel.screen), inventory.join(','), ownerToken, panelId, temporaryHidden].join('|')); }" |
+        gvariant_string
+}
+
+require_unrelated_panel_unchanged() {
+    local containment_id="$1"
+    local expected_snapshot="$2"
+    local phase="$3"
+    local actual_snapshot
+    actual_snapshot="$(unrelated_panel_snapshot "$containment_id")"
+    [[ "$actual_snapshot" == "$expected_snapshot" ]] || {
+        printf 'Unrelated Plasma panel changed during %s: expected=%s actual=%s\n' \
+            "$phase" "$expected_snapshot" "${actual_snapshot:-unavailable}" >&2
+        exit 1
+    }
 }
 
 add_legacy_control_applet() {
@@ -421,6 +461,28 @@ run_session() {
     log_session_phase 'starting PlasmaShell'
     start_plasmashell plasmashell.log
 
+    local unrelated_containment_id
+    unrelated_containment_id="$(create_unrelated_panel_fixture)"
+    [[ "$unrelated_containment_id" =~ ^[0-9]+$ ]] || {
+        printf 'Could not create the named unrelated Plasma panel fixture: %s\n' \
+            "$unrelated_containment_id" >&2
+        exit 1
+    }
+    wait_for_native_panel_screen "$unrelated_containment_id" 0
+    [[ "$(unrelated_panel_archdock_marker "$unrelated_containment_id")" == '|' ]] || {
+        printf 'The unrelated Plasma panel fixture unexpectedly has Arch Dock ownership.\n' >&2
+        exit 1
+    }
+    local unrelated_snapshot
+    unrelated_snapshot="$(unrelated_panel_snapshot "$unrelated_containment_id")"
+    [[ "$unrelated_snapshot" == "$unrelated_containment_id|"* &&
+        "$unrelated_snapshot" == *':org.kde.plasma.digitalclock|'* ]] || {
+        printf 'The unrelated Plasma panel fixture snapshot is incomplete: %s\n' \
+            "$unrelated_snapshot" >&2
+        exit 1
+    }
+    log_session_phase 'created named unrelated Plasma panel fixture'
+
     log_session_phase 'starting Arch Dock'
     start_arch_dock arch-dock.log
 
@@ -454,6 +516,8 @@ run_session() {
         printf 'Cold missing-id recovery did not persist a fresh ownership token.\n' >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'cold missing-id recovery'
     log_session_phase 'recovered visible panel from missing ids'
 
     local baseline_ids
@@ -484,6 +548,8 @@ run_session() {
     first_dock_id="$(owned_dock_id "$first_containment_id" "$panel_id")"
     local ids_before_hide
     ids_before_hide="$(panel_ids)"
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'managed panel creation'
 
     require_true_reply "$(panel_call setPanelVisible "$panel_id" false)"
     log_session_phase 'temporarily hid native panel'
@@ -503,6 +569,8 @@ run_session() {
         printf 'Temporary hide changed the Plasma panel id set.\n' >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'temporary hide'
 
     require_true_reply "$(panel_call setPanelVisible "$panel_id" true)"
     log_session_phase 'showed existing native panel'
@@ -522,6 +590,8 @@ run_session() {
         printf 'Show duplicated or removed a Plasma panel.\n' >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'show after temporary hide'
 
     local unsupported_mode
     unsupported_mode="$(plasma_script "var panel = panelById($first_containment_id); if (!panel) { print('missing'); } else { panel.hiding = 'dodgewindows'; print(panel.hiding); }" | gvariant_string)"
@@ -546,12 +616,18 @@ run_session() {
         printf 'Could not restore the disposable native panel presentation.\n' >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'rejected unsupported hide'
     log_session_phase 'rejected unsupported temporary hide safely'
 
     require_true_reply "$(panel_call setNativePanelType "$panel_id" launcher)"
     require_visual_dock "$first_containment_id" "$panel_id" launcher
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'launcher renderer reconciliation'
     require_true_reply "$(panel_call setNativePanelType "$panel_id" hybrid)"
     require_visual_dock "$first_containment_id" "$panel_id" hybrid
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'hybrid renderer reconciliation'
 
     local legacy_control_id
     legacy_control_id="$(add_legacy_control_applet "$first_containment_id" "$panel_id")"
@@ -565,6 +641,8 @@ run_session() {
     }
     require_true_reply "$(panel_call createNativeKdePanel "$panel_id")"
     require_visual_dock "$first_containment_id" "$panel_id" hybrid
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'legacy renderer cleanup'
 
     local empty_panel_id
     empty_panel_id="$(panel_call createNativePanel top empty | gvariant_string)"
@@ -583,6 +661,8 @@ run_session() {
         printf 'Empty native panel unexpectedly contains widgets.\n' >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'empty panel creation'
     legacy_control_id="$(add_legacy_control_applet "$empty_containment_id" "$empty_panel_id")"
     [[ "$legacy_control_id" =~ ^[0-9]+$ ]] || {
         printf 'Could not add a disposable legacy control applet to an empty panel: %s\n' "$legacy_control_id" >&2
@@ -593,8 +673,12 @@ run_session() {
         printf 'Empty native panel retained a legacy control applet.\n' >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'empty renderer reconciliation'
     require_true_reply "$(panel_call removeNativeKdePanel "$empty_panel_id")"
     panel_call removePanel "$empty_panel_id" >/dev/null
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'empty panel permanent removal'
 
     local typed_edge
     local typed_type
@@ -618,8 +702,12 @@ run_session() {
             exit 1
         }
         require_visual_dock "$typed_containment_id" "$typed_panel_id" "$typed_type"
+        require_unrelated_panel_unchanged \
+            "$unrelated_containment_id" "$unrelated_snapshot" "$typed_type panel creation"
         require_true_reply "$(panel_call removeNativeKdePanel "$typed_panel_id")"
         panel_call removePanel "$typed_panel_id" >/dev/null
+        require_unrelated_panel_unchanged \
+            "$unrelated_containment_id" "$unrelated_snapshot" "$typed_type panel permanent removal"
     done
 
     panel_call setPanelScreen "$panel_id" 1 >/dev/null
@@ -635,6 +723,8 @@ run_session() {
         printf 'Native panel did not persist a stable output identity.\n' >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'managed screen reassignment'
 
     local enabled_outputs
     enabled_outputs="$(enabled_output_names)"
@@ -659,6 +749,8 @@ run_session() {
         printf 'Screen fallback did not record index 0 while retaining the stable output identity.\n' >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'managed screen fallback'
     log_session_phase 'restoring secondary virtual output'
     kscreen-doctor "output.$secondary_output.enable" >/dev/null
     wait_for_screen_count 2
@@ -687,6 +779,8 @@ run_session() {
         printf 'Restoring the output replaced the requested stable output identity.\n' >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'managed screen restoration'
 
     local externally_removed
     externally_removed="$(plasma_script "var panel = panelById($first_containment_id); if (panel === null) { print(0); } else { panel.currentConfigGroup = ['ArchDock']; var owned = panel.readConfig('panelId', '') === '$panel_id' && panel.readConfig('ownerToken', '') === '$first_token'; if (owned) { panel.remove(); print(1); } else { print(0); } }" | gvariant_string)"
@@ -694,6 +788,8 @@ run_session() {
         printf 'Refused to remove the verified disposable containment.\n' >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'managed-host loss fixture'
 
     start_signal_monitor nativePanelRecoveryFinished
     require_true_reply "$(panel_call setPanelVisible "$panel_id" true)"
@@ -716,6 +812,8 @@ run_session() {
     replacement_dock_id="$(owned_dock_id "$replacement_containment_id" "$panel_id")"
     local ids_after_replacement
     ids_after_replacement="$(panel_ids)"
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'visible missing-host recreation'
 
     require_true_reply "$(panel_call setPanelVisible "$panel_id" true)"
     require_true_reply "$(panel_call setPanelVisible "$panel_id" true)"
@@ -725,6 +823,8 @@ run_session() {
         printf 'Repeated synchronization duplicated or replaced a recovered native panel.\n' >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'repeated recovery convergence'
     log_session_phase 'repeated missing-host synchronization remained idempotent'
 
     local hidden_panel_id
@@ -741,7 +841,11 @@ run_session() {
         printf 'Hidden-detach panel ownership marker was not persisted: %s\n' "$hidden_record" >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'hidden-detach panel creation'
     require_true_reply "$(panel_call setPanelVisible "$hidden_panel_id" false)"
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'hidden-detach temporary hide'
     local hidden_removed
     hidden_removed="$(plasma_script "var panel = panelById($hidden_containment_id); if (!panel) { print(0); } else { panel.currentConfigGroup = ['ArchDock']; var owned = panel.readConfig('panelId', '') === '$hidden_panel_id' && panel.readConfig('ownerToken', '') === '$hidden_token'; if (owned) { panel.remove(); print(1); } else { print(0); } }" | gvariant_string)"
     [[ "$hidden_removed" == '1' ]] || {
@@ -765,6 +869,8 @@ run_session() {
         exit 1
     }
     panel_call removePanel "$hidden_panel_id" >/dev/null
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'hidden missing-host detach'
     log_session_phase 'safely detached hidden panel with no owned host'
 
     local panel_count_before_stale_rebind
@@ -805,6 +911,8 @@ run_session() {
         printf 'Unique ownership-token rediscovery did not rebind the stale registry exactly once.\n' >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'stale native id rebind'
     log_session_phase 'rebound stale native ids to one verified token match'
 
     local duplicate_containment_id
@@ -827,6 +935,8 @@ run_session() {
         printf 'Multiple ownership matches were not preserved as a non-mutating conflict.\n' >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'multiple ownership conflict refusal'
     local duplicate_removed
     duplicate_removed="$(plasma_script "var panel = panelById($duplicate_containment_id); if (!panel) { print(0); } else { panel.currentConfigGroup = ['ArchDock']; var owned = panel.readConfig('panelId', '') === '$panel_id' && panel.readConfig('ownerToken', '') === '$replacement_token'; if (owned) { panel.remove(); print(1); } else { print(0); } }" | gvariant_string)"
     [[ "$duplicate_removed" == '1' ]] || {
@@ -841,6 +951,8 @@ run_session() {
         printf 'Native panel did not converge after the duplicate conflict was removed.\n' >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'ownership conflict convergence'
     log_session_phase 'preserved multiple token matches as an explicit conflict'
 
     local panel_count_before_restart
@@ -884,6 +996,63 @@ run_session() {
             "$restarted_expected_screen" "$restarted_screen" >&2
         exit 1
     }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'PlasmaShell restart recovery'
+
+    local removal_registry_snapshot
+    removal_registry_snapshot="$(panel_registry_record_snapshot "$panel_id")"
+    local wrong_token='00000000-0000-0000-0000-000000000010'
+    local token_tampered
+    token_tampered="$(plasma_script "var panel = panelById($restarted_containment_id); if (!panel) { print(0); } else { panel.currentConfigGroup = ['ArchDock']; if (String(panel.readConfig('panelId', '')) !== '$panel_id' || String(panel.readConfig('ownerToken', '')) !== '$replacement_token') { print(0); } else { panel.writeConfig('ownerToken', '$wrong_token'); panel.reloadConfig(); print(String(panel.readConfig('ownerToken', '')) === '$wrong_token' ? 1 : 0); } }" | gvariant_string)"
+    [[ "$token_tampered" == '1' ]] || {
+        printf 'Could not establish the wrong-token permanent-removal fixture.\n' >&2
+        exit 1
+    }
+    require_false_reply "$(panel_call removeNativeKdePanel "$panel_id")"
+    panel_call removePanel "$panel_id" >/dev/null
+    local guarded_containment_exists
+    guarded_containment_exists="$(plasma_script "print(panelById($restarted_containment_id) ? 1 : 0);" | gvariant_string)"
+    [[ "$guarded_containment_exists" == '1' &&
+        "$(panel_registry_record_snapshot "$panel_id")" == "$removal_registry_snapshot" &&
+        "$(owned_dock_id "$restarted_containment_id" "$panel_id")" == "$restarted_dock_id" &&
+        "$(owned_dock_type "$restarted_containment_id" "$panel_id")" == 'hybrid' ]] || {
+        printf 'Wrong-token removal did not preserve the containment, renderer and registry record.\n' >&2
+        exit 1
+    }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'wrong-token removal refusal'
+    local token_restored
+    token_restored="$(plasma_script "var panel = panelById($restarted_containment_id); if (!panel) { print(0); } else { panel.currentConfigGroup = ['ArchDock']; if (String(panel.readConfig('panelId', '')) !== '$panel_id' || String(panel.readConfig('ownerToken', '')) !== '$wrong_token') { print(0); } else { panel.writeConfig('ownerToken', '$replacement_token'); panel.reloadConfig(); print(String(panel.readConfig('ownerToken', '')) === '$replacement_token' ? 1 : 0); } }" | gvariant_string)"
+    [[ "$token_restored" == '1' &&
+        "$(owned_panel_record "$panel_id")" == "$restarted_containment_id|$replacement_token" ]] || {
+        printf 'Could not restore the exact ownership token after the refusal test.\n' >&2
+        exit 1
+    }
+
+    local renderer_tampered
+    renderer_tampered="$(plasma_script "var panel = panelById($restarted_containment_id); var dock = panel ? panel.widgetById($restarted_dock_id) : null; if (!dock || dock.type !== 'org.archdock.dock') { print(0); } else { dock.currentConfigGroup = ['General']; if (String(dock.readConfig('panelId', '')) !== '$panel_id' || String(dock.readConfig('panelType', '')) !== 'hybrid') { print(0); } else { dock.writeConfig('panelType', 'tasks'); dock.reloadConfig(); print(String(dock.readConfig('panelType', '')) === 'tasks' ? 1 : 0); } }" | gvariant_string)"
+    [[ "$renderer_tampered" == '1' ]] || {
+        printf 'Could not establish the wrong-renderer permanent-removal fixture.\n' >&2
+        exit 1
+    }
+    require_false_reply "$(panel_call removeNativeKdePanel "$panel_id")"
+    guarded_containment_exists="$(plasma_script "print(panelById($restarted_containment_id) ? 1 : 0);" | gvariant_string)"
+    [[ "$guarded_containment_exists" == '1' &&
+        "$(panel_registry_record_snapshot "$panel_id")" == "$removal_registry_snapshot" &&
+        "$(owned_dock_id "$restarted_containment_id" "$panel_id")" == "$restarted_dock_id" &&
+        "$(owned_dock_type "$restarted_containment_id" "$panel_id")" == 'tasks' ]] || {
+        printf 'Wrong-renderer removal did not preserve the containment, applet and registry record.\n' >&2
+        exit 1
+    }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'wrong-renderer removal refusal'
+    local renderer_restored
+    renderer_restored="$(plasma_script "var panel = panelById($restarted_containment_id); var dock = panel ? panel.widgetById($restarted_dock_id) : null; if (!dock || dock.type !== 'org.archdock.dock') { print(0); } else { dock.currentConfigGroup = ['General']; if (String(dock.readConfig('panelId', '')) !== '$panel_id' || String(dock.readConfig('panelType', '')) !== 'tasks') { print(0); } else { dock.writeConfig('panelType', 'hybrid'); dock.reloadConfig(); print(String(dock.readConfig('panelType', '')) === 'hybrid' ? 1 : 0); } }" | gvariant_string)"
+    [[ "$renderer_restored" == '1' ]] || {
+        printf 'Could not restore the expected renderer association after the refusal test.\n' >&2
+        exit 1
+    }
+    require_visual_dock "$restarted_containment_id" "$panel_id" hybrid
 
     require_true_reply "$(panel_call removeNativeKdePanel "$panel_id")"
     local removal_result
@@ -892,13 +1061,31 @@ run_session() {
         printf 'Verified native panel was not removed.\n' >&2
         exit 1
     }
+    [[ "$(panel_registry_value "$panel_id" nativePanelId)" == '-1' &&
+        "$(panel_registry_value "$panel_id" nativeDockAppletId)" == '-1' &&
+        -z "$(panel_registry_value "$panel_id" nativeOwnershipToken)" ]] || {
+        printf 'Verified native removal did not clear the managed association.\n' >&2
+        exit 1
+    }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'verified permanent removal'
     panel_call removePanel "$panel_id" >/dev/null
+    if panel_registry_record_snapshot "$panel_id" >/dev/null 2>&1; then
+        printf 'Removing the verified panel did not remove its registry record.\n' >&2
+        exit 1
+    fi
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'managed record removal'
 
     local final_ids
     final_ids="$(panel_ids)"
     [[ "$final_ids" == "$baseline_ids" ]] || {
         printf 'The native lifecycle test changed non-Arch-Dock panels: before=%s after=%s\n' \
             "$baseline_ids" "$final_ids" >&2
+        exit 1
+    }
+    [[ "$(unrelated_panel_archdock_marker "$unrelated_containment_id")" == '|' ]] || {
+        printf 'The unrelated Plasma panel acquired an Arch Dock ownership marker.\n' >&2
         exit 1
     }
 
