@@ -1,3 +1,10 @@
+> **Status: historical and superseded.** This 2026-07-24 audit is retained as an
+> implementation snapshot, not as current project status. Use
+> [CURRENT_STATE.md](CURRENT_STATE.md) for current facts and
+> [MASTER_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md](MASTER_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md)
+> for architecture intent. The independent Qt Quick free-panel description
+> below predates the current Plasma desktop-hosted applet implementation.
+
 # Arch Dock Implementation Audit
 
 Updated: 2026-07-24

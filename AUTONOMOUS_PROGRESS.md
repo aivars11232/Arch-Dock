@@ -1,3 +1,11 @@
+> **Status: historical and superseded.** This 2026-07-23 snapshot is retained as
+> project history, not as current architecture or implementation status. Use
+> [docs/CURRENT_STATE.md](docs/CURRENT_STATE.md) for current facts and
+> [docs/MASTER_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md](docs/MASTER_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md)
+> for the architecture roadmap. In particular, the free-panel retirement claim
+> below is historical and contradicts the current Plasma desktop-hosted applet
+> implementation.
+
 # Arch Dock Native Plasma Architecture
 
 Updated: 2026-07-23

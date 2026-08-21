@@ -10,23 +10,25 @@ the containment's `ArchDock` configuration group:
 - `panelId`: the matching Arch Dock registry panel id.
 
 The same token is stored as `nativeOwnershipToken` in the registry. Before Arch
-Dock changes a native panel's screen, attaches a control applet, or removes the
-panel, it reads both containment values and requires an exact match. This
-prevents a recycled Plasma containment id from targeting a user-owned panel.
+Dock changes a native panel's screen, attaches or repairs its visual dock
+applet, or removes the panel, it reads both containment values and requires an
+exact match. This prevents a recycled Plasma containment id from targeting a
+user-owned panel.
 
 Legacy associations without a token are adopted only when the recorded applet
-is an `org.archdock.control` widget whose `General/panelId` matches the registry
-panel. Any other mismatch clears Arch Dock's stored association without changing
-the Plasma containment.
+is either an `org.archdock.dock` visual applet or an `org.archdock.control`
+legacy widget whose `General/panelId` matches the registry panel. Any other
+mismatch clears Arch Dock's stored association without changing the Plasma
+containment.
 
 ## Runtime Behavior
 
 - Screen add/remove signals cause Arch Dock to resolve each saved stable screen
   id first and use its bounded numeric fallback only when that output is gone.
-- A native panel missing its control applet can be repaired later as long as its
-  containment ownership marker remains valid.
+- A native panel missing its visual dock applet can be repaired later as long as
+  its containment ownership marker remains valid.
 - A stale or unverified native association is never removed, reconfigured, or
-  used as the target for a control applet.
+  used as the target for applet attachment.
 - When Plasma Shell acquires a new D-Bus owner, Arch Dock retries recovery of
   stored native associations after the shell has rebuilt its layout. A later
   shell disappearance cancels pending retries, and recovery first verifies that
@@ -48,12 +50,13 @@ XDG and D-Bus environment, and starts two virtual KWin outputs:
 bash tests/run-plasma-lifecycle.sh
 ```
 
-It verifies native containment creation, exact ownership markers, control
-applet attachment, fallback during virtual-output removal, stable-id restoration
-after KWin reorders outputs, stale-containment replacement, PlasmaShell restart
-recovery, verified removal, and preservation of pre-existing non-Arch-Dock
-panel ids. It deletes its temporary state after a normal exit and never contacts
-the running desktop session.
+It verifies native containment creation, exact ownership markers, visual dock
+applet attachment, legacy-control cleanup, fallback during virtual-output
+removal, stable-id restoration after KWin reorders outputs,
+stale-containment replacement, PlasmaShell restart recovery, verified removal,
+and preservation of pre-existing non-Arch-Dock panel ids. It deletes its
+temporary state after a normal exit and never contacts the running desktop
+session.
 
 The registry test suite also uses a controlled long-running renderer to verify
 that registry teardown kills and reaps it. Use a physical disposable Wayland
