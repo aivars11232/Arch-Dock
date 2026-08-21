@@ -185,6 +185,18 @@ bool isThemeFit(const QString &fit)
            fit == QStringLiteral("tile");
 }
 
+QVariantList builtInThemes()
+{
+    static const QVariantList themes = [] {
+        QFile file(QStringLiteral(":/archdock/data/themes/builtin-themes.json"));
+        if (!file.open(QIODevice::ReadOnly))
+            return QVariantList{};
+        const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+        return document.object().value(QStringLiteral("themes")).toArray().toVariantList();
+    }();
+    return themes;
+}
+
 constexpr int themePackageVersion = 1;
 const QString themePackageFormat = QStringLiteral("org.archdock.theme");
 const QString themePackageManifestName = QStringLiteral("archdock-theme.json");
@@ -692,6 +704,57 @@ void PanelRegistry::setPanelValue(const QString &panelId, const QString &key, co
 void PanelRegistry::updatePanel(const QString &panelId, const QVariantMap &values)
 {
     setPanelValues(panelId, values);
+}
+
+QVariantList PanelRegistry::themeDefinitions() const
+{
+    return builtInThemes();
+}
+
+bool PanelRegistry::applyTheme(const QString &panelId,
+                               const QString &themeId,
+                               const QString &layer)
+{
+    const QString normalizedLayer = layer.trimmed().toLower();
+    if (!record(panelId) || (normalizedLayer != QStringLiteral("panel") &&
+                             normalizedLayer != QStringLiteral("icon") &&
+                             normalizedLayer != QStringLiteral("complete")))
+        return false;
+
+    for (const QVariant &candidate : builtInThemes())
+    {
+        const QVariantMap theme = candidate.toMap();
+        if (theme.value(QStringLiteral("id")).toString() != themeId)
+            continue;
+
+        QVariantMap changes;
+        const auto mergeStyle = [&changes](const QVariantMap &style)
+        {
+            for (auto it = style.cbegin(); it != style.cend(); ++it)
+                changes.insert(it.key(), it.value());
+        };
+        if (normalizedLayer == QStringLiteral("panel") || normalizedLayer == QStringLiteral("complete"))
+        {
+            mergeStyle(theme.value(QStringLiteral("panelStyle")).toMap());
+            changes.insert(QStringLiteral("panelThemeId"), themeId);
+        }
+        if (normalizedLayer == QStringLiteral("icon") || normalizedLayer == QStringLiteral("complete"))
+        {
+            mergeStyle(theme.value(QStringLiteral("iconStyle")).toMap());
+            changes.insert(QStringLiteral("iconThemeId"), themeId);
+        }
+        if (normalizedLayer == QStringLiteral("complete"))
+        {
+            mergeStyle(theme.value(QStringLiteral("tileStyle")).toMap());
+            mergeStyle(theme.value(QStringLiteral("indicatorStyle")).toMap());
+            mergeStyle(theme.value(QStringLiteral("animationStyle")).toMap());
+            mergeStyle(theme.value(QStringLiteral("layoutStyle")).toMap());
+            changes.insert(QStringLiteral("completeThemeId"), themeId);
+        }
+        setPanelValues(panelId, changes);
+        return true;
+    }
+    return false;
 }
 
 QString PanelRegistry::addPanel(const QString &edge, const QString &type)

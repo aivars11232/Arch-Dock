@@ -677,6 +677,9 @@ Window {
             stageThemeAction(selectedPanelId, "render", "");
         } else if (action === "reset-panel") {
             resetSelectedPanelDraft();
+        } else if (action === "load-built-in-theme") {
+            panelRegistry.applyTheme(selectedPanelId, data.themeId, "complete");
+            discardStudioChanges();
         }
     }
 
@@ -906,8 +909,12 @@ Window {
     }
 
     function panelsAppearanceRows() {
+        const panel3dEnabled = Boolean(effectivePanelValue("panel3dEnabled", false));
         return [
             section(qsTr("Appearance"), qsTr("Surface styling for the selected panel."), true),
+            { kind: "themeSamples", label: qsTr("Built-in themes"),
+              description: qsTr("Original renderer-driven samples. Loading one preserves your icons and launchers."),
+              themes: panelRegistry.themeDefinitions() },
             panelField("combo", qsTr("Shape"), "shape", "pill",
                 { options: panelShapeOptions }),
             panelField("color", qsTr("Color"), "color", ""),
@@ -915,6 +922,30 @@ Window {
                 { from: 0, to: 1, step: 0.05, decimals: 2 }),
             panelField("combo", qsTr("Theme"), "appearance", "glass",
                 { options: materialOptions }),
+            panelField("switch", qsTr("3D Enabled"), "panel3dEnabled", false),
+            section(qsTr("3D Panel"), qsTr("Depth rendering for the selected panel."), false),
+            panelField("slider", qsTr("Depth"), "panel3dDepth", 12,
+                { from: 0, to: 64, step: 1, decimals: 0, available: panel3dEnabled }),
+            panelField("slider", qsTr("Extrusion"), "panel3dExtrusion", 8,
+                { from: 0, to: 64, step: 1, decimals: 0, available: panel3dEnabled }),
+            panelField("slider", qsTr("Perspective"), "panel3dPerspective", 0,
+                { from: -45, to: 45, step: 1, decimals: 0, available: panel3dEnabled }),
+            panelField("slider", qsTr("Rotation"), "panel3dRotation", 0,
+                { from: -180, to: 180, step: 1, decimals: 0, available: panel3dEnabled }),
+            panelField("slider", qsTr("Bevel"), "panel3dBevel", 4,
+                { from: 0, to: 32, step: 1, decimals: 0, available: panel3dEnabled }),
+            panelField("combo", qsTr("Surface Material"), "panel3dMaterial", "glass",
+                { options: materialOptions, available: panel3dEnabled }),
+            panelField("slider", qsTr("Lighting"), "panel3dLighting", 1,
+                { from: 0, to: 2, step: 0.1, decimals: 1, available: panel3dEnabled }),
+            panelField("slider", qsTr("Shadow"), "panel3dShadow", 0.4,
+                { from: 0, to: 1, step: 0.05, decimals: 2, available: panel3dEnabled }),
+            panelField("slider", qsTr("Reflection"), "panel3dReflection", 0.2,
+                { from: 0, to: 1, step: 0.05, decimals: 2, available: panel3dEnabled }),
+            panelField("slider", qsTr("Border Depth"), "panel3dBorderDepth", 2,
+                { from: 0, to: 24, step: 1, decimals: 0, available: panel3dEnabled }),
+            panelField("combo", qsTr("3D Rendering Quality"), "panel3dQuality", "balanced",
+                { options: choices(["performance", "balanced", "high", "ultra"]), available: panel3dEnabled }),
             panelField("combo", qsTr("Artwork fit"), "themeFit", "cover",
                 { options: choices(["cover", "contain", "stretch", "tile"]) }),
             {
@@ -995,6 +1026,7 @@ Window {
     }
 
     function iconsAppearanceRows() {
+        const icon3dEnabled = Boolean(effectivePanelValue("icon3dEnabled", false));
         return [
             section(qsTr("Appearance"), qsTr("Icon geometry and live global effects."), true),
             panelField("combo", qsTr("Shape"), "iconShape", "rounded",
@@ -1003,6 +1035,40 @@ Window {
                 { from: 24, to: 128, step: 2 }),
             panelField("slider", qsTr("Spacing"), "spacing", 8,
                 { from: 0, to: 48, step: 1, decimals: 0 }),
+            panelField("switch", qsTr("3D Enabled"), "icon3dEnabled", false),
+            section(qsTr("3D Icon"), qsTr("Depth rendering for the current icons."), false),
+            panelField("slider", qsTr("Depth"), "icon3dDepth", 10,
+                { from: 0, to: 64, step: 1, decimals: 0, available: icon3dEnabled }),
+            panelField("slider", qsTr("Extrusion"), "icon3dExtrusion", 7,
+                { from: 0, to: 64, step: 1, decimals: 0, available: icon3dEnabled }),
+            panelField("slider", qsTr("Bevel"), "icon3dBevel", 3,
+                { from: 0, to: 32, step: 1, decimals: 0, available: icon3dEnabled }),
+            panelField("slider", qsTr("Perspective"), "icon3dPerspective", 0,
+                { from: -45, to: 45, step: 1, decimals: 0, available: icon3dEnabled }),
+            panelField("slider", qsTr("Rotation X"), "icon3dRotationX", 0,
+                { from: -180, to: 180, step: 1, decimals: 0, available: icon3dEnabled }),
+            panelField("slider", qsTr("Rotation Y"), "icon3dRotationY", 0,
+                { from: -180, to: 180, step: 1, decimals: 0, available: icon3dEnabled }),
+            panelField("slider", qsTr("Rotation Z"), "icon3dRotationZ", 0,
+                { from: -180, to: 180, step: 1, decimals: 0, available: icon3dEnabled }),
+            panelField("combo", qsTr("Surface Material"), "icon3dMaterial", "glass",
+                { options: materialOptions, available: icon3dEnabled }),
+            panelField("slider", qsTr("Front Lighting"), "icon3dFrontLighting", 1,
+                { from: 0, to: 2, step: 0.1, decimals: 1, available: icon3dEnabled }),
+            panelField("slider", qsTr("Rim Lighting"), "icon3dRimLighting", 0.4,
+                { from: 0, to: 2, step: 0.1, decimals: 1, available: icon3dEnabled }),
+            panelField("slider", qsTr("Shadow"), "icon3dShadow", 0.4,
+                { from: 0, to: 1, step: 0.05, decimals: 2, available: icon3dEnabled }),
+            panelField("slider", qsTr("Reflection"), "icon3dReflection", 0.2,
+                { from: 0, to: 1, step: 0.05, decimals: 2, available: icon3dEnabled }),
+            panelField("slider", qsTr("Gloss"), "icon3dGloss", 0.5,
+                { from: 0, to: 1, step: 0.05, decimals: 2, available: icon3dEnabled }),
+            panelField("slider", qsTr("Edge Highlight"), "icon3dEdgeHighlight", 0.4,
+                { from: 0, to: 1, step: 0.05, decimals: 2, available: icon3dEnabled }),
+            panelField("switch", qsTr("Background Tile"), "icon3dBackgroundTile", true,
+                { available: icon3dEnabled }),
+            panelField("combo", qsTr("3D Rendering Quality"), "icon3dQuality", "balanced",
+                { options: choices(["performance", "balanced", "high", "ultra"]), available: icon3dEnabled }),
             settingsField("switch", qsTr("Reflection"), "showReflections"),
             notice(qsTr("Opacity, Glow, Shadow, Attention Color, and independent Icon Style require the icon renderer work planned for this section."))
         ];

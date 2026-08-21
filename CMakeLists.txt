@@ -63,6 +63,11 @@ qt_add_qml_module(
   qml/runtime/StudioForm.qml
   qml/runtime/StudioNavigation.js
   qml/runtime/SettingsPopup.qml)
+qt_add_resources(
+  arch-dock
+  theme-catalog
+  PREFIX "/archdock"
+  FILES data/themes/builtin-themes.json)
 
 target_link_libraries(
   arch-dock
@@ -188,6 +193,7 @@ if(BUILD_TESTING)
 endif()
 
 install(TARGETS arch-dock RUNTIME DESTINATION bin)
+install(FILES data/themes/builtin-themes.json DESTINATION share/arch-dock/themes)
 install(
   DIRECTORY kwin-script/
   DESTINATION share/kwin/scripts/org.archdock.windowwatcher)

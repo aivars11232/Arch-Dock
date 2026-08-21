@@ -69,9 +69,80 @@ ScrollView {
                         : Kirigami.MessageType.Information
                 }
 
+                ColumnLayout {
+                    visible: rowDelegate.kind === "themeSamples"
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Label {
+                        text: rowDelegate.modelData.label || ""
+                        color: "#f3f8fb"
+                        font.pixelSize: 16
+                        font.weight: Font.DemiBold
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: rowDelegate.modelData.description || ""
+                        color: "#91a8b5"
+                        font.pixelSize: 11
+                        wrapMode: Text.Wrap
+                    }
+                    Repeater {
+                        model: rowDelegate.modelData.themes || []
+                        delegate: Rectangle {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            implicitHeight: 92
+                            radius: 8
+                            color: "#1b2831"
+                            border.width: 1
+                            border.color: "#3a5868"
+                            readonly property var panelStyle: modelData.panelStyle || ({})
+                            readonly property var iconStyle: modelData.iconStyle || ({})
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 12
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Label { text: modelData.name; color: "#edf7fa"; font.weight: Font.DemiBold }
+                                    Label { text: qsTr("Built-in · %1").arg(modelData.category || "theme"); color: "#90a7b4"; font.pixelSize: 11 }
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 34
+                                        radius: panelStyle.shape === "hexagon" ? 3 : 14
+                                        color: panelStyle.color || "#263642"
+                                        opacity: panelStyle.opacity === undefined ? 0.9 : panelStyle.opacity
+                                        Row {
+                                            anchors.centerIn: parent
+                                            spacing: Number(iconStyle.spacing || 8)
+                                            Repeater {
+                                                model: 6
+                                                delegate: Rectangle {
+                                                    width: 18; height: 18
+                                                    radius: iconStyle.iconShape === "circle" ? 9 : 5
+                                                    color: index === 2 ? "#60d6ff" : "#d4e3eb"
+                                                    opacity: index === 4 ? 0.55 : 1
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                Button {
+                                    text: qsTr("Load")
+                                    icon.name: "dialog-ok-apply"
+                                    onClicked: root.studio.performStudioAction("load-built-in-theme", { themeId: modelData.id })
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Rectangle {
                     visible: rowDelegate.kind !== "section"
                         && rowDelegate.kind !== "notice"
+                        && rowDelegate.kind !== "themeSamples"
                     Layout.fillWidth: true
                     implicitHeight: fieldRow.implicitHeight + 22
                     radius: 7
