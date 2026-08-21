@@ -131,6 +131,22 @@ owned_panel_record() {
         gvariant_string
 }
 
+wait_for_owned_panel() {
+    local panel_id="$1"
+    local attempt
+    local current_record=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        current_record="$(owned_panel_record "$panel_id")"
+        if [[ "$current_record" =~ ^[0-9]+\|[0-9a-f-]+$ ]]; then
+            return
+        fi
+        sleep 0.1
+    done
+    printf 'Timed out waiting for an owned native panel: panel=%s record=%s\n' \
+        "$panel_id" "${current_record:-unavailable}" >&2
+    return 1
+}
+
 owned_dock_id() {
     local containment_id="$1"
     local panel_id="$2"
@@ -144,6 +160,13 @@ owned_dock_type() {
     local panel_id="$2"
     plasma_script \
         "var panel = panelById($containment_id); var result = ''; var widgets = panel ? panel.widgets() : []; for (var index = 0; index < widgets.length; ++index) { var dock = panel.widgetById(widgets[index].id); if (dock && dock.type === 'org.archdock.dock') { dock.currentConfigGroup = ['General']; if (dock.readConfig('panelId', '') === '$panel_id') { result = dock.readConfig('panelType', ''); break; } } } print(result);" |
+        gvariant_string
+}
+
+native_panel_presentation() {
+    local containment_id="$1"
+    plasma_script \
+        "var panel = panelById($containment_id); if (!panel) { print('missing|-1'); } else { panel.currentConfigGroup = ['ArchDock']; print(panel.hiding + '|' + String(panel.readConfig('temporaryHidden', '0'))); }" |
         gvariant_string
 }
 
@@ -183,6 +206,13 @@ require_visual_dock() {
 
 require_true_reply() {
     [[ "$1" == '(true,)' ]] || {
+        printf 'Unexpected D-Bus reply: %s\n' "$1" >&2
+        exit 1
+    }
+}
+
+require_false_reply() {
+    [[ "$1" == '(false,)' ]] || {
         printf 'Unexpected D-Bus reply: %s\n' "$1" >&2
         exit 1
     }
@@ -282,7 +312,25 @@ run_session() {
         exit 1
     }
 
-    require_true_reply "$(panel_call createNativeKdePanel bottom)"
+    wait_for_owned_panel bottom
+    local recovered_bottom_record
+    recovered_bottom_record="$(owned_panel_record bottom)"
+    local recovered_bottom_containment_id="${recovered_bottom_record%%|*}"
+    local recovered_bottom_token="${recovered_bottom_record#*|}"
+    require_visual_dock "$recovered_bottom_containment_id" bottom hybrid
+    local recovered_bottom_ids
+    recovered_bottom_ids="$(panel_ids)"
+    require_true_reply "$(panel_call setPanelVisible bottom true)"
+    [[ "$(owned_panel_record bottom)" == "$recovered_bottom_record" &&
+        "$(panel_ids)" == "$recovered_bottom_ids" ]] || {
+        printf 'Cold missing-id recovery did not persist one stable native association.\n' >&2
+        exit 1
+    }
+    [[ -n "$recovered_bottom_token" ]] || {
+        printf 'Cold missing-id recovery did not persist a fresh ownership token.\n' >&2
+        exit 1
+    }
+    log_session_phase 'recovered visible panel from missing ids'
 
     local baseline_ids
     baseline_ids="$(panel_ids)"
@@ -307,6 +355,74 @@ run_session() {
     }
 
     require_visual_dock "$first_containment_id" "$panel_id" hybrid
+
+    local first_dock_id
+    first_dock_id="$(owned_dock_id "$first_containment_id" "$panel_id")"
+    local ids_before_hide
+    ids_before_hide="$(panel_ids)"
+
+    require_true_reply "$(panel_call setPanelVisible "$panel_id" false)"
+    log_session_phase 'temporarily hid native panel'
+    [[ "$(owned_panel_record "$panel_id")" == "$first_record" ]] || {
+        printf 'Temporary hide changed the containment or ownership token.\n' >&2
+        exit 1
+    }
+    [[ "$(owned_dock_id "$first_containment_id" "$panel_id")" == "$first_dock_id" ]] || {
+        printf 'Temporary hide changed the native dock applet id.\n' >&2
+        exit 1
+    }
+    [[ "$(native_panel_presentation "$first_containment_id")" == 'autohide|1' ]] || {
+        printf 'Temporary hide did not apply the verified Plasma presentation.\n' >&2
+        exit 1
+    }
+    [[ "$(panel_ids)" == "$ids_before_hide" ]] || {
+        printf 'Temporary hide changed the Plasma panel id set.\n' >&2
+        exit 1
+    }
+
+    require_true_reply "$(panel_call setPanelVisible "$panel_id" true)"
+    log_session_phase 'showed existing native panel'
+    [[ "$(owned_panel_record "$panel_id")" == "$first_record" ]] || {
+        printf 'Show changed the containment or ownership token.\n' >&2
+        exit 1
+    }
+    [[ "$(owned_dock_id "$first_containment_id" "$panel_id")" == "$first_dock_id" ]] || {
+        printf 'Show changed the native dock applet id.\n' >&2
+        exit 1
+    }
+    [[ "$(native_panel_presentation "$first_containment_id")" == 'none|0' ]] || {
+        printf 'Show did not restore the verified Plasma presentation.\n' >&2
+        exit 1
+    }
+    [[ "$(panel_ids)" == "$ids_before_hide" ]] || {
+        printf 'Show duplicated or removed a Plasma panel.\n' >&2
+        exit 1
+    }
+
+    local unsupported_mode
+    unsupported_mode="$(plasma_script "var panel = panelById($first_containment_id); if (!panel) { print('missing'); } else { panel.hiding = 'dodgewindows'; print(panel.hiding); }" | gvariant_string)"
+    [[ "$unsupported_mode" == 'dodgewindows' ]] || {
+        printf 'Could not establish the unsupported-mode test precondition: %s\n' \
+            "$unsupported_mode" >&2
+        exit 1
+    }
+    require_false_reply "$(panel_call setPanelVisible "$panel_id" false)"
+    [[ "$(native_panel_presentation "$first_containment_id")" == 'dodgewindows|0' ]] || {
+        printf 'Unsupported temporary hide changed the native presentation.\n' >&2
+        exit 1
+    }
+    [[ "$(owned_panel_record "$panel_id")" == "$first_record" &&
+        "$(owned_dock_id "$first_containment_id" "$panel_id")" == "$first_dock_id" &&
+        "$(panel_ids)" == "$ids_before_hide" ]] || {
+        printf 'Unsupported temporary hide changed native or unrelated panel identity.\n' >&2
+        exit 1
+    }
+    unsupported_mode="$(plasma_script "var panel = panelById($first_containment_id); if (!panel) { print('missing'); } else { panel.hiding = 'none'; print(panel.hiding); }" | gvariant_string)"
+    [[ "$unsupported_mode" == 'none' ]] || {
+        printf 'Could not restore the disposable native panel presentation.\n' >&2
+        exit 1
+    }
+    log_session_phase 'rejected unsupported temporary hide safely'
 
     require_true_reply "$(panel_call setNativePanelType "$panel_id" launcher)"
     require_visual_dock "$first_containment_id" "$panel_id" launcher
@@ -442,9 +558,9 @@ run_session() {
     }
 
     start_signal_monitor nativePanelRecoveryFinished
-    require_true_reply "$(panel_call createNativeKdePanel "$panel_id")"
+    require_true_reply "$(panel_call setPanelVisible "$panel_id" true)"
     wait_for_signal_monitor nativePanelRecoveryFinished
-    log_session_phase 'recreated native panel'
+    log_session_phase 'recreated missing native panel through synchronization'
     local replacement_record
     replacement_record="$(owned_panel_record "$panel_id")"
     local replacement_containment_id="${replacement_record%%|*}"
@@ -453,7 +569,25 @@ run_session() {
         printf 'Replacement native panel ownership marker was not persisted: %s\n' "$replacement_record" >&2
         exit 1
     }
+    [[ "$replacement_token" != "$first_token" ]] || {
+        printf 'Replacement native panel reused the missing host ownership token.\n' >&2
+        exit 1
+    }
     require_visual_dock "$replacement_containment_id" "$panel_id" hybrid
+    local replacement_dock_id
+    replacement_dock_id="$(owned_dock_id "$replacement_containment_id" "$panel_id")"
+    local ids_after_replacement
+    ids_after_replacement="$(panel_ids)"
+
+    require_true_reply "$(panel_call setPanelVisible "$panel_id" true)"
+    require_true_reply "$(panel_call setPanelVisible "$panel_id" true)"
+    [[ "$(owned_panel_record "$panel_id")" == "$replacement_record" &&
+        "$(owned_dock_id "$replacement_containment_id" "$panel_id")" == "$replacement_dock_id" &&
+        "$(panel_ids)" == "$ids_after_replacement" ]] || {
+        printf 'Repeated synchronization duplicated or replaced a recovered native panel.\n' >&2
+        exit 1
+    }
+    log_session_phase 'repeated missing-host synchronization remained idempotent'
 
     start_signal_monitor nativePanelRecoveryFinished
     restart_plasmashell

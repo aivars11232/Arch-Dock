@@ -706,6 +706,59 @@ void PanelRegistry::updatePanel(const QString &panelId, const QVariantMap &value
     setPanelValues(panelId, values);
 }
 
+bool PanelRegistry::commitVerifiedNativePanelAssociation(
+    const QString &panelId,
+    int containmentId,
+    int dockAppletId,
+    const QString &ownershipToken)
+{
+    const QVariantMap *panel = record(panelId);
+    const QString normalizedToken = ownershipToken.trimmed();
+    if (!panel || panel->value(QStringLiteral("edge")).toString() == QStringLiteral("free") ||
+        containmentId < 0 || normalizedToken.isEmpty())
+    {
+        return false;
+    }
+
+    const QString type = panel->value(QStringLiteral("type")).toString();
+    if (!isPanelType(type) ||
+        (type == QStringLiteral("empty") ? dockAppletId != -1 : dockAppletId < 0))
+    {
+        return false;
+    }
+
+    return setPanelValuesChecked(
+        panelId,
+        {{QStringLiteral("nativePanelId"), containmentId},
+         {QStringLiteral("nativeControlAppletId"), -1},
+         {QStringLiteral("nativeDockAppletId"), dockAppletId},
+         {QStringLiteral("nativeOwnershipToken"), normalizedToken},
+         {QStringLiteral("nativeRecoveryState"), QStringLiteral("ready")},
+         {QStringLiteral("nativeRecoveryError"), QString{}}});
+}
+
+bool PanelRegistry::recordNativePanelRecoveryFailure(
+    const QString &panelId,
+    const QString &errorCode)
+{
+    const QVariantMap *panel = record(panelId);
+    const QString normalizedError = errorCode.trimmed();
+    if (!panel || panel->value(QStringLiteral("edge")).toString() == QStringLiteral("free") ||
+        normalizedError.isEmpty())
+    {
+        return false;
+    }
+
+    return setPanelValuesChecked(
+        panelId,
+        {{QStringLiteral("nativePanelId"), -1},
+         {QStringLiteral("nativeControlAppletId"), -1},
+         {QStringLiteral("nativeDockAppletId"), -1},
+         {QStringLiteral("nativeOwnershipToken"), QString{}},
+         {QStringLiteral("nativeRecoveryState"), QStringLiteral("recoverable-error")},
+         {QStringLiteral("nativeRecoveryError"), normalizedError}});
+}
+
 QVariantList PanelRegistry::themeDefinitions() const
 {
     return builtInThemes();
@@ -1144,7 +1197,9 @@ QVariantMap PanelRegistry::makePanel(const QString &id,
         {QStringLiteral("nativePanelId"), -1},
         {QStringLiteral("nativeControlAppletId"), -1},
         {QStringLiteral("nativeDockAppletId"), -1},
-        {QStringLiteral("nativeOwnershipToken"), QString{}}};
+        {QStringLiteral("nativeOwnershipToken"), QString{}},
+        {QStringLiteral("nativeRecoveryState"), QStringLiteral("idle")},
+        {QStringLiteral("nativeRecoveryError"), QString{}}};
 }
 
 QVariant PanelRegistry::normalizeValue(const QString &key, const QVariant &value) const
@@ -1449,12 +1504,18 @@ bool PanelRegistry::renderWithQt(const RenderRequest &request, QString *errorMes
 
 void PanelRegistry::setPanelValues(const QString &panelId, const QVariantMap &values)
 {
+    (void)setPanelValuesChecked(panelId, values);
+}
+
+bool PanelRegistry::setPanelValuesChecked(const QString &panelId, const QVariantMap &values)
+{
     QVariantMap *panel = record(panelId);
     if (!panel)
     {
-        return;
+        return false;
     }
 
+    const QVariantMap previousValues = *panel;
     const bool wasNativePanel = panel->value(QStringLiteral("edge")).toString() !=
         QStringLiteral("free");
     bool didChange = false;
@@ -1495,7 +1556,11 @@ void PanelRegistry::setPanelValues(const QString &panelId, const QVariantMap &va
     }
     if (didChange)
     {
-        save();
+        if (!saveChecked())
+        {
+            *panel = previousValues;
+            return false;
+        }
         ++m_revision;
         if (!contentOnly)
         {
@@ -1509,6 +1574,7 @@ void PanelRegistry::setPanelValues(const QString &panelId, const QVariantMap &va
         }
         emit revisionChanged();
     }
+    return true;
 }
 
 void PanelRegistry::startRender(const RenderRequest &request)
@@ -1783,6 +1849,16 @@ void PanelRegistry::load()
                         panel.insert(QStringLiteral("nativeDockAppletId"), -1);
                         migrated = true;
                     }
+                    if (!panel.contains(QStringLiteral("nativeRecoveryState")))
+                    {
+                        panel.insert(QStringLiteral("nativeRecoveryState"), QStringLiteral("idle"));
+                        migrated = true;
+                    }
+                    if (!panel.contains(QStringLiteral("nativeRecoveryError")))
+                    {
+                        panel.insert(QStringLiteral("nativeRecoveryError"), QString{});
+                        migrated = true;
+                    }
                     if (migrateLegacyThemePackage(&panel))
                     {
                         migrated = true;
@@ -1847,6 +1923,11 @@ void PanelRegistry::load()
 
 void PanelRegistry::save() const
 {
+    (void)saveChecked();
+}
+
+bool PanelRegistry::saveChecked() const
+{
     QJsonArray panels;
     for (const QVariantMap &panel : m_panels)
     {
@@ -1858,6 +1939,7 @@ void PanelRegistry::save() const
         QStringLiteral("dock/panels"),
         QJsonDocument(panels).toJson(QJsonDocument::Compact));
     settings.sync();
+    return settings.status() == QSettings::NoError;
 }
 
 void PanelRegistry::changed(bool nativeTopologyChanged)

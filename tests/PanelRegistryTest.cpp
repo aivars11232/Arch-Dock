@@ -78,6 +78,7 @@ private slots:
     void preservesFreePanelForFreeSurface();
     void migratesLegacyThemeSource();
     void batchesNormalizedPanelUpdates();
+    void persistsNativePanelRecoveryOutcomes();
     void reconcilesNativeContainmentLifecycle();
     void selectsNativeContainmentLifecycleIntent();
     void resolvesStableScreenIdentityBeforeFallbackIndex();
@@ -130,6 +131,10 @@ void PanelRegistryTest::provisionsPanelFamiliesAndNativeBridgeState()
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeControlAppletId")).toInt(), -1);
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeDockAppletId")).toInt(), -1);
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeOwnershipToken")).toString(), QString{});
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryState")).toString(),
+             QStringLiteral("idle"));
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryError")).toString(),
+             QString{});
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("screen")).toInt(), 0);
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("screenId")).toString(), QString{});
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("visibilityMode")).toString(),
@@ -262,6 +267,74 @@ void PanelRegistryTest::batchesNormalizedPanelUpdates()
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("visibilityMode")).toString(),
              QStringLiteral("always"));
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("revealZone")).toInt(), 64);
+}
+
+void PanelRegistryTest::persistsNativePanelRecoveryOutcomes()
+{
+    PanelRegistry registry;
+    const int initialRevision = registry.revision();
+
+    QVERIFY(!registry.commitVerifiedNativePanelAssociation(
+        QStringLiteral("missing"), 42, 73, QStringLiteral("token-a")));
+    QVERIFY(!registry.commitVerifiedNativePanelAssociation(
+        QStringLiteral("bottom"), 42, -1, QStringLiteral("token-a")));
+    QVERIFY(!registry.commitVerifiedNativePanelAssociation(
+        QStringLiteral("bottom"), 42, 73, QString{}));
+    QVERIFY(!registry.recordNativePanelRecoveryFailure(QStringLiteral("bottom"), QString{}));
+    QCOMPARE(registry.revision(), initialRevision);
+
+    QVERIFY(registry.commitVerifiedNativePanelAssociation(
+        QStringLiteral("bottom"), 42, 73, QStringLiteral("token-a")));
+    QCOMPARE(registry.revision(), initialRevision + 1);
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativePanelId")).toInt(), 42);
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeControlAppletId")).toInt(), -1);
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeDockAppletId")).toInt(), 73);
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeOwnershipToken")).toString(),
+             QStringLiteral("token-a"));
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryState")).toString(),
+             QStringLiteral("ready"));
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryError")).toString(),
+             QString{});
+
+    PanelRegistry persistedSuccess;
+    QCOMPARE(persistedSuccess.panelValue(QStringLiteral("bottom"), QStringLiteral("nativePanelId")).toInt(), 42);
+    QCOMPARE(persistedSuccess.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeDockAppletId")).toInt(), 73);
+    QCOMPARE(persistedSuccess.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeOwnershipToken")).toString(),
+             QStringLiteral("token-a"));
+
+    const int failureRevision = persistedSuccess.revision();
+    QVERIFY(persistedSuccess.recordNativePanelRecoveryFailure(
+        QStringLiteral("bottom"), QStringLiteral("renderer-verification-failed")));
+    QCOMPARE(persistedSuccess.revision(), failureRevision + 1);
+    QCOMPARE(persistedSuccess.panelValue(QStringLiteral("bottom"), QStringLiteral("nativePanelId")).toInt(), -1);
+    QCOMPARE(persistedSuccess.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeControlAppletId")).toInt(), -1);
+    QCOMPARE(persistedSuccess.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeDockAppletId")).toInt(), -1);
+    QCOMPARE(persistedSuccess.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeOwnershipToken")).toString(),
+             QString{});
+    QCOMPARE(persistedSuccess.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryState")).toString(),
+             QStringLiteral("recoverable-error"));
+    QCOMPARE(persistedSuccess.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryError")).toString(),
+             QStringLiteral("renderer-verification-failed"));
+
+    PanelRegistry persistedFailure;
+    QCOMPARE(persistedFailure.panelValue(QStringLiteral("bottom"), QStringLiteral("nativePanelId")).toInt(), -1);
+    QCOMPARE(persistedFailure.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryState")).toString(),
+             QStringLiteral("recoverable-error"));
+    QCOMPARE(persistedFailure.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryError")).toString(),
+             QStringLiteral("renderer-verification-failed"));
+
+    const int recoveryRevision = persistedFailure.revision();
+    QVERIFY(persistedFailure.commitVerifiedNativePanelAssociation(
+        QStringLiteral("bottom"), 84, 91, QStringLiteral("token-b")));
+    QCOMPARE(persistedFailure.revision(), recoveryRevision + 1);
+    QCOMPARE(persistedFailure.panelValue(QStringLiteral("bottom"), QStringLiteral("nativePanelId")).toInt(), 84);
+    QCOMPARE(persistedFailure.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeDockAppletId")).toInt(), 91);
+    QCOMPARE(persistedFailure.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeOwnershipToken")).toString(),
+             QStringLiteral("token-b"));
+    QCOMPARE(persistedFailure.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryState")).toString(),
+             QStringLiteral("ready"));
+    QCOMPARE(persistedFailure.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryError")).toString(),
+             QString{});
 }
 
 void PanelRegistryTest::reconcilesNativeContainmentLifecycle()

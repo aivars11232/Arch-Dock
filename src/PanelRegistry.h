@@ -31,6 +31,14 @@ public:
     Q_INVOKABLE bool isBuiltIn(const QString &panelId) const;
     Q_INVOKABLE void setPanelValue(const QString &panelId, const QString &key, const QVariant &value);
     Q_INVOKABLE void updatePanel(const QString &panelId, const QVariantMap &values);
+    [[nodiscard]] bool commitVerifiedNativePanelAssociation(
+        const QString &panelId,
+        int containmentId,
+        int dockAppletId,
+        const QString &ownershipToken);
+    [[nodiscard]] bool recordNativePanelRecoveryFailure(
+        const QString &panelId,
+        const QString &errorCode);
     Q_INVOKABLE QVariantList themeDefinitions() const;
     Q_INVOKABLE bool applyTheme(const QString &panelId,
                                 const QString &themeId,
@@ -73,11 +81,13 @@ private:
     [[nodiscard]] RenderRequest makeRenderRequest(const QString &panelId, int width, int height, qreal devicePixelRatio) const;
     [[nodiscard]] bool renderWithQt(const RenderRequest &request, QString *errorMessage) const;
     void setPanelValues(const QString &panelId, const QVariantMap &values);
+    [[nodiscard]] bool setPanelValuesChecked(const QString &panelId, const QVariantMap &values);
     void startRender(const RenderRequest &request);
     void startMagickRender(const RenderRequest &request, const QString &sourcePath);
     void finishRender(const RenderRequest &request, bool success, const QString &message);
     void load();
     void save() const;
+    [[nodiscard]] bool saveChecked() const;
     void changed(bool nativeTopologyChanged);
 
     QList<QVariantMap> m_panels;

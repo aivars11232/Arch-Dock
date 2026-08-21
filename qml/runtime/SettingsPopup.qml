@@ -530,10 +530,23 @@ Window {
         const result = {};
         for (let index = 0; index < editablePanelKeys.length; ++index) {
             const key = editablePanelKeys[index];
-            if (key !== "visibilityMode" && StudioDraft.hasValue(draft, key))
+            if (key !== "visible" && key !== "visibilityMode"
+                    && StudioDraft.hasValue(draft, key))
                 result[key] = draft[key];
         }
         return result;
+    }
+
+    function applyPanelVisibility(panelId, visible) {
+        if (String(panelValueFor(panelId, "edge", "bottom")) === "free") {
+            panelRegistry.setPanelValue(panelId, "visible", visible);
+            return true;
+        }
+        if (panelController.setPanelVisible(panelId, visible))
+            return true;
+        studioError = qsTr(
+            "Plasma could not safely change this panel's visibility. Its native host was left unchanged.");
+        return false;
     }
 
     function draftPanelIds() {
@@ -578,6 +591,9 @@ Window {
             const values = filteredPanelDraft(draft);
             if (StudioDraft.keyCount(values) > 0)
                 panelRegistry.updatePanel(panelId, values);
+            if (StudioDraft.hasValue(draft, "visible")
+                    && !applyPanelVisibility(panelId, Boolean(draft.visible)))
+                return false;
             if (StudioDraft.hasValue(draft, "visibilityMode")) {
                 panelController.setPanelVisibilityMode(
                     panelId, String(draft.visibilityMode));
@@ -659,11 +675,15 @@ Window {
     }
 
     function performStudioAction(action, data) {
-        if ((action === "create-free" || action === "remove-panel")
+        if ((action === "create-free" || action === "remove-panel"
+                || action === "toggle-panel-visibility")
                 && hasPendingChanges)
             return;
         if (action === "create-free") {
             openPanelEditor(panelController.createFreePanel());
+        } else if (action === "toggle-panel-visibility") {
+            applyPanelVisibility(
+                selectedPanelId, !Boolean(panelValue("visible", true)));
         } else if (action === "remove-panel") {
             const removed = selectedPanelId;
             panelController.removePanel(removed);
@@ -852,10 +872,16 @@ Window {
                     { label: qsTr("Add free panel"), icon: "list-add",
                       action: "create-free", available: !hasPendingChanges },
                     { label: panelRegistry.isBuiltIn(selectedPanelId)
-                        ? qsTr("Hide panel") : qsTr("Remove panel"),
+                        ? (panelValue("visible", true)
+                            ? qsTr("Hide panel") : qsTr("Show panel"))
+                        : qsTr("Remove panel"),
                       icon: panelRegistry.isBuiltIn(selectedPanelId)
-                        ? "view-hidden" : "edit-delete",
-                      action: "remove-panel", available: !hasPendingChanges }
+                        ? (panelValue("visible", true)
+                            ? "view-hidden" : "view-visible")
+                        : "edit-delete",
+                      action: panelRegistry.isBuiltIn(selectedPanelId)
+                        ? "toggle-panel-visibility" : "remove-panel",
+                      available: !hasPendingChanges }
                 ]
             },
             panelField("combo", qsTr("Panel Type"), "type", "empty",

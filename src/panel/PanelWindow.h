@@ -8,6 +8,8 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <optional>
+
 #include "../DockModel.h"
 #include "../DockSettings.h"
 #include "../KWinActionBridge.h"
@@ -77,6 +79,7 @@ public slots:
     QVariantList availableScreens() const;
     int screenIndexForPanel(const QString &panelId) const;
     void setPanelScreen(const QString &panelId, int screenIndex);
+    bool setPanelVisible(const QString &panelId, bool visible);
     void setPanelVisibilityMode(const QString &panelId, const QString &visibilityMode);
     bool shouldConcealPanel(const QString &panelId) const;
     void resetSettings();
@@ -115,8 +118,28 @@ private:
     int nativePanelOffset(const QString &panelId) const;
     bool nativePanelExists(int panelId) const;
     bool nativePanelIsOwned(const QString &panelId, int containmentId) const;
+    bool nativePanelIsOwned(const QString &panelId,
+                            int containmentId,
+                            const QString &ownershipToken) const;
+    int createNativePanelCandidate(const QString &panelId,
+                                   const QString &ownershipToken,
+                                   QString *errorCode) const;
+    [[nodiscard]] std::optional<int> verifiedNativeDockAppletId(
+        const QString &panelId,
+        int containmentId,
+        const QString &panelType) const;
+    bool rollbackNativePanelCandidate(const QString &panelId,
+                                      int containmentId,
+                                      const QString &ownershipToken) const;
     bool nativeControlAppletIsOwned(const QString &panelId, int containmentId, int appletId) const;
     bool nativeDockAppletIsOwned(const QString &panelId, int containmentId, int appletId) const;
+    [[nodiscard]] std::optional<bool> nativePanelTemporarilyHidden(
+        const QString &panelId,
+        int containmentId) const;
+    bool setNativePanelTemporarilyHidden(const QString &panelId,
+                                         int containmentId,
+                                         bool hidden);
+    bool synchronizeNativePanelVisibility(const QString &panelId, bool visible);
     bool adoptNativePanelOwnership(const QString &panelId, int containmentId);
     bool synchronizeNativePanelScreen(const QString &panelId) const;
     bool removeLegacyControlApplets(const QString &panelId, int containmentId);
