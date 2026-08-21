@@ -6,23 +6,25 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-08-21T16:38:12+02:00 (Europe/Amsterdam). Unless a
-statement is explicitly described as runtime evidence, it comes from repository
-and source inspection during TASK-0003.
+**Evidence snapshot:** 2026-08-21T18:01:21+02:00 (Europe/Amsterdam). Static
+implementation statements come from repository and source inspection. Build,
+test, and stage-install statements come from the fresh TASK-0004 evidence
+identified below; no live Plasma runtime evidence is claimed.
 
 ## Repository state
 
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`
-- Baseline and current `HEAD`: `529004f32929ea0d6b37e1f7d224964c1995879c`
-  (`task2`)
+- Pre-checkpoint `HEAD`: `2fb46c8a65c7c2ce7e5f25296b0812d75a08e058`
+  (`Task4`)
 - Locally recorded `origin/main`:
   `11d66e7304cca3875640afa55c80d846424b9d4a`
-- `HEAD...origin/main` count: one local commit ahead, zero behind. No network
+- `HEAD...origin/main` count: three local commits ahead, zero behind. No network
   fetch was performed, so this describes the locally recorded remote reference.
-- TASK-0003 began with a clean working tree. Its working tree changes are
-  limited to the nine documentation paths named in this task's completion
-  report. Nothing was staged, committed, pushed, or installed.
+- TASK-0005 began with a clean non-ignored working tree. Its expected working
+  tree changes are exactly `docs/BASELINE_CHECKPOINT.md` and this file. Codex
+  did not stage, commit, push, globally install, or mutate the live Plasma
+  session while creating this checkpoint.
 
 ## Inspected platform
 
@@ -33,8 +35,9 @@ and source inspection during TASK-0003.
 - Qt base `6.11.2-2`
 - KDE Frameworks Core Addons and Kirigami `6.29.0-1`
 
-These versions describe the inspection host only. TASK-0003 did not build,
-install, restart PlasmaShell, or run Arch Dock in the live desktop session.
+These versions describe the inspection host only. TASK-0004 used a disposable
+build and staging root but did not globally install, restart PlasmaShell, or run
+Arch Dock in the live desktop session.
 
 ## Documentation authority map
 
@@ -49,6 +52,10 @@ install, restart PlasmaShell, or run Arch Dock in the live desktop session.
   [theme-packages.md](theme-packages.md)
 - Native Plasma ownership and recovery safeguards:
   [plasma-lifecycle.md](plasma-lifecycle.md)
+- Canonical baseline checkpoint and task handoff:
+  [BASELINE_CHECKPOINT.md](BASELINE_CHECKPOINT.md)
+- Fresh configure, build, test, and stage-install evidence from TASK-0004:
+  [audits/BASELINE_BUILD_REPORT.md](audits/BASELINE_BUILD_REPORT.md)
 - Baseline evidence from TASK-0001 and TASK-0002:
   [audits/BASELINE_AUDIT.md](audits/BASELINE_AUDIT.md)
 - [AUTONOMOUS_PROGRESS.md](../AUTONOMOUS_PROGRESS.md) and
@@ -61,9 +68,10 @@ second authority.
 
 ## Verified current implementation
 
-The following statements were verified by inspecting the current source at the
-commit above. They are not claims that TASK-0003 re-exercised the behavior at
-runtime.
+The following implementation statements were verified by inspecting the source
+at the pre-checkpoint commit above. Unless a bullet explicitly cites build or
+test evidence, it is not a claim that the behavior was exercised in a live
+Plasma session.
 
 - `src/main.cpp` creates a Qt Quick/Kirigami application, owns the session-bus
   name `org.archdock.ArchDock`, and delegates panel behavior to `PanelManager`.
@@ -78,8 +86,10 @@ runtime.
   an embedded catalog of five themes: Obsidian Glass, Neon Segments, Metallic
   Shelf, Holographic Ring, and Minimal Underline.
 - CMake declares the application, QML and theme resources, Plasma applets and
-  templates, D-Bus and systemd metadata, and nine tests. Their declaration is
-  verified; their current build and pass status is not.
+  templates, D-Bus and systemd metadata, and nine tests. TASK-0004 completed a
+  fresh 68-step build, passed all nine declared CTests with zero failures or
+  skips, and produced a 37-file stage-install manifest; see the
+  [build report](audits/BASELINE_BUILD_REPORT.md) for commands and limitations.
 
 ## Known defects and incomplete behavior
 
@@ -100,9 +110,9 @@ runtime.
   installation strategy is not yet aligned.
 - Settings expose panel and icon 3D values, but the shared true-3D scene and
   renderer architecture required by the master plan is not present.
-- No fresh configure, build, CTest run, stage install, or live Plasma lifecycle
-  run was performed for this snapshot. Bundled or earlier build artifacts are
-  not accepted as current validation evidence.
+- No live Plasma lifecycle run has been performed for this baseline. The exact
+  deferred harness command and the distinction between automated and live
+  evidence are recorded in the build report and canonical checkpoint.
 
 ## Planned but not implemented
 
@@ -123,16 +133,17 @@ not be interpreted as completion of those v2 systems.
 
 ## Verification boundary
 
-TASK-0003 is documentation-only. Its acceptance evidence consists of static
-source inspection, exact-content comparisons, documentation-link validation,
-contradiction searches, filename checks, and Git scope checks. No acceptance
-criterion was directly observed in a running Arch Dock or Plasma session, and
-no CTest result is claimed by this task.
+TASK-0004 supplies the fresh automated configure, build, nine-test CTest, and
+stage-install evidence. TASK-0005 is documentation-only and indexes that
+evidence in the canonical checkpoint, with documentation-link, source/resource,
+and Git-scope checks rerun against the checkpoint working tree. No acceptance
+criterion was directly observed in a running Arch Dock or Plasma session.
 
 ## Next task boundary
 
-The task pack identifies **TASK-0004 — Fresh configure, build, test, and
-stage-install baseline** as the next sequential planning target. TASK-0003's
-approval does not authorize TASK-0004 implementation. TASK-0004 must begin with
-its own read-only Stage A plan and must receive its own exact implementation
-approval before any build directory or report is created.
+The task pack identifies **TASK-0006 — Define the native panel lifecycle
+contract** as the next sequential planning target. TASK-0005's approval does not
+authorize TASK-0006 implementation. TASK-0006 may begin only after the user
+creates the exact TASK-0005 checkpoint commit, verifies its hash and a clean
+working tree, then completes TASK-0006's own read-only Stage A plan and exact
+implementation approval gate.
