@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/archdock">
+    <file alias="data/themes/builtin-themes.json">/mnt/F/Arch Dock/data/themes/builtin-themes.json</file>
+  </qresource>
+</RCC>
+

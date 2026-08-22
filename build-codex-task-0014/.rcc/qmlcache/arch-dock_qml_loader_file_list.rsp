@@ -1,0 +1,16 @@
+--resource
+/mnt/F/Arch Dock/build-codex-task-0014/.qt/rcc/qmake_ArchDock.qrc
+--resource
+/mnt/F/Arch Dock/build-codex-task-0014/.qt/rcc/arch-dock_raw_qml_0.qrc
+--resource
+/mnt/F/Arch Dock/build-codex-task-0014/.qt/rcc/arch-dock_raw_qml_0_extra_qmldirs.qrc
+--resource
+/mnt/F/Arch Dock/build-codex-task-0014/.qt/rcc/theme-catalog.qrc
+/qt/qml/ArchDock/qml/runtime/DockGeometry.js
+/qt/qml/ArchDock/qml/runtime/FreePanelWindow.qml
+/qt/qml/ArchDock/qml/runtime/IconProperties.qml
+/qt/qml/ArchDock/qml/runtime/IconPropertiesWindow.qml
+/qt/qml/ArchDock/qml/runtime/StudioDraft.js
+/qt/qml/ArchDock/qml/runtime/StudioForm.qml
+/qt/qml/ArchDock/qml/runtime/StudioNavigation.js
+/qt/qml/ArchDock/qml/runtime/SettingsPopup.qml

@@ -1,0 +1,13 @@
+<RCC>
+  <qresource prefix="/qt/qml/ArchDock/">
+    <file alias="qml/runtime/DockGeometry.js">/mnt/F/Arch Dock/qml/runtime/DockGeometry.js</file>
+    <file alias="qml/runtime/FreePanelWindow.qml">/mnt/F/Arch Dock/qml/runtime/FreePanelWindow.qml</file>
+    <file alias="qml/runtime/IconProperties.qml">/mnt/F/Arch Dock/qml/runtime/IconProperties.qml</file>
+    <file alias="qml/runtime/IconPropertiesWindow.qml">/mnt/F/Arch Dock/qml/runtime/IconPropertiesWindow.qml</file>
+    <file alias="qml/runtime/StudioDraft.js">/mnt/F/Arch Dock/qml/runtime/StudioDraft.js</file>
+    <file alias="qml/runtime/StudioForm.qml">/mnt/F/Arch Dock/qml/runtime/StudioForm.qml</file>
+    <file alias="qml/runtime/StudioNavigation.js">/mnt/F/Arch Dock/qml/runtime/StudioNavigation.js</file>
+    <file alias="qml/runtime/SettingsPopup.qml">/mnt/F/Arch Dock/qml/runtime/SettingsPopup.qml</file>
+  </qresource>
+</RCC>
+

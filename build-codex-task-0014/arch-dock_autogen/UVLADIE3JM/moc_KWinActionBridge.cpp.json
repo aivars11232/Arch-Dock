@@ -1,0 +1,55 @@
+{
+    "classes": [
+        {
+            "className": "KWinActionBridge",
+            "final": true,
+            "lineNumber": 5,
+            "object": true,
+            "qualifiedClassName": "KWinActionBridge",
+            "slots": [
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "internalId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "action",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 0,
+                    "lineNumber": 13,
+                    "name": "requestAction",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "resourceClass",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "caption",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 1,
+                    "lineNumber": 14,
+                    "name": "focusWindow",
+                    "returnType": "void"
+                }
+            ],
+            "superClasses": [
+                {
+                    "access": "public",
+                    "name": "QObject"
+                }
+            ]
+        }
+    ],
+    "inputFile": "KWinActionBridge.h",
+    "outputRevision": 69
+}

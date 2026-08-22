@@ -1,0 +1,6 @@
+set(__QT_DEPLOY_TARGET_arch-dock_FILE /mnt/F/Arch Dock/build-codex-task-0014/arch-dock)
+set(__QT_DEPLOY_TARGET_arch-dock_TYPE EXECUTABLE)
+set(__QT_DEPLOY_TARGET_panel-registry-test_FILE /mnt/F/Arch Dock/build-codex-task-0014/panel-registry-test)
+set(__QT_DEPLOY_TARGET_panel-registry-test_TYPE EXECUTABLE)
+set(__QT_DEPLOY_TARGET_plasma-script-result-test_FILE /mnt/F/Arch Dock/build-codex-task-0014/plasma-script-result-test)
+set(__QT_DEPLOY_TARGET_plasma-script-result-test_TYPE EXECUTABLE)

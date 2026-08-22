@@ -1,0 +1,353 @@
+{
+    "classes": [
+        {
+            "className": "PanelRegistry",
+            "final": true,
+            "lineNumber": 15,
+            "methods": [
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "key",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 5,
+                    "isConst": true,
+                    "lineNumber": 50,
+                    "name": "panelValue",
+                    "returnType": "QVariant"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 6,
+                    "isConst": true,
+                    "lineNumber": 51,
+                    "name": "panelName",
+                    "returnType": "QString"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 7,
+                    "isConst": true,
+                    "lineNumber": 52,
+                    "name": "isBuiltIn",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "key",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "value",
+                            "type": "QVariant"
+                        }
+                    ],
+                    "index": 8,
+                    "lineNumber": 53,
+                    "name": "setPanelValue",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "values",
+                            "type": "QVariantMap"
+                        }
+                    ],
+                    "index": 9,
+                    "lineNumber": 54,
+                    "name": "updatePanel",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 10,
+                    "isConst": true,
+                    "lineNumber": 117,
+                    "name": "themeDefinitions",
+                    "returnType": "QVariantList"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "themeId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "layer",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 11,
+                    "lineNumber": 118,
+                    "name": "applyTheme",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 12,
+                    "lineNumber": 123,
+                    "name": "removePanel",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "sourceUrl",
+                            "type": "QUrl"
+                        }
+                    ],
+                    "index": 13,
+                    "lineNumber": 124,
+                    "name": "importTheme",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "width",
+                            "type": "int"
+                        },
+                        {
+                            "name": "height",
+                            "type": "int"
+                        },
+                        {
+                            "name": "devicePixelRatio",
+                            "type": "qreal"
+                        },
+                        {
+                            "name": "force",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 14,
+                    "lineNumber": 125,
+                    "name": "renderTheme",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "width",
+                            "type": "int"
+                        },
+                        {
+                            "name": "height",
+                            "type": "int"
+                        },
+                        {
+                            "name": "devicePixelRatio",
+                            "type": "qreal"
+                        }
+                    ],
+                    "index": 15,
+                    "isCloned": true,
+                    "lineNumber": 125,
+                    "name": "renderTheme",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "width",
+                            "type": "int"
+                        },
+                        {
+                            "name": "height",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 16,
+                    "isCloned": true,
+                    "lineNumber": 125,
+                    "name": "renderTheme",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 17,
+                    "lineNumber": 130,
+                    "name": "clearTheme",
+                    "returnType": "void"
+                }
+            ],
+            "object": true,
+            "properties": [
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 0,
+                    "lineNumber": 19,
+                    "name": "panelIds",
+                    "notify": "panelsChanged",
+                    "override": false,
+                    "read": "panelIds",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "QStringList",
+                    "user": false,
+                    "virtual": false
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 1,
+                    "lineNumber": 20,
+                    "name": "activePanelId",
+                    "notify": "activePanelIdChanged",
+                    "override": false,
+                    "read": "activePanelId",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "QString",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setActivePanelId"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 2,
+                    "lineNumber": 21,
+                    "name": "revision",
+                    "notify": "revisionChanged",
+                    "override": false,
+                    "read": "revision",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "int",
+                    "user": false,
+                    "virtual": false
+                }
+            ],
+            "qualifiedClassName": "PanelRegistry",
+            "signals": [
+                {
+                    "access": "public",
+                    "index": 0,
+                    "lineNumber": 136,
+                    "name": "panelsChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 1,
+                    "lineNumber": 137,
+                    "name": "nativePanelTopologyChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 2,
+                    "lineNumber": 138,
+                    "name": "activePanelIdChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 3,
+                    "lineNumber": 139,
+                    "name": "revisionChanged",
+                    "returnType": "void"
+                }
+            ],
+            "slots": [
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 4,
+                    "lineNumber": 133,
+                    "name": "setActivePanelId",
+                    "returnType": "void"
+                }
+            ],
+            "superClasses": [
+                {
+                    "access": "public",
+                    "name": "QObject"
+                }
+            ]
+        }
+    ],
+    "inputFile": "PanelRegistry.h",
+    "outputRevision": 69
+}

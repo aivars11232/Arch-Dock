@@ -328,6 +328,24 @@ set_stale_native_ids() {
     write_panel_registry_json "$registry_json"
 }
 
+set_stale_free_ids() {
+    local panel_id="$1"
+    local desktop_containment_id="$2"
+    local dock_applet_id="$3"
+    local registry_json
+    registry_json="$(panel_registry_json | jq -ce \
+        --arg panel_id "$panel_id" \
+        --argjson desktop_containment_id "$desktop_containment_id" \
+        --argjson dock_applet_id "$dock_applet_id" \
+        'map(if .id == $panel_id then
+            .freeDesktopContainmentId = $desktop_containment_id |
+            .freeDockAppletId = $dock_applet_id |
+            .freeHostState = "hosted-stale" |
+            .freeRecoveryError = "stale-id-fixture"
+        else . end)')"
+    write_panel_registry_json "$registry_json"
+}
+
 wait_for_panel_registry_value() {
     local panel_id="$1"
     local key="$2"
@@ -341,6 +359,38 @@ wait_for_panel_registry_value() {
     done
     printf 'Timed out waiting for registry value: panel=%s key=%s expected=%s actual=%s\n' \
         "$panel_id" "$key" "$expected" "${actual:-unavailable}" >&2
+    return 1
+}
+
+wait_for_panel_registry_absent() {
+    local panel_id="$1"
+    local attempt
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        if ! panel_registry_record_snapshot "$panel_id" >/dev/null 2>&1; then
+            return
+        fi
+        sleep 0.1
+    done
+    printf 'Timed out waiting for the panel registry record to be removed: %s record=%s\n' \
+        "$panel_id" \
+        "$(panel_registry_record_snapshot "$panel_id" 2>/dev/null || true)" >&2
+    return 1
+}
+
+wait_for_free_host_match_count() {
+    local panel_id="$1"
+    local ownership_token="$2"
+    local expected_count="$3"
+    local attempt
+    local actual_count=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        actual_count="$(free_host_match_count \
+            "$panel_id" "$ownership_token" 2>/dev/null || true)"
+        [[ "$actual_count" == "$expected_count" ]] && return
+        sleep 0.1
+    done
+    printf 'Timed out waiting for free-host matches: panel=%s expected=%s actual=%s\n' \
+        "$panel_id" "$expected_count" "${actual_count:-unavailable}" >&2
     return 1
 }
 
@@ -788,6 +838,82 @@ run_session() {
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'failed free-host adoption rollback'
     log_session_phase 'rolled back failed free-host adoption without touching unrelated applets'
+
+    local template_snapshot_before_free_restart
+    template_snapshot_before_free_restart="$(free_host_snapshot \
+        "$template_containment_id" "$template_applet_id")"
+    local free_count_before_studio_removal
+    free_count_before_studio_removal="$(free_panel_count)"
+    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    set_stale_free_ids "$studio_panel_id" 999999997 999999996
+    [[ "$(panel_registry_value "$studio_panel_id" freeOwnershipToken)" == "$studio_token" &&
+        "$(panel_registry_value "$studio_panel_id" freeDesktopContainmentId)" == '999999997' &&
+        "$(panel_registry_value "$studio_panel_id" freeDockAppletId)" == '999999996' &&
+        "$(panel_registry_value "$studio_panel_id" freeHostState)" == 'hosted-stale' ]] || {
+        printf 'The free-panel stale-id fixture changed more than its stored association.\n' >&2
+        exit 1
+    }
+    start_arch_dock arch-dock-free-stale-rebind.log
+    start_signal_monitor nativePanelRecoveryFinished
+    wait_for_panel_registry_value \
+        "$studio_panel_id" freeDesktopContainmentId "$studio_containment_id"
+    wait_for_panel_registry_value \
+        "$studio_panel_id" freeDockAppletId "$studio_applet_id"
+    wait_for_panel_registry_value "$studio_panel_id" freeHostState hosted-owned
+    local rebound_studio_token
+    rebound_studio_token="$(require_free_panel_host \
+        "$studio_panel_id" "$studio_containment_id" "$studio_applet_id" \
+        'restarted Studio')"
+    [[ "$rebound_studio_token" == "$studio_token" &&
+        -z "$(panel_registry_value "$studio_panel_id" freeRecoveryError)" &&
+        "$(free_panel_count)" == "$free_count_before_studio_removal" &&
+        "$(free_host_snapshot "$template_containment_id" "$template_applet_id")" == "$template_snapshot_before_free_restart" &&
+        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" ]] || {
+        printf 'Free-panel startup recovery did not uniquely rebind the stale record.\n' >&2
+        exit 1
+    }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'free-host startup recovery'
+    wait_for_signal_monitor nativePanelRecoveryFinished
+    log_session_phase 'rebound stale free-host ids after completed private service recovery'
+
+    start_signal_monitor nativePanelRecoveryFinished
+    panel_call removePanel "$studio_panel_id" >/dev/null
+    wait_for_panel_registry_absent "$studio_panel_id"
+    wait_for_free_host_match_count "$studio_panel_id" "$studio_token" 0
+    [[ "$(free_host_snapshot "$studio_containment_id" "$studio_applet_id")" == 'missing' &&
+        "$(free_panel_count)" == "$((free_count_before_studio_removal - 1))" &&
+        "$(free_host_snapshot "$template_containment_id" "$template_applet_id")" == "$template_snapshot_before_free_restart" &&
+        "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
+        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" &&
+        "$(free_host_match_count \
+            archdock-unrelated-sentinel archdock-unrelated-sentinel-token)" == '1' ]] || {
+        printf 'Verified free-panel removal changed or retained the wrong desktop applet.\n' >&2
+        exit 1
+    }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'verified free-host removal'
+    wait_for_signal_monitor nativePanelRecoveryFinished
+    if panel_registry_record_snapshot "$studio_panel_id" >/dev/null 2>&1; then
+        printf 'Completed recovery recreated the removed free-panel record: %s\n' \
+            "$(panel_registry_record_snapshot "$studio_panel_id")" >&2
+        exit 1
+    fi
+    [[ "$(free_host_snapshot "$studio_containment_id" "$studio_applet_id")" == 'missing' &&
+        "$(free_host_match_count "$studio_panel_id" "$studio_token")" == '0' &&
+        "$(free_panel_count)" == "$((free_count_before_studio_removal - 1))" &&
+        "$(free_host_snapshot "$template_containment_id" "$template_applet_id")" == "$template_snapshot_before_free_restart" &&
+        "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
+        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" &&
+        "$(free_host_match_count \
+            archdock-unrelated-sentinel archdock-unrelated-sentinel-token)" == '1' ]] || {
+        printf 'Completed recovery changed the removed host or an unrelated free applet.\n' >&2
+        exit 1
+    }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'post-removal free-host recovery'
+    log_session_phase 'removed verified free host after restart without touching sentinels'
 
     wait_for_owned_panel bottom
     local recovered_bottom_record
@@ -1473,6 +1599,7 @@ run_outer() {
         rg -n -i 'lifecycle phase|timed out|could not|native panel|unexpected' \
             "$log_dir/session.log" >&2 || true
         tail -n 120 "$log_dir/session.log" >&2 || true
+        tail -n 120 "$log_dir"/arch-dock*.log >&2 || true
         exit 1
     }
 

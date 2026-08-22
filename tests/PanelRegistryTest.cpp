@@ -93,6 +93,10 @@ struct FreePanelHostHarness
 {
     std::optional<int> bridgeScreen = 1;
     std::optional<int> matchingCount = 0;
+    ArchDock::FreePanelHostDiscoveryResult discoveryResult{
+        ArchDock::FreePanelHostDiscoveryOutcome::Unique,
+        {42, 73},
+        1};
     ArchDock::FreePanelHostMutationResult createResult{
         ArchDock::FreePanelHostMutationOutcome::Verified,
         {42, 73},
@@ -111,10 +115,12 @@ struct FreePanelHostHarness
     ArchDock::FreePanelRemovalOutcome bridgeRemoval =
         ArchDock::FreePanelRemovalOutcome::Removed;
     std::function<void(int)> onVerify;
+    std::function<void()> onDiscover;
     std::function<void()> onExactRemoval;
     std::function<void()> onCreate;
     int bridgeScreenCalls = 0;
     int matchingCountCalls = 0;
+    int discoverCalls = 0;
     int createCalls = 0;
     int adoptCalls = 0;
     int verifyCalls = 0;
@@ -122,6 +128,8 @@ struct FreePanelHostHarness
     int identityRemovalCalls = 0;
     int bridgeRemovalCalls = 0;
     ArchDock::FreePanelHost removedHost;
+    QString discoveredPanelId;
+    QString discoveredToken;
     QString removedPanelId;
     QString removedToken;
 
@@ -137,6 +145,17 @@ struct FreePanelHostHarness
         {
             ++matchingCountCalls;
             return matchingCount;
+        };
+        result.discoverOwnedHost = [this](const QString &panelId, const QString &token)
+        {
+            ++discoverCalls;
+            discoveredPanelId = panelId;
+            discoveredToken = token;
+            if (onDiscover)
+            {
+                onDiscover();
+            }
+            return discoveryResult;
         };
         result.createConfiguredHost = [this](int, const QString &, const QString &)
         {
@@ -239,6 +258,30 @@ ArchDock::FreePanelCreationRequest studioFreePanelRequest()
     return request;
 }
 
+QString createOwnedFreePanelRecord(
+    PanelRegistry &registry,
+    const QString &ownershipToken,
+    int desktopContainmentId = 42,
+    int dockAppletId = 73,
+    int screenIndex = 1)
+{
+    const QString panelId = registry.beginFreePanelCreation(ownershipToken);
+    if (panelId.isEmpty() ||
+        !registry.commitVerifiedFreeHostAssociation(
+            panelId,
+            desktopContainmentId,
+            dockAppletId,
+            ownershipToken,
+            screenIndex,
+            QStringLiteral("output:%1").arg(screenIndex),
+            QStringLiteral("desktop")) ||
+        !registry.completeFreePanelCreation(panelId, ownershipToken))
+    {
+        return {};
+    }
+    return panelId;
+}
+
 void clearPanelRegistrySettings()
 {
     QSettings settings;
@@ -271,6 +314,8 @@ private slots:
     void persistsFreePanelCreationTransactionState();
     void rollsBackFreePanelCreationFailures();
     void reportsFreePanelRollbackFailures();
+    void recoversFreePanelHostLifecycle();
+    void removesFreePanelHostLifecycleSafely();
     void resolvesStableScreenIdentityBeforeFallbackIndex();
     void reservesAndOffsetsOnlySameScreenPanels();
     void concealsOnlyForRelevantActiveWindows();
@@ -1551,6 +1596,348 @@ void PanelRegistryTest::reportsFreePanelRollbackFailures()
         QCOMPARE(harness.identityRemovalCalls, 1);
         QCOMPARE(harness.exactRemovalCalls, 0);
         QCOMPARE(harness.createCalls, 1);
+    }
+}
+
+void PanelRegistryTest::recoversFreePanelHostLifecycle()
+{
+    using DiscoveryOutcome = ArchDock::FreePanelHostDiscoveryOutcome;
+    using LifecycleOutcome = ArchDock::FreePanelLifecycleOutcome;
+
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-recovery-unique");
+        const QString panelId = createOwnedFreePanelRecord(registry, token, 900, 901, 0);
+        QVERIFY(!panelId.isEmpty());
+        registry.updatePanel(
+            panelId,
+            {{QStringLiteral("freeHostState"), QStringLiteral("hosted-stale")}});
+
+        FreePanelHostHarness harness;
+        harness.discoveryResult = {DiscoveryOutcome::Unique, {42, 73}, 2};
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelLifecycleResult first = controller.synchronize(panelId);
+        QVERIFY(first.success);
+        QCOMPARE(first.outcome, LifecycleOutcome::Rebound);
+        const auto rebound = registry.freeHostAssociation(panelId);
+        QVERIFY(rebound.has_value());
+        QCOMPARE(rebound->state, PanelRegistry::FreeHostState::HostedOwned);
+        QCOMPARE(rebound->desktopContainmentId, 42);
+        QCOMPARE(rebound->dockAppletId, 73);
+        QCOMPARE(rebound->ownershipToken, token);
+        QCOMPARE(rebound->screenIndex, 2);
+        QCOMPARE(rebound->screenId, QStringLiteral("output:2"));
+        QCOMPARE(registry.panelValue(
+                     panelId, QStringLiteral("freeRecoveryError")).toString(),
+                 QString{});
+
+        const ArchDock::FreePanelLifecycleResult repeated = controller.synchronize(panelId);
+        QVERIFY(repeated.success);
+        QCOMPARE(repeated.outcome, LifecycleOutcome::Rebound);
+        QCOMPARE(harness.discoverCalls, 2);
+        QCOMPARE(harness.verifyCalls, 2);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-recovery-missing");
+        const QString panelId = createOwnedFreePanelRecord(registry, token);
+        QVERIFY(!panelId.isEmpty());
+
+        FreePanelHostHarness harness;
+        harness.discoveryResult = {DiscoveryOutcome::Missing, {}, -1};
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelLifecycleResult missing = controller.synchronize(panelId);
+        QVERIFY(missing.success);
+        QCOMPARE(missing.outcome, LifecycleOutcome::Detached);
+        const auto detached = registry.freeHostAssociation(panelId);
+        QVERIFY(detached.has_value());
+        QCOMPARE(detached->state, PanelRegistry::FreeHostState::Detached);
+        QCOMPARE(detached->desktopContainmentId, -1);
+        QCOMPARE(detached->dockAppletId, -1);
+        QCOMPARE(detached->ownershipToken, QString{});
+        QCOMPARE(registry.panelValue(
+                     panelId, QStringLiteral("freeRecoveryError")).toString(),
+                 QStringLiteral("owned-host-not-found"));
+
+        const ArchDock::FreePanelLifecycleResult repeated = controller.synchronize(panelId);
+        QVERIFY(repeated.success);
+        QCOMPARE(repeated.outcome, LifecycleOutcome::Detached);
+        QCOMPARE(harness.discoverCalls, 1);
+        QCOMPARE(harness.verifyCalls, 0);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-recovery-conflict");
+        const QString panelId = createOwnedFreePanelRecord(registry, token);
+        QVERIFY(!panelId.isEmpty());
+        const auto before = registry.freeHostAssociation(panelId);
+
+        FreePanelHostHarness harness;
+        harness.discoveryResult = {DiscoveryOutcome::Conflict, {}, -1};
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelLifecycleResult conflict = controller.synchronize(panelId);
+        QVERIFY(!conflict.success);
+        QCOMPARE(conflict.outcome, LifecycleOutcome::Conflict);
+        const auto retained = registry.freeHostAssociation(panelId);
+        QVERIFY(before.has_value());
+        QVERIFY(retained.has_value());
+        QCOMPARE(retained->state, PanelRegistry::FreeHostState::HostedStale);
+        QCOMPARE(retained->desktopContainmentId, before->desktopContainmentId);
+        QCOMPARE(retained->dockAppletId, before->dockAppletId);
+        QCOMPARE(retained->ownershipToken, token);
+        QCOMPARE(registry.panelValue(
+                     panelId, QStringLiteral("freeRecoveryError")).toString(),
+                 QStringLiteral("owned-host-conflict"));
+        QCOMPARE(harness.verifyCalls, 0);
+        QCOMPARE(harness.exactRemovalCalls, 0);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-recovery-query");
+        const QString panelId = createOwnedFreePanelRecord(registry, token);
+        QVERIFY(!panelId.isEmpty());
+
+        FreePanelHostHarness harness;
+        harness.discoveryResult = {DiscoveryOutcome::QueryFailed, {}, -1};
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelLifecycleResult queryFailed = controller.synchronize(panelId);
+        QVERIFY(!queryFailed.success);
+        QCOMPARE(queryFailed.outcome, LifecycleOutcome::QueryFailed);
+        const auto retained = registry.freeHostAssociation(panelId);
+        QVERIFY(retained.has_value());
+        QCOMPARE(retained->desktopContainmentId, 42);
+        QCOMPARE(retained->dockAppletId, 73);
+        QCOMPARE(retained->ownershipToken, token);
+        QCOMPARE(registry.panelValue(
+                     panelId, QStringLiteral("freeRecoveryError")).toString(),
+                 QStringLiteral("owned-host-query-failed"));
+        QCOMPARE(harness.verifyCalls, 0);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-recovery-unowned");
+        const QString panelId = createOwnedFreePanelRecord(registry, token);
+        QVERIFY(!panelId.isEmpty());
+
+        FreePanelHostHarness harness;
+        harness.verificationResults = {
+            ArchDock::FreePanelHostVerificationOutcome::UnownedOrUnverified};
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelLifecycleResult refused = controller.synchronize(panelId);
+        QVERIFY(!refused.success);
+        QCOMPARE(refused.outcome, LifecycleOutcome::Refused);
+        QVERIFY(registry.panelIds().contains(panelId));
+        QCOMPARE(harness.exactRemovalCalls, 0);
+    }
+}
+
+void PanelRegistryTest::removesFreePanelHostLifecycleSafely()
+{
+    using DiscoveryOutcome = ArchDock::FreePanelHostDiscoveryOutcome;
+    using LifecycleOutcome = ArchDock::FreePanelLifecycleOutcome;
+    using RemovalOutcome = ArchDock::FreePanelRemovalOutcome;
+
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-removal-owned");
+        const QString panelId = createOwnedFreePanelRecord(registry, token, 900, 901, 0);
+        QVERIFY(!panelId.isEmpty());
+
+        FreePanelHostHarness harness;
+        harness.discoveryResult = {DiscoveryOutcome::Unique, {42, 73}, 2};
+        bool recordPresentDuringRemoval = false;
+        bool associationReboundBeforeRemoval = false;
+        harness.onExactRemoval = [&]
+        {
+            recordPresentDuringRemoval = registry.panelIds().contains(panelId);
+            const auto association = registry.freeHostAssociation(panelId);
+            associationReboundBeforeRemoval = association.has_value() &&
+                association->state == PanelRegistry::FreeHostState::HostedOwned &&
+                association->desktopContainmentId == 42 &&
+                association->dockAppletId == 73 &&
+                association->ownershipToken == token;
+        };
+
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelLifecycleResult removed = controller.remove(panelId);
+        QVERIFY(removed.success);
+        QCOMPARE(removed.outcome, LifecycleOutcome::Removed);
+        QVERIFY(recordPresentDuringRemoval);
+        QVERIFY(associationReboundBeforeRemoval);
+        QVERIFY(!registry.panelIds().contains(panelId));
+        QCOMPARE(harness.exactRemovalCalls, 1);
+        QCOMPARE(harness.removedHost.desktopContainmentId, 42);
+        QCOMPARE(harness.removedHost.dockAppletId, 73);
+        QCOMPARE(harness.removedPanelId, panelId);
+        QCOMPARE(harness.removedToken, token);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-removal-missing");
+        const QString panelId = createOwnedFreePanelRecord(registry, token);
+        QVERIFY(!panelId.isEmpty());
+
+        FreePanelHostHarness harness;
+        harness.discoveryResult = {DiscoveryOutcome::Missing, {}, -1};
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelLifecycleResult absent = controller.remove(panelId);
+        QVERIFY(absent.success);
+        QCOMPARE(absent.outcome, LifecycleOutcome::AlreadyAbsent);
+        QVERIFY(!registry.panelIds().contains(panelId));
+        QCOMPARE(harness.exactRemovalCalls, 0);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-removal-already-absent");
+        const QString panelId = createOwnedFreePanelRecord(registry, token);
+        QVERIFY(!panelId.isEmpty());
+
+        FreePanelHostHarness harness;
+        harness.exactRemoval = RemovalOutcome::AlreadyAbsent;
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelLifecycleResult absent = controller.remove(panelId);
+        QVERIFY(absent.success);
+        QCOMPARE(absent.outcome, LifecycleOutcome::AlreadyAbsent);
+        QVERIFY(!registry.panelIds().contains(panelId));
+        QCOMPARE(harness.exactRemovalCalls, 1);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-removal-conflict");
+        const QString panelId = createOwnedFreePanelRecord(registry, token);
+        QVERIFY(!panelId.isEmpty());
+
+        FreePanelHostHarness harness;
+        harness.discoveryResult = {DiscoveryOutcome::Conflict, {}, -1};
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelLifecycleResult conflict = controller.remove(panelId);
+        QVERIFY(!conflict.success);
+        QCOMPARE(conflict.outcome, LifecycleOutcome::Conflict);
+        QVERIFY(registry.panelIds().contains(panelId));
+        QCOMPARE(registry.freeHostAssociation(panelId)->ownershipToken, token);
+        QCOMPARE(harness.exactRemovalCalls, 0);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-removal-refused");
+        const QString panelId = createOwnedFreePanelRecord(registry, token);
+        QVERIFY(!panelId.isEmpty());
+
+        FreePanelHostHarness harness;
+        harness.exactRemoval = RemovalOutcome::Refused;
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelLifecycleResult refused = controller.remove(panelId);
+        QVERIFY(!refused.success);
+        QCOMPARE(refused.outcome, LifecycleOutcome::Refused);
+        QVERIFY(registry.panelIds().contains(panelId));
+        QCOMPARE(registry.freeHostAssociation(panelId)->ownershipToken, token);
+        QCOMPARE(registry.panelValue(
+                     panelId, QStringLiteral("freeRecoveryError")).toString(),
+                 QStringLiteral("owned-host-removal-refused"));
+        QCOMPARE(harness.exactRemovalCalls, 1);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-removal-query");
+        const QString panelId = createOwnedFreePanelRecord(registry, token);
+        QVERIFY(!panelId.isEmpty());
+
+        FreePanelHostHarness harness;
+        harness.exactRemoval = RemovalOutcome::QueryFailed;
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelLifecycleResult queryFailed = controller.remove(panelId);
+        QVERIFY(!queryFailed.success);
+        QCOMPARE(queryFailed.outcome, LifecycleOutcome::QueryFailed);
+        QVERIFY(registry.panelIds().contains(panelId));
+        QCOMPARE(registry.freeHostAssociation(panelId)->ownershipToken, token);
+        QCOMPARE(harness.exactRemovalCalls, 1);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-removal-unowned");
+        const QString panelId = createOwnedFreePanelRecord(registry, token);
+        QVERIFY(!panelId.isEmpty());
+
+        FreePanelHostHarness harness;
+        harness.verificationResults = {
+            ArchDock::FreePanelHostVerificationOutcome::UnownedOrUnverified};
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelLifecycleResult refused = controller.remove(panelId);
+        QVERIFY(!refused.success);
+        QCOMPARE(refused.outcome, LifecycleOutcome::Refused);
+        QVERIFY(registry.panelIds().contains(panelId));
+        QCOMPARE(harness.exactRemovalCalls, 0);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-removal-persist-failure");
+        const QString panelId = createOwnedFreePanelRecord(registry, token);
+        QVERIFY(!panelId.isEmpty());
+
+        QTemporaryDir blockedRoot;
+        QVERIFY(blockedRoot.isValid());
+        const QString blockedPath = blockedRoot.filePath(QStringLiteral("not-a-directory"));
+        QFile blocker(blockedPath);
+        QVERIFY(blocker.open(QIODevice::WriteOnly));
+        blocker.write("blocked");
+        blocker.close();
+        FreePanelHostHarness harness;
+        harness.onExactRemoval = [&registry, blockedPath]
+        {
+            connect(
+                &registry,
+                &PanelRegistry::revisionChanged,
+                &registry,
+                [blockedPath]
+                {
+                    QSettings::setPath(
+                        QSettings::NativeFormat,
+                        QSettings::UserScope,
+                        blockedPath);
+                },
+                Qt::SingleShotConnection);
+        };
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelLifecycleResult failed = controller.remove(panelId);
+        QSettings::setPath(
+            QSettings::NativeFormat,
+            QSettings::UserScope,
+            m_settingsDirectory.path());
+
+        QVERIFY(!failed.success);
+        QCOMPARE(failed.outcome, LifecycleOutcome::PersistenceFailed);
+        QCOMPARE(failed.errorCode, QStringLiteral("free-record-removal-persist-failed"));
+        QCOMPARE(harness.exactRemovalCalls, 1);
+        const auto retained = registry.freeHostAssociation(panelId);
+        QVERIFY(retained.has_value());
+        QCOMPARE(retained->state, PanelRegistry::FreeHostState::Detached);
+        QCOMPARE(retained->desktopContainmentId, -1);
+        QCOMPARE(retained->dockAppletId, -1);
+        QCOMPARE(retained->ownershipToken, QString{});
     }
 }
 

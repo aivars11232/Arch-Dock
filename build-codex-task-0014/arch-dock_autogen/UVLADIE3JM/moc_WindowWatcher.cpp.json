@@ -1,0 +1,116 @@
+{
+    "classes": [
+        {
+            "className": "WindowWatcher",
+            "final": true,
+            "lineNumber": 8,
+            "object": true,
+            "qualifiedClassName": "WindowWatcher",
+            "slots": [
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "internalId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "desktopFileName",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "resourceClass",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "resourceName",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "caption",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "active",
+                            "type": "bool"
+                        },
+                        {
+                            "name": "minimized",
+                            "type": "bool"
+                        },
+                        {
+                            "name": "stateJson",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 0,
+                    "lineNumber": 17,
+                    "name": "windowAdded",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "internalId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 1,
+                    "lineNumber": 26,
+                    "name": "windowRemoved",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "internalId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "desktopFileName",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "resourceClass",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "resourceName",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "caption",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "active",
+                            "type": "bool"
+                        },
+                        {
+                            "name": "minimized",
+                            "type": "bool"
+                        },
+                        {
+                            "name": "stateJson",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 2,
+                    "lineNumber": 28,
+                    "name": "windowUpdated",
+                    "returnType": "void"
+                }
+            ],
+            "superClasses": [
+                {
+                    "access": "public",
+                    "name": "QObject"
+                }
+            ]
+        }
+    ],
+    "inputFile": "WindowWatcher.h",
+    "outputRevision": 69
+}

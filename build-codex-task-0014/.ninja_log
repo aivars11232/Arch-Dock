@@ -1,0 +1,154 @@
+# ninja log v7
+6	825	1787406513063527755	panel-registry-test_autogen/timestamp	715a423262307919
+6	825	1787406513063527755	panel-registry-test_autogen/mocs_compilation.cpp	715a423262307919
+6	825	1787406513063527755	/mnt/F/Arch Dock/build-codex-task-0014/panel-registry-test_autogen/timestamp	715a423262307919
+6	825	1787406513063527755	/mnt/F/Arch Dock/build-codex-task-0014/panel-registry-test_autogen/mocs_compilation.cpp	715a423262307919
+830	4165	1787406513083527481	CMakeFiles/panel-registry-test.dir/panel-registry-test_autogen/mocs_compilation.cpp.o	9d49e5d85ef9d0cc
+4165	7337	1787406516418481818	CMakeFiles/panel-registry-test.dir/src/DockSettings.cpp.o	c155da14aecd5e0a
+830	8162	1787406513083527481	CMakeFiles/panel-registry-test.dir/tests/PanelRegistryTest.cpp.o	722de16e7cd445c9
+8162	8622	1787406520415427093	CMakeFiles/panel-registry-test.dir/src/NativeContainmentLifecycle.cpp.o	82c9f2758b71813f
+8622	11703	1787406520875420795	CMakeFiles/panel-registry-test.dir/src/panel/FreePanelController.cpp.o	d2344c18aab52f67
+11703	13182	1787406523956378615	CMakeFiles/panel-registry-test.dir/src/PanelPlacement.cpp.o	92bd26b971c569e8
+7337	13248	1787406519590438388	CMakeFiles/panel-registry-test.dir/src/PanelRegistry.cpp.o	a2f379843abaa86b
+13182	14707	1787406525435358367	CMakeFiles/panel-registry-test.dir/src/PanelVisibility.cpp.o	9c1b13a69a9aac52
+13248	16011	1787406525501357463	CMakeFiles/panel-registry-test.dir/src/ScreenIdentity.cpp.o	7d0b2d417e6fb675
+14707	17748	1787406526960337490	CMakeFiles/panel-registry-test.dir/src/WindowModel.cpp.o	557d360e51dc84bb
+16011	21118	1787406528264319639	CMakeFiles/panel-registry-test.dir/src/DockModel.cpp.o	bfff3e9894e11e5d
+21118	21615	1787406533371249730	panel-registry-test	d048c03cf7bbf7b
+10	518	1787406644033736031	panel-registry-test_autogen/timestamp	715a423262307919
+10	518	1787406644033736031	panel-registry-test_autogen/mocs_compilation.cpp	715a423262307919
+10	518	1787406644033736031	/mnt/F/Arch Dock/build-codex-task-0014/panel-registry-test_autogen/timestamp	715a423262307919
+10	518	1787406644033736031	/mnt/F/Arch Dock/build-codex-task-0014/panel-registry-test_autogen/mocs_compilation.cpp	715a423262307919
+519	3716	1787406644542729073	CMakeFiles/panel-registry-test.dir/src/panel/FreePanelController.cpp.o	d2344c18aab52f67
+519	7356	1787406644542729073	CMakeFiles/panel-registry-test.dir/tests/PanelRegistryTest.cpp.o	722de16e7cd445c9
+7356	7823	1787406651379635623	panel-registry-test	d048c03cf7bbf7b
+11	33	1787406774365955737	.qt/arch-dock_res.txt	ccce82e145c437da
+11	33	1787406774365955737	/mnt/F/Arch Dock/build-codex-task-0014/.qt/arch-dock_res.txt	ccce82e145c437da
+10	34	1787406774366955723	.qt/arch-dock_qml.txt	cc44c0595dde7e19
+10	34	1787406774366955723	/mnt/F/Arch Dock/build-codex-task-0014/.qt/arch-dock_qml.txt	cc44c0595dde7e19
+33	89	1787406774420954986	.qt/.qmlls.build.ini	5da38ab937ac2195
+33	89	1787406774420954986	/mnt/F/Arch Dock/build-codex-task-0014/.qt/.qmlls.build.ini	5da38ab937ac2195
+89	1137	1787406775454940872	arch-dock_autogen/timestamp	5eb2cb38690d3acc
+89	1137	1787406775454940872	arch-dock_autogen/mocs_compilation.cpp	5eb2cb38690d3acc
+89	1137	1787406775454940872	/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_autogen/timestamp	5eb2cb38690d3acc
+89	1137	1787406775454940872	/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_autogen/mocs_compilation.cpp	5eb2cb38690d3acc
+1137	1142	1787406775476940571	meta_types/arch-dock_json_file_list.txt	a2b92e2823c8caa5
+1137	1142	1787406775476940571	meta_types/arch-dock_json_file_list.txt.timestamp	a2b92e2823c8caa5
+1137	1142	1787406775476940571	/mnt/F/Arch Dock/build-codex-task-0014/meta_types/arch-dock_json_file_list.txt	a2b92e2823c8caa5
+1137	1142	1787406775476940571	/mnt/F/Arch Dock/build-codex-task-0014/meta_types/arch-dock_json_file_list.txt.timestamp	a2b92e2823c8caa5
+1137	1145	1787406775479680955	.qt/rcc/qrc_qmake_ArchDock.cpp	a54a69ef3df256a7
+1137	1145	1787406775479680955	/mnt/F/Arch Dock/build-codex-task-0014/.qt/rcc/qrc_qmake_ArchDock.cpp	a54a69ef3df256a7
+1142	1157	1787406775490940380	meta_types/qt6arch-dock_metatypes.json.gen	be0ee2a6accaa0b4
+1142	1157	1787406775490940380	meta_types/qt6arch-dock_metatypes.json	be0ee2a6accaa0b4
+1142	1157	1787406775490940380	/mnt/F/Arch Dock/build-codex-task-0014/meta_types/qt6arch-dock_metatypes.json.gen	be0ee2a6accaa0b4
+1142	1157	1787406775490940380	/mnt/F/Arch Dock/build-codex-task-0014/meta_types/qt6arch-dock_metatypes.json	be0ee2a6accaa0b4
+1145	1162	1787406775492940353	.rcc/qmlcache/arch-dock_qmlcache_loader.cpp	8fea72226df05e3c
+1145	1162	1787406775492940353	/mnt/F/Arch Dock/build-codex-task-0014/.rcc/qmlcache/arch-dock_qmlcache_loader.cpp	8fea72226df05e3c
+1162	1217	1787406775549939576	.qt/rcc/qrc_arch-dock_raw_qml_0.cpp	18c4ac58631a3360
+1162	1217	1787406775549939576	/mnt/F/Arch Dock/build-codex-task-0014/.qt/rcc/qrc_arch-dock_raw_qml_0.cpp	18c4ac58631a3360
+1157	1223	1787406775532939807	arch-dock_qmltyperegistrations.cpp	92e2f62dc2331e3e
+1157	1223	1787406775532939807	ArchDock/arch-dock.qmltypes	92e2f62dc2331e3e
+1157	1223	1787406775532939807	/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_qmltyperegistrations.cpp	92e2f62dc2331e3e
+1157	1223	1787406775532939807	/mnt/F/Arch Dock/build-codex-task-0014/ArchDock/arch-dock.qmltypes	92e2f62dc2331e3e
+1217	1225	1787406775560575335	.qt/rcc/qrc_arch-dock_raw_qml_0_extra_qmldirs.cpp	eec19890d6617d06
+1217	1225	1787406775560575335	/mnt/F/Arch Dock/build-codex-task-0014/.qt/rcc/qrc_arch-dock_raw_qml_0_extra_qmldirs.cpp	eec19890d6617d06
+1223	1253	1787406775584939098	.rcc/qmlcache/arch-dock_qml_runtime_DockGeometry_js.cpp	10e29f41c0c2a424
+1223	1253	1787406775584939098	/mnt/F/Arch Dock/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_DockGeometry_js.cpp	10e29f41c0c2a424
+1225	1375	1787406775698937542	.rcc/qmlcache/arch-dock_qml_runtime_FreePanelWindow_qml.cpp	40cd08b3aeed9328
+1225	1375	1787406775698937542	.rcc/qmlcache/arch-dock_qml_runtime_FreePanelWindow_qml.cpp.aotstats	40cd08b3aeed9328
+1225	1375	1787406775698937542	/mnt/F/Arch Dock/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_FreePanelWindow_qml.cpp	40cd08b3aeed9328
+1225	1375	1787406775698937542	/mnt/F/Arch Dock/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_FreePanelWindow_qml.cpp.aotstats	40cd08b3aeed9328
+1253	1392	1787406775716363019	.rcc/qmlcache/arch-dock_qml_runtime_IconProperties_qml.cpp	b9fac73e7b14aac8
+1253	1392	1787406775716363019	.rcc/qmlcache/arch-dock_qml_runtime_IconProperties_qml.cpp.aotstats	b9fac73e7b14aac8
+1253	1392	1787406775716363019	/mnt/F/Arch Dock/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_IconProperties_qml.cpp	b9fac73e7b14aac8
+1253	1392	1787406775716363019	/mnt/F/Arch Dock/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_IconProperties_qml.cpp.aotstats	b9fac73e7b14aac8
+1392	1419	1787406775751936818	.rcc/qmlcache/arch-dock_qml_runtime_StudioDraft_js.cpp	551256c3ef3f1c15
+1392	1419	1787406775751936818	/mnt/F/Arch Dock/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_StudioDraft_js.cpp	551256c3ef3f1c15
+1375	1512	1787406775838935630	.rcc/qmlcache/arch-dock_qml_runtime_IconPropertiesWindow_qml.cpp	9dd26fb9aa6d3336
+1375	1512	1787406775838935630	.rcc/qmlcache/arch-dock_qml_runtime_IconPropertiesWindow_qml.cpp.aotstats	9dd26fb9aa6d3336
+1375	1512	1787406775838935630	/mnt/F/Arch Dock/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_IconPropertiesWindow_qml.cpp	9dd26fb9aa6d3336
+1375	1512	1787406775838935630	/mnt/F/Arch Dock/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_IconPropertiesWindow_qml.cpp.aotstats	9dd26fb9aa6d3336
+1512	1538	1787406775871935180	.rcc/qmlcache/arch-dock_qml_runtime_StudioNavigation_js.cpp	7028a3d9810dc885
+1512	1538	1787406775871935180	/mnt/F/Arch Dock/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_StudioNavigation_js.cpp	7028a3d9810dc885
+1419	1642	1787406775965933897	.rcc/qmlcache/arch-dock_qml_runtime_StudioForm_qml.cpp	4f49ecd24ae39cfc
+1419	1642	1787406775965933897	.rcc/qmlcache/arch-dock_qml_runtime_StudioForm_qml.cpp.aotstats	4f49ecd24ae39cfc
+1419	1642	1787406775965933897	/mnt/F/Arch Dock/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_StudioForm_qml.cpp	4f49ecd24ae39cfc
+1419	1642	1787406775965933897	/mnt/F/Arch Dock/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_StudioForm_qml.cpp.aotstats	4f49ecd24ae39cfc
+1642	1651	1787406775986933610	.qt/rcc/qrc_theme-catalog.cpp	72970df1b2d00a68
+1642	1651	1787406775986933610	/mnt/F/Arch Dock/build-codex-task-0014/.qt/rcc/qrc_theme-catalog.cpp	72970df1b2d00a68
+1538	1829	1787406776148931399	.rcc/qmlcache/arch-dock_qml_runtime_SettingsPopup_qml.cpp	a53b4b67a252fa25
+1538	1829	1787406776148931399	.rcc/qmlcache/arch-dock_qml_runtime_SettingsPopup_qml.cpp.aotstats	a53b4b67a252fa25
+1538	1829	1787406776148931399	/mnt/F/Arch Dock/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_SettingsPopup_qml.cpp	a53b4b67a252fa25
+1538	1829	1787406776148931399	/mnt/F/Arch Dock/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_SettingsPopup_qml.cpp.aotstats	a53b4b67a252fa25
+1830	5024	1787406776165931167	CMakeFiles/arch-dock.dir/src/main.cpp.o	1369e643a08f58a5
+1830	5551	1787406776165931167	CMakeFiles/arch-dock.dir/arch-dock_autogen/mocs_compilation.cpp.o	9eadd48c183dec1
+5551	8613	1787406779886880374	CMakeFiles/arch-dock.dir/src/DockSettings.cpp.o	41957af31ad1f4a4
+5024	10521	1787406779359887567	CMakeFiles/arch-dock.dir/src/DockModel.cpp.o	897ebd153b3154d1
+10521	10970	1787406784856812534	CMakeFiles/arch-dock.dir/src/NativeContainmentLifecycle.cpp.o	c10fcd51ac98dda5
+10970	13670	1787406785305806405	CMakeFiles/arch-dock.dir/src/PlasmaScriptResult.cpp.o	2756b85289793024
+8613	14468	1787406782948838577	CMakeFiles/arch-dock.dir/src/PanelRegistry.cpp.o	cddf6cd6ba87c89d
+13670	15187	1787406788005769552	CMakeFiles/arch-dock.dir/src/PanelPlacement.cpp.o	870af15e26169f00
+14468	16018	1787406788803758660	CMakeFiles/arch-dock.dir/src/PanelVisibility.cpp.o	b483731f2c4d54f7
+15187	18074	1787406789522748846	CMakeFiles/arch-dock.dir/src/ScreenIdentity.cpp.o	34de976463b27c94
+16018	19302	1787406790353737504	CMakeFiles/arch-dock.dir/src/SystemStatus.cpp.o	4602dad1b9a6200d
+18074	21973	1787406792409709442	CMakeFiles/arch-dock.dir/src/KWinActionBridge.cpp.o	9fa6d6a388c6866b
+19303	22977	1787406793638692667	CMakeFiles/arch-dock.dir/src/panel/PanelManager.cpp.o	94479553dbe4bc8b
+21973	25194	1787406796308656226	CMakeFiles/arch-dock.dir/src/panel/FreePanelController.cpp.o	1694a06c720da5da
+25194	28436	1787406799530612252	CMakeFiles/arch-dock.dir/src/WindowModel.cpp.o	71b66cd667f6b4c3
+22977	30500	1787406797312642524	CMakeFiles/arch-dock.dir/src/panel/PanelWindow.cpp.o	c7a5f785937d14bd
+28437	32530	1787406802772568006	CMakeFiles/arch-dock.dir/src/WindowWatcher.cpp.o	65e4012b94aae756
+32530	32560	1787406806865512148	CMakeFiles/arch-dock.dir/build-codex-task-0014/.qt/rcc/qrc_qmake_ArchDock.cpp.o	bbfb7ad4c656c1fb
+30501	34206	1787406804836539838	CMakeFiles/arch-dock.dir/arch-dock_qmltyperegistrations.cpp.o	f05709258a491e60
+32560	36374	1787406806895511739	CMakeFiles/arch-dock.dir/build-codex-task-0014/.rcc/qmlcache/arch-dock_qmlcache_loader.cpp.o	a86a6cd711bf7bf6
+34206	37423	1787406808541489276	CMakeFiles/arch-dock.dir/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_DockGeometry_js.cpp.o	53fca7470681d8df
+36374	39913	1787406810709459690	CMakeFiles/arch-dock.dir/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_FreePanelWindow_qml.cpp.o	530bb1f28ef71200
+37423	40473	1787406811758445375	CMakeFiles/arch-dock.dir/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_IconProperties_qml.cpp.o	47e9e9c904a0d8cd
+39913	42836	1787406814248411395	CMakeFiles/arch-dock.dir/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_IconPropertiesWindow_qml.cpp.o	7f7b2b97d225cc96
+40473	43232	1787406814808403753	CMakeFiles/arch-dock.dir/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_StudioDraft_js.cpp.o	25b4ddbfcce3b0f3
+42836	45909	1787406817171371508	CMakeFiles/arch-dock.dir/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_StudioForm_qml.cpp.o	f657a23c9a9d172f
+43232	45981	1787406817567366104	CMakeFiles/arch-dock.dir/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_StudioNavigation_js.cpp.o	6f0e86962e843f51
+45981	46014	1787406820316328592	CMakeFiles/arch-dock.dir/build-codex-task-0014/.qt/rcc/qrc_arch-dock_raw_qml_0.cpp.o	a7ebac0c1b81acdb
+46014	46040	1787406820349328142	CMakeFiles/arch-dock.dir/build-codex-task-0014/.qt/rcc/qrc_arch-dock_raw_qml_0_extra_qmldirs.cpp.o	fcf1f5a5b008eb9d
+46040	46066	1787406820375327787	CMakeFiles/arch-dock.dir/build-codex-task-0014/.qt/rcc/qrc_theme-catalog.cpp.o	5db40dadf1cc472d
+45909	49463	1787406820244329575	CMakeFiles/arch-dock.dir/build-codex-task-0014/.rcc/qmlcache/arch-dock_qml_runtime_SettingsPopup_qml.cpp.o	623dd80cac41111d
+49463	50306	1787406823798281079	arch-dock	6187b6e0367a80eb
+9	517	1787406937887724971	panel-registry-test_autogen/timestamp	715a423262307919
+9	517	1787406937887724971	panel-registry-test_autogen/mocs_compilation.cpp	715a423262307919
+9	517	1787406937887724971	/mnt/F/Arch Dock/build-codex-task-0014/panel-registry-test_autogen/timestamp	715a423262307919
+9	517	1787406937887724971	/mnt/F/Arch Dock/build-codex-task-0014/panel-registry-test_autogen/mocs_compilation.cpp	715a423262307919
+517	7214	1787406938395718045	CMakeFiles/panel-registry-test.dir/tests/PanelRegistryTest.cpp.o	722de16e7cd445c9
+7214	7678	1787406945092626741	panel-registry-test	d048c03cf7bbf7b
+11	466	1787406963743372485	panel-registry-test_autogen/timestamp	715a423262307919
+11	466	1787406963743372485	panel-registry-test_autogen/mocs_compilation.cpp	715a423262307919
+11	466	1787406963743372485	/mnt/F/Arch Dock/build-codex-task-0014/panel-registry-test_autogen/timestamp	715a423262307919
+11	466	1787406963743372485	/mnt/F/Arch Dock/build-codex-task-0014/panel-registry-test_autogen/mocs_compilation.cpp	715a423262307919
+466	7267	1787406964198366283	CMakeFiles/panel-registry-test.dir/tests/PanelRegistryTest.cpp.o	722de16e7cd445c9
+7267	7741	1787406970999273577	panel-registry-test	d048c03cf7bbf7b
+11	498	1787407093897598920	plasma-script-result-test_autogen/timestamp	d1369b1a6e213a7b
+11	498	1787407093897598920	plasma-script-result-test_autogen/mocs_compilation.cpp	d1369b1a6e213a7b
+11	498	1787407093897598920	/mnt/F/Arch Dock/build-codex-task-0014/plasma-script-result-test_autogen/timestamp	d1369b1a6e213a7b
+11	498	1787407093897598920	/mnt/F/Arch Dock/build-codex-task-0014/plasma-script-result-test_autogen/mocs_compilation.cpp	d1369b1a6e213a7b
+498	514	1787407093917598648	CMakeFiles/plasma-script-result-test.dir/plasma-script-result-test_autogen/mocs_compilation.cpp.o	b17e4c982ff56dad
+514	3135	1787407093933598430	CMakeFiles/plasma-script-result-test.dir/src/PlasmaScriptResult.cpp.o	314943959857a4f4
+498	3860	1787407093917598648	CMakeFiles/plasma-script-result-test.dir/tests/PlasmaScriptResultTest.cpp.o	4e65224e1b7c9f1d
+3860	4078	1787407097279552852	plasma-script-result-test	c9c70bb413c4009d
+13	82	1787407258028363923	arch-dock_autogen/timestamp	5eb2cb38690d3acc
+13	82	1787407258028363923	arch-dock_autogen/mocs_compilation.cpp	5eb2cb38690d3acc
+13	82	1787407258028363923	/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_autogen/timestamp	5eb2cb38690d3acc
+13	82	1787407258028363923	/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_autogen/mocs_compilation.cpp	5eb2cb38690d3acc
+82	89	1787407258097362983	meta_types/arch-dock_json_file_list.txt	a2b92e2823c8caa5
+82	89	1787407258097362983	meta_types/arch-dock_json_file_list.txt.timestamp	a2b92e2823c8caa5
+82	89	1787407258097362983	/mnt/F/Arch Dock/build-codex-task-0014/meta_types/arch-dock_json_file_list.txt	a2b92e2823c8caa5
+82	89	1787407258097362983	/mnt/F/Arch Dock/build-codex-task-0014/meta_types/arch-dock_json_file_list.txt.timestamp	a2b92e2823c8caa5
+90	6472	1787407258105362874	CMakeFiles/arch-dock.dir/src/panel/PanelWindow.cpp.o	c7a5f785937d14bd
+6472	7318	1787407264487275999	arch-dock	6187b6e0367a80eb
+13	80	1787410194054376834	arch-dock_autogen/timestamp	5eb2cb38690d3acc
+13	80	1787410194054376834	arch-dock_autogen/mocs_compilation.cpp	5eb2cb38690d3acc
+13	80	1787410194054376834	/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_autogen/timestamp	5eb2cb38690d3acc
+13	80	1787410194054376834	/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_autogen/mocs_compilation.cpp	5eb2cb38690d3acc
+80	88	1787410194121375896	meta_types/arch-dock_json_file_list.txt	a2b92e2823c8caa5
+80	88	1787410194121375896	meta_types/arch-dock_json_file_list.txt.timestamp	a2b92e2823c8caa5
+80	88	1787410194121375896	/mnt/F/Arch Dock/build-codex-task-0014/meta_types/arch-dock_json_file_list.txt	a2b92e2823c8caa5
+80	88	1787410194121375896	/mnt/F/Arch Dock/build-codex-task-0014/meta_types/arch-dock_json_file_list.txt.timestamp	a2b92e2823c8caa5
+88	6059	1787410194129375784	CMakeFiles/arch-dock.dir/src/panel/PanelWindow.cpp.o	c7a5f785937d14bd
+6059	6870	1787410200100292220	arch-dock	6187b6e0367a80eb

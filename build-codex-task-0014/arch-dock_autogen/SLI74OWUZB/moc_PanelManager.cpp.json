@@ -1,0 +1,19 @@
+{
+    "classes": [
+        {
+            "className": "PanelManager",
+            "final": true,
+            "lineNumber": 9,
+            "object": true,
+            "qualifiedClassName": "PanelManager",
+            "superClasses": [
+                {
+                    "access": "public",
+                    "name": "QObject"
+                }
+            ]
+        }
+    ],
+    "inputFile": "PanelManager.h",
+    "outputRevision": 69
+}

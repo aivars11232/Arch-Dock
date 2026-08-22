@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/qt/qml/ArchDock">
+    <file alias="qmldir">/mnt/F/Arch Dock/build-codex-task-0014/ArchDock/qmldir</file>
+  </qresource>
+</RCC>
+

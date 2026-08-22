@@ -1,0 +1,41 @@
+{
+    "classes": [
+        {
+            "className": "WindowModel",
+            "enums": [
+                {
+                    "isClass": false,
+                    "isFlag": false,
+                    "lineNumber": 14,
+                    "name": "Role",
+                    "values": [
+                        "InternalIdRole",
+                        "DesktopFileNameRole",
+                        "IconNameRole",
+                        "ResourceClassRole",
+                        "ResourceNameRole",
+                        "CaptionRole",
+                        "FrameGeometryRole",
+                        "ScreenIndexRole",
+                        "ActiveRole",
+                        "MinimizedRole",
+                        "MaximizedRole",
+                        "FullScreenRole"
+                    ]
+                }
+            ],
+            "final": true,
+            "lineNumber": 9,
+            "object": true,
+            "qualifiedClassName": "WindowModel",
+            "superClasses": [
+                {
+                    "access": "public",
+                    "name": "QAbstractListModel"
+                }
+            ]
+        }
+    ],
+    "inputFile": "WindowModel.h",
+    "outputRevision": 69
+}

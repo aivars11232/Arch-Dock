@@ -77,6 +77,22 @@ public:
     [[nodiscard]] bool discardFreePanelCreation(
         const QString &panelId,
         const QString &ownershipToken);
+    [[nodiscard]] bool rebindRecoveredFreeHostAssociation(
+        const QString &panelId,
+        int desktopContainmentId,
+        int dockAppletId,
+        const QString &ownershipToken,
+        int screenIndex,
+        const QString &screenId);
+    [[nodiscard]] bool detachFreeHostAssociation(
+        const QString &panelId,
+        const QString &ownershipToken,
+        const QString &recoveryError);
+    [[nodiscard]] bool recordFreeHostRecoveryError(
+        const QString &panelId,
+        const QString &ownershipToken,
+        const QString &errorCode);
+    [[nodiscard]] bool removeDetachedFreePanel(const QString &panelId);
     [[nodiscard]] bool commitVerifiedNativePanelAssociation(
         const QString &panelId,
         int containmentId,

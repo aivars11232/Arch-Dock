@@ -1,0 +1,248 @@
+/****************************************************************************
+** Meta object code from reading C++ file 'PanelRegistryTest.cpp'
+**
+** Created by: The Qt Meta Object Compiler version 69 (Qt 6.11.2)
+**
+** WARNING! All changes made in this file will be lost!
+*****************************************************************************/
+
+#include <QtCore/qmetatype.h>
+
+#include <QtCore/qtmochelpers.h>
+
+#include <memory>
+
+
+#include <QtCore/qxptype_traits.h>
+#if !defined(Q_MOC_OUTPUT_REVISION)
+#error "The header file 'PanelRegistryTest.cpp' doesn't include <QObject>."
+#elif Q_MOC_OUTPUT_REVISION != 69
+#error "This file was generated using the moc from 6.11.2. It"
+#error "cannot be used with the include files from this version of Qt."
+#error "(The moc has changed too much.)"
+#endif
+
+#ifndef Q_CONSTINIT
+#define Q_CONSTINIT
+#endif
+
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
+QT_WARNING_DISABLE_GCC("-Wuseless-cast")
+namespace {
+struct qt_meta_tag_ZN17PanelRegistryTestE_t {};
+} // unnamed namespace
+
+template <> constexpr inline auto PanelRegistryTest::qt_create_metaobjectdata<qt_meta_tag_ZN17PanelRegistryTestE_t>()
+{
+    namespace QMC = QtMocConstants;
+    QtMocHelpers::StringRefStorage qt_stringData {
+        "PanelRegistryTest",
+        "initTestCase",
+        "",
+        "cleanup",
+        "provisionsPanelFamiliesAndNativeBridgeState",
+        "migratesLegacyBottomPanelSettings",
+        "preservesFreePanelForFreeSurface",
+        "normalizesFreeHostAssociationStates",
+        "migratesLegacyFreeHostAssociationWithoutDataLoss",
+        "roundTripsFreeHostAssociation",
+        "migratesLegacyThemeSource",
+        "batchesNormalizedPanelUpdates",
+        "persistsNativePanelRecoveryOutcomes",
+        "persistsNativePanelRediscoveryOutcomes",
+        "reconcilesNativeContainmentLifecycle",
+        "classifiesNativeContainmentMatches",
+        "selectsNativeContainmentLifecycleIntent",
+        "selectsFreePanelCreationIntent",
+        "persistsFreePanelCreationTransactionState",
+        "rollsBackFreePanelCreationFailures",
+        "reportsFreePanelRollbackFailures",
+        "recoversFreePanelHostLifecycle",
+        "removesFreePanelHostLifecycleSafely",
+        "resolvesStableScreenIdentityBeforeFallbackIndex",
+        "reservesAndOffsetsOnlySameScreenPanels",
+        "concealsOnlyForRelevantActiveWindows",
+        "persistsReducedMotionPreference",
+        "normalizesLayoutAndMotionValues",
+        "separatesVisualChangesFromPanelTopology",
+        "filtersEntriesByPanelContentType",
+        "exposesStablePanelEntrySnapshots",
+        "targetsStableApplicationWindowIds",
+        "supportsPinnedFolderSnapshotsAndReordering",
+        "importsVersionedThemePackage",
+        "analyzesAdaptive2DThemeArtwork",
+        "reportsOptionalSceneConversionCapability",
+        "rendersResponsivePanelSkins",
+        "stopsActiveRendererOnDestruction"
+    };
+
+    QtMocHelpers::UintData qt_methods {
+        // Slot 'initTestCase'
+        QtMocHelpers::SlotData<void()>(1, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'cleanup'
+        QtMocHelpers::SlotData<void()>(3, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'provisionsPanelFamiliesAndNativeBridgeState'
+        QtMocHelpers::SlotData<void()>(4, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'migratesLegacyBottomPanelSettings'
+        QtMocHelpers::SlotData<void()>(5, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'preservesFreePanelForFreeSurface'
+        QtMocHelpers::SlotData<void()>(6, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'normalizesFreeHostAssociationStates'
+        QtMocHelpers::SlotData<void()>(7, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'migratesLegacyFreeHostAssociationWithoutDataLoss'
+        QtMocHelpers::SlotData<void()>(8, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'roundTripsFreeHostAssociation'
+        QtMocHelpers::SlotData<void()>(9, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'migratesLegacyThemeSource'
+        QtMocHelpers::SlotData<void()>(10, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'batchesNormalizedPanelUpdates'
+        QtMocHelpers::SlotData<void()>(11, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'persistsNativePanelRecoveryOutcomes'
+        QtMocHelpers::SlotData<void()>(12, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'persistsNativePanelRediscoveryOutcomes'
+        QtMocHelpers::SlotData<void()>(13, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'reconcilesNativeContainmentLifecycle'
+        QtMocHelpers::SlotData<void()>(14, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'classifiesNativeContainmentMatches'
+        QtMocHelpers::SlotData<void()>(15, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'selectsNativeContainmentLifecycleIntent'
+        QtMocHelpers::SlotData<void()>(16, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'selectsFreePanelCreationIntent'
+        QtMocHelpers::SlotData<void()>(17, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'persistsFreePanelCreationTransactionState'
+        QtMocHelpers::SlotData<void()>(18, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'rollsBackFreePanelCreationFailures'
+        QtMocHelpers::SlotData<void()>(19, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'reportsFreePanelRollbackFailures'
+        QtMocHelpers::SlotData<void()>(20, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'recoversFreePanelHostLifecycle'
+        QtMocHelpers::SlotData<void()>(21, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'removesFreePanelHostLifecycleSafely'
+        QtMocHelpers::SlotData<void()>(22, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'resolvesStableScreenIdentityBeforeFallbackIndex'
+        QtMocHelpers::SlotData<void()>(23, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'reservesAndOffsetsOnlySameScreenPanels'
+        QtMocHelpers::SlotData<void()>(24, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'concealsOnlyForRelevantActiveWindows'
+        QtMocHelpers::SlotData<void()>(25, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'persistsReducedMotionPreference'
+        QtMocHelpers::SlotData<void()>(26, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'normalizesLayoutAndMotionValues'
+        QtMocHelpers::SlotData<void()>(27, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'separatesVisualChangesFromPanelTopology'
+        QtMocHelpers::SlotData<void()>(28, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'filtersEntriesByPanelContentType'
+        QtMocHelpers::SlotData<void()>(29, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'exposesStablePanelEntrySnapshots'
+        QtMocHelpers::SlotData<void()>(30, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'targetsStableApplicationWindowIds'
+        QtMocHelpers::SlotData<void()>(31, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'supportsPinnedFolderSnapshotsAndReordering'
+        QtMocHelpers::SlotData<void()>(32, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'importsVersionedThemePackage'
+        QtMocHelpers::SlotData<void()>(33, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'analyzesAdaptive2DThemeArtwork'
+        QtMocHelpers::SlotData<void()>(34, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'reportsOptionalSceneConversionCapability'
+        QtMocHelpers::SlotData<void()>(35, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'rendersResponsivePanelSkins'
+        QtMocHelpers::SlotData<void()>(36, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'stopsActiveRendererOnDestruction'
+        QtMocHelpers::SlotData<void()>(37, 2, QMC::AccessPrivate, QMetaType::Void),
+    };
+    QtMocHelpers::UintData qt_properties {
+    };
+    QtMocHelpers::UintData qt_enums {
+    };
+    return QtMocHelpers::metaObjectData<PanelRegistryTest, qt_meta_tag_ZN17PanelRegistryTestE_t>(QMC::MetaObjectFlag{}, qt_stringData,
+            qt_methods, qt_properties, qt_enums);
+}
+Q_CONSTINIT const QMetaObject PanelRegistryTest::staticMetaObject = { {
+    QMetaObject::SuperData::link<QObject::staticMetaObject>(),
+    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN17PanelRegistryTestE_t>.stringdata,
+    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN17PanelRegistryTestE_t>.data,
+    qt_static_metacall,
+    nullptr,
+    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN17PanelRegistryTestE_t>.metaTypes,
+    nullptr
+} };
+
+void PanelRegistryTest::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, void **_a)
+{
+    auto *_t = static_cast<PanelRegistryTest *>(_o);
+    if (_c == QMetaObject::InvokeMetaMethod) {
+        switch (_id) {
+        case 0: _t->initTestCase(); break;
+        case 1: _t->cleanup(); break;
+        case 2: _t->provisionsPanelFamiliesAndNativeBridgeState(); break;
+        case 3: _t->migratesLegacyBottomPanelSettings(); break;
+        case 4: _t->preservesFreePanelForFreeSurface(); break;
+        case 5: _t->normalizesFreeHostAssociationStates(); break;
+        case 6: _t->migratesLegacyFreeHostAssociationWithoutDataLoss(); break;
+        case 7: _t->roundTripsFreeHostAssociation(); break;
+        case 8: _t->migratesLegacyThemeSource(); break;
+        case 9: _t->batchesNormalizedPanelUpdates(); break;
+        case 10: _t->persistsNativePanelRecoveryOutcomes(); break;
+        case 11: _t->persistsNativePanelRediscoveryOutcomes(); break;
+        case 12: _t->reconcilesNativeContainmentLifecycle(); break;
+        case 13: _t->classifiesNativeContainmentMatches(); break;
+        case 14: _t->selectsNativeContainmentLifecycleIntent(); break;
+        case 15: _t->selectsFreePanelCreationIntent(); break;
+        case 16: _t->persistsFreePanelCreationTransactionState(); break;
+        case 17: _t->rollsBackFreePanelCreationFailures(); break;
+        case 18: _t->reportsFreePanelRollbackFailures(); break;
+        case 19: _t->recoversFreePanelHostLifecycle(); break;
+        case 20: _t->removesFreePanelHostLifecycleSafely(); break;
+        case 21: _t->resolvesStableScreenIdentityBeforeFallbackIndex(); break;
+        case 22: _t->reservesAndOffsetsOnlySameScreenPanels(); break;
+        case 23: _t->concealsOnlyForRelevantActiveWindows(); break;
+        case 24: _t->persistsReducedMotionPreference(); break;
+        case 25: _t->normalizesLayoutAndMotionValues(); break;
+        case 26: _t->separatesVisualChangesFromPanelTopology(); break;
+        case 27: _t->filtersEntriesByPanelContentType(); break;
+        case 28: _t->exposesStablePanelEntrySnapshots(); break;
+        case 29: _t->targetsStableApplicationWindowIds(); break;
+        case 30: _t->supportsPinnedFolderSnapshotsAndReordering(); break;
+        case 31: _t->importsVersionedThemePackage(); break;
+        case 32: _t->analyzesAdaptive2DThemeArtwork(); break;
+        case 33: _t->reportsOptionalSceneConversionCapability(); break;
+        case 34: _t->rendersResponsivePanelSkins(); break;
+        case 35: _t->stopsActiveRendererOnDestruction(); break;
+        default: ;
+        }
+    }
+    (void)_a;
+}
+
+const QMetaObject *PanelRegistryTest::metaObject() const
+{
+    return QObject::d_ptr->metaObject ? QObject::d_ptr->dynamicMetaObject() : &staticMetaObject;
+}
+
+void *PanelRegistryTest::qt_metacast(const char *_clname)
+{
+    if (!_clname) return nullptr;
+    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN17PanelRegistryTestE_t>.strings))
+        return static_cast<void*>(this);
+    return QObject::qt_metacast(_clname);
+}
+
+int PanelRegistryTest::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
+{
+    _id = QObject::qt_metacall(_c, _id, _a);
+    if (_id < 0)
+        return _id;
+    if (_c == QMetaObject::InvokeMetaMethod) {
+        if (_id < 36)
+            qt_static_metacall(this, _c, _id, _a);
+        _id -= 36;
+    }
+    if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
+        if (_id < 36)
+            *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
+        _id -= 36;
+    }
+    return _id;
+}
+QT_WARNING_POP

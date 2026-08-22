@@ -1,0 +1,1171 @@
+{
+    "classes": [
+        {
+            "className": "DockSettings",
+            "final": true,
+            "lineNumber": 5,
+            "object": true,
+            "properties": [
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 0,
+                    "lineNumber": 9,
+                    "name": "position",
+                    "notify": "positionChanged",
+                    "override": false,
+                    "read": "position",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "QString",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setPosition"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 1,
+                    "lineNumber": 10,
+                    "name": "alignment",
+                    "notify": "alignmentChanged",
+                    "override": false,
+                    "read": "alignment",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "QString",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setAlignment"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 2,
+                    "lineNumber": 11,
+                    "name": "appearancePreset",
+                    "notify": "appearancePresetChanged",
+                    "override": false,
+                    "read": "appearancePreset",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "QString",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setAppearancePreset"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 3,
+                    "lineNumber": 12,
+                    "name": "monitorIndex",
+                    "notify": "monitorIndexChanged",
+                    "override": false,
+                    "read": "monitorIndex",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "int",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setMonitorIndex"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 4,
+                    "lineNumber": 13,
+                    "name": "screenCount",
+                    "notify": "screenCountChanged",
+                    "override": false,
+                    "read": "screenCount",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "int",
+                    "user": false,
+                    "virtual": false
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 5,
+                    "lineNumber": 14,
+                    "name": "iconSize",
+                    "notify": "iconSizeChanged",
+                    "override": false,
+                    "read": "iconSize",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "int",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setIconSize"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 6,
+                    "lineNumber": 15,
+                    "name": "spacing",
+                    "notify": "spacingChanged",
+                    "override": false,
+                    "read": "spacing",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "qreal",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setSpacing"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 7,
+                    "lineNumber": 16,
+                    "name": "magnification",
+                    "notify": "magnificationChanged",
+                    "override": false,
+                    "read": "magnification",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "qreal",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setMagnification"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 8,
+                    "lineNumber": 17,
+                    "name": "magnificationEnabled",
+                    "notify": "magnificationEnabledChanged",
+                    "override": false,
+                    "read": "magnificationEnabled",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "bool",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setMagnificationEnabled"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 9,
+                    "lineNumber": 18,
+                    "name": "panelOpacity",
+                    "notify": "panelOpacityChanged",
+                    "override": false,
+                    "read": "panelOpacity",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "qreal",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setPanelOpacity"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 10,
+                    "lineNumber": 19,
+                    "name": "showReflections",
+                    "notify": "showReflectionsChanged",
+                    "override": false,
+                    "read": "showReflections",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "bool",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setShowReflections"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 11,
+                    "lineNumber": 20,
+                    "name": "showIndicators",
+                    "notify": "showIndicatorsChanged",
+                    "override": false,
+                    "read": "showIndicators",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "bool",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setShowIndicators"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 12,
+                    "lineNumber": 21,
+                    "name": "showTooltips",
+                    "notify": "showTooltipsChanged",
+                    "override": false,
+                    "read": "showTooltips",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "bool",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setShowTooltips"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 13,
+                    "lineNumber": 22,
+                    "name": "showStatusModule",
+                    "notify": "showStatusModuleChanged",
+                    "override": false,
+                    "read": "showStatusModule",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "bool",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setShowStatusModule"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 14,
+                    "lineNumber": 23,
+                    "name": "showDate",
+                    "notify": "showDateChanged",
+                    "override": false,
+                    "read": "showDate",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "bool",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setShowDate"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 15,
+                    "lineNumber": 24,
+                    "name": "showNetworkModule",
+                    "notify": "showNetworkModuleChanged",
+                    "override": false,
+                    "read": "showNetworkModule",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "bool",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setShowNetworkModule"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 16,
+                    "lineNumber": 25,
+                    "name": "showBatteryModule",
+                    "notify": "showBatteryModuleChanged",
+                    "override": false,
+                    "read": "showBatteryModule",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "bool",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setShowBatteryModule"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 17,
+                    "lineNumber": 26,
+                    "name": "showPerformanceModule",
+                    "notify": "showPerformanceModuleChanged",
+                    "override": false,
+                    "read": "showPerformanceModule",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "bool",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setShowPerformanceModule"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 18,
+                    "lineNumber": 27,
+                    "name": "animationDuration",
+                    "notify": "animationDurationChanged",
+                    "override": false,
+                    "read": "animationDuration",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "int",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setAnimationDuration"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 19,
+                    "lineNumber": 28,
+                    "name": "reducedMotion",
+                    "notify": "reducedMotionChanged",
+                    "override": false,
+                    "read": "reducedMotion",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "bool",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setReducedMotion"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 20,
+                    "lineNumber": 29,
+                    "name": "autoHide",
+                    "notify": "autoHideChanged",
+                    "override": false,
+                    "read": "autoHide",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "bool",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setAutoHide"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 21,
+                    "lineNumber": 30,
+                    "name": "desktopSuite",
+                    "notify": "desktopSuiteChanged",
+                    "override": false,
+                    "read": "desktopSuite",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "bool",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setDesktopSuite"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 22,
+                    "lineNumber": 31,
+                    "name": "topLauncherVisible",
+                    "notify": "topLauncherVisibleChanged",
+                    "override": false,
+                    "read": "topLauncherVisible",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "bool",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setTopLauncherVisible"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 23,
+                    "lineNumber": 32,
+                    "name": "sideRailVisible",
+                    "notify": "sideRailVisibleChanged",
+                    "override": false,
+                    "read": "sideRailVisible",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "bool",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setSideRailVisible"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 24,
+                    "lineNumber": 33,
+                    "name": "bottomPanelVisible",
+                    "notify": "bottomPanelVisibleChanged",
+                    "override": false,
+                    "read": "bottomPanelVisible",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "bool",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setBottomPanelVisible"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 25,
+                    "lineNumber": 34,
+                    "name": "panelShape",
+                    "notify": "panelShapeChanged",
+                    "override": false,
+                    "read": "panelShape",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "QString",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setPanelShape"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 26,
+                    "lineNumber": 35,
+                    "name": "iconTileShape",
+                    "notify": "iconTileShapeChanged",
+                    "override": false,
+                    "read": "iconTileShape",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "QString",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setIconTileShape"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 27,
+                    "lineNumber": 36,
+                    "name": "topPanelType",
+                    "notify": "topPanelTypeChanged",
+                    "override": false,
+                    "read": "topPanelType",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "QString",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setTopPanelType"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 28,
+                    "lineNumber": 37,
+                    "name": "sidePanelType",
+                    "notify": "sidePanelTypeChanged",
+                    "override": false,
+                    "read": "sidePanelType",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "QString",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setSidePanelType"
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 29,
+                    "lineNumber": 38,
+                    "name": "bottomPanelType",
+                    "notify": "bottomPanelTypeChanged",
+                    "override": false,
+                    "read": "bottomPanelType",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "QString",
+                    "user": false,
+                    "virtual": false,
+                    "write": "setBottomPanelType"
+                }
+            ],
+            "qualifiedClassName": "DockSettings",
+            "signals": [
+                {
+                    "access": "public",
+                    "index": 0,
+                    "lineNumber": 108,
+                    "name": "positionChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 1,
+                    "lineNumber": 109,
+                    "name": "alignmentChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 2,
+                    "lineNumber": 110,
+                    "name": "appearancePresetChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 3,
+                    "lineNumber": 111,
+                    "name": "monitorIndexChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 4,
+                    "lineNumber": 112,
+                    "name": "screenCountChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 5,
+                    "lineNumber": 113,
+                    "name": "iconSizeChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 6,
+                    "lineNumber": 114,
+                    "name": "spacingChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 7,
+                    "lineNumber": 115,
+                    "name": "magnificationChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 8,
+                    "lineNumber": 116,
+                    "name": "magnificationEnabledChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 9,
+                    "lineNumber": 117,
+                    "name": "panelOpacityChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 10,
+                    "lineNumber": 118,
+                    "name": "showReflectionsChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 11,
+                    "lineNumber": 119,
+                    "name": "showIndicatorsChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 12,
+                    "lineNumber": 120,
+                    "name": "showTooltipsChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 13,
+                    "lineNumber": 121,
+                    "name": "showStatusModuleChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 14,
+                    "lineNumber": 122,
+                    "name": "showDateChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 15,
+                    "lineNumber": 123,
+                    "name": "showNetworkModuleChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 16,
+                    "lineNumber": 124,
+                    "name": "showBatteryModuleChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 17,
+                    "lineNumber": 125,
+                    "name": "showPerformanceModuleChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 18,
+                    "lineNumber": 126,
+                    "name": "animationDurationChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 19,
+                    "lineNumber": 127,
+                    "name": "reducedMotionChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 20,
+                    "lineNumber": 128,
+                    "name": "autoHideChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 21,
+                    "lineNumber": 129,
+                    "name": "desktopSuiteChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 22,
+                    "lineNumber": 130,
+                    "name": "topLauncherVisibleChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 23,
+                    "lineNumber": 131,
+                    "name": "sideRailVisibleChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 24,
+                    "lineNumber": 132,
+                    "name": "bottomPanelVisibleChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 25,
+                    "lineNumber": 133,
+                    "name": "panelShapeChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 26,
+                    "lineNumber": 134,
+                    "name": "iconTileShapeChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 27,
+                    "lineNumber": 135,
+                    "name": "topPanelTypeChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 28,
+                    "lineNumber": 136,
+                    "name": "sidePanelTypeChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 29,
+                    "lineNumber": 137,
+                    "name": "bottomPanelTypeChanged",
+                    "returnType": "void"
+                }
+            ],
+            "slots": [
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "position",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 30,
+                    "lineNumber": 75,
+                    "name": "setPosition",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "alignment",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 31,
+                    "lineNumber": 76,
+                    "name": "setAlignment",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "appearancePreset",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 32,
+                    "lineNumber": 77,
+                    "name": "setAppearancePreset",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "monitorIndex",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 33,
+                    "lineNumber": 78,
+                    "name": "setMonitorIndex",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "iconSize",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 34,
+                    "lineNumber": 79,
+                    "name": "setIconSize",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "spacing",
+                            "type": "qreal"
+                        }
+                    ],
+                    "index": 35,
+                    "lineNumber": 80,
+                    "name": "setSpacing",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "magnification",
+                            "type": "qreal"
+                        }
+                    ],
+                    "index": 36,
+                    "lineNumber": 81,
+                    "name": "setMagnification",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "magnificationEnabled",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 37,
+                    "lineNumber": 82,
+                    "name": "setMagnificationEnabled",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelOpacity",
+                            "type": "qreal"
+                        }
+                    ],
+                    "index": 38,
+                    "lineNumber": 83,
+                    "name": "setPanelOpacity",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "showReflections",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 39,
+                    "lineNumber": 84,
+                    "name": "setShowReflections",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "showIndicators",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 40,
+                    "lineNumber": 85,
+                    "name": "setShowIndicators",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "showTooltips",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 41,
+                    "lineNumber": 86,
+                    "name": "setShowTooltips",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "showStatusModule",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 42,
+                    "lineNumber": 87,
+                    "name": "setShowStatusModule",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "showDate",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 43,
+                    "lineNumber": 88,
+                    "name": "setShowDate",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "showNetworkModule",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 44,
+                    "lineNumber": 89,
+                    "name": "setShowNetworkModule",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "showBatteryModule",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 45,
+                    "lineNumber": 90,
+                    "name": "setShowBatteryModule",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "showPerformanceModule",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 46,
+                    "lineNumber": 91,
+                    "name": "setShowPerformanceModule",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "animationDuration",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 47,
+                    "lineNumber": 92,
+                    "name": "setAnimationDuration",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "reducedMotion",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 48,
+                    "lineNumber": 93,
+                    "name": "setReducedMotion",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "autoHide",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 49,
+                    "lineNumber": 94,
+                    "name": "setAutoHide",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "desktopSuite",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 50,
+                    "lineNumber": 95,
+                    "name": "setDesktopSuite",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "topLauncherVisible",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 51,
+                    "lineNumber": 96,
+                    "name": "setTopLauncherVisible",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "sideRailVisible",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 52,
+                    "lineNumber": 97,
+                    "name": "setSideRailVisible",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "bottomPanelVisible",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 53,
+                    "lineNumber": 98,
+                    "name": "setBottomPanelVisible",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelShape",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 54,
+                    "lineNumber": 99,
+                    "name": "setPanelShape",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "iconTileShape",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 55,
+                    "lineNumber": 100,
+                    "name": "setIconTileShape",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "topPanelType",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 56,
+                    "lineNumber": 101,
+                    "name": "setTopPanelType",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "sidePanelType",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 57,
+                    "lineNumber": 102,
+                    "name": "setSidePanelType",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "bottomPanelType",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 58,
+                    "lineNumber": 103,
+                    "name": "setBottomPanelType",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "profileName",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 59,
+                    "lineNumber": 104,
+                    "name": "applyProfile",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 60,
+                    "lineNumber": 105,
+                    "name": "reset",
+                    "returnType": "void"
+                }
+            ],
+            "superClasses": [
+                {
+                    "access": "public",
+                    "name": "QObject"
+                }
+            ]
+        }
+    ],
+    "inputFile": "DockSettings.h",
+    "outputRevision": 69
+}

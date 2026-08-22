@@ -1,0 +1,18 @@
+-I
+/mnt/F/Arch Dock/build-codex-task-0014
+-I
+/mnt/F/Arch Dock/build-codex-task-0014/ArchDock
+-I
+/mnt/F/Arch Dock/build-codex-task-0014
+-I
+/usr/lib/qt6/qml
+--resource
+/mnt/F/Arch Dock/build-codex-task-0014/.qt/rcc/qmake_ArchDock.qrc
+--resource
+/mnt/F/Arch Dock/build-codex-task-0014/.qt/rcc/arch-dock_raw_qml_0.qrc
+--resource
+/mnt/F/Arch Dock/build-codex-task-0014/.qt/rcc/arch-dock_raw_qml_0_extra_qmldirs.qrc
+--resource
+/mnt/F/Arch Dock/build-codex-task-0014/.qt/rcc/theme-catalog.qrc
+--module
+ArchDock

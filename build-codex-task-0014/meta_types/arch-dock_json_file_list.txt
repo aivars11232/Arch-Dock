@@ -1,0 +1,9 @@
+/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_autogen/include/../SLI74OWUZB/moc_PanelManager.cpp.json
+/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_autogen/include/../SLI74OWUZB/moc_PanelWindow.cpp.json
+/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_autogen/include/../UVLADIE3JM/moc_DockModel.cpp.json
+/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_autogen/include/../UVLADIE3JM/moc_DockSettings.cpp.json
+/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_autogen/include/../UVLADIE3JM/moc_KWinActionBridge.cpp.json
+/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_autogen/include/../UVLADIE3JM/moc_PanelRegistry.cpp.json
+/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_autogen/include/../UVLADIE3JM/moc_SystemStatus.cpp.json
+/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_autogen/include/../UVLADIE3JM/moc_WindowModel.cpp.json
+/mnt/F/Arch Dock/build-codex-task-0014/arch-dock_autogen/include/../UVLADIE3JM/moc_WindowWatcher.cpp.json

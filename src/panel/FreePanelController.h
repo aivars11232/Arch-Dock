@@ -52,6 +52,21 @@ struct FreePanelHost
     int dockAppletId = -1;
 };
 
+enum class FreePanelHostDiscoveryOutcome
+{
+    Unique,
+    Missing,
+    Conflict,
+    QueryFailed,
+};
+
+struct FreePanelHostDiscoveryResult
+{
+    FreePanelHostDiscoveryOutcome outcome = FreePanelHostDiscoveryOutcome::QueryFailed;
+    FreePanelHost host;
+    int screenIndex = -1;
+};
+
 enum class FreePanelHostMutationOutcome
 {
     Verified,
@@ -83,6 +98,26 @@ enum class FreePanelRemovalOutcome
     QueryFailed,
 };
 
+enum class FreePanelLifecycleOutcome
+{
+    Rebound,
+    Detached,
+    Removed,
+    AlreadyAbsent,
+    InvalidRecord,
+    Conflict,
+    Refused,
+    QueryFailed,
+    PersistenceFailed,
+};
+
+struct FreePanelLifecycleResult
+{
+    bool success = false;
+    FreePanelLifecycleOutcome outcome = FreePanelLifecycleOutcome::InvalidRecord;
+    QString errorCode;
+};
+
 struct FreePanelCreationResult
 {
     bool success = false;
@@ -109,6 +144,8 @@ public:
         std::function<std::optional<int>(int, const QString &)> verifiedBridgeScreen;
         std::function<std::optional<int>(const QString &, const QString &)>
             matchingHostCount;
+        std::function<FreePanelHostDiscoveryResult(const QString &, const QString &)>
+            discoverOwnedHost;
         std::function<FreePanelHostMutationResult(int, const QString &, const QString &)>
             createConfiguredHost;
         std::function<FreePanelHostMutationResult(int, int, const QString &, const QString &)>
@@ -126,6 +163,8 @@ public:
     FreePanelController(PanelRegistry &registry, HostOperations operations);
 
     [[nodiscard]] FreePanelCreationResult create(const FreePanelCreationRequest &request);
+    [[nodiscard]] FreePanelLifecycleResult synchronize(const QString &panelId) const;
+    [[nodiscard]] FreePanelLifecycleResult remove(const QString &panelId) const;
 
 private:
     [[nodiscard]] FreePanelCreationResult failure(

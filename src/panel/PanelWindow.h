@@ -2,7 +2,6 @@
 
 #include <QObject>
 #include <QPointer>
-#include <QHash>
 #include <QStringList>
 #include <QUrl>
 #include <QVariantList>
@@ -129,10 +128,14 @@ private:
     void synchronizeFreePanels();
     [[nodiscard]] ArchDock::FreePanelCreationResult createFreePanelTransaction(
         const ArchDock::FreePanelCreationRequest &request);
+    [[nodiscard]] ArchDock::FreePanelController::HostOperations freePanelHostOperations() const;
     [[nodiscard]] std::optional<int> verifiedFreeTemplateBridgeScreen(
         int containmentId,
         const QString &ownershipToken) const;
     [[nodiscard]] std::optional<int> freePanelHostMatchCount(
+        const QString &panelId,
+        const QString &ownershipToken) const;
+    [[nodiscard]] ArchDock::FreePanelHostDiscoveryResult discoverOwnedFreePanelHost(
         const QString &panelId,
         const QString &ownershipToken) const;
     [[nodiscard]] ArchDock::FreePanelHostMutationResult createConfiguredFreePanelHost(
@@ -221,7 +224,6 @@ private:
     WindowWatcher m_windowWatcher;
     QPointer<QWindow> m_settingsWindow;
     QPointer<QWindow> m_iconPropertiesWindow;
-    QHash<QString, QPointer<QWindow>> m_freePanelWindows;
     int m_screenRevision = 0;
     int m_visibilityRevision = 0;
     qulonglong m_dockRevision = 0;

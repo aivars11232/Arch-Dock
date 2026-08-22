@@ -215,6 +215,296 @@ FreePanelCreationResult FreePanelController::rollBack(
     return result;
 }
 
+FreePanelLifecycleResult FreePanelController::synchronize(const QString &panelId) const
+{
+    const auto association = m_registry.freeHostAssociation(panelId);
+    if (!association.has_value())
+    {
+        return {false,
+                FreePanelLifecycleOutcome::InvalidRecord,
+                QStringLiteral("free-record-not-found")};
+    }
+
+    if (association->state == PanelRegistry::FreeHostState::Detached &&
+        association->desktopContainmentId < 0 && association->dockAppletId < 0 &&
+        association->ownershipToken.trimmed().isEmpty())
+    {
+        return {true, FreePanelLifecycleOutcome::Detached, {}};
+    }
+
+    const QString ownershipToken = association->ownershipToken.trimmed();
+    if (ownershipToken.isEmpty())
+    {
+        return {false,
+                FreePanelLifecycleOutcome::InvalidRecord,
+                QStringLiteral("free-ownership-token-missing")};
+    }
+
+    const auto recordError = [this, &panelId, &ownershipToken](
+                                 FreePanelLifecycleOutcome outcome,
+                                 const QString &errorCode)
+    {
+        if (!m_registry.recordFreeHostRecoveryError(
+                panelId, ownershipToken, errorCode))
+        {
+            return FreePanelLifecycleResult{
+                false,
+                FreePanelLifecycleOutcome::PersistenceFailed,
+                QStringLiteral("free-recovery-error-persist-failed")};
+        }
+        return FreePanelLifecycleResult{false, outcome, errorCode};
+    };
+
+    if (!m_operations.discoverOwnedHost)
+    {
+        return recordError(
+            FreePanelLifecycleOutcome::QueryFailed,
+            QStringLiteral("free-host-discovery-unavailable"));
+    }
+
+    const FreePanelHostDiscoveryResult discovery = m_operations.discoverOwnedHost(
+        panelId, ownershipToken);
+    switch (discovery.outcome)
+    {
+    case FreePanelHostDiscoveryOutcome::Missing:
+        if (!m_registry.detachFreeHostAssociation(
+                panelId, ownershipToken, QStringLiteral("owned-host-not-found")))
+        {
+            return {false,
+                    FreePanelLifecycleOutcome::PersistenceFailed,
+                    QStringLiteral("free-host-detach-persist-failed")};
+        }
+        return {true, FreePanelLifecycleOutcome::Detached, {}};
+    case FreePanelHostDiscoveryOutcome::Conflict:
+        return recordError(
+            FreePanelLifecycleOutcome::Conflict,
+            QStringLiteral("owned-host-conflict"));
+    case FreePanelHostDiscoveryOutcome::QueryFailed:
+        return recordError(
+            FreePanelLifecycleOutcome::QueryFailed,
+            QStringLiteral("owned-host-query-failed"));
+    case FreePanelHostDiscoveryOutcome::Unique:
+        break;
+    }
+
+    if (!validHost(discovery.host) || !m_operations.verifyHost)
+    {
+        return recordError(
+            FreePanelLifecycleOutcome::QueryFailed,
+            QStringLiteral("owned-host-discovery-invalid"));
+    }
+
+    const FreePanelHostVerificationOutcome verification = m_operations.verifyHost(
+        discovery.host.desktopContainmentId,
+        discovery.host.dockAppletId,
+        panelId,
+        ownershipToken);
+    if (verification != FreePanelHostVerificationOutcome::Owned)
+    {
+        if (verification == FreePanelHostVerificationOutcome::UnownedOrUnverified)
+        {
+            return recordError(
+                FreePanelLifecycleOutcome::Refused,
+                QStringLiteral("owned-host-verification-refused"));
+        }
+        return recordError(
+            FreePanelLifecycleOutcome::QueryFailed,
+            verification == FreePanelHostVerificationOutcome::Missing
+                ? QStringLiteral("owned-host-changed-during-recovery")
+                : QStringLiteral("owned-host-verification-query-failed"));
+    }
+
+    const int screenIndex = discovery.screenIndex >= 0
+        ? discovery.screenIndex
+        : association->screenIndex;
+    const QString screenId = m_operations.screenIdForIndex
+        ? m_operations.screenIdForIndex(screenIndex)
+        : association->screenId;
+    if (!m_registry.rebindRecoveredFreeHostAssociation(
+            panelId,
+            discovery.host.desktopContainmentId,
+            discovery.host.dockAppletId,
+            ownershipToken,
+            screenIndex,
+            screenId))
+    {
+        return {false,
+                FreePanelLifecycleOutcome::PersistenceFailed,
+                QStringLiteral("free-host-rebind-persist-failed")};
+    }
+
+    return {true, FreePanelLifecycleOutcome::Rebound, {}};
+}
+
+FreePanelLifecycleResult FreePanelController::remove(const QString &panelId) const
+{
+    const auto association = m_registry.freeHostAssociation(panelId);
+    if (!association.has_value())
+    {
+        return {false,
+                FreePanelLifecycleOutcome::InvalidRecord,
+                QStringLiteral("free-record-not-found")};
+    }
+
+    if (association->state == PanelRegistry::FreeHostState::Detached &&
+        association->desktopContainmentId < 0 && association->dockAppletId < 0 &&
+        association->ownershipToken.trimmed().isEmpty())
+    {
+        if (!m_registry.removeDetachedFreePanel(panelId))
+        {
+            return {false,
+                    FreePanelLifecycleOutcome::PersistenceFailed,
+                    QStringLiteral("free-record-removal-persist-failed")};
+        }
+        return {true, FreePanelLifecycleOutcome::AlreadyAbsent, {}};
+    }
+
+    const QString ownershipToken = association->ownershipToken.trimmed();
+    if (ownershipToken.isEmpty())
+    {
+        return {false,
+                FreePanelLifecycleOutcome::InvalidRecord,
+                QStringLiteral("free-ownership-token-missing")};
+    }
+
+    const auto recordError = [this, &panelId, &ownershipToken](
+                                 FreePanelLifecycleOutcome outcome,
+                                 const QString &errorCode)
+    {
+        if (!m_registry.recordFreeHostRecoveryError(
+                panelId, ownershipToken, errorCode))
+        {
+            return FreePanelLifecycleResult{
+                false,
+                FreePanelLifecycleOutcome::PersistenceFailed,
+                QStringLiteral("free-removal-error-persist-failed")};
+        }
+        return FreePanelLifecycleResult{false, outcome, errorCode};
+    };
+    const auto finalizeRemoval = [this, &panelId, &ownershipToken](
+                                     FreePanelLifecycleOutcome outcome,
+                                     const QString &detachReason)
+    {
+        if (!m_registry.detachFreeHostAssociation(
+                panelId, ownershipToken, detachReason))
+        {
+            return FreePanelLifecycleResult{
+                false,
+                FreePanelLifecycleOutcome::PersistenceFailed,
+                QStringLiteral("free-host-detach-persist-failed")};
+        }
+        if (!m_registry.removeDetachedFreePanel(panelId))
+        {
+            return FreePanelLifecycleResult{
+                false,
+                FreePanelLifecycleOutcome::PersistenceFailed,
+                QStringLiteral("free-record-removal-persist-failed")};
+        }
+        return FreePanelLifecycleResult{true, outcome, {}};
+    };
+
+    if (!m_operations.discoverOwnedHost)
+    {
+        return recordError(
+            FreePanelLifecycleOutcome::QueryFailed,
+            QStringLiteral("free-host-discovery-unavailable"));
+    }
+
+    const FreePanelHostDiscoveryResult discovery = m_operations.discoverOwnedHost(
+        panelId, ownershipToken);
+    switch (discovery.outcome)
+    {
+    case FreePanelHostDiscoveryOutcome::Missing:
+        return finalizeRemoval(
+            FreePanelLifecycleOutcome::AlreadyAbsent,
+            QStringLiteral("owned-host-not-found"));
+    case FreePanelHostDiscoveryOutcome::Conflict:
+        return recordError(
+            FreePanelLifecycleOutcome::Conflict,
+            QStringLiteral("owned-host-conflict"));
+    case FreePanelHostDiscoveryOutcome::QueryFailed:
+        return recordError(
+            FreePanelLifecycleOutcome::QueryFailed,
+            QStringLiteral("owned-host-query-failed"));
+    case FreePanelHostDiscoveryOutcome::Unique:
+        break;
+    }
+
+    if (!validHost(discovery.host) || !m_operations.verifyHost ||
+        !m_operations.removeOwnedHost)
+    {
+        return recordError(
+            FreePanelLifecycleOutcome::QueryFailed,
+            QStringLiteral("owned-host-operation-unavailable"));
+    }
+
+    const FreePanelHostVerificationOutcome verification = m_operations.verifyHost(
+        discovery.host.desktopContainmentId,
+        discovery.host.dockAppletId,
+        panelId,
+        ownershipToken);
+    if (verification != FreePanelHostVerificationOutcome::Owned)
+    {
+        if (verification == FreePanelHostVerificationOutcome::UnownedOrUnverified)
+        {
+            return recordError(
+                FreePanelLifecycleOutcome::Refused,
+                QStringLiteral("owned-host-verification-refused"));
+        }
+        return recordError(
+            FreePanelLifecycleOutcome::QueryFailed,
+            verification == FreePanelHostVerificationOutcome::Missing
+                ? QStringLiteral("owned-host-changed-before-removal")
+                : QStringLiteral("owned-host-verification-query-failed"));
+    }
+
+    const int screenIndex = discovery.screenIndex >= 0
+        ? discovery.screenIndex
+        : association->screenIndex;
+    const QString screenId = m_operations.screenIdForIndex
+        ? m_operations.screenIdForIndex(screenIndex)
+        : association->screenId;
+    if (!m_registry.rebindRecoveredFreeHostAssociation(
+            panelId,
+            discovery.host.desktopContainmentId,
+            discovery.host.dockAppletId,
+            ownershipToken,
+            screenIndex,
+            screenId))
+    {
+        return {false,
+                FreePanelLifecycleOutcome::PersistenceFailed,
+                QStringLiteral("free-host-rebind-persist-failed")};
+    }
+
+    const FreePanelRemovalOutcome removal = m_operations.removeOwnedHost(
+        discovery.host.desktopContainmentId,
+        discovery.host.dockAppletId,
+        panelId,
+        ownershipToken);
+    switch (removal)
+    {
+    case FreePanelRemovalOutcome::Removed:
+        return finalizeRemoval(FreePanelLifecycleOutcome::Removed, {});
+    case FreePanelRemovalOutcome::AlreadyAbsent:
+        return finalizeRemoval(
+            FreePanelLifecycleOutcome::AlreadyAbsent,
+            QStringLiteral("owned-host-not-found"));
+    case FreePanelRemovalOutcome::Refused:
+        return recordError(
+            FreePanelLifecycleOutcome::Refused,
+            QStringLiteral("owned-host-removal-refused"));
+    case FreePanelRemovalOutcome::QueryFailed:
+        return recordError(
+            FreePanelLifecycleOutcome::QueryFailed,
+            QStringLiteral("owned-host-removal-query-failed"));
+    }
+
+    return recordError(
+        FreePanelLifecycleOutcome::QueryFailed,
+        QStringLiteral("owned-host-removal-query-failed"));
+}
+
 FreePanelCreationResult FreePanelController::create(const FreePanelCreationRequest &request)
 {
     const bool validRequest = requestIsValid(request);

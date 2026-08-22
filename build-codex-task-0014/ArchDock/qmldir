@@ -1,0 +1,13 @@
+module ArchDock
+typeinfo arch-dock.qmltypes
+prefer :/qt/qml/ArchDock/
+DockGeometry 1.0 qml/runtime/DockGeometry.js
+FreePanelWindow 1.0 qml/runtime/FreePanelWindow.qml
+IconProperties 1.0 qml/runtime/IconProperties.qml
+IconPropertiesWindow 1.0 qml/runtime/IconPropertiesWindow.qml
+StudioDraft 1.0 qml/runtime/StudioDraft.js
+StudioForm 1.0 qml/runtime/StudioForm.qml
+StudioNavigation 1.0 qml/runtime/StudioNavigation.js
+SettingsPopup 1.0 qml/runtime/SettingsPopup.qml
+depends QtQuick
+

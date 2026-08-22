@@ -1,0 +1,809 @@
+{
+    "classes": [
+        {
+            "className": "PanelWindow",
+            "final": true,
+            "lineNumber": 27,
+            "object": true,
+            "properties": [
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 0,
+                    "lineNumber": 31,
+                    "name": "screenRevision",
+                    "notify": "screenRevisionChanged",
+                    "override": false,
+                    "read": "screenRevision",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "int",
+                    "user": false,
+                    "virtual": false
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 1,
+                    "lineNumber": 32,
+                    "name": "visibilityRevision",
+                    "notify": "visibilityRevisionChanged",
+                    "override": false,
+                    "read": "visibilityRevision",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "int",
+                    "user": false,
+                    "virtual": false
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 2,
+                    "lineNumber": 33,
+                    "name": "dockRevision",
+                    "notify": "dockRevisionChanged",
+                    "override": false,
+                    "read": "dockRevision",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "qulonglong",
+                    "user": false,
+                    "virtual": false
+                },
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 3,
+                    "lineNumber": 34,
+                    "name": "dockEntriesRevision",
+                    "notify": "dockEntriesRevisionChanged",
+                    "override": false,
+                    "read": "dockEntriesRevision",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "qulonglong",
+                    "user": false,
+                    "virtual": false
+                }
+            ],
+            "qualifiedClassName": "PanelWindow",
+            "signals": [
+                {
+                    "access": "public",
+                    "index": 0,
+                    "lineNumber": 99,
+                    "name": "screenRevisionChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 1,
+                    "lineNumber": 100,
+                    "name": "visibilityRevisionChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 2,
+                    "lineNumber": 101,
+                    "name": "dockRevisionChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 3,
+                    "lineNumber": 102,
+                    "name": "dockEntriesRevisionChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 4,
+                    "lineNumber": 103,
+                    "name": "nativePanelRecoveryFinished",
+                    "returnType": "void"
+                }
+            ],
+            "slots": [
+                {
+                    "access": "public",
+                    "index": 5,
+                    "lineNumber": 47,
+                    "name": "showSettings",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 6,
+                    "lineNumber": 48,
+                    "name": "showPanelSettings",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "edge",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "type",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 7,
+                    "lineNumber": 49,
+                    "name": "createNativePanel",
+                    "returnType": "QString"
+                },
+                {
+                    "access": "public",
+                    "index": 8,
+                    "lineNumber": 50,
+                    "name": "createFreePanel",
+                    "returnType": "QVariantMap"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "containmentId",
+                            "type": "int"
+                        },
+                        {
+                            "name": "ownershipToken",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 9,
+                    "lineNumber": 51,
+                    "name": "createFreePanelFromTemplate",
+                    "returnType": "QVariantMap"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "desktopContainmentId",
+                            "type": "int"
+                        },
+                        {
+                            "name": "dockAppletId",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 10,
+                    "lineNumber": 52,
+                    "name": "adoptFreePanelApplet",
+                    "returnType": "QVariantMap"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "x",
+                            "type": "int"
+                        },
+                        {
+                            "name": "y",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 11,
+                    "lineNumber": 53,
+                    "name": "saveFreePanelPosition",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "type",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 12,
+                    "lineNumber": 54,
+                    "name": "setNativePanelType",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 13,
+                    "isConst": true,
+                    "lineNumber": 55,
+                    "name": "dockConfiguration",
+                    "returnType": "QVariantMap"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "key",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "value",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 14,
+                    "lineNumber": 56,
+                    "name": "setDockStringConfiguration",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "key",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "value",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 15,
+                    "lineNumber": 57,
+                    "name": "setDockIntegerConfiguration",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "key",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "value",
+                            "type": "double"
+                        }
+                    ],
+                    "index": 16,
+                    "lineNumber": 58,
+                    "name": "setDockRealConfiguration",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "key",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "value",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 17,
+                    "lineNumber": 59,
+                    "name": "setDockBooleanConfiguration",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelType",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 18,
+                    "isConst": true,
+                    "lineNumber": 60,
+                    "name": "dockEntries",
+                    "returnType": "QVariantList"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "panelType",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 19,
+                    "isConst": true,
+                    "lineNumber": 61,
+                    "name": "dockEntriesForPanel",
+                    "returnType": "QVariantList"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "appId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 20,
+                    "lineNumber": 62,
+                    "name": "activateDockEntry",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "appId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "windowId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 21,
+                    "lineNumber": 63,
+                    "name": "activateDockWindow",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "appId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 22,
+                    "lineNumber": 64,
+                    "name": "minimizeDockEntry",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "appId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 23,
+                    "lineNumber": 65,
+                    "name": "closeDockEntry",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "appId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 24,
+                    "lineNumber": 66,
+                    "name": "closeAllDockEntry",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "appId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 25,
+                    "lineNumber": 67,
+                    "name": "togglePinnedDockEntry",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "appId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "beforeAppId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 26,
+                    "lineNumber": 68,
+                    "name": "moveDockEntryBefore",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "url",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 27,
+                    "lineNumber": 69,
+                    "name": "pinDockUrl",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "urls",
+                            "type": "QStringList"
+                        }
+                    ],
+                    "index": 28,
+                    "lineNumber": 70,
+                    "name": "pinDockUrls",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "urls",
+                            "type": "QStringList"
+                        }
+                    ],
+                    "index": 29,
+                    "lineNumber": 71,
+                    "name": "pinPanelUrls",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "entryId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 30,
+                    "lineNumber": 72,
+                    "name": "removePanelContent",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "appId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 31,
+                    "isConst": true,
+                    "lineNumber": 73,
+                    "name": "dockFolderEntries",
+                    "returnType": "QVariantList"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "url",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 32,
+                    "lineNumber": 74,
+                    "name": "openDockUrl",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "index": 33,
+                    "isConst": true,
+                    "lineNumber": 75,
+                    "name": "availableKdeWidgets",
+                    "returnType": "QStringList"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 34,
+                    "lineNumber": 76,
+                    "name": "createNativeKdePanel",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "appletId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 35,
+                    "lineNumber": 77,
+                    "name": "addKdeWidget",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 36,
+                    "lineNumber": 78,
+                    "name": "removeNativeKdePanel",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 37,
+                    "lineNumber": 79,
+                    "name": "removePanel",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "appletId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 38,
+                    "lineNumber": 80,
+                    "name": "openKdeWidgetPreview",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "index": 39,
+                    "isConst": true,
+                    "lineNumber": 81,
+                    "name": "availableScreens",
+                    "returnType": "QVariantList"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 40,
+                    "isConst": true,
+                    "lineNumber": 82,
+                    "name": "screenIndexForPanel",
+                    "returnType": "int"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "screenIndex",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 41,
+                    "lineNumber": 83,
+                    "name": "setPanelScreen",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "visible",
+                            "type": "bool"
+                        }
+                    ],
+                    "index": 42,
+                    "lineNumber": 84,
+                    "name": "setPanelVisible",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "visibilityMode",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 43,
+                    "lineNumber": 85,
+                    "name": "setPanelVisibilityMode",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelId",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 44,
+                    "isConst": true,
+                    "lineNumber": 86,
+                    "name": "shouldConcealPanel",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "index": 45,
+                    "lineNumber": 87,
+                    "name": "resetSettings",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 46,
+                    "lineNumber": 88,
+                    "name": "toggleAutoHide",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 47,
+                    "lineNumber": 89,
+                    "name": "toggleDesktopSuite",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 48,
+                    "lineNumber": 90,
+                    "name": "toggleTopLauncher",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 49,
+                    "lineNumber": 91,
+                    "name": "toggleSideRail",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "index": 50,
+                    "lineNumber": 92,
+                    "name": "toggleBottomPanel",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "profileName",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 51,
+                    "lineNumber": 93,
+                    "name": "applyProfile",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "module",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 52,
+                    "lineNumber": 94,
+                    "name": "openSystemSettings",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 53,
+                    "lineNumber": 96,
+                    "name": "showIconProperties",
+                    "returnType": "void"
+                }
+            ],
+            "superClasses": [
+                {
+                    "access": "public",
+                    "name": "QObject"
+                }
+            ]
+        }
+    ],
+    "inputFile": "PanelWindow.h",
+    "outputRevision": 69
+}

@@ -1,0 +1,379 @@
+{
+    "classes": [
+        {
+            "className": "DockModel",
+            "enums": [
+                {
+                    "isClass": false,
+                    "isFlag": false,
+                    "lineNumber": 22,
+                    "name": "Role",
+                    "values": [
+                        "AppIdRole",
+                        "DesktopFileNameRole",
+                        "IconNameRole",
+                        "DisplayNameRole",
+                        "PinnedRole",
+                        "RunningRole",
+                        "ActiveRole",
+                        "MinimizedRole",
+                        "WindowCountRole",
+                        "WindowIdsRole",
+                        "WindowTitlesRole",
+                        "FolderRole"
+                    ]
+                }
+            ],
+            "final": true,
+            "lineNumber": 15,
+            "methods": [
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 2,
+                    "lineNumber": 46,
+                    "name": "activate",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        },
+                        {
+                            "name": "windowIndex",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 3,
+                    "lineNumber": 47,
+                    "name": "activateWindow",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 4,
+                    "lineNumber": 48,
+                    "name": "toggleMinimized",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 5,
+                    "lineNumber": 49,
+                    "name": "launch",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        },
+                        {
+                            "name": "windowIndex",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 6,
+                    "lineNumber": 50,
+                    "name": "close",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 7,
+                    "isCloned": true,
+                    "lineNumber": 50,
+                    "name": "close",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 8,
+                    "lineNumber": 51,
+                    "name": "closeAll",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 9,
+                    "lineNumber": 52,
+                    "name": "togglePinned",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 10,
+                    "lineNumber": 53,
+                    "name": "pin",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 11,
+                    "lineNumber": 54,
+                    "name": "unpin",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "from",
+                            "type": "int"
+                        },
+                        {
+                            "name": "to",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 12,
+                    "lineNumber": 55,
+                    "name": "move",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        },
+                        {
+                            "name": "iconName",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 13,
+                    "lineNumber": 56,
+                    "name": "setCustomIcon",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 14,
+                    "lineNumber": 57,
+                    "name": "clearCustomIcon",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "url",
+                            "type": "QUrl"
+                        }
+                    ],
+                    "index": 15,
+                    "lineNumber": 58,
+                    "name": "pinUrl",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 16,
+                    "isConst": true,
+                    "lineNumber": 62,
+                    "name": "isFolder",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        }
+                    ],
+                    "index": 17,
+                    "isConst": true,
+                    "lineNumber": 63,
+                    "name": "folderEntries",
+                    "returnType": "QVariantList"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "url",
+                            "type": "QUrl"
+                        }
+                    ],
+                    "index": 18,
+                    "isConst": true,
+                    "lineNumber": 64,
+                    "name": "openUrl",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        },
+                        {
+                            "name": "panelType",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 19,
+                    "isConst": true,
+                    "lineNumber": 65,
+                    "name": "panelEntryMatches",
+                    "returnType": "bool"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "row",
+                            "type": "int"
+                        },
+                        {
+                            "name": "panelType",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 20,
+                    "isConst": true,
+                    "lineNumber": 66,
+                    "name": "panelEntryPosition",
+                    "returnType": "int"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "panelType",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 21,
+                    "isConst": true,
+                    "lineNumber": 67,
+                    "name": "panelEntryCount",
+                    "returnType": "int"
+                }
+            ],
+            "object": true,
+            "properties": [
+                {
+                    "constant": false,
+                    "designable": true,
+                    "final": false,
+                    "index": 0,
+                    "lineNumber": 19,
+                    "name": "count",
+                    "notify": "countChanged",
+                    "override": false,
+                    "read": "rowCount",
+                    "required": false,
+                    "scriptable": true,
+                    "stored": true,
+                    "type": "int",
+                    "user": false,
+                    "virtual": false
+                }
+            ],
+            "qualifiedClassName": "DockModel",
+            "signals": [
+                {
+                    "access": "public",
+                    "index": 0,
+                    "lineNumber": 80,
+                    "name": "countChanged",
+                    "returnType": "void"
+                },
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "internalId",
+                            "type": "QString"
+                        },
+                        {
+                            "name": "action",
+                            "type": "QString"
+                        }
+                    ],
+                    "index": 1,
+                    "lineNumber": 81,
+                    "name": "windowActionRequested",
+                    "returnType": "void"
+                }
+            ],
+            "superClasses": [
+                {
+                    "access": "public",
+                    "name": "QAbstractListModel"
+                }
+            ]
+        }
+    ],
+    "inputFile": "DockModel.h",
+    "outputRevision": 69
+}

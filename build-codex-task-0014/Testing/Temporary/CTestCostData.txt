@@ -1,0 +1,10 @@
+panel-registry-test 7 0.0810151
+plasma-script-result-test 2 0.00388708
+dock-geometry-test 2 0.0271707
+motion-policy-test 2 0.0252943
+free-entry-policy-test 2 0.0278577
+bootstrap-coordinator-test 2 0.139837
+plasma-template-contract-test 2 0.00532023
+studio-navigation-test 2 0.0249554
+studio-draft-test 2 0.0235269
+---
