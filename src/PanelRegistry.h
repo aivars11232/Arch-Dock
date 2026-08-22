@@ -8,6 +8,8 @@
 #include <QVariant>
 #include <QVariantMap>
 
+#include <optional>
+
 class QProcess;
 
 class PanelRegistry final : public QObject
@@ -19,6 +21,25 @@ class PanelRegistry final : public QObject
     Q_PROPERTY(int revision READ revision NOTIFY revisionChanged)
 
 public:
+    enum class FreeHostState
+    {
+        Unhosted,
+        HostedOwned,
+        HostedStale,
+        Detached
+    };
+
+    struct FreeHostAssociation
+    {
+        int desktopContainmentId = -1;
+        int dockAppletId = -1;
+        QString ownershipToken;
+        int screenIndex = 0;
+        QString screenId;
+        QString hostMode = QStringLiteral("desktop");
+        FreeHostState state = FreeHostState::Unhosted;
+    };
+
     explicit PanelRegistry(QObject *parent = nullptr);
     ~PanelRegistry() override;
 
@@ -31,6 +52,15 @@ public:
     Q_INVOKABLE bool isBuiltIn(const QString &panelId) const;
     Q_INVOKABLE void setPanelValue(const QString &panelId, const QString &key, const QVariant &value);
     Q_INVOKABLE void updatePanel(const QString &panelId, const QVariantMap &values);
+    [[nodiscard]] std::optional<FreeHostAssociation> freeHostAssociation(const QString &panelId) const;
+    [[nodiscard]] bool commitVerifiedFreeHostAssociation(
+        const QString &panelId,
+        int desktopContainmentId,
+        int dockAppletId,
+        const QString &ownershipToken,
+        int screenIndex,
+        const QString &screenId,
+        const QString &hostMode);
     [[nodiscard]] bool commitVerifiedNativePanelAssociation(
         const QString &panelId,
         int containmentId,

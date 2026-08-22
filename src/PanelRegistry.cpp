@@ -20,8 +20,12 @@
 #include <QStandardPaths>
 #include <QtGlobal>
 
+#include <limits>
+
 namespace
 {
+constexpr int kFreeHostOwnershipTokenMaximumLength = 96;
+
 bool isEdge(const QString &edge)
 {
     return edge == QStringLiteral("top") ||
@@ -628,6 +632,120 @@ bool isVisibilityMode(const QString &mode)
            mode == QStringLiteral("cover");
 }
 
+int normalizedFreeHostId(const QVariant &value)
+{
+    bool ok = false;
+    const qlonglong candidate = value.toLongLong(&ok);
+    return ok && candidate >= 0 && candidate <= std::numeric_limits<int>::max()
+        ? static_cast<int>(candidate)
+        : -1;
+}
+
+bool hasFreeHostIdData(const QVariant &value)
+{
+    if (!value.isValid() || value.isNull() || value.toString().trimmed().isEmpty())
+    {
+        return false;
+    }
+
+    bool ok = false;
+    const qlonglong candidate = value.toLongLong(&ok);
+    return !ok || candidate != -1;
+}
+
+PanelRegistry::FreeHostState freeHostStateFromString(const QString &value)
+{
+    if (value == QStringLiteral("unhosted"))
+    {
+        return PanelRegistry::FreeHostState::Unhosted;
+    }
+    if (value == QStringLiteral("hosted-owned"))
+    {
+        return PanelRegistry::FreeHostState::HostedOwned;
+    }
+    if (value == QStringLiteral("detached"))
+    {
+        return PanelRegistry::FreeHostState::Detached;
+    }
+    return PanelRegistry::FreeHostState::HostedStale;
+}
+
+bool normalizeFreeHostRecord(QVariantMap *panel)
+{
+    if (!panel || panel->value(QStringLiteral("edge")).toString() != QStringLiteral("free"))
+    {
+        return false;
+    }
+
+    const QVariant rawContainmentId = panel->value(QStringLiteral("freeDesktopContainmentId"), -1);
+    const QVariant rawAppletId = panel->value(QStringLiteral("freeDockAppletId"), -1);
+    const int containmentId = normalizedFreeHostId(rawContainmentId);
+    const int appletId = normalizedFreeHostId(rawAppletId);
+    const QString ownershipToken = panel->value(
+        QStringLiteral("freeOwnershipToken")).toString().trimmed();
+    const QString requestedHostMode = panel->value(
+        QStringLiteral("freeHostMode")).toString().trimmed().toLower();
+    const QString hostMode = QStringLiteral("desktop");
+
+    const QString requestedState = panel->value(
+        QStringLiteral("freeHostState")).toString().trimmed().toLower();
+    const bool declaredDesktopMode = requestedHostMode == QStringLiteral("desktop");
+    const bool defaultableDesktopMode = requestedHostMode.isEmpty() || declaredDesktopMode;
+    const bool validToken = !ownershipToken.isEmpty() &&
+        ownershipToken.size() <= kFreeHostOwnershipTokenMaximumLength;
+    const bool completeAssociation = containmentId >= 0 && appletId >= 0 &&
+        validToken && declaredDesktopMode;
+    const bool hasAssociationData = hasFreeHostIdData(rawContainmentId) ||
+        hasFreeHostIdData(rawAppletId) || !ownershipToken.isEmpty() ||
+        !defaultableDesktopMode;
+
+    QString normalizedState;
+    if (requestedState == QStringLiteral("hosted-owned"))
+    {
+        normalizedState = completeAssociation
+            ? QStringLiteral("hosted-owned")
+            : QStringLiteral("hosted-stale");
+    }
+    else if (requestedState == QStringLiteral("hosted-stale"))
+    {
+        normalizedState = QStringLiteral("hosted-stale");
+    }
+    else if (requestedState == QStringLiteral("detached"))
+    {
+        normalizedState = !hasAssociationData && defaultableDesktopMode
+            ? QStringLiteral("detached")
+            : QStringLiteral("hosted-stale");
+    }
+    else if (requestedState.isEmpty() || requestedState == QStringLiteral("unhosted"))
+    {
+        normalizedState = !hasAssociationData && defaultableDesktopMode
+            ? QStringLiteral("unhosted")
+            : QStringLiteral("hosted-stale");
+    }
+    else
+    {
+        normalizedState = QStringLiteral("hosted-stale");
+    }
+
+    bool changed = false;
+    const auto setValue = [panel, &changed](const QString &key, const QVariant &value)
+    {
+        if (!panel->contains(key) || panel->value(key) != value)
+        {
+            panel->insert(key, value);
+            changed = true;
+        }
+    };
+    setValue(QStringLiteral("freeDesktopContainmentId"), containmentId);
+    setValue(QStringLiteral("freeDockAppletId"), appletId);
+    setValue(QStringLiteral("freeOwnershipToken"), ownershipToken);
+    setValue(QStringLiteral("freeHostMode"), hostMode);
+    setValue(QStringLiteral("freeHostState"), normalizedState);
+    setValue(QStringLiteral("screen"), qMax(0, panel->value(QStringLiteral("screen")).toInt()));
+    setValue(QStringLiteral("screenId"), panel->value(QStringLiteral("screenId")).toString().trimmed());
+    return changed;
+}
+
 }
 
 PanelRegistry::PanelRegistry(QObject *parent)
@@ -704,6 +822,61 @@ void PanelRegistry::setPanelValue(const QString &panelId, const QString &key, co
 void PanelRegistry::updatePanel(const QString &panelId, const QVariantMap &values)
 {
     setPanelValues(panelId, values);
+}
+
+std::optional<PanelRegistry::FreeHostAssociation> PanelRegistry::freeHostAssociation(
+    const QString &panelId) const
+{
+    const QVariantMap *panel = record(panelId);
+    if (!panel || panel->value(QStringLiteral("edge")).toString() != QStringLiteral("free"))
+    {
+        return std::nullopt;
+    }
+
+    FreeHostAssociation association;
+    association.desktopContainmentId = panel->value(
+        QStringLiteral("freeDesktopContainmentId"), -1).toInt();
+    association.dockAppletId = panel->value(QStringLiteral("freeDockAppletId"), -1).toInt();
+    association.ownershipToken = panel->value(
+        QStringLiteral("freeOwnershipToken")).toString();
+    association.screenIndex = panel->value(QStringLiteral("screen")).toInt();
+    association.screenId = panel->value(QStringLiteral("screenId")).toString();
+    association.hostMode = panel->value(QStringLiteral("freeHostMode")).toString();
+    association.state = freeHostStateFromString(
+        panel->value(QStringLiteral("freeHostState")).toString());
+    return association;
+}
+
+bool PanelRegistry::commitVerifiedFreeHostAssociation(
+    const QString &panelId,
+    int desktopContainmentId,
+    int dockAppletId,
+    const QString &ownershipToken,
+    int screenIndex,
+    const QString &screenId,
+    const QString &hostMode)
+{
+    const QVariantMap *panel = record(panelId);
+    const QString normalizedToken = ownershipToken.trimmed();
+    const QString normalizedMode = hostMode.trimmed().toLower();
+    if (!panel || panel->value(QStringLiteral("edge")).toString() != QStringLiteral("free") ||
+        desktopContainmentId < 0 || dockAppletId < 0 || screenIndex < 0 ||
+        normalizedToken.isEmpty() ||
+        normalizedToken.size() > kFreeHostOwnershipTokenMaximumLength ||
+        normalizedMode != QStringLiteral("desktop"))
+    {
+        return false;
+    }
+
+    return setPanelValuesChecked(
+        panelId,
+        {{QStringLiteral("freeDesktopContainmentId"), desktopContainmentId},
+         {QStringLiteral("freeDockAppletId"), dockAppletId},
+         {QStringLiteral("freeOwnershipToken"), normalizedToken},
+         {QStringLiteral("screen"), screenIndex},
+         {QStringLiteral("screenId"), screenId.trimmed()},
+         {QStringLiteral("freeHostMode"), normalizedMode},
+         {QStringLiteral("freeHostState"), QStringLiteral("hosted-owned")}});
 }
 
 bool PanelRegistry::commitVerifiedNativePanelAssociation(
@@ -918,6 +1091,7 @@ QString PanelRegistry::addPanel(const QString &edge, const QString &type)
     {
         panel.insert(QStringLiteral("dynamic"), false);
     }
+    (void)normalizeFreeHostRecord(&panel);
     m_panels.append(panel);
     m_activePanelId = id;
     save();
@@ -948,6 +1122,7 @@ QString PanelRegistry::addFreePanel()
     panel.insert(QStringLiteral("layoutRadius"), 145);
     panel.insert(QStringLiteral("x"), 240);
     panel.insert(QStringLiteral("y"), 180);
+    (void)normalizeFreeHostRecord(&panel);
     m_panels.append(panel);
     m_activePanelId = id;
     save();
@@ -1306,6 +1481,19 @@ QVariant PanelRegistry::normalizeValue(const QString &key, const QVariant &value
     {
         return value.toString().trimmed();
     }
+    if (key == QStringLiteral("freeDesktopContainmentId") ||
+        key == QStringLiteral("freeDockAppletId"))
+    {
+        return normalizedFreeHostId(value);
+    }
+    if (key == QStringLiteral("freeOwnershipToken"))
+    {
+        return value.toString().trimmed();
+    }
+    if (key == QStringLiteral("freeHostMode") || key == QStringLiteral("freeHostState"))
+    {
+        return value.toString().trimmed().toLower();
+    }
     if (key == QStringLiteral("visibilityMode"))
     {
         const QString mode = value.toString().trimmed().toLower();
@@ -1635,6 +1823,11 @@ bool PanelRegistry::setPanelValuesChecked(const QString &panelId, const QVariant
             contentOnly = false;
         }
     }
+    if (normalizeFreeHostRecord(panel))
+    {
+        didChange = true;
+        contentOnly = false;
+    }
     if (didChange)
     {
         if (!saveChecked())
@@ -1938,6 +2131,10 @@ void PanelRegistry::load()
                     if (!panel.contains(QStringLiteral("nativeRecoveryError")))
                     {
                         panel.insert(QStringLiteral("nativeRecoveryError"), QString{});
+                        migrated = true;
+                    }
+                    if (normalizeFreeHostRecord(&panel))
+                    {
                         migrated = true;
                     }
                     if (migrateLegacyThemePackage(&panel))

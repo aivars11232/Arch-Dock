@@ -77,6 +77,9 @@ private slots:
     void provisionsPanelFamiliesAndNativeBridgeState();
     void migratesLegacyBottomPanelSettings();
     void preservesFreePanelForFreeSurface();
+    void normalizesFreeHostAssociationStates();
+    void migratesLegacyFreeHostAssociationWithoutDataLoss();
+    void roundTripsFreeHostAssociation();
     void migratesLegacyThemeSource();
     void batchesNormalizedPanelUpdates();
     void persistsNativePanelRecoveryOutcomes();
@@ -207,6 +210,192 @@ void PanelRegistryTest::preservesFreePanelForFreeSurface()
              QStringLiteral("free"));
     QCOMPARE(registry.panelValue(QStringLiteral("free"), QStringLiteral("type")).toString(),
              QStringLiteral("launcher"));
+}
+
+void PanelRegistryTest::normalizesFreeHostAssociationStates()
+{
+    PanelRegistry registry;
+    const QString panelId = registry.addFreePanel();
+    QVERIFY(!panelId.isEmpty());
+    QVERIFY(!registry.freeHostAssociation(QStringLiteral("bottom")).has_value());
+
+    const auto unhosted = registry.freeHostAssociation(panelId);
+    QVERIFY(unhosted.has_value());
+    QCOMPARE(unhosted->desktopContainmentId, -1);
+    QCOMPARE(unhosted->dockAppletId, -1);
+    QCOMPARE(unhosted->ownershipToken, QString{});
+    QCOMPARE(unhosted->screenIndex, 0);
+    QCOMPARE(unhosted->screenId, QString{});
+    QCOMPARE(unhosted->hostMode, QStringLiteral("desktop"));
+    QVERIFY(unhosted->state == PanelRegistry::FreeHostState::Unhosted);
+
+    const QString genericFreePanelId = registry.addPanel(
+        QStringLiteral("free"), QStringLiteral("empty"));
+    const auto genericUnhosted = registry.freeHostAssociation(genericFreePanelId);
+    QVERIFY(genericUnhosted.has_value());
+    QCOMPARE(genericUnhosted->hostMode, QStringLiteral("desktop"));
+    QVERIFY(genericUnhosted->state == PanelRegistry::FreeHostState::Unhosted);
+
+    const int initialRevision = registry.revision();
+    QVERIFY(!registry.commitVerifiedFreeHostAssociation(
+        QStringLiteral("missing"), 42, 73, QStringLiteral("token-a"), 1,
+        QStringLiteral("output:DP-1"), QStringLiteral("desktop")));
+    QVERIFY(!registry.commitVerifiedFreeHostAssociation(
+        QStringLiteral("bottom"), 42, 73, QStringLiteral("token-a"), 1,
+        QStringLiteral("output:DP-1"), QStringLiteral("desktop")));
+    QVERIFY(!registry.commitVerifiedFreeHostAssociation(
+        panelId, -1, 73, QStringLiteral("token-a"), 1,
+        QStringLiteral("output:DP-1"), QStringLiteral("desktop")));
+    QVERIFY(!registry.commitVerifiedFreeHostAssociation(
+        panelId, 42, -1, QStringLiteral("token-a"), 1,
+        QStringLiteral("output:DP-1"), QStringLiteral("desktop")));
+    QVERIFY(!registry.commitVerifiedFreeHostAssociation(
+        panelId, 42, 73, QString{}, 1,
+        QStringLiteral("output:DP-1"), QStringLiteral("desktop")));
+    QVERIFY(!registry.commitVerifiedFreeHostAssociation(
+        panelId, 42, 73, QString(97, QLatin1Char('x')), 1,
+        QStringLiteral("output:DP-1"), QStringLiteral("desktop")));
+    QVERIFY(!registry.commitVerifiedFreeHostAssociation(
+        panelId, 42, 73, QStringLiteral("token-a"), -1,
+        QStringLiteral("output:DP-1"), QStringLiteral("desktop")));
+    QVERIFY(!registry.commitVerifiedFreeHostAssociation(
+        panelId, 42, 73, QStringLiteral("token-a"), 1,
+        QStringLiteral("output:DP-1"), QStringLiteral("overlay")));
+    QCOMPARE(registry.revision(), initialRevision);
+
+    QVERIFY(registry.commitVerifiedFreeHostAssociation(
+        panelId, 42, 73, QStringLiteral("  token-a  "), 1,
+        QStringLiteral("  output:DP-1  "), QStringLiteral("  DESKTOP  ")));
+    const auto owned = registry.freeHostAssociation(panelId);
+    QVERIFY(owned.has_value());
+    QCOMPARE(owned->desktopContainmentId, 42);
+    QCOMPARE(owned->dockAppletId, 73);
+    QCOMPARE(owned->ownershipToken, QStringLiteral("token-a"));
+    QCOMPARE(owned->screenIndex, 1);
+    QCOMPARE(owned->screenId, QStringLiteral("output:DP-1"));
+    QCOMPARE(owned->hostMode, QStringLiteral("desktop"));
+    QVERIFY(owned->state == PanelRegistry::FreeHostState::HostedOwned);
+
+    registry.updatePanel(
+        panelId,
+        {{QStringLiteral("freeOwnershipToken"), QString{}},
+         {QStringLiteral("freeHostState"), QStringLiteral("hosted-owned")}});
+    const auto stale = registry.freeHostAssociation(panelId);
+    QVERIFY(stale.has_value());
+    QCOMPARE(stale->desktopContainmentId, 42);
+    QCOMPARE(stale->dockAppletId, 73);
+    QCOMPARE(stale->ownershipToken, QString{});
+    QVERIFY(stale->state == PanelRegistry::FreeHostState::HostedStale);
+
+    registry.updatePanel(
+        panelId,
+        {{QStringLiteral("freeDesktopContainmentId"), -1},
+         {QStringLiteral("freeDockAppletId"), -1},
+         {QStringLiteral("freeOwnershipToken"), QString{}},
+         {QStringLiteral("freeHostMode"), QStringLiteral("desktop")},
+         {QStringLiteral("freeHostState"), QStringLiteral("detached")}});
+    const auto detached = registry.freeHostAssociation(panelId);
+    QVERIFY(detached.has_value());
+    QCOMPARE(detached->desktopContainmentId, -1);
+    QCOMPARE(detached->dockAppletId, -1);
+    QCOMPARE(detached->ownershipToken, QString{});
+    QVERIFY(detached->state == PanelRegistry::FreeHostState::Detached);
+
+    registry.updatePanel(
+        genericFreePanelId,
+        {{QStringLiteral("freeDesktopContainmentId"), 84},
+         {QStringLiteral("freeDockAppletId"), 91},
+         {QStringLiteral("freeOwnershipToken"), QStringLiteral("token-overlay")},
+         {QStringLiteral("freeHostMode"), QStringLiteral("overlay")},
+         {QStringLiteral("freeHostState"), QStringLiteral("hosted-owned")}});
+    const auto unsupportedMode = registry.freeHostAssociation(genericFreePanelId);
+    QVERIFY(unsupportedMode.has_value());
+    QCOMPARE(unsupportedMode->hostMode, QStringLiteral("desktop"));
+    QVERIFY(unsupportedMode->state == PanelRegistry::FreeHostState::HostedStale);
+}
+
+void PanelRegistryTest::migratesLegacyFreeHostAssociationWithoutDataLoss()
+{
+    QJsonArray panels;
+    panels.append(QJsonObject::fromVariantMap(
+        {{QStringLiteral("id"), QStringLiteral("legacy-free")},
+         {QStringLiteral("name"), QStringLiteral("Legacy free panel")},
+         {QStringLiteral("builtIn"), false},
+         {QStringLiteral("visible"), true},
+         {QStringLiteral("edge"), QStringLiteral("free")},
+         {QStringLiteral("type"), QStringLiteral("launcher")},
+         {QStringLiteral("contentAppIds"), QStringList{QStringLiteral("org.kde.dolphin")}},
+         {QStringLiteral("legacyExtensionData"), QStringLiteral("keep-me")}}));
+    QSettings settings;
+    settings.setValue(QStringLiteral("dock/monitorIndex"), 2);
+    settings.setValue(
+        QStringLiteral("dock/panels"),
+        QJsonDocument(panels).toJson(QJsonDocument::Compact));
+    settings.sync();
+
+    PanelRegistry registry;
+    const auto migrated = registry.freeHostAssociation(QStringLiteral("legacy-free"));
+    QVERIFY(migrated.has_value());
+    QCOMPARE(migrated->desktopContainmentId, -1);
+    QCOMPARE(migrated->dockAppletId, -1);
+    QCOMPARE(migrated->ownershipToken, QString{});
+    QCOMPARE(migrated->screenIndex, 2);
+    QCOMPARE(migrated->screenId, QString{});
+    QCOMPARE(migrated->hostMode, QStringLiteral("desktop"));
+    QVERIFY(migrated->state == PanelRegistry::FreeHostState::Unhosted);
+    QCOMPARE(registry.panelName(QStringLiteral("legacy-free")), QStringLiteral("Legacy free panel"));
+    QCOMPARE(registry.panelValue(QStringLiteral("legacy-free"), QStringLiteral("type")).toString(),
+             QStringLiteral("launcher"));
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("legacy-free"), QStringLiteral("contentAppIds")).toStringList(),
+             QStringList{QStringLiteral("org.kde.dolphin")});
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("legacy-free"), QStringLiteral("legacyExtensionData")).toString(),
+             QStringLiteral("keep-me"));
+
+    PanelRegistry reloaded;
+    const auto persisted = reloaded.freeHostAssociation(QStringLiteral("legacy-free"));
+    QVERIFY(persisted.has_value());
+    QVERIFY(persisted->state == PanelRegistry::FreeHostState::Unhosted);
+    QCOMPARE(reloaded.panelValue(
+                 QStringLiteral("legacy-free"), QStringLiteral("legacyExtensionData")).toString(),
+             QStringLiteral("keep-me"));
+    QCOMPARE(reloaded.panelValue(
+                 QStringLiteral("legacy-free"), QStringLiteral("contentAppIds")).toStringList(),
+             QStringList{QStringLiteral("org.kde.dolphin")});
+}
+
+void PanelRegistryTest::roundTripsFreeHostAssociation()
+{
+    PanelRegistry registry;
+    const QString panelId = registry.addFreePanel();
+    QVERIFY(!panelId.isEmpty());
+    QVERIFY(registry.commitVerifiedFreeHostAssociation(
+        panelId, 421, 733, QStringLiteral("archdock-free-owner-7"), 2,
+        QStringLiteral("edid:0123456789abcdef"), QStringLiteral("desktop")));
+
+    const auto committed = registry.freeHostAssociation(panelId);
+    QVERIFY(committed.has_value());
+    QCOMPARE(committed->desktopContainmentId, 421);
+    QCOMPARE(committed->dockAppletId, 733);
+    QCOMPARE(committed->ownershipToken, QStringLiteral("archdock-free-owner-7"));
+    QCOMPARE(committed->screenIndex, 2);
+    QCOMPARE(committed->screenId, QStringLiteral("edid:0123456789abcdef"));
+    QCOMPARE(committed->hostMode, QStringLiteral("desktop"));
+    QVERIFY(committed->state == PanelRegistry::FreeHostState::HostedOwned);
+
+    PanelRegistry reloaded;
+    const auto persisted = reloaded.freeHostAssociation(panelId);
+    QVERIFY(persisted.has_value());
+    QCOMPARE(persisted->desktopContainmentId, committed->desktopContainmentId);
+    QCOMPARE(persisted->dockAppletId, committed->dockAppletId);
+    QCOMPARE(persisted->ownershipToken, committed->ownershipToken);
+    QCOMPARE(persisted->screenIndex, committed->screenIndex);
+    QCOMPARE(persisted->screenId, committed->screenId);
+    QCOMPARE(persisted->hostMode, committed->hostMode);
+    QVERIFY(persisted->state == committed->state);
+    QCOMPARE(reloaded.panelValue(panelId, QStringLiteral("freeHostState")).toString(),
+             QStringLiteral("hosted-owned"));
 }
 
 void PanelRegistryTest::migratesLegacyThemeSource()
