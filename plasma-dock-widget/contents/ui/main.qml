@@ -168,18 +168,31 @@ PlasmoidItem {
         if (bootstrapRequested || panelId.length > 0 ||
             !Plasmoid.configuration.bootstrapFreeDock || !dockService.registered)
             return;
+        const containment = Plasmoid.containment;
+        const containmentId = containment ? Number(containment.id) : -1;
+        const appletId = Number(Plasmoid.id);
+        if (containmentId < 0 || appletId < 0) {
+            requestFailed = true;
+            return;
+        }
         bootstrapRequested = true;
-        callDock("createFreePanel", [], function(reply) {
+        callDock("adoptFreePanelApplet", [containmentId, appletId], function(reply) {
             const value = normalizeReply(reply);
-            if (typeof value === "string" && value.length > 0) {
-                Plasmoid.configuration.panelId = value;
+            const transaction = Array.isArray(value) && value.length === 1
+                ? value[0] : value;
+            if (transaction && transaction.success === true
+                    && String(transaction.panelId || "").length > 0) {
+                Plasmoid.configuration.panelId = String(transaction.panelId);
                 Plasmoid.configuration.bootstrapFreeDock = false;
+                requestFailed = false;
                 refresh();
             } else {
                 bootstrapRequested = false;
+                requestFailed = true;
             }
         }, function() {
             bootstrapRequested = false;
+            requestFailed = true;
         });
     }
 

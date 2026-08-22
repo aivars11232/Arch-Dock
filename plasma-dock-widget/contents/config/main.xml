@@ -10,6 +10,9 @@
         <entry name="panelType" type="String">
             <default>hybrid</default>
         </entry>
+        <entry name="ownerToken" type="String">
+            <default></default>
+        </entry>
         <entry name="bootstrapFreeDock" type="Bool">
             <default>false</default>
         </entry>

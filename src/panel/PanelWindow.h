@@ -19,6 +19,7 @@
 #include "../SystemStatus.h"
 #include "../WindowModel.h"
 #include "../WindowWatcher.h"
+#include "FreePanelController.h"
 
 class QQmlApplicationEngine;
 class QScreen;
@@ -47,8 +48,9 @@ public slots:
     void showSettings();
     void showPanelSettings(const QString &panelId);
     QString createNativePanel(const QString &edge, const QString &type);
-    QString createFreePanel();
-    QString createFreePanelFromTemplate(int containmentId, const QString &ownershipToken);
+    QVariantMap createFreePanel();
+    QVariantMap createFreePanelFromTemplate(int containmentId, const QString &ownershipToken);
+    QVariantMap adoptFreePanelApplet(int desktopContainmentId, int dockAppletId);
     void saveFreePanelPosition(const QString &panelId, int x, int y);
     bool setNativePanelType(const QString &panelId, const QString &type);
     QVariantMap dockConfiguration(const QString &panelId) const;
@@ -125,6 +127,33 @@ private:
     void scheduleNativePanelRecovery();
     void recoverNativePanels(bool allowMissingHostRecovery);
     void synchronizeFreePanels();
+    [[nodiscard]] ArchDock::FreePanelCreationResult createFreePanelTransaction(
+        const ArchDock::FreePanelCreationRequest &request);
+    [[nodiscard]] std::optional<int> verifiedFreeTemplateBridgeScreen(
+        int containmentId,
+        const QString &ownershipToken) const;
+    [[nodiscard]] std::optional<ArchDock::FreePanelHost> createConfiguredFreePanelHost(
+        int screenIndex,
+        const QString &panelId,
+        const QString &ownershipToken) const;
+    [[nodiscard]] std::optional<int> configureAdoptedFreePanelHost(
+        int desktopContainmentId,
+        int dockAppletId,
+        const QString &panelId,
+        const QString &ownershipToken) const;
+    [[nodiscard]] bool freePanelHostIsOwned(
+        int desktopContainmentId,
+        int dockAppletId,
+        const QString &panelId,
+        const QString &ownershipToken) const;
+    [[nodiscard]] bool removeOwnedFreePanelHost(
+        int desktopContainmentId,
+        int dockAppletId,
+        const QString &panelId,
+        const QString &ownershipToken) const;
+    [[nodiscard]] bool removeVerifiedFreeTemplateBridge(
+        int containmentId,
+        const QString &ownershipToken) const;
     [[nodiscard]] QScreen *screenForPanel(const QString &panelId) const;
     [[nodiscard]] QString screenIdForIndex(int screenIndex) const;
     [[nodiscard]] QList<ArchDock::EdgePanel> edgePanels() const;

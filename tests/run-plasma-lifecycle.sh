@@ -85,6 +85,21 @@ gvariant_integer() {
     sed -n 's/^(\(-\{0,1\}[0-9]\+\),)$/\1/p'
 }
 
+gvariant_map_string() {
+    local key="$1"
+    sed -n "s/.*'$key': <'\([^']*\)'>.*/\1/p"
+}
+
+gvariant_map_integer() {
+    local key="$1"
+    sed -n "s/.*'$key': <\(int32 \)\{0,1\}\(-\{0,1\}[0-9]\+\)>.*/\2/p"
+}
+
+gvariant_map_boolean() {
+    local key="$1"
+    sed -n "s/.*'$key': <\(true\|false\)>.*/\1/p"
+}
+
 panel_ids() {
     plasma_script \
         "var ids = []; var all = panels(); for (var index = 0; index < all.length; ++index) { ids.push(String(all[index].id)); } ids.sort(); print(ids.join(','));"
@@ -157,6 +172,137 @@ panel_registry_record_snapshot() {
     panel_registry_json | jq -cSe \
         --arg panel_id "$panel_id" \
         'first(.[] | select(.id == $panel_id))'
+}
+
+free_panel_ids_json() {
+    panel_registry_json | jq -c '[.[] | select(.edge == "free") | .id] | sort'
+}
+
+free_panel_count() {
+    free_panel_ids_json | jq -r 'length'
+}
+
+wait_for_free_panel_count() {
+    local expected_count="$1"
+    local attempt
+    local actual_count=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        actual_count="$(free_panel_count 2>/dev/null || true)"
+        [[ "$actual_count" == "$expected_count" ]] && return
+        sleep 0.1
+    done
+    printf 'Timed out waiting for %s free-panel records; last=%s.\n' \
+        "$expected_count" "${actual_count:-unavailable}" >&2
+    return 1
+}
+
+new_free_panel_id() {
+    local previous_ids_json="$1"
+    panel_registry_json | jq -er \
+        --argjson previous "$previous_ids_json" \
+        '[.[] | select(.edge == "free") | .id as $id |
+          select(($previous | index($id)) == null) | $id] |
+         if length == 1 then .[0] else error("expected exactly one new free panel") end'
+}
+
+wait_for_panel_ids() {
+    local expected_ids="$1"
+    local attempt
+    local actual_ids=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        actual_ids="$(panel_ids 2>/dev/null || true)"
+        [[ "$actual_ids" == "$expected_ids" ]] && return
+        sleep 0.1
+    done
+    printf 'Timed out waiting for the Plasma panel set to converge: expected=%s actual=%s\n' \
+        "$expected_ids" "${actual_ids:-unavailable}" >&2
+    return 1
+}
+
+free_host_snapshot() {
+    local desktop_containment_id="$1"
+    local dock_applet_id="$2"
+    plasma_script \
+        "var desktop = desktopById($desktop_containment_id); var dock = desktop ? desktop.widgetById($dock_applet_id) : null; if (!desktop || !dock || dock.type !== 'org.archdock.dock') { print('missing'); } else { dock.currentConfigGroup = ['General']; var geometry = dock.geometry; print([String(desktop.id), String(desktop.screen), String(dock.id), String(dock.type), String(dock.readConfig('panelId', '')), String(dock.readConfig('panelType', '')), String(dock.readConfig('ownerToken', '')), String(dock.readConfig('bootstrapFreeDock', true)), String(Number(geometry.width)), String(Number(geometry.height))].join('|')); }" |
+        gvariant_string
+}
+
+free_host_match_count() {
+    local panel_id="$1"
+    local ownership_token="$2"
+    plasma_script \
+        "var count = 0; var all = desktops(); for (var index = 0; index < all.length; ++index) { var desktop = all[index]; var docks = desktop.widgets('org.archdock.dock'); for (var dockIndex = 0; dockIndex < docks.length; ++dockIndex) { var dock = desktop.widgetById(docks[dockIndex].id); if (!dock || dock.type !== 'org.archdock.dock') { continue; } dock.currentConfigGroup = ['General']; if (String(dock.readConfig('panelId', '')) === '$panel_id' && String(dock.readConfig('ownerToken', '')) === '$ownership_token') { ++count; } } } print(String(count));" |
+        gvariant_string
+}
+
+require_free_panel_host() {
+    local panel_id="$1"
+    local expected_containment_id="$2"
+    local expected_applet_id="$3"
+    local route="$4"
+    local ownership_token
+    ownership_token="$(panel_registry_value "$panel_id" freeOwnershipToken)"
+    local registry_containment_id
+    registry_containment_id="$(panel_registry_value "$panel_id" freeDesktopContainmentId)"
+    local registry_applet_id
+    registry_applet_id="$(panel_registry_value "$panel_id" freeDockAppletId)"
+    local registry_screen
+    registry_screen="$(panel_registry_value "$panel_id" screen)"
+    local registry_screen_id
+    registry_screen_id="$(panel_registry_value "$panel_id" screenId)"
+
+    [[ "$(panel_registry_value "$panel_id" freeHostState)" == 'hosted-owned' &&
+        "$(panel_registry_value "$panel_id" freeHostMode)" == 'desktop' &&
+        "$registry_containment_id" == "$expected_containment_id" &&
+        "$registry_applet_id" == "$expected_applet_id" &&
+        "$registry_screen" =~ ^[0-9]+$ && -n "$registry_screen_id" &&
+        -n "$ownership_token" ]] || {
+        printf 'The %s free-panel registry association is incomplete: %s\n' \
+            "$route" "$(panel_registry_record_snapshot "$panel_id" 2>/dev/null || true)" >&2
+        return 1
+    }
+
+    local attempt
+    local snapshot=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        snapshot="$(free_host_snapshot "$expected_containment_id" "$expected_applet_id" 2>/dev/null || true)"
+        local live_containment_id=''
+        local live_screen=''
+        local live_applet_id=''
+        local live_type=''
+        local live_panel_id=''
+        local live_panel_type=''
+        local live_token=''
+        local live_bootstrap=''
+        local live_width=''
+        local live_height=''
+        IFS='|' read -r \
+            live_containment_id live_screen live_applet_id live_type live_panel_id \
+            live_panel_type live_token live_bootstrap live_width live_height <<<"$snapshot"
+        if [[ "$live_containment_id" == "$expected_containment_id" &&
+            "$live_screen" == "$registry_screen" &&
+            "$live_applet_id" == "$expected_applet_id" &&
+            "$live_type" == 'org.archdock.dock' &&
+            "$live_panel_id" == "$panel_id" &&
+            "$live_panel_type" == 'empty' &&
+            "$live_token" == "$ownership_token" &&
+            "$live_bootstrap" == 'false' &&
+            "$live_width" =~ ^[1-9][0-9]*$ &&
+            "$live_height" =~ ^[1-9][0-9]*$ ]]; then
+            [[ "$(free_host_match_count "$panel_id" "$ownership_token")" == '1' ]] || {
+                printf 'The %s free-panel token does not identify exactly one live applet.\n' \
+                    "$route" >&2
+                return 1
+            }
+            printf '%s\n' "$ownership_token"
+            return
+        fi
+        sleep 0.1
+    done
+
+    printf 'Timed out waiting for the %s free-panel host: %s\n' \
+        "$route" "${snapshot:-unavailable}" >&2
+    return 1
 }
 
 set_stale_native_ids() {
@@ -497,6 +643,97 @@ run_session() {
         printf 'Virtual KWin did not expose two client-visible outputs.\n' >&2
         exit 1
     }
+
+    local free_count_before_studio
+    free_count_before_studio="$(free_panel_count)"
+    local studio_reply
+    studio_reply="$(panel_call createFreePanel)"
+    local studio_panel_id
+    studio_panel_id="$(gvariant_map_string panelId <<<"$studio_reply")"
+    local studio_containment_id
+    studio_containment_id="$(gvariant_map_integer desktopContainmentId <<<"$studio_reply")"
+    local studio_applet_id
+    studio_applet_id="$(gvariant_map_integer dockAppletId <<<"$studio_reply")"
+    [[ "$(gvariant_map_boolean success <<<"$studio_reply")" == 'true' &&
+        "$(gvariant_map_boolean ownershipVerified <<<"$studio_reply")" == 'true' &&
+        "$(gvariant_map_string status <<<"$studio_reply")" == 'created' &&
+        "$studio_panel_id" == free-* &&
+        "$studio_containment_id" =~ ^[0-9]+$ &&
+        "$studio_applet_id" =~ ^[0-9]+$ ]] || {
+        printf 'Panel Studio returned an invalid free-panel transaction: %s\n' \
+            "$studio_reply" >&2
+        exit 1
+    }
+    wait_for_free_panel_count "$((free_count_before_studio + 1))"
+    local studio_token
+    studio_token="$(require_free_panel_host \
+        "$studio_panel_id" "$studio_containment_id" "$studio_applet_id" 'Studio')"
+    [[ "$studio_token" == archdock-free-* ]] || {
+        printf 'Panel Studio did not persist a generated ownership token.\n' >&2
+        exit 1
+    }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'Studio free-panel creation'
+    log_session_phase 'created verified Studio free-panel host'
+
+    local free_ids_before_template
+    free_ids_before_template="$(free_panel_ids_json)"
+    local free_count_before_template
+    free_count_before_template="$(jq -r 'length' <<<"$free_ids_before_template")"
+    local panel_ids_before_template
+    panel_ids_before_template="$(panel_ids)"
+    [[ -r "${ARCHDOCK_FREE_TEMPLATE_SCRIPT:-}" ]] || {
+        printf 'The staged free-panel template script is unavailable.\n' >&2
+        exit 1
+    }
+    plasma_script "$(<"$ARCHDOCK_FREE_TEMPLATE_SCRIPT")" >/dev/null
+    wait_for_free_panel_count "$((free_count_before_template + 1))"
+    local template_panel_id
+    template_panel_id="$(new_free_panel_id "$free_ids_before_template")"
+    wait_for_panel_registry_value "$template_panel_id" freeHostState hosted-owned
+    local template_containment_id
+    template_containment_id="$(panel_registry_value \
+        "$template_panel_id" freeDesktopContainmentId)"
+    local template_applet_id
+    template_applet_id="$(panel_registry_value "$template_panel_id" freeDockAppletId)"
+    local template_token
+    template_token="$(require_free_panel_host \
+        "$template_panel_id" "$template_containment_id" "$template_applet_id" 'template')"
+    [[ "$template_token" == archdock-free-template-* ]] || {
+        printf 'The template route did not persist its verified bootstrap token.\n' >&2
+        exit 1
+    }
+    wait_for_panel_ids "$panel_ids_before_template"
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'template free-panel creation'
+    log_session_phase 'created verified template free-panel host and removed bridge'
+
+    local template_bridge_id="${template_token#archdock-free-template-}"
+    template_bridge_id="${template_bridge_id%%:*}"
+    [[ "$template_bridge_id" =~ ^[0-9]+$ ]] || {
+        printf 'Could not recover the verified bridge ID from the template token: %s\n' \
+            "$template_token" >&2
+        exit 1
+    }
+    local duplicate_reply
+    duplicate_reply="$(panel_call createFreePanelFromTemplate \
+        "$template_bridge_id" "$template_token")"
+    [[ "$(gvariant_map_boolean success <<<"$duplicate_reply")" == 'true' &&
+        "$(gvariant_map_boolean ownershipVerified <<<"$duplicate_reply")" == 'true' &&
+        "$(gvariant_map_string status <<<"$duplicate_reply")" == 'existing' &&
+        "$(gvariant_map_string panelId <<<"$duplicate_reply")" == "$template_panel_id" &&
+        "$(gvariant_map_integer desktopContainmentId <<<"$duplicate_reply")" == "$template_containment_id" &&
+        "$(gvariant_map_integer dockAppletId <<<"$duplicate_reply")" == "$template_applet_id" &&
+        "$(free_panel_count)" == "$((free_count_before_template + 1))" &&
+        "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
+        "$(panel_ids)" == "$panel_ids_before_template" ]] || {
+        printf 'Repeated template bootstrap did not converge on the existing host: %s\n' \
+            "$duplicate_reply" >&2
+        exit 1
+    }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'duplicate template bootstrap'
+    log_session_phase 'reused template free-panel host without duplication'
 
     wait_for_owned_panel bottom
     local recovered_bottom_record
@@ -1124,6 +1361,7 @@ run_outer() {
     local log_dir="$ARCHDOCK_LIFECYCLE_STATE_ROOT/logs"
     local session_result_file="$ARCHDOCK_LIFECYCLE_STATE_ROOT/session-result"
     local session_script="$ARCHDOCK_LIFECYCLE_STATE_ROOT/run-plasma-lifecycle.sh"
+    local free_template_script="$stage_root/share/plasma/layout-templates/org.archdock.plasma.desktop.circularFreeDock/contents/layout.js"
     mkdir -p \
         "$ARCHDOCK_LIFECYCLE_STATE_ROOT/cache" \
         "$ARCHDOCK_LIFECYCLE_STATE_ROOT/config" \
@@ -1138,6 +1376,10 @@ run_outer() {
     chmod +x "$session_script"
 
     cmake --install "$build_dir" --prefix "$stage_root"
+    [[ -r "$free_template_script" ]] || {
+        printf 'Staged free-panel template is unavailable: %s\n' "$free_template_script" >&2
+        exit 1
+    }
 
     local session_runner_status
     set +e
@@ -1146,6 +1388,7 @@ run_outer() {
         ARCHDOCK_SESSION_RESULT_FILE="$session_result_file" \
         ARCHDOCK_TEST_BINARY="$binary_path" \
         ARCHDOCK_TEST_LOG_DIR="$log_dir" \
+        ARCHDOCK_FREE_TEMPLATE_SCRIPT="$free_template_script" \
         DESKTOP_SESSION=archdock-test \
         HOME="$ARCHDOCK_LIFECYCLE_STATE_ROOT/home" \
         KDE_FULL_SESSION=true \
@@ -1179,7 +1422,7 @@ run_outer() {
         exit 1
     }
 
-    printf 'Isolated Plasma native lifecycle succeeded.\n'
+    printf 'Isolated Plasma native/free lifecycle succeeded.\n'
 }
 
 if [[ "${ARCHDOCK_PLASMA_LIFECYCLE_SESSION:-}" == '1' ]]; then

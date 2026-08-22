@@ -1,5 +1,6 @@
 #include "PanelRegistry.h"
 #include "NativeContainmentLifecycle.h"
+#include "panel/FreePanelController.h"
 #include "PanelPlacement.h"
 #include "ScreenIdentity.h"
 #include "PanelVisibility.h"
@@ -87,6 +88,7 @@ private slots:
     void reconcilesNativeContainmentLifecycle();
     void classifiesNativeContainmentMatches();
     void selectsNativeContainmentLifecycleIntent();
+    void selectsFreePanelCreationIntent();
     void resolvesStableScreenIdentityBeforeFallbackIndex();
     void reservesAndOffsetsOnlySameScreenPanels();
     void concealsOnlyForRelevantActiveWindows();
@@ -741,6 +743,53 @@ void PanelRegistryTest::selectsNativeContainmentLifecycleIntent()
         const Intent actualIntent = ArchDock::nativeContainmentLifecycleIntent(
             testCase.request,
             testCase.state);
+        QVERIFY2(actualIntent == testCase.expectedIntent, testCase.name);
+    }
+}
+
+void PanelRegistryTest::selectsFreePanelCreationIntent()
+{
+    using Intent = ArchDock::FreePanelCreationIntent;
+    using Origin = ArchDock::FreePanelCreationOrigin;
+    using State = ArchDock::FreePanelCreationDecisionState;
+
+    struct CreationCase
+    {
+        const char *name;
+        State state;
+        Intent expectedIntent;
+    };
+
+    const std::array<CreationCase, 8> cases{{
+        {"create a Studio host",
+         {Origin::Studio, true, 0, false},
+         Intent::CreateHost},
+        {"adopt the requesting desktop applet",
+         {Origin::ExistingApplet, true, 0, false},
+         Intent::AdoptHost},
+        {"create the first host for a template token",
+         {Origin::TemplateBridge, true, 0, false},
+         Intent::CreateHost},
+        {"return the one verified host for a repeated template token",
+         {Origin::TemplateBridge, true, 1, true},
+         Intent::ReturnExisting},
+        {"reject a stale host for a repeated template token",
+         {Origin::TemplateBridge, true, 1, false},
+         Intent::Reject},
+        {"reject conflicting hosts for one template token",
+         {Origin::TemplateBridge, true, 2, true},
+         Intent::Reject},
+        {"reject an invalid template request",
+         {Origin::TemplateBridge, false, 0, false},
+         Intent::Reject},
+        {"reject an invalid existing-applet request",
+         {Origin::ExistingApplet, false, 0, false},
+         Intent::Reject},
+    }};
+
+    for (const CreationCase &testCase : cases)
+    {
+        const Intent actualIntent = ArchDock::freePanelCreationIntent(testCase.state);
         QVERIFY2(actualIntent == testCase.expectedIntent, testCase.name);
     }
 }

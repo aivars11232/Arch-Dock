@@ -61,6 +61,10 @@ PlasmoidItem {
             const keys = Object.keys(reply);
             if (keys.length === 1 && keys[0] === "value")
                 return normalizeReply(reply.value);
+            const result = {};
+            for (const key of keys)
+                result[key] = normalizeReply(reply[key]);
+            return result;
         }
         return reply;
     }
@@ -86,9 +90,11 @@ PlasmoidItem {
             root.callDock("createFreePanelFromTemplate", [panelId, token],
                 function(result) {
                     const value = root.normalizeReply(result);
+                    const transaction = Array.isArray(value) && value.length === 1
+                        ? value[0] : value;
                     bootstrapCoordinator.resolved(
-                        Array.isArray(value) && value.length === 1
-                            ? value[0] : value);
+                        transaction && transaction.success === true
+                            ? String(transaction.panelId || "") : "");
                 },
                 function() {
                     bootstrapCoordinator.rejected();

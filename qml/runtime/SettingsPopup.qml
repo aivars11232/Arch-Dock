@@ -680,7 +680,18 @@ Window {
                 && hasPendingChanges)
             return;
         if (action === "create-free") {
-            openPanelEditor(panelController.createFreePanel());
+            const result = panelController.createFreePanel();
+            if (result && result.success === true
+                    && String(result.panelId || "").length > 0) {
+                studioError = "";
+                openPanelEditor(String(result.panelId));
+            } else {
+                const errorCode = result
+                    ? String(result.errorCode || "unknown-error")
+                    : "unknown-error";
+                studioError = qsTr("Could not create the free panel (%1).")
+                    .arg(errorCode);
+            }
         } else if (action === "toggle-panel-visibility") {
             applyPanelVisibility(
                 selectedPanelId, !Boolean(panelValue("visible", true)));

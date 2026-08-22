@@ -40,6 +40,8 @@ qt_add_executable(
   src/KWinActionBridge.cpp
   src/panel/PanelManager.h
   src/panel/PanelManager.cpp
+  src/panel/FreePanelController.h
+  src/panel/FreePanelController.cpp
   src/panel/PanelWindow.h
   src/panel/PanelWindow.cpp
   src/WindowItem.h
@@ -96,6 +98,8 @@ if(BUILD_TESTING)
     src/PanelRegistry.cpp
     src/NativeContainmentLifecycle.h
     src/NativeContainmentLifecycle.cpp
+    src/panel/FreePanelController.h
+    src/panel/FreePanelController.cpp
     src/PanelPlacement.h
     src/PanelPlacement.cpp
     src/PanelVisibility.h
