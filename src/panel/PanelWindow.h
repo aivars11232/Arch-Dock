@@ -132,26 +132,32 @@ private:
     [[nodiscard]] std::optional<int> verifiedFreeTemplateBridgeScreen(
         int containmentId,
         const QString &ownershipToken) const;
-    [[nodiscard]] std::optional<ArchDock::FreePanelHost> createConfiguredFreePanelHost(
+    [[nodiscard]] std::optional<int> freePanelHostMatchCount(
+        const QString &panelId,
+        const QString &ownershipToken) const;
+    [[nodiscard]] ArchDock::FreePanelHostMutationResult createConfiguredFreePanelHost(
         int screenIndex,
         const QString &panelId,
         const QString &ownershipToken) const;
-    [[nodiscard]] std::optional<int> configureAdoptedFreePanelHost(
+    [[nodiscard]] ArchDock::FreePanelHostMutationResult configureAdoptedFreePanelHost(
         int desktopContainmentId,
         int dockAppletId,
         const QString &panelId,
         const QString &ownershipToken) const;
-    [[nodiscard]] bool freePanelHostIsOwned(
+    [[nodiscard]] ArchDock::FreePanelHostVerificationOutcome freePanelHostVerification(
         int desktopContainmentId,
         int dockAppletId,
         const QString &panelId,
         const QString &ownershipToken) const;
-    [[nodiscard]] bool removeOwnedFreePanelHost(
+    [[nodiscard]] ArchDock::FreePanelRemovalOutcome removeOwnedFreePanelHost(
         int desktopContainmentId,
         int dockAppletId,
         const QString &panelId,
         const QString &ownershipToken) const;
-    [[nodiscard]] bool removeVerifiedFreeTemplateBridge(
+    [[nodiscard]] ArchDock::FreePanelRemovalOutcome removeOwnedFreePanelHostByIdentity(
+        const QString &panelId,
+        const QString &ownershipToken) const;
+    [[nodiscard]] ArchDock::FreePanelRemovalOutcome removeVerifiedFreeTemplateBridge(
         int containmentId,
         const QString &ownershipToken) const;
     [[nodiscard]] QScreen *screenForPanel(const QString &panelId) const;

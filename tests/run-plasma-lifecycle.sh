@@ -235,6 +235,12 @@ free_host_match_count() {
         gvariant_string
 }
 
+create_unrelated_free_host_sentinel() {
+    plasma_script \
+        "var desktop = desktopForScreen(0); if (!desktop) { print('missing'); } else { var dock = desktop.addWidget('org.archdock.dock', Math.round(gridUnit * 2), Math.round(gridUnit * 2), Math.round(gridUnit * 12), Math.round(gridUnit * 12)); if (!dock || Number(dock.id) < 0) { print('missing'); } else { dock.currentConfigGroup = ['General']; dock.writeConfig('panelId', 'archdock-unrelated-sentinel'); dock.writeConfig('panelType', 'empty'); dock.writeConfig('ownerToken', 'archdock-unrelated-sentinel-token'); dock.writeConfig('bootstrapFreeDock', false); dock.reloadConfig(); print(String(desktop.id) + '|' + String(dock.id)); } }" |
+        gvariant_string
+}
+
 require_free_panel_host() {
     local panel_id="$1"
     local expected_containment_id="$2"
@@ -734,6 +740,54 @@ run_session() {
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'duplicate template bootstrap'
     log_session_phase 'reused template free-panel host without duplication'
+
+    local sentinel_host
+    sentinel_host="$(create_unrelated_free_host_sentinel)"
+    local sentinel_desktop_id=''
+    local sentinel_applet_id=''
+    IFS='|' read -r sentinel_desktop_id sentinel_applet_id <<<"$sentinel_host"
+    [[ "$sentinel_desktop_id" =~ ^[0-9]+$ &&
+        "$sentinel_applet_id" =~ ^[0-9]+$ ]] || {
+        printf 'Could not create the unrelated free-host sentinel: %s\n' \
+            "$sentinel_host" >&2
+        exit 1
+    }
+    local sentinel_snapshot
+    sentinel_snapshot="$(free_host_snapshot \
+        "$sentinel_desktop_id" "$sentinel_applet_id")"
+    [[ "$sentinel_snapshot" == "$sentinel_desktop_id|"* &&
+        "$sentinel_snapshot" == *"|$sentinel_applet_id|org.archdock.dock|archdock-unrelated-sentinel|empty|archdock-unrelated-sentinel-token|false|"* ]] || {
+        printf 'The unrelated free-host sentinel snapshot is incomplete: %s\n' \
+            "$sentinel_snapshot" >&2
+        exit 1
+    }
+
+    local free_count_before_failed_adoption
+    free_count_before_failed_adoption="$(free_panel_count)"
+    local failed_adoption_reply
+    failed_adoption_reply="$(panel_call adoptFreePanelApplet \
+        "$sentinel_desktop_id" "$sentinel_applet_id")"
+    [[ "$(gvariant_map_boolean success <<<"$failed_adoption_reply")" == 'false' &&
+        "$(gvariant_map_string status <<<"$failed_adoption_reply")" == 'rolled-back' &&
+        "$(gvariant_map_string errorCode <<<"$failed_adoption_reply")" == 'host-adoption-failed' &&
+        "$(gvariant_map_string failureStage <<<"$failed_adoption_reply")" == 'host-adoption' &&
+        "$(gvariant_map_boolean rollbackAttempted <<<"$failed_adoption_reply")" == 'true' &&
+        "$(gvariant_map_boolean rollbackSucceeded <<<"$failed_adoption_reply")" == 'true' &&
+        "$(gvariant_map_string rollbackErrorCode <<<"$failed_adoption_reply")" == '' &&
+        "$(gvariant_map_boolean recoverable <<<"$failed_adoption_reply")" == 'false' &&
+        "$(gvariant_map_string panelId <<<"$failed_adoption_reply")" == '' &&
+        "$(free_panel_count)" == "$free_count_before_failed_adoption" &&
+        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" &&
+        "$(free_host_match_count \
+            archdock-unrelated-sentinel archdock-unrelated-sentinel-token)" == '1' ]] || {
+        printf 'Failed adoption did not roll back only its record: reply=%s sentinel=%s\n' \
+            "$failed_adoption_reply" \
+            "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id" 2>/dev/null || true)" >&2
+        exit 1
+    }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'failed free-host adoption rollback'
+    log_session_phase 'rolled back failed free-host adoption without touching unrelated applets'
 
     wait_for_owned_panel bottom
     local recovered_bottom_record

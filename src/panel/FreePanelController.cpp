@@ -33,6 +33,32 @@ QString generatedOwnershipToken()
     return QStringLiteral("archdock-free-") +
         QUuid::createUuid().toString(QUuid::WithoutBraces);
 }
+
+bool validHost(const ArchDock::FreePanelHost &host)
+{
+    return host.desktopContainmentId >= 0 && host.dockAppletId >= 0;
+}
+
+bool removalCompleted(ArchDock::FreePanelRemovalOutcome outcome)
+{
+    return outcome == ArchDock::FreePanelRemovalOutcome::Removed ||
+        outcome == ArchDock::FreePanelRemovalOutcome::AlreadyAbsent;
+}
+
+QString removalErrorCode(ArchDock::FreePanelRemovalOutcome outcome)
+{
+    switch (outcome)
+    {
+    case ArchDock::FreePanelRemovalOutcome::Removed:
+    case ArchDock::FreePanelRemovalOutcome::AlreadyAbsent:
+        return {};
+    case ArchDock::FreePanelRemovalOutcome::Refused:
+        return QStringLiteral("host-rollback-refused");
+    case ArchDock::FreePanelRemovalOutcome::QueryFailed:
+        return QStringLiteral("host-rollback-query-failed");
+    }
+    return QStringLiteral("host-rollback-query-failed");
+}
 }
 
 namespace ArchDock
@@ -75,6 +101,11 @@ QVariantMap FreePanelCreationResult::toVariantMap() const
         {QStringLiteral("desktopContainmentId"), desktopContainmentId},
         {QStringLiteral("dockAppletId"), dockAppletId},
         {QStringLiteral("ownershipVerified"), ownershipVerified},
+        {QStringLiteral("failureStage"), failureStage},
+        {QStringLiteral("rollbackAttempted"), rollbackAttempted},
+        {QStringLiteral("rollbackSucceeded"), rollbackSucceeded},
+        {QStringLiteral("rollbackErrorCode"), rollbackErrorCode},
+        {QStringLiteral("recoverable"), recoverable},
     };
 }
 
@@ -84,10 +115,103 @@ FreePanelController::FreePanelController(PanelRegistry &registry, HostOperations
 {
 }
 
-FreePanelCreationResult FreePanelController::failure(const QString &errorCode) const
+FreePanelCreationResult FreePanelController::failure(
+    const QString &errorCode,
+    const QString &failureStage) const
 {
     FreePanelCreationResult result;
     result.errorCode = errorCode;
+    result.failureStage = failureStage;
+    return result;
+}
+
+FreePanelCreationResult FreePanelController::rollBack(
+    const QString &errorCode,
+    const QString &failureStage,
+    const QString &panelId,
+    const QString &ownershipToken,
+    const FreePanelHost &host,
+    int screenIndex,
+    const QString &screenId,
+    bool hostMayExist,
+    bool removeByIdentity,
+    bool ownershipVerified) const
+{
+    FreePanelCreationResult result = failure(errorCode, failureStage);
+    result.panelId = panelId;
+    result.desktopContainmentId = host.desktopContainmentId;
+    result.dockAppletId = host.dockAppletId;
+    result.ownershipVerified = ownershipVerified;
+    result.rollbackAttempted = true;
+
+    bool hostResolved = !hostMayExist;
+    if (hostMayExist)
+    {
+        FreePanelRemovalOutcome removalOutcome = FreePanelRemovalOutcome::QueryFailed;
+        if (removeByIdentity)
+        {
+            if (m_operations.removeOwnedHostByIdentity)
+            {
+                removalOutcome = m_operations.removeOwnedHostByIdentity(
+                    panelId, ownershipToken);
+            }
+        }
+        else if (validHost(host) && m_operations.removeOwnedHost)
+        {
+            removalOutcome = m_operations.removeOwnedHost(
+                host.desktopContainmentId,
+                host.dockAppletId,
+                panelId,
+                ownershipToken);
+        }
+        hostResolved = removalCompleted(removalOutcome);
+        result.rollbackErrorCode = removalErrorCode(removalOutcome);
+        if (removeByIdentity &&
+            removalOutcome == FreePanelRemovalOutcome::AlreadyAbsent)
+        {
+            hostResolved = false;
+            result.rollbackErrorCode =
+                QStringLiteral("host-rollback-absence-unverified");
+        }
+    }
+
+    if (hostResolved && m_registry.discardFreePanelCreation(panelId, ownershipToken))
+    {
+        result.status = QStringLiteral("rolled-back");
+        result.rollbackSucceeded = true;
+        result.panelId.clear();
+        result.desktopContainmentId = -1;
+        result.dockAppletId = -1;
+        result.ownershipVerified = false;
+        return result;
+    }
+
+    if (hostResolved)
+    {
+        result.rollbackErrorCode = QStringLiteral("record-discard-failed");
+    }
+    if (result.rollbackErrorCode.isEmpty())
+    {
+        result.rollbackErrorCode = QStringLiteral("rollback-unverified");
+    }
+
+    if (!m_registry.recordRecoverableFreePanelCreation(
+            panelId,
+            host.desktopContainmentId,
+            host.dockAppletId,
+            ownershipToken,
+            screenIndex,
+            screenId,
+            errorCode,
+            result.rollbackErrorCode))
+    {
+        result.rollbackErrorCode += QStringLiteral("+recovery-record-persist-failed");
+    }
+
+    const auto retainedAssociation = m_registry.freeHostAssociation(panelId);
+    result.status = QStringLiteral("rollback-pending");
+    result.recoverable = retainedAssociation.has_value() &&
+        retainedAssociation->ownershipToken == ownershipToken;
     return result;
 }
 
@@ -119,15 +243,22 @@ FreePanelCreationResult FreePanelController::create(const FreePanelCreationReque
         }
     }
 
+    const QString matchingCreationState = matchingAssociationCount == 1
+        ? m_registry.panelValue(
+              matchingPanelId, QStringLiteral("freeCreationState")).toString()
+        : QString{};
+    const bool matchingAssociationComplete = matchingCreationState.isEmpty() ||
+        matchingCreationState == QStringLiteral("complete");
     const bool matchingAssociationVerified = matchingAssociationCount == 1 &&
         matchingAssociation.has_value() &&
+        matchingAssociationComplete &&
         matchingAssociation->state == PanelRegistry::FreeHostState::HostedOwned &&
         m_operations.verifyHost &&
         m_operations.verifyHost(
             matchingAssociation->desktopContainmentId,
             matchingAssociation->dockAppletId,
             matchingPanelId,
-            request.ownershipToken);
+            request.ownershipToken) == FreePanelHostVerificationOutcome::Owned;
 
     const FreePanelCreationIntent intent = freePanelCreationIntent(
         {request.origin,
@@ -137,9 +268,11 @@ FreePanelCreationResult FreePanelController::create(const FreePanelCreationReque
 
     if (intent == FreePanelCreationIntent::Reject)
     {
-        return failure(matchingAssociationCount == 0
-            ? QStringLiteral("invalid-request")
-            : QStringLiteral("bootstrap-association-conflict"));
+        return failure(
+            matchingAssociationCount == 0
+                ? QStringLiteral("invalid-request")
+                : QStringLiteral("bootstrap-association-conflict"),
+            QStringLiteral("intent-selection"));
     }
 
     if (intent == FreePanelCreationIntent::ReturnExisting)
@@ -149,11 +282,16 @@ FreePanelCreationResult FreePanelController::create(const FreePanelCreationReque
         result.desktopContainmentId = matchingAssociation->desktopContainmentId;
         result.dockAppletId = matchingAssociation->dockAppletId;
         result.ownershipVerified = true;
-        if (!m_operations.removeVerifiedBridge ||
-            !m_operations.removeVerifiedBridge(
-                request.bridgeContainmentId, request.ownershipToken))
+        const FreePanelRemovalOutcome bridgeOutcome = m_operations.removeVerifiedBridge
+            ? m_operations.removeVerifiedBridge(
+                  request.bridgeContainmentId, request.ownershipToken)
+            : FreePanelRemovalOutcome::QueryFailed;
+        if (!removalCompleted(bridgeOutcome))
         {
-            result.errorCode = QStringLiteral("bootstrap-cleanup-failed");
+            result.errorCode = bridgeOutcome == FreePanelRemovalOutcome::Refused
+                ? QStringLiteral("bootstrap-cleanup-refused")
+                : QStringLiteral("bootstrap-cleanup-indeterminate");
+            result.failureStage = QStringLiteral("bootstrap-cleanup");
             return result;
         }
         result.success = true;
@@ -166,71 +304,199 @@ FreePanelCreationResult FreePanelController::create(const FreePanelCreationReque
     {
         if (!m_operations.verifiedBridgeScreen)
         {
-            return failure(QStringLiteral("operation-unavailable"));
+            return failure(
+                QStringLiteral("operation-unavailable"),
+                QStringLiteral("bridge-verification"));
         }
         const std::optional<int> verifiedScreen = m_operations.verifiedBridgeScreen(
             request.bridgeContainmentId, request.ownershipToken);
         if (!verifiedScreen.has_value() || *verifiedScreen < 0)
         {
-            return failure(QStringLiteral("bootstrap-bridge-unverified"));
+            return failure(
+                QStringLiteral("bootstrap-bridge-unverified"),
+                QStringLiteral("bridge-verification"));
         }
         screenIndex = *verifiedScreen;
-    }
-
-    const QString panelId = m_registry.addFreePanel();
-    if (panelId.isEmpty())
-    {
-        return failure(QStringLiteral("record-allocation-failed"));
     }
 
     const QString ownershipToken = request.origin == FreePanelCreationOrigin::TemplateBridge
         ? request.ownershipToken
         : generatedOwnershipToken();
-    FreePanelHost host;
-    bool createdHost = false;
+    const QString panelId = m_registry.beginFreePanelCreation(ownershipToken);
+    if (panelId.isEmpty())
+    {
+        return failure(
+            QStringLiteral("record-allocation-failed"),
+            QStringLiteral("record-allocation"));
+    }
+
+    QString screenId = m_operations.screenIdForIndex
+        ? m_operations.screenIdForIndex(screenIndex)
+        : QString{};
+    if (!m_operations.matchingHostCount)
+    {
+        return rollBack(
+            QStringLiteral("operation-unavailable"),
+            QStringLiteral("host-preflight"),
+            panelId,
+            ownershipToken,
+            {},
+            screenIndex,
+            screenId,
+            false,
+            false,
+            false);
+    }
+    const std::optional<int> preexistingMatches = m_operations.matchingHostCount(
+        panelId, ownershipToken);
+    if (!preexistingMatches.has_value())
+    {
+        return rollBack(
+            QStringLiteral("host-preflight-query-failed"),
+            QStringLiteral("host-preflight"),
+            panelId,
+            ownershipToken,
+            {},
+            screenIndex,
+            screenId,
+            false,
+            false,
+            false);
+    }
+    if (*preexistingMatches != 0)
+    {
+        return rollBack(
+            QStringLiteral("host-identity-conflict"),
+            QStringLiteral("host-preflight"),
+            panelId,
+            ownershipToken,
+            {},
+            screenIndex,
+            screenId,
+            false,
+            false,
+            false);
+    }
+
+    FreePanelHostMutationResult mutation;
 
     if (intent == FreePanelCreationIntent::AdoptHost)
     {
         if (!m_operations.configureAdoptedHost)
         {
-            m_registry.removePanel(panelId);
-            return failure(QStringLiteral("operation-unavailable"));
+            return rollBack(
+                QStringLiteral("operation-unavailable"),
+                QStringLiteral("host-adoption"),
+                panelId,
+                ownershipToken,
+                {},
+                screenIndex,
+                screenId,
+                false,
+                false,
+                false);
         }
-        const std::optional<int> adoptedScreen = m_operations.configureAdoptedHost(
+        mutation = m_operations.configureAdoptedHost(
             request.existingDesktopContainmentId,
             request.existingDockAppletId,
             panelId,
             ownershipToken);
-        if (!adoptedScreen.has_value() || *adoptedScreen < 0)
+        if (!validHost(mutation.host))
         {
-            m_registry.removePanel(panelId);
-            return failure(QStringLiteral("host-adoption-unverified"));
+            mutation.host = {
+                request.existingDesktopContainmentId,
+                request.existingDockAppletId};
         }
-        screenIndex = *adoptedScreen;
-        host = {request.existingDesktopContainmentId, request.existingDockAppletId};
     }
     else
     {
         if (screenIndex < 0 || !m_operations.createConfiguredHost)
         {
-            m_registry.removePanel(panelId);
-            return failure(QStringLiteral("operation-unavailable"));
+            return rollBack(
+                QStringLiteral("operation-unavailable"),
+                QStringLiteral("host-creation"),
+                panelId,
+                ownershipToken,
+                {},
+                screenIndex,
+                screenId,
+                false,
+                false,
+                false);
         }
-        const std::optional<FreePanelHost> created = m_operations.createConfiguredHost(
+        mutation = m_operations.createConfiguredHost(
             screenIndex, panelId, ownershipToken);
-        if (!created.has_value() || created->desktopContainmentId < 0 ||
-            created->dockAppletId < 0)
-        {
-            m_registry.removePanel(panelId);
-            return failure(QStringLiteral("host-creation-failed"));
-        }
-        host = *created;
-        createdHost = true;
     }
 
-    const QString screenId = m_operations.screenIdForIndex
+    const QString mutationStage = intent == FreePanelCreationIntent::AdoptHost
+        ? QStringLiteral("host-adoption")
+        : QStringLiteral("host-creation");
+    const QString mutationErrorPrefix = intent == FreePanelCreationIntent::AdoptHost
+        ? QStringLiteral("host-adoption")
+        : QStringLiteral("host-creation");
+    if (mutation.outcome != FreePanelHostMutationOutcome::Verified ||
+        !validHost(mutation.host))
+    {
+        QString mutationError = mutationErrorPrefix + QStringLiteral("-failed");
+        bool hostMayExist = false;
+        if (mutation.outcome == FreePanelHostMutationOutcome::CandidateUnverified)
+        {
+            mutationError = mutationErrorPrefix + QStringLiteral("-unverified");
+            hostMayExist = true;
+        }
+        else if (mutation.outcome == FreePanelHostMutationOutcome::Indeterminate)
+        {
+            mutationError = mutationErrorPrefix + QStringLiteral("-indeterminate");
+            hostMayExist = true;
+        }
+        return rollBack(
+            mutationError,
+            mutationStage,
+            panelId,
+            ownershipToken,
+            mutation.host,
+            mutation.screenIndex >= 0 ? mutation.screenIndex : screenIndex,
+            screenId,
+            hostMayExist,
+            !validHost(mutation.host),
+            false);
+    }
+
+    screenIndex = mutation.screenIndex >= 0 ? mutation.screenIndex : screenIndex;
+    screenId = m_operations.screenIdForIndex
         ? m_operations.screenIdForIndex(screenIndex)
         : QString{};
+    const FreePanelHost host = mutation.host;
+    const FreePanelHostVerificationOutcome initialVerification = m_operations.verifyHost
+        ? m_operations.verifyHost(
+              host.desktopContainmentId,
+              host.dockAppletId,
+              panelId,
+              ownershipToken)
+        : FreePanelHostVerificationOutcome::QueryFailed;
+    if (initialVerification != FreePanelHostVerificationOutcome::Owned)
+    {
+        const bool definitelyMissing =
+            initialVerification == FreePanelHostVerificationOutcome::Missing;
+        const QString verificationError = initialVerification ==
+                FreePanelHostVerificationOutcome::QueryFailed
+            ? QStringLiteral("host-verification-query-failed")
+            : initialVerification == FreePanelHostVerificationOutcome::Missing
+                ? QStringLiteral("host-verification-missing")
+                : QStringLiteral("host-verification-refused");
+        return rollBack(
+            verificationError,
+            QStringLiteral("host-verification"),
+            panelId,
+            ownershipToken,
+            host,
+            screenIndex,
+            screenId,
+            !definitelyMissing,
+            false,
+            false);
+    }
+
     if (!m_registry.commitVerifiedFreeHostAssociation(
             panelId,
             host.desktopContainmentId,
@@ -240,37 +506,107 @@ FreePanelCreationResult FreePanelController::create(const FreePanelCreationReque
             screenId,
             QStringLiteral("desktop")))
     {
-        if (createdHost && m_operations.removeOwnedHost &&
-            m_operations.removeOwnedHost(
-                host.desktopContainmentId,
-                host.dockAppletId,
-                panelId,
-                ownershipToken))
-        {
-            m_registry.removePanel(panelId);
-        }
-
-        FreePanelCreationResult result = failure(
-            QStringLiteral("association-persist-failed"));
-        result.panelId = panelId;
-        result.desktopContainmentId = host.desktopContainmentId;
-        result.dockAppletId = host.dockAppletId;
-        result.ownershipVerified = true;
-        return result;
+        return rollBack(
+            QStringLiteral("association-persist-failed"),
+            QStringLiteral("association-persistence"),
+            panelId,
+            ownershipToken,
+            host,
+            screenIndex,
+            screenId,
+            true,
+            false,
+            true);
     }
 
-    if (request.origin == FreePanelCreationOrigin::TemplateBridge &&
-        (!m_operations.removeVerifiedBridge ||
-         !m_operations.removeVerifiedBridge(
-             request.bridgeContainmentId, request.ownershipToken)))
+    const auto persistedAssociation = m_registry.freeHostAssociation(panelId);
+    if (!persistedAssociation.has_value() ||
+        persistedAssociation->state != PanelRegistry::FreeHostState::HostedOwned ||
+        persistedAssociation->desktopContainmentId != host.desktopContainmentId ||
+        persistedAssociation->dockAppletId != host.dockAppletId ||
+        persistedAssociation->ownershipToken != ownershipToken ||
+        persistedAssociation->screenIndex != screenIndex ||
+        persistedAssociation->screenId != screenId ||
+        persistedAssociation->hostMode != QStringLiteral("desktop"))
     {
-        FreePanelCreationResult result = failure(
-            QStringLiteral("bootstrap-cleanup-failed"));
-        result.panelId = panelId;
-        result.desktopContainmentId = host.desktopContainmentId;
-        result.dockAppletId = host.dockAppletId;
-        result.ownershipVerified = true;
-        return result;
+        return rollBack(
+            QStringLiteral("association-readback-failed"),
+            QStringLiteral("association-readback"),
+            panelId,
+            ownershipToken,
+            host,
+            screenIndex,
+            screenId,
+            true,
+            false,
+            true);
+    }
+
+    if (request.origin == FreePanelCreationOrigin::TemplateBridge)
+    {
+        const FreePanelRemovalOutcome bridgeOutcome = m_operations.removeVerifiedBridge
+            ? m_operations.removeVerifiedBridge(
+                  request.bridgeContainmentId, request.ownershipToken)
+            : FreePanelRemovalOutcome::QueryFailed;
+        if (!removalCompleted(bridgeOutcome))
+        {
+            return rollBack(
+                bridgeOutcome == FreePanelRemovalOutcome::Refused
+                    ? QStringLiteral("bootstrap-cleanup-refused")
+                    : QStringLiteral("bootstrap-cleanup-indeterminate"),
+                QStringLiteral("bootstrap-cleanup"),
+                panelId,
+                ownershipToken,
+                host,
+                screenIndex,
+                screenId,
+                true,
+                false,
+                true);
+        }
+    }
+
+    const FreePanelHostVerificationOutcome finalVerification = m_operations.verifyHost
+        ? m_operations.verifyHost(
+              host.desktopContainmentId,
+              host.dockAppletId,
+              panelId,
+              ownershipToken)
+        : FreePanelHostVerificationOutcome::QueryFailed;
+    if (finalVerification != FreePanelHostVerificationOutcome::Owned)
+    {
+        const bool definitelyMissing =
+            finalVerification == FreePanelHostVerificationOutcome::Missing;
+        return rollBack(
+            finalVerification == FreePanelHostVerificationOutcome::QueryFailed
+                ? QStringLiteral("final-host-readback-query-failed")
+                : finalVerification == FreePanelHostVerificationOutcome::Missing
+                    ? QStringLiteral("final-host-readback-missing")
+                    : QStringLiteral("final-host-readback-refused"),
+            QStringLiteral("final-readback"),
+            panelId,
+            ownershipToken,
+            host,
+            screenIndex,
+            screenId,
+            !definitelyMissing,
+            false,
+            false);
+    }
+
+    if (!m_registry.completeFreePanelCreation(panelId, ownershipToken))
+    {
+        return rollBack(
+            QStringLiteral("creation-completion-persist-failed"),
+            QStringLiteral("transaction-completion"),
+            panelId,
+            ownershipToken,
+            host,
+            screenIndex,
+            screenId,
+            true,
+            false,
+            true);
     }
 
     FreePanelCreationResult result;

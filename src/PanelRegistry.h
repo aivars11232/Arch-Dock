@@ -53,6 +53,7 @@ public:
     Q_INVOKABLE void setPanelValue(const QString &panelId, const QString &key, const QVariant &value);
     Q_INVOKABLE void updatePanel(const QString &panelId, const QVariantMap &values);
     [[nodiscard]] std::optional<FreeHostAssociation> freeHostAssociation(const QString &panelId) const;
+    [[nodiscard]] QString beginFreePanelCreation(const QString &ownershipToken);
     [[nodiscard]] bool commitVerifiedFreeHostAssociation(
         const QString &panelId,
         int desktopContainmentId,
@@ -61,6 +62,21 @@ public:
         int screenIndex,
         const QString &screenId,
         const QString &hostMode);
+    [[nodiscard]] bool completeFreePanelCreation(
+        const QString &panelId,
+        const QString &ownershipToken);
+    [[nodiscard]] bool recordRecoverableFreePanelCreation(
+        const QString &panelId,
+        int desktopContainmentId,
+        int dockAppletId,
+        const QString &ownershipToken,
+        int screenIndex,
+        const QString &screenId,
+        const QString &creationError,
+        const QString &rollbackError);
+    [[nodiscard]] bool discardFreePanelCreation(
+        const QString &panelId,
+        const QString &ownershipToken);
     [[nodiscard]] bool commitVerifiedNativePanelAssociation(
         const QString &panelId,
         int containmentId,

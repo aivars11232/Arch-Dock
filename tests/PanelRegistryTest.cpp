@@ -28,6 +28,7 @@
 #include <array>
 #include <cerrno>
 #include <csignal>
+#include <functional>
 #include <optional>
 #include <utility>
 
@@ -66,6 +67,184 @@ bool processIsRunning(qint64 processId)
     errno = 0;
     return processId > 0 && ::kill(static_cast<pid_t>(processId), 0) == 0;
 }
+
+class ScopedNativeSettingsPath final
+{
+public:
+    ScopedNativeSettingsPath(QString path, QString restorePath)
+        : m_restorePath(std::move(restorePath))
+    {
+        QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, path);
+    }
+
+    ~ScopedNativeSettingsPath()
+    {
+        QSettings::setPath(
+            QSettings::NativeFormat,
+            QSettings::UserScope,
+            m_restorePath);
+    }
+
+private:
+    QString m_restorePath;
+};
+
+struct FreePanelHostHarness
+{
+    std::optional<int> bridgeScreen = 1;
+    std::optional<int> matchingCount = 0;
+    ArchDock::FreePanelHostMutationResult createResult{
+        ArchDock::FreePanelHostMutationOutcome::Verified,
+        {42, 73},
+        1};
+    ArchDock::FreePanelHostMutationResult adoptResult{
+        ArchDock::FreePanelHostMutationOutcome::Verified,
+        {42, 73},
+        1};
+    QList<ArchDock::FreePanelHostVerificationOutcome> verificationResults{
+        ArchDock::FreePanelHostVerificationOutcome::Owned,
+        ArchDock::FreePanelHostVerificationOutcome::Owned};
+    ArchDock::FreePanelRemovalOutcome exactRemoval =
+        ArchDock::FreePanelRemovalOutcome::Removed;
+    ArchDock::FreePanelRemovalOutcome identityRemoval =
+        ArchDock::FreePanelRemovalOutcome::AlreadyAbsent;
+    ArchDock::FreePanelRemovalOutcome bridgeRemoval =
+        ArchDock::FreePanelRemovalOutcome::Removed;
+    std::function<void(int)> onVerify;
+    std::function<void()> onExactRemoval;
+    std::function<void()> onCreate;
+    int bridgeScreenCalls = 0;
+    int matchingCountCalls = 0;
+    int createCalls = 0;
+    int adoptCalls = 0;
+    int verifyCalls = 0;
+    int exactRemovalCalls = 0;
+    int identityRemovalCalls = 0;
+    int bridgeRemovalCalls = 0;
+    ArchDock::FreePanelHost removedHost;
+    QString removedPanelId;
+    QString removedToken;
+
+    ArchDock::FreePanelController::HostOperations operations()
+    {
+        ArchDock::FreePanelController::HostOperations result;
+        result.verifiedBridgeScreen = [this](int, const QString &)
+        {
+            ++bridgeScreenCalls;
+            return bridgeScreen;
+        };
+        result.matchingHostCount = [this](const QString &, const QString &)
+        {
+            ++matchingCountCalls;
+            return matchingCount;
+        };
+        result.createConfiguredHost = [this](int, const QString &, const QString &)
+        {
+            ++createCalls;
+            if (onCreate)
+            {
+                onCreate();
+            }
+            return createResult;
+        };
+        result.configureAdoptedHost = [this](
+            int,
+            int,
+            const QString &,
+            const QString &)
+        {
+            ++adoptCalls;
+            return adoptResult;
+        };
+        result.verifyHost = [this](
+            int,
+            int,
+            const QString &,
+            const QString &)
+        {
+            const int callIndex = verifyCalls++;
+            if (onVerify)
+            {
+                onVerify(callIndex);
+            }
+            if (verificationResults.isEmpty())
+            {
+                return ArchDock::FreePanelHostVerificationOutcome::Owned;
+            }
+            return verificationResults.at(qMin(callIndex, verificationResults.size() - 1));
+        };
+        result.removeOwnedHost = [this](
+            int containmentId,
+            int appletId,
+            const QString &panelId,
+            const QString &token)
+        {
+            ++exactRemovalCalls;
+            removedHost = {containmentId, appletId};
+            removedPanelId = panelId;
+            removedToken = token;
+            if (onExactRemoval)
+            {
+                onExactRemoval();
+            }
+            return exactRemoval;
+        };
+        result.removeOwnedHostByIdentity = [this](
+            const QString &panelId,
+            const QString &token)
+        {
+            ++identityRemovalCalls;
+            removedPanelId = panelId;
+            removedToken = token;
+            return identityRemoval;
+        };
+        result.removeVerifiedBridge = [this](int, const QString &)
+        {
+            ++bridgeRemovalCalls;
+            return bridgeRemoval;
+        };
+        result.screenIdForIndex = [](int screenIndex)
+        {
+            return QStringLiteral("output:%1").arg(screenIndex);
+        };
+        return result;
+    }
+};
+
+struct FreePanelControllerRun
+{
+    ArchDock::FreePanelCreationResult result;
+    QStringList panelIdsBefore;
+    QStringList panelIdsAfter;
+};
+
+FreePanelControllerRun runFreePanelController(
+    FreePanelHostHarness &harness,
+    const ArchDock::FreePanelCreationRequest &request)
+{
+    PanelRegistry registry;
+    FreePanelControllerRun run;
+    run.panelIdsBefore = registry.panelIds();
+    ArchDock::FreePanelController controller(registry, harness.operations());
+    run.result = controller.create(request);
+    run.panelIdsAfter = registry.panelIds();
+    return run;
+}
+
+ArchDock::FreePanelCreationRequest studioFreePanelRequest()
+{
+    ArchDock::FreePanelCreationRequest request;
+    request.origin = ArchDock::FreePanelCreationOrigin::Studio;
+    request.screenIndex = 1;
+    return request;
+}
+
+void clearPanelRegistrySettings()
+{
+    QSettings settings;
+    settings.clear();
+    settings.sync();
+}
 }
 
 class PanelRegistryTest final : public QObject
@@ -89,6 +268,9 @@ private slots:
     void classifiesNativeContainmentMatches();
     void selectsNativeContainmentLifecycleIntent();
     void selectsFreePanelCreationIntent();
+    void persistsFreePanelCreationTransactionState();
+    void rollsBackFreePanelCreationFailures();
+    void reportsFreePanelRollbackFailures();
     void resolvesStableScreenIdentityBeforeFallbackIndex();
     void reservesAndOffsetsOnlySameScreenPanels();
     void concealsOnlyForRelevantActiveWindows();
@@ -791,6 +973,584 @@ void PanelRegistryTest::selectsFreePanelCreationIntent()
     {
         const Intent actualIntent = ArchDock::freePanelCreationIntent(testCase.state);
         QVERIFY2(actualIntent == testCase.expectedIntent, testCase.name);
+    }
+}
+
+void PanelRegistryTest::persistsFreePanelCreationTransactionState()
+{
+    PanelRegistry registry;
+    const QString token = QStringLiteral("archdock-free-test-transaction");
+    const QString panelId = registry.beginFreePanelCreation(token);
+    QVERIFY(!panelId.isEmpty());
+
+    const auto pending = registry.freeHostAssociation(panelId);
+    QVERIFY(pending.has_value());
+    QVERIFY(pending->state == PanelRegistry::FreeHostState::HostedStale);
+    QCOMPARE(pending->desktopContainmentId, -1);
+    QCOMPARE(pending->dockAppletId, -1);
+    QCOMPARE(pending->ownershipToken, token);
+    QCOMPARE(registry.panelValue(
+                 panelId, QStringLiteral("freeCreationState")).toString(),
+             QStringLiteral("pending"));
+
+    QVERIFY(registry.commitVerifiedFreeHostAssociation(
+        panelId,
+        42,
+        73,
+        token,
+        1,
+        QStringLiteral("output:1"),
+        QStringLiteral("desktop")));
+    const auto committed = registry.freeHostAssociation(panelId);
+    QVERIFY(committed.has_value());
+    QVERIFY(committed->state == PanelRegistry::FreeHostState::HostedOwned);
+    QCOMPARE(registry.panelValue(
+                 panelId, QStringLiteral("freeCreationState")).toString(),
+             QStringLiteral("pending"));
+
+    QVERIFY(registry.completeFreePanelCreation(panelId, token));
+    QCOMPARE(registry.panelValue(
+                 panelId, QStringLiteral("freeCreationState")).toString(),
+             QStringLiteral("complete"));
+    QVERIFY(!registry.discardFreePanelCreation(panelId, token));
+
+    PanelRegistry reloaded;
+    const auto persisted = reloaded.freeHostAssociation(panelId);
+    QVERIFY(persisted.has_value());
+    QVERIFY(persisted->state == PanelRegistry::FreeHostState::HostedOwned);
+    QCOMPARE(persisted->desktopContainmentId, 42);
+    QCOMPARE(persisted->dockAppletId, 73);
+    QCOMPARE(persisted->ownershipToken, token);
+    QCOMPARE(reloaded.panelValue(
+                 panelId, QStringLiteral("freeCreationState")).toString(),
+             QStringLiteral("complete"));
+
+    const QString recoveryToken = QStringLiteral("archdock-free-test-recovery");
+    const QString recoveryPanelId = registry.beginFreePanelCreation(recoveryToken);
+    QVERIFY(!recoveryPanelId.isEmpty());
+    QVERIFY(registry.recordRecoverableFreePanelCreation(
+        recoveryPanelId,
+        84,
+        91,
+        recoveryToken,
+        2,
+        QStringLiteral("output:2"),
+        QStringLiteral("association-persist-failed"),
+        QStringLiteral("host-rollback-query-failed")));
+    const auto recoverable = registry.freeHostAssociation(recoveryPanelId);
+    QVERIFY(recoverable.has_value());
+    QVERIFY(recoverable->state == PanelRegistry::FreeHostState::HostedStale);
+    QCOMPARE(recoverable->desktopContainmentId, 84);
+    QCOMPARE(recoverable->dockAppletId, 91);
+    QCOMPARE(recoverable->ownershipToken, recoveryToken);
+    QCOMPARE(registry.panelValue(
+                 recoveryPanelId, QStringLiteral("freeCreationState")).toString(),
+             QStringLiteral("rollback-pending"));
+    QCOMPARE(registry.panelValue(
+                 recoveryPanelId, QStringLiteral("freeCreationError")).toString(),
+             QStringLiteral("association-persist-failed"));
+    QCOMPARE(registry.panelValue(
+                 recoveryPanelId, QStringLiteral("freeRollbackError")).toString(),
+             QStringLiteral("host-rollback-query-failed"));
+    QVERIFY(!registry.discardFreePanelCreation(
+        recoveryPanelId, QStringLiteral("wrong-token")));
+    QVERIFY(registry.discardFreePanelCreation(recoveryPanelId, recoveryToken));
+    QVERIFY(!registry.panelIds().contains(recoveryPanelId));
+
+    QTemporaryDir blockedRoot;
+    QVERIFY(blockedRoot.isValid());
+    const QString blockedPath = blockedRoot.filePath(QStringLiteral("not-a-directory"));
+    QFile blocker(blockedPath);
+    QVERIFY(blocker.open(QIODevice::WriteOnly));
+    blocker.write("blocked");
+    blocker.close();
+    const QStringList idsBeforeFailure = registry.panelIds();
+    {
+        ScopedNativeSettingsPath blockedSettings(
+            blockedPath, m_settingsDirectory.path());
+        QVERIFY(registry.beginFreePanelCreation(
+            QStringLiteral("archdock-free-test-allocation-failure")).isEmpty());
+        QCOMPARE(registry.panelIds(), idsBeforeFailure);
+    }
+}
+
+void PanelRegistryTest::rollsBackFreePanelCreationFailures()
+{
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QStringList panelIdsBefore = registry.panelIds();
+        QTemporaryDir blockedRoot;
+        QVERIFY(blockedRoot.isValid());
+        const QString blockedPath = blockedRoot.filePath(QStringLiteral("not-a-directory"));
+        QFile blocker(blockedPath);
+        QVERIFY(blocker.open(QIODevice::WriteOnly));
+        blocker.write("blocked");
+        blocker.close();
+
+        FreePanelHostHarness harness;
+        ArchDock::FreePanelCreationResult result;
+        {
+            ScopedNativeSettingsPath blockedSettings(
+                blockedPath, m_settingsDirectory.path());
+            ArchDock::FreePanelController controller(registry, harness.operations());
+            result = controller.create(studioFreePanelRequest());
+        }
+        QCOMPARE(result.errorCode, QStringLiteral("record-allocation-failed"));
+        QCOMPARE(result.failureStage, QStringLiteral("record-allocation"));
+        QVERIFY(!result.rollbackAttempted);
+        QCOMPARE(registry.panelIds(), panelIdsBefore);
+        QCOMPARE(harness.matchingCountCalls, 0);
+        QCOMPARE(harness.createCalls, 0);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        FreePanelHostHarness harness;
+        harness.bridgeScreen = std::nullopt;
+        ArchDock::FreePanelCreationRequest request;
+        request.origin = ArchDock::FreePanelCreationOrigin::TemplateBridge;
+        request.bridgeContainmentId = 17;
+        request.ownershipToken = QStringLiteral("archdock-free-template-17:test");
+        const FreePanelControllerRun run = runFreePanelController(harness, request);
+        QCOMPARE(run.result.errorCode, QStringLiteral("bootstrap-bridge-unverified"));
+        QCOMPARE(run.result.failureStage, QStringLiteral("bridge-verification"));
+        QVERIFY(!run.result.rollbackAttempted);
+        QCOMPARE(run.panelIdsAfter, run.panelIdsBefore);
+        QCOMPARE(harness.bridgeScreenCalls, 1);
+        QCOMPARE(harness.createCalls, 0);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        FreePanelHostHarness harness;
+        harness.matchingCount = std::nullopt;
+        const FreePanelControllerRun run = runFreePanelController(
+            harness, studioFreePanelRequest());
+        QCOMPARE(run.result.errorCode, QStringLiteral("host-preflight-query-failed"));
+        QCOMPARE(run.result.failureStage, QStringLiteral("host-preflight"));
+        QVERIFY(run.result.rollbackAttempted);
+        QVERIFY(run.result.rollbackSucceeded);
+        QCOMPARE(run.panelIdsAfter, run.panelIdsBefore);
+        QCOMPARE(harness.matchingCountCalls, 1);
+        QCOMPARE(harness.createCalls, 0);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        FreePanelHostHarness harness;
+        harness.createResult.outcome = ArchDock::FreePanelHostMutationOutcome::NoHost;
+        harness.createResult.host = {};
+        const FreePanelControllerRun run = runFreePanelController(
+            harness, studioFreePanelRequest());
+        QCOMPARE(run.result.errorCode, QStringLiteral("host-creation-failed"));
+        QVERIFY(run.result.rollbackSucceeded);
+        QCOMPARE(run.panelIdsAfter, run.panelIdsBefore);
+        QCOMPARE(harness.createCalls, 1);
+        QCOMPARE(harness.exactRemovalCalls, 0);
+        QCOMPARE(harness.identityRemovalCalls, 0);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        FreePanelHostHarness harness;
+        harness.createResult.outcome =
+            ArchDock::FreePanelHostMutationOutcome::CandidateUnverified;
+        const FreePanelControllerRun run = runFreePanelController(
+            harness, studioFreePanelRequest());
+        QCOMPARE(run.result.errorCode, QStringLiteral("host-creation-unverified"));
+        QVERIFY(run.result.rollbackSucceeded);
+        QCOMPARE(run.panelIdsAfter, run.panelIdsBefore);
+        QCOMPARE(harness.exactRemovalCalls, 1);
+        QCOMPARE(harness.identityRemovalCalls, 0);
+        QCOMPARE(harness.removedHost.desktopContainmentId, 42);
+        QCOMPARE(harness.removedHost.dockAppletId, 73);
+        QVERIFY(harness.removedPanelId.startsWith(QStringLiteral("free-")));
+        QVERIFY(harness.removedToken.startsWith(QStringLiteral("archdock-free-")));
+    }
+
+    {
+        clearPanelRegistrySettings();
+        FreePanelHostHarness harness;
+        harness.createResult.outcome =
+            ArchDock::FreePanelHostMutationOutcome::Indeterminate;
+        harness.createResult.host = {42, -1};
+        harness.identityRemoval = ArchDock::FreePanelRemovalOutcome::Removed;
+        const FreePanelControllerRun run = runFreePanelController(
+            harness, studioFreePanelRequest());
+        QCOMPARE(run.result.errorCode, QStringLiteral("host-creation-indeterminate"));
+        QVERIFY(run.result.rollbackSucceeded);
+        QCOMPARE(run.panelIdsAfter, run.panelIdsBefore);
+        QCOMPARE(harness.exactRemovalCalls, 0);
+        QCOMPARE(harness.identityRemovalCalls, 1);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        FreePanelHostHarness harness;
+        harness.verificationResults = {
+            ArchDock::FreePanelHostVerificationOutcome::Missing};
+        const FreePanelControllerRun run = runFreePanelController(
+            harness, studioFreePanelRequest());
+        QCOMPARE(run.result.errorCode, QStringLiteral("host-verification-missing"));
+        QVERIFY(run.result.rollbackSucceeded);
+        QCOMPARE(run.panelIdsAfter, run.panelIdsBefore);
+        QCOMPARE(harness.verifyCalls, 1);
+        QCOMPARE(harness.exactRemovalCalls, 0);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        QTemporaryDir blockedRoot;
+        QVERIFY(blockedRoot.isValid());
+        const QString blockedPath = blockedRoot.filePath(QStringLiteral("not-a-directory"));
+        QFile blocker(blockedPath);
+        QVERIFY(blocker.open(QIODevice::WriteOnly));
+        blocker.write("blocked");
+        blocker.close();
+
+        FreePanelHostHarness harness;
+        harness.onVerify = [blockedPath](int callIndex)
+        {
+            if (callIndex == 0)
+            {
+                QSettings::setPath(
+                    QSettings::NativeFormat,
+                    QSettings::UserScope,
+                    blockedPath);
+            }
+        };
+        harness.onExactRemoval = [this]
+        {
+            QSettings::setPath(
+                QSettings::NativeFormat,
+                QSettings::UserScope,
+                m_settingsDirectory.path());
+        };
+        const FreePanelControllerRun run = runFreePanelController(
+            harness, studioFreePanelRequest());
+        QSettings::setPath(
+            QSettings::NativeFormat,
+            QSettings::UserScope,
+            m_settingsDirectory.path());
+        QCOMPARE(run.result.errorCode, QStringLiteral("association-persist-failed"));
+        QVERIFY(run.result.rollbackSucceeded);
+        QCOMPARE(run.panelIdsAfter, run.panelIdsBefore);
+        QCOMPARE(harness.exactRemovalCalls, 1);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        FreePanelHostHarness harness;
+        harness.bridgeRemoval = ArchDock::FreePanelRemovalOutcome::Refused;
+        ArchDock::FreePanelCreationRequest request;
+        request.origin = ArchDock::FreePanelCreationOrigin::TemplateBridge;
+        request.bridgeContainmentId = 19;
+        request.ownershipToken = QStringLiteral("archdock-free-template-19:test");
+        const FreePanelControllerRun run = runFreePanelController(harness, request);
+        QCOMPARE(run.result.errorCode, QStringLiteral("bootstrap-cleanup-refused"));
+        QCOMPARE(run.result.failureStage, QStringLiteral("bootstrap-cleanup"));
+        QVERIFY(run.result.rollbackSucceeded);
+        QCOMPARE(run.panelIdsAfter, run.panelIdsBefore);
+        QCOMPARE(harness.bridgeScreenCalls, 1);
+        QCOMPARE(harness.bridgeRemovalCalls, 1);
+        QCOMPARE(harness.exactRemovalCalls, 1);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        FreePanelHostHarness harness;
+        harness.verificationResults = {
+            ArchDock::FreePanelHostVerificationOutcome::Owned,
+            ArchDock::FreePanelHostVerificationOutcome::Missing};
+        const FreePanelControllerRun run = runFreePanelController(
+            harness, studioFreePanelRequest());
+        QCOMPARE(run.result.errorCode, QStringLiteral("final-host-readback-missing"));
+        QCOMPARE(run.result.failureStage, QStringLiteral("final-readback"));
+        QVERIFY(run.result.rollbackSucceeded);
+        QCOMPARE(run.panelIdsAfter, run.panelIdsBefore);
+        QCOMPARE(harness.verifyCalls, 2);
+        QCOMPARE(harness.exactRemovalCalls, 0);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        QTemporaryDir blockedRoot;
+        QVERIFY(blockedRoot.isValid());
+        const QString blockedPath = blockedRoot.filePath(QStringLiteral("not-a-directory"));
+        QFile blocker(blockedPath);
+        QVERIFY(blocker.open(QIODevice::WriteOnly));
+        blocker.write("blocked");
+        blocker.close();
+
+        FreePanelHostHarness harness;
+        harness.onVerify = [blockedPath](int callIndex)
+        {
+            if (callIndex == 1)
+            {
+                QSettings::setPath(
+                    QSettings::NativeFormat,
+                    QSettings::UserScope,
+                    blockedPath);
+            }
+        };
+        harness.onExactRemoval = [this]
+        {
+            QSettings::setPath(
+                QSettings::NativeFormat,
+                QSettings::UserScope,
+                m_settingsDirectory.path());
+        };
+        const FreePanelControllerRun run = runFreePanelController(
+            harness, studioFreePanelRequest());
+        QSettings::setPath(
+            QSettings::NativeFormat,
+            QSettings::UserScope,
+            m_settingsDirectory.path());
+        QCOMPARE(
+            run.result.errorCode,
+            QStringLiteral("creation-completion-persist-failed"));
+        QVERIFY(run.result.rollbackSucceeded);
+        QCOMPARE(run.panelIdsAfter, run.panelIdsBefore);
+        QCOMPARE(harness.verifyCalls, 2);
+        QCOMPARE(harness.exactRemovalCalls, 1);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        FreePanelHostHarness harness;
+        const FreePanelControllerRun run = runFreePanelController(
+            harness, studioFreePanelRequest());
+        QVERIFY(run.result.success);
+        QCOMPARE(run.result.status, QStringLiteral("created"));
+        QVERIFY(run.result.ownershipVerified);
+        QCOMPARE(run.panelIdsAfter.size(), run.panelIdsBefore.size() + 1);
+        QCOMPARE(harness.matchingCountCalls, 1);
+        QCOMPARE(harness.createCalls, 1);
+        QCOMPARE(harness.verifyCalls, 2);
+        QCOMPARE(harness.exactRemovalCalls, 0);
+        PanelRegistry reloaded;
+        QCOMPARE(reloaded.panelValue(
+                     run.result.panelId,
+                     QStringLiteral("freeCreationState")).toString(),
+                 QStringLiteral("complete"));
+    }
+
+    {
+        clearPanelRegistrySettings();
+        ArchDock::FreePanelCreationRequest request;
+        request.origin = ArchDock::FreePanelCreationOrigin::TemplateBridge;
+        request.bridgeContainmentId = 29;
+        request.ownershipToken = QStringLiteral("archdock-free-template-29:test");
+
+        FreePanelHostHarness firstHarness;
+        const FreePanelControllerRun firstRun = runFreePanelController(
+            firstHarness, request);
+        QVERIFY(firstRun.result.success);
+        QCOMPARE(firstRun.result.status, QStringLiteral("created"));
+
+        FreePanelHostHarness repeatedHarness;
+        repeatedHarness.bridgeRemoval =
+            ArchDock::FreePanelRemovalOutcome::AlreadyAbsent;
+        const FreePanelControllerRun repeatedRun = runFreePanelController(
+            repeatedHarness, request);
+        QVERIFY(repeatedRun.result.success);
+        QCOMPARE(repeatedRun.result.status, QStringLiteral("existing"));
+        QCOMPARE(repeatedRun.result.panelId, firstRun.result.panelId);
+        QCOMPARE(repeatedRun.panelIdsAfter, repeatedRun.panelIdsBefore);
+        QCOMPARE(repeatedHarness.createCalls, 0);
+        QCOMPARE(repeatedHarness.verifyCalls, 1);
+        QCOMPARE(repeatedHarness.bridgeRemovalCalls, 1);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        FreePanelHostHarness harness;
+        harness.adoptResult = {
+            ArchDock::FreePanelHostMutationOutcome::Verified,
+            {55, 66},
+            2};
+        ArchDock::FreePanelCreationRequest request;
+        request.origin = ArchDock::FreePanelCreationOrigin::ExistingApplet;
+        request.existingDesktopContainmentId = 55;
+        request.existingDockAppletId = 66;
+        const FreePanelControllerRun run = runFreePanelController(harness, request);
+        QVERIFY(run.result.success);
+        QCOMPARE(run.result.status, QStringLiteral("adopted"));
+        QCOMPARE(run.result.desktopContainmentId, 55);
+        QCOMPARE(run.result.dockAppletId, 66);
+        QCOMPARE(harness.adoptCalls, 1);
+        QCOMPARE(harness.verifyCalls, 2);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        FreePanelHostHarness harness;
+        harness.adoptResult.outcome = ArchDock::FreePanelHostMutationOutcome::NoHost;
+        ArchDock::FreePanelCreationRequest request;
+        request.origin = ArchDock::FreePanelCreationOrigin::ExistingApplet;
+        request.existingDesktopContainmentId = 900;
+        request.existingDockAppletId = 901;
+        const FreePanelControllerRun run = runFreePanelController(harness, request);
+        QCOMPARE(run.result.errorCode, QStringLiteral("host-adoption-failed"));
+        QVERIFY(run.result.rollbackSucceeded);
+        QCOMPARE(run.panelIdsAfter, run.panelIdsBefore);
+        QCOMPARE(harness.exactRemovalCalls, 0);
+        QCOMPARE(harness.identityRemovalCalls, 0);
+    }
+}
+
+void PanelRegistryTest::reportsFreePanelRollbackFailures()
+{
+    {
+        clearPanelRegistrySettings();
+        QTemporaryDir blockedRoot;
+        QVERIFY(blockedRoot.isValid());
+        const QString blockedPath = blockedRoot.filePath(QStringLiteral("not-a-directory"));
+        QFile blocker(blockedPath);
+        QVERIFY(blocker.open(QIODevice::WriteOnly));
+        blocker.write("blocked");
+        blocker.close();
+
+        FreePanelHostHarness harness;
+        harness.exactRemoval = ArchDock::FreePanelRemovalOutcome::Refused;
+        harness.onVerify = [blockedPath](int callIndex)
+        {
+            if (callIndex == 0)
+            {
+                QSettings::setPath(
+                    QSettings::NativeFormat,
+                    QSettings::UserScope,
+                    blockedPath);
+            }
+        };
+        harness.onExactRemoval = [this]
+        {
+            QSettings::setPath(
+                QSettings::NativeFormat,
+                QSettings::UserScope,
+                m_settingsDirectory.path());
+        };
+        const FreePanelControllerRun run = runFreePanelController(
+            harness, studioFreePanelRequest());
+        QSettings::setPath(
+            QSettings::NativeFormat,
+            QSettings::UserScope,
+            m_settingsDirectory.path());
+
+        QCOMPARE(run.result.errorCode, QStringLiteral("association-persist-failed"));
+        QCOMPARE(run.result.failureStage, QStringLiteral("association-persistence"));
+        QVERIFY(run.result.rollbackAttempted);
+        QVERIFY(!run.result.rollbackSucceeded);
+        QCOMPARE(run.result.rollbackErrorCode, QStringLiteral("host-rollback-refused"));
+        QCOMPARE(run.result.status, QStringLiteral("rollback-pending"));
+        QVERIFY(run.result.recoverable);
+        QCOMPARE(harness.exactRemovalCalls, 1);
+        QCOMPARE(harness.identityRemovalCalls, 0);
+        QCOMPARE(harness.removedPanelId, run.result.panelId);
+
+        PanelRegistry reloaded;
+        const auto retained = reloaded.freeHostAssociation(run.result.panelId);
+        QVERIFY(retained.has_value());
+        QVERIFY(retained->state == PanelRegistry::FreeHostState::HostedStale);
+        QCOMPARE(retained->desktopContainmentId, 42);
+        QCOMPARE(retained->dockAppletId, 73);
+        QCOMPARE(retained->ownershipToken, harness.removedToken);
+        QCOMPARE(reloaded.panelValue(
+                     run.result.panelId,
+                     QStringLiteral("freeCreationError")).toString(),
+                 QStringLiteral("association-persist-failed"));
+        QCOMPARE(reloaded.panelValue(
+                     run.result.panelId,
+                     QStringLiteral("freeRollbackError")).toString(),
+                 QStringLiteral("host-rollback-refused"));
+    }
+
+    {
+        clearPanelRegistrySettings();
+        QTemporaryDir blockedRoot;
+        QVERIFY(blockedRoot.isValid());
+        const QString blockedPath = blockedRoot.filePath(QStringLiteral("not-a-directory"));
+        QFile blocker(blockedPath);
+        QVERIFY(blocker.open(QIODevice::WriteOnly));
+        blocker.write("blocked");
+        blocker.close();
+
+        FreePanelHostHarness harness;
+        harness.createResult.outcome = ArchDock::FreePanelHostMutationOutcome::NoHost;
+        harness.createResult.host = {};
+        harness.onCreate = [blockedPath]
+        {
+            QSettings::setPath(
+                QSettings::NativeFormat,
+                QSettings::UserScope,
+                blockedPath);
+        };
+        const FreePanelControllerRun run = runFreePanelController(
+            harness, studioFreePanelRequest());
+        QSettings::setPath(
+            QSettings::NativeFormat,
+            QSettings::UserScope,
+            m_settingsDirectory.path());
+
+        QCOMPARE(run.result.errorCode, QStringLiteral("host-creation-failed"));
+        QVERIFY(!run.result.rollbackSucceeded);
+        QCOMPARE(
+            run.result.rollbackErrorCode,
+            QStringLiteral(
+                "record-discard-failed+recovery-record-persist-failed"));
+        QVERIFY(run.result.recoverable);
+        QVERIFY(run.panelIdsAfter.contains(run.result.panelId));
+        QCOMPARE(harness.createCalls, 1);
+        QCOMPARE(harness.exactRemovalCalls, 0);
+        QCOMPARE(harness.identityRemovalCalls, 0);
+
+        PanelRegistry reloaded;
+        const auto retained = reloaded.freeHostAssociation(run.result.panelId);
+        QVERIFY(retained.has_value());
+        QVERIFY(retained->state == PanelRegistry::FreeHostState::HostedStale);
+        QVERIFY(retained->ownershipToken.startsWith(QStringLiteral("archdock-free-")));
+        QCOMPARE(reloaded.panelValue(
+                     run.result.panelId,
+                     QStringLiteral("freeCreationState")).toString(),
+                 QStringLiteral("pending"));
+    }
+
+    {
+        clearPanelRegistrySettings();
+        FreePanelHostHarness harness;
+        harness.createResult.outcome =
+            ArchDock::FreePanelHostMutationOutcome::Indeterminate;
+        harness.createResult.host = {42, -1};
+        harness.identityRemoval = ArchDock::FreePanelRemovalOutcome::AlreadyAbsent;
+        const FreePanelControllerRun run = runFreePanelController(
+            harness, studioFreePanelRequest());
+        QCOMPARE(run.result.errorCode, QStringLiteral("host-creation-indeterminate"));
+        QCOMPARE(
+            run.result.rollbackErrorCode,
+            QStringLiteral("host-rollback-absence-unverified"));
+        QVERIFY(run.result.recoverable);
+        QCOMPARE(harness.identityRemovalCalls, 1);
+        QCOMPARE(harness.exactRemovalCalls, 0);
+    }
+
+    {
+        clearPanelRegistrySettings();
+        FreePanelHostHarness harness;
+        harness.createResult.outcome =
+            ArchDock::FreePanelHostMutationOutcome::Indeterminate;
+        harness.createResult.host = {42, -1};
+        harness.identityRemoval = ArchDock::FreePanelRemovalOutcome::QueryFailed;
+        const FreePanelControllerRun run = runFreePanelController(
+            harness, studioFreePanelRequest());
+        QCOMPARE(run.result.errorCode, QStringLiteral("host-creation-indeterminate"));
+        QCOMPARE(
+            run.result.rollbackErrorCode,
+            QStringLiteral("host-rollback-query-failed"));
+        QVERIFY(run.result.recoverable);
+        QCOMPARE(harness.identityRemovalCalls, 1);
+        QCOMPARE(harness.exactRemovalCalls, 0);
+        QCOMPARE(harness.createCalls, 1);
     }
 }
 

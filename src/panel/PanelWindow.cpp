@@ -34,6 +34,7 @@
 #include <QWindow>
 
 #include <array>
+#include <limits>
 #include <utility>
 
 namespace
@@ -84,6 +85,24 @@ QString screenResolutionReasonName(ArchDock::ScreenResolutionReason reason)
         return QStringLiteral("bounded-index-fallback");
     }
     return QStringLiteral("unknown");
+}
+
+ArchDock::FreePanelRemovalOutcome freePanelRemovalOutcome(
+    const std::optional<int> &marker)
+{
+    if (!marker.has_value())
+    {
+        return ArchDock::FreePanelRemovalOutcome::QueryFailed;
+    }
+    if (*marker == 1)
+    {
+        return ArchDock::FreePanelRemovalOutcome::Removed;
+    }
+    if (*marker == 2)
+    {
+        return ArchDock::FreePanelRemovalOutcome::AlreadyAbsent;
+    }
+    return ArchDock::FreePanelRemovalOutcome::Refused;
 }
 }
 
@@ -1034,7 +1053,8 @@ QVariantMap PanelWindow::createFreePanel()
     else
     {
         qWarning() << "Could not create the free-panel Plasma desktop host:"
-                   << result.errorCode;
+                   << result.errorCode << result.failureStage
+                   << result.rollbackErrorCode;
     }
     return result.toVariantMap();
 }
@@ -1056,7 +1076,8 @@ QVariantMap PanelWindow::createFreePanelFromTemplate(
     else
     {
         qWarning() << "Could not complete the free-panel template transaction:"
-                   << result.errorCode;
+                   << result.errorCode << result.failureStage
+                   << result.rollbackErrorCode;
     }
     return result.toVariantMap();
 }
@@ -1078,7 +1099,8 @@ QVariantMap PanelWindow::adoptFreePanelApplet(
     else
     {
         qWarning() << "Could not adopt the requesting free-panel desktop applet:"
-                   << result.errorCode;
+                   << result.errorCode << result.failureStage
+                   << result.rollbackErrorCode;
     }
     return result.toVariantMap();
 }
@@ -1090,6 +1112,10 @@ ArchDock::FreePanelCreationResult PanelWindow::createFreePanelTransaction(
     operations.verifiedBridgeScreen = [this](int containmentId, const QString &token)
     {
         return verifiedFreeTemplateBridgeScreen(containmentId, token);
+    };
+    operations.matchingHostCount = [this](const QString &panelId, const QString &token)
+    {
+        return freePanelHostMatchCount(panelId, token);
     };
     operations.createConfiguredHost = [this](
         int screenIndex,
@@ -1112,7 +1138,7 @@ ArchDock::FreePanelCreationResult PanelWindow::createFreePanelTransaction(
         const QString &panelId,
         const QString &token)
     {
-        return freePanelHostIsOwned(containmentId, appletId, panelId, token);
+        return freePanelHostVerification(containmentId, appletId, panelId, token);
     };
     operations.removeOwnedHost = [this](
         int containmentId,
@@ -1121,6 +1147,12 @@ ArchDock::FreePanelCreationResult PanelWindow::createFreePanelTransaction(
         const QString &token)
     {
         return removeOwnedFreePanelHost(containmentId, appletId, panelId, token);
+    };
+    operations.removeOwnedHostByIdentity = [this](
+        const QString &panelId,
+        const QString &token)
+    {
+        return removeOwnedFreePanelHostByIdentity(panelId, token);
     };
     operations.removeVerifiedBridge = [this](int containmentId, const QString &token)
     {
@@ -1181,14 +1213,56 @@ print("ARCHDOCK_RESULT:" + String(verifiedScreen + 1));
     return *marker - 1;
 }
 
-std::optional<ArchDock::FreePanelHost> PanelWindow::createConfiguredFreePanelHost(
+std::optional<int> PanelWindow::freePanelHostMatchCount(
+    const QString &panelId,
+    const QString &ownershipToken) const
+{
+    if (panelId.isEmpty() || ownershipToken.isEmpty())
+    {
+        return std::nullopt;
+    }
+
+    const QString script = QStringLiteral(R"JS(
+let matches = 0;
+const allDesktops = desktops();
+for (let desktopIndex = 0; desktopIndex < allDesktops.length; ++desktopIndex) {
+    const desktop = desktopById(Number(allDesktops[desktopIndex].id));
+    if (!desktop)
+        continue;
+    const docks = desktop.widgets("org.archdock.dock");
+    for (let dockIndex = 0; dockIndex < docks.length; ++dockIndex) {
+        const dock = desktop.widgetById(Number(docks[dockIndex].id));
+        if (!dock || dock.type !== "org.archdock.dock")
+            continue;
+        dock.currentConfigGroup = ["General"];
+        const bootstrap = String(dock.readConfig("bootstrapFreeDock", true)).toLowerCase();
+        if (String(dock.readConfig("panelId", "")) === %1 &&
+            String(dock.readConfig("panelType", "")) === "empty" &&
+            String(dock.readConfig("ownerToken", "")) === %2 &&
+            (bootstrap === "false" || bootstrap === "0")) {
+            ++matches;
+        }
+    }
+}
+print("ARCHDOCK_RESULT:" + String(matches));
+)JS")
+                               .arg(plasmaScriptStringLiteral(panelId))
+                               .arg(plasmaScriptStringLiteral(ownershipToken));
+    const std::optional<int> result = evaluatePlasmaScriptResultOptional(script);
+    return result.has_value() && *result >= 0 ? result : std::nullopt;
+}
+
+ArchDock::FreePanelHostMutationResult PanelWindow::createConfiguredFreePanelHost(
     int screenIndex,
     const QString &panelId,
     const QString &ownershipToken) const
 {
+    ArchDock::FreePanelHostMutationResult result;
+    result.screenIndex = screenIndex;
     if (screenIndex < 0 || panelId.isEmpty() || ownershipToken.isEmpty())
     {
-        return std::nullopt;
+        result.outcome = ArchDock::FreePanelHostMutationOutcome::NoHost;
+        return result;
     }
 
     const std::optional<int> desktopContainmentId = evaluatePlasmaScriptResultOptional(
@@ -1196,16 +1270,22 @@ std::optional<ArchDock::FreePanelHost> PanelWindow::createConfiguredFreePanelHos
             "const desktop = desktopForScreen(%1); "
             "print('ARCHDOCK_RESULT:' + String(desktop ? Number(desktop.id) : -1));")
             .arg(screenIndex));
-    if (!desktopContainmentId.has_value() || *desktopContainmentId < 0)
+    if (!desktopContainmentId.has_value())
     {
-        return std::nullopt;
+        return result;
     }
+    if (*desktopContainmentId < 0)
+    {
+        result.outcome = ArchDock::FreePanelHostMutationOutcome::NoHost;
+        return result;
+    }
+    result.host.desktopContainmentId = *desktopContainmentId;
 
     const QString panel = plasmaScriptStringLiteral(panelId);
     const QString token = plasmaScriptStringLiteral(ownershipToken);
     const QString script = QStringLiteral(R"JS(
 const desktop = desktopForScreen(%1);
-let createdAppletId = -1;
+let marker = 0;
 if (desktop && Number(desktop.id) === %2) {
     const size = Math.round(gridUnit * 22);
     let dock = null;
@@ -1220,60 +1300,87 @@ if (desktop && Number(desktop.id) === %2) {
         dock = null;
     }
     if (dock) {
+        const candidateId = Number(dock.id);
+        if (candidateId < 0) {
+            marker = -2147483648;
+        }
         try {
             dock.currentConfigGroup = ["General"];
+            dock.writeConfig("ownerToken", %4);
             dock.writeConfig("panelId", %3);
             dock.writeConfig("panelType", "empty");
-            dock.writeConfig("ownerToken", %4);
             dock.writeConfig("bootstrapFreeDock", false);
             dock.reloadConfig();
-            if (Number(dock.id) >= 0 && dock.type === "org.archdock.dock" &&
+            const bootstrap = String(dock.readConfig("bootstrapFreeDock", true)).toLowerCase();
+            if (candidateId >= 0 && dock.type === "org.archdock.dock" &&
                 String(dock.readConfig("panelId", "")) === %3 &&
                 String(dock.readConfig("panelType", "")) === "empty" &&
                 String(dock.readConfig("ownerToken", "")) === %4 &&
-                String(dock.readConfig("bootstrapFreeDock", true)) === "false") {
-                createdAppletId = Number(dock.id);
+                (bootstrap === "false" || bootstrap === "0")) {
+                marker = candidateId + 1;
             }
         } catch (error) {
-            createdAppletId = -1;
         }
-        if (createdAppletId < 0) {
-            try {
-                dock.remove();
-            } catch (error) {
+
+        if (marker <= 0 && candidateId >= 0) {
+            const currentDock = desktop.widgetById(candidateId);
+            let transactionOwned = false;
+            if (currentDock && currentDock.type === "org.archdock.dock") {
+                currentDock.currentConfigGroup = ["General"];
+                transactionOwned =
+                    String(currentDock.readConfig("panelId", "")) === %3 &&
+                    String(currentDock.readConfig("ownerToken", "")) === %4;
             }
+            if (transactionOwned) {
+                try {
+                    currentDock.remove();
+                } catch (error) {
+                }
+            }
+            marker = desktop.widgetById(candidateId) ? -(candidateId + 1) : 0;
         }
     }
 }
-print("ARCHDOCK_RESULT:" + String(createdAppletId));
+print("ARCHDOCK_RESULT:" + String(marker));
 )JS")
                                .arg(screenIndex)
                                .arg(*desktopContainmentId)
                                .arg(panel)
                                .arg(token);
-    const std::optional<int> dockAppletId = evaluatePlasmaScriptResultOptional(script);
-    if (!dockAppletId.has_value() || *dockAppletId < 0 ||
-        !freePanelHostIsOwned(
-            *desktopContainmentId,
-            *dockAppletId,
-            panelId,
-            ownershipToken))
+    const std::optional<int> marker = evaluatePlasmaScriptResultOptional(script);
+    if (!marker.has_value() || *marker == std::numeric_limits<int>::min())
     {
-        return std::nullopt;
+        return result;
     }
-    return ArchDock::FreePanelHost{*desktopContainmentId, *dockAppletId};
+    if (*marker == 0)
+    {
+        result.outcome = ArchDock::FreePanelHostMutationOutcome::NoHost;
+        return result;
+    }
+    if (*marker > 0)
+    {
+        result.outcome = ArchDock::FreePanelHostMutationOutcome::Verified;
+        result.host.dockAppletId = *marker - 1;
+        return result;
+    }
+    result.outcome = ArchDock::FreePanelHostMutationOutcome::CandidateUnverified;
+    result.host.dockAppletId = -*marker - 1;
+    return result;
 }
 
-std::optional<int> PanelWindow::configureAdoptedFreePanelHost(
+ArchDock::FreePanelHostMutationResult PanelWindow::configureAdoptedFreePanelHost(
     int desktopContainmentId,
     int dockAppletId,
     const QString &panelId,
     const QString &ownershipToken) const
 {
+    ArchDock::FreePanelHostMutationResult result;
+    result.host = {desktopContainmentId, dockAppletId};
     if (desktopContainmentId < 0 || dockAppletId < 0 || panelId.isEmpty() ||
         ownershipToken.isEmpty())
     {
-        return std::nullopt;
+        result.outcome = ArchDock::FreePanelHostMutationOutcome::NoHost;
+        return result;
     }
 
     const QString panel = plasmaScriptStringLiteral(panelId);
@@ -1281,49 +1388,87 @@ std::optional<int> PanelWindow::configureAdoptedFreePanelHost(
     const QString script = QStringLiteral(R"JS(
 const desktop = desktopById(%1);
 const dock = desktop ? desktop.widgetById(%2) : null;
-let verifiedScreen = -1;
+let marker = 0;
 if (desktop && Number(desktop.id) === %1 && dock && Number(dock.id) === %2 &&
     dock.type === "org.archdock.dock") {
     dock.currentConfigGroup = ["General"];
-    const pending = String(dock.readConfig("bootstrapFreeDock", false)).toLowerCase();
-    if (String(dock.readConfig("panelId", "")) === "" &&
-        (pending === "true" || pending === "1")) {
+    const originalPanelId = String(dock.readConfig("panelId", ""));
+    const originalPanelType = String(dock.readConfig("panelType", ""));
+    const originalOwnerToken = String(dock.readConfig("ownerToken", ""));
+    const originalBootstrap = String(
+        dock.readConfig("bootstrapFreeDock", false)).toLowerCase();
+    if (originalPanelId === "" && originalOwnerToken === "" &&
+        (originalBootstrap === "true" || originalBootstrap === "1")) {
         const screen = Number(desktop.screen);
         if (screen >= 0) {
-            dock.writeConfig("panelId", %3);
-            dock.writeConfig("panelType", "empty");
-            dock.writeConfig("ownerToken", %4);
-            dock.writeConfig("bootstrapFreeDock", false);
-            dock.reloadConfig();
-            if (String(dock.readConfig("panelId", "")) === %3 &&
-                String(dock.readConfig("panelType", "")) === "empty" &&
-                String(dock.readConfig("ownerToken", "")) === %4 &&
-                String(dock.readConfig("bootstrapFreeDock", true)) === "false") {
-                verifiedScreen = screen;
+            try {
+                dock.writeConfig("ownerToken", %4);
+                dock.writeConfig("panelId", %3);
+                dock.writeConfig("panelType", "empty");
+                dock.writeConfig("bootstrapFreeDock", false);
+                dock.reloadConfig();
+                const bootstrap = String(
+                    dock.readConfig("bootstrapFreeDock", true)).toLowerCase();
+                if (String(dock.readConfig("panelId", "")) === %3 &&
+                    String(dock.readConfig("panelType", "")) === "empty" &&
+                    String(dock.readConfig("ownerToken", "")) === %4 &&
+                    (bootstrap === "false" || bootstrap === "0")) {
+                    marker = screen + 1;
+                }
+            } catch (error) {
+            }
+
+            if (marker === 0) {
+                try {
+                    dock.writeConfig("panelId", originalPanelId);
+                    dock.writeConfig("panelType", originalPanelType);
+                    dock.writeConfig("ownerToken", originalOwnerToken);
+                    dock.writeConfig(
+                        "bootstrapFreeDock",
+                        originalBootstrap === "true" || originalBootstrap === "1");
+                    dock.reloadConfig();
+                } catch (error) {
+                }
+                const restoredBootstrap = String(
+                    dock.readConfig("bootstrapFreeDock", false)).toLowerCase();
+                const restored =
+                    String(dock.readConfig("panelId", "")) === originalPanelId &&
+                    String(dock.readConfig("panelType", "")) === originalPanelType &&
+                    String(dock.readConfig("ownerToken", "")) === originalOwnerToken &&
+                    restoredBootstrap === originalBootstrap;
+                marker = restored ? 0 : -1;
             }
         }
     }
 }
-print("ARCHDOCK_RESULT:" + String(verifiedScreen + 1));
+print("ARCHDOCK_RESULT:" + String(marker));
 )JS")
                                .arg(desktopContainmentId)
                                .arg(dockAppletId)
                                .arg(panel)
                                .arg(token);
     const std::optional<int> marker = evaluatePlasmaScriptResultOptional(script);
-    if (!marker.has_value() || *marker < 1 ||
-        !freePanelHostIsOwned(
-            desktopContainmentId,
-            dockAppletId,
-            panelId,
-            ownershipToken))
+    if (!marker.has_value())
     {
-        return std::nullopt;
+        return result;
     }
-    return *marker - 1;
+    if (*marker > 0)
+    {
+        result.outcome = ArchDock::FreePanelHostMutationOutcome::Verified;
+        result.screenIndex = *marker - 1;
+    }
+    else if (*marker == 0)
+    {
+        result.outcome = ArchDock::FreePanelHostMutationOutcome::NoHost;
+    }
+    else
+    {
+        result.outcome = ArchDock::FreePanelHostMutationOutcome::CandidateUnverified;
+    }
+    return result;
 }
 
-bool PanelWindow::freePanelHostIsOwned(
+ArchDock::FreePanelHostVerificationOutcome PanelWindow::freePanelHostVerification(
     int desktopContainmentId,
     int dockAppletId,
     const QString &panelId,
@@ -1332,77 +1477,161 @@ bool PanelWindow::freePanelHostIsOwned(
     if (desktopContainmentId < 0 || dockAppletId < 0 || panelId.isEmpty() ||
         ownershipToken.isEmpty())
     {
-        return false;
+        return ArchDock::FreePanelHostVerificationOutcome::UnownedOrUnverified;
     }
 
     const QString script = QStringLiteral(R"JS(
 const desktop = desktopById(%1);
 const dock = desktop ? desktop.widgetById(%2) : null;
-let owned = 0;
+let outcome = 0;
 if (desktop && Number(desktop.id) === %1 && dock && Number(dock.id) === %2 &&
     dock.type === "org.archdock.dock") {
+    outcome = -1;
     dock.currentConfigGroup = ["General"];
+    const bootstrap = String(dock.readConfig("bootstrapFreeDock", true)).toLowerCase();
     if (String(dock.readConfig("panelId", "")) === %3 &&
         String(dock.readConfig("panelType", "")) === "empty" &&
         String(dock.readConfig("ownerToken", "")) === %4 &&
-        String(dock.readConfig("bootstrapFreeDock", true)) === "false") {
-        owned = 1;
+        (bootstrap === "false" || bootstrap === "0")) {
+        outcome = 1;
     }
+} else if (dock) {
+    outcome = -1;
 }
-print("ARCHDOCK_RESULT:" + String(owned));
+print("ARCHDOCK_RESULT:" + String(outcome));
 )JS")
                                .arg(desktopContainmentId)
                                .arg(dockAppletId)
                                .arg(plasmaScriptStringLiteral(panelId))
                                .arg(plasmaScriptStringLiteral(ownershipToken));
     const std::optional<int> result = evaluatePlasmaScriptResultOptional(script);
-    return result.has_value() && *result == 1;
+    if (!result.has_value())
+    {
+        return ArchDock::FreePanelHostVerificationOutcome::QueryFailed;
+    }
+    if (*result == 1)
+    {
+        return ArchDock::FreePanelHostVerificationOutcome::Owned;
+    }
+    if (*result == 0)
+    {
+        return ArchDock::FreePanelHostVerificationOutcome::Missing;
+    }
+    return ArchDock::FreePanelHostVerificationOutcome::UnownedOrUnverified;
 }
 
-bool PanelWindow::removeOwnedFreePanelHost(
+ArchDock::FreePanelRemovalOutcome PanelWindow::removeOwnedFreePanelHost(
     int desktopContainmentId,
     int dockAppletId,
     const QString &panelId,
     const QString &ownershipToken) const
 {
+    if (desktopContainmentId < 0 || dockAppletId < 0 || panelId.isEmpty() ||
+        ownershipToken.isEmpty())
+    {
+        return ArchDock::FreePanelRemovalOutcome::Refused;
+    }
+
     const QString script = QStringLiteral(R"JS(
 const desktop = desktopById(%1);
 const dock = desktop ? desktop.widgetById(%2) : null;
-let removed = 0;
+let outcome = (!desktop || !dock) ? 2 : 0;
 if (desktop && Number(desktop.id) === %1 && dock && Number(dock.id) === %2 &&
     dock.type === "org.archdock.dock") {
     dock.currentConfigGroup = ["General"];
+    const bootstrap = String(dock.readConfig("bootstrapFreeDock", true)).toLowerCase();
     if (String(dock.readConfig("panelId", "")) === %3 &&
         String(dock.readConfig("panelType", "")) === "empty" &&
-        String(dock.readConfig("ownerToken", "")) === %4) {
+        String(dock.readConfig("ownerToken", "")) === %4 &&
+        (bootstrap === "false" || bootstrap === "0")) {
         dock.remove();
-        removed = desktop.widgetById(%2) ? 0 : 1;
+        outcome = desktop.widgetById(%2) ? 0 : 1;
     }
 }
-print("ARCHDOCK_RESULT:" + String(removed));
+print("ARCHDOCK_RESULT:" + String(outcome));
 )JS")
                                .arg(desktopContainmentId)
                                .arg(dockAppletId)
                                .arg(plasmaScriptStringLiteral(panelId))
                                .arg(plasmaScriptStringLiteral(ownershipToken));
-    const std::optional<int> result = evaluatePlasmaScriptResultOptional(script);
-    return result.has_value() && *result == 1;
+    return freePanelRemovalOutcome(evaluatePlasmaScriptResultOptional(script));
 }
 
-bool PanelWindow::removeVerifiedFreeTemplateBridge(
+ArchDock::FreePanelRemovalOutcome PanelWindow::removeOwnedFreePanelHostByIdentity(
+    const QString &panelId,
+    const QString &ownershipToken) const
+{
+    if (panelId.isEmpty() || ownershipToken.isEmpty())
+    {
+        return ArchDock::FreePanelRemovalOutcome::Refused;
+    }
+
+    const QString script = QStringLiteral(R"JS(
+let matches = 0;
+let matchingDesktopId = -1;
+let matchingAppletId = -1;
+const allDesktops = desktops();
+for (let desktopIndex = 0; desktopIndex < allDesktops.length; ++desktopIndex) {
+    const desktop = desktopById(Number(allDesktops[desktopIndex].id));
+    if (!desktop)
+        continue;
+    const docks = desktop.widgets("org.archdock.dock");
+    for (let dockIndex = 0; dockIndex < docks.length; ++dockIndex) {
+        const dock = desktop.widgetById(Number(docks[dockIndex].id));
+        if (!dock || dock.type !== "org.archdock.dock")
+            continue;
+        dock.currentConfigGroup = ["General"];
+        const bootstrap = String(dock.readConfig("bootstrapFreeDock", true)).toLowerCase();
+        if (String(dock.readConfig("panelId", "")) === %1 &&
+            String(dock.readConfig("panelType", "")) === "empty" &&
+            String(dock.readConfig("ownerToken", "")) === %2 &&
+            (bootstrap === "false" || bootstrap === "0")) {
+            ++matches;
+            matchingDesktopId = Number(desktop.id);
+            matchingAppletId = Number(dock.id);
+        }
+    }
+}
+
+let outcome = matches === 0 ? 2 : 0;
+if (matches === 1) {
+    const desktop = desktopById(matchingDesktopId);
+    const dock = desktop ? desktop.widgetById(matchingAppletId) : null;
+    if (!desktop || !dock) {
+        outcome = 2;
+    } else if (dock.type === "org.archdock.dock") {
+        dock.currentConfigGroup = ["General"];
+        const bootstrap = String(dock.readConfig("bootstrapFreeDock", true)).toLowerCase();
+        if (String(dock.readConfig("panelId", "")) === %1 &&
+            String(dock.readConfig("panelType", "")) === "empty" &&
+            String(dock.readConfig("ownerToken", "")) === %2 &&
+            (bootstrap === "false" || bootstrap === "0")) {
+            dock.remove();
+            outcome = desktop.widgetById(matchingAppletId) ? 0 : 1;
+        }
+    }
+}
+print("ARCHDOCK_RESULT:" + String(outcome));
+)JS")
+                               .arg(plasmaScriptStringLiteral(panelId))
+                               .arg(plasmaScriptStringLiteral(ownershipToken));
+    return freePanelRemovalOutcome(evaluatePlasmaScriptResultOptional(script));
+}
+
+ArchDock::FreePanelRemovalOutcome PanelWindow::removeVerifiedFreeTemplateBridge(
     int containmentId,
     const QString &ownershipToken) const
 {
     if (containmentId < 0 || ownershipToken.isEmpty())
     {
-        return false;
+        return ArchDock::FreePanelRemovalOutcome::Refused;
     }
 
     const QString script = QStringLiteral(R"JS(
-let removed = 0;
+let outcome = 0;
 const bridgePanel = panelById(%1);
 if (!bridgePanel) {
-    removed = 1;
+    outcome = 2;
 } else if (Number(bridgePanel.id) === %1) {
     const controls = bridgePanel.widgets("org.archdock.control");
     let matchingControlId = -1;
@@ -1431,17 +1660,16 @@ if (!bridgePanel) {
                 String(control.readConfig("bootstrapToken", "")) === %2 &&
                 Number(control.readConfig("bootstrapPanelId", -1)) === %1) {
                 currentPanel.remove();
-                removed = panelById(%1) ? 0 : 1;
+                outcome = panelById(%1) ? 0 : 1;
             }
         }
     }
 }
-print("ARCHDOCK_RESULT:" + String(removed));
+print("ARCHDOCK_RESULT:" + String(outcome));
 )JS")
                                .arg(containmentId)
                                .arg(plasmaScriptStringLiteral(ownershipToken));
-    const std::optional<int> result = evaluatePlasmaScriptResultOptional(script);
-    return result.has_value() && *result == 1;
+    return freePanelRemovalOutcome(evaluatePlasmaScriptResultOptional(script));
 }
 
 void PanelWindow::saveFreePanelPosition(const QString &panelId, int x, int y)
