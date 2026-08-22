@@ -58,6 +58,29 @@ TestCase {
         compare(requestSpy.count, 1);
     }
 
+    function test_nudgesAreCoalescedWhileRequestIsPending() {
+        const coordinator = createCoordinator();
+        makeReady(coordinator, 19);
+        tryCompare(requestSpy, "count", 1);
+        compare(coordinator.requestPending, true);
+        compare(coordinator.attempts, 1);
+
+        coordinator.nudge();
+        coordinator.nudge();
+        coordinator.nudge();
+        wait(5);
+
+        compare(requestSpy.count, 1);
+        compare(coordinator.requestPending, true);
+        compare(coordinator.attempts, 1);
+
+        coordinator.resolved("free-1");
+        wait(5);
+        compare(requestSpy.count, 1);
+        compare(coordinator.requestPending, false);
+        compare(coordinator.attempts, 0);
+    }
+
     function test_errorAndEmptyResultRetryUntilSuccess() {
         const coordinator = createCoordinator();
         makeReady(coordinator, 23);

@@ -139,6 +139,54 @@ failed absence check returns failure without clearing the registry evidence.
 The higher-level `removePanel` path preserves the complete panel record when
 native removal is refused.
 
+## Free Desktop-Host Lifecycle
+
+A free panel is an `org.archdock.dock` applet in a Plasma desktop containment,
+not an independent Arch Dock window. Its registry association contains
+`freeDesktopContainmentId`, `freeDockAppletId`, `freeOwnershipToken`, `screen`,
+`screenId`, `freeHostMode=desktop`, and `freeHostState`. The owned applet stores
+the same panel id and token in its `General` configuration group together with
+`panelType=empty` and `bootstrapFreeDock=false`. Numeric containment and applet
+ids remain locators; the exact plugin, panel id, token, panel type, and bootstrap
+state provide the ownership proof.
+
+Panel Studio creation and the Plasma layout-template route converge on the same
+backend transaction. The transaction:
+
+1. reserves a pending free-panel record and ownership token;
+2. proves that no host already uses that identity;
+3. creates or adopts a desktop applet and verifies its configuration;
+4. persists and reads back the complete owned association;
+5. removes and verifies absence of the temporary template bridge, when present;
+6. performs a final host readback before marking creation complete.
+
+A repeated template request returns the one existing verified association. It
+does not allocate another record or applet. A missing, stale, unverified, or
+multiple-match result is not treated as duplicate success.
+
+Every failure stage enters the same rollback boundary. A known owned candidate
+is removed and its absence is established before the pending record is
+discarded. A failure before a host exists discards only the pending record. If
+host removal, absence verification, or persistence is uncertain, Arch Dock
+retains a token-bound `hosted-stale` recovery record with stable creation and
+rollback errors; it does not report record-only success or erase the evidence.
+
+Free-host synchronization uses identity match cardinality:
+
+| Exact live matches | Result |
+| --- | --- |
+| Zero | Clear host ids/token, retain one `detached` record, and record `owned-host-not-found`. Repeated synchronization is a no-op. |
+| One | Re-verify the exact applet configuration and rebind current containment, applet, and screen data. |
+| More than one | Record `owned-host-conflict` and preserve the record and every applet without mutation. |
+| Query or ownership failure | Preserve the association and report the stable recovery error. |
+
+Permanent free-panel removal rediscovers the token identity, requires exactly
+one match, verifies the exact applet again, removes that applet, verifies its
+absence, and only then removes the registry record. A safely detached record can
+be removed without a Plasma mutation. Conflict, query failure, ownership
+mismatch, or uncertain absence preserves the record and does not target an
+unrelated applet.
+
 ## Runtime Behavior
 
 - Screen add/remove signals cause Arch Dock to resolve each saved stable screen
@@ -152,25 +200,32 @@ native removal is refused.
   used as the target for applet attachment or replacement.
 - Repeated recovery converges on one token-bound containment and renderer; it
   does not duplicate either object.
+- Free-host recovery applies the same convergence rule to desktop applets:
+  zero matches detach, one verified match rebinds, and multiple matches remain a
+  non-mutating conflict.
+- Plasma can temporarily report screen `-1` for the desktop containment on a
+  disconnected output. Arch Dock preserves the verified free host through that
+  interval and requires normal registry/live screen convergence after the output
+  returns.
 - When Plasma Shell acquires a new D-Bus owner, Arch Dock retries recovery of
-  stored native associations after the shell has rebuilt its layout. A later
-  shell disappearance cancels pending retries, and recovery first verifies that
-  the PlasmaShell service is still available.
+  stored native and free associations after the shell has rebuilt its layout. A
+  later shell disappearance cancels pending retries, and recovery first verifies
+  that the PlasmaShell service is still available.
 - Theme rendering subprocesses are cancelled and reaped during registry
   shutdown, avoiding a running ImageMagick or Blender child during application
   teardown.
 
 ## Controlled Validation
 
-Run native Plasma lifecycle checks only in a disposable Plasma user/session or
-after backing up the Arch Dock QSettings file. Do not use existing personal
-Plasma panels as test targets.
+Run native and free Plasma lifecycle checks only in a disposable Plasma
+user/session or after backing up the Arch Dock QSettings file. Do not use
+existing personal Plasma panels or desktop applets as test targets.
 
 The opt-in virtual-session harness stages the current build, creates a private
 XDG and D-Bus environment, and starts two virtual KWin outputs:
 
 ```bash
-bash tests/run-plasma-lifecycle.sh
+ARCHDOCK_BUILD_DIR=/path/to/fresh-build bash tests/run-plasma-lifecycle.sh
 ```
 
 It creates an explicitly tracked unrelated Plasma panel with a standard digital
@@ -193,6 +248,22 @@ full registry record until the exact association is restored. The harness
 deletes its temporary state after a normal exit and never contacts the running
 desktop session.
 
+The free-host cases cover verified Studio and template creation, complete
+registry/host ownership, explicit template bridge and control-applet absence,
+duplicate bootstrap convergence, failed adoption rollback, stale-id recovery,
+zero/one/multiple token matches, output disconnect/restore, PlasmaShell restart,
+detached-record idempotence, verified applet removal, and final absence. A
+separate unrelated free applet is snapshotted and checked throughout alongside
+the unrelated native panel.
+
+TASK-0015 was freshly verified on 2026-08-22 using Arch Linux, Plasma/KWin
+6.7.4, Qt 6.11.2, and KF6 6.29.0. The focused C++ test, bootstrap-coordinator QML
+test, template contract test, and all 9 configured CTests passed. The expanded
+two-output private Wayland lifecycle completed with
+`Isolated Plasma native/free lifecycle succeeded.` in approximately 204 seconds,
+then removed its temporary root and left no process discoverable with that
+private session environment.
+
 The registry test suite also uses a controlled long-running renderer to verify
 that registry teardown kills and reaps it. Use a physical disposable Wayland
 session when hardware-specific output disconnect/reconnect behavior must be
@@ -205,3 +276,9 @@ file. Use Arch Dock's native-panel removal path only for a panel whose ownership
 marker it verifies. A present but unverified association is left unchanged for
 diagnosis rather than being cleared or replaced; remove a non-Arch-Dock panel
 through Plasma's own edit mode instead.
+
+For a free panel, use the Arch Dock removal path only while the registry retains
+its verified token association. Do not delete a desktop applet by a saved
+numeric id alone. If Arch Dock reports a conflict or query failure, preserve the
+record and inspect the token matches in a disposable session before attempting
+manual cleanup.

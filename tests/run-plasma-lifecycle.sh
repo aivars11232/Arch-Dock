@@ -158,6 +158,23 @@ if settings.status() != QSettings.Status.NoError:
 PY
 }
 
+set_private_monitor_index() {
+    local monitor_index="$1"
+    python - "$(arch_dock_settings_file)" "$monitor_index" <<'PY'
+import sys
+
+from PySide6.QtCore import QSettings
+
+settings = QSettings(sys.argv[1], QSettings.IniFormat)
+settings.beginGroup("dock")
+settings.setValue("monitorIndex", int(sys.argv[2]))
+settings.endGroup()
+settings.sync()
+if settings.status() != QSettings.Status.NoError:
+    raise SystemExit(1)
+PY
+}
+
 panel_registry_value() {
     local panel_id="$1"
     local key="$2"
@@ -235,6 +252,49 @@ free_host_match_count() {
         gvariant_string
 }
 
+free_bootstrap_artifact_count() {
+    local bridge_containment_id="$1"
+    local bootstrap_token="$2"
+    plasma_script \
+        "var count = panelById($bridge_containment_id) ? 1 : 0; function countControls(containments) { for (var containmentIndex = 0; containmentIndex < containments.length; ++containmentIndex) { var containment = containments[containmentIndex]; var widgets = containment.widgets(); for (var widgetIndex = 0; widgetIndex < widgets.length; ++widgetIndex) { var widget = containment.widgetById(widgets[widgetIndex].id); if (!widget || widget.type !== 'org.archdock.control') { continue; } widget.currentConfigGroup = ['General']; if (Number(widget.readConfig('bootstrapPanelId', -1)) === $bridge_containment_id && String(widget.readConfig('bootstrapToken', '')) === '$bootstrap_token') { ++count; } } } } countControls(panels()); countControls(desktops()); print(String(count));" |
+        gvariant_string
+}
+
+wait_for_free_bootstrap_artifacts_absent() {
+    local bridge_containment_id="$1"
+    local bootstrap_token="$2"
+    local attempt
+    local actual_count=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        actual_count="$(free_bootstrap_artifact_count \
+            "$bridge_containment_id" "$bootstrap_token" 2>/dev/null || true)"
+        [[ "$actual_count" == '0' ]] && return
+        sleep 0.1
+    done
+    printf 'Timed out waiting for template bridge artifacts to disappear: bridge=%s count=%s\n' \
+        "$bridge_containment_id" "${actual_count:-unavailable}" >&2
+    return 1
+}
+
+create_duplicate_free_host_fixture() {
+    local desktop_containment_id="$1"
+    local panel_id="$2"
+    local ownership_token="$3"
+    plasma_script \
+        "var desktop = desktopById($desktop_containment_id); if (!desktop) { print('missing'); } else { var dock = desktop.addWidget('org.archdock.dock', Math.round(gridUnit * 4), Math.round(gridUnit * 4), Math.round(gridUnit * 12), Math.round(gridUnit * 12)); if (!dock || Number(dock.id) < 0) { print('missing'); } else { dock.currentConfigGroup = ['General']; dock.writeConfig('panelId', '$panel_id'); dock.writeConfig('panelType', 'empty'); dock.writeConfig('ownerToken', '$ownership_token'); dock.writeConfig('bootstrapFreeDock', false); dock.reloadConfig(); print(String(desktop.id) + '|' + String(dock.id)); } }" |
+        gvariant_string
+}
+
+remove_owned_free_host_fixture() {
+    local desktop_containment_id="$1"
+    local dock_applet_id="$2"
+    local panel_id="$3"
+    local ownership_token="$4"
+    plasma_script \
+        "var desktop = desktopById($desktop_containment_id); var dock = desktop ? desktop.widgetById($dock_applet_id) : null; if (!desktop || Number(desktop.id) !== $desktop_containment_id || !dock || Number(dock.id) !== $dock_applet_id || dock.type !== 'org.archdock.dock') { print(0); } else { dock.currentConfigGroup = ['General']; var bootstrap = String(dock.readConfig('bootstrapFreeDock', true)).toLowerCase(); var owned = String(dock.readConfig('panelId', '')) === '$panel_id' && String(dock.readConfig('panelType', '')) === 'empty' && String(dock.readConfig('ownerToken', '')) === '$ownership_token' && (bootstrap === 'false' || bootstrap === '0'); if (!owned) { print(0); } else { dock.remove(); print(1); } }" |
+        gvariant_string
+}
+
 create_unrelated_free_host_sentinel() {
     plasma_script \
         "var desktop = desktopForScreen(0); if (!desktop) { print('missing'); } else { var dock = desktop.addWidget('org.archdock.dock', Math.round(gridUnit * 2), Math.round(gridUnit * 2), Math.round(gridUnit * 12), Math.round(gridUnit * 12)); if (!dock || Number(dock.id) < 0) { print('missing'); } else { dock.currentConfigGroup = ['General']; dock.writeConfig('panelId', 'archdock-unrelated-sentinel'); dock.writeConfig('panelType', 'empty'); dock.writeConfig('ownerToken', 'archdock-unrelated-sentinel-token'); dock.writeConfig('bootstrapFreeDock', false); dock.reloadConfig(); print(String(desktop.id) + '|' + String(dock.id)); } }" |
@@ -246,6 +306,7 @@ require_free_panel_host() {
     local expected_containment_id="$2"
     local expected_applet_id="$3"
     local route="$4"
+    local allow_disconnected_screen="${5:-false}"
     local ownership_token
     ownership_token="$(panel_registry_value "$panel_id" freeOwnershipToken)"
     local registry_containment_id
@@ -286,7 +347,8 @@ require_free_panel_host() {
             live_containment_id live_screen live_applet_id live_type live_panel_id \
             live_panel_type live_token live_bootstrap live_width live_height <<<"$snapshot"
         if [[ "$live_containment_id" == "$expected_containment_id" &&
-            "$live_screen" == "$registry_screen" &&
+            ("$live_screen" == "$registry_screen" ||
+             ("$allow_disconnected_screen" == 'true' && "$live_screen" == '-1')) &&
             "$live_applet_id" == "$expected_applet_id" &&
             "$live_type" == 'org.archdock.dock' &&
             "$live_panel_id" == "$panel_id" &&
@@ -309,6 +371,27 @@ require_free_panel_host() {
     printf 'Timed out waiting for the %s free-panel host: %s\n' \
         "$route" "${snapshot:-unavailable}" >&2
     return 1
+}
+
+require_current_free_panel_host() {
+    local panel_id="$1"
+    local expected_token="$2"
+    local route="$3"
+    local allow_disconnected_screen="${4:-false}"
+    local desktop_containment_id
+    desktop_containment_id="$(panel_registry_value \
+        "$panel_id" freeDesktopContainmentId)"
+    local dock_applet_id
+    dock_applet_id="$(panel_registry_value "$panel_id" freeDockAppletId)"
+    local actual_token
+    actual_token="$(require_free_panel_host \
+        "$panel_id" "$desktop_containment_id" "$dock_applet_id" "$route" \
+        "$allow_disconnected_screen")"
+    [[ "$actual_token" == "$expected_token" ]] || {
+        printf 'The %s free-panel ownership token changed: expected=%s actual=%s\n' \
+            "$route" "$expected_token" "${actual_token:-unavailable}" >&2
+        return 1
+    }
 }
 
 set_stale_native_ids() {
@@ -391,6 +474,22 @@ wait_for_free_host_match_count() {
     done
     printf 'Timed out waiting for free-host matches: panel=%s expected=%s actual=%s\n' \
         "$panel_id" "$expected_count" "${actual_count:-unavailable}" >&2
+    return 1
+}
+
+wait_for_free_host_absent() {
+    local desktop_containment_id="$1"
+    local dock_applet_id="$2"
+    local attempt
+    local snapshot=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        snapshot="$(free_host_snapshot \
+            "$desktop_containment_id" "$dock_applet_id" 2>/dev/null || true)"
+        [[ "$snapshot" == 'missing' ]] && return
+        sleep 0.1
+    done
+    printf 'Timed out waiting for a free-host applet to disappear: containment=%s applet=%s snapshot=%s\n' \
+        "$desktop_containment_id" "$dock_applet_id" "${snapshot:-unavailable}" >&2
     return 1
 }
 
@@ -685,7 +784,8 @@ run_session() {
     }
     log_session_phase 'created named unrelated Plasma panel fixture'
 
-    log_session_phase 'starting Arch Dock'
+    set_private_monitor_index 1
+    log_session_phase 'starting Arch Dock with the Studio route on virtual output 1'
     start_arch_dock arch-dock.log
 
     gdbus introspect \
@@ -715,7 +815,8 @@ run_session() {
         "$(gvariant_map_string status <<<"$studio_reply")" == 'created' &&
         "$studio_panel_id" == free-* &&
         "$studio_containment_id" =~ ^[0-9]+$ &&
-        "$studio_applet_id" =~ ^[0-9]+$ ]] || {
+        "$studio_applet_id" =~ ^[0-9]+$ &&
+        "$(panel_registry_value "$studio_panel_id" screen)" == '1' ]] || {
         printf 'Panel Studio returned an invalid free-panel transaction: %s\n' \
             "$studio_reply" >&2
         exit 1
@@ -759,11 +860,6 @@ run_session() {
         printf 'The template route did not persist its verified bootstrap token.\n' >&2
         exit 1
     }
-    wait_for_panel_ids "$panel_ids_before_template"
-    require_unrelated_panel_unchanged \
-        "$unrelated_containment_id" "$unrelated_snapshot" 'template free-panel creation'
-    log_session_phase 'created verified template free-panel host and removed bridge'
-
     local template_bridge_id="${template_token#archdock-free-template-}"
     template_bridge_id="${template_bridge_id%%:*}"
     [[ "$template_bridge_id" =~ ^[0-9]+$ ]] || {
@@ -771,6 +867,12 @@ run_session() {
             "$template_token" >&2
         exit 1
     }
+    wait_for_panel_ids "$panel_ids_before_template"
+    wait_for_free_bootstrap_artifacts_absent "$template_bridge_id" "$template_token"
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'template free-panel creation'
+    log_session_phase 'created verified template free-panel host and removed bridge'
+
     local duplicate_reply
     duplicate_reply="$(panel_call createFreePanelFromTemplate \
         "$template_bridge_id" "$template_token")"
@@ -842,8 +944,8 @@ run_session() {
     local template_snapshot_before_free_restart
     template_snapshot_before_free_restart="$(free_host_snapshot \
         "$template_containment_id" "$template_applet_id")"
-    local free_count_before_studio_removal
-    free_count_before_studio_removal="$(free_panel_count)"
+    local free_count_before_recovery_matrix
+    free_count_before_recovery_matrix="$(free_panel_count)"
     stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
     ARCHDOCK_SESSION_ARCH_DOCK_PID=''
     set_stale_free_ids "$studio_panel_id" 999999997 999999996
@@ -867,7 +969,7 @@ run_session() {
         'restarted Studio')"
     [[ "$rebound_studio_token" == "$studio_token" &&
         -z "$(panel_registry_value "$studio_panel_id" freeRecoveryError)" &&
-        "$(free_panel_count)" == "$free_count_before_studio_removal" &&
+        "$(free_panel_count)" == "$free_count_before_recovery_matrix" &&
         "$(free_host_snapshot "$template_containment_id" "$template_applet_id")" == "$template_snapshot_before_free_restart" &&
         "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" ]] || {
         printf 'Free-panel startup recovery did not uniquely rebind the stale record.\n' >&2
@@ -878,42 +980,72 @@ run_session() {
     wait_for_signal_monitor nativePanelRecoveryFinished
     log_session_phase 'rebound stale free-host ids after completed private service recovery'
 
+    local duplicate_free_host
+    duplicate_free_host="$(create_duplicate_free_host_fixture \
+        "$template_containment_id" "$template_panel_id" "$template_token")"
+    local duplicate_free_desktop_id=''
+    local duplicate_free_applet_id=''
+    IFS='|' read -r duplicate_free_desktop_id duplicate_free_applet_id \
+        <<<"$duplicate_free_host"
+    [[ "$duplicate_free_desktop_id" == "$template_containment_id" &&
+        "$duplicate_free_applet_id" =~ ^[0-9]+$ ]] || {
+        printf 'Could not create the duplicate free-host conflict fixture: %s\n' \
+            "$duplicate_free_host" >&2
+        exit 1
+    }
+    wait_for_free_host_match_count "$template_panel_id" "$template_token" 2
+    local duplicate_free_snapshot
+    duplicate_free_snapshot="$(free_host_snapshot \
+        "$duplicate_free_desktop_id" "$duplicate_free_applet_id")"
+
+    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    start_arch_dock arch-dock-free-conflict.log
     start_signal_monitor nativePanelRecoveryFinished
-    panel_call removePanel "$studio_panel_id" >/dev/null
-    wait_for_panel_registry_absent "$studio_panel_id"
-    wait_for_free_host_match_count "$studio_panel_id" "$studio_token" 0
-    [[ "$(free_host_snapshot "$studio_containment_id" "$studio_applet_id")" == 'missing' &&
-        "$(free_panel_count)" == "$((free_count_before_studio_removal - 1))" &&
-        "$(free_host_snapshot "$template_containment_id" "$template_applet_id")" == "$template_snapshot_before_free_restart" &&
-        "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
-        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" &&
-        "$(free_host_match_count \
-            archdock-unrelated-sentinel archdock-unrelated-sentinel-token)" == '1' ]] || {
-        printf 'Verified free-panel removal changed or retained the wrong desktop applet.\n' >&2
-        exit 1
-    }
-    require_unrelated_panel_unchanged \
-        "$unrelated_containment_id" "$unrelated_snapshot" 'verified free-host removal'
+    wait_for_panel_registry_value "$template_panel_id" freeRecoveryError owned-host-conflict
     wait_for_signal_monitor nativePanelRecoveryFinished
-    if panel_registry_record_snapshot "$studio_panel_id" >/dev/null 2>&1; then
-        printf 'Completed recovery recreated the removed free-panel record: %s\n' \
-            "$(panel_registry_record_snapshot "$studio_panel_id")" >&2
-        exit 1
-    fi
-    [[ "$(free_host_snapshot "$studio_containment_id" "$studio_applet_id")" == 'missing' &&
-        "$(free_host_match_count "$studio_panel_id" "$studio_token")" == '0' &&
-        "$(free_panel_count)" == "$((free_count_before_studio_removal - 1))" &&
+    [[ "$(panel_registry_value "$template_panel_id" freeHostState)" == 'hosted-stale' &&
+        "$(panel_registry_value "$template_panel_id" freeDesktopContainmentId)" == "$template_containment_id" &&
+        "$(panel_registry_value "$template_panel_id" freeDockAppletId)" == "$template_applet_id" &&
+        "$(panel_registry_value "$template_panel_id" freeOwnershipToken)" == "$template_token" &&
+        "$(free_host_match_count "$template_panel_id" "$template_token")" == '2' &&
         "$(free_host_snapshot "$template_containment_id" "$template_applet_id")" == "$template_snapshot_before_free_restart" &&
-        "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
-        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" &&
-        "$(free_host_match_count \
-            archdock-unrelated-sentinel archdock-unrelated-sentinel-token)" == '1' ]] || {
-        printf 'Completed recovery changed the removed host or an unrelated free applet.\n' >&2
+        "$(free_host_snapshot "$duplicate_free_desktop_id" "$duplicate_free_applet_id")" == "$duplicate_free_snapshot" &&
+        "$(free_panel_count)" == "$free_count_before_recovery_matrix" &&
+        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" ]] || {
+        printf 'Multiple free-host token matches were not preserved as a non-mutating conflict.\n' >&2
         exit 1
     }
     require_unrelated_panel_unchanged \
-        "$unrelated_containment_id" "$unrelated_snapshot" 'post-removal free-host recovery'
-    log_session_phase 'removed verified free host after restart without touching sentinels'
+        "$unrelated_containment_id" "$unrelated_snapshot" 'multiple free-host match conflict'
+
+    [[ "$(remove_owned_free_host_fixture \
+        "$duplicate_free_desktop_id" "$duplicate_free_applet_id" \
+        "$template_panel_id" "$template_token")" == '1' ]] || {
+        printf 'Could not remove the exact duplicate free-host conflict fixture.\n' >&2
+        exit 1
+    }
+    wait_for_free_host_absent "$duplicate_free_desktop_id" "$duplicate_free_applet_id"
+    wait_for_free_host_match_count "$template_panel_id" "$template_token" 1
+
+    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    start_arch_dock arch-dock-free-conflict-converged.log
+    start_signal_monitor nativePanelRecoveryFinished
+    wait_for_panel_registry_value "$template_panel_id" freeHostState hosted-owned
+    wait_for_panel_registry_value "$template_panel_id" freeRecoveryError ''
+    wait_for_signal_monitor nativePanelRecoveryFinished
+    [[ "$(require_free_panel_host \
+        "$template_panel_id" "$template_containment_id" "$template_applet_id" \
+        'conflict-converged template')" == "$template_token" &&
+        "$(free_panel_count)" == "$free_count_before_recovery_matrix" &&
+        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" ]] || {
+        printf 'Free-host recovery did not converge from two token matches to one.\n' >&2
+        exit 1
+    }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'free-host conflict convergence'
+    log_session_phase 'preserved two free-host matches as conflict and converged to one'
 
     wait_for_owned_panel bottom
     local recovered_bottom_record
@@ -1152,6 +1284,9 @@ run_session() {
         exit 1
     }
 
+    local free_count_before_screen_change
+    free_count_before_screen_change="$(free_panel_count)"
+    start_signal_monitor nativePanelRecoveryFinished
     log_session_phase 'disabling secondary virtual output'
     kscreen-doctor "output.$secondary_output.disable" >/dev/null
     wait_for_screen_count 1
@@ -1161,13 +1296,28 @@ run_session() {
         exit 1
     }
     wait_for_native_panel_screen "$first_containment_id" 0
+    wait_for_signal_monitor nativePanelRecoveryFinished
     [[ "$(panel_registry_value "$panel_id" screen)" == '0' &&
         "$(panel_registry_value "$panel_id" screenId)" == "$requested_screen_id" ]] || {
         printf 'Screen fallback did not record index 0 while retaining the stable output identity.\n' >&2
         exit 1
     }
+    wait_for_panel_registry_value "$studio_panel_id" freeHostState hosted-owned
+    wait_for_panel_registry_value "$template_panel_id" freeHostState hosted-owned
+    require_current_free_panel_host \
+        "$studio_panel_id" "$studio_token" 'output-loss Studio' true
+    require_current_free_panel_host \
+        "$template_panel_id" "$template_token" 'screen-fallback template'
+    [[ "$(free_panel_count)" == "$free_count_before_screen_change" &&
+        "$(free_host_match_count "$studio_panel_id" "$studio_token")" == '1' &&
+        "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
+        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" ]] || {
+        printf 'Free-host screen fallback duplicated, detached, or changed a sentinel applet.\n' >&2
+        exit 1
+    }
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'managed screen fallback'
+    start_signal_monitor nativePanelRecoveryFinished
     log_session_phase 'restoring secondary virtual output'
     kscreen-doctor "output.$secondary_output.enable" >/dev/null
     wait_for_screen_count 2
@@ -1192,12 +1342,27 @@ run_session() {
         printf 'KScreen outputs after restore: %s\n' "$(enabled_output_names | paste -sd ',' -)" >&2
         exit 1
     fi
+    wait_for_signal_monitor nativePanelRecoveryFinished
     [[ "$(panel_registry_value "$panel_id" screenId)" == "$requested_screen_id" ]] || {
         printf 'Restoring the output replaced the requested stable output identity.\n' >&2
         exit 1
     }
+    wait_for_panel_registry_value "$studio_panel_id" freeHostState hosted-owned
+    wait_for_panel_registry_value "$template_panel_id" freeHostState hosted-owned
+    require_current_free_panel_host \
+        "$studio_panel_id" "$studio_token" 'screen-restored Studio'
+    require_current_free_panel_host \
+        "$template_panel_id" "$template_token" 'screen-restored template'
+    [[ "$(free_panel_count)" == "$free_count_before_screen_change" &&
+        "$(free_host_match_count "$studio_panel_id" "$studio_token")" == '1' &&
+        "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
+        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" ]] || {
+        printf 'Free-host screen restoration duplicated, detached, or changed a sentinel applet.\n' >&2
+        exit 1
+    }
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'managed screen restoration'
+    log_session_phase 'preserved unique free hosts through output fallback and restoration'
 
     local externally_removed
     externally_removed="$(plasma_script "var panel = panelById($first_containment_id); if (panel === null) { print(0); } else { panel.currentConfigGroup = ['ArchDock']; var owned = panel.readConfig('panelId', '') === '$panel_id' && panel.readConfig('ownerToken', '') === '$first_token'; if (owned) { panel.remove(); print(1); } else { print(0); } }" | gvariant_string)"
@@ -1374,6 +1539,8 @@ run_session() {
 
     local panel_count_before_restart
     panel_count_before_restart="$(panel_count)"
+    local free_count_before_plasma_restart
+    free_count_before_plasma_restart="$(free_panel_count)"
     start_signal_monitor nativePanelRecoveryFinished
     restart_plasmashell
     wait_for_signal_monitor nativePanelRecoveryFinished
@@ -1413,8 +1580,112 @@ run_session() {
             "$restarted_expected_screen" "$restarted_screen" >&2
         exit 1
     }
+    wait_for_panel_registry_value "$studio_panel_id" freeHostState hosted-owned
+    wait_for_panel_registry_value "$template_panel_id" freeHostState hosted-owned
+    require_current_free_panel_host \
+        "$studio_panel_id" "$studio_token" 'PlasmaShell-restarted Studio'
+    require_current_free_panel_host \
+        "$template_panel_id" "$template_token" 'PlasmaShell-restarted template'
+    [[ "$(free_panel_count)" == "$free_count_before_plasma_restart" &&
+        "$(free_host_match_count "$studio_panel_id" "$studio_token")" == '1' &&
+        "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
+        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" &&
+        "$(free_host_match_count \
+            archdock-unrelated-sentinel archdock-unrelated-sentinel-token)" == '1' &&
+        "$(free_bootstrap_artifact_count "$template_bridge_id" "$template_token")" == '0' ]] || {
+        printf 'PlasmaShell restart duplicated or lost a managed free host or bootstrap cleanup.\n' >&2
+        exit 1
+    }
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'PlasmaShell restart recovery'
+    log_session_phase 'recovered unique free hosts after a real private PlasmaShell restart'
+
+    local free_count_before_cleanup
+    free_count_before_cleanup="$(free_panel_count)"
+    studio_containment_id="$(panel_registry_value \
+        "$studio_panel_id" freeDesktopContainmentId)"
+    studio_applet_id="$(panel_registry_value "$studio_panel_id" freeDockAppletId)"
+    [[ "$(remove_owned_free_host_fixture \
+        "$studio_containment_id" "$studio_applet_id" \
+        "$studio_panel_id" "$studio_token")" == '1' ]] || {
+        printf 'Could not remove the exact Studio free-host zero-match fixture.\n' >&2
+        exit 1
+    }
+    wait_for_free_host_absent "$studio_containment_id" "$studio_applet_id"
+    wait_for_free_host_match_count "$studio_panel_id" "$studio_token" 0
+
+    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    start_arch_dock arch-dock-free-zero-match.log
+    start_signal_monitor nativePanelRecoveryFinished
+    wait_for_panel_registry_value "$studio_panel_id" freeHostState detached
+    wait_for_signal_monitor nativePanelRecoveryFinished
+    [[ "$(panel_registry_value "$studio_panel_id" freeDesktopContainmentId)" == '-1' &&
+        "$(panel_registry_value "$studio_panel_id" freeDockAppletId)" == '-1' &&
+        -z "$(panel_registry_value "$studio_panel_id" freeOwnershipToken)" &&
+        "$(panel_registry_value "$studio_panel_id" freeRecoveryError)" == 'owned-host-not-found' &&
+        "$(free_panel_count)" == "$free_count_before_cleanup" &&
+        "$(free_host_match_count "$studio_panel_id" "$studio_token")" == '0' &&
+        "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
+        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" ]] || {
+        printf 'Zero-match free-host recovery did not persist one safe detached record.\n' >&2
+        exit 1
+    }
+    require_current_free_panel_host \
+        "$template_panel_id" "$template_token" 'zero-match-preserved template'
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'zero free-host match detach'
+
+    local detached_studio_snapshot
+    detached_studio_snapshot="$(panel_registry_record_snapshot "$studio_panel_id")"
+    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    start_arch_dock arch-dock-free-zero-match-repeated.log
+    start_signal_monitor nativePanelRecoveryFinished
+    wait_for_signal_monitor nativePanelRecoveryFinished
+    [[ "$(panel_registry_record_snapshot "$studio_panel_id")" == "$detached_studio_snapshot" &&
+        "$(free_host_match_count "$studio_panel_id" "$studio_token")" == '0' &&
+        "$(free_panel_count)" == "$free_count_before_cleanup" ]] || {
+        printf 'Repeated zero-match synchronization changed the detached free-panel record.\n' >&2
+        exit 1
+    }
+    require_current_free_panel_host \
+        "$template_panel_id" "$template_token" 'repeated-zero-preserved template'
+
+    start_signal_monitor nativePanelRecoveryFinished
+    panel_call removePanel "$studio_panel_id" >/dev/null
+    wait_for_panel_registry_absent "$studio_panel_id"
+    wait_for_signal_monitor nativePanelRecoveryFinished
+    [[ "$(free_panel_count)" == "$((free_count_before_cleanup - 1))" &&
+        "$(free_host_match_count "$studio_panel_id" "$studio_token")" == '0' &&
+        "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
+        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" ]] || {
+        printf 'Removing the detached free record changed a live or unrelated applet.\n' >&2
+        exit 1
+    }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'detached free record removal'
+
+    template_containment_id="$(panel_registry_value \
+        "$template_panel_id" freeDesktopContainmentId)"
+    template_applet_id="$(panel_registry_value "$template_panel_id" freeDockAppletId)"
+    start_signal_monitor nativePanelRecoveryFinished
+    panel_call removePanel "$template_panel_id" >/dev/null
+    wait_for_panel_registry_absent "$template_panel_id"
+    wait_for_free_host_match_count "$template_panel_id" "$template_token" 0
+    wait_for_free_host_absent "$template_containment_id" "$template_applet_id"
+    wait_for_signal_monitor nativePanelRecoveryFinished
+    [[ "$(free_panel_count)" == "$((free_count_before_cleanup - 2))" &&
+        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" &&
+        "$(free_host_match_count \
+            archdock-unrelated-sentinel archdock-unrelated-sentinel-token)" == '1' &&
+        "$(free_bootstrap_artifact_count "$template_bridge_id" "$template_token")" == '0' ]] || {
+        printf 'Verified free-host removal left an orphan or changed an unrelated applet.\n' >&2
+        exit 1
+    }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'verified free-host cleanup'
+    log_session_phase 'detached zero matches idempotently and removed the final verified free host'
 
     local removal_registry_snapshot
     removal_registry_snapshot="$(panel_registry_record_snapshot "$panel_id")"
@@ -1585,7 +1856,7 @@ run_outer() {
         XDG_SESSION_TYPE=wayland \
         XDG_STATE_HOME="$ARCHDOCK_LIFECYCLE_STATE_ROOT/state" \
         dbus-run-session -- \
-        timeout --kill-after=10s 120s "$session_script" >"$log_dir/session.log" 2>&1
+        timeout --kill-after=10s 300s "$session_script" >"$log_dir/session.log" 2>&1
     session_runner_status=$?
     set -e
 

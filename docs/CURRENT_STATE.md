@@ -6,28 +6,29 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-08-21T23:24:36+02:00 (Europe/Amsterdam). Static
+**Evidence snapshot:** 2026-08-22T18:41:40+02:00 (Europe/Amsterdam). Static
 implementation statements come from the current checkout. Build and test
-statements come from the fresh TASK-0010 build described below. Runtime claims
-come only from its disposable private D-Bus, virtual KWin Wayland, and private
-PlasmaShell session; no personal desktop session was contacted.
+statements come from the fresh external TASK-0015 build described below.
+Runtime claims come only from its disposable private D-Bus, virtual KWin
+Wayland, and private PlasmaShell session; no personal desktop session was
+contacted.
 
 ## Repository state
 
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`
-- TASK-0010 baseline `HEAD`: `e7a764476359ba87176e2638f249297f3576b158`
-  (`Task9`)
-- Locally recorded `origin/main`:
-  `11d66e7304cca3875640afa55c80d846424b9d4a`
-- `HEAD...origin/main` count: seven local commits ahead, zero behind. No network
-  fetch was performed, so this describes the locally recorded remote reference.
-- TASK-0010 began with a clean non-ignored working tree. Its expected source and
-  documentation changes are limited to `tests/PanelRegistryTest.cpp`,
-  `src/NativeContainmentLifecycle.cpp`, `src/panel/PanelWindow.cpp`,
-  `tests/run-plasma-lifecycle.sh`, `docs/plasma-lifecycle.md`, and this file.
-  Codex did not stage, commit, push, globally install, or mutate the live Plasma
-  session.
+- TASK-0015 baseline `HEAD`: `75232e5a62e4d524c35deb7b2f8f9ef02842db45`
+  (`task14`).
+- The locally recorded `origin/main` is the same commit; `HEAD...origin/main`
+  reports zero ahead and zero behind. No network fetch was performed.
+- TASK-0015 began with a clean non-ignored working tree. Its bounded changes are
+  limited to `tests/PanelRegistryTest.cpp`,
+  `tests/tst_BootstrapCoordinator.qml`, `tests/run-plasma-lifecycle.sh`,
+  `docs/plasma-lifecycle.md`, and this file. Production C++, production QML,
+  CMake, Plasma packages, D-Bus contracts, registry/controller behavior, and
+  runtime resources were not changed.
+- Codex did not stage, commit, push, globally install, or mutate the personal
+  Plasma session.
 
 ## Inspected platform
 
@@ -38,8 +39,8 @@ PlasmaShell session; no personal desktop session was contacted.
 - Qt base `6.11.2-2`
 - KDE Frameworks Core Addons and Kirigami `6.29.0-1`
 
-These versions describe the inspection and verification host. TASK-0010 used a
-fresh build directory and a disposable staged private session; it did not
+These versions describe the inspection and verification host. TASK-0015 used a
+fresh external build directory and a disposable staged private session; it did not
 globally install, restart the live PlasmaShell, or run Arch Dock against the
 personal desktop session.
 
@@ -54,7 +55,7 @@ personal desktop session.
 - Release gates: [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)
 - Current version-1 theme-package behavior:
   [theme-packages.md](theme-packages.md)
-- Native Plasma ownership and recovery safeguards:
+- Native and free Plasma ownership, recovery, and rollback safeguards:
   [plasma-lifecycle.md](plasma-lifecycle.md)
 - Canonical baseline checkpoint and task handoff:
   [BASELINE_CHECKPOINT.md](BASELINE_CHECKPOINT.md)
@@ -72,9 +73,9 @@ second authority.
 
 ## Verified current implementation
 
-The following implementation statements were verified in the TASK-0010
-checkout. Native lifecycle statements marked as runtime-verified were exercised
-in the disposable private Plasma Wayland session, not inferred from inspection.
+The following implementation statements were verified in the TASK-0015
+checkout. Lifecycle statements marked as runtime-verified were exercised in the
+disposable private Plasma Wayland session, not inferred from inspection.
 
 - `src/main.cpp` creates a Qt Quick/Kirigami application, owns the session-bus
   name `org.archdock.ArchDock`, and delegates panel behavior to `PanelManager`.
@@ -93,26 +94,40 @@ in the disposable private Plasma Wayland session, not inferred from inspection.
 - Temporary hide/show changes verified Plasma presentation on the existing
   containment and keeps the containment id, dock applet id, and ownership token
   stable. It does not implement visibility by deleting and recreating the host.
-- Free panels are **not retired**. The Plasma layout-template route verifies a
-  temporary bridge, creates an `org.archdock.dock` applet in the target desktop
-  containment, configures it as a free/empty panel, and removes the bridge.
+- Free panels are **not retired**. Panel Studio and the Plasma layout-template
+  route converge on one backend transaction that creates a real
+  `org.archdock.dock` desktop applet, verifies its exact panel id/token/type and
+  non-bootstrap state, persists and reads back its containment/applet/token and
+  screen association, removes any verified temporary bridge, and completes the
+  record only after a final host readback. Both routes are runtime-verified and
+  do not produce record-only success.
+- Free creation rollback covers record allocation, bridge verification, host
+  preflight and mutation, host verification, association persistence/readback,
+  bridge cleanup, final readback, and completion persistence. A verified removed
+  candidate permits record discard; uncertain rollback retains a token-bound
+  recoverable record instead of losing ownership evidence.
+- Free-host recovery distinguishes zero, one, and multiple exact token matches.
+  Zero safely detaches the record; one verifies and rebinds it; multiple matches
+  preserve every applet and record a non-mutating conflict. Repeated detached or
+  unique synchronization is idempotent. Output disconnect/restore and a real
+  private PlasmaShell restart preserve one verified host per record.
+- Free removal rediscovers and re-verifies the unique owned applet, removes it,
+  verifies absence, and only then removes the record. Missing detached hosts can
+  remove their records without a Plasma mutation. Failed adoption, conflict, and
+  removal paths preserve unrelated desktop applets; these paths are
+  runtime-verified with an explicit unrelated free-host sentinel.
 - The registry includes the current version-1 theme-package implementation and
   an embedded catalog of five themes: Obsidian Glass, Neon Segments, Metallic
   Shelf, Holographic Ring, and Minimal Underline.
 - CMake declares the application, QML and theme resources, Plasma applets and
-  templates, D-Bus and systemd metadata, and nine tests. TASK-0010 configured and
-  built the current checkout in `build-codex-task-0010`, passed its focused
-  lifecycle test, passed all nine CTests with zero failures or skips, and passed
-  the staged isolated Plasma lifecycle session.
+  templates, D-Bus and systemd metadata, and nine tests. TASK-0015 configured and
+  built the current checkout in
+  `/tmp/archdock-task-0015-build.Z8zoR1`, passed its focused C++/QML/template
+  tests, passed all nine CTests with zero failures or skips, and passed the staged
+  isolated native/free Plasma lifecycle session.
 
 ## Known defects and incomplete behavior
 
-- Free-panel creation has two paths. `createFreePanelFromTemplate()` creates the
-  Plasma desktop-hosted applet, while `createFreePanel()` only creates a registry
-  record and opens settings. The paths are not behaviorally equivalent.
-- The C++ free-panel removal branch deletes any legacy utility window and the
-  registry record, but does not explicitly remove the desktop-hosted Plasma
-  applet. TASK-0003 did not test the resulting live-desktop behavior.
 - `setPanelVisibilityMode()` stores the requested mode, but
   `shouldConcealPanel()` currently always returns `false`; the planned
   visibility-policy behavior is therefore incomplete.
@@ -147,16 +162,30 @@ not be interpreted as completion of those v2 systems.
 
 ## Verification boundary
 
-TASK-0010 supplies fresh evidence from `build-codex-task-0010`: the focused
-`panel-registry-test` passed, the complete CTest suite passed 9/9 with no skips,
-and the isolated Plasma lifecycle script completed successfully. That runtime
-session directly observed hide/show identity stability, visible missing-host
-recreation, hidden missing-host detach, screen fallback/restoration, stale-id
-rebind, repeated-recovery idempotence, conflict refusal/convergence,
-PlasmaShell restart recovery, destructive wrong-token and wrong-renderer
-refusal, verified permanent removal, and an unchanged unrelated containment and
-digital-clock applet after every managed phase. `git diff --check` is part of
-the final task gate.
+TASK-0015 supplies fresh evidence from
+`/tmp/archdock-task-0015-build.Z8zoR1`: the focused `panel-registry-test`,
+`bootstrap-coordinator-test`, and `plasma-template-contract-test` each passed;
+the complete CTest suite passed 9/9 with no skips; and the expanded isolated
+Plasma lifecycle script completed successfully under its 300-second outer
+ceiling in approximately 204 seconds.
+
+The private runtime directly observed verified Studio and template free-host
+creation, no remaining template bridge/control artifact, duplicate-bootstrap
+convergence, failed-adoption rollback without an orphan, stale-id one-match
+rebind, two-match conflict preservation and convergence, output
+disconnect/restore, PlasmaShell restart recovery, zero-match detach, repeated
+detached synchronization, verified applet/record removal, and unchanged
+unrelated native and free sentinels through final cleanup. The harness printed
+`Isolated Plasma native/free lifecycle succeeded.`, exited zero, removed its
+temporary root, and left no process discoverable with its private session
+environment.
+
+The same run also re-exercised the native lifecycle cases: hide/show identity
+stability, visible missing-host recreation, hidden missing-host detach, screen
+fallback/restoration, stale-id rebind, repeated-recovery idempotence, conflict
+refusal/convergence, PlasmaShell restart recovery, destructive wrong-token and
+wrong-renderer refusal, and verified permanent removal. `git diff --check` and
+the final build/CTest run remain part of the task handoff.
 
 This evidence is representative of the required Arch Linux, Plasma 6, Qt 6,
 Wayland integration, but it remains an isolated virtual session. It does not
@@ -164,8 +193,11 @@ claim hardware-specific monitor behavior or mutation of a user's live desktop.
 
 ## Next task boundary
 
-The task pack identifies **TASK-0011 — Persist ownership-verifiable free-host
-associations** as the next sequential planning target. It begins the separate
-AD-0003 free-panel lifecycle work package; TASK-0010 does not authorize it.
-TASK-0011 may begin only through its own read-only Stage A inspection and exact
-implementation approval gate.
+TASK-0015 closes the AD-0003 free-panel host lifecycle scope with unit, QML,
+template-contract, full CTest, and isolated Plasma evidence. It does not complete
+the wider release checklist or claim physical monitor validation.
+
+The task pack identifies **TASK-0016 — Define a normalized native placement
+contract** as the next sequential planning target. It begins AD-0004 and may
+start only through its own read-only Stage A inspection and exact implementation
+approval gate. TASK-0016 has not been started here.

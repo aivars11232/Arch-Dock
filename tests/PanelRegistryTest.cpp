@@ -1286,6 +1286,66 @@ void PanelRegistryTest::rollsBackFreePanelCreationFailures()
 
     {
         clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QStringList panelIdsBefore = registry.panelIds();
+        bool associationCorrupted = false;
+        QString corruptedPanelId;
+        const QMetaObject::Connection connection = connect(
+            &registry,
+            &PanelRegistry::revisionChanged,
+            &registry,
+            [&]
+            {
+                if (associationCorrupted)
+                {
+                    return;
+                }
+                for (const QString &panelId : registry.panelIds())
+                {
+                    const auto association = registry.freeHostAssociation(panelId);
+                    if (!association.has_value() ||
+                        association->state != PanelRegistry::FreeHostState::HostedOwned ||
+                        registry.panelValue(
+                            panelId,
+                            QStringLiteral("freeCreationState")).toString() !=
+                            QStringLiteral("pending"))
+                    {
+                        continue;
+                    }
+
+                    associationCorrupted = true;
+                    corruptedPanelId = panelId;
+                    registry.updatePanel(
+                        panelId,
+                        {{QStringLiteral("screenId"),
+                          QStringLiteral("output:readback-mismatch")}});
+                    return;
+                }
+            });
+
+        FreePanelHostHarness harness;
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelCreationResult result = controller.create(
+            studioFreePanelRequest());
+        disconnect(connection);
+
+        QVERIFY(associationCorrupted);
+        QVERIFY(!corruptedPanelId.isEmpty());
+        QCOMPARE(result.errorCode, QStringLiteral("association-readback-failed"));
+        QCOMPARE(result.failureStage, QStringLiteral("association-readback"));
+        QVERIFY(result.rollbackAttempted);
+        QVERIFY(result.rollbackSucceeded);
+        QCOMPARE(registry.panelIds(), panelIdsBefore);
+        QVERIFY(!registry.panelIds().contains(corruptedPanelId));
+        QCOMPARE(harness.exactRemovalCalls, 1);
+        QCOMPARE(harness.identityRemovalCalls, 0);
+        QCOMPARE(harness.removedHost.desktopContainmentId, 42);
+        QCOMPARE(harness.removedHost.dockAppletId, 73);
+        QCOMPARE(harness.removedPanelId, corruptedPanelId);
+    }
+
+    {
+        clearPanelRegistrySettings();
         FreePanelHostHarness harness;
         harness.bridgeRemoval = ArchDock::FreePanelRemovalOutcome::Refused;
         ArchDock::FreePanelCreationRequest request;
@@ -1375,6 +1435,13 @@ void PanelRegistryTest::rollsBackFreePanelCreationFailures()
         QCOMPARE(harness.verifyCalls, 2);
         QCOMPARE(harness.exactRemovalCalls, 0);
         PanelRegistry reloaded;
+        const auto association = reloaded.freeHostAssociation(run.result.panelId);
+        QVERIFY(association.has_value());
+        QCOMPARE(association->state, PanelRegistry::FreeHostState::HostedOwned);
+        QCOMPARE(association->desktopContainmentId, 42);
+        QCOMPARE(association->dockAppletId, 73);
+        QVERIFY(association->ownershipToken.startsWith(
+            QStringLiteral("archdock-free-")));
         QCOMPARE(reloaded.panelValue(
                      run.result.panelId,
                      QStringLiteral("freeCreationState")).toString(),
@@ -1393,6 +1460,13 @@ void PanelRegistryTest::rollsBackFreePanelCreationFailures()
             firstHarness, request);
         QVERIFY(firstRun.result.success);
         QCOMPARE(firstRun.result.status, QStringLiteral("created"));
+        QCOMPARE(firstHarness.bridgeRemovalCalls, 1);
+        PanelRegistry afterFirstCreation;
+        const auto firstAssociation = afterFirstCreation.freeHostAssociation(
+            firstRun.result.panelId);
+        QVERIFY(firstAssociation.has_value());
+        QCOMPARE(firstAssociation->state, PanelRegistry::FreeHostState::HostedOwned);
+        QCOMPARE(firstAssociation->ownershipToken, request.ownershipToken);
 
         FreePanelHostHarness repeatedHarness;
         repeatedHarness.bridgeRemoval =
@@ -1406,6 +1480,12 @@ void PanelRegistryTest::rollsBackFreePanelCreationFailures()
         QCOMPARE(repeatedHarness.createCalls, 0);
         QCOMPARE(repeatedHarness.verifyCalls, 1);
         QCOMPARE(repeatedHarness.bridgeRemovalCalls, 1);
+        PanelRegistry afterRepeatedCreation;
+        QCOMPARE(afterRepeatedCreation.panelIds(), repeatedRun.panelIdsBefore);
+        const auto repeatedAssociation = afterRepeatedCreation.freeHostAssociation(
+            repeatedRun.result.panelId);
+        QVERIFY(repeatedAssociation.has_value());
+        QCOMPARE(repeatedAssociation->ownershipToken, request.ownershipToken);
     }
 
     {
@@ -1426,6 +1506,16 @@ void PanelRegistryTest::rollsBackFreePanelCreationFailures()
         QCOMPARE(run.result.dockAppletId, 66);
         QCOMPARE(harness.adoptCalls, 1);
         QCOMPARE(harness.verifyCalls, 2);
+        PanelRegistry reloaded;
+        const auto association = reloaded.freeHostAssociation(run.result.panelId);
+        QVERIFY(association.has_value());
+        QCOMPARE(association->state, PanelRegistry::FreeHostState::HostedOwned);
+        QCOMPARE(association->desktopContainmentId, 55);
+        QCOMPARE(association->dockAppletId, 66);
+        QCOMPARE(reloaded.panelValue(
+                     run.result.panelId,
+                     QStringLiteral("freeCreationState")).toString(),
+                 QStringLiteral("complete"));
     }
 
     {
@@ -1616,6 +1706,7 @@ void PanelRegistryTest::recoversFreePanelHostLifecycle()
 
         FreePanelHostHarness harness;
         harness.discoveryResult = {DiscoveryOutcome::Unique, {42, 73}, 2};
+        QSignalSpy revisionSpy(&registry, &PanelRegistry::revisionChanged);
         ArchDock::FreePanelController controller(registry, harness.operations());
         const ArchDock::FreePanelLifecycleResult first = controller.synchronize(panelId);
         QVERIFY(first.success);
@@ -1631,12 +1722,14 @@ void PanelRegistryTest::recoversFreePanelHostLifecycle()
         QCOMPARE(registry.panelValue(
                      panelId, QStringLiteral("freeRecoveryError")).toString(),
                  QString{});
+        const int revisionCountAfterFirstSync = revisionSpy.count();
 
         const ArchDock::FreePanelLifecycleResult repeated = controller.synchronize(panelId);
         QVERIFY(repeated.success);
         QCOMPARE(repeated.outcome, LifecycleOutcome::Rebound);
         QCOMPARE(harness.discoverCalls, 2);
         QCOMPARE(harness.verifyCalls, 2);
+        QCOMPARE(revisionSpy.count(), revisionCountAfterFirstSync);
     }
 
     {
