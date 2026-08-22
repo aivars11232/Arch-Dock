@@ -126,6 +126,20 @@ if(BUILD_TESTING)
                "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-data/panel-registry")
 
   qt_add_executable(
+    panel-placement-test
+    tests/PanelPlacementTest.cpp
+    src/PanelPlacement.h
+    src/PanelPlacement.cpp)
+  target_include_directories(
+    panel-placement-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    panel-placement-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(NAME panel-placement-test COMMAND panel-placement-test)
+
+  qt_add_executable(
     plasma-script-result-test
     tests/PlasmaScriptResultTest.cpp
     src/PlasmaScriptResult.h
