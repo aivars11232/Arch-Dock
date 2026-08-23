@@ -7,6 +7,7 @@ import org.kde.kirigami as Kirigami
 import "PlacementStatus.js" as PlacementStatus
 import "StudioDraft.js" as StudioDraft
 import "StudioNavigation.js" as StudioNavigation
+import "VisibilityStatus.js" as VisibilityStatus
 
 Window {
     id: root
@@ -25,6 +26,7 @@ Window {
     property var colorField: null
     property string colorTargetPanelId: ""
     property string studioError: ""
+    property string studioWarning: ""
 
     readonly property int panelRevision: panelRegistry.revision
     readonly property int screenRevision: panelController.screenRevision
@@ -32,6 +34,12 @@ Window {
     readonly property var selectedPlacementResult: {
         const revision = placementRevision;
         return panelController.nativePanelPlacementStatus(selectedPanelId);
+    }
+    readonly property int nativeVisibilityRevision:
+        panelController.nativeVisibilityRevision
+    readonly property var selectedVisibilityResult: {
+        const revision = nativeVisibilityRevision;
+        return panelController.nativePanelVisibilityStatus(selectedPanelId);
     }
     readonly property bool hasPendingChanges: StudioDraft.isSessionDirty(
         panelDrafts, settingsDraft, screenDrafts, themeDrafts)
@@ -90,12 +98,16 @@ Window {
         "draw-rectangle",
         "document-save"
     ]
-    readonly property var visibilityOptions: [
-        option(qsTr("Always visible"), "always"),
-        option(qsTr("Auto-hide"), "auto-hide"),
-        option(qsTr("Dodge active window"), "dodge"),
-        option(qsTr("Hide under active window"), "cover")
-    ]
+    readonly property var visibilityLabels: ({
+        "always": qsTr("Always visible"),
+        "auto-hide": qsTr("Auto-hide"),
+        "dodge": qsTr("Dodge touching windows"),
+        "cover": qsTr("Hide for maximized/fullscreen")
+    })
+    readonly property var visibilityOptions: VisibilityStatus.modeOptions(
+        selectedVisibilityResult,
+        isNativePanel(selectedPanelId),
+        visibilityLabels)
     readonly property var panelTypeOptions: [
         option(qsTr("Empty"), "empty"),
         option(qsTr("Launchers"), "launcher"),
@@ -600,6 +612,22 @@ Window {
         return false;
     }
 
+    function applyPanelVisibilityMode(panelId, mode) {
+        const result = panelController.applyNativePanelVisibilityMode(
+            panelId, String(mode));
+        if (result && result.success === true) {
+            if (result.fallbackApplied === true) {
+                studioWarning = VisibilityStatus.problemText(result);
+            }
+            return true;
+        }
+        studioError = qsTr("Native visibility: %1 (%2)")
+            .arg(VisibilityStatus.statusLabel(
+                result ? result.status : "failed"))
+            .arg(VisibilityStatus.problemText(result));
+        return false;
+    }
+
     function draftPanelIds() {
         const found = {};
         const collections = [panelDrafts, screenDrafts, themeDrafts];
@@ -622,10 +650,12 @@ Window {
         colorField = null;
         colorTargetPanelId = "";
         studioError = "";
+        studioWarning = "";
     }
 
     function applyStudioChanges() {
         studioError = "";
+        studioWarning = "";
         const panelIds = draftPanelIds();
         const existingPanelIds = panelRegistry.panelIds;
         for (let index = 0; index < panelIds.length; ++index) {
@@ -661,8 +691,9 @@ Window {
                     && !applyPanelVisibility(panelId, Boolean(draft.visible)))
                 return false;
             if (StudioDraft.hasValue(draft, "visibilityMode")) {
-                panelController.setPanelVisibilityMode(
-                    panelId, String(draft.visibilityMode));
+                if (!applyPanelVisibilityMode(
+                        panelId, String(draft.visibilityMode)))
+                    return false;
             }
         }
 
@@ -733,7 +764,11 @@ Window {
     }
 
     function acceptStudioChanges() {
-        if ((!hasPendingChanges || applyStudioChanges()))
+        if (!hasPendingChanges) {
+            close();
+            return;
+        }
+        if (applyStudioChanges() && studioWarning.length === 0)
             close();
     }
 
@@ -871,8 +906,10 @@ Window {
                 panelValue("width", 720) + " × " + panelValue("height", 76)
                     + qsTr(" px")),
             readOnlyRow(qsTr("Sizing"),
-                panelValue("dynamic", true) ? qsTr("Dynamic") : qsTr("Static")),
-            readOnlyRow(qsTr("Visibility"), visibility),
+                panelValue("dynamic", true) ? qsTr("Dynamic") : qsTr("Static")));
+        if (!freePanel)
+            rows.push(readOnlyRow(qsTr("Visibility"), visibility));
+        rows.push(
             section(qsTr("Appearance"),
                 qsTr("The active surface and geometry settings.")),
             readOnlyRow(qsTr("Layout"),
@@ -1130,21 +1167,36 @@ Window {
     }
 
     function panelsBehaviorRows() {
-        return [
-            section(qsTr("Behavior"), qsTr("Visibility and interaction rules."), true),
-            panelField("switch", qsTr("Visible"), "visible", true),
-            {
-                kind: "switch",
-                label: qsTr("Auto Hide"),
-                scope: "mode",
-                mode: "auto-hide"
-            },
-            {
-                kind: "switch",
-                label: qsTr("Dodge Windows"),
-                scope: "mode",
-                mode: "dodge"
-            },
+        const nativePanel = isNativePanel(selectedPanelId);
+        const rows = [
+            section(qsTr("Behavior"), qsTr("Visibility and interaction rules."), true)
+        ];
+        if (nativePanel) {
+            rows.push(
+                panelField("switch", qsTr("Visible"), "visible", true),
+                panelField("combo", qsTr("Visibility mode"),
+                    "visibilityMode", "always",
+                    { options: visibilityOptions }),
+                readOnlyRow(
+                    qsTr("Native host result"),
+                    VisibilityStatus.statusLabel(selectedVisibilityResult.status),
+                    qsTr("The last ownership-verified Plasma result")));
+            if (VisibilityStatus.isProblem(selectedVisibilityResult)) {
+                rows.push(notice(
+                    qsTr("Visibility detail: %1")
+                        .arg(VisibilityStatus.problemText(
+                            selectedVisibilityResult)),
+                    true));
+            }
+            const savedMode = effectivePanelValue("visibilityMode", "always");
+            if (!VisibilityStatus.containsMode(
+                    selectedVisibilityResult, true, savedMode)) {
+                rows.push(notice(qsTr(
+                    "The saved visibility mode is unavailable. Apply Always visible or another listed mode."),
+                    true));
+            }
+        }
+        rows.push(
             panelField("switch", qsTr("Dynamic / Static"), "dynamic", true,
                 { description: qsTr("On is dynamic; off is static") }),
             panelField("switch", qsTr("Spring rearrangement"),
@@ -1153,7 +1205,8 @@ Window {
                 { options: folderLayoutOptions }),
             panelField("spin", qsTr("Folder animation speed"), "folderSpeed", 260,
                 { from: 80, to: 1200, step: 20 })
-        ];
+        );
+        return rows;
     }
 
     function panelsLayoutRows() {
@@ -1695,7 +1748,18 @@ Window {
         }
 
         Label {
-            visible: root.hasPendingChanges && root.studioError.length === 0
+            visible: root.studioWarning.length > 0
+            Layout.maximumWidth: 420
+            text: root.studioWarning
+            color: "#ffc66d"
+            font.pixelSize: 10
+            elide: Text.ElideRight
+        }
+
+        Label {
+            visible: root.hasPendingChanges
+                && root.studioError.length === 0
+                && root.studioWarning.length === 0
             text: qsTr("Pending changes")
             color: "#80de70"
             font.pixelSize: 10

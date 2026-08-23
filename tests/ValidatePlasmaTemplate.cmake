@@ -25,6 +25,48 @@ foreach(required_value
   endif()
 endforeach()
 
+file(READ
+  "${SOURCE_DIR}/plasma-dock-widget/contents/config/config.qml"
+  dock_config_model)
+file(READ
+  "${SOURCE_DIR}/plasma-dock-widget/contents/ui/configBehavior.qml"
+  dock_behavior_page)
+
+string(FIND
+  "${dock_config_model}"
+  "source: \"configBehavior.qml\""
+  behavior_page_position)
+if(behavior_page_position EQUAL -1)
+  message(FATAL_ERROR
+    "The dock configuration model must register the functional Behavior page.")
+endif()
+
+foreach(required_visibility_contract
+    "nativePanelVisibilityStatus"
+    "applyNativePanelVisibilityMode"
+    "setPanelVisible"
+    "supportedModes"
+    "fallbackApplied"
+    "visible: root.visibilityOptions.length > 0")
+  string(FIND
+    "${dock_behavior_page}"
+    "${required_visibility_contract}"
+    visibility_contract_position)
+  if(visibility_contract_position EQUAL -1)
+    message(FATAL_ERROR
+      "The Behavior page is missing ${required_visibility_contract}.")
+  endif()
+endforeach()
+
+string(FIND
+  "${dock_behavior_page}"
+  "visibility are managed by Plasma's panel Edit Mode"
+  stale_visibility_claim_position)
+if(NOT stale_visibility_claim_position EQUAL -1)
+  message(FATAL_ERROR
+    "The Behavior page still contains the obsolete static visibility claim.")
+endif()
+
 foreach(token_component
     "bridgePanel.id"
     "currentActivity()"

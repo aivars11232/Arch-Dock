@@ -22,6 +22,8 @@ public:
         {QStringLiteral("minimumLength"), 720},
         {QStringLiteral("length"), 720},
         {QStringLiteral("lengthMode"), 1},
+        {QStringLiteral("hiding"), 0},
+        {QStringLiteral("temporaryHidden"), 0},
     };
     QSet<QString> unsupported;
     QList<std::optional<int>> forcedReplies;
@@ -38,6 +40,12 @@ public:
         if (!forcedReplies.isEmpty())
         {
             return forcedReplies.takeFirst();
+        }
+
+        if (script.contains(QStringLiteral("var actualHiding")) &&
+            script.contains(QStringLiteral("var temporaryCode")))
+        {
+            return executeVisibilityState(script);
         }
 
         const QString property = propertyForScript(script);
@@ -70,6 +78,72 @@ public:
     }
 
 private:
+    std::optional<int> executeVisibilityState(const QString &script)
+    {
+        if (unsupported.contains(QStringLiteral("hiding")) ||
+            unsupported.contains(QStringLiteral("temporaryHidden")))
+        {
+            return -1002;
+        }
+
+        const auto mutate = [this](const QString &property, int requestedValue)
+            -> std::optional<int>
+        {
+            const int mutationCount = ++mutationCounts[property];
+            values[property] = property == coerceFirstMutationProperty && mutationCount == 1
+                ? coercedValue
+                : requestedValue;
+            if (property == failFirstMutationProperty && mutationCount == 1)
+            {
+                return -1003;
+            }
+            if (property == failRollbackProperty && mutationCount > 1)
+            {
+                return -1003;
+            }
+            return std::nullopt;
+        };
+
+        const QRegularExpression temporaryExpression(
+            QStringLiteral("panel\\.writeConfig\\('temporaryHidden', '([01])'\\);"));
+        const QRegularExpressionMatch temporaryMatch = temporaryExpression.match(script);
+        if (temporaryMatch.hasMatch())
+        {
+            const std::optional<int> failure = mutate(
+                QStringLiteral("temporaryHidden"), temporaryMatch.captured(1).toInt());
+            if (failure.has_value())
+            {
+                return failure;
+            }
+        }
+
+        const QRegularExpression hidingExpression(
+            QStringLiteral("panel\\.hiding = '([^']+)';"));
+        const QRegularExpressionMatch hidingMatch = hidingExpression.match(script);
+        if (hidingMatch.hasMatch())
+        {
+            const QMap<QString, int> hidingValues{
+                {QStringLiteral("none"), 0},
+                {QStringLiteral("autohide"), 1},
+                {QStringLiteral("dodgewindows"), 2},
+                {QStringLiteral("windowsgobelow"), 3},
+            };
+            if (!hidingValues.contains(hidingMatch.captured(1)))
+            {
+                return -1004;
+            }
+            const std::optional<int> failure = mutate(
+                QStringLiteral("hiding"), hidingValues.value(hidingMatch.captured(1)));
+            if (failure.has_value())
+            {
+                return failure;
+            }
+        }
+
+        return values.value(QStringLiteral("hiding")) * 2 +
+            values.value(QStringLiteral("temporaryHidden"));
+    }
+
     static QString propertyForScript(const QString &script)
     {
         if (script.contains(QStringLiteral("panel.maximumLength")))
@@ -199,6 +273,14 @@ private slots:
     void reportsScriptFailureBeforeMutation();
     void rejectsInvalidRequestsWithoutExecuting();
     void escapesOwnershipValuesInEveryScript();
+    void appliesAndReadsBackVisibilityState();
+    void reportsUnsupportedVisibilityBeforeMutation();
+    void rollsBackVisibilityReadbackMismatch();
+    void rollsBackVisibilityWhenPersistenceFails();
+    void reportsVisibilityRollbackFailurePrecisely();
+    void stopsVisibilityMutationWhenOwnershipIsDenied();
+    void rejectsInvalidVisibilityRequestsWithoutExecuting();
+    void escapesVisibilityOwnershipValuesInEveryScript();
 };
 
 void PlasmaPanelAdapterTest::edgeScriptsUseSupportedProperties_data()
@@ -549,6 +631,199 @@ void PlasmaPanelAdapterTest::escapesOwnershipValuesInEveryScript()
 
     QVERIFY(result.success());
     QCOMPARE(host.scripts.size(), 27);
+    for (const QString &script : host.scripts)
+    {
+        QVERIFY(script.contains(QStringLiteral("var panel = panelById(42);")));
+        QVERIFY(script.contains(QStringLiteral("panel.readConfig('ownerToken', '')")));
+        QVERIFY(script.contains(QStringLiteral("panel.readConfig('panelId', '')")));
+        QVERIFY(script.contains(QStringLiteral("panel-\\'\\\\line\\nnext\\u2028id")));
+        QVERIFY(script.contains(QStringLiteral("owner-\\'\\\\line\\rnext\\u2029token")));
+        QVERIFY(!script.contains(panelId));
+        QVERIFY(!script.contains(token));
+    }
+}
+
+void PlasmaPanelAdapterTest::appliesAndReadsBackVisibilityState()
+{
+    using namespace ArchDock;
+
+    FakePlasmaHost host;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelVisibilityApplyResult result = adapter.applyVisibility(
+        42,
+        QStringLiteral("panel-1"),
+        QStringLiteral("owner-1"),
+        PlasmaPanelHidingMode::DodgeWindows,
+        true);
+
+    QVERIFY(result.success());
+    QVERIFY(result.ownershipVerified);
+    QCOMPARE(result.status, QStringLiteral("applied"));
+    QVERIFY(result.errorCode.isEmpty());
+    QCOMPARE(result.requestedHostMode, QStringLiteral("dodgewindows"));
+    QVERIFY(result.requestedTemporaryHidden);
+    QVERIFY(result.actualHostMode.has_value());
+    QVERIFY(result.actualTemporaryHidden.has_value());
+    QCOMPARE(*result.actualHostMode, QStringLiteral("dodgewindows"));
+    QCOMPARE(*result.actualTemporaryHidden, true);
+    QCOMPARE(host.values.value(QStringLiteral("hiding")), 2);
+    QCOMPARE(host.values.value(QStringLiteral("temporaryHidden")), 1);
+    QCOMPARE(host.scripts.size(), 3);
+
+    const QVariantMap structured = result.toVariantMap();
+    QVERIFY(structured.value(QStringLiteral("success")).toBool());
+    QCOMPARE(structured.value(QStringLiteral("requested")).toMap()
+                 .value(QStringLiteral("hostMode")).toString(),
+             QStringLiteral("dodgewindows"));
+    QCOMPARE(structured.value(QStringLiteral("hostState")).toMap()
+                 .value(QStringLiteral("temporaryHidden")).toBool(),
+             true);
+}
+
+void PlasmaPanelAdapterTest::reportsUnsupportedVisibilityBeforeMutation()
+{
+    using namespace ArchDock;
+
+    FakePlasmaHost host;
+    host.unsupported.insert(QStringLiteral("hiding"));
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelVisibilityApplyResult result = adapter.applyVisibility(
+        42,
+        QStringLiteral("panel-1"),
+        QStringLiteral("owner-1"),
+        PlasmaPanelHidingMode::AutoHide,
+        false);
+
+    QVERIFY(!result.success());
+    QVERIFY(result.ownershipVerified);
+    QCOMPARE(result.errorCode, QStringLiteral("property-unsupported"));
+    QCOMPARE(host.scripts.size(), 1);
+    QVERIFY(host.mutationCounts.isEmpty());
+}
+
+void PlasmaPanelAdapterTest::rollsBackVisibilityReadbackMismatch()
+{
+    using namespace ArchDock;
+
+    FakePlasmaHost host;
+    host.coerceFirstMutationProperty = QStringLiteral("hiding");
+    host.coercedValue = 0;
+    const QMap<QString, int> original = host.values;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelVisibilityApplyResult result = adapter.applyVisibility(
+        42,
+        QStringLiteral("panel-1"),
+        QStringLiteral("owner-1"),
+        PlasmaPanelHidingMode::AutoHide,
+        true);
+
+    QVERIFY(!result.success());
+    QCOMPARE(result.status, QStringLiteral("rolled-back"));
+    QCOMPARE(result.errorCode, QStringLiteral("readback-mismatch"));
+    QVERIFY(result.rollbackAttempted);
+    QVERIFY(result.rollbackSucceeded);
+    QCOMPARE(host.values, original);
+    QCOMPARE(*result.actualHostMode, QStringLiteral("none"));
+    QCOMPARE(*result.actualTemporaryHidden, false);
+}
+
+void PlasmaPanelAdapterTest::rollsBackVisibilityWhenPersistenceFails()
+{
+    using namespace ArchDock;
+
+    FakePlasmaHost host;
+    const QMap<QString, int> original = host.values;
+    bool persistenceCalled = false;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelVisibilityApplyResult result = adapter.applyVisibility(
+        42,
+        QStringLiteral("panel-1"),
+        QStringLiteral("owner-1"),
+        PlasmaPanelHidingMode::AutoHide,
+        false,
+        [&persistenceCalled]
+        {
+            persistenceCalled = true;
+            return false;
+        });
+
+    QVERIFY(persistenceCalled);
+    QCOMPARE(result.status, QStringLiteral("rolled-back"));
+    QCOMPARE(result.errorCode, QStringLiteral("persistence-failed"));
+    QVERIFY(result.rollbackSucceeded);
+    QCOMPARE(host.values, original);
+}
+
+void PlasmaPanelAdapterTest::reportsVisibilityRollbackFailurePrecisely()
+{
+    using namespace ArchDock;
+
+    FakePlasmaHost host;
+    host.coerceFirstMutationProperty = QStringLiteral("hiding");
+    host.coercedValue = 0;
+    host.failRollbackProperty = QStringLiteral("hiding");
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelVisibilityApplyResult result = adapter.applyVisibility(
+        42,
+        QStringLiteral("panel-1"),
+        QStringLiteral("owner-1"),
+        PlasmaPanelHidingMode::AutoHide,
+        false);
+
+    QCOMPARE(result.status, QStringLiteral("rollback-failed"));
+    QVERIFY(result.rollbackAttempted);
+    QVERIFY(!result.rollbackSucceeded);
+    QCOMPARE(result.rollbackErrorCode, QStringLiteral("script-failure"));
+}
+
+void PlasmaPanelAdapterTest::stopsVisibilityMutationWhenOwnershipIsDenied()
+{
+    using namespace ArchDock;
+
+    FakePlasmaHost host;
+    host.forcedReplies.append(-1001);
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelVisibilityApplyResult result = adapter.applyVisibility(
+        42,
+        QStringLiteral("panel-1"),
+        QStringLiteral("wrong-owner"),
+        PlasmaPanelHidingMode::AutoHide,
+        false);
+
+    QVERIFY(!result.ownershipVerified);
+    QCOMPARE(result.errorCode, QStringLiteral("ownership-denied"));
+    QCOMPARE(host.scripts.size(), 1);
+    QVERIFY(host.mutationCounts.isEmpty());
+}
+
+void PlasmaPanelAdapterTest::rejectsInvalidVisibilityRequestsWithoutExecuting()
+{
+    using namespace ArchDock;
+
+    FakePlasmaHost host;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelVisibilityApplyResult result = adapter.applyVisibility(
+        -1, {}, {}, PlasmaPanelHidingMode::None, false);
+
+    QCOMPARE(result.errorCode, QStringLiteral("invalid-request"));
+    QVERIFY(host.scripts.isEmpty());
+}
+
+void PlasmaPanelAdapterTest::escapesVisibilityOwnershipValuesInEveryScript()
+{
+    using namespace ArchDock;
+
+    const QString panelId = QStringLiteral("panel-'") + QLatin1Char('\\') +
+        QStringLiteral("line\nnext") + QChar(0x2028) + QStringLiteral("id");
+    const QString token = QStringLiteral("owner-'") + QLatin1Char('\\') +
+        QStringLiteral("line\rnext") + QChar(0x2029) + QStringLiteral("token");
+    FakePlasmaHost host;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelVisibilityApplyResult result = adapter.applyVisibility(
+        42, panelId, token, PlasmaPanelHidingMode::AutoHide, false);
+
+    QVERIFY(result.success());
+    QCOMPARE(host.scripts.size(), 3);
     for (const QString &script : host.scripts)
     {
         QVERIFY(script.contains(QStringLiteral("var panel = panelById(42);")));

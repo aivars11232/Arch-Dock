@@ -8,10 +8,12 @@ class WindowModel;
 class WindowWatcher final : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(bool available READ available NOTIFY availableChanged)
 
 public:
     explicit WindowWatcher(WindowModel &windowModel,
                            QObject *parent = nullptr);
+    [[nodiscard]] bool available() const;
 
 public slots:
     void windowAdded(const QString &internalId,
@@ -34,8 +36,12 @@ public slots:
                        bool minimized,
                        const QString &stateJson);
 
+signals:
+    void availableChanged();
+
 private:
-    void loadKWinScript();
+    bool loadKWinScript();
 
     WindowModel &m_windowModel;
+    bool m_available = false;
 };

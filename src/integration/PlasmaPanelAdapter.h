@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../PanelPlacement.h"
+#include "../PanelVisibility.h"
 
 #include <QList>
 #include <QString>
@@ -57,6 +58,23 @@ struct PlasmaPanelPlacementApplyResult
     [[nodiscard]] QVariantMap toVariantMap() const;
 };
 
+struct PlasmaPanelVisibilityApplyResult
+{
+    bool ownershipVerified = false;
+    QString requestedHostMode;
+    bool requestedTemporaryHidden = false;
+    std::optional<QString> actualHostMode;
+    std::optional<bool> actualTemporaryHidden;
+    QString status = QStringLiteral("failed");
+    QString errorCode = QStringLiteral("invalid-result");
+    bool rollbackAttempted = false;
+    bool rollbackSucceeded = false;
+    QString rollbackErrorCode;
+
+    [[nodiscard]] bool success() const;
+    [[nodiscard]] QVariantMap toVariantMap() const;
+};
+
 using PlasmaPanelScriptExecutor = std::function<std::optional<int>(const QString &)>;
 using PlasmaPanelPersistence = std::function<bool()>;
 
@@ -73,6 +91,14 @@ public:
         const QString &panelId,
         const QString &ownershipToken,
         const NativePanelPlacement &placement,
+        PlasmaPanelPersistence persist = {}) const;
+
+    [[nodiscard]] PlasmaPanelVisibilityApplyResult applyVisibility(
+        int containmentId,
+        const QString &panelId,
+        const QString &ownershipToken,
+        PlasmaPanelHidingMode hidingMode,
+        bool temporaryHidden,
         PlasmaPanelPersistence persist = {}) const;
 
 private:

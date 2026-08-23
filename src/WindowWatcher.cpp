@@ -111,16 +111,27 @@ WindowWatcher::WindowWatcher(WindowModel &windowModel,
 {
     auto sessionBus = QDBusConnection::sessionBus();
 
-    if (!sessionBus.registerObject(
+    const bool objectRegistered = sessionBus.registerObject(
             QStringLiteral("/WindowWatcher"),
             this,
-            QDBusConnection::ExportAllSlots))
+            QDBusConnection::ExportAllSlots);
+    if (!objectRegistered)
     {
         qWarning() << "Failed to register WindowWatcher D-Bus object:"
                    << sessionBus.lastError().message();
+        return;
     }
 
-    loadKWinScript();
+    m_available = loadKWinScript();
+    if (m_available)
+    {
+        emit availableChanged();
+    }
+}
+
+bool WindowWatcher::available() const
+{
+    return m_available;
 }
 
 void WindowWatcher::windowAdded(const QString &internalId,
@@ -222,7 +233,7 @@ void WindowWatcher::windowUpdated(const QString &internalId,
     m_windowModel.updateWindow(window);
 }
 
-void WindowWatcher::loadKWinScript()
+bool WindowWatcher::loadKWinScript()
 {
     const QString installedScriptPath = QStandardPaths::locate(
         QStandardPaths::GenericDataLocation,
@@ -233,7 +244,7 @@ void WindowWatcher::loadKWinScript()
     if (!QFileInfo::exists(scriptPath))
     {
         qWarning() << "Arch Dock KWin script is unavailable:" << scriptPath;
-        return;
+        return false;
     }
 
     QDBusInterface scripting(
@@ -244,7 +255,7 @@ void WindowWatcher::loadKWinScript()
     if (!scripting.isValid())
     {
         qWarning() << "KWin scripting D-Bus interface is unavailable.";
-        return;
+        return false;
     }
 
     const QString pluginName = QStringLiteral("org.archdock.windowwatcher");
@@ -257,8 +268,15 @@ void WindowWatcher::loadKWinScript()
     {
         qWarning() << "Failed to load Arch Dock KWin script:"
                    << loadReply.errorMessage();
-        return;
+        return false;
     }
 
-    scripting.call(QStringLiteral("start"));
+    const QDBusMessage startReply = scripting.call(QStringLiteral("start"));
+    if (startReply.type() == QDBusMessage::ErrorMessage)
+    {
+        qWarning() << "Failed to start Arch Dock KWin script:"
+                   << startReply.errorMessage();
+        return false;
+    }
+    return true;
 }

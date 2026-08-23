@@ -27,6 +27,10 @@ class PanelVisibilityTest final : public QObject
 
 private slots:
     void normalizesStoredModes();
+    void validatesAndSerializesModes();
+    void reportsOnlySupportedNativeModes();
+    void resolvesNativeHostModes();
+    void fallsBackToAlwaysVisibleWhenUnsupported();
     void keepsAlwaysVisibleWithoutManualRequest();
     void autoHideConcealsWhenUnlocked();
     void manualHideIsExplicitAndGuarded();
@@ -54,6 +58,166 @@ void PanelVisibilityTest::normalizesStoredModes()
             PanelVisibilityMode::HideForMaximizedOrFullscreen);
     QVERIFY(ArchDock::panelVisibilityModeFromString(QStringLiteral("unknown")) ==
             PanelVisibilityMode::AlwaysVisible);
+}
+
+void PanelVisibilityTest::validatesAndSerializesModes()
+{
+    using ArchDock::PanelVisibilityMode;
+
+    const auto always = ArchDock::normalizedPanelVisibilityMode(QStringLiteral("Always Visible"));
+    const auto autoHide = ArchDock::normalizedPanelVisibilityMode(QStringLiteral("auto_hide"));
+    const auto dodge = ArchDock::normalizedPanelVisibilityMode(QStringLiteral("Dodge Windows"));
+    const auto cover = ArchDock::normalizedPanelVisibilityMode(
+        QStringLiteral("hide-for-maximized-or-fullscreen"));
+
+    QVERIFY(always.has_value());
+    QVERIFY(autoHide.has_value());
+    QVERIFY(dodge.has_value());
+    QVERIFY(cover.has_value());
+    QCOMPARE(always.value(), PanelVisibilityMode::AlwaysVisible);
+    QCOMPARE(autoHide.value(), PanelVisibilityMode::AutoHide);
+    QCOMPARE(dodge.value(), PanelVisibilityMode::DodgeActiveWindow);
+    QCOMPARE(cover.value(), PanelVisibilityMode::HideForMaximizedOrFullscreen);
+    QVERIFY(!ArchDock::normalizedPanelVisibilityMode(QStringLiteral("sometimes")).has_value());
+    QVERIFY(!ArchDock::normalizedPanelVisibilityMode(QString{}).has_value());
+
+    QCOMPARE(ArchDock::panelVisibilityModeToString(PanelVisibilityMode::AlwaysVisible),
+             QStringLiteral("always"));
+    QCOMPARE(ArchDock::panelVisibilityModeToString(PanelVisibilityMode::AutoHide),
+             QStringLiteral("auto-hide"));
+    QCOMPARE(ArchDock::panelVisibilityModeToString(PanelVisibilityMode::DodgeActiveWindow),
+             QStringLiteral("dodge"));
+    QCOMPARE(ArchDock::panelVisibilityModeToString(
+                 PanelVisibilityMode::HideForMaximizedOrFullscreen),
+             QStringLiteral("cover"));
+}
+
+void PanelVisibilityTest::reportsOnlySupportedNativeModes()
+{
+    ArchDock::NativeVisibilityCapabilities capabilities;
+    QCOMPARE(ArchDock::supportedNativeVisibilityModes(capabilities),
+             QStringList{QStringLiteral("always")});
+
+    capabilities.autoHide = true;
+    QCOMPARE(ArchDock::supportedNativeVisibilityModes(capabilities),
+             QStringList({QStringLiteral("always"), QStringLiteral("auto-hide")}));
+
+    capabilities.dodgeWindows = true;
+    QCOMPARE(ArchDock::supportedNativeVisibilityModes(capabilities),
+             QStringList({QStringLiteral("always"),
+                          QStringLiteral("auto-hide"),
+                          QStringLiteral("dodge")}));
+
+    capabilities.coverController = true;
+    QCOMPARE(ArchDock::supportedNativeVisibilityModes(capabilities),
+             QStringList({QStringLiteral("always"),
+                          QStringLiteral("auto-hide"),
+                          QStringLiteral("dodge"),
+                          QStringLiteral("cover")}));
+
+    capabilities.autoHide = false;
+    QCOMPARE(ArchDock::supportedNativeVisibilityModes(capabilities),
+             QStringList({QStringLiteral("always"), QStringLiteral("dodge")}));
+}
+
+void PanelVisibilityTest::resolvesNativeHostModes()
+{
+    using ArchDock::PanelVisibilityDecision;
+    using ArchDock::PanelVisibilityMode;
+    using ArchDock::PlasmaPanelHidingMode;
+
+    const ArchDock::NativeVisibilityCapabilities capabilities{true, true, true};
+
+    auto result = ArchDock::resolveNativeVisibility(
+        PanelVisibilityMode::AlwaysVisible,
+        PanelVisibilityDecision::Reveal,
+        false,
+        capabilities);
+    QVERIFY(result.supported);
+    QCOMPARE(result.hostMode, PlasmaPanelHidingMode::None);
+
+    result = ArchDock::resolveNativeVisibility(
+        PanelVisibilityMode::AutoHide,
+        PanelVisibilityDecision::Reveal,
+        false,
+        capabilities);
+    QCOMPARE(result.hostMode, PlasmaPanelHidingMode::AutoHide);
+
+    result = ArchDock::resolveNativeVisibility(
+        PanelVisibilityMode::DodgeActiveWindow,
+        PanelVisibilityDecision::Reveal,
+        false,
+        capabilities);
+    QCOMPARE(result.hostMode, PlasmaPanelHidingMode::DodgeWindows);
+
+    result = ArchDock::resolveNativeVisibility(
+        PanelVisibilityMode::HideForMaximizedOrFullscreen,
+        PanelVisibilityDecision::Reveal,
+        false,
+        capabilities);
+    QCOMPARE(result.hostMode, PlasmaPanelHidingMode::None);
+
+    result = ArchDock::resolveNativeVisibility(
+        PanelVisibilityMode::HideForMaximizedOrFullscreen,
+        PanelVisibilityDecision::Conceal,
+        false,
+        capabilities);
+    QCOMPARE(result.hostMode, PlasmaPanelHidingMode::AutoHide);
+
+    result = ArchDock::resolveNativeVisibility(
+        PanelVisibilityMode::AlwaysVisible,
+        PanelVisibilityDecision::Reveal,
+        true,
+        capabilities);
+    QCOMPARE(result.hostMode, PlasmaPanelHidingMode::AutoHide);
+    QVERIFY(!result.fallbackApplied);
+
+    QCOMPARE(ArchDock::plasmaPanelHidingModeToString(PlasmaPanelHidingMode::None),
+             QStringLiteral("none"));
+    QCOMPARE(ArchDock::plasmaPanelHidingModeToString(PlasmaPanelHidingMode::AutoHide),
+             QStringLiteral("autohide"));
+    QCOMPARE(ArchDock::plasmaPanelHidingModeToString(PlasmaPanelHidingMode::DodgeWindows),
+             QStringLiteral("dodgewindows"));
+}
+
+void PanelVisibilityTest::fallsBackToAlwaysVisibleWhenUnsupported()
+{
+    using ArchDock::PanelVisibilityDecision;
+    using ArchDock::PanelVisibilityMode;
+    using ArchDock::PlasmaPanelHidingMode;
+
+    const ArchDock::NativeVisibilityCapabilities unsupported;
+    const QList<PanelVisibilityMode> requestedModes{
+        PanelVisibilityMode::AutoHide,
+        PanelVisibilityMode::DodgeActiveWindow,
+        PanelVisibilityMode::HideForMaximizedOrFullscreen,
+    };
+
+    for (const PanelVisibilityMode requestedMode : requestedModes)
+    {
+        const auto result = ArchDock::resolveNativeVisibility(
+            requestedMode,
+            PanelVisibilityDecision::Conceal,
+            false,
+            unsupported);
+        QVERIFY(!result.supported);
+        QVERIFY(result.fallbackApplied);
+        QVERIFY(!result.errorCode.isEmpty());
+        QCOMPARE(result.requestedMode, requestedMode);
+        QCOMPARE(result.effectiveMode, PanelVisibilityMode::AlwaysVisible);
+        QCOMPARE(result.hostMode, PlasmaPanelHidingMode::None);
+    }
+
+    const auto manualHide = ArchDock::resolveNativeVisibility(
+        PanelVisibilityMode::AlwaysVisible,
+        PanelVisibilityDecision::Conceal,
+        true,
+        unsupported);
+    QVERIFY(!manualHide.supported);
+    QVERIFY(manualHide.fallbackApplied);
+    QCOMPARE(manualHide.errorCode, QStringLiteral("manual-hide-unsupported"));
+    QCOMPARE(manualHide.effectiveMode, PanelVisibilityMode::AlwaysVisible);
+    QCOMPARE(manualHide.hostMode, PlasmaPanelHidingMode::None);
 }
 
 void PanelVisibilityTest::keepsAlwaysVisibleWithoutManualRequest()

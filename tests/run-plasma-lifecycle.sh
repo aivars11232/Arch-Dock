@@ -9,6 +9,10 @@ ARCHDOCK_SESSION_ARCH_DOCK_PID=''
 ARCHDOCK_SESSION_PLASMASHELL_PID=''
 ARCHDOCK_SESSION_KWIN_PID=''
 ARCHDOCK_SIGNAL_MONITOR_PID=''
+ARCHDOCK_VISIBILITY_WINDOW_PID=''
+ARCHDOCK_VISIBILITY_COMMAND_FILE=''
+ARCHDOCK_VISIBILITY_WINDOW_LOG=''
+ARCHDOCK_VISIBILITY_PROBE_SNAPSHOT=''
 ARCHDOCK_SETTINGS_FIXTURE_FILE=''
 ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY=''
 ARCHDOCK_SETTINGS_FIXTURE_FILE_MODE=''
@@ -60,6 +64,16 @@ restore_settings_fixture_permissions() {
 
 cleanup_session() {
     stop_process "$ARCHDOCK_SIGNAL_MONITOR_PID"
+    stop_process "$ARCHDOCK_VISIBILITY_WINDOW_PID"
+    if [[ -n "$ARCHDOCK_SESSION_KWIN_PID" ]] &&
+        kill -0 "$ARCHDOCK_SESSION_KWIN_PID" 2>/dev/null; then
+        gdbus call \
+            --session \
+            --dest org.kde.KWin \
+            --object-path /Scripting \
+            --method org.kde.kwin.Scripting.unloadScript \
+            org.archdock.visibilityprobe >/dev/null 2>&1 || true
+    fi
     stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
     stop_process "$ARCHDOCK_SESSION_PLASMASHELL_PID"
     stop_process "$ARCHDOCK_SESSION_KWIN_PID"
@@ -164,6 +178,45 @@ require_structured_placement_reply() {
         "$reply" == *"'rollbackErrorCode':"* ]] || {
         printf 'Unexpected structured placement result: expected=%s/%s/%s reply=%s\n' \
             "$expected_status" "$expected_success" "$expected_error" "$reply" >&2
+        return 1
+    }
+}
+
+require_structured_visibility_reply() {
+    local reply="$1"
+    local expected_status="$2"
+    local expected_success="$3"
+    local expected_error="$4"
+    local expected_effective_mode="$5"
+    local expected_host_mode="$6"
+    local actual_status
+    actual_status="$(gvariant_map_string status <<<"$reply")"
+    local actual_success
+    actual_success="$(gvariant_map_boolean success <<<"$reply")"
+    local actual_error
+    actual_error="$(gvariant_map_string errorCode <<<"$reply")"
+    local actual_effective_mode
+    actual_effective_mode="$(gvariant_map_string effectiveMode <<<"$reply")"
+    local actual_host_mode
+    actual_host_mode="$(gvariant_map_string hostMode <<<"$reply")"
+    [[ "$actual_status" == "$expected_status" &&
+        "$actual_success" == "$expected_success" &&
+        "$actual_error" == "$expected_error" &&
+        "$actual_effective_mode" == "$expected_effective_mode" &&
+        "$actual_host_mode" == "$expected_host_mode" &&
+        "$reply" == *"'requestedMode':"* &&
+        "$reply" == *"'supportedModes':"* &&
+        "$reply" == *"'watcherAvailable': <true>"* &&
+        "$reply" == *"'verified':"* &&
+        "$reply" == *"'fallbackApplied':"* &&
+        "$reply" == *"'fallbackReason':"* &&
+        "$reply" == *"'ownershipVerified':"* &&
+        "$reply" == *"'rollbackAttempted':"* &&
+        "$reply" == *"'rollbackSucceeded':"* &&
+        "$reply" == *"'rollbackErrorCode':"* ]] || {
+        printf 'Unexpected structured visibility result: expected=%s/%s/%s/%s/%s reply=%s\n' \
+            "$expected_status" "$expected_success" "$expected_error" \
+            "$expected_effective_mode" "$expected_host_mode" "$reply" >&2
         return 1
     }
 }
@@ -697,6 +750,195 @@ native_panel_presentation() {
     plasma_script \
         "var panel = panelById($containment_id); if (!panel) { print('missing|-1'); } else { panel.currentConfigGroup = ['ArchDock']; print(panel.hiding + '|' + String(panel.readConfig('temporaryHidden', '0'))); }" |
         gvariant_string
+}
+
+wait_for_native_panel_presentation() {
+    local containment_id="$1"
+    local expected_presentation="$2"
+    local phase="$3"
+    local attempt
+    local actual_presentation=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        actual_presentation="$(native_panel_presentation \
+            "$containment_id" 2>/dev/null || true)"
+        [[ "$actual_presentation" == "$expected_presentation" ]] && return
+        sleep 0.1
+    done
+    printf 'Timed out waiting for native visibility during %s: expected=%s actual=%s\n' \
+        "$phase" "$expected_presentation" \
+        "${actual_presentation:-unavailable}" >&2
+    return 1
+}
+
+reload_visibility_probe() {
+    local kwin_log="$ARCHDOCK_TEST_LOG_DIR/kwin.log"
+    local first_line
+    first_line="$(( $(wc -l <"$kwin_log") + 1 ))"
+    gdbus call \
+        --session \
+        --dest org.kde.KWin \
+        --object-path /Scripting \
+        --method org.kde.kwin.Scripting.unloadScript \
+        org.archdock.visibilityprobe >/dev/null 2>&1 || true
+    local load_reply
+    load_reply="$(gdbus call \
+        --session \
+        --dest org.kde.KWin \
+        --object-path /Scripting \
+        --method org.kde.kwin.Scripting.loadScript \
+        "$ARCHDOCK_VISIBILITY_PROBE_SCRIPT" \
+        org.archdock.visibilityprobe)"
+    local script_id
+    script_id="$(gvariant_integer <<<"$load_reply")"
+    [[ "$script_id" =~ ^[0-9]+$ ]] || {
+        printf 'Could not load the private KWin visibility probe: %s\n' \
+            "$load_reply" >&2
+        return 1
+    }
+    gdbus call \
+        --session \
+        --dest org.kde.KWin \
+        --object-path /Scripting \
+        --method org.kde.kwin.Scripting.start >/dev/null
+
+    local attempt
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        sed -n "${first_line},\$p" "$kwin_log" >"$ARCHDOCK_VISIBILITY_PROBE_SNAPSHOT"
+        if grep -Fq 'ARCHDOCK_VISIBILITY_PROBE_END' \
+                "$ARCHDOCK_VISIBILITY_PROBE_SNAPSHOT"; then
+            return
+        fi
+        sleep 0.1
+    done
+    printf 'Timed out waiting for the private KWin visibility probe snapshot.\n' >&2
+    return 1
+}
+
+identify_visibility_panel_window() {
+    local expected_width="$1"
+    local expected_height="$2"
+    reload_visibility_probe
+    local candidates
+    candidates="$(awk -F'|' \
+        -v expected_width="$expected_width" \
+        -v expected_height="$expected_height" \
+        '$1 ~ /ARCHDOCK_VISIBILITY_PROBE$/ &&
+         $8 == expected_width && $9 == expected_height &&
+         ($15 == "true" || tolower($3) ~ /plasma/) { print $2 }' \
+        "$ARCHDOCK_VISIBILITY_PROBE_SNAPSHOT")"
+    local candidate_count
+    candidate_count="$(sed '/^$/d' <<<"$candidates" | wc -l)"
+    [[ "$candidate_count" == '1' ]] || {
+        printf 'Expected one uniquely sized owned panel surface; candidates=%s snapshot=%s\n' \
+            "$candidate_count" \
+            "$(grep -F 'ARCHDOCK_VISIBILITY_PROBE|' \
+                "$ARCHDOCK_VISIBILITY_PROBE_SNAPSHOT" | tr '\n' ';')" >&2
+        return 1
+    }
+    sed -n '1p' <<<"$candidates"
+}
+
+wait_for_visibility_panel_hidden() {
+    local internal_id="$1"
+    local expected_hidden="$2"
+    local phase="$3"
+    local attempt
+    local actual_hidden=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        reload_visibility_probe
+        actual_hidden="$(awk -F'|' -v internal_id="$internal_id" \
+            '$1 ~ /ARCHDOCK_VISIBILITY_PROBE$/ && $2 == internal_id { print $10 }' \
+            "$ARCHDOCK_VISIBILITY_PROBE_SNAPSHOT" | tail -n 1)"
+        [[ "$actual_hidden" == "$expected_hidden" ]] && return
+        sleep 0.1
+    done
+    printf 'Timed out waiting for compositor panel state during %s: expected-hidden=%s actual=%s\n' \
+        "$phase" "$expected_hidden" "${actual_hidden:-unavailable}" >&2
+    return 1
+}
+
+wait_for_visibility_fixture_state() {
+    local expected_state="$1"
+    local attempt
+    local fixture_row=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        reload_visibility_probe
+        fixture_row="$(awk -F'|' \
+            '$1 ~ /ARCHDOCK_VISIBILITY_PROBE$/ &&
+             $5 == "Arch Dock Visibility Fixture" { print }' \
+            "$ARCHDOCK_VISIBILITY_PROBE_SNAPSHOT" | tail -n 1)"
+        if [[ -n "$fixture_row" ]]; then
+            local active=''
+            local fullscreen=''
+            local normal=''
+            local maximized=''
+            IFS='|' read -r \
+                _ _ _ _ _ _ _ _ _ _ active fullscreen _ normal _ maximized \
+                <<<"$fixture_row"
+            if [[ "$active" == 'true' ]]; then
+                case "$expected_state" in
+                normal|overlap)
+                    [[ "$fullscreen" == 'false' && "$normal" == 'true' &&
+                        "$maximized" == 'false' ]] && return
+                    ;;
+                maximized)
+                    [[ "$fullscreen" == 'false' && "$maximized" == 'true' ]] && return
+                    ;;
+                fullscreen)
+                    [[ "$fullscreen" == 'true' ]] && return
+                    ;;
+                esac
+            fi
+        fi
+        sleep 0.1
+    done
+    printf 'Timed out waiting for compositor fixture state %s: %s\n' \
+        "$expected_state" "${fixture_row:-unavailable}" >&2
+    return 1
+}
+
+start_visibility_window() {
+    local screen_index="$1"
+    ARCHDOCK_VISIBILITY_COMMAND_FILE="$XDG_RUNTIME_DIR/archdock-visibility-command"
+    ARCHDOCK_VISIBILITY_WINDOW_LOG="$ARCHDOCK_TEST_LOG_DIR/visibility-window.log"
+    ARCHDOCK_VISIBILITY_PROBE_SNAPSHOT="$XDG_RUNTIME_DIR/archdock-visibility-probe-snapshot"
+    printf '0 normal\n' >"$ARCHDOCK_VISIBILITY_COMMAND_FILE"
+    python "$ARCHDOCK_VISIBILITY_WINDOW_SCRIPT" \
+        "$ARCHDOCK_VISIBILITY_COMMAND_FILE" "$screen_index" \
+        >"$ARCHDOCK_VISIBILITY_WINDOW_LOG" 2>&1 &
+    ARCHDOCK_VISIBILITY_WINDOW_PID=$!
+
+    local attempt
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        grep -Fq 'STATE:0:normal' "$ARCHDOCK_VISIBILITY_WINDOW_LOG" && return
+        if ! kill -0 "$ARCHDOCK_VISIBILITY_WINDOW_PID" 2>/dev/null; then
+            printf 'The visibility window fixture exited during startup: %s\n' \
+                "$(<"$ARCHDOCK_VISIBILITY_WINDOW_LOG")" >&2
+            return 1
+        fi
+        sleep 0.1
+    done
+    printf 'Timed out starting the visibility window fixture.\n' >&2
+    return 1
+}
+
+command_visibility_window() {
+    local serial="$1"
+    local command="$2"
+    printf '%s %s\n' "$serial" "$command" >"$ARCHDOCK_VISIBILITY_COMMAND_FILE"
+    local attempt
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        grep -Fq "STATE:$serial:$command" "$ARCHDOCK_VISIBILITY_WINDOW_LOG" && return
+        if ! kill -0 "$ARCHDOCK_VISIBILITY_WINDOW_PID" 2>/dev/null; then
+            printf 'The visibility window fixture exited while applying %s: %s\n' \
+                "$command" "$(<"$ARCHDOCK_VISIBILITY_WINDOW_LOG")" >&2
+            return 1
+        fi
+        sleep 0.1
+    done
+    printf 'Timed out commanding the visibility window fixture: %s\n' \
+        "$command" >&2
+    return 1
 }
 
 native_panel_placement_snapshot() {
@@ -1421,32 +1663,161 @@ run_session() {
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'show after temporary hide'
 
-    local unsupported_mode
-    unsupported_mode="$(plasma_script "var panel = panelById($first_containment_id); if (!panel) { print('missing'); } else { panel.hiding = 'dodgewindows'; print(panel.hiding); }" | gvariant_string)"
-    [[ "$unsupported_mode" == 'dodgewindows' ]] || {
-        printf 'Could not establish the unsupported-mode test precondition: %s\n' \
-            "$unsupported_mode" >&2
+    local visibility_geometry_reply
+    visibility_geometry_reply="$(panel_call applyNativePanelPlacementDraft \
+        "$panel_id" \
+        "{'dynamic': <false>, 'width': <int32 617>, 'height': <int32 91>}")"
+    require_structured_placement_reply \
+        "$visibility_geometry_reply" applied true ''
+    wait_for_native_panel_geometry \
+        "$first_containment_id" 91 custom 617 617 '*' \
+        'visibility surface identification'
+
+    local visibility_screen_index
+    visibility_screen_index="$(panel_call screenIndexForPanel "$panel_id" | gvariant_integer)"
+    [[ "$visibility_screen_index" =~ ^[0-9]+$ ]] || {
+        printf 'Could not resolve the visibility fixture output: %s\n' \
+            "${visibility_screen_index:-unavailable}" >&2
         exit 1
     }
-    require_false_reply "$(panel_call setPanelVisible "$panel_id" false)"
-    [[ "$(native_panel_presentation "$first_containment_id")" == 'dodgewindows|0' ]] || {
-        printf 'Unsupported temporary hide changed the native presentation.\n' >&2
+    start_visibility_window "$visibility_screen_index"
+    wait_for_visibility_fixture_state normal
+
+    local visibility_reply
+    visibility_reply="$(panel_call applyNativePanelVisibilityMode \
+        "$panel_id" always)"
+    require_structured_visibility_reply \
+        "$visibility_reply" applied true '' always none
+    wait_for_native_panel_presentation \
+        "$first_containment_id" 'none|0' 'always-visible mode'
+    local visibility_panel_window_id
+    visibility_panel_window_id="$(identify_visibility_panel_window 617 91)"
+    [[ -n "$visibility_panel_window_id" ]] || {
+        printf 'Could not identify the owned panel surface for visibility checks.\n' >&2
         exit 1
     }
+    wait_for_visibility_panel_hidden \
+        "$visibility_panel_window_id" false 'always-visible mode'
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'always-visible mode'
+
+    visibility_reply="$(panel_call applyNativePanelVisibilityMode \
+        "$panel_id" auto-hide)"
+    require_structured_visibility_reply \
+        "$visibility_reply" applied true '' auto-hide autohide
+    wait_for_native_panel_presentation \
+        "$first_containment_id" 'autohide|0' 'auto-hide mode'
+    wait_for_visibility_panel_hidden \
+        "$visibility_panel_window_id" true 'auto-hide mode'
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'auto-hide mode'
+
+    command_visibility_window 1 normal
+    wait_for_visibility_fixture_state normal
+    visibility_reply="$(panel_call applyNativePanelVisibilityMode \
+        "$panel_id" dodge)"
+    require_structured_visibility_reply \
+        "$visibility_reply" applied true '' dodge dodgewindows
+    wait_for_native_panel_presentation \
+        "$first_containment_id" 'dodgewindows|0' 'native dodge mode'
+    wait_for_visibility_panel_hidden \
+        "$visibility_panel_window_id" false 'native dodge without overlap'
+    command_visibility_window 2 overlap
+    wait_for_visibility_fixture_state overlap
+    wait_for_visibility_panel_hidden \
+        "$visibility_panel_window_id" true 'native dodge with overlap'
+    command_visibility_window 3 normal
+    wait_for_visibility_fixture_state normal
+    wait_for_visibility_panel_hidden \
+        "$visibility_panel_window_id" false 'native dodge after overlap'
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'native dodge mode'
+
+    visibility_reply="$(panel_call applyNativePanelVisibilityMode \
+        "$panel_id" cover)"
+    require_structured_visibility_reply \
+        "$visibility_reply" applied true '' cover none
+    wait_for_native_panel_presentation \
+        "$first_containment_id" 'none|0' 'cover normal window'
+    wait_for_visibility_panel_hidden \
+        "$visibility_panel_window_id" false 'cover normal window'
+
+    command_visibility_window 4 maximized
+    wait_for_visibility_fixture_state maximized
+    wait_for_native_panel_presentation \
+        "$first_containment_id" 'autohide|0' 'cover maximized window'
+    wait_for_visibility_panel_hidden \
+        "$visibility_panel_window_id" true 'cover maximized window'
+    require_structured_visibility_reply \
+        "$(panel_call nativePanelVisibilityStatus "$panel_id")" \
+        applied true '' cover autohide
+
+    command_visibility_window 5 normal
+    wait_for_visibility_fixture_state normal
+    wait_for_native_panel_presentation \
+        "$first_containment_id" 'none|0' 'cover restored window'
+    wait_for_visibility_panel_hidden \
+        "$visibility_panel_window_id" false 'cover restored window'
+
+    command_visibility_window 6 fullscreen
+    wait_for_visibility_fixture_state fullscreen
+    wait_for_native_panel_presentation \
+        "$first_containment_id" 'autohide|0' 'cover fullscreen window'
+    wait_for_visibility_panel_hidden \
+        "$visibility_panel_window_id" true 'cover fullscreen window'
+    require_structured_visibility_reply \
+        "$(panel_call nativePanelVisibilityStatus "$panel_id")" \
+        applied true '' cover autohide
+
+    command_visibility_window 7 normal
+    wait_for_visibility_fixture_state normal
+    wait_for_native_panel_presentation \
+        "$first_containment_id" 'none|0' 'cover after fullscreen'
+    wait_for_visibility_panel_hidden \
+        "$visibility_panel_window_id" false 'cover after fullscreen'
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" \
+        'maximized and fullscreen cover mode'
+
+    require_true_reply "$(panel_call setPanelVisible "$panel_id" false)"
+    wait_for_native_panel_presentation \
+        "$first_containment_id" 'autohide|1' 'manual hide in cover mode'
+    wait_for_visibility_panel_hidden \
+        "$visibility_panel_window_id" true 'manual hide in cover mode'
+    require_true_reply "$(panel_call setPanelVisible "$panel_id" true)"
+    wait_for_native_panel_presentation \
+        "$first_containment_id" 'none|0' 'manual restore in cover mode'
+    wait_for_visibility_panel_hidden \
+        "$visibility_panel_window_id" false 'manual restore in cover mode'
+
+    visibility_reply="$(panel_call applyNativePanelVisibilityMode \
+        "$panel_id" always)"
+    require_structured_visibility_reply \
+        "$visibility_reply" applied true '' always none
+    command_visibility_window 8 quit
+    stop_process "$ARCHDOCK_VISIBILITY_WINDOW_PID"
+    ARCHDOCK_VISIBILITY_WINDOW_PID=''
+
+    local visibility_restore_reply
+    visibility_restore_reply="$(panel_call applyNativePanelPlacementDraft \
+        "$panel_id" \
+        "{'dynamic': <false>, 'width': <int32 720>, 'height': <int32 76>}")"
+    require_structured_placement_reply \
+        "$visibility_restore_reply" applied true ''
+    wait_for_native_panel_geometry \
+        "$first_containment_id" 76 custom 720 720 '*' \
+        'visibility geometry restoration'
     [[ "$(owned_panel_record "$panel_id")" == "$first_record" &&
         "$(owned_dock_id "$first_containment_id" "$panel_id")" == "$first_dock_id" &&
         "$(panel_ids)" == "$ids_before_hide" ]] || {
-        printf 'Unsupported temporary hide changed native or unrelated panel identity.\n' >&2
-        exit 1
-    }
-    unsupported_mode="$(plasma_script "var panel = panelById($first_containment_id); if (!panel) { print('missing'); } else { panel.hiding = 'none'; print(panel.hiding); }" | gvariant_string)"
-    [[ "$unsupported_mode" == 'none' ]] || {
-        printf 'Could not restore the disposable native panel presentation.\n' >&2
+        printf 'Visibility modes changed native panel identity.\n' >&2
         exit 1
     }
     require_unrelated_panel_unchanged \
-        "$unrelated_containment_id" "$unrelated_snapshot" 'rejected unsupported hide'
-    log_session_phase 'rejected unsupported temporary hide safely'
+        "$unrelated_containment_id" "$unrelated_snapshot" \
+        'visibility mode restoration'
+    log_session_phase \
+        'verified always, auto-hide, dodge, maximized/fullscreen cover, and manual restore'
 
     require_true_reply "$(panel_call setNativePanelType "$panel_id" launcher)"
     require_visual_dock "$first_containment_id" "$panel_id" launcher
@@ -2267,8 +2638,8 @@ run_outer() {
     require_command stat
     require_command stdbuf
     require_command timeout
-    python -c 'from PySide6.QtCore import QByteArray, QSettings' || {
-        printf 'Required Python module is unavailable: PySide6.QtCore\n' >&2
+    python -c 'from PySide6.QtCore import QByteArray, QSettings; from PySide6.QtGui import QWindow' || {
+        printf 'Required Python modules are unavailable: PySide6.QtCore/QtGui\n' >&2
         exit 1
     }
 
@@ -2287,6 +2658,8 @@ run_outer() {
     local session_result_file="$ARCHDOCK_LIFECYCLE_STATE_ROOT/session-result"
     local session_script="$ARCHDOCK_LIFECYCLE_STATE_ROOT/run-plasma-lifecycle.sh"
     local free_template_script="$stage_root/share/plasma/layout-templates/org.archdock.plasma.desktop.circularFreeDock/contents/layout.js"
+    local visibility_window_script="$project_root/tests/visibility-window.py"
+    local visibility_probe_script="$project_root/tests/kwin-panel-visibility-probe.js"
     mkdir -p \
         "$ARCHDOCK_LIFECYCLE_STATE_ROOT/cache" \
         "$ARCHDOCK_LIFECYCLE_STATE_ROOT/config" \
@@ -2305,6 +2678,11 @@ run_outer() {
         printf 'Staged free-panel template is unavailable: %s\n' "$free_template_script" >&2
         exit 1
     }
+    [[ -r "$visibility_window_script" && -r "$visibility_probe_script" ]] || {
+        printf 'Visibility runtime fixtures are unavailable: window=%s probe=%s\n' \
+            "$visibility_window_script" "$visibility_probe_script" >&2
+        exit 1
+    }
 
     local session_runner_status
     set +e
@@ -2314,6 +2692,8 @@ run_outer() {
         ARCHDOCK_TEST_BINARY="$binary_path" \
         ARCHDOCK_TEST_LOG_DIR="$log_dir" \
         ARCHDOCK_FREE_TEMPLATE_SCRIPT="$free_template_script" \
+        ARCHDOCK_VISIBILITY_WINDOW_SCRIPT="$visibility_window_script" \
+        ARCHDOCK_VISIBILITY_PROBE_SCRIPT="$visibility_probe_script" \
         DESKTOP_SESSION=archdock-test \
         HOME="$ARCHDOCK_LIFECYCLE_STATE_ROOT/home" \
         KDE_FULL_SESSION=true \

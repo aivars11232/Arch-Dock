@@ -64,6 +64,7 @@ qt_add_qml_module(
   qml/runtime/IconProperties.qml
   qml/runtime/IconPropertiesWindow.qml
   qml/runtime/PlacementStatus.js
+  qml/runtime/VisibilityStatus.js
   qml/runtime/StudioDraft.js
   qml/runtime/StudioForm.qml
   qml/runtime/StudioNavigation.js
@@ -248,6 +249,14 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PlacementStatus.qml)
   set_tests_properties(
     placement-status-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME visibility-status-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_VisibilityStatus.qml)
+  set_tests_properties(
+    visibility-status-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()
 

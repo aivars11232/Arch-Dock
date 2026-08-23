@@ -274,8 +274,10 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
                     if (newOwner.isEmpty())
                     {
                         ++m_nativePanelRecoveryGeneration;
+                        m_nativePanelVisibilityStateCache.clear();
                         return;
                     }
+                    m_nativePanelVisibilityStateCache.clear();
                     scheduleNativePanelRecovery();
                 });
 
@@ -303,11 +305,40 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     connect(&m_settings, &DockSettings::animationDurationChanged, this, notifyGlobalVisualChange);
     connect(&m_settings, &DockSettings::reducedMotionChanged, this, notifyGlobalVisualChange);
     connect(&m_panelRegistry, &PanelRegistry::nativePanelTopologyChanged,
-            this, &PanelWindow::updateDesktopSuite);
+            this, [this]
+            {
+                m_nativePanelVisibilityStateCache.clear();
+                updateDesktopSuite();
+            });
     const auto updateVisibility = [this]
     {
         ++m_visibilityRevision;
         emit visibilityRevisionChanged();
+        for (const QString &panelId : m_panelRegistry.panelIds())
+        {
+            const std::optional<ArchDock::PanelVisibilityMode> mode =
+                ArchDock::normalizedPanelVisibilityMode(
+                    m_panelRegistry.panelValue(
+                        panelId, QStringLiteral("visibilityMode")).toString());
+            if (!mode.has_value() ||
+                *mode != ArchDock::PanelVisibilityMode::HideForMaximizedOrFullscreen)
+            {
+                continue;
+            }
+            const int containmentId = nativePanelId(panelId);
+            const QString ownershipToken = nativeOwnershipToken(panelId).trimmed();
+            if (containmentId < 0 || ownershipToken.isEmpty())
+            {
+                continue;
+            }
+            reconcileNativePanelVisibility(
+                panelId,
+                containmentId,
+                ownershipToken,
+                *mode,
+                m_panelRegistry.panelValue(
+                    panelId, QStringLiteral("visible")).toBool());
+        }
     };
     connect(&m_windowModel, &QAbstractItemModel::dataChanged, this, updateVisibility);
     connect(&m_windowModel, &QAbstractItemModel::rowsInserted, this, updateVisibility);
@@ -359,6 +390,11 @@ qulonglong PanelWindow::dockEntriesRevision() const
 qulonglong PanelWindow::nativePlacementRevision() const
 {
     return m_nativePlacementRevision;
+}
+
+qulonglong PanelWindow::nativeVisibilityRevision() const
+{
+    return m_nativeVisibilityRevision;
 }
 
 void PanelWindow::notifyDockRevision()
@@ -438,6 +474,67 @@ QVariantMap PanelWindow::nativePanelPlacementStatus(const QString &panelId) cons
     };
 }
 
+void PanelWindow::recordNativePanelVisibilityResult(const QString &panelId,
+                                                     QVariantMap result)
+{
+    result.insert(QStringLiteral("panelId"), panelId);
+    m_nativePanelVisibilityResults.insert(panelId, std::move(result));
+    ++m_nativeVisibilityRevision;
+    emit nativeVisibilityRevisionChanged();
+
+    QDBusMessage propertiesChanged = QDBusMessage::createSignal(
+        QStringLiteral("/Control"),
+        QStringLiteral("org.freedesktop.DBus.Properties"),
+        QStringLiteral("PropertiesChanged"));
+    propertiesChanged << QStringLiteral("local.PanelWindow")
+                      << QVariantMap{{QStringLiteral("nativeVisibilityRevision"),
+                                      m_nativeVisibilityRevision}}
+                      << QStringList{};
+    QDBusConnection::sessionBus().send(propertiesChanged);
+}
+
+QVariantMap PanelWindow::nativePanelVisibilityStatus(const QString &panelId) const
+{
+    const auto recorded = m_nativePanelVisibilityResults.constFind(panelId);
+    if (recorded != m_nativePanelVisibilityResults.cend())
+    {
+        return recorded.value();
+    }
+
+    const bool nativePanel = m_panelRegistry.panelIds().contains(panelId) &&
+        isNativeDockPanelEdge(
+            m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString());
+    const ArchDock::NativeVisibilityCapabilities capabilities =
+        nativeVisibilityCapabilities(panelId);
+    return {
+        {QStringLiteral("panelId"), panelId},
+        {QStringLiteral("success"), false},
+        {QStringLiteral("verified"), false},
+        {QStringLiteral("status"), QStringLiteral("not-attempted")},
+        {QStringLiteral("errorCode"), QStringLiteral("not-attempted")},
+        {QStringLiteral("requestedMode"),
+         nativePanel
+             ? m_panelRegistry.panelValue(
+                   panelId, QStringLiteral("visibilityMode")).toString()
+             : QString{}},
+        {QStringLiteral("effectiveMode"), QString{}},
+        {QStringLiteral("hostMode"), QString{}},
+        {QStringLiteral("supportedModes"),
+         nativePanel
+             ? ArchDock::supportedNativeVisibilityModes(capabilities)
+             : QStringList{}},
+        {QStringLiteral("watcherAvailable"), m_windowWatcher.available()},
+        {QStringLiteral("fallbackAttempted"), false},
+        {QStringLiteral("fallbackApplied"), false},
+        {QStringLiteral("fallbackReason"), QString{}},
+        {QStringLiteral("fallbackErrorCode"), QString{}},
+        {QStringLiteral("ownershipVerified"), false},
+        {QStringLiteral("rollbackAttempted"), false},
+        {QStringLiteral("rollbackSucceeded"), false},
+        {QStringLiteral("rollbackErrorCode"), QString{}},
+    };
+}
+
 QVariantMap PanelWindow::dockConfiguration(const QString &panelId) const
 {
     const auto panel = [this, &panelId](const char *key, const QVariant &fallback)
@@ -446,6 +543,8 @@ QVariantMap PanelWindow::dockConfiguration(const QString &panelId) const
         return value.isValid() ? value : fallback;
     };
     return {
+        {QStringLiteral("visible"), panel("visible", true)},
+        {QStringLiteral("visibilityMode"), panel("visibilityMode", QStringLiteral("always"))},
         {QStringLiteral("iconSize"), panel("iconSize", m_settings.iconSize())},
         {QStringLiteral("spacing"), panel("spacing", m_settings.spacing())},
         {QStringLiteral("opacity"), panel("opacity", m_settings.panelOpacity())},
@@ -866,33 +965,84 @@ bool PanelWindow::setPanelVisible(const QString &panelId, bool visible)
         return false;
     }
 
-    if (!synchronizeNativePanelVisibility(panelId, visible))
-    {
-        return false;
-    }
-
-    m_panelRegistry.setPanelValue(panelId, QStringLiteral("visible"), visible);
-    return true;
+    return synchronizeNativePanelVisibility(
+        panelId,
+        visible,
+        true,
+        std::nullopt,
+        {{QStringLiteral("visible"), visible}});
 }
 
 void PanelWindow::setPanelVisibilityMode(const QString &panelId, const QString &visibilityMode)
 {
-    if (!m_panelRegistry.panelIds().contains(panelId))
+    const QVariantMap result = applyNativePanelVisibilityMode(panelId, visibilityMode);
+    if (!result.value(QStringLiteral("success")).toBool() ||
+        panelId != QStringLiteral("bottom"))
     {
         return;
     }
 
-    m_panelRegistry.setPanelValue(panelId, QStringLiteral("visibilityMode"), visibilityMode);
-    if (panelId == QStringLiteral("bottom"))
+    const bool autoHide = m_panelRegistry.panelValue(
+        panelId,
+        QStringLiteral("visibilityMode")).toString() == QStringLiteral("auto-hide");
+    if (m_settings.autoHide() != autoHide)
     {
-        const bool autoHide = m_panelRegistry.panelValue(
-            panelId,
-            QStringLiteral("visibilityMode")).toString() == QStringLiteral("auto-hide");
-        if (m_settings.autoHide() != autoHide)
-        {
-            m_settings.setAutoHide(autoHide);
-        }
+        m_settings.setAutoHide(autoHide);
     }
+}
+
+QVariantMap PanelWindow::applyNativePanelVisibilityMode(
+    const QString &panelId,
+    const QString &visibilityMode)
+{
+    const bool nativePanel = m_panelRegistry.panelIds().contains(panelId) &&
+        isNativeDockPanelEdge(
+            m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString());
+    const ArchDock::NativeVisibilityCapabilities capabilities =
+        nativeVisibilityCapabilities(panelId);
+    const std::optional<ArchDock::PanelVisibilityMode> requestedMode =
+        ArchDock::normalizedPanelVisibilityMode(visibilityMode);
+    if (!nativePanel || !requestedMode.has_value())
+    {
+        QVariantMap result{
+            {QStringLiteral("success"), false},
+            {QStringLiteral("verified"), false},
+            {QStringLiteral("status"),
+             nativePanel ? QStringLiteral("failed") : QStringLiteral("unsupported")},
+            {QStringLiteral("errorCode"),
+             nativePanel
+                 ? QStringLiteral("invalid-visibility-mode")
+                 : QStringLiteral("visibility-unsupported-host")},
+            {QStringLiteral("requestedMode"), visibilityMode},
+            {QStringLiteral("effectiveMode"), QString{}},
+            {QStringLiteral("hostMode"), QString{}},
+            {QStringLiteral("supportedModes"),
+             nativePanel
+                 ? ArchDock::supportedNativeVisibilityModes(capabilities)
+                 : QStringList{}},
+            {QStringLiteral("watcherAvailable"), m_windowWatcher.available()},
+            {QStringLiteral("fallbackAttempted"), false},
+            {QStringLiteral("fallbackApplied"), false},
+            {QStringLiteral("fallbackReason"), QString{}},
+            {QStringLiteral("fallbackErrorCode"), QString{}},
+            {QStringLiteral("ownershipVerified"), false},
+            {QStringLiteral("rollbackAttempted"), false},
+            {QStringLiteral("rollbackSucceeded"), false},
+            {QStringLiteral("rollbackErrorCode"), QString{}},
+        };
+        recordNativePanelVisibilityResult(panelId, std::move(result));
+        return nativePanelVisibilityStatus(panelId);
+    }
+
+    const QString canonicalMode = ArchDock::panelVisibilityModeToString(*requestedMode);
+    synchronizeNativePanelVisibility(
+        panelId,
+        m_panelRegistry.panelValue(
+            panelId, QStringLiteral("visible")).toBool(),
+        true,
+        requestedMode,
+        {{QStringLiteral("visibilityMode"), canonicalMode}});
+    return nativePanelVisibilityStatus(panelId);
 }
 
 QList<ArchDock::EdgePanel> PanelWindow::edgePanels() const
@@ -919,13 +1069,29 @@ QList<ArchDock::EdgePanel> PanelWindow::edgePanels() const
     return panels;
 }
 
-bool PanelWindow::shouldConcealPanel(const QString &panelId) const
+ArchDock::NativeVisibilityCapabilities PanelWindow::nativeVisibilityCapabilities(
+    const QString &panelId) const
 {
     if (!m_panelRegistry.panelIds().contains(panelId) ||
         !isNativeDockPanelEdge(
             m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString()))
     {
-        return false;
+        return {};
+    }
+
+    return {true, true, m_windowWatcher.available()};
+}
+
+ArchDock::PanelVisibilityDecision PanelWindow::nativePanelVisibilityDecision(
+    const QString &panelId,
+    ArchDock::PanelVisibilityMode mode,
+    bool visible) const
+{
+    if (!m_panelRegistry.panelIds().contains(panelId) ||
+        !isNativeDockPanelEdge(
+            m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString()))
+    {
+        return ArchDock::PanelVisibilityDecision::Reveal;
     }
 
     QScreen *screen = screenForPanel(panelId);
@@ -935,17 +1101,15 @@ bool PanelWindow::shouldConcealPanel(const QString &panelId) const
     if (!screen || screenIndex < 0 || !placementResult.isValid() ||
         !placementResult.placement.has_value())
     {
-        return false;
+        return ArchDock::PanelVisibilityDecision::Reveal;
     }
 
     ArchDock::PanelVisibilityInput input;
-    input.mode = ArchDock::panelVisibilityModeFromString(
-        m_panelRegistry.panelValue(panelId, QStringLiteral("visibilityMode")).toString());
+    input.mode = mode;
     input.panelGeometry = panelGeometryForVisibility(
         screen->geometry(), *placementResult.placement);
     input.panelScreenIndex = screenIndex;
-    input.manualHideRequested = !m_panelRegistry.panelValue(
-        panelId, QStringLiteral("visible")).toBool();
+    input.manualHideRequested = !visible;
     input.windows.reserve(m_windowModel.windows().size());
     for (const WindowItem &window : m_windowModel.windows())
     {
@@ -956,7 +1120,25 @@ bool PanelWindow::shouldConcealPanel(const QString &panelId) const
                               window.maximized,
                               window.fullScreen});
     }
-    return ArchDock::shouldConcealPanel(input);
+    return ArchDock::decidePanelVisibility(input);
+}
+
+bool PanelWindow::shouldConcealPanel(const QString &panelId) const
+{
+    const std::optional<ArchDock::PanelVisibilityMode> mode =
+        ArchDock::normalizedPanelVisibilityMode(
+            m_panelRegistry.panelValue(
+                panelId, QStringLiteral("visibilityMode")).toString());
+    if (!mode.has_value())
+    {
+        return false;
+    }
+    return nativePanelVisibilityDecision(
+               panelId,
+               *mode,
+               m_panelRegistry.panelValue(
+                   panelId, QStringLiteral("visible")).toBool()) ==
+        ArchDock::PanelVisibilityDecision::Conceal;
 }
 
 void PanelWindow::synchronizeScreenAssignments()
@@ -2608,86 +2790,224 @@ std::optional<bool> PanelWindow::nativePanelTemporarilyHidden(
     return std::nullopt;
 }
 
-bool PanelWindow::setNativePanelTemporarilyHidden(const QString &panelId,
-                                                   int containmentId,
-                                                   bool hidden)
+bool PanelWindow::reconcileNativePanelVisibility(
+    const QString &panelId,
+    int containmentId,
+    const QString &ownershipToken,
+    ArchDock::PanelVisibilityMode requestedMode,
+    bool visible,
+    QVariantMap persistValues)
 {
-    const QString token = nativeOwnershipToken(panelId);
-    if (containmentId < 0 || token.isEmpty() ||
-        !nativePanelIsOwned(panelId, containmentId))
+    const ArchDock::NativeVisibilityCapabilities capabilities =
+        nativeVisibilityCapabilities(panelId);
+    const QString requestedModeName = ArchDock::panelVisibilityModeToString(requestedMode);
+    const QStringList supportedModes = ArchDock::supportedNativeVisibilityModes(capabilities);
+    const ArchDock::PanelVisibilityDecision decision = nativePanelVisibilityDecision(
+        panelId, requestedMode, visible);
+    const ArchDock::NativeVisibilityResolution resolution =
+        ArchDock::resolveNativeVisibility(
+            requestedMode, decision, !visible, capabilities);
+
+    const auto persistence = [this, panelId](const QVariantMap &values)
+        -> ArchDock::PlasmaPanelPersistence
     {
+        if (values.isEmpty())
+        {
+            return {};
+        }
+        return [this, panelId, values]
+        {
+            return m_panelRegistry.updatePanelChecked(panelId, values);
+        };
+    };
+    const auto stateKey = [containmentId](ArchDock::PlasmaPanelHidingMode hostMode,
+                                          bool temporaryHidden)
+    {
+        return QStringLiteral("%1|%2|%3")
+            .arg(containmentId)
+            .arg(ArchDock::plasmaPanelHidingModeToString(hostMode))
+            .arg(temporaryHidden ? 1 : 0);
+    };
+    const auto structuredResult = [&](const ArchDock::PlasmaPanelVisibilityApplyResult &applied,
+                                      ArchDock::PanelVisibilityMode effectiveMode,
+                                      ArchDock::PlasmaPanelHidingMode requestedHostMode,
+                                      bool fallbackAttempted,
+                                      const QString &fallbackReason,
+                                      const QString &fallbackErrorCode,
+                                      const QVariantMap &requestedApply = QVariantMap{})
+    {
+        QVariantMap structured = applied.toVariantMap();
+        structured.insert(QStringLiteral("verified"),
+                          applied.success() && applied.ownershipVerified);
+        structured.insert(QStringLiteral("requestedMode"), requestedModeName);
+        structured.insert(
+            QStringLiteral("effectiveMode"),
+            ArchDock::panelVisibilityModeToString(effectiveMode));
+        structured.insert(
+            QStringLiteral("hostMode"),
+            applied.actualHostMode.value_or(
+                ArchDock::plasmaPanelHidingModeToString(requestedHostMode)));
+        structured.insert(QStringLiteral("supportedModes"), supportedModes);
+        structured.insert(QStringLiteral("watcherAvailable"), m_windowWatcher.available());
+        structured.insert(QStringLiteral("fallbackAttempted"), fallbackAttempted);
+        structured.insert(QStringLiteral("fallbackApplied"),
+                          fallbackAttempted && applied.success());
+        structured.insert(QStringLiteral("fallbackReason"), fallbackReason);
+        structured.insert(QStringLiteral("fallbackErrorCode"), fallbackErrorCode);
+        if (!requestedApply.isEmpty())
+        {
+            structured.insert(QStringLiteral("requestedApply"), requestedApply);
+        }
+        return structured;
+    };
+
+    if (containmentId < 0 || ownershipToken.trimmed().isEmpty())
+    {
+        QVariantMap failed{
+            {QStringLiteral("success"), false},
+            {QStringLiteral("verified"), false},
+            {QStringLiteral("status"), QStringLiteral("failed")},
+            {QStringLiteral("errorCode"),
+             containmentId < 0
+                 ? QStringLiteral("containment-missing")
+                 : QStringLiteral("ownership-token-missing")},
+            {QStringLiteral("requestedMode"), requestedModeName},
+            {QStringLiteral("effectiveMode"), QString{}},
+            {QStringLiteral("hostMode"), QString{}},
+            {QStringLiteral("supportedModes"), supportedModes},
+            {QStringLiteral("watcherAvailable"), m_windowWatcher.available()},
+            {QStringLiteral("fallbackAttempted"), false},
+            {QStringLiteral("fallbackApplied"), false},
+            {QStringLiteral("fallbackReason"), QString{}},
+            {QStringLiteral("fallbackErrorCode"), QString{}},
+            {QStringLiteral("ownershipVerified"), false},
+            {QStringLiteral("rollbackAttempted"), false},
+            {QStringLiteral("rollbackSucceeded"), false},
+            {QStringLiteral("rollbackErrorCode"), QString{}},
+        };
+        recordNativePanelVisibilityResult(panelId, std::move(failed));
         return false;
     }
 
-    const QString script = hidden
-        ? QStringLiteral(
-              "var panel = panelById(%1);"
-              "if (!panel) { print('ARCHDOCK_RESULT:0'); }"
-              "else {"
-              "panel.currentConfigGroup = ['ArchDock'];"
-              "var owned = panel.readConfig('ownerToken', '') === %2 && "
-              "panel.readConfig('panelId', '') === %3;"
-              "var temporaryHidden = String(panel.readConfig('temporaryHidden', '0')) === '1';"
-              "if (!owned) { print('ARCHDOCK_RESULT:0'); }"
-              "else if (temporaryHidden) { print('ARCHDOCK_RESULT:' + String(panel.hiding === 'autohide' ? 1 : 0)); }"
-              "else if (panel.hiding !== 'none') { print('ARCHDOCK_RESULT:-2'); }"
-              "else {"
-              "panel.hiding = 'autohide';"
-              "if (panel.hiding !== 'autohide') { print('ARCHDOCK_RESULT:0'); }"
-              "else {"
-              "panel.writeConfig('temporaryHidden', '1');"
-              "panel.reloadConfig();"
-              "var persisted = String(panel.readConfig('temporaryHidden', '0')) === '1';"
-              "if (!persisted) { panel.hiding = 'none'; print('ARCHDOCK_RESULT:0'); }"
-              "else { print('ARCHDOCK_RESULT:1'); }"
-              "}"
-              "}"
-              "}")
-        : QStringLiteral(
-              "var panel = panelById(%1);"
-              "if (!panel) { print('ARCHDOCK_RESULT:0'); }"
-              "else {"
-              "panel.currentConfigGroup = ['ArchDock'];"
-              "var owned = panel.readConfig('ownerToken', '') === %2 && "
-              "panel.readConfig('panelId', '') === %3;"
-              "var temporaryHidden = String(panel.readConfig('temporaryHidden', '0')) === '1';"
-              "if (!owned) { print('ARCHDOCK_RESULT:0'); }"
-              "else if (!temporaryHidden) { print('ARCHDOCK_RESULT:1'); }"
-              "else if (panel.hiding !== 'autohide') { print('ARCHDOCK_RESULT:-2'); }"
-              "else {"
-              "panel.hiding = 'none';"
-              "if (panel.hiding !== 'none') { print('ARCHDOCK_RESULT:0'); }"
-              "else {"
-              "panel.writeConfig('temporaryHidden', '0');"
-              "panel.reloadConfig();"
-              "var persisted = String(panel.readConfig('temporaryHidden', '0')) === '1';"
-              "if (persisted) { panel.hiding = 'autohide'; print('ARCHDOCK_RESULT:0'); }"
-              "else { print('ARCHDOCK_RESULT:1'); }"
-              "}"
-              "}"
-              "}");
-    const int result = evaluatePlasmaScriptResult(
-        script.arg(containmentId)
-            .arg(plasmaScriptStringLiteral(token))
-            .arg(plasmaScriptStringLiteral(panelId)));
-    if (result == -2)
+    const bool fallbackRequired = resolution.fallbackApplied;
+    const ArchDock::PanelVisibilityMode targetMode = fallbackRequired
+        ? ArchDock::PanelVisibilityMode::AlwaysVisible
+        : resolution.effectiveMode;
+    const ArchDock::PlasmaPanelHidingMode targetHostMode = resolution.hostMode;
+    const bool targetTemporaryHidden = fallbackRequired ? false : !visible;
+    QVariantMap targetPersistence = persistValues;
+    if (fallbackRequired)
     {
-        qWarning() << "Native panel" << panelId
-                   << "uses a Plasma hiding mode that cannot be safely round-tripped";
+        targetPersistence.insert(QStringLiteral("visibilityMode"), QStringLiteral("always"));
+        targetPersistence.insert(QStringLiteral("visible"), true);
+    }
+
+    const QString requestedStateKey = stateKey(targetHostMode, targetTemporaryHidden);
+    if (!fallbackRequired && targetPersistence.isEmpty() &&
+        m_nativePanelVisibilityStateCache.value(panelId) == requestedStateKey)
+    {
+        return true;
+    }
+
+    const ArchDock::PlasmaPanelAdapter adapter(
+        [this](const QString &script)
+        {
+            return evaluatePlasmaScriptResultOptional(script);
+        });
+    ArchDock::PlasmaPanelVisibilityApplyResult applied = adapter.applyVisibility(
+        containmentId,
+        panelId,
+        ownershipToken,
+        targetHostMode,
+        targetTemporaryHidden,
+        persistence(targetPersistence));
+
+    if (applied.success())
+    {
+        m_nativePanelVisibilityStateCache.insert(panelId, requestedStateKey);
+        QVariantMap structured = structuredResult(
+            applied,
+            targetMode,
+            targetHostMode,
+            fallbackRequired,
+            fallbackRequired ? resolution.errorCode : QString{},
+            QString{});
+        if (fallbackRequired)
+        {
+            structured.insert(QStringLiteral("status"), QStringLiteral("fallback-applied"));
+            structured.insert(QStringLiteral("errorCode"), resolution.errorCode);
+            if (panelId == QStringLiteral("bottom") && m_settings.autoHide())
+            {
+                m_settings.setAutoHide(false);
+            }
+        }
+        recordNativePanelVisibilityResult(panelId, std::move(structured));
+        return true;
+    }
+
+    m_nativePanelVisibilityStateCache.remove(panelId);
+    const QVariantMap requestedApply = applied.toVariantMap();
+    if (fallbackRequired || !applied.ownershipVerified ||
+        (requestedMode == ArchDock::PanelVisibilityMode::AlwaysVisible && visible))
+    {
+        QVariantMap structured = structuredResult(
+            applied,
+            targetMode,
+            targetHostMode,
+            fallbackRequired,
+            fallbackRequired ? resolution.errorCode : applied.errorCode,
+            fallbackRequired ? applied.errorCode : QString{});
+        if (fallbackRequired)
+        {
+            structured.insert(QStringLiteral("status"), QStringLiteral("fallback-failed"));
+        }
+        recordNativePanelVisibilityResult(panelId, std::move(structured));
         return false;
     }
-    if (result != 1)
+
+    QVariantMap fallbackPersistence = persistValues;
+    fallbackPersistence.insert(QStringLiteral("visibilityMode"), QStringLiteral("always"));
+    fallbackPersistence.insert(QStringLiteral("visible"), true);
+    ArchDock::PlasmaPanelVisibilityApplyResult fallback = adapter.applyVisibility(
+        containmentId,
+        panelId,
+        ownershipToken,
+        ArchDock::PlasmaPanelHidingMode::None,
+        false,
+        persistence(fallbackPersistence));
+    QVariantMap structured = structuredResult(
+        fallback,
+        ArchDock::PanelVisibilityMode::AlwaysVisible,
+        ArchDock::PlasmaPanelHidingMode::None,
+        true,
+        applied.errorCode,
+        fallback.success() ? QString{} : fallback.errorCode,
+        requestedApply);
+    if (fallback.success())
     {
-        qWarning() << "Plasma did not apply the requested temporary presentation for native panel"
-                   << panelId;
-        return false;
+        structured.insert(QStringLiteral("status"), QStringLiteral("fallback-applied"));
+        structured.insert(QStringLiteral("errorCode"), applied.errorCode);
+        m_nativePanelVisibilityStateCache.insert(
+            panelId,
+            stateKey(ArchDock::PlasmaPanelHidingMode::None, false));
+        if (panelId == QStringLiteral("bottom") && m_settings.autoHide())
+        {
+            m_settings.setAutoHide(false);
+        }
     }
-    return true;
+    else
+    {
+        structured.insert(QStringLiteral("status"), QStringLiteral("fallback-failed"));
+    }
+    recordNativePanelVisibilityResult(panelId, std::move(structured));
+    return fallback.success();
 }
 
 bool PanelWindow::synchronizeNativePanelVisibility(const QString &panelId,
                                                    bool visible,
-                                                   bool allowMissingHostRecovery)
+                                                   bool allowMissingHostRecovery,
+                                                   std::optional<ArchDock::PanelVisibilityMode> requestedMode,
+                                                   QVariantMap persistValues)
 {
     int containmentId = nativePanelId(panelId);
     const QString type = m_panelRegistry.panelValue(
@@ -2848,17 +3168,60 @@ bool PanelWindow::synchronizeNativePanelVisibility(const QString &panelId,
             qWarning() << "Refusing to change visibility of an unowned native panel for" << panelId;
             return false;
         }
-        return true;
+        if (state.hostStatus == ArchDock::NativeContainmentHostStatus::Missing)
+        {
+            const bool persisted = persistValues.isEmpty() ||
+                m_panelRegistry.updatePanelChecked(panelId, persistValues);
+            if (!persistValues.isEmpty())
+            {
+                const ArchDock::NativeVisibilityCapabilities capabilities =
+                    nativeVisibilityCapabilities(panelId);
+                QVariantMap deferred{
+                    {QStringLiteral("success"), false},
+                    {QStringLiteral("verified"), false},
+                    {QStringLiteral("status"), QStringLiteral("deferred-no-host")},
+                    {QStringLiteral("errorCode"),
+                     persisted
+                         ? QStringLiteral("containment-missing")
+                         : QStringLiteral("persistence-failed")},
+                    {QStringLiteral("requestedMode"),
+                     ArchDock::panelVisibilityModeToString(
+                         requestedMode.value_or(
+                             ArchDock::panelVisibilityModeFromString(
+                                 m_panelRegistry.panelValue(
+                                     panelId,
+                                     QStringLiteral("visibilityMode")).toString())))},
+                    {QStringLiteral("effectiveMode"), QString{}},
+                    {QStringLiteral("hostMode"), QString{}},
+                    {QStringLiteral("supportedModes"),
+                     ArchDock::supportedNativeVisibilityModes(capabilities)},
+                    {QStringLiteral("watcherAvailable"), m_windowWatcher.available()},
+                    {QStringLiteral("fallbackAttempted"), false},
+                    {QStringLiteral("fallbackApplied"), false},
+                    {QStringLiteral("fallbackReason"), QString{}},
+                    {QStringLiteral("fallbackErrorCode"), QString{}},
+                    {QStringLiteral("ownershipVerified"), false},
+                    {QStringLiteral("rollbackAttempted"), false},
+                    {QStringLiteral("rollbackSucceeded"), false},
+                    {QStringLiteral("rollbackErrorCode"), QString{}},
+                };
+                recordNativePanelVisibilityResult(panelId, std::move(deferred));
+            }
+            return persisted;
+        }
+        break;
     case ArchDock::NativeContainmentLifecycleIntent::ShowHost:
-        return setNativePanelTemporarilyHidden(panelId, containmentId, false);
+        break;
     case ArchDock::NativeContainmentLifecycleIntent::HideHost:
-        return setNativePanelTemporarilyHidden(panelId, containmentId, true);
+        break;
     case ArchDock::NativeContainmentLifecycleIntent::RecreateMissingHost:
         if (!createNativeKdePanel(panelId))
         {
             return false;
         }
-        return setNativePanelTemporarilyHidden(panelId, nativePanelId(panelId), false);
+        containmentId = nativePanelId(panelId);
+        ownershipToken = nativeOwnershipToken(panelId).trimmed();
+        break;
     case ArchDock::NativeContainmentLifecycleIntent::CreateHost:
     case ArchDock::NativeContainmentLifecycleIntent::AttachRenderer:
     case ArchDock::NativeContainmentLifecycleIntent::RemoveHostPermanently:
@@ -2866,7 +3229,17 @@ bool PanelWindow::synchronizeNativePanelVisibility(const QString &panelId,
         return false;
     }
 
-    return false;
+    const ArchDock::PanelVisibilityMode effectiveRequestedMode = requestedMode.value_or(
+        ArchDock::panelVisibilityModeFromString(
+            m_panelRegistry.panelValue(
+                panelId, QStringLiteral("visibilityMode")).toString()));
+    return reconcileNativePanelVisibility(
+        panelId,
+        containmentId,
+        ownershipToken,
+        effectiveRequestedMode,
+        visible,
+        std::move(persistValues));
 }
 
 bool PanelWindow::adoptNativePanelOwnership(const QString &panelId, int containmentId)
@@ -2926,6 +3299,7 @@ ArchDock::NativePanelPlacementResult PanelWindow::normalizedNativePanelPlacement
         : screenIndexForPanel(panelId);
     request.edge = value(QStringLiteral("edge")).toString();
     request.alignment = value(QStringLiteral("alignment")).toString();
+    request.visibilityMode = value(QStringLiteral("visibilityMode")).toString();
 
     const bool vertical = request.edge == QStringLiteral("left") ||
         request.edge == QStringLiteral("right");

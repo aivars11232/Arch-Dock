@@ -269,6 +269,103 @@ QString lengthModeScript(int containmentId,
     return placementScript(containmentId, panelId, ownershipToken, body);
 }
 
+int hidingModeValue(PlasmaPanelHidingMode hidingMode)
+{
+    switch (hidingMode)
+    {
+    case PlasmaPanelHidingMode::None:
+        return 0;
+    case PlasmaPanelHidingMode::AutoHide:
+        return 1;
+    case PlasmaPanelHidingMode::DodgeWindows:
+        return 2;
+    }
+    return -1;
+}
+
+QString hidingModeName(int rawMode)
+{
+    switch (rawMode)
+    {
+    case 0:
+        return QStringLiteral("none");
+    case 1:
+        return QStringLiteral("autohide");
+    case 2:
+        return QStringLiteral("dodgewindows");
+    case 3:
+        return QStringLiteral("windowsgobelow");
+    default:
+        return {};
+    }
+}
+
+QString visibilityStateScript(int containmentId,
+                              const QString &panelId,
+                              const QString &ownershipToken,
+                              std::optional<int> hidingMode,
+                              std::optional<bool> temporaryHidden)
+{
+    QString mutation;
+    if (temporaryHidden.has_value())
+    {
+        mutation += QStringLiteral(
+                        "panel.writeConfig('temporaryHidden', '%1');"
+                        "panel.reloadConfig();")
+                        .arg(*temporaryHidden ? 1 : 0);
+    }
+    if (hidingMode.has_value())
+    {
+        mutation += QStringLiteral("panel.hiding = %1;")
+                        .arg(plasmaScriptStringLiteral(hidingModeName(*hidingMode)));
+    }
+
+    const QString body = QStringLiteral(
+        "if (typeof panel.hiding === 'undefined' || "
+        "typeof panel.readConfig !== 'function' || "
+        "typeof panel.writeConfig !== 'function') { return %1; }"
+        "%2"
+        "var actualHiding = String(panel.hiding).toLowerCase();"
+        "var hidingCode = -1;"
+        "if (actualHiding === 'none') { hidingCode = 0; }"
+        "else if (actualHiding === 'autohide') { hidingCode = 1; }"
+        "else if (actualHiding === 'dodgewindows') { hidingCode = 2; }"
+        "else if (actualHiding === 'windowsgobelow') { hidingCode = 3; }"
+        "if (hidingCode < 0) { return %3; }"
+        "var temporaryCode = String(panel.readConfig('temporaryHidden', '0')) === '1' ? 1 : 0;"
+        "return hidingCode * 2 + temporaryCode;")
+        .arg(kPropertyUnsupported)
+        .arg(mutation)
+        .arg(kUnrecognizedReadback);
+    return placementScript(containmentId, panelId, ownershipToken, body);
+}
+
+std::optional<std::pair<int, bool>> decodedVisibilityState(int scriptResult)
+{
+    if (scriptResult < 0 || scriptResult > 7)
+    {
+        return std::nullopt;
+    }
+    return std::pair<int, bool>{scriptResult / 2, scriptResult % 2 == 1};
+}
+
+void populateVisibilityActual(PlasmaPanelVisibilityApplyResult *result,
+                              const std::optional<std::pair<int, bool>> &state)
+{
+    if (!state.has_value())
+    {
+        result->actualHostMode.reset();
+        result->actualTemporaryHidden.reset();
+        return;
+    }
+
+    const QString hostMode = hidingModeName(state->first);
+    result->actualHostMode = hostMode.isEmpty()
+        ? std::nullopt
+        : std::optional<QString>(hostMode);
+    result->actualTemporaryHidden = state->second;
+}
+
 QString integerScript(int containmentId,
                       const QString &panelId,
                       const QString &ownershipToken,
@@ -707,6 +804,40 @@ QVariantMap PlasmaPanelPlacementApplyResult::toVariantMap() const
     };
 }
 
+bool PlasmaPanelVisibilityApplyResult::success() const
+{
+    return status == QLatin1String("applied");
+}
+
+QVariantMap PlasmaPanelVisibilityApplyResult::toVariantMap() const
+{
+    QVariantMap requested{
+        {QStringLiteral("hostMode"), requestedHostMode},
+        {QStringLiteral("temporaryHidden"), requestedTemporaryHidden},
+    };
+    QVariantMap actual;
+    if (actualHostMode.has_value())
+    {
+        actual.insert(QStringLiteral("hostMode"), *actualHostMode);
+    }
+    if (actualTemporaryHidden.has_value())
+    {
+        actual.insert(QStringLiteral("temporaryHidden"), *actualTemporaryHidden);
+    }
+
+    return {
+        {QStringLiteral("success"), success()},
+        {QStringLiteral("status"), status},
+        {QStringLiteral("errorCode"), errorCode},
+        {QStringLiteral("requested"), requested},
+        {QStringLiteral("hostState"), actual},
+        {QStringLiteral("ownershipVerified"), ownershipVerified},
+        {QStringLiteral("rollbackAttempted"), rollbackAttempted},
+        {QStringLiteral("rollbackSucceeded"), rollbackSucceeded},
+        {QStringLiteral("rollbackErrorCode"), rollbackErrorCode},
+    };
+}
+
 PlasmaPanelAdapter::PlasmaPanelAdapter(PlasmaPanelScriptExecutor executor)
     : m_executor(std::move(executor))
 {
@@ -956,6 +1087,166 @@ PlasmaPanelPlacementApplyResult PlasmaPanelAdapter::applyPlacement(
     result.rollbackSucceeded = rollbackOk;
     result.rollbackErrorCode = rollbackOk ? QString{} : rollbackError;
     result.status = rollbackOk
+        ? QStringLiteral("rolled-back")
+        : QStringLiteral("rollback-failed");
+    return result;
+}
+
+PlasmaPanelVisibilityApplyResult PlasmaPanelAdapter::applyVisibility(
+    int containmentId,
+    const QString &panelId,
+    const QString &ownershipToken,
+    PlasmaPanelHidingMode hidingMode,
+    bool temporaryHidden,
+    PlasmaPanelPersistence persist) const
+{
+    PlasmaPanelVisibilityApplyResult result;
+    const int requestedHidingMode = hidingModeValue(hidingMode);
+    result.requestedHostMode = hidingModeName(requestedHidingMode);
+    result.requestedTemporaryHidden = temporaryHidden;
+
+    if (containmentId < 0 || panelId.trimmed().isEmpty() ||
+        ownershipToken.trimmed().isEmpty() || requestedHidingMode < 0 || !m_executor)
+    {
+        result.errorCode = QStringLiteral("invalid-request");
+        return result;
+    }
+
+    const QString readScript = visibilityStateScript(
+        containmentId, panelId, ownershipToken, std::nullopt, std::nullopt);
+    const std::optional<int> snapshotReply = m_executor(readScript);
+    const std::optional<PlasmaPanelApplyFailure> snapshotFailure = executionFailure(
+        snapshotReply);
+    if (snapshotFailure.has_value())
+    {
+        result.errorCode = plasmaPanelApplyFailureName(*snapshotFailure);
+        result.ownershipVerified = *snapshotFailure != PlasmaPanelApplyFailure::ContainmentMissing &&
+            *snapshotFailure != PlasmaPanelApplyFailure::OwnershipDenied;
+        return result;
+    }
+
+    const std::optional<std::pair<int, bool>> snapshot = decodedVisibilityState(
+        *snapshotReply);
+    if (!snapshot.has_value())
+    {
+        result.ownershipVerified = true;
+        result.errorCode = QStringLiteral("readback-mismatch");
+        return result;
+    }
+    result.ownershipVerified = true;
+    populateVisibilityActual(&result, snapshot);
+
+    const QString mutationScript = visibilityStateScript(
+        containmentId,
+        panelId,
+        ownershipToken,
+        requestedHidingMode,
+        temporaryHidden);
+    const std::optional<int> mutationReply = m_executor(mutationScript);
+    const std::optional<PlasmaPanelApplyFailure> mutationFailure = executionFailure(
+        mutationReply);
+    QString applyError;
+    if (mutationFailure.has_value())
+    {
+        applyError = plasmaPanelApplyFailureName(*mutationFailure);
+        if (*mutationFailure == PlasmaPanelApplyFailure::ContainmentMissing ||
+            *mutationFailure == PlasmaPanelApplyFailure::OwnershipDenied)
+        {
+            result.ownershipVerified = false;
+            result.errorCode = applyError;
+            return result;
+        }
+    }
+
+    const std::optional<int> readbackReply = m_executor(readScript);
+    const std::optional<PlasmaPanelApplyFailure> readbackFailure = executionFailure(
+        readbackReply);
+    std::optional<std::pair<int, bool>> readback;
+    if (readbackFailure.has_value())
+    {
+        if (applyError.isEmpty())
+        {
+            applyError = plasmaPanelApplyFailureName(*readbackFailure);
+        }
+        if (*readbackFailure == PlasmaPanelApplyFailure::ContainmentMissing ||
+            *readbackFailure == PlasmaPanelApplyFailure::OwnershipDenied)
+        {
+            result.ownershipVerified = false;
+            result.errorCode = applyError;
+            return result;
+        }
+    }
+    else
+    {
+        readback = decodedVisibilityState(*readbackReply);
+        populateVisibilityActual(&result, readback);
+        if (!readback.has_value() || readback->first != requestedHidingMode ||
+            readback->second != temporaryHidden)
+        {
+            applyError = QStringLiteral("readback-mismatch");
+        }
+    }
+
+    bool persistenceFailed = false;
+    if (applyError.isEmpty() && persist)
+    {
+        persistenceFailed = !persist();
+        if (persistenceFailed)
+        {
+            applyError = QStringLiteral("persistence-failed");
+        }
+    }
+    if (applyError.isEmpty())
+    {
+        result.status = QStringLiteral("applied");
+        result.errorCode.clear();
+        return result;
+    }
+
+    result.errorCode = applyError;
+    result.rollbackAttempted = true;
+    const QString rollbackScript = visibilityStateScript(
+        containmentId,
+        panelId,
+        ownershipToken,
+        snapshot->first,
+        snapshot->second);
+    const std::optional<int> rollbackReply = m_executor(rollbackScript);
+    const std::optional<PlasmaPanelApplyFailure> rollbackFailure = executionFailure(
+        rollbackReply);
+    const std::optional<int> finalReply = m_executor(readScript);
+    const std::optional<PlasmaPanelApplyFailure> finalFailure = executionFailure(finalReply);
+    const std::optional<std::pair<int, bool>> finalState = finalFailure.has_value()
+        ? std::nullopt
+        : decodedVisibilityState(*finalReply);
+    populateVisibilityActual(&result, finalState);
+
+    if (rollbackFailure == PlasmaPanelApplyFailure::ContainmentMissing ||
+        rollbackFailure == PlasmaPanelApplyFailure::OwnershipDenied ||
+        finalFailure == PlasmaPanelApplyFailure::ContainmentMissing ||
+        finalFailure == PlasmaPanelApplyFailure::OwnershipDenied)
+    {
+        result.ownershipVerified = false;
+    }
+
+    result.rollbackSucceeded = !rollbackFailure.has_value() && finalState.has_value() &&
+        *finalState == *snapshot;
+    if (!result.rollbackSucceeded)
+    {
+        if (rollbackFailure.has_value())
+        {
+            result.rollbackErrorCode = plasmaPanelApplyFailureName(*rollbackFailure);
+        }
+        else if (finalFailure.has_value())
+        {
+            result.rollbackErrorCode = plasmaPanelApplyFailureName(*finalFailure);
+        }
+        else
+        {
+            result.rollbackErrorCode = QStringLiteral("rollback-readback-mismatch");
+        }
+    }
+    result.status = result.rollbackSucceeded
         ? QStringLiteral("rolled-back")
         : QStringLiteral("rollback-failed");
     return result;

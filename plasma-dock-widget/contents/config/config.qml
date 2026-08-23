@@ -6,4 +6,9 @@ ConfigModel {
         icon: "configure"
         source: "configGeneral.qml"
     }
+    ConfigCategory {
+        name: i18n("Behavior")
+        icon: "preferences-system-windows-behavior"
+        source: "configBehavior.qml"
+    }
 }

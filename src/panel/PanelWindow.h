@@ -35,6 +35,7 @@ class PanelWindow final : public QObject
     Q_PROPERTY(qulonglong dockRevision READ dockRevision NOTIFY dockRevisionChanged)
     Q_PROPERTY(qulonglong dockEntriesRevision READ dockEntriesRevision NOTIFY dockEntriesRevisionChanged)
     Q_PROPERTY(qulonglong nativePlacementRevision READ nativePlacementRevision NOTIFY nativePlacementRevisionChanged)
+    Q_PROPERTY(qulonglong nativeVisibilityRevision READ nativeVisibilityRevision NOTIFY nativeVisibilityRevisionChanged)
 
 public:
     explicit PanelWindow(QQmlApplicationEngine &engine,
@@ -45,6 +46,7 @@ public:
     [[nodiscard]] qulonglong dockRevision() const;
     [[nodiscard]] qulonglong dockEntriesRevision() const;
     [[nodiscard]] qulonglong nativePlacementRevision() const;
+    [[nodiscard]] qulonglong nativeVisibilityRevision() const;
     bool setDockConfiguration(const QString &panelId, const QString &key, const QVariant &value);
 
 public slots:
@@ -90,6 +92,9 @@ public slots:
     void setPanelScreen(const QString &panelId, int screenIndex);
     bool setPanelVisible(const QString &panelId, bool visible);
     void setPanelVisibilityMode(const QString &panelId, const QString &visibilityMode);
+    QVariantMap applyNativePanelVisibilityMode(const QString &panelId,
+                                               const QString &visibilityMode);
+    QVariantMap nativePanelVisibilityStatus(const QString &panelId) const;
     bool shouldConcealPanel(const QString &panelId) const;
     void resetSettings();
     void toggleAutoHide();
@@ -108,6 +113,7 @@ signals:
     void dockRevisionChanged();
     void dockEntriesRevisionChanged();
     void nativePlacementRevisionChanged();
+    void nativeVisibilityRevisionChanged();
     void nativePanelRecoveryFinished();
 
 private:
@@ -203,12 +209,27 @@ private:
     [[nodiscard]] std::optional<bool> nativePanelTemporarilyHidden(
         const QString &panelId,
         int containmentId) const;
-    bool setNativePanelTemporarilyHidden(const QString &panelId,
-                                         int containmentId,
-                                         bool hidden);
     bool synchronizeNativePanelVisibility(const QString &panelId,
                                           bool visible,
-                                          bool allowMissingHostRecovery = true);
+                                          bool allowMissingHostRecovery = true,
+                                          std::optional<ArchDock::PanelVisibilityMode> requestedMode =
+                                              std::nullopt,
+                                          QVariantMap persistValues = {});
+    [[nodiscard]] ArchDock::NativeVisibilityCapabilities nativeVisibilityCapabilities(
+        const QString &panelId) const;
+    [[nodiscard]] ArchDock::PanelVisibilityDecision nativePanelVisibilityDecision(
+        const QString &panelId,
+        ArchDock::PanelVisibilityMode mode,
+        bool visible) const;
+    bool reconcileNativePanelVisibility(
+        const QString &panelId,
+        int containmentId,
+        const QString &ownershipToken,
+        ArchDock::PanelVisibilityMode requestedMode,
+        bool visible,
+        QVariantMap persistValues = {});
+    void recordNativePanelVisibilityResult(const QString &panelId,
+                                           QVariantMap result);
     bool adoptNativePanelOwnership(const QString &panelId, int containmentId);
     [[nodiscard]] ArchDock::NativePanelPlacementResult normalizedNativePanelPlacement(
         const QString &panelId,
@@ -254,7 +275,10 @@ private:
     qulonglong m_dockRevision = 0;
     qulonglong m_dockEntriesRevision = 0;
     qulonglong m_nativePlacementRevision = 0;
+    qulonglong m_nativeVisibilityRevision = 0;
     QHash<QString, QVariantMap> m_nativePanelPlacementResults;
+    QHash<QString, QVariantMap> m_nativePanelVisibilityResults;
+    QHash<QString, QString> m_nativePanelVisibilityStateCache;
     int m_nativePanelRecoveryGeneration = 0;
     bool m_nativePanelRecoveryActive = false;
 };
