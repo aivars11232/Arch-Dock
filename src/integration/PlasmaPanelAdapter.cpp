@@ -1,7 +1,6 @@
 #include "PlasmaPanelAdapter.h"
 
 #include <algorithm>
-#include <array>
 #include <utility>
 
 namespace ArchDock
@@ -54,6 +53,27 @@ QString alignmentName(NativePanelAlignment alignment)
         return QStringLiteral("end");
     }
     return {};
+}
+
+QString lengthModeName(NativePanelLengthMode mode)
+{
+    switch (mode)
+    {
+    case NativePanelLengthMode::Fit:
+        return QStringLiteral("fit");
+    case NativePanelLengthMode::Fixed:
+        return QStringLiteral("fixed");
+    case NativePanelLengthMode::Fill:
+        return QStringLiteral("fill");
+    }
+    return {};
+}
+
+QString plasmaLengthModeName(NativePanelLengthMode mode)
+{
+    return mode == NativePanelLengthMode::Fixed
+        ? QStringLiteral("custom")
+        : lengthModeName(mode);
 }
 
 QString plasmaAlignmentName(NativePanelAlignment alignment, bool vertical)
@@ -170,6 +190,44 @@ QString offsetMutationScript(int containmentId,
     return placementMutationScript(containmentId, panelId, ownershipToken, body);
 }
 
+QString integerMutationScript(int containmentId,
+                              const QString &panelId,
+                              const QString &ownershipToken,
+                              const QString &propertyName,
+                              int value)
+{
+    const QString body = QStringLiteral(
+        "if (typeof panel.%1 === 'undefined') { return %2; }"
+        "panel.%1 = %3;"
+        "var actual = Number(panel.%1);"
+        "if (!isFinite(actual) || Math.floor(actual) !== actual) { return %4; }"
+        "return actual;")
+        .arg(propertyName)
+        .arg(kPropertyUnsupported)
+        .arg(value)
+        .arg(kUnrecognizedReadback);
+    return placementMutationScript(containmentId, panelId, ownershipToken, body);
+}
+
+QString lengthModeMutationScript(int containmentId,
+                                 const QString &panelId,
+                                 const QString &ownershipToken,
+                                 NativePanelLengthMode mode)
+{
+    const QString body = QStringLiteral(
+        "if (typeof panel.lengthMode === 'undefined') { return %1; }"
+        "panel.lengthMode = %2;"
+        "var actual = String(panel.lengthMode).toLowerCase();"
+        "if (actual === 'fit') { return 0; }"
+        "if (actual === 'custom') { return 1; }"
+        "if (actual === 'fill') { return 2; }"
+        "return %3;")
+        .arg(kPropertyUnsupported)
+        .arg(plasmaScriptStringLiteral(plasmaLengthModeName(mode)))
+        .arg(kUnrecognizedReadback);
+    return placementMutationScript(containmentId, panelId, ownershipToken, body);
+}
+
 std::optional<QString> decodedEdge(int result)
 {
     switch (result)
@@ -202,6 +260,21 @@ std::optional<QString> decodedAlignment(int result, bool vertical)
     }
 }
 
+std::optional<QString> decodedLengthMode(int result)
+{
+    switch (result)
+    {
+    case 0:
+        return QStringLiteral("fit");
+    case 1:
+        return QStringLiteral("fixed");
+    case 2:
+        return QStringLiteral("fill");
+    default:
+        return std::nullopt;
+    }
+}
+
 struct FieldOperation
 {
     NativePlacementField field;
@@ -223,7 +296,7 @@ PlasmaPanelFieldResult failedField(const FieldOperation &operation,
 
 bool PlasmaPanelPlacementApplyResult::allApplied() const
 {
-    return fields.size() == 4 && std::all_of(
+    return !fields.isEmpty() && std::all_of(
         fields.cbegin(),
         fields.cend(),
         [](const PlasmaPanelFieldResult &field)
@@ -256,7 +329,7 @@ PlasmaPanelPlacementApplyResult PlasmaPanelAdapter::applyPlacement(
 {
     const bool vertical = placement.edge == NativePanelEdge::Left ||
         placement.edge == NativePanelEdge::Right;
-    const std::array<FieldOperation, 4> operations{
+    QList<FieldOperation> operations{
         FieldOperation{
             NativePlacementField::Edge,
             edgeName(placement.edge),
@@ -291,6 +364,66 @@ PlasmaPanelPlacementApplyResult PlasmaPanelAdapter::applyPlacement(
                                    : std::nullopt;
             }},
     };
+
+    const auto appendIntegerOperation = [&](NativePlacementField field,
+                                            const QString &propertyName,
+                                            int requestedValue)
+    {
+        operations.append(FieldOperation{
+            field,
+            QString::number(requestedValue),
+            integerMutationScript(
+                containmentId,
+                panelId,
+                ownershipToken,
+                propertyName,
+                requestedValue),
+            [](int result) -> std::optional<QString>
+            {
+                return result >= 0 ? std::optional<QString>(QString::number(result))
+                                   : std::nullopt;
+            }});
+    };
+    const auto appendLengthModeOperation = [&]
+    {
+        operations.append(FieldOperation{
+            NativePlacementField::LengthMode,
+            lengthModeName(placement.lengthMode),
+            lengthModeMutationScript(
+                containmentId, panelId, ownershipToken, placement.lengthMode),
+            decodedLengthMode});
+    };
+
+    appendIntegerOperation(
+        NativePlacementField::Thickness, QStringLiteral("height"), placement.thickness);
+    if (placement.lengthMode == NativePanelLengthMode::Fixed)
+    {
+        appendIntegerOperation(
+            NativePlacementField::MaximumLength,
+            QStringLiteral("maximumLength"),
+            placement.fixedLength);
+        appendIntegerOperation(
+            NativePlacementField::MinimumLength,
+            QStringLiteral("minimumLength"),
+            placement.fixedLength);
+        appendIntegerOperation(
+            NativePlacementField::FixedLength,
+            QStringLiteral("length"),
+            placement.fixedLength);
+        appendLengthModeOperation();
+    }
+    else
+    {
+        appendLengthModeOperation();
+        appendIntegerOperation(
+            NativePlacementField::MaximumLength,
+            QStringLiteral("maximumLength"),
+            placement.maximumLength);
+        appendIntegerOperation(
+            NativePlacementField::MinimumLength,
+            QStringLiteral("minimumLength"),
+            placement.minimumLength);
+    }
 
     PlasmaPanelPlacementApplyResult result;
     if (containmentId < 0 || panelId.trimmed().isEmpty() || ownershipToken.trimmed().isEmpty() ||

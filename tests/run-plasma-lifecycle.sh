@@ -431,6 +431,36 @@ set_panel_registry_placement() {
     write_panel_registry_json "$registry_json"
 }
 
+set_panel_registry_geometry() {
+    local panel_id="$1"
+    local dynamic="$2"
+    local width="$3"
+    local height="$4"
+    local floating_margin="${5:-}"
+    local registry_json
+    registry_json="$(panel_registry_json | jq -ce \
+        --arg panel_id "$panel_id" \
+        --argjson dynamic "$dynamic" \
+        --argjson width "$width" \
+        --argjson height "$height" \
+        --arg floating_margin "$floating_margin" \
+        'if ([.[] | select(.id == $panel_id)] | length) != 1 then
+            error("expected exactly one panel registry record")
+         else
+            map(if .id == $panel_id then
+                .dynamic = $dynamic |
+                .width = $width |
+                .height = $height |
+                if $floating_margin == "" then
+                    del(.floatingMargin)
+                else
+                    .floatingMargin = ($floating_margin | tonumber)
+                end
+            else . end)
+         end')"
+    write_panel_registry_json "$registry_json"
+}
+
 set_stale_free_ids() {
     local panel_id="$1"
     local desktop_containment_id="$2"
@@ -606,6 +636,78 @@ native_panel_placement_snapshot() {
     plasma_script \
         "var panel = panelById($containment_id); if (!panel) { print('missing'); } else { print([String(panel.location).toLowerCase(), String(panel.screen), String(panel.alignment).toLowerCase(), String(panel.offset)].join('|')); }" |
         gvariant_string
+}
+
+native_panel_geometry_snapshot() {
+    local containment_id="$1"
+    plasma_script \
+        "var panel = panelById($containment_id); if (!panel) { print('missing'); } else { print([String(panel.height), String(panel.lengthMode).toLowerCase(), String(panel.minimumLength), String(panel.maximumLength), String(panel.length)].join('|')); }" |
+        gvariant_string
+}
+
+native_panel_geometry_matches() {
+    local actual_snapshot="$1"
+    local expected_thickness="$2"
+    local expected_mode="$3"
+    local expected_minimum="$4"
+    local expected_maximum="$5"
+    local expected_length="$6"
+    local actual_thickness=''
+    local actual_mode=''
+    local actual_minimum=''
+    local actual_maximum=''
+    local actual_length=''
+    IFS='|' read -r \
+        actual_thickness actual_mode actual_minimum actual_maximum actual_length \
+        <<<"$actual_snapshot"
+    [[ "$actual_thickness" == "$expected_thickness" &&
+        "$actual_mode" == "$expected_mode" &&
+        "$actual_minimum" == "$expected_minimum" &&
+        "$actual_maximum" == "$expected_maximum" &&
+        ("$expected_length" == '*' || "$actual_length" == "$expected_length") ]]
+}
+
+require_native_panel_geometry() {
+    local containment_id="$1"
+    local expected_thickness="$2"
+    local expected_mode="$3"
+    local expected_minimum="$4"
+    local expected_maximum="$5"
+    local expected_length="$6"
+    local phase="$7"
+    local actual_snapshot
+    actual_snapshot="$(native_panel_geometry_snapshot "$containment_id")"
+    native_panel_geometry_matches \
+        "$actual_snapshot" "$expected_thickness" "$expected_mode" \
+        "$expected_minimum" "$expected_maximum" "$expected_length" || {
+        printf 'Native geometry mismatch during %s: expected=%s|%s|%s|%s|%s actual=%s\n' \
+            "$phase" "$expected_thickness" "$expected_mode" "$expected_minimum" \
+            "$expected_maximum" "$expected_length" "${actual_snapshot:-unavailable}" >&2
+        exit 1
+    }
+}
+
+wait_for_native_panel_geometry() {
+    local containment_id="$1"
+    local expected_thickness="$2"
+    local expected_mode="$3"
+    local expected_minimum="$4"
+    local expected_maximum="$5"
+    local expected_length="$6"
+    local phase="$7"
+    local attempt
+    local actual_snapshot=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        actual_snapshot="$(native_panel_geometry_snapshot "$containment_id" 2>/dev/null || true)"
+        native_panel_geometry_matches \
+            "$actual_snapshot" "$expected_thickness" "$expected_mode" \
+            "$expected_minimum" "$expected_maximum" "$expected_length" && return
+        sleep 0.1
+    done
+    printf 'Timed out waiting for native geometry during %s: expected=%s|%s|%s|%s|%s actual=%s\n' \
+        "$phase" "$expected_thickness" "$expected_mode" "$expected_minimum" \
+        "$expected_maximum" "$expected_length" "${actual_snapshot:-unavailable}" >&2
+    exit 1
 }
 
 expected_native_panel_offset() {
@@ -1199,6 +1301,8 @@ run_session() {
     require_visual_dock "$first_containment_id" "$panel_id" hybrid
     require_native_panel_placement \
         "$first_containment_id" "$panel_id" bottom center 'managed panel creation'
+    require_native_panel_geometry \
+        "$first_containment_id" 76 custom 720 720 '*' 'managed panel creation'
 
     local first_dock_id
     first_dock_id="$(owned_dock_id "$first_containment_id" "$panel_id")"
@@ -1317,6 +1421,8 @@ run_session() {
         printf 'Empty native panel unexpectedly contains widgets.\n' >&2
         exit 1
     }
+    require_native_panel_geometry \
+        "$empty_containment_id" 76 custom 720 720 '*' 'top empty panel creation'
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'empty panel creation'
     legacy_control_id="$(add_legacy_control_applet "$empty_containment_id" "$empty_panel_id")"
@@ -1338,8 +1444,10 @@ run_session() {
 
     local typed_edge
     local typed_type
-    for typed_edge in left right; do
-        if [[ "$typed_edge" == left ]]; then
+    for typed_edge in top left right; do
+        if [[ "$typed_edge" == top ]]; then
+            typed_type=hybrid
+        elif [[ "$typed_edge" == left ]]; then
             typed_type=launcher
         else
             typed_type=tasks
@@ -1358,6 +1466,8 @@ run_session() {
             exit 1
         }
         require_visual_dock "$typed_containment_id" "$typed_panel_id" "$typed_type"
+        require_native_panel_geometry \
+            "$typed_containment_id" 76 fit 48 4096 '*' "$typed_edge fit panel creation"
         require_unrelated_panel_unchanged \
             "$unrelated_containment_id" "$unrelated_snapshot" "$typed_type panel creation"
         require_true_reply "$(panel_call removeNativeKdePanel "$typed_panel_id")"
@@ -1369,14 +1479,20 @@ run_session() {
     stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
     ARCHDOCK_SESSION_ARCH_DOCK_PID=''
     set_panel_registry_placement "$panel_id" left start
+    set_panel_registry_geometry "$panel_id" false 92 640
     [[ "$(panel_registry_value "$panel_id" edge)" == 'left' &&
-        "$(panel_registry_value "$panel_id" alignment)" == 'start' ]] || {
-        printf 'Could not establish the vertical-start placement fixture.\n' >&2
+        "$(panel_registry_value "$panel_id" alignment)" == 'start' &&
+        "$(panel_registry_value "$panel_id" dynamic)" == 'false' &&
+        "$(panel_registry_value "$panel_id" width)" == '92' &&
+        "$(panel_registry_value "$panel_id" height)" == '640' ]] || {
+        printf 'Could not establish the vertical-start geometry fixture.\n' >&2
         exit 1
     }
     start_arch_dock arch-dock-placement-recovery.log
     wait_for_native_panel_placement \
         "$first_containment_id" "$panel_id" left right 'vertical-start recovery'
+    wait_for_native_panel_geometry \
+        "$first_containment_id" 92 custom 640 640 '*' 'vertical fixed geometry recovery'
     [[ "$(owned_panel_record "$panel_id")" == "$first_record" &&
         "$(owned_dock_id "$first_containment_id" "$panel_id")" == "$first_dock_id" ]] || {
         printf 'Vertical-start recovery changed the owned native panel identity.\n' >&2
@@ -1384,7 +1500,38 @@ run_session() {
     }
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'vertical-start recovery'
-    log_session_phase 'recovered vertical start as Plasma right alignment'
+    log_session_phase 'recovered vertical start and fixed geometry through the adapter'
+
+    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    set_panel_registry_geometry "$panel_id" false 104 680 8
+    start_arch_dock arch-dock-unsupported-floating.log
+    require_false_reply "$(panel_call createNativeKdePanel "$panel_id")"
+    require_native_panel_geometry \
+        "$first_containment_id" 92 custom 640 640 '*' 'unsupported floating refusal'
+    [[ "$(owned_panel_record "$panel_id")" == "$first_record" &&
+        "$(owned_dock_id "$first_containment_id" "$panel_id")" == "$first_dock_id" ]] || {
+        printf 'Unsupported floating request changed the owned native panel identity.\n' >&2
+        exit 1
+    }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'unsupported floating refusal'
+    log_session_phase 'rejected unsupported numeric floating margin without host mutation'
+
+    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    set_panel_registry_geometry "$panel_id" false 104 680
+    start_arch_dock arch-dock-supported-geometry.log
+    wait_for_native_panel_geometry \
+        "$first_containment_id" 104 custom 680 680 '*' 'supported geometry after refusal'
+    [[ "$(owned_panel_record "$panel_id")" == "$first_record" &&
+        "$(owned_dock_id "$first_containment_id" "$panel_id")" == "$first_dock_id" ]] || {
+        printf 'Supported geometry update changed the owned native panel identity.\n' >&2
+        exit 1
+    }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'supported geometry after refusal'
+    log_session_phase 'applied later thickness and fixed length on the same native host'
 
     panel_call setPanelScreen "$panel_id" 1 >/dev/null
     wait_for_native_panel_placement \

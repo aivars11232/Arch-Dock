@@ -100,6 +100,18 @@ QString nativePlacementFieldName(ArchDock::NativePlacementField field)
         return QStringLiteral("alignment");
     case ArchDock::NativePlacementField::Offset:
         return QStringLiteral("offset");
+    case ArchDock::NativePlacementField::Thickness:
+        return QStringLiteral("thickness");
+    case ArchDock::NativePlacementField::LengthMode:
+        return QStringLiteral("length-mode");
+    case ArchDock::NativePlacementField::MinimumLength:
+        return QStringLiteral("minimum-length");
+    case ArchDock::NativePlacementField::MaximumLength:
+        return QStringLiteral("maximum-length");
+    case ArchDock::NativePlacementField::FixedLength:
+        return QStringLiteral("fixed-length");
+    case ArchDock::NativePlacementField::FloatingMargin:
+        return QStringLiteral("floating-margin");
     default:
         return QStringLiteral("out-of-scope-field");
     }
@@ -2250,17 +2262,6 @@ int PanelWindow::createNativePanelCandidate(const QString &panelId,
         return fail(QStringLiteral("screen-unavailable"));
     }
 
-    const bool vertical = edge == QStringLiteral("left") || edge == QStringLiteral("right");
-    const int thickness = qMax(
-        24,
-        m_panelRegistry.panelValue(
-            panelId,
-            vertical ? QStringLiteral("width") : QStringLiteral("height")).toInt());
-    const int length = qMax(
-        48,
-        m_panelRegistry.panelValue(
-            panelId,
-            vertical ? QStringLiteral("height") : QStringLiteral("width")).toInt());
     const bool needsRenderer = panelTypeNeedsDockApplet(type);
     const QString rendererPreflight = needsRenderer
         ? QStringLiteral(
@@ -2277,9 +2278,6 @@ int PanelWindow::createNativePanelCandidate(const QString &panelId,
         "panel.readConfig('panelId', '') !== %2) "
         "{ panel.remove(); panel = null; return -3; }"
         "panel.writeConfig('temporaryHidden', '0');"
-        "panel.height = %3;"
-        "panel.minimumLength = %4;"
-        "panel.maximumLength = %4;"
         "panel.hiding = 'none';"
         "panel.reloadConfig();"
         "if (panel.readConfig('ownerToken', '') !== %1 || "
@@ -2288,9 +2286,7 @@ int PanelWindow::createNativePanelCandidate(const QString &panelId,
         "panel.hiding !== 'none') "
         "{ panel.remove(); panel = null; return -6; }")
         .arg(plasmaScriptStringLiteral(ownershipToken))
-        .arg(plasmaScriptStringLiteral(panelId))
-        .arg(thickness)
-        .arg(length);
+        .arg(plasmaScriptStringLiteral(panelId));
     const QString rendererAttachment = needsRenderer
         ? QStringLiteral(
               "var dock = panel.addWidget('org.archdock.dock');"
@@ -2792,6 +2788,7 @@ bool PanelWindow::adoptNativePanelOwnership(const QString &panelId, int containm
 ArchDock::NativePanelPlacementResult PanelWindow::normalizedNativePanelPlacement(
     const QString &panelId) const
 {
+    const ArchDock::NativePanelPlacement defaults = ArchDock::defaultNativePanelPlacement();
     ArchDock::NativePanelPlacementRequest request;
     request.screenStableId = m_panelRegistry.panelValue(
         panelId, QStringLiteral("screenId")).toString();
@@ -2800,6 +2797,24 @@ ArchDock::NativePanelPlacementResult PanelWindow::normalizedNativePanelPlacement
     request.alignment = m_panelRegistry.panelValue(
         panelId, QStringLiteral("alignment")).toString();
     request.offset = nativePanelOffset(panelId);
+
+    const bool vertical = request.edge == QStringLiteral("left") ||
+        request.edge == QStringLiteral("right");
+    const QVariant thickness = m_panelRegistry.panelValue(
+        panelId, vertical ? QStringLiteral("width") : QStringLiteral("height"));
+    const QVariant length = m_panelRegistry.panelValue(
+        panelId, vertical ? QStringLiteral("height") : QStringLiteral("width"));
+    request.thickness = thickness.isValid() ? thickness.toInt() : defaults.thickness;
+    request.fixedLength = length.isValid() ? length.toInt() : defaults.fixedLength;
+    request.dynamicLength = m_panelRegistry.panelValue(
+        panelId, QStringLiteral("dynamic")).toBool();
+
+    const QVariant floatingMargin = m_panelRegistry.panelValue(
+        panelId, QStringLiteral("floatingMargin"));
+    if (floatingMargin.isValid())
+    {
+        request.floatingMargin = floatingMargin.toInt();
+    }
     return ArchDock::normalizeNativePanelPlacement(request);
 }
 
@@ -2832,6 +2847,18 @@ bool PanelWindow::applyNativePanelPlacement(const QString &panelId,
     {
         qWarning() << "Refusing invalid normalized native panel placement for" << panelId;
         return fail(QStringLiteral("placement-invalid"));
+    }
+    if (!normalized.isSupported())
+    {
+        for (const ArchDock::NativePlacementIssue &issue : normalized.issues)
+        {
+            if (issue.kind == ArchDock::NativePlacementIssueKind::UnsupportedRequest)
+            {
+                qWarning() << "Refusing unsupported normalized native panel placement for"
+                           << panelId << nativePlacementFieldName(issue.field);
+            }
+        }
+        return fail(QStringLiteral("placement-unsupported"));
     }
 
     const ArchDock::PlasmaPanelAdapter adapter(

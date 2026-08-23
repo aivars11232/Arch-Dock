@@ -315,6 +315,12 @@ Window {
                 return Math.max(width, height);
             return ["left", "right"].includes(edge) ? height : width;
         }
+        if (scope === "thickness") {
+            const edge = effectivePanelValue("edge", "bottom");
+            const width = Number(effectivePanelValue("width", 720));
+            const height = Number(effectivePanelValue("height", 76));
+            return ["left", "right"].includes(edge) ? width : height;
+        }
         return effectivePanelValue(field.key, field.fallback);
     }
 
@@ -380,6 +386,14 @@ Window {
                 setPanelDraftValue(selectedPanelId, "height", length, 420);
             } else {
                 setPanelDraftValue(selectedPanelId, "width", length, 720);
+            }
+        } else if (scope === "thickness") {
+            const edge = effectivePanelValue("edge", "bottom");
+            const thickness = Number(value);
+            if (["left", "right"].includes(edge)) {
+                setPanelDraftValue(selectedPanelId, "width", thickness, 76);
+            } else {
+                setPanelDraftValue(selectedPanelId, "height", thickness, 76);
             }
         } else {
             setPanelDraftValue(
@@ -923,12 +937,41 @@ Window {
     }
 
     function panelsSizeRows() {
+        const freePanel = effectivePanelValue("edge", "bottom") === "free";
+        if (freePanel) {
+            return [
+                section(qsTr("Size"), qsTr("Panel dimensions and dynamic sizing."), true),
+                panelField("spin", qsTr("Width"), "width", 720,
+                    { from: 48, to: 4096, step: 4 }),
+                panelField("spin", qsTr("Height"), "height", 76,
+                    { from: 48, to: 4096, step: 4 }),
+                {
+                    kind: "spin",
+                    label: qsTr("Length"),
+                    scope: "length",
+                    from: 48,
+                    to: 4096,
+                    step: 4,
+                    description: qsTr("Sets both width and height")
+                },
+                panelField("switch", qsTr("Dynamic Size"), "dynamic", true),
+                notice(qsTr("Floating Margin needs a placement adapter before it can safely change native and free panels."))
+            ];
+        }
+
+        const dynamic = Boolean(effectivePanelValue("dynamic", true));
         return [
             section(qsTr("Size"), qsTr("Panel dimensions and dynamic sizing."), true),
-            panelField("spin", qsTr("Width"), "width", 720,
-                { from: 48, to: 4096, step: 4 }),
-            panelField("spin", qsTr("Height"), "height", 76,
-                { from: 48, to: 4096, step: 4 }),
+            {
+                kind: "spin",
+                label: qsTr("Thickness"),
+                scope: "thickness",
+                from: 48,
+                to: 4096,
+                step: 4,
+                description: qsTr("Across the panel orientation")
+            },
+            panelField("switch", qsTr("Dynamic Size"), "dynamic", true),
             {
                 kind: "spin",
                 label: qsTr("Length"),
@@ -936,12 +979,12 @@ Window {
                 from: 48,
                 to: 4096,
                 step: 4,
-                description: effectivePanelValue("edge", "bottom") === "free"
-                    ? qsTr("Sets both width and height")
-                    : qsTr("Along the panel orientation")
+                available: !dynamic,
+                description: dynamic
+                    ? qsTr("Fit mode follows the panel's applet content. Turn off Dynamic Size to set a fixed length.")
+                    : qsTr("Fixed length along the panel orientation")
             },
-            panelField("switch", qsTr("Dynamic Size"), "dynamic", true),
-            notice(qsTr("Floating Margin needs a placement adapter before it can safely change native and free panels."))
+            notice(qsTr("Numeric Floating Margin is unavailable through Plasma's scripting API. Use Plasma Edit Mode's supported Floating setting; the Plasma theme controls its gap."))
         ];
     }
 
