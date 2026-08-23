@@ -52,6 +52,7 @@ public:
     Q_INVOKABLE bool isBuiltIn(const QString &panelId) const;
     Q_INVOKABLE void setPanelValue(const QString &panelId, const QString &key, const QVariant &value);
     Q_INVOKABLE void updatePanel(const QString &panelId, const QVariantMap &values);
+    [[nodiscard]] bool updatePanelChecked(const QString &panelId, const QVariantMap &values);
     [[nodiscard]] std::optional<FreeHostAssociation> freeHostAssociation(const QString &panelId) const;
     [[nodiscard]] QString beginFreePanelCreation(const QString &ownershipToken);
     [[nodiscard]] bool commitVerifiedFreeHostAssociation(

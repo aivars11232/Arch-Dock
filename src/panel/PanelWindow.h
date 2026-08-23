@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QHash>
 #include <QObject>
 #include <QPointer>
 #include <QStringList>
@@ -18,6 +19,7 @@
 #include "../SystemStatus.h"
 #include "../WindowModel.h"
 #include "../WindowWatcher.h"
+#include "../integration/PlasmaPanelAdapter.h"
 #include "FreePanelController.h"
 
 class QQmlApplicationEngine;
@@ -32,6 +34,7 @@ class PanelWindow final : public QObject
     Q_PROPERTY(int visibilityRevision READ visibilityRevision NOTIFY visibilityRevisionChanged)
     Q_PROPERTY(qulonglong dockRevision READ dockRevision NOTIFY dockRevisionChanged)
     Q_PROPERTY(qulonglong dockEntriesRevision READ dockEntriesRevision NOTIFY dockEntriesRevisionChanged)
+    Q_PROPERTY(qulonglong nativePlacementRevision READ nativePlacementRevision NOTIFY nativePlacementRevisionChanged)
 
 public:
     explicit PanelWindow(QQmlApplicationEngine &engine,
@@ -41,6 +44,7 @@ public:
     [[nodiscard]] int visibilityRevision() const;
     [[nodiscard]] qulonglong dockRevision() const;
     [[nodiscard]] qulonglong dockEntriesRevision() const;
+    [[nodiscard]] qulonglong nativePlacementRevision() const;
     bool setDockConfiguration(const QString &panelId, const QString &key, const QVariant &value);
 
 public slots:
@@ -53,6 +57,9 @@ public slots:
     void saveFreePanelPosition(const QString &panelId, int x, int y);
     bool setNativePanelType(const QString &panelId, const QString &type);
     QVariantMap dockConfiguration(const QString &panelId) const;
+    QVariantMap applyNativePanelPlacementDraft(const QString &panelId,
+                                               const QVariantMap &values);
+    QVariantMap nativePanelPlacementStatus(const QString &panelId) const;
     bool setDockStringConfiguration(const QString &panelId, const QString &key, const QString &value);
     bool setDockIntegerConfiguration(const QString &panelId, const QString &key, int value);
     bool setDockRealConfiguration(const QString &panelId, const QString &key, double value);
@@ -100,6 +107,7 @@ signals:
     void visibilityRevisionChanged();
     void dockRevisionChanged();
     void dockEntriesRevisionChanged();
+    void nativePlacementRevisionChanged();
     void nativePanelRecoveryFinished();
 
 private:
@@ -203,12 +211,23 @@ private:
                                           bool allowMissingHostRecovery = true);
     bool adoptNativePanelOwnership(const QString &panelId, int containmentId);
     [[nodiscard]] ArchDock::NativePanelPlacementResult normalizedNativePanelPlacement(
-        const QString &panelId) const;
+        const QString &panelId,
+        const QVariantMap &overrides = {}) const;
+    [[nodiscard]] QVariantMap nativePanelPlacementIntent(const QString &panelId) const;
+    [[nodiscard]] ArchDock::PlasmaPanelPlacementApplyResult applyNativePanelPlacementTransaction(
+        const QString &panelId,
+        int containmentId,
+        const QString &ownershipToken,
+        const QVariantMap &values,
+        bool persistIntent);
     bool applyNativePanelPlacement(const QString &panelId,
                                    int containmentId,
                                    const QString &ownershipToken,
-                                   QString *errorCode = nullptr) const;
-    bool synchronizeNativePanelPlacement(const QString &panelId) const;
+                                   QString *errorCode = nullptr);
+    bool synchronizeNativePanelPlacement(const QString &panelId);
+    void recordNativePanelPlacementResult(
+        const QString &panelId,
+        ArchDock::PlasmaPanelPlacementApplyResult result);
     bool removeLegacyControlApplets(const QString &panelId, int containmentId);
     bool attachNativeDockApplet(const QString &panelId, int containmentId);
     void notifyDockRevision();
@@ -234,6 +253,8 @@ private:
     int m_visibilityRevision = 0;
     qulonglong m_dockRevision = 0;
     qulonglong m_dockEntriesRevision = 0;
+    qulonglong m_nativePlacementRevision = 0;
+    QHash<QString, QVariantMap> m_nativePanelPlacementResults;
     int m_nativePanelRecoveryGeneration = 0;
     bool m_nativePanelRecoveryActive = false;
 };

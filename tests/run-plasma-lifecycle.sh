@@ -9,6 +9,10 @@ ARCHDOCK_SESSION_ARCH_DOCK_PID=''
 ARCHDOCK_SESSION_PLASMASHELL_PID=''
 ARCHDOCK_SESSION_KWIN_PID=''
 ARCHDOCK_SIGNAL_MONITOR_PID=''
+ARCHDOCK_SETTINGS_FIXTURE_FILE=''
+ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY=''
+ARCHDOCK_SETTINGS_FIXTURE_FILE_MODE=''
+ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY_MODE=''
 ARCHDOCK_SESSION_RESULT_FILE="${ARCHDOCK_SESSION_RESULT_FILE:-}"
 
 require_command() {
@@ -35,11 +39,31 @@ stop_process() {
     fi
 }
 
+restore_settings_fixture_permissions() {
+    if [[ -n "$ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY" &&
+        -d "$ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY" &&
+        -n "$ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY_MODE" ]]; then
+        chmod "$ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY_MODE" \
+            "$ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY"
+    fi
+    if [[ -n "$ARCHDOCK_SETTINGS_FIXTURE_FILE" &&
+        -f "$ARCHDOCK_SETTINGS_FIXTURE_FILE" &&
+        -n "$ARCHDOCK_SETTINGS_FIXTURE_FILE_MODE" ]]; then
+        chmod "$ARCHDOCK_SETTINGS_FIXTURE_FILE_MODE" \
+            "$ARCHDOCK_SETTINGS_FIXTURE_FILE"
+    fi
+    ARCHDOCK_SETTINGS_FIXTURE_FILE=''
+    ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY=''
+    ARCHDOCK_SETTINGS_FIXTURE_FILE_MODE=''
+    ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY_MODE=''
+}
+
 cleanup_session() {
     stop_process "$ARCHDOCK_SIGNAL_MONITOR_PID"
     stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
     stop_process "$ARCHDOCK_SESSION_PLASMASHELL_PID"
     stop_process "$ARCHDOCK_SESSION_KWIN_PID"
+    restore_settings_fixture_permissions
 }
 
 record_session_result() {
@@ -65,6 +89,16 @@ panel_call() {
         --object-path /Control \
         --method "local.PanelWindow.$method" \
         "$@"
+}
+
+panel_property() {
+    gdbus call \
+        --session \
+        --dest org.archdock.ArchDock \
+        --object-path /Control \
+        --method org.freedesktop.DBus.Properties.Get \
+        local.PanelWindow \
+        "$1"
 }
 
 plasma_script() {
@@ -98,6 +132,40 @@ gvariant_map_integer() {
 gvariant_map_boolean() {
     local key="$1"
     sed -n "s/.*'$key': <\(true\|false\)>.*/\1/p"
+}
+
+gvariant_nested_map_string() {
+    local map="$1"
+    local key="$2"
+    sed -n "s/.*'$map': <{[^}]*'$key': <'\([^']*\)'>[^}]*}>.*/\1/p"
+}
+
+require_structured_placement_reply() {
+    local reply="$1"
+    local expected_status="$2"
+    local expected_success="$3"
+    local expected_error="$4"
+    local actual_status
+    actual_status="$(gvariant_map_string status <<<"$reply")"
+    local actual_success
+    actual_success="$(gvariant_map_boolean success <<<"$reply")"
+    [[ "$actual_status" == "$expected_status" &&
+        "$actual_success" == "$expected_success" &&
+        "$reply" == *"'errorCode': <'$expected_error'>"* &&
+        "$reply" == *"'requested':"* &&
+        "$reply" == *"'applied':"* &&
+        "$reply" == *"'unsupported':"* &&
+        "$reply" == *"'failed':"* &&
+        "$reply" == *"'savedIntent':"* &&
+        "$reply" == *"'hostState':"* &&
+        "$reply" == *"'ownershipVerified':"* &&
+        "$reply" == *"'rollbackAttempted':"* &&
+        "$reply" == *"'rollbackSucceeded':"* &&
+        "$reply" == *"'rollbackErrorCode':"* ]] || {
+        printf 'Unexpected structured placement result: expected=%s/%s/%s reply=%s\n' \
+            "$expected_status" "$expected_success" "$expected_error" "$reply" >&2
+        return 1
+    }
 }
 
 panel_ids() {
@@ -1533,9 +1601,137 @@ run_session() {
         "$unrelated_containment_id" "$unrelated_snapshot" 'supported geometry after refusal'
     log_session_phase 'applied later thickness and fixed length on the same native host'
 
+    local structured_apply_reply
+    structured_apply_reply="$(panel_call applyNativePanelPlacementDraft \
+        "$panel_id" \
+        "{'alignment': <'end'>, 'dynamic': <false>, 'width': <int32 112>, 'height': <int32 700>}")"
+    require_structured_placement_reply \
+        "$structured_apply_reply" applied true ''
+    [[ "$(gvariant_map_boolean ownershipVerified <<<"$structured_apply_reply")" == 'true' &&
+        "$(gvariant_map_boolean rollbackAttempted <<<"$structured_apply_reply")" == 'false' &&
+        "$(panel_registry_value "$panel_id" alignment)" == 'end' &&
+        "$(panel_registry_value "$panel_id" dynamic)" == 'false' &&
+        "$(panel_registry_value "$panel_id" width)" == '112' &&
+        "$(panel_registry_value "$panel_id" height)" == '700' ]] || {
+        printf 'Structured native placement did not persist the verified intent: %s\n' \
+            "$structured_apply_reply" >&2
+        exit 1
+    }
+    require_native_panel_placement \
+        "$first_containment_id" "$panel_id" left left 'structured placement success'
+    require_native_panel_geometry \
+        "$first_containment_id" 112 custom 700 700 '*' 'structured placement success'
+    require_structured_placement_reply \
+        "$(panel_call nativePanelPlacementStatus "$panel_id")" applied true ''
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'structured placement success'
+    log_session_phase 'reported saved intent and verified Plasma host state separately'
+
+    local structured_saved_registry
+    structured_saved_registry="$(panel_registry_json)"
+    local structured_unsupported_reply
+    structured_unsupported_reply="$(panel_call applyNativePanelPlacementDraft \
+        "$panel_id" "{'floatingMargin': <int32 8>}")"
+    require_structured_placement_reply \
+        "$structured_unsupported_reply" unsupported false \
+        unsupported-capability-unavailable
+    [[ "$(panel_registry_json)" == "$structured_saved_registry" &&
+        "$structured_unsupported_reply" == *"'field': <'floatingMargin'>"* &&
+        "$structured_unsupported_reply" == *"'requested': <'8'>"* ]] || {
+        printf 'Unsupported structured placement changed saved intent or hid its field: %s\n' \
+            "$structured_unsupported_reply" >&2
+        exit 1
+    }
+    require_native_panel_placement \
+        "$first_containment_id" "$panel_id" left left 'structured unsupported refusal'
+    require_native_panel_geometry \
+        "$first_containment_id" 112 custom 700 700 '*' 'structured unsupported refusal'
+    require_structured_placement_reply \
+        "$(panel_call nativePanelPlacementStatus "$panel_id")" unsupported false \
+        unsupported-capability-unavailable
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'structured unsupported refusal'
+    log_session_phase 'reported unsupported floating margin without changing saved or host state'
+
+    local settings_file
+    settings_file="$(arch_dock_settings_file)"
+    local settings_directory
+    settings_directory="$(dirname -- "$settings_file")"
+    [[ -f "$settings_file" && -d "$settings_directory" ]] || {
+        printf 'Could not locate the private settings file for rollback coverage.\n' >&2
+        exit 1
+    }
+
+    local structured_saved_revision
+    structured_saved_revision="$(panel_property dockRevision)"
+    local structured_saved_hash
+    structured_saved_hash="$(sha256sum "$settings_file" | awk '{ print $1 }')"
+    local structured_saved_file_state
+    structured_saved_file_state="$(stat -c '%i|%s|%Y|%y' "$settings_file")"
+
+    ARCHDOCK_SETTINGS_FIXTURE_FILE="$settings_file"
+    ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY="$settings_directory"
+    ARCHDOCK_SETTINGS_FIXTURE_FILE_MODE="$(stat -c '%a' "$settings_file")"
+    ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY_MODE="$(stat -c '%a' "$settings_directory")"
+    chmod 400 "$settings_file"
+    chmod 500 "$settings_directory"
+    [[ ! -w "$settings_file" && ! -w "$settings_directory" ]] || {
+        printf 'Private settings rollback fixture remained writable.\n' >&2
+        exit 1
+    }
+    local structured_rollback_reply
+    local structured_rollback_call_status
+    set +e
+    structured_rollback_reply="$(panel_call applyNativePanelPlacementDraft \
+        "$panel_id" \
+        "{'alignment': <'start'>, 'dynamic': <false>, 'width': <int32 120>, 'height': <int32 716>}" 2>&1)"
+    structured_rollback_call_status=$?
+    set -e
+
+    local structured_after_hash
+    structured_after_hash="$(sha256sum "$settings_file" | awk '{ print $1 }')"
+    local structured_after_file_state
+    structured_after_file_state="$(stat -c '%i|%s|%Y|%y' "$settings_file")"
+    local structured_after_revision
+    structured_after_revision="$(panel_property dockRevision)"
+    restore_settings_fixture_permissions
+    [[ "$structured_rollback_call_status" == '0' ]] || {
+        printf 'Structured rollback call failed before returning its result: %s\n' \
+            "$structured_rollback_reply" >&2
+        exit 1
+    }
+    require_structured_placement_reply \
+        "$structured_rollback_reply" rolled-back false persistence-failed
+    [[ "$(gvariant_map_boolean rollbackAttempted <<<"$structured_rollback_reply")" == 'true' &&
+        "$(gvariant_map_boolean rollbackSucceeded <<<"$structured_rollback_reply")" == 'true' &&
+        "$(gvariant_nested_map_string requested height <<<"$structured_rollback_reply")" == '120' &&
+        "$(gvariant_nested_map_string requested fixedLength <<<"$structured_rollback_reply")" == '716' &&
+        "$(gvariant_nested_map_string applied height <<<"$structured_rollback_reply")" == '120' &&
+        "$(gvariant_nested_map_string applied fixedLength <<<"$structured_rollback_reply")" == '716' &&
+        "$(gvariant_nested_map_string hostState height <<<"$structured_rollback_reply")" == '112' &&
+        "$(gvariant_nested_map_string hostState fixedLength <<<"$structured_rollback_reply")" == '700' &&
+        "$(panel_registry_json)" == "$structured_saved_registry" &&
+        "$structured_after_hash" == "$structured_saved_hash" &&
+        "$structured_after_file_state" == "$structured_saved_file_state" &&
+        "$structured_after_revision" == "$structured_saved_revision" ]] || {
+        printf 'Failed persistence did not preserve the prior saved revision: %s\n' \
+            "$structured_rollback_reply" >&2
+        exit 1
+    }
+    require_native_panel_placement \
+        "$first_containment_id" "$panel_id" left left 'structured persistence rollback'
+    require_native_panel_geometry \
+        "$first_containment_id" 112 custom 700 700 '*' 'structured persistence rollback'
+    require_structured_placement_reply \
+        "$(panel_call nativePanelPlacementStatus "$panel_id")" rolled-back false \
+        persistence-failed
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'structured persistence rollback'
+    log_session_phase 'rolled Plasma host back after checked persistence failure'
+
     panel_call setPanelScreen "$panel_id" 1 >/dev/null
     wait_for_native_panel_placement \
-        "$first_containment_id" "$panel_id" left right 'managed screen reassignment'
+        "$first_containment_id" "$panel_id" left left 'managed screen reassignment'
     [[ "$(panel_call screenIndexForPanel "$panel_id" | gvariant_integer)" == '1' ]] || {
         printf 'Native panel did not move to virtual output 1.\n' >&2
         exit 1
@@ -1572,7 +1768,7 @@ run_session() {
     wait_for_native_panel_screen "$first_containment_id" 0
     wait_for_signal_monitor nativePanelRecoveryFinished
     require_native_panel_placement \
-        "$first_containment_id" "$panel_id" left right 'managed screen fallback'
+        "$first_containment_id" "$panel_id" left left 'managed screen fallback'
     [[ "$(panel_registry_value "$panel_id" screen)" == '0' &&
         "$(panel_registry_value "$panel_id" screenId)" == "$requested_screen_id" ]] || {
         printf 'Screen fallback did not record index 0 while retaining the stable output identity.\n' >&2
@@ -1620,7 +1816,7 @@ run_session() {
     fi
     wait_for_signal_monitor nativePanelRecoveryFinished
     require_native_panel_placement \
-        "$first_containment_id" "$panel_id" left right 'managed screen restoration'
+        "$first_containment_id" "$panel_id" left left 'managed screen restoration'
     [[ "$(panel_registry_value "$panel_id" screenId)" == "$requested_screen_id" ]] || {
         printf 'Restoring the output replaced the requested stable output identity.\n' >&2
         exit 1
@@ -1669,7 +1865,7 @@ run_session() {
     }
     require_visual_dock "$replacement_containment_id" "$panel_id" hybrid
     require_native_panel_placement \
-        "$replacement_containment_id" "$panel_id" left right 'missing-host recreation'
+        "$replacement_containment_id" "$panel_id" left left 'missing-host recreation'
     local replacement_dock_id
     replacement_dock_id="$(owned_dock_id "$replacement_containment_id" "$panel_id")"
     local ids_after_replacement
@@ -1854,7 +2050,7 @@ run_session() {
         exit 1
     }
     require_native_panel_placement \
-        "$restarted_containment_id" "$panel_id" left right 'PlasmaShell restart'
+        "$restarted_containment_id" "$panel_id" left left 'PlasmaShell restart'
     wait_for_panel_registry_value "$studio_panel_id" freeHostState hosted-owned
     wait_for_panel_registry_value "$template_panel_id" freeHostState hosted-owned
     require_current_free_panel_host \
@@ -2058,6 +2254,7 @@ run_session() {
 
 run_outer() {
     require_command cmake
+    require_command chmod
     require_command dbus-run-session
     require_command gdbus
     require_command jq
@@ -2066,6 +2263,8 @@ run_outer() {
     require_command kwin_wayland
     require_command plasmashell
     require_command python
+    require_command sha256sum
+    require_command stat
     require_command stdbuf
     require_command timeout
     python -c 'from PySide6.QtCore import QByteArray, QSettings' || {

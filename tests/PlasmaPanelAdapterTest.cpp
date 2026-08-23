@@ -1,35 +1,180 @@
 #include "integration/PlasmaPanelAdapter.h"
 
+#include <QMap>
+#include <QRegularExpression>
+#include <QSet>
 #include <QTest>
 
-#include <algorithm>
 #include <optional>
 
 namespace
 {
-ArchDock::PlasmaPanelAdapter fixtureAdapter(QList<std::optional<int>> *replies,
-                                            QStringList *scripts)
+class FakePlasmaHost final
+{
+public:
+    QMap<QString, int> values{
+        {QStringLiteral("edge"), 1},
+        {QStringLiteral("screen"), 0},
+        {QStringLiteral("alignment"), 1},
+        {QStringLiteral("offset"), 0},
+        {QStringLiteral("height"), 76},
+        {QStringLiteral("maximumLength"), 720},
+        {QStringLiteral("minimumLength"), 720},
+        {QStringLiteral("length"), 720},
+        {QStringLiteral("lengthMode"), 1},
+    };
+    QSet<QString> unsupported;
+    QList<std::optional<int>> forcedReplies;
+    QString coerceFirstMutationProperty;
+    int coercedValue = 0;
+    QString failFirstMutationProperty;
+    QString failRollbackProperty;
+    QMap<QString, int> mutationCounts;
+    QStringList scripts;
+
+    std::optional<int> execute(const QString &script)
+    {
+        scripts.append(script);
+        if (!forcedReplies.isEmpty())
+        {
+            return forcedReplies.takeFirst();
+        }
+
+        const QString property = propertyForScript(script);
+        if (property.isEmpty())
+        {
+            return -1003;
+        }
+        if (unsupported.contains(property))
+        {
+            return -1002;
+        }
+
+        const std::optional<int> mutation = mutationValue(script, property);
+        if (mutation.has_value())
+        {
+            const int mutationCount = ++mutationCounts[property];
+            values[property] = property == coerceFirstMutationProperty && mutationCount == 1
+                ? coercedValue
+                : *mutation;
+            if (property == failFirstMutationProperty && mutationCount == 1)
+            {
+                return -1003;
+            }
+            if (property == failRollbackProperty && mutationCount > 1)
+            {
+                return -1003;
+            }
+        }
+        return values.value(property);
+    }
+
+private:
+    static QString propertyForScript(const QString &script)
+    {
+        if (script.contains(QStringLiteral("panel.maximumLength")))
+        {
+            return QStringLiteral("maximumLength");
+        }
+        if (script.contains(QStringLiteral("panel.minimumLength")))
+        {
+            return QStringLiteral("minimumLength");
+        }
+        if (script.contains(QStringLiteral("panel.lengthMode")))
+        {
+            return QStringLiteral("lengthMode");
+        }
+        if (script.contains(QStringLiteral("panel.length")))
+        {
+            return QStringLiteral("length");
+        }
+        if (script.contains(QStringLiteral("panel.location")))
+        {
+            return QStringLiteral("edge");
+        }
+        if (script.contains(QStringLiteral("panel.screen")))
+        {
+            return QStringLiteral("screen");
+        }
+        if (script.contains(QStringLiteral("panel.alignment")))
+        {
+            return QStringLiteral("alignment");
+        }
+        if (script.contains(QStringLiteral("panel.offset")))
+        {
+            return QStringLiteral("offset");
+        }
+        if (script.contains(QStringLiteral("panel.height")))
+        {
+            return QStringLiteral("height");
+        }
+        return {};
+    }
+
+    static std::optional<int> stringMutationValue(const QString &script,
+                                                  const QString &property,
+                                                  const QMap<QString, int> &mapping)
+    {
+        const QRegularExpression expression(
+            QStringLiteral("panel\\.%1 = '([^']+)';").arg(property));
+        const QRegularExpressionMatch match = expression.match(script);
+        if (!match.hasMatch() || !mapping.contains(match.captured(1)))
+        {
+            return std::nullopt;
+        }
+        return mapping.value(match.captured(1));
+    }
+
+    static std::optional<int> mutationValue(const QString &script,
+                                            const QString &property)
+    {
+        if (property == QLatin1String("edge"))
+        {
+            return stringMutationValue(
+                script,
+                QStringLiteral("location"),
+                {{QStringLiteral("top"), 0},
+                 {QStringLiteral("bottom"), 1},
+                 {QStringLiteral("left"), 2},
+                 {QStringLiteral("right"), 3}});
+        }
+        if (property == QLatin1String("alignment"))
+        {
+            return stringMutationValue(
+                script,
+                QStringLiteral("alignment"),
+                {{QStringLiteral("left"), 0},
+                 {QStringLiteral("center"), 1},
+                 {QStringLiteral("right"), 2}});
+        }
+        if (property == QLatin1String("lengthMode"))
+        {
+            return stringMutationValue(
+                script,
+                QStringLiteral("lengthMode"),
+                {{QStringLiteral("fit"), 0},
+                 {QStringLiteral("custom"), 1},
+                 {QStringLiteral("fill"), 2}});
+        }
+
+        const QRegularExpression expression(
+            QStringLiteral("panel\\.%1 = (-?\\d+);").arg(property));
+        const QRegularExpressionMatch match = expression.match(script);
+        if (!match.hasMatch())
+        {
+            return std::nullopt;
+        }
+        return match.captured(1).toInt();
+    }
+};
+
+ArchDock::PlasmaPanelAdapter fixtureAdapter(FakePlasmaHost *host)
 {
     return ArchDock::PlasmaPanelAdapter(
-        [replies, scripts](const QString &script) -> std::optional<int>
+        [host](const QString &script)
         {
-            scripts->append(script);
-            if (replies->isEmpty())
-            {
-                return std::nullopt;
-            }
-            return replies->takeFirst();
+            return host->execute(script);
         });
-}
-
-QList<std::optional<int>> successfulFixedReplies(int edge = 1,
-                                                 int screen = 0,
-                                                 int alignment = 1,
-                                                 int offset = 0,
-                                                 int thickness = 76,
-                                                 int length = 720)
-{
-    return {edge, screen, alignment, offset, thickness, length, length, length, 1};
 }
 }
 
@@ -45,11 +190,13 @@ private slots:
     void mapsVerticalAlignment();
     void mapsGeometryModes_data();
     void mapsGeometryModes();
-    void reportsUnsupportedAndContinues();
-    void reportsReadbackMismatch();
+    void reportsUnsupportedAndRollsBack();
+    void reportsReadbackMismatchAndRollsBack();
+    void rollsBackWhenPersistenceFails();
+    void reportsRollbackFailurePrecisely();
     void stopsBeforeMutationWhenOwnershipIsDenied();
     void reportsMissingContainmentForEveryField();
-    void reportsScriptAndFixtureFailures();
+    void reportsScriptFailureBeforeMutation();
     void rejectsInvalidRequestsWithoutExecuting();
     void escapesOwnershipValuesInEveryScript();
 };
@@ -57,41 +204,33 @@ private slots:
 void PlasmaPanelAdapterTest::edgeScriptsUseSupportedProperties_data()
 {
     QTest::addColumn<int>("edge");
-    QTest::addColumn<int>("readback");
     QTest::addColumn<QString>("propertyValue");
 
     using ArchDock::NativePanelEdge;
-    QTest::newRow("top") << static_cast<int>(NativePanelEdge::Top) << 0
-                         << QStringLiteral("top");
-    QTest::newRow("bottom") << static_cast<int>(NativePanelEdge::Bottom) << 1
+    QTest::newRow("top") << static_cast<int>(NativePanelEdge::Top) << QStringLiteral("top");
+    QTest::newRow("bottom") << static_cast<int>(NativePanelEdge::Bottom)
                             << QStringLiteral("bottom");
-    QTest::newRow("left") << static_cast<int>(NativePanelEdge::Left) << 2
-                          << QStringLiteral("left");
-    QTest::newRow("right") << static_cast<int>(NativePanelEdge::Right) << 3
-                           << QStringLiteral("right");
+    QTest::newRow("left") << static_cast<int>(NativePanelEdge::Left) << QStringLiteral("left");
+    QTest::newRow("right") << static_cast<int>(NativePanelEdge::Right) << QStringLiteral("right");
 }
 
 void PlasmaPanelAdapterTest::edgeScriptsUseSupportedProperties()
 {
     QFETCH(int, edge);
-    QFETCH(int, readback);
     QFETCH(QString, propertyValue);
 
     ArchDock::NativePanelPlacement placement;
     placement.edge = static_cast<ArchDock::NativePanelEdge>(edge);
-
-    QList<std::optional<int>> replies = successfulFixedReplies(readback);
-    QStringList scripts;
-    const ArchDock::PlasmaPanelAdapter adapter = fixtureAdapter(&replies, &scripts);
+    FakePlasmaHost host;
+    const ArchDock::PlasmaPanelAdapter adapter = fixtureAdapter(&host);
     const ArchDock::PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
         42, QStringLiteral("panel-1"), QStringLiteral("owner-1"), placement);
 
-    QVERIFY(result.allApplied());
-    QCOMPARE(scripts.size(), 9);
-    QVERIFY(scripts.constFirst().contains(
+    QVERIFY(result.success());
+    QCOMPARE(host.scripts.size(), 27);
+    QVERIFY(host.scripts.at(9).contains(
         QStringLiteral("panel.location = '%1';").arg(propertyValue)));
-    QVERIFY(result.fields.constFirst().actualValue.has_value());
-    QCOMPARE(*result.fields.constFirst().actualValue, propertyValue);
+    QCOMPARE(result.hostState.value(QStringLiteral("edge")).toString(), propertyValue);
 }
 
 void PlasmaPanelAdapterTest::appliesAndReadsBackEveryField()
@@ -104,15 +243,17 @@ void PlasmaPanelAdapterTest::appliesAndReadsBackEveryField()
     placement.alignment = NativePanelAlignment::End;
     placement.offset = 37;
 
-    QList<std::optional<int>> replies = successfulFixedReplies(0, 2, 2, 37);
-    QStringList scripts;
-    const PlasmaPanelAdapter adapter = fixtureAdapter(&replies, &scripts);
+    FakePlasmaHost host;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
     const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
         42, QStringLiteral("panel-1"), QStringLiteral("owner-1"), placement);
 
     QVERIFY(result.ownershipVerified);
+    QVERIFY(result.success());
     QVERIFY(result.allApplied());
     QVERIFY(!result.hasUnsupported());
+    QCOMPARE(result.status, QStringLiteral("applied"));
+    QVERIFY(result.errorCode.isEmpty());
     QCOMPARE(result.fields.size(), 9);
     QCOMPARE(result.fields.at(0).requestedValue, QStringLiteral("top"));
     QCOMPARE(result.fields.at(1).requestedValue, QStringLiteral("2"));
@@ -123,81 +264,77 @@ void PlasmaPanelAdapterTest::appliesAndReadsBackEveryField()
     QCOMPARE(result.fields.at(6).requestedValue, QStringLiteral("720"));
     QCOMPARE(result.fields.at(7).requestedValue, QStringLiteral("720"));
     QCOMPARE(result.fields.at(8).requestedValue, QStringLiteral("fixed"));
-    QVERIFY(scripts.at(1).contains(QStringLiteral("panel.screen = 2;")));
-    QVERIFY(scripts.at(2).contains(QStringLiteral("panel.alignment = 'right';")));
-    QVERIFY(scripts.at(3).contains(QStringLiteral("panel.offset = 37;")));
-    QVERIFY(scripts.at(4).contains(QStringLiteral("panel.height = 76;")));
-    QVERIFY(scripts.at(5).contains(QStringLiteral("panel.maximumLength = 720;")));
-    QVERIFY(scripts.at(6).contains(QStringLiteral("panel.minimumLength = 720;")));
-    QVERIFY(scripts.at(7).contains(QStringLiteral("panel.length = 720;")));
-    QVERIFY(scripts.at(8).contains(QStringLiteral("panel.lengthMode = 'custom';")));
+    QVERIFY(host.scripts.at(10).contains(QStringLiteral("panel.screen = 2;")));
+    QVERIFY(host.scripts.at(11).contains(QStringLiteral("panel.alignment = 'right';")));
+    QVERIFY(host.scripts.at(12).contains(QStringLiteral("panel.offset = 37;")));
+    QCOMPARE(result.hostState.value(QStringLiteral("screen")).toString(), QStringLiteral("2"));
+    QCOMPARE(result.hostState.value(QStringLiteral("alignment")).toString(), QStringLiteral("end"));
+
+    const QVariantMap structured = result.toVariantMap();
+    QVERIFY(structured.value(QStringLiteral("success")).toBool());
+    QCOMPARE(structured.value(QStringLiteral("requested")).toMap().size(), 9);
+    QCOMPARE(structured.value(QStringLiteral("applied")).toMap().size(), 9);
+    QVERIFY(structured.value(QStringLiteral("unsupported")).toList().isEmpty());
+    QVERIFY(structured.value(QStringLiteral("failed")).toList().isEmpty());
 }
 
 void PlasmaPanelAdapterTest::mapsVerticalAlignment_data()
 {
     QTest::addColumn<int>("alignment");
-    QTest::addColumn<int>("readback");
     QTest::addColumn<QString>("propertyValue");
     QTest::addColumn<QString>("logicalValue");
 
     using ArchDock::NativePanelAlignment;
-    QTest::newRow("start-is-top") << static_cast<int>(NativePanelAlignment::Start) << 2
+    QTest::newRow("start-is-top") << static_cast<int>(NativePanelAlignment::Start)
                                   << QStringLiteral("right") << QStringLiteral("start");
-    QTest::newRow("center") << static_cast<int>(NativePanelAlignment::Center) << 1
+    QTest::newRow("center") << static_cast<int>(NativePanelAlignment::Center)
                             << QStringLiteral("center") << QStringLiteral("center");
-    QTest::newRow("end-is-bottom") << static_cast<int>(NativePanelAlignment::End) << 0
+    QTest::newRow("end-is-bottom") << static_cast<int>(NativePanelAlignment::End)
                                    << QStringLiteral("left") << QStringLiteral("end");
 }
 
 void PlasmaPanelAdapterTest::mapsVerticalAlignment()
 {
     QFETCH(int, alignment);
-    QFETCH(int, readback);
     QFETCH(QString, propertyValue);
     QFETCH(QString, logicalValue);
 
     ArchDock::NativePanelPlacement placement;
     placement.edge = ArchDock::NativePanelEdge::Left;
     placement.alignment = static_cast<ArchDock::NativePanelAlignment>(alignment);
-
-    QList<std::optional<int>> replies = successfulFixedReplies(2, 0, readback);
-    QStringList scripts;
-    const ArchDock::PlasmaPanelAdapter adapter = fixtureAdapter(&replies, &scripts);
+    FakePlasmaHost host;
+    const ArchDock::PlasmaPanelAdapter adapter = fixtureAdapter(&host);
     const ArchDock::PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
         42, QStringLiteral("panel-1"), QStringLiteral("owner-1"), placement);
 
-    QVERIFY(result.allApplied());
-    QVERIFY(scripts.at(2).contains(
+    QVERIFY(result.success());
+    QVERIFY(host.scripts.at(11).contains(
         QStringLiteral("panel.alignment = '%1';").arg(propertyValue)));
-    QVERIFY(result.fields.at(2).actualValue.has_value());
-    QCOMPARE(*result.fields.at(2).actualValue, logicalValue);
+    QCOMPARE(result.hostState.value(QStringLiteral("alignment")).toString(), logicalValue);
 }
 
 void PlasmaPanelAdapterTest::mapsGeometryModes_data()
 {
     QTest::addColumn<int>("mode");
-    QTest::addColumn<int>("modeReadback");
     QTest::addColumn<QString>("plasmaMode");
-    QTest::addColumn<QString>("logicalMode");
+    QTest::addColumn<int>("operationCount");
 
     using ArchDock::NativePanelLengthMode;
-    QTest::newRow("fit") << static_cast<int>(NativePanelLengthMode::Fit) << 0
-                         << QStringLiteral("fit") << QStringLiteral("fit");
-    QTest::newRow("fixed") << static_cast<int>(NativePanelLengthMode::Fixed) << 1
-                           << QStringLiteral("custom") << QStringLiteral("fixed");
-    QTest::newRow("fill") << static_cast<int>(NativePanelLengthMode::Fill) << 2
-                          << QStringLiteral("fill") << QStringLiteral("fill");
+    QTest::newRow("fit") << static_cast<int>(NativePanelLengthMode::Fit)
+                         << QStringLiteral("fit") << 8;
+    QTest::newRow("fixed") << static_cast<int>(NativePanelLengthMode::Fixed)
+                           << QStringLiteral("custom") << 9;
+    QTest::newRow("fill") << static_cast<int>(NativePanelLengthMode::Fill)
+                          << QStringLiteral("fill") << 8;
 }
 
 void PlasmaPanelAdapterTest::mapsGeometryModes()
 {
     QFETCH(int, mode);
-    QFETCH(int, modeReadback);
     QFETCH(QString, plasmaMode);
-    QFETCH(QString, logicalMode);
+    QFETCH(int, operationCount);
 
     using namespace ArchDock;
-
     NativePanelPlacement placement;
     placement.thickness = 88;
     placement.lengthMode = static_cast<NativePanelLengthMode>(mode);
@@ -205,115 +342,141 @@ void PlasmaPanelAdapterTest::mapsGeometryModes()
     placement.maximumLength = 840;
     placement.fixedLength = 640;
 
-    QList<std::optional<int>> replies{1, 0, 1, 0, 88};
-    if (placement.lengthMode == NativePanelLengthMode::Fixed)
-    {
-        replies += QList<std::optional<int>>{640, 640, 640, modeReadback};
-    }
-    else
-    {
-        replies += QList<std::optional<int>>{modeReadback, 840, 120};
-    }
-
-    QStringList scripts;
-    const PlasmaPanelAdapter adapter = fixtureAdapter(&replies, &scripts);
+    FakePlasmaHost host;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
     const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
         42, QStringLiteral("panel-1"), QStringLiteral("owner-1"), placement);
 
-    QVERIFY(result.allApplied());
-    QVERIFY(result.ownershipVerified);
-    QVERIFY(scripts.at(4).contains(QStringLiteral("panel.height = 88;")));
-    QCOMPARE(result.fields.at(4).field, NativePlacementField::Thickness);
-
-    if (placement.lengthMode == NativePanelLengthMode::Fixed)
-    {
-        QCOMPARE(scripts.size(), 9);
-        QVERIFY(scripts.at(5).contains(QStringLiteral("panel.maximumLength = 640;")));
-        QVERIFY(scripts.at(6).contains(QStringLiteral("panel.minimumLength = 640;")));
-        QVERIFY(scripts.at(7).contains(QStringLiteral("panel.length = 640;")));
-        QVERIFY(scripts.at(8).contains(
-            QStringLiteral("panel.lengthMode = '%1';").arg(plasmaMode)));
-        QCOMPARE(result.fields.at(8).field, NativePlacementField::LengthMode);
-        QVERIFY(result.fields.at(8).actualValue.has_value());
-        QCOMPARE(*result.fields.at(8).actualValue, logicalMode);
-    }
-    else
-    {
-        QCOMPARE(scripts.size(), 8);
-        QVERIFY(scripts.at(5).contains(
-            QStringLiteral("panel.lengthMode = '%1';").arg(plasmaMode)));
-        QVERIFY(scripts.at(6).contains(QStringLiteral("panel.maximumLength = 840;")));
-        QVERIFY(scripts.at(7).contains(QStringLiteral("panel.minimumLength = 120;")));
-        QVERIFY(std::none_of(
-            scripts.cbegin(),
-            scripts.cend(),
-            [](const QString &script)
-            {
-                return script.contains(QStringLiteral("panel.length ="));
-            }));
-        QCOMPARE(result.fields.at(5).field, NativePlacementField::LengthMode);
-        QVERIFY(result.fields.at(5).actualValue.has_value());
-        QCOMPARE(*result.fields.at(5).actualValue, logicalMode);
-    }
+    QVERIFY(result.success());
+    QCOMPARE(host.scripts.size(), operationCount * 3);
+    QVERIFY(host.scripts.at(operationCount + 4).contains(QStringLiteral("panel.height = 88;")));
+    QVERIFY(std::any_of(
+        host.scripts.cbegin() + operationCount,
+        host.scripts.cbegin() + (operationCount * 2),
+        [&plasmaMode](const QString &script)
+        {
+            return script.contains(
+                QStringLiteral("panel.lengthMode = '%1';").arg(plasmaMode));
+        }));
+    QCOMPARE(result.hostState.value(QStringLiteral("height")).toString(), QStringLiteral("88"));
 }
 
-void PlasmaPanelAdapterTest::reportsUnsupportedAndContinues()
+void PlasmaPanelAdapterTest::reportsUnsupportedAndRollsBack()
 {
     using namespace ArchDock;
-
     NativePanelPlacement placement;
     placement.edge = NativePanelEdge::Top;
     placement.offset = 17;
 
-    QList<std::optional<int>> replies = successfulFixedReplies(0, 0, 1, 17);
-    replies[4] = -1002;
-    QStringList scripts;
-    const PlasmaPanelAdapter adapter = fixtureAdapter(&replies, &scripts);
+    FakePlasmaHost host;
+    host.unsupported.insert(QStringLiteral("height"));
+    const QMap<QString, int> original = host.values;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
     const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
         42, QStringLiteral("panel-1"), QStringLiteral("owner-1"), placement);
 
-    QVERIFY(result.ownershipVerified);
-    QVERIFY(!result.allApplied());
+    QVERIFY(!result.success());
     QVERIFY(result.hasUnsupported());
-    QCOMPARE(scripts.size(), 9);
+    QCOMPARE(result.status, QStringLiteral("rolled-back"));
+    QCOMPARE(result.errorCode, QStringLiteral("property-unsupported"));
+    QVERIFY(result.rollbackAttempted);
+    QVERIFY(result.rollbackSucceeded);
     QCOMPARE(result.fields.at(4).status, PlasmaPanelApplyStatus::Unsupported);
     QCOMPARE(result.fields.at(4).failure, PlasmaPanelApplyFailure::PropertyUnsupported);
-    QCOMPARE(result.fields.at(8).status, PlasmaPanelApplyStatus::Applied);
+    QCOMPARE(host.values, original);
+    QCOMPARE(result.hostState.value(QStringLiteral("edge")).toString(), QStringLiteral("bottom"));
+    QCOMPARE(result.toVariantMap().value(QStringLiteral("unsupported")).toList().size(), 1);
 }
 
-void PlasmaPanelAdapterTest::reportsReadbackMismatch()
+void PlasmaPanelAdapterTest::reportsReadbackMismatchAndRollsBack()
 {
     using namespace ArchDock;
-
     NativePanelPlacement placement;
     placement.edge = NativePanelEdge::Top;
 
-    QList<std::optional<int>> replies = successfulFixedReplies();
-    replies[4] = 77;
-    QStringList scripts;
-    const PlasmaPanelAdapter adapter = fixtureAdapter(&replies, &scripts);
+    FakePlasmaHost host;
+    host.coerceFirstMutationProperty = QStringLiteral("height");
+    host.coercedValue = 77;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
     const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
         42, QStringLiteral("panel-1"), QStringLiteral("owner-1"), placement);
 
+    QCOMPARE(result.status, QStringLiteral("rolled-back"));
+    QCOMPARE(result.errorCode, QStringLiteral("readback-mismatch"));
+    QVERIFY(result.rollbackSucceeded);
     QCOMPARE(result.fields.at(4).status, PlasmaPanelApplyStatus::Failed);
     QCOMPARE(result.fields.at(4).failure, PlasmaPanelApplyFailure::ReadbackMismatch);
     QVERIFY(result.fields.at(4).actualValue.has_value());
     QCOMPARE(*result.fields.at(4).actualValue, QStringLiteral("77"));
-    QCOMPARE(scripts.size(), 9);
+    QVERIFY(result.fields.at(4).hostValue.has_value());
+    QCOMPARE(*result.fields.at(4).hostValue, QStringLiteral("76"));
+}
+
+void PlasmaPanelAdapterTest::rollsBackWhenPersistenceFails()
+{
+    using namespace ArchDock;
+    NativePanelPlacement placement;
+    placement.edge = NativePanelEdge::Top;
+    placement.screen.fallbackIndex = 2;
+
+    FakePlasmaHost host;
+    const QMap<QString, int> original = host.values;
+    bool persistenceCalled = false;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
+        42,
+        QStringLiteral("panel-1"),
+        QStringLiteral("owner-1"),
+        placement,
+        [&persistenceCalled]
+        {
+            persistenceCalled = true;
+            return false;
+        });
+
+    QVERIFY(persistenceCalled);
+    QVERIFY(!result.success());
+    QCOMPARE(result.status, QStringLiteral("rolled-back"));
+    QCOMPARE(result.errorCode, QStringLiteral("persistence-failed"));
+    QVERIFY(result.allApplied());
+    QVERIFY(result.rollbackAttempted);
+    QVERIFY(result.rollbackSucceeded);
+    QCOMPARE(host.values, original);
+    QCOMPARE(result.hostState.value(QStringLiteral("screen")).toString(), QStringLiteral("0"));
+}
+
+void PlasmaPanelAdapterTest::reportsRollbackFailurePrecisely()
+{
+    using namespace ArchDock;
+    NativePanelPlacement placement;
+    placement.edge = NativePanelEdge::Top;
+
+    FakePlasmaHost host;
+    host.coerceFirstMutationProperty = QStringLiteral("height");
+    host.coercedValue = 77;
+    host.failRollbackProperty = QStringLiteral("height");
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
+        42, QStringLiteral("panel-1"), QStringLiteral("owner-1"), placement);
+
+    QCOMPARE(result.status, QStringLiteral("rollback-failed"));
+    QVERIFY(result.rollbackAttempted);
+    QVERIFY(!result.rollbackSucceeded);
+    QCOMPARE(result.rollbackErrorCode, QStringLiteral("script-failure"));
 }
 
 void PlasmaPanelAdapterTest::stopsBeforeMutationWhenOwnershipIsDenied()
 {
     using namespace ArchDock;
-
-    QList<std::optional<int>> replies{-1001};
-    QStringList scripts;
-    const PlasmaPanelAdapter adapter = fixtureAdapter(&replies, &scripts);
+    FakePlasmaHost host;
+    host.forcedReplies.append(-1001);
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
     const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
         42, QStringLiteral("panel-1"), QStringLiteral("wrong-owner"), {});
 
     QVERIFY(!result.ownershipVerified);
-    QCOMPARE(scripts.size(), 1);
+    QCOMPARE(host.scripts.size(), 1);
+    QVERIFY(host.mutationCounts.isEmpty());
     QCOMPARE(result.fields.size(), 9);
     for (const PlasmaPanelFieldResult &field : result.fields)
     {
@@ -325,56 +488,47 @@ void PlasmaPanelAdapterTest::stopsBeforeMutationWhenOwnershipIsDenied()
 void PlasmaPanelAdapterTest::reportsMissingContainmentForEveryField()
 {
     using namespace ArchDock;
-
-    QList<std::optional<int>> replies{-1000};
-    QStringList scripts;
-    const PlasmaPanelAdapter adapter = fixtureAdapter(&replies, &scripts);
+    FakePlasmaHost host;
+    host.forcedReplies.append(-1000);
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
     const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
         42, QStringLiteral("panel-1"), QStringLiteral("owner-1"), {});
 
-    QCOMPARE(scripts.size(), 1);
-    QCOMPARE(result.fields.size(), 9);
+    QCOMPARE(host.scripts.size(), 1);
     for (const PlasmaPanelFieldResult &field : result.fields)
     {
         QCOMPARE(field.failure, PlasmaPanelApplyFailure::ContainmentMissing);
     }
 }
 
-void PlasmaPanelAdapterTest::reportsScriptAndFixtureFailures()
+void PlasmaPanelAdapterTest::reportsScriptFailureBeforeMutation()
 {
     using namespace ArchDock;
-
-    QList<std::optional<int>> replies{
-        std::nullopt,
-        -1003,
-        -1004,
-        99,
-    };
-    QStringList scripts;
-    const PlasmaPanelAdapter adapter = fixtureAdapter(&replies, &scripts);
+    FakePlasmaHost host;
+    host.forcedReplies.append(std::nullopt);
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
     const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
         42, QStringLiteral("panel-1"), QStringLiteral("owner-1"), {});
 
-    QCOMPARE(scripts.size(), 9);
-    QCOMPARE(result.fields.at(0).failure, PlasmaPanelApplyFailure::ScriptFailure);
-    QCOMPARE(result.fields.at(1).failure, PlasmaPanelApplyFailure::ScriptFailure);
-    QCOMPARE(result.fields.at(2).failure, PlasmaPanelApplyFailure::ReadbackMismatch);
-    QCOMPARE(result.fields.at(3).failure, PlasmaPanelApplyFailure::ReadbackMismatch);
-    QVERIFY(result.fields.at(3).actualValue.has_value());
-    QCOMPARE(*result.fields.at(3).actualValue, QStringLiteral("99"));
+    QCOMPARE(host.scripts.size(), 1);
+    QVERIFY(host.mutationCounts.isEmpty());
+    QVERIFY(!result.ownershipVerified);
+    QCOMPARE(result.errorCode, QStringLiteral("script-failure"));
+    for (const PlasmaPanelFieldResult &field : result.fields)
+    {
+        QCOMPARE(field.failure, PlasmaPanelApplyFailure::ScriptFailure);
+    }
 }
 
 void PlasmaPanelAdapterTest::rejectsInvalidRequestsWithoutExecuting()
 {
     using namespace ArchDock;
+    FakePlasmaHost host;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(-1, {}, {}, {});
 
-    QList<std::optional<int>> replies = successfulFixedReplies();
-    QStringList scripts;
-    const PlasmaPanelAdapter adapter = fixtureAdapter(&replies, &scripts);
-    const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
-        -1, QString{}, QString{}, {});
-
-    QVERIFY(scripts.isEmpty());
+    QVERIFY(host.scripts.isEmpty());
+    QCOMPARE(result.errorCode, QStringLiteral("invalid-request"));
     QCOMPARE(result.fields.size(), 9);
     for (const PlasmaPanelFieldResult &field : result.fields)
     {
@@ -385,20 +539,17 @@ void PlasmaPanelAdapterTest::rejectsInvalidRequestsWithoutExecuting()
 void PlasmaPanelAdapterTest::escapesOwnershipValuesInEveryScript()
 {
     using namespace ArchDock;
-
     const QString panelId = QStringLiteral("panel-'") + QLatin1Char('\\') +
         QStringLiteral("line\nnext") + QChar(0x2028) + QStringLiteral("id");
     const QString token = QStringLiteral("owner-'") + QLatin1Char('\\') +
         QStringLiteral("line\rnext") + QChar(0x2029) + QStringLiteral("token");
-    QList<std::optional<int>> replies = successfulFixedReplies();
-    QStringList scripts;
-    const PlasmaPanelAdapter adapter = fixtureAdapter(&replies, &scripts);
-    const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
-        42, panelId, token, {});
+    FakePlasmaHost host;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(42, panelId, token, {});
 
-    QVERIFY(result.allApplied());
-    QCOMPARE(scripts.size(), 9);
-    for (const QString &script : scripts)
+    QVERIFY(result.success());
+    QCOMPARE(host.scripts.size(), 27);
+    for (const QString &script : host.scripts)
     {
         QVERIFY(script.contains(QStringLiteral("var panel = panelById(42);")));
         QVERIFY(script.contains(QStringLiteral("panel.readConfig('ownerToken', '')")));

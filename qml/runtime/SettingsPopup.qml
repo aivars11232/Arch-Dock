@@ -4,6 +4,7 @@ import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
 import org.kde.kirigami as Kirigami
+import "PlacementStatus.js" as PlacementStatus
 import "StudioDraft.js" as StudioDraft
 import "StudioNavigation.js" as StudioNavigation
 
@@ -27,6 +28,11 @@ Window {
 
     readonly property int panelRevision: panelRegistry.revision
     readonly property int screenRevision: panelController.screenRevision
+    readonly property int placementRevision: panelController.nativePlacementRevision
+    readonly property var selectedPlacementResult: {
+        const revision = placementRevision;
+        return panelController.nativePanelPlacementStatus(selectedPanelId);
+    }
     readonly property bool hasPendingChanges: StudioDraft.isSessionDirty(
         panelDrafts, settingsDraft, screenDrafts, themeDrafts)
     readonly property var editablePanelKeys: [
@@ -62,6 +68,14 @@ Window {
         "opacity",
         "color",
         "themeFit"
+    ]
+    readonly property var nativePlacementKeys: [
+        "edge",
+        "alignment",
+        "dynamic",
+        "width",
+        "height",
+        "floatingMargin"
     ]
     readonly property var screenOptions: {
         const revision = screenRevision;
@@ -540,11 +554,34 @@ Window {
         stageThemeAction(panelId, "clear", "");
     }
 
-    function filteredPanelDraft(draft) {
+    function isNativePanel(panelId) {
+        return String(panelValueFor(panelId, "edge", "bottom")) !== "free";
+    }
+
+    function nativePlacementDraft(panelId, draft) {
+        const result = {};
+        if (!isNativePanel(panelId))
+            return result;
+
+        for (let index = 0; index < nativePlacementKeys.length; ++index) {
+            const key = nativePlacementKeys[index];
+            if (StudioDraft.hasValue(draft, key))
+                result[key] = draft[key];
+        }
+        if (StudioDraft.keyCount(
+                StudioDraft.nestedMap(screenDrafts, panelId)) > 0) {
+            result.screen = effectivePanelScreenIndex(panelId);
+        }
+        return result;
+    }
+
+    function filteredPanelDraft(panelId, draft) {
         const result = {};
         for (let index = 0; index < editablePanelKeys.length; ++index) {
             const key = editablePanelKeys[index];
             if (key !== "visible" && key !== "visibilityMode"
+                    && (!isNativePanel(panelId)
+                        || nativePlacementKeys.indexOf(key) < 0)
                     && StudioDraft.hasValue(draft, key))
                 result[key] = draft[key];
         }
@@ -602,7 +639,22 @@ Window {
         for (let index = 0; index < panelIds.length; ++index) {
             const panelId = panelIds[index];
             const draft = panelDraft(panelId);
-            const values = filteredPanelDraft(draft);
+            const placementValues = nativePlacementDraft(panelId, draft);
+            if (StudioDraft.keyCount(placementValues) > 0) {
+                const placementResult =
+                    panelController.applyNativePanelPlacementDraft(
+                        panelId, placementValues);
+                if (!placementResult || placementResult.success !== true) {
+                    const status = PlacementStatus.statusLabel(
+                        placementResult ? placementResult.status : "failed");
+                    const details = PlacementStatus.problemText(placementResult);
+                    studioError = qsTr("Native placement: %1 (%2)")
+                        .arg(status).arg(details);
+                    return false;
+                }
+            }
+
+            const values = filteredPanelDraft(panelId, draft);
             if (StudioDraft.keyCount(values) > 0)
                 panelRegistry.updatePanel(panelId, values);
             if (StudioDraft.hasValue(draft, "visible")
@@ -623,8 +675,10 @@ Window {
         const screenPanelIds = Object.keys(screenDrafts);
         for (let index = 0; index < screenPanelIds.length; ++index) {
             const panelId = screenPanelIds[index];
-            panelController.setPanelScreen(
-                panelId, effectivePanelScreenIndex(panelId));
+            if (!isNativePanel(panelId)) {
+                panelController.setPanelScreen(
+                    panelId, effectivePanelScreenIndex(panelId));
+            }
         }
 
         let themeSucceeded = true;
@@ -880,6 +934,33 @@ Window {
         ];
     }
 
+    function nativePlacementStatusRows() {
+        if (!isNativePanel(selectedPanelId))
+            return [];
+
+        const result = selectedPlacementResult;
+        const rows = [
+            section(
+                qsTr("Native placement result"),
+                PlacementStatus.statusLabel(result.status)),
+            readOnlyRow(
+                qsTr("Saved intent"),
+                PlacementStatus.savedIntentText(result),
+                qsTr("Values currently persisted by Arch Dock")),
+            readOnlyRow(
+                qsTr("Actual Plasma host"),
+                PlacementStatus.hostStateText(result),
+                qsTr("Values read back from the owned Plasma panel"))
+        ];
+        if (PlacementStatus.isProblem(result)) {
+            rows.push(notice(
+                qsTr("Placement detail: %1")
+                    .arg(PlacementStatus.problemText(result)),
+                true));
+        }
+        return rows;
+    }
+
     function panelsGeneralRows() {
         const edge = effectivePanelValue("edge", "bottom");
         const freePanel = edge === "free";
@@ -931,6 +1012,9 @@ Window {
                     description: edgeEditable ? "" : qsTr("Fixed for this panel type")
                 }));
         }
+        const placementRows = nativePlacementStatusRows();
+        for (let index = 0; index < placementRows.length; ++index)
+            rows.push(placementRows[index]);
         rows.push(notice(qsTr(
             "Lock Position will be added with live panel-geometry synchronization.")));
         return rows;

@@ -305,6 +305,7 @@ private slots:
     void roundTripsFreeHostAssociation();
     void migratesLegacyThemeSource();
     void batchesNormalizedPanelUpdates();
+    void checksBatchPersistenceBeforeRevision();
     void persistsNativePanelRecoveryOutcomes();
     void persistsNativePanelRediscoveryOutcomes();
     void reconcilesNativeContainmentLifecycle();
@@ -688,6 +689,49 @@ void PanelRegistryTest::batchesNormalizedPanelUpdates()
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("visibilityMode")).toString(),
              QStringLiteral("always"));
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("revealZone")).toInt(), 64);
+}
+
+void PanelRegistryTest::checksBatchPersistenceBeforeRevision()
+{
+    PanelRegistry registry;
+    QSignalSpy revisionSpy(&registry, &PanelRegistry::revisionChanged);
+    const int initialRevision = registry.revision();
+
+    QVERIFY(registry.updatePanelChecked(
+        QStringLiteral("bottom"),
+        {{QStringLiteral("edge"), QStringLiteral("TOP")},
+         {QStringLiteral("screen"), 2},
+         {QStringLiteral("height"), 91}}));
+    QCOMPARE(registry.revision(), initialRevision + 1);
+    QCOMPARE(revisionSpy.count(), 1);
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("edge")).toString(),
+             QStringLiteral("top"));
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("screen")).toInt(), 2);
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("height")).toInt(), 91);
+
+    const QString blockedSettingsPath = m_settingsDirectory.filePath(
+        QStringLiteral("not-a-directory"));
+    QFile blocker(blockedSettingsPath);
+    QVERIFY(blocker.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    QCOMPARE(blocker.write("blocked"), qint64(7));
+    blocker.close();
+
+    {
+        const ScopedNativeSettingsPath blockedPath(
+            blockedSettingsPath, m_settingsDirectory.path());
+        QVERIFY(!registry.updatePanelChecked(
+            QStringLiteral("bottom"),
+            {{QStringLiteral("edge"), QStringLiteral("right")},
+             {QStringLiteral("screen"), 4},
+             {QStringLiteral("height"), 101}}));
+    }
+
+    QCOMPARE(registry.revision(), initialRevision + 1);
+    QCOMPARE(revisionSpy.count(), 1);
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("edge")).toString(),
+             QStringLiteral("top"));
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("screen")).toInt(), 2);
+    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("height")).toInt(), 91);
 }
 
 void PanelRegistryTest::persistsNativePanelRecoveryOutcomes()

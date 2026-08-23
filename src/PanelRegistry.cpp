@@ -827,6 +827,11 @@ void PanelRegistry::updatePanel(const QString &panelId, const QVariantMap &value
     setPanelValues(panelId, values);
 }
 
+bool PanelRegistry::updatePanelChecked(const QString &panelId, const QVariantMap &values)
+{
+    return setPanelValuesChecked(panelId, values);
+}
+
 std::optional<PanelRegistry::FreeHostAssociation> PanelRegistry::freeHostAssociation(
     const QString &panelId) const
 {
