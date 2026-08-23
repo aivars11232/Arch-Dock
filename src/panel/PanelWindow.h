@@ -202,7 +202,13 @@ private:
                                           bool visible,
                                           bool allowMissingHostRecovery = true);
     bool adoptNativePanelOwnership(const QString &panelId, int containmentId);
-    bool synchronizeNativePanelScreen(const QString &panelId) const;
+    [[nodiscard]] ArchDock::NativePanelPlacementResult normalizedNativePanelPlacement(
+        const QString &panelId) const;
+    bool applyNativePanelPlacement(const QString &panelId,
+                                   int containmentId,
+                                   const QString &ownershipToken,
+                                   QString *errorCode = nullptr) const;
+    bool synchronizeNativePanelPlacement(const QString &panelId) const;
     bool removeLegacyControlApplets(const QString &panelId, int containmentId);
     bool attachNativeDockApplet(const QString &panelId, int containmentId);
     void notifyDockRevision();

@@ -30,6 +30,8 @@ qt_add_executable(
   src/PlasmaScriptResult.cpp
   src/PanelPlacement.h
   src/PanelPlacement.cpp
+  src/integration/PlasmaPanelAdapter.h
+  src/integration/PlasmaPanelAdapter.cpp
   src/PanelVisibility.h
   src/PanelVisibility.cpp
   src/ScreenIdentity.h
@@ -138,6 +140,22 @@ if(BUILD_TESTING)
     PRIVATE Qt6::Core
             Qt6::Test)
   add_test(NAME panel-placement-test COMMAND panel-placement-test)
+
+  qt_add_executable(
+    plasma-panel-adapter-test
+    tests/PlasmaPanelAdapterTest.cpp
+    src/integration/PlasmaPanelAdapter.h
+    src/integration/PlasmaPanelAdapter.cpp)
+  target_include_directories(
+    plasma-panel-adapter-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    plasma-panel-adapter-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(
+    NAME plasma-panel-adapter-test
+    COMMAND plasma-panel-adapter-test)
 
   qt_add_executable(
     plasma-script-result-test

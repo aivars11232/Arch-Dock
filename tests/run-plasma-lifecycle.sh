@@ -411,6 +411,26 @@ set_stale_native_ids() {
     write_panel_registry_json "$registry_json"
 }
 
+set_panel_registry_placement() {
+    local panel_id="$1"
+    local edge="$2"
+    local alignment="$3"
+    local registry_json
+    registry_json="$(panel_registry_json | jq -ce \
+        --arg panel_id "$panel_id" \
+        --arg edge "$edge" \
+        --arg alignment "$alignment" \
+        'if ([.[] | select(.id == $panel_id)] | length) != 1 then
+            error("expected exactly one panel registry record")
+         else
+            map(if .id == $panel_id then
+                .edge = $edge |
+                .alignment = $alignment
+            else . end)
+         end')"
+    write_panel_registry_json "$registry_json"
+}
+
 set_stale_free_ids() {
     local panel_id="$1"
     local desktop_containment_id="$2"
@@ -579,6 +599,91 @@ native_panel_presentation() {
     plasma_script \
         "var panel = panelById($containment_id); if (!panel) { print('missing|-1'); } else { panel.currentConfigGroup = ['ArchDock']; print(panel.hiding + '|' + String(panel.readConfig('temporaryHidden', '0'))); }" |
         gvariant_string
+}
+
+native_panel_placement_snapshot() {
+    local containment_id="$1"
+    plasma_script \
+        "var panel = panelById($containment_id); if (!panel) { print('missing'); } else { print([String(panel.location).toLowerCase(), String(panel.screen), String(panel.alignment).toLowerCase(), String(panel.offset)].join('|')); }" |
+        gvariant_string
+}
+
+expected_native_panel_offset() {
+    local panel_id="$1"
+    panel_registry_json | jq -er \
+        --arg panel_id "$panel_id" \
+        '[.[] | select(.edge == "top" or .edge == "bottom" or
+                       .edge == "left" or .edge == "right")] as $panels |
+         ($panels | to_entries |
+          first(.[] | select(.value.id == $panel_id))) as $current |
+         reduce ($panels[0:$current.key][]) as $panel
+             (8;
+              if ($panel.visible == true and
+                  $panel.edge == $current.value.edge and
+                  $panel.screen == $current.value.screen)
+              then
+                  . + ([0,
+                        (($panel |
+                          if ($current.value.edge == "left" or
+                              $current.value.edge == "right")
+                          then .width else .height end) // 0)] | max) + 8
+              else . end)'
+}
+
+expected_native_panel_placement() {
+    local panel_id="$1"
+    local edge="$2"
+    local plasma_alignment="$3"
+    local screen_index
+    screen_index="$(panel_call screenIndexForPanel "$panel_id" | gvariant_integer)"
+    [[ "$screen_index" =~ ^[0-9]+$ ]] || {
+        printf 'Could not resolve native placement screen for %s: %s\n' \
+            "$panel_id" "${screen_index:-unavailable}" >&2
+        return 1
+    }
+    printf '%s|%s|%s|%s\n' \
+        "$edge" "$screen_index" "$plasma_alignment" \
+        "$(expected_native_panel_offset "$panel_id")"
+}
+
+require_native_panel_placement() {
+    local containment_id="$1"
+    local panel_id="$2"
+    local edge="$3"
+    local plasma_alignment="$4"
+    local phase="$5"
+    local expected_snapshot
+    expected_snapshot="$(expected_native_panel_placement \
+        "$panel_id" "$edge" "$plasma_alignment")"
+    local actual_snapshot
+    actual_snapshot="$(native_panel_placement_snapshot "$containment_id")"
+    [[ "$actual_snapshot" == "$expected_snapshot" ]] || {
+        printf 'Native placement mismatch during %s: expected=%s actual=%s\n' \
+            "$phase" "$expected_snapshot" "${actual_snapshot:-unavailable}" >&2
+        exit 1
+    }
+}
+
+wait_for_native_panel_placement() {
+    local containment_id="$1"
+    local panel_id="$2"
+    local edge="$3"
+    local plasma_alignment="$4"
+    local phase="$5"
+    local attempt
+    local expected_snapshot=''
+    local actual_snapshot=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        expected_snapshot="$(expected_native_panel_placement \
+            "$panel_id" "$edge" "$plasma_alignment")"
+        actual_snapshot="$(native_panel_placement_snapshot "$containment_id" 2>/dev/null || true)"
+        [[ "$actual_snapshot" == "$expected_snapshot" ]] && return
+        sleep 0.1
+    done
+    printf 'Timed out waiting for native placement during %s: expected=%s actual=%s\n' \
+        "$phase" "${expected_snapshot:-unavailable}" \
+        "${actual_snapshot:-unavailable}" >&2
+    exit 1
 }
 
 native_widget_count() {
@@ -1092,6 +1197,8 @@ run_session() {
     }
 
     require_visual_dock "$first_containment_id" "$panel_id" hybrid
+    require_native_panel_placement \
+        "$first_containment_id" "$panel_id" bottom center 'managed panel creation'
 
     local first_dock_id
     first_dock_id="$(owned_dock_id "$first_containment_id" "$panel_id")"
@@ -1259,11 +1366,31 @@ run_session() {
             "$unrelated_containment_id" "$unrelated_snapshot" "$typed_type panel permanent removal"
     done
 
+    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    set_panel_registry_placement "$panel_id" left start
+    [[ "$(panel_registry_value "$panel_id" edge)" == 'left' &&
+        "$(panel_registry_value "$panel_id" alignment)" == 'start' ]] || {
+        printf 'Could not establish the vertical-start placement fixture.\n' >&2
+        exit 1
+    }
+    start_arch_dock arch-dock-placement-recovery.log
+    wait_for_native_panel_placement \
+        "$first_containment_id" "$panel_id" left right 'vertical-start recovery'
+    [[ "$(owned_panel_record "$panel_id")" == "$first_record" &&
+        "$(owned_dock_id "$first_containment_id" "$panel_id")" == "$first_dock_id" ]] || {
+        printf 'Vertical-start recovery changed the owned native panel identity.\n' >&2
+        exit 1
+    }
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'vertical-start recovery'
+    log_session_phase 'recovered vertical start as Plasma right alignment'
+
     panel_call setPanelScreen "$panel_id" 1 >/dev/null
-    local reassigned_screen
-    reassigned_screen="$(plasma_script "var panel = panelById($first_containment_id); print(panel ? panel.screen : -1);" | gvariant_string)"
-    [[ "$reassigned_screen" == '1' ]] || {
-        printf 'Native panel did not move to virtual output 1: %s\n' "$reassigned_screen" >&2
+    wait_for_native_panel_placement \
+        "$first_containment_id" "$panel_id" left right 'managed screen reassignment'
+    [[ "$(panel_call screenIndexForPanel "$panel_id" | gvariant_integer)" == '1' ]] || {
+        printf 'Native panel did not move to virtual output 1.\n' >&2
         exit 1
     }
     local requested_screen_id
@@ -1297,6 +1424,8 @@ run_session() {
     }
     wait_for_native_panel_screen "$first_containment_id" 0
     wait_for_signal_monitor nativePanelRecoveryFinished
+    require_native_panel_placement \
+        "$first_containment_id" "$panel_id" left right 'managed screen fallback'
     [[ "$(panel_registry_value "$panel_id" screen)" == '0' &&
         "$(panel_registry_value "$panel_id" screenId)" == "$requested_screen_id" ]] || {
         printf 'Screen fallback did not record index 0 while retaining the stable output identity.\n' >&2
@@ -1343,6 +1472,8 @@ run_session() {
         exit 1
     fi
     wait_for_signal_monitor nativePanelRecoveryFinished
+    require_native_panel_placement \
+        "$first_containment_id" "$panel_id" left right 'managed screen restoration'
     [[ "$(panel_registry_value "$panel_id" screenId)" == "$requested_screen_id" ]] || {
         printf 'Restoring the output replaced the requested stable output identity.\n' >&2
         exit 1
@@ -1390,6 +1521,8 @@ run_session() {
         exit 1
     }
     require_visual_dock "$replacement_containment_id" "$panel_id" hybrid
+    require_native_panel_placement \
+        "$replacement_containment_id" "$panel_id" left right 'missing-host recreation'
     local replacement_dock_id
     replacement_dock_id="$(owned_dock_id "$replacement_containment_id" "$panel_id")"
     local ids_after_replacement
@@ -1566,8 +1699,6 @@ run_session() {
         printf 'PlasmaShell restart duplicated the managed panel or lost its token-bound association.\n' >&2
         exit 1
     }
-    local restarted_screen
-    restarted_screen="$(plasma_script "var panel = panelById($restarted_containment_id); print(panel ? panel.screen : -1);" | gvariant_string)"
     local restarted_expected_screen
     restarted_expected_screen="$(panel_call screenIndexForPanel "$panel_id" | gvariant_integer)"
     [[ "$restarted_expected_screen" =~ ^[0-9]+$ ]] || {
@@ -1575,11 +1706,8 @@ run_session() {
             "$restarted_expected_screen" >&2
         exit 1
     }
-    [[ "$restarted_screen" == "$restarted_expected_screen" ]] || {
-        printf 'Restarted native panel did not retain its stable virtual output: expected=%s actual=%s\n' \
-            "$restarted_expected_screen" "$restarted_screen" >&2
-        exit 1
-    }
+    require_native_panel_placement \
+        "$restarted_containment_id" "$panel_id" left right 'PlasmaShell restart'
     wait_for_panel_registry_value "$studio_panel_id" freeHostState hosted-owned
     wait_for_panel_registry_value "$template_panel_id" freeHostState hosted-owned
     require_current_free_panel_host \

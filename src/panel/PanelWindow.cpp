@@ -4,6 +4,7 @@
 #include "../PanelPlacement.h"
 #include "../PlasmaScriptResult.h"
 #include "../ScreenIdentity.h"
+#include "../integration/PlasmaPanelAdapter.h"
 
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
@@ -83,6 +84,45 @@ QString screenResolutionReasonName(ArchDock::ScreenResolutionReason reason)
         return QStringLiteral("stored-index-fallback");
     case ArchDock::ScreenResolutionReason::BoundedIndexFallback:
         return QStringLiteral("bounded-index-fallback");
+    }
+    return QStringLiteral("unknown");
+}
+
+QString nativePlacementFieldName(ArchDock::NativePlacementField field)
+{
+    switch (field)
+    {
+    case ArchDock::NativePlacementField::Edge:
+        return QStringLiteral("edge");
+    case ArchDock::NativePlacementField::ScreenFallbackIndex:
+        return QStringLiteral("screen");
+    case ArchDock::NativePlacementField::Alignment:
+        return QStringLiteral("alignment");
+    case ArchDock::NativePlacementField::Offset:
+        return QStringLiteral("offset");
+    default:
+        return QStringLiteral("out-of-scope-field");
+    }
+}
+
+QString plasmaPanelApplyFailureName(ArchDock::PlasmaPanelApplyFailure failure)
+{
+    switch (failure)
+    {
+    case ArchDock::PlasmaPanelApplyFailure::None:
+        return QStringLiteral("none");
+    case ArchDock::PlasmaPanelApplyFailure::InvalidRequest:
+        return QStringLiteral("invalid-request");
+    case ArchDock::PlasmaPanelApplyFailure::ContainmentMissing:
+        return QStringLiteral("containment-missing");
+    case ArchDock::PlasmaPanelApplyFailure::OwnershipDenied:
+        return QStringLiteral("ownership-denied");
+    case ArchDock::PlasmaPanelApplyFailure::PropertyUnsupported:
+        return QStringLiteral("property-unsupported");
+    case ArchDock::PlasmaPanelApplyFailure::ScriptFailure:
+        return QStringLiteral("script-failure");
+    case ArchDock::PlasmaPanelApplyFailure::ReadbackMismatch:
+        return QStringLiteral("readback-mismatch");
     }
     return QStringLiteral("unknown");
 }
@@ -711,9 +751,9 @@ void PanelWindow::setPanelScreen(const QString &panelId, int screenIndex)
         panelId,
         {{QStringLiteral("screen"), boundedIndex},
          {QStringLiteral("screenId"), ArchDock::persistentScreenId(screens.at(boundedIndex))}});
-    if (!synchronizeNativePanelScreen(panelId) && nativePanelId(panelId) >= 0)
+    if (!synchronizeNativePanelPlacement(panelId) && nativePanelId(panelId) >= 0)
     {
-        qWarning() << "Could not move the native Plasma panel for" << panelId;
+        qWarning() << "Could not apply native Plasma panel placement for" << panelId;
     }
 }
 
@@ -836,9 +876,9 @@ void PanelWindow::handleScreensChanged()
     synchronizeScreenAssignments();
     for (const QString &panelId : m_panelRegistry.panelIds())
     {
-        if (nativePanelId(panelId) >= 0 && !synchronizeNativePanelScreen(panelId))
+        if (nativePanelId(panelId) >= 0 && !synchronizeNativePanelPlacement(panelId))
         {
-            qWarning() << "Could not update the native Plasma panel screen for" << panelId;
+            qWarning() << "Could not update the native Plasma panel placement for" << panelId;
         }
     }
     ++m_screenRevision;
@@ -896,6 +936,10 @@ void PanelWindow::recoverNativePanels(bool allowMissingHostRecovery)
                 panelId, visible, allowMissingHostRecovery))
         {
             qWarning() << "Could not synchronize the native Plasma panel for" << panelId;
+        }
+        else if (!synchronizeNativePanelPlacement(panelId))
+        {
+            qWarning() << "Could not synchronize native Plasma panel placement for" << panelId;
         }
     }
     m_nativePanelRecoveryActive = false;
@@ -983,9 +1027,9 @@ void PanelWindow::syncRegistryFromLegacySettings()
 
     for (const QString &panelId : m_panelRegistry.panelIds())
     {
-        if (nativePanelId(panelId) >= 0 && !synchronizeNativePanelScreen(panelId))
+        if (nativePanelId(panelId) >= 0 && !synchronizeNativePanelPlacement(panelId))
         {
-            qWarning() << "Could not update the native Plasma panel screen for" << panelId;
+            qWarning() << "Could not update the native Plasma panel placement for" << panelId;
         }
     }
 }
@@ -2201,8 +2245,7 @@ int PanelWindow::createNativePanelCandidate(const QString &panelId,
         return fail(QStringLiteral("invalid-native-panel-definition"));
     }
 
-    const int screenIndex = screenIndexForPanel(panelId);
-    if (screenIndex < 0)
+    if (screenIndexForPanel(panelId) < 0)
     {
         return fail(QStringLiteral("screen-unavailable"));
     }
@@ -2218,8 +2261,6 @@ int PanelWindow::createNativePanelCandidate(const QString &panelId,
         m_panelRegistry.panelValue(
             panelId,
             vertical ? QStringLiteral("height") : QStringLiteral("width")).toInt());
-    const int offset = nativePanelOffset(panelId);
-    const QString alignment = vertical ? QStringLiteral("top") : QStringLiteral("left");
     const bool needsRenderer = panelTypeNeedsDockApplet(type);
     const QString rendererPreflight = needsRenderer
         ? QStringLiteral(
@@ -2228,32 +2269,28 @@ int PanelWindow::createNativePanelCandidate(const QString &panelId,
     const QString hostSetup = QStringLiteral(
         "panel = new Panel;"
         "if (!panel || panel.id < 0) { return -1; }"
-        "panel.location = %1;"
-        "panel.screen = %2;"
-        "panel.height = %3;"
-        "panel.alignment = %4;"
-        "panel.offset = %5;"
-        "panel.minimumLength = %6;"
-        "panel.maximumLength = %6;"
-        "panel.hiding = 'none';"
         "panel.currentConfigGroup = ['ArchDock'];"
-        "panel.writeConfig('ownerToken', %7);"
-        "panel.writeConfig('panelId', %8);"
-        "panel.writeConfig('temporaryHidden', '0');"
+        "panel.writeConfig('ownerToken', %1);"
+        "panel.writeConfig('panelId', %2);"
         "panel.reloadConfig();"
-        "if (panel.hiding !== 'none') { panel.remove(); panel = null; return -6; }"
-        "if (panel.readConfig('ownerToken', '') !== %7 || "
-        "panel.readConfig('panelId', '') !== %8 || "
-        "String(panel.readConfig('temporaryHidden', '0')) !== '0') "
-        "{ panel.remove(); panel = null; return -3; }")
-        .arg(plasmaScriptStringLiteral(edge))
-        .arg(screenIndex)
-        .arg(thickness)
-        .arg(plasmaScriptStringLiteral(alignment))
-        .arg(offset)
-        .arg(length)
+        "if (panel.readConfig('ownerToken', '') !== %1 || "
+        "panel.readConfig('panelId', '') !== %2) "
+        "{ panel.remove(); panel = null; return -3; }"
+        "panel.writeConfig('temporaryHidden', '0');"
+        "panel.height = %3;"
+        "panel.minimumLength = %4;"
+        "panel.maximumLength = %4;"
+        "panel.hiding = 'none';"
+        "panel.reloadConfig();"
+        "if (panel.readConfig('ownerToken', '') !== %1 || "
+        "panel.readConfig('panelId', '') !== %2 || "
+        "String(panel.readConfig('temporaryHidden', '0')) !== '0' || "
+        "panel.hiding !== 'none') "
+        "{ panel.remove(); panel = null; return -6; }")
         .arg(plasmaScriptStringLiteral(ownershipToken))
-        .arg(plasmaScriptStringLiteral(panelId));
+        .arg(plasmaScriptStringLiteral(panelId))
+        .arg(thickness)
+        .arg(length);
     const QString rendererAttachment = needsRenderer
         ? QStringLiteral(
               "var dock = panel.addWidget('org.archdock.dock');"
@@ -2752,26 +2789,122 @@ bool PanelWindow::adoptNativePanelOwnership(const QString &panelId, int containm
     return true;
 }
 
-bool PanelWindow::synchronizeNativePanelScreen(const QString &panelId) const
+ArchDock::NativePanelPlacementResult PanelWindow::normalizedNativePanelPlacement(
+    const QString &panelId) const
+{
+    ArchDock::NativePanelPlacementRequest request;
+    request.screenStableId = m_panelRegistry.panelValue(
+        panelId, QStringLiteral("screenId")).toString();
+    request.screenFallbackIndex = screenIndexForPanel(panelId);
+    request.edge = m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString();
+    request.alignment = m_panelRegistry.panelValue(
+        panelId, QStringLiteral("alignment")).toString();
+    request.offset = nativePanelOffset(panelId);
+    return ArchDock::normalizeNativePanelPlacement(request);
+}
+
+bool PanelWindow::applyNativePanelPlacement(const QString &panelId,
+                                            int containmentId,
+                                            const QString &ownershipToken,
+                                            QString *errorCode) const
+{
+    if (errorCode)
+    {
+        errorCode->clear();
+    }
+    const auto fail = [errorCode](const QString &code)
+    {
+        if (errorCode)
+        {
+            *errorCode = code;
+        }
+        return false;
+    };
+
+    if (!m_panelRegistry.panelIds().contains(panelId))
+    {
+        return fail(QStringLiteral("placement-invalid"));
+    }
+
+    const ArchDock::NativePanelPlacementResult normalized =
+        normalizedNativePanelPlacement(panelId);
+    if (!normalized.isValid() || !normalized.placement.has_value())
+    {
+        qWarning() << "Refusing invalid normalized native panel placement for" << panelId;
+        return fail(QStringLiteral("placement-invalid"));
+    }
+
+    const ArchDock::PlasmaPanelAdapter adapter(
+        [this](const QString &script)
+        {
+            return evaluatePlasmaScriptResultOptional(script);
+        });
+    const ArchDock::PlasmaPanelPlacementApplyResult applied = adapter.applyPlacement(
+        containmentId, panelId, ownershipToken, *normalized.placement);
+
+    bool unsupported = false;
+    QString failureCode;
+    for (const ArchDock::PlasmaPanelFieldResult &field : applied.fields)
+    {
+        if (field.status == ArchDock::PlasmaPanelApplyStatus::Applied)
+        {
+            continue;
+        }
+        if (field.status == ArchDock::PlasmaPanelApplyStatus::Unsupported)
+        {
+            unsupported = true;
+            qWarning() << "Unsupported native Plasma placement field for" << panelId
+                       << nativePlacementFieldName(field.field)
+                       << "requested" << field.requestedValue;
+            continue;
+        }
+
+        qWarning() << "Failed to apply native Plasma placement field for" << panelId
+                   << nativePlacementFieldName(field.field)
+                   << "requested" << field.requestedValue
+                   << "actual"
+                   << field.actualValue.value_or(QStringLiteral("<unavailable>"))
+                   << "reason" << plasmaPanelApplyFailureName(field.failure);
+        if (field.failure == ArchDock::PlasmaPanelApplyFailure::OwnershipDenied)
+        {
+            failureCode = QStringLiteral("placement-ownership-denied");
+        }
+        else if (field.failure == ArchDock::PlasmaPanelApplyFailure::ContainmentMissing &&
+                 failureCode.isEmpty())
+        {
+            failureCode = QStringLiteral("placement-host-missing");
+        }
+        else if (failureCode.isEmpty())
+        {
+            failureCode = QStringLiteral("placement-apply-failed");
+        }
+    }
+
+    if (!failureCode.isEmpty())
+    {
+        return fail(failureCode);
+    }
+    if (unsupported || !applied.allApplied())
+    {
+        return fail(QStringLiteral("placement-unsupported"));
+    }
+    return true;
+}
+
+bool PanelWindow::synchronizeNativePanelPlacement(const QString &panelId) const
 {
     const int containmentId = nativePanelId(panelId);
-    const int screenIndex = screenIndexForPanel(panelId);
-    if (containmentId < 0 || screenIndex < 0)
+    if (containmentId < 0)
     {
-        return containmentId < 0;
+        return true;
     }
-    if (!nativePanelIsOwned(panelId, containmentId))
+
+    const QString ownershipToken = nativeOwnershipToken(panelId).trimmed();
+    if (ownershipToken.isEmpty())
     {
         return false;
     }
-
-    return evaluatePlasmaScript(
-        QStringLiteral(
-            "var panel = panelById(%1);"
-            "if (!panel) { print(-1); }"
-            "else { panel.screen = %2; print(1); }")
-            .arg(containmentId)
-            .arg(screenIndex)) == 1;
+    return applyNativePanelPlacement(panelId, containmentId, ownershipToken);
 }
 
 bool PanelWindow::removeLegacyControlApplets(const QString &panelId, int containmentId)
@@ -3001,7 +3134,7 @@ bool PanelWindow::createNativeKdePanel(const QString &panelId)
                        << panelId;
             return false;
         }
-        return synchronizeNativePanelScreen(panelId) &&
+        return synchronizeNativePanelPlacement(panelId) &&
             attachNativeDockApplet(panelId, storedContainmentId);
     }
 
@@ -3051,6 +3184,18 @@ bool PanelWindow::createNativeKdePanel(const QString &panelId)
     {
         return rollbackAndRecordFailure(
             createdId, ownershipToken, QStringLiteral("ownership-verification-failed"));
+    }
+
+    QString placementError;
+    if (!applyNativePanelPlacement(
+            panelId, createdId, ownershipToken, &placementError))
+    {
+        return rollbackAndRecordFailure(
+            createdId,
+            ownershipToken,
+            placementError.isEmpty()
+                ? QStringLiteral("placement-apply-failed")
+                : placementError);
     }
 
     const std::optional<int> dockAppletId = verifiedNativeDockAppletId(
