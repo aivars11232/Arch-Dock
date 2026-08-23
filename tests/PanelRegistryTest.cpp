@@ -2146,6 +2146,7 @@ void PanelRegistryTest::concealsOnlyForRelevantActiveWindows()
     const QRect panelGeometry(0, 1040, 1920, 40);
     const QList<ArchDock::WindowOcclusion> windows{
         {QRect(0, 0, 1920, 1080), 0, true, false, false, false},
+        {QRect(0, 0, 1920, 1080), 0, true, false, true, false},
         {QRect(0, 0, 1920, 1080), 1, true, false, true, false},
         {QRect(0, 1040, 1920, 40), 0, false, false, true, false},
         {QRect(0, 1040, 1920, 40), 0, true, true, true, false}};
@@ -2153,7 +2154,12 @@ void PanelRegistryTest::concealsOnlyForRelevantActiveWindows()
     QVERIFY(ArchDock::shouldConcealForWindows(QStringLiteral("dodge"), panelGeometry, 0, windows));
     QVERIFY(ArchDock::shouldConcealForWindows(QStringLiteral("cover"), panelGeometry, 0, windows));
     QVERIFY(!ArchDock::shouldConcealForWindows(QStringLiteral("always"), panelGeometry, 0, windows));
-    QVERIFY(!ArchDock::shouldConcealForWindows(QStringLiteral("auto-hide"), panelGeometry, 0, windows));
+    QVERIFY(ArchDock::shouldConcealForWindows(QStringLiteral("auto-hide"), panelGeometry, 0, windows));
+    QVERIFY(!ArchDock::shouldConcealForWindows(
+        QStringLiteral("cover"),
+        panelGeometry,
+        0,
+        {{QRect(0, 0, 1920, 1080), 0, true, false, false, false}}));
     QVERIFY(!ArchDock::shouldConcealForWindows(
         QStringLiteral("dodge"),
         panelGeometry,

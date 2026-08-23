@@ -1,14 +1,33 @@
 print("Arch Dock KWin script loaded.");
 
+function outputIndex(output) {
+    if (!output || !workspace.screens)
+        return -1;
+
+    const outputName = typeof output.name === "string" ? output.name : "";
+    for (let index = 0; index < workspace.screens.length; ++index) {
+        const candidate = workspace.screens[index];
+        if (candidate === output
+                || (candidate && outputName.length > 0 && candidate.name === outputName))
+            return index;
+    }
+    return -1;
+}
+
 function windowState(window) {
     const geometry = window.frameGeometry;
+    const output = window.output;
+    const resolvedOutputIndex = outputIndex(output);
     const maximizeMode = typeof window.maximizeMode === "number" ? window.maximizeMode : 0;
     return {
         x: geometry ? geometry.x : 0,
         y: geometry ? geometry.y : 0,
         width: geometry ? geometry.width : 0,
         height: geometry ? geometry.height : 0,
-        screen: typeof window.screen === "number" ? window.screen : 0,
+        screen: resolvedOutputIndex >= 0
+            ? resolvedOutputIndex
+            : (typeof window.screen === "number" ? window.screen : -1),
+        outputName: output && typeof output.name === "string" ? output.name : "",
         maximized: typeof window.maximized === "boolean" ? window.maximized : maximizeMode === 3,
         fullScreen: window.fullScreen === true
     };
@@ -67,9 +86,13 @@ function watchWindow(window) {
     window.desktopFileNameChanged.connect(function() { sendWindowUpdated(window); });
     if (window.frameGeometryChanged)
         window.frameGeometryChanged.connect(function() { sendWindowUpdated(window); });
-    if (window.screenChanged)
+    if (window.outputChanged)
+        window.outputChanged.connect(function() { sendWindowUpdated(window); });
+    else if (window.screenChanged)
         window.screenChanged.connect(function() { sendWindowUpdated(window); });
-    if (window.maximizeModeChanged)
+    if (window.maximizedChanged)
+        window.maximizedChanged.connect(function() { sendWindowUpdated(window); });
+    else if (window.maximizeModeChanged)
         window.maximizeModeChanged.connect(function() { sendWindowUpdated(window); });
     if (window.fullScreenChanged)
         window.fullScreenChanged.connect(function() { sendWindowUpdated(window); });

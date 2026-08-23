@@ -2,6 +2,7 @@
 
 #include "../NativeContainmentLifecycle.h"
 #include "../PanelPlacement.h"
+#include "../PanelVisibility.h"
 #include "../PlasmaScriptResult.h"
 #include "../ScreenIdentity.h"
 #include "../integration/PlasmaPanelAdapter.h"
@@ -64,6 +65,62 @@ bool isNativeDockPanelType(const QString &type)
         edge == QStringLiteral("left") ||
         edge == QStringLiteral("right");
     }
+
+QRect panelGeometryForVisibility(const QRect &screenGeometry,
+                                 const ArchDock::NativePanelPlacement &placement)
+{
+    if (!screenGeometry.isValid())
+    {
+        return {};
+    }
+
+    const bool vertical = placement.edge == ArchDock::NativePanelEdge::Left ||
+        placement.edge == ArchDock::NativePanelEdge::Right;
+    const int axisStart = vertical ? screenGeometry.top() : screenGeometry.left();
+    const int axisLength = vertical ? screenGeometry.height() : screenGeometry.width();
+    const int crossLength = vertical ? screenGeometry.width() : screenGeometry.height();
+    const int panelLength = placement.lengthMode == ArchDock::NativePanelLengthMode::Fill
+        ? axisLength
+        : qBound(1, placement.fixedLength, axisLength);
+    const int thickness = qBound(1, placement.thickness, crossLength);
+    const int offset = qMax(0, placement.offset);
+
+    int requestedStart = axisStart;
+    switch (placement.alignment)
+    {
+    case ArchDock::NativePanelAlignment::Start:
+        requestedStart = axisStart + offset;
+        break;
+    case ArchDock::NativePanelAlignment::Center:
+        requestedStart = axisStart + ((axisLength - panelLength) / 2) + offset;
+        break;
+    case ArchDock::NativePanelAlignment::End:
+        requestedStart = axisStart + axisLength - panelLength - offset;
+        break;
+    }
+    const int alongStart = qBound(
+        axisStart, requestedStart, axisStart + axisLength - panelLength);
+
+    switch (placement.edge)
+    {
+    case ArchDock::NativePanelEdge::Top:
+        return {alongStart, screenGeometry.top(), panelLength, thickness};
+    case ArchDock::NativePanelEdge::Bottom:
+        return {alongStart,
+                screenGeometry.bottom() - thickness + 1,
+                panelLength,
+                thickness};
+    case ArchDock::NativePanelEdge::Left:
+        return {screenGeometry.left(), alongStart, thickness, panelLength};
+    case ArchDock::NativePanelEdge::Right:
+        return {screenGeometry.right() - thickness + 1,
+                alongStart,
+                thickness,
+                panelLength};
+    }
+
+    return {};
+}
 
 bool panelTypeNeedsDockApplet(const QString &type)
 {
@@ -862,9 +919,44 @@ QList<ArchDock::EdgePanel> PanelWindow::edgePanels() const
     return panels;
 }
 
-bool PanelWindow::shouldConcealPanel(const QString &) const
+bool PanelWindow::shouldConcealPanel(const QString &panelId) const
 {
-    return false;
+    if (!m_panelRegistry.panelIds().contains(panelId) ||
+        !isNativeDockPanelEdge(
+            m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString()))
+    {
+        return false;
+    }
+
+    QScreen *screen = screenForPanel(panelId);
+    const int screenIndex = screenIndexForPanel(panelId);
+    const ArchDock::NativePanelPlacementResult placementResult =
+        normalizedNativePanelPlacement(panelId);
+    if (!screen || screenIndex < 0 || !placementResult.isValid() ||
+        !placementResult.placement.has_value())
+    {
+        return false;
+    }
+
+    ArchDock::PanelVisibilityInput input;
+    input.mode = ArchDock::panelVisibilityModeFromString(
+        m_panelRegistry.panelValue(panelId, QStringLiteral("visibilityMode")).toString());
+    input.panelGeometry = panelGeometryForVisibility(
+        screen->geometry(), *placementResult.placement);
+    input.panelScreenIndex = screenIndex;
+    input.manualHideRequested = !m_panelRegistry.panelValue(
+        panelId, QStringLiteral("visible")).toBool();
+    input.windows.reserve(m_windowModel.windows().size());
+    for (const WindowItem &window : m_windowModel.windows())
+    {
+        input.windows.append({window.frameGeometry,
+                              window.screenIndex,
+                              window.active,
+                              window.minimized,
+                              window.maximized,
+                              window.fullScreen});
+    }
+    return ArchDock::shouldConcealPanel(input);
 }
 
 void PanelWindow::synchronizeScreenAssignments()

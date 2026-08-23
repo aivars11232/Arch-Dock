@@ -7,8 +7,10 @@
 #include <QDBusInterface>
 #include <QDebug>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QScreen>
 #include <QSettings>
 #include <QStandardPaths>
 
@@ -74,6 +76,32 @@ namespace
     {
         const QJsonDocument document = QJsonDocument::fromJson(stateJson.toUtf8());
         return document.isObject() ? document.object() : QJsonObject{};
+    }
+
+    int resolvedScreenIndex(const QJsonObject &state)
+    {
+        const QList<QScreen *> screens = QGuiApplication::screens();
+        if (screens.isEmpty())
+        {
+            return -1;
+        }
+
+        const QString outputName = state.value(QStringLiteral("outputName"))
+                                       .toString()
+                                       .trimmed();
+        if (!outputName.isEmpty())
+        {
+            for (int index = 0; index < screens.size(); ++index)
+            {
+                if (screens.at(index)->name().trimmed() == outputName)
+                {
+                    return index;
+                }
+            }
+        }
+
+        const int fallbackIndex = state.value(QStringLiteral("screen")).toInt(-1);
+        return fallbackIndex >= 0 && fallbackIndex < screens.size() ? fallbackIndex : -1;
     }
 }
 
@@ -150,7 +178,7 @@ void WindowWatcher::windowAdded(const QString &internalId,
                                  qRound(state.value(QStringLiteral("y")).toDouble()),
                                  qMax(0, qRound(state.value(QStringLiteral("width")).toDouble())),
                                  qMax(0, qRound(state.value(QStringLiteral("height")).toDouble())));
-    window.screenIndex = qMax(0, state.value(QStringLiteral("screen")).toInt());
+    window.screenIndex = resolvedScreenIndex(state);
     window.active = active;
     window.minimized = minimized;
     window.maximized = state.value(QStringLiteral("maximized")).toBool();
@@ -185,7 +213,7 @@ void WindowWatcher::windowUpdated(const QString &internalId,
                                  qRound(state.value(QStringLiteral("y")).toDouble()),
                                  qMax(0, qRound(state.value(QStringLiteral("width")).toDouble())),
                                  qMax(0, qRound(state.value(QStringLiteral("height")).toDouble())));
-    window.screenIndex = qMax(0, state.value(QStringLiteral("screen")).toInt());
+    window.screenIndex = resolvedScreenIndex(state);
     window.active = active;
     window.minimized = minimized;
     window.maximized = state.value(QStringLiteral("maximized")).toBool();
