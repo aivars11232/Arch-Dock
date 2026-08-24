@@ -302,6 +302,9 @@ private slots:
     void preservesFreePanelForFreeSurface();
     void normalizesFreeHostAssociationStates();
     void migratesLegacyFreeHostAssociationWithoutDataLoss();
+    void backsUpFlatRecordsBeforeStableMigration();
+    void rejectsCorruptAndUnsupportedStoredRecords();
+    void refusesMigrationWhenLegacyBackupConflicts();
     void roundTripsFreeHostAssociation();
     void migratesLegacyThemeSource();
     void batchesNormalizedPanelUpdates();
@@ -593,6 +596,118 @@ void PanelRegistryTest::migratesLegacyFreeHostAssociationWithoutDataLoss()
     QCOMPARE(reloaded.panelValue(
                  QStringLiteral("legacy-free"), QStringLiteral("contentAppIds")).toStringList(),
              QStringList{QStringLiteral("org.kde.dolphin")});
+}
+
+void PanelRegistryTest::backsUpFlatRecordsBeforeStableMigration()
+{
+    const QByteArray legacySource = QByteArray(R"JSON([
+  {
+    "id": "custom-native",
+    "name": "Custom native",
+    "builtIn": false,
+    "edge": "left",
+    "visible": true,
+    "screen": 1,
+    "visibilityMode": "dodge",
+    "legacyExtensionData": "keep-me",
+    "hovered": true
+  }
+])JSON");
+    QSettings settings;
+    settings.setValue(QStringLiteral("dock/panels"), legacySource);
+    settings.sync();
+
+    PanelRegistry registry;
+    QCOMPARE(registry.migrationDiagnostic(), QString{});
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("custom-native"),
+                 QStringLiteral("legacyExtensionData")).toString(),
+             QStringLiteral("keep-me"));
+    QVERIFY(!registry.panelValue(
+        QStringLiteral("custom-native"), QStringLiteral("hovered")).isValid());
+
+    settings.sync();
+    QCOMPARE(
+        settings.value(QStringLiteral("dock/panelsLegacyV1Backup")).toByteArray(),
+        legacySource);
+    const QByteArray migratedSource =
+        settings.value(QStringLiteral("dock/panels")).toByteArray();
+    QVERIFY(migratedSource != legacySource);
+    const QJsonObject migratedRecord = QJsonDocument::fromJson(migratedSource)
+        .array().at(0).toObject();
+    QCOMPARE(migratedRecord.value(QStringLiteral("schemaVersion")).toInt(), 2);
+    QVERIFY(!migratedRecord.contains(QStringLiteral("legacyExtensionData")));
+    QVERIFY(!migratedRecord.contains(QStringLiteral("hovered")));
+    QCOMPARE(
+        migratedRecord.value(QStringLiteral("extensions")).toObject()
+            .value(QStringLiteral("legacyExtensionData")).toString(),
+        QStringLiteral("keep-me"));
+
+    PanelRegistry reloaded;
+    QCOMPARE(reloaded.migrationDiagnostic(), QString{});
+    settings.sync();
+    QCOMPARE(settings.value(QStringLiteral("dock/panels")).toByteArray(), migratedSource);
+    QCOMPARE(
+        settings.value(QStringLiteral("dock/panelsLegacyV1Backup")).toByteArray(),
+        legacySource);
+    QCOMPARE(reloaded.panelValue(
+                 QStringLiteral("custom-native"),
+                 QStringLiteral("legacyExtensionData")).toString(),
+             QStringLiteral("keep-me"));
+}
+
+void PanelRegistryTest::rejectsCorruptAndUnsupportedStoredRecords()
+{
+    const auto verifyBlockedSource = [](const QByteArray &source,
+                                        const QString &diagnosticPrefix)
+    {
+        QSettings settings;
+        settings.clear();
+        settings.setValue(QStringLiteral("dock/panels"), source);
+        settings.sync();
+
+        PanelRegistry registry;
+        QVERIFY(registry.panelIds().isEmpty());
+        QVERIFY2(
+            registry.migrationDiagnostic().startsWith(diagnosticPrefix),
+            qPrintable(registry.migrationDiagnostic()));
+        settings.sync();
+        QCOMPARE(settings.value(QStringLiteral("dock/panels")).toByteArray(), source);
+        QVERIFY(!settings.contains(QStringLiteral("dock/panelsLegacyV1Backup")));
+    };
+
+    verifyBlockedSource(
+        QByteArrayLiteral("{not-json"),
+        QStringLiteral("invalid-json:"));
+    verifyBlockedSource(
+        QByteArrayLiteral("[{\"name\":\"Missing id\"}]"),
+        QStringLiteral("invalid-record:"));
+    verifyBlockedSource(
+        QByteArrayLiteral("[{\"schemaVersion\":99,\"id\":\"future\"}]"),
+        QStringLiteral("unsupported-version:"));
+}
+
+void PanelRegistryTest::refusesMigrationWhenLegacyBackupConflicts()
+{
+    const QByteArray legacySource = QByteArrayLiteral(
+        "[{\"id\":\"custom-native\",\"edge\":\"top\"}]");
+    const QByteArray conflictingBackup = QByteArrayLiteral("different-source");
+    QSettings settings;
+    settings.setValue(QStringLiteral("dock/panels"), legacySource);
+    settings.setValue(
+        QStringLiteral("dock/panelsLegacyV1Backup"),
+        conflictingBackup);
+    settings.sync();
+
+    PanelRegistry registry;
+    QVERIFY2(
+        registry.migrationDiagnostic().startsWith(QStringLiteral("backup-conflict:")),
+        qPrintable(registry.migrationDiagnostic()));
+    settings.sync();
+    QCOMPARE(settings.value(QStringLiteral("dock/panels")).toByteArray(), legacySource);
+    QCOMPARE(
+        settings.value(QStringLiteral("dock/panelsLegacyV1Backup")).toByteArray(),
+        conflictingBackup);
 }
 
 void PanelRegistryTest::roundTripsFreeHostAssociation()

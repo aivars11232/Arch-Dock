@@ -24,6 +24,12 @@ qt_add_executable(
   src/DockSettings.cpp
   src/PanelRegistry.h
   src/PanelRegistry.cpp
+  src/model/PanelDefinition.h
+  src/model/PanelDefinition.cpp
+  src/model/PanelRuntimeState.h
+  src/model/PanelRuntimeState.cpp
+  src/model/SettingsMigration.h
+  src/model/SettingsMigration.cpp
   src/NativeContainmentLifecycle.h
   src/NativeContainmentLifecycle.cpp
   src/PlasmaScriptResult.h
@@ -94,12 +100,36 @@ if(BUILD_TESTING)
   find_package(Qt6 REQUIRED COMPONENTS Test QmlTools)
 
   qt_add_executable(
+    panel-model-test
+    tests/PanelModelTest.cpp
+    src/model/PanelDefinition.h
+    src/model/PanelDefinition.cpp
+    src/model/PanelRuntimeState.h
+    src/model/PanelRuntimeState.cpp
+    src/model/SettingsMigration.h
+    src/model/SettingsMigration.cpp)
+  target_include_directories(
+    panel-model-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    panel-model-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(NAME panel-model-test COMMAND panel-model-test)
+
+  qt_add_executable(
     panel-registry-test
     tests/PanelRegistryTest.cpp
     src/DockSettings.h
     src/DockSettings.cpp
     src/PanelRegistry.h
     src/PanelRegistry.cpp
+    src/model/PanelDefinition.h
+    src/model/PanelDefinition.cpp
+    src/model/PanelRuntimeState.h
+    src/model/PanelRuntimeState.cpp
+    src/model/SettingsMigration.h
+    src/model/SettingsMigration.cpp
     src/NativeContainmentLifecycle.h
     src/NativeContainmentLifecycle.cpp
     src/panel/FreePanelController.h

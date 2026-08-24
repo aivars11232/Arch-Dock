@@ -1,0 +1,6 @@
+{
+  "name": "Missing identity",
+  "edge": "bottom",
+  "visible": true,
+  "legacyPayload": "must-not-be-overwritten"
+}

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 99,
+  "id": "future-panel",
+  "name": "Future panel",
+  "edge": "bottom",
+  "futurePayload": {
+    "mustRemainUntouched": true
+  }
+}

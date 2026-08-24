@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QObject>
 #include <QPointer>
+#include <QByteArray>
 #include <QStringList>
 #include <QUrl>
 #include <QVariant>
@@ -11,6 +12,7 @@
 #include <optional>
 
 class QProcess;
+class QSettings;
 
 class PanelRegistry final : public QObject
 {
@@ -19,6 +21,7 @@ class PanelRegistry final : public QObject
     Q_PROPERTY(QStringList panelIds READ panelIds NOTIFY panelsChanged)
     Q_PROPERTY(QString activePanelId READ activePanelId WRITE setActivePanelId NOTIFY activePanelIdChanged)
     Q_PROPERTY(int revision READ revision NOTIFY revisionChanged)
+    Q_PROPERTY(QString migrationDiagnostic READ migrationDiagnostic NOTIFY migrationDiagnosticChanged)
 
 public:
     enum class FreeHostState
@@ -46,6 +49,7 @@ public:
     [[nodiscard]] QStringList panelIds() const;
     [[nodiscard]] QString activePanelId() const;
     [[nodiscard]] int revision() const;
+    [[nodiscard]] QString migrationDiagnostic() const;
 
     Q_INVOKABLE QVariant panelValue(const QString &panelId, const QString &key) const;
     Q_INVOKABLE QString panelName(const QString &panelId) const;
@@ -138,6 +142,7 @@ signals:
     void nativePanelTopologyChanged();
     void activePanelIdChanged();
     void revisionChanged();
+    void migrationDiagnosticChanged();
 
 private:
     struct RenderRequest
@@ -162,8 +167,11 @@ private:
     void startMagickRender(const RenderRequest &request, const QString &sourcePath);
     void finishRender(const RenderRequest &request, bool success, const QString &message);
     void load();
-    void save() const;
-    [[nodiscard]] bool saveChecked() const;
+    void save();
+    [[nodiscard]] bool saveChecked();
+    [[nodiscard]] bool ensureLegacyBackupChecked(QSettings &settings);
+    [[nodiscard]] QByteArray serializePanels(QString *errorMessage) const;
+    void setMigrationDiagnostic(const QString &diagnostic);
     void changed(bool nativeTopologyChanged);
 
     QList<QVariantMap> m_panels;
@@ -171,5 +179,9 @@ private:
     QHash<QString, RenderRequest> m_pendingRenders;
     QHash<QString, QPointer<QProcess>> m_renderProcesses;
     QString m_activePanelId = QStringLiteral("bottom");
+    QString m_migrationDiagnostic;
+    QByteArray m_legacySource;
+    bool m_legacyRewritePending = false;
+    bool m_persistenceBlocked = false;
     int m_revision = 0;
 };

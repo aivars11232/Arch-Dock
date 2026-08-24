@@ -1,4 +1,6 @@
 #include "PanelRegistry.h"
+#include "model/PanelDefinition.h"
+#include "model/SettingsMigration.h"
 
 #include <QDateTime>
 #include <QCryptographicHash>
@@ -28,6 +30,8 @@ constexpr int kFreeHostOwnershipTokenMaximumLength = 96;
 constexpr auto kFreeCreationPending = "pending";
 constexpr auto kFreeCreationComplete = "complete";
 constexpr auto kFreeCreationRollbackPending = "rollback-pending";
+constexpr auto kPanelRecordsKey = "dock/panels";
+constexpr auto kPanelLegacyBackupKey = "dock/panelsLegacyV1Backup";
 
 bool isEdge(const QString &edge)
 {
@@ -799,6 +803,11 @@ int PanelRegistry::revision() const
     return m_revision;
 }
 
+QString PanelRegistry::migrationDiagnostic() const
+{
+    return m_migrationDiagnostic;
+}
+
 QVariant PanelRegistry::panelValue(const QString &panelId, const QString &key) const
 {
     const QVariantMap *panel = record(panelId);
@@ -935,7 +944,7 @@ bool PanelRegistry::commitVerifiedFreeHostAssociation(
         normalizedToken.isEmpty() ||
         normalizedToken.size() > kFreeHostOwnershipTokenMaximumLength ||
         normalizedMode != QStringLiteral("desktop") ||
-        (!creationState.isEmpty() &&
+        (!creationState.isEmpty() && creationState != QStringLiteral("idle") &&
          (creationState != QLatin1String(kFreeCreationPending) ||
           reservedToken != normalizedToken)))
     {
@@ -1713,81 +1722,7 @@ QVariantMap PanelRegistry::makePanel(const QString &id,
                                      const QString &edge,
                                      bool builtIn) const
 {
-    const bool vertical = edge == QStringLiteral("left") || edge == QStringLiteral("right");
-    return {
-        {QStringLiteral("id"), id},
-        {QStringLiteral("name"), name},
-        {QStringLiteral("builtIn"), builtIn},
-        {QStringLiteral("visible"), edge == QStringLiteral("bottom")},
-        {QStringLiteral("edge"), edge},
-        {QStringLiteral("alignment"), QStringLiteral("center")},
-        {QStringLiteral("screen"), 0},
-        {QStringLiteral("screenId"), QString{}},
-        {QStringLiteral("visibilityMode"), QStringLiteral("always")},
-        {QStringLiteral("revealZone"), 10},
-        {QStringLiteral("dynamic"), edge != QStringLiteral("bottom")},
-        {QStringLiteral("width"), vertical ? 76 : 720},
-        {QStringLiteral("height"), vertical ? 420 : 76},
-        {QStringLiteral("x"), 180},
-        {QStringLiteral("y"), 180},
-        {QStringLiteral("type"), QStringLiteral("hybrid")},
-        {QStringLiteral("appearance"), QStringLiteral("glass")},
-        {QStringLiteral("shape"), QStringLiteral("pill")},
-        {QStringLiteral("iconShape"), QStringLiteral("rounded")},
-        {QStringLiteral("iconSize"), 52},
-        {QStringLiteral("spacing"), 8.0},
-        {QStringLiteral("layout"), QStringLiteral("adaptive")},
-        {QStringLiteral("layoutScale"), 1.0},
-        {QStringLiteral("layoutAngle"), 0.0},
-        {QStringLiteral("layoutRadius"), 150},
-        {QStringLiteral("layoutRows"), 2},
-        {QStringLiteral("layoutPadding"), 18},
-        {QStringLiteral("pathSides"), 6},
-        {QStringLiteral("pathOrientation"), QStringLiteral("upright")},
-        {QStringLiteral("pathAnchor"), QStringLiteral("center")},
-        {QStringLiteral("iconAnimation"), QStringLiteral("scale")},
-        {QStringLiteral("animationTrigger"), QStringLiteral("hover")},
-        {QStringLiteral("animationSpeed"), 1.0},
-        {QStringLiteral("animationIntensity"), 1.0},
-        {QStringLiteral("physicsEnabled"), false},
-        {QStringLiteral("folderLayout"), QStringLiteral("fan")},
-        {QStringLiteral("folderSpeed"), 260},
-        {QStringLiteral("folderEasing"), QStringLiteral("outBack")},
-        {QStringLiteral("folderExpandOnClick"), true},
-        {QStringLiteral("opacity"), 0.9},
-        {QStringLiteral("color"), QString{}},
-        {QStringLiteral("themeAsset"), QString{}},
-        {QStringLiteral("themeSource"), QString{}},
-        {QStringLiteral("themeFit"), QStringLiteral("cover")},
-        {QStringLiteral("themeSourceKind"), QString{}},
-        {QStringLiteral("themeSourceFormat"), QString{}},
-        {QStringLiteral("themeSourceWidth"), 0},
-        {QStringLiteral("themeSourceHeight"), 0},
-        {QStringLiteral("themeSourceHasAlpha"), false},
-        {QStringLiteral("themeSuggestedFit"), QStringLiteral("cover")},
-        {QStringLiteral("themePreview"), QString{}},
-        {QStringLiteral("themeAnalysisStatus"), tr("No source selected.")},
-        {QStringLiteral("themeConversionTool"), QString{}},
-        {QStringLiteral("themeConversionAvailable"), false},
-        {QStringLiteral("themePackageFormat"), QString{}},
-        {QStringLiteral("themePackageVersion"), 0},
-        {QStringLiteral("themePackageId"), QString{}},
-        {QStringLiteral("themePackageName"), QString{}},
-        {QStringLiteral("themePackageAuthor"), QString{}},
-        {QStringLiteral("themePackageManifest"), QString{}},
-        {QStringLiteral("themeStatus"), tr("Preset surface active.")},
-        {QStringLiteral("themeRenderWidth"), 0},
-        {QStringLiteral("themeRenderHeight"), 0},
-        {QStringLiteral("themeRenderFit"), QString{}},
-        {QStringLiteral("themeRenderOutcome"), QString{}},
-        {QStringLiteral("acceptDrops"), true},
-        {QStringLiteral("kdeWidgets"), QStringList{}},
-        {QStringLiteral("nativePanelId"), -1},
-        {QStringLiteral("nativeControlAppletId"), -1},
-        {QStringLiteral("nativeDockAppletId"), -1},
-        {QStringLiteral("nativeOwnershipToken"), QString{}},
-        {QStringLiteral("nativeRecoveryState"), QStringLiteral("idle")},
-        {QStringLiteral("nativeRecoveryError"), QString{}}};
+    return ArchDock::PanelDefinition::defaults(id, name, edge, builtIn).toLegacyMap();
 }
 
 QVariant PanelRegistry::normalizeValue(const QString &key, const QVariant &value) const
@@ -2117,9 +2052,9 @@ bool PanelRegistry::setPanelValuesChecked(const QString &panelId, const QVariant
     }
 
     const QVariantMap previousValues = *panel;
-    const bool wasNativePanel = panel->value(QStringLiteral("edge")).toString() !=
+    QVariantMap candidate = previousValues;
+    const bool wasNativePanel = previousValues.value(QStringLiteral("edge")).toString() !=
         QStringLiteral("free");
-    bool didChange = false;
     bool contentOnly = true;
     bool topologyChanged = false;
     static const QSet<QString> topologyKeys{
@@ -2142,12 +2077,11 @@ bool PanelRegistry::setPanelValuesChecked(const QString &panelId, const QVariant
         }
 
         const QVariant normalized = normalizeValue(iterator.key(), iterator.value());
-        if (panel->value(iterator.key()) == normalized)
+        if (candidate.value(iterator.key()) == normalized)
         {
             continue;
         }
-        panel->insert(iterator.key(), normalized);
-        didChange = true;
+        candidate.insert(iterator.key(), normalized);
         topologyChanged = topologyChanged || topologyKeys.contains(iterator.key());
         if (iterator.key() != QStringLiteral("contentUrls") &&
             iterator.key() != QStringLiteral("contentAppIds"))
@@ -2155,31 +2089,52 @@ bool PanelRegistry::setPanelValuesChecked(const QString &panelId, const QVariant
             contentOnly = false;
         }
     }
-    if (normalizeFreeHostRecord(panel))
+    if (normalizeFreeHostRecord(&candidate))
     {
-        didChange = true;
         contentOnly = false;
     }
-    if (didChange)
+    if (values.contains(QStringLiteral("edge")))
     {
-        if (!saveChecked())
-        {
-            *panel = previousValues;
-            return false;
-        }
-        ++m_revision;
-        if (!contentOnly)
-        {
-            emit panelsChanged();
-        }
-        const bool isNativePanel = panel->value(QStringLiteral("edge")).toString() !=
-            QStringLiteral("free");
-        if (topologyChanged && (wasNativePanel || isNativePanel))
-        {
-            emit nativePanelTopologyChanged();
-        }
-        emit revisionChanged();
+        candidate.insert(
+            QStringLiteral("hostKind"),
+            candidate.value(QStringLiteral("edge")).toString() == QStringLiteral("free")
+                ? QStringLiteral("free-desktop")
+                : QStringLiteral("native-edge"));
     }
+
+    QString definitionError;
+    const std::optional<ArchDock::PanelDefinition> definition =
+        ArchDock::PanelDefinition::fromLegacyMap(candidate, &definitionError);
+    if (!definition.has_value())
+    {
+        qWarning().noquote() << "Panel update rejected:" << definitionError;
+        return false;
+    }
+
+    candidate = definition->toLegacyMap();
+    if (candidate == previousValues)
+    {
+        return true;
+    }
+
+    *panel = candidate;
+    if (!saveChecked())
+    {
+        *panel = previousValues;
+        return false;
+    }
+    ++m_revision;
+    if (!contentOnly)
+    {
+        emit panelsChanged();
+    }
+    const bool isNativePanel = panel->value(QStringLiteral("edge")).toString() !=
+        QStringLiteral("free");
+    if (topologyChanged && (wasNativePanel || isNativePanel))
+    {
+        emit nativePanelTopologyChanged();
+    }
+    emit revisionChanged();
     return true;
 }
 
@@ -2386,100 +2341,85 @@ void PanelRegistry::load()
     QSettings settings;
     const int legacyScreen = qMax(0, settings.value(QStringLiteral("dock/monitorIndex"), 0).toInt());
     const bool legacyAutoHide = settings.value(QStringLiteral("dock/autoHide"), false).toBool();
-    bool migrated = false;
-    const QJsonDocument document = QJsonDocument::fromJson(
-        settings.value(QStringLiteral("dock/panels")).toByteArray());
-    if (document.isArray())
+    const QString panelRecordsKey = QString::fromLatin1(kPanelRecordsKey);
+    const bool hasStoredPanels = settings.contains(panelRecordsKey);
+    const QByteArray storedPanels = settings.value(panelRecordsKey).toByteArray();
+    bool initializeBuiltIns = !hasStoredPanels;
+    bool compatibilityRewriteRequired = false;
+
+    if (hasStoredPanels && storedPanels.isEmpty())
     {
-        for (const QJsonValue &value : document.array())
+        m_persistenceBlocked = true;
+        setMigrationDiagnostic(QStringLiteral(
+            "invalid-json: stored panel registry is empty"));
+        qWarning().noquote() << "Panel registry load blocked:" << m_migrationDiagnostic;
+        return;
+    }
+
+    if (hasStoredPanels)
+    {
+        const ArchDock::PanelMigrationResult migration =
+            ArchDock::SettingsMigration::migratePanelRecords(storedPanels);
+        if (migration.status != ArchDock::PanelMigrationStatus::Success)
         {
-            if (value.isObject())
+            m_persistenceBlocked = true;
+            setMigrationDiagnostic(
+                ArchDock::SettingsMigration::statusName(migration.status) +
+                QStringLiteral(": ") + migration.diagnostic);
+            qWarning().noquote() << "Panel registry load blocked:" << m_migrationDiagnostic;
+            return;
+        }
+
+        m_legacySource = storedPanels;
+        m_legacyRewritePending = migration.rewriteRequired;
+        const QJsonArray sourceRecords = QJsonDocument::fromJson(storedPanels).array();
+        for (qsizetype index = 0; index < migration.definitions.size(); ++index)
+        {
+            QVariantMap panel = migration.definitions.at(index).toLegacyMap();
+            const QVariantMap sourceRecord = sourceRecords.at(index).toObject().toVariantMap();
+            if (!sourceRecord.contains(QStringLiteral("screen")))
             {
-                QVariantMap panel = value.toObject().toVariantMap();
-                if (!panel.value(QStringLiteral("id")).toString().isEmpty())
-                {
-                    const QString normalizedEdge = normalizeValue(
-                        QStringLiteral("edge"),
-                        panel.value(QStringLiteral("edge"))).toString();
-                    if (panel.value(QStringLiteral("edge")).toString() != normalizedEdge)
-                    {
-                        panel.insert(QStringLiteral("edge"), normalizedEdge);
-                        migrated = true;
-                    }
-                    if (!panel.contains(QStringLiteral("screen")))
-                    {
-                        panel.insert(QStringLiteral("screen"), legacyScreen);
-                        migrated = true;
-                    }
-                    if (!panel.contains(QStringLiteral("screenId")))
-                    {
-                        panel.insert(QStringLiteral("screenId"), QString{});
-                        migrated = true;
-                    }
-                    if (!panel.contains(QStringLiteral("visibilityMode")))
-                    {
-                        panel.insert(
-                            QStringLiteral("visibilityMode"),
-                            panel.value(QStringLiteral("id")).toString() == QStringLiteral("bottom") && legacyAutoHide
-                                ? QStringLiteral("auto-hide")
-                                : QStringLiteral("always"));
-                        migrated = true;
-                    }
-                    if (!panel.contains(QStringLiteral("revealZone")))
-                    {
-                        panel.insert(QStringLiteral("revealZone"), 10);
-                        migrated = true;
-                    }
-                    if (!panel.contains(QStringLiteral("pathSides")))
-                    {
-                        panel.insert(QStringLiteral("pathSides"), 6);
-                        migrated = true;
-                    }
-                    if (!panel.contains(QStringLiteral("pathOrientation")))
-                    {
-                        panel.insert(QStringLiteral("pathOrientation"), QStringLiteral("upright"));
-                        migrated = true;
-                    }
-                    if (!panel.contains(QStringLiteral("pathAnchor")))
-                    {
-                        panel.insert(QStringLiteral("pathAnchor"), QStringLiteral("center"));
-                        migrated = true;
-                    }
-                    if (!panel.contains(QStringLiteral("nativeOwnershipToken")))
-                    {
-                        panel.insert(QStringLiteral("nativeOwnershipToken"), QString{});
-                        migrated = true;
-                    }
-                    if (!panel.contains(QStringLiteral("nativeDockAppletId")))
-                    {
-                        panel.insert(QStringLiteral("nativeDockAppletId"), -1);
-                        migrated = true;
-                    }
-                    if (!panel.contains(QStringLiteral("nativeRecoveryState")))
-                    {
-                        panel.insert(QStringLiteral("nativeRecoveryState"), QStringLiteral("idle"));
-                        migrated = true;
-                    }
-                    if (!panel.contains(QStringLiteral("nativeRecoveryError")))
-                    {
-                        panel.insert(QStringLiteral("nativeRecoveryError"), QString{});
-                        migrated = true;
-                    }
-                    if (normalizeFreeHostRecord(&panel))
-                    {
-                        migrated = true;
-                    }
-                    if (migrateLegacyThemePackage(&panel))
-                    {
-                        migrated = true;
-                    }
-                    m_panels.append(panel);
-                }
+                panel.insert(QStringLiteral("screen"), legacyScreen);
+                compatibilityRewriteRequired = true;
             }
+            if (!sourceRecord.contains(QStringLiteral("visibilityMode")))
+            {
+                panel.insert(
+                    QStringLiteral("visibilityMode"),
+                    panel.value(QStringLiteral("id")).toString() == QStringLiteral("bottom") && legacyAutoHide
+                        ? QStringLiteral("auto-hide")
+                        : QStringLiteral("always"));
+                compatibilityRewriteRequired = true;
+            }
+            compatibilityRewriteRequired = normalizeFreeHostRecord(&panel) ||
+                compatibilityRewriteRequired;
+            compatibilityRewriteRequired = migrateLegacyThemePackage(&panel) ||
+                compatibilityRewriteRequired;
+
+            QString definitionError;
+            const std::optional<ArchDock::PanelDefinition> normalized =
+                ArchDock::PanelDefinition::fromLegacyMap(panel, &definitionError);
+            if (!normalized.has_value())
+            {
+                m_panels.clear();
+                m_persistenceBlocked = true;
+                setMigrationDiagnostic(
+                    QStringLiteral("invalid-record: compatibility migration failed: ") +
+                    definitionError);
+                qWarning().noquote() << "Panel registry load blocked:" << m_migrationDiagnostic;
+                return;
+            }
+            m_panels.append(normalized->toLegacyMap());
+        }
+
+        if (m_panels.isEmpty())
+        {
+            initializeBuiltIns = true;
+            m_legacyRewritePending = true;
         }
     }
 
-    if (m_panels.isEmpty())
+    if (initializeBuiltIns)
     {
         const bool suiteVisible = settings.value(QStringLiteral("dock/desktopSuite"), false).toBool();
         QVariantMap bottom = makePanel(QStringLiteral("bottom"), tr("Bottom panel"), QStringLiteral("bottom"), true);
@@ -2515,8 +2455,7 @@ void PanelRegistry::load()
         side.insert(QStringLiteral("type"), settings.value(QStringLiteral("dock/sidePanelType"), QStringLiteral("hybrid")).toString());
         side.insert(QStringLiteral("screen"), legacyScreen);
         m_panels.append(side);
-
-        save();
+        compatibilityRewriteRequired = true;
     }
 
     const QString requestedActive = settings.value(QStringLiteral("dock/activePanel"), m_activePanelId).toString();
@@ -2525,31 +2464,147 @@ void PanelRegistry::load()
         m_activePanelId = requestedActive;
     }
 
-    if (migrated)
+    if (m_legacyRewritePending || compatibilityRewriteRequired)
     {
-        save();
+        (void)saveChecked();
     }
 }
 
-void PanelRegistry::save() const
+void PanelRegistry::save()
 {
     (void)saveChecked();
 }
 
-bool PanelRegistry::saveChecked() const
+bool PanelRegistry::saveChecked()
 {
-    QJsonArray panels;
-    for (const QVariantMap &panel : m_panels)
+    if (m_persistenceBlocked)
     {
-        panels.append(QJsonObject::fromVariantMap(panel));
+        if (m_migrationDiagnostic.isEmpty())
+        {
+            setMigrationDiagnostic(QStringLiteral(
+                "persistence-blocked: panel registry source requires repair"));
+        }
+        return false;
+    }
+
+    QString serializationError;
+    const QByteArray serialized = serializePanels(&serializationError);
+    if (!serializationError.isEmpty())
+    {
+        setMigrationDiagnostic(QStringLiteral("serialization-failed: ") + serializationError);
+        qWarning().noquote() << "Panel registry save blocked:" << m_migrationDiagnostic;
+        return false;
     }
 
     QSettings settings;
-    settings.setValue(
-        QStringLiteral("dock/panels"),
-        QJsonDocument(panels).toJson(QJsonDocument::Compact));
+    if (m_legacyRewritePending && !ensureLegacyBackupChecked(settings))
+    {
+        return false;
+    }
+
+    settings.setValue(QString::fromLatin1(kPanelRecordsKey), serialized);
     settings.sync();
-    return settings.status() == QSettings::NoError;
+    if (settings.status() != QSettings::NoError)
+    {
+        setMigrationDiagnostic(QStringLiteral(
+            "write-failed: QSettings could not persist panel registry schema v2"));
+        qWarning().noquote() << "Panel registry save failed:" << m_migrationDiagnostic;
+        return false;
+    }
+
+    m_legacySource.clear();
+    m_legacyRewritePending = false;
+    setMigrationDiagnostic(QString{});
+    return true;
+}
+
+bool PanelRegistry::ensureLegacyBackupChecked(QSettings &settings)
+{
+    const QString backupKey = QString::fromLatin1(kPanelLegacyBackupKey);
+    if (settings.contains(backupKey))
+    {
+        if (settings.value(backupKey).toByteArray() == m_legacySource)
+        {
+            return true;
+        }
+        setMigrationDiagnostic(QStringLiteral(
+            "backup-conflict: existing legacy panel backup does not match the source"));
+        qWarning().noquote() << "Panel registry migration blocked:" << m_migrationDiagnostic;
+        return false;
+    }
+
+    settings.setValue(backupKey, m_legacySource);
+    settings.sync();
+    if (settings.status() != QSettings::NoError)
+    {
+        setMigrationDiagnostic(QStringLiteral(
+            "backup-write-failed: QSettings could not persist the legacy panel source"));
+        qWarning().noquote() << "Panel registry migration blocked:" << m_migrationDiagnostic;
+        return false;
+    }
+
+    QSettings verifier;
+    verifier.sync();
+    if (verifier.status() != QSettings::NoError ||
+        !verifier.contains(backupKey) ||
+        verifier.value(backupKey).toByteArray() != m_legacySource)
+    {
+        setMigrationDiagnostic(QStringLiteral(
+            "backup-verification-failed: legacy panel source readback was not exact"));
+        qWarning().noquote() << "Panel registry migration blocked:" << m_migrationDiagnostic;
+        return false;
+    }
+    return true;
+}
+
+QByteArray PanelRegistry::serializePanels(QString *errorMessage) const
+{
+    QList<ArchDock::PanelDefinition> definitions;
+    definitions.reserve(m_panels.size());
+    QSet<QString> panelIds;
+    for (qsizetype index = 0; index < m_panels.size(); ++index)
+    {
+        QString definitionError;
+        const std::optional<ArchDock::PanelDefinition> definition =
+            ArchDock::PanelDefinition::fromLegacyMap(m_panels.at(index), &definitionError);
+        if (!definition.has_value())
+        {
+            if (errorMessage)
+            {
+                *errorMessage = QStringLiteral("panel %1 is invalid: %2")
+                    .arg(index)
+                    .arg(definitionError);
+            }
+            return {};
+        }
+        if (panelIds.contains(definition->identity.id))
+        {
+            if (errorMessage)
+            {
+                *errorMessage = QStringLiteral("panel %1 duplicates id '%2'")
+                    .arg(index)
+                    .arg(definition->identity.id);
+            }
+            return {};
+        }
+        panelIds.insert(definition->identity.id);
+        definitions.append(*definition);
+    }
+    if (errorMessage)
+    {
+        errorMessage->clear();
+    }
+    return ArchDock::SettingsMigration::serializeVersionTwo(definitions);
+}
+
+void PanelRegistry::setMigrationDiagnostic(const QString &diagnostic)
+{
+    if (m_migrationDiagnostic == diagnostic)
+    {
+        return;
+    }
+    m_migrationDiagnostic = diagnostic;
+    emit migrationDiagnosticChanged();
 }
 
 void PanelRegistry::changed(bool nativeTopologyChanged)
