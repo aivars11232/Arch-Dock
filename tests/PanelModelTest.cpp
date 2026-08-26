@@ -8,6 +8,8 @@
 #include <QJsonObject>
 #include <QTest>
 
+#include <limits>
+
 using ArchDock::PanelDefinition;
 using ArchDock::PanelHostKind;
 using ArchDock::PanelPresetOrigin;
@@ -55,6 +57,7 @@ class PanelModelTest final : public QObject
 private slots:
     void defaultsExposeEveryVersionTwoSection();
     void legacyRecordConvertsWithDeterministicDefaults();
+    void settingsRevisionRoundTripsWithoutSchemaBump();
     void currentFieldsAndExtensionsRoundTripWithoutLoss();
     void provenanceIsOptionalAndSelfContained();
     void runtimeStateStartsFromSafeDefaults();
@@ -128,6 +131,36 @@ void PanelModelTest::legacyRecordConvertsWithDeterministicDefaults()
         first->content.applicationIds,
         QStringList{QStringLiteral("org.kde.kate")});
     QCOMPARE(first->normalized(), *first);
+}
+
+void PanelModelTest::settingsRevisionRoundTripsWithoutSchemaBump()
+{
+    const QVariantMap oldVersionTwoRecord{
+        {QStringLiteral("schemaVersion"), PanelDefinition::CurrentSchemaVersion},
+        {QStringLiteral("id"), QStringLiteral("bottom")},
+        {QStringLiteral("name"), QStringLiteral("Bottom panel")},
+        {QStringLiteral("edge"), QStringLiteral("bottom")},
+    };
+    const auto oldRecord = PanelDefinition::fromLegacyMap(oldVersionTwoRecord);
+    QVERIFY(oldRecord.has_value());
+    QCOMPARE(oldRecord->settingsRevision, quint64{0});
+
+    PanelDefinition revised = *oldRecord;
+    revised.settingsRevision = std::numeric_limits<quint64>::max();
+    const QVariantMap persisted = revised.toPersistedMap();
+    QCOMPARE(persisted.value(QStringLiteral("schemaVersion")).toInt(),
+             PanelDefinition::CurrentSchemaVersion);
+    QCOMPARE(persisted.value(QStringLiteral("settingsRevision")).toString(),
+             QStringLiteral("18446744073709551615"));
+    const auto reparsed = PanelDefinition::fromLegacyMap(persisted);
+    QVERIFY(reparsed.has_value());
+    QCOMPARE(reparsed->settingsRevision, revised.settingsRevision);
+
+    QVariantMap malformed = oldVersionTwoRecord;
+    malformed.insert(QStringLiteral("settingsRevision"), QStringLiteral("not-a-number"));
+    QString errorMessage;
+    QVERIFY(!PanelDefinition::fromLegacyMap(malformed, &errorMessage).has_value());
+    QCOMPARE(errorMessage, QStringLiteral("panel settings revision is invalid"));
 }
 
 void PanelModelTest::currentFieldsAndExtensionsRoundTripWithoutLoss()

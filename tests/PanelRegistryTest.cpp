@@ -288,6 +288,26 @@ void clearPanelRegistrySettings()
     settings.clear();
     settings.sync();
 }
+
+QVariantList taskThemeDefinitions()
+{
+    const QString catalogPath = QDir(QFileInfo(QString::fromUtf8(__FILE__)).absolutePath())
+        .absoluteFilePath(QStringLiteral("../data/themes/builtin-themes.json"));
+    QFile file(catalogPath);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return {};
+    }
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+    const QJsonObject catalog = document.object();
+    if (catalog.value(QStringLiteral("format")).toString() !=
+            QStringLiteral("org.archdock.theme-catalog") ||
+        catalog.value(QStringLiteral("version")).toInt() != 1)
+    {
+        return {};
+    }
+    return catalog.value(QStringLiteral("themes")).toArray().toVariantList();
+}
 }
 
 class PanelRegistryTest final : public QObject
@@ -309,6 +329,8 @@ private slots:
     void migratesLegacyThemeSource();
     void batchesNormalizedPanelUpdates();
     void checksBatchPersistenceBeforeRevision();
+    void persistsAndRollsBackSettingsTransactionsAtomically();
+    void rejectsPreparedTransactionAfterInterveningUpdate();
     void persistsNativePanelRecoveryOutcomes();
     void persistsNativePanelRediscoveryOutcomes();
     void reconcilesNativeContainmentLifecycle();
@@ -330,6 +352,10 @@ private slots:
     void exposesStablePanelEntrySnapshots();
     void targetsStableApplicationWindowIds();
     void supportsPinnedFolderSnapshotsAndReordering();
+    void validatesBuiltInCapabilityCatalog();
+    void resolvesThemeCandidatesWithoutMutation();
+    void rejectsIncompatibleThemeWithoutRecordMutation();
+    void mapsVersionOneArtworkToSkinnedTwoDWithProceduralFallback();
     void importsVersionedThemePackage();
     void analyzesAdaptive2DThemeArtwork();
     void reportsOptionalSceneConversionCapability();
@@ -847,6 +873,119 @@ void PanelRegistryTest::checksBatchPersistenceBeforeRevision()
              QStringLiteral("top"));
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("screen")).toInt(), 2);
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("height")).toInt(), 91);
+}
+
+void PanelRegistryTest::persistsAndRollsBackSettingsTransactionsAtomically()
+{
+    PanelRegistry registry;
+    DockSettings dockSettings;
+    const auto beforePanel = registry.panelDefinition(QStringLiteral("bottom"));
+    QVERIFY(beforePanel.has_value());
+    const QVariantMap beforeGlobals = dockSettings.transactionSnapshot();
+    QVariantMap candidateGlobals;
+    QString errorMessage;
+    QVERIFY(dockSettings.stageTransaction(
+        {{QStringLiteral("magnification"), 2.1}},
+        &candidateGlobals,
+        &errorMessage));
+
+    ArchDock::PanelSettingsTransactionRequest request{
+        QStringLiteral("bottom"),
+        beforePanel->settingsRevision,
+        {
+            {QStringLiteral("opacity"), 0.51},
+            {QStringLiteral("width"), 911},
+        },
+        {{QStringLiteral("magnification"), 2.1}},
+    };
+    ArchDock::PanelSettingsTransactionOutcome outcome;
+    const auto draft = ArchDock::PanelSettingsTransaction::prepare(
+        *beforePanel,
+        beforeGlobals,
+        candidateGlobals,
+        request,
+        &outcome);
+    QVERIFY(draft.has_value());
+
+    QSignalSpy revisionSpy(&registry, &PanelRegistry::revisionChanged);
+    QSignalSpy panelsSpy(&registry, &PanelRegistry::panelsChanged);
+    QVERIFY2(registry.persistPanelSettingsTransaction(*draft, &errorMessage),
+             qPrintable(errorMessage));
+    QCOMPARE(revisionSpy.count(), 0);
+    QCOMPARE(panelsSpy.count(), 0);
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("opacity")).toReal(),
+             0.51);
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("width")).toInt(),
+             911);
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("settingsRevision"))
+                 .toULongLong(),
+             beforePanel->settingsRevision + 1);
+    QSettings persistedCandidate;
+    QCOMPARE(persistedCandidate.value(QStringLiteral("dock/magnification")).toReal(),
+             2.1);
+
+    quint64 rollbackRevision = 0;
+    QVERIFY2(registry.rollbackPanelSettingsTransaction(
+                 *draft,
+                 draft->candidatePanel.settingsRevision,
+                 &rollbackRevision,
+                 &errorMessage),
+             qPrintable(errorMessage));
+    QCOMPARE(rollbackRevision, beforePanel->settingsRevision + 2);
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("opacity")).toReal(),
+             beforePanel->surface.opacity);
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("width")).toInt(),
+             beforePanel->placement.width);
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("settingsRevision"))
+                 .toULongLong(),
+             rollbackRevision);
+    QSettings persistedRollback;
+    QCOMPARE(persistedRollback.value(QStringLiteral("dock/magnification")).toReal(),
+             beforeGlobals.value(QStringLiteral("magnification")).toReal());
+    QCOMPARE(revisionSpy.count(), 0);
+    QCOMPARE(panelsSpy.count(), 0);
+
+    registry.notifyPanelSettingsTransactionAdopted(true);
+    QCOMPARE(revisionSpy.count(), 1);
+    QCOMPARE(panelsSpy.count(), 1);
+}
+
+void PanelRegistryTest::rejectsPreparedTransactionAfterInterveningUpdate()
+{
+    PanelRegistry registry;
+    DockSettings dockSettings;
+    const auto beforePanel = registry.panelDefinition(QStringLiteral("bottom"));
+    QVERIFY(beforePanel.has_value());
+    const QVariantMap globals = dockSettings.transactionSnapshot();
+    ArchDock::PanelSettingsTransactionRequest request{
+        QStringLiteral("bottom"),
+        beforePanel->settingsRevision,
+        {{QStringLiteral("opacity"), 0.4}},
+        {},
+    };
+    ArchDock::PanelSettingsTransactionOutcome outcome;
+    const auto draft = ArchDock::PanelSettingsTransaction::prepare(
+        *beforePanel, globals, globals, request, &outcome);
+    QVERIFY(draft.has_value());
+
+    QVERIFY(registry.updatePanelChecked(
+        QStringLiteral("bottom"),
+        {{QStringLiteral("iconSize"), 61}}));
+    QString errorMessage;
+    QVERIFY(!registry.persistPanelSettingsTransaction(*draft, &errorMessage));
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("opacity")).toReal(),
+             beforePanel->surface.opacity);
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("iconSize")).toInt(),
+             61);
+    QVERIFY(errorMessage.contains(QStringLiteral("changed")));
 }
 
 void PanelRegistryTest::persistsNativePanelRecoveryOutcomes()
@@ -2510,6 +2649,150 @@ void PanelRegistryTest::supportsPinnedFolderSnapshotsAndReordering()
     QCOMPARE(entries.at(0).toMap().value(QStringLiteral("appId")).toString(), secondId);
     QCOMPARE(entries.at(1).toMap().value(QStringLiteral("appId")).toString(), firstId);
     QCOMPARE(entries.at(2).toMap().value(QStringLiteral("appId")).toString(), thirdId);
+}
+
+void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
+{
+    const QVariantList definitions = taskThemeDefinitions();
+    QCOMPARE(definitions.size(), 5);
+    PanelRegistry registry(definitions);
+    QCOMPARE(registry.themeDefinitions().size(), definitions.size());
+
+    for (const QVariant &candidate : registry.themeDefinitions())
+    {
+        QString errorCode;
+        const std::optional<ArchDock::ThemeCapabilityProfile> profile =
+            ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
+                candidate.toMap(), &errorCode);
+        QVERIFY2(profile.has_value(), qPrintable(errorCode));
+        QVERIFY(profile->rendererTiers.contains(
+            ArchDock::RendererTier::Procedural2D));
+        QVERIFY(!profile->rendererTiers.contains(
+            ArchDock::RendererTier::Skinned2D));
+        QVERIFY(!profile->rendererTiers.contains(
+            ArchDock::RendererTier::Baked2_5D));
+        QVERIFY(!profile->rendererTiers.contains(
+            ArchDock::RendererTier::True3D));
+        QVERIFY(profile->presentationMechanisms.isEmpty());
+        QVERIFY(!profile->capabilities.contains(
+            ArchDock::PanelCapability::NonRectangularInput));
+    }
+
+    const QVariantMap ringTheme = registry.themeDefinitions().at(3).toMap();
+    QCOMPARE(ringTheme.value(QStringLiteral("id")).toString(),
+             QStringLiteral("holographic-ring"));
+    const auto ringProfile =
+        ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(ringTheme);
+    QVERIFY(ringProfile.has_value());
+    QCOMPARE(ringProfile->hostKinds,
+             QVector<ArchDock::PanelHostKind>{ArchDock::PanelHostKind::FreeDesktop});
+    QCOMPARE(ringProfile->layouts,
+             QVector<ArchDock::PanelLayoutKind>{ArchDock::PanelLayoutKind::Ring});
+}
+
+void PanelRegistryTest::resolvesThemeCandidatesWithoutMutation()
+{
+    PanelRegistry registry(taskThemeDefinitions());
+    const QVariantMap before = registry.panelSnapshot(QStringLiteral("bottom"));
+    const int revisionBefore = registry.revision();
+
+    const QVariantMap candidate = registry.themeCandidate(
+        QStringLiteral("bottom"),
+        QStringLiteral("obsidian-glass"),
+        QStringLiteral("complete"));
+
+    QVERIFY(candidate.value(QStringLiteral("success")).toBool());
+    QCOMPARE(candidate.value(QStringLiteral("status")).toString(),
+             QStringLiteral("resolved"));
+    const QVariantMap values = candidate.value(QStringLiteral("values")).toMap();
+    QCOMPARE(values.value(QStringLiteral("completeThemeId")).toString(),
+             QStringLiteral("obsidian-glass"));
+    QCOMPARE(values.value(QStringLiteral("appearance")).toString(),
+             QStringLiteral("glass"));
+    QCOMPARE(values.value(QStringLiteral("opacity")).toReal(), 0.88);
+    QVERIFY(!values.contains(QStringLiteral("id")));
+    QVERIFY(!values.contains(QStringLiteral("builtIn")));
+    QVERIFY(!values.contains(QStringLiteral("screenId")));
+    QVERIFY(!values.contains(QStringLiteral("surface3D")));
+    QCOMPARE(registry.panelSnapshot(QStringLiteral("bottom")), before);
+    QCOMPARE(registry.revision(), revisionBefore);
+
+    const QVariantMap unavailable = registry.themeCandidate(
+        QStringLiteral("bottom"),
+        QStringLiteral("holographic-ring"),
+        QStringLiteral("complete"));
+    QVERIFY(!unavailable.value(QStringLiteral("success")).toBool());
+    QCOMPARE(unavailable.value(QStringLiteral("status")).toString(),
+             QStringLiteral("capability-unavailable"));
+    QVERIFY(unavailable.value(QStringLiteral("values")).toMap().isEmpty());
+    QCOMPARE(registry.panelSnapshot(QStringLiteral("bottom")), before);
+    QCOMPARE(registry.revision(), revisionBefore);
+}
+
+void PanelRegistryTest::rejectsIncompatibleThemeWithoutRecordMutation()
+{
+    const QVariantList definitions = taskThemeDefinitions();
+    QCOMPARE(definitions.size(), 5);
+    PanelRegistry registry(definitions);
+    const QVariantMap before = registry.panelSnapshot(QStringLiteral("bottom"));
+    const int registryRevisionBefore = registry.revision();
+    const auto definitionBefore = registry.panelDefinition(QStringLiteral("bottom"));
+    QVERIFY(definitionBefore.has_value());
+
+    QVERIFY(!registry.applyTheme(
+        QStringLiteral("bottom"),
+        QStringLiteral("holographic-ring"),
+        QStringLiteral("complete")));
+
+    QCOMPARE(registry.panelSnapshot(QStringLiteral("bottom")), before);
+    QCOMPARE(registry.revision(), registryRevisionBefore);
+    QCOMPARE(registry.panelDefinition(QStringLiteral("bottom")), definitionBefore);
+
+    const QString freePanelId = registry.addFreePanel();
+    QVERIFY(!freePanelId.isEmpty());
+    QVERIFY(registry.applyTheme(
+        freePanelId,
+        QStringLiteral("holographic-ring"),
+        QStringLiteral("complete")));
+    QCOMPARE(registry.panelValue(freePanelId, QStringLiteral("layout")).toString(),
+             QStringLiteral("ring"));
+}
+
+void PanelRegistryTest::mapsVersionOneArtworkToSkinnedTwoDWithProceduralFallback()
+{
+    PanelRegistry registry(taskThemeDefinitions());
+    ArchDock::PanelDefinition definition = ArchDock::PanelDefinition::defaults(
+        QStringLiteral("legacy-artwork"),
+        QStringLiteral("Legacy Artwork"),
+        QStringLiteral("bottom"),
+        false);
+    definition.surface.themeSource = QStringLiteral("file:///tmp/example.blend");
+    definition.surface.themeSourceFormat = QStringLiteral("blend");
+    definition.surface.themePackageFormat = QStringLiteral("org.archdock.theme");
+    definition.surface.themePackageVersion = 1;
+    definition.surface.themePackageId = QStringLiteral("legacy-scene");
+
+    const auto profile = registry.themeCapabilityProfile(definition);
+    QVERIFY(profile.has_value());
+    QCOMPARE(profile->preferredRendererTier,
+             std::optional<ArchDock::RendererTier>(
+                 ArchDock::RendererTier::Skinned2D));
+    QCOMPARE(profile->fallbackRendererTiers,
+             QVector<ArchDock::RendererTier>{ArchDock::RendererTier::Procedural2D});
+    QVERIFY(profile->rendererTiers.contains(ArchDock::RendererTier::Skinned2D));
+    QVERIFY(profile->rendererTiers.contains(ArchDock::RendererTier::Procedural2D));
+    QVERIFY(!profile->rendererTiers.contains(ArchDock::RendererTier::Baked2_5D));
+    QVERIFY(!profile->rendererTiers.contains(ArchDock::RendererTier::True3D));
+
+    const ArchDock::CapabilityResolution resolution =
+        registry.resolvePanelCapabilities(definition);
+    QVERIFY(resolution.available);
+    QVERIFY(resolution.renderer.fallbackApplied);
+    QCOMPARE(resolution.renderer.effectiveTier,
+             std::optional<ArchDock::RendererTier>(
+                 ArchDock::RendererTier::Procedural2D));
+    QCOMPARE(resolution.renderer.evaluatedTiers.constFirst().reason,
+             ArchDock::CapabilityReasonCode::RendererHostUnsupported);
 }
 
 void PanelRegistryTest::importsVersionedThemePackage()

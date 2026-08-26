@@ -15,6 +15,39 @@ enum class PanelHostKind
     FreeDesktop
 };
 
+enum class PanelLayoutKind
+{
+    Adaptive,
+    Horizontal,
+    Vertical,
+    Diagonal,
+    Circular,
+    Ellipse,
+    Ring,
+    Radial,
+    Arc,
+    Semicircle,
+    Fan,
+    Spiral,
+    Ribbon,
+    VerticalCurve,
+    HorizontalCurve,
+    Polygon,
+    Triangle,
+    Square,
+    Pentagon,
+    Hexagon,
+    Octagon,
+    Star,
+    Grid,
+    Floating,
+    Count
+};
+
+[[nodiscard]] std::optional<PanelLayoutKind> panelLayoutKindFromName(
+    const QString &name);
+[[nodiscard]] QString panelLayoutKindName(PanelLayoutKind kind);
+
 struct PanelPresetOrigin
 {
     QString panelPresetId;
@@ -211,6 +244,7 @@ public:
     static constexpr int CurrentSchemaVersion = 2;
 
     int schemaVersion = CurrentSchemaVersion;
+    quint64 settingsRevision = 0;
     PanelIdentity identity;
     PanelHost host;
     PanelContent content;
@@ -236,6 +270,7 @@ public:
     [[nodiscard]] QVariantMap toLegacyMap() const;
     [[nodiscard]] QVariantMap toPersistedMap() const;
 
+    [[nodiscard]] static bool isDurableLegacyKey(const QString &key);
     [[nodiscard]] static QVariant normalizeLegacyValue(const QString &key,
                                                        const QVariant &value);
     [[nodiscard]] static QString hostKindName(PanelHostKind kind);

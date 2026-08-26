@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -24,9 +26,8 @@ ScrollView {
 
                 required property var modelData
                 readonly property string kind: modelData.kind || "value"
-                readonly property bool fieldAvailable: modelData.available === undefined
-                    || modelData.available
 
+                visible: modelData.available === undefined || modelData.available
                 Layout.fillWidth: true
                 spacing: 6
 
@@ -55,7 +56,7 @@ ScrollView {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.topMargin: 5
-                        height: 1
+                        Layout.preferredHeight: 1
                         color: "#31526472"
                     }
                 }
@@ -64,9 +65,7 @@ ScrollView {
                     visible: rowDelegate.kind === "notice"
                     Layout.fillWidth: true
                     text: rowDelegate.modelData.text || ""
-                    type: rowDelegate.modelData.warning
-                        ? Kirigami.MessageType.Warning
-                        : Kirigami.MessageType.Information
+                    type: rowDelegate.modelData.warning ? Kirigami.MessageType.Warning : Kirigami.MessageType.Information
                 }
 
                 ColumnLayout {
@@ -90,6 +89,8 @@ ScrollView {
                     Repeater {
                         model: rowDelegate.modelData.themes || []
                         delegate: Rectangle {
+                            id: themeSample
+
                             required property var modelData
                             Layout.fillWidth: true
                             implicitHeight: 92
@@ -106,22 +107,33 @@ ScrollView {
                                 spacing: 12
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    Label { text: modelData.name; color: "#edf7fa"; font.weight: Font.DemiBold }
-                                    Label { text: qsTr("Built-in · %1").arg(modelData.category || "theme"); color: "#90a7b4"; font.pixelSize: 11 }
+                                    Label {
+                                        text: themeSample.modelData.name
+                                        color: "#edf7fa"
+                                        font.weight: Font.DemiBold
+                                    }
+                                    Label {
+                                        text: qsTr("Built-in · %1").arg(themeSample.modelData.category || "theme")
+                                        color: "#90a7b4"
+                                        font.pixelSize: 11
+                                    }
                                     Rectangle {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 34
-                                        radius: panelStyle.shape === "hexagon" ? 3 : 14
-                                        color: panelStyle.color || "#263642"
-                                        opacity: panelStyle.opacity === undefined ? 0.9 : panelStyle.opacity
+                                        radius: themeSample.panelStyle.shape === "hexagon" ? 3 : 14
+                                        color: themeSample.panelStyle.color || "#263642"
+                                        opacity: themeSample.panelStyle.opacity === undefined ? 0.9 : themeSample.panelStyle.opacity
                                         Row {
                                             anchors.centerIn: parent
-                                            spacing: Number(iconStyle.spacing || 8)
+                                            spacing: Number(themeSample.iconStyle.spacing || 8)
                                             Repeater {
                                                 model: 6
                                                 delegate: Rectangle {
-                                                    width: 18; height: 18
-                                                    radius: iconStyle.iconShape === "circle" ? 9 : 5
+                                                    required property int index
+
+                                                    width: 18
+                                                    height: 18
+                                                    radius: themeSample.iconStyle.iconShape === "circle" ? 9 : 5
                                                     color: index === 2 ? "#60d6ff" : "#d4e3eb"
                                                     opacity: index === 4 ? 0.55 : 1
                                                 }
@@ -132,7 +144,9 @@ ScrollView {
                                 Button {
                                     text: qsTr("Load")
                                     icon.name: "dialog-ok-apply"
-                                    onClicked: root.studio.performStudioAction("load-built-in-theme", { themeId: modelData.id })
+                                    onClicked: root.studio.performStudioAction("load-built-in-theme", {
+                                        themeId: themeSample.modelData.id
+                                    })
                                 }
                             }
                         }
@@ -140,9 +154,7 @@ ScrollView {
                 }
 
                 Rectangle {
-                    visible: rowDelegate.kind !== "section"
-                        && rowDelegate.kind !== "notice"
-                        && rowDelegate.kind !== "themeSamples"
+                    visible: rowDelegate.kind !== "section" && rowDelegate.kind !== "notice" && rowDelegate.kind !== "themeSamples"
                     Layout.fillWidth: true
                     implicitHeight: fieldRow.implicitHeight + 22
                     radius: 7
@@ -172,7 +184,7 @@ ScrollView {
                             Label {
                                 Layout.fillWidth: true
                                 text: rowDelegate.modelData.label || ""
-                                color: rowDelegate.fieldAvailable ? "#d8e5ec" : "#80919a"
+                                color: "#d8e5ec"
                                 font.pixelSize: 12
                                 wrapMode: Text.Wrap
                             }
@@ -198,89 +210,63 @@ ScrollView {
 
                         Switch {
                             visible: rowDelegate.kind === "switch"
-                            enabled: rowDelegate.fieldAvailable
                             checked: Boolean(root.studio.fieldValue(rowDelegate.modelData))
-                            onToggled: root.studio.setFieldValue(
-                                rowDelegate.modelData,
-                                checked)
+                            onToggled: root.studio.setFieldValue(rowDelegate.modelData, checked)
                         }
 
                         ComboBox {
                             visible: rowDelegate.kind === "combo"
-                            enabled: rowDelegate.fieldAvailable
                             Layout.preferredWidth: 270
                             model: rowDelegate.modelData.options || []
                             textRole: "label"
                             valueRole: "value"
-                            currentIndex: root.studio.fieldOptionIndex(
-                                rowDelegate.modelData)
-                            onActivated: root.studio.setFieldValue(
-                                rowDelegate.modelData,
-                                currentValue)
+                            currentIndex: root.studio.fieldOptionIndex(rowDelegate.modelData)
+                            onActivated: root.studio.setFieldValue(rowDelegate.modelData, currentValue)
                         }
 
                         SpinBox {
                             visible: rowDelegate.kind === "spin"
-                            enabled: rowDelegate.fieldAvailable
                             Layout.preferredWidth: 180
-                            from: rowDelegate.modelData.from === undefined
-                                ? 0 : rowDelegate.modelData.from
-                            to: rowDelegate.modelData.to === undefined
-                                ? 100 : rowDelegate.modelData.to
-                            stepSize: rowDelegate.modelData.step === undefined
-                                ? 1 : rowDelegate.modelData.step
+                            from: rowDelegate.modelData.from === undefined ? 0 : rowDelegate.modelData.from
+                            to: rowDelegate.modelData.to === undefined ? 100 : rowDelegate.modelData.to
+                            stepSize: rowDelegate.modelData.step === undefined ? 1 : rowDelegate.modelData.step
                             editable: true
                             value: Number(root.studio.fieldValue(rowDelegate.modelData))
-                            onValueModified: root.studio.setFieldValue(
-                                rowDelegate.modelData,
-                                value)
+                            onValueModified: root.studio.setFieldValue(rowDelegate.modelData, value)
                         }
 
                         RowLayout {
                             visible: rowDelegate.kind === "slider"
-                            enabled: rowDelegate.fieldAvailable
                             Layout.preferredWidth: 300
                             spacing: 8
 
                             Slider {
                                 Layout.fillWidth: true
-                                from: rowDelegate.modelData.from === undefined
-                                    ? 0 : rowDelegate.modelData.from
-                                to: rowDelegate.modelData.to === undefined
-                                    ? 1 : rowDelegate.modelData.to
-                                stepSize: rowDelegate.modelData.step === undefined
-                                    ? 0.05 : rowDelegate.modelData.step
-                                value: Number(root.studio.fieldValue(
-                                    rowDelegate.modelData))
-                                onMoved: root.studio.setFieldValue(
-                                    rowDelegate.modelData,
-                                    value)
+                                from: rowDelegate.modelData.from === undefined ? 0 : rowDelegate.modelData.from
+                                to: rowDelegate.modelData.to === undefined ? 1 : rowDelegate.modelData.to
+                                stepSize: rowDelegate.modelData.step === undefined ? 0.05 : rowDelegate.modelData.step
+                                value: Number(root.studio.fieldValue(rowDelegate.modelData))
+                                onMoved: root.studio.setFieldValue(rowDelegate.modelData, value)
                             }
 
                             Label {
                                 Layout.minimumWidth: 52
                                 horizontalAlignment: Text.AlignRight
-                                text: root.studio.formatFieldValue(
-                                    rowDelegate.modelData,
-                                    root.studio.fieldValue(rowDelegate.modelData))
+                                text: root.studio.formatFieldValue(rowDelegate.modelData, root.studio.fieldValue(rowDelegate.modelData))
                                 color: "#dce9ef"
                             }
                         }
 
                         TextField {
                             visible: rowDelegate.kind === "text"
-                            enabled: rowDelegate.fieldAvailable
                             Layout.preferredWidth: 270
                             placeholderText: rowDelegate.modelData.placeholder || ""
                             text: String(root.studio.fieldValue(rowDelegate.modelData))
-                            onEditingFinished: root.studio.setFieldValue(
-                                rowDelegate.modelData,
-                                text)
+                            onEditingFinished: root.studio.setFieldValue(rowDelegate.modelData, text)
                         }
 
                         RowLayout {
                             visible: rowDelegate.kind === "color"
-                            enabled: rowDelegate.fieldAvailable
                             Layout.preferredWidth: 270
                             spacing: 8
 
@@ -288,8 +274,7 @@ ScrollView {
                                 Layout.preferredWidth: 28
                                 Layout.preferredHeight: 28
                                 radius: 4
-                                color: root.studio.colorPreviewValue(
-                                    rowDelegate.modelData)
+                                color: root.studio.colorPreviewValue(rowDelegate.modelData)
                                 border.width: 1
                                 border.color: "#8195a1"
 
@@ -305,19 +290,15 @@ ScrollView {
 
                             Button {
                                 Layout.fillWidth: true
-                                text: root.studio.colorDisplayValue(
-                                    rowDelegate.modelData)
+                                text: root.studio.colorDisplayValue(rowDelegate.modelData)
                                 icon.name: "color-picker"
-                                onClicked: root.studio.openColorEditor(
-                                    rowDelegate.modelData)
+                                onClicked: root.studio.openColorEditor(rowDelegate.modelData)
                             }
 
                             ToolButton {
-                                enabled: String(root.studio.fieldValue(
-                                    rowDelegate.modelData)).trim().length > 0
+                                enabled: String(root.studio.fieldValue(rowDelegate.modelData)).trim().length > 0
                                 icon.name: "edit-clear"
-                                onClicked: root.studio.setFieldValue(
-                                    rowDelegate.modelData, "")
+                                onClicked: root.studio.setFieldValue(rowDelegate.modelData, "")
 
                                 ToolTip.visible: hovered
                                 ToolTip.text: qsTr("Use theme default")
@@ -326,13 +307,9 @@ ScrollView {
 
                         Button {
                             visible: rowDelegate.kind === "action"
-                            enabled: rowDelegate.fieldAvailable
-                            text: rowDelegate.modelData.buttonText
-                                || rowDelegate.modelData.label
+                            text: rowDelegate.modelData.buttonText || rowDelegate.modelData.label
                             icon.name: rowDelegate.modelData.icon || ""
-                            onClicked: root.studio.performStudioAction(
-                                rowDelegate.modelData.action,
-                                rowDelegate.modelData)
+                            onClicked: root.studio.performStudioAction(rowDelegate.modelData.action, rowDelegate.modelData)
                         }
 
                         RowLayout {
@@ -345,13 +322,10 @@ ScrollView {
                                 delegate: Button {
                                     required property var modelData
 
+                                    visible: modelData.available === undefined || modelData.available
                                     text: modelData.label || ""
                                     icon.name: modelData.icon || ""
-                                    enabled: modelData.available === undefined
-                                        || modelData.available
-                                    onClicked: root.studio.performStudioAction(
-                                        modelData.action,
-                                        modelData)
+                                    onClicked: root.studio.performStudioAction(modelData.action, modelData)
                                 }
                             }
                         }

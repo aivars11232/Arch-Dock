@@ -1,4 +1,5 @@
 #include "DockSettings.h"
+#include "model/PanelSettingsSchema.h"
 
 #include <QGuiApplication>
 #include <QSettings>
@@ -40,63 +41,18 @@ DockSettings::DockSettings(QObject *parent)
     m_bottomPanelType = settings.value(QStringLiteral("bottomPanelType"), m_bottomPanelType).toString().toLower();
     settings.endGroup();
 
-    if (m_position != QStringLiteral("top") &&
-        m_position != QStringLiteral("bottom") &&
-        m_position != QStringLiteral("left") &&
-        m_position != QStringLiteral("right"))
+    QVariantMap normalized;
+    const bool normalizedSuccessfully =
+        ArchDock::PanelSettingsSchema::normalizeGlobalValues(
+            transactionSnapshot(),
+            {},
+            qMax(0, screenCount() - 1),
+            &normalized);
+    Q_ASSERT(normalizedSuccessfully);
+    if (normalizedSuccessfully)
     {
-        m_position = QStringLiteral("bottom");
+        adoptTransaction(normalized);
     }
-    m_iconSize = qBound(32, m_iconSize, 96);
-    m_spacing = qBound<qreal>(0.0, m_spacing, 32.0);
-    m_magnification = qBound<qreal>(1.0, m_magnification, 2.4);
-    m_panelOpacity = qBound<qreal>(0.35, m_panelOpacity, 1.0);
-    m_animationDuration = qBound(80, m_animationDuration, 500);
-    if (m_alignment != QStringLiteral("start") &&
-        m_alignment != QStringLiteral("center") &&
-        m_alignment != QStringLiteral("end"))
-    {
-        m_alignment = QStringLiteral("center");
-    }
-    if (m_appearancePreset != QStringLiteral("glass") &&
-        m_appearancePreset != QStringLiteral("crystal") &&
-        m_appearancePreset != QStringLiteral("neon") &&
-        m_appearancePreset != QStringLiteral("minimal") &&
-        m_appearancePreset != QStringLiteral("plasma") &&
-        m_appearancePreset != QStringLiteral("lime"))
-    {
-        m_appearancePreset = QStringLiteral("glass");
-    }
-    if (m_panelShape != QStringLiteral("pill") &&
-        m_panelShape != QStringLiteral("rounded") &&
-        m_panelShape != QStringLiteral("hexagon"))
-    {
-        m_panelShape = QStringLiteral("pill");
-    }
-    if (m_iconTileShape != QStringLiteral("rounded") &&
-        m_iconTileShape != QStringLiteral("circle") &&
-        m_iconTileShape != QStringLiteral("hexagon"))
-    {
-        m_iconTileShape = QStringLiteral("rounded");
-    }
-    if (m_topPanelType != QStringLiteral("launcher") &&
-        m_topPanelType != QStringLiteral("tasks") &&
-        m_topPanelType != QStringLiteral("hybrid"))
-    {
-        m_topPanelType = QStringLiteral("hybrid");
-    }
-    const auto normalizePanelType = [](QString &type)
-    {
-        if (type != QStringLiteral("launcher") &&
-            type != QStringLiteral("tasks") &&
-            type != QStringLiteral("hybrid"))
-        {
-            type = QStringLiteral("hybrid");
-        }
-    };
-    normalizePanelType(m_topPanelType);
-    normalizePanelType(m_sidePanelType);
-    normalizePanelType(m_bottomPanelType);
     clampMonitorIndex();
 
     if (auto *application = qobject_cast<QGuiApplication *>(QCoreApplication::instance()))
@@ -232,6 +188,159 @@ const QString &DockSettings::iconTileShape() const { return m_iconTileShape; }
 const QString &DockSettings::topPanelType() const { return m_topPanelType; }
 const QString &DockSettings::sidePanelType() const { return m_sidePanelType; }
 const QString &DockSettings::bottomPanelType() const { return m_bottomPanelType; }
+
+QVariantMap DockSettings::transactionSnapshot() const
+{
+    QVariantMap snapshot;
+    for (const auto &field : ArchDock::PanelSettingsSchema::fields())
+    {
+        if (field.scope != ArchDock::PanelSettingsFieldScope::Global)
+        {
+            continue;
+        }
+        const QByteArray propertyName = field.key.toUtf8();
+        snapshot.insert(field.key, property(propertyName.constData()));
+    }
+    return snapshot;
+}
+
+QVariantMap DockSettings::editorTransactionSnapshot() const
+{
+    return ArchDock::PanelSettingsSchema::editorValues(
+        ArchDock::PanelSettingsFieldScope::Global,
+        transactionSnapshot());
+}
+
+bool DockSettings::stageTransaction(const QVariantMap &values,
+                                    QVariantMap *candidate,
+                                    QString *errorMessage) const
+{
+    if (!candidate)
+    {
+        if (errorMessage)
+        {
+            *errorMessage = QStringLiteral("the global settings candidate is missing");
+        }
+        return false;
+    }
+
+    return ArchDock::PanelSettingsSchema::normalizeGlobalValues(
+        transactionSnapshot(),
+        values,
+        qMax(0, screenCount() - 1),
+        candidate,
+        errorMessage);
+}
+
+void DockSettings::writeTransaction(QSettings &settings,
+                                    const QVariantMap &candidate)
+{
+    settings.beginGroup(QStringLiteral("dock"));
+    for (auto it = candidate.cbegin(); it != candidate.cend(); ++it)
+    {
+        settings.setValue(it.key(), it.value());
+    }
+    settings.remove(QStringLiteral("freePanelVisible"));
+    settings.remove(QStringLiteral("freePanelType"));
+    settings.remove(QStringLiteral("freePanelX"));
+    settings.remove(QStringLiteral("freePanelY"));
+    settings.endGroup();
+}
+
+void DockSettings::adoptTransaction(const QVariantMap &candidate)
+{
+    bool changed = false;
+    const auto adopt = [this, &changed](auto &target, const auto &value, auto signal)
+    {
+        if (target == value)
+        {
+            return;
+        }
+        target = value;
+        changed = true;
+        (this->*signal)();
+    };
+
+    adopt(m_position, candidate.value(QStringLiteral("position")).toString(),
+          &DockSettings::positionChanged);
+    adopt(m_alignment, candidate.value(QStringLiteral("alignment")).toString(),
+          &DockSettings::alignmentChanged);
+    adopt(m_appearancePreset,
+          candidate.value(QStringLiteral("appearancePreset")).toString(),
+          &DockSettings::appearancePresetChanged);
+    adopt(m_monitorIndex, candidate.value(QStringLiteral("monitorIndex")).toInt(),
+          &DockSettings::monitorIndexChanged);
+    adopt(m_iconSize, candidate.value(QStringLiteral("iconSize")).toInt(),
+          &DockSettings::iconSizeChanged);
+    adopt(m_spacing, candidate.value(QStringLiteral("spacing")).toReal(),
+          &DockSettings::spacingChanged);
+    adopt(m_magnification, candidate.value(QStringLiteral("magnification")).toReal(),
+          &DockSettings::magnificationChanged);
+    adopt(m_magnificationEnabled,
+          candidate.value(QStringLiteral("magnificationEnabled")).toBool(),
+          &DockSettings::magnificationEnabledChanged);
+    adopt(m_panelOpacity, candidate.value(QStringLiteral("panelOpacity")).toReal(),
+          &DockSettings::panelOpacityChanged);
+    adopt(m_showReflections,
+          candidate.value(QStringLiteral("showReflections")).toBool(),
+          &DockSettings::showReflectionsChanged);
+    adopt(m_showIndicators,
+          candidate.value(QStringLiteral("showIndicators")).toBool(),
+          &DockSettings::showIndicatorsChanged);
+    adopt(m_showTooltips, candidate.value(QStringLiteral("showTooltips")).toBool(),
+          &DockSettings::showTooltipsChanged);
+    adopt(m_showStatusModule,
+          candidate.value(QStringLiteral("showStatusModule")).toBool(),
+          &DockSettings::showStatusModuleChanged);
+    adopt(m_showDate, candidate.value(QStringLiteral("showDate")).toBool(),
+          &DockSettings::showDateChanged);
+    adopt(m_showNetworkModule,
+          candidate.value(QStringLiteral("showNetworkModule")).toBool(),
+          &DockSettings::showNetworkModuleChanged);
+    adopt(m_showBatteryModule,
+          candidate.value(QStringLiteral("showBatteryModule")).toBool(),
+          &DockSettings::showBatteryModuleChanged);
+    adopt(m_showPerformanceModule,
+          candidate.value(QStringLiteral("showPerformanceModule")).toBool(),
+          &DockSettings::showPerformanceModuleChanged);
+    adopt(m_animationDuration,
+          candidate.value(QStringLiteral("animationDuration")).toInt(),
+          &DockSettings::animationDurationChanged);
+    adopt(m_reducedMotion, candidate.value(QStringLiteral("reducedMotion")).toBool(),
+          &DockSettings::reducedMotionChanged);
+    adopt(m_autoHide, candidate.value(QStringLiteral("autoHide")).toBool(),
+          &DockSettings::autoHideChanged);
+    adopt(m_desktopSuite, candidate.value(QStringLiteral("desktopSuite")).toBool(),
+          &DockSettings::desktopSuiteChanged);
+    adopt(m_topLauncherVisible,
+          candidate.value(QStringLiteral("topLauncherVisible")).toBool(),
+          &DockSettings::topLauncherVisibleChanged);
+    adopt(m_sideRailVisible,
+          candidate.value(QStringLiteral("sideRailVisible")).toBool(),
+          &DockSettings::sideRailVisibleChanged);
+    adopt(m_bottomPanelVisible,
+          candidate.value(QStringLiteral("bottomPanelVisible")).toBool(),
+          &DockSettings::bottomPanelVisibleChanged);
+    adopt(m_panelShape, candidate.value(QStringLiteral("panelShape")).toString(),
+          &DockSettings::panelShapeChanged);
+    adopt(m_iconTileShape,
+          candidate.value(QStringLiteral("iconTileShape")).toString(),
+          &DockSettings::iconTileShapeChanged);
+    adopt(m_topPanelType,
+          candidate.value(QStringLiteral("topPanelType")).toString(),
+          &DockSettings::topPanelTypeChanged);
+    adopt(m_sidePanelType,
+          candidate.value(QStringLiteral("sidePanelType")).toString(),
+          &DockSettings::sidePanelTypeChanged);
+    adopt(m_bottomPanelType,
+          candidate.value(QStringLiteral("bottomPanelType")).toString(),
+          &DockSettings::bottomPanelTypeChanged);
+
+    if (changed)
+    {
+        emit transactionAdopted();
+    }
+}
 
 void DockSettings::setPosition(const QString &position)
 {

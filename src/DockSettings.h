@@ -1,6 +1,9 @@
 #pragma once
 
 #include <QObject>
+#include <QVariantMap>
+
+class QSettings;
 
 class DockSettings final : public QObject
 {
@@ -71,6 +74,15 @@ public:
     [[nodiscard]] const QString &sidePanelType() const;
     [[nodiscard]] const QString &bottomPanelType() const;
 
+    [[nodiscard]] QVariantMap transactionSnapshot() const;
+    [[nodiscard]] QVariantMap editorTransactionSnapshot() const;
+    [[nodiscard]] bool stageTransaction(const QVariantMap &values,
+                                        QVariantMap *candidate,
+                                        QString *errorMessage = nullptr) const;
+    static void writeTransaction(QSettings &settings,
+                                 const QVariantMap &candidate);
+    void adoptTransaction(const QVariantMap &candidate);
+
 public slots:
     void setPosition(const QString &position);
     void setAlignment(const QString &alignment);
@@ -135,6 +147,7 @@ signals:
     void topPanelTypeChanged();
     void sidePanelTypeChanged();
     void bottomPanelTypeChanged();
+    void transactionAdopted();
 
 private:
     void save() const;

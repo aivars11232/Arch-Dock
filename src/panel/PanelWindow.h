@@ -59,6 +59,26 @@ public slots:
     void saveFreePanelPosition(const QString &panelId, int x, int y);
     bool setNativePanelType(const QString &panelId, const QString &type);
     QVariantMap dockConfiguration(const QString &panelId) const;
+    QVariantMap panelRendererConfiguration(const QString &panelId) const;
+    QVariantMap resolvePanelCapabilities(
+        const QString &panelId,
+        const QVariantMap &candidateValues = {}) const;
+    QVariantList resolvedThemeDefinitions(
+        const QString &panelId,
+        const QVariantMap &candidateValues = {}) const;
+    QVariantMap panelSettingsEditorSnapshot(const QString &panelId,
+                                            const QString &consumer) const;
+    QVariantMap resolvePanelSettingsEditorDraft(
+        const QString &panelId,
+        qulonglong expectedRevision,
+        const QVariantMap &panelValues,
+        const QVariantMap &globalValues,
+        const QString &consumer) const;
+    QVariantMap applyPanelSettingsTransaction(
+        const QString &panelId,
+        qulonglong expectedRevision,
+        const QVariantMap &panelValues,
+        const QVariantMap &globalValues = {});
     QVariantMap applyNativePanelPlacementDraft(const QString &panelId,
                                                const QVariantMap &values);
     QVariantMap nativePanelPlacementStatus(const QString &panelId) const;
@@ -132,6 +152,25 @@ private:
         int containmentId = -1;
         int dockAppletId = -1;
     };
+
+    [[nodiscard]] std::optional<ArchDock::PanelDefinition>
+    capabilityCandidateDefinition(
+        const QString &panelId,
+        const QVariantMap &candidateValues) const;
+    [[nodiscard]] QVariantList panelSettingsEditorFields(
+        const ArchDock::PanelDefinition &candidate,
+        const ArchDock::CapabilityResolution &resolution,
+        const QString &consumer) const;
+    [[nodiscard]] QVariantMap panelSettingsEditorValues(
+        const ArchDock::PanelDefinition &candidate,
+        const QVariantList &fields) const;
+    [[nodiscard]] std::optional<ArchDock::PanelSettingsTransactionDraft>
+    preparePanelSettingsDraft(
+        const QString &panelId,
+        qulonglong expectedRevision,
+        const QVariantMap &panelValues,
+        const QVariantMap &globalValues,
+        ArchDock::PanelSettingsTransactionOutcome *outcome) const;
 
     void updateDesktopSuite();
     void syncRegistryFromLegacySettings();
@@ -249,6 +288,13 @@ private:
     void recordNativePanelPlacementResult(
         const QString &panelId,
         ArchDock::PlasmaPanelPlacementApplyResult result);
+    [[nodiscard]] QList<ArchDock::PanelSettingsHostResult> applyPanelSettingsHosts(
+        const ArchDock::PanelSettingsTransactionDraft &draft);
+    [[nodiscard]] QList<ArchDock::PanelSettingsHostResult> rollbackPanelSettingsHosts(
+        const ArchDock::PanelSettingsTransactionDraft &draft);
+    [[nodiscard]] static bool panelSettingsTopologyChanged(
+        const ArchDock::PanelDefinition &before,
+        const ArchDock::PanelDefinition &after);
     bool removeLegacyControlApplets(const QString &panelId, int containmentId);
     bool attachNativeDockApplet(const QString &panelId, int containmentId);
     void notifyDockRevision();
@@ -281,4 +327,5 @@ private:
     QHash<QString, QString> m_nativePanelVisibilityStateCache;
     int m_nativePanelRecoveryGeneration = 0;
     bool m_nativePanelRecoveryActive = false;
+    bool m_settingsTransactionAdoptionActive = false;
 };

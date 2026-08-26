@@ -1,39 +1,23 @@
 import QtQuick
 import QtQuick.Controls as QQC2
+import org.kde.kcmutils as KCM
 import org.kde.kirigami as Kirigami
 
-ConfigPageBase {
-    id: root
+KCM.SimpleKCM {
+    property string cfg_panelId: ""
+    property string cfg_panelIdDefault: ""
+    property string cfg_panelType: "hybrid"
+    property string cfg_panelTypeDefault: "hybrid"
+    property string cfg_ownerToken: ""
+    property string cfg_ownerTokenDefault: ""
+    property bool cfg_bootstrapFreeDock: false
+    property bool cfg_bootstrapFreeDockDefault: false
 
     Kirigami.FormLayout {
-        QQC2.SpinBox {
-            Kirigami.FormData.label: qsTr("Icon size")
-            from: 24
-            to: 128
-            value: Number(root.values.iconSize || 52)
-            onValueModified: root.setValue("iconSize", value)
-        }
-        QQC2.SpinBox {
-            Kirigami.FormData.label: qsTr("Icon spacing")
-            from: 0
-            to: 48
-            value: Number(root.values.spacing || 8)
-            onValueModified: root.setValue("spacing", value)
-        }
-        QQC2.CheckBox {
-            Kirigami.FormData.label: qsTr("Magnification")
-            text: qsTr("Magnify icons under the pointer")
-            checked: root.values.magnificationEnabled === undefined
-                ? true : root.values.magnificationEnabled
-            onToggled: root.setValue("magnificationEnabled", checked)
-        }
-        QQC2.Slider {
-            Kirigami.FormData.label: qsTr("Magnification amount")
-            from: 1
-            to: 2.5
-            stepSize: 0.05
-            value: Number(root.values.magnification || 1.65)
-            onMoved: root.setValue("magnification", value)
+        QQC2.Label {
+            Kirigami.FormData.isSection: true
+            text: qsTr("Layout is not registered as a native configuration page. Open Panel Studio to edit only the layouts supported by this panel's resolved capabilities.")
+            wrapMode: Text.WordWrap
         }
     }
 }

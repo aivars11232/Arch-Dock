@@ -2,10 +2,125 @@
   "format": "org.archdock.theme-catalog",
   "version": 1,
   "themes": [
-    {"id":"obsidian-glass","name":"Obsidian Glass","version":1,"builtIn":true,"category":"glass","capabilities":{"panel2D":true,"icons2D":true,"tiles":true,"indicators":true,"animations":true,"layouts":true},"panelStyle":{"appearance":"glass","shape":"pill","color":"#161b26","opacity":0.88},"iconStyle":{"iconShape":"rounded","iconSize":52,"spacing":8},"tileStyle":{},"indicatorStyle":{},"animationStyle":{"iconAnimation":"scale","animationTrigger":"hover","animationSpeed":1.0,"animationIntensity":1.0},"layoutStyle":{"layout":"adaptive","layoutScale":1.0},"previewConfiguration":{"active":true}},
-    {"id":"neon-segments","name":"Neon Segments","version":1,"builtIn":true,"category":"neon","capabilities":{"panel2D":true,"icons2D":true,"tiles":true,"indicators":true,"animations":true,"layouts":true},"panelStyle":{"appearance":"neon","shape":"rounded","color":"#101126","opacity":0.94},"iconStyle":{"iconShape":"squircle","iconSize":52,"spacing":10},"tileStyle":{},"indicatorStyle":{},"animationStyle":{"iconAnimation":"glow","animationTrigger":"hover","animationSpeed":1.0,"animationIntensity":1.2},"layoutStyle":{"layout":"adaptive","layoutScale":1.0},"previewConfiguration":{"active":true}},
-    {"id":"metallic-shelf","name":"Metallic Shelf","version":1,"builtIn":true,"category":"metallic","capabilities":{"panel2D":true,"icons2D":true,"tiles":true,"indicators":true,"animations":true,"layouts":true},"panelStyle":{"appearance":"metallic","shape":"pill","color":"#3a414b","opacity":0.96},"iconStyle":{"iconShape":"rounded","iconSize":54,"spacing":7},"tileStyle":{},"indicatorStyle":{},"animationStyle":{"iconAnimation":"bounce","animationTrigger":"hover","animationSpeed":0.9,"animationIntensity":0.8},"layoutStyle":{"layout":"horizontal","layoutScale":1.0},"previewConfiguration":{"active":true}},
-    {"id":"holographic-ring","name":"Holographic Ring","version":1,"builtIn":true,"category":"holographic","capabilities":{"panel2D":true,"icons2D":true,"tiles":true,"indicators":true,"animations":true,"layouts":true},"panelStyle":{"appearance":"futuristic","shape":"hexagon","color":"#082a35","opacity":0.9},"iconStyle":{"iconShape":"circle","iconSize":48,"spacing":10},"tileStyle":{},"indicatorStyle":{},"animationStyle":{"iconAnimation":"orbit","animationTrigger":"hover","animationSpeed":0.8,"animationIntensity":0.8},"layoutStyle":{"layout":"ring","layoutScale":1.0},"previewConfiguration":{"active":true}},
-    {"id":"minimal-underline","name":"Minimal Underline","version":1,"builtIn":true,"category":"minimal","capabilities":{"panel2D":true,"icons2D":true,"tiles":true,"indicators":true,"animations":true,"layouts":true},"panelStyle":{"appearance":"minimal","shape":"rounded","color":"#20242c","opacity":0.82},"iconStyle":{"iconShape":"square","iconSize":48,"spacing":12},"tileStyle":{},"indicatorStyle":{},"animationStyle":{"iconAnimation":"none","animationTrigger":"hover","animationSpeed":1.0,"animationIntensity":1.0},"layoutStyle":{"layout":"horizontal","layoutScale":1.0},"previewConfiguration":{"active":true}}
+    {
+      "id": "obsidian-glass",
+      "name": "Obsidian Glass",
+      "version": 1,
+      "builtIn": true,
+      "category": "glass",
+      "capabilities": {
+        "hosts": ["native-edge", "free-desktop"],
+        "layouts": ["adaptive", "horizontal", "vertical"],
+        "features": ["dynamic-tint", "icon-state-styling"],
+        "presentationMechanisms": [],
+        "rendererTiers": ["procedural2d"],
+        "preferredRendererTier": "procedural2d",
+        "fallbackRendererTiers": [],
+        "rotation": {"mode": "bounded", "minimumDegrees": -180, "maximumDegrees": 180}
+      },
+      "panelStyle": {"appearance": "glass", "shape": "pill", "color": "#161b26", "opacity": 0.88},
+      "iconStyle": {"iconShape": "rounded", "iconSize": 52, "spacing": 8},
+      "tileStyle": {},
+      "indicatorStyle": {},
+      "animationStyle": {"iconAnimation": "scale", "animationTrigger": "hover", "animationSpeed": 1.0, "animationIntensity": 1.0},
+      "layoutStyle": {"layout": "adaptive", "layoutScale": 1.0},
+      "previewConfiguration": {"active": true}
+    },
+    {
+      "id": "neon-segments",
+      "name": "Neon Segments",
+      "version": 1,
+      "builtIn": true,
+      "category": "neon",
+      "capabilities": {
+        "hosts": ["native-edge", "free-desktop"],
+        "layouts": ["adaptive", "horizontal", "vertical"],
+        "features": ["dynamic-tint", "icon-state-styling"],
+        "presentationMechanisms": [],
+        "rendererTiers": ["procedural2d"],
+        "preferredRendererTier": "procedural2d",
+        "fallbackRendererTiers": [],
+        "rotation": {"mode": "bounded", "minimumDegrees": -180, "maximumDegrees": 180}
+      },
+      "panelStyle": {"appearance": "neon", "shape": "rounded", "color": "#101126", "opacity": 0.94},
+      "iconStyle": {"iconShape": "squircle", "iconSize": 52, "spacing": 10},
+      "tileStyle": {},
+      "indicatorStyle": {},
+      "animationStyle": {"iconAnimation": "glow", "animationTrigger": "hover", "animationSpeed": 1.0, "animationIntensity": 1.2},
+      "layoutStyle": {"layout": "adaptive", "layoutScale": 1.0},
+      "previewConfiguration": {"active": true}
+    },
+    {
+      "id": "metallic-shelf",
+      "name": "Metallic Shelf",
+      "version": 1,
+      "builtIn": true,
+      "category": "metallic",
+      "capabilities": {
+        "hosts": ["native-edge", "free-desktop"],
+        "layouts": ["horizontal"],
+        "features": ["dynamic-tint", "icon-state-styling"],
+        "presentationMechanisms": [],
+        "rendererTiers": ["procedural2d"],
+        "preferredRendererTier": "procedural2d",
+        "fallbackRendererTiers": [],
+        "rotation": {"mode": "bounded", "minimumDegrees": -180, "maximumDegrees": 180}
+      },
+      "panelStyle": {"appearance": "metallic", "shape": "pill", "color": "#3a414b", "opacity": 0.96},
+      "iconStyle": {"iconShape": "rounded", "iconSize": 54, "spacing": 7},
+      "tileStyle": {},
+      "indicatorStyle": {},
+      "animationStyle": {"iconAnimation": "bounce", "animationTrigger": "hover", "animationSpeed": 0.9, "animationIntensity": 0.8},
+      "layoutStyle": {"layout": "horizontal", "layoutScale": 1.0},
+      "previewConfiguration": {"active": true}
+    },
+    {
+      "id": "holographic-ring",
+      "name": "Holographic Ring",
+      "version": 1,
+      "builtIn": true,
+      "category": "holographic",
+      "capabilities": {
+        "hosts": ["free-desktop"],
+        "layouts": ["ring"],
+        "features": ["dynamic-tint", "icon-state-styling"],
+        "presentationMechanisms": [],
+        "rendererTiers": ["procedural2d"],
+        "preferredRendererTier": "procedural2d",
+        "fallbackRendererTiers": [],
+        "rotation": {"mode": "bounded", "minimumDegrees": -180, "maximumDegrees": 180}
+      },
+      "panelStyle": {"appearance": "futuristic", "shape": "hexagon", "color": "#082a35", "opacity": 0.9},
+      "iconStyle": {"iconShape": "circle", "iconSize": 48, "spacing": 10},
+      "tileStyle": {},
+      "indicatorStyle": {},
+      "animationStyle": {"iconAnimation": "orbit", "animationTrigger": "hover", "animationSpeed": 0.8, "animationIntensity": 0.8},
+      "layoutStyle": {"layout": "ring", "layoutScale": 1.0},
+      "previewConfiguration": {"active": true}
+    },
+    {
+      "id": "minimal-underline",
+      "name": "Minimal Underline",
+      "version": 1,
+      "builtIn": true,
+      "category": "minimal",
+      "capabilities": {
+        "hosts": ["native-edge", "free-desktop"],
+        "layouts": ["horizontal"],
+        "features": ["dynamic-tint", "icon-state-styling"],
+        "presentationMechanisms": [],
+        "rendererTiers": ["procedural2d"],
+        "preferredRendererTier": "procedural2d",
+        "fallbackRendererTiers": [],
+        "rotation": {"mode": "bounded", "minimumDegrees": -180, "maximumDegrees": 180}
+      },
+      "panelStyle": {"appearance": "minimal", "shape": "rounded", "color": "#20242c", "opacity": 0.82},
+      "iconStyle": {"iconShape": "square", "iconSize": 48, "spacing": 12},
+      "tileStyle": {},
+      "indicatorStyle": {},
+      "animationStyle": {"iconAnimation": "none", "animationTrigger": "hover", "animationSpeed": 1.0, "animationIntensity": 1.0},
+      "layoutStyle": {"layout": "horizontal", "layoutScale": 1.0},
+      "previewConfiguration": {"active": true}
+    }
   ]
 }

@@ -33,6 +33,10 @@ PlasmoidItem {
         ? 0 : Math.max(80, Math.min(1200,
             Number(configuration.animationDuration || 170)
             / Math.max(0.2, Number(configuration.animationSpeed || 1))))
+    readonly property var capabilityResolution:
+        configuration.capabilityResolution || ({})
+    readonly property string effectiveRendererTier:
+        String(configuration.effectiveRendererTier || "")
 
     property var entries: []
     property var configuration: ({
@@ -129,7 +133,7 @@ PlasmoidItem {
             requestFailed = false;
             return;
         }
-        callDock("dockConfiguration", [panelId], function(reply) {
+        callDock("panelRendererConfiguration", [panelId], function(reply) {
             const value = normalizeReply(reply);
             if (value && typeof value === "object")
                 configuration = value;

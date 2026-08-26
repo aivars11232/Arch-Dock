@@ -11,6 +11,10 @@
 
 #include <optional>
 
+#include "model/PanelDefinition.h"
+#include "model/PanelCapabilityResolver.h"
+#include "panel/PanelSettingsTransaction.h"
+
 class QProcess;
 class QSettings;
 
@@ -44,6 +48,8 @@ public:
     };
 
     explicit PanelRegistry(QObject *parent = nullptr);
+    explicit PanelRegistry(const QVariantList &themeDefinitions,
+                           QObject *parent = nullptr);
     ~PanelRegistry() override;
 
     [[nodiscard]] QStringList panelIds() const;
@@ -52,11 +58,30 @@ public:
     [[nodiscard]] QString migrationDiagnostic() const;
 
     Q_INVOKABLE QVariant panelValue(const QString &panelId, const QString &key) const;
+    Q_INVOKABLE QVariantMap panelSnapshot(const QString &panelId) const;
     Q_INVOKABLE QString panelName(const QString &panelId) const;
     Q_INVOKABLE bool isBuiltIn(const QString &panelId) const;
-    Q_INVOKABLE void setPanelValue(const QString &panelId, const QString &key, const QVariant &value);
-    Q_INVOKABLE void updatePanel(const QString &panelId, const QVariantMap &values);
+    void setPanelValue(const QString &panelId, const QString &key, const QVariant &value);
+    void updatePanel(const QString &panelId, const QVariantMap &values);
     [[nodiscard]] bool updatePanelChecked(const QString &panelId, const QVariantMap &values);
+    [[nodiscard]] std::optional<ArchDock::PanelDefinition> panelDefinition(
+        const QString &panelId,
+        QString *errorMessage = nullptr) const;
+    [[nodiscard]] std::optional<ArchDock::ThemeCapabilityProfile>
+    themeCapabilityProfile(const ArchDock::PanelDefinition &definition,
+                           QString *errorCode = nullptr) const;
+    [[nodiscard]] ArchDock::CapabilityResolution resolvePanelCapabilities(
+        const ArchDock::PanelDefinition &definition,
+        QString *errorCode = nullptr) const;
+    [[nodiscard]] bool persistPanelSettingsTransaction(
+        const ArchDock::PanelSettingsTransactionDraft &draft,
+        QString *errorMessage = nullptr);
+    [[nodiscard]] bool rollbackPanelSettingsTransaction(
+        const ArchDock::PanelSettingsTransactionDraft &draft,
+        quint64 committedRevision,
+        quint64 *rollbackRevision,
+        QString *errorMessage = nullptr);
+    void notifyPanelSettingsTransactionAdopted(bool nativeTopologyChanged);
     [[nodiscard]] std::optional<FreeHostAssociation> freeHostAssociation(const QString &panelId) const;
     [[nodiscard]] QString beginFreePanelCreation(const QString &ownershipToken);
     [[nodiscard]] bool commitVerifiedFreeHostAssociation(
@@ -120,9 +145,12 @@ public:
         const QString &panelId,
         const QString &errorCode);
     Q_INVOKABLE QVariantList themeDefinitions() const;
-    Q_INVOKABLE bool applyTheme(const QString &panelId,
-                                const QString &themeId,
-                                const QString &layer);
+    Q_INVOKABLE QVariantMap themeCandidate(const QString &panelId,
+                                           const QString &themeId,
+                                           const QString &layer) const;
+    bool applyTheme(const QString &panelId,
+                    const QString &themeId,
+                    const QString &layer);
     QString addPanel(const QString &edge, const QString &type);
     QString addFreePanel();
     Q_INVOKABLE void removePanel(const QString &panelId);
@@ -171,10 +199,18 @@ private:
     [[nodiscard]] bool saveChecked();
     [[nodiscard]] bool ensureLegacyBackupChecked(QSettings &settings);
     [[nodiscard]] QByteArray serializePanels(QString *errorMessage) const;
+    [[nodiscard]] QByteArray serializePanels(
+        const QList<QVariantMap> &panels,
+        QString *errorMessage) const;
+    [[nodiscard]] bool persistPanelState(
+        const QList<QVariantMap> &panels,
+        const QVariantMap &globalSettings,
+        QString *errorMessage);
     void setMigrationDiagnostic(const QString &diagnostic);
     void changed(bool nativeTopologyChanged);
 
     QList<QVariantMap> m_panels;
+    QVariantList m_themeDefinitions;
     QHash<QString, RenderRequest> m_activeRenders;
     QHash<QString, RenderRequest> m_pendingRenders;
     QHash<QString, QPointer<QProcess>> m_renderProcesses;

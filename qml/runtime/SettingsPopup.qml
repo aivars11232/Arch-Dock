@@ -1,319 +1,112 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
 import org.kde.kirigami as Kirigami
+import "CapabilityModel.js" as CapabilityModel
 import "PlacementStatus.js" as PlacementStatus
-import "StudioDraft.js" as StudioDraft
+import "SettingsEditorModel.js" as EditorModel
 import "StudioNavigation.js" as StudioNavigation
 import "VisibilityStatus.js" as VisibilityStatus
 
 Window {
     id: root
 
-    property var settings: dockSettings
     property string selectedPanelId: panelRegistry.activePanelId
     property bool showPanels: false
     property int mainTabIndex: 0
     property int subTabIndex: 0
     property var subTabMemory: [0, 0, 0, 0, 0]
-    property var panelDrafts: ({})
-    property var settingsDraft: ({})
-    property var screenDrafts: ({})
-    property var themeDrafts: ({})
+    property var editorSession: EditorModel.emptySession("", "")
+    property var artifactDraft: ({})
     property string themeTargetPanelId: ""
     property var colorField: null
-    property string colorTargetPanelId: ""
     property string studioError: ""
     property string studioWarning: ""
+    property bool internalPanelSelection: false
 
     readonly property int panelRevision: panelRegistry.revision
-    readonly property int screenRevision: panelController.screenRevision
     readonly property int placementRevision: panelController.nativePlacementRevision
+    readonly property int nativeVisibilityRevision: panelController.nativeVisibilityRevision
+    readonly property bool hasSettingsChanges: EditorModel.dirty(editorSession)
+    readonly property bool hasArtifactChanges: String(artifactDraft.action || "").length > 0
+    readonly property bool hasPendingChanges: hasSettingsChanges || hasArtifactChanges
+    readonly property var selectedCapabilityResolution: editorSession.capabilityResolution || ({})
+    readonly property var selectedResolvedThemes: editorSession.themes || []
     readonly property var selectedPlacementResult: {
         const revision = placementRevision;
         return panelController.nativePanelPlacementStatus(selectedPanelId);
     }
-    readonly property int nativeVisibilityRevision:
-        panelController.nativeVisibilityRevision
     readonly property var selectedVisibilityResult: {
         const revision = nativeVisibilityRevision;
         return panelController.nativePanelVisibilityStatus(selectedPanelId);
     }
-    readonly property bool hasPendingChanges: StudioDraft.isSessionDirty(
-        panelDrafts, settingsDraft, screenDrafts, themeDrafts)
-    readonly property var editablePanelKeys: [
-        "visible",
-        "edge",
-        "alignment",
-        "visibilityMode",
-        "dynamic",
-        "width",
-        "height",
-        "type",
-        "appearance",
-        "shape",
-        "iconShape",
-        "iconSize",
-        "spacing",
-        "layout",
-        "layoutScale",
-        "layoutAngle",
-        "layoutRadius",
-        "layoutRows",
-        "layoutPadding",
-        "pathSides",
-        "pathOrientation",
-        "pathAnchor",
-        "iconAnimation",
-        "animationTrigger",
-        "animationSpeed",
-        "animationIntensity",
-        "physicsEnabled",
-        "folderLayout",
-        "folderSpeed",
-        "opacity",
-        "color",
-        "themeFit"
-    ]
-    readonly property var nativePlacementKeys: [
-        "edge",
-        "alignment",
-        "dynamic",
-        "width",
-        "height",
-        "floatingMargin"
-    ]
-    readonly property var screenOptions: {
-        const revision = screenRevision;
-        return panelController.availableScreens();
-    }
     readonly property var currentSubtabs: StudioNavigation.subtabsFor(mainTabIndex)
     readonly property var mainTabLabels: StudioNavigation.mainLabels()
-    readonly property var mainTabIcons: [
-        "view-dashboard",
-        "preferences-desktop-display",
-        "preferences-desktop-icons",
-        "draw-rectangle",
-        "document-save"
-    ]
-    readonly property var visibilityLabels: ({
-        "always": qsTr("Always visible"),
-        "auto-hide": qsTr("Auto-hide"),
-        "dodge": qsTr("Dodge touching windows"),
-        "cover": qsTr("Hide for maximized/fullscreen")
-    })
-    readonly property var visibilityOptions: VisibilityStatus.modeOptions(
-        selectedVisibilityResult,
-        isNativePanel(selectedPanelId),
-        visibilityLabels)
-    readonly property var panelTypeOptions: [
-        option(qsTr("Empty"), "empty"),
-        option(qsTr("Launchers"), "launcher"),
-        option(qsTr("Tasks"), "tasks"),
-        option(qsTr("Hybrid"), "hybrid")
-    ]
-    readonly property var edgeOptions: [
-        option(qsTr("Top"), "top"),
-        option(qsTr("Bottom"), "bottom"),
-        option(qsTr("Left"), "left"),
-        option(qsTr("Right"), "right"),
-        option(qsTr("Free"), "free")
-    ]
-    readonly property var nativeEdgeOptions: [
-        option(qsTr("Top"), "top"),
-        option(qsTr("Bottom"), "bottom"),
-        option(qsTr("Left"), "left"),
-        option(qsTr("Right"), "right")
-    ]
-    readonly property var alignmentOptions: [
-        option(qsTr("Start"), "start"),
-        option(qsTr("Center"), "center"),
-        option(qsTr("End"), "end")
-    ]
-    readonly property var panelShapeOptions: choices(["pill", "rounded", "hexagon"])
-    readonly property var iconShapeOptions: choices(["circle", "rounded", "hexagon"])
-    readonly property var pathAnchorOptions: [
-        option(qsTr("Top left"), "top-left"),
-        option(qsTr("Top"), "top"),
-        option(qsTr("Top right"), "top-right"),
-        option(qsTr("Left"), "left"),
-        option(qsTr("Center"), "center"),
-        option(qsTr("Right"), "right"),
-        option(qsTr("Bottom left"), "bottom-left"),
-        option(qsTr("Bottom"), "bottom"),
-        option(qsTr("Bottom right"), "bottom-right")
-    ]
-    readonly property var pathOrientationOptions: [
-        option(qsTr("Keep icons upright"), "upright"),
-        option(qsTr("Follow path tangent"), "tangent"),
-        option(qsTr("Point away from center"), "radial")
-    ]
-    readonly property var layoutOptions: [
-        option(qsTr("Adaptive row / column"), "adaptive"),
-        option(qsTr("Horizontal"), "horizontal"),
-        option(qsTr("Vertical"), "vertical"),
-        option(qsTr("Diagonal"), "diagonal"),
-        option(qsTr("Circular"), "circular"),
-        option(qsTr("Ellipse"), "ellipse"),
-        option(qsTr("Ring"), "ring"),
-        option(qsTr("Radial"), "radial"),
-        option(qsTr("Arc"), "arc"),
-        option(qsTr("Semicircle"), "semicircle"),
-        option(qsTr("Fan"), "fan"),
-        option(qsTr("Spiral"), "spiral"),
-        option(qsTr("Ribbon"), "ribbon"),
-        option(qsTr("Horizontal curve"), "horizontal-curve"),
-        option(qsTr("Vertical curve"), "vertical-curve"),
-        option(qsTr("Polygon path"), "polygon"),
-        option(qsTr("Triangle"), "triangle"),
-        option(qsTr("Square"), "square"),
-        option(qsTr("Pentagon"), "pentagon"),
-        option(qsTr("Hexagon"), "hexagon"),
-        option(qsTr("Octagon"), "octagon"),
-        option(qsTr("Star"), "star"),
-        option(qsTr("Multi-row grid"), "grid"),
-        option(qsTr("Floating cluster"), "floating")
-    ]
-    readonly property var materialOptions: [
-        option(qsTr("Glass"), "glass"),
-        option(qsTr("Crystal"), "crystal"),
-        option(qsTr("Neon"), "neon"),
-        option(qsTr("Minimal"), "minimal"),
-        option(qsTr("Plasma"), "plasma"),
-        option(qsTr("Lime"), "lime"),
-        option(qsTr("Floating glass"), "floating-glass"),
-        option(qsTr("Metallic"), "metallic"),
-        option(qsTr("Futuristic"), "futuristic"),
-        option(qsTr("Organic"), "organic"),
-        option(qsTr("Platform bases"), "platform"),
-        option(qsTr("Individual plates"), "plate"),
-        option(qsTr("Pedestals"), "pedestal")
-    ]
-    readonly property var motionOptions: [
-        option(qsTr("None"), "none"),
-        option(qsTr("Bounce"), "bounce"),
-        option(qsTr("Elastic bounce"), "elastic"),
-        option(qsTr("Pulse"), "pulse"),
-        option(qsTr("Scale"), "scale"),
-        option(qsTr("Spin"), "spin"),
-        option(qsTr("Slow rotation"), "idle-rotate"),
-        option(qsTr("Orbit"), "orbit"),
-        option(qsTr("Swing"), "swing"),
-        option(qsTr("Wobble"), "wobble"),
-        option(qsTr("Wiggle"), "wiggle"),
-        option(qsTr("Shake"), "shake"),
-        option(qsTr("Glow"), "glow"),
-        option(qsTr("Breathing"), "breathe"),
-        option(qsTr("Floating"), "float"),
-        option(qsTr("Hover wave"), "wave"),
-        option(qsTr("Ripple"), "ripple"),
-        option(qsTr("Magnetic"), "magnetic"),
-        option(qsTr("Spring"), "spring")
-    ]
-    readonly property var triggerOptions: [
-        option(qsTr("Hover"), "hover"),
-        option(qsTr("Click"), "click"),
-        option(qsTr("Launch"), "launch"),
-        option(qsTr("Running"), "running"),
-        option(qsTr("Drag and drop"), "drop"),
-        option(qsTr("Reveal"), "reveal"),
-        option(qsTr("Always on"), "idle")
-    ]
-    readonly property var folderLayoutOptions: choices([
-        "fan", "grid", "stack", "arc", "spiral", "circular", "radial",
-        "vertical", "horizontal", "elastic", "physics"
-    ])
-    function option(label, value) {
-        return { label: label, value: value };
-    }
+    readonly property var mainTabIcons: ["view-dashboard", "preferences-desktop-display", "preferences-desktop-icons", "draw-rectangle", "document-save"]
 
     function titleCase(value) {
-        const text = String(value).replace(/-/g, " ");
-        return text.length === 0
-            ? text
-            : text.charAt(0).toUpperCase() + text.slice(1);
-    }
-
-    function choices(values) {
-        return values.map(function(value) {
-            return option(titleCase(value), value);
-        });
-    }
-
-    function panelValueFor(panelId, key, fallback) {
-        const revision = panelRevision;
-        const candidate = panelRegistry.panelValue(panelId, key);
-        return candidate === undefined || candidate === null ? fallback : candidate;
-    }
-
-    function panelValue(key, fallback) {
-        return panelValueFor(selectedPanelId, key, fallback);
-    }
-
-    function panelDraft(panelId) {
-        return StudioDraft.nestedMap(panelDrafts, panelId);
-    }
-
-    function effectivePanelValueFor(panelId, key, fallback) {
-        return StudioDraft.value(
-            panelDraft(panelId),
-            key,
-            panelValueFor(panelId, key, fallback));
-    }
-
-    function effectivePanelValue(key, fallback) {
-        return effectivePanelValueFor(selectedPanelId, key, fallback);
-    }
-
-    function panelScreenIndex(panelId) {
-        const revision = panelRevision;
-        const displays = screenRevision;
-        return panelController.screenIndexForPanel(panelId);
-    }
-
-    function effectivePanelScreenIndex(panelId) {
-        const draft = StudioDraft.nestedMap(screenDrafts, panelId);
-        if (StudioDraft.keyCount(draft) === 0)
-            return panelScreenIndex(panelId);
-
-        const stableId = String(draft.id || "");
-        if (stableId.length > 0) {
-            for (let index = 0; index < screenOptions.length; ++index) {
-                if (String(screenOptions[index].id || "") === stableId)
-                    return index;
-            }
-        }
-        return Number(draft.index);
+        const text = String(value || "").replace(/-/g, " ");
+        return text.length === 0 ? text : text.charAt(0).toUpperCase() + text.slice(1);
     }
 
     function optionIndex(options, value) {
-        for (let index = 0; index < options.length; ++index) {
-            if (options[index].value === value)
+        const source = options || [];
+        for (let index = 0; index < source.length; ++index) {
+            if (source[index].value === value)
                 return index;
         }
         return 0;
     }
 
+    function loadEditor(panelId) {
+        const normalizedPanelId = String(panelId || "");
+        if (normalizedPanelId.length === 0) {
+            editorSession = EditorModel.emptySession("panel-not-found", qsTr("No panel is selected."));
+            return false;
+        }
+        const snapshot = panelController.panelSettingsEditorSnapshot(normalizedPanelId, "studio");
+        const loaded = EditorModel.load(snapshot);
+        editorSession = loaded;
+        if (!loaded.loaded) {
+            studioError = qsTr("Panel settings could not be loaded (%1).").arg(loaded.errorCode);
+            return false;
+        }
+        studioError = "";
+        studioWarning = "";
+        return true;
+    }
+
     function selectPanel(panelId) {
-        if (!panelId || panelId.length === 0)
-            return;
-        selectedPanelId = panelId;
+        const normalizedPanelId = String(panelId || "");
+        if (normalizedPanelId.length === 0 || normalizedPanelId === selectedPanelId)
+            return true;
+        if (hasPendingChanges) {
+            studioError = qsTr("Apply or cancel the current draft before switching panels.");
+            return false;
+        }
+        internalPanelSelection = true;
+        selectedPanelId = normalizedPanelId;
+        internalPanelSelection = false;
+        panelRegistry.setActivePanelId(normalizedPanelId);
+        artifactDraft = {};
+        return loadEditor(normalizedPanelId);
     }
 
     function openPanelEditor(panelId) {
-        selectPanel(panelId);
-        setMainTab(1);
-        setSubTab(0);
+        if (selectPanel(panelId)) {
+            setMainTab(1);
+            setSubTab(0);
+        }
     }
 
     function setMainTab(index) {
         const next = StudioNavigation.clampSectionIndex(index);
         mainTabIndex = next;
-        subTabIndex = StudioNavigation.clampSubtabIndex(
-            next,
-            subTabMemory[next] || 0);
+        subTabIndex = StudioNavigation.clampSubtabIndex(next, subTabMemory[next] || 0);
     }
 
     function setSubTab(index) {
@@ -324,108 +117,43 @@ Window {
         subTabMemory = memory;
     }
 
+    function panelValue(key, fallback) {
+        return EditorModel.panelValue(editorSession, key, fallback);
+    }
+
+    function globalValue(key, fallback) {
+        return EditorModel.globalValue(editorSession, key, fallback);
+    }
+
+    function isNativePanel() {
+        return String(panelValue("edge", "bottom")) !== "free";
+    }
+
+    function refreshProjection() {
+        if (!editorSession.loaded)
+            return false;
+        const projected = panelController.resolvePanelSettingsEditorDraft(editorSession.panelId, editorSession.revision, EditorModel.panelCandidate(editorSession), EditorModel.globalCandidate(editorSession), "studio");
+        if (!projected || projected.success !== true) {
+            editorSession = EditorModel.retainFailure(editorSession, projected);
+            studioError = qsTr("Draft validation failed: %1 (%2)").arg(String(projected && projected.status ? projected.status : "failed")).arg(String(projected && (projected.errorMessage || projected.errorCode) ? (projected.errorMessage || projected.errorCode) : qsTr("No details were returned.")));
+            return false;
+        }
+        editorSession = EditorModel.withProjection(editorSession, projected);
+        studioError = "";
+        return true;
+    }
+
     function fieldValue(field) {
-        const scope = field.scope || "panel";
-        if (scope === "settings")
-            return StudioDraft.value(
-                settingsDraft, field.key, settings[field.key]);
-        if (scope === "screen")
-            return effectivePanelScreenIndex(selectedPanelId);
-        if (scope === "mode")
-            return effectivePanelValue("visibilityMode", "always") === field.mode;
-        if (scope === "length") {
-            const edge = effectivePanelValue("edge", "bottom");
-            const width = Number(effectivePanelValue("width", 720));
-            const height = Number(effectivePanelValue("height", 76));
-            if (edge === "free")
-                return Math.max(width, height);
-            return ["left", "right"].includes(edge) ? height : width;
-        }
-        if (scope === "thickness") {
-            const edge = effectivePanelValue("edge", "bottom");
-            const width = Number(effectivePanelValue("width", 720));
-            const height = Number(effectivePanelValue("height", 76));
-            return ["left", "right"].includes(edge) ? width : height;
-        }
-        return effectivePanelValue(field.key, field.fallback);
-    }
-
-    function setPanelDraftValue(panelId, key, value, fallback) {
-        const updated = StudioDraft.setComparedValue(
-            panelDraft(panelId),
-            key,
-            value,
-            panelValueFor(panelId, key, fallback));
-        panelDrafts = StudioDraft.setNestedMap(panelDrafts, panelId, updated);
-        studioError = "";
-    }
-
-    function stagePanelValues(panelId, values) {
-        let updated = panelDraft(panelId);
-        const keys = Object.keys(values);
-        for (let index = 0; index < keys.length; ++index) {
-            const key = keys[index];
-            updated = StudioDraft.setComparedValue(
-                updated,
-                key,
-                values[key],
-                panelValueFor(panelId, key, values[key]));
-        }
-        panelDrafts = StudioDraft.setNestedMap(panelDrafts, panelId, updated);
-        studioError = "";
+        return field.scope === "settings" ? globalValue(field.key, field.fallback) : panelValue(field.key, field.fallback);
     }
 
     function setFieldValue(field, value) {
-        const scope = field.scope || "panel";
-        if (scope === "settings") {
-            settingsDraft = StudioDraft.setComparedValue(
-                settingsDraft,
-                field.key,
-                value,
-                settings[field.key]);
-        } else if (scope === "screen") {
-            const screenIndex = Number(value);
-            const draft = screenIndex === panelScreenIndex(selectedPanelId)
-                ? {}
-                : {
-                    index: screenIndex,
-                    id: screenIndex >= 0 && screenIndex < screenOptions.length
-                        ? String(screenOptions[screenIndex].id || "") : ""
-                };
-            screenDrafts = StudioDraft.setNestedMap(
-                screenDrafts, selectedPanelId, draft);
-        } else if (scope === "mode") {
-            const current = effectivePanelValue("visibilityMode", "always");
-            setPanelDraftValue(
-                selectedPanelId,
-                "visibilityMode",
-                value ? field.mode
-                    : (current === field.mode ? "always" : current),
-                "always");
-        } else if (scope === "length") {
-            const edge = effectivePanelValue("edge", "bottom");
-            const length = Number(value);
-            if (edge === "free") {
-                setPanelDraftValue(selectedPanelId, "width", length, 420);
-                setPanelDraftValue(selectedPanelId, "height", length, 420);
-            } else if (["left", "right"].includes(edge)) {
-                setPanelDraftValue(selectedPanelId, "height", length, 420);
-            } else {
-                setPanelDraftValue(selectedPanelId, "width", length, 720);
-            }
-        } else if (scope === "thickness") {
-            const edge = effectivePanelValue("edge", "bottom");
-            const thickness = Number(value);
-            if (["left", "right"].includes(edge)) {
-                setPanelDraftValue(selectedPanelId, "width", thickness, 76);
-            } else {
-                setPanelDraftValue(selectedPanelId, "height", thickness, 76);
-            }
+        if (field.scope === "settings") {
+            editorSession = EditorModel.setGlobalValue(editorSession, field.key, value);
         } else {
-            setPanelDraftValue(
-                selectedPanelId, field.key, value, field.fallback);
+            editorSession = EditorModel.setPanelValue(editorSession, field.key, value);
         }
-        studioError = "";
+        refreshProjection();
     }
 
     function fieldOptionIndex(field) {
@@ -434,35 +162,46 @@ Window {
 
     function formatFieldValue(field, value) {
         const decimals = field.decimals === undefined ? 0 : field.decimals;
-        const numeric = Number(value)
-            * (field.displayScale === undefined ? 1 : field.displayScale);
+        const numeric = Number(value) * (field.displayScale === undefined ? 1 : field.displayScale);
         const text = decimals > 0 ? numeric.toFixed(decimals) : Math.round(numeric);
         return (field.prefix || "") + text + (field.suffix || "");
     }
 
     function displayFieldValue(field) {
-        if (field.value !== undefined)
-            return String(field.value);
-        return String(fieldValue(field));
+        return field.value !== undefined ? String(field.value) : String(fieldValue(field));
     }
 
     function colorDisplayValue(field) {
-        const value = String(fieldValue(field)).trim();
+        const value = String(fieldValue(field) || "").trim();
         return value.length > 0 ? value : qsTr("Theme default");
     }
 
     function colorPreviewValue(field) {
-        const value = String(fieldValue(field)).trim();
-        return /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value)
-            ? value : "transparent";
+        const value = String(fieldValue(field) || "").trim();
+        return /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value) ? value : "transparent";
     }
 
     function openColorEditor(field) {
         colorField = field;
-        colorTargetPanelId = selectedPanelId;
-        const current = String(fieldValue(field)).trim();
+        const current = String(fieldValue(field) || "").trim();
         colorDialog.selectedColor = current.length > 0 ? current : "#334455";
         colorDialog.open();
+    }
+
+    function fieldDescriptor(key, scope) {
+        const fields = scope === "settings" ? editorSession.globalFields : editorSession.panelFields;
+        for (let index = 0; index < fields.length; ++index) {
+            if (String(fields[index].key) === key)
+                return fields[index];
+        }
+        return null;
+    }
+
+    function optionLabel(key, value, scope) {
+        const descriptor = fieldDescriptor(key, scope || "panel");
+        const options = descriptor ? descriptor.options || [] : [];
+        const index = optionIndex(options, value);
+        return options.length > 0 && options[index].value === value ? options[index].label : titleCase(value);
     }
 
     function readOnlyRow(label, value, description) {
@@ -472,349 +211,6 @@ Window {
             value: value,
             description: description || ""
         };
-    }
-
-    function optionLabel(options, value) {
-        const index = optionIndex(options, value);
-        if (options.length > 0 && options[index].value === value)
-            return options[index].label;
-        return titleCase(value);
-    }
-
-    function onOff(value) {
-        return value ? qsTr("On") : qsTr("Off");
-    }
-
-    function selectedScreenLabel() {
-        const index = panelScreenIndex(selectedPanelId);
-        if (index >= 0 && index < screenOptions.length)
-            return screenOptions[index].label;
-        return qsTr("Display %1").arg(index + 1);
-    }
-
-    function stageThemeAction(panelId, action, sourceUrl) {
-        let draft = {};
-        if (action === "import") {
-            draft = { action: action, sourceUrl: sourceUrl };
-        } else if (action === "clear") {
-            const hasAppliedTheme =
-                String(panelValueFor(panelId, "themeSource", "")).length > 0
-                || String(panelValueFor(panelId, "themeAsset", "")).length > 0;
-            if (hasAppliedTheme)
-                draft = { action: action };
-        } else if (action === "render") {
-            const existing = StudioDraft.nestedMap(themeDrafts, panelId);
-            if (existing.action === "import")
-                return;
-            if (String(panelValueFor(panelId, "themeSource", "")).length > 0)
-                draft = { action: action };
-        }
-        themeDrafts = StudioDraft.setNestedMap(themeDrafts, panelId, draft);
-        studioError = "";
-    }
-
-    function themeActionDescription(panelId) {
-        const draft = StudioDraft.nestedMap(themeDrafts, panelId);
-        if (draft.action === "import")
-            return qsTr("Artwork import pending");
-        if (draft.action === "clear")
-            return qsTr("Artwork removal pending");
-        if (draft.action === "render")
-            return qsTr("Artwork re-render pending");
-        return String(panelValueFor(
-            panelId, "themeStatus", qsTr("Preset surface active.")));
-    }
-
-    function resetSelectedPanelDraft() {
-        const panelId = selectedPanelId;
-        const edge = panelValueFor(panelId, "edge", "bottom");
-        const freePanel = edge === "free";
-        const vertical = ["left", "right"].includes(edge);
-        stagePanelValues(panelId, {
-            visible: edge === "bottom" || freePanel,
-            alignment: "center",
-            visibilityMode: "always",
-            dynamic: freePanel ? false : edge !== "bottom",
-            width: freePanel ? 420 : (vertical ? 76 : 720),
-            height: freePanel ? 420 : (vertical ? 420 : 76),
-            type: freePanel ? "empty" : "hybrid",
-            appearance: "glass",
-            shape: "pill",
-            iconShape: "rounded",
-            iconSize: 52,
-            spacing: 8,
-            layout: freePanel ? "circular" : "adaptive",
-            layoutScale: 1.0,
-            layoutAngle: 0.0,
-            layoutRadius: freePanel ? 145 : 150,
-            layoutRows: 2,
-            layoutPadding: 18,
-            pathSides: 6,
-            pathOrientation: "upright",
-            pathAnchor: "center",
-            iconAnimation: "scale",
-            animationTrigger: "hover",
-            animationSpeed: 1.0,
-            animationIntensity: 1.0,
-            physicsEnabled: false,
-            folderLayout: "fan",
-            folderSpeed: 260,
-            opacity: 0.9,
-            color: "",
-            themeFit: "cover"
-        });
-        stageThemeAction(panelId, "clear", "");
-    }
-
-    function isNativePanel(panelId) {
-        return String(panelValueFor(panelId, "edge", "bottom")) !== "free";
-    }
-
-    function nativePlacementDraft(panelId, draft) {
-        const result = {};
-        if (!isNativePanel(panelId))
-            return result;
-
-        for (let index = 0; index < nativePlacementKeys.length; ++index) {
-            const key = nativePlacementKeys[index];
-            if (StudioDraft.hasValue(draft, key))
-                result[key] = draft[key];
-        }
-        if (StudioDraft.keyCount(
-                StudioDraft.nestedMap(screenDrafts, panelId)) > 0) {
-            result.screen = effectivePanelScreenIndex(panelId);
-        }
-        return result;
-    }
-
-    function filteredPanelDraft(panelId, draft) {
-        const result = {};
-        for (let index = 0; index < editablePanelKeys.length; ++index) {
-            const key = editablePanelKeys[index];
-            if (key !== "visible" && key !== "visibilityMode"
-                    && (!isNativePanel(panelId)
-                        || nativePlacementKeys.indexOf(key) < 0)
-                    && StudioDraft.hasValue(draft, key))
-                result[key] = draft[key];
-        }
-        return result;
-    }
-
-    function applyPanelVisibility(panelId, visible) {
-        if (String(panelValueFor(panelId, "edge", "bottom")) === "free") {
-            panelRegistry.setPanelValue(panelId, "visible", visible);
-            return true;
-        }
-        if (panelController.setPanelVisible(panelId, visible))
-            return true;
-        studioError = qsTr(
-            "Plasma could not safely change this panel's visibility. Its native host was left unchanged.");
-        return false;
-    }
-
-    function applyPanelVisibilityMode(panelId, mode) {
-        const result = panelController.applyNativePanelVisibilityMode(
-            panelId, String(mode));
-        if (result && result.success === true) {
-            if (result.fallbackApplied === true) {
-                studioWarning = VisibilityStatus.problemText(result);
-            }
-            return true;
-        }
-        studioError = qsTr("Native visibility: %1 (%2)")
-            .arg(VisibilityStatus.statusLabel(
-                result ? result.status : "failed"))
-            .arg(VisibilityStatus.problemText(result));
-        return false;
-    }
-
-    function draftPanelIds() {
-        const found = {};
-        const collections = [panelDrafts, screenDrafts, themeDrafts];
-        for (let collectionIndex = 0;
-             collectionIndex < collections.length;
-             ++collectionIndex) {
-            const ids = Object.keys(collections[collectionIndex]);
-            for (let index = 0; index < ids.length; ++index)
-                found[ids[index]] = true;
-        }
-        return Object.keys(found);
-    }
-
-    function discardStudioChanges() {
-        panelDrafts = StudioDraft.clear();
-        settingsDraft = StudioDraft.clear();
-        screenDrafts = StudioDraft.clear();
-        themeDrafts = StudioDraft.clear();
-        themeTargetPanelId = "";
-        colorField = null;
-        colorTargetPanelId = "";
-        studioError = "";
-        studioWarning = "";
-    }
-
-    function applyStudioChanges() {
-        studioError = "";
-        studioWarning = "";
-        const panelIds = draftPanelIds();
-        const existingPanelIds = panelRegistry.panelIds;
-        for (let index = 0; index < panelIds.length; ++index) {
-            if (existingPanelIds.indexOf(panelIds[index]) < 0) {
-                studioError = qsTr(
-                    "A panel changed outside Panel Studio. Cancel and reopen it before applying.");
-                return false;
-            }
-        }
-
-        for (let index = 0; index < panelIds.length; ++index) {
-            const panelId = panelIds[index];
-            const draft = panelDraft(panelId);
-            const placementValues = nativePlacementDraft(panelId, draft);
-            if (StudioDraft.keyCount(placementValues) > 0) {
-                const placementResult =
-                    panelController.applyNativePanelPlacementDraft(
-                        panelId, placementValues);
-                if (!placementResult || placementResult.success !== true) {
-                    const status = PlacementStatus.statusLabel(
-                        placementResult ? placementResult.status : "failed");
-                    const details = PlacementStatus.problemText(placementResult);
-                    studioError = qsTr("Native placement: %1 (%2)")
-                        .arg(status).arg(details);
-                    return false;
-                }
-            }
-
-            const values = filteredPanelDraft(panelId, draft);
-            if (StudioDraft.keyCount(values) > 0)
-                panelRegistry.updatePanel(panelId, values);
-            if (StudioDraft.hasValue(draft, "visible")
-                    && !applyPanelVisibility(panelId, Boolean(draft.visible)))
-                return false;
-            if (StudioDraft.hasValue(draft, "visibilityMode")) {
-                if (!applyPanelVisibilityMode(
-                        panelId, String(draft.visibilityMode)))
-                    return false;
-            }
-        }
-
-        const settingKeys = Object.keys(settingsDraft);
-        for (let index = 0; index < settingKeys.length; ++index) {
-            const key = settingKeys[index];
-            settings[key] = settingsDraft[key];
-        }
-
-        const screenPanelIds = Object.keys(screenDrafts);
-        for (let index = 0; index < screenPanelIds.length; ++index) {
-            const panelId = screenPanelIds[index];
-            if (!isNativePanel(panelId)) {
-                panelController.setPanelScreen(
-                    panelId, effectivePanelScreenIndex(panelId));
-            }
-        }
-
-        let themeSucceeded = true;
-        for (let index = 0; index < panelIds.length; ++index) {
-            const panelId = panelIds[index];
-            const themeDraft = StudioDraft.nestedMap(themeDrafts, panelId);
-            const action = String(themeDraft.action || "");
-            if (action === "clear") {
-                panelRegistry.clearTheme(panelId);
-            } else if (action === "import") {
-                themeSucceeded = panelRegistry.importTheme(
-                    panelId, themeDraft.sourceUrl) && themeSucceeded;
-            } else if (action === "render") {
-                themeSucceeded = panelRegistry.renderTheme(
-                    panelId,
-                    Number(panelValueFor(panelId, "width", 720)),
-                    Number(panelValueFor(panelId, "height", 76)),
-                    Screen.devicePixelRatio,
-                    true) && themeSucceeded;
-            } else {
-                const draft = panelDraft(panelId);
-                const geometryChanged =
-                    StudioDraft.hasValue(draft, "width")
-                    || StudioDraft.hasValue(draft, "height")
-                    || StudioDraft.hasValue(draft, "themeFit");
-                if (geometryChanged
-                        && String(panelValueFor(
-                            panelId, "themeSource", "")).length > 0) {
-                    themeSucceeded = panelRegistry.renderTheme(
-                        panelId,
-                        Number(panelValueFor(panelId, "width", 720)),
-                        Number(panelValueFor(panelId, "height", 76)),
-                        Screen.devicePixelRatio,
-                        true) && themeSucceeded;
-                }
-            }
-        }
-
-        panelDrafts = StudioDraft.clear();
-        settingsDraft = StudioDraft.clear();
-        screenDrafts = StudioDraft.clear();
-        themeDrafts = StudioDraft.clear();
-        themeTargetPanelId = "";
-        colorField = null;
-        colorTargetPanelId = "";
-        if (!themeSucceeded) {
-            studioError = qsTr(
-                "The settings were applied, but an artwork operation failed.");
-            return false;
-        }
-        return true;
-    }
-
-    function acceptStudioChanges() {
-        if (!hasPendingChanges) {
-            close();
-            return;
-        }
-        if (applyStudioChanges() && studioWarning.length === 0)
-            close();
-    }
-
-    function cancelStudioChanges() {
-        discardStudioChanges();
-        close();
-    }
-
-    function performStudioAction(action, data) {
-        if ((action === "create-free" || action === "remove-panel"
-                || action === "toggle-panel-visibility")
-                && hasPendingChanges)
-            return;
-        if (action === "create-free") {
-            const result = panelController.createFreePanel();
-            if (result && result.success === true
-                    && String(result.panelId || "").length > 0) {
-                studioError = "";
-                openPanelEditor(String(result.panelId));
-            } else {
-                const errorCode = result
-                    ? String(result.errorCode || "unknown-error")
-                    : "unknown-error";
-                studioError = qsTr("Could not create the free panel (%1).")
-                    .arg(errorCode);
-            }
-        } else if (action === "toggle-panel-visibility") {
-            applyPanelVisibility(
-                selectedPanelId, !Boolean(panelValue("visible", true)));
-        } else if (action === "remove-panel") {
-            const removed = selectedPanelId;
-            panelController.removePanel(removed);
-            selectPanel(panelRegistry.activePanelId);
-        } else if (action === "import-theme") {
-            themeTargetPanelId = selectedPanelId;
-            themeDialog.open();
-        } else if (action === "clear-theme") {
-            stageThemeAction(selectedPanelId, "clear", "");
-        } else if (action === "render-theme") {
-            stageThemeAction(selectedPanelId, "render", "");
-        } else if (action === "reset-panel") {
-            resetSelectedPanelDraft();
-        } else if (action === "load-built-in-theme") {
-            panelRegistry.applyTheme(selectedPanelId, data.themeId, "complete");
-            discardStudioChanges();
-        }
     }
 
     function section(label, description, first) {
@@ -827,586 +223,344 @@ Window {
     }
 
     function notice(text, warning) {
-        return { kind: "notice", text: text, warning: warning === true };
-    }
-
-    function panelField(kind, label, key, fallback, extra) {
-        const row = {
-            kind: kind,
-            label: label,
-            key: key,
-            fallback: fallback,
-            scope: "panel"
-        };
-        if (extra) {
-            for (const propertyName in extra)
-                row[propertyName] = extra[propertyName];
-        }
-        return row;
-    }
-
-    function settingsField(kind, label, key, extra) {
-        const row = {
-            kind: kind,
-            label: label,
-            key: key,
-            scope: "settings",
-            description: qsTr("Applies to all Arch Dock panels")
-        };
-        if (extra) {
-            for (const propertyName in extra)
-                row[propertyName] = extra[propertyName];
-        }
-        return row;
-    }
-
-    function screenField() {
         return {
-            kind: "combo",
-            label: qsTr("Display"),
-            key: "screen",
-            scope: "screen",
-            options: screenOptions.map(function(display, index) {
-                return option(display.label, index);
-            })
+            kind: "notice",
+            text: text,
+            warning: warning === true
         };
+    }
+
+    function choicesToOptions(choices) {
+        const result = [];
+        const source = choices || [];
+        for (let index = 0; index < source.length; ++index) {
+            result.push({
+                label: titleCase(source[index]),
+                value: source[index]
+            });
+        }
+        return result;
+    }
+
+    function editorRow(descriptor) {
+        const control = String(descriptor.control || "");
+        const row = {
+            kind: control === "screen" ? "combo" : control,
+            key: descriptor.key,
+            label: descriptor.label,
+            scope: descriptor.scope === "global" ? "settings" : "panel",
+            fallback: descriptor.defaultValue,
+            options: descriptor.options && descriptor.options.length > 0 ? descriptor.options : choicesToOptions(descriptor.choices),
+            description: descriptor.scope === "global" ? qsTr("Applies to all Arch Dock panels") : ""
+        };
+        if (descriptor.minimumValue !== undefined && descriptor.minimumValue !== null)
+            row.from = Number(descriptor.minimumValue);
+        if (descriptor.maximumValue !== undefined && descriptor.maximumValue !== null)
+            row.to = Number(descriptor.maximumValue);
+        if (descriptor.step !== undefined)
+            row.step = Number(descriptor.step);
+        if (descriptor.decimals !== undefined)
+            row.decimals = Number(descriptor.decimals);
+        if (descriptor.suffix !== undefined)
+            row.suffix = descriptor.suffix;
+        return row;
+    }
+
+    function fieldsForSection(sectionId) {
+        const result = [];
+        const sources = [editorSession.panelFields, editorSession.globalFields];
+        for (let sourceIndex = 0; sourceIndex < sources.length; ++sourceIndex) {
+            const source = sources[sourceIndex] || [];
+            for (let index = 0; index < source.length; ++index) {
+                if (String(source[index].section) === sectionId)
+                    result.push(editorRow(source[index]));
+            }
+        }
+        return result;
+    }
+
+    function schemaSectionRows(sectionId, label, description) {
+        const rows = [section(label, description, true)];
+        const fields = fieldsForSection(sectionId);
+        for (let index = 0; index < fields.length; ++index)
+            rows.push(fields[index]);
+        if (fields.length === 0) {
+            rows.push(notice(qsTr("No settings in this section are available for the resolved panel capabilities.")));
+        }
+        return rows;
     }
 
     function overviewPanelRows() {
-        const edge = panelValue("edge", "bottom");
-        const alignment = panelValue("alignment", "center");
-        const freePanel = edge === "free";
-        const position = freePanel
-            ? qsTr("Free on desktop")
-            : optionLabel(edgeOptions, edge) + " · "
-                + optionLabel(alignmentOptions, alignment);
-        const visibility = panelValue("visible", true)
-            ? optionLabel(visibilityOptions,
-                panelValue("visibilityMode", "always"))
-            : qsTr("Hidden");
         const color = String(panelValue("color", "")).trim();
-        const themeSource = String(panelValue("themeSource", ""));
-        const themePackage = String(panelValue("themePackageName", "")).trim();
-        const artwork = themePackage.length > 0
-            ? themePackage
-            : (themeSource.length > 0 ? qsTr("Imported artwork") : qsTr("None"));
-        const rows = [
-            section(qsTr("Panel"),
-                qsTr("Settings currently applied to the selected panel. Edit them under Panels."),
-                true),
-            readOnlyRow(qsTr("Name"), panelRegistry.panelName(selectedPanelId)),
-            readOnlyRow(qsTr("Type"),
-                optionLabel(panelTypeOptions, panelValue("type", "empty"))),
-            readOnlyRow(qsTr("Position"), position)
-        ];
-        if (!freePanel)
-            rows.push(readOnlyRow(qsTr("Display"), selectedScreenLabel()));
-        rows.push(
-            readOnlyRow(qsTr("Size"),
-                panelValue("width", 720) + " × " + panelValue("height", 76)
-                    + qsTr(" px")),
-            readOnlyRow(qsTr("Sizing"),
-                panelValue("dynamic", true) ? qsTr("Dynamic") : qsTr("Static")));
-        if (!freePanel)
-            rows.push(readOnlyRow(qsTr("Visibility"), visibility));
-        rows.push(
-            section(qsTr("Appearance"),
-                qsTr("The active surface and geometry settings.")),
-            readOnlyRow(qsTr("Layout"),
-                optionLabel(layoutOptions, panelValue("layout", "adaptive"))),
-            readOnlyRow(qsTr("Shape"),
-                optionLabel(panelShapeOptions, panelValue("shape", "pill"))),
-            readOnlyRow(qsTr("Theme"),
-                optionLabel(materialOptions, panelValue("appearance", "glass"))),
-            readOnlyRow(qsTr("Color"),
-                color.length > 0 ? color : qsTr("Theme default")),
-            readOnlyRow(qsTr("Opacity"),
-                Math.round(Number(panelValue("opacity", 0.9)) * 100) + "%"),
-            readOnlyRow(qsTr("Artwork"), artwork));
-        return rows;
+        return [section(qsTr("Panel"), qsTr("Settings currently applied to the selected panel."), true), readOnlyRow(qsTr("Name"), panelRegistry.panelName(selectedPanelId)), readOnlyRow(qsTr("Type"), optionLabel("type", panelValue("type", "empty"))), readOnlyRow(qsTr("Position"), optionLabel("edge", panelValue("edge", "bottom"))), readOnlyRow(qsTr("Layout"), optionLabel("layout", panelValue("layout", "adaptive"))), readOnlyRow(qsTr("Theme"), optionLabel("appearance", panelValue("appearance", "glass"))), readOnlyRow(qsTr("Color"), color.length > 0 ? color : qsTr("Theme default")), readOnlyRow(qsTr("Opacity"), Math.round(Number(panelValue("opacity", 0.9)) * 100) + "%")];
     }
 
     function overviewIconRows() {
-        const animation = optionLabel(
-            motionOptions,
-            panelValue("iconAnimation", "scale"));
-        const trigger = optionLabel(
-            triggerOptions,
-            panelValue("animationTrigger", "hover")).toLowerCase();
-        const animationSummary = animation + " · " + trigger + " · "
-            + Number(panelValue("animationSpeed", 1)).toFixed(1) + "×";
-        const appearance = panelValue("appearance", "glass");
-        const tileAppearances = ["plate", "platform", "pedestal"];
-        return [
-            section(qsTr("Icons"),
-                qsTr("Icon settings currently applied to the selected panel. Edit them under Icons."),
-                true),
-            readOnlyRow(qsTr("Size"),
-                panelValue("iconSize", 52) + qsTr(" px")),
-            readOnlyRow(qsTr("Spacing"),
-                Math.round(Number(panelValue("spacing", 8))) + qsTr(" px")),
-            readOnlyRow(qsTr("Shape"),
-                optionLabel(iconShapeOptions,
-                    panelValue("iconShape", "rounded"))),
-            readOnlyRow(qsTr("Animation"), animationSummary),
-            readOnlyRow(qsTr("Motion intensity"),
-                Number(panelValue("animationIntensity", 1)).toFixed(1) + "×"),
-            section(qsTr("Appearance"),
-                qsTr("Active global and theme-driven icon effects.")),
-            readOnlyRow(qsTr("Surface style"),
-                optionLabel(materialOptions, appearance)),
-            readOnlyRow(qsTr("Reflections"), onOff(settings.showReflections),
-                qsTr("Applies to all Arch Dock panels")),
-            readOnlyRow(qsTr("Indicators"), onOff(settings.showIndicators),
-                qsTr("Applies to all Arch Dock panels")),
-            readOnlyRow(qsTr("Magnification"),
-                settings.magnificationEnabled
-                    ? Number(settings.magnification).toFixed(2) + "×"
-                    : qsTr("Off"),
-                qsTr("Applies to all Arch Dock panels")),
-            readOnlyRow(qsTr("Icon tiles"),
-                tileAppearances.includes(appearance)
-                    ? optionLabel(materialOptions, appearance)
-                    : qsTr("Off"))
-        ];
+        return [section(qsTr("Icons"), qsTr("Settings currently applied to icons in the selected panel."), true), readOnlyRow(qsTr("Size"), panelValue("iconSize", 52) + qsTr(" px")), readOnlyRow(qsTr("Spacing"), Math.round(Number(panelValue("spacing", 8))) + qsTr(" px")), readOnlyRow(qsTr("Shape"), optionLabel("iconShape", panelValue("iconShape", "rounded"))), readOnlyRow(qsTr("Animation"), optionLabel("iconAnimation", panelValue("iconAnimation", "scale"))), readOnlyRow(qsTr("Magnification"), globalValue("magnificationEnabled", true) ? Number(globalValue("magnification", 1.65)).toFixed(2) + "×" : qsTr("Off"))];
     }
 
-    function nativePlacementStatusRows() {
-        if (!isNativePanel(selectedPanelId))
-            return [];
-
-        const result = selectedPlacementResult;
-        const rows = [
-            section(
-                qsTr("Native placement result"),
-                PlacementStatus.statusLabel(result.status)),
-            readOnlyRow(
-                qsTr("Saved intent"),
-                PlacementStatus.savedIntentText(result),
-                qsTr("Values currently persisted by Arch Dock")),
-            readOnlyRow(
-                qsTr("Actual Plasma host"),
-                PlacementStatus.hostStateText(result),
-                qsTr("Values read back from the owned Plasma panel"))
-        ];
-        if (PlacementStatus.isProblem(result)) {
-            rows.push(notice(
-                qsTr("Placement detail: %1")
-                    .arg(PlacementStatus.problemText(result)),
-                true));
-        }
-        return rows;
-    }
-
-    function panelsGeneralRows() {
-        const edge = effectivePanelValue("edge", "bottom");
-        const freePanel = edge === "free";
-        const edgeEditable = !panelRegistry.isBuiltIn(selectedPanelId) && !freePanel;
-        const orientation = freePanel
-            ? titleCase(effectivePanelValue("layout", "adaptive"))
-            : (["left", "right"].includes(edge)
-                ? qsTr("Vertical") : qsTr("Horizontal"));
-        const rows = [
-            section(qsTr("General"), qsTr("Identity and placement of the selected panel."), true),
-            {
-                kind: "actions",
-                label: qsTr("Panel"),
-                actions: [
-                    { label: qsTr("Add free panel"), icon: "list-add",
-                      action: "create-free", available: !hasPendingChanges },
-                    { label: panelRegistry.isBuiltIn(selectedPanelId)
-                        ? (panelValue("visible", true)
-                            ? qsTr("Hide panel") : qsTr("Show panel"))
-                        : qsTr("Remove panel"),
-                      icon: panelRegistry.isBuiltIn(selectedPanelId)
-                        ? (panelValue("visible", true)
-                            ? "view-hidden" : "view-visible")
-                        : "edit-delete",
-                      action: panelRegistry.isBuiltIn(selectedPanelId)
-                        ? "toggle-panel-visibility" : "remove-panel",
-                      available: !hasPendingChanges }
-                ]
-            },
-            panelField("combo", qsTr("Panel Type"), "type", "empty",
-                { options: panelTypeOptions }),
-            panelField("combo", qsTr("Position"), "edge", "bottom",
+    function panelGeneralRows() {
+        const rows = schemaSectionRows("panels-general", qsTr("General"), qsTr("Identity and placement of the selected panel."));
+        const builtIn = panelRegistry.isBuiltIn(selectedPanelId);
+        rows.splice(1, 0, {
+            kind: "actions",
+            label: qsTr("Panel"),
+            actions: [
                 {
-                    options: freePanel ? edgeOptions : nativeEdgeOptions,
-                    available: edgeEditable,
-                    description: edgeEditable ? "" : qsTr("Fixed for this panel type")
-                }),
-            panelField("combo", qsTr("Alignment"), "alignment", "center",
-                { options: alignmentOptions }),
-            { kind: "readonly", label: qsTr("Orientation"), value: orientation }
-        ];
-        if (!freePanel) {
-            rows.push(
-                screenField(),
-                panelField("combo", qsTr("Screen Edge"), "edge", "bottom",
-                {
-                    options: nativeEdgeOptions,
-                    available: edgeEditable,
-                    description: edgeEditable ? "" : qsTr("Fixed for this panel type")
-                }));
-        }
-        const placementRows = nativePlacementStatusRows();
-        for (let index = 0; index < placementRows.length; ++index)
-            rows.push(placementRows[index]);
-        rows.push(notice(qsTr(
-            "Lock Position will be added with live panel-geometry synchronization.")));
-        return rows;
-    }
-
-    function panelsSizeRows() {
-        const freePanel = effectivePanelValue("edge", "bottom") === "free";
-        if (freePanel) {
-            return [
-                section(qsTr("Size"), qsTr("Panel dimensions and dynamic sizing."), true),
-                panelField("spin", qsTr("Width"), "width", 720,
-                    { from: 48, to: 4096, step: 4 }),
-                panelField("spin", qsTr("Height"), "height", 76,
-                    { from: 48, to: 4096, step: 4 }),
-                {
-                    kind: "spin",
-                    label: qsTr("Length"),
-                    scope: "length",
-                    from: 48,
-                    to: 4096,
-                    step: 4,
-                    description: qsTr("Sets both width and height")
+                    label: qsTr("Add free panel"),
+                    icon: "list-add",
+                    action: "create-free",
+                    available: !hasPendingChanges
                 },
-                panelField("switch", qsTr("Dynamic Size"), "dynamic", true),
-                notice(qsTr("Floating Margin needs a placement adapter before it can safely change native and free panels."))
-            ];
-        }
-
-        const dynamic = Boolean(effectivePanelValue("dynamic", true));
-        return [
-            section(qsTr("Size"), qsTr("Panel dimensions and dynamic sizing."), true),
-            {
-                kind: "spin",
-                label: qsTr("Thickness"),
-                scope: "thickness",
-                from: 48,
-                to: 4096,
-                step: 4,
-                description: qsTr("Across the panel orientation")
-            },
-            panelField("switch", qsTr("Dynamic Size"), "dynamic", true),
-            {
-                kind: "spin",
-                label: qsTr("Length"),
-                scope: "length",
-                from: 48,
-                to: 4096,
-                step: 4,
-                available: !dynamic,
-                description: dynamic
-                    ? qsTr("Fit mode follows the panel's applet content. Turn off Dynamic Size to set a fixed length.")
-                    : qsTr("Fixed length along the panel orientation")
-            },
-            notice(qsTr("Numeric Floating Margin is unavailable through Plasma's scripting API. Use Plasma Edit Mode's supported Floating setting; the Plasma theme controls its gap."))
-        ];
-    }
-
-    function panelsAppearanceRows() {
-        const panel3dEnabled = Boolean(effectivePanelValue("panel3dEnabled", false));
-        return [
-            section(qsTr("Appearance"), qsTr("Surface styling for the selected panel."), true),
-            { kind: "themeSamples", label: qsTr("Built-in themes"),
-              description: qsTr("Original renderer-driven samples. Loading one preserves your icons and launchers."),
-              themes: panelRegistry.themeDefinitions() },
-            panelField("combo", qsTr("Shape"), "shape", "pill",
-                { options: panelShapeOptions }),
-            panelField("color", qsTr("Color"), "color", ""),
-            panelField("slider", qsTr("Opacity"), "opacity", 0.9,
-                { from: 0, to: 1, step: 0.05, decimals: 2 }),
-            panelField("combo", qsTr("Theme"), "appearance", "glass",
-                { options: materialOptions }),
-            panelField("switch", qsTr("3D Enabled"), "panel3dEnabled", false),
-            section(qsTr("3D Panel"), qsTr("Depth rendering for the selected panel."), false),
-            panelField("slider", qsTr("Depth"), "panel3dDepth", 12,
-                { from: 0, to: 64, step: 1, decimals: 0, available: panel3dEnabled }),
-            panelField("slider", qsTr("Extrusion"), "panel3dExtrusion", 8,
-                { from: 0, to: 64, step: 1, decimals: 0, available: panel3dEnabled }),
-            panelField("slider", qsTr("Perspective"), "panel3dPerspective", 0,
-                { from: -45, to: 45, step: 1, decimals: 0, available: panel3dEnabled }),
-            panelField("slider", qsTr("Rotation"), "panel3dRotation", 0,
-                { from: -180, to: 180, step: 1, decimals: 0, available: panel3dEnabled }),
-            panelField("slider", qsTr("Bevel"), "panel3dBevel", 4,
-                { from: 0, to: 32, step: 1, decimals: 0, available: panel3dEnabled }),
-            panelField("combo", qsTr("Surface Material"), "panel3dMaterial", "glass",
-                { options: materialOptions, available: panel3dEnabled }),
-            panelField("slider", qsTr("Lighting"), "panel3dLighting", 1,
-                { from: 0, to: 2, step: 0.1, decimals: 1, available: panel3dEnabled }),
-            panelField("slider", qsTr("Shadow"), "panel3dShadow", 0.4,
-                { from: 0, to: 1, step: 0.05, decimals: 2, available: panel3dEnabled }),
-            panelField("slider", qsTr("Reflection"), "panel3dReflection", 0.2,
-                { from: 0, to: 1, step: 0.05, decimals: 2, available: panel3dEnabled }),
-            panelField("slider", qsTr("Border Depth"), "panel3dBorderDepth", 2,
-                { from: 0, to: 24, step: 1, decimals: 0, available: panel3dEnabled }),
-            panelField("combo", qsTr("3D Rendering Quality"), "panel3dQuality", "balanced",
-                { options: choices(["performance", "balanced", "high", "ultra"]), available: panel3dEnabled }),
-            panelField("combo", qsTr("Artwork fit"), "themeFit", "cover",
-                { options: choices(["cover", "contain", "stretch", "tile"]) }),
-            {
-                kind: "actions",
-                label: qsTr("Artwork"),
-                description: themeActionDescription(selectedPanelId),
-                actions: [
-                    { label: qsTr("Import"), icon: "document-import",
-                      action: "import-theme" },
-                    { label: qsTr("Re-render"), icon: "view-refresh",
-                      action: "render-theme" },
-                    { label: qsTr("Clear"), icon: "edit-clear",
-                      action: "clear-theme" }
-                ]
-            },
-            notice(qsTr("Texture, Border, Shadow, and Blur will appear here once their renderer path is implemented."))
-        ];
-    }
-
-    function panelsBehaviorRows() {
-        const nativePanel = isNativePanel(selectedPanelId);
-        const rows = [
-            section(qsTr("Behavior"), qsTr("Visibility and interaction rules."), true)
-        ];
-        if (nativePanel) {
-            rows.push(
-                panelField("switch", qsTr("Visible"), "visible", true),
-                panelField("combo", qsTr("Visibility mode"),
-                    "visibilityMode", "always",
-                    { options: visibilityOptions }),
-                readOnlyRow(
-                    qsTr("Native host result"),
-                    VisibilityStatus.statusLabel(selectedVisibilityResult.status),
-                    qsTr("The last ownership-verified Plasma result")));
-            if (VisibilityStatus.isProblem(selectedVisibilityResult)) {
-                rows.push(notice(
-                    qsTr("Visibility detail: %1")
-                        .arg(VisibilityStatus.problemText(
-                            selectedVisibilityResult)),
-                    true));
-            }
-            const savedMode = effectivePanelValue("visibilityMode", "always");
-            if (!VisibilityStatus.containsMode(
-                    selectedVisibilityResult, true, savedMode)) {
-                rows.push(notice(qsTr(
-                    "The saved visibility mode is unavailable. Apply Always visible or another listed mode."),
-                    true));
+                {
+                    label: builtIn ? (Boolean(panelValue("visible", true)) ? qsTr("Hide panel") : qsTr("Show panel")) : qsTr("Remove panel"),
+                    icon: builtIn ? (Boolean(panelValue("visible", true)) ? "view-hidden" : "view-visible") : "edit-delete",
+                    action: builtIn ? "toggle-panel-visibility" : "remove-panel",
+                    available: builtIn || !hasPendingChanges
+                }
+            ]
+        });
+        if (isNativePanel()) {
+            rows.push(section(qsTr("Native placement result"), PlacementStatus.statusLabel(selectedPlacementResult.status)), readOnlyRow(qsTr("Saved intent"), PlacementStatus.savedIntentText(selectedPlacementResult)), readOnlyRow(qsTr("Actual Plasma host"), PlacementStatus.hostStateText(selectedPlacementResult)));
+            if (PlacementStatus.isProblem(selectedPlacementResult)) {
+                rows.push(notice(qsTr("Placement detail: %1").arg(PlacementStatus.problemText(selectedPlacementResult)), true));
             }
         }
-        rows.push(
-            panelField("switch", qsTr("Dynamic / Static"), "dynamic", true,
-                { description: qsTr("On is dynamic; off is static") }),
-            panelField("switch", qsTr("Spring rearrangement"),
-                "physicsEnabled", false),
-            panelField("combo", qsTr("Folder expansion"), "folderLayout", "fan",
-                { options: folderLayoutOptions }),
-            panelField("spin", qsTr("Folder animation speed"), "folderSpeed", 260,
-                { from: 80, to: 1200, step: 20 })
-        );
         return rows;
     }
 
-    function panelsLayoutRows() {
-        return [
-            section(qsTr("Layout"), qsTr("Shape geometry and content placement."), true),
-            panelField("combo", qsTr("Dock layout"), "layout", "adaptive",
-                { options: layoutOptions }),
-            panelField("slider", qsTr("Layout scale"), "layoutScale", 1.0,
-                { from: 0.5, to: 2.5, step: 0.05, decimals: 2, suffix: "×" }),
-            panelField("spin", qsTr("Radius"), "layoutRadius", 150,
-                { from: 48, to: 2048, step: 2 }),
-            panelField("spin", qsTr("Layout angle"), "layoutAngle", 0,
-                { from: -180, to: 180, step: 1 }),
-            panelField("spin", qsTr("Polygon sides"), "pathSides", 6,
-                { from: 3, to: 12, step: 1 }),
-            panelField("combo", qsTr("Content Alignment"), "pathAnchor", "center",
-                { options: pathAnchorOptions }),
-            panelField("combo", qsTr("Icon path orientation"),
-                "pathOrientation", "upright",
-                { options: pathOrientationOptions }),
-            panelField("spin", qsTr("Grid rows"), "layoutRows", 2,
-                { from: 1, to: 8, step: 1 }),
-            panelField("spin", qsTr("Panel Padding"), "layoutPadding", 18,
-                { from: 0, to: 240, step: 1 }),
-            notice(qsTr("Content Margins, Start Offset, and End Offset need geometry support before they can be enabled."))
-        ];
+    function panelAppearanceRows() {
+        const rows = schemaSectionRows("panels-appearance", qsTr("Appearance"), qsTr("Surface styling for the selected panel."));
+        rows.splice(1, 0, {
+            kind: "themeSamples",
+            label: qsTr("Built-in themes"),
+            description: qsTr("Available themes are resolved by the backend for this panel."),
+            themes: CapabilityModel.availableItems(selectedResolvedThemes)
+        });
+        rows.push({
+            kind: "actions",
+            label: qsTr("Artwork"),
+            description: artifactDescription(),
+            actions: [
+                {
+                    label: qsTr("Import"),
+                    icon: "document-import",
+                    action: "import-theme"
+                },
+                {
+                    label: qsTr("Re-render"),
+                    icon: "view-refresh",
+                    action: "render-theme"
+                },
+                {
+                    label: qsTr("Clear"),
+                    icon: "edit-clear",
+                    action: "clear-theme"
+                }
+            ]
+        });
+        return rows;
     }
 
-    function panelsSegmentsRows() {
-        return [
-            section(qsTr("Segments"), qsTr("Independent panel surface sections."), true),
-            notice(qsTr("Segments are not rendered yet. Enabled / Disabled, spacing, style, width, color, opacity, glow, corner radius, and padding will be added together so the controls cannot silently do nothing."), true)
-        ];
-    }
-
-    function iconsAppearanceRows() {
-        const icon3dEnabled = Boolean(effectivePanelValue("icon3dEnabled", false));
-        return [
-            section(qsTr("Appearance"), qsTr("Icon geometry and live global effects."), true),
-            panelField("combo", qsTr("Shape"), "iconShape", "rounded",
-                { options: iconShapeOptions }),
-            panelField("spin", qsTr("Size"), "iconSize", 52,
-                { from: 24, to: 128, step: 2 }),
-            panelField("slider", qsTr("Spacing"), "spacing", 8,
-                { from: 0, to: 48, step: 1, decimals: 0 }),
-            panelField("switch", qsTr("3D Enabled"), "icon3dEnabled", false),
-            section(qsTr("3D Icon"), qsTr("Depth rendering for the current icons."), false),
-            panelField("slider", qsTr("Depth"), "icon3dDepth", 10,
-                { from: 0, to: 64, step: 1, decimals: 0, available: icon3dEnabled }),
-            panelField("slider", qsTr("Extrusion"), "icon3dExtrusion", 7,
-                { from: 0, to: 64, step: 1, decimals: 0, available: icon3dEnabled }),
-            panelField("slider", qsTr("Bevel"), "icon3dBevel", 3,
-                { from: 0, to: 32, step: 1, decimals: 0, available: icon3dEnabled }),
-            panelField("slider", qsTr("Perspective"), "icon3dPerspective", 0,
-                { from: -45, to: 45, step: 1, decimals: 0, available: icon3dEnabled }),
-            panelField("slider", qsTr("Rotation X"), "icon3dRotationX", 0,
-                { from: -180, to: 180, step: 1, decimals: 0, available: icon3dEnabled }),
-            panelField("slider", qsTr("Rotation Y"), "icon3dRotationY", 0,
-                { from: -180, to: 180, step: 1, decimals: 0, available: icon3dEnabled }),
-            panelField("slider", qsTr("Rotation Z"), "icon3dRotationZ", 0,
-                { from: -180, to: 180, step: 1, decimals: 0, available: icon3dEnabled }),
-            panelField("combo", qsTr("Surface Material"), "icon3dMaterial", "glass",
-                { options: materialOptions, available: icon3dEnabled }),
-            panelField("slider", qsTr("Front Lighting"), "icon3dFrontLighting", 1,
-                { from: 0, to: 2, step: 0.1, decimals: 1, available: icon3dEnabled }),
-            panelField("slider", qsTr("Rim Lighting"), "icon3dRimLighting", 0.4,
-                { from: 0, to: 2, step: 0.1, decimals: 1, available: icon3dEnabled }),
-            panelField("slider", qsTr("Shadow"), "icon3dShadow", 0.4,
-                { from: 0, to: 1, step: 0.05, decimals: 2, available: icon3dEnabled }),
-            panelField("slider", qsTr("Reflection"), "icon3dReflection", 0.2,
-                { from: 0, to: 1, step: 0.05, decimals: 2, available: icon3dEnabled }),
-            panelField("slider", qsTr("Gloss"), "icon3dGloss", 0.5,
-                { from: 0, to: 1, step: 0.05, decimals: 2, available: icon3dEnabled }),
-            panelField("slider", qsTr("Edge Highlight"), "icon3dEdgeHighlight", 0.4,
-                { from: 0, to: 1, step: 0.05, decimals: 2, available: icon3dEnabled }),
-            panelField("switch", qsTr("Background Tile"), "icon3dBackgroundTile", true,
-                { available: icon3dEnabled }),
-            panelField("combo", qsTr("3D Rendering Quality"), "icon3dQuality", "balanced",
-                { options: choices(["performance", "balanced", "high", "ultra"]), available: icon3dEnabled }),
-            settingsField("switch", qsTr("Reflection"), "showReflections"),
-            notice(qsTr("Opacity, Glow, Shadow, Attention Color, and independent Icon Style require the icon renderer work planned for this section."))
-        ];
-    }
-
-    function iconsBehaviorRows() {
-        return [
-            section(qsTr("Hover and Click"),
-                qsTr("Select an animation and the event that triggers it."), true),
-            panelField("combo", qsTr("Animation"), "iconAnimation", "scale",
-                { options: motionOptions }),
-            panelField("combo", qsTr("Trigger"), "animationTrigger", "hover",
-                { options: triggerOptions }),
-            panelField("slider", qsTr("Animation Speed"), "animationSpeed", 1.0,
-                { from: 0.2, to: 3, step: 0.1, decimals: 1, suffix: "×" }),
-            panelField("slider", qsTr("Motion intensity"), "animationIntensity", 1.0,
-                { from: 0.1, to: 2.5, step: 0.1, decimals: 1 }),
-            section(qsTr("Magnification"),
-                qsTr("These controls currently apply to all panels.")),
-            settingsField("switch", qsTr("Enabled"), "magnificationEnabled"),
-            settingsField("slider", qsTr("Size"), "magnification",
-                { from: 1, to: 2.4, step: 0.05, decimals: 2, suffix: "×" }),
-            settingsField("slider", qsTr("Speed"), "animationDuration",
-                { from: 80, to: 500, step: 10, decimals: 0, suffix: qsTr(" ms") }),
-            notice(qsTr("Separate Hover Glow, Click Color/Shade, Lift, and Attention controls need per-state renderer support."))
-        ];
-    }
-
-    function iconsIndicatorRows() {
-        return [
-            section(qsTr("Indicators"), qsTr("Running and attention markers."), true),
-            settingsField("switch", qsTr("Enabled"), "showIndicators"),
-            notice(qsTr("Shape, Color, Size, Style, and Attention styling are currently renderer-defined. They will be exposed together with per-panel indicators."))
-        ];
-    }
-
-    function iconsNotificationRows() {
-        return [
-            section(qsTr("Notifications"), qsTr("Badges and transient icon notices."), true),
-            notice(qsTr("Notifications are not implemented yet. Enabled, Show on Hover, Duration, and Position will be added with the notification source and renderer."), true)
-        ];
-    }
-
-    function iconStyleRows() {
-        return [
-            section(qsTr("Icon Style"), qsTr("Reusable sets of icon appearance settings."), true),
-            notice(qsTr("Name, Save, Load, Import, and Export require an Icon Style store. They are intentionally not presented as non-working buttons."), true)
-        ];
-    }
-
-    function iconTileRows() {
-        return [
-            section(qsTr("Icon Tiles"), qsTr("The surface behind each icon."), true),
-            panelField("combo", qsTr("Shape"), "iconShape", "rounded",
-                { options: iconShapeOptions }),
-            notice(qsTr("Enabled, Color, and Opacity need an independent tile renderer. Shape remains connected to the current working icon-shape setting."))
-        ];
-    }
-
-    function quickProfileRows() {
-        return [
-            section(qsTr("Quick Profile"),
-                qsTr("Reusable profiles for the selected panel."), true),
-            notice(qsTr("Recent panel profiles and Favorites will appear here after the panel-profile store is implemented."))
-        ];
-    }
-
-    function manageProfileRows() {
-        return [
-            section(qsTr("Manage"), qsTr("Saved Panel Studio profiles."), true),
-            notice(qsTr("Save, Rename, and Delete will be enabled with the profile store so complete settings can be restored safely.")),
-            {
-                kind: "action",
-                label: qsTr("Reset"),
-                buttonText: qsTr("Reset selected panel"),
-                icon: "edit-undo",
-                action: "reset-panel"
+    function panelBehaviorRows() {
+        const rows = schemaSectionRows("panels-behavior", qsTr("Behavior"), qsTr("Visibility and interaction rules."));
+        if (isNativePanel()) {
+            rows.push(readOnlyRow(qsTr("Native host result"), VisibilityStatus.statusLabel(selectedVisibilityResult.status), qsTr("The last ownership-verified Plasma result")));
+            if (VisibilityStatus.isProblem(selectedVisibilityResult)) {
+                rows.push(notice(qsTr("Visibility detail: %1").arg(VisibilityStatus.problemText(selectedVisibilityResult)), true));
             }
-        ];
+        }
+        return rows;
     }
 
-    function shortcutRows() {
-        return [
-            section(qsTr("Shortcuts"), qsTr("Apply Profile 1–4."), true),
-            notice(qsTr("Profile shortcuts will use KDE GlobalAccel. Arch Dock will not install a keyboard-event watcher because that can interfere with Plasma and animated wallpapers."), true)
-        ];
+    function unavailablePage(label, description) {
+        return [section(label, description, true), notice(qsTr("This page remains unavailable until its renderer and persistence path are implemented."))];
     }
 
     function rowsForCurrentPage() {
         if (mainTabIndex === 0)
             return subTabIndex === 0 ? overviewPanelRows() : overviewIconRows();
         if (mainTabIndex === 1) {
-            const panelPages = [
-                panelsGeneralRows,
-                panelsSizeRows,
-                panelsAppearanceRows,
-                panelsBehaviorRows,
-                panelsLayoutRows,
-                panelsSegmentsRows
-            ];
-            return panelPages[subTabIndex]();
+            if (subTabIndex === 0)
+                return panelGeneralRows();
+            if (subTabIndex === 1)
+                return schemaSectionRows("panels-size", qsTr("Size"), qsTr("Panel dimensions and dynamic sizing."));
+            if (subTabIndex === 2)
+                return panelAppearanceRows();
+            if (subTabIndex === 3)
+                return panelBehaviorRows();
+            if (subTabIndex === 4)
+                return schemaSectionRows("panels-layout", qsTr("Layout"), qsTr("Shape geometry and content placement."));
+            return unavailablePage(qsTr("Segments"), qsTr("Independent panel surface sections."));
         }
         if (mainTabIndex === 2) {
-            const iconPages = [
-                iconsAppearanceRows,
-                iconsBehaviorRows,
-                iconsIndicatorRows,
-                iconsNotificationRows,
-                iconStyleRows
-            ];
-            return iconPages[subTabIndex]();
+            if (subTabIndex === 0)
+                return schemaSectionRows("icons-appearance", qsTr("Appearance"), qsTr("Icon appearance for the selected panel."));
+            if (subTabIndex === 1)
+                return schemaSectionRows("icons-behavior", qsTr("Behavior"), qsTr("Icon motion and magnification."));
+            if (subTabIndex === 2)
+                return schemaSectionRows("icons-indicators", qsTr("Indicators"), qsTr("Running and attention markers."));
+            if (subTabIndex === 3)
+                return unavailablePage(qsTr("Notifications"), qsTr("Badges and transient icon notices."));
+            return unavailablePage(qsTr("Icon Style"), qsTr("Reusable icon appearance sets."));
         }
         if (mainTabIndex === 3)
-            return iconTileRows();
-        const profilePages = [quickProfileRows, manageProfileRows, shortcutRows];
-        return profilePages[subTabIndex]();
+            return unavailablePage(qsTr("Icon Tiles"), qsTr("Independent icon tile rendering."));
+        return unavailablePage(currentSubtabs.length > 0 ? currentSubtabs[subTabIndex] : qsTr("Profiles"), qsTr("Reusable profiles are outside the current settings contract."));
+    }
+
+    function stageArtifact(action, sourceUrl) {
+        artifactDraft = {
+            action: String(action || ""),
+            sourceUrl: sourceUrl || ""
+        };
+        studioError = "";
+    }
+
+    function artifactDescription() {
+        const action = String(artifactDraft.action || "");
+        if (action === "import")
+            return qsTr("Artwork import pending");
+        if (action === "clear")
+            return qsTr("Artwork removal pending");
+        if (action === "render")
+            return qsTr("Artwork re-render pending");
+        return String(panelRegistry.panelValue(selectedPanelId, "themeStatus") || qsTr("Preset surface active."));
+    }
+
+    function applyArtifact() {
+        const action = String(artifactDraft.action || "");
+        if (action.length === 0)
+            return true;
+        if (action === "clear") {
+            panelRegistry.clearTheme(selectedPanelId);
+            return true;
+        }
+        if (action === "import")
+            return panelRegistry.importTheme(selectedPanelId, artifactDraft.sourceUrl);
+        if (action === "render") {
+            return panelRegistry.renderTheme(selectedPanelId, Number(panelValue("width", 720)), Number(panelValue("height", 76)), Screen.devicePixelRatio, true);
+        }
+        return false;
+    }
+
+    function discardStudioChanges() {
+        editorSession = EditorModel.cancel(editorSession);
+        artifactDraft = {};
+        themeTargetPanelId = "";
+        colorField = null;
+        studioError = "";
+        studioWarning = "";
+    }
+
+    function applyStudioChanges() {
+        studioError = "";
+        studioWarning = "";
+        if (!editorSession.loaded)
+            return false;
+
+        if (hasSettingsChanges) {
+            const result = panelController.applyPanelSettingsTransaction(editorSession.panelId, editorSession.revision, EditorModel.panelCandidate(editorSession), EditorModel.globalCandidate(editorSession));
+            if (!EditorModel.transactionSucceeded(result)) {
+                editorSession = EditorModel.retainFailure(editorSession, result);
+                studioError = EditorModel.transactionConflict(result) ? qsTr("This panel changed outside Panel Studio. Cancel and reopen it before applying.") : qsTr("Settings transaction failed: %1 (%2)").arg(String(result && result.status ? result.status : "failed")).arg(String(result && (result.errorMessage || result.errorCode) ? (result.errorMessage || result.errorCode) : qsTr("No details were returned.")));
+                return false;
+            }
+
+            const refreshed = panelController.panelSettingsEditorSnapshot(editorSession.panelId, "studio");
+            editorSession = EditorModel.adoptResult(editorSession, result, refreshed);
+            if (!editorSession.loaded || EditorModel.dirty(editorSession)) {
+                studioError = qsTr("The transaction succeeded, but its saved revision could not be reloaded.");
+                return false;
+            }
+        }
+
+        if (!applyArtifact()) {
+            studioError = qsTr("The settings transaction completed, but the separate artwork operation failed.");
+            return false;
+        }
+        artifactDraft = {};
+        return loadEditor(selectedPanelId);
+    }
+
+    function acceptStudioChanges() {
+        if (!hasPendingChanges || applyStudioChanges())
+            close();
+    }
+
+    function cancelStudioChanges() {
+        discardStudioChanges();
+        close();
+    }
+
+    function performStudioAction(action, data) {
+        if (action === "create-free") {
+            if (hasPendingChanges)
+                return;
+            const result = panelController.createFreePanel();
+            if (result && result.success === true && String(result.panelId || "").length > 0) {
+                openPanelEditor(String(result.panelId));
+            } else {
+                studioError = qsTr("Could not create the free panel (%1).").arg(String(result && result.errorCode ? result.errorCode : "unknown-error"));
+            }
+        } else if (action === "remove-panel") {
+            if (hasPendingChanges)
+                return;
+            panelController.removePanel(selectedPanelId);
+            internalPanelSelection = true;
+            selectedPanelId = panelRegistry.activePanelId;
+            internalPanelSelection = false;
+            loadEditor(selectedPanelId);
+        } else if (action === "toggle-panel-visibility") {
+            editorSession = EditorModel.setPanelValue(editorSession, "visible", !Boolean(panelValue("visible", true)));
+            refreshProjection();
+        } else if (action === "load-built-in-theme") {
+            const candidate = panelRegistry.themeCandidate(selectedPanelId, String(data.themeId || ""), "complete");
+            if (!candidate || candidate.success !== true) {
+                studioError = qsTr("Theme is unavailable: %1").arg(String(candidate && (candidate.errorMessage || candidate.errorCode) ? (candidate.errorMessage || candidate.errorCode) : qsTr("No details were returned.")));
+                return;
+            }
+            editorSession = EditorModel.stagePanelValues(editorSession, candidate.values || {});
+            refreshProjection();
+        } else if (action === "import-theme") {
+            themeTargetPanelId = selectedPanelId;
+            themeDialog.open();
+        } else if (action === "render-theme") {
+            stageArtifact("render", "");
+        } else if (action === "clear-theme") {
+            stageArtifact("clear", "");
+        }
+    }
+
+    onSelectedPanelIdChanged: {
+        if (internalPanelSelection)
+            return;
+        if (editorSession.loaded && editorSession.panelId !== selectedPanelId && hasPendingChanges) {
+            const previousPanelId = editorSession.panelId;
+            studioError = qsTr("Apply or cancel the current draft before switching panels.");
+            internalPanelSelection = true;
+            selectedPanelId = previousPanelId;
+            internalPanelSelection = false;
+            return;
+        }
+        artifactDraft = {};
+        loadEditor(selectedPanelId);
     }
 
     onShowPanelsChanged: {
         if (showPanels)
             setMainTab(1);
+    }
+
+    Component.onCompleted: loadEditor(selectedPanelId)
+
+    Connections {
+        target: panelRegistry
+
+        function onRevisionChanged() {
+            if (!root.hasPendingChanges)
+                root.loadEditor(root.selectedPanelId);
+        }
     }
 
     width: 980
@@ -1421,8 +575,11 @@ Window {
     title: qsTr("Arch Dock Panel Studio")
 
     onVisibleChanged: {
-        if (visible)
+        if (visible) {
+            if (!hasPendingChanges)
+                loadEditor(selectedPanelId);
             requestActivate();
+        }
     }
     onClosing: discardStudioChanges()
 
@@ -1437,8 +594,14 @@ Window {
         border.width: 1
         border.color: "#75d9edf2"
         gradient: Gradient {
-            GradientStop { position: 0; color: "#f62a3848" }
-            GradientStop { position: 1; color: "#f1081018" }
+            GradientStop {
+                position: 0
+                color: "#f62a3848"
+            }
+            GradientStop {
+                position: 1
+                color: "#f1081018"
+            }
         }
     }
 
@@ -1451,7 +614,6 @@ Window {
         anchors.margins: 1
         height: 38
         color: "#e8182b3b"
-        clip: true
 
         Rectangle {
             anchors.left: parent.left
@@ -1498,11 +660,7 @@ Window {
 
         Label {
             anchors.centerIn: parent
-            text: {
-                const revision = root.panelRevision;
-                const name = panelRegistry.panelName(root.selectedPanelId);
-                return name.length > 0 ? name : qsTr("Panel Editor");
-            }
+            text: panelRegistry.panelName(root.selectedPanelId) || qsTr("Panel Editor")
             color: "#d5e5ed"
             font.pixelSize: 12
             elide: Text.ElideRight
@@ -1517,6 +675,8 @@ Window {
         }
 
         ToolButton {
+            id: closeButton
+
             anchors.right: parent.right
             anchors.rightMargin: 4
             anchors.verticalCenter: parent.verticalCenter
@@ -1527,11 +687,8 @@ Window {
 
             background: Rectangle {
                 radius: 4
-                color: parent.hovered ? "#b94b526f" : "transparent"
+                color: closeButton.hovered ? "#b94b526f" : "transparent"
             }
-
-            ToolTip.visible: hovered
-            ToolTip.text: qsTr("Close Panel Studio")
         }
     }
 
@@ -1575,6 +732,8 @@ Window {
                     model: root.mainTabLabels
 
                     delegate: ItemDelegate {
+                        id: mainTabDelegate
+
                         required property string modelData
                         required property int index
 
@@ -1592,36 +751,23 @@ Window {
                             Kirigami.Icon {
                                 Layout.preferredWidth: 20
                                 Layout.preferredHeight: 20
-                                source: parent.parent.icon.name
-                                color: parent.parent.checked ? "#7ce7fa" : "#9db0ba"
+                                source: mainTabDelegate.icon.name
+                                color: mainTabDelegate.checked ? "#7ce7fa" : "#9db0ba"
                             }
 
                             Label {
                                 Layout.fillWidth: true
-                                text: parent.parent.text
-                                color: parent.parent.checked ? "#f4fbff" : "#b2c1c8"
-                                font.weight: parent.parent.checked
-                                    ? Font.DemiBold : Font.Normal
+                                text: mainTabDelegate.text
+                                color: mainTabDelegate.checked ? "#f4fbff" : "#b2c1c8"
+                                font.weight: mainTabDelegate.checked ? Font.DemiBold : Font.Normal
                             }
                         }
 
                         background: Rectangle {
                             radius: 6
-                            color: parent.checked ? "#4b23627a"
-                                : (parent.hovered ? "#26384a56" : "transparent")
-                            border.width: parent.checked ? 1 : 0
+                            color: mainTabDelegate.checked ? "#4b23627a" : (mainTabDelegate.hovered ? "#26384a56" : "transparent")
+                            border.width: mainTabDelegate.checked ? 1 : 0
                             border.color: "#5e73cfe7"
-
-                            Rectangle {
-                                visible: parent.parent.checked
-                                anchors.left: parent.left
-                                anchors.leftMargin: 1
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: 3
-                                height: 24
-                                radius: 2
-                                color: "#70e5f8"
-                            }
                         }
                     }
                 }
@@ -1683,8 +829,6 @@ Window {
             }
 
             TabBar {
-                id: subTabs
-
                 visible: root.currentSubtabs.length > 0
                 Layout.fillWidth: true
                 currentIndex: root.subTabIndex
@@ -1701,13 +845,6 @@ Window {
                         onClicked: root.setSubTab(index)
                     }
                 }
-            }
-
-            Rectangle {
-                visible: root.currentSubtabs.length === 0
-                Layout.fillWidth: true
-                height: 1
-                color: "#31526472"
             }
 
             StudioForm {
@@ -1731,16 +868,14 @@ Window {
         height: 38
 
         Label {
-            text: root.mainTabLabels[root.mainTabIndex]
-                + (root.currentSubtabs.length > 0
-                    ? "  /  " + root.currentSubtabs[root.subTabIndex] : "")
+            text: root.mainTabLabels[root.mainTabIndex] + (root.currentSubtabs.length > 0 ? "  /  " + root.currentSubtabs[root.subTabIndex] : "")
             color: "#69808d"
             font.pixelSize: 10
         }
 
         Label {
             visible: root.studioError.length > 0
-            Layout.maximumWidth: 360
+            Layout.maximumWidth: 420
             text: root.studioError
             color: "#ff8c8c"
             font.pixelSize: 10
@@ -1757,9 +892,7 @@ Window {
         }
 
         Label {
-            visible: root.hasPendingChanges
-                && root.studioError.length === 0
-                && root.studioWarning.length === 0
+            visible: root.hasPendingChanges && root.studioError.length === 0 && root.studioWarning.length === 0
             text: qsTr("Pending changes")
             color: "#80de70"
             font.pixelSize: 10
@@ -1794,16 +927,10 @@ Window {
 
         title: qsTr("Import theme package or artwork")
         fileMode: FileDialog.OpenFile
-        nameFilters: [
-            qsTr("Theme packages (archdock-theme.json *.archdock-theme.json *.json)"),
-            qsTr("Design files (*.png *.jpg *.jpeg *.webp *.avif *.heif *.heic *.jxl *.svg *.svgz *.tif *.tiff *.pdf *.psd *.xcf *.blend)"),
-            qsTr("All files (*)")
-        ]
+        nameFilters: [qsTr("Theme packages (archdock-theme.json *.archdock-theme.json *.json)"), qsTr("Design files (*.png *.jpg *.jpeg *.webp *.avif *.heif *.heic *.jxl *.svg *.svgz *.tif *.tiff *.pdf *.psd *.xcf *.blend)"), qsTr("All files (*)")]
         onAccepted: {
-            if (root.themeTargetPanelId.length > 0) {
-                root.stageThemeAction(
-                    root.themeTargetPanelId, "import", selectedFile);
-            }
+            if (root.themeTargetPanelId === root.selectedPanelId)
+                root.stageArtifact("import", selectedFile);
             root.themeTargetPanelId = "";
         }
         onRejected: root.themeTargetPanelId = ""
@@ -1817,20 +944,10 @@ Window {
         modality: Qt.WindowModal
         options: ColorDialog.ShowAlphaChannel
         onAccepted: {
-            if (root.colorField !== null
-                    && root.colorTargetPanelId.length > 0) {
-                root.setPanelDraftValue(
-                    root.colorTargetPanelId,
-                    root.colorField.key,
-                    selectedColor.toString(),
-                    root.colorField.fallback);
-            }
+            if (root.colorField !== null)
+                root.setFieldValue(root.colorField, selectedColor.toString());
             root.colorField = null;
-            root.colorTargetPanelId = "";
         }
-        onRejected: {
-            root.colorField = null;
-            root.colorTargetPanelId = "";
-        }
+        onRejected: root.colorField = null
     }
 }

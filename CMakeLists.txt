@@ -26,6 +26,10 @@ qt_add_executable(
   src/PanelRegistry.cpp
   src/model/PanelDefinition.h
   src/model/PanelDefinition.cpp
+  src/model/PanelSettingsSchema.h
+  src/model/PanelSettingsSchema.cpp
+  src/model/PanelCapabilityResolver.h
+  src/model/PanelCapabilityResolver.cpp
   src/model/PanelRuntimeState.h
   src/model/PanelRuntimeState.cpp
   src/model/SettingsMigration.h
@@ -50,6 +54,8 @@ qt_add_executable(
   src/panel/PanelManager.cpp
   src/panel/FreePanelController.h
   src/panel/FreePanelController.cpp
+  src/panel/PanelSettingsTransaction.h
+  src/panel/PanelSettingsTransaction.cpp
   src/panel/PanelWindow.h
   src/panel/PanelWindow.cpp
   src/WindowItem.h
@@ -65,11 +71,13 @@ qt_add_qml_module(
   1.0
   NO_IMPORT_SCAN
   QML_FILES
+  qml/runtime/CapabilityModel.js
   qml/runtime/DockGeometry.js
   qml/runtime/FreePanelWindow.qml
   qml/runtime/IconProperties.qml
   qml/runtime/IconPropertiesWindow.qml
   qml/runtime/PlacementStatus.js
+  qml/runtime/SettingsEditorModel.js
   qml/runtime/VisibilityStatus.js
   qml/runtime/StudioDraft.js
   qml/runtime/StudioForm.qml
@@ -104,6 +112,8 @@ if(BUILD_TESTING)
     tests/PanelModelTest.cpp
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
+    src/model/PanelSettingsSchema.h
+    src/model/PanelSettingsSchema.cpp
     src/model/PanelRuntimeState.h
     src/model/PanelRuntimeState.cpp
     src/model/SettingsMigration.h
@@ -118,6 +128,72 @@ if(BUILD_TESTING)
   add_test(NAME panel-model-test COMMAND panel-model-test)
 
   qt_add_executable(
+    panel-settings-schema-test
+    tests/PanelSettingsSchemaTest.cpp
+    src/model/PanelDefinition.h
+    src/model/PanelDefinition.cpp
+    src/model/PanelSettingsSchema.h
+    src/model/PanelSettingsSchema.cpp
+    src/model/PanelRuntimeState.h
+    src/model/PanelRuntimeState.cpp)
+  target_include_directories(
+    panel-settings-schema-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    panel-settings-schema-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(
+    NAME panel-settings-schema-test
+    COMMAND panel-settings-schema-test)
+
+  qt_add_executable(
+    panel-capability-resolver-test
+    tests/PanelCapabilityResolverTest.cpp
+    src/model/PanelDefinition.h
+    src/model/PanelDefinition.cpp
+    src/model/PanelSettingsSchema.h
+    src/model/PanelSettingsSchema.cpp
+    src/model/PanelCapabilityResolver.h
+    src/model/PanelCapabilityResolver.cpp
+    src/model/PanelRuntimeState.h
+    src/model/PanelRuntimeState.cpp)
+  target_include_directories(
+    panel-capability-resolver-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    panel-capability-resolver-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(
+    NAME panel-capability-resolver-test
+    COMMAND panel-capability-resolver-test)
+
+  qt_add_executable(
+    panel-settings-transaction-test
+    tests/PanelSettingsTransactionTest.cpp
+    src/panel/PanelSettingsTransaction.h
+    src/panel/PanelSettingsTransaction.cpp
+    src/model/PanelDefinition.h
+    src/model/PanelDefinition.cpp
+    src/model/PanelSettingsSchema.h
+    src/model/PanelSettingsSchema.cpp
+    src/model/PanelCapabilityResolver.h
+    src/model/PanelCapabilityResolver.cpp
+    src/model/PanelRuntimeState.h
+    src/model/PanelRuntimeState.cpp)
+  target_include_directories(
+    panel-settings-transaction-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    panel-settings-transaction-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(
+    NAME panel-settings-transaction-test
+    COMMAND panel-settings-transaction-test)
+
+  qt_add_executable(
     panel-registry-test
     tests/PanelRegistryTest.cpp
     src/DockSettings.h
@@ -126,6 +202,10 @@ if(BUILD_TESTING)
     src/PanelRegistry.cpp
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
+    src/model/PanelSettingsSchema.h
+    src/model/PanelSettingsSchema.cpp
+    src/model/PanelCapabilityResolver.h
+    src/model/PanelCapabilityResolver.cpp
     src/model/PanelRuntimeState.h
     src/model/PanelRuntimeState.cpp
     src/model/SettingsMigration.h
@@ -134,6 +214,8 @@ if(BUILD_TESTING)
     src/NativeContainmentLifecycle.cpp
     src/panel/FreePanelController.h
     src/panel/FreePanelController.cpp
+    src/panel/PanelSettingsTransaction.h
+    src/panel/PanelSettingsTransaction.cpp
     src/PanelPlacement.h
     src/PanelPlacement.cpp
     src/PanelVisibility.h
@@ -158,6 +240,83 @@ if(BUILD_TESTING)
     panel-registry-test
     PROPERTIES ENVIRONMENT
                "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-data/panel-registry")
+
+  qt_add_executable(
+    panel-window-capability-test
+    tests/PanelWindowCapabilityTest.cpp
+    src/DockModel.h
+    src/DockModel.cpp
+    src/DockSettings.h
+    src/DockSettings.cpp
+    src/PanelRegistry.h
+    src/PanelRegistry.cpp
+    src/model/PanelDefinition.h
+    src/model/PanelDefinition.cpp
+    src/model/PanelSettingsSchema.h
+    src/model/PanelSettingsSchema.cpp
+    src/model/PanelCapabilityResolver.h
+    src/model/PanelCapabilityResolver.cpp
+    src/model/PanelRuntimeState.h
+    src/model/PanelRuntimeState.cpp
+    src/model/SettingsMigration.h
+    src/model/SettingsMigration.cpp
+    src/NativeContainmentLifecycle.h
+    src/NativeContainmentLifecycle.cpp
+    src/PlasmaScriptResult.h
+    src/PlasmaScriptResult.cpp
+    src/PanelPlacement.h
+    src/PanelPlacement.cpp
+    src/integration/PlasmaPanelAdapter.h
+    src/integration/PlasmaPanelAdapter.cpp
+    src/PanelVisibility.h
+    src/PanelVisibility.cpp
+    src/ScreenIdentity.h
+    src/ScreenIdentity.cpp
+    src/SystemStatus.h
+    src/SystemStatus.cpp
+    src/KWinActionBridge.h
+    src/KWinActionBridge.cpp
+    src/panel/PanelManager.h
+    src/panel/PanelManager.cpp
+    src/panel/FreePanelController.h
+    src/panel/FreePanelController.cpp
+    src/panel/PanelSettingsTransaction.h
+    src/panel/PanelSettingsTransaction.cpp
+    src/panel/PanelWindow.h
+    src/panel/PanelWindow.cpp
+    src/WindowItem.h
+    src/WindowModel.h
+    src/WindowModel.cpp
+    src/WindowWatcher.h
+    src/WindowWatcher.cpp)
+  qt_add_resources(
+    panel-window-capability-test
+    panel-window-capability-theme-catalog
+    PREFIX "/archdock"
+    FILES data/themes/builtin-themes.json)
+  target_include_directories(
+    panel-window-capability-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    panel-window-capability-test
+    PRIVATE Qt6::Core
+            Qt6::DBus
+            Qt6::Gui
+            Qt6::Network
+            Qt6::Qml
+            Qt6::Quick
+            Qt6::Test
+            KF6::Kirigami)
+  target_compile_definitions(
+    panel-window-capability-test
+    PRIVATE ARCHDOCK_SOURCE_KWIN_SCRIPT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/kwin-script/contents/code/main.js")
+  add_test(
+    NAME panel-window-capability-test
+    COMMAND panel-window-capability-test)
+  set_tests_properties(
+    panel-window-capability-test
+    PROPERTIES ENVIRONMENT
+               "QT_QPA_PLATFORM=offscreen;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-data/panel-window-config;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-data/panel-window-data;XDG_CACHE_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-data/panel-window-cache")
 
   qt_add_executable(
     panel-placement-test
@@ -271,6 +430,30 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_StudioDraft.qml)
   set_tests_properties(
     studio-draft-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME settings-editor-model-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_SettingsEditorModel.qml)
+  set_tests_properties(
+    settings-editor-model-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME native-config-draft-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_NativeConfigDraft.qml)
+  set_tests_properties(
+    native-config-draft-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME capability-model-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_CapabilityModel.qml)
+  set_tests_properties(
+    capability-model-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(

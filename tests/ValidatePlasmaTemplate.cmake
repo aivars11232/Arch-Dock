@@ -31,6 +31,21 @@ file(READ
 file(READ
   "${SOURCE_DIR}/plasma-dock-widget/contents/ui/configBehavior.qml"
   dock_behavior_page)
+file(READ
+  "${SOURCE_DIR}/plasma-dock-widget/contents/ui/ConfigPageBase.qml"
+  dock_config_page_base)
+file(READ
+  "${SOURCE_DIR}/plasma-dock-widget/contents/ui/main.qml"
+  dock_main)
+file(READ
+  "${SOURCE_DIR}/plasma-dock-widget/contents/ui/configLayout.qml"
+  dock_layout_page)
+file(READ
+  "${SOURCE_DIR}/plasma-dock-widget/contents/ui/configAppearance.qml"
+  dock_appearance_page)
+file(READ
+  "${SOURCE_DIR}/plasma-dock-widget/contents/ui/configAnimation.qml"
+  dock_animation_page)
 
 string(FIND
   "${dock_config_model}"
@@ -41,20 +56,90 @@ if(behavior_page_position EQUAL -1)
     "The dock configuration model must register the functional Behavior page.")
 endif()
 
-foreach(required_visibility_contract
+string(REGEX MATCHALL
+  "source:[ \t]*\"[^\"]+\\.qml\""
+  dock_config_pages
+  "${dock_config_model}")
+list(LENGTH dock_config_pages dock_config_page_count)
+if(NOT dock_config_page_count EQUAL 2)
+  message(FATAL_ERROR
+    "The native dock configuration must remain limited to its two existing pages.")
+endif()
+
+foreach(required_runtime_contract
+    "panelRendererConfiguration"
+    "capabilityResolution"
+    "effectiveRendererTier")
+  string(FIND
+    "${dock_main}"
+    "${required_runtime_contract}"
+    main_runtime_contract_position)
+  if(main_runtime_contract_position EQUAL -1)
+    message(FATAL_ERROR
+      "The dock runtime is missing ${required_runtime_contract}.")
+  endif()
+endforeach()
+
+foreach(required_behavior_contract
+    "capabilityResolution"
+    "effectiveRendererTier"
     "nativePanelVisibilityStatus"
-    "applyNativePanelVisibilityMode"
-    "setPanelVisible"
-    "supportedModes"
     "fallbackApplied"
-    "visible: root.visibilityOptions.length > 0")
+    "visibleFields"
+    "applyDraft"
+    "cancelDraft"
+    "draftDirty")
   string(FIND
     "${dock_behavior_page}"
-    "${required_visibility_contract}"
-    visibility_contract_position)
-  if(visibility_contract_position EQUAL -1)
+    "${required_behavior_contract}"
+    behavior_contract_position)
+  if(behavior_contract_position EQUAL -1)
     message(FATAL_ERROR
-      "The Behavior page is missing ${required_visibility_contract}.")
+      "The Behavior page is missing ${required_behavior_contract}.")
+  endif()
+endforeach()
+
+foreach(required_draft_contract
+    "panelSettingsEditorSnapshot"
+    "applyPanelSettingsTransaction"
+    "panelCandidate"
+    "globalCandidate"
+    "applyInFlight")
+  string(FIND
+    "${dock_config_page_base}"
+    "${required_draft_contract}"
+    draft_contract_position)
+  if(draft_contract_position EQUAL -1)
+    message(FATAL_ERROR
+      "The native draft base is missing ${required_draft_contract}.")
+  endif()
+endforeach()
+
+foreach(forbidden_native_write
+    "applyNativePanelVisibilityMode"
+    "setPanelVisible"
+    "setDockBooleanConfiguration"
+    "setDockIntegerConfiguration"
+    "setDockRealConfiguration"
+    "setDockStringConfiguration")
+  string(FIND
+    "${dock_behavior_page}${dock_config_page_base}"
+    "${forbidden_native_write}"
+    forbidden_native_write_position)
+  if(NOT forbidden_native_write_position EQUAL -1)
+    message(FATAL_ERROR
+      "Native configuration still exposes the legacy write bypass ${forbidden_native_write}.")
+  endif()
+endforeach()
+
+foreach(unregistered_page
+    dock_layout_page
+    dock_appearance_page
+    dock_animation_page)
+  string(FIND "${${unregistered_page}}" "setValue(" unregistered_setter_position)
+  if(NOT unregistered_setter_position EQUAL -1)
+    message(FATAL_ERROR
+      "An unregistered native placeholder still contains an editable setter.")
   endif()
 endforeach()
 

@@ -57,3 +57,22 @@ Blender at runtime before attempting its existing background conversion/render
 path. When Blender is unavailable, the scene source remains safely imported and
 the editor reports that conversion could not be previewed; no rendered asset is
 claimed as ready.
+
+## Version 1 Capability Mapping
+
+Version 1 packages do not declare a capability model. Arch Dock therefore maps
+them conservatively and deterministically instead of inferring future renderer
+features from file extensions or metadata:
+
+- a managed surface asset requests the skinned 2D tier;
+- the existing procedural 2D surface is its only safe fallback;
+- skinned 2D is usable only on a host whose current renderer consumes the asset;
+- no version 1 package declares baked 2.5D, live true 3D, split or shutter
+  presentation, radial opening, or nonrectangular input support.
+
+A `.blend` file remains an offline source. If Blender flattens it successfully,
+the resulting image is a skinned 2D asset. Blender installation, a saved scene,
+or a successful preview never makes the live true 3D renderer available.
+
+This compatibility mapping does not introduce or finalize a version 2 theme
+package format.

@@ -1,200 +1,49 @@
 #include "PanelDefinition.h"
 #include "PanelRuntimeState.h"
+#include "PanelSettingsSchema.h"
 
 #include <QCoreApplication>
-#include <QSet>
-#include <QUrl>
 #include <QtGlobal>
 
-#include <limits>
+#include <array>
 
 namespace
 {
 
 using ArchDock::PanelHostKind;
+using ArchDock::PanelLayoutKind;
 
-const QSet<QString> &knownLegacyKeys()
+const std::array<std::pair<PanelLayoutKind, const char *>,
+                 static_cast<std::size_t>(PanelLayoutKind::Count)> &panelLayoutNames()
 {
-    static const QSet<QString> keys{
-        QStringLiteral("schemaVersion"),
-        QStringLiteral("extensions"),
-        QStringLiteral("presetOrigin"),
-        QStringLiteral("id"),
-        QStringLiteral("name"),
-        QStringLiteral("builtIn"),
-        QStringLiteral("hostKind"),
-        QStringLiteral("screen"),
-        QStringLiteral("screenId"),
-        QStringLiteral("nativePanelId"),
-        QStringLiteral("nativeControlAppletId"),
-        QStringLiteral("nativeDockAppletId"),
-        QStringLiteral("nativeOwnershipToken"),
-        QStringLiteral("nativeRecoveryState"),
-        QStringLiteral("nativeRecoveryError"),
-        QStringLiteral("freeDesktopContainmentId"),
-        QStringLiteral("freeDockAppletId"),
-        QStringLiteral("freeOwnershipToken"),
-        QStringLiteral("freeHostMode"),
-        QStringLiteral("freeHostState"),
-        QStringLiteral("freeCreationState"),
-        QStringLiteral("freeCreationError"),
-        QStringLiteral("freeRollbackError"),
-        QStringLiteral("freeRecoveryError"),
-        QStringLiteral("type"),
-        QStringLiteral("contentAppIds"),
-        QStringLiteral("contentUrls"),
-        QStringLiteral("kdeWidgets"),
-        QStringLiteral("acceptDrops"),
-        QStringLiteral("folderLayout"),
-        QStringLiteral("folderSpeed"),
-        QStringLiteral("folderEasing"),
-        QStringLiteral("folderExpandOnClick"),
-        QStringLiteral("edge"),
-        QStringLiteral("alignment"),
-        QStringLiteral("dynamic"),
-        QStringLiteral("width"),
-        QStringLiteral("height"),
-        QStringLiteral("x"),
-        QStringLiteral("y"),
-        QStringLiteral("offset"),
-        QStringLiteral("floatingMargin"),
-        QStringLiteral("thickness"),
-        QStringLiteral("lengthMode"),
-        QStringLiteral("minimumLength"),
-        QStringLiteral("maximumLength"),
-        QStringLiteral("visible"),
-        QStringLiteral("visibilityMode"),
-        QStringLiteral("revealZone"),
-        QStringLiteral("openDelay"),
-        QStringLiteral("closeDelay"),
-        QStringLiteral("windowOverlapPolicy"),
-        QStringLiteral("presentationMode"),
-        QStringLiteral("collapseAxis"),
-        QStringLiteral("collapseMechanism"),
-        QStringLiteral("revealHandle"),
-        QStringLiteral("layout"),
-        QStringLiteral("layoutScale"),
-        QStringLiteral("layoutAngle"),
-        QStringLiteral("layoutRadius"),
-        QStringLiteral("layoutRows"),
-        QStringLiteral("layoutPadding"),
-        QStringLiteral("pathSides"),
-        QStringLiteral("pathOrientation"),
-        QStringLiteral("pathAnchor"),
-        QStringLiteral("rendererTier"),
-        QStringLiteral("panelThemeId"),
-        QStringLiteral("completeThemeId"),
-        QStringLiteral("appearance"),
-        QStringLiteral("shape"),
-        QStringLiteral("opacity"),
-        QStringLiteral("color"),
-        QStringLiteral("border"),
-        QStringLiteral("glow"),
-        QStringLiteral("shadow"),
-        QStringLiteral("blur"),
-        QStringLiteral("surface2D"),
-        QStringLiteral("surface2_5D"),
-        QStringLiteral("surface3D"),
-        QStringLiteral("themeAsset"),
-        QStringLiteral("themeSource"),
-        QStringLiteral("themeFit"),
-        QStringLiteral("themeSourceKind"),
-        QStringLiteral("themeSourceFormat"),
-        QStringLiteral("themeSourceWidth"),
-        QStringLiteral("themeSourceHeight"),
-        QStringLiteral("themeSourceHasAlpha"),
-        QStringLiteral("themeSuggestedFit"),
-        QStringLiteral("themePreview"),
-        QStringLiteral("themeAnalysisStatus"),
-        QStringLiteral("themeConversionTool"),
-        QStringLiteral("themeConversionAvailable"),
-        QStringLiteral("themePackageFormat"),
-        QStringLiteral("themePackageVersion"),
-        QStringLiteral("themePackageId"),
-        QStringLiteral("themePackageName"),
-        QStringLiteral("themePackageAuthor"),
-        QStringLiteral("themePackageManifest"),
-        QStringLiteral("themeStatus"),
-        QStringLiteral("themeRenderWidth"),
-        QStringLiteral("themeRenderHeight"),
-        QStringLiteral("themeRenderFit"),
-        QStringLiteral("themeRenderOutcome"),
-        QStringLiteral("iconStyle"),
-        QStringLiteral("iconThemeId"),
-        QStringLiteral("iconShape"),
-        QStringLiteral("iconSize"),
-        QStringLiteral("spacing"),
-        QStringLiteral("iconGlobalDefaults"),
-        QStringLiteral("iconOverrides"),
-        QStringLiteral("iconAnimation"),
-        QStringLiteral("animationTrigger"),
-        QStringLiteral("animationSpeed"),
-        QStringLiteral("animationIntensity"),
-        QStringLiteral("physicsEnabled"),
-        QStringLiteral("panelMotionProfile"),
-        QStringLiteral("revealMotionProfile"),
-        QStringLiteral("reducedMotion"),
-    };
-    return keys;
-}
-
-bool isOneOf(const QString &value, std::initializer_list<const char *> candidates)
-{
-    for (const char *candidate : candidates)
-    {
-        if (value == QLatin1String(candidate))
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-QStringList normalizedStringList(const QVariant &value, bool urls)
-{
-    QStringList candidates;
-    if (value.metaType().id() == QMetaType::QStringList)
-    {
-        candidates = value.toStringList();
-    }
-    else
-    {
-        const QVariantList values = value.toList();
-        candidates.reserve(values.size());
-        for (const QVariant &candidate : values)
-        {
-            candidates.append(candidate.toString());
-        }
-    }
-
-    QStringList result;
-    for (const QString &candidate : candidates)
-    {
-        QString normalized = candidate.trimmed();
-        if (urls)
-        {
-            const QUrl url(normalized);
-            if (!url.isValid() || url.isEmpty())
-            {
-                continue;
-            }
-            normalized = url.toString();
-        }
-        if (!normalized.isEmpty() && !result.contains(normalized))
-        {
-            result.append(normalized);
-        }
-    }
-    return result;
-}
-
-int normalizedHostId(const QVariant &value)
-{
-    bool ok = false;
-    const qlonglong candidate = value.toLongLong(&ok);
-    return ok && candidate >= 0 && candidate <= std::numeric_limits<int>::max()
-        ? static_cast<int>(candidate)
-        : -1;
+    static const std::array<std::pair<PanelLayoutKind, const char *>,
+                            static_cast<std::size_t>(PanelLayoutKind::Count)> names{{
+        {PanelLayoutKind::Adaptive, "adaptive"},
+        {PanelLayoutKind::Horizontal, "horizontal"},
+        {PanelLayoutKind::Vertical, "vertical"},
+        {PanelLayoutKind::Diagonal, "diagonal"},
+        {PanelLayoutKind::Circular, "circular"},
+        {PanelLayoutKind::Ellipse, "ellipse"},
+        {PanelLayoutKind::Ring, "ring"},
+        {PanelLayoutKind::Radial, "radial"},
+        {PanelLayoutKind::Arc, "arc"},
+        {PanelLayoutKind::Semicircle, "semicircle"},
+        {PanelLayoutKind::Fan, "fan"},
+        {PanelLayoutKind::Spiral, "spiral"},
+        {PanelLayoutKind::Ribbon, "ribbon"},
+        {PanelLayoutKind::VerticalCurve, "vertical-curve"},
+        {PanelLayoutKind::HorizontalCurve, "horizontal-curve"},
+        {PanelLayoutKind::Polygon, "polygon"},
+        {PanelLayoutKind::Triangle, "triangle"},
+        {PanelLayoutKind::Square, "square"},
+        {PanelLayoutKind::Pentagon, "pentagon"},
+        {PanelLayoutKind::Hexagon, "hexagon"},
+        {PanelLayoutKind::Octagon, "octagon"},
+        {PanelLayoutKind::Star, "star"},
+        {PanelLayoutKind::Grid, "grid"},
+        {PanelLayoutKind::Floating, "floating"},
+    }};
+    return names;
 }
 
 void setError(QString *errorMessage, const QString &message)
@@ -247,6 +96,31 @@ void insertOptional(QVariantMap *record, const QString &key, const std::optional
 
 namespace ArchDock
 {
+
+std::optional<PanelLayoutKind> panelLayoutKindFromName(const QString &name)
+{
+    const QString normalized = name.trimmed().toLower();
+    for (const auto &[kind, candidate] : panelLayoutNames())
+    {
+        if (normalized == QLatin1String(candidate))
+        {
+            return kind;
+        }
+    }
+    return std::nullopt;
+}
+
+QString panelLayoutKindName(PanelLayoutKind kind)
+{
+    for (const auto &[candidate, name] : panelLayoutNames())
+    {
+        if (candidate == kind)
+        {
+            return QString::fromLatin1(name);
+        }
+    }
+    return QString{};
+}
 
 PanelDefinition PanelDefinition::defaults(const QString &id,
                                           const QString &name,
@@ -318,6 +192,17 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         edge,
         record.value(QStringLiteral("builtIn"), false).toBool());
     definition.schemaVersion = CurrentSchemaVersion;
+    if (record.contains(QStringLiteral("settingsRevision")))
+    {
+        bool revisionOk = false;
+        definition.settingsRevision = record.value(
+            QStringLiteral("settingsRevision")).toString().toULongLong(&revisionOk);
+        if (!revisionOk)
+        {
+            setError(errorMessage, QStringLiteral("panel settings revision is invalid"));
+            return std::nullopt;
+        }
+    }
 
     const auto normalized = [&record](const QString &key, const QVariant &fallback)
     {
@@ -339,14 +224,13 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         QStringLiteral("screen"), definition.host.screenIndex).toInt();
     definition.host.screenId = normalized(
         QStringLiteral("screenId"), definition.host.screenId).toString();
-    definition.host.nativePanelId = normalizedHostId(
-        record.value(QStringLiteral("nativePanelId"), definition.host.nativePanelId));
-    definition.host.nativeControlAppletId = normalizedHostId(
-        record.value(
-            QStringLiteral("nativeControlAppletId"),
-            definition.host.nativeControlAppletId));
-    definition.host.nativeDockAppletId = normalizedHostId(
-        record.value(QStringLiteral("nativeDockAppletId"), definition.host.nativeDockAppletId));
+    definition.host.nativePanelId = normalized(
+        QStringLiteral("nativePanelId"), definition.host.nativePanelId).toInt();
+    definition.host.nativeControlAppletId = normalized(
+        QStringLiteral("nativeControlAppletId"),
+        definition.host.nativeControlAppletId).toInt();
+    definition.host.nativeDockAppletId = normalized(
+        QStringLiteral("nativeDockAppletId"), definition.host.nativeDockAppletId).toInt();
     setString(
         QStringLiteral("nativeOwnershipToken"),
         &definition.host.nativeOwnershipToken);
@@ -357,12 +241,11 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     setString(
         QStringLiteral("nativeRecoveryError"),
         &definition.host.nativeRecoveryError);
-    definition.host.freeDesktopContainmentId = normalizedHostId(
-        record.value(
-            QStringLiteral("freeDesktopContainmentId"),
-            definition.host.freeDesktopContainmentId));
-    definition.host.freeDockAppletId = normalizedHostId(
-        record.value(QStringLiteral("freeDockAppletId"), definition.host.freeDockAppletId));
+    definition.host.freeDesktopContainmentId = normalized(
+        QStringLiteral("freeDesktopContainmentId"),
+        definition.host.freeDesktopContainmentId).toInt();
+    definition.host.freeDockAppletId = normalized(
+        QStringLiteral("freeDockAppletId"), definition.host.freeDockAppletId).toInt();
     setString(
         QStringLiteral("freeOwnershipToken"),
         &definition.host.freeOwnershipToken);
@@ -388,8 +271,8 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         QStringLiteral("contentAppIds"), definition.content.applicationIds).toStringList();
     definition.content.urls = normalized(
         QStringLiteral("contentUrls"), definition.content.urls).toStringList();
-    definition.content.kdeWidgets = normalizedStringList(
-        record.value(QStringLiteral("kdeWidgets"), definition.content.kdeWidgets), false);
+    definition.content.kdeWidgets = normalized(
+        QStringLiteral("kdeWidgets"), definition.content.kdeWidgets).toStringList();
     definition.content.acceptDrops = normalized(
         QStringLiteral("acceptDrops"), definition.content.acceptDrops).toBool();
     definition.content.folderLayout = normalized(
@@ -643,7 +526,7 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     }
     for (auto it = record.cbegin(); it != record.cend(); ++it)
     {
-        if (!knownLegacyKeys().contains(it.key()) &&
+        if (!isDurableLegacyKey(it.key()) &&
             !PanelRuntimeState::isTransientLegacyKey(it.key()))
         {
             definition.extensions.insert(it.key(), it.value());
@@ -704,6 +587,9 @@ QVariantMap PanelDefinition::toLegacyMap() const
 {
     QVariantMap record = persistentExtensions(extensions);
     record.insert(QStringLiteral("schemaVersion"), CurrentSchemaVersion);
+    record.insert(
+        QStringLiteral("settingsRevision"),
+        QVariant::fromValue<qulonglong>(settingsRevision));
     record.insert(QStringLiteral("id"), identity.id);
     record.insert(QStringLiteral("name"), identity.name);
     record.insert(QStringLiteral("builtIn"), identity.builtIn);
@@ -861,10 +747,13 @@ QVariantMap PanelDefinition::toLegacyMap() const
 QVariantMap PanelDefinition::toPersistedMap() const
 {
     QVariantMap record = toLegacyMap();
+    record.insert(
+        QStringLiteral("settingsRevision"),
+        QString::number(settingsRevision));
     const QVariantMap filteredExtensions = persistentExtensions(extensions);
     for (auto it = filteredExtensions.cbegin(); it != filteredExtensions.cend(); ++it)
     {
-        if (!knownLegacyKeys().contains(it.key()))
+        if (!isDurableLegacyKey(it.key()))
         {
             record.remove(it.key());
         }
@@ -876,237 +765,14 @@ QVariantMap PanelDefinition::toPersistedMap() const
     return record;
 }
 
+bool PanelDefinition::isDurableLegacyKey(const QString &key)
+{
+    return PanelSettingsSchema::isKnownPanelField(key);
+}
+
 QVariant PanelDefinition::normalizeLegacyValue(const QString &key, const QVariant &value)
 {
-    if (key == QStringLiteral("edge"))
-    {
-        const QString candidate = value.toString().trimmed().toLower();
-        return isOneOf(candidate, {"top", "bottom", "left", "right", "free"})
-            ? candidate
-            : QStringLiteral("bottom");
-    }
-    if (key == QStringLiteral("alignment"))
-    {
-        const QString candidate = value.toString().trimmed().toLower();
-        return isOneOf(candidate, {"start", "center", "end"})
-            ? candidate
-            : QStringLiteral("center");
-    }
-    if (key == QStringLiteral("screen"))
-    {
-        return qMax(0, value.toInt());
-    }
-    if (key == QStringLiteral("screenId"))
-    {
-        return value.toString().trimmed();
-    }
-    if (key == QStringLiteral("nativePanelId") ||
-        key == QStringLiteral("nativeControlAppletId") ||
-        key == QStringLiteral("nativeDockAppletId") ||
-        key == QStringLiteral("freeDesktopContainmentId") ||
-        key == QStringLiteral("freeDockAppletId"))
-    {
-        return normalizedHostId(value);
-    }
-    if (key == QStringLiteral("visibilityMode"))
-    {
-        const QString candidate = value.toString().trimmed().toLower();
-        return isOneOf(candidate, {"always", "auto-hide", "dodge", "cover"})
-            ? candidate
-            : QStringLiteral("always");
-    }
-    if (key == QStringLiteral("revealZone"))
-    {
-        return qBound(1, value.toInt(), 64);
-    }
-    if (key == QStringLiteral("type"))
-    {
-        const QString candidate = value.toString().trimmed().toLower();
-        return isOneOf(candidate, {"empty", "launcher", "tasks", "hybrid"})
-            ? candidate
-            : QStringLiteral("hybrid");
-    }
-    if (key == QStringLiteral("contentAppIds"))
-    {
-        return normalizedStringList(value, false);
-    }
-    if (key == QStringLiteral("contentUrls"))
-    {
-        return normalizedStringList(value, true);
-    }
-    if (key == QStringLiteral("shape"))
-    {
-        const QString candidate = value.toString().trimmed().toLower();
-        return isOneOf(candidate, {"pill", "rounded", "hexagon"})
-            ? candidate
-            : QStringLiteral("pill");
-    }
-    if (key == QStringLiteral("iconShape"))
-    {
-        const QString candidate = value.toString().trimmed().toLower();
-        return isOneOf(candidate, {"rounded", "square", "squircle", "circle", "hexagon"})
-            ? candidate
-            : QStringLiteral("rounded");
-    }
-    if (key == QStringLiteral("appearance"))
-    {
-        const QString candidate = value.toString().trimmed().toLower();
-        return isOneOf(
-            candidate,
-            {"glass", "crystal", "neon", "minimal", "plasma", "lime",
-             "floating-glass", "metallic", "futuristic", "organic", "platform",
-             "plate", "pedestal"})
-            ? candidate
-            : QStringLiteral("glass");
-    }
-    if (key == QStringLiteral("layout"))
-    {
-        const QString candidate = value.toString().trimmed().toLower();
-        return isOneOf(
-            candidate,
-            {"adaptive", "horizontal", "vertical", "diagonal", "circular", "ellipse",
-             "ring", "radial", "arc", "semicircle", "fan", "spiral", "ribbon",
-             "vertical-curve", "horizontal-curve", "polygon", "triangle", "square",
-             "pentagon", "hexagon", "octagon", "star", "grid", "floating"})
-            ? candidate
-            : QStringLiteral("adaptive");
-    }
-    if (key == QStringLiteral("pathOrientation"))
-    {
-        const QString candidate = value.toString().trimmed().toLower();
-        return isOneOf(candidate, {"upright", "tangent", "radial"})
-            ? candidate
-            : QStringLiteral("upright");
-    }
-    if (key == QStringLiteral("pathAnchor"))
-    {
-        const QString candidate = value.toString().trimmed().toLower();
-        return isOneOf(
-            candidate,
-            {"top-left", "top", "top-right", "left", "center", "right",
-             "bottom-left", "bottom", "bottom-right"})
-            ? candidate
-            : QStringLiteral("center");
-    }
-    if (key == QStringLiteral("iconAnimation"))
-    {
-        const QString candidate = value.toString().trimmed().toLower();
-        return isOneOf(
-            candidate,
-            {"none", "bounce", "elastic", "pulse", "scale", "spin", "idle-rotate",
-             "orbit", "swing", "wobble", "wiggle", "shake", "glow", "breathe",
-             "float", "wave", "ripple", "magnetic", "spring"})
-            ? candidate
-            : QStringLiteral("scale");
-    }
-    if (key == QStringLiteral("animationTrigger"))
-    {
-        const QString candidate = value.toString().trimmed().toLower();
-        return isOneOf(candidate, {"hover", "click", "launch", "running", "drop", "reveal", "idle"})
-            ? candidate
-            : QStringLiteral("hover");
-    }
-    if (key == QStringLiteral("folderLayout"))
-    {
-        const QString candidate = value.toString().trimmed().toLower();
-        return isOneOf(
-            candidate,
-            {"fan", "grid", "stack", "arc", "spiral", "circular", "radial",
-             "vertical", "horizontal", "elastic", "physics"})
-            ? candidate
-            : QStringLiteral("fan");
-    }
-    if (key == QStringLiteral("folderEasing"))
-    {
-        const QString candidate = value.toString().trimmed();
-        return isOneOf(candidate, {"outCubic", "outBack", "outElastic", "spring"})
-            ? candidate
-            : QStringLiteral("outBack");
-    }
-    if (key == QStringLiteral("themeFit") || key == QStringLiteral("themeSuggestedFit"))
-    {
-        const QString candidate = value.toString().trimmed().toLower();
-        return isOneOf(candidate, {"cover", "contain", "stretch", "tile"})
-            ? candidate
-            : QStringLiteral("cover");
-    }
-    if (key == QStringLiteral("lengthMode"))
-    {
-        const QString candidate = value.toString().trimmed().toLower();
-        return isOneOf(candidate, {"fit", "fixed", "fill"})
-            ? candidate
-            : QStringLiteral("fixed");
-    }
-    if (key == QStringLiteral("opacity"))
-    {
-        return qBound<qreal>(0.0, value.toReal(), 1.0);
-    }
-    if (key == QStringLiteral("iconSize"))
-    {
-        return qBound(24, value.toInt(), 128);
-    }
-    if (key == QStringLiteral("spacing"))
-    {
-        return qBound<qreal>(0.0, value.toReal(), 48.0);
-    }
-    if (key == QStringLiteral("layoutScale"))
-    {
-        return qBound<qreal>(0.5, value.toReal(), 2.5);
-    }
-    if (key == QStringLiteral("layoutAngle"))
-    {
-        return qBound<qreal>(-180.0, value.toReal(), 180.0);
-    }
-    if (key == QStringLiteral("layoutRadius"))
-    {
-        return qBound(48, value.toInt(), 2048);
-    }
-    if (key == QStringLiteral("layoutRows"))
-    {
-        return qBound(1, value.toInt(), 8);
-    }
-    if (key == QStringLiteral("layoutPadding"))
-    {
-        return qBound(0, value.toInt(), 240);
-    }
-    if (key == QStringLiteral("pathSides"))
-    {
-        return qBound(3, value.toInt(), 12);
-    }
-    if (key == QStringLiteral("animationSpeed"))
-    {
-        return qBound<qreal>(0.2, value.toReal(), 3.0);
-    }
-    if (key == QStringLiteral("animationIntensity"))
-    {
-        return qBound<qreal>(0.1, value.toReal(), 2.5);
-    }
-    if (key == QStringLiteral("folderSpeed"))
-    {
-        return qBound(80, value.toInt(), 1200);
-    }
-    if (key == QStringLiteral("width") || key == QStringLiteral("height") ||
-        key == QStringLiteral("thickness") || key == QStringLiteral("minimumLength") ||
-        key == QStringLiteral("maximumLength"))
-    {
-        return qBound(48, value.toInt(), 4096);
-    }
-    if (key == QStringLiteral("x") || key == QStringLiteral("y") ||
-        key == QStringLiteral("offset") || key == QStringLiteral("floatingMargin"))
-    {
-        return qMax(0, value.toInt());
-    }
-    if (key == QStringLiteral("openDelay") || key == QStringLiteral("closeDelay"))
-    {
-        return qBound(0, value.toInt(), 60000);
-    }
-    if (key == QStringLiteral("visible") || key == QStringLiteral("dynamic") ||
-        key == QStringLiteral("acceptDrops") || key == QStringLiteral("physicsEnabled") ||
-        key == QStringLiteral("folderExpandOnClick") || key == QStringLiteral("reducedMotion"))
-    {
-        return value.toBool();
-    }
-    return value;
+    return PanelSettingsSchema::normalizePanelValue(key, value);
 }
 
 QString PanelDefinition::hostKindName(PanelHostKind kind)

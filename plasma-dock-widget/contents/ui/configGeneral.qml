@@ -11,6 +11,8 @@ KCM.SimpleKCM {
     property string cfg_panelIdDefault: ""
     property string cfg_panelType: "hybrid"
     property string cfg_panelTypeDefault: "hybrid"
+    property string cfg_ownerToken: ""
+    property string cfg_ownerTokenDefault: ""
     property bool cfg_bootstrapFreeDock: false
     property bool cfg_bootstrapFreeDockDefault: false
     property var placementStatus: ({})

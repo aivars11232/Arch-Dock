@@ -1,5 +1,7 @@
 #include "PanelRegistry.h"
+#include "DockSettings.h"
 #include "model/PanelDefinition.h"
+#include "model/PanelSettingsSchema.h"
 #include "model/SettingsMigration.h"
 
 #include <QDateTime>
@@ -50,144 +52,6 @@ bool isPanelType(const QString &type)
            type == QStringLiteral("hybrid");
 }
 
-bool isPanelShape(const QString &shape)
-{
-    return shape == QStringLiteral("pill") ||
-           shape == QStringLiteral("rounded") ||
-           shape == QStringLiteral("hexagon");
-}
-
-bool isIconShape(const QString &shape)
-{
-    return shape == QStringLiteral("rounded") ||
-           shape == QStringLiteral("square") ||
-           shape == QStringLiteral("squircle") ||
-           shape == QStringLiteral("circle") ||
-           shape == QStringLiteral("hexagon");
-}
-
-bool isAppearance(const QString &appearance)
-{
-    return appearance == QStringLiteral("glass") ||
-           appearance == QStringLiteral("crystal") ||
-           appearance == QStringLiteral("neon") ||
-           appearance == QStringLiteral("minimal") ||
-           appearance == QStringLiteral("plasma") ||
-           appearance == QStringLiteral("lime") ||
-           appearance == QStringLiteral("floating-glass") ||
-           appearance == QStringLiteral("metallic") ||
-           appearance == QStringLiteral("futuristic") ||
-           appearance == QStringLiteral("organic") ||
-           appearance == QStringLiteral("platform") ||
-           appearance == QStringLiteral("plate") ||
-           appearance == QStringLiteral("pedestal");
-}
-
-bool isLayout(const QString &layout)
-{
-    return layout == QStringLiteral("adaptive") ||
-           layout == QStringLiteral("horizontal") ||
-           layout == QStringLiteral("vertical") ||
-           layout == QStringLiteral("diagonal") ||
-           layout == QStringLiteral("circular") ||
-           layout == QStringLiteral("ellipse") ||
-           layout == QStringLiteral("ring") ||
-           layout == QStringLiteral("radial") ||
-           layout == QStringLiteral("arc") ||
-           layout == QStringLiteral("semicircle") ||
-           layout == QStringLiteral("fan") ||
-           layout == QStringLiteral("spiral") ||
-           layout == QStringLiteral("ribbon") ||
-           layout == QStringLiteral("vertical-curve") ||
-           layout == QStringLiteral("horizontal-curve") ||
-           layout == QStringLiteral("polygon") ||
-           layout == QStringLiteral("triangle") ||
-           layout == QStringLiteral("square") ||
-           layout == QStringLiteral("pentagon") ||
-           layout == QStringLiteral("hexagon") ||
-           layout == QStringLiteral("octagon") ||
-           layout == QStringLiteral("star") ||
-           layout == QStringLiteral("grid") ||
-           layout == QStringLiteral("floating");
-}
-
-bool isPathOrientation(const QString &orientation)
-{
-    return orientation == QStringLiteral("upright") ||
-           orientation == QStringLiteral("tangent") ||
-           orientation == QStringLiteral("radial");
-}
-
-bool isPathAnchor(const QString &anchor)
-{
-    return anchor == QStringLiteral("top-left") ||
-           anchor == QStringLiteral("top") ||
-           anchor == QStringLiteral("top-right") ||
-           anchor == QStringLiteral("left") ||
-           anchor == QStringLiteral("center") ||
-           anchor == QStringLiteral("right") ||
-           anchor == QStringLiteral("bottom-left") ||
-           anchor == QStringLiteral("bottom") ||
-           anchor == QStringLiteral("bottom-right");
-}
-
-bool isIconAnimation(const QString &animation)
-{
-    return animation == QStringLiteral("none") ||
-           animation == QStringLiteral("bounce") ||
-           animation == QStringLiteral("elastic") ||
-           animation == QStringLiteral("pulse") ||
-           animation == QStringLiteral("scale") ||
-           animation == QStringLiteral("spin") ||
-           animation == QStringLiteral("idle-rotate") ||
-           animation == QStringLiteral("orbit") ||
-           animation == QStringLiteral("swing") ||
-           animation == QStringLiteral("wobble") ||
-           animation == QStringLiteral("wiggle") ||
-           animation == QStringLiteral("shake") ||
-           animation == QStringLiteral("glow") ||
-           animation == QStringLiteral("breathe") ||
-           animation == QStringLiteral("float") ||
-           animation == QStringLiteral("wave") ||
-           animation == QStringLiteral("ripple") ||
-           animation == QStringLiteral("magnetic") ||
-           animation == QStringLiteral("spring");
-}
-
-bool isAnimationTrigger(const QString &trigger)
-{
-    return trigger == QStringLiteral("hover") ||
-           trigger == QStringLiteral("click") ||
-           trigger == QStringLiteral("launch") ||
-           trigger == QStringLiteral("running") ||
-           trigger == QStringLiteral("drop") ||
-           trigger == QStringLiteral("reveal") ||
-           trigger == QStringLiteral("idle");
-}
-
-bool isFolderLayout(const QString &layout)
-{
-    return layout == QStringLiteral("fan") ||
-           layout == QStringLiteral("grid") ||
-           layout == QStringLiteral("stack") ||
-           layout == QStringLiteral("arc") ||
-           layout == QStringLiteral("spiral") ||
-           layout == QStringLiteral("circular") ||
-           layout == QStringLiteral("radial") ||
-           layout == QStringLiteral("vertical") ||
-           layout == QStringLiteral("horizontal") ||
-           layout == QStringLiteral("elastic") ||
-           layout == QStringLiteral("physics");
-}
-
-bool isFolderEasing(const QString &easing)
-{
-    return easing == QStringLiteral("outCubic") ||
-           easing == QStringLiteral("outBack") ||
-           easing == QStringLiteral("outElastic") ||
-           easing == QStringLiteral("spring");
-}
-
 bool isThemeFit(const QString &fit)
 {
     return fit == QStringLiteral("cover") ||
@@ -203,9 +67,38 @@ QVariantList builtInThemes()
         if (!file.open(QIODevice::ReadOnly))
             return QVariantList{};
         const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
-        return document.object().value(QStringLiteral("themes")).toArray().toVariantList();
+        const QJsonObject catalog = document.object();
+        if (catalog.value(QStringLiteral("format")).toString() !=
+                QStringLiteral("org.archdock.theme-catalog") ||
+            catalog.value(QStringLiteral("version")).toInt() != 1)
+        {
+            return QVariantList{};
+        }
+        return catalog.value(QStringLiteral("themes")).toArray().toVariantList();
     }();
     return themes;
+}
+
+QVariantList validatedThemeDefinitions(const QVariantList &themes)
+{
+    QVariantList result;
+    result.reserve(themes.size());
+    for (const QVariant &candidate : themes)
+    {
+        QString errorCode;
+        if (!ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
+                candidate.toMap(), &errorCode).has_value())
+        {
+            qWarning().noquote()
+                << "Theme catalog rejected:"
+                << (errorCode.isEmpty()
+                        ? QStringLiteral("invalid-capability-input")
+                        : errorCode);
+            return {};
+        }
+        result.append(candidate.toMap());
+    }
+    return result;
 }
 
 constexpr int themePackageVersion = 1;
@@ -756,7 +649,14 @@ bool normalizeFreeHostRecord(QVariantMap *panel)
 }
 
 PanelRegistry::PanelRegistry(QObject *parent)
-    : QObject(parent)
+    : PanelRegistry(builtInThemes(), parent)
+{
+}
+
+PanelRegistry::PanelRegistry(const QVariantList &themeDefinitions,
+                             QObject *parent)
+    : QObject(parent),
+      m_themeDefinitions(validatedThemeDefinitions(themeDefinitions))
 {
     load();
 }
@@ -814,6 +714,12 @@ QVariant PanelRegistry::panelValue(const QString &panelId, const QString &key) c
     return panel ? panel->value(key) : QVariant{};
 }
 
+QVariantMap PanelRegistry::panelSnapshot(const QString &panelId) const
+{
+    const QVariantMap *panel = record(panelId);
+    return panel ? *panel : QVariantMap{};
+}
+
 QString PanelRegistry::panelName(const QString &panelId) const
 {
     const QVariantMap *panel = record(panelId);
@@ -839,6 +745,233 @@ void PanelRegistry::updatePanel(const QString &panelId, const QVariantMap &value
 bool PanelRegistry::updatePanelChecked(const QString &panelId, const QVariantMap &values)
 {
     return setPanelValuesChecked(panelId, values);
+}
+
+std::optional<ArchDock::PanelDefinition> PanelRegistry::panelDefinition(
+    const QString &panelId,
+    QString *errorMessage) const
+{
+    const QVariantMap *panel = record(panelId);
+    if (!panel)
+    {
+        if (errorMessage)
+        {
+            *errorMessage = QStringLiteral("panel not found: %1").arg(panelId);
+        }
+        return std::nullopt;
+    }
+    return ArchDock::PanelDefinition::fromLegacyMap(*panel, errorMessage);
+}
+
+std::optional<ArchDock::ThemeCapabilityProfile>
+PanelRegistry::themeCapabilityProfile(
+    const ArchDock::PanelDefinition &definition,
+    QString *errorCode) const
+{
+    const bool hasManagedArtwork =
+        !definition.surface.themeAsset.trimmed().isEmpty() ||
+        !definition.surface.themeSource.trimmed().isEmpty() ||
+        !definition.surface.themePackageManifest.trimmed().isEmpty();
+    if (hasManagedArtwork)
+    {
+        if (errorCode)
+        {
+            errorCode->clear();
+        }
+        return ArchDock::PanelCapabilityResolver::legacyThemeProfile(definition);
+    }
+
+    const QString themeId = !definition.surface.completeThemeId.trimmed().isEmpty()
+        ? definition.surface.completeThemeId.trimmed()
+        : definition.surface.panelThemeId.trimmed();
+    if (themeId.isEmpty())
+    {
+        if (errorCode)
+        {
+            errorCode->clear();
+        }
+        return ArchDock::PanelCapabilityResolver::proceduralThemeProfile();
+    }
+
+    for (const QVariant &candidate : m_themeDefinitions)
+    {
+        const QVariantMap theme = candidate.toMap();
+        if (theme.value(QStringLiteral("id")).toString() != themeId)
+        {
+            continue;
+        }
+        return ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
+            theme, errorCode);
+    }
+
+    if (errorCode)
+    {
+        *errorCode = QStringLiteral("theme-capability-undeclared");
+    }
+    return std::nullopt;
+}
+
+ArchDock::CapabilityResolution PanelRegistry::resolvePanelCapabilities(
+    const ArchDock::PanelDefinition &definition,
+    QString *errorCode) const
+{
+    const ArchDock::HostCapabilityProfile host =
+        ArchDock::PanelCapabilityResolver::productionHostProfile(
+            definition.host.kind);
+    const std::optional<ArchDock::ThemeCapabilityProfile> theme =
+        themeCapabilityProfile(definition, errorCode);
+    if (!theme.has_value())
+    {
+        ArchDock::CapabilityResolution unavailable;
+        unavailable.hostProfileId = host.id;
+        unavailable.themeId = !definition.surface.completeThemeId.trimmed().isEmpty()
+            ? definition.surface.completeThemeId.trimmed()
+            : definition.surface.panelThemeId.trimmed();
+        unavailable.reason = ArchDock::CapabilityReasonCode::InvalidCapabilityInput;
+        return unavailable;
+    }
+
+    if (errorCode)
+    {
+        errorCode->clear();
+    }
+    return ArchDock::PanelCapabilityResolver::resolve(
+        definition,
+        host,
+        *theme,
+        ArchDock::PanelCapabilityResolver::productionRenderers(),
+        ArchDock::PanelCapabilityResolver::productionPlatform());
+}
+
+bool PanelRegistry::persistPanelSettingsTransaction(
+    const ArchDock::PanelSettingsTransactionDraft &draft,
+    QString *errorMessage)
+{
+    qsizetype panelIndex = -1;
+    for (qsizetype index = 0; index < m_panels.size(); ++index)
+    {
+        if (m_panels.at(index).value(QStringLiteral("id")).toString() ==
+            draft.previousPanel.identity.id)
+        {
+            panelIndex = index;
+            break;
+        }
+    }
+    if (panelIndex < 0)
+    {
+        if (errorMessage)
+        {
+            *errorMessage = QStringLiteral("panel disappeared before transaction commit");
+        }
+        return false;
+    }
+
+    QString currentError;
+    const std::optional<ArchDock::PanelDefinition> current =
+        ArchDock::PanelDefinition::fromLegacyMap(m_panels.at(panelIndex), &currentError);
+    if (!current.has_value() || *current != draft.previousPanel)
+    {
+        if (errorMessage)
+        {
+            *errorMessage = current.has_value()
+                ? QStringLiteral("panel changed before transaction commit")
+                : currentError;
+        }
+        return false;
+    }
+    if (draft.candidatePanel.settingsRevision !=
+            draft.previousPanel.settingsRevision + 1 ||
+        draft.candidatePanel.identity.id != draft.previousPanel.identity.id)
+    {
+        if (errorMessage)
+        {
+            *errorMessage = QStringLiteral("candidate revision is not the next panel revision");
+        }
+        return false;
+    }
+
+    QList<QVariantMap> stagedPanels = m_panels;
+    stagedPanels[panelIndex] = draft.candidatePanel.toLegacyMap();
+    if (!persistPanelState(stagedPanels, draft.candidateGlobals, errorMessage))
+    {
+        return false;
+    }
+    m_panels = std::move(stagedPanels);
+    return true;
+}
+
+bool PanelRegistry::rollbackPanelSettingsTransaction(
+    const ArchDock::PanelSettingsTransactionDraft &draft,
+    quint64 committedRevision,
+    quint64 *rollbackRevision,
+    QString *errorMessage)
+{
+    if (rollbackRevision)
+    {
+        *rollbackRevision = 0;
+    }
+    if (committedRevision == std::numeric_limits<quint64>::max())
+    {
+        if (errorMessage)
+        {
+            *errorMessage = QStringLiteral("panel revision cannot advance for rollback");
+        }
+        return false;
+    }
+
+    qsizetype panelIndex = -1;
+    for (qsizetype index = 0; index < m_panels.size(); ++index)
+    {
+        if (m_panels.at(index).value(QStringLiteral("id")).toString() ==
+            draft.previousPanel.identity.id)
+        {
+            panelIndex = index;
+            break;
+        }
+    }
+    if (panelIndex < 0)
+    {
+        if (errorMessage)
+        {
+            *errorMessage = QStringLiteral("panel disappeared before transaction rollback");
+        }
+        return false;
+    }
+
+    QString currentError;
+    const std::optional<ArchDock::PanelDefinition> current =
+        ArchDock::PanelDefinition::fromLegacyMap(m_panels.at(panelIndex), &currentError);
+    if (!current.has_value() || current->settingsRevision != committedRevision)
+    {
+        if (errorMessage)
+        {
+            *errorMessage = current.has_value()
+                ? QStringLiteral("panel changed before transaction rollback")
+                : currentError;
+        }
+        return false;
+    }
+
+    ArchDock::PanelDefinition restoredPanel = draft.previousPanel;
+    restoredPanel.settingsRevision = committedRevision + 1;
+    QList<QVariantMap> stagedPanels = m_panels;
+    stagedPanels[panelIndex] = restoredPanel.toLegacyMap();
+    if (!persistPanelState(stagedPanels, draft.previousGlobals, errorMessage))
+    {
+        return false;
+    }
+    m_panels = std::move(stagedPanels);
+    if (rollbackRevision)
+    {
+        *rollbackRevision = restoredPanel.settingsRevision;
+    }
+    return true;
+}
+
+void PanelRegistry::notifyPanelSettingsTransactionAdopted(
+    bool nativeTopologyChanged)
+{
+    changed(nativeTopologyChanged);
 }
 
 std::optional<PanelRegistry::FreeHostAssociation> PanelRegistry::freeHostAssociation(
@@ -1347,20 +1480,32 @@ bool PanelRegistry::recordNativePanelRecoveryFailure(
 
 QVariantList PanelRegistry::themeDefinitions() const
 {
-    return builtInThemes();
+    return m_themeDefinitions;
 }
 
-bool PanelRegistry::applyTheme(const QString &panelId,
-                               const QString &themeId,
-                               const QString &layer)
+QVariantMap PanelRegistry::themeCandidate(const QString &panelId,
+                                          const QString &themeId,
+                                          const QString &layer) const
 {
     const QString normalizedLayer = layer.trimmed().toLower();
     if (!record(panelId) || (normalizedLayer != QStringLiteral("panel") &&
                              normalizedLayer != QStringLiteral("icon") &&
                              normalizedLayer != QStringLiteral("complete")))
-        return false;
+    {
+        return {
+            {QStringLiteral("success"), false},
+            {QStringLiteral("status"), QStringLiteral("validation-failed")},
+            {QStringLiteral("errorCode"), record(panelId)
+                 ? QStringLiteral("invalid-theme-layer")
+                 : QStringLiteral("panel-not-found")},
+            {QStringLiteral("panelId"), panelId},
+            {QStringLiteral("themeId"), themeId},
+            {QStringLiteral("layer"), normalizedLayer},
+            {QStringLiteral("values"), QVariantMap{}},
+        };
+    }
 
-    for (const QVariant &candidate : builtInThemes())
+    for (const QVariant &candidate : m_themeDefinitions)
     {
         const QVariantMap theme = candidate.toMap();
         if (theme.value(QStringLiteral("id")).toString() != themeId)
@@ -1390,10 +1535,116 @@ bool PanelRegistry::applyTheme(const QString &panelId,
             mergeStyle(theme.value(QStringLiteral("layoutStyle")).toMap());
             changes.insert(QStringLiteral("completeThemeId"), themeId);
         }
-        setPanelValues(panelId, changes);
-        return true;
+
+        QVariantMap normalizedChanges;
+        for (auto iterator = changes.cbegin(); iterator != changes.cend(); ++iterator)
+        {
+            const ArchDock::PanelSettingsFieldDescriptor *field =
+                ArchDock::PanelSettingsSchema::panelDescriptor(iterator.key());
+            if (!field || field->access != ArchDock::PanelSettingsFieldAccess::Editor)
+            {
+                return {
+                    {QStringLiteral("success"), false},
+                    {QStringLiteral("status"), QStringLiteral("validation-failed")},
+                    {QStringLiteral("errorCode"), QStringLiteral("theme-field-unavailable")},
+                    {QStringLiteral("errorMessage"), iterator.key()},
+                    {QStringLiteral("panelId"), panelId},
+                    {QStringLiteral("themeId"), themeId},
+                    {QStringLiteral("layer"), normalizedLayer},
+                    {QStringLiteral("values"), QVariantMap{}},
+                };
+            }
+            normalizedChanges.insert(
+                iterator.key(),
+                ArchDock::PanelSettingsSchema::normalizePanelValue(
+                    iterator.key(), iterator.value()));
+        }
+
+        QVariantMap candidateRecord = *record(panelId);
+        for (auto iterator = normalizedChanges.cbegin();
+             iterator != normalizedChanges.cend(); ++iterator)
+        {
+            candidateRecord.insert(iterator.key(), iterator.value());
+        }
+        QString definitionError;
+        const std::optional<ArchDock::PanelDefinition> definition =
+            ArchDock::PanelDefinition::fromLegacyMap(
+                candidateRecord, &definitionError);
+        QString capabilityError;
+        const std::optional<ArchDock::ThemeCapabilityProfile> profile =
+            ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
+                theme, &capabilityError);
+        if (!definition.has_value() || !profile.has_value())
+        {
+            return {
+                {QStringLiteral("success"), false},
+                {QStringLiteral("status"), QStringLiteral("validation-failed")},
+                {QStringLiteral("errorCode"), !definition.has_value()
+                     ? QStringLiteral("invalid-theme-candidate")
+                     : QStringLiteral("invalid-theme-capabilities")},
+                {QStringLiteral("errorMessage"), !definition.has_value()
+                     ? definitionError : capabilityError},
+                {QStringLiteral("panelId"), panelId},
+                {QStringLiteral("themeId"), themeId},
+                {QStringLiteral("layer"), normalizedLayer},
+                {QStringLiteral("values"), QVariantMap{}},
+            };
+        }
+        const ArchDock::CapabilityResolution resolution =
+            ArchDock::PanelCapabilityResolver::resolve(
+                *definition,
+                ArchDock::PanelCapabilityResolver::productionHostProfile(
+                    definition->host.kind),
+                *profile,
+                ArchDock::PanelCapabilityResolver::productionRenderers(),
+                ArchDock::PanelCapabilityResolver::productionPlatform());
+        if (!resolution.available)
+        {
+            return {
+                {QStringLiteral("success"), false},
+                {QStringLiteral("status"), QStringLiteral("capability-unavailable")},
+                {QStringLiteral("errorCode"),
+                 ArchDock::capabilityReasonCodeName(resolution.reason)},
+                {QStringLiteral("panelId"), panelId},
+                {QStringLiteral("themeId"), themeId},
+                {QStringLiteral("layer"), normalizedLayer},
+                {QStringLiteral("values"), QVariantMap{}},
+                {QStringLiteral("capabilityResolution"), resolution.toVariantMap()},
+            };
+        }
+        return {
+            {QStringLiteral("success"), true},
+            {QStringLiteral("status"), QStringLiteral("resolved")},
+            {QStringLiteral("errorCode"), QString{}},
+            {QStringLiteral("panelId"), panelId},
+            {QStringLiteral("themeId"), themeId},
+            {QStringLiteral("layer"), normalizedLayer},
+            {QStringLiteral("values"), normalizedChanges},
+            {QStringLiteral("capabilityResolution"), resolution.toVariantMap()},
+        };
     }
-    return false;
+    return {
+        {QStringLiteral("success"), false},
+        {QStringLiteral("status"), QStringLiteral("validation-failed")},
+        {QStringLiteral("errorCode"), QStringLiteral("theme-not-found")},
+        {QStringLiteral("panelId"), panelId},
+        {QStringLiteral("themeId"), themeId},
+        {QStringLiteral("layer"), normalizedLayer},
+        {QStringLiteral("values"), QVariantMap{}},
+    };
+}
+
+bool PanelRegistry::applyTheme(const QString &panelId,
+                               const QString &themeId,
+                               const QString &layer)
+{
+    const QVariantMap candidate = themeCandidate(panelId, themeId, layer);
+    if (!candidate.value(QStringLiteral("success")).toBool())
+    {
+        return false;
+    }
+    setPanelValues(panelId, candidate.value(QStringLiteral("values")).toMap());
+    return true;
 }
 
 QString PanelRegistry::addPanel(const QString &edge, const QString &type)
@@ -1537,6 +1788,26 @@ bool PanelRegistry::importTheme(const QString &panelId, const QUrl &sourceUrl)
         {
             imported.fit = QStringLiteral("cover");
         }
+    }
+
+    QVariantMap capabilityCandidate = *record(panelId);
+    capabilityCandidate.insert(
+        QStringLiteral("themeSource"),
+        QUrl::fromLocalFile(imported.sourcePath).toString());
+    capabilityCandidate.insert(
+        QStringLiteral("themePackageFormat"), themePackageFormat);
+    capabilityCandidate.insert(
+        QStringLiteral("themePackageVersion"), themePackageVersion);
+    capabilityCandidate.insert(
+        QStringLiteral("themePackageId"), imported.id);
+    QString capabilityDefinitionError;
+    const std::optional<ArchDock::PanelDefinition> capabilityDefinition =
+        ArchDock::PanelDefinition::fromLegacyMap(
+            capabilityCandidate, &capabilityDefinitionError);
+    if (!capabilityDefinition.has_value() ||
+        !resolvePanelCapabilities(*capabilityDefinition).available)
+    {
+        return false;
     }
 
     ThemePackage managed;
@@ -1727,198 +1998,7 @@ QVariantMap PanelRegistry::makePanel(const QString &id,
 
 QVariant PanelRegistry::normalizeValue(const QString &key, const QVariant &value) const
 {
-    if (key == QStringLiteral("edge"))
-    {
-        const QString edge = value.toString().trimmed().toLower();
-        return isEdge(edge) ? edge : QStringLiteral("bottom");
-    }
-    if (key == QStringLiteral("alignment"))
-    {
-        const QString alignment = value.toString().trimmed().toLower();
-        return alignment == QStringLiteral("start") ||
-                alignment == QStringLiteral("center") ||
-                alignment == QStringLiteral("end")
-            ? alignment : QStringLiteral("center");
-    }
-    if (key == QStringLiteral("screen"))
-    {
-        return qMax(0, value.toInt());
-    }
-    if (key == QStringLiteral("screenId"))
-    {
-        return value.toString().trimmed();
-    }
-    if (key == QStringLiteral("freeDesktopContainmentId") ||
-        key == QStringLiteral("freeDockAppletId"))
-    {
-        return normalizedFreeHostId(value);
-    }
-    if (key == QStringLiteral("freeOwnershipToken"))
-    {
-        return value.toString().trimmed();
-    }
-    if (key == QStringLiteral("freeHostMode") || key == QStringLiteral("freeHostState"))
-    {
-        return value.toString().trimmed().toLower();
-    }
-    if (key == QStringLiteral("visibilityMode"))
-    {
-        const QString mode = value.toString().trimmed().toLower();
-        return isVisibilityMode(mode) ? mode : QStringLiteral("always");
-    }
-    if (key == QStringLiteral("revealZone"))
-    {
-        return qBound(1, value.toInt(), 64);
-    }
-    if (key == QStringLiteral("type"))
-    {
-        const QString type = value.toString().trimmed().toLower();
-        return isPanelType(type) ? type : QStringLiteral("hybrid");
-    }
-    if (key == QStringLiteral("contentAppIds"))
-    {
-        QStringList result;
-        for (const QString &id : value.toStringList())
-        {
-            const QString normalized = id.trimmed();
-            if (!normalized.isEmpty() && !result.contains(normalized))
-            {
-                result.append(normalized);
-            }
-        }
-        return result;
-    }
-    if (key == QStringLiteral("contentUrls"))
-    {
-        QStringList result;
-        for (const QString &url : value.toStringList())
-        {
-            const QUrl normalized(url);
-            if (normalized.isValid() && !normalized.isEmpty() &&
-                !result.contains(normalized.toString()))
-            {
-                result.append(normalized.toString());
-            }
-        }
-        return result;
-    }
-    if (key == QStringLiteral("shape"))
-    {
-        const QString shape = value.toString().trimmed().toLower();
-        return isPanelShape(shape) ? shape : QStringLiteral("pill");
-    }
-    if (key == QStringLiteral("iconShape"))
-    {
-        const QString shape = value.toString().trimmed().toLower();
-        return isIconShape(shape) ? shape : QStringLiteral("rounded");
-    }
-    if (key == QStringLiteral("appearance"))
-    {
-        const QString appearance = value.toString().trimmed().toLower();
-        return isAppearance(appearance) ? appearance : QStringLiteral("glass");
-    }
-    if (key == QStringLiteral("layout"))
-    {
-        const QString layout = value.toString().trimmed().toLower();
-        return isLayout(layout) ? layout : QStringLiteral("adaptive");
-    }
-    if (key == QStringLiteral("iconAnimation"))
-    {
-        const QString animation = value.toString().trimmed().toLower();
-        return isIconAnimation(animation) ? animation : QStringLiteral("scale");
-    }
-    if (key == QStringLiteral("animationTrigger"))
-    {
-        const QString trigger = value.toString().trimmed().toLower();
-        return isAnimationTrigger(trigger) ? trigger : QStringLiteral("hover");
-    }
-    if (key == QStringLiteral("folderLayout"))
-    {
-        const QString layout = value.toString().trimmed().toLower();
-        return isFolderLayout(layout) ? layout : QStringLiteral("fan");
-    }
-    if (key == QStringLiteral("folderEasing"))
-    {
-        const QString easing = value.toString().trimmed();
-        return isFolderEasing(easing) ? easing : QStringLiteral("outBack");
-    }
-    if (key == QStringLiteral("themeFit"))
-    {
-        const QString fit = value.toString().trimmed().toLower();
-        return isThemeFit(fit) ? fit : QStringLiteral("cover");
-    }
-    if (key == QStringLiteral("opacity"))
-    {
-        return qBound<qreal>(0.0, value.toReal(), 1.0);
-    }
-    if (key == QStringLiteral("iconSize"))
-    {
-        return qBound(24, value.toInt(), 128);
-    }
-    if (key == QStringLiteral("spacing"))
-    {
-        return qBound<qreal>(0.0, value.toReal(), 48.0);
-    }
-    if (key == QStringLiteral("layoutScale"))
-    {
-        return qBound<qreal>(0.5, value.toReal(), 2.5);
-    }
-    if (key == QStringLiteral("layoutAngle"))
-    {
-        return qBound<qreal>(-180.0, value.toReal(), 180.0);
-    }
-    if (key == QStringLiteral("layoutRadius"))
-    {
-        return qBound(48, value.toInt(), 2048);
-    }
-    if (key == QStringLiteral("layoutRows"))
-    {
-        return qBound(1, value.toInt(), 8);
-    }
-    if (key == QStringLiteral("layoutPadding"))
-    {
-        return qBound(0, value.toInt(), 240);
-    }
-    if (key == QStringLiteral("pathSides"))
-    {
-        return qBound(3, value.toInt(), 12);
-    }
-    if (key == QStringLiteral("pathOrientation"))
-    {
-        const QString orientation = value.toString().trimmed().toLower();
-        return isPathOrientation(orientation) ? orientation : QStringLiteral("upright");
-    }
-    if (key == QStringLiteral("pathAnchor"))
-    {
-        const QString anchor = value.toString().trimmed().toLower();
-        return isPathAnchor(anchor) ? anchor : QStringLiteral("center");
-    }
-    if (key == QStringLiteral("animationSpeed"))
-    {
-        return qBound<qreal>(0.2, value.toReal(), 3.0);
-    }
-    if (key == QStringLiteral("animationIntensity"))
-    {
-        return qBound<qreal>(0.1, value.toReal(), 2.5);
-    }
-    if (key == QStringLiteral("folderSpeed"))
-    {
-        return qBound(80, value.toInt(), 1200);
-    }
-    if (key == QStringLiteral("width") || key == QStringLiteral("height"))
-    {
-        return qBound(48, value.toInt(), 4096);
-    }
-    if (key == QStringLiteral("x") || key == QStringLiteral("y"))
-    {
-        return qMax(0, value.toInt());
-    }
-    if (key == QStringLiteral("visible") || key == QStringLiteral("dynamic") || key == QStringLiteral("acceptDrops") ||
-        key == QStringLiteral("physicsEnabled") || key == QStringLiteral("folderExpandOnClick"))
-    {
-        return value.toBool();
-    }
-    return value;
+    return ArchDock::PanelSettingsSchema::normalizePanelValue(key, value);
 }
 
 PanelRegistry::RenderRequest PanelRegistry::makeRenderRequest(const QString &panelId,
@@ -2071,7 +2151,10 @@ bool PanelRegistry::setPanelValuesChecked(const QString &panelId, const QVariant
         QStringLiteral("type")};
     for (auto iterator = values.cbegin(); iterator != values.cend(); ++iterator)
     {
-        if (iterator.key() == QStringLiteral("id") || iterator.key() == QStringLiteral("builtIn"))
+        if (iterator.key() == QStringLiteral("id") ||
+            iterator.key() == QStringLiteral("builtIn") ||
+            iterator.key() == QStringLiteral("schemaVersion") ||
+            iterator.key() == QStringLiteral("settingsRevision"))
         {
             continue;
         }
@@ -2116,6 +2199,15 @@ bool PanelRegistry::setPanelValuesChecked(const QString &panelId, const QVariant
     {
         return true;
     }
+
+    ArchDock::PanelDefinition revisedDefinition = *definition;
+    if (revisedDefinition.settingsRevision == std::numeric_limits<quint64>::max())
+    {
+        qWarning() << "Panel update rejected: settings revision exhausted for" << panelId;
+        return false;
+    }
+    revisedDefinition.settingsRevision += 1;
+    candidate = revisedDefinition.toLegacyMap();
 
     *panel = candidate;
     if (!saveChecked())
@@ -2559,14 +2651,21 @@ bool PanelRegistry::ensureLegacyBackupChecked(QSettings &settings)
 
 QByteArray PanelRegistry::serializePanels(QString *errorMessage) const
 {
+    return serializePanels(m_panels, errorMessage);
+}
+
+QByteArray PanelRegistry::serializePanels(
+    const QList<QVariantMap> &panels,
+    QString *errorMessage) const
+{
     QList<ArchDock::PanelDefinition> definitions;
-    definitions.reserve(m_panels.size());
+    definitions.reserve(panels.size());
     QSet<QString> panelIds;
-    for (qsizetype index = 0; index < m_panels.size(); ++index)
+    for (qsizetype index = 0; index < panels.size(); ++index)
     {
         QString definitionError;
         const std::optional<ArchDock::PanelDefinition> definition =
-            ArchDock::PanelDefinition::fromLegacyMap(m_panels.at(index), &definitionError);
+            ArchDock::PanelDefinition::fromLegacyMap(panels.at(index), &definitionError);
         if (!definition.has_value())
         {
             if (errorMessage)
@@ -2595,6 +2694,86 @@ QByteArray PanelRegistry::serializePanels(QString *errorMessage) const
         errorMessage->clear();
     }
     return ArchDock::SettingsMigration::serializeVersionTwo(definitions);
+}
+
+bool PanelRegistry::persistPanelState(
+    const QList<QVariantMap> &panels,
+    const QVariantMap &globalSettings,
+    QString *errorMessage)
+{
+    if (m_persistenceBlocked)
+    {
+        if (errorMessage)
+        {
+            *errorMessage = QStringLiteral(
+                "panel registry persistence is blocked pending source repair");
+        }
+        return false;
+    }
+
+    QString serializationError;
+    const QByteArray serialized = serializePanels(panels, &serializationError);
+    if (!serializationError.isEmpty())
+    {
+        if (errorMessage)
+        {
+            *errorMessage = serializationError;
+        }
+        return false;
+    }
+
+    QSettings settings;
+    if (m_legacyRewritePending && !ensureLegacyBackupChecked(settings))
+    {
+        if (errorMessage)
+        {
+            *errorMessage = m_migrationDiagnostic;
+        }
+        return false;
+    }
+    settings.setValue(QString::fromLatin1(kPanelRecordsKey), serialized);
+    DockSettings::writeTransaction(settings, globalSettings);
+    settings.sync();
+    if (settings.status() != QSettings::NoError)
+    {
+        if (errorMessage)
+        {
+            *errorMessage = QStringLiteral("QSettings could not persist the settings transaction");
+        }
+        return false;
+    }
+
+    QSettings verifier;
+    if (verifier.value(QString::fromLatin1(kPanelRecordsKey)).toByteArray() != serialized)
+    {
+        if (errorMessage)
+        {
+            *errorMessage = QStringLiteral("panel settings transaction readback did not match");
+        }
+        return false;
+    }
+    for (auto it = globalSettings.cbegin(); it != globalSettings.cend(); ++it)
+    {
+        if (verifier.value(QStringLiteral("dock/") + it.key()) != it.value())
+        {
+            if (errorMessage)
+            {
+                *errorMessage = QStringLiteral(
+                    "global settings transaction readback did not match field: %1")
+                    .arg(it.key());
+            }
+            return false;
+        }
+    }
+
+    m_legacySource.clear();
+    m_legacyRewritePending = false;
+    setMigrationDiagnostic(QString{});
+    if (errorMessage)
+    {
+        errorMessage->clear();
+    }
+    return true;
 }
 
 void PanelRegistry::setMigrationDiagnostic(const QString &diagnostic)

@@ -26,6 +26,19 @@ require_command() {
     }
 }
 
+validate_lifecycle_stop_after() {
+    local selector="${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}"
+    case "$selector" in
+    ''|transaction)
+        ;;
+    *)
+        printf 'Unsupported ARCHDOCK_LIFECYCLE_STOP_AFTER value: %s\n' \
+            "$selector" >&2
+        return 2
+        ;;
+    esac
+}
+
 stop_process() {
     local process_id="${1:-}"
     if [[ -n "$process_id" ]] && kill -0 "$process_id" 2>/dev/null; then
@@ -154,6 +167,154 @@ gvariant_nested_map_string() {
     sed -n "s/.*'$map': <{[^}]*'$key': <'\([^']*\)'>[^}]*}>.*/\1/p"
 }
 
+transaction_outer_fields() {
+    local reply="$1"
+    python - "$reply" <<'PY'
+import ast
+import re
+import sys
+
+
+PAIRS = {"(": ")", "[": "]", "{": "}", "<": ">"}
+CLOSERS = set(PAIRS.values())
+
+
+def scan(text, delimiter=None, stop_when_empty=False):
+    stack = []
+    quote = None
+    escaped = False
+    starts = [0]
+    for index, character in enumerate(text):
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            continue
+        if character in ("'", '"'):
+            quote = character
+            continue
+        if character in PAIRS:
+            stack.append(character)
+            continue
+        if character in CLOSERS:
+            if not stack or PAIRS[stack[-1]] != character:
+                raise ValueError("unbalanced GVariant reply")
+            stack.pop()
+            if stop_when_empty and not stack:
+                return index
+            continue
+        if delimiter is not None and character == delimiter and not stack:
+            starts.append(index + 1)
+    if quote is not None or stack:
+        raise ValueError("unterminated GVariant reply")
+    if delimiter is None:
+        return None
+    boundaries = [start - 1 for start in starts[1:]] + [len(text)]
+    return [text[start:end].strip() for start, end in zip(starts, boundaries)]
+
+
+def split_entry(entry):
+    stack = []
+    quote = None
+    escaped = False
+    for index, character in enumerate(entry):
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            continue
+        if character in ("'", '"'):
+            quote = character
+        elif character in PAIRS:
+            stack.append(character)
+        elif character in CLOSERS:
+            if not stack or PAIRS[stack[-1]] != character:
+                raise ValueError("unbalanced GVariant map entry")
+            stack.pop()
+        elif character == ":" and not stack:
+            return entry[:index].strip(), entry[index + 1:].strip()
+    raise ValueError("GVariant map entry has no top-level separator")
+
+
+def variant_inner(raw):
+    raw = raw.strip()
+    if len(raw) < 2 or raw[0] != "<" or raw[-1] != ">":
+        raise ValueError("outer map field is not a variant")
+    return raw[1:-1].strip()
+
+
+def string_field(fields, key):
+    value = ast.literal_eval(variant_inner(fields[key]))
+    if not isinstance(value, str):
+        raise ValueError(f"{key} is not a string")
+    return value
+
+
+def boolean_field(fields, key):
+    value = variant_inner(fields[key])
+    if value not in ("true", "false"):
+        raise ValueError(f"{key} is not a boolean")
+    return value
+
+
+def revision_field(fields, key):
+    match = re.fullmatch(r"(?:uint64\s+)?([0-9]+)", variant_inner(fields[key]))
+    if match is None:
+        raise ValueError(f"{key} is not an unsigned revision")
+    return match.group(1)
+
+
+try:
+    reply = sys.argv[1].strip()
+    map_start = reply.find("{")
+    if map_start < 0 or reply[:map_start].strip() != "(":
+        raise ValueError("reply is not a one-map D-Bus tuple")
+    map_length = scan(reply[map_start:], stop_when_empty=True)
+    map_end = map_start + map_length
+    if "".join(reply[map_end + 1:].split()) != ",)":
+        raise ValueError("reply contains data outside the outer transaction map")
+
+    fields = {}
+    body = reply[map_start + 1:map_end]
+    for entry in scan(body, delimiter=","):
+        if not entry:
+            continue
+        raw_key, raw_value = split_entry(entry)
+        key = ast.literal_eval(raw_key)
+        if not isinstance(key, str) or key in fields:
+            raise ValueError("invalid or duplicate outer transaction key")
+        fields[key] = raw_value
+
+    required = {
+        "status",
+        "success",
+        "errorCode",
+        "rolledBack",
+        "rollbackRevision",
+        "hostResults",
+    }
+    missing = sorted(required.difference(fields))
+    if missing:
+        raise ValueError("missing outer transaction fields: " + ", ".join(missing))
+
+    print(string_field(fields, "status"))
+    print(string_field(fields, "errorCode"))
+    print(boolean_field(fields, "success"))
+    print(boolean_field(fields, "rolledBack"))
+    print(revision_field(fields, "rollbackRevision"))
+    print("true")
+except (KeyError, SyntaxError, ValueError) as error:
+    print(f"Could not parse outer settings transaction: {error}", file=sys.stderr)
+    raise SystemExit(1)
+PY
+}
+
 require_structured_placement_reply() {
     local reply="$1"
     local expected_status="$2"
@@ -219,6 +380,53 @@ require_structured_visibility_reply() {
             "$expected_effective_mode" "$expected_host_mode" "$reply" >&2
         return 1
     }
+}
+
+require_structured_transaction_reply() {
+    local reply="$1"
+    local expected_status="$2"
+    local expected_success="$3"
+    local expected_error="$4"
+    local expected_rolled_back="$5"
+    local expected_rollback_revision="$6"
+    local parsed
+    parsed="$(transaction_outer_fields "$reply")" || return 1
+    local -a fields
+    mapfile -t fields <<<"$parsed"
+    [[ "${#fields[@]}" == '6' ]] || {
+        printf 'Outer settings transaction parser returned %s fields: %s\n' \
+            "${#fields[@]}" "$parsed" >&2
+        return 1
+    }
+    local actual_status="${fields[0]}"
+    local actual_error="${fields[1]}"
+    local actual_success="${fields[2]}"
+    local actual_rolled_back="${fields[3]}"
+    local actual_rollback_revision="${fields[4]}"
+    local host_results_present="${fields[5]}"
+    [[ "$actual_status" == "$expected_status" &&
+        "$actual_success" == "$expected_success" &&
+        "$actual_error" == "$expected_error" &&
+        "$actual_rolled_back" == "$expected_rolled_back" &&
+        "$actual_rollback_revision" == "$expected_rollback_revision" &&
+        "$host_results_present" == 'true' &&
+        "$reply" == *"'expectedRevision':"* &&
+        "$reply" == *"'previousRevision':"* &&
+        "$reply" == *"'revision':"* ]] || {
+        printf 'Unexpected outer settings transaction: expected=%s/%s/%s/%s/%s actual=%s/%s/%s/%s/%s reply=%s\n' \
+            "$expected_status" "$expected_success" "$expected_error" \
+            "$expected_rolled_back" "$expected_rollback_revision" \
+            "$actual_status" "$actual_success" "$actual_error" \
+            "$actual_rolled_back" "$actual_rollback_revision" "$reply" >&2
+        return 1
+    }
+}
+
+run_transaction_parser_fixture() {
+    local reply="({'status': <'outer-status'>, 'errorCode': <'outer-error'>, 'rolledBack': <true>, 'rollbackRevision': <uint64 44>, 'success': <false>, 'hostResults': <[<{'status': <'nested-status'>, 'errorCode': <'nested-error'>, 'rolledBack': <false>, 'rollbackRevision': <uint64 999>, 'success': <true>}>]>, 'expectedRevision': <uint64 42>, 'previousRevision': <uint64 42>, 'revision': <uint64 43>},)"
+    require_structured_transaction_reply \
+        "$reply" outer-status false outer-error true 44
+    printf 'Focused outer transaction parser fixture succeeded.\n'
 }
 
 panel_ids() {
@@ -1272,6 +1480,7 @@ wait_for_signal_monitor() {
 }
 
 run_session() {
+    validate_lifecycle_stop_after
     trap record_session_result EXIT
 
     log_session_phase 'starting private KWin'
@@ -1613,6 +1822,85 @@ run_session() {
         "$first_containment_id" "$panel_id" bottom center 'managed panel creation'
     require_native_panel_geometry \
         "$first_containment_id" 76 custom 720 720 '*' 'managed panel creation'
+
+    local transaction_revision
+    transaction_revision="$(panel_registry_value "$panel_id" settingsRevision)"
+    local transaction_reply
+    transaction_reply="$(panel_call applyPanelSettingsTransaction \
+        "$panel_id" "uint64 $transaction_revision" \
+        "{'opacity': <0.61>}" "{'magnification': <1.77>}")"
+    require_structured_transaction_reply \
+        "$transaction_reply" succeeded true '' false 0
+    local successful_transaction_revision
+    successful_transaction_revision="$(panel_registry_value \
+        "$panel_id" settingsRevision)"
+    [[ "$successful_transaction_revision" == "$((transaction_revision + 1))" &&
+        "$(panel_registry_value "$panel_id" opacity)" == '0.61' ]] || {
+        printf 'Successful settings transaction did not persist one complete revision: %s\n' \
+            "$transaction_reply" >&2
+        exit 1
+    }
+
+    local validation_snapshot
+    validation_snapshot="$(panel_registry_record_snapshot "$panel_id")"
+    local validation_reply
+    validation_reply="$(panel_call applyPanelSettingsTransaction \
+        "$panel_id" "uint64 $successful_transaction_revision" \
+        "{'id': <'not-the-owned-panel'>}" '{}')"
+    require_structured_transaction_reply \
+        "$validation_reply" validation-failed false protected-panel-field false 0
+    [[ "$(panel_registry_record_snapshot "$panel_id")" == "$validation_snapshot" ]] || {
+        printf 'Validation failure changed the persisted panel record.\n' >&2
+        exit 1
+    }
+
+    local stale_reply
+    stale_reply="$(panel_call applyPanelSettingsTransaction \
+        "$panel_id" "uint64 $transaction_revision" \
+        "{'opacity': <0.22>}" '{}')"
+    require_structured_transaction_reply \
+        "$stale_reply" revision-conflict false stale-revision false 0
+    [[ "$(panel_registry_record_snapshot "$panel_id")" == "$validation_snapshot" ]] || {
+        printf 'Stale settings draft overwrote the current panel record.\n' >&2
+        exit 1
+    }
+
+    local host_failure_before
+    host_failure_before="$(panel_registry_record_snapshot "$panel_id")"
+    local host_failure_reply
+    host_failure_reply="$(panel_call applyPanelSettingsTransaction \
+        "$panel_id" "uint64 $successful_transaction_revision" \
+        "{'floatingMargin': <12>}" '{}')"
+    require_structured_transaction_reply \
+        "$host_failure_reply" host-failed false required-host-apply-failed true \
+        "$((successful_transaction_revision + 2))"
+    local host_failure_after
+    host_failure_after="$(panel_registry_record_snapshot "$panel_id")"
+    local rollback_revision
+    rollback_revision="$(panel_registry_value "$panel_id" settingsRevision)"
+    [[ "$rollback_revision" == "$((successful_transaction_revision + 2))" &&
+        "$(jq -cS 'del(.settingsRevision)' <<<"$host_failure_after")" == \
+            "$(jq -cS 'del(.settingsRevision)' <<<"$host_failure_before")" &&
+        "$host_failure_reply" == *"'rolledBack': <true>"* ]] || {
+        printf 'Required-host failure did not restore the complete prior settings: %s\n' \
+            "$host_failure_reply" >&2
+        exit 1
+    }
+    require_native_panel_placement \
+        "$first_containment_id" "$panel_id" bottom center \
+        'transaction host-failure rollback'
+    require_native_panel_geometry \
+        "$first_containment_id" 76 custom 720 720 '*' \
+        'transaction host-failure rollback'
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" \
+        'settings transaction matrix'
+    log_session_phase \
+        'verified settings success validation conflict and host rollback transactions'
+
+    if [[ "${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}" == 'transaction' ]]; then
+        return 0
+    fi
 
     local first_dock_id
     first_dock_id="$(owned_dock_id "$first_containment_id" "$panel_id")"
@@ -2624,6 +2912,7 @@ run_session() {
 }
 
 run_outer() {
+    validate_lifecycle_stop_after
     require_command cmake
     require_command chmod
     require_command dbus-run-session
@@ -2687,6 +2976,7 @@ run_outer() {
     local session_runner_status
     set +e
     env \
+        ARCHDOCK_LIFECYCLE_STOP_AFTER="${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}" \
         ARCHDOCK_PLASMA_LIFECYCLE_SESSION=1 \
         ARCHDOCK_SESSION_RESULT_FILE="$session_result_file" \
         ARCHDOCK_TEST_BINARY="$binary_path" \
@@ -2728,10 +3018,18 @@ run_outer() {
         exit 1
     }
 
-    printf 'Isolated Plasma native/free lifecycle succeeded.\n'
+    if [[ "${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}" == 'transaction' ]]; then
+        cleanup_outer
+        ARCHDOCK_LIFECYCLE_STATE_ROOT=''
+        printf 'Isolated Plasma TASK-0023 Phase A transaction lifecycle succeeded.\n'
+    else
+        printf 'Isolated Plasma native/free lifecycle succeeded.\n'
+    fi
 }
 
-if [[ "${ARCHDOCK_PLASMA_LIFECYCLE_SESSION:-}" == '1' ]]; then
+if [[ "${ARCHDOCK_TRANSACTION_PARSER_FIXTURE:-}" == '1' ]]; then
+    run_transaction_parser_fixture
+elif [[ "${ARCHDOCK_PLASMA_LIFECYCLE_SESSION:-}" == '1' ]]; then
     run_session
 else
     run_outer
