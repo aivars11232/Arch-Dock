@@ -5,6 +5,7 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
+import ArchDock.Rendering 1.0
 import org.kde.kirigami as Kirigami
 import "CapabilityModel.js" as CapabilityModel
 import "PlacementStatus.js" as PlacementStatus
@@ -15,6 +16,7 @@ import "VisibilityStatus.js" as VisibilityStatus
 Window {
     id: root
 
+    readonly property bool renderingModuleReady: RenderingModuleProbe.ready
     property string selectedPanelId: panelRegistry.activePanelId
     property bool showPanels: false
     property int mainTabIndex: 0

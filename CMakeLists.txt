@@ -15,6 +15,59 @@ find_package(KF6Kirigami REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
+include(GNUInstallDirs)
+
+set(
+  ARCHDOCK_QML_INSTALL_DIR
+  "${CMAKE_INSTALL_LIBDIR}/qt6/qml"
+  CACHE STRING
+        "Relative installation root for Arch Dock QML modules")
+if(IS_ABSOLUTE "${ARCHDOCK_QML_INSTALL_DIR}" OR
+   ARCHDOCK_QML_INSTALL_DIR MATCHES "(^|/)\.\.(/|$)")
+  message(
+    FATAL_ERROR
+      "ARCHDOCK_QML_INSTALL_DIR must be a safe relative installation path")
+endif()
+
+set(ARCHDOCK_RENDERING_SOURCE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/qml/ArchDock/Rendering")
+set(ARCHDOCK_RENDERING_IMPORT_ROOT
+    "${CMAKE_CURRENT_BINARY_DIR}/qml-imports")
+set(ARCHDOCK_RENDERING_BUILD_DIR
+    "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Rendering")
+set(ARCHDOCK_RENDERING_MODULE_FILES
+    qmldir
+    RenderingModuleProbe.qml
+    LayoutEngine.js
+    PanelScene.qml
+    PanelSurfaceLoader.qml
+    renderers/PanelProcedural2D.qml)
+set(ARCHDOCK_RENDERING_MODULE_SOURCES)
+
+file(MAKE_DIRECTORY "${ARCHDOCK_RENDERING_BUILD_DIR}")
+foreach(rendering_file IN LISTS ARCHDOCK_RENDERING_MODULE_FILES)
+  list(
+    APPEND ARCHDOCK_RENDERING_MODULE_SOURCES
+    "${ARCHDOCK_RENDERING_SOURCE_DIR}/${rendering_file}")
+  get_filename_component(rendering_directory "${rendering_file}" DIRECTORY)
+  file(MAKE_DIRECTORY
+       "${ARCHDOCK_RENDERING_BUILD_DIR}/${rendering_directory}")
+  configure_file(
+    "${ARCHDOCK_RENDERING_SOURCE_DIR}/${rendering_file}"
+    "${ARCHDOCK_RENDERING_BUILD_DIR}/${rendering_file}"
+    COPYONLY)
+endforeach()
+
+add_custom_target(
+  archdock-rendering-module ALL
+  COMMAND ${CMAKE_COMMAND} -E make_directory
+          "${ARCHDOCK_RENDERING_BUILD_DIR}"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${ARCHDOCK_RENDERING_SOURCE_DIR}"
+          "${ARCHDOCK_RENDERING_BUILD_DIR}"
+  DEPENDS ${ARCHDOCK_RENDERING_MODULE_SOURCES}
+  COMMENT "Preparing the ArchDock.Rendering QML module")
+
 qt_add_executable(
   arch-dock
   src/main.cpp
@@ -70,9 +123,10 @@ qt_add_qml_module(
   VERSION
   1.0
   NO_IMPORT_SCAN
+  IMPORT_PATH
+  ${ARCHDOCK_RENDERING_IMPORT_ROOT}
   QML_FILES
   qml/runtime/CapabilityModel.js
-  qml/runtime/DockGeometry.js
   qml/runtime/FreePanelWindow.qml
   qml/runtime/IconProperties.qml
   qml/runtime/IconPropertiesWindow.qml
@@ -83,6 +137,7 @@ qt_add_qml_module(
   qml/runtime/StudioForm.qml
   qml/runtime/StudioNavigation.js
   qml/runtime/SettingsPopup.qml)
+add_dependencies(arch-dock archdock-rendering-module)
 qt_add_resources(
   arch-dock
   theme-catalog
@@ -381,10 +436,55 @@ if(BUILD_TESTING)
   add_test(
     NAME dock-geometry-test
     COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_DockGeometry.qml)
   set_tests_properties(
     dock-geometry-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME layout-engine-visual-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_LayoutEngineVisual.qml)
+  set_tests_properties(
+    layout-engine-visual-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME panel-scene-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PanelScene.qml)
+  set_tests_properties(
+    panel-scene-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME rendering-module-host-neutral-test
+    COMMAND ${CMAKE_COMMAND}
+            -DARCHDOCK_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ValidateRenderingModule.cmake)
+
+  add_test(
+    NAME rendering-module-import-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_RenderingModuleImport.qml)
+  set_tests_properties(
+    rendering-module-import-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME rendering-import-smoke
+    COMMAND ${CMAKE_COMMAND} -E env
+            ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
+            ARCHDOCK_QMLTESTRUNNER=$<TARGET_FILE:Qt6::qmltestrunner>
+            bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
+  set_tests_properties(
+    rendering-import-smoke
+    PROPERTIES DEPENDS rendering-module-import-test TIMEOUT 120)
 
   add_test(
     NAME motion-policy-test
@@ -474,6 +574,13 @@ if(BUILD_TESTING)
 endif()
 
 install(TARGETS arch-dock RUNTIME DESTINATION bin)
+foreach(rendering_file IN LISTS ARCHDOCK_RENDERING_MODULE_FILES)
+  get_filename_component(rendering_directory "${rendering_file}" DIRECTORY)
+  install(
+    FILES "${ARCHDOCK_RENDERING_SOURCE_DIR}/${rendering_file}"
+    DESTINATION
+      "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Rendering/${rendering_directory}")
+endforeach()
 install(FILES data/themes/builtin-themes.json DESTINATION share/arch-dock/themes)
 install(
   DIRECTORY kwin-script/

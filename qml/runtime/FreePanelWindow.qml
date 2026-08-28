@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Window
+import ArchDock.Rendering 1.0
 import org.kde.kirigami as Kirigami
-import "DockGeometry.js" as DockGeometry
 
 Window {
     id: root
@@ -19,7 +19,7 @@ Window {
     readonly property real layoutAngle: value("layoutAngle", 0)
     readonly property int polygonSides: value("pathSides", 6)
     readonly property string pathOrientation: value("pathOrientation", "upright")
-    readonly property var geometry: DockGeometry.metrics(
+    readonly property var geometry: LayoutEngine.metrics(
         layout, entryCount, iconSize, spacing, layoutScale, radiusValue,
         value("layoutRows", 2), value("layoutPadding", 18), false,
         layoutAngle, polygonSides)
@@ -157,9 +157,10 @@ Window {
 
             readonly property bool included: dockModel.panelEntryMatches(index, root.panelType)
             readonly property int pathIndex: dockModel.panelEntryPosition(index, root.panelType)
-            readonly property var point: DockGeometry.position(
+            readonly property var point: LayoutEngine.position(
                 root.layout, pathIndex, root.entryCount, root.geometry,
-                root.layoutAngle, root.polygonSides, root.pathOrientation)
+                root.layoutAngle, root.polygonSides, root.pathOrientation,
+                "runtime")
 
             visible: included
             width: root.iconSize

@@ -103,9 +103,13 @@ function polygonPoint(progress, sides, radius) {
         x: Math.cos(endAngle) * radius,
         y: Math.sin(endAngle) * radius
     };
+    const x = start.x + (end.x - start.x) * fraction;
+    const y = start.y + (end.y - start.y) * fraction;
     return {
-        x: start.x + (end.x - start.x) * fraction,
-        y: start.y + (end.y - start.y) * fraction
+        x: x,
+        y: y,
+        tangent: Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI,
+        radial: Math.atan2(y, x) * 180 / Math.PI
     };
 }
 
@@ -124,99 +128,213 @@ function starPoint(progress, points, radius) {
     }
     const start = vertex(segment);
     const end = vertex((segment + 1) % vertices);
+    const x = start.x + (end.x - start.x) * fraction;
+    const y = start.y + (end.y - start.y) * fraction;
     return {
-        x: start.x + (end.x - start.x) * fraction,
-        y: start.y + (end.y - start.y) * fraction
+        x: x,
+        y: y,
+        tangent: Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI,
+        radial: Math.atan2(y, x) * 180 / Math.PI
     };
 }
 
-function position(layout, index, count, geometry, angle, polygonSides,
-                  pathOrientation) {
+function entryGeometry(layout, index, count, geometry, angle, polygonSides,
+                       pathOrientation, compatibilityProfile) {
     const resolvedLayout = geometry.layout || normalizedLayout(layout, false);
     const safeCount = Math.max(1, count);
+    const safeIndex = clamp(Math.round(Number(index || 0)), 0, safeCount - 1);
     const size = geometry.iconSize;
     const slot = size + geometry.spacing;
     const centerX = geometry.width / 2;
     const centerY = geometry.height / 2;
-    const progress = safeCount === 1 ? 0.5 : index / (safeCount - 1);
-    const closedProgress = index / safeCount;
+    const progress = safeCount === 1 ? 0.5 : safeIndex / (safeCount - 1);
+    const closedProgress = safeIndex / safeCount;
+    const profile = compatibilityProfile || "canonical";
     let x = geometry.padding;
     let y = geometry.padding;
     let rotation = 0;
+    let tangent = 0;
+    let radial = -90;
 
     if (resolvedLayout === "horizontal") {
-        x += index * slot;
+        x += safeIndex * slot;
+        tangent = 0;
+        radial = -90;
     } else if (resolvedLayout === "vertical") {
-        y += index * slot;
+        y += safeIndex * slot;
+        tangent = 90;
+        radial = 0;
     } else if (resolvedLayout === "diagonal") {
-        x += index * slot * 0.78;
-        y += index * slot * 0.34;
+        x += safeIndex * slot * 0.78;
+        y += safeIndex * slot * 0.34;
+        tangent = Math.atan2(0.34, 0.78) * 180 / Math.PI;
+        radial = tangent - 90;
     } else if (resolvedLayout === "circular" || resolvedLayout === "ring") {
         const radians = -Math.PI / 2 + closedProgress * Math.PI * 2;
         x = centerX + Math.cos(radians) * geometry.radius - size / 2;
         y = centerY + Math.sin(radians) * geometry.radius - size / 2;
+        radial = radians * 180 / Math.PI;
+        tangent = radial + 90;
     } else if (resolvedLayout === "ellipse") {
         const radians = -Math.PI / 2 + closedProgress * Math.PI * 2;
         x = centerX + Math.cos(radians) * geometry.radius - size / 2;
         y = centerY + Math.sin(radians) * geometry.radius * 0.62 - size / 2;
+        radial = Math.atan2(y + size / 2 - centerY,
+                            x + size / 2 - centerX) * 180 / Math.PI;
+        tangent = Math.atan2(Math.cos(radians) * geometry.radius * 0.62,
+                             -Math.sin(radians) * geometry.radius) * 180 / Math.PI;
     } else if (resolvedLayout === "radial") {
         const radians = (-150 + progress * 300) * Math.PI / 180;
         x = centerX + Math.cos(radians) * geometry.radius - size / 2;
         y = centerY + Math.sin(radians) * geometry.radius - size / 2;
+        radial = radians * 180 / Math.PI;
+        tangent = radial + 90;
     } else if (["polygon", "triangle", "square", "pentagon", "hexagon",
                 "octagon", "star"].includes(resolvedLayout)) {
         const sides = shapeSides(resolvedLayout, polygonSides);
-        const point = resolvedLayout === "star"
+        const local = resolvedLayout === "star"
             ? starPoint(closedProgress, sides, geometry.radius)
             : polygonPoint(closedProgress, sides, geometry.radius);
-        x = centerX + point.x - size / 2;
-        y = centerY + point.y - size / 2;
+        x = centerX + local.x - size / 2;
+        y = centerY + local.y - size / 2;
+        tangent = local.tangent;
+        radial = local.radial;
     } else if (resolvedLayout === "arc" || resolvedLayout === "semicircle"
                || resolvedLayout === "fan") {
         const sweep = resolvedLayout === "semicircle" ? 180
             : resolvedLayout === "fan" ? 116 : 130;
-        const radians = (270 - sweep / 2 + progress * sweep) * Math.PI / 180;
+        const pathDegrees = resolvedLayout === "fan"
+            ? -58 + progress * 116
+            : 270 - sweep / 2 + progress * sweep;
+        const radians = (resolvedLayout === "fan"
+            ? pathDegrees - 90 : pathDegrees) * Math.PI / 180;
+        const runtimeProfile = profile === "runtime";
+        const verticalFactor = resolvedLayout === "fan"
+            ? (runtimeProfile ? 0.48 : 0.58)
+            : (runtimeProfile ? 0.64 : 0.58);
         x = centerX + Math.cos(radians) * geometry.radius - size / 2;
-        y = geometry.height - geometry.padding - size * 0.58
+        y = geometry.height - geometry.padding - size * verticalFactor
             + Math.sin(radians) * geometry.radius - size / 2;
+        radial = radians * 180 / Math.PI;
+        tangent = radial + 90;
         if (resolvedLayout === "fan")
-            rotation = (-58 + progress * 116) * 0.18;
+            rotation = pathDegrees * 0.18;
     } else if (resolvedLayout === "spiral") {
-        const radians = -Math.PI / 2 + index * 1.25;
+        const radians = -Math.PI / 2 + safeIndex * 1.25;
         const distance = geometry.radius * (0.26 + 0.74 * progress);
         x = centerX + Math.cos(radians) * distance - size / 2;
         y = centerY + Math.sin(radians) * distance - size / 2;
+        radial = radians * 180 / Math.PI;
+        tangent = radial + 90;
     } else if (resolvedLayout === "ribbon"
                || resolvedLayout === "horizontal-curve") {
-        x += index * slot;
+        x += safeIndex * slot;
         y = centerY - size / 2
             + Math.sin(progress * Math.PI * 2) * size * 0.36;
         rotation = Math.cos(progress * Math.PI * 2) * 8;
+        tangent = Math.atan2(
+            Math.cos(progress * Math.PI * 2) * size * 0.36 * Math.PI * 2,
+            Math.max(slot, 1)) * 180 / Math.PI;
+        radial = tangent - 90;
     } else if (resolvedLayout === "vertical-curve") {
         x = centerX - size / 2
             + Math.sin(progress * Math.PI * 2) * size * 0.6;
         y = geometry.padding + progress
             * Math.max(0, geometry.height - geometry.padding * 2 - size);
+        tangent = 90 - Math.atan2(
+            Math.cos(progress * Math.PI * 2) * size * 0.6 * Math.PI * 2,
+            Math.max(slot, 1)) * 180 / Math.PI;
+        radial = tangent - 90;
     } else if (resolvedLayout === "grid" || resolvedLayout === "floating") {
         const columns = Math.ceil(safeCount / geometry.rows);
-        const row = Math.floor(index / columns);
-        const column = index % columns;
+        const row = Math.floor(safeIndex / columns);
+        const column = safeIndex % columns;
         x += column * slot;
         y += row * slot;
         if (resolvedLayout === "floating") {
-            x += Math.sin((index + 1) * 1.71) * geometry.spacing * 0.42;
-            y += Math.cos((index + 1) * 1.29) * geometry.spacing * 0.42;
-            rotation = Math.sin((index + 1) * 1.37) * 5;
+            x += Math.sin((safeIndex + 1) * 1.71) * geometry.spacing * 0.42;
+            y += Math.cos((safeIndex + 1) * 1.29) * geometry.spacing * 0.42;
+            rotation = Math.sin((safeIndex + 1) * 1.37) * 5;
         }
     }
 
-    const point = rotate(
+    const safeAngle = Number(angle || 0);
+    const rotatedPoint = rotate(
         { x: x + size / 2, y: y + size / 2 },
-        centerX, centerY, angle);
+        centerX, centerY, safeAngle);
+    x = rotatedPoint.x - size / 2;
+    y = rotatedPoint.y - size / 2;
+
+    const orientation = pathOrientation || "upright";
+    const radialLayouts = [
+        "circular", "ring", "ellipse", "radial", "polygon", "triangle",
+        "square", "pentagon", "hexagon", "octagon", "star", "arc",
+        "semicircle", "fan", "spiral"
+    ];
+    const legacyRuntimeRadial = profile === "runtime"
+        && !radialLayouts.includes(resolvedLayout);
+    const orientationRadial = legacyRuntimeRadial ? 0 : radial;
+    if (profile !== "live") {
+        if (orientation === "tangent")
+            rotation = tangent + safeAngle;
+        else if (orientation === "radial")
+            rotation = orientationRadial + safeAngle;
+        else if (profile === "runtime"
+                 && (resolvedLayout === "fan" || resolvedLayout === "ribbon"))
+            rotation += safeAngle * 0.35;
+    }
+
+    const normalAngle = radial + safeAngle;
+    const normalRadians = normalAngle * Math.PI / 180;
+    const closedLayouts = [
+        "circular", "ellipse", "ring", "polygon", "triangle", "square",
+        "pentagon", "hexagon", "octagon", "star"
+    ];
+    const panelBounds = {
+        x: 0,
+        y: 0,
+        width: geometry.width,
+        height: geometry.height
+    };
+    const entryBounds = {
+        x: x,
+        y: y,
+        width: size,
+        height: size
+    };
     return {
-        x: point.x - size / 2,
-        y: point.y - size / 2,
-        rotation: rotation
+        position: { x: x, y: y },
+        x: x,
+        y: y,
+        rotation: rotation,
+        tangentAngle: tangent + safeAngle,
+        outwardNormal: {
+            x: Math.cos(normalRadians),
+            y: Math.sin(normalRadians),
+            angle: normalAngle
+        },
+        depthOrder: y + size / 2,
+        scaleFactor: 1,
+        pathProgress: closedLayouts.includes(resolvedLayout)
+            ? closedProgress : progress,
+        bounds: panelBounds,
+        panelBounds: panelBounds,
+        entryBounds: entryBounds,
+        safeInputRegion: panelBounds,
+        position3D: null,
+        orientation3D: null
+    };
+}
+
+function position(layout, index, count, geometry, angle, polygonSides,
+                  pathOrientation, compatibilityProfile) {
+    const result = entryGeometry(
+        layout, index, count, geometry, angle, polygonSides,
+        pathOrientation, compatibilityProfile);
+    return {
+        x: result.position.x,
+        y: result.position.y,
+        rotation: result.rotation
     };
 }
 
@@ -307,7 +425,7 @@ function surface(layout, geometry, angle, polygonSides) {
     } else {
         for (let index = 0; index < samples; ++index) {
             const progress = index / (samples - 1);
-            let x = geometry.padding + geometry.iconSize / 2
+            const x = geometry.padding + geometry.iconSize / 2
                 + progress * Math.max(0, geometry.width
                     - geometry.padding * 2 - geometry.iconSize);
             let y = centerY;
@@ -336,40 +454,36 @@ function themeStyle(appearance, customColor, iconSize) {
             shadow: "rgba(158, 238, 255, 0.72)", width: 0.38, blur: 17
         },
         "neon": {
-            stroke: "#50e6ff",
-            shadow: "#35cfff", width: 0.25, blur: 25
+            stroke: "#50e6ff", shadow: "#35cfff", width: 0.25, blur: 25
         },
         "minimal": {
             stroke: "rgba(76, 89, 102, 0.88)",
             shadow: "transparent", width: 0.18, blur: 0
         },
         "plasma": {
-            stroke: "#895cff",
-            shadow: "#d94cff", width: 0.40, blur: 23
+            stroke: "#895cff", shadow: "#d94cff", width: 0.40, blur: 23
         },
         "lime": {
-            stroke: "#7dff58",
-            shadow: "#7dff58", width: 0.30, blur: 22
+            stroke: "#7dff58", shadow: "#7dff58", width: 0.30, blur: 22
         },
         "floating-glass": {
             stroke: "rgba(109, 181, 225, 0.58)",
             shadow: "rgba(67, 152, 218, 0.62)", width: 0.50, blur: 20
         },
         "metallic": {
-            stroke: "#aeb9c4",
-            shadow: "rgba(0, 0, 0, 0.72)", width: 0.52, blur: 8
+            stroke: "#aeb9c4", shadow: "rgba(0, 0, 0, 0.72)",
+            width: 0.52, blur: 8
         },
         "futuristic": {
-            stroke: "#b030d8",
-            shadow: "#35cfff", width: 0.38, blur: 28
+            stroke: "#b030d8", shadow: "#35cfff", width: 0.38, blur: 28
         },
         "organic": {
-            stroke: "#57c98b",
-            shadow: "rgba(44, 133, 83, 0.74)", width: 0.46, blur: 13
+            stroke: "#57c98b", shadow: "rgba(44, 133, 83, 0.74)",
+            width: 0.46, blur: 13
         },
         "platform": {
-            stroke: "#6e7884",
-            shadow: "rgba(0, 0, 0, 0.72)", width: 0.32, blur: 9
+            stroke: "#6e7884", shadow: "rgba(0, 0, 0, 0.72)",
+            width: 0.32, blur: 9
         },
         "plate": {
             stroke: "rgba(76, 89, 102, 0.36)",
@@ -389,4 +503,89 @@ function themeStyle(appearance, customColor, iconSize) {
         blur: result.blur,
         trackVisible: preset !== "plate" && preset !== "pedestal"
     };
+}
+
+function nearestIndex(layout, count, geometry, angle, pointX, pointY,
+                      polygonSides, pathOrientation, compatibilityProfile) {
+    let nearest = 0;
+    let nearestDistance = Number.MAX_VALUE;
+    for (let index = 0; index < count; ++index) {
+        const candidate = position(
+            layout, index, count, geometry, angle, polygonSides,
+            pathOrientation, compatibilityProfile);
+        const centerX = candidate.x + geometry.iconSize / 2;
+        const centerY = candidate.y + geometry.iconSize / 2;
+        const distance = Math.pow(centerX - pointX, 2)
+            + Math.pow(centerY - pointY, 2);
+        if (distance < nearestDistance) {
+            nearest = index;
+            nearestDistance = distance;
+        }
+    }
+    return nearest;
+}
+
+function anchorOffset(anchor, containerWidth, containerHeight, geometry) {
+    const availableWidth = Math.max(0, containerWidth - geometry.width);
+    const availableHeight = Math.max(0, containerHeight - geometry.height);
+    let x = availableWidth / 2;
+    let y = availableHeight / 2;
+
+    if (anchor === "top-left" || anchor === "left" || anchor === "bottom-left")
+        x = 0;
+    else if (anchor === "top-right" || anchor === "right"
+             || anchor === "bottom-right")
+        x = availableWidth;
+
+    if (anchor === "top-left" || anchor === "top" || anchor === "top-right")
+        y = 0;
+    else if (anchor === "bottom-left" || anchor === "bottom"
+             || anchor === "bottom-right")
+        y = availableHeight;
+
+    return { x: x, y: y };
+}
+
+function expansionOffset(layout, index, count, iconSize, spacing, radius, rows) {
+    const safeCount = Math.max(1, count);
+    const safeRadius = Math.max(iconSize * 1.2, radius);
+    const safeRows = clamp(Math.round(rows), 1, 8);
+    const slot = iconSize + Math.max(0, spacing);
+    const progress = safeCount === 1 ? 0.5 : index / (safeCount - 1);
+    if (layout === "grid") {
+        const columns = Math.ceil(safeCount / safeRows);
+        return {
+            x: (index % columns - (columns - 1) / 2) * slot,
+            y: (Math.floor(index / columns) - (safeRows - 1) / 2) * slot
+        };
+    }
+    if (layout === "stack")
+        return {
+            x: index * Math.max(4, spacing * 0.72),
+            y: -index * Math.max(5, spacing * 0.92)
+        };
+    if (layout === "vertical")
+        return { x: 0, y: (index - (safeCount - 1) / 2) * slot };
+    if (layout === "horizontal")
+        return { x: (index - (safeCount - 1) / 2) * slot, y: 0 };
+    if (layout === "spiral") {
+        const radians = index * 1.82 - Math.PI / 2;
+        const distance = iconSize * 1.1 + index * Math.max(iconSize * 0.33, spacing);
+        return { x: Math.cos(radians) * distance, y: Math.sin(radians) * distance };
+    }
+    if (layout === "circular" || layout === "radial") {
+        const radians = -Math.PI / 2 + index * Math.PI * 2 / safeCount;
+        return { x: Math.cos(radians) * safeRadius, y: Math.sin(radians) * safeRadius };
+    }
+    if (layout === "arc" || layout === "fan" || layout === "elastic"
+        || layout === "physics") {
+        const degrees = -72 + progress * 144;
+        const radians = (degrees - 90) * Math.PI / 180;
+        const distance = layout === "fan" ? safeRadius * 0.82 : safeRadius;
+        return {
+            x: Math.cos(radians) * distance,
+            y: Math.sin(radians) * distance + safeRadius * 0.35
+        };
+    }
+    return { x: (index - (safeCount - 1) / 2) * slot, y: 0 };
 }

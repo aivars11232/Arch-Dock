@@ -1,16 +1,17 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
+import ArchDock.Rendering 1.0
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.workspace.dbus as PlasmaDBus
-import "DockGeometry.js" as DockGeometry
 import "FreeEntryPolicy.js" as FreeEntryPolicy
 
 PlasmoidItem {
     id: root
 
+    readonly property bool renderingModuleReady: RenderingModuleProbe.ready
     readonly property string panelId: Plasmoid.configuration.panelId || ""
     readonly property string configuredPanelType: Plasmoid.configuration.panelType || "hybrid"
     readonly property string panelType: ["empty", "launcher", "tasks", "hybrid"].includes(configuredPanelType)
@@ -250,7 +251,7 @@ PlasmoidItem {
             id: representation
 
         readonly property string freeLayout: root.configuration.layout || "circular"
-        readonly property var freeGeometry: DockGeometry.metrics(
+        readonly property var freeGeometry: LayoutEngine.metrics(
             freeLayout, root.entries.length, root.iconSize, root.spacing,
             Number(root.configuration.layoutScale || 1),
             Number(root.configuration.layoutRadius || 150),
@@ -322,7 +323,7 @@ PlasmoidItem {
                             const context = getContext("2d");
                             context.reset();
                             const appearance = root.configuration.appearance || "glass";
-                            const style = DockGeometry.themeStyle(
+                            const style = LayoutEngine.themeStyle(
                                 appearance,
                                 String(root.configuration.color || ""),
                                 representation.freeGeometry.iconSize);
@@ -344,7 +345,7 @@ PlasmoidItem {
                             context.shadowBlur = style.blur;
                             context.lineCap = "round";
                             context.lineJoin = "round";
-                            const surface = DockGeometry.surface(
+                            const surface = LayoutEngine.surface(
                                 representation.freeLayout,
                                 representation.freeGeometry,
                                 Number(root.configuration.layoutAngle || 0),
@@ -374,12 +375,13 @@ PlasmoidItem {
                         delegate: Item {
                             required property var modelData
                             required property int index
-                            readonly property var point: DockGeometry.position(
+                            readonly property var point: LayoutEngine.position(
                                 representation.freeLayout, index, root.entries.length,
                                 representation.freeGeometry,
                                 Number(root.configuration.layoutAngle || 0),
                                 Number(root.configuration.pathSides || 6),
-                                root.configuration.pathOrientation || "upright")
+                                root.configuration.pathOrientation || "upright",
+                                "live")
 
                             x: point.x
                             y: point.y

@@ -13,6 +13,10 @@ Runtime claims come only from its disposable private D-Bus, virtual KWin
 Wayland, and private PlasmaShell session; no personal desktop session was
 contacted.
 
+TASK-0024 renderer statements below were refreshed on 2026-08-28 from the
+current checkout and its external task-specific build. They do not revise the
+older lifecycle evidence snapshot or claim personal-session verification.
+
 ## Repository state
 
 - Repository root: `/mnt/F/Arch Dock`
@@ -55,6 +59,8 @@ personal desktop session.
 - Release gates: [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)
 - Current version-1 theme-package behavior:
   [theme-packages.md](theme-packages.md)
+- Shared rendering module, geometry, scene, and fallback contract:
+  [shared-renderer.md](shared-renderer.md)
 - Native and free Plasma ownership, recovery, and rollback safeguards:
   [plasma-lifecycle.md](plasma-lifecycle.md)
 - Canonical baseline checkpoint and task handoff:
@@ -73,10 +79,23 @@ second authority.
 
 ## Verified current implementation
 
-The following implementation statements were verified in the TASK-0015
-checkout. Lifecycle statements marked as runtime-verified were exercised in the
+The following implementation statements use the evidence snapshots identified
+above. Lifecycle statements marked as runtime-verified were exercised in a
 disposable private Plasma Wayland session, not inferred from inspection.
 
+- The installed `ArchDock.Rendering` 1.0 module contains the canonical
+  `LayoutEngine`, host-neutral `PanelScene`, surface loader, and safe procedural
+  2D renderer. Both former `DockGeometry.js` copies have been removed after the
+  service-side free-window and live applet callers migrated with compatibility
+  profiles. Geometry contract, boundary, deterministic, orientation, frozen
+  compatibility, and offscreen visual parity tests cover the shared engine.
+- `PanelScene` accepts normalized definition, runtime state, ordered entries,
+  host capabilities, theme/icon/motion inputs, and screen/work-area bounds. It
+  exposes visual/effect bounds, safe input, reveal and popup/preview anchors,
+  renderer status, and entry geometry. Missing or invalid themes and unavailable
+  renderer tiers use procedural 2D with a truthful fallback reason. TASK-0025,
+  not TASK-0024, owns switching the production applet and Studio preview to the
+  scene.
 - `src/main.cpp` creates a Qt Quick/Kirigami application, owns the session-bus
   name `org.archdock.ArchDock`, and delegates panel behavior to `PanelManager`.
 - Native edge panels use Plasma containments. Creation records an Arch Dock
@@ -131,9 +150,6 @@ disposable private Plasma Wayland session, not inferred from inspection.
 - `setPanelVisibilityMode()` stores the requested mode, but
   `shouldConcealPanel()` currently always returns `false`; the planned
   visibility-policy behavior is therefore incomplete.
-- `qml/runtime/DockGeometry.js` and
-  `plasma-dock-widget/contents/ui/DockGeometry.js` are different copies of dock
-  geometry logic and currently have different SHA-256 hashes.
 - The installed systemd user unit starts `%h/.local/bin/arch-dock`, while the
   application and D-Bus metadata invoke `arch-dock` from `PATH`. The startup and
   installation strategy is not yet aligned.
@@ -148,8 +164,8 @@ disposable private Plasma Wayland session, not inferred from inspection.
 The master plan and preset specification describe target behavior. Source
 inspection found no completed v2 implementation of the following named systems:
 
-- `PanelDefinition`, `PanelRuntimeState`, `PanelScene`, or `IconScene`
-- a shared panel/icon renderer used by runtime, settings, and previews
+- `IconScene` and the TASK-0025 production applet/Panel Studio bridges to the
+  shared `PanelScene`
 - version-2 panel and icon preset catalogs, including the required 15 panel and
   15 icon presets
 - `PreviewSession` audition/rollback semantics
