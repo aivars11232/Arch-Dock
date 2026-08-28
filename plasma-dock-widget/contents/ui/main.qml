@@ -38,6 +38,29 @@ PlasmoidItem {
         configuration.capabilityResolution || ({})
     readonly property string effectiveRendererTier:
         String(configuration.effectiveRendererTier || "")
+    readonly property bool sceneInputEnabled: freeSurface
+        ? FreeEntryPolicy.interactionEnabled(plasmaEditMode)
+        : dockService.registered && !plasmaEditMode
+    readonly property real nativeScenePadding: Kirigami.Units.largeSpacing
+        + (configuration.magnificationEnabled
+            ? baseCellSize * Math.max(0, magnification - 1) : 0)
+    readonly property var scenePanelDefinition: buildScenePanelDefinition()
+    readonly property var sceneRuntimeState: ({
+        hovered: hoveredIndex >= 0,
+        hoveredEntry: hoveredIndex,
+        editMode: plasmaEditMode,
+        rendererFallback: ""
+    })
+    readonly property var sceneHostCapabilities:
+        capabilityResolution && typeof capabilityResolution === "object"
+            && Object.keys(capabilityResolution).length > 0
+        ? capabilityResolution : ({
+            available: dockService.registered,
+            renderer: {
+                effectiveTier: effectiveRendererTier || "procedural2d",
+                fallbackApplied: false
+            }
+        })
 
     property var entries: []
     property var configuration: ({
@@ -69,8 +92,7 @@ PlasmoidItem {
 
     Plasmoid.title: qsTr("Arch Dock")
     Plasmoid.icon: "applications-system"
-    Plasmoid.backgroundHints: root.freeSurface
-        ? PlasmaCore.Types.NoBackground : PlasmaCore.Types.StandardBackground
+    Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
     preferredRepresentation: fullRepresentation
     switchWidth: Kirigami.Units.gridUnit * 24
     switchHeight: Kirigami.Units.gridUnit * 4
@@ -122,6 +144,28 @@ PlasmoidItem {
             return result;
         }
         return reply;
+    }
+
+    function buildScenePanelDefinition() {
+        const definition = {};
+        const source = configuration || {};
+        for (const key of Object.keys(source)) {
+            if (key !== "capabilityResolution")
+                definition[key] = source[key];
+        }
+        definition.edge = freeSurface ? "free" : vertical ? "left" : "bottom";
+        definition.rendererTier = String(
+            source.rendererTier || effectiveRendererTier || "procedural2d");
+        if (freeSurface) {
+            definition.layout = source.layout || "circular";
+        } else {
+            definition.layout = vertical ? "vertical" : "horizontal";
+            definition.layoutScale = 1;
+            definition.layoutAngle = 0;
+            definition.layoutPadding = nativeScenePadding;
+            definition.iconSize = baseCellSize;
+        }
+        return definition;
     }
 
     function refreshConfiguration() {
@@ -250,295 +294,108 @@ PlasmoidItem {
         Item {
             id: representation
 
-        readonly property string freeLayout: root.configuration.layout || "circular"
-        readonly property var freeGeometry: LayoutEngine.metrics(
-            freeLayout, root.entries.length, root.iconSize, root.spacing,
-            Number(root.configuration.layoutScale || 1),
-            Number(root.configuration.layoutRadius || 150),
-            Number(root.configuration.layoutRows || 2),
-            Number(root.configuration.layoutPadding || 18),
-            false,
-            Number(root.configuration.layoutAngle || 0),
-            Number(root.configuration.pathSides || 6))
-        readonly property real magnifiedCell: root.baseCellSize
-            * (root.configuration.magnificationEnabled ? Math.max(1, root.magnification) : 1)
-        implicitWidth: root.freeSurface ? freeGeometry.width : root.vertical
-            ? magnifiedCell + Kirigami.Units.largeSpacing * 2
-            : Math.max(root.baseCellSize + Kirigami.Units.largeSpacing * 2,
-                       root.entries.length * root.baseCellSize
-                           + Math.max(0, root.entries.length - 1) * root.spacing
-                           + (magnifiedCell - root.baseCellSize) * 2
-                           + Kirigami.Units.largeSpacing * 2)
-        implicitHeight: root.freeSurface ? freeGeometry.height : root.vertical
-            ? Math.max(root.baseCellSize + Kirigami.Units.largeSpacing * 2,
-                       root.entries.length * root.baseCellSize
-                           + Math.max(0, root.entries.length - 1) * root.spacing
-                           + (magnifiedCell - root.baseCellSize) * 2
-                           + Kirigami.Units.largeSpacing * 2)
-            : magnifiedCell + Kirigami.Units.largeSpacing * 2
-        Layout.minimumWidth: implicitWidth
-        Layout.minimumHeight: implicitHeight
-        Loader {
-            anchors.centerIn: parent
-            width: parent.width
-            height: parent.height
-            active: root.freeSurface || root.entries.length > 0
-            sourceComponent: root.freeSurface
-                ? freeEntries : root.vertical ? verticalEntries : horizontalEntries
-        }
+            implicitWidth: panelScene.width
+            implicitHeight: panelScene.height
+            Layout.minimumWidth: implicitWidth
+            Layout.minimumHeight: implicitHeight
 
-        Component {
-            id: freeEntries
+            PanelScene {
+                id: panelScene
 
-            Item {
-                width: parent ? parent.width : 0
-                height: parent ? parent.height : 0
-
-                Item {
-                    id: freeGeometryLayer
-
-                    anchors.centerIn: parent
-                    width: representation.freeGeometry.width
-                    height: representation.freeGeometry.height
-
-                    Image {
-                        id: themeArtwork
-
-                        visible: false
-                        asynchronous: true
-                        cache: false
-                        source: root.configuration.themeAsset || ""
-                        sourceSize.width: Math.ceil(freeGeometryLayer.width)
-                        sourceSize.height: Math.ceil(freeGeometryLayer.height)
-                        onStatusChanged: freeSurfaceCanvas.requestPaint()
-                    }
-
-                    Canvas {
-                        id: freeSurfaceCanvas
-
-                        anchors.fill: parent
-                        opacity: root.panelOpacity
-                        renderStrategy: Canvas.Cooperative
-                        onPaint: {
-                            const context = getContext("2d");
-                            context.reset();
-                            const appearance = root.configuration.appearance || "glass";
-                            const style = LayoutEngine.themeStyle(
-                                appearance,
-                                String(root.configuration.color || ""),
-                                representation.freeGeometry.iconSize);
-                            const hasArtwork = themeArtwork.status === Image.Ready;
-                            if (!hasArtwork && !style.trackVisible)
-                                return;
-
-                            context.lineWidth = style.lineWidth;
-                            context.strokeStyle = style.stroke;
-                            if (hasArtwork) {
-                                try {
-                                    context.strokeStyle = context.createPattern(
-                                        themeArtwork, "no-repeat");
-                                } catch (error) {
-                                    context.strokeStyle = style.stroke;
-                                }
-                            }
-                            context.shadowColor = style.shadow;
-                            context.shadowBlur = style.blur;
-                            context.lineCap = "round";
-                            context.lineJoin = "round";
-                            const surface = LayoutEngine.surface(
-                                representation.freeLayout,
-                                representation.freeGeometry,
-                                Number(root.configuration.layoutAngle || 0),
-                                Number(root.configuration.pathSides || 6));
-                            context.beginPath();
-                            if (surface.points.length > 0) {
-                                context.moveTo(surface.points[0].x, surface.points[0].y);
-                                for (let index = 1; index < surface.points.length; ++index)
-                                    context.lineTo(surface.points[index].x, surface.points[index].y);
-                                if (surface.closed)
-                                    context.closePath();
-                            }
-                            context.stroke();
-                        }
-
-                        Connections {
-                            target: root
-                            function onConfigurationChanged() {
-                                freeSurfaceCanvas.requestPaint();
-                            }
-                        }
-                    }
-
-                    Repeater {
-                        model: root.entries
-
-                        delegate: Item {
-                            required property var modelData
-                            required property int index
-                            readonly property var point: LayoutEngine.position(
-                                representation.freeLayout, index, root.entries.length,
-                                representation.freeGeometry,
-                                Number(root.configuration.layoutAngle || 0),
-                                Number(root.configuration.pathSides || 6),
-                                root.configuration.pathOrientation || "upright",
-                                "live")
-
-                            x: point.x
-                            y: point.y
-                            width: representation.freeGeometry.iconSize
-                            height: width
-                            rotation: point.rotation
-
-                            DockEntry {
-                                anchors.centerIn: parent
-                                entry: parent.modelData
-                                entryIndex: parent.index
-                                vertical: false
-                                baseSize: representation.freeGeometry.iconSize
-                                magnification: root.magnification
-                                magnificationEnabled: root.configuration.magnificationEnabled
-                                hoveredIndex: root.hoveredIndex
-                                tileShape: root.configuration.iconShape
-                                appearance: root.configuration.appearance
-                                showReflection: root.configuration.showReflections
-                                showIndicator: root.configuration.showIndicators
-                                showTooltip: root.configuration.showTooltips
-                                motion: root.configuration.iconAnimation
-                                motionTrigger: root.configuration.animationTrigger
-                                motionIntensity: root.configuration.animationIntensity
-                                motionDuration: root.motionDuration
-                                reducedMotion: root.configuration.reducedMotion
-                                inputEnabled: FreeEntryPolicy.interactionEnabled(
-                                    root.plasmaEditMode)
-                                acceptDrops: root.configuration.acceptDrops
-                                invoke: root.invokeEntry
-                                reorder: root.reorderEntry
-                                pinUrls: root.pinDroppedUrls
-                                setHoveredIndex: function(value) { root.hoveredIndex = value }
-                                openPanelStudio: root.openPanelStudio
-                            }
-                        }
-                    }
-                }
+                anchors.centerIn: parent
+                panelDefinition: root.scenePanelDefinition
+                runtimeState: root.sceneRuntimeState
+                orderedEntries: root.entries
+                hostCapabilities: root.sceneHostCapabilities
+                themeDefinition: root.configuration.themeDefinition || ({})
+                iconStyleDefinition: ({})
+                animationProfiles: ({
+                    reducedMotion: root.configuration.reducedMotion,
+                    duration: root.motionDuration
+                })
+                entryDelegate: liveEntryDelegate
+                entryInteractionEnabled: root.sceneInputEnabled
+                geometryCompatibilityProfile: root.freeSurface
+                    ? "live" : "canonical"
+                entryDelegateContext: ({
+                    hostKind: root.freeSurface ? "free" : "native",
+                    vertical: root.vertical
+                })
             }
-        }
 
-        Component {
-            id: horizontalEntries
-            Row {
-                spacing: root.spacing
-                Repeater {
-                    model: root.entries
-                    delegate: DockEntry {
-                        required property var modelData
-                        required property int index
-
-                        entry: modelData
-                        entryIndex: index
-                        vertical: false
-                        baseSize: root.baseCellSize
-                        magnification: root.magnification
-                        magnificationEnabled: root.configuration.magnificationEnabled
-                        hoveredIndex: root.hoveredIndex
-                        tileShape: root.configuration.iconShape
-                        appearance: root.configuration.appearance
-                        showReflection: root.configuration.showReflections
-                        showIndicator: root.configuration.showIndicators
-                        showTooltip: root.configuration.showTooltips
-                        motion: root.configuration.iconAnimation
-                        motionTrigger: root.configuration.animationTrigger
-                        motionIntensity: root.configuration.animationIntensity
-                        motionDuration: root.motionDuration
-                        reducedMotion: root.configuration.reducedMotion
-                        inputEnabled: dockService.registered && !root.plasmaEditMode
-                        acceptDrops: root.configuration.acceptDrops
-                        invoke: root.invokeEntry
-                        reorder: root.reorderEntry
-                        pinUrls: root.pinDroppedUrls
-                        setHoveredIndex: function(value) { root.hoveredIndex = value }
-                        openPanelStudio: root.openPanelStudio
-                    }
-                }
-            }
-        }
-
-        Component {
-            id: verticalEntries
             Column {
-                spacing: root.spacing
-                Repeater {
-                    model: root.entries
-                    delegate: DockEntry {
-                        required property var modelData
-                        required property int index
+                anchors.centerIn: parent
+                z: 20
+                spacing: Kirigami.Units.smallSpacing
+                visible: root.entries.length === 0
 
-                        entry: modelData
-                        entryIndex: index
-                        vertical: true
-                        baseSize: root.baseCellSize
-                        magnification: root.magnification
-                        magnificationEnabled: root.configuration.magnificationEnabled
-                        hoveredIndex: root.hoveredIndex
-                        tileShape: root.configuration.iconShape
-                        appearance: root.configuration.appearance
-                        showReflection: root.configuration.showReflections
-                        showIndicator: root.configuration.showIndicators
-                        showTooltip: root.configuration.showTooltips
-                        motion: root.configuration.iconAnimation
-                        motionTrigger: root.configuration.animationTrigger
-                        motionIntensity: root.configuration.animationIntensity
-                        motionDuration: root.motionDuration
-                        reducedMotion: root.configuration.reducedMotion
-                        inputEnabled: dockService.registered && !root.plasmaEditMode
-                        acceptDrops: root.configuration.acceptDrops
-                        invoke: root.invokeEntry
-                        reorder: root.reorderEntry
-                        pinUrls: root.pinDroppedUrls
-                        setHoveredIndex: function(value) { root.hoveredIndex = value }
-                        openPanelStudio: root.openPanelStudio
-                    }
+                Kirigami.Icon {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: Kirigami.Units.iconSizes.medium
+                    height: width
+                    source: dockService.registered
+                        ? (root.requestFailed ? "data-error" : "list-add")
+                        : "network-disconnect"
+                }
+                QQC2.Label {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: !dockService.registered
+                        ? qsTr("Arch Dock service is unavailable")
+                        : root.requestFailed
+                            ? qsTr("Could not load dock entries")
+                            : qsTr("Drop applications here")
+                }
+                QQC2.Button {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: qsTr("Retry")
+                    visible: !dockService.registered || root.requestFailed
+                    onClicked: root.refresh()
+                }
+            }
+
+            DropArea {
+                anchors.fill: parent
+                enabled: root.configuration.acceptDrops && !root.plasmaEditMode
+                keys: ["text/uri-list"]
+                onDropped: drop => {
+                    if (drop.hasUrls)
+                        root.pinDroppedUrls(drop.urls);
+                    drop.acceptProposedAction();
                 }
             }
         }
+    }
 
-        Column {
+    Component {
+        id: liveEntryDelegate
+
+        DockEntry {
             anchors.centerIn: parent
-            spacing: Kirigami.Units.smallSpacing
-            visible: root.entries.length === 0
-
-            Kirigami.Icon {
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: Kirigami.Units.iconSizes.medium
-                height: width
-                source: dockService.registered
-                    ? (root.requestFailed ? "data-error" : "list-add")
-                    : "network-disconnect"
-            }
-            QQC2.Label {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: !dockService.registered ? qsTr("Arch Dock service is unavailable")
-                    : root.requestFailed ? qsTr("Could not load dock entries")
-                    : qsTr("Drop applications here")
-            }
-            QQC2.Button {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Retry")
-                visible: !dockService.registered || root.requestFailed
-                onClicked: root.refresh()
-            }
-        }
-
-        DropArea {
-            anchors.fill: parent
-            z: -1
-            enabled: root.configuration.acceptDrops && !root.plasmaEditMode
-            keys: ["text/uri-list"]
-            onDropped: drop => {
-                if (drop.hasUrls)
-                    root.pinDroppedUrls(drop.urls);
-                drop.acceptProposedAction();
-            }
-        }
+            entry: parent.sceneEntry
+            entryIndex: parent.sceneIndex
+            vertical: root.freeSurface ? false : root.vertical
+            baseSize: Number(parent.sceneGeometry.iconSize || root.baseCellSize)
+            magnification: root.magnification
+            magnificationEnabled: root.configuration.magnificationEnabled
+            hoveredIndex: root.hoveredIndex
+            tileShape: root.configuration.iconShape
+            appearance: root.configuration.appearance
+            showReflection: root.configuration.showReflections
+            showIndicator: root.configuration.showIndicators
+            showTooltip: root.configuration.showTooltips
+            motion: root.configuration.iconAnimation
+            motionTrigger: root.configuration.animationTrigger
+            motionIntensity: root.configuration.animationIntensity
+            motionDuration: root.motionDuration
+            reducedMotion: root.configuration.reducedMotion
+            inputEnabled: parent.sceneInputEnabled
+            editMode: root.plasmaEditMode
+            acceptDrops: root.configuration.acceptDrops
+            invoke: root.invokeEntry
+            reorder: root.reorderEntry
+            pinUrls: root.pinDroppedUrls
+            setHoveredIndex: function(value) { root.hoveredIndex = value }
+            openPanelStudio: root.openPanelStudio
         }
     }
 

@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ArchDock.Rendering 1.0
 import org.kde.kirigami as Kirigami
 
 ScrollView {
@@ -93,13 +94,13 @@ ScrollView {
 
                             required property var modelData
                             Layout.fillWidth: true
-                            implicitHeight: 92
+                            implicitHeight: 154
                             radius: 8
                             color: "#1b2831"
                             border.width: 1
                             border.color: "#3a5868"
-                            readonly property var panelStyle: modelData.panelStyle || ({})
-                            readonly property var iconStyle: modelData.iconStyle || ({})
+                            readonly property var rendererCandidate:
+                                root.studio.themeRendererCandidate(modelData)
 
                             RowLayout {
                                 anchors.fill: parent
@@ -117,28 +118,42 @@ ScrollView {
                                         color: "#90a7b4"
                                         font.pixelSize: 11
                                     }
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: 34
-                                        radius: themeSample.panelStyle.shape === "hexagon" ? 3 : 14
-                                        color: themeSample.panelStyle.color || "#263642"
-                                        opacity: themeSample.panelStyle.opacity === undefined ? 0.9 : themeSample.panelStyle.opacity
-                                        Row {
-                                            anchors.centerIn: parent
-                                            spacing: Number(themeSample.iconStyle.spacing || 8)
-                                            Repeater {
-                                                model: 6
-                                                delegate: Rectangle {
-                                                    required property int index
 
-                                                    width: 18
-                                                    height: 18
-                                                    radius: themeSample.iconStyle.iconShape === "circle" ? 9 : 5
-                                                    color: index === 2 ? "#60d6ff" : "#d4e3eb"
-                                                    opacity: index === 4 ? 0.55 : 1
-                                                }
-                                            }
-                                        }
+                                    LivePanelPreview {
+                                        id: themePreview
+
+                                        objectName: "theme-live-preview-"
+                                            + themeSample.modelData.id
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 76
+                                        panelDefinition:
+                                            themeSample.rendererCandidate
+                                        hostCapabilities:
+                                            themeSample.rendererCandidate
+                                                .capabilityResolution || ({})
+                                        themeDefinition:
+                                            themeSample.modelData
+                                        iconStyleDefinition:
+                                            themeSample.rendererCandidate
+                                        indicatorStyleDefinition:
+                                            themeSample.modelData
+                                                .indicatorStyle || ({})
+                                        animationProfiles:
+                                            themeSample.rendererCandidate
+                                        previewMode:
+                                            root.studio.rendererPreviewMode(
+                                                themeSample
+                                                    .rendererCandidate)
+                                        stateEntry: 1
+                                        iconState: "hover"
+                                        contentMargin: 4
+                                    }
+
+                                    Label {
+                                        text: themePreview.rendererStatusText
+                                        color: themePreview.fallbackApplied
+                                            ? "#ffc66d" : "#72909f"
+                                        font.pixelSize: 9
                                     }
                                 }
                                 Button {

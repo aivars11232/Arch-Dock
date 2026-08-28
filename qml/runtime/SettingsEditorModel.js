@@ -15,6 +15,24 @@ function copyMap(source) {
     return result;
 }
 
+function copyValue(source) {
+    if (Array.isArray(source)) {
+        const result = [];
+        for (let index = 0; index < source.length; ++index)
+            result.push(copyValue(source[index]));
+        return result;
+    }
+    if (source !== null && source !== undefined
+            && typeof source === "object") {
+        const result = {};
+        const keys = Object.keys(source);
+        for (let index = 0; index < keys.length; ++index)
+            result[keys[index]] = copyValue(source[keys[index]]);
+        return result;
+    }
+    return source;
+}
+
 function merge(base, changes) {
     const result = copyMap(base);
     const keys = changes === null || changes === undefined ? [] : Object.keys(changes);
@@ -207,6 +225,49 @@ function panelCandidate(session) {
 
 function globalCandidate(session) {
     return session && session.loaded ? merge(session.globalBaseline, session.globalChanges) : {};
+}
+
+function rendererCandidate(session) {
+    if (!session || !session.loaded)
+        return {};
+    const result = merge(globalCandidate(session), panelCandidate(session));
+    result.capabilityResolution = copyValue(session.capabilityResolution);
+    const renderer = result.capabilityResolution
+        && typeof result.capabilityResolution.renderer === "object"
+        ? result.capabilityResolution.renderer : {};
+    result.effectiveRendererTier = String(renderer.effectiveTier
+        || result.rendererTier || "procedural2d");
+    return result;
+}
+
+function rendererThemeCandidate(session, theme) {
+    let result = rendererCandidate(session);
+    const source = theme && typeof theme === "object" ? theme : {};
+    const styleGroups = [
+        "panelStyle", "iconStyle", "tileStyle", "indicatorStyle",
+        "animationStyle", "layoutStyle"
+    ];
+    for (let index = 0; index < styleGroups.length; ++index) {
+        const style = source[styleGroups[index]];
+        if (style && typeof style === "object")
+            result = merge(result, copyValue(style));
+    }
+    const themeId = String(source.id || "");
+    if (themeId.length > 0) {
+        result.panelThemeId = themeId;
+        result.iconThemeId = themeId;
+        result.completeThemeId = themeId;
+    }
+    if (source.capabilityResolution
+            && typeof source.capabilityResolution === "object") {
+        result.capabilityResolution = copyValue(
+            source.capabilityResolution);
+        const renderer = result.capabilityResolution.renderer;
+        result.effectiveRendererTier = String(renderer
+            && renderer.effectiveTier || result.rendererTier
+            || "procedural2d");
+    }
+    return result;
 }
 
 function cancel(session) {

@@ -61,6 +61,18 @@ plasma_script() {
         "$1"
 }
 
+panel_call() {
+    local method="$1"
+    shift
+    gdbus call \
+        --session \
+        --timeout=5 \
+        --dest org.archdock.ArchDock \
+        --object-path /Control \
+        --method "local.PanelWindow.$method" \
+        "$@"
+}
+
 wait_for_wayland_socket() {
     local socket_path="$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"
     local attempt
@@ -81,7 +93,7 @@ require_no_import_errors() {
     for log_file in "$ARCHDOCK_RENDERING_LOG_DIR/service.log" \
                     "$ARCHDOCK_RENDERING_LOG_DIR/plasmashell.log"; do
         if rg -n -i \
-            'module "ArchDock\.Rendering" is not installed|RenderingModuleProbe[^[:cntrl:]]*(not a type|unavailable)|Panel(Scene|SurfaceLoader|Procedural2D)[^[:cntrl:]]*(not a type|unavailable|not installed)|SettingsPopup\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed)|org\.archdock\.dock/contents/ui/main\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type)|Error loading QML file[^[:cntrl:]]*org\.archdock\.dock' \
+            'module "ArchDock\.Rendering" is not installed|RenderingModuleProbe[^[:cntrl:]]*(not a type|unavailable)|Panel(Scene|SurfaceLoader|Procedural2D)[^[:cntrl:]]*(not a type|unavailable|not installed)|(IconScene|RunningIndicator|LivePanelPreview)[^[:cntrl:]]*(not a type|unavailable|not installed)|(SettingsPopup|StudioForm)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|org\.archdock\.dock/contents/ui/(main|DockEntry|IconVisual|RunningIndicator)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|ArchDock/Rendering/(PanelScene|IconScene|RunningIndicator|previews/LivePanelPreview)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(typeerror|referenceerror|cannot assign|unable to assign|binding loop)|Error loading QML file[^[:cntrl:]]*org\.archdock\.dock' \
             "$log_file"; then
             printf 'Staged rendering import failed; relevant QML errors were logged in %s.\n' \
                 "$log_file" >&2
@@ -115,29 +127,58 @@ run_private_session() {
     ARCHDOCK_RENDERING_PLASMASHELL_PID=$!
     gdbus wait --session --timeout=20 org.kde.plasmashell
 
-    local applet_snapshot
-    applet_snapshot="$(plasma_script \
-        "var result = (function() { var panel = null; try { panel = new Panel; panel.screen = 0; panel.location = 'bottom'; var widget = panel.addWidget('org.archdock.dock'); if (!widget) { panel.remove(); return 'missing-widget'; } return [String(panel.id), String(widget.id), String(widget.type)].join('|'); } catch (error) { if (panel) { panel.remove(); } return 'exception:' + String(error); } })(); print(result);" | gvariant_string)"
-
-    [[ "$applet_snapshot" =~ ^[0-9]+\|[0-9]+\|org\.archdock\.dock$ ]] || {
-        printf 'Private PlasmaShell did not create the staged Arch Dock applet: %s\n' \
-            "${applet_snapshot:-unavailable}" >&2
+    [[ -r "$ARCHDOCK_RENDERING_SMOKE_DESKTOP_FILE" ]] || {
+        printf 'The staged smoke-test desktop entry is unavailable: %s\n' \
+            "$ARCHDOCK_RENDERING_SMOKE_DESKTOP_FILE" >&2
+        return 1
+    }
+    local smoke_desktop_url="file://$ARCHDOCK_RENDERING_SMOKE_DESKTOP_FILE"
+    local pin_reply
+    pin_reply="$(panel_call pinDockUrls "['$smoke_desktop_url']")"
+    [[ "$pin_reply" == '(true,)' ]] || {
+        printf 'Could not seed a deterministic renderer smoke entry: %s\n' \
+            "$pin_reply" >&2
         return 1
     }
 
-    local panel_id="${applet_snapshot%%|*}"
-    local applet_tail="${applet_snapshot#*|}"
-    local applet_id="${applet_tail%%|*}"
+    local host_ids
+    host_ids="$(plasma_script \
+        "var result = (function() { var panel = null; var freeWidget = null; try { panel = new Panel; panel.screen = 0; panel.location = 'bottom'; var nativeWidget = panel.addWidget('org.archdock.dock'); if (!nativeWidget) { panel.remove(); return 'missing-native-widget'; } nativeWidget.currentConfigGroup = ['General']; nativeWidget.writeConfig('panelId', 'bottom'); nativeWidget.writeConfig('panelType', 'hybrid'); nativeWidget.reloadConfig(); var desktop = desktopForScreen(0); if (!desktop) { panel.remove(); return 'missing-desktop'; } freeWidget = desktop.addWidget('org.archdock.dock', Math.round(gridUnit * 2), Math.round(gridUnit * 2), Math.round(gridUnit * 16), Math.round(gridUnit * 10)); if (!freeWidget) { panel.remove(); return 'missing-free-widget'; } freeWidget.currentConfigGroup = ['General']; freeWidget.writeConfig('panelId', 'free-render-smoke'); freeWidget.writeConfig('panelType', 'hybrid'); freeWidget.writeConfig('bootstrapFreeDock', false); freeWidget.reloadConfig(); return [String(panel.id), String(nativeWidget.id), String(desktop.id), String(freeWidget.id)].join('|'); } catch (error) { if (freeWidget) { freeWidget.remove(); } if (panel) { panel.remove(); } return 'exception:' + String(error); } })(); print(result);" | gvariant_string)"
+
+    [[ "$host_ids" =~ ^[0-9]+\|[0-9]+\|[0-9]+\|[0-9]+$ ]] || {
+        printf 'Private PlasmaShell did not create native and free Arch Dock hosts: %s\n' \
+            "${host_ids:-unavailable}" >&2
+        return 1
+    }
+
+    local panel_id=''
+    local native_applet_id=''
+    local desktop_id=''
+    local free_applet_id=''
+    IFS='|' read -r panel_id native_applet_id desktop_id free_applet_id \
+        <<<"$host_ids"
     local attempt
-    local loaded_type=''
+    local native_snapshot=''
+    local free_snapshot=''
     for ((attempt = 0; attempt < 50; ++attempt)); do
-        loaded_type="$(plasma_script \
-            "var panel = panelById($panel_id); var widget = panel ? panel.widgetById($applet_id) : null; print(widget ? String(widget.type) : 'missing');" | gvariant_string)"
-        [[ "$loaded_type" == 'org.archdock.dock' ]] && break
+        native_snapshot="$(plasma_script \
+            "var panel = panelById($panel_id); var widget = panel ? panel.widgetById($native_applet_id) : null; if (!widget) { print('missing'); } else { widget.currentConfigGroup = ['General']; var geometry = widget.geometry; print([String(widget.type), String(widget.readConfig('panelId', '')), String(widget.readConfig('panelType', '')), String(Number(geometry.width)), String(Number(geometry.height))].join('|')); }" | gvariant_string)"
+        free_snapshot="$(plasma_script \
+            "var desktop = desktopById($desktop_id); var widget = desktop ? desktop.widgetById($free_applet_id) : null; if (!widget) { print('missing'); } else { widget.currentConfigGroup = ['General']; var geometry = widget.geometry; print([String(widget.type), String(widget.readConfig('panelId', '')), String(widget.readConfig('panelType', '')), String(widget.readConfig('bootstrapFreeDock', true)), String(Number(geometry.width)), String(Number(geometry.height))].join('|')); }" | gvariant_string)"
+        if [[ "$native_snapshot" =~ ^org\.archdock\.dock\|bottom\|hybrid\|[1-9][0-9]*([.][0-9]+)?\|[1-9][0-9]*([.][0-9]+)?$ &&
+              "$free_snapshot" =~ ^org\.archdock\.dock\|free-render-smoke\|hybrid\|(false|0)\|[1-9][0-9]*([.][0-9]+)?\|[1-9][0-9]*([.][0-9]+)?$ ]]; then
+            break
+        fi
         sleep 0.1
     done
-    [[ "$loaded_type" == 'org.archdock.dock' ]] || {
-        printf 'The staged Arch Dock applet did not remain loaded in PlasmaShell.\n' >&2
+    [[ "$native_snapshot" =~ ^org\.archdock\.dock\|bottom\|hybrid\|[1-9][0-9]*([.][0-9]+)?\|[1-9][0-9]*([.][0-9]+)?$ ]] || {
+        printf 'The staged native PanelScene host was not ready: %s\n' \
+            "$native_snapshot" >&2
+        return 1
+    }
+    [[ "$free_snapshot" =~ ^org\.archdock\.dock\|free-render-smoke\|hybrid\|(false|0)\|[1-9][0-9]*([.][0-9]+)?\|[1-9][0-9]*([.][0-9]+)?$ ]] || {
+        printf 'The staged free PanelScene host was not ready: %s\n' \
+            "$free_snapshot" >&2
         return 1
     }
 
@@ -147,10 +188,10 @@ run_private_session() {
     require_no_import_errors
 
     plasma_script \
-        "var panel = panelById($panel_id); if (panel) { panel.remove(); print('removed'); } else { print('missing'); }" \
+        "var desktop = desktopById($desktop_id); var freeWidget = desktop ? desktop.widgetById($free_applet_id) : null; if (freeWidget) { freeWidget.remove(); } var panel = panelById($panel_id); if (panel) { panel.remove(); } print('removed');" \
         >/dev/null
 
-    printf 'Staged service/Studio and private PlasmaShell applet imports succeeded.\n'
+    printf 'Staged service/Studio and native/free PanelScene hosts succeeded.\n'
 }
 
 run_outer() {
@@ -206,8 +247,11 @@ run_outer() {
     [[ -r "$module_root/qmldir" &&
        -r "$module_root/RenderingModuleProbe.qml" &&
        -r "$module_root/LayoutEngine.js" &&
+       -r "$module_root/IconScene.qml" &&
        -r "$module_root/PanelScene.qml" &&
        -r "$module_root/PanelSurfaceLoader.qml" &&
+       -r "$module_root/RunningIndicator.qml" &&
+       -r "$module_root/previews/LivePanelPreview.qml" &&
        -r "$module_root/renderers/PanelProcedural2D.qml" ]] || {
         printf 'The staged ArchDock.Rendering module is incomplete: %s\n' \
             "$module_root" >&2
@@ -215,6 +259,11 @@ run_outer() {
     }
     [[ -r "$stage_root/share/plasma/plasmoids/org.archdock.dock/metadata.json" ]] || {
         printf 'The staged Arch Dock applet package is unavailable.\n' >&2
+        return 1
+    }
+    [[ ! -e "$stage_root/share/plasma/plasmoids/org.archdock.dock/contents/ui/IconVisual.qml" &&
+       ! -e "$stage_root/share/plasma/plasmoids/org.archdock.dock/contents/ui/RunningIndicator.qml" ]] || {
+        printf 'The staged applet still contains an obsolete local icon renderer.\n' >&2
         return 1
     }
 
@@ -225,9 +274,24 @@ run_outer() {
             -import "$import_root" \
             -input "$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_RenderingModuleImport.qml"
 
+    QT_QPA_PLATFORM=offscreen \
+    QML_IMPORT_PATH="$import_root" \
+    QML2_IMPORT_PATH="$import_root" \
+        "$qmltestrunner_binary" \
+            -import "$import_root" \
+            -input "$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_LivePanelPreview.qml"
+
+    QT_QPA_PLATFORM=offscreen \
+    QML_IMPORT_PATH="$import_root" \
+    QML2_IMPORT_PATH="$import_root" \
+        "$qmltestrunner_binary" \
+            -import "$import_root" \
+            -input "$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_RendererParity.qml"
+
     env \
         ARCHDOCK_RENDERING_IMPORT_SESSION=1 \
         ARCHDOCK_RENDERING_LOG_DIR="$log_dir" \
+        ARCHDOCK_RENDERING_SMOKE_DESKTOP_FILE="$stage_root/share/applications/org.archdock.ArchDock.desktop" \
         ARCHDOCK_RENDERING_STAGED_BINARY="$stage_root/bin/arch-dock" \
         DESKTOP_SESSION=archdock-rendering-test \
         KDE_FULL_SESSION=true \

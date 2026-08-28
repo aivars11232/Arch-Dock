@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls as QQC2
+import ArchDock.Rendering 1.0
 import org.kde.kirigami as Kirigami
 
 Item {
@@ -23,6 +24,7 @@ Item {
     required property int motionDuration
     required property bool reducedMotion
     required property bool inputEnabled
+    required property bool editMode
     required property bool acceptDrops
     required property var invoke
     required property var reorder
@@ -49,6 +51,14 @@ Item {
         : motion === "wobble" ? 9
         : motion === "wiggle" ? 6 : 3
     readonly property int cycleDuration: Math.max(80, motionDuration)
+    readonly property real visualScale: magnificationLayer.scale
+    readonly property var logicalInputRegion: ({
+        x: 0,
+        y: 0,
+        width: baseSize,
+        height: baseSize
+    })
+    readonly property string iconVisualState: visual.visualState
 
     function resetMotionLayer() {
         motionLayer.x = 0;
@@ -67,39 +77,57 @@ Item {
         }
     }
 
-    width: baseSize * hoverScale
+    width: baseSize
     height: width
     z: hoverArea.containsMouse || dragging ? 10 : influence
 
-    Behavior on width {
-        enabled: !root.reducedMotion
-        NumberAnimation { duration: root.motionDuration; easing.type: Easing.OutCubic }
-    }
-    Behavior on height {
-        enabled: !root.reducedMotion
-        NumberAnimation { duration: root.motionDuration; easing.type: Easing.OutCubic }
-    }
-
     Item {
-        id: motionLayer
-        width: parent.width
-        height: parent.height
+        id: magnificationLayer
 
-        IconVisual {
-            id: visual
-            anchors.fill: parent
-            entry: root.entry
-            iconSize: root.baseSize
-            tileShape: root.tileShape
-            appearance: root.appearance
-            hovered: hoverArea.containsMouse
-            pressed: hoverArea.pressed || root.clickPulse
-            showReflection: root.showReflection
-            glowAmount: root.motion === "glow" && root.motionActive
-                ? Math.min(1, root.motionIntensity) : 0
-            glowAnimating: root.motion === "glow" && root.motionActive
-            glowDuration: root.cycleDuration
+        anchors.centerIn: parent
+        width: root.baseSize
+        height: root.baseSize
+        scale: root.hoverScale
+
+        Behavior on scale {
+            enabled: !root.reducedMotion
+            NumberAnimation {
+                duration: root.motionDuration
+                easing.type: Easing.OutCubic
+            }
         }
+
+        Item {
+            id: motionLayer
+
+            anchors.fill: parent
+
+            IconScene {
+                id: visual
+
+                anchors.fill: parent
+                entry: root.entry
+                logicalSize: root.baseSize
+                tileShape: root.tileShape
+                appearance: root.appearance
+                vertical: root.vertical
+                hovered: hoverArea.containsMouse
+                pressed: hoverArea.pressed || root.clickPulse
+                active: Boolean(root.entry.active)
+                running: Boolean(root.entry.running)
+                minimized: Boolean(root.entry.minimized)
+                urgent: Boolean(root.entry.attention || root.entry.urgent)
+                dropTarget: root.dragging || entryDropArea.containsDrag
+                editMode: root.editMode
+                windowCount: Math.max(1, root.entry.windowCount || 1)
+                showReflection: root.showReflection
+                showIndicator: root.showIndicator
+                reducedMotion: root.reducedMotion
+                glowAmount: root.motion === "glow" && root.motionActive
+                    ? Math.min(1, root.motionIntensity) : 0
+                glowAnimating: root.motion === "glow" && root.motionActive
+                glowDuration: root.cycleDuration
+            }
 
         SequentialAnimation {
             running: root.motionActive && root.motion === "bounce"
@@ -170,24 +198,25 @@ Item {
                 duration: root.motion === "wiggle" || root.motion === "shake" ? root.cycleDuration * 0.35 : root.cycleDuration
             }
         }
-        SequentialAnimation {
-            running: root.motionActive && root.motion === "orbit"
-            loops: Animation.Infinite
-            ParallelAnimation {
-                XAnimator { target: motionLayer; from: 0; to: root.amplitude; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
-                YAnimator { target: motionLayer; from: -root.amplitude; to: 0; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
-            }
-            ParallelAnimation {
-                XAnimator { target: motionLayer; from: root.amplitude; to: 0; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
-                YAnimator { target: motionLayer; from: 0; to: root.amplitude; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
-            }
-            ParallelAnimation {
-                XAnimator { target: motionLayer; from: 0; to: -root.amplitude; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
-                YAnimator { target: motionLayer; from: root.amplitude; to: 0; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
-            }
-            ParallelAnimation {
-                XAnimator { target: motionLayer; from: -root.amplitude; to: 0; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
-                YAnimator { target: motionLayer; from: 0; to: -root.amplitude; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+            SequentialAnimation {
+                running: root.motionActive && root.motion === "orbit"
+                loops: Animation.Infinite
+                ParallelAnimation {
+                    XAnimator { target: motionLayer; from: 0; to: root.amplitude; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+                    YAnimator { target: motionLayer; from: -root.amplitude; to: 0; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+                }
+                ParallelAnimation {
+                    XAnimator { target: motionLayer; from: root.amplitude; to: 0; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+                    YAnimator { target: motionLayer; from: 0; to: root.amplitude; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+                }
+                ParallelAnimation {
+                    XAnimator { target: motionLayer; from: 0; to: -root.amplitude; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+                    YAnimator { target: motionLayer; from: root.amplitude; to: 0; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+                }
+                ParallelAnimation {
+                    XAnimator { target: motionLayer; from: -root.amplitude; to: 0; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+                    YAnimator { target: motionLayer; from: 0; to: -root.amplitude; duration: root.cycleDuration / 2; easing.type: Easing.InOutSine }
+                }
             }
         }
     }
@@ -202,18 +231,6 @@ Item {
         triggerPulse = false;
         triggerPulse = true;
         triggerTimer.restart();
-    }
-
-    RunningIndicator {
-        visible: root.showIndicator && root.entry.running
-        vertical: root.vertical
-        active: root.entry.active
-        urgent: root.entry.attention || false
-        windowCount: Math.max(1, root.entry.windowCount || 1)
-        anchors.horizontalCenter: root.vertical ? undefined : parent.horizontalCenter
-        anchors.verticalCenter: root.vertical ? parent.verticalCenter : undefined
-        anchors.bottom: root.vertical ? undefined : parent.bottom
-        anchors.left: root.vertical ? parent.left : undefined
     }
 
     MouseArea {
@@ -263,6 +280,8 @@ Item {
     }
 
     DropArea {
+        id: entryDropArea
+
         anchors.fill: parent
         enabled: root.acceptDrops && root.inputEnabled
         keys: ["application/x-archdock-app", "text/uri-list"]

@@ -29,6 +29,10 @@ Window {
     property string studioError: ""
     property string studioWarning: ""
     property bool internalPanelSelection: false
+    property string previewMode: "horizontal"
+    property string previewPresentationState: "open"
+    property int previewStateEntry: 1
+    property string previewIconState: "normal"
 
     readonly property int panelRevision: panelRegistry.revision
     readonly property int placementRevision: panelController.nativePlacementRevision
@@ -38,6 +42,10 @@ Window {
     readonly property bool hasPendingChanges: hasSettingsChanges || hasArtifactChanges
     readonly property var selectedCapabilityResolution: editorSession.capabilityResolution || ({})
     readonly property var selectedResolvedThemes: editorSession.themes || []
+    readonly property var selectedRendererCandidate:
+        EditorModel.rendererCandidate(editorSession)
+    readonly property var selectedPreviewTheme:
+        rendererPreviewTheme(selectedRendererCandidate)
     readonly property var selectedPlacementResult: {
         const revision = placementRevision;
         return panelController.nativePanelPlacementStatus(selectedPanelId);
@@ -64,6 +72,40 @@ Window {
         return 0;
     }
 
+    function rendererPreviewMode(candidate) {
+        const edge = String(candidate && candidate.edge
+            || panelRegistry.panelValue(selectedPanelId, "edge")
+            || "bottom");
+        if (edge === "free")
+            return "free";
+        return edge === "left" || edge === "right"
+            ? "vertical" : "horizontal";
+    }
+
+    function rendererPreviewTheme(candidate) {
+        const themeId = String(candidate && (candidate.panelThemeId
+            || candidate.completeThemeId) || "");
+        if (themeId.length === 0)
+            return {};
+        const themes = CapabilityModel.normalized(selectedResolvedThemes);
+        for (let index = 0; index < themes.length; ++index) {
+            if (String(themes[index].id || "") === themeId)
+                return themes[index];
+        }
+        return {};
+    }
+
+    function themeRendererCandidate(theme) {
+        return EditorModel.rendererThemeCandidate(editorSession, theme);
+    }
+
+    function resetRendererPreview(candidate) {
+        previewMode = rendererPreviewMode(candidate);
+        previewPresentationState = "open";
+        previewStateEntry = 1;
+        previewIconState = "normal";
+    }
+
     function loadEditor(panelId) {
         const normalizedPanelId = String(panelId || "");
         if (normalizedPanelId.length === 0) {
@@ -77,6 +119,7 @@ Window {
             studioError = qsTr("Panel settings could not be loaded (%1).").arg(loaded.errorCode);
             return false;
         }
+        resetRendererPreview(EditorModel.rendererCandidate(loaded));
         studioError = "";
         studioWarning = "";
         return true;
@@ -128,7 +171,8 @@ Window {
     }
 
     function isNativePanel() {
-        return String(panelValue("edge", "bottom")) !== "free";
+        return String(panelRegistry.panelValue(selectedPanelId, "edge")
+            || panelValue("edge", "bottom")) !== "free";
     }
 
     function refreshProjection() {
@@ -448,6 +492,7 @@ Window {
 
     function discardStudioChanges() {
         editorSession = EditorModel.cancel(editorSession);
+        resetRendererPreview(EditorModel.rendererCandidate(editorSession));
         artifactDraft = {};
         themeTargetPanelId = "";
         colorField = null;
@@ -827,6 +872,152 @@ Window {
                     text: qsTr("Free panel")
                     enabled: !root.hasPendingChanges
                     onClicked: root.performStudioAction("create-free", {})
+                }
+            }
+
+            Rectangle {
+                id: rendererPreviewCard
+
+                Layout.fillWidth: true
+                Layout.preferredHeight: 210
+                radius: 8
+                color: "#32121f2a"
+                border.width: 1
+                border.color: "#3d587080"
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    spacing: 6
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        Label {
+                            text: qsTr("Live renderer preview")
+                            color: "#e9f5fa"
+                            font.weight: Font.DemiBold
+                        }
+
+                        Item {
+                            Layout.fillWidth: true
+                        }
+
+                        ComboBox {
+                            id: previewModeSelector
+
+                            Layout.preferredWidth: 154
+                            model: [
+                                {
+                                    label: qsTr("Horizontal native"),
+                                    value: "horizontal"
+                                },
+                                {
+                                    label: qsTr("Vertical native"),
+                                    value: "vertical"
+                                },
+                                {
+                                    label: qsTr("Free"),
+                                    value: "free"
+                                }
+                            ]
+                            textRole: "label"
+                            valueRole: "value"
+                            currentIndex: root.optionIndex(
+                                model, root.previewMode)
+                            onActivated: root.previewMode = currentValue
+                        }
+
+                        ComboBox {
+                            id: previewIconStateSelector
+
+                            Layout.preferredWidth: 118
+                            model: [
+                                { label: qsTr("Normal"), value: "normal" },
+                                { label: qsTr("Hover"), value: "hover" },
+                                { label: qsTr("Pressed"), value: "pressed" },
+                                { label: qsTr("Active"), value: "active" },
+                                { label: qsTr("Running"), value: "running" },
+                                { label: qsTr("Minimized"), value: "minimized" },
+                                { label: qsTr("Urgent"), value: "urgent" },
+                                { label: qsTr("Drop"), value: "drop" },
+                                { label: qsTr("Edit"), value: "edit" }
+                            ]
+                            textRole: "label"
+                            valueRole: "value"
+                            currentIndex: root.optionIndex(
+                                model, root.previewIconState)
+                            onActivated:
+                                root.previewIconState = currentValue
+                        }
+
+                        Button {
+                            text: checked ? qsTr("Collapsed") : qsTr("Open")
+                            checkable: true
+                            checked: root.previewPresentationState
+                                === "collapsed"
+                            onClicked: root.previewPresentationState = checked
+                                ? "collapsed" : "open"
+                        }
+                    }
+
+                    LivePanelPreview {
+                        id: embeddedRendererPreview
+
+                        objectName: "panel-studio-live-renderer-preview"
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        panelDefinition: root.selectedRendererCandidate
+                        hostCapabilities:
+                            root.selectedCapabilityResolution
+                        themeDefinition: root.selectedPreviewTheme
+                        iconStyleDefinition:
+                            root.selectedRendererCandidate
+                        indicatorStyleDefinition:
+                            root.selectedPreviewTheme.indicatorStyle || ({})
+                        animationProfiles:
+                            root.selectedRendererCandidate
+                        previewMode: root.previewMode
+                        presentationState:
+                            root.previewPresentationState
+                        stateEntry: root.previewStateEntry
+                        iconState: root.previewIconState
+                        contentMargin: 6
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+
+                        Label {
+                            text: qsTr("Renderer: %1").arg(
+                                embeddedRendererPreview.activeRendererTier)
+                            color: "#86dff2"
+                            font.pixelSize: 10
+                        }
+
+                        Label {
+                            visible: embeddedRendererPreview.fallbackApplied
+                            text: qsTr("Fallback: %1").arg(
+                                embeddedRendererPreview.fallbackReason
+                                || qsTr("unspecified"))
+                            color: "#ffc66d"
+                            font.pixelSize: 10
+                        }
+
+                        Item {
+                            Layout.fillWidth: true
+                        }
+
+                        Label {
+                            text: root.hasSettingsChanges
+                                ? qsTr("Draft only — desktop unchanged")
+                                : qsTr("Saved settings")
+                            color: root.hasSettingsChanges
+                                ? "#80de70" : "#728995"
+                            font.pixelSize: 10
+                        }
+                    }
                 }
             }
 

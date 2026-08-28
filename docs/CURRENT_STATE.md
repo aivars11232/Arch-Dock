@@ -6,45 +6,39 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-08-22T18:41:40+02:00 (Europe/Amsterdam). Static
-implementation statements come from the current checkout. Build and test
-statements come from the fresh external TASK-0015 build described below.
-Runtime claims come only from its disposable private D-Bus, virtual KWin
-Wayland, and private PlasmaShell session; no personal desktop session was
-contacted.
-
-TASK-0024 renderer statements below were refreshed on 2026-08-28 from the
-current checkout and its external task-specific build. They do not revise the
-older lifecycle evidence snapshot or claim personal-session verification.
+**Evidence snapshot:** 2026-08-28 (Europe/Amsterdam). Static implementation
+statements come from the current checkout. TASK-0025 build and test statements
+come from a clean external configure/build and all 32 registered tests. Runtime
+renderer claims come only from disposable private D-Bus, virtual KWin Wayland,
+and private PlasmaShell sessions; no personal desktop session was contacted.
+Older lifecycle details below retain their earlier isolated-session evidence.
 
 ## Repository state
 
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`
-- TASK-0015 baseline `HEAD`: `75232e5a62e4d524c35deb7b2f8f9ef02842db45`
-  (`task14`).
+- TASK-0025 baseline `HEAD`: `2ed1a919559f18fced082db7764346fcdb9600f6`
+  (`task24`).
 - The locally recorded `origin/main` is the same commit; `HEAD...origin/main`
   reports zero ahead and zero behind. No network fetch was performed.
-- TASK-0015 began with a clean non-ignored working tree. Its bounded changes are
-  limited to `tests/PanelRegistryTest.cpp`,
-  `tests/tst_BootstrapCoordinator.qml`, `tests/run-plasma-lifecycle.sh`,
-  `docs/plasma-lifecycle.md`, and this file. Production C++, production QML,
-  CMake, Plasma packages, D-Bus contracts, registry/controller behavior, and
-  runtime resources were not changed.
+- TASK-0025 began with a clean non-ignored working tree. Its bounded changes are
+  the shared-scene applet bridge, layered icon renderer, embedded Studio
+  preview, their tests/install contracts, removal of superseded local renderer
+  files, and renderer/current-state documentation.
 - Codex did not stage, commit, push, globally install, or mutate the personal
   Plasma session.
 
 ## Inspected platform
 
 - Arch Linux, rolling release
-- Kernel `7.1.8-arch1-3`
+- Kernel `7.1.9-arch1-2`
 - KDE Plasma and KWin `6.7.4`
 - Wayland KDE session (`WAYLAND_DISPLAY=wayland-0`)
 - Qt base `6.11.2-2`
 - KDE Frameworks Core Addons and Kirigami `6.29.0-1`
 
-These versions describe the inspection and verification host. TASK-0015 used a
-fresh external build directory and a disposable staged private session; it did not
+These versions describe the inspection and verification host. TASK-0025 used
+external build directories and disposable staged private sessions; it did not
 globally install, restart the live PlasmaShell, or run Arch Dock against the
 personal desktop session.
 
@@ -84,18 +78,30 @@ above. Lifecycle statements marked as runtime-verified were exercised in a
 disposable private Plasma Wayland session, not inferred from inspection.
 
 - The installed `ArchDock.Rendering` 1.0 module contains the canonical
-  `LayoutEngine`, host-neutral `PanelScene`, surface loader, and safe procedural
-  2D renderer. Both former `DockGeometry.js` copies have been removed after the
-  service-side free-window and live applet callers migrated with compatibility
-  profiles. Geometry contract, boundary, deterministic, orientation, frozen
-  compatibility, and offscreen visual parity tests cover the shared engine.
+  `LayoutEngine`, host-neutral `PanelScene`, layered `IconScene`, shared
+  `RunningIndicator`, `LivePanelPreview`, surface loader, and safe procedural
+  2D renderer. Geometry contract, boundary, deterministic, orientation, frozen
+  compatibility, preview-state, snapshot, and offscreen visual parity tests
+  cover the shared engine.
 - `PanelScene` accepts normalized definition, runtime state, ordered entries,
   host capabilities, theme/icon/motion inputs, and screen/work-area bounds. It
   exposes visual/effect bounds, safe input, reveal and popup/preview anchors,
   renderer status, and entry geometry. Missing or invalid themes and unavailable
-  renderer tiers use procedural 2D with a truthful fallback reason. TASK-0025,
-  not TASK-0024, owns switching the production applet and Studio preview to the
-  scene.
+  renderer tiers use procedural 2D with a truthful fallback reason.
+- The production native and free `org.archdock.dock` hosts instantiate one
+  `PanelScene` with the existing interactive `DockEntry` as host delegate.
+  Launch, context-menu, drag/drop, reorder, edit-mode, and free/native input
+  policy remain intact. Separate Canvas and layout branches and the dormant
+  service-side `FreePanelWindow` are gone.
+- `DockEntry` now uses one shared `IconScene` inside independent magnification
+  and motion layers while its outer logical root, pointer region, and drop area
+  remain fixed. The former applet-local `IconVisual` and `RunningIndicator`
+  implementations are removed.
+- Panel Studio renders its active transaction draft and all available built-in
+  theme cards through `LivePanelPreview`. Horizontal-native, vertical-native,
+  free, open/collapsed, hover, and explicit icon states are supported. Renderer
+  tier and fallback reason are shown from `PanelScene`; preview controls have no
+  desktop-audition or persistence path, and Apply remains the only transaction.
 - `src/main.cpp` creates a Qt Quick/Kirigami application, owns the session-bus
   name `org.archdock.ArchDock`, and delegates panel behavior to `PanelManager`.
 - Native edge panels use Plasma containments. Creation records an Arch Dock
@@ -139,17 +145,13 @@ disposable private Plasma Wayland session, not inferred from inspection.
   an embedded catalog of five themes: Obsidian Glass, Neon Segments, Metallic
   Shelf, Holographic Ring, and Minimal Underline.
 - CMake declares the application, QML and theme resources, Plasma applets and
-  templates, D-Bus and systemd metadata, and nine tests. TASK-0015 configured and
-  built the current checkout in
-  `/tmp/archdock-task-0015-build.Z8zoR1`, passed its focused C++/QML/template
-  tests, passed all nine CTests with zero failures or skips, and passed the staged
-  isolated native/free Plasma lifecycle session.
+  templates, D-Bus and systemd metadata, and 32 tests. TASK-0025 passed a clean
+  external configure and serial build, all 32 CTests with zero failures or
+  skips, installed-module preview/parity tests, and the staged isolated
+  Studio/native/free renderer session.
 
 ## Known defects and incomplete behavior
 
-- `setPanelVisibilityMode()` stores the requested mode, but
-  `shouldConcealPanel()` currently always returns `false`; the planned
-  visibility-policy behavior is therefore incomplete.
 - The installed systemd user unit starts `%h/.local/bin/arch-dock`, while the
   application and D-Bus metadata invoke `arch-dock` from `PATH`. The startup and
   installation strategy is not yet aligned.
@@ -161,11 +163,9 @@ disposable private Plasma Wayland session, not inferred from inspection.
 
 ## Planned but not implemented
 
-The master plan and preset specification describe target behavior. Source
-inspection found no completed v2 implementation of the following named systems:
+The master plan and preset specification describe target behavior. The
+following named systems remain outside TASK-0025:
 
-- `IconScene` and the TASK-0025 production applet/Panel Studio bridges to the
-  shared `PanelScene`
 - version-2 panel and icon preset catalogs, including the required 15 panel and
   15 icon presets
 - `PreviewSession` audition/rollback semantics
@@ -178,30 +178,26 @@ not be interpreted as completion of those v2 systems.
 
 ## Verification boundary
 
-TASK-0015 supplies fresh evidence from
-`/tmp/archdock-task-0015-build.Z8zoR1`: the focused `panel-registry-test`,
-`bootstrap-coordinator-test`, and `plasma-template-contract-test` each passed;
-the complete CTest suite passed 9/9 with no skips; and the expanded isolated
-Plasma lifecycle script completed successfully under its 300-second outer
-ceiling in approximately 204 seconds.
+TASK-0025 supplies fresh evidence from the clean external build at
+`/tmp/archdock-task0025-final.OJCyAG` (removed after evidence capture): configure
+passed, the full serial build passed, and all 32 CTests passed with zero failures
+or skips. Focused QML coverage includes `PanelScene`, `IconScene`, `DockEntry`,
+`LivePanelPreview`, renderer parity, installed-module import, editor candidates,
+and static live/Studio single-authority contracts.
 
-The private runtime directly observed verified Studio and template free-host
-creation, no remaining template bridge/control artifact, duplicate-bootstrap
-convergence, failed-adoption rollback without an orphan, stale-id one-match
-rebind, two-match conflict preservation and convergence, output
-disconnect/restore, PlasmaShell restart recovery, zero-match detach, repeated
-detached synchronization, verified applet/record removal, and unchanged
-unrelated native and free sentinels through final cleanup. The harness printed
-`Isolated Plasma native/free lifecycle succeeded.`, exited zero, removed its
-temporary root, and left no process discoverable with its private session
-environment.
+The offscreen visual harness captured safe procedural scenes for horizontal,
+vertical, and free layouts. It compared preview and direct `PanelScene`
+geometry/bounds/anchors and exact procedural surface pixels from the same
+deterministic definitions, including capability fallback.
 
-The same run also re-exercised the native lifecycle cases: hide/show identity
-stability, visible missing-host recreation, hidden missing-host detach, screen
-fallback/restoration, stale-id rebind, repeated-recovery idempotence, conflict
-refusal/convergence, PlasmaShell restart recovery, destructive wrong-token and
-wrong-renderer refusal, and verified permanent removal. `git diff --check` and
-the final build/CTest run remain part of the task handoff.
+The staged-install test installed only into a disposable prefix, then ran the
+module import, preview, and parity suites from that prefix. Its private KWin and
+PlasmaShell session started the staged service with Panel Studio, created one
+configured native applet and one configured free applet with non-zero geometry,
+verified their panel/type configuration, found no focused shared-renderer QML
+errors, removed both hosts, and cleaned the private session. This is runtime
+evidence for installed import and native/free host integration; it is not a
+claim about the personal desktop or hardware-specific behavior.
 
 This evidence is representative of the required Arch Linux, Plasma 6, Qt 6,
 Wayland integration, but it remains an isolated virtual session. It does not
@@ -209,11 +205,12 @@ claim hardware-specific monitor behavior or mutation of a user's live desktop.
 
 ## Next task boundary
 
-TASK-0015 closes the AD-0003 free-panel host lifecycle scope with unit, QML,
-template-contract, full CTest, and isolated Plasma evidence. It does not complete
-the wider release checklist or claim physical monitor validation.
+TASK-0025 closes AD-0006 shared renderer integration: the live applet, layered
+icon scene, and Panel Studio preview now share the installed scene contract.
+It does not implement Theme Package v2, production sample processing, a true-3D
+renderer, or desktop preview-audition semantics.
 
-The task pack identifies **TASK-0016 — Define a normalized native placement
-contract** as the next sequential planning target. It begins AD-0004 and may
-start only through its own read-only Stage A inspection and exact implementation
-approval gate. TASK-0016 has not been started here.
+The task pack identifies **TASK-0026 — Theme package version 2 and sample
+catalog** as the next sequential planning target. It may start only through its
+own read-only inspection and exact approval gate. TASK-0026 has not been
+started here.

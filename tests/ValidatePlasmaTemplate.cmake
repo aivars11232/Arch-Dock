@@ -38,6 +38,9 @@ file(READ
   "${SOURCE_DIR}/plasma-dock-widget/contents/ui/main.qml"
   dock_main)
 file(READ
+  "${SOURCE_DIR}/plasma-dock-widget/contents/ui/DockEntry.qml"
+  dock_entry)
+file(READ
   "${SOURCE_DIR}/plasma-dock-widget/contents/ui/configLayout.qml"
   dock_layout_page)
 file(READ
@@ -69,7 +72,22 @@ endif()
 foreach(required_runtime_contract
     "panelRendererConfiguration"
     "capabilityResolution"
-    "effectiveRendererTier")
+    "effectiveRendererTier"
+    "PanelScene"
+    "scenePanelDefinition"
+    "sceneRuntimeState"
+    "sceneHostCapabilities"
+    "entryDelegate: liveEntryDelegate"
+    "entryInteractionEnabled: root.sceneInputEnabled"
+    "FreeEntryPolicy.interactionEnabled(plasmaEditMode)"
+    "dockService.registered && !plasmaEditMode"
+    "inputEnabled: parent.sceneInputEnabled"
+    "editMode: root.plasmaEditMode"
+    "invoke: root.invokeEntry"
+    "reorder: root.reorderEntry"
+    "pinUrls: root.pinDroppedUrls"
+    "openPanelStudio: root.openPanelStudio"
+    "PlasmaCore.Types.NoBackground")
   string(FIND
     "${dock_main}"
     "${required_runtime_contract}"
@@ -77,6 +95,76 @@ foreach(required_runtime_contract
   if(main_runtime_contract_position EQUAL -1)
     message(FATAL_ERROR
       "The dock runtime is missing ${required_runtime_contract}.")
+  endif()
+endforeach()
+
+foreach(required_icon_scene_contract
+    "IconScene {"
+    "width: baseSize"
+    "id: magnificationLayer"
+    "scale: root.hoverScale"
+    "logicalInputRegion"
+    "iconVisualState")
+  string(FIND
+    "${dock_entry}"
+    "${required_icon_scene_contract}"
+    icon_scene_contract_position)
+  if(icon_scene_contract_position EQUAL -1)
+    message(FATAL_ERROR
+      "DockEntry is missing the shared icon contract ${required_icon_scene_contract}.")
+  endif()
+endforeach()
+
+foreach(forbidden_icon_implementation
+    "width: baseSize * hoverScale"
+    "IconVisual {"
+    "RunningIndicator {")
+  string(FIND
+    "${dock_entry}"
+    "${forbidden_icon_implementation}"
+    forbidden_icon_implementation_position)
+  if(NOT forbidden_icon_implementation_position EQUAL -1)
+    message(FATAL_ERROR
+      "DockEntry still contains the local icon implementation ${forbidden_icon_implementation}.")
+  endif()
+endforeach()
+
+foreach(obsolete_icon_file
+    "${SOURCE_DIR}/plasma-dock-widget/contents/ui/IconVisual.qml"
+    "${SOURCE_DIR}/plasma-dock-widget/contents/ui/RunningIndicator.qml")
+  if(EXISTS "${obsolete_icon_file}")
+    message(FATAL_ERROR
+      "Obsolete applet-local icon renderer remains: ${obsolete_icon_file}")
+  endif()
+endforeach()
+
+string(REGEX MATCHALL
+  "PanelScene[ \t\r\n]*\\{"
+  panel_scene_instances
+  "${dock_main}")
+list(LENGTH panel_scene_instances panel_scene_instance_count)
+if(NOT panel_scene_instance_count EQUAL 1)
+  message(FATAL_ERROR
+    "The dock applet must contain exactly one shared PanelScene host.")
+endif()
+
+foreach(forbidden_local_renderer
+    "Canvas {"
+    "LayoutEngine.metrics"
+    "LayoutEngine.position"
+    "LayoutEngine.surface"
+    "LayoutEngine.themeStyle"
+    "id: freeEntries"
+    "id: horizontalEntries"
+    "id: verticalEntries"
+    "id: freeSurfaceCanvas")
+  string(FIND
+    "${dock_main}"
+    "${forbidden_local_renderer}"
+    forbidden_local_renderer_position)
+  if(NOT forbidden_local_renderer_position EQUAL -1)
+    message(FATAL_ERROR
+      "The dock applet still contains the local renderer branch ${forbidden_local_renderer}.")
   endif()
 endforeach()
 

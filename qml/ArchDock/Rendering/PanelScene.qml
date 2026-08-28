@@ -13,6 +13,10 @@ Item {
     property var animationProfiles: ({})
     property var screenBounds: ({ x: 0, y: 0, width: 0, height: 0 })
     property var availableBounds: ({ x: 0, y: 0, width: 0, height: 0 })
+    property Component entryDelegate: null
+    property bool entryInteractionEnabled: true
+    property string geometryCompatibilityProfile: "canonical"
+    property var entryDelegateContext: ({})
 
     readonly property int entryCount:
         orderedEntries && orderedEntries.length !== undefined
@@ -155,7 +159,7 @@ Item {
     function entryGeometryAt(index) {
         return LayoutEngine.entryGeometry(
             layoutPath, index, entryCount, layoutGeometry, layoutAngle,
-            polygonSides, pathOrientation, "canonical")
+            polygonSides, pathOrientation, geometryCompatibilityProfile)
     }
 
     function entryLabel(entry, index) {
@@ -272,6 +276,16 @@ Item {
             required property var modelData
             required property int index
             readonly property var geometryOutput: root.entryGeometryAt(index)
+            readonly property var sceneEntry: modelData
+            readonly property int sceneIndex: index
+            readonly property bool sceneInputEnabled:
+                root.entryInteractionEnabled
+            readonly property var sceneGeometry: geometryOutput
+            readonly property var sceneRuntimeState: root.runtimeState
+            readonly property var scenePanelDefinition: root.panelDefinition
+            readonly property var sceneHostCapabilities: root.hostCapabilities
+            readonly property var sceneContext: root.entryDelegateContext
+            readonly property var delegateItem: entryLoader.item
 
             objectName: "panel-entry-" + index
             x: geometryOutput.position.x
@@ -281,19 +295,52 @@ Item {
             height: width
             rotation: geometryOutput.rotation
             scale: geometryOutput.scaleFactor
-            opacity: modelData && modelData.minimized ? 0.55 : 1
+            opacity: root.entryDelegate === null && modelData
+                && modelData.minimized ? 0.55 : 1
+
+            Loader {
+                id: entryLoader
+
+                readonly property var sceneEntry: entryItem.sceneEntry
+                readonly property int sceneIndex: entryItem.sceneIndex
+                readonly property bool sceneInputEnabled:
+                    entryItem.sceneInputEnabled
+                readonly property var sceneGeometry: entryItem.sceneGeometry
+                readonly property var sceneRuntimeState:
+                    entryItem.sceneRuntimeState
+                readonly property var scenePanelDefinition:
+                    entryItem.scenePanelDefinition
+                readonly property var sceneHostCapabilities:
+                    entryItem.sceneHostCapabilities
+                readonly property var sceneContext: entryItem.sceneContext
+
+                anchors.fill: parent
+                sourceComponent: root.entryDelegate || defaultEntryDelegate
+            }
+        }
+    }
+
+    Component {
+        id: defaultEntryDelegate
+
+        Item {
+            id: defaultEntry
+
+            readonly property var entry: parent.sceneEntry
+            readonly property int entryIndex: parent.sceneIndex
 
             Rectangle {
                 anchors.fill: parent
                 radius: root.iconShape === "circle" ? width / 2 : width * 0.24
-                color: root.entryColor(entryItem.modelData)
+                color: root.entryColor(defaultEntry.entry)
                 border.width: 1
                 border.color: "#e8ffffff"
             }
 
             Text {
                 anchors.centerIn: parent
-                text: root.entryLabel(entryItem.modelData, entryItem.index)
+                text: root.entryLabel(defaultEntry.entry,
+                                      defaultEntry.entryIndex)
                 color: "#18232b"
                 font.bold: true
                 font.pixelSize: Math.max(10, parent.width * 0.42)

@@ -16,6 +16,20 @@ TestCase {
         PanelScene {}
     }
 
+    Component {
+        id: hostEntryComponent
+
+        Rectangle {
+            property var bridgedEntry: parent.sceneEntry
+            property int bridgedIndex: parent.sceneIndex
+            property bool bridgedInputEnabled: parent.sceneInputEnabled
+
+            objectName: "host-entry-" + bridgedIndex
+            anchors.fill: parent
+            color: bridgedInputEnabled ? "#44ff88" : "#ff8844"
+        }
+    }
+
     function definition(overrides) {
         const result = {
             schemaVersion: 2,
@@ -250,5 +264,32 @@ TestCase {
         verify(scene.visualPanel !== null)
         compare(scene.iconDelegates.count, 3)
         verify(scene.entryItemAt(0) !== null)
+    }
+
+    function test_hostEntryDelegateReceivesSceneContext() {
+        const scene = createScene({
+            panelDefinition: definition({
+                layout: "circular",
+                pathOrientation: "tangent"
+            }),
+            entryDelegate: hostEntryComponent,
+            entryInteractionEnabled: false,
+            geometryCompatibilityProfile: "live"
+        })
+
+        compare(scene.geometryCompatibilityProfile, "live")
+        const slot = scene.entryItemAt(1)
+        verify(slot !== null)
+        verify(slot.delegateItem !== null)
+        compare(slot.sceneEntry.id, "org.example.two")
+        compare(slot.sceneIndex, 1)
+        compare(slot.sceneInputEnabled, false)
+        compare(slot.delegateItem.objectName, "host-entry-1")
+        compare(slot.delegateItem.bridgedEntry.id, "org.example.two")
+        compare(slot.delegateItem.bridgedIndex, 1)
+        compare(slot.delegateItem.bridgedInputEnabled, false)
+        compare(slot.width, scene.layoutGeometry.iconSize)
+        compare(slot.height, scene.layoutGeometry.iconSize)
+        compare(slot.rotation, 0)
     }
 }

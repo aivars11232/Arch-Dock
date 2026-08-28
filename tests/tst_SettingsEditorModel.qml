@@ -86,6 +86,86 @@ TestCase {
         compare(original.panelChanges.opacity, undefined);
     }
 
+    function test_rendererCandidateMergesDraftGlobalsAndResolvedCapabilities() {
+        const source = snapshot("bottom", 7);
+        source.panelValues.rendererTier = "skinned2d";
+        source.capabilityResolution = {
+            available: true,
+            renderer: {
+                requestedTier: "skinned2d",
+                effectiveTier: "procedural2d",
+                fallbackApplied: true,
+                reasonCode: "renderer-unavailable"
+            }
+        };
+        let edited = EditorModel.load(source);
+        edited = EditorModel.setPanelValue(edited, "opacity", 0.55);
+        edited = EditorModel.setGlobalValue(edited, "showTooltips", false);
+
+        const candidate = EditorModel.rendererCandidate(edited);
+        compare(candidate.opacity, 0.55);
+        compare(candidate.layout, "adaptive");
+        compare(candidate.showTooltips, false);
+        compare(candidate.effectiveRendererTier, "procedural2d");
+        compare(candidate.capabilityResolution.renderer.requestedTier,
+                "skinned2d");
+        compare(candidate.capabilityResolution.renderer.fallbackApplied,
+                true);
+
+        candidate.opacity = 0.1;
+        candidate.capabilityResolution.renderer.effectiveTier = "true3d";
+        compare(EditorModel.panelValue(edited, "opacity", 0), 0.55);
+        compare(edited.capabilityResolution.renderer.effectiveTier,
+                "procedural2d");
+    }
+
+    function test_rendererThemeCandidateIsAnIsolatedResolvedCardDraft() {
+        let session = EditorModel.load(snapshot("bottom", 7));
+        session = EditorModel.setPanelValue(session, "opacity", 0.55);
+        const theme = {
+            id: "holographic-ring",
+            panelStyle: {
+                appearance: "futuristic",
+                opacity: 0.9
+            },
+            iconStyle: {
+                iconShape: "circle",
+                iconSize: 48
+            },
+            layoutStyle: {
+                layout: "ring",
+                layoutRadius: 96
+            },
+            capabilityResolution: {
+                available: true,
+                renderer: {
+                    requestedTier: "procedural2d",
+                    effectiveTier: "procedural2d",
+                    fallbackApplied: false,
+                    reasonCode: ""
+                }
+            }
+        };
+
+        const candidate = EditorModel.rendererThemeCandidate(session, theme);
+        compare(candidate.appearance, "futuristic");
+        compare(candidate.opacity, 0.9);
+        compare(candidate.iconShape, "circle");
+        compare(candidate.iconSize, 48);
+        compare(candidate.layout, "ring");
+        compare(candidate.layoutRadius, 96);
+        compare(candidate.completeThemeId, "holographic-ring");
+        compare(candidate.capabilityResolution.renderer.effectiveTier,
+                "procedural2d");
+
+        candidate.layout = "horizontal";
+        candidate.capabilityResolution.renderer.effectiveTier = "true3d";
+        compare(EditorModel.panelValue(session, "layout", ""), "adaptive");
+        compare(theme.layoutStyle.layout, "ring");
+        compare(theme.capabilityResolution.renderer.effectiveTier,
+                "procedural2d");
+    }
+
     function test_unknownClientKeysCannotEnterTheCandidate() {
         const session = EditorModel.load(snapshot("bottom", 1));
         const protectedAttempt = EditorModel.setPanelValue(session, "screenId", "forged");

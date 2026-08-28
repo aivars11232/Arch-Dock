@@ -1,6 +1,9 @@
 module ArchDock.Rendering
 singleton RenderingModuleProbe 1.0 RenderingModuleProbe.qml
 LayoutEngine 1.0 LayoutEngine.js
+IconScene 1.0 IconScene.qml
 PanelScene 1.0 PanelScene.qml
 PanelSurfaceLoader 1.0 PanelSurfaceLoader.qml
+RunningIndicator 1.0 RunningIndicator.qml
+LivePanelPreview 1.0 previews/LivePanelPreview.qml
 PanelProcedural2D 1.0 renderers/PanelProcedural2D.qml

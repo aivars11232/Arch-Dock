@@ -39,8 +39,11 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     qmldir
     RenderingModuleProbe.qml
     LayoutEngine.js
+    IconScene.qml
     PanelScene.qml
     PanelSurfaceLoader.qml
+    RunningIndicator.qml
+    previews/LivePanelPreview.qml
     renderers/PanelProcedural2D.qml)
 set(ARCHDOCK_RENDERING_MODULE_SOURCES)
 
@@ -127,7 +130,6 @@ qt_add_qml_module(
   ${ARCHDOCK_RENDERING_IMPORT_ROOT}
   QML_FILES
   qml/runtime/CapabilityModel.js
-  qml/runtime/FreePanelWindow.qml
   qml/runtime/IconProperties.qml
   qml/runtime/IconPropertiesWindow.qml
   qml/runtime/PlacementStatus.js
@@ -461,6 +463,42 @@ if(BUILD_TESTING)
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(
+    NAME live-panel-preview-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_LivePanelPreview.qml)
+  set_tests_properties(
+    live-panel-preview-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME renderer-parity-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_RendererParity.qml)
+  set_tests_properties(
+    renderer-parity-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME icon-scene-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_IconScene.qml)
+  set_tests_properties(
+    icon-scene-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME dock-entry-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_DockEntry.qml)
+  set_tests_properties(
+    dock-entry-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
     NAME rendering-module-host-neutral-test
     COMMAND ${CMAKE_COMMAND}
             -DARCHDOCK_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
@@ -515,6 +553,12 @@ if(BUILD_TESTING)
     COMMAND ${CMAKE_COMMAND}
             -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ValidatePlasmaTemplate.cmake)
+
+  add_test(
+    NAME studio-preview-contract-test
+    COMMAND ${CMAKE_COMMAND}
+            -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ValidateStudioPreview.cmake)
 
   add_test(
     NAME studio-navigation-test

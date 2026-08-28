@@ -1,9 +1,10 @@
 # Shared renderer foundation
 
 `ArchDock.Rendering` is the installed, host-neutral QML module introduced by
-TASK-0024. It is shared infrastructure for plasmashell, the Arch Dock service,
-Panel Studio, and tests. The module does not own Plasma containments, D-Bus
-mutation, panel lifecycle, or visibility policy.
+TASK-0024 and integrated into live and preview consumers by TASK-0025. It is
+shared infrastructure for plasmashell, the Arch Dock service, Panel Studio,
+and tests. The module does not own Plasma containments, D-Bus mutation, panel
+lifecycle, settings persistence, or visibility policy.
 
 The module URI is `ArchDock.Rendering`, version `1.0`. CMake installs it below
 the relative `ARCHDOCK_QML_INSTALL_DIR` and tests it from a disposable staged
@@ -23,14 +24,23 @@ contract.
   position, tangent angle, outward normal, depth order, scale factor, path
   progress, panel and entry bounds, a safe input region, and nullable 3D fields.
 - `PanelScene` is the shared visual contract.
+- `IconScene` is the layered icon contract: rear effects, base/tile, glyph,
+  front treatment, running indicator, badge, and progress layers consume
+  explicit runtime states while retaining a fixed logical input rectangle.
+- `RunningIndicator` is the shared orientation-aware indicator with a style
+  contract for thickness, length, color, window steps, and pulse behavior.
 - `PanelSurfaceLoader` selects the safe available surface and reports fallback.
 - `PanelProcedural2D` is the initial dependency-free renderer and the fallback
   for missing, invalid, or unavailable theme renderers.
+- `LivePanelPreview` hosts exactly one `PanelScene` with draft or preset data.
+  It supports horizontal-native, vertical-native, and free modes; open and
+  collapsed presentation; explicit icon states; and truthful renderer status.
 
 `LayoutEngine.position()` remains as an incremental compatibility wrapper.
-The `live` profile preserves the pre-TASK-0024 applet placement, and the
-`runtime` profile preserves the former service-side free-window placement.
-New shared-scene code uses the `canonical` profile.
+The `live` profile preserves free-applet placement compatibility. The
+`runtime` profile remains for frozen compatibility coverage after the dormant
+service-side free window was removed. Native live scenes, previews, and new
+shared-scene code use the `canonical` profile.
 
 ## PanelScene inputs
 
@@ -45,6 +55,10 @@ New shared-scene code uses the `canonical` profile.
 | `animationProfiles` | Resolved motion-profile input reserved for shared motion components. TASK-0024 does not add animation behavior. |
 | `screenBounds` | Current logical screen rectangle supplied by the host. |
 | `availableBounds` | Logical work-area rectangle supplied by the host. |
+| `entryDelegate` | Optional host delegate. The live applet supplies `DockEntry`; previews use the shared `IconScene`. |
+| `entryInteractionEnabled` | Host-owned input gate mirrored to every delegate without changing scene geometry. |
+| `geometryCompatibilityProfile` | Explicit canonical or retained compatibility profile. |
+| `entryDelegateContext` | Host-neutral context values mirrored to delegates. |
 
 The scene accepts these inputs as values. It does not query or mutate a Plasma
 host and does not call the Arch Dock service.
@@ -78,10 +92,31 @@ capability fallback or runtime fallback is also reflected in the scene status.
 The fallback always retains deterministic geometry, visible entries, bounds,
 input-region output, and popup/reveal anchors.
 
-## Integration boundary
+## Live and preview integration
 
-TASK-0024 does not replace the production applet body or the Panel Studio mock
-preview with `PanelScene`. TASK-0025 owns those bridges, the layered
-`IconScene`, and shared live-preview integration. Until then, the live applet
-uses `LayoutEngine` directly through its compatibility profile while importing
-the same installed module.
+The production `org.archdock.dock` applet now contains one `PanelScene`. Its
+host delegate is the existing interactive `DockEntry`, so launch, context-menu,
+drag/drop, reorder, edit-mode, native-service, and free-host input policy stay
+host-owned. The applet no longer has separate Canvas or horizontal, vertical,
+and free renderer branches. The obsolete service-side `FreePanelWindow` was
+removed after its lack of runtime callers was verified.
+
+`DockEntry` renders one shared `IconScene` inside a transformed visual layer.
+Its outer logical root and pointer/drop regions remain fixed at the base icon
+size, so magnification and motion do not move the hit target. The former
+applet-local `IconVisual` and `RunningIndicator` implementations were removed.
+
+Panel Studio builds a pure renderer candidate from its loaded editor baseline,
+local panel/global changes, and backend capability result. The active editor
+preview and every available built-in theme card use `LivePanelPreview`; the old
+generic theme strip is gone. Preview mode, presentation, hover/icon states, and
+renderer/fallback labels mutate only embedded QML state. Persisted settings
+still change only through the existing transactional Apply operation; TASK-0025
+does not start a desktop audition or introduce `PreviewSession` semantics.
+
+The staged-install gate runs module import, preview, and deterministic parity
+tests against installed files, then starts the staged service/Studio and real
+native/free applet hosts in a disposable private KWin/Plasma session. The
+parity harness feeds the same deterministic definitions to preview and direct
+`PanelScene` instances and compares geometry contracts plus safe procedural
+surface pixels.
