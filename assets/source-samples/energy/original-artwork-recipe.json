@@ -1,0 +1,140 @@
+{
+  "format": "org.archdock.clean-room-artwork-recipe",
+  "version": 1,
+  "task": "TASK-0028",
+  "method": "deterministic-hand-authored-svg",
+  "pixelInput": false,
+  "sourceDerivative": false,
+  "authorizationEvidence": "assets/source-samples/energy/REFERENCE_RIGHTS.md",
+  "inspirationReferences": [
+    {
+      "catalogId": "panel-screenshot-20260811-193105",
+      "sha256": "ce30234a578093e5a943c6c2045ff8025c952da4cc08ec2568d2ac445397b427",
+      "variant": "energy-frame-cyan",
+      "permittedUse": "broad-concept-only",
+      "pixelInput": false
+    },
+    {
+      "catalogId": "panel-screenshot-20260811-192733",
+      "sha256": "638662753e315b59ffe295d640699c207bf834d233a82422497ef48794596a2c",
+      "variant": "energy-frame-green",
+      "permittedUse": "broad-concept-only",
+      "pixelInput": false
+    },
+    {
+      "catalogId": "panel-screenshot-20260811-192943",
+      "sha256": "a9aab4f4612cf4f1ec7bee06a1c99b6e7fec8a7698f978f62e8979b229ed9588",
+      "variant": "energy-frame-orange",
+      "permittedUse": "broad-concept-only",
+      "pixelInput": false
+    },
+    {
+      "catalogId": "panel-screenshot-20260811-193642",
+      "sha256": "bd3268a2607f04a10bff2a606817ae67c8800bc43006ece749e6ca88f51d0e57",
+      "variant": "energy-frame-purple",
+      "permittedUse": "broad-concept-only",
+      "pixelInput": false
+    }
+  ],
+  "canvas": {
+    "width": 1200,
+    "height": 160,
+    "transparent": true
+  },
+  "geometry": {
+    "outerSilhouette": "M 8 80 L 46 31 Q 54 20 68 18 L 132 8 H 1068 L 1132 18 Q 1146 20 1154 31 L 1192 80 L 1154 129 Q 1146 140 1132 142 L 1068 152 H 132 L 68 142 Q 54 140 46 129 Z",
+    "innerRail": {
+      "x": 118,
+      "y": 28,
+      "width": 964,
+      "height": 104,
+      "radius": 28
+    },
+    "fixedStart": 152,
+    "fixedEnd": 152,
+    "centerMode": "stretch",
+    "minimumOutput": {
+      "width": 352,
+      "height": 64
+    }
+  },
+  "contentRegion": {
+    "x": 168,
+    "y": 38,
+    "width": 864,
+    "height": 84,
+    "baseline": 70
+  },
+  "effectMargins": {
+    "left": 18,
+    "top": 16,
+    "right": 18,
+    "bottom": 16
+  },
+  "inputMask": {
+    "shape": "outerSilhouette",
+    "threshold": 0.5,
+    "excludesEffectOverflow": true
+  },
+  "layers": [
+    "surface",
+    "frame-mask",
+    "glow-mask",
+    "energy-overlay-mask",
+    "highlight-mask",
+    "input-mask"
+  ],
+  "states": {
+    "normal": {"glowOpacity": 0.55, "energyOpacity": 0.42},
+    "hover": {"glowOpacity": 0.92, "energyOpacity": 0.76},
+    "open": {"glowOpacity": 0.78, "energyOpacity": 0.66},
+    "collapsed": {"glowOpacity": 0.32, "energyOpacity": 0.22}
+  },
+  "variants": [
+    {
+      "id": "energy-frame-cyan",
+      "base": "#071821",
+      "mid": "#0d3340",
+      "edge": "#2abfd2",
+      "accent": "#66f4ff",
+      "highlight": "#d8fdff",
+      "defaultTint": "#58e9f5"
+    },
+    {
+      "id": "energy-frame-green",
+      "base": "#071a13",
+      "mid": "#123b2c",
+      "edge": "#35c98a",
+      "accent": "#72ffc0",
+      "highlight": "#dcffef",
+      "defaultTint": "#65e8a8"
+    },
+    {
+      "id": "energy-frame-orange",
+      "base": "#1b0d07",
+      "mid": "#482013",
+      "edge": "#e46029",
+      "accent": "#ffad55",
+      "highlight": "#fff0cf",
+      "defaultTint": "#ff8b45"
+    },
+    {
+      "id": "energy-frame-purple",
+      "base": "#15091f",
+      "mid": "#35154d",
+      "edge": "#a95bd8",
+      "accent": "#e29aff",
+      "highlight": "#f9e5ff",
+      "defaultTint": "#c27be8"
+    }
+  ],
+  "prohibitedElements": [
+    "source-image-pixels",
+    "tracing",
+    "third-party-logos",
+    "third-party-glyphs",
+    "text",
+    "embedded-raster-images",
+    "distinctive-source-ornament"
+  ]
+}

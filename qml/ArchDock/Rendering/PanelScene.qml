@@ -52,6 +52,13 @@ Item {
         "surface", "color", "color", ""))
     readonly property real panelOpacity: Number(definitionValue(
         "surface", "opacity", "opacity", 0.9))
+    readonly property real glowIntensity: {
+        const candidate = Number(definitionValue(
+            "surface", "glowIntensity", "glowIntensity", 1))
+        return isFinite(candidate) ? candidate : 1
+    }
+    readonly property color tintColor:
+        customColor.length > 0 ? customColor : "#78e9f4"
     readonly property string themeId: String(definitionValue(
         "surface", "panelThemeId", "panelThemeId", ""))
     readonly property string themeSource: String(definitionValue(
@@ -73,6 +80,26 @@ Item {
         return ["normal", "open", "collapsed"].includes(requested)
             ? requested : "open"
     }
+    readonly property string transitionState: {
+        const requested = String(runtimeState
+            ? runtimeState.transitionState || "idle" : "idle").toLowerCase()
+        return ["opening", "closing"].includes(requested)
+            ? requested : "idle"
+    }
+    readonly property real presentationProgress: {
+        const candidate = Number(runtimeState
+            ? runtimeState.presentationProgress : -1)
+        return isFinite(candidate) && candidate >= 0 && candidate <= 1
+            ? candidate : -1
+    }
+    readonly property bool panelHovered:
+        Boolean(runtimeState ? runtimeState.hovered : false)
+    readonly property bool reducedMotion:
+        animationProfiles
+            && animationProfiles.reducedMotion !== undefined
+        ? Boolean(animationProfiles.reducedMotion)
+        : Boolean(definitionValue(
+            "motion", "reducedMotion", "reducedMotion", false))
     readonly property string themeOrientation:
         verticalLayout ? "vertical"
         : ["horizontal", "adaptive"].includes(layoutPath)
@@ -422,6 +449,12 @@ Item {
         themeDefinition: root.themeDefinition
         layout: root.layoutPath
         presentationState: root.presentationState
+        transitionState: root.transitionState
+        presentationProgress: root.presentationProgress
+        hovered: root.panelHovered
+        tintColor: root.tintColor
+        glowIntensity: root.glowIntensity
+        reducedMotion: root.reducedMotion
         geometry: root.rendererGeometry
         layoutAngle: root.layoutAngle
         polygonSides: root.polygonSides

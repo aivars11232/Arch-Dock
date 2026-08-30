@@ -106,7 +106,7 @@ require_no_import_errors() {
     for log_file in "$ARCHDOCK_RENDERING_LOG_DIR/service.log" \
                     "$ARCHDOCK_RENDERING_LOG_DIR/plasmashell.log"; do
         if rg -n -i \
-            'module "ArchDock\.Rendering" is not installed|RenderingModuleProbe[^[:cntrl:]]*(not a type|unavailable)|Panel(Scene|SurfaceLoader|Procedural2D|Skin2D)[^[:cntrl:]]*(not a type|unavailable|not installed)|AlphaHitMask[^[:cntrl:]]*(not a type|unavailable|not installed)|(IconScene|RunningIndicator|LivePanelPreview)[^[:cntrl:]]*(not a type|unavailable|not installed)|(SettingsPopup|StudioForm)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|org\.archdock\.dock/contents/ui/(main|DockEntry|IconVisual|RunningIndicator)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|ArchDock/Rendering/(PanelScene|PanelSurfaceLoader|renderers/PanelSkin2D|inputs/AlphaHitMask|IconScene|RunningIndicator|previews/LivePanelPreview)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(typeerror|referenceerror|cannot assign|unable to assign|binding loop)|Error loading QML file[^[:cntrl:]]*org\.archdock\.dock' \
+            'module "ArchDock\.Rendering" is not installed|RenderingModuleProbe[^[:cntrl:]]*(not a type|unavailable)|Panel(Scene|SurfaceLoader|Procedural2D|Skin2D|SkinLayer2D)[^[:cntrl:]]*(not a type|unavailable|not installed)|AlphaHitMask[^[:cntrl:]]*(not a type|unavailable|not installed)|(IconScene|RunningIndicator|LivePanelPreview)[^[:cntrl:]]*(not a type|unavailable|not installed)|(SettingsPopup|StudioForm)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|org\.archdock\.dock/contents/ui/(main|DockEntry|IconVisual|RunningIndicator)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|ArchDock/Rendering/(PanelScene|PanelSurfaceLoader|renderers/PanelSkin2D|renderers/PanelSkinLayer2D|inputs/AlphaHitMask|IconScene|RunningIndicator|previews/LivePanelPreview)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(typeerror|referenceerror|cannot assign|unable to assign|binding loop)|Error loading QML file[^[:cntrl:]]*org\.archdock\.dock' \
             "$log_file"; then
             printf 'Staged rendering import failed; relevant QML errors were logged in %s.\n' \
                 "$log_file" >&2
@@ -222,20 +222,20 @@ run_private_session() {
         return 1
     }
 
-    local chassis_values="{'layout': <'horizontal'>, 'rendererTier': <'skinned2d'>, 'panelThemeId': <'sci-fi-chassis-dark'>, 'completeThemeId': <'sci-fi-chassis-dark'>}"
+    local energy_values="{'layout': <'horizontal'>, 'rendererTier': <'skinned2d'>, 'panelThemeId': <'energy-frame-cyan'>, 'completeThemeId': <'energy-frame-cyan'>, 'color': <'#44ddea'>, 'glowIntensity': <1.15>}"
     local native_theme_reply
     local free_theme_reply
-    printf 'Selecting the staged chassis theme on the private native host.\n'
+    printf 'Selecting the staged cyan energy theme on the private native host.\n'
     native_theme_reply="$(panel_call applyPanelSettingsTransaction \
-        bottom "uint64 $native_revision" "$chassis_values" '{}')"
-    printf 'Selecting the staged chassis theme on the private free host.\n'
+        bottom "uint64 $native_revision" "$energy_values" '{}')"
+    printf 'Selecting the staged cyan energy theme on the private free host.\n'
     free_theme_reply="$(panel_call applyPanelSettingsTransaction \
-        "$free_panel_id" "uint64 $free_revision" "$chassis_values" '{}')"
+        "$free_panel_id" "uint64 $free_revision" "$energy_values" '{}')"
     [[ "$native_theme_reply" == *"'success': <true>"* &&
        "$native_theme_reply" == *"'status': <'succeeded'>"* &&
        "$free_theme_reply" == *"'success': <true>"* &&
        "$free_theme_reply" == *"'status': <'succeeded'>"* ]] || {
-        printf 'Could not select the staged chassis theme: native=%s free=%s\n' \
+        printf 'Could not select the staged cyan energy theme: native=%s free=%s\n' \
             "$native_theme_reply" "$free_theme_reply" >&2
         return 1
     }
@@ -255,11 +255,13 @@ run_private_session() {
         free_renderer="$(panel_call panelRendererConfiguration "$free_panel_id")"
         if [[ "$native_renderer" == *"'effectiveRendererTier': <'skinned2d'>"* &&
               "$native_renderer" == *"'themeProjectionStatus': <'ready'>"* &&
-              "$native_renderer" == *"'id': <'sci-fi-chassis-dark'>"* &&
+              "$native_renderer" == *"'id': <'energy-frame-cyan'>"* &&
+              "$native_renderer" == *"'dynamic-glow'"* &&
               "$native_renderer" == *"'manifestPath': <'$ARCHDOCK_RENDERING_STAGED_THEME_MANIFEST'>"* &&
               "$free_renderer" == *"'effectiveRendererTier': <'skinned2d'>"* &&
               "$free_renderer" == *"'themeProjectionStatus': <'ready'>"* &&
-              "$free_renderer" == *"'id': <'sci-fi-chassis-dark'>"* &&
+              "$free_renderer" == *"'id': <'energy-frame-cyan'>"* &&
+              "$free_renderer" == *"'dynamic-glow'"* &&
               "$free_renderer" == *"'manifestPath': <'$ARCHDOCK_RENDERING_STAGED_THEME_MANIFEST'>"* ]]; then
             break
         fi
@@ -267,17 +269,19 @@ run_private_session() {
     done
     [[ "$native_renderer" == *"'effectiveRendererTier': <'skinned2d'>"* &&
        "$native_renderer" == *"'themeProjectionStatus': <'ready'>"* &&
-       "$native_renderer" == *"'id': <'sci-fi-chassis-dark'>"* &&
+       "$native_renderer" == *"'id': <'energy-frame-cyan'>"* &&
+       "$native_renderer" == *"'dynamic-glow'"* &&
        "$native_renderer" == *"'manifestPath': <'$ARCHDOCK_RENDERING_STAGED_THEME_MANIFEST'>"* ]] || {
-        printf 'The native live host did not resolve the chassis renderer: %s\n' \
+        printf 'The native live host did not resolve the cyan energy renderer: %s\n' \
             "$native_renderer" >&2
         return 1
     }
     [[ "$free_renderer" == *"'effectiveRendererTier': <'skinned2d'>"* &&
        "$free_renderer" == *"'themeProjectionStatus': <'ready'>"* &&
-       "$free_renderer" == *"'id': <'sci-fi-chassis-dark'>"* &&
+       "$free_renderer" == *"'id': <'energy-frame-cyan'>"* &&
+       "$free_renderer" == *"'dynamic-glow'"* &&
        "$free_renderer" == *"'manifestPath': <'$ARCHDOCK_RENDERING_STAGED_THEME_MANIFEST'>"* ]] || {
-        printf 'The free live host did not resolve the chassis renderer: %s\n' \
+        printf 'The free live host did not resolve the cyan energy renderer: %s\n' \
             "$free_renderer" >&2
         return 1
     }
@@ -353,6 +357,7 @@ run_outer() {
        -r "$module_root/previews/LivePanelPreview.qml" &&
        -r "$module_root/renderers/PanelProcedural2D.qml" &&
        -r "$module_root/renderers/PanelSkin2D.qml" &&
+       -r "$module_root/renderers/PanelSkinLayer2D.qml" &&
        -r "$module_root/inputs/AlphaHitMask.qml" ]] || {
         printf 'The staged ArchDock.Rendering module is incomplete: %s\n' \
             "$module_root" >&2
@@ -380,6 +385,21 @@ run_outer() {
            -r "$theme_root/$theme_id/metadata/production-record.json" &&
            -r "$theme_root/$theme_id/metadata/visual-review.json" ]] || {
             printf 'The staged chassis package is incomplete: %s\n' "$theme_id" >&2
+            return 1
+        }
+    done
+    for theme_id in energy-frame-cyan energy-frame-green \
+                    energy-frame-orange energy-frame-purple; do
+        [[ -r "$theme_root/$theme_id/archdock-theme.json" &&
+           -r "$theme_root/$theme_id/assets/surface.svg" &&
+           -r "$theme_root/$theme_id/assets/frame-mask.svg" &&
+           -r "$theme_root/$theme_id/assets/glow-mask.svg" &&
+           -r "$theme_root/$theme_id/assets/energy-overlay-mask.svg" &&
+           -r "$theme_root/$theme_id/assets/highlight-mask.svg" &&
+           -r "$theme_root/$theme_id/masks/input.svg" &&
+           -r "$theme_root/$theme_id/metadata/production-record.json" &&
+           -r "$theme_root/$theme_id/metadata/visual-review.json" ]] || {
+            printf 'The staged energy package is incomplete: %s\n' "$theme_id" >&2
             return 1
         }
     done
@@ -418,7 +438,7 @@ run_outer() {
         ARCHDOCK_RENDERING_IMPORT_SESSION=1 \
         ARCHDOCK_RENDERING_LOG_DIR="$log_dir" \
         ARCHDOCK_RENDERING_SMOKE_DESKTOP_FILE="$stage_root/share/applications/org.archdock.ArchDock.desktop" \
-        ARCHDOCK_RENDERING_STAGED_THEME_MANIFEST="$theme_root/sci-fi-chassis-dark/archdock-theme.json" \
+        ARCHDOCK_RENDERING_STAGED_THEME_MANIFEST="$theme_root/energy-frame-cyan/archdock-theme.json" \
         ARCHDOCK_RENDERING_STAGED_BINARY="$stage_root/bin/arch-dock" \
         DESKTOP_SESSION=archdock-rendering-test \
         KDE_FULL_SESSION=true \

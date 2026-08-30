@@ -94,6 +94,7 @@ void PanelSettingsSchemaTest::editorCandidatesExcludeProtectedAndHiddenState()
         {QStringLiteral("screenId"), QStringLiteral("forged")},
         {QStringLiteral("visible"), true},
         {QStringLiteral("opacity"), 0.75},
+        {QStringLiteral("glowIntensity"), 1.4},
         {QStringLiteral("physicsEnabled"), true},
         {QStringLiteral("folderLayout"), QStringLiteral("fan")},
         {QStringLiteral("pathAnchor"), QStringLiteral("center")},
@@ -104,6 +105,7 @@ void PanelSettingsSchemaTest::editorCandidatesExcludeProtectedAndHiddenState()
         PanelSettingsFieldScope::Panel, record);
     QVERIFY(editor.contains(QStringLiteral("visible")));
     QVERIFY(editor.contains(QStringLiteral("opacity")));
+    QVERIFY(editor.contains(QStringLiteral("glowIntensity")));
     QVERIFY(!editor.contains(QStringLiteral("id")));
     QVERIFY(!editor.contains(QStringLiteral("builtIn")));
     QVERIFY(!editor.contains(QStringLiteral("nativeOwnershipToken")));
@@ -128,6 +130,7 @@ void PanelSettingsSchemaTest::runtimeProjectionContainsOnlyDeclaredConsumerValue
         {QStringLiteral("nativeOwnershipToken"), QStringLiteral("secret")},
         {QStringLiteral("visible"), true},
         {QStringLiteral("opacity"), 0.74},
+        {QStringLiteral("glowIntensity"), 1.25},
         {QStringLiteral("themeAsset"), QStringLiteral("file:///managed.png")},
         {QStringLiteral("surface3D"), QVariantMap{{QStringLiteral("depth"), 12}}},
         {QStringLiteral("themeStatus"), QStringLiteral("diagnostic")},
@@ -137,6 +140,7 @@ void PanelSettingsSchemaTest::runtimeProjectionContainsOnlyDeclaredConsumerValue
         PanelSettingsFieldScope::Panel, record);
     QCOMPARE(runtime.value(QStringLiteral("visible")).toBool(), true);
     QCOMPARE(runtime.value(QStringLiteral("opacity")).toReal(), 0.74);
+    QCOMPARE(runtime.value(QStringLiteral("glowIntensity")).toReal(), 1.25);
     QCOMPARE(runtime.value(QStringLiteral("themeAsset")).toString(),
              QStringLiteral("file:///managed.png"));
     QVERIFY(!runtime.contains(QStringLiteral("id")));
@@ -219,6 +223,12 @@ void PanelSettingsSchemaTest::panelNormalizationMatchesTheDurableModelContract()
                  QStringLiteral("layoutAngle"), -900.0).toReal(),
              -180.0);
     QCOMPARE(PanelSettingsSchema::normalizePanelValue(
+                 QStringLiteral("glowIntensity"), 9.0).toReal(),
+             2.0);
+    QCOMPARE(PanelSettingsSchema::normalizePanelValue(
+                 QStringLiteral("glowIntensity"), -1.0).toReal(),
+             0.0);
+    QCOMPARE(PanelSettingsSchema::normalizePanelValue(
                  QStringLiteral("nativePanelId"), -8).toInt(),
              -1);
     QCOMPARE(PanelSettingsSchema::normalizePanelValue(
@@ -226,6 +236,14 @@ void PanelSettingsSchemaTest::panelNormalizationMatchesTheDurableModelContract()
                  QStringList{QStringLiteral(" app "), QStringLiteral("app"), {}})
                  .toStringList(),
              QStringList{QStringLiteral("app")});
+
+    const auto *glow = PanelSettingsSchema::panelDescriptor(
+        QStringLiteral("glowIntensity"));
+    QVERIFY(glow);
+    QCOMPARE(glow->editor.control, QStringLiteral("slider"));
+    QCOMPARE(glow->editor.capability, QStringLiteral("dynamic-glow"));
+    QCOMPARE(glow->minimumValue.toReal(), 0.0);
+    QCOMPARE(glow->maximumValue.toReal(), 2.0);
 }
 
 void PanelSettingsSchemaTest::globalNormalizationIsSchemaDrivenAndStrictForChoices()

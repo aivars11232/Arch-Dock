@@ -22,6 +22,7 @@ enum class PanelCapability
     ThicknessMutation,
     LengthMutation,
     DynamicTint,
+    DynamicGlow,
     IconStateStyling,
     Count
 };

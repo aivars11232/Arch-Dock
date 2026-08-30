@@ -2649,7 +2649,7 @@ void PanelRegistryTest::supportsPinnedFolderSnapshotsAndReordering()
 void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
 {
     const QVariantList definitions = taskThemeDefinitions();
-    QCOMPARE(definitions.size(), 8);
+    QCOMPARE(definitions.size(), 12);
     PanelRegistry registry(definitions);
     QCOMPARE(registry.themeDefinitions().size(), definitions.size());
 
@@ -2702,7 +2702,7 @@ void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
             QVERIFY(profile->presentationMechanisms.isEmpty());
         }
     }
-    QCOMPARE(packagedThemeCount, 3);
+    QCOMPARE(packagedThemeCount, 7);
 
     const QVariantMap ringTheme = registry.themeDefinitions().at(3).toMap();
     QCOMPARE(ringTheme.value(QStringLiteral("id")).toString(),
@@ -2837,7 +2837,7 @@ void PanelRegistryTest::resolvesThemeCandidatesWithoutMutation()
 void PanelRegistryTest::rejectsIncompatibleThemeWithoutRecordMutation()
 {
     const QVariantList definitions = taskThemeDefinitions();
-    QCOMPARE(definitions.size(), 8);
+    QCOMPARE(definitions.size(), 12);
     PanelRegistry registry(definitions);
     const QVariantMap before = registry.panelSnapshot(QStringLiteral("bottom"));
     const int registryRevisionBefore = registry.revision();

@@ -90,6 +90,7 @@ private slots:
     void editorDraftResolutionIsReadOnlyAndCannotAuthorizeHiddenState();
     void builtInThemeCandidateCommitsThroughUnifiedTransaction();
     void builtInChassisCandidateProjectsIntoStudioAndRenderer();
+    void builtInEnergyCandidateProjectsGlowAndTheme();
     void screenIdentityIsDerivedServerSideAndCannotBeForged();
     void compatibilityConfigurationSurfaceRemainsExactlyBounded();
     void rejectedCapabilityTransactionStopsBeforePersistenceAndHosts();
@@ -598,7 +599,7 @@ void PanelWindowCapabilityTest::builtInChassisCandidateProjectsIntoStudioAndRend
     QVERIFY(snapshot.value(QStringLiteral("success")).toBool());
     const quint64 revision = snapshot.value(QStringLiteral("revision")).toULongLong();
     const QVariantList themes = snapshot.value(QStringLiteral("themes")).toList();
-    QCOMPARE(themes.size(), 8);
+    QCOMPARE(themes.size(), 12);
     int chassisThemeCount = 0;
     for (const QVariant &value : themes)
     {
@@ -659,6 +660,99 @@ void PanelWindowCapabilityTest::builtInChassisCandidateProjectsIntoStudioAndRend
              QStringLiteral("sci-fi-chassis-red"));
     QCOMPARE(renderer.value(QStringLiteral("layout")).toString(),
              QStringLiteral("horizontal"));
+}
+
+void PanelWindowCapabilityTest::builtInEnergyCandidateProjectsGlowAndTheme()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    PanelRegistry *registry = qobject_cast<PanelRegistry *>(
+        engine.rootContext()
+            ->contextProperty(QStringLiteral("panelRegistry"))
+            .value<QObject *>());
+    QVERIFY(registry);
+
+    const QVariantMap snapshot = window.panelSettingsEditorSnapshot(
+        QStringLiteral("bottom"), QStringLiteral("studio"));
+    QVERIFY(snapshot.value(QStringLiteral("success")).toBool());
+    const quint64 revision = snapshot.value(QStringLiteral("revision")).toULongLong();
+
+    const QVariantMap expectedTints{
+        {QStringLiteral("energy-frame-cyan"), QStringLiteral("#44ddea")},
+        {QStringLiteral("energy-frame-green"), QStringLiteral("#4ee68a")},
+        {QStringLiteral("energy-frame-orange"), QStringLiteral("#ff873c")},
+        {QStringLiteral("energy-frame-purple"), QStringLiteral("#b96cff")},
+    };
+    QVariantMap projectedThemes;
+    for (const QVariant &value : snapshot.value(QStringLiteral("themes")).toList())
+    {
+        const QVariantMap candidate = value.toMap();
+        const QString candidateId = candidate.value(QStringLiteral("id")).toString();
+        if (expectedTints.contains(candidateId))
+        {
+            projectedThemes.insert(candidateId, candidate);
+        }
+    }
+    QCOMPARE(projectedThemes.size(), expectedTints.size());
+
+    QVariantMap cyanValues;
+    for (auto iterator = expectedTints.constBegin();
+         iterator != expectedTints.constEnd(); ++iterator)
+    {
+        const QString themeId = iterator.key();
+        const QVariantMap projectedTheme = projectedThemes.value(themeId).toMap();
+        QVERIFY2(!projectedTheme.isEmpty(), qPrintable(themeId));
+        QVERIFY2(projectedTheme.value(QStringLiteral("available")).toBool(),
+                 qPrintable(themeId));
+        QCOMPARE(projectedTheme.value(
+                     QStringLiteral("themeProjectionStatus")).toString(),
+                 QStringLiteral("ready"));
+        QVERIFY2(projectedTheme.value(QStringLiteral("valid")).toBool(),
+                 qPrintable(themeId));
+        QVERIFY(projectedTheme.value(QStringLiteral("capabilities"))
+                    .toMap()
+                    .value(QStringLiteral("features"))
+                    .toList()
+                    .contains(QStringLiteral("dynamic-glow")));
+
+        const QVariantMap theme = registry->themeCandidate(
+            QStringLiteral("bottom"), themeId, QStringLiteral("complete"));
+        QVERIFY2(theme.value(QStringLiteral("success")).toBool(),
+                 qPrintable(themeId));
+        const QVariantMap values = theme.value(QStringLiteral("values")).toMap();
+        QCOMPARE(values.value(QStringLiteral("rendererTier")).toString(),
+                 QStringLiteral("skinned2d"));
+        QCOMPARE(values.value(QStringLiteral("color")).toString(),
+                 iterator.value().toString());
+        QCOMPARE(values.value(QStringLiteral("glowIntensity")).toReal(), 1.15);
+        if (themeId == QStringLiteral("energy-frame-cyan"))
+        {
+            cyanValues = values;
+        }
+    }
+    QVERIFY(!cyanValues.isEmpty());
+
+    const QVariantMap result = window.applyPanelSettingsTransaction(
+        QStringLiteral("bottom"), revision, cyanValues, {});
+    QVERIFY2(result.value(QStringLiteral("success")).toBool(),
+             qPrintable(result.value(QStringLiteral("errorMessage")).toString()));
+
+    const QVariantMap renderer = window.panelRendererConfiguration(
+        QStringLiteral("bottom"));
+    QCOMPARE(renderer.value(QStringLiteral("effectiveRendererTier")).toString(),
+             QStringLiteral("skinned2d"));
+    QCOMPARE(renderer.value(QStringLiteral("color")).toString(),
+             QStringLiteral("#44ddea"));
+    QCOMPARE(renderer.value(QStringLiteral("glowIntensity")).toReal(), 1.15);
+    const QVariantMap runtimeTheme = renderer.value(
+        QStringLiteral("themeDefinition")).toMap();
+    QCOMPARE(runtimeTheme.value(QStringLiteral("id")).toString(),
+             QStringLiteral("energy-frame-cyan"));
+    QVERIFY(runtimeTheme.value(QStringLiteral("capabilities"))
+                .toMap()
+                .value(QStringLiteral("features"))
+                .toList()
+                .contains(QStringLiteral("dynamic-glow")));
 }
 
 void PanelWindowCapabilityTest::screenIdentityIsDerivedServerSideAndCannotBeForged()

@@ -90,6 +90,7 @@ void PanelModelTest::defaultsExposeEveryVersionTwoSection()
     QVERIFY(definition.presentation.mode.isEmpty());
     QCOMPARE(definition.layout.pathType, QStringLiteral("circular"));
     QCOMPARE(definition.surface.appearance, QStringLiteral("glass"));
+    QCOMPARE(definition.surface.glowIntensity, 1.0);
     QCOMPARE(definition.iconStyle.shape, QStringLiteral("rounded"));
     QCOMPARE(definition.motion.iconProfile, QStringLiteral("scale"));
     QVERIFY(!definition.presetOrigin.has_value());
@@ -206,6 +207,7 @@ void PanelModelTest::currentFieldsAndExtensionsRoundTripWithoutLoss()
         {QStringLiteral("shape"), QStringLiteral("rounded")},
         {QStringLiteral("opacity"), 0.82},
         {QStringLiteral("color"), QStringLiteral("#112233")},
+        {QStringLiteral("glowIntensity"), 1.35},
         {QStringLiteral("panelThemeId"), QStringLiteral("metallic-shelf")},
         {QStringLiteral("completeThemeId"), QStringLiteral("metallic-shelf")},
         {QStringLiteral("themeAsset"), QStringLiteral("/tmp/surface.png")},
@@ -320,12 +322,14 @@ void PanelModelTest::runtimeStateStartsFromSafeDefaults()
     QVERIFY(!first.windowOverlap);
     QVERIFY(first.rendererFallback.isEmpty());
     QCOMPARE(first.frameQuality, QStringLiteral("normal"));
+    QCOMPARE(first.presentationProgress, -1.0);
     QVERIFY(first.currentScreenGeometry.isNull());
 
     const QVariantMap runtime = first.toRuntimeMap();
     QCOMPARE(runtime.value(QStringLiteral("transitionState")).toString(),
              QStringLiteral("idle"));
     QCOMPARE(runtime.value(QStringLiteral("hoveredEntry")).toInt(), -1);
+    QCOMPARE(runtime.value(QStringLiteral("presentationProgress")).toReal(), -1.0);
     QVERIFY(runtime.contains(QStringLiteral("currentScreenGeometry")));
 }
 
@@ -341,6 +345,7 @@ void PanelModelTest::serializationExcludesTransientRuntimeState()
         {QStringLiteral("popupOpen"), true},
         {QStringLiteral("dragging"), true},
         {QStringLiteral("transitionState"), QStringLiteral("opening")},
+        {QStringLiteral("presentationProgress"), 0.4},
         {QStringLiteral("windowOverlap"), true},
         {QStringLiteral("rendererFallback"), QStringLiteral("software")},
         {QStringLiteral("frameQuality"), QStringLiteral("reduced")},
@@ -373,6 +378,7 @@ void PanelModelTest::serializationExcludesTransientRuntimeState()
         QStringLiteral("dragging"),
         QStringLiteral("moving"),
         QStringLiteral("transitionState"),
+        QStringLiteral("presentationProgress"),
         QStringLiteral("windowOverlap"),
         QStringLiteral("rendererFallback"),
         QStringLiteral("frameQuality"),

@@ -9,3 +9,4 @@ LivePanelPreview 1.0 previews/LivePanelPreview.qml
 AlphaHitMask 1.0 inputs/AlphaHitMask.qml
 PanelProcedural2D 1.0 renderers/PanelProcedural2D.qml
 PanelSkin2D 1.0 renderers/PanelSkin2D.qml
+PanelSkinLayer2D 1.0 renderers/PanelSkinLayer2D.qml

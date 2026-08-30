@@ -48,7 +48,8 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     inputs/AlphaHitMask.qml
     previews/LivePanelPreview.qml
     renderers/PanelProcedural2D.qml
-    renderers/PanelSkin2D.qml)
+    renderers/PanelSkin2D.qml
+    renderers/PanelSkinLayer2D.qml)
 set(ARCHDOCK_RENDERING_MODULE_SOURCES)
 
 file(MAKE_DIRECTORY "${ARCHDOCK_RENDERING_BUILD_DIR}")
@@ -226,6 +227,23 @@ if(BUILD_TESTING)
             Qt6::Gui
             Qt6::Test)
   add_test(NAME chassis-asset-test COMMAND chassis-asset-test)
+
+  qt_add_executable(
+    energy-asset-test
+    tests/EnergyAssetTest.cpp
+    src/model/ThemeDefinition.h
+    src/model/ThemeDefinition.cpp
+    src/themes/ThemePackage.h
+    src/themes/ThemePackage.cpp)
+  target_include_directories(
+    energy-asset-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    energy-asset-test
+    PRIVATE Qt6::Core
+            Qt6::Gui
+            Qt6::Test)
+  add_test(NAME energy-asset-test COMMAND energy-asset-test)
 
   qt_add_executable(
     source-asset-catalog-test
@@ -731,12 +749,16 @@ foreach(rendering_file IN LISTS ARCHDOCK_RENDERING_MODULE_FILES)
       "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Rendering/${rendering_directory}")
 endforeach()
 install(FILES data/themes/builtin-themes.json DESTINATION share/arch-dock/themes)
-foreach(chassis_theme
+foreach(packaged_theme
         sci-fi-chassis-dark
         sci-fi-chassis-red
-        sci-fi-chassis-blue)
+        sci-fi-chassis-blue
+        energy-frame-cyan
+        energy-frame-green
+        energy-frame-orange
+        energy-frame-purple)
   install(
-    DIRECTORY "assets/themes/${chassis_theme}"
+    DIRECTORY "assets/themes/${packaged_theme}"
     DESTINATION share/arch-dock/themes)
 endforeach()
 install(

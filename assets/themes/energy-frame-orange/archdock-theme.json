@@ -1,0 +1,73 @@
+{
+  "format": "org.archdock.theme",
+  "version": 2,
+  "id": "energy-frame-orange",
+  "name": "Orange Energy Frame",
+  "packageRevision": 1,
+  "author": "Arch Dock project",
+  "description": "Original layered orange energy-frame artwork created from a blank canvas for Arch Dock",
+  "license": {"spdx": "NOASSERTION", "redistribution": "allowed", "evidence": "User approved creation and redistribution of newly created original TASK-0028 artwork as part of Arch Dock; no public license was selected"},
+  "capabilities": {
+    "hosts": ["native-edge", "free-desktop"],
+    "rendererTiers": ["skinned2d", "procedural2d"],
+    "preferredRendererTier": "skinned2d",
+    "fallbackRendererTiers": ["procedural2d"],
+    "layouts": ["horizontal"],
+    "orientations": ["horizontal"],
+    "features": ["dynamic-tint", "dynamic-glow", "icon-state-styling"],
+    "presentationMechanisms": ["open", "collapse-horizontal", "split"],
+    "rotation": {"mode": "none"}
+  },
+  "assets": [
+    {"id": "surface", "path": "assets/surface.svg", "kind": "vector", "mimeType": "image/svg+xml", "sha256": "de8c7456e0be90a87869912054d0cebc454d4467f35b7cd1ffc73bacea09bae4", "naturalSize": {"width": 1200, "height": 160}},
+    {"id": "frame-mask", "path": "assets/frame-mask.svg", "kind": "mask", "mimeType": "image/svg+xml", "sha256": "0800b8734929ca2493837de0df3bc5f4164d0e7a773ea447af62019f7e91068e", "naturalSize": {"width": 1200, "height": 160}},
+    {"id": "glow-mask", "path": "assets/glow-mask.svg", "kind": "mask", "mimeType": "image/svg+xml", "sha256": "a800b107ce193f2b103bc382255e09a0e7eebefc14ec0735830893cea9089083", "naturalSize": {"width": 1200, "height": 160}},
+    {"id": "energy-overlay-mask", "path": "assets/energy-overlay-mask.svg", "kind": "mask", "mimeType": "image/svg+xml", "sha256": "cc3786cc2c08a64eaa8eabb04b9d2794065b294eb89f1981320049695b6ef9c3", "naturalSize": {"width": 1200, "height": 160}},
+    {"id": "highlight-mask", "path": "assets/highlight-mask.svg", "kind": "mask", "mimeType": "image/svg+xml", "sha256": "540b99de3591ffe7636e8398132a30f8aa90bfce017accbf821506d52cdbec95", "naturalSize": {"width": 1200, "height": 160}},
+    {"id": "input-mask", "path": "masks/input.svg", "kind": "mask", "mimeType": "image/svg+xml", "sha256": "9366bcf93d8e837900aebea727e40c1905a246f48ecd1e20c88af3eecbf2b7d3", "naturalSize": {"width": 1200, "height": 160}},
+    {"id": "preview", "path": "assets/surface.svg", "kind": "vector", "mimeType": "image/svg+xml", "sha256": "de8c7456e0be90a87869912054d0cebc454d4467f35b7cd1ffc73bacea09bae4", "naturalSize": {"width": 1200, "height": 160}},
+    {"id": "production-record", "path": "metadata/production-record.json", "kind": "material", "mimeType": "application/json", "sha256": "433607680b1376c59b6f808e598fb5a0a2baf3427f78af5e60c54810b94bf6fb"},
+    {"id": "visual-review", "path": "metadata/visual-review.json", "kind": "material", "mimeType": "application/json", "sha256": "b81d54a921086882ebe62063322597aabf663170095c63b53e5d30cb170674bb"}
+  ],
+  "states": [
+    {"id": "normal", "layers": ["base-start", "base-center", "base-end", "frame", "glow-normal", "energy-normal", "highlight"]},
+    {"id": "hover", "layers": ["base-start", "base-center", "base-end", "frame", "glow-hover", "energy-hover", "highlight"]},
+    {"id": "open", "layers": ["base-start", "base-center", "base-end", "frame", "glow-open", "energy-open", "highlight"]},
+    {"id": "collapsed", "layers": ["base-start", "base-center", "base-end", "frame", "glow-collapsed", "energy-collapsed", "highlight"]}
+  ],
+  "layers": [
+    {"id": "base-start", "asset": "surface", "role": "split-start", "sourceRect": {"x": 0, "y": 0, "width": 152, "height": 160}, "opacity": 1.0, "blendMode": "source-over"},
+    {"id": "base-center", "asset": "surface", "role": "split-center", "sourceRect": {"x": 152, "y": 0, "width": 896, "height": 160}, "opacity": 1.0, "blendMode": "source-over"},
+    {"id": "base-end", "asset": "surface", "role": "split-end", "sourceRect": {"x": 1048, "y": 0, "width": 152, "height": 160}, "opacity": 1.0, "blendMode": "source-over"},
+    {"id": "frame", "asset": "frame-mask", "role": "overlay", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.84, "blendMode": "source-over"},
+    {"id": "glow-normal", "asset": "glow-mask", "role": "glow", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.55, "blendMode": "source-over"},
+    {"id": "glow-hover", "asset": "glow-mask", "role": "glow", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.92, "blendMode": "source-over"},
+    {"id": "glow-open", "asset": "glow-mask", "role": "glow", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.78, "blendMode": "source-over"},
+    {"id": "glow-collapsed", "asset": "glow-mask", "role": "glow", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.32, "blendMode": "source-over"},
+    {"id": "energy-normal", "asset": "energy-overlay-mask", "role": "overlay", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.42, "blendMode": "source-over"},
+    {"id": "energy-hover", "asset": "energy-overlay-mask", "role": "overlay", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.76, "blendMode": "source-over"},
+    {"id": "energy-open", "asset": "energy-overlay-mask", "role": "overlay", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.66, "blendMode": "source-over"},
+    {"id": "energy-collapsed", "asset": "energy-overlay-mask", "role": "overlay", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.22, "blendMode": "source-over"},
+    {"id": "highlight", "asset": "highlight-mask", "role": "overlay", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.58, "blendMode": "source-over"}
+  ],
+  "slices": [
+    {"id": "normal-horizontal", "asset": "surface", "state": "normal", "orientation": "horizontal", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "fixedStart": 152, "fixedEnd": 152, "centerMode": "stretch"},
+    {"id": "hover-horizontal", "asset": "surface", "state": "hover", "orientation": "horizontal", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "fixedStart": 152, "fixedEnd": 152, "centerMode": "stretch"},
+    {"id": "open-horizontal", "asset": "surface", "state": "open", "orientation": "horizontal", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "fixedStart": 152, "fixedEnd": 152, "centerMode": "stretch"},
+    {"id": "collapsed-horizontal", "asset": "surface", "state": "collapsed", "orientation": "horizontal", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "fixedStart": 152, "fixedEnd": 152, "centerMode": "stretch"}
+  ],
+  "contentRegions": [
+    {"id": "normal-content", "state": "normal", "orientation": "horizontal", "shape": "rect", "rect": {"x": 168, "y": 38, "width": 864, "height": 84}, "baseline": 70},
+    {"id": "hover-content", "state": "hover", "orientation": "horizontal", "shape": "rect", "rect": {"x": 168, "y": 38, "width": 864, "height": 84}, "baseline": 70},
+    {"id": "open-content", "state": "open", "orientation": "horizontal", "shape": "rect", "rect": {"x": 168, "y": 38, "width": 864, "height": 84}, "baseline": 70},
+    {"id": "collapsed-content", "state": "collapsed", "orientation": "horizontal", "shape": "rect", "rect": {"x": 168, "y": 38, "width": 864, "height": 84}, "baseline": 70}
+  ],
+  "effectMargins": {"left": 18, "top": 16, "right": 18, "bottom": 16},
+  "inputMasks": [
+    {"id": "normal-input", "asset": "input-mask", "state": "normal", "orientation": "horizontal", "threshold": 0.5},
+    {"id": "hover-input", "asset": "input-mask", "state": "hover", "orientation": "horizontal", "threshold": 0.5},
+    {"id": "open-input", "asset": "input-mask", "state": "open", "orientation": "horizontal", "threshold": 0.5},
+    {"id": "collapsed-input", "asset": "input-mask", "state": "collapsed", "orientation": "horizontal", "threshold": 0.5}
+  ],
+  "animationProfileRefs": []
+}

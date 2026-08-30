@@ -136,7 +136,7 @@ uninstalled renderer available.
   "fallbackRendererTiers": ["procedural2d"],
   "layouts": ["adaptive", "horizontal", "vertical"],
   "orientations": ["horizontal", "vertical"],
-  "features": ["dynamic-tint", "icon-state-styling"],
+  "features": ["dynamic-tint", "dynamic-glow", "icon-state-styling"],
   "presentationMechanisms": ["split"],
   "rotation": {
     "mode": "bounded",
@@ -168,6 +168,15 @@ A procedural theme MAY have no assets. `skinned2d` and `baked2.5d` require at
 least one raster or vector surface asset. `true3d` requires a declared mesh
 asset and MUST NOT be satisfied by a flat raster or vector image. A package may
 declare true-3D capability with a 2D fallback without making true 3D mandatory.
+
+For Theme v2 artwork, the renderer-relevant feature IDs are `dynamic-tint`,
+`dynamic-glow`, and `icon-state-styling`. `dynamic-tint` permits colorization
+only for assets declared with `kind: "mask"`; ordinary vector or raster
+surfaces retain their authored colors. `dynamic-glow` permits the bounded
+`surface.glowIntensity` setting and subtle motion of a declared energy overlay.
+Both features remain unavailable unless the active host and theme declare the
+same capability. A feature declaration never authorizes an undeclared layer,
+an unsupported blend mode, or a compositor-wide effect.
 
 ## 5. Assets
 
@@ -213,6 +222,13 @@ States make open/collapsed/hover and other visual variants explicit:
 earlier state without forming a cycle. Standard IDs are `normal`, `hover`,
 `active`, `urgent`, `open`, `collapsed`, `minimized`, `drop`, and `edit`;
 package-specific IDs may use the normal identifier grammar.
+
+The skinned 2D renderer consumes state layer IDs in manifest order. A direct
+state input selects that exact ordered list. During an explicit `opening` or
+`closing` transition with progress in the inclusive range `0.0` through `1.0`,
+layers shared by both endpoint states remain stable while endpoint-only layers
+crossfade. The renderer does not infer presentation state or own the panel
+presentation state machine.
 
 Each layer declares one asset and an explicit role:
 
@@ -370,7 +386,7 @@ extension, or claim that TASK-0026 supplies a production skinned renderer.
     "fallbackRendererTiers": ["procedural2d"],
     "layouts": ["adaptive", "horizontal", "vertical"],
     "orientations": ["horizontal", "vertical"],
-    "features": ["dynamic-tint", "icon-state-styling"],
+    "features": ["dynamic-tint", "dynamic-glow", "icon-state-styling"],
     "presentationMechanisms": ["split"],
     "rotation": {"mode": "none"}
   },

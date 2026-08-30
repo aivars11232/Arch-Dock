@@ -122,6 +122,7 @@ TestCase {
         const preview = createPreview()
         compare(preview.presentationState, "open")
         compare(preview.presentationOpacity, 1)
+        compare(preview.previewRuntimeState.hovered, false)
 
         preview.presentationState = "collapsed"
         wait(0)
@@ -130,8 +131,16 @@ TestCase {
 
         preview.presentationState = "open"
         preview.hoveredEntry = 1
+        preview.transitionState = "opening"
+        preview.presentationProgress = 0.4
         wait(0)
         compare(iconAt(preview, 1).visualState, "hover")
+        compare(preview.previewRuntimeState.hovered, true)
+        compare(preview.previewRuntimeState.transitionState, "opening")
+        compare(preview.previewRuntimeState.presentationProgress, 0.4)
+        compare(preview.panelSceneItem.panelHovered, true)
+        compare(preview.panelSceneItem.transitionState, "opening")
+        compare(preview.panelSceneItem.presentationProgress, 0.4)
 
         const states = [
             "pressed", "active", "running", "minimized", "urgent",

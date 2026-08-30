@@ -390,6 +390,9 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     definition.surface.opacity = normalized(
         QStringLiteral("opacity"), definition.surface.opacity).toReal();
     setString(QStringLiteral("color"), &definition.surface.color);
+    definition.surface.glowIntensity = normalized(
+        QStringLiteral("glowIntensity"),
+        definition.surface.glowIntensity).toReal();
     definition.surface.border = record.value(QStringLiteral("border")).toMap();
     definition.surface.glow = record.value(QStringLiteral("glow")).toMap();
     definition.surface.shadow = record.value(QStringLiteral("shadow")).toMap();
@@ -671,6 +674,7 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("shape"), surface.shape);
     record.insert(QStringLiteral("opacity"), surface.opacity);
     record.insert(QStringLiteral("color"), surface.color);
+    record.insert(QStringLiteral("glowIntensity"), surface.glowIntensity);
     insertIfNotEmpty(&record, QStringLiteral("border"), surface.border);
     insertIfNotEmpty(&record, QStringLiteral("glow"), surface.glow);
     insertIfNotEmpty(&record, QStringLiteral("shadow"), surface.shadow);

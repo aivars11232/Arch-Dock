@@ -183,6 +183,7 @@ private slots:
     void syntheticNativeRotationCanBeBounded();
     void freeRotationVocabularyMapsToArbitrary();
     void productionSkinnedTwoDIsAvailableOnSupportedHosts();
+    void dynamicGlowRequiresHostAndThemeDeclaration();
     void bakedTwoPointFiveDCanBeAvailableInSyntheticInventory();
     void trueThreeDReportsNotInstalled();
     void trueThreeDReportsDisabledSeparately();
@@ -410,6 +411,43 @@ void PanelCapabilityResolverTest::productionSkinnedTwoDIsAvailableOnSupportedHos
     QVERIFY(nativeChoice);
     QVERIFY(nativeChoice->available);
     QCOMPARE(nativeChoice->reason, CapabilityReasonCode::None);
+}
+
+void PanelCapabilityResolverTest::dynamicGlowRequiresHostAndThemeDeclaration()
+{
+    const HostCapabilityProfile host =
+        PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop);
+    QVERIFY(host.capabilities.contains(PanelCapability::DynamicGlow));
+
+    ThemeCapabilityProfile theme = themeFor(
+        QStringLiteral("energy-with-optional-glow"),
+        {PanelHostKind::FreeDesktop},
+        {PanelLayoutKind::Adaptive},
+        {RendererTier::Skinned2D, RendererTier::Procedural2D},
+        RendererTier::Skinned2D);
+    theme.fallbackRendererTiers = {RendererTier::Procedural2D};
+
+    const CapabilityResolution undeclared = PanelCapabilityResolver::resolve(
+        panelFor(PanelHostKind::FreeDesktop), host, theme,
+        PanelCapabilityResolver::productionRenderers(),
+        PanelCapabilityResolver::productionPlatform());
+    const CapabilityDecision *blocked = decisionById(
+        undeclared.controls, QStringLiteral("dynamic-glow"));
+    QVERIFY(blocked);
+    QVERIFY(!blocked->available);
+    QCOMPARE(blocked->reason, CapabilityReasonCode::ThemeCapabilityUndeclared);
+
+    theme.capabilities.append(PanelCapability::DynamicGlow);
+    const CapabilityResolution declared = PanelCapabilityResolver::resolve(
+        panelFor(PanelHostKind::FreeDesktop), host, theme,
+        PanelCapabilityResolver::productionRenderers(),
+        PanelCapabilityResolver::productionPlatform());
+    const CapabilityDecision *available = decisionById(
+        declared.controls, QStringLiteral("dynamic-glow"));
+    QVERIFY(available);
+    QVERIFY(available->available);
+    QCOMPARE(panelCapabilityFromName(QStringLiteral("DYNAMIC-GLOW")),
+             std::optional<PanelCapability>(PanelCapability::DynamicGlow));
 }
 
 void PanelCapabilityResolverTest::bakedTwoPointFiveDCanBeAvailableInSyntheticInventory()

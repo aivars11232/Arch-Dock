@@ -10,7 +10,8 @@ set(rendering_sources
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/inputs/AlphaHitMask.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/previews/LivePanelPreview.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelProcedural2D.qml"
-    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelSkin2D.qml")
+    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelSkin2D.qml"
+    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelSkinLayer2D.qml")
 
 foreach(rendering_source IN LISTS rendering_sources)
   if(NOT EXISTS "${rendering_source}")

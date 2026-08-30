@@ -344,4 +344,37 @@ TestCase {
         verify(!Object.prototype.hasOwnProperty.call(EditorModel.panelCandidate(session), "builtIn"));
         verify(!Object.prototype.hasOwnProperty.call(EditorModel.panelCandidate(session), "surface3D"));
     }
+
+    function test_dynamicGlowFieldFollowsServerCapabilityProjection() {
+        let source = snapshot("bottom", 11)
+        source.panelValues.glowIntensity = 1
+        source.panelFields.push({
+            key: "glowIntensity",
+            scope: "panel",
+            control: "slider",
+            capability: "dynamic-glow"
+        })
+        let session = EditorModel.load(source)
+        session = EditorModel.setPanelValue(session, "glowIntensity", 1.6)
+        compare(EditorModel.panelCandidate(session).glowIntensity, 1.6)
+
+        const projected = EditorModel.withProjection(session, {
+            success: true,
+            status: "resolved",
+            panelFields: source.panelFields.filter(function(field) {
+                return field.key !== "glowIntensity"
+            }),
+            globalFields: session.globalFields,
+            panelValues: {
+                visible: true,
+                opacity: 0.9,
+                layout: "adaptive"
+            },
+            globalValues: session.globalBaseline,
+            themes: [],
+            capabilityResolution: { available: true }
+        })
+        verify(!Object.prototype.hasOwnProperty.call(
+            EditorModel.panelCandidate(projected), "glowIntensity"))
+    }
 }

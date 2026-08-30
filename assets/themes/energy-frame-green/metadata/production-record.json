@@ -1,0 +1,10 @@
+{
+  "format": "org.archdock.production-record", "version": 1, "themeId": "energy-frame-green", "task": "TASK-0028", "method": "deterministic-hand-authored-svg", "sourceDerivative": false, "pixelInput": false,
+  "recipe": "assets/source-samples/energy/original-artwork-recipe.json", "authorizationEvidence": "assets/source-samples/energy/REFERENCE_RIGHTS.md",
+  "excludedReferences": [{"catalogId": "panel-screenshot-20260811-192733", "sha256": "638662753e315b59ffe295d640699c207bf834d233a82422497ef48794596a2c", "role": "broad-concept-only", "pixelInput": false}],
+  "outputs": [
+    {"path": "assets/surface.svg", "sha256": "24da9cdd25536b3583019962d960f044631b9adb8afbf38b124d9f6791baf80b"}, {"path": "assets/frame-mask.svg", "sha256": "0800b8734929ca2493837de0df3bc5f4164d0e7a773ea447af62019f7e91068e"}, {"path": "assets/glow-mask.svg", "sha256": "a800b107ce193f2b103bc382255e09a0e7eebefc14ec0735830893cea9089083"}, {"path": "assets/energy-overlay-mask.svg", "sha256": "cc3786cc2c08a64eaa8eabb04b9d2794065b294eb89f1981320049695b6ef9c3"}, {"path": "assets/highlight-mask.svg", "sha256": "540b99de3591ffe7636e8398132a30f8aa90bfce017accbf821506d52cdbec95"}, {"path": "masks/input.svg", "sha256": "9366bcf93d8e837900aebea727e40c1905a246f48ecd1e20c88af3eecbf2b7d3"}
+  ],
+  "parameters": {"canvas": {"width": 1200, "height": 160}, "fixedStart": 152, "fixedEnd": 152, "centerMode": "stretch", "contentRegion": {"x": 168, "y": 38, "width": 864, "height": 84}, "effectMargins": {"left": 18, "top": 16, "right": 18, "bottom": 16}, "animationSafeBounds": {"x": 20, "y": 17, "width": 1160, "height": 126}, "minimumSize": {"width": 352, "height": 64}, "orientation": "horizontal", "tintableMasks": ["frame-mask", "glow-mask", "energy-overlay-mask", "highlight-mask"]},
+  "license": {"spdx": "NOASSERTION", "redistribution": "allowed", "evidence": "User approved creation and redistribution of newly created original TASK-0028 artwork as part of Arch Dock; no public license was selected"}
+}

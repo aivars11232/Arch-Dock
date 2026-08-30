@@ -135,6 +135,38 @@ sample pixels are packaged. The new Arch Dock artwork separately records the
 user's redistribution authorization and `NOASSERTION` because no public license
 was selected.
 
+## Installed Energy Family
+
+TASK-0028 installs four stable Theme v2 packages under
+`share/arch-dock/themes`: `energy-frame-cyan`, `energy-frame-green`,
+`energy-frame-orange`, and `energy-frame-purple`. Their deterministic preview
+seeds are `energy-family-v1-cyan`, `energy-family-v1-green`,
+`energy-family-v1-orange`, and `energy-family-v1-purple`. Each catalog entry
+matches its package capability declaration exactly and selects a compatible
+icon-style reference without implementing that icon style inside the panel
+package.
+
+All variants use the same reviewed 1200 by 160 geometry: fixed 152-unit end
+caps, a stretchable 896-unit center, a safe 168,38 through 1032,122 content
+rectangle, and 18,16,18,16 effect margins. Each package declares native-edge
+and free-desktop hosts, horizontal layout/orientation, `skinned2d` with a
+procedural fallback, no whole-panel rotation, and the `dynamic-tint`,
+`dynamic-glow`, and `icon-state-styling` features. Normal, hover, open, and
+collapsed states select an explicit ordered layer list and a state-specific
+input mask over the same bounded active region.
+
+Each state renders three surface slices followed by frame, glow, energy, and
+highlight masks. Tint is applied only to declared mask assets. A transparent
+or very dark requested tint is replaced with the readable cyan fallback before
+rendering; glow intensity is bounded to 0 through 2. The input mask, not the
+visual effect rectangle, remains authoritative for QML hit testing.
+
+The energy artwork is clean-room, hand-authored SVG output. Reference
+screenshots remain non-installable, reference-only inputs with unknown source
+redistribution rights; no screenshot pixels are copied into the packages.
+Every shipped asset has an exact production hash and a recorded visual review
+covering 352 by 64, 720 by 96, 1200 by 160, and 1500 by 200 scenes.
+
 ## Version 1 Capability Mapping
 
 Version 1 packages do not declare slice, content-safe, effect-margin, state, or

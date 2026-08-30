@@ -96,6 +96,7 @@ private slots:
     void suppliedHashMustMatch();
     void manifestLimitIsEnforcedBeforeParsing();
     void managedCopyIsAtomicAndReusable();
+    void dynamicGlowCapabilityIsVersionedAndStrict();
 };
 
 void ThemePackageTest::fixtures_data()
@@ -281,6 +282,38 @@ void ThemePackageTest::managedCopyIsAtomicAndReusable()
     const QStringList staging = QDir(managed.path()).entryList(
         QStringList{QStringLiteral(".archdock-theme-*")}, QDir::Dirs | QDir::Hidden);
     QVERIFY(staging.isEmpty());
+}
+
+void ThemePackageTest::dynamicGlowCapabilityIsVersionedAndStrict()
+{
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    QVERIFY(writeBytes(root.filePath(QStringLiteral("surface.png")),
+                       QByteArrayLiteral("synthetic")));
+
+    QJsonObject manifest = QJsonDocument::fromJson(
+        versionTwoRasterManifest(QStringLiteral("surface.png"))).object();
+    QJsonObject capabilities = manifest.value(
+        QStringLiteral("capabilities")).toObject();
+    capabilities.insert(QStringLiteral("features"),
+                        QJsonArray{QStringLiteral("dynamic-glow")});
+    manifest.insert(QStringLiteral("capabilities"), capabilities);
+
+    const QString accepted = root.filePath(QStringLiteral("accepted.json"));
+    QVERIFY(writeBytes(accepted, QJsonDocument(manifest).toJson()));
+    const auto valid = ThemePackage::load(accepted);
+    QVERIFY2(valid.isValid(), qPrintable(valid.primaryMessage()));
+    QVERIFY(valid.package->definition().capabilities.features.contains(
+        QStringLiteral("dynamic-glow")));
+
+    capabilities.insert(QStringLiteral("features"),
+                        QJsonArray{QStringLiteral("unapproved-runtime-shader")});
+    manifest.insert(QStringLiteral("capabilities"), capabilities);
+    const QString rejected = root.filePath(QStringLiteral("rejected.json"));
+    QVERIFY(writeBytes(rejected, QJsonDocument(manifest).toJson()));
+    const auto invalid = ThemePackage::load(rejected);
+    QVERIFY(!invalid.isValid());
+    QCOMPARE(invalid.primaryCode(), QStringLiteral("invalid-enum"));
 }
 
 QTEST_GUILESS_MAIN(ThemePackageTest)

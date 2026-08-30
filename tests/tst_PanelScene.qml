@@ -305,13 +305,17 @@ TestCase {
         const scene = createScene({
             panelDefinition: definition({
                 rendererTier: "skinned2d",
-                panelThemeId: "sci-fi-chassis-dark"
+                panelThemeId: "sci-fi-chassis-dark",
+                color: "#44ddea",
+                glowIntensity: 1.35
             }),
             runtimeState: {
-                hovered: false,
+                hovered: true,
                 hoveredEntry: 1,
                 rendererFallback: "",
-                presentationState: "open"
+                presentationState: "open",
+                transitionState: "closing",
+                presentationProgress: 0.4
             },
             hostCapabilities: {
                 available: true,
@@ -320,7 +324,8 @@ TestCase {
                     fallbackApplied: false
                 }
             },
-            themeDefinition: chassisThemeDefinition()
+            themeDefinition: chassisThemeDefinition(),
+            animationProfiles: ({ reducedMotion: false })
         })
         tryVerify(function() {
             return scene.effectiveRendererTier === "skinned2d"
@@ -347,6 +352,12 @@ TestCase {
         verify(scene.contains(Qt.point(scene.width / 2, scene.height / 2)))
         verify(!scene.contains(Qt.point(0, 0)))
         verify(scene.visualPanel.rendererReady)
+        compare(scene.visualPanel.hovered, true)
+        compare(scene.visualPanel.transitionState, "closing")
+        compare(scene.visualPanel.presentationProgress, 0.4)
+        compare(scene.visualPanel.tintColor, "#44ddea")
+        compare(scene.visualPanel.glowIntensity, 1.35)
+        compare(scene.visualPanel.reducedMotion, false)
     }
 
     function test_chassisSkinWorksForHorizontalFreeAndRejectsVertical() {

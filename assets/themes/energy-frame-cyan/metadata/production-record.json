@@ -1,0 +1,22 @@
+{
+  "format": "org.archdock.production-record",
+  "version": 1,
+  "themeId": "energy-frame-cyan",
+  "task": "TASK-0028",
+  "method": "deterministic-hand-authored-svg",
+  "sourceDerivative": false,
+  "pixelInput": false,
+  "recipe": "assets/source-samples/energy/original-artwork-recipe.json",
+  "authorizationEvidence": "assets/source-samples/energy/REFERENCE_RIGHTS.md",
+  "excludedReferences": [{"catalogId": "panel-screenshot-20260811-193105", "sha256": "ce30234a578093e5a943c6c2045ff8025c952da4cc08ec2568d2ac445397b427", "role": "broad-concept-only", "pixelInput": false}],
+  "outputs": [
+    {"path": "assets/surface.svg", "sha256": "b10ec70ec35ecc0f342258058b90e90aec90a72a2b251f2e83b63421a9e1bc2b"},
+    {"path": "assets/frame-mask.svg", "sha256": "4bec5b85428cb14237f02cafd77f0dece948bf7cf804c20c5b8bbd1ca44ac61c"},
+    {"path": "assets/glow-mask.svg", "sha256": "819fd8c91b6636c1bc26b96b697e6416ef5c85c137ca99beaad9bdc72a5385db"},
+    {"path": "assets/energy-overlay-mask.svg", "sha256": "fde7611dfbf90230489c7650f85c70248d426a8a1439547f2b7b8e78c1ce4a00"},
+    {"path": "assets/highlight-mask.svg", "sha256": "af70e81e697bf67e62a6f9f327dae2312c9e3bc4bb8f664ce065e3e33e9ea8d6"},
+    {"path": "masks/input.svg", "sha256": "c21cf2b3cd832e51e801dd5b40b818ad1ba1a3d4514b3201471ca44f0cf2fbae"}
+  ],
+  "parameters": {"canvas": {"width": 1200, "height": 160}, "fixedStart": 152, "fixedEnd": 152, "centerMode": "stretch", "contentRegion": {"x": 168, "y": 38, "width": 864, "height": 84}, "effectMargins": {"left": 18, "top": 16, "right": 18, "bottom": 16}, "animationSafeBounds": {"x": 20, "y": 17, "width": 1160, "height": 126}, "minimumSize": {"width": 352, "height": 64}, "orientation": "horizontal", "tintableMasks": ["frame-mask", "glow-mask", "energy-overlay-mask", "highlight-mask"]},
+  "license": {"spdx": "NOASSERTION", "redistribution": "allowed", "evidence": "User approved creation and redistribution of newly created original TASK-0028 artwork as part of Arch Dock; no public license was selected"}
+}

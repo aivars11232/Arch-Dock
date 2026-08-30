@@ -16,6 +16,8 @@ Item {
     property var animationProfiles: ({})
     property string previewMode: defaultPreviewMode()
     property string presentationState: "open"
+    property string transitionState: "idle"
+    property real presentationProgress: -1
     property int hoveredEntry: -1
     property int stateEntry: 1
     property string iconState: "normal"
@@ -154,7 +156,10 @@ Item {
     function runtimeForPreview(state) {
         const result = copied(state || {})
         result.hoveredEntry = hoveredEntry
+        result.hovered = hoveredEntry >= 0 || iconState === "hover"
         result.presentationState = presentationState
+        result.transitionState = transitionState
+        result.presentationProgress = presentationProgress
         return result
     }
 

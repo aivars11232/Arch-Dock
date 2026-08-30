@@ -10,6 +10,12 @@ Item {
     property var themeDefinition: ({})
     property string layout: "horizontal"
     property string presentationState: "open"
+    property string transitionState: "idle"
+    property real presentationProgress: -1
+    property bool hovered: false
+    property color tintColor: "#78e9f4"
+    property real glowIntensity: 1
+    property bool reducedMotion: false
     property var geometry: ({})
     property real layoutAngle: 0
     property int polygonSides: 6
@@ -126,6 +132,12 @@ Item {
                 ? "vertical" : root.layout === "horizontal"
                     ? "horizontal" : "free"
             presentationState: root.presentationState
+            transitionState: root.transitionState
+            presentationProgress: root.presentationProgress
+            hovered: root.hovered
+            tintColor: root.tintColor
+            glowIntensity: root.glowIntensity
+            reducedMotion: root.reducedMotion
             panelOpacity: root.panelOpacity
         }
     }

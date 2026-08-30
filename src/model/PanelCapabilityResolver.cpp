@@ -40,6 +40,7 @@ const std::array<PanelCapability,
         PanelCapability::ThicknessMutation,
         PanelCapability::LengthMutation,
         PanelCapability::DynamicTint,
+        PanelCapability::DynamicGlow,
         PanelCapability::IconStateStyling,
     };
     return values;
@@ -87,6 +88,7 @@ bool themeRequiredForCapability(PanelCapability capability)
 {
     return capability == PanelCapability::NonRectangularInput ||
         capability == PanelCapability::DynamicTint ||
+        capability == PanelCapability::DynamicGlow ||
         capability == PanelCapability::IconStateStyling;
 }
 
@@ -532,6 +534,8 @@ QString panelCapabilityName(PanelCapability capability)
         return QStringLiteral("length-mutation");
     case PanelCapability::DynamicTint:
         return QStringLiteral("dynamic-tint");
+    case PanelCapability::DynamicGlow:
+        return QStringLiteral("dynamic-glow");
     case PanelCapability::IconStateStyling:
         return QStringLiteral("icon-state-styling");
     case PanelCapability::Count:
@@ -697,6 +701,7 @@ HostCapabilityProfile PanelCapabilityResolver::productionHostProfile(
             PanelCapability::ArbitraryXyPlacement,
             PanelCapability::WholePanelRotation,
             PanelCapability::DynamicTint,
+            PanelCapability::DynamicGlow,
             PanelCapability::IconStateStyling,
         };
         profile.layouts = allLayouts();
@@ -716,6 +721,7 @@ HostCapabilityProfile PanelCapabilityResolver::productionHostProfile(
         PanelCapability::ThicknessMutation,
         PanelCapability::LengthMutation,
         PanelCapability::DynamicTint,
+        PanelCapability::DynamicGlow,
         PanelCapability::IconStateStyling,
     };
     profile.layouts = {

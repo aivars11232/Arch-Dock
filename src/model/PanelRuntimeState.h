@@ -22,6 +22,7 @@ struct PanelRuntimeState
     bool popupOpen = false;
     bool dragInProgress = false;
     PanelTransitionState transition = PanelTransitionState::Idle;
+    qreal presentationProgress = -1.0;
     bool windowOverlap = false;
     QString rendererFallback;
     QString frameQuality = QStringLiteral("normal");

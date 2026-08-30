@@ -175,6 +175,7 @@ struct PanelSurfaceDefinition
     QString shape = QStringLiteral("pill");
     qreal opacity = 0.9;
     QString color;
+    qreal glowIntensity = 1.0;
     QVariantMap border;
     QVariantMap glow;
     QVariantMap shadow;

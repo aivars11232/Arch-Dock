@@ -1,0 +1,73 @@
+{
+  "format": "org.archdock.theme",
+  "version": 2,
+  "id": "energy-frame-cyan",
+  "name": "Cyan Energy Frame",
+  "packageRevision": 1,
+  "author": "Arch Dock project",
+  "description": "Original layered cyan energy-frame artwork created from a blank canvas for Arch Dock",
+  "license": {"spdx": "NOASSERTION", "redistribution": "allowed", "evidence": "User approved creation and redistribution of newly created original TASK-0028 artwork as part of Arch Dock; no public license was selected"},
+  "capabilities": {
+    "hosts": ["native-edge", "free-desktop"],
+    "rendererTiers": ["skinned2d", "procedural2d"],
+    "preferredRendererTier": "skinned2d",
+    "fallbackRendererTiers": ["procedural2d"],
+    "layouts": ["horizontal"],
+    "orientations": ["horizontal"],
+    "features": ["dynamic-tint", "dynamic-glow", "icon-state-styling"],
+    "presentationMechanisms": ["open", "collapse-horizontal", "split"],
+    "rotation": {"mode": "none"}
+  },
+  "assets": [
+    {"id": "surface", "path": "assets/surface.svg", "kind": "vector", "mimeType": "image/svg+xml", "sha256": "b10ec70ec35ecc0f342258058b90e90aec90a72a2b251f2e83b63421a9e1bc2b", "naturalSize": {"width": 1200, "height": 160}},
+    {"id": "frame-mask", "path": "assets/frame-mask.svg", "kind": "mask", "mimeType": "image/svg+xml", "sha256": "4bec5b85428cb14237f02cafd77f0dece948bf7cf804c20c5b8bbd1ca44ac61c", "naturalSize": {"width": 1200, "height": 160}},
+    {"id": "glow-mask", "path": "assets/glow-mask.svg", "kind": "mask", "mimeType": "image/svg+xml", "sha256": "819fd8c91b6636c1bc26b96b697e6416ef5c85c137ca99beaad9bdc72a5385db", "naturalSize": {"width": 1200, "height": 160}},
+    {"id": "energy-overlay-mask", "path": "assets/energy-overlay-mask.svg", "kind": "mask", "mimeType": "image/svg+xml", "sha256": "fde7611dfbf90230489c7650f85c70248d426a8a1439547f2b7b8e78c1ce4a00", "naturalSize": {"width": 1200, "height": 160}},
+    {"id": "highlight-mask", "path": "assets/highlight-mask.svg", "kind": "mask", "mimeType": "image/svg+xml", "sha256": "af70e81e697bf67e62a6f9f327dae2312c9e3bc4bb8f664ce065e3e33e9ea8d6", "naturalSize": {"width": 1200, "height": 160}},
+    {"id": "input-mask", "path": "masks/input.svg", "kind": "mask", "mimeType": "image/svg+xml", "sha256": "c21cf2b3cd832e51e801dd5b40b818ad1ba1a3d4514b3201471ca44f0cf2fbae", "naturalSize": {"width": 1200, "height": 160}},
+    {"id": "preview", "path": "assets/surface.svg", "kind": "vector", "mimeType": "image/svg+xml", "sha256": "b10ec70ec35ecc0f342258058b90e90aec90a72a2b251f2e83b63421a9e1bc2b", "naturalSize": {"width": 1200, "height": 160}},
+    {"id": "production-record", "path": "metadata/production-record.json", "kind": "material", "mimeType": "application/json", "sha256": "a75e6a00b64a9b589a4691f321a65a4074a25e3b7c27a95646631b936beece1d"},
+    {"id": "visual-review", "path": "metadata/visual-review.json", "kind": "material", "mimeType": "application/json", "sha256": "8bb74d954a1aaf8c469c87e8ade3502062488447d7ebdbfc8bc356e716a7c304"}
+  ],
+  "states": [
+    {"id": "normal", "layers": ["base-start", "base-center", "base-end", "frame", "glow-normal", "energy-normal", "highlight"]},
+    {"id": "hover", "layers": ["base-start", "base-center", "base-end", "frame", "glow-hover", "energy-hover", "highlight"]},
+    {"id": "open", "layers": ["base-start", "base-center", "base-end", "frame", "glow-open", "energy-open", "highlight"]},
+    {"id": "collapsed", "layers": ["base-start", "base-center", "base-end", "frame", "glow-collapsed", "energy-collapsed", "highlight"]}
+  ],
+  "layers": [
+    {"id": "base-start", "asset": "surface", "role": "split-start", "sourceRect": {"x": 0, "y": 0, "width": 152, "height": 160}, "opacity": 1.0, "blendMode": "source-over"},
+    {"id": "base-center", "asset": "surface", "role": "split-center", "sourceRect": {"x": 152, "y": 0, "width": 896, "height": 160}, "opacity": 1.0, "blendMode": "source-over"},
+    {"id": "base-end", "asset": "surface", "role": "split-end", "sourceRect": {"x": 1048, "y": 0, "width": 152, "height": 160}, "opacity": 1.0, "blendMode": "source-over"},
+    {"id": "frame", "asset": "frame-mask", "role": "overlay", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.84, "blendMode": "source-over"},
+    {"id": "glow-normal", "asset": "glow-mask", "role": "glow", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.55, "blendMode": "source-over"},
+    {"id": "glow-hover", "asset": "glow-mask", "role": "glow", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.92, "blendMode": "source-over"},
+    {"id": "glow-open", "asset": "glow-mask", "role": "glow", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.78, "blendMode": "source-over"},
+    {"id": "glow-collapsed", "asset": "glow-mask", "role": "glow", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.32, "blendMode": "source-over"},
+    {"id": "energy-normal", "asset": "energy-overlay-mask", "role": "overlay", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.42, "blendMode": "source-over"},
+    {"id": "energy-hover", "asset": "energy-overlay-mask", "role": "overlay", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.76, "blendMode": "source-over"},
+    {"id": "energy-open", "asset": "energy-overlay-mask", "role": "overlay", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.66, "blendMode": "source-over"},
+    {"id": "energy-collapsed", "asset": "energy-overlay-mask", "role": "overlay", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.22, "blendMode": "source-over"},
+    {"id": "highlight", "asset": "highlight-mask", "role": "overlay", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "opacity": 0.58, "blendMode": "source-over"}
+  ],
+  "slices": [
+    {"id": "normal-horizontal", "asset": "surface", "state": "normal", "orientation": "horizontal", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "fixedStart": 152, "fixedEnd": 152, "centerMode": "stretch"},
+    {"id": "hover-horizontal", "asset": "surface", "state": "hover", "orientation": "horizontal", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "fixedStart": 152, "fixedEnd": 152, "centerMode": "stretch"},
+    {"id": "open-horizontal", "asset": "surface", "state": "open", "orientation": "horizontal", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "fixedStart": 152, "fixedEnd": 152, "centerMode": "stretch"},
+    {"id": "collapsed-horizontal", "asset": "surface", "state": "collapsed", "orientation": "horizontal", "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160}, "fixedStart": 152, "fixedEnd": 152, "centerMode": "stretch"}
+  ],
+  "contentRegions": [
+    {"id": "normal-content", "state": "normal", "orientation": "horizontal", "shape": "rect", "rect": {"x": 168, "y": 38, "width": 864, "height": 84}, "baseline": 70},
+    {"id": "hover-content", "state": "hover", "orientation": "horizontal", "shape": "rect", "rect": {"x": 168, "y": 38, "width": 864, "height": 84}, "baseline": 70},
+    {"id": "open-content", "state": "open", "orientation": "horizontal", "shape": "rect", "rect": {"x": 168, "y": 38, "width": 864, "height": 84}, "baseline": 70},
+    {"id": "collapsed-content", "state": "collapsed", "orientation": "horizontal", "shape": "rect", "rect": {"x": 168, "y": 38, "width": 864, "height": 84}, "baseline": 70}
+  ],
+  "effectMargins": {"left": 18, "top": 16, "right": 18, "bottom": 16},
+  "inputMasks": [
+    {"id": "normal-input", "asset": "input-mask", "state": "normal", "orientation": "horizontal", "threshold": 0.5},
+    {"id": "hover-input", "asset": "input-mask", "state": "hover", "orientation": "horizontal", "threshold": 0.5},
+    {"id": "open-input", "asset": "input-mask", "state": "open", "orientation": "horizontal", "threshold": 0.5},
+    {"id": "collapsed-input", "asset": "input-mask", "state": "collapsed", "orientation": "horizontal", "threshold": 0.5}
+  ],
+  "animationProfileRefs": []
+}

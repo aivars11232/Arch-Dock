@@ -577,6 +577,7 @@ private:
             QStringLiteral("thickness-mutation"),
             QStringLiteral("length-mutation"),
             QStringLiteral("dynamic-tint"),
+            QStringLiteral("dynamic-glow"),
             QStringLiteral("icon-state-styling")};
         const QSet<QString> presentations{
             QStringLiteral("open"), QStringLiteral("collapse-horizontal"),

@@ -33,8 +33,11 @@ contract.
 - `PanelProcedural2D` is the initial dependency-free renderer and the fallback
   for missing, invalid, or unavailable theme renderers.
 - `PanelSkin2D` is the Theme v2 skinned renderer. It composes fixed left/right
-  caps with a stretched or tiled center, applies optional glow parts in declared
-  source-over order, and exposes the package content, effect, and input bounds.
+  caps with a stretched or tiled center, applies declared surface, frame, glow,
+  energy, and highlight layers in manifest order, and exposes package content,
+  effect, and input bounds.
+- `PanelSkinLayer2D` renders one declared layer and applies colorization only to
+  assets typed as masks.
 - `AlphaHitMask` samples the package input-mask alpha through a bounded cached
   raster and supplies the scene containment predicate.
 - `LivePanelPreview` hosts exactly one `PanelScene` with draft or preset data.
@@ -118,6 +121,24 @@ not claim compositor-wide click-through outside the applet's enclosing window:
 Qt documents a `QWindow` mask as a window-manager hint, so Arch Dock does not
 advertise the `nonrectangular-input` host capability on that evidence alone.
 
+## Energy renderer cost and pause policy
+
+An energy state has seven active draw items: three surface slices plus frame,
+glow, energy-overlay, and highlight masks. An opening or closing crossfade can
+temporarily retain both state-specific glow and energy layers, raising the
+maximum to nine draw items. Mask colorization uses Qt Quick `MultiEffect` with
+blur and shadow disabled; no custom shader, framebuffer blur, or compositor
+effect is required. Image caching remains enabled.
+
+The only continuous panel-skin motion is one 3600 ms energy-overlay phase. It
+modulates that layer within a two-pixel vertical range and a six-percent
+opacity range. The animation runs only when the package declares
+`dynamic-glow`, an energy overlay is available, reduced motion is off, and the
+skin is visible, enabled, and non-transparent. Hidden, disabled, transparent,
+or reduced-motion skins stop the animation and reset its effective phase to
+zero. State selection, tint, and static glow remain visible under reduced
+motion, preserving hover/open/collapsed feedback without continuous movement.
+
 ## Live and preview integration
 
 The production `org.archdock.dock` applet now contains one `PanelScene`. Its
@@ -145,11 +166,12 @@ semantics are introduced.
 The staged-install gate runs module import, preview, and deterministic parity
 tests against installed files, then starts the staged service/Studio and real
 native/free applet hosts in a disposable private KWin/Plasma session. The live
-skin smoke selects the same installed `sci-fi-chassis-dark` catalog entry for
+skin smoke selects the same installed `energy-frame-cyan` catalog entry for
 both isolated panel records through the atomic settings transaction. It
 requires both renderer configurations to report `skinned2d`, a ready
-projection, and the exact staged manifest path. The staged-install gate also
-requires all three chassis packages and rejects any installed source-sample or
-`Screenshot_*` file. The parity harness feeds the same deterministic
+projection, `dynamic-glow`, and the exact staged manifest path. The
+staged-install gate also requires all three chassis packages and all four
+energy packages, and rejects any installed source-sample or `Screenshot_*`
+file. The parity harness feeds the same deterministic
 definitions to preview and direct `PanelScene` instances and compares geometry
 contracts plus safe procedural surface pixels.

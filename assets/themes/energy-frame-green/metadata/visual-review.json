@@ -1,0 +1,5 @@
+{
+  "format": "org.archdock.visual-review", "version": 1, "themeId": "energy-frame-green", "reviewedAt": "2026-08-30", "reviewSurface": "fixed-cap family composite at four output sizes",
+  "checks": {"transparentExterior": "pass", "emptyContentRegion": "pass", "embeddedText": "absent", "thirdPartyBranding": "absent", "thirdPartyGlyphs": "absent", "distinctiveReferenceDesign": "absent", "sourcePixels": "absent", "layerSeparation": "pass", "effectOverflow": "pass", "shortStretch": "pass", "mediumStretch": "pass", "longStretch": "pass", "fractionalScale": "pass"},
+  "contactSheetSha256": "0a9bc4a12cbfe59e858e37c50ae36e65783f34b7ac2ef4ba83c2ab8f49459ea7", "contactSheetSizes": ["352x64", "720x96", "1200x160", "1500x200"], "status": "production-approved", "notes": "Clean-room green surface and separable neutral masks passed original-resolution and fixed-cap multiscale review without clipping, transparent seams, prohibited content, or content-region obstruction."
+}
