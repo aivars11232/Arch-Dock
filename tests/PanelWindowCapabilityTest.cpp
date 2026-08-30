@@ -5,12 +5,17 @@
 #include "panel/PanelWindow.h"
 #include "ScreenIdentity.h"
 
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonDocument>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QUrl>
 #include <QtTest>
 
 namespace
@@ -80,6 +85,7 @@ private slots:
     void cleanup();
     void backendResolutionMatchesDirectResolverWithoutWrites();
     void editorSnapshotsExposeOnlyProjectedEditableState();
+    void managedVersionTwoCapabilitiesDriveFallbackAndEditorVisibility();
     void rendererProjectionPreservesConsumedValuesWithoutProtectedState();
     void editorDraftResolutionIsReadOnlyAndCannotAuthorizeHiddenState();
     void builtInThemeCandidateCommitsThroughUnifiedTransaction();
@@ -105,6 +111,14 @@ void PanelWindowCapabilityTest::cleanup()
     QSettings settings;
     settings.clear();
     settings.sync();
+
+    const QString themesRoot = QDir(
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
+                                   .filePath(QStringLiteral("themes"));
+    if (QFileInfo::exists(themesRoot))
+    {
+        QVERIFY2(QDir(themesRoot).removeRecursively(), qPrintable(themesRoot));
+    }
 }
 
 void PanelWindowCapabilityTest::backendResolutionMatchesDirectResolverWithoutWrites()
@@ -238,6 +252,107 @@ void PanelWindowCapabilityTest::editorSnapshotsExposeOnlyProjectedEditableState(
     QVERIFY(!studioKeys.contains(QStringLiteral("layoutRadius")));
     QVERIFY(!studioKeys.contains(QStringLiteral("pathSides")));
     QVERIFY(!studioKeys.contains(QStringLiteral("surface3D")));
+}
+
+void PanelWindowCapabilityTest::managedVersionTwoCapabilitiesDriveFallbackAndEditorVisibility()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    PanelRegistry *registry = qobject_cast<PanelRegistry *>(
+        engine.rootContext()
+            ->contextProperty(QStringLiteral("panelRegistry"))
+            .value<QObject *>());
+    QVERIFY(registry);
+
+    const QString panelId = registry->addFreePanel();
+    QVERIFY(!panelId.isEmpty());
+    registry->setPanelValue(
+        panelId, QStringLiteral("layout"), QStringLiteral("ring"));
+    QCOMPARE(registry->panelValue(panelId, QStringLiteral("layout")).toString(),
+             QStringLiteral("ring"));
+
+    const QString manifestPath = QFINDTESTDATA(
+        QStringLiteral("fixtures/theme-v2/valid-baked25d-ring.json"));
+    QVERIFY(!manifestPath.isEmpty());
+    QVERIFY(registry->importTheme(panelId, QUrl::fromLocalFile(manifestPath)));
+
+    const QVariantMap validSnapshot = window.panelSettingsEditorSnapshot(
+        panelId, QStringLiteral("studio"));
+    QVERIFY(validSnapshot.value(QStringLiteral("success")).toBool());
+    const QVariantMap validResolution = validSnapshot.value(
+        QStringLiteral("capabilityResolution")).toMap();
+    QVERIFY(validResolution.value(QStringLiteral("available")).toBool());
+    QCOMPARE(validResolution.value(QStringLiteral("themeId")).toString(),
+             QStringLiteral("fixture-baked-ring"));
+    const QVariantMap validRenderer = validResolution.value(
+        QStringLiteral("renderer")).toMap();
+    QCOMPARE(validRenderer.value(QStringLiteral("requestedTier")).toString(),
+             QStringLiteral("baked2.5d"));
+    QCOMPARE(validRenderer.value(QStringLiteral("effectiveTier")).toString(),
+             QStringLiteral("procedural2d"));
+    QVERIFY(validRenderer.value(QStringLiteral("fallbackApplied")).toBool());
+    QCOMPARE(validRenderer.value(QStringLiteral("reasonCode")).toString(),
+             QStringLiteral("renderer-not-installed"));
+
+    const QVariantList validFields = validSnapshot.value(
+        QStringLiteral("panelFields")).toList();
+    QCOMPARE(fieldByKey(validFields, QStringLiteral("layout"))
+                 .value(QStringLiteral("choices")).toStringList(),
+             QStringList({QStringLiteral("ring"), QStringLiteral("polygon")}));
+    const QSet<QString> validKeys = fieldKeys(validFields);
+    QVERIFY(validKeys.contains(QStringLiteral("layoutAngle")));
+    QVERIFY(validKeys.contains(QStringLiteral("layoutRadius")));
+    QVERIFY(validKeys.contains(QStringLiteral("pathOrientation")));
+    QVERIFY(validKeys.contains(QStringLiteral("appearance")));
+    QVERIFY(validKeys.contains(QStringLiteral("shape")));
+    QVERIFY(validKeys.contains(QStringLiteral("opacity")));
+    QVERIFY(validKeys.contains(QStringLiteral("themeFit")));
+    QVERIFY(validKeys.contains(QStringLiteral("iconShape")));
+    QVERIFY(!validKeys.contains(QStringLiteral("color")));
+    QVERIFY(!validKeys.contains(QStringLiteral("layoutRows")));
+    QVERIFY(!validKeys.contains(QStringLiteral("pathSides")));
+
+    const QUrl managedManifest(registry->panelValue(
+        panelId, QStringLiteral("themePackageManifest")).toString());
+    QVERIFY(managedManifest.isLocalFile());
+    QFile corruptManifest(managedManifest.toLocalFile());
+    QVERIFY(corruptManifest.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    QCOMPARE(corruptManifest.write(QByteArrayLiteral("not-json")), qint64{8});
+    corruptManifest.close();
+
+    const QVariantMap invalidSnapshot = window.panelSettingsEditorSnapshot(
+        panelId, QStringLiteral("studio"));
+    QVERIFY(invalidSnapshot.value(QStringLiteral("success")).toBool());
+    const QVariantMap invalidResolution = invalidSnapshot.value(
+        QStringLiteral("capabilityResolution")).toMap();
+    QVERIFY(!invalidResolution.value(QStringLiteral("available")).toBool());
+    QCOMPARE(invalidResolution.value(QStringLiteral("reasonCode")).toString(),
+             QStringLiteral("invalid-capability-input"));
+    QVERIFY(invalidResolution.value(QStringLiteral("renderer"))
+                .toMap()
+                .value(QStringLiteral("effectiveTier"))
+                .toString()
+                .isEmpty());
+
+    const QSet<QString> invalidKeys = fieldKeys(invalidSnapshot.value(
+        QStringLiteral("panelFields")).toList());
+    for (const QString &unsupported : {
+             QStringLiteral("layout"),
+             QStringLiteral("layoutScale"),
+             QStringLiteral("layoutAngle"),
+             QStringLiteral("layoutRadius"),
+             QStringLiteral("pathOrientation"),
+             QStringLiteral("appearance"),
+             QStringLiteral("shape"),
+             QStringLiteral("opacity"),
+             QStringLiteral("color"),
+             QStringLiteral("themeFit"),
+             QStringLiteral("iconShape"),
+             QStringLiteral("iconSize"),
+             QStringLiteral("spacing")})
+    {
+        QVERIFY2(!invalidKeys.contains(unsupported), qPrintable(unsupported));
+    }
 }
 
 void PanelWindowCapabilityTest::rendererProjectionPreservesConsumedValuesWithoutProtectedState()

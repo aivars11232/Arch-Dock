@@ -3,8 +3,46 @@
 import pathlib
 import sys
 
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QGuiApplication, QWindow
+from PySide6.QtCore import QRect, QTimer, Qt
+from PySide6.QtGui import (
+    QBackingStore,
+    QColor,
+    QGuiApplication,
+    QPainter,
+    QRegion,
+    QWindow,
+)
+
+FIXTURE_TITLE = "Arch Dock Visibility Fixture"
+
+
+class VisibilityWindow(QWindow):
+    def __init__(self):
+        QWindow.__init__(self)
+        self._backing_store = QBackingStore(self)
+
+    def render(self):
+        if not self.isExposed() or self.width() <= 0 or self.height() <= 0:
+            return
+
+        rectangle = QRect(0, 0, self.width(), self.height())
+        region = QRegion(rectangle)
+        self._backing_store.resize(self.size())
+        self._backing_store.beginPaint(region)
+        painter = QPainter(self._backing_store.paintDevice())
+        painter.fillRect(rectangle, QColor("#20242b"))
+        painter.end()
+        self._backing_store.endPaint()
+        self._backing_store.flush(region)
+
+    def exposeEvent(self, event):
+        QWindow.exposeEvent(self, event)
+        self.render()
+
+    def resizeEvent(self, event):
+        QWindow.resizeEvent(self, event)
+        self._backing_store.resize(event.size())
+        self.render()
 
 
 if len(sys.argv) != 3:
@@ -22,9 +60,9 @@ if screen_index < 0 or screen_index >= len(screens):
     raise SystemExit(f"screen index {screen_index} is unavailable")
 
 screen = screens[screen_index]
-window = QWindow()
+window = VisibilityWindow()
 window.setScreen(screen)
-window.setTitle("Arch Dock Visibility Fixture")
+window.setTitle(FIXTURE_TITLE)
 window.setFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
 
 last_serial = ""
@@ -54,6 +92,14 @@ def activate():
     window.requestActivate()
 
 
+def request_geometry(state, geometry):
+    x, y, width, height = geometry
+    window.setTitle(
+        f"{FIXTURE_TITLE} [{state}:{x}:{y}:{width}:{height}]"
+    )
+    window.setGeometry(x, y, width, height)
+
+
 def apply_command(serial, command):
     if command == "quit":
         print(f"STATE:{serial}:quit", flush=True)
@@ -62,13 +108,15 @@ def apply_command(serial, command):
 
     if command == "normal":
         window.showNormal()
-        window.setGeometry(*normal_geometry())
+        request_geometry(command, normal_geometry())
     elif command == "overlap":
         window.showNormal()
-        window.setGeometry(*overlap_geometry())
+        request_geometry(command, overlap_geometry())
     elif command == "maximized":
+        window.setTitle(f"{FIXTURE_TITLE} [{command}]")
         window.showMaximized()
     elif command == "fullscreen":
+        window.setTitle(f"{FIXTURE_TITLE} [{command}]")
         window.showFullScreen()
     else:
         raise RuntimeError(f"unknown fixture command: {command}")

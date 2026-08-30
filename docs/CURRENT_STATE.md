@@ -6,38 +6,39 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-08-28 (Europe/Amsterdam). Static implementation
-statements come from the current checkout. TASK-0025 build and test statements
-come from a clean external configure/build and all 32 registered tests. Runtime
-renderer claims come only from disposable private D-Bus, virtual KWin Wayland,
-and private PlasmaShell sessions; no personal desktop session was contacted.
-Older lifecycle details below retain their earlier isolated-session evidence.
+**Evidence snapshot:** 2026-08-30 (Europe/Amsterdam). Static implementation
+statements come from the current checkout. TASK-0026 build and test statements
+come from a fresh external configure/build and all 35 registered tests. Runtime
+claims come only from a disposable private D-Bus, virtual KWin Wayland, and
+private PlasmaShell session; no personal desktop session was contacted. Older
+lifecycle details below retain their earlier isolated-session evidence.
 
 ## Repository state
 
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`
-- TASK-0025 baseline `HEAD`: `2ed1a919559f18fced082db7764346fcdb9600f6`
-  (`task24`).
+- TASK-0026 baseline `HEAD`: `a7f818e91e8d261e4be7b18e55e9ce814f81ec42`
+  (`task25`).
 - The locally recorded `origin/main` is the same commit; `HEAD...origin/main`
   reports zero ahead and zero behind. No network fetch was performed.
-- TASK-0025 began with a clean non-ignored working tree. Its bounded changes are
-  the shared-scene applet bridge, layered icon renderer, embedded Studio
-  preview, their tests/install contracts, removal of superseded local renderer
-  files, and renderer/current-state documentation.
+- TASK-0026 changes are intentionally unstaged. They comprise the Theme Package
+  v2 contract/parser, v1 compatibility, provenance catalog, non-destructive
+  processor, sample classification, capability integration, tests, source-only
+  catalog data, and the bounded isolated-runtime harness repair required to
+  complete the inherited lifecycle gate.
 - Codex did not stage, commit, push, globally install, or mutate the personal
   Plasma session.
 
 ## Inspected platform
 
 - Arch Linux, rolling release
-- Kernel `7.1.9-arch1-2`
+- Kernel `7.1.11-arch1-1`
 - KDE Plasma and KWin `6.7.4`
 - Wayland KDE session (`WAYLAND_DISPLAY=wayland-0`)
-- Qt base `6.11.2-2`
+- Qt base `6.11.2-3`
 - KDE Frameworks Core Addons and Kirigami `6.29.0-1`
 
-These versions describe the inspection and verification host. TASK-0025 used
+These versions describe the inspection and verification host. TASK-0026 used
 external build directories and disposable staged private sessions; it did not
 globally install, restart the live PlasmaShell, or run Arch Dock against the
 personal desktop session.
@@ -51,7 +52,11 @@ personal desktop session.
 - Target repository structure:
   [TARGET_STRUCTURE_TREE_V2.md](TARGET_STRUCTURE_TREE_V2.md)
 - Release gates: [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)
-- Current version-1 theme-package behavior:
+- Theme Package v2 normative contract:
+  [THEME_PACKAGE_V2.md](THEME_PACKAGE_V2.md)
+- Source sample provenance and installation boundary:
+  [SOURCE_ASSET_CATALOG.md](SOURCE_ASSET_CATALOG.md)
+- Version-1 compatibility and installed theme-package behavior:
   [theme-packages.md](theme-packages.md)
 - Shared rendering module, geometry, scene, and fallback contract:
   [shared-renderer.md](shared-renderer.md)
@@ -141,14 +146,32 @@ disposable private Plasma Wayland session, not inferred from inspection.
   remove their records without a Plasma mutation. Failed adoption, conflict, and
   removal paths preserve unrelated desktop applets; these paths are
   runtime-verified with an explicit unrelated free-host sentinel.
-- The registry includes the current version-1 theme-package implementation and
-  an embedded catalog of five themes: Obsidian Glass, Neon Segments, Metallic
-  Shelf, Holographic Ring, and Minimal Underline.
+- `ThemeDefinition` and `ThemePackage` implement the version-2 manifest model,
+  strict resource and path bounds, typed capabilities/assets/states/layers/
+  slices/regions/masks/references, structured diagnostics, and deterministic
+  version-1 adaptation. Invalid or incompatible packages fail closed to the
+  safe procedural renderer; package data never executes code.
+- The source-asset catalog contains exactly 138 independently hashed reviewed
+  records: 122 panel screenshots and 16 icon reference sheets. Every record is
+  source-only, reference-only, redistribution-unknown, opaque, and blocked from
+  installation. Strong 2D, energy, ring/polygon, arc, and icon-reference groups
+  are stable catalog classifications, not license or production-readiness
+  claims.
+- `ThemeAssetProcessor` produces bounded deterministic managed derivatives and
+  metadata without overwriting source files. It verifies real pixel alpha,
+  prevents source/output aliasing and path escape, validates requested scales,
+  records hashes, and preserves manual-cleanup requirements instead of claiming
+  automated logo or placeholder removal.
+- Theme capabilities now participate in the existing host/theme/renderer/
+  platform intersection. Unsupported layouts, rotation, presentation features,
+  and renderer tiers remain hidden or fall back with an explicit reason; a flat
+  image cannot satisfy true-3D capability.
+- The embedded version-1 catalog remains available with five themes: Obsidian
+  Glass, Neon Segments, Metallic Shelf, Holographic Ring, and Minimal Underline.
 - CMake declares the application, QML and theme resources, Plasma applets and
-  templates, D-Bus and systemd metadata, and 32 tests. TASK-0025 passed a clean
-  external configure and serial build, all 32 CTests with zero failures or
-  skips, installed-module preview/parity tests, and the staged isolated
-  Studio/native/free renderer session.
+  templates, D-Bus and systemd metadata, source-only catalog exclusions, and 35
+  tests. TASK-0026 passed a fresh external configure and serial build, all 35
+  CTests, and the complete staged isolated Plasma native/free lifecycle.
 
 ## Known defects and incomplete behavior
 
@@ -164,7 +187,7 @@ disposable private Plasma Wayland session, not inferred from inspection.
 ## Planned but not implemented
 
 The master plan and preset specification describe target behavior. The
-following named systems remain outside TASK-0025:
+following named systems remain outside TASK-0026:
 
 - version-2 panel and icon preset catalogs, including the required 15 panel and
   15 icon presets
@@ -173,31 +196,35 @@ following named systems remain outside TASK-0025:
 - the complete true-3D, notification, accessibility, performance, packaging,
   migration, and release-validation work required by the architecture plan
 
-The existing version-1 theme-package support and visible settings fields must
-not be interpreted as completion of those v2 systems.
+The version-2 package/parser/processor and classified reference catalog must not
+be interpreted as a production skin family, redistribution approval, or a
+true-3D renderer.
 
 ## Verification boundary
 
-TASK-0025 supplies fresh evidence from the clean external build at
-`/tmp/archdock-task0025-final.OJCyAG` (removed after evidence capture): configure
-passed, the full serial build passed, and all 32 CTests passed with zero failures
-or skips. Focused QML coverage includes `PanelScene`, `IconScene`, `DockEntry`,
-`LivePanelPreview`, renderer parity, installed-module import, editor candidates,
-and static live/Studio single-authority contracts.
+TASK-0026 supplies fresh evidence from the external build at
+`/tmp/archdock-task0026-regression.na337X` (removed during closure): configure
+passed, the full serial build passed, and all 35 CTests reported Passed with zero
+failures. The new focused coverage includes v2 package parsing and fixtures,
+version-1 adaptation, source catalog count/hash/path/install boundaries,
+deterministic asset processing, theme-aware capability resolution, registry
+round trips, and PanelWindow renderer configuration.
 
 The offscreen visual harness captured safe procedural scenes for horizontal,
 vertical, and free layouts. It compared preview and direct `PanelScene`
 geometry/bounds/anchors and exact procedural surface pixels from the same
 deterministic definitions, including capability fallback.
 
-The staged-install test installed only into a disposable prefix, then ran the
-module import, preview, and parity suites from that prefix. Its private KWin and
-PlasmaShell session started the staged service with Panel Studio, created one
-configured native applet and one configured free applet with non-zero geometry,
-verified their panel/type configuration, found no focused shared-renderer QML
-errors, removed both hosts, and cleaned the private session. This is runtime
-evidence for installed import and native/free host integration; it is not a
-claim about the personal desktop or hardware-specific behavior.
+The isolated lifecycle installed only into a disposable prefix and used its own
+D-Bus daemon, virtual KWin, PlasmaShell, XDG roots, outputs, applets, and
+fixtures. It completed free-host adoption/recovery/conflict/removal, native
+settings rollback, exact visibility modes including dodge and maximized/
+fullscreen cover, renderer reconciliation, placement and persistence rollback,
+output fallback/restore, host loss, PlasmaShell restart, guarded removal, and
+final unrelated-panel checks. The repaired KWin probe emitted both required
+markers and observed real buffered Wayland fixture windows. This is runtime
+evidence for the staged private environment, not the personal desktop or
+hardware-specific behavior.
 
 This evidence is representative of the required Arch Linux, Plasma 6, Qt 6,
 Wayland integration, but it remains an isolated virtual session. It does not
@@ -205,12 +232,13 @@ claim hardware-specific monitor behavior or mutation of a user's live desktop.
 
 ## Next task boundary
 
-TASK-0025 closes AD-0006 shared renderer integration: the live applet, layered
-icon scene, and Panel Studio preview now share the installed scene contract.
-It does not implement Theme Package v2, production sample processing, a true-3D
-renderer, or desktop preview-audition semantics.
+TASK-0026 closes AD-0007 Theme Package v2 and sample classification: package
+inputs are typed, bounded, provenance-tracked, non-destructively processed, and
+capability-aware without promoting reference screenshots to production assets.
+It does not implement a production skin family, grant redistribution rights,
+or add a true-3D renderer.
 
-The task pack identifies **TASK-0026 — Theme package version 2 and sample
-catalog** as the next sequential planning target. It may start only through its
-own read-only inspection and exact approval gate. TASK-0026 has not been
-started here.
+The task pack identifies **TASK-0027 — Implement the production
+science-fiction chassis skin family** as the next sequential planning target.
+It may start only through its own read-only inspection and exact approval gate.
+TASK-0027 has not been started here.

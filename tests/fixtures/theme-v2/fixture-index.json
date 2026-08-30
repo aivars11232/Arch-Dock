@@ -1,0 +1,56 @@
+{
+  "format": "org.archdock.theme-fixture-index",
+  "version": 1,
+  "fixtures": [
+    {
+      "path": "valid-procedural.json",
+      "expectValid": true,
+      "expectedCode": ""
+    },
+    {
+      "path": "valid-skinned2d-states.json",
+      "expectValid": true,
+      "expectedCode": ""
+    },
+    {
+      "path": "valid-baked25d-ring.json",
+      "expectValid": true,
+      "expectedCode": ""
+    },
+    {
+      "path": "valid-true3d-optional.json",
+      "expectValid": true,
+      "expectedCode": ""
+    },
+    {
+      "path": "invalid-path-traversal.json",
+      "expectValid": false,
+      "expectedCode": "unsafe-path"
+    },
+    {
+      "path": "invalid-absolute-path.json",
+      "expectValid": false,
+      "expectedCode": "unsafe-path"
+    },
+    {
+      "path": "invalid-missing-asset.json",
+      "expectValid": false,
+      "expectedCode": "missing-asset"
+    },
+    {
+      "path": "invalid-bounds.json",
+      "expectValid": false,
+      "expectedCode": "invalid-bounds"
+    },
+    {
+      "path": "invalid-tier-asset.json",
+      "expectValid": false,
+      "expectedCode": "renderer-asset-mismatch"
+    },
+    {
+      "path": "invalid-duplicate-layer.json",
+      "expectValid": false,
+      "expectedCode": "duplicate-id"
+    }
+  ]
+}

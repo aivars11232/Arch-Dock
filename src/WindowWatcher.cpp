@@ -5,6 +5,7 @@
 #include <QDBusConnection>
 #include <QDBusError>
 #include <QDBusInterface>
+#include <QDBusReply>
 #include <QDebug>
 #include <QFileInfo>
 #include <QGuiApplication>
@@ -259,23 +260,62 @@ bool WindowWatcher::loadKWinScript()
     }
 
     const QString pluginName = QStringLiteral("org.archdock.windowwatcher");
-    scripting.call(QStringLiteral("unloadScript"), pluginName);
-    const QDBusMessage loadReply = scripting.call(
-        QStringLiteral("loadScript"),
-        scriptPath,
-        pluginName);
-    if (loadReply.type() == QDBusMessage::ErrorMessage)
+    const QDBusReply<bool> unloadReply = scripting.call(
+        QStringLiteral("unloadScript"), pluginName);
+    if (!unloadReply.isValid())
     {
-        qWarning() << "Failed to load Arch Dock KWin script:"
-                   << loadReply.errorMessage();
+        qWarning() << "Failed to unload the prior Arch Dock KWin script:"
+                   << unloadReply.error().message();
         return false;
     }
 
-    const QDBusMessage startReply = scripting.call(QStringLiteral("start"));
-    if (startReply.type() == QDBusMessage::ErrorMessage)
+    const QDBusReply<bool> loadedAfterUnload = scripting.call(
+        QStringLiteral("isScriptLoaded"), pluginName);
+    if (!loadedAfterUnload.isValid() || loadedAfterUnload.value())
     {
-        qWarning() << "Failed to start Arch Dock KWin script:"
-                   << startReply.errorMessage();
+        qWarning() << "Arch Dock KWin script did not reach the unloaded state:"
+                   << loadedAfterUnload.error().message();
+        return false;
+    }
+
+    const QDBusReply<int> loadReply = scripting.call(
+        QStringLiteral("loadScript"),
+        scriptPath,
+        pluginName);
+    if (!loadReply.isValid() || loadReply.value() < 0)
+    {
+        qWarning() << "Failed to load Arch Dock KWin script:"
+                   << loadReply.error().message()
+                   << "script id" << loadReply.value();
+        return false;
+    }
+
+    QDBusInterface script(
+        QStringLiteral("org.kde.KWin"),
+        QStringLiteral("/Scripting/Script%1").arg(loadReply.value()),
+        QStringLiteral("org.kde.kwin.Script"),
+        QDBusConnection::sessionBus());
+    if (!script.isValid())
+    {
+        qWarning() << "Loaded Arch Dock KWin script object is unavailable:"
+                   << script.lastError().message();
+        return false;
+    }
+
+    const QDBusMessage runReply = script.call(QStringLiteral("run"));
+    if (runReply.type() == QDBusMessage::ErrorMessage)
+    {
+        qWarning() << "Failed to run Arch Dock KWin script:"
+                   << runReply.errorMessage();
+        return false;
+    }
+
+    const QDBusReply<bool> loadedAfterRun = scripting.call(
+        QStringLiteral("isScriptLoaded"), pluginName);
+    if (!loadedAfterRun.isValid() || !loadedAfterRun.value())
+    {
+        qWarning() << "Arch Dock KWin script did not remain loaded after run:"
+                   << loadedAfterRun.error().message();
         return false;
     }
     return true;

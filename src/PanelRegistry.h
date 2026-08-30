@@ -2,7 +2,6 @@
 
 #include <QHash>
 #include <QObject>
-#include <QPointer>
 #include <QByteArray>
 #include <QStringList>
 #include <QUrl>
@@ -15,7 +14,6 @@
 #include "model/PanelCapabilityResolver.h"
 #include "panel/PanelSettingsTransaction.h"
 
-class QProcess;
 class QSettings;
 
 class PanelRegistry final : public QObject
@@ -188,11 +186,10 @@ private:
     [[nodiscard]] QVariantMap makePanel(const QString &id, const QString &name, const QString &edge, bool builtIn) const;
     [[nodiscard]] QVariant normalizeValue(const QString &key, const QVariant &value) const;
     [[nodiscard]] RenderRequest makeRenderRequest(const QString &panelId, int width, int height, qreal devicePixelRatio) const;
-    [[nodiscard]] bool renderWithQt(const RenderRequest &request, QString *errorMessage) const;
+    [[nodiscard]] bool renderWithQt(RenderRequest *request, QString *errorMessage) const;
     void setPanelValues(const QString &panelId, const QVariantMap &values);
     [[nodiscard]] bool setPanelValuesChecked(const QString &panelId, const QVariantMap &values);
     void startRender(const RenderRequest &request);
-    void startMagickRender(const RenderRequest &request, const QString &sourcePath);
     void finishRender(const RenderRequest &request, bool success, const QString &message);
     void load();
     void save();
@@ -213,7 +210,6 @@ private:
     QVariantList m_themeDefinitions;
     QHash<QString, RenderRequest> m_activeRenders;
     QHash<QString, RenderRequest> m_pendingRenders;
-    QHash<QString, QPointer<QProcess>> m_renderProcesses;
     QString m_activePanelId = QStringLiteral("bottom");
     QString m_migrationDiagnostic;
     QByteArray m_legacySource;

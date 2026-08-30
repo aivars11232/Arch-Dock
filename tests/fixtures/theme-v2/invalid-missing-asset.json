@@ -1,0 +1,25 @@
+{
+  "format": "org.archdock.theme",
+  "version": 2,
+  "id": "fixture-missing-asset",
+  "name": "Fixture Missing Asset",
+  "capabilities": {
+    "hosts": ["native-edge"],
+    "rendererTiers": ["skinned2d", "procedural2d"],
+    "preferredRendererTier": "skinned2d",
+    "fallbackRendererTiers": ["procedural2d"],
+    "layouts": ["horizontal"],
+    "orientations": ["horizontal"],
+    "features": [],
+    "presentationMechanisms": [],
+    "rotation": {"mode": "none"}
+  },
+  "assets": [
+    {
+      "id": "surface",
+      "path": "assets/does-not-exist.png",
+      "kind": "raster",
+      "naturalSize": {"width": 1200, "height": 160}
+    }
+  ]
+}

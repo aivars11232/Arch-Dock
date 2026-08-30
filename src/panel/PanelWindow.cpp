@@ -796,6 +796,18 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 ? true
                 : layoutAvailable(candidate.layout.pathType);
         }
+        else if (capability == QStringLiteral("procedural-surface"))
+        {
+            available = resolution.available &&
+                resolution.renderer.effectiveTier.has_value() &&
+                *resolution.renderer.effectiveTier ==
+                    ArchDock::RendererTier::Procedural2D;
+        }
+        else if (capability == QStringLiteral("artwork-fit"))
+        {
+            available = resolution.available &&
+                !candidate.surface.themeSource.trimmed().isEmpty();
+        }
         else if (const std::optional<ArchDock::PanelCapability> parsed =
                      ArchDock::panelCapabilityFromName(capability);
                  parsed.has_value())

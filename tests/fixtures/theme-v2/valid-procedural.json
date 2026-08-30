@@ -1,0 +1,17 @@
+{
+  "format": "org.archdock.theme",
+  "version": 2,
+  "id": "fixture-procedural",
+  "name": "Fixture Procedural",
+  "capabilities": {
+    "hosts": ["native-edge", "free-desktop"],
+    "rendererTiers": ["procedural2d"],
+    "preferredRendererTier": "procedural2d",
+    "fallbackRendererTiers": [],
+    "layouts": ["adaptive", "horizontal", "vertical"],
+    "orientations": ["horizontal", "vertical"],
+    "features": ["dynamic-tint", "icon-state-styling"],
+    "presentationMechanisms": [],
+    "rotation": {"mode": "none"}
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "format": "org.archdock.theme",
+  "version": 2,
+  "id": "fixture-baked-ring",
+  "name": "Fixture Baked Ring",
+  "capabilities": {
+    "hosts": ["free-desktop"],
+    "rendererTiers": ["baked2.5d", "procedural2d"],
+    "preferredRendererTier": "baked2.5d",
+    "fallbackRendererTiers": ["procedural2d"],
+    "layouts": ["ring", "polygon"],
+    "orientations": ["free"],
+    "features": ["icon-state-styling"],
+    "presentationMechanisms": [],
+    "rotation": {"mode": "free"}
+  },
+  "assets": [
+    {
+      "id": "platform",
+      "path": "assets/surface.svg",
+      "kind": "vector",
+      "mimeType": "image/svg+xml",
+      "naturalSize": {"width": 1200, "height": 160}
+    }
+  ],
+  "states": [{"id": "normal", "layers": ["platform-layer"]}],
+  "layers": [
+    {
+      "id": "platform-layer",
+      "asset": "platform",
+      "role": "surface",
+      "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160},
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    }
+  ],
+  "contentRegions": [
+    {
+      "id": "ring-content",
+      "state": "normal",
+      "orientation": "free",
+      "shape": "rect",
+      "rect": {"x": 160, "y": 24, "width": 880, "height": 112}
+    }
+  ]
+}

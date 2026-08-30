@@ -3,20 +3,17 @@
 #include "model/PanelDefinition.h"
 #include "model/PanelSettingsSchema.h"
 #include "model/SettingsMigration.h"
+#include "themes/ThemeAssetProcessor.h"
+#include "themes/ThemePackage.h"
 
-#include <QDateTime>
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
-#include <QImage>
-#include <QImageReader>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QPainter>
-#include <QProcess>
 #include <QSaveFile>
 #include <QScreen>
 #include <QSet>
@@ -24,6 +21,7 @@
 #include <QStandardPaths>
 #include <QtGlobal>
 
+#include <algorithm>
 #include <limits>
 
 namespace
@@ -101,11 +99,11 @@ QVariantList validatedThemeDefinitions(const QVariantList &themes)
     return result;
 }
 
-constexpr int themePackageVersion = 1;
+constexpr int legacyThemePackageVersion = 1;
 const QString themePackageFormat = QStringLiteral("org.archdock.theme");
 const QString themePackageManifestName = QStringLiteral("archdock-theme.json");
 
-struct ThemePackage
+struct LegacyThemePackage
 {
     QString id;
     QString name;
@@ -136,10 +134,28 @@ QString normalizedThemePackageId(const QString &value)
     return id.isEmpty() ? QStringLiteral("theme") : id.left(64);
 }
 
-bool writeThemePackageManifest(const QString &manifestPath,
-                               const ThemePackage &package,
-                               const QString &assetName,
-                               QString *errorMessage)
+QJsonObject legacyThemePackageManifest(const LegacyThemePackage &package,
+                                       const QString &assetName)
+{
+    QJsonObject manifest{
+        {QStringLiteral("format"), themePackageFormat},
+        {QStringLiteral("version"), legacyThemePackageVersion},
+        {QStringLiteral("id"), package.id},
+        {QStringLiteral("name"), package.name},
+        {QStringLiteral("surface"), QJsonObject{
+             {QStringLiteral("asset"), assetName},
+             {QStringLiteral("fit"), package.fit}}}};
+    if (!package.author.isEmpty())
+    {
+        manifest.insert(QStringLiteral("author"), package.author);
+    }
+    return manifest;
+}
+
+bool writeLegacyThemePackageManifest(const QString &manifestPath,
+                                     const LegacyThemePackage &package,
+                                     const QString &assetName,
+                                     QString *errorMessage)
 {
     QSaveFile file(manifestPath);
     if (!file.open(QIODevice::WriteOnly))
@@ -151,19 +167,8 @@ bool writeThemePackageManifest(const QString &manifestPath,
         return false;
     }
 
-    QJsonObject manifest{
-        {QStringLiteral("format"), themePackageFormat},
-        {QStringLiteral("version"), themePackageVersion},
-        {QStringLiteral("id"), package.id},
-        {QStringLiteral("name"), package.name},
-        {QStringLiteral("surface"), QJsonObject{
-             {QStringLiteral("asset"), assetName},
-             {QStringLiteral("fit"), package.fit}}}};
-    if (!package.author.isEmpty())
-    {
-        manifest.insert(QStringLiteral("author"), package.author);
-    }
-    const QByteArray contents = QJsonDocument(manifest).toJson(QJsonDocument::Indented);
+    const QByteArray contents = QJsonDocument(
+        legacyThemePackageManifest(package, assetName)).toJson(QJsonDocument::Indented);
     if (file.write(contents) != contents.size() || !file.commit())
     {
         if (errorMessage)
@@ -172,146 +177,6 @@ bool writeThemePackageManifest(const QString &manifestPath,
         }
         return false;
     }
-    return true;
-}
-
-bool readThemePackageManifest(const QFileInfo &manifestFile,
-                              ThemePackage *package,
-                              QString *errorMessage)
-{
-    QFile file(manifestFile.absoluteFilePath());
-    if (!file.open(QIODevice::ReadOnly))
-    {
-        if (errorMessage)
-        {
-            *errorMessage = file.errorString();
-        }
-        return false;
-    }
-
-    QJsonParseError parseError;
-    const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parseError);
-    const QJsonObject manifest = document.object();
-    if (parseError.error != QJsonParseError::NoError || !document.isObject() ||
-        manifest.value(QStringLiteral("format")).toString() != themePackageFormat ||
-        manifest.value(QStringLiteral("version")).toInt(-1) != themePackageVersion)
-    {
-        if (errorMessage)
-        {
-            *errorMessage = QObject::tr("This theme package has an unsupported format or version.");
-        }
-        return false;
-    }
-
-    const QJsonObject surface = manifest.value(QStringLiteral("surface")).toObject();
-    const QString assetReference = QDir::cleanPath(
-        surface.value(QStringLiteral("asset")).toString().trimmed());
-    if (assetReference.isEmpty() || assetReference == QStringLiteral(".") ||
-        assetReference == QStringLiteral("..") || assetReference.startsWith(QStringLiteral("../")) ||
-        assetReference.contains(QLatin1Char('\\')) || QDir::isAbsolutePath(assetReference))
-    {
-        if (errorMessage)
-        {
-            *errorMessage = QObject::tr("The package surface must be a file inside the package directory.");
-        }
-        return false;
-    }
-
-    const QString packageDirectory = QDir(manifestFile.absolutePath()).canonicalPath();
-    const QFileInfo assetFile(QDir(packageDirectory).filePath(assetReference));
-    const QString assetPath = assetFile.canonicalFilePath();
-    const QString packagePrefix = packageDirectory.endsWith(QLatin1Char('/'))
-        ? packageDirectory
-        : packageDirectory + QLatin1Char('/');
-    if (packageDirectory.isEmpty() || assetPath.isEmpty() || !assetFile.isFile() ||
-        !assetPath.startsWith(packagePrefix))
-    {
-        if (errorMessage)
-        {
-            *errorMessage = QObject::tr("The package surface is missing or outside the package directory.");
-        }
-        return false;
-    }
-
-    package->id = normalizedThemePackageId(manifest.value(QStringLiteral("id")).toString());
-    package->name = manifest.value(QStringLiteral("name")).toString().trimmed();
-    if (package->name.isEmpty())
-    {
-        package->name = package->id;
-    }
-    package->author = manifest.value(QStringLiteral("author")).toString().trimmed();
-    package->sourcePath = assetPath;
-    package->fit = surface.value(QStringLiteral("fit")).toString().trimmed().toLower();
-    if (!isThemeFit(package->fit))
-    {
-        package->fit = QStringLiteral("cover");
-    }
-    return true;
-}
-
-bool materializeThemePackage(const QString &panelId,
-                             ThemePackage package,
-                             ThemePackage *materialized,
-                             QString *errorMessage)
-{
-    const QFileInfo source(package.sourcePath);
-    if (!source.isFile())
-    {
-        if (errorMessage)
-        {
-            *errorMessage = QObject::tr("The theme surface could not be read.");
-        }
-        return false;
-    }
-
-    package.id = normalizedThemePackageId(package.id);
-    if (package.name.isEmpty())
-    {
-        package.name = source.completeBaseName();
-    }
-    if (!isThemeFit(package.fit))
-    {
-        package.fit = QStringLiteral("cover");
-    }
-
-    const QString themesDirectory = QStandardPaths::writableLocation(
-        QStandardPaths::AppDataLocation) + QStringLiteral("/themes/") + panelId + QStringLiteral("/packages");
-    const QByteArray identity = (package.id + QLatin1Char('|') + source.absoluteFilePath() + QLatin1Char('|') +
-        QString::number(QDateTime::currentMSecsSinceEpoch())).toUtf8();
-    const QString token = QString::fromLatin1(
-        QCryptographicHash::hash(identity, QCryptographicHash::Sha256).toHex().left(12));
-    const QString packageDirectory = themesDirectory + QLatin1Char('/') + package.id + QLatin1Char('-') + token;
-    if (!QDir().mkpath(packageDirectory))
-    {
-        if (errorMessage)
-        {
-            *errorMessage = QObject::tr("The managed theme package directory could not be created.");
-        }
-        return false;
-    }
-
-    const QString sourceName = QStringLiteral("surface") +
-        (source.suffix().isEmpty() ? QString{} : QLatin1Char('.') + source.suffix().toLower());
-    const QString copiedSource = packageDirectory + QLatin1Char('/') + sourceName;
-    if (!QFile::copy(source.absoluteFilePath(), copiedSource))
-    {
-        QDir(packageDirectory).removeRecursively();
-        if (errorMessage)
-        {
-            *errorMessage = QObject::tr("The theme surface could not be copied into the managed package.");
-        }
-        return false;
-    }
-
-    package.sourcePath = copiedSource;
-    package.manifestPath = packageDirectory + QLatin1Char('/') + themePackageManifestName;
-    if (!writeThemePackageManifest(package.manifestPath, package, sourceName, errorMessage))
-    {
-        QDir(packageDirectory).removeRecursively();
-        return false;
-    }
-
-    *materialized = package;
     return true;
 }
 
@@ -345,9 +210,59 @@ QString suggestedThemeFit(const QSize &sourceSize, const QSize &targetSize)
     return ratioDifference >= 2.0 ? QStringLiteral("contain") : QStringLiteral("cover");
 }
 
-QVariantMap analyzeThemeSource(const ThemePackage &package, const QSize &targetSize)
+QString processorAssetId(const QString &value)
 {
-    const QFileInfo source(package.sourcePath);
+    QString result;
+    result.reserve(qMin(value.size(), 48));
+    bool previousWasSeparator = false;
+    for (const QChar character : value.toLower())
+    {
+        const ushort code = character.unicode();
+        const bool accepted = (code >= 'a' && code <= 'z') ||
+            (code >= '0' && code <= '9') || character == QLatin1Char('.') ||
+            character == QLatin1Char('_') || character == QLatin1Char('-');
+        if (accepted)
+        {
+            result.append(character);
+            previousWasSeparator = false;
+        }
+        else if (!result.isEmpty() && !previousWasSeparator)
+        {
+            result.append(QLatin1Char('-'));
+            previousWasSeparator = true;
+        }
+        if (result.size() == 48)
+        {
+            break;
+        }
+    }
+    while (result.endsWith(QLatin1Char('-')))
+    {
+        result.chop(1);
+    }
+    return result.isEmpty() ? QStringLiteral("asset") : result;
+}
+
+QString processorFailureMessage(
+    const ArchDock::ThemeAssetProcessingResult &result,
+    const QString &fallback)
+{
+    if (result.diagnostics.isEmpty())
+    {
+        return fallback;
+    }
+    const ArchDock::ThemeValidationDiagnostic &diagnostic =
+        result.diagnostics.constFirst();
+    return QStringLiteral("[%1] %2").arg(
+        diagnostic.code,
+        diagnostic.message.isEmpty() ? fallback : diagnostic.message);
+}
+
+QVariantMap analyzeThemeSource(const QString &sourcePath,
+                               const QString &manifestPath,
+                               const QSize &targetSize)
+{
+    const QFileInfo source(sourcePath);
     const QString format = source.suffix().toLower();
     QVariantMap analysis{
         {QStringLiteral("themeSourceKind"), themeSourceKind(format)},
@@ -361,80 +276,66 @@ QVariantMap analyzeThemeSource(const ThemePackage &package, const QSize &targetS
         {QStringLiteral("themeConversionTool"), QString{}},
         {QStringLiteral("themeConversionAvailable"), false}};
 
-    if (format == QStringLiteral("blend"))
-    {
-        const bool blenderAvailable = !QStandardPaths::findExecutable(QStringLiteral("blender")).isEmpty();
-        analysis.insert(QStringLiteral("themeConversionTool"), QStringLiteral("Blender"));
-        analysis.insert(QStringLiteral("themeConversionAvailable"), blenderAvailable);
-        analysis.insert(
-            QStringLiteral("themeAnalysisStatus"),
-            blenderAvailable
-                ? QObject::tr("3D scene saved; Blender rendering is available.")
-                : QObject::tr("3D scene saved; Blender is unavailable, so no conversion preview was created."));
-        return analysis;
-    }
-
-    QImageReader reader(source.absoluteFilePath());
-    reader.setAutoTransform(true);
-    if (!reader.canRead())
+    ArchDock::ThemeAssetProcessingRequest request;
+    request.sourcePath = source.absoluteFilePath();
+    request.managedOutputRoot = QFileInfo(manifestPath).absolutePath() +
+        QStringLiteral("/processed");
+    request.assetId = processorAssetId(source.completeBaseName());
+    request.previewBounds = QSize(320, 180);
+    request.cleanupRequirements = {QStringLiteral("none")};
+    const ArchDock::ThemeAssetProcessingResult processed =
+        ArchDock::ThemeAssetProcessor::process(request);
+    if (!processed.isValid())
     {
         analysis.insert(
             QStringLiteral("themeAnalysisStatus"),
-            QObject::tr("Source metadata is unavailable; rendering will use available import tools."));
+            format == QStringLiteral("blend")
+                ? QObject::tr(
+                      "3D scene saved as an offline source; automatic external conversion is disabled. %1")
+                      .arg(processorFailureMessage(
+                          processed, QObject::tr("A reviewed raster derivative is required.")))
+                : QObject::tr("Bounded source analysis failed: %1")
+                      .arg(processorFailureMessage(
+                          processed, QObject::tr("The source could not be decoded."))));
         return analysis;
     }
 
-    const QSize sourceSize = reader.size();
-    if (!sourceSize.isValid() || sourceSize.width() < 1 || sourceSize.height() < 1)
-    {
-        analysis.insert(
-            QStringLiteral("themeAnalysisStatus"),
-            QObject::tr("Source dimensions are unavailable; a preview was not created."));
-        return analysis;
-    }
-
+    const QSize sourceSize = processed.inspection.sourceSize;
     analysis.insert(QStringLiteral("themeSourceWidth"), sourceSize.width());
     analysis.insert(QStringLiteral("themeSourceHeight"), sourceSize.height());
-    analysis.insert(QStringLiteral("themeSuggestedFit"), suggestedThemeFit(sourceSize, targetSize));
-
-    constexpr qint64 previewPixelLimit = 16LL * 1024 * 1024;
-    const qint64 sourcePixels = static_cast<qint64>(sourceSize.width()) * sourceSize.height();
-    if (sourcePixels > previewPixelLimit)
+    analysis.insert(
+        QStringLiteral("themeSourceHasAlpha"),
+        processed.inspection.hasAlphaChannel);
+    analysis.insert(
+        QStringLiteral("themeSuggestedFit"),
+        suggestedThemeFit(sourceSize, targetSize));
+    for (const ArchDock::ThemeAssetDerivative &derivative :
+         processed.derivatives)
+    {
+        if (derivative.role == QStringLiteral("preview"))
+        {
+            analysis.insert(
+                QStringLiteral("themePreview"),
+                QUrl::fromLocalFile(derivative.absolutePath).toString());
+            break;
+        }
+    }
+    if (processed.inspection.hasTransparentPixels)
     {
         analysis.insert(
             QStringLiteral("themeAnalysisStatus"),
-            QObject::tr("Source dimensions recorded; preview skipped to limit memory use."));
-        return analysis;
+            QObject::tr(
+                "Analyzed %1 x %2 source; %3 transparent pixels detected; bounded preview ready.")
+                .arg(sourceSize.width())
+                .arg(sourceSize.height())
+                .arg(processed.inspection.transparentPixelCount));
     }
-
-    QSize previewSize = sourceSize;
-    const QSize previewBounds(320, 180);
-    if (previewSize.width() > previewBounds.width() || previewSize.height() > previewBounds.height())
-    {
-        previewSize = previewSize.scaled(previewBounds, Qt::KeepAspectRatio);
-        reader.setScaledSize(previewSize);
-    }
-    QImage preview = reader.read();
-    if (preview.isNull())
+    else if (processed.inspection.hasAlphaChannel)
     {
         analysis.insert(
             QStringLiteral("themeAnalysisStatus"),
-            QObject::tr("Source dimensions recorded; preview decoding was unavailable."));
-        return analysis;
-    }
-    if (preview.size() != previewSize)
-    {
-        preview = preview.scaled(previewSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    }
-
-    const QString previewPath = QFileInfo(package.manifestPath).absolutePath() + QStringLiteral("/preview.png");
-    if (preview.save(previewPath, "PNG"))
-    {
-        analysis.insert(QStringLiteral("themePreview"), QUrl::fromLocalFile(previewPath).toString());
-        analysis.insert(QStringLiteral("themeSourceHasAlpha"), preview.hasAlphaChannel());
-        analysis.insert(
-            QStringLiteral("themeAnalysisStatus"),
-            QObject::tr("Analyzed %1 x %2 source; preview ready.")
+            QObject::tr(
+                "Analyzed %1 x %2 source; its alpha channel is fully opaque; bounded preview ready.")
                 .arg(sourceSize.width())
                 .arg(sourceSize.height()));
     }
@@ -442,7 +343,10 @@ QVariantMap analyzeThemeSource(const ThemePackage &package, const QSize &targetS
     {
         analysis.insert(
             QStringLiteral("themeAnalysisStatus"),
-            QObject::tr("Source dimensions recorded; preview could not be written."));
+            QObject::tr(
+                "Analyzed %1 x %2 source without an alpha channel; bounded preview ready.")
+                .arg(sourceSize.width())
+                .arg(sourceSize.height()));
     }
     return analysis;
 }
@@ -450,16 +354,50 @@ QVariantMap analyzeThemeSource(const ThemePackage &package, const QSize &targetS
 bool migrateLegacyThemePackage(QVariantMap *panel)
 {
     const QUrl currentManifest(panel->value(QStringLiteral("themePackageManifest")).toString());
-    if (panel->value(QStringLiteral("themePackageFormat")).toString() == themePackageFormat &&
-        panel->value(QStringLiteral("themePackageVersion")).toInt() == themePackageVersion &&
-        currentManifest.isLocalFile() && QFileInfo::exists(currentManifest.toLocalFile()))
+    const bool declaresPackage =
+        panel->value(QStringLiteral("themePackageFormat")).toString() ==
+            themePackageFormat &&
+        panel->value(QStringLiteral("themePackageVersion")).toInt() > 0;
+    if (declaresPackage)
     {
-        return false;
+        const int declaredVersion = panel->value(
+            QStringLiteral("themePackageVersion")).toInt();
+        const ArchDock::ThemePackageLoadResult current =
+            currentManifest.isLocalFile()
+            ? ArchDock::ThemePackage::load(currentManifest.toLocalFile())
+            : ArchDock::ThemePackageLoadResult{};
+        if (current.isValid() && current.package->sourceVersion() == declaredVersion)
+        {
+            return false;
+        }
+
+        const QString code = current.primaryCode().isEmpty()
+            ? QStringLiteral("missing-asset") : current.primaryCode();
+        panel->insert(QStringLiteral("themeSource"), QString{});
+        panel->insert(QStringLiteral("themeAsset"), QString{});
+        panel->insert(QStringLiteral("themePreview"), QString{});
+        panel->insert(QStringLiteral("themePackageFormat"), QString{});
+        panel->insert(QStringLiteral("themePackageVersion"), 0);
+        panel->insert(QStringLiteral("themePackageId"), QString{});
+        panel->insert(QStringLiteral("themePackageName"), QString{});
+        panel->insert(QStringLiteral("themePackageAuthor"), QString{});
+        panel->insert(QStringLiteral("themePackageManifest"), QString{});
+        panel->insert(QStringLiteral("themeRenderWidth"), 0);
+        panel->insert(QStringLiteral("themeRenderHeight"), 0);
+        panel->insert(QStringLiteral("themeRenderFit"), QString{});
+        panel->insert(QStringLiteral("themeRenderOutcome"), QStringLiteral("fallback"));
+        panel->insert(
+            QStringLiteral("themeAnalysisStatus"),
+            QObject::tr("Persisted theme package failed validation; safe fallback active."));
+        panel->insert(
+            QStringLiteral("themeStatus"),
+            QObject::tr("Persisted theme rejected [%1]; preset surface active.").arg(code));
+        return true;
     }
 
     const QUrl sourceUrl(panel->value(QStringLiteral("themeSource")).toString());
     const QFileInfo source(sourceUrl.toLocalFile());
-    ThemePackage package;
+    LegacyThemePackage package;
     if (sourceUrl.isLocalFile() && source.isFile())
     {
         const QString fingerprint = QString::fromLatin1(
@@ -476,10 +414,11 @@ bool migrateLegacyThemePackage(QVariantMap *panel)
             QStringLiteral(".archdock-theme.json");
 
         QString errorMessage;
-        if (writeThemePackageManifest(package.manifestPath, package, source.fileName(), &errorMessage))
+        if (writeLegacyThemePackageManifest(
+                package.manifestPath, package, source.fileName(), &errorMessage))
         {
             panel->insert(QStringLiteral("themePackageFormat"), themePackageFormat);
-            panel->insert(QStringLiteral("themePackageVersion"), themePackageVersion);
+            panel->insert(QStringLiteral("themePackageVersion"), legacyThemePackageVersion);
             panel->insert(QStringLiteral("themePackageId"), package.id);
             panel->insert(QStringLiteral("themePackageName"), package.name);
             panel->insert(QStringLiteral("themePackageAuthor"), QString{});
@@ -487,7 +426,8 @@ bool migrateLegacyThemePackage(QVariantMap *panel)
             const QSize targetSize(
                 panel->value(QStringLiteral("width"), 720).toInt(),
                 panel->value(QStringLiteral("height"), 76).toInt());
-            const QVariantMap analysis = analyzeThemeSource(package, targetSize);
+            const QVariantMap analysis = analyzeThemeSource(
+                package.sourcePath, package.manifestPath, targetSize);
             for (auto iterator = analysis.cbegin(); iterator != analysis.cend(); ++iterator)
             {
                 panel->insert(iterator.key(), iterator.value());
@@ -663,23 +603,8 @@ PanelRegistry::PanelRegistry(const QVariantList &themeDefinitions,
 
 PanelRegistry::~PanelRegistry()
 {
-    const auto processes = m_renderProcesses;
-    m_renderProcesses.clear();
     m_activeRenders.clear();
     m_pendingRenders.clear();
-    for (const QPointer<QProcess> &process : processes)
-    {
-        if (!process)
-        {
-            continue;
-        }
-        QObject::disconnect(process.data(), nullptr, this, nullptr);
-        if (process->state() != QProcess::NotRunning)
-        {
-            process->kill();
-            process->waitForFinished(1000);
-        }
-    }
 }
 
 QStringList PanelRegistry::panelIds() const
@@ -768,10 +693,56 @@ PanelRegistry::themeCapabilityProfile(
     const ArchDock::PanelDefinition &definition,
     QString *errorCode) const
 {
+    const QString manifestValue =
+        definition.surface.themePackageManifest.trimmed();
+    if (!manifestValue.isEmpty())
+    {
+        const QUrl manifestUrl(manifestValue);
+        if (!manifestUrl.isLocalFile())
+        {
+            if (errorCode)
+            {
+                *errorCode = QStringLiteral("unsafe-package-root");
+            }
+            return std::nullopt;
+        }
+        const ArchDock::ThemePackageLoadResult loaded =
+            ArchDock::ThemePackage::load(manifestUrl.toLocalFile());
+        if (!loaded.isValid())
+        {
+            if (errorCode)
+            {
+                *errorCode = loaded.primaryCode().isEmpty()
+                    ? QStringLiteral("invalid-capability-input")
+                    : loaded.primaryCode();
+            }
+            return std::nullopt;
+        }
+        if (definition.surface.themePackageVersion > 0 &&
+            loaded.package->sourceVersion() !=
+                definition.surface.themePackageVersion)
+        {
+            if (errorCode)
+            {
+                *errorCode = QStringLiteral("unsupported-version");
+            }
+            return std::nullopt;
+        }
+        if (loaded.package->sourceVersion() >= 2)
+        {
+            return ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
+                loaded.package->definition().toVariantMap(), errorCode);
+        }
+        if (errorCode)
+        {
+            errorCode->clear();
+        }
+        return ArchDock::PanelCapabilityResolver::legacyThemeProfile(definition);
+    }
+
     const bool hasManagedArtwork =
         !definition.surface.themeAsset.trimmed().isEmpty() ||
-        !definition.surface.themeSource.trimmed().isEmpty() ||
-        !definition.surface.themePackageManifest.trimmed().isEmpty();
+        !definition.surface.themeSource.trimmed().isEmpty();
     if (hasManagedArtwork)
     {
         if (errorCode)
@@ -1768,75 +1739,154 @@ bool PanelRegistry::importTheme(const QString &panelId, const QUrl &sourceUrl)
         return false;
     }
 
-    ThemePackage imported;
-    QString errorMessage;
+    ArchDock::ThemePackageLoadResult loaded;
     if (source.suffix().compare(QStringLiteral("json"), Qt::CaseInsensitive) == 0)
     {
-        if (!readThemePackageManifest(source, &imported, &errorMessage))
-        {
-            setPanelValues(panelId, {{QStringLiteral("themeStatus"), errorMessage}});
-            return false;
-        }
+        loaded = ArchDock::ThemePackage::load(source.absoluteFilePath());
     }
     else
     {
-        imported.id = normalizedThemePackageId(source.completeBaseName());
-        imported.name = source.completeBaseName();
-        imported.sourcePath = source.absoluteFilePath();
-        imported.fit = record(panelId)->value(QStringLiteral("themeFit"), QStringLiteral("cover")).toString();
-        if (!isThemeFit(imported.fit))
+        LegacyThemePackage legacy;
+        legacy.id = normalizedThemePackageId(source.completeBaseName());
+        legacy.name = source.completeBaseName();
+        legacy.sourcePath = source.absoluteFilePath();
+        legacy.fit = record(panelId)->value(
+            QStringLiteral("themeFit"), QStringLiteral("cover")).toString();
+        if (!isThemeFit(legacy.fit))
         {
-            imported.fit = QStringLiteral("cover");
+            legacy.fit = QStringLiteral("cover");
         }
+        const QByteArray manifestBytes = QJsonDocument(
+            legacyThemePackageManifest(legacy, source.fileName()))
+                                             .toJson(QJsonDocument::Compact);
+        loaded = ArchDock::ThemePackage::loadBytes(
+            manifestBytes,
+            source.absolutePath(),
+            QDir(source.absolutePath()).filePath(themePackageManifestName));
     }
-
-    QVariantMap capabilityCandidate = *record(panelId);
-    capabilityCandidate.insert(
-        QStringLiteral("themeSource"),
-        QUrl::fromLocalFile(imported.sourcePath).toString());
-    capabilityCandidate.insert(
-        QStringLiteral("themePackageFormat"), themePackageFormat);
-    capabilityCandidate.insert(
-        QStringLiteral("themePackageVersion"), themePackageVersion);
-    capabilityCandidate.insert(
-        QStringLiteral("themePackageId"), imported.id);
-    QString capabilityDefinitionError;
-    const std::optional<ArchDock::PanelDefinition> capabilityDefinition =
-        ArchDock::PanelDefinition::fromLegacyMap(
-            capabilityCandidate, &capabilityDefinitionError);
-    if (!capabilityDefinition.has_value() ||
-        !resolvePanelCapabilities(*capabilityDefinition).available)
+    if (!loaded.isValid())
     {
+        const QString code = loaded.primaryCode().isEmpty()
+            ? QStringLiteral("invalid-value") : loaded.primaryCode();
+        const QString message = loaded.primaryMessage().isEmpty()
+            ? tr("Theme package validation failed.") : loaded.primaryMessage();
+        setPanelValues(
+            panelId,
+            {{QStringLiteral("themeStatus"),
+              tr("Theme package rejected [%1]: %2").arg(code, message)}});
         return false;
     }
 
-    ThemePackage managed;
-    if (!materializeThemePackage(panelId, imported, &managed, &errorMessage))
+    QString capabilityError;
+    const std::optional<ArchDock::ThemeCapabilityProfile> themeProfile =
+        ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
+            loaded.package->definition().toVariantMap(), &capabilityError);
+    std::optional<ArchDock::PanelDefinition> capabilityDefinition =
+        panelDefinition(panelId, &capabilityError);
+    if (!themeProfile.has_value() || !capabilityDefinition.has_value())
     {
-        setPanelValues(panelId, {{QStringLiteral("themeStatus"), errorMessage}});
+        setPanelValues(
+            panelId,
+            {{QStringLiteral("themeStatus"),
+              tr("Theme package rejected [%1].")
+                  .arg(capabilityError.isEmpty()
+                           ? QStringLiteral("invalid-capability-input")
+                           : capabilityError)}});
         return false;
     }
+    capabilityDefinition->surface.themeSource = QUrl::fromLocalFile(
+        loaded.package->primarySurfacePath()).toString();
+    capabilityDefinition->surface.themePackageFormat = themePackageFormat;
+    capabilityDefinition->surface.themePackageVersion = loaded.package->sourceVersion();
+    capabilityDefinition->surface.themePackageId = loaded.package->definition().id;
+    const ArchDock::CapabilityResolution capabilityResolution =
+        ArchDock::PanelCapabilityResolver::resolve(
+            *capabilityDefinition,
+            ArchDock::PanelCapabilityResolver::productionHostProfile(
+                capabilityDefinition->host.kind),
+            *themeProfile,
+            ArchDock::PanelCapabilityResolver::productionRenderers(),
+            ArchDock::PanelCapabilityResolver::productionPlatform());
+    if (!capabilityResolution.available)
+    {
+        setPanelValues(
+            panelId,
+            {{QStringLiteral("themeStatus"),
+              tr("Theme package is incompatible [%1]; the active theme was kept.")
+                  .arg(ArchDock::capabilityReasonCodeName(
+                      capabilityResolution.reason))}});
+        return false;
+    }
+
+    const QString managedRoot = QStandardPaths::writableLocation(
+        QStandardPaths::AppDataLocation) + QStringLiteral("/themes/") + panelId +
+        QStringLiteral("/packages");
+    ArchDock::ThemePackageMaterializeResult materialized =
+        loaded.package->materialize(managedRoot);
+    if (!materialized.isValid())
+    {
+        const QString code = materialized.diagnostics.isEmpty()
+            ? QStringLiteral("invalid-value")
+            : materialized.diagnostics.first().code;
+        const QString message = materialized.diagnostics.isEmpty()
+            ? tr("Theme package could not be installed.")
+            : materialized.diagnostics.first().message;
+        setPanelValues(
+            panelId,
+            {{QStringLiteral("themeStatus"),
+              tr("Theme package installation failed [%1]: %2").arg(code, message)}});
+        return false;
+    }
+    const ArchDock::ThemePackage &managed = *materialized.package;
 
     const QVariantMap *currentPanel = record(panelId);
     const QSize targetSize(
         currentPanel ? currentPanel->value(QStringLiteral("width"), 720).toInt() : 720,
         currentPanel ? currentPanel->value(QStringLiteral("height"), 76).toInt() : 76);
-    const QVariantMap analysis = analyzeThemeSource(managed, targetSize);
+    const QString managedSource = managed.primarySurfacePath();
+    QVariantMap analysis = analyzeThemeSource(
+        managedSource, managed.manifestPath(), targetSize);
+    if (managedSource.isEmpty())
+    {
+        analysis.insert(QStringLiteral("themeSourceKind"), QString{});
+        analysis.insert(QStringLiteral("themeSourceFormat"), QString{});
+        analysis.insert(
+            QStringLiteral("themeAnalysisStatus"),
+            tr("No 2D surface is declared; the resolved safe renderer remains active."));
+    }
+    const ArchDock::ThemeDefinition &theme = managed.definition();
+    QString fit = managed.sourceVersion() == 1
+        ? managed.legacyFit()
+        : (currentPanel
+               ? currentPanel->value(
+                     QStringLiteral("themeFit"), QStringLiteral("cover")).toString()
+               : QStringLiteral("cover"));
+    if (!isThemeFit(fit))
+    {
+        fit = QStringLiteral("cover");
+    }
     QVariantMap values{
-        {QStringLiteral("themeSource"), QUrl::fromLocalFile(managed.sourcePath).toString()},
+        {QStringLiteral("themeSource"), managedSource.isEmpty()
+             ? QString{} : QUrl::fromLocalFile(managedSource).toString()},
         {QStringLiteral("themeAsset"), QString{}},
-        {QStringLiteral("themeFit"), managed.fit},
+        {QStringLiteral("themeFit"), fit},
         {QStringLiteral("themePackageFormat"), themePackageFormat},
-        {QStringLiteral("themePackageVersion"), themePackageVersion},
-        {QStringLiteral("themePackageId"), managed.id},
-        {QStringLiteral("themePackageName"), managed.name},
-        {QStringLiteral("themePackageAuthor"), managed.author},
-        {QStringLiteral("themePackageManifest"), QUrl::fromLocalFile(managed.manifestPath).toString()},
-        {QStringLiteral("themeStatus"), tr("Theme package \"%1\" imported; preparing panel skin.").arg(managed.name)},
+        {QStringLiteral("themePackageVersion"), managed.sourceVersion()},
+        {QStringLiteral("themePackageId"), theme.id},
+        {QStringLiteral("themePackageName"), theme.name},
+        {QStringLiteral("themePackageAuthor"), theme.author},
+        {QStringLiteral("themePackageManifest"),
+         QUrl::fromLocalFile(managed.manifestPath()).toString()},
+        {QStringLiteral("themeStatus"), managedSource.isEmpty()
+             ? tr("Theme package \"%1\" imported; safe renderer fallback active.")
+                   .arg(theme.name)
+             : tr("Theme package \"%1\" imported; preparing panel skin.")
+                   .arg(theme.name)},
         {QStringLiteral("themeRenderWidth"), 0},
         {QStringLiteral("themeRenderHeight"), 0},
         {QStringLiteral("themeRenderFit"), QString{}},
-        {QStringLiteral("themeRenderOutcome"), QString{}}};
+        {QStringLiteral("themeRenderOutcome"), managedSource.isEmpty()
+             ? QStringLiteral("fallback") : QString{}}};
     for (auto iterator = analysis.cbegin(); iterator != analysis.cend(); ++iterator)
     {
         values.insert(iterator.key(), iterator.value());
@@ -1852,10 +1902,13 @@ bool PanelRegistry::importTheme(const QString &panelId, const QUrl &sourceUrl)
         return false;
     }
 
-    renderTheme(
-        panelId,
-        panel->value(QStringLiteral("width"), 720).toInt(),
-        panel->value(QStringLiteral("height"), 76).toInt());
+    if (!managedSource.isEmpty())
+    {
+        renderTheme(
+            panelId,
+            panel->value(QStringLiteral("width"), 720).toInt(),
+            panel->value(QStringLiteral("height"), 76).toInt());
+    }
     return true;
 }
 
@@ -1919,10 +1972,7 @@ void PanelRegistry::clearTheme(const QString &panelId)
     }
 
     m_pendingRenders.remove(panelId);
-    if (const auto process = m_renderProcesses.value(panelId))
-    {
-        process->kill();
-    }
+    m_activeRenders.remove(panelId);
     setPanelValues(
         panelId,
         {{QStringLiteral("themeSource"), QString{}},
@@ -2052,69 +2102,60 @@ PanelRegistry::RenderRequest PanelRegistry::makeRenderRequest(const QString &pan
     return request;
 }
 
-bool PanelRegistry::renderWithQt(const RenderRequest &request, QString *errorMessage) const
+bool PanelRegistry::renderWithQt(RenderRequest *request, QString *errorMessage) const
 {
-    QImageReader reader(request.sourcePath);
-    reader.setAutoTransform(true);
-    const QImage source = reader.read();
-    if (source.isNull())
+    if (!request)
     {
         if (errorMessage)
         {
-            *errorMessage = reader.errorString().isEmpty()
-                ? tr("Qt could not decode this design file.")
-                : reader.errorString();
+            *errorMessage = tr("The panel skin request is missing.");
         }
         return false;
     }
 
-    QImage rendered;
-    const QSize target(request.width, request.height);
-    if (request.fit == QStringLiteral("tile"))
-    {
-        const int tileLimit = qBound(48, qMin(request.width, request.height) / 2, 512);
-        const QImage tile = source.scaled(
-            QSize(tileLimit, tileLimit),
-            Qt::KeepAspectRatio,
-            Qt::SmoothTransformation);
-        rendered = QImage(target, QImage::Format_ARGB32_Premultiplied);
-        rendered.fill(Qt::transparent);
-        QPainter painter(&rendered);
-        for (int y = 0; y < target.height(); y += tile.height())
-        {
-            for (int x = 0; x < target.width(); x += tile.width())
-            {
-                painter.drawImage(x, y, tile);
-            }
-        }
-    }
-    else if (request.fit == QStringLiteral("stretch"))
-    {
-        rendered = source.scaled(target, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-    }
-    else
-    {
-        const Qt::AspectRatioMode mode = request.fit == QStringLiteral("contain")
-            ? Qt::KeepAspectRatio
-            : Qt::KeepAspectRatioByExpanding;
-        const QImage scaled = source.scaled(target, mode, Qt::SmoothTransformation);
-        rendered = QImage(target, QImage::Format_ARGB32_Premultiplied);
-        rendered.fill(Qt::transparent);
-        QPainter painter(&rendered);
-        const QPoint origin(
-            (target.width() - scaled.width()) / 2,
-            (target.height() - scaled.height()) / 2);
-        painter.drawImage(origin, scaled);
-    }
-
-    if (rendered.isNull() || !rendered.save(request.outputPath, "PNG"))
+    ArchDock::ThemeAssetProcessingRequest processingRequest;
+    processingRequest.sourcePath = request->sourcePath;
+    processingRequest.managedOutputRoot =
+        QFileInfo(request->outputPath).absolutePath() +
+        QStringLiteral("/processed-renders");
+    processingRequest.assetId = QStringLiteral("render-") +
+        processorAssetId(request->panelId);
+    processingRequest.previewBounds = QSize(320, 180);
+    processingRequest.targetSize = QSize(request->width, request->height);
+    processingRequest.scaleFactors = {1.0};
+    processingRequest.fit = request->fit;
+    processingRequest.cleanupRequirements = {QStringLiteral("none")};
+    const ArchDock::ThemeAssetProcessingResult processed =
+        ArchDock::ThemeAssetProcessor::process(processingRequest);
+    if (!processed.isValid())
     {
         if (errorMessage)
         {
-            *errorMessage = tr("Qt could not write the generated panel skin.");
+            *errorMessage = tr("Bounded panel rendering failed: %1").arg(
+                processorFailureMessage(
+                    processed,
+                    tr("Qt could not create a verified panel derivative.")));
         }
         return false;
     }
+
+    const auto variant = std::find_if(
+        processed.derivatives.cbegin(), processed.derivatives.cend(),
+        [](const ArchDock::ThemeAssetDerivative &derivative)
+        {
+            return derivative.id == QStringLiteral("scale-1000") &&
+                derivative.role == QStringLiteral("variant");
+        });
+    if (variant == processed.derivatives.cend() ||
+        !QFileInfo(variant->absolutePath).isFile())
+    {
+        if (errorMessage)
+        {
+            *errorMessage = tr("The bounded processor did not publish the requested panel derivative.");
+        }
+        return false;
+    }
+    request->outputPath = variant->absolutePath;
     return true;
 }
 
@@ -2239,152 +2280,27 @@ void PanelRegistry::startRender(const RenderRequest &request)
             .arg(request.height)},
          {QStringLiteral("themeRenderOutcome"), QStringLiteral("rendering")}});
 
-    if (QFileInfo(request.sourcePath).suffix().compare(QStringLiteral("blend"), Qt::CaseInsensitive) == 0)
+    if (QFileInfo(request.sourcePath).suffix().compare(
+            QStringLiteral("blend"), Qt::CaseInsensitive) == 0)
     {
-        const QString blender = QStandardPaths::findExecutable(QStringLiteral("blender"));
-        if (blender.isEmpty())
-        {
-            finishRender(
-                request,
-                false,
-                tr("Blender is not installed. The .blend source is saved and can be rendered after Blender is installed."));
-            return;
-        }
-
-        const QString outputBase = QFileInfo(request.outputPath).absolutePath() +
-            QLatin1Char('/') + QFileInfo(request.outputPath).completeBaseName() + QStringLiteral("-blend-");
-        const QString renderedFrame = outputBase + QStringLiteral("0001.png");
-        QFile::remove(renderedFrame);
-        auto *process = new QProcess(this);
-        m_renderProcesses.insert(request.panelId, process);
-        connect(process,
-                qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
-                this,
-                [this, process, request, renderedFrame](int exitCode, QProcess::ExitStatus exitStatus)
-                {
-                    const QString error = QString::fromUtf8(process->readAllStandardError()).trimmed();
-                    m_renderProcesses.remove(request.panelId);
-                    process->deleteLater();
-                    if (exitStatus == QProcess::NormalExit && exitCode == 0 && QFileInfo::exists(renderedFrame))
-                    {
-                        startMagickRender(request, renderedFrame);
-                        return;
-                    }
-                    finishRender(
-                        request,
-                        false,
-                        error.isEmpty() ? tr("Blender could not render frame 1 from this .blend file.") : error.left(220));
-                });
-        process->start(
-            blender,
-            {QStringLiteral("--background"), request.sourcePath,
-             QStringLiteral("--render-output"), outputBase,
-             QStringLiteral("--render-format"), QStringLiteral("PNG"),
-             QStringLiteral("--render-frame"), QStringLiteral("1")});
-        if (!process->waitForStarted(1500))
-        {
-            const QString error = process->errorString();
-            m_renderProcesses.remove(request.panelId);
-            process->deleteLater();
-            finishRender(request, false, error.isEmpty() ? tr("Blender did not start.") : error);
-        }
-        return;
-    }
-
-    startMagickRender(request, request.sourcePath);
-}
-
-void PanelRegistry::startMagickRender(const RenderRequest &request, const QString &sourcePath)
-{
-    const QString magick = QStandardPaths::findExecutable(QStringLiteral("magick"));
-    if (magick.isEmpty())
-    {
-        QString error;
-        const bool success = renderWithQt(request, &error);
-        finishRender(request, success, success ? tr("Rendered with Qt fallback.") : error);
-        return;
-    }
-
-    QStringList arguments{sourcePath, QStringLiteral("-auto-orient"), QStringLiteral("-colorspace"), QStringLiteral("sRGB")};
-    if (request.fit == QStringLiteral("tile"))
-    {
-        const int tileLimit = qBound(48, qMin(request.width, request.height) / 2, 512);
-        arguments << QStringLiteral("-resize")
-                  << QStringLiteral("%1x%2>").arg(tileLimit).arg(tileLimit)
-                  << QStringLiteral("-write") << QStringLiteral("mpr:tile")
-                  << QStringLiteral("+delete")
-                  << QStringLiteral("-size")
-                  << QStringLiteral("%1x%2").arg(request.width).arg(request.height)
-                  << QStringLiteral("tile:mpr:tile");
-    }
-    else if (request.fit == QStringLiteral("stretch"))
-    {
-        arguments << QStringLiteral("-resize")
-                  << QStringLiteral("%1x%2!").arg(request.width).arg(request.height);
-    }
-    else if (request.fit == QStringLiteral("contain"))
-    {
-        arguments << QStringLiteral("-resize")
-                  << QStringLiteral("%1x%2").arg(request.width).arg(request.height)
-                  << QStringLiteral("-gravity") << QStringLiteral("center")
-                  << QStringLiteral("-background") << QStringLiteral("none")
-                  << QStringLiteral("-extent")
-                  << QStringLiteral("%1x%2").arg(request.width).arg(request.height);
-    }
-    else
-    {
-        arguments << QStringLiteral("-resize")
-                  << QStringLiteral("%1x%2^").arg(request.width).arg(request.height)
-                  << QStringLiteral("-gravity") << QStringLiteral("center")
-                  << QStringLiteral("-extent")
-                  << QStringLiteral("%1x%2").arg(request.width).arg(request.height);
-    }
-    arguments << QStringLiteral("-strip") << QStringLiteral("-quality") << QStringLiteral("92")
-              << QStringLiteral("PNG32:") + request.outputPath;
-
-    auto *process = new QProcess(this);
-    m_renderProcesses.insert(request.panelId, process);
-    connect(process,
-            qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
-            this,
-            [this, process, request](int exitCode, QProcess::ExitStatus exitStatus)
-            {
-                const QString error = QString::fromUtf8(process->readAllStandardError()).trimmed();
-                m_renderProcesses.remove(request.panelId);
-                process->deleteLater();
-                if (exitStatus == QProcess::NormalExit && exitCode == 0 && QFileInfo::exists(request.outputPath))
-                {
-                    finishRender(request, true, tr("Panel skin is ready."));
-                    return;
-                }
-
-                QString fallbackError;
-                const bool fallbackSucceeded = renderWithQt(request, &fallbackError);
-                finishRender(
-                    request,
-                    fallbackSucceeded,
-                    fallbackSucceeded ? tr("Rendered with Qt fallback.")
-                        : (fallbackError.isEmpty() ? error.left(220) : fallbackError));
-            });
-    process->start(magick, arguments);
-    if (!process->waitForStarted(1500))
-    {
-        const QString error = process->errorString();
-        m_renderProcesses.remove(request.panelId);
-        process->deleteLater();
-        QString fallbackError;
-        const bool fallbackSucceeded = renderWithQt(request, &fallbackError);
         finishRender(
             request,
-            fallbackSucceeded,
-            fallbackSucceeded ? tr("Rendered with Qt fallback.")
-                : (fallbackError.isEmpty() ? error : fallbackError));
+            false,
+            tr("The .blend source is retained for offline review; Arch Dock does not execute external scene converters."));
+        return;
     }
+
+    RenderRequest completedRequest = request;
+    QString error;
+    const bool success = renderWithQt(&completedRequest, &error);
+    finishRender(
+        completedRequest,
+        success,
+        success ? tr("Verified bounded Qt panel derivative is ready.") : error);
 }
 
 void PanelRegistry::finishRender(const RenderRequest &request, bool success, const QString &message)
 {
-    m_renderProcesses.remove(request.panelId);
     m_activeRenders.remove(request.panelId);
     const QVariantMap *panel = record(request.panelId);
     const QString currentSource = panel

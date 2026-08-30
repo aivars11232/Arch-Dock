@@ -211,9 +211,9 @@ unrelated applet.
   stored native and free associations after the shell has rebuilt its layout. A
   later shell disappearance cancels pending retries, and recovery first verifies
   that the PlasmaShell service is still available.
-- Theme rendering subprocesses are cancelled and reaped during registry
-  shutdown, avoiding a running ImageMagick or Blender child during application
-  teardown.
+- Theme previews and raster derivatives are produced in-process by the bounded
+  Qt asset processor. Registry shutdown therefore has no ImageMagick, Blender,
+  or shell renderer child to cancel or reap.
 
 ## Controlled Validation
 

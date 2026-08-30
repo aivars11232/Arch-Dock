@@ -80,6 +80,12 @@ qt_add_executable(
   src/DockSettings.cpp
   src/PanelRegistry.h
   src/PanelRegistry.cpp
+  src/model/ThemeDefinition.h
+  src/model/ThemeDefinition.cpp
+  src/themes/ThemeAssetProcessor.h
+  src/themes/ThemeAssetProcessor.cpp
+  src/themes/ThemePackage.h
+  src/themes/ThemePackage.cpp
   src/model/PanelDefinition.h
   src/model/PanelDefinition.cpp
   src/model/PanelSettingsSchema.h
@@ -185,6 +191,59 @@ if(BUILD_TESTING)
   add_test(NAME panel-model-test COMMAND panel-model-test)
 
   qt_add_executable(
+    theme-package-test
+    tests/ThemePackageTest.cpp
+    src/model/ThemeDefinition.h
+    src/model/ThemeDefinition.cpp
+    src/themes/ThemePackage.h
+    src/themes/ThemePackage.cpp)
+  target_include_directories(
+    theme-package-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    theme-package-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(NAME theme-package-test COMMAND theme-package-test)
+
+  qt_add_executable(
+    source-asset-catalog-test
+    tests/SourceAssetCatalogTest.cpp
+    src/model/ThemeDefinition.h
+    src/model/ThemeDefinition.cpp
+    src/themes/SourceAssetCatalog.h
+    src/themes/SourceAssetCatalog.cpp)
+  target_include_directories(
+    source-asset-catalog-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    source-asset-catalog-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(
+    NAME source-asset-catalog-test
+    COMMAND source-asset-catalog-test)
+
+  qt_add_executable(
+    theme-asset-processor-test
+    tests/ThemeAssetProcessorTest.cpp
+    src/model/ThemeDefinition.h
+    src/model/ThemeDefinition.cpp
+    src/themes/ThemeAssetProcessor.h
+    src/themes/ThemeAssetProcessor.cpp)
+  target_include_directories(
+    theme-asset-processor-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    theme-asset-processor-test
+    PRIVATE Qt6::Core
+            Qt6::Gui
+            Qt6::Test)
+  add_test(
+    NAME theme-asset-processor-test
+    COMMAND theme-asset-processor-test)
+
+  qt_add_executable(
     panel-settings-schema-test
     tests/PanelSettingsSchemaTest.cpp
     src/model/PanelDefinition.h
@@ -257,6 +316,12 @@ if(BUILD_TESTING)
     src/DockSettings.cpp
     src/PanelRegistry.h
     src/PanelRegistry.cpp
+    src/model/ThemeDefinition.h
+    src/model/ThemeDefinition.cpp
+    src/themes/ThemeAssetProcessor.h
+    src/themes/ThemeAssetProcessor.cpp
+    src/themes/ThemePackage.h
+    src/themes/ThemePackage.cpp
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
     src/model/PanelSettingsSchema.h
@@ -307,6 +372,12 @@ if(BUILD_TESTING)
     src/DockSettings.cpp
     src/PanelRegistry.h
     src/PanelRegistry.cpp
+    src/model/ThemeDefinition.h
+    src/model/ThemeDefinition.cpp
+    src/themes/ThemeAssetProcessor.h
+    src/themes/ThemeAssetProcessor.cpp
+    src/themes/ThemePackage.h
+    src/themes/ThemePackage.cpp
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
     src/model/PanelSettingsSchema.h

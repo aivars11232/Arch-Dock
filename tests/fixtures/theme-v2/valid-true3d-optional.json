@@ -1,0 +1,35 @@
+{
+  "format": "org.archdock.theme",
+  "version": 2,
+  "id": "fixture-optional-3d",
+  "name": "Fixture Optional 3D",
+  "capabilities": {
+    "hosts": ["free-desktop"],
+    "rendererTiers": ["true3d", "procedural2d"],
+    "preferredRendererTier": "true3d",
+    "fallbackRendererTiers": ["procedural2d"],
+    "layouts": ["ring", "polygon", "floating"],
+    "orientations": ["free"],
+    "features": ["icon-state-styling"],
+    "presentationMechanisms": [],
+    "rotation": {"mode": "free"}
+  },
+  "assets": [
+    {
+      "id": "panel-mesh",
+      "path": "assets/minimal.gltf",
+      "kind": "mesh",
+      "mimeType": "model/gltf+json"
+    }
+  ],
+  "states": [{"id": "normal", "layers": ["mesh-layer"]}],
+  "layers": [
+    {
+      "id": "mesh-layer",
+      "asset": "panel-mesh",
+      "role": "mesh",
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    }
+  ]
+}

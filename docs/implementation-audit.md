@@ -53,11 +53,13 @@ live edge applet currently renders.
 
 ## Theme Support
 
-`PanelRegistry` defines a versioned `org.archdock.theme` package, validates and
-copies source assets, analyzes raster/vector/scene inputs, renders adaptive 2D
-previews, and detects optional Blender/ImageMagick conversion tools. The live
-applet does not yet render all processed theme metadata, masks, safe regions,
-or 3D scenes.
+`PanelRegistry` loads versioned `org.archdock.theme` v1/v2 packages through a
+typed fail-closed validator, materializes declared assets, and sends readable
+2D sources through a bounded in-process Qt processor. That processor publishes
+content-addressed previews and panel derivatives with hashes and exact alpha
+inspection metadata. Offline scene files are retained without executing
+Blender, ImageMagick, or shell converters. The live applet does not yet render
+all processed theme metadata, masks, safe regions, or 3D scenes.
 
 ## Supplied Visual Reference Families
 

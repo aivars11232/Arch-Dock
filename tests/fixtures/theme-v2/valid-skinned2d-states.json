@@ -1,0 +1,115 @@
+{
+  "format": "org.archdock.theme",
+  "version": 2,
+  "id": "fixture-split-skin",
+  "name": "Fixture Split Skin",
+  "packageRevision": 1,
+  "author": "Arch Dock tests",
+  "description": "Synthetic state and slice coverage",
+  "license": {
+    "spdx": "CC0-1.0",
+    "redistribution": "allowed",
+    "evidence": "generated for this test fixture"
+  },
+  "capabilities": {
+    "hosts": ["native-edge", "free-desktop"],
+    "rendererTiers": ["skinned2d", "procedural2d"],
+    "preferredRendererTier": "skinned2d",
+    "fallbackRendererTiers": ["procedural2d"],
+    "layouts": ["adaptive", "horizontal", "vertical"],
+    "orientations": ["horizontal", "vertical"],
+    "features": ["dynamic-tint", "icon-state-styling"],
+    "presentationMechanisms": ["split"],
+    "rotation": {"mode": "bounded", "minimumDegrees": -90, "maximumDegrees": 90}
+  },
+  "assets": [
+    {
+      "id": "surface",
+      "path": "assets/surface.svg",
+      "kind": "vector",
+      "mimeType": "image/svg+xml",
+      "naturalSize": {"width": 1200, "height": 160}
+    },
+    {
+      "id": "input-mask",
+      "path": "assets/surface.svg",
+      "kind": "mask",
+      "mimeType": "image/svg+xml",
+      "naturalSize": {"width": 1200, "height": 160}
+    }
+  ],
+  "states": [
+    {"id": "normal", "layers": ["left", "center", "right"]},
+    {"id": "open", "inherits": "normal", "layers": ["left", "center", "right"]},
+    {"id": "collapsed", "inherits": "normal", "layers": ["center"]},
+    {"id": "hover", "inherits": "normal", "layers": ["left", "center", "right", "glow"]}
+  ],
+  "layers": [
+    {
+      "id": "left",
+      "asset": "surface",
+      "role": "split-start",
+      "sourceRect": {"x": 0, "y": 0, "width": 80, "height": 160},
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "center",
+      "asset": "surface",
+      "role": "split-center",
+      "sourceRect": {"x": 80, "y": 0, "width": 1040, "height": 160},
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "right",
+      "asset": "surface",
+      "role": "split-end",
+      "sourceRect": {"x": 1120, "y": 0, "width": 80, "height": 160},
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "glow",
+      "asset": "surface",
+      "role": "glow",
+      "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160},
+      "opacity": 0.6,
+      "blendMode": "screen"
+    }
+  ],
+  "slices": [
+    {
+      "id": "main-horizontal",
+      "asset": "surface",
+      "state": "normal",
+      "orientation": "horizontal",
+      "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160},
+      "fixedStart": 80,
+      "fixedEnd": 80,
+      "centerMode": "stretch"
+    }
+  ],
+  "contentRegions": [
+    {
+      "id": "primary",
+      "state": "normal",
+      "orientation": "horizontal",
+      "shape": "rect",
+      "rect": {"x": 96, "y": 24, "width": 1008, "height": 112},
+      "baseline": 104
+    }
+  ],
+  "effectMargins": {"left": 12, "top": 12, "right": 12, "bottom": 20},
+  "inputMasks": [
+    {
+      "id": "primary-input",
+      "asset": "input-mask",
+      "state": "normal",
+      "orientation": "horizontal",
+      "threshold": 0.5
+    }
+  ],
+  "iconStyleRef": {"id": "fixture-icons"},
+  "animationProfileRefs": [{"id": "fixture-motion", "states": ["hover", "open"]}]
+}

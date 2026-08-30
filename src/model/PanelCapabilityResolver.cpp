@@ -408,7 +408,8 @@ RotationCapability parseRotation(const QVariantMap &rotation, bool *ok)
     {
         result.support = RotationSupport::Bounded;
     }
-    else if (mode == QStringLiteral("arbitrary"))
+    else if (mode == QStringLiteral("free") ||
+             mode == QStringLiteral("arbitrary"))
     {
         result.support = RotationSupport::Arbitrary;
     }
@@ -871,8 +872,8 @@ QVector<RendererAvailability> PanelCapabilityResolver::productionRenderers()
          6,
          true},
         {RendererTier::Skinned2D,
-         true,
-         true,
+         false,
+         false,
          {PanelHostKind::FreeDesktop},
          {QStringLiteral("arch")},
          6,

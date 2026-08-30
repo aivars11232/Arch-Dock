@@ -181,6 +181,8 @@ private slots:
     void freeDesktopResolvesBoundedRotation();
     void productionNativeRotationIsUnavailable();
     void syntheticNativeRotationCanBeBounded();
+    void freeRotationVocabularyMapsToArbitrary();
+    void productionSkinnedTwoDReportsNotInstalled();
     void bakedTwoPointFiveDCanBeAvailableInSyntheticInventory();
     void trueThreeDReportsNotInstalled();
     void trueThreeDReportsDisabledSeparately();
@@ -339,6 +341,59 @@ void PanelCapabilityResolverTest::syntheticNativeRotationCanBeBounded()
     QCOMPARE(result.rotation.support, RotationSupport::Bounded);
     QCOMPARE(result.rotation.minimumDegrees, -15.0);
     QCOMPARE(result.rotation.maximumDegrees, 20.0);
+}
+
+void PanelCapabilityResolverTest::freeRotationVocabularyMapsToArbitrary()
+{
+    QVariantMap theme = themeMap(false);
+    QVariantMap capabilities = theme.value(
+        QStringLiteral("capabilities")).toMap();
+    capabilities.insert(
+        QStringLiteral("rotation"),
+        QVariantMap{{QStringLiteral("mode"), QStringLiteral("free")}});
+    theme.insert(QStringLiteral("capabilities"), capabilities);
+
+    QString errorCode;
+    const auto profile = PanelCapabilityResolver::themeProfileFromVariantMap(
+        theme, &errorCode);
+    QVERIFY2(profile.has_value(), qPrintable(errorCode));
+    QCOMPARE(profile->rotation.support, RotationSupport::Arbitrary);
+    QCOMPARE(profile->rotation.minimumDegrees, -180.0);
+    QCOMPARE(profile->rotation.maximumDegrees, 180.0);
+}
+
+void PanelCapabilityResolverTest::productionSkinnedTwoDReportsNotInstalled()
+{
+    ThemeCapabilityProfile theme = themeFor(
+        QStringLiteral("skinned-with-safe-fallback"),
+        {PanelHostKind::FreeDesktop},
+        {PanelLayoutKind::Adaptive},
+        {RendererTier::Skinned2D, RendererTier::Procedural2D},
+        RendererTier::Skinned2D);
+    theme.fallbackRendererTiers = {RendererTier::Procedural2D};
+    const CapabilityResolution result = PanelCapabilityResolver::resolve(
+        panelFor(PanelHostKind::FreeDesktop),
+        PanelCapabilityResolver::productionHostProfile(
+            PanelHostKind::FreeDesktop),
+        theme,
+        PanelCapabilityResolver::productionRenderers(),
+        PanelCapabilityResolver::productionPlatform());
+
+    QVERIFY(result.available);
+    QVERIFY(result.renderer.fallbackApplied);
+    QCOMPARE(result.renderer.effectiveTier,
+             std::optional<RendererTier>(RendererTier::Procedural2D));
+    QCOMPARE(result.renderer.reason,
+             CapabilityReasonCode::RendererNotInstalled);
+    QCOMPARE(result.renderer.evaluatedTiers.constFirst().tier,
+             RendererTier::Skinned2D);
+    QCOMPARE(result.renderer.evaluatedTiers.constFirst().reason,
+             CapabilityReasonCode::RendererNotInstalled);
+    const RendererCandidateDecision *choice = rendererChoiceByTier(
+        result.rendererChoices, RendererTier::Skinned2D);
+    QVERIFY(choice);
+    QVERIFY(!choice->available);
+    QCOMPARE(choice->reason, CapabilityReasonCode::RendererNotInstalled);
 }
 
 void PanelCapabilityResolverTest::bakedTwoPointFiveDCanBeAvailableInSyntheticInventory()

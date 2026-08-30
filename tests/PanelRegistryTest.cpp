@@ -26,8 +26,6 @@
 #include <QtGlobal>
 
 #include <array>
-#include <cerrno>
-#include <csignal>
 #include <functional>
 #include <optional>
 #include <utility>
@@ -61,12 +59,6 @@ private:
     bool m_wasSet;
     QByteArray m_previousValue;
 };
-
-bool processIsRunning(qint64 processId)
-{
-    errno = 0;
-    return processId > 0 && ::kill(static_cast<pid_t>(processId), 0) == 0;
-}
 
 class ScopedNativeSettingsPath final
 {
@@ -357,10 +349,12 @@ private slots:
     void rejectsIncompatibleThemeWithoutRecordMutation();
     void mapsVersionOneArtworkToSkinnedTwoDWithProceduralFallback();
     void importsVersionedThemePackage();
+    void importsVersionTwoThemePackageWithSafeFallback();
+    void usesManagedVersionTwoCapabilitiesAndRendererFallback();
     void analyzesAdaptive2DThemeArtwork();
-    void reportsOptionalSceneConversionCapability();
+    void retainsSceneSourcesWithoutExternalConversion();
     void rendersResponsivePanelSkins();
-    void stopsActiveRendererOnDestruction();
+    void doesNotExecuteExternalRenderers();
 
 private:
     QTemporaryDir m_settingsDirectory;
@@ -2792,7 +2786,7 @@ void PanelRegistryTest::mapsVersionOneArtworkToSkinnedTwoDWithProceduralFallback
              std::optional<ArchDock::RendererTier>(
                  ArchDock::RendererTier::Procedural2D));
     QCOMPARE(resolution.renderer.evaluatedTiers.constFirst().reason,
-             ArchDock::CapabilityReasonCode::RendererHostUnsupported);
+             ArchDock::CapabilityReasonCode::RendererNotInstalled);
 }
 
 void PanelRegistryTest::importsVersionedThemePackage()
@@ -2865,6 +2859,10 @@ void PanelRegistryTest::importsVersionedThemePackage()
          {QStringLiteral("surface"), QJsonObject{{QStringLiteral("asset"), QStringLiteral("surface.png")}}}});
     QVERIFY(!unsupportedPath.isEmpty());
     QVERIFY(!registry.importTheme(QStringLiteral("bottom"), QUrl::fromLocalFile(unsupportedPath)));
+    QVERIFY(registry.panelValue(
+        QStringLiteral("bottom"), QStringLiteral("themeStatus"))
+                .toString()
+                .contains(QStringLiteral("unknown-field")));
 
     const QString traversalPath = writeManifest(
         QStringLiteral("traversal-theme.json"),
@@ -2873,10 +2871,127 @@ void PanelRegistryTest::importsVersionedThemePackage()
          {QStringLiteral("surface"), QJsonObject{{QStringLiteral("asset"), QStringLiteral("../surface.png")}}}});
     QVERIFY(!traversalPath.isEmpty());
     QVERIFY(!registry.importTheme(QStringLiteral("bottom"), QUrl::fromLocalFile(traversalPath)));
+    QVERIFY(registry.panelValue(
+        QStringLiteral("bottom"), QStringLiteral("themeStatus"))
+                .toString()
+                .contains(QStringLiteral("unsafe-path")));
 
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themeSource")).toString(), activeSource);
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themeAsset")).toString(), activeAsset);
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themePackageId")).toString(), activePackageId);
+}
+
+void PanelRegistryTest::importsVersionTwoThemePackageWithSafeFallback()
+{
+    const QString manifestPath = QFINDTESTDATA(
+        QStringLiteral("fixtures/theme-v2/valid-procedural.json"));
+    QVERIFY(!manifestPath.isEmpty());
+    QFile originalFile(manifestPath);
+    QVERIFY(originalFile.open(QIODevice::ReadOnly));
+    const QByteArray originalBytes = originalFile.readAll();
+
+    PanelRegistry registry;
+    QVERIFY(registry.importTheme(
+        QStringLiteral("bottom"), QUrl::fromLocalFile(manifestPath)));
+
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("themePackageVersion")).toInt(),
+             2);
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("themePackageId")).toString(),
+             QStringLiteral("fixture-procedural"));
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("themePackageName")).toString(),
+             QStringLiteral("Fixture Procedural"));
+    QVERIFY(registry.panelValue(
+        QStringLiteral("bottom"), QStringLiteral("themeSource")).toString().isEmpty());
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("themeRenderOutcome")).toString(),
+             QStringLiteral("fallback"));
+    const QUrl managedManifest(registry.panelValue(
+        QStringLiteral("bottom"), QStringLiteral("themePackageManifest")).toString());
+    QVERIFY(managedManifest.isLocalFile());
+    QVERIFY(QFileInfo(managedManifest.toLocalFile()).isFile());
+    QVERIFY(managedManifest.toLocalFile() != manifestPath);
+
+    QFile originalAfter(manifestPath);
+    QVERIFY(originalAfter.open(QIODevice::ReadOnly));
+    QCOMPARE(originalAfter.readAll(), originalBytes);
+
+    PanelRegistry reloaded;
+    QCOMPARE(reloaded.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("themePackageVersion")).toInt(),
+             2);
+    QCOMPARE(reloaded.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("themePackageId")).toString(),
+             QStringLiteral("fixture-procedural"));
+
+    QFile corruptManagedManifest(managedManifest.toLocalFile());
+    QVERIFY(corruptManagedManifest.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    QCOMPARE(corruptManagedManifest.write(QByteArrayLiteral("not-json")), qint64{8});
+    corruptManagedManifest.close();
+    PanelRegistry fallbackReload;
+    QCOMPARE(fallbackReload.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("themePackageVersion")).toInt(),
+             0);
+    QVERIFY(fallbackReload.panelValue(
+        QStringLiteral("bottom"), QStringLiteral("themeSource")).toString().isEmpty());
+    QCOMPARE(fallbackReload.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("themeRenderOutcome")).toString(),
+             QStringLiteral("fallback"));
+    QVERIFY(fallbackReload.panelValue(
+        QStringLiteral("bottom"), QStringLiteral("themeStatus"))
+                .toString()
+                .contains(QStringLiteral("invalid-json")));
+}
+
+void PanelRegistryTest::usesManagedVersionTwoCapabilitiesAndRendererFallback()
+{
+    const QString manifestPath = QFINDTESTDATA(
+        QStringLiteral("fixtures/theme-v2/valid-skinned2d-states.json"));
+    QVERIFY(!manifestPath.isEmpty());
+
+    PanelRegistry registry;
+    QVERIFY(registry.importTheme(
+        QStringLiteral("bottom"), QUrl::fromLocalFile(manifestPath)));
+    const auto definition = registry.panelDefinition(QStringLiteral("bottom"));
+    QVERIFY(definition.has_value());
+    QString errorCode;
+    const auto profile = registry.themeCapabilityProfile(
+        *definition, &errorCode);
+    QVERIFY2(profile.has_value(), qPrintable(errorCode));
+    QCOMPARE(profile->id, QStringLiteral("fixture-split-skin"));
+    const QVector<ArchDock::PanelHostKind> expectedHosts{
+        ArchDock::PanelHostKind::NativeEdge,
+        ArchDock::PanelHostKind::FreeDesktop,
+    };
+    QCOMPARE(profile->hostKinds, expectedHosts);
+    QCOMPARE(profile->preferredRendererTier,
+             std::optional<ArchDock::RendererTier>(
+                 ArchDock::RendererTier::Skinned2D));
+    QCOMPARE(profile->fallbackRendererTiers,
+             QVector<ArchDock::RendererTier>{
+                 ArchDock::RendererTier::Procedural2D});
+    QVERIFY(profile->layouts.contains(ArchDock::PanelLayoutKind::Adaptive));
+    QVERIFY(profile->layouts.contains(ArchDock::PanelLayoutKind::Horizontal));
+    QVERIFY(profile->layouts.contains(ArchDock::PanelLayoutKind::Vertical));
+    QVERIFY(!profile->layouts.contains(ArchDock::PanelLayoutKind::Ring));
+    QVERIFY(profile->presentationMechanisms.contains(
+        ArchDock::PanelPresentationMechanism::Split));
+    QCOMPARE(profile->rotation.support, ArchDock::RotationSupport::Bounded);
+    QCOMPARE(profile->rotation.minimumDegrees, -90.0);
+    QCOMPARE(profile->rotation.maximumDegrees, 90.0);
+
+    const ArchDock::CapabilityResolution resolution =
+        registry.resolvePanelCapabilities(*definition, &errorCode);
+    QVERIFY2(resolution.available, qPrintable(errorCode));
+    QCOMPARE(resolution.themeId, QStringLiteral("fixture-split-skin"));
+    QVERIFY(resolution.renderer.fallbackApplied);
+    QCOMPARE(resolution.renderer.effectiveTier,
+             std::optional<ArchDock::RendererTier>(
+                 ArchDock::RendererTier::Procedural2D));
+    QCOMPARE(resolution.renderer.reason,
+             ArchDock::CapabilityReasonCode::RendererNotInstalled);
 }
 
 void PanelRegistryTest::analyzesAdaptive2DThemeArtwork()
@@ -2902,6 +3017,10 @@ void PanelRegistryTest::analyzesAdaptive2DThemeArtwork()
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themeSourceWidth")).toInt(), 80);
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themeSourceHeight")).toInt(), 40);
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themeSourceHasAlpha")).toBool(), true);
+    QVERIFY(registry.panelValue(
+        QStringLiteral("bottom"), QStringLiteral("themeAnalysisStatus"))
+                .toString()
+                .contains(QStringLiteral("transparent pixels detected")));
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themeSuggestedFit")).toString(),
              QStringLiteral("contain"));
 
@@ -2917,7 +3036,7 @@ void PanelRegistryTest::analyzesAdaptive2DThemeArtwork()
         10000);
 }
 
-void PanelRegistryTest::reportsOptionalSceneConversionCapability()
+void PanelRegistryTest::retainsSceneSourcesWithoutExternalConversion()
 {
     QTemporaryDir sourceDirectory;
     QVERIFY(sourceDirectory.isValid());
@@ -2933,17 +3052,27 @@ void PanelRegistryTest::reportsOptionalSceneConversionCapability()
 
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themeSourceKind")).toString(),
              QStringLiteral("scene"));
-    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themeConversionTool")).toString(),
-             QStringLiteral("Blender"));
-    QCOMPARE(
-        registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themeConversionAvailable")).toBool(),
-        !QStandardPaths::findExecutable(QStringLiteral("blender")).isEmpty());
+    QVERIFY(registry.panelValue(
+        QStringLiteral("bottom"), QStringLiteral("themeConversionTool"))
+                .toString()
+                .isEmpty());
+    QVERIFY(!registry.panelValue(
+        QStringLiteral("bottom"), QStringLiteral("themeConversionAvailable"))
+                 .toBool());
     QVERIFY(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themePreview")).toString().isEmpty());
+    QVERIFY(registry.panelValue(
+        QStringLiteral("bottom"), QStringLiteral("themeAnalysisStatus"))
+                .toString()
+                .contains(QStringLiteral("automatic external conversion is disabled")));
 
     QTRY_COMPARE_WITH_TIMEOUT(
         registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themeRenderOutcome")).toString(),
         QStringLiteral("error"),
         10000);
+    QVERIFY(registry.panelValue(
+        QStringLiteral("bottom"), QStringLiteral("themeStatus"))
+                .toString()
+                .contains(QStringLiteral("does not execute external scene converters")));
 }
 
 void PanelRegistryTest::rendersResponsivePanelSkins()
@@ -2981,6 +3110,11 @@ void PanelRegistryTest::rendersResponsivePanelSkins()
     QVERIFY(QFileInfo::exists(containAsset.toLocalFile()));
     QVERIFY(copiedSource.toLocalFile() != sourcePath);
     QVERIFY(containAsset.toLocalFile() != copiedSource.toLocalFile());
+    QVERIFY(containAsset.toLocalFile().contains(
+        QStringLiteral("/processed-renders/")));
+    QVERIFY(QFileInfo(QFileInfo(containAsset.toLocalFile()).absolutePath() +
+                      QStringLiteral("/processing.json"))
+                .isFile());
 
     const QImage containImage(containAsset.toLocalFile());
     QVERIFY(!containImage.isNull());
@@ -3007,24 +3141,32 @@ void PanelRegistryTest::rendersResponsivePanelSkins()
     QVERIFY(tileImage.pixelColor(43, 3).red() > tileImage.pixelColor(43, 3).blue());
 }
 
-void PanelRegistryTest::stopsActiveRendererOnDestruction()
+void PanelRegistryTest::doesNotExecuteExternalRenderers()
 {
     QTemporaryDir rendererDirectory;
     QVERIFY(rendererDirectory.isValid());
 
-    const QString pidPath = rendererDirectory.filePath(QStringLiteral("renderer.pid"));
-    QFile renderer(rendererDirectory.filePath(QStringLiteral("magick")));
-    QVERIFY(renderer.open(QIODevice::WriteOnly | QIODevice::Truncate));
-    renderer.write("#!/bin/sh\nprintf '%s\\n' \"$$\" > \"$ARCHDOCK_RENDER_PID_FILE\"\nexec sleep 60\n");
-    renderer.close();
-    QVERIFY(renderer.setPermissions(
-        QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner |
-        QFileDevice::ReadGroup | QFileDevice::ExeGroup |
-        QFileDevice::ReadOther | QFileDevice::ExeOther));
+    const QString markerPath = rendererDirectory.filePath(
+        QStringLiteral("external-renderer-invoked"));
+    for (const QString &name : {QStringLiteral("magick"), QStringLiteral("blender")})
+    {
+        QFile renderer(rendererDirectory.filePath(name));
+        QVERIFY(renderer.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        QCOMPARE(
+            renderer.write(
+                "#!/bin/sh\nprintf invoked > \"$ARCHDOCK_RENDER_MARKER\"\nexit 99\n"),
+            qint64(61));
+        renderer.close();
+        QVERIFY(renderer.setPermissions(
+            QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+            QFileDevice::ExeOwner | QFileDevice::ReadGroup |
+            QFileDevice::ExeGroup | QFileDevice::ReadOther |
+            QFileDevice::ExeOther));
+    }
 
     const QByteArray originalPath = qgetenv("PATH");
-    const ScopedEnvironmentVariable rendererPidFile(
-        QByteArrayLiteral("ARCHDOCK_RENDER_PID_FILE"), pidPath.toUtf8());
+    const ScopedEnvironmentVariable rendererMarker(
+        QByteArrayLiteral("ARCHDOCK_RENDER_MARKER"), markerPath.toUtf8());
     const ScopedEnvironmentVariable rendererPath(
         QByteArrayLiteral("PATH"), rendererDirectory.path().toUtf8() + ':' + originalPath);
 
@@ -3033,19 +3175,28 @@ void PanelRegistryTest::stopsActiveRendererOnDestruction()
     source.fill(Qt::darkCyan);
     QVERIFY(source.save(sourcePath));
 
-    auto registry = std::make_unique<PanelRegistry>();
-    QVERIFY(registry->importTheme(QStringLiteral("bottom"), QUrl::fromLocalFile(sourcePath)));
-    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(pidPath), 5000);
+    PanelRegistry registry;
+    QVERIFY(registry.importTheme(
+        QStringLiteral("bottom"), QUrl::fromLocalFile(sourcePath)));
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("themeRenderOutcome"))
+                 .toString(),
+             QStringLiteral("ready"));
+    QVERIFY(!QFileInfo::exists(markerPath));
 
-    QFile pidFile(pidPath);
-    QVERIFY(pidFile.open(QIODevice::ReadOnly));
-    bool parsedPid = false;
-    const qint64 rendererPid = QString::fromUtf8(pidFile.readAll()).trimmed().toLongLong(&parsedPid);
-    QVERIFY(parsedPid);
-    QVERIFY(processIsRunning(rendererPid));
-
-    registry.reset();
-    QTRY_VERIFY_WITH_TIMEOUT(!processIsRunning(rendererPid), 5000);
+    const QString blendPath = rendererDirectory.filePath(
+        QStringLiteral("scene.blend"));
+    QFile blend(blendPath);
+    QVERIFY(blend.open(QIODevice::WriteOnly));
+    QCOMPARE(blend.write(QByteArrayLiteral("BLENDER-v300")), qint64(12));
+    blend.close();
+    QVERIFY(registry.importTheme(
+        QStringLiteral("bottom"), QUrl::fromLocalFile(blendPath)));
+    QCOMPARE(registry.panelValue(
+                 QStringLiteral("bottom"), QStringLiteral("themeRenderOutcome"))
+                 .toString(),
+             QStringLiteral("error"));
+    QVERIFY(!QFileInfo::exists(markerPath));
 }
 
 int main(int argc, char *argv[])

@@ -1,0 +1,35 @@
+{
+  "format": "org.archdock.theme",
+  "version": 2,
+  "id": "fixture-flat-is-not-3d",
+  "name": "Fixture Flat Is Not 3D",
+  "capabilities": {
+    "hosts": ["free-desktop"],
+    "rendererTiers": ["true3d", "procedural2d"],
+    "preferredRendererTier": "true3d",
+    "fallbackRendererTiers": ["procedural2d"],
+    "layouts": ["ring"],
+    "orientations": ["free"],
+    "features": [],
+    "presentationMechanisms": [],
+    "rotation": {"mode": "free"}
+  },
+  "assets": [
+    {
+      "id": "flat-surface",
+      "path": "assets/surface.svg",
+      "kind": "vector",
+      "naturalSize": {"width": 1200, "height": 160}
+    }
+  ],
+  "states": [{"id": "normal", "layers": ["flat-layer"]}],
+  "layers": [
+    {
+      "id": "flat-layer",
+      "asset": "flat-surface",
+      "role": "surface",
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    }
+  ]
+}

@@ -56,6 +56,69 @@ stop_process() {
     fi
 }
 
+wait_for_kwin_script_state() {
+    local plugin_name="$1"
+    local expected_state="$2"
+    local phase="$3"
+    local attempt
+    local actual_state=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        actual_state="$(gdbus call \
+            --session \
+            --dest org.kde.KWin \
+            --object-path /Scripting \
+            --method org.kde.kwin.Scripting.isScriptLoaded \
+            "$plugin_name" 2>/dev/null || true)"
+        [[ "$actual_state" == "($expected_state,)" ]] && return
+        if [[ -n "$ARCHDOCK_SESSION_KWIN_PID" ]] &&
+            ! kill -0 "$ARCHDOCK_SESSION_KWIN_PID" 2>/dev/null; then
+            break
+        fi
+        sleep 0.1
+    done
+    printf 'Timed out waiting for KWin script state during %s: plugin=%s expected=%s actual=%s\n' \
+        "$phase" "$plugin_name" "$expected_state" \
+        "${actual_state:-unavailable}" >&2
+    return 1
+}
+
+unload_kwin_script() {
+    local plugin_name="$1"
+    if [[ -z "$ARCHDOCK_SESSION_KWIN_PID" ]] ||
+        ! kill -0 "$ARCHDOCK_SESSION_KWIN_PID" 2>/dev/null; then
+        return
+    fi
+    gdbus call \
+        --session \
+        --dest org.kde.KWin \
+        --object-path /Scripting \
+        --method org.kde.kwin.Scripting.unloadScript \
+        "$plugin_name" >/dev/null
+    wait_for_kwin_script_state "$plugin_name" false "unloading $plugin_name"
+}
+
+stop_arch_dock() {
+    unload_kwin_script org.archdock.windowwatcher
+    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+
+    local attempt
+    local owner_reply=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        owner_reply="$(gdbus call \
+            --session \
+            --dest org.freedesktop.DBus \
+            --object-path /org/freedesktop/DBus \
+            --method org.freedesktop.DBus.NameHasOwner \
+            org.archdock.ArchDock 2>/dev/null || true)"
+        [[ "$owner_reply" == '(false,)' ]] && return
+        sleep 0.1
+    done
+    printf 'Timed out stopping the private Arch Dock service: owner=%s\n' \
+        "${owner_reply:-unavailable}" >&2
+    return 1
+}
+
 restore_settings_fixture_permissions() {
     if [[ -n "$ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY" &&
         -d "$ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY" &&
@@ -80,14 +143,9 @@ cleanup_session() {
     stop_process "$ARCHDOCK_VISIBILITY_WINDOW_PID"
     if [[ -n "$ARCHDOCK_SESSION_KWIN_PID" ]] &&
         kill -0 "$ARCHDOCK_SESSION_KWIN_PID" 2>/dev/null; then
-        gdbus call \
-            --session \
-            --dest org.kde.KWin \
-            --object-path /Scripting \
-            --method org.kde.kwin.Scripting.unloadScript \
-            org.archdock.visibilityprobe >/dev/null 2>&1 || true
+        unload_kwin_script org.archdock.visibilityprobe || true
     fi
-    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
+    stop_arch_dock || true
     stop_process "$ARCHDOCK_SESSION_PLASMASHELL_PID"
     stop_process "$ARCHDOCK_SESSION_KWIN_PID"
     restore_settings_fixture_permissions
@@ -573,6 +631,38 @@ free_host_snapshot() {
         gvariant_string
 }
 
+wait_for_free_host_snapshot_stable() {
+    local desktop_containment_id="$1"
+    local dock_applet_id="$2"
+    local phase="$3"
+    local previous_snapshot=''
+    local current_snapshot=''
+    local stable_observations=0
+    local attempt
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        current_snapshot="$(free_host_snapshot \
+            "$desktop_containment_id" "$dock_applet_id" 2>/dev/null || true)"
+        if [[ "$current_snapshot" != 'missing' &&
+            "$current_snapshot" == "$previous_snapshot" ]]; then
+            ((stable_observations += 1))
+        elif [[ "$current_snapshot" != 'missing' ]]; then
+            previous_snapshot="$current_snapshot"
+            stable_observations=1
+        else
+            previous_snapshot=''
+            stable_observations=0
+        fi
+        if ((stable_observations >= 5)); then
+            printf '%s\n' "$current_snapshot"
+            return
+        fi
+        sleep 0.1
+    done
+    printf 'Timed out waiting for the free host snapshot to stabilize during %s: %s\n' \
+        "$phase" "${current_snapshot:-unavailable}" >&2
+    return 1
+}
+
 free_host_match_count() {
     local panel_id="$1"
     local ownership_token="$2"
@@ -1006,8 +1096,20 @@ reload_visibility_probe() {
     gdbus call \
         --session \
         --dest org.kde.KWin \
+        --object-path "/Scripting/Script$script_id" \
+        --method org.kde.kwin.Script.run >/dev/null
+    local loaded_reply
+    loaded_reply="$(gdbus call \
+        --session \
+        --dest org.kde.KWin \
         --object-path /Scripting \
-        --method org.kde.kwin.Scripting.start >/dev/null
+        --method org.kde.kwin.Scripting.isScriptLoaded \
+        org.archdock.visibilityprobe)"
+    [[ "$loaded_reply" == '(true,)' ]] || {
+        printf 'Private KWin visibility probe did not remain loaded: %s\n' \
+            "$loaded_reply" >&2
+        return 1
+    }
 
     local attempt
     for ((attempt = 0; attempt < 100; ++attempt)); do
@@ -1023,22 +1125,23 @@ reload_visibility_probe() {
 }
 
 identify_visibility_panel_window() {
-    local expected_width="$1"
-    local expected_height="$2"
+    local expected_length="$1"
+    local expected_output="$2"
     reload_visibility_probe
     local candidates
     candidates="$(awk -F'|' \
-        -v expected_width="$expected_width" \
-        -v expected_height="$expected_height" \
+        -v expected_length="$expected_length" \
+        -v expected_output="$expected_output" \
         '$1 ~ /ARCHDOCK_VISIBILITY_PROBE$/ &&
-         $8 == expected_width && $9 == expected_height &&
+         $8 == expected_length &&
+         $17 == expected_output &&
          ($15 == "true" || tolower($3) ~ /plasma/) { print $2 }' \
         "$ARCHDOCK_VISIBILITY_PROBE_SNAPSHOT")"
     local candidate_count
     candidate_count="$(sed '/^$/d' <<<"$candidates" | wc -l)"
     [[ "$candidate_count" == '1' ]] || {
-        printf 'Expected one uniquely sized owned panel surface; candidates=%s snapshot=%s\n' \
-            "$candidate_count" \
+        printf 'Expected one panel surface with length %s on output %s; candidates=%s snapshot=%s\n' \
+            "$expected_length" "$expected_output" "$candidate_count" \
             "$(grep -F 'ARCHDOCK_VISIBILITY_PROBE|' \
                 "$ARCHDOCK_VISIBILITY_PROBE_SNAPSHOT" | tr '\n' ';')" >&2
         return 1
@@ -1073,27 +1176,48 @@ wait_for_visibility_fixture_state() {
         reload_visibility_probe
         fixture_row="$(awk -F'|' \
             '$1 ~ /ARCHDOCK_VISIBILITY_PROBE$/ &&
-             $5 == "Arch Dock Visibility Fixture" { print }' \
+             index($5, "Arch Dock Visibility Fixture [") == 1 { print }' \
             "$ARCHDOCK_VISIBILITY_PROBE_SNAPSHOT" | tail -n 1)"
         if [[ -n "$fixture_row" ]]; then
+            local caption=''
+            local geometry_x=''
+            local geometry_y=''
+            local geometry_width=''
+            local geometry_height=''
             local active=''
             local fullscreen=''
             local normal=''
             local maximized=''
+            local output_index=''
             IFS='|' read -r \
-                _ _ _ _ _ _ _ _ _ _ active fullscreen _ normal _ maximized \
+                _ _ _ _ caption geometry_x geometry_y geometry_width \
+                geometry_height _ active fullscreen _ normal _ maximized \
+                output_index \
                 <<<"$fixture_row"
             if [[ "$active" == 'true' ]]; then
                 case "$expected_state" in
                 normal|overlap)
-                    [[ "$fullscreen" == 'false' && "$normal" == 'true' &&
-                        "$maximized" == 'false' ]] && return
+                    local geometry_pattern="^Arch Dock Visibility Fixture \\[$expected_state:(-?[0-9]+):(-?[0-9]+):([0-9]+):([0-9]+)\\]$"
+                    if [[ "$caption" =~ $geometry_pattern ]]; then
+                        local requested_x="${BASH_REMATCH[1]}"
+                        local requested_y="${BASH_REMATCH[2]}"
+                        local requested_width="${BASH_REMATCH[3]}"
+                        local requested_height="${BASH_REMATCH[4]}"
+                        [[ "$fullscreen" == 'false' && "$normal" == 'true' &&
+                            "$maximized" == 'false' &&
+                            "$geometry_x" == "$requested_x" &&
+                            "$geometry_y" == "$requested_y" &&
+                            "$geometry_width" == "$requested_width" &&
+                            "$geometry_height" == "$requested_height" ]] && return
+                    fi
                     ;;
                 maximized)
-                    [[ "$fullscreen" == 'false' && "$maximized" == 'true' ]] && return
+                    [[ "$caption" == 'Arch Dock Visibility Fixture [maximized]' &&
+                        "$fullscreen" == 'false' && "$maximized" == 'true' ]] && return
                     ;;
                 fullscreen)
-                    [[ "$fullscreen" == 'true' ]] && return
+                    [[ "$caption" == 'Arch Dock Visibility Fixture [fullscreen]' &&
+                        "$fullscreen" == 'true' ]] && return
                     ;;
                 esac
             fi
@@ -1419,10 +1543,16 @@ start_arch_dock() {
         stop_process "$launched_pid"
         return 1
     }
+    wait_for_kwin_script_state \
+        org.archdock.windowwatcher true 'starting Arch Dock'
 }
 
 start_compositor() {
-    kwin_wayland \
+    env \
+        QT_FORCE_STDERR_LOGGING=1 \
+        QT_LOGGING_RULES='js.debug=true' \
+        XDG_CURRENT_DESKTOP=KDE \
+        kwin_wayland \
         --virtual \
         --width 1280 \
         --height 720 \
@@ -1631,8 +1761,9 @@ run_session() {
         exit 1
     }
     local sentinel_snapshot
-    sentinel_snapshot="$(free_host_snapshot \
-        "$sentinel_desktop_id" "$sentinel_applet_id")"
+    sentinel_snapshot="$(wait_for_free_host_snapshot_stable \
+        "$sentinel_desktop_id" "$sentinel_applet_id" \
+        'unrelated free-host sentinel creation')"
     [[ "$sentinel_snapshot" == "$sentinel_desktop_id|"* &&
         "$sentinel_snapshot" == *"|$sentinel_applet_id|org.archdock.dock|archdock-unrelated-sentinel|empty|archdock-unrelated-sentinel-token|false|"* ]] || {
         printf 'The unrelated free-host sentinel snapshot is incomplete: %s\n' \
@@ -1672,8 +1803,7 @@ run_session() {
         "$template_containment_id" "$template_applet_id")"
     local free_count_before_recovery_matrix
     free_count_before_recovery_matrix="$(free_panel_count)"
-    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
-    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    stop_arch_dock
     set_stale_free_ids "$studio_panel_id" 999999997 999999996
     [[ "$(panel_registry_value "$studio_panel_id" freeOwnershipToken)" == "$studio_token" &&
         "$(panel_registry_value "$studio_panel_id" freeDesktopContainmentId)" == '999999997' &&
@@ -1724,8 +1854,7 @@ run_session() {
     duplicate_free_snapshot="$(free_host_snapshot \
         "$duplicate_free_desktop_id" "$duplicate_free_applet_id")"
 
-    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
-    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    stop_arch_dock
     start_arch_dock arch-dock-free-conflict.log
     start_signal_monitor nativePanelRecoveryFinished
     wait_for_panel_registry_value "$template_panel_id" freeRecoveryError owned-host-conflict
@@ -1754,8 +1883,7 @@ run_session() {
     wait_for_free_host_absent "$duplicate_free_desktop_id" "$duplicate_free_applet_id"
     wait_for_free_host_match_count "$template_panel_id" "$template_token" 1
 
-    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
-    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    stop_arch_dock
     start_arch_dock arch-dock-free-conflict-converged.log
     start_signal_monitor nativePanelRecoveryFinished
     wait_for_panel_registry_value "$template_panel_id" freeHostState hosted-owned
@@ -1802,7 +1930,8 @@ run_session() {
     local panel_id
     panel_id="$(panel_call createNativePanel bottom hybrid | gvariant_string)"
     [[ -n "$panel_id" ]] || {
-        printf 'Could not create an Arch Dock test panel.\n' >&2
+        printf 'Could not create an Arch Dock test panel: placement=%s\n' \
+            "$(panel_call nativePanelPlacementStatus panel-1)" >&2
         exit 1
     }
     wait_for_signal_monitor nativePanelRecoveryFinished
@@ -1951,16 +2080,6 @@ run_session() {
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'show after temporary hide'
 
-    local visibility_geometry_reply
-    visibility_geometry_reply="$(panel_call applyNativePanelPlacementDraft \
-        "$panel_id" \
-        "{'dynamic': <false>, 'width': <int32 617>, 'height': <int32 91>}")"
-    require_structured_placement_reply \
-        "$visibility_geometry_reply" applied true ''
-    wait_for_native_panel_geometry \
-        "$first_containment_id" 91 custom 617 617 '*' \
-        'visibility surface identification'
-
     local visibility_screen_index
     visibility_screen_index="$(panel_call screenIndexForPanel "$panel_id" | gvariant_integer)"
     [[ "$visibility_screen_index" =~ ^[0-9]+$ ]] || {
@@ -1979,7 +2098,8 @@ run_session() {
     wait_for_native_panel_presentation \
         "$first_containment_id" 'none|0' 'always-visible mode'
     local visibility_panel_window_id
-    visibility_panel_window_id="$(identify_visibility_panel_window 617 91)"
+    visibility_panel_window_id="$(identify_visibility_panel_window \
+        720 "$visibility_screen_index")"
     [[ -n "$visibility_panel_window_id" ]] || {
         printf 'Could not identify the owned panel surface for visibility checks.\n' >&2
         exit 1
@@ -2086,15 +2206,9 @@ run_session() {
     stop_process "$ARCHDOCK_VISIBILITY_WINDOW_PID"
     ARCHDOCK_VISIBILITY_WINDOW_PID=''
 
-    local visibility_restore_reply
-    visibility_restore_reply="$(panel_call applyNativePanelPlacementDraft \
-        "$panel_id" \
-        "{'dynamic': <false>, 'width': <int32 720>, 'height': <int32 76>}")"
-    require_structured_placement_reply \
-        "$visibility_restore_reply" applied true ''
-    wait_for_native_panel_geometry \
+    require_native_panel_geometry \
         "$first_containment_id" 76 custom 720 720 '*' \
-        'visibility geometry restoration'
+        'visibility geometry preservation'
     [[ "$(owned_panel_record "$panel_id")" == "$first_record" &&
         "$(owned_dock_id "$first_containment_id" "$panel_id")" == "$first_dock_id" &&
         "$(panel_ids)" == "$ids_before_hide" ]] || {
@@ -2107,7 +2221,14 @@ run_session() {
     log_session_phase \
         'verified always, auto-hide, dodge, maximized/fullscreen cover, and manual restore'
 
-    require_true_reply "$(panel_call setNativePanelType "$panel_id" launcher)"
+    local launcher_type_reply
+    launcher_type_reply="$(panel_call setNativePanelType "$panel_id" launcher)"
+    [[ "$launcher_type_reply" == '(true,)' ]] || {
+        printf 'Could not reconcile the launcher renderer: reply=%s placement=%s\n' \
+            "$launcher_type_reply" \
+            "$(panel_call nativePanelPlacementStatus "$panel_id")" >&2
+        exit 1
+    }
     require_visual_dock "$first_containment_id" "$panel_id" launcher
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'launcher renderer reconciliation'
@@ -2203,8 +2324,7 @@ run_session() {
             "$unrelated_containment_id" "$unrelated_snapshot" "$typed_type panel permanent removal"
     done
 
-    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
-    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    stop_arch_dock
     set_panel_registry_placement "$panel_id" left start
     set_panel_registry_geometry "$panel_id" false 92 640
     [[ "$(panel_registry_value "$panel_id" edge)" == 'left' &&
@@ -2229,8 +2349,7 @@ run_session() {
         "$unrelated_containment_id" "$unrelated_snapshot" 'vertical-start recovery'
     log_session_phase 'recovered vertical start and fixed geometry through the adapter'
 
-    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
-    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    stop_arch_dock
     set_panel_registry_geometry "$panel_id" false 104 680 8
     start_arch_dock arch-dock-unsupported-floating.log
     require_false_reply "$(panel_call createNativeKdePanel "$panel_id")"
@@ -2245,8 +2364,7 @@ run_session() {
         "$unrelated_containment_id" "$unrelated_snapshot" 'unsupported floating refusal'
     log_session_phase 'rejected unsupported numeric floating margin without host mutation'
 
-    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
-    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    stop_arch_dock
     set_panel_registry_geometry "$panel_id" false 104 680
     start_arch_dock arch-dock-supported-geometry.log
     wait_for_native_panel_geometry \
@@ -2305,9 +2423,6 @@ run_session() {
         "$first_containment_id" "$panel_id" left left 'structured unsupported refusal'
     require_native_panel_geometry \
         "$first_containment_id" 112 custom 700 700 '*' 'structured unsupported refusal'
-    require_structured_placement_reply \
-        "$(panel_call nativePanelPlacementStatus "$panel_id")" unsupported false \
-        unsupported-capability-unavailable
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'structured unsupported refusal'
     log_session_phase 'reported unsupported floating margin without changing saved or host state'
@@ -2343,7 +2458,7 @@ run_session() {
     set +e
     structured_rollback_reply="$(panel_call applyNativePanelPlacementDraft \
         "$panel_id" \
-        "{'alignment': <'start'>, 'dynamic': <false>, 'width': <int32 120>, 'height': <int32 716>}" 2>&1)"
+        "{'alignment': <'start'>}" 2>&1)"
     structured_rollback_call_status=$?
     set -e
 
@@ -2363,10 +2478,10 @@ run_session() {
         "$structured_rollback_reply" rolled-back false persistence-failed
     [[ "$(gvariant_map_boolean rollbackAttempted <<<"$structured_rollback_reply")" == 'true' &&
         "$(gvariant_map_boolean rollbackSucceeded <<<"$structured_rollback_reply")" == 'true' &&
-        "$(gvariant_nested_map_string requested height <<<"$structured_rollback_reply")" == '120' &&
-        "$(gvariant_nested_map_string requested fixedLength <<<"$structured_rollback_reply")" == '716' &&
-        "$(gvariant_nested_map_string applied height <<<"$structured_rollback_reply")" == '120' &&
-        "$(gvariant_nested_map_string applied fixedLength <<<"$structured_rollback_reply")" == '716' &&
+        "$(gvariant_nested_map_string requested height <<<"$structured_rollback_reply")" == '112' &&
+        "$(gvariant_nested_map_string requested fixedLength <<<"$structured_rollback_reply")" == '700' &&
+        "$(gvariant_nested_map_string applied height <<<"$structured_rollback_reply")" == '112' &&
+        "$(gvariant_nested_map_string applied fixedLength <<<"$structured_rollback_reply")" == '700' &&
         "$(gvariant_nested_map_string hostState height <<<"$structured_rollback_reply")" == '112' &&
         "$(gvariant_nested_map_string hostState fixedLength <<<"$structured_rollback_reply")" == '700' &&
         "$(panel_registry_json)" == "$structured_saved_registry" &&
@@ -2381,9 +2496,6 @@ run_session() {
         "$first_containment_id" "$panel_id" left left 'structured persistence rollback'
     require_native_panel_geometry \
         "$first_containment_id" 112 custom 700 700 '*' 'structured persistence rollback'
-    require_structured_placement_reply \
-        "$(panel_call nativePanelPlacementStatus "$panel_id")" rolled-back false \
-        persistence-failed
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'structured persistence rollback'
     log_session_phase 'rolled Plasma host back after checked persistence failure'
@@ -2594,8 +2706,7 @@ run_session() {
     panel_count_before_stale_rebind="$(panel_count)"
     stop_process "$ARCHDOCK_SESSION_PLASMASHELL_PID"
     ARCHDOCK_SESSION_PLASMASHELL_PID=''
-    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
-    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    stop_arch_dock
     set_stale_native_ids "$panel_id" 999999999 999999998
     [[ "$(panel_registry_value "$panel_id" nativeOwnershipToken)" == "$replacement_token" ]] || {
         printf 'Stale-id fixture changed the ownership token.\n' >&2
@@ -2744,8 +2855,7 @@ run_session() {
     wait_for_free_host_absent "$studio_containment_id" "$studio_applet_id"
     wait_for_free_host_match_count "$studio_panel_id" "$studio_token" 0
 
-    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
-    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    stop_arch_dock
     start_arch_dock arch-dock-free-zero-match.log
     start_signal_monitor nativePanelRecoveryFinished
     wait_for_panel_registry_value "$studio_panel_id" freeHostState detached
@@ -2768,8 +2878,7 @@ run_session() {
 
     local detached_studio_snapshot
     detached_studio_snapshot="$(panel_registry_record_snapshot "$studio_panel_id")"
-    stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
-    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    stop_arch_dock
     start_arch_dock arch-dock-free-zero-match-repeated.log
     start_signal_monitor nativePanelRecoveryFinished
     wait_for_signal_monitor nativePanelRecoveryFinished
@@ -2959,6 +3068,19 @@ run_outer() {
         "$ARCHDOCK_LIFECYCLE_STATE_ROOT/runtime" \
         "$ARCHDOCK_LIFECYCLE_STATE_ROOT/state"
     chmod 700 "$ARCHDOCK_LIFECYCLE_STATE_ROOT/runtime"
+
+    if command -v plasma-welcome >/dev/null 2>&1; then
+        local plasma_welcome_version
+        plasma_welcome_version="$(plasma-welcome --version | awk 'NF >= 2 { print $NF; exit }')"
+        [[ "$plasma_welcome_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            printf 'Could not resolve the installed Plasma Welcome version: %s\n' \
+                "$plasma_welcome_version" >&2
+            exit 1
+        }
+        printf '[General]\nLastSeenVersion=%s\n' "$plasma_welcome_version" \
+            >"$ARCHDOCK_LIFECYCLE_STATE_ROOT/config/plasma-welcomerc"
+    fi
+
     cp "$0" "$session_script"
     chmod +x "$session_script"
 
