@@ -49,6 +49,13 @@ TestCase {
                     id: "obsidian-glass"
                 }
             ],
+            themeDefinition: {
+                id: "fixture-split-skin",
+                valid: true,
+                assetPaths: { surface: "/managed/surface.svg" }
+            },
+            themeProjectionStatus: "ready",
+            themeProjectionError: "",
             capabilityResolution: {
                 available: true
             }
@@ -64,10 +71,16 @@ TestCase {
         compare(session.revision, 4);
         compare(EditorModel.panelValue(session, "opacity", 0), 0.9);
         compare(EditorModel.globalValue(session, "showTooltips", false), true);
+        compare(session.themeDefinition.id, "fixture-split-skin");
+        compare(session.themeProjectionStatus, "ready");
+        compare(session.themeProjectionError, "");
         verify(!EditorModel.dirty(session));
 
         source.panelValues.opacity = 0.1;
+        source.themeDefinition.assetPaths.surface = "/forged/surface.svg";
         compare(EditorModel.panelValue(session, "opacity", 0), 0.9);
+        compare(session.themeDefinition.assetPaths.surface,
+                "/managed/surface.svg");
         verify(!Object.prototype.hasOwnProperty.call(EditorModel.panelCandidate(session), "id"));
     }
 
@@ -226,6 +239,12 @@ TestCase {
             },
             globalValues: session.globalBaseline,
             themes: [],
+            themeDefinition: {
+                id: "fixture-projected-skin",
+                valid: true
+            },
+            themeProjectionStatus: "ready",
+            themeProjectionError: "",
             capabilityResolution: {
                 available: true,
                 themeId: "procedural"
@@ -238,6 +257,8 @@ TestCase {
         compare(EditorModel.panelValue(projected, "layoutRadius", 0), 150);
         compare(EditorModel.panelCandidate(projected).layout, "horizontal");
         compare(projected.revision, 5);
+        compare(projected.themeDefinition.id, "fixture-projected-skin");
+        compare(projected.themeProjectionStatus, "ready");
 
         const radiusDraft = EditorModel.setPanelValue(projected, "layoutRadius", 230);
         const hiddenAgain = EditorModel.withProjection(radiusDraft, {

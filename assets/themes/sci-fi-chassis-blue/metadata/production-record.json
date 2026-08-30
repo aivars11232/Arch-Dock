@@ -1,0 +1,49 @@
+{
+  "format": "org.archdock.production-record",
+  "version": 1,
+  "themeId": "sci-fi-chassis-blue",
+  "task": "TASK-0027",
+  "method": "deterministic-hand-authored-svg",
+  "sourceDerivative": false,
+  "pixelInput": false,
+  "recipe": "assets/source-samples/chassis/original-artwork-recipe.json",
+  "authorizationEvidence": "assets/source-samples/chassis/REFERENCE_RIGHTS.md",
+  "excludedReferences": [
+    {
+      "catalogId": "panel-screenshot-20260802-010048",
+      "sha256": "e6e5e2503dddebfee231001db8dbf32bd6ee55fbfc9f7076376882088d885c0b",
+      "role": "broad-concept-only",
+      "pixelInput": false
+    }
+  ],
+  "outputs": [
+    {
+      "path": "assets/surface.svg",
+      "sha256": "a0d0755ee69f9b69e2b7423dddf78ffa5b81def7a784de68d157cc9da4e983ca"
+    },
+    {
+      "path": "assets/glow.svg",
+      "sha256": "80b1331113883b0f34b76947815f45916aa3f62a3689767e6e68086088b1a8c8"
+    },
+    {
+      "path": "masks/input.svg",
+      "sha256": "9b0a9d44fafc7adfab236127b1ba1db41f1631364ed0236128238abbf7c2f13c"
+    }
+  ],
+  "parameters": {
+    "canvas": {"width": 1200, "height": 160},
+    "fixedStart": 152,
+    "fixedEnd": 152,
+    "centerMode": "stretch",
+    "contentRegion": {"x": 168, "y": 36, "width": 864, "height": 88},
+    "effectMargins": {"left": 14, "top": 12, "right": 14, "bottom": 14},
+    "minimumSize": {"width": 352, "height": 64},
+    "orientation": "horizontal",
+    "stateAccentOpacity": {"normal": 0.72, "open": 1.0, "collapsed": 0.38}
+  },
+  "license": {
+    "spdx": "NOASSERTION",
+    "redistribution": "allowed",
+    "evidence": "User explicitly authorized newly created original TASK-0027 artwork for redistribution as part of Arch Dock; no public license was selected"
+  }
+}

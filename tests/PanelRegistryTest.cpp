@@ -345,9 +345,10 @@ private slots:
     void targetsStableApplicationWindowIds();
     void supportsPinnedFolderSnapshotsAndReordering();
     void validatesBuiltInCapabilityCatalog();
+    void resolvesBuiltInChassisPackagesAndImportPrecedence();
     void resolvesThemeCandidatesWithoutMutation();
     void rejectsIncompatibleThemeWithoutRecordMutation();
-    void mapsVersionOneArtworkToSkinnedTwoDWithProceduralFallback();
+    void mapsVersionOneArtworkToProceduralFallback();
     void importsVersionedThemePackage();
     void importsVersionTwoThemePackageWithSafeFallback();
     void usesManagedVersionTwoCapabilitiesAndRendererFallback();
@@ -2648,29 +2649,60 @@ void PanelRegistryTest::supportsPinnedFolderSnapshotsAndReordering()
 void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
 {
     const QVariantList definitions = taskThemeDefinitions();
-    QCOMPARE(definitions.size(), 5);
+    QCOMPARE(definitions.size(), 8);
     PanelRegistry registry(definitions);
     QCOMPARE(registry.themeDefinitions().size(), definitions.size());
 
+    int packagedThemeCount = 0;
     for (const QVariant &candidate : registry.themeDefinitions())
     {
+        const QVariantMap theme = candidate.toMap();
         QString errorCode;
         const std::optional<ArchDock::ThemeCapabilityProfile> profile =
             ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
-                candidate.toMap(), &errorCode);
+                theme, &errorCode);
         QVERIFY2(profile.has_value(), qPrintable(errorCode));
         QVERIFY(profile->rendererTiers.contains(
             ArchDock::RendererTier::Procedural2D));
         QVERIFY(!profile->rendererTiers.contains(
-            ArchDock::RendererTier::Skinned2D));
-        QVERIFY(!profile->rendererTiers.contains(
             ArchDock::RendererTier::Baked2_5D));
         QVERIFY(!profile->rendererTiers.contains(
             ArchDock::RendererTier::True3D));
-        QVERIFY(profile->presentationMechanisms.isEmpty());
         QVERIFY(!profile->capabilities.contains(
             ArchDock::PanelCapability::NonRectangularInput));
+        if (theme.contains(QStringLiteral("packageManifest")))
+        {
+            ++packagedThemeCount;
+            QVERIFY(profile->rendererTiers.contains(
+                ArchDock::RendererTier::Skinned2D));
+            QCOMPARE(profile->preferredRendererTier,
+                     std::optional<ArchDock::RendererTier>(
+                         ArchDock::RendererTier::Skinned2D));
+            QCOMPARE(profile->fallbackRendererTiers,
+                     QVector<ArchDock::RendererTier>{
+                         ArchDock::RendererTier::Procedural2D});
+            QCOMPARE(profile->layouts,
+                     QVector<ArchDock::PanelLayoutKind>{
+                         ArchDock::PanelLayoutKind::Horizontal});
+            QCOMPARE(profile->presentationMechanisms.size(), 3);
+            const QVariantMap preview = theme.value(
+                QStringLiteral("previewConfiguration")).toMap();
+            QCOMPARE(preview.value(QStringLiteral("mode")).toString(),
+                     QStringLiteral("horizontal"));
+            QCOMPARE(preview.value(
+                         QStringLiteral("presentationState")).toString(),
+                     QStringLiteral("open"));
+            QVERIFY(!theme.value(
+                QStringLiteral("iconStyleRef")).toMap().isEmpty());
+        }
+        else
+        {
+            QVERIFY(!profile->rendererTiers.contains(
+                ArchDock::RendererTier::Skinned2D));
+            QVERIFY(profile->presentationMechanisms.isEmpty());
+        }
     }
+    QCOMPARE(packagedThemeCount, 3);
 
     const QVariantMap ringTheme = registry.themeDefinitions().at(3).toMap();
     QCOMPARE(ringTheme.value(QStringLiteral("id")).toString(),
@@ -2682,6 +2714,85 @@ void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
              QVector<ArchDock::PanelHostKind>{ArchDock::PanelHostKind::FreeDesktop});
     QCOMPARE(ringProfile->layouts,
              QVector<ArchDock::PanelLayoutKind>{ArchDock::PanelLayoutKind::Ring});
+}
+
+void PanelRegistryTest::resolvesBuiltInChassisPackagesAndImportPrecedence()
+{
+    PanelRegistry registry(taskThemeDefinitions());
+    const QString panelId = QStringLiteral("bottom");
+
+    const QVariantMap candidate = registry.themeCandidate(
+        panelId,
+        QStringLiteral("sci-fi-chassis-dark"),
+        QStringLiteral("complete"));
+    QVERIFY(candidate.value(QStringLiteral("success")).toBool());
+    const QVariantMap values = candidate.value(QStringLiteral("values")).toMap();
+    QCOMPARE(values.value(QStringLiteral("layout")).toString(),
+             QStringLiteral("horizontal"));
+    QCOMPARE(values.value(QStringLiteral("rendererTier")).toString(),
+             QStringLiteral("skinned2d"));
+    QCOMPARE(values.value(QStringLiteral("completeThemeId")).toString(),
+             QStringLiteral("sci-fi-chassis-dark"));
+    QCOMPARE(candidate.value(QStringLiteral("capabilityResolution"))
+                 .toMap()
+                 .value(QStringLiteral("renderer"))
+                 .toMap()
+                 .value(QStringLiteral("effectiveTier"))
+                 .toString(),
+             QStringLiteral("skinned2d"));
+
+    QVERIFY(registry.applyTheme(
+        panelId,
+        QStringLiteral("sci-fi-chassis-dark"),
+        QStringLiteral("complete")));
+    const auto builtInDefinition = registry.panelDefinition(panelId);
+    QVERIFY(builtInDefinition.has_value());
+    QString projectionError;
+    const std::optional<QVariantMap> builtInProjection =
+        registry.themeRuntimeProjection(*builtInDefinition, &projectionError);
+    QVERIFY2(builtInProjection.has_value(), qPrintable(projectionError));
+    QCOMPARE(builtInProjection->value(QStringLiteral("id")).toString(),
+             QStringLiteral("sci-fi-chassis-dark"));
+    QVERIFY(builtInProjection->value(QStringLiteral("valid")).toBool());
+    const QVariantMap assetPaths = builtInProjection->value(
+        QStringLiteral("assetPaths")).toMap();
+    QVERIFY(QFileInfo(assetPaths.value(
+        QStringLiteral("surface")).toString()).isAbsolute());
+    QVERIFY(QFileInfo(assetPaths.value(
+        QStringLiteral("glow")).toString()).isFile());
+    QVERIFY(QFileInfo(assetPaths.value(
+        QStringLiteral("input-mask")).toString()).isFile());
+
+    const QString importedManifest = QFINDTESTDATA(
+        QStringLiteral("fixtures/theme-v2/valid-skinned2d-states.json"));
+    QVERIFY(!importedManifest.isEmpty());
+    QVERIFY(registry.importTheme(
+        panelId, QUrl::fromLocalFile(importedManifest)));
+    QCOMPARE(registry.panelValue(
+                 panelId, QStringLiteral("panelThemeId")).toString(),
+             QString{});
+    QCOMPARE(registry.panelValue(
+                 panelId, QStringLiteral("completeThemeId")).toString(),
+             QString{});
+    const auto importedDefinition = registry.panelDefinition(panelId);
+    QVERIFY(importedDefinition.has_value());
+    const auto importedProjection = registry.themeRuntimeProjection(
+        *importedDefinition, &projectionError);
+    QVERIFY2(importedProjection.has_value(), qPrintable(projectionError));
+    QCOMPARE(importedProjection->value(QStringLiteral("id")).toString(),
+             QStringLiteral("fixture-split-skin"));
+
+    QVERIFY(registry.applyTheme(
+        panelId,
+        QStringLiteral("sci-fi-chassis-blue"),
+        QStringLiteral("complete")));
+    const auto selectedDefinition = registry.panelDefinition(panelId);
+    QVERIFY(selectedDefinition.has_value());
+    const auto selectedProjection = registry.themeRuntimeProjection(
+        *selectedDefinition, &projectionError);
+    QVERIFY2(selectedProjection.has_value(), qPrintable(projectionError));
+    QCOMPARE(selectedProjection->value(QStringLiteral("id")).toString(),
+             QStringLiteral("sci-fi-chassis-blue"));
 }
 
 void PanelRegistryTest::resolvesThemeCandidatesWithoutMutation()
@@ -2726,7 +2837,7 @@ void PanelRegistryTest::resolvesThemeCandidatesWithoutMutation()
 void PanelRegistryTest::rejectsIncompatibleThemeWithoutRecordMutation()
 {
     const QVariantList definitions = taskThemeDefinitions();
-    QCOMPARE(definitions.size(), 5);
+    QCOMPARE(definitions.size(), 8);
     PanelRegistry registry(definitions);
     const QVariantMap before = registry.panelSnapshot(QStringLiteral("bottom"));
     const int registryRevisionBefore = registry.revision();
@@ -2752,7 +2863,7 @@ void PanelRegistryTest::rejectsIncompatibleThemeWithoutRecordMutation()
              QStringLiteral("ring"));
 }
 
-void PanelRegistryTest::mapsVersionOneArtworkToSkinnedTwoDWithProceduralFallback()
+void PanelRegistryTest::mapsVersionOneArtworkToProceduralFallback()
 {
     PanelRegistry registry(taskThemeDefinitions());
     ArchDock::PanelDefinition definition = ArchDock::PanelDefinition::defaults(
@@ -2770,10 +2881,9 @@ void PanelRegistryTest::mapsVersionOneArtworkToSkinnedTwoDWithProceduralFallback
     QVERIFY(profile.has_value());
     QCOMPARE(profile->preferredRendererTier,
              std::optional<ArchDock::RendererTier>(
-                 ArchDock::RendererTier::Skinned2D));
-    QCOMPARE(profile->fallbackRendererTiers,
-             QVector<ArchDock::RendererTier>{ArchDock::RendererTier::Procedural2D});
-    QVERIFY(profile->rendererTiers.contains(ArchDock::RendererTier::Skinned2D));
+                 ArchDock::RendererTier::Procedural2D));
+    QVERIFY(profile->fallbackRendererTiers.isEmpty());
+    QVERIFY(!profile->rendererTiers.contains(ArchDock::RendererTier::Skinned2D));
     QVERIFY(profile->rendererTiers.contains(ArchDock::RendererTier::Procedural2D));
     QVERIFY(!profile->rendererTiers.contains(ArchDock::RendererTier::Baked2_5D));
     QVERIFY(!profile->rendererTiers.contains(ArchDock::RendererTier::True3D));
@@ -2781,12 +2891,12 @@ void PanelRegistryTest::mapsVersionOneArtworkToSkinnedTwoDWithProceduralFallback
     const ArchDock::CapabilityResolution resolution =
         registry.resolvePanelCapabilities(definition);
     QVERIFY(resolution.available);
-    QVERIFY(resolution.renderer.fallbackApplied);
+    QVERIFY(!resolution.renderer.fallbackApplied);
     QCOMPARE(resolution.renderer.effectiveTier,
              std::optional<ArchDock::RendererTier>(
                  ArchDock::RendererTier::Procedural2D));
     QCOMPARE(resolution.renderer.evaluatedTiers.constFirst().reason,
-             ArchDock::CapabilityReasonCode::RendererNotInstalled);
+             ArchDock::CapabilityReasonCode::None);
 }
 
 void PanelRegistryTest::importsVersionedThemePackage()
@@ -2957,6 +3067,34 @@ void PanelRegistryTest::usesManagedVersionTwoCapabilitiesAndRendererFallback()
     const auto definition = registry.panelDefinition(QStringLiteral("bottom"));
     QVERIFY(definition.has_value());
     QString errorCode;
+    const auto runtimeProjection = registry.themeRuntimeProjection(
+        *definition, &errorCode);
+    QVERIFY2(runtimeProjection.has_value(), qPrintable(errorCode));
+    QCOMPARE(runtimeProjection->value(QStringLiteral("format")).toString(),
+             QStringLiteral("org.archdock.theme"));
+    QCOMPARE(runtimeProjection->value(QStringLiteral("version")).toInt(), 2);
+    QCOMPARE(runtimeProjection->value(QStringLiteral("id")).toString(),
+             QStringLiteral("fixture-split-skin"));
+    QVERIFY(runtimeProjection->value(QStringLiteral("valid")).toBool());
+    QCOMPARE(runtimeProjection->value(QStringLiteral("manifestPath")).toString(),
+             QUrl(definition->surface.themePackageManifest).toLocalFile());
+    const QVariantMap assetPaths = runtimeProjection->value(
+        QStringLiteral("assetPaths")).toMap();
+    QVERIFY(QFileInfo(assetPaths.value(QStringLiteral("surface")).toString())
+                .isAbsolute());
+    QVERIFY(QFileInfo(assetPaths.value(QStringLiteral("surface")).toString())
+                .isFile());
+    QVERIFY(QFileInfo(assetPaths.value(QStringLiteral("input-mask")).toString())
+                .isFile());
+
+    ArchDock::PanelDefinition mismatchedDefinition = *definition;
+    mismatchedDefinition.surface.themePackageId =
+        QStringLiteral("forged-package-id");
+    QVERIFY(!registry.themeRuntimeProjection(
+        mismatchedDefinition, &errorCode).has_value());
+    QCOMPARE(errorCode, QStringLiteral("theme-package-identity-mismatch"));
+    errorCode.clear();
+
     const auto profile = registry.themeCapabilityProfile(
         *definition, &errorCode);
     QVERIFY2(profile.has_value(), qPrintable(errorCode));
@@ -2986,12 +3124,12 @@ void PanelRegistryTest::usesManagedVersionTwoCapabilitiesAndRendererFallback()
         registry.resolvePanelCapabilities(*definition, &errorCode);
     QVERIFY2(resolution.available, qPrintable(errorCode));
     QCOMPARE(resolution.themeId, QStringLiteral("fixture-split-skin"));
-    QVERIFY(resolution.renderer.fallbackApplied);
+    QVERIFY(!resolution.renderer.fallbackApplied);
     QCOMPARE(resolution.renderer.effectiveTier,
              std::optional<ArchDock::RendererTier>(
-                 ArchDock::RendererTier::Procedural2D));
+                 ArchDock::RendererTier::Skinned2D));
     QCOMPARE(resolution.renderer.reason,
-             ArchDock::CapabilityReasonCode::RendererNotInstalled);
+             ArchDock::CapabilityReasonCode::None);
 }
 
 void PanelRegistryTest::analyzesAdaptive2DThemeArtwork()

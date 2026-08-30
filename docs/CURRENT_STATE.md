@@ -7,8 +7,8 @@
 > implementation claims.
 
 **Evidence snapshot:** 2026-08-30 (Europe/Amsterdam). Static implementation
-statements come from the current checkout. TASK-0026 build and test statements
-come from a fresh external configure/build and all 35 registered tests. Runtime
+statements come from the current checkout. TASK-0027 build and test statements
+come from a fresh external configure/build and all 37 registered tests. Runtime
 claims come only from a disposable private D-Bus, virtual KWin Wayland, and
 private PlasmaShell session; no personal desktop session was contacted. Older
 lifecycle details below retain their earlier isolated-session evidence.
@@ -17,15 +17,14 @@ lifecycle details below retain their earlier isolated-session evidence.
 
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`
-- TASK-0026 baseline `HEAD`: `a7f818e91e8d261e4be7b18e55e9ce814f81ec42`
-  (`task25`).
+- TASK-0027 baseline `HEAD`: `c2473ff26bbe927ac6794d7a137e40c1006b9228`
+  (`task26`).
 - The locally recorded `origin/main` is the same commit; `HEAD...origin/main`
   reports zero ahead and zero behind. No network fetch was performed.
-- TASK-0026 changes are intentionally unstaged. They comprise the Theme Package
-  v2 contract/parser, v1 compatibility, provenance catalog, non-destructive
-  processor, sample classification, capability integration, tests, source-only
-  catalog data, and the bounded isolated-runtime harness repair required to
-  complete the inherited lifecycle gate.
+- TASK-0027 changes are intentionally unstaged. They comprise the original
+  dark/red/blue chassis assets and review records, package/catalog integration,
+  shared skinned-2D renderer and alpha mask, native/free/Studio projection,
+  staged-install rules, visual/runtime regression coverage, and documentation.
 - Codex did not stage, commit, push, globally install, or mutate the personal
   Plasma session.
 
@@ -38,7 +37,7 @@ lifecycle details below retain their earlier isolated-session evidence.
 - Qt base `6.11.2-3`
 - KDE Frameworks Core Addons and Kirigami `6.29.0-1`
 
-These versions describe the inspection and verification host. TASK-0026 used
+These versions describe the inspection and verification host. TASK-0027 used
 external build directories and disposable staged private sessions; it did not
 globally install, restart the live PlasmaShell, or run Arch Dock against the
 personal desktop session.
@@ -84,10 +83,11 @@ disposable private Plasma Wayland session, not inferred from inspection.
 
 - The installed `ArchDock.Rendering` 1.0 module contains the canonical
   `LayoutEngine`, host-neutral `PanelScene`, layered `IconScene`, shared
-  `RunningIndicator`, `LivePanelPreview`, surface loader, and safe procedural
-  2D renderer. Geometry contract, boundary, deterministic, orientation, frozen
-  compatibility, preview-state, snapshot, and offscreen visual parity tests
-  cover the shared engine.
+  `RunningIndicator`, `LivePanelPreview`, surface loader, `PanelSkin2D`, alpha
+  hit mask, and safe procedural fallback. Geometry contract, boundary,
+  deterministic state, orientation, fixed-cap scaling, content-safe placement,
+  mask, preview-state, snapshot, and offscreen visual tests cover the shared
+  engine.
 - `PanelScene` accepts normalized definition, runtime state, ordered entries,
   host capabilities, theme/icon/motion inputs, and screen/work-area bounds. It
   exposes visual/effect bounds, safe input, reveal and popup/preview anchors,
@@ -151,6 +151,13 @@ disposable private Plasma Wayland session, not inferred from inspection.
   slices/regions/masks/references, structured diagnostics, and deterministic
   version-1 adaptation. Invalid or incompatible packages fail closed to the
   safe procedural renderer; package data never executes code.
+- Three original production chassis packages are installed with stable IDs:
+  `sci-fi-chassis-dark`, `sci-fi-chassis-red`, and `sci-fi-chassis-blue`. They
+  have separate surface/glow/mask assets, fixed caps and scalable centers,
+  content/effect/input bounds, horizontal normal/open/collapsed states, exact
+  native/free capability metadata, default icon-style references, and
+  deterministic Studio preview inputs. The package-backed catalog entries are
+  selectable through the same atomic settings transaction as procedural themes.
 - The source-asset catalog contains exactly 138 independently hashed reviewed
   records: 122 panel screenshots and 16 icon reference sheets. Every record is
   source-only, reference-only, redistribution-unknown, opaque, and blocked from
@@ -166,12 +173,14 @@ disposable private Plasma Wayland session, not inferred from inspection.
   platform intersection. Unsupported layouts, rotation, presentation features,
   and renderer tiers remain hidden or fall back with an explicit reason; a flat
   image cannot satisfy true-3D capability.
-- The embedded version-1 catalog remains available with five themes: Obsidian
-  Glass, Neon Segments, Metallic Shelf, Holographic Ring, and Minimal Underline.
-- CMake declares the application, QML and theme resources, Plasma applets and
-  templates, D-Bus and systemd metadata, source-only catalog exclusions, and 35
-  tests. TASK-0026 passed a fresh external configure and serial build, all 35
-  CTests, and the complete staged isolated Plasma native/free lifecycle.
+- The embedded catalog contains the five retained procedural themes plus the
+  three package-backed chassis themes. The later Panel/Icon preset system and
+  its exact 15+15 libraries remain a separate contract.
+- CMake declares the application, QML and theme resources, all three installed
+  chassis packages, Plasma applets and templates, D-Bus and systemd metadata,
+  source-only catalog exclusions, and 37 tests. TASK-0027 passed a fresh
+  external build, all 37 CTests, and its staged isolated Plasma native/free
+  renderer smoke.
 
 ## Known defects and incomplete behavior
 
@@ -183,11 +192,16 @@ disposable private Plasma Wayland session, not inferred from inspection.
 - Physical monitor disconnect/reconnect behavior and the personal desktop
   session were not exercised. Output fallback and restoration were verified on
   two virtual KWin Wayland outputs in the disposable lifecycle session.
+- The chassis family is horizontal only. Vertical or other layouts fall back to
+  procedural 2D; no vertical chassis artwork is fabricated.
+- The alpha mask narrows Qt Quick item containment. It is not evidence of
+  compositor-wide click-through outside the applet's enclosing window, so the
+  native/free host profiles do not claim `nonrectangular-input` from this work.
 
 ## Planned but not implemented
 
 The master plan and preset specification describe target behavior. The
-following named systems remain outside TASK-0026:
+following named systems remain outside TASK-0027:
 
 - version-2 panel and icon preset catalogs, including the required 15 panel and
   15 icon presets
@@ -196,35 +210,35 @@ following named systems remain outside TASK-0026:
 - the complete true-3D, notification, accessibility, performance, packaging,
   migration, and release-validation work required by the architecture plan
 
-The version-2 package/parser/processor and classified reference catalog must not
-be interpreted as a production skin family, redistribution approval, or a
-true-3D renderer.
+The chassis states are deterministic renderer inputs only. TASK-0027 does not
+add opening interaction, energy animation, host geometry animation, an
+animation-profile engine, or a true-3D renderer.
 
 ## Verification boundary
 
-TASK-0026 supplies fresh evidence from the external build at
-`/tmp/archdock-task0026-regression.na337X` (removed during closure): configure
-passed, the full serial build passed, and all 35 CTests reported Passed with zero
-failures. The new focused coverage includes v2 package parsing and fixtures,
-version-1 adaptation, source catalog count/hash/path/install boundaries,
-deterministic asset processing, theme-aware capability resolution, registry
-round trips, and PanelWindow renderer configuration.
+TASK-0027 supplies fresh evidence from a task-specific external build removed
+during closure: configure and build passed, and all 37 CTests reported Passed
+with zero failures. Focused coverage validates exact original asset hashes and
+alpha/bounds metadata, source exclusion, all three package/catalog profiles,
+built-in selection/import precedence, renderer projection, fixed-cap geometry,
+content and mask bounds, horizontal open/collapsed scenes at 352x64 and
+1500x200, unsupported-orientation fallback, and deterministic Studio inputs.
 
-The offscreen visual harness captured safe procedural scenes for horizontal,
-vertical, and free layouts. It compared preview and direct `PanelScene`
-geometry/bounds/anchors and exact procedural surface pixels from the same
-deterministic definitions, including capability fallback.
+The asset review contact sheet covered 352x64, 720x96, 1200x160, and 1500x200;
+its recorded SHA-256 is
+`d63e2edf2e15186df0fa14e74d2758e9a3ed67270551fbb36745834fb574e9cc`.
+Automated QML scenes additionally render every color variant at short and long
+sizes across open and collapsed states while checking cap geometry, center
+alpha, and input containment.
 
-The isolated lifecycle installed only into a disposable prefix and used its own
-D-Bus daemon, virtual KWin, PlasmaShell, XDG roots, outputs, applets, and
-fixtures. It completed free-host adoption/recovery/conflict/removal, native
-settings rollback, exact visibility modes including dodge and maximized/
-fullscreen cover, renderer reconciliation, placement and persistence rollback,
-output fallback/restore, host loss, PlasmaShell restart, guarded removal, and
-final unrelated-panel checks. The repaired KWin probe emitted both required
-markers and observed real buffered Wayland fixture windows. This is runtime
-evidence for the staged private environment, not the personal desktop or
-hardware-specific behavior.
+The TASK-0027 isolated renderer smoke installed into a disposable prefix and
+used its own D-Bus daemon, virtual KWin, PlasmaShell, XDG roots, native panel,
+and free desktop applet. Both hosts selected `sci-fi-chassis-dark` through the
+normal atomic settings transaction and reported `skinned2d`, a ready Theme v2
+projection, and the exact staged manifest path. The stage contained all three
+complete packages and no source-sample or `Screenshot_*` files. The harness
+removed its panel, applet, processes, prefix, and state. This is runtime evidence
+for the staged private environment, not the personal desktop or hardware.
 
 This evidence is representative of the required Arch Linux, Plasma 6, Qt 6,
 Wayland integration, but it remains an isolated virtual session. It does not
@@ -232,13 +246,11 @@ claim hardware-specific monitor behavior or mutation of a user's live desktop.
 
 ## Next task boundary
 
-TASK-0026 closes AD-0007 Theme Package v2 and sample classification: package
-inputs are typed, bounded, provenance-tracked, non-destructively processed, and
-capability-aware without promoting reference screenshots to production assets.
-It does not implement a production skin family, grant redistribution rights,
-or add a true-3D renderer.
+TASK-0027 closes AD-0008 with an original, installed, scalable, capability-aware
+science-fiction chassis family. Samples 10, 12, and 13 remain third-party
+reference-only records; their pixels, logos, glyphs, and distinctive designs
+are not present in the production packages.
 
-The task pack identifies **TASK-0027 — Implement the production
-science-fiction chassis skin family** as the next sequential planning target.
-It may start only through its own read-only inspection and exact approval gate.
-TASK-0027 has not been started here.
+The task pack identifies **TASK-0028 — Implement the production energy and glow
+skin family** as the next sequential planning target. It has not been started
+and requires its own read-only inspection and exact approval gate.

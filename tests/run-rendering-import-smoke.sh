@@ -35,9 +35,22 @@ stop_process() {
 }
 
 cleanup_session() {
+    local exit_status=$?
+    if ((exit_status != 0)) && [[ -n "${ARCHDOCK_RENDERING_LOG_DIR:-}" ]]; then
+        local log_file
+        for log_file in "$ARCHDOCK_RENDERING_LOG_DIR/service.log" \
+                        "$ARCHDOCK_RENDERING_LOG_DIR/plasmashell.log" \
+                        "$ARCHDOCK_RENDERING_LOG_DIR/kwin.log"; do
+            if [[ -r "$log_file" ]]; then
+                printf '%s\n' "--- ${log_file##*/} (failure tail) ---" >&2
+                tail -n 160 "$log_file" >&2
+            fi
+        done
+    fi
     stop_process "$ARCHDOCK_RENDERING_SERVICE_PID"
     stop_process "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
     stop_process "$ARCHDOCK_RENDERING_KWIN_PID"
+    return "$exit_status"
 }
 
 cleanup_outer() {
@@ -93,7 +106,7 @@ require_no_import_errors() {
     for log_file in "$ARCHDOCK_RENDERING_LOG_DIR/service.log" \
                     "$ARCHDOCK_RENDERING_LOG_DIR/plasmashell.log"; do
         if rg -n -i \
-            'module "ArchDock\.Rendering" is not installed|RenderingModuleProbe[^[:cntrl:]]*(not a type|unavailable)|Panel(Scene|SurfaceLoader|Procedural2D)[^[:cntrl:]]*(not a type|unavailable|not installed)|(IconScene|RunningIndicator|LivePanelPreview)[^[:cntrl:]]*(not a type|unavailable|not installed)|(SettingsPopup|StudioForm)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|org\.archdock\.dock/contents/ui/(main|DockEntry|IconVisual|RunningIndicator)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|ArchDock/Rendering/(PanelScene|IconScene|RunningIndicator|previews/LivePanelPreview)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(typeerror|referenceerror|cannot assign|unable to assign|binding loop)|Error loading QML file[^[:cntrl:]]*org\.archdock\.dock' \
+            'module "ArchDock\.Rendering" is not installed|RenderingModuleProbe[^[:cntrl:]]*(not a type|unavailable)|Panel(Scene|SurfaceLoader|Procedural2D|Skin2D)[^[:cntrl:]]*(not a type|unavailable|not installed)|AlphaHitMask[^[:cntrl:]]*(not a type|unavailable|not installed)|(IconScene|RunningIndicator|LivePanelPreview)[^[:cntrl:]]*(not a type|unavailable|not installed)|(SettingsPopup|StudioForm)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|org\.archdock\.dock/contents/ui/(main|DockEntry|IconVisual|RunningIndicator)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|ArchDock/Rendering/(PanelScene|PanelSurfaceLoader|renderers/PanelSkin2D|inputs/AlphaHitMask|IconScene|RunningIndicator|previews/LivePanelPreview)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(typeerror|referenceerror|cannot assign|unable to assign|binding loop)|Error loading QML file[^[:cntrl:]]*org\.archdock\.dock' \
             "$log_file"; then
             printf 'Staged rendering import failed; relevant QML errors were logged in %s.\n' \
                 "$log_file" >&2
@@ -104,6 +117,12 @@ require_no_import_errors() {
 
 run_private_session() {
     trap cleanup_session EXIT
+
+    [[ -r "$ARCHDOCK_RENDERING_STAGED_THEME_MANIFEST" ]] || {
+        printf 'The staged renderer smoke theme manifest is unavailable: %s\n' \
+            "$ARCHDOCK_RENDERING_STAGED_THEME_MANIFEST" >&2
+        return 1
+    }
 
     kwin_wayland \
         --virtual \
@@ -143,7 +162,7 @@ run_private_session() {
 
     local host_ids
     host_ids="$(plasma_script \
-        "var result = (function() { var panel = null; var freeWidget = null; try { panel = new Panel; panel.screen = 0; panel.location = 'bottom'; var nativeWidget = panel.addWidget('org.archdock.dock'); if (!nativeWidget) { panel.remove(); return 'missing-native-widget'; } nativeWidget.currentConfigGroup = ['General']; nativeWidget.writeConfig('panelId', 'bottom'); nativeWidget.writeConfig('panelType', 'hybrid'); nativeWidget.reloadConfig(); var desktop = desktopForScreen(0); if (!desktop) { panel.remove(); return 'missing-desktop'; } freeWidget = desktop.addWidget('org.archdock.dock', Math.round(gridUnit * 2), Math.round(gridUnit * 2), Math.round(gridUnit * 16), Math.round(gridUnit * 10)); if (!freeWidget) { panel.remove(); return 'missing-free-widget'; } freeWidget.currentConfigGroup = ['General']; freeWidget.writeConfig('panelId', 'free-render-smoke'); freeWidget.writeConfig('panelType', 'hybrid'); freeWidget.writeConfig('bootstrapFreeDock', false); freeWidget.reloadConfig(); return [String(panel.id), String(nativeWidget.id), String(desktop.id), String(freeWidget.id)].join('|'); } catch (error) { if (freeWidget) { freeWidget.remove(); } if (panel) { panel.remove(); } return 'exception:' + String(error); } })(); print(result);" | gvariant_string)"
+        "var result = (function() { var panel = null; var freeWidget = null; try { panel = new Panel; panel.screen = 0; panel.location = 'bottom'; var nativeWidget = panel.addWidget('org.archdock.dock'); if (!nativeWidget) { panel.remove(); return 'missing-native-widget'; } nativeWidget.currentConfigGroup = ['General']; nativeWidget.writeConfig('panelId', 'bottom'); nativeWidget.writeConfig('panelType', 'hybrid'); nativeWidget.reloadConfig(); var desktop = desktopForScreen(0); if (!desktop) { panel.remove(); return 'missing-desktop'; } freeWidget = desktop.addWidget('org.archdock.dock', Math.round(gridUnit * 2), Math.round(gridUnit * 2), Math.round(gridUnit * 20), Math.round(gridUnit * 10)); if (!freeWidget) { panel.remove(); return 'missing-free-widget'; } freeWidget.currentConfigGroup = ['General']; freeWidget.writeConfig('panelId', ''); freeWidget.writeConfig('panelType', 'hybrid'); freeWidget.writeConfig('bootstrapFreeDock', true); freeWidget.reloadConfig(); return [String(panel.id), String(nativeWidget.id), String(desktop.id), String(freeWidget.id)].join('|'); } catch (error) { if (freeWidget) { freeWidget.remove(); } if (panel) { panel.remove(); } return 'exception:' + String(error); } })(); print(result);" | gvariant_string)"
 
     [[ "$host_ids" =~ ^[0-9]+\|[0-9]+\|[0-9]+\|[0-9]+$ ]] || {
         printf 'Private PlasmaShell did not create native and free Arch Dock hosts: %s\n' \
@@ -160,13 +179,14 @@ run_private_session() {
     local attempt
     local native_snapshot=''
     local free_snapshot=''
+    local free_panel_id=''
     for ((attempt = 0; attempt < 50; ++attempt)); do
         native_snapshot="$(plasma_script \
             "var panel = panelById($panel_id); var widget = panel ? panel.widgetById($native_applet_id) : null; if (!widget) { print('missing'); } else { widget.currentConfigGroup = ['General']; var geometry = widget.geometry; print([String(widget.type), String(widget.readConfig('panelId', '')), String(widget.readConfig('panelType', '')), String(Number(geometry.width)), String(Number(geometry.height))].join('|')); }" | gvariant_string)"
         free_snapshot="$(plasma_script \
             "var desktop = desktopById($desktop_id); var widget = desktop ? desktop.widgetById($free_applet_id) : null; if (!widget) { print('missing'); } else { widget.currentConfigGroup = ['General']; var geometry = widget.geometry; print([String(widget.type), String(widget.readConfig('panelId', '')), String(widget.readConfig('panelType', '')), String(widget.readConfig('bootstrapFreeDock', true)), String(Number(geometry.width)), String(Number(geometry.height))].join('|')); }" | gvariant_string)"
         if [[ "$native_snapshot" =~ ^org\.archdock\.dock\|bottom\|hybrid\|[1-9][0-9]*([.][0-9]+)?\|[1-9][0-9]*([.][0-9]+)?$ &&
-              "$free_snapshot" =~ ^org\.archdock\.dock\|free-render-smoke\|hybrid\|(false|0)\|[1-9][0-9]*([.][0-9]+)?\|[1-9][0-9]*([.][0-9]+)?$ ]]; then
+              "$free_snapshot" =~ ^org\.archdock\.dock\|free-[1-9][0-9]*\|empty\|(false|0)\|[1-9][0-9]*([.][0-9]+)?\|[1-9][0-9]*([.][0-9]+)?$ ]]; then
             break
         fi
         sleep 0.1
@@ -176,12 +196,91 @@ run_private_session() {
             "$native_snapshot" >&2
         return 1
     }
-    [[ "$free_snapshot" =~ ^org\.archdock\.dock\|free-render-smoke\|hybrid\|(false|0)\|[1-9][0-9]*([.][0-9]+)?\|[1-9][0-9]*([.][0-9]+)?$ ]] || {
+    [[ "$free_snapshot" =~ ^org\.archdock\.dock\|free-[1-9][0-9]*\|empty\|(false|0)\|[1-9][0-9]*([.][0-9]+)?\|[1-9][0-9]*([.][0-9]+)?$ ]] || {
         printf 'The staged free PanelScene host was not ready: %s\n' \
             "$free_snapshot" >&2
         return 1
     }
 
+    IFS='|' read -r _ free_panel_id _ _ _ _ <<<"$free_snapshot"
+    local native_configuration
+    local free_configuration
+    local native_revision
+    local free_revision
+    native_configuration="$(panel_call dockConfiguration bottom)"
+    free_configuration="$(panel_call dockConfiguration "$free_panel_id")"
+    native_revision="$(sed -n \
+        "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
+        <<<"$native_configuration")"
+    free_revision="$(sed -n \
+        "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
+        <<<"$free_configuration")"
+    [[ "$native_revision" =~ ^[0-9]+$ &&
+       "$free_revision" =~ ^[0-9]+$ ]] || {
+        printf 'Could not read live panel settings revisions: native=%s free=%s\n' \
+            "$native_revision" "$free_revision" >&2
+        return 1
+    }
+
+    local chassis_values="{'layout': <'horizontal'>, 'rendererTier': <'skinned2d'>, 'panelThemeId': <'sci-fi-chassis-dark'>, 'completeThemeId': <'sci-fi-chassis-dark'>}"
+    local native_theme_reply
+    local free_theme_reply
+    printf 'Selecting the staged chassis theme on the private native host.\n'
+    native_theme_reply="$(panel_call applyPanelSettingsTransaction \
+        bottom "uint64 $native_revision" "$chassis_values" '{}')"
+    printf 'Selecting the staged chassis theme on the private free host.\n'
+    free_theme_reply="$(panel_call applyPanelSettingsTransaction \
+        "$free_panel_id" "uint64 $free_revision" "$chassis_values" '{}')"
+    [[ "$native_theme_reply" == *"'success': <true>"* &&
+       "$native_theme_reply" == *"'status': <'succeeded'>"* &&
+       "$free_theme_reply" == *"'success': <true>"* &&
+       "$free_theme_reply" == *"'status': <'succeeded'>"* ]] || {
+        printf 'Could not select the staged chassis theme: native=%s free=%s\n' \
+            "$native_theme_reply" "$free_theme_reply" >&2
+        return 1
+    }
+
+    local free_pin_reply
+    free_pin_reply="$(panel_call pinPanelUrls "$free_panel_id" "['$smoke_desktop_url']")"
+    [[ "$free_pin_reply" == '(true,)' ]] || {
+        printf 'Could not seed the free renderer smoke entry: %s\n' \
+            "$free_pin_reply" >&2
+        return 1
+    }
+
+    local native_renderer=''
+    local free_renderer=''
+    for ((attempt = 0; attempt < 50; ++attempt)); do
+        native_renderer="$(panel_call panelRendererConfiguration bottom)"
+        free_renderer="$(panel_call panelRendererConfiguration "$free_panel_id")"
+        if [[ "$native_renderer" == *"'effectiveRendererTier': <'skinned2d'>"* &&
+              "$native_renderer" == *"'themeProjectionStatus': <'ready'>"* &&
+              "$native_renderer" == *"'id': <'sci-fi-chassis-dark'>"* &&
+              "$native_renderer" == *"'manifestPath': <'$ARCHDOCK_RENDERING_STAGED_THEME_MANIFEST'>"* &&
+              "$free_renderer" == *"'effectiveRendererTier': <'skinned2d'>"* &&
+              "$free_renderer" == *"'themeProjectionStatus': <'ready'>"* &&
+              "$free_renderer" == *"'id': <'sci-fi-chassis-dark'>"* &&
+              "$free_renderer" == *"'manifestPath': <'$ARCHDOCK_RENDERING_STAGED_THEME_MANIFEST'>"* ]]; then
+            break
+        fi
+        sleep 0.1
+    done
+    [[ "$native_renderer" == *"'effectiveRendererTier': <'skinned2d'>"* &&
+       "$native_renderer" == *"'themeProjectionStatus': <'ready'>"* &&
+       "$native_renderer" == *"'id': <'sci-fi-chassis-dark'>"* &&
+       "$native_renderer" == *"'manifestPath': <'$ARCHDOCK_RENDERING_STAGED_THEME_MANIFEST'>"* ]] || {
+        printf 'The native live host did not resolve the chassis renderer: %s\n' \
+            "$native_renderer" >&2
+        return 1
+    }
+    [[ "$free_renderer" == *"'effectiveRendererTier': <'skinned2d'>"* &&
+       "$free_renderer" == *"'themeProjectionStatus': <'ready'>"* &&
+       "$free_renderer" == *"'id': <'sci-fi-chassis-dark'>"* &&
+       "$free_renderer" == *"'manifestPath': <'$ARCHDOCK_RENDERING_STAGED_THEME_MANIFEST'>"* ]] || {
+        printf 'The free live host did not resolve the chassis renderer: %s\n' \
+            "$free_renderer" >&2
+        return 1
+    }
     sleep 1
     kill -0 "$ARCHDOCK_RENDERING_SERVICE_PID"
     kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
@@ -191,7 +290,7 @@ run_private_session() {
         "var desktop = desktopById($desktop_id); var freeWidget = desktop ? desktop.widgetById($free_applet_id) : null; if (freeWidget) { freeWidget.remove(); } var panel = panelById($panel_id); if (panel) { panel.remove(); } print('removed');" \
         >/dev/null
 
-    printf 'Staged service/Studio and native/free PanelScene hosts succeeded.\n'
+    printf 'Staged service/Studio and native/free skinned PanelScene hosts succeeded.\n'
 }
 
 run_outer() {
@@ -225,13 +324,13 @@ run_outer() {
             "$qmltestrunner_binary" >&2
         return 1
     }
-
     ARCHDOCK_RENDERING_STATE_ROOT="$(mktemp -d /tmp/archdock-rendering-import.XXXXXX)"
     trap cleanup_outer EXIT
 
     local stage_root="$ARCHDOCK_RENDERING_STATE_ROOT/stage"
     local import_root="$stage_root/$qml_install_dir"
     local module_root="$import_root/ArchDock/Rendering"
+    local theme_root="$stage_root/share/arch-dock/themes"
     local log_dir="$ARCHDOCK_RENDERING_STATE_ROOT/logs"
     mkdir -p \
         "$ARCHDOCK_RENDERING_STATE_ROOT/cache" \
@@ -252,7 +351,9 @@ run_outer() {
        -r "$module_root/PanelSurfaceLoader.qml" &&
        -r "$module_root/RunningIndicator.qml" &&
        -r "$module_root/previews/LivePanelPreview.qml" &&
-       -r "$module_root/renderers/PanelProcedural2D.qml" ]] || {
+       -r "$module_root/renderers/PanelProcedural2D.qml" &&
+       -r "$module_root/renderers/PanelSkin2D.qml" &&
+       -r "$module_root/inputs/AlphaHitMask.qml" ]] || {
         printf 'The staged ArchDock.Rendering module is incomplete: %s\n' \
             "$module_root" >&2
         return 1
@@ -264,6 +365,31 @@ run_outer() {
     [[ ! -e "$stage_root/share/plasma/plasmoids/org.archdock.dock/contents/ui/IconVisual.qml" &&
        ! -e "$stage_root/share/plasma/plasmoids/org.archdock.dock/contents/ui/RunningIndicator.qml" ]] || {
         printf 'The staged applet still contains an obsolete local icon renderer.\n' >&2
+        return 1
+    }
+    [[ -r "$theme_root/builtin-themes.json" ]] || {
+        printf 'The staged built-in theme catalog is unavailable.\n' >&2
+        return 1
+    }
+    local theme_id
+    for theme_id in sci-fi-chassis-dark sci-fi-chassis-red sci-fi-chassis-blue; do
+        [[ -r "$theme_root/$theme_id/archdock-theme.json" &&
+           -r "$theme_root/$theme_id/assets/surface.svg" &&
+           -r "$theme_root/$theme_id/assets/glow.svg" &&
+           -r "$theme_root/$theme_id/masks/input.svg" &&
+           -r "$theme_root/$theme_id/metadata/production-record.json" &&
+           -r "$theme_root/$theme_id/metadata/visual-review.json" ]] || {
+            printf 'The staged chassis package is incomplete: %s\n' "$theme_id" >&2
+            return 1
+        }
+    done
+    local forbidden_reference
+    forbidden_reference="$(find "$stage_root" -type f \
+        \( -iname 'Screenshot_*' -o -path '*/source-samples/*' \) \
+        -print -quit)"
+    [[ -z "$forbidden_reference" ]] || {
+        printf 'A reference-only source asset entered the staged install: %s\n' \
+            "$forbidden_reference" >&2
         return 1
     }
 
@@ -292,6 +418,7 @@ run_outer() {
         ARCHDOCK_RENDERING_IMPORT_SESSION=1 \
         ARCHDOCK_RENDERING_LOG_DIR="$log_dir" \
         ARCHDOCK_RENDERING_SMOKE_DESKTOP_FILE="$stage_root/share/applications/org.archdock.ArchDock.desktop" \
+        ARCHDOCK_RENDERING_STAGED_THEME_MANIFEST="$theme_root/sci-fi-chassis-dark/archdock-theme.json" \
         ARCHDOCK_RENDERING_STAGED_BINARY="$stage_root/bin/arch-dock" \
         DESKTOP_SESSION=archdock-rendering-test \
         KDE_FULL_SESSION=true \

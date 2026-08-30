@@ -676,9 +676,12 @@ private:
                         QStringLiteral("/cleanupRequirements"),
                     QStringLiteral("opaque reference is missing mandatory cleanup blockers"));
             }
+            const bool referenceLicenseIsUnasserted =
+                record.provenance.licenseSpdx.isEmpty() ||
+                record.provenance.licenseSpdx == QStringLiteral("NOASSERTION");
             if (record.status != QStringLiteral("reference-only") ||
                 record.provenance.redistribution != QStringLiteral("unknown") ||
-                !record.provenance.licenseSpdx.isEmpty() ||
+                !referenceLicenseIsUnasserted ||
                 !record.opaqueScreenshot || record.isolatedCleanAsset ||
                 record.isInstallEligible())
             {

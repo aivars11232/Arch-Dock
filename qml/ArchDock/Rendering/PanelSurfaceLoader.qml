@@ -9,6 +9,7 @@ Item {
     property string themeSource: ""
     property var themeDefinition: ({})
     property string layout: "horizontal"
+    property string presentationState: "open"
     property var geometry: ({})
     property real layoutAngle: 0
     property int polygonSides: 6
@@ -21,15 +22,43 @@ Item {
     readonly property bool themeRequested:
         themeId.length > 0 || themeSource.length > 0
     readonly property bool themeUsable: isThemeUsable(themeDefinition)
+    readonly property bool skinnedRequested:
+        normalizedRequestedTier === "skinned2d"
     readonly property bool rendererSupported:
-        normalizedRequestedTier === "procedural2d"
+        ["procedural2d", "skinned2d"]
+            .includes(normalizedRequestedTier)
+    readonly property var skinnedItem: skinnedRenderer.item
+    readonly property bool skinnedReady:
+        skinnedRequested && themeUsable && skinnedItem
+        && Boolean(skinnedItem.rendererReady)
     readonly property bool fallbackApplied:
         !rendererSupported || (themeRequested && !themeUsable)
-    readonly property string fallbackReason:
-        themeRequested && !themeUsable ? "theme-unavailable"
-        : !rendererSupported ? "renderer-unavailable" : ""
-    readonly property string effectiveRendererTier: "procedural2d"
-    readonly property var surfaceItem: renderer.item
+        || (skinnedRequested && !skinnedReady)
+    readonly property string fallbackReason: {
+        if (themeRequested && !themeUsable)
+            return "theme-unavailable"
+        if (!rendererSupported)
+            return "renderer-unavailable"
+        if (skinnedRequested && !skinnedReady) {
+            if (skinnedItem && skinnedItem.errorReason.length > 0)
+                return skinnedItem.errorReason
+            return "renderer-loading"
+        }
+        return ""
+    }
+    readonly property string effectiveRendererTier:
+        skinnedReady ? "skinned2d" : "procedural2d"
+    readonly property var surfaceItem:
+        skinnedReady ? skinnedItem : proceduralRenderer.item
+    readonly property var inputMaskItem:
+        skinnedReady ? skinnedItem.inputMaskItem : null
+    readonly property var contentRegionDefinition:
+        skinnedReady ? skinnedItem.contentRegionDefinition : null
+    readonly property var sliceDefinition:
+        skinnedReady ? skinnedItem.sliceDefinition : null
+    readonly property var effectMargins:
+        skinnedReady && themeDefinition.effectMargins
+        ? themeDefinition.effectMargins : ({ left: 0, top: 0, right: 0, bottom: 0 })
 
     function isThemeUsable(candidate) {
         if (!themeRequested)
@@ -58,14 +87,24 @@ Item {
     height: Number(geometry.height || 0)
 
     Loader {
-        id: renderer
+        id: proceduralRenderer
 
         anchors.fill: parent
-        sourceComponent: proceduralRenderer
+        sourceComponent: proceduralComponent
+        visible: !root.skinnedReady
+    }
+
+    Loader {
+        id: skinnedRenderer
+
+        anchors.fill: parent
+        active: root.skinnedRequested && root.themeUsable
+        sourceComponent: skinnedComponent
+        visible: root.skinnedReady
     }
 
     Component {
-        id: proceduralRenderer
+        id: proceduralComponent
 
         PanelProcedural2D {
             layout: root.layout
@@ -74,6 +113,19 @@ Item {
             polygonSides: root.polygonSides
             appearance: root.appearance
             customColor: root.customColor
+            panelOpacity: root.panelOpacity
+        }
+    }
+
+    Component {
+        id: skinnedComponent
+
+        PanelSkin2D {
+            themeDefinition: root.themeDefinition
+            orientation: root.layout === "vertical"
+                ? "vertical" : root.layout === "horizontal"
+                    ? "horizontal" : "free"
+            presentationState: root.presentationState
             panelOpacity: root.panelOpacity
         }
     }

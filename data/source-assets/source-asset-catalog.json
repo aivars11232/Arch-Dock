@@ -901,10 +901,10 @@
       "intendedUse": "first-2d-skin-family-candidate",
       "provenance": {
         "sourceKind": "user-supplied-reference-archive",
-        "creator": "unknown",
-        "licenseSpdx": "",
+        "creator": "unknown third-party creator(s)",
+        "licenseSpdx": "NOASSERTION",
         "redistribution": "unknown",
-        "evidence": "No authorship or redistribution evidence supplied with archive"
+        "evidence": "Google Images was the discovery venue, not an asserted origin. No authorship, license, derivative-work permission, or redistribution grant accompanied this reference; see assets/source-samples/chassis/REFERENCE_RIGHTS.md"
       },
       "targetRendererTier": "skinned2d",
       "orientations": [
@@ -925,7 +925,7 @@
         "horizontal",
         "sci-fi-chassis"
       ],
-      "reviewNotes": "Panel sample 10 visually reviewed: strong horizontal science-fiction chassis candidate; source is one opaque screenshot and needs clean alpha, layers, safe regions, and a derived state pair.",
+      "reviewNotes": "Panel sample 10 visually reviewed: opaque third-party screenshot retained only for broad-concept inspiration. It is not licensed for copying, derivation, packaging, or installation; TASK-0027 production artwork must be independently drawn without source pixels.",
       "isolatedCleanAsset": false,
       "opaqueScreenshot": true
     },
@@ -980,10 +980,10 @@
       "intendedUse": "first-2d-skin-family-candidate",
       "provenance": {
         "sourceKind": "user-supplied-reference-archive",
-        "creator": "unknown",
-        "licenseSpdx": "",
+        "creator": "unknown third-party creator(s)",
+        "licenseSpdx": "NOASSERTION",
         "redistribution": "unknown",
-        "evidence": "No authorship or redistribution evidence supplied with archive"
+        "evidence": "Google Images was the discovery venue, not an asserted origin. No authorship, license, derivative-work permission, or redistribution grant accompanied this reference; see assets/source-samples/chassis/REFERENCE_RIGHTS.md"
       },
       "targetRendererTier": "skinned2d",
       "orientations": [
@@ -1004,7 +1004,7 @@
         "horizontal",
         "sci-fi-chassis"
       ],
-      "reviewNotes": "Panel sample 12 visually reviewed: strong horizontal science-fiction chassis candidate; source is one opaque screenshot and needs clean alpha, layers, safe regions, and a derived state pair.",
+      "reviewNotes": "Panel sample 12 visually reviewed: opaque third-party screenshot retained only for broad-concept inspiration. It is not licensed for copying, derivation, packaging, or installation; TASK-0027 production artwork must be independently drawn without source pixels.",
       "isolatedCleanAsset": false,
       "opaqueScreenshot": true
     },
@@ -1019,10 +1019,10 @@
       "intendedUse": "first-2d-skin-family-candidate",
       "provenance": {
         "sourceKind": "user-supplied-reference-archive",
-        "creator": "unknown",
-        "licenseSpdx": "",
+        "creator": "unknown third-party creator(s)",
+        "licenseSpdx": "NOASSERTION",
         "redistribution": "unknown",
-        "evidence": "No authorship or redistribution evidence supplied with archive"
+        "evidence": "Google Images was the discovery venue, not an asserted origin. No authorship, license, derivative-work permission, or redistribution grant accompanied this reference; see assets/source-samples/chassis/REFERENCE_RIGHTS.md"
       },
       "targetRendererTier": "skinned2d",
       "orientations": [
@@ -1043,7 +1043,7 @@
         "horizontal",
         "sci-fi-chassis"
       ],
-      "reviewNotes": "Panel sample 13 visually reviewed: strong horizontal science-fiction chassis candidate; source is one opaque screenshot and needs clean alpha, layers, safe regions, and a derived state pair.",
+      "reviewNotes": "Panel sample 13 visually reviewed: opaque third-party screenshot retained only for broad-concept inspiration. It is not licensed for copying, derivation, packaging, or installation; TASK-0027 production artwork must be independently drawn without source pixels.",
       "isolatedCleanAsset": false,
       "opaqueScreenshot": true
     },

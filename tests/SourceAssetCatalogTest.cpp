@@ -62,6 +62,11 @@ void SourceAssetCatalogTest::completeCatalogLoadsWithNoInstallableScreenshots()
     qsizetype iconCount = 0;
     QHash<QString, qsizetype> classCounts;
     QSet<QString> visualGroups;
+    const QSet<QString> noAssertionReferences{
+        QStringLiteral("panel-screenshot-20260802-010007"),
+        QStringLiteral("panel-screenshot-20260802-010039"),
+        QStringLiteral("panel-screenshot-20260802-010048"),
+    };
     for (const SourceAssetRecord &record : catalog.assets)
     {
         panelCount += record.sampleKind == QStringLiteral("panel");
@@ -73,7 +78,19 @@ void SourceAssetCatalogTest::completeCatalogLoadsWithNoInstallableScreenshots()
         }
         QCOMPARE(record.status, QStringLiteral("reference-only"));
         QCOMPARE(record.provenance.redistribution, QStringLiteral("unknown"));
-        QVERIFY(record.provenance.licenseSpdx.isEmpty());
+        if (noAssertionReferences.contains(record.id))
+        {
+            QCOMPARE(record.provenance.licenseSpdx,
+                     QStringLiteral("NOASSERTION"));
+            QCOMPARE(record.provenance.creator,
+                     QStringLiteral("unknown third-party creator(s)"));
+            QVERIFY(record.provenance.evidence.contains(
+                QStringLiteral("Google Images")));
+        }
+        else
+        {
+            QVERIFY(record.provenance.licenseSpdx.isEmpty());
+        }
         QVERIFY(record.opaqueScreenshot);
         QVERIFY(!record.isolatedCleanAsset);
         QVERIFY(!record.isInstallEligible());
@@ -90,6 +107,7 @@ void SourceAssetCatalogTest::completeCatalogLoadsWithNoInstallableScreenshots()
     }
     QCOMPARE(panelCount, SourceAssetCatalog::ExpectedPanelCount);
     QCOMPARE(iconCount, SourceAssetCatalog::ExpectedIconReferenceCount);
+    QCOMPARE(noAssertionReferences.size(), 3);
     QCOMPARE(classCounts.value(QStringLiteral("A-desktop-product-reference")), 9);
     QCOMPARE(classCounts.value(QStringLiteral("B-strong-horizontal-2d-candidate")), 8);
     QCOMPARE(classCounts.value(QStringLiteral("C-legacy-dock-shelf-reference")), 27);

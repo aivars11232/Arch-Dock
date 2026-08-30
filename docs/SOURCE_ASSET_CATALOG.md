@@ -24,9 +24,10 @@ status, visual groups, and review notes.
   `allowed`, the item is an isolated clean asset rather than a screenshot, and
   no manual-review, isolation, logo, or placeholder blocker remains.
 
-An empty SPDX field or `redistribution: unknown` never implies permission. A
-filename, visual style, apparent brand, or similarity to another theme is not
-license evidence. The source catalog has `sourceOnly: true` and
+An empty SPDX field, SPDX `NOASSERTION`, or `redistribution: unknown` never
+implies permission. A filename, visual style, apparent brand, discovery in
+Google Images, or similarity to another theme is not license evidence. The
+source catalog has `sourceOnly: true` and
 `installByDefault: false`; its validator enforces those values and currently
 returns no install-eligible entries.
 
@@ -68,6 +69,31 @@ screenshot; none is production-ready or installable. Visual review may narrow
 or reject an item, but it cannot invent authorship, license, or redistribution
 evidence.
 
-Future clean artwork must enter as a new content-hashed record with its own
-provenance evidence. It must not silently inherit approval from the screenshot
-that inspired it.
+## TASK-0027 clean-room chassis boundary
+
+Samples 10, 12, and 13 have explicit SPDX `NOASSERTION` metadata because their
+third-party creators, authoritative origins, licenses, derivative-work rights,
+and redistribution rights remain unknown. Google Images was only the discovery
+venue. User cropping did not create a new chain of title. These three records
+remain opaque, `reference-only`, redistribution-unknown, and non-installable.
+The exact declaration is retained in
+`assets/source-samples/chassis/REFERENCE_RIGHTS.md`.
+
+TASK-0027 production themes are separate, original Arch Dock package assets:
+
+- `sci-fi-chassis-dark`
+- `sci-fi-chassis-red`
+- `sci-fi-chassis-blue`
+
+They were drawn from blank SVG canvases using only broad concepts such as dark
+futuristic surfaces, accent lighting, beveled framing, and general
+science-fiction styling. Their deterministic recipe marks all reference hashes
+as excluded, broad-concept-only references with `pixelInput: false`. Package
+production records, asset hashes, alpha/bounds checks, fixed-cap stretch tests,
+and visual-review records establish the independent production boundary. No
+reference screenshot, crop, logo, text, application glyph, or source pixel is
+contained in or installed with those packages.
+
+Future clean artwork must enter as a new content-hashed source record or a
+separately validated production package with its own provenance evidence. It
+must not silently inherit approval from a screenshot that inspired it.

@@ -1,0 +1,24 @@
+{
+  "format": "org.archdock.visual-review",
+  "version": 1,
+  "themeId": "sci-fi-chassis-blue",
+  "reviewedAt": "2026-08-30",
+  "reviewSurface": "1200x160 original-resolution composite",
+  "checks": {
+    "transparentExterior": "pass",
+    "emptyContentRegion": "pass",
+    "embeddedText": "absent",
+    "thirdPartyBranding": "absent",
+    "thirdPartyGlyphs": "absent",
+    "distinctiveReferenceDesign": "absent",
+    "sourcePixels": "absent",
+    "shortStretch": "pass",
+    "mediumStretch": "pass",
+    "longStretch": "pass",
+    "fractionalScale": "pass"
+  },
+  "contactSheetSha256": "d63e2edf2e15186df0fa14e74d2758e9a3ed67270551fbb36745834fb574e9cc",
+  "contactSheetSizes": ["352x64", "720x96", "1200x160", "1500x200"],
+  "status": "production-approved",
+  "notes": "Original-resolution and deterministic fixed-cap multiscale reviews passed with no visible seams or prohibited content."
+}

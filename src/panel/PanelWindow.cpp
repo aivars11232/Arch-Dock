@@ -594,6 +594,22 @@ QVariantMap PanelWindow::panelRendererConfiguration(const QString &panelId) cons
         capabilityResolution.value(QStringLiteral("renderer"))
             .toMap()
             .value(QStringLiteral("effectiveTier")));
+    QString themeProjectionError;
+    const std::optional<QVariantMap> themeProjection =
+        m_panelRegistry.themeRuntimeProjection(
+            *definition, &themeProjectionError);
+    configuration.insert(
+        QStringLiteral("themeDefinition"),
+        themeProjection.value_or(QVariantMap{}));
+    configuration.insert(
+        QStringLiteral("themeProjectionStatus"),
+        themeProjection.has_value()
+            ? QStringLiteral("ready")
+            : themeProjectionError.isEmpty()
+                ? QStringLiteral("unavailable")
+                : QStringLiteral("error"));
+    configuration.insert(
+        QStringLiteral("themeProjectionError"), themeProjectionError);
     return configuration;
 }
 
@@ -683,6 +699,40 @@ QVariantList PanelWindow::resolvedThemeDefinitions(
     for (const QVariant &value : themes)
     {
         QVariantMap theme = value.toMap();
+        if (theme.contains(QStringLiteral("packageManifest")))
+        {
+            QString projectionError;
+            const std::optional<QVariantMap> projection =
+                m_panelRegistry.builtInThemeRuntimeProjection(
+                    theme.value(QStringLiteral("id")).toString(),
+                    &projectionError);
+            if (!projection.has_value())
+            {
+                theme.insert(QStringLiteral("available"), false);
+                theme.insert(
+                    QStringLiteral("reasonCode"),
+                    projectionError.isEmpty()
+                        ? QStringLiteral("theme-package-unavailable")
+                        : projectionError);
+                theme.insert(
+                    QStringLiteral("themeProjectionStatus"),
+                    QStringLiteral("error"));
+                theme.insert(
+                    QStringLiteral("themeProjectionError"), projectionError);
+                result.append(theme);
+                continue;
+            }
+            for (auto iterator = projection->cbegin();
+                 iterator != projection->cend(); ++iterator)
+            {
+                theme.insert(iterator.key(), iterator.value());
+            }
+            theme.insert(
+                QStringLiteral("themeProjectionStatus"),
+                QStringLiteral("ready"));
+            theme.insert(
+                QStringLiteral("themeProjectionError"), QString{});
+        }
         const std::optional<ArchDock::ThemeCapabilityProfile> profile =
             ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(theme);
         if (!profile.has_value())
@@ -1111,6 +1161,10 @@ QVariantMap PanelWindow::panelSettingsEditorSnapshot(
     {
         globalValues.insert(key, globalSnapshot.value(key));
     }
+    QString themeProjectionError;
+    const std::optional<QVariantMap> themeProjection =
+        m_panelRegistry.themeRuntimeProjection(
+            *definition, &themeProjectionError);
 
     return {
         {QStringLiteral("success"), true},
@@ -1127,6 +1181,15 @@ QVariantMap PanelWindow::panelSettingsEditorSnapshot(
         {QStringLiteral("panelFields"), panelFields},
         {QStringLiteral("globalFields"), globalFields},
         {QStringLiteral("capabilityResolution"), resolution.toVariantMap()},
+        {QStringLiteral("themeDefinition"),
+         themeProjection.value_or(QVariantMap{})},
+        {QStringLiteral("themeProjectionStatus"),
+         themeProjection.has_value()
+             ? QStringLiteral("ready")
+             : themeProjectionError.isEmpty()
+                 ? QStringLiteral("unavailable")
+                 : QStringLiteral("error")},
+        {QStringLiteral("themeProjectionError"), themeProjectionError},
         {QStringLiteral("themes"), resolvedThemeDefinitions(panelId)},
     };
 }
@@ -1171,6 +1234,10 @@ QVariantMap PanelWindow::resolvePanelSettingsEditorDraft(
     {
         projectedGlobals.insert(key, draft->candidateGlobals.value(key));
     }
+    QString themeProjectionError;
+    const std::optional<QVariantMap> themeProjection =
+        m_panelRegistry.themeRuntimeProjection(
+            draft->candidatePanel, &themeProjectionError);
 
     return {
         {QStringLiteral("success"), true},
@@ -1188,6 +1255,15 @@ QVariantMap PanelWindow::resolvePanelSettingsEditorDraft(
         {QStringLiteral("panelFields"), panelFields},
         {QStringLiteral("globalFields"), globalFields},
         {QStringLiteral("capabilityResolution"), resolution.toVariantMap()},
+        {QStringLiteral("themeDefinition"),
+         themeProjection.value_or(QVariantMap{})},
+        {QStringLiteral("themeProjectionStatus"),
+         themeProjection.has_value()
+             ? QStringLiteral("ready")
+             : themeProjectionError.isEmpty()
+                 ? QStringLiteral("unavailable")
+                 : QStringLiteral("error")},
+        {QStringLiteral("themeProjectionError"), themeProjectionError},
         {QStringLiteral("themes"),
          resolvedThemeDefinitions(panelId, panelValues)},
     };

@@ -85,13 +85,16 @@ Window {
     function rendererPreviewTheme(candidate) {
         const themeId = String(candidate && (candidate.panelThemeId
             || candidate.completeThemeId) || "");
+        const activeTheme = editorSession.themeDefinition || {};
         if (themeId.length === 0)
-            return {};
+            return activeTheme;
         const themes = CapabilityModel.normalized(selectedResolvedThemes);
         for (let index = 0; index < themes.length; ++index) {
             if (String(themes[index].id || "") === themeId)
                 return themes[index];
         }
+        if (String(activeTheme.id || "") === themeId)
+            return activeTheme;
         return {};
     }
 

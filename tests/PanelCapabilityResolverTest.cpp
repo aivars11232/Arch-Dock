@@ -182,7 +182,7 @@ private slots:
     void productionNativeRotationIsUnavailable();
     void syntheticNativeRotationCanBeBounded();
     void freeRotationVocabularyMapsToArbitrary();
-    void productionSkinnedTwoDReportsNotInstalled();
+    void productionSkinnedTwoDIsAvailableOnSupportedHosts();
     void bakedTwoPointFiveDCanBeAvailableInSyntheticInventory();
     void trueThreeDReportsNotInstalled();
     void trueThreeDReportsDisabledSeparately();
@@ -362,16 +362,16 @@ void PanelCapabilityResolverTest::freeRotationVocabularyMapsToArbitrary()
     QCOMPARE(profile->rotation.maximumDegrees, 180.0);
 }
 
-void PanelCapabilityResolverTest::productionSkinnedTwoDReportsNotInstalled()
+void PanelCapabilityResolverTest::productionSkinnedTwoDIsAvailableOnSupportedHosts()
 {
     ThemeCapabilityProfile theme = themeFor(
         QStringLiteral("skinned-with-safe-fallback"),
-        {PanelHostKind::FreeDesktop},
+        {PanelHostKind::NativeEdge, PanelHostKind::FreeDesktop},
         {PanelLayoutKind::Adaptive},
         {RendererTier::Skinned2D, RendererTier::Procedural2D},
         RendererTier::Skinned2D);
     theme.fallbackRendererTiers = {RendererTier::Procedural2D};
-    const CapabilityResolution result = PanelCapabilityResolver::resolve(
+    const CapabilityResolution freeResult = PanelCapabilityResolver::resolve(
         panelFor(PanelHostKind::FreeDesktop),
         PanelCapabilityResolver::productionHostProfile(
             PanelHostKind::FreeDesktop),
@@ -379,21 +379,37 @@ void PanelCapabilityResolverTest::productionSkinnedTwoDReportsNotInstalled()
         PanelCapabilityResolver::productionRenderers(),
         PanelCapabilityResolver::productionPlatform());
 
-    QVERIFY(result.available);
-    QVERIFY(result.renderer.fallbackApplied);
-    QCOMPARE(result.renderer.effectiveTier,
-             std::optional<RendererTier>(RendererTier::Procedural2D));
-    QCOMPARE(result.renderer.reason,
-             CapabilityReasonCode::RendererNotInstalled);
-    QCOMPARE(result.renderer.evaluatedTiers.constFirst().tier,
+    QVERIFY(freeResult.available);
+    QVERIFY(!freeResult.renderer.fallbackApplied);
+    QCOMPARE(freeResult.renderer.effectiveTier,
+             std::optional<RendererTier>(RendererTier::Skinned2D));
+    QCOMPARE(freeResult.renderer.reason, CapabilityReasonCode::None);
+    QCOMPARE(freeResult.renderer.evaluatedTiers.constFirst().tier,
              RendererTier::Skinned2D);
-    QCOMPARE(result.renderer.evaluatedTiers.constFirst().reason,
-             CapabilityReasonCode::RendererNotInstalled);
-    const RendererCandidateDecision *choice = rendererChoiceByTier(
-        result.rendererChoices, RendererTier::Skinned2D);
-    QVERIFY(choice);
-    QVERIFY(!choice->available);
-    QCOMPARE(choice->reason, CapabilityReasonCode::RendererNotInstalled);
+    QCOMPARE(freeResult.renderer.evaluatedTiers.constFirst().reason,
+             CapabilityReasonCode::None);
+    const RendererCandidateDecision *freeChoice = rendererChoiceByTier(
+        freeResult.rendererChoices, RendererTier::Skinned2D);
+    QVERIFY(freeChoice);
+    QVERIFY(freeChoice->available);
+    QCOMPARE(freeChoice->reason, CapabilityReasonCode::None);
+
+    const CapabilityResolution nativeResult = PanelCapabilityResolver::resolve(
+        panelFor(PanelHostKind::NativeEdge),
+        PanelCapabilityResolver::productionHostProfile(
+            PanelHostKind::NativeEdge),
+        theme,
+        PanelCapabilityResolver::productionRenderers(),
+        PanelCapabilityResolver::productionPlatform());
+    QVERIFY(nativeResult.available);
+    QVERIFY(!nativeResult.renderer.fallbackApplied);
+    QCOMPARE(nativeResult.renderer.effectiveTier,
+             std::optional<RendererTier>(RendererTier::Skinned2D));
+    const RendererCandidateDecision *nativeChoice = rendererChoiceByTier(
+        nativeResult.rendererChoices, RendererTier::Skinned2D);
+    QVERIFY(nativeChoice);
+    QVERIFY(nativeChoice->available);
+    QCOMPARE(nativeChoice->reason, CapabilityReasonCode::None);
 }
 
 void PanelCapabilityResolverTest::bakedTwoPointFiveDCanBeAvailableInSyntheticInventory()

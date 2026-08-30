@@ -125,6 +125,9 @@ function emptySession(errorCode, errorMessage) {
         panelPresentedKeys: [],
         globalPresentedKeys: [],
         themes: [],
+        themeDefinition: {},
+        themeProjectionStatus: "unavailable",
+        themeProjectionError: "",
         capabilityResolution: {},
         status: "load-failed",
         errorCode: String(errorCode || "invalid-editor-snapshot"),
@@ -150,6 +153,10 @@ function load(snapshot) {
         panelPresentedKeys: fieldKeys(snapshot.panelFields),
         globalPresentedKeys: fieldKeys(snapshot.globalFields),
         themes: (snapshot.themes || []).slice(),
+        themeDefinition: copyValue(snapshot.themeDefinition || {}),
+        themeProjectionStatus: String(
+            snapshot.themeProjectionStatus || "unavailable"),
+        themeProjectionError: String(snapshot.themeProjectionError || ""),
         capabilityResolution: copyMap(snapshot.capabilityResolution),
         status: "loaded",
         errorCode: "",
@@ -301,6 +308,11 @@ function withProjection(session, projection) {
     result.panelPresentedKeys = fieldKeys(result.panelFields);
     result.globalPresentedKeys = fieldKeys(result.globalFields);
     result.themes = (projection.themes || []).slice();
+    result.themeDefinition = copyValue(projection.themeDefinition || {});
+    result.themeProjectionStatus = String(
+        projection.themeProjectionStatus || "unavailable");
+    result.themeProjectionError = String(
+        projection.themeProjectionError || "");
     result.capabilityResolution = copyMap(projection.capabilityResolution);
     result.status = dirty(session) ? "editing" : "loaded";
     result.errorCode = "";

@@ -6,4 +6,6 @@ PanelScene 1.0 PanelScene.qml
 PanelSurfaceLoader 1.0 PanelSurfaceLoader.qml
 RunningIndicator 1.0 RunningIndicator.qml
 LivePanelPreview 1.0 previews/LivePanelPreview.qml
+AlphaHitMask 1.0 inputs/AlphaHitMask.qml
 PanelProcedural2D 1.0 renderers/PanelProcedural2D.qml
+PanelSkin2D 1.0 renderers/PanelSkin2D.qml

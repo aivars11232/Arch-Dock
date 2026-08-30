@@ -66,10 +66,30 @@ Item {
         capabilityRenderer.effectiveTier
         || (hostCapabilities ? hostCapabilities.effectiveRendererTier : "")
         || requestedRendererTier || "procedural2d")
+    readonly property string presentationState: {
+        const requested = String(runtimeState
+                                 ? runtimeState.presentationState || "open"
+                                 : "open").toLowerCase()
+        return ["normal", "open", "collapsed"].includes(requested)
+            ? requested : "open"
+    }
+    readonly property string themeOrientation:
+        verticalLayout ? "vertical"
+        : ["horizontal", "adaptive"].includes(layoutPath)
+            ? "horizontal" : "free"
     readonly property var layoutGeometry: LayoutEngine.metrics(
         layoutPath, entryCount, iconSize, iconSpacing, layoutScale,
         layoutRadius, layoutRows, layoutPadding, verticalLayout,
         layoutAngle, polygonSides)
+    readonly property var activeThemeSlice: themeRecord(
+        themeDefinition ? themeDefinition.slices : [],
+        presentationState, themeOrientation)
+    readonly property var activeThemeContentRegion: themeRecord(
+        themeDefinition ? themeDefinition.contentRegions : [],
+        presentationState, themeOrientation)
+    readonly property bool skinMetadataUsable: usableSkinMetadata()
+    readonly property var surfaceMetrics: buildSurfaceMetrics()
+    readonly property var rendererGeometry: buildRendererGeometry()
     readonly property var rendererStyle: LayoutEngine.themeStyle(
         appearance, customColor, layoutGeometry.iconSize)
     readonly property real effectMargin: Math.ceil(
@@ -77,30 +97,37 @@ Item {
         + Number(rendererStyle.lineWidth || 0) / 2)
 
     readonly property var contentBounds: ({
-        x: 0,
-        y: 0,
+        x: surfaceMetrics.contentX,
+        y: surfaceMetrics.contentY,
         width: layoutGeometry.width,
         height: layoutGeometry.height
     })
-    readonly property var visualBounds: contentBounds
+    readonly property var visualBounds: ({
+        x: 0,
+        y: 0,
+        width: surfaceMetrics.width,
+        height: surfaceMetrics.height
+    })
     readonly property var effectBounds: ({
-        x: -effectMargin,
-        y: -effectMargin,
-        width: layoutGeometry.width + effectMargin * 2,
-        height: layoutGeometry.height + effectMargin * 2
+        x: -surfaceMetrics.effectLeft,
+        y: -surfaceMetrics.effectTop,
+        width: surfaceMetrics.width + surfaceMetrics.effectLeft
+            + surfaceMetrics.effectRight,
+        height: surfaceMetrics.height + surfaceMetrics.effectTop
+            + surfaceMetrics.effectBottom
     })
     readonly property var inputRegion: ({
         x: 0,
         y: 0,
-        width: layoutGeometry.width,
-        height: layoutGeometry.height
+        width: surfaceMetrics.width,
+        height: surfaceMetrics.height
     })
     readonly property var revealHandle: buildRevealHandle()
     readonly property var popupAnchors: buildPopupAnchors()
     readonly property var previewAnchors: ({
         center: {
-            x: layoutGeometry.width / 2,
-            y: layoutGeometry.height / 2
+            x: surfaceMetrics.width / 2,
+            y: surfaceMetrics.height / 2
         },
         entries: popupAnchors.entries
     })
@@ -135,6 +162,8 @@ Item {
     readonly property var visualPanel: surfaceLoader.surfaceItem
     readonly property var iconDelegates: entryRepeater
 
+    containmentMask: surfaceLoader.inputMaskItem
+
     function definitionValue(sectionName, key, flatKey, fallback) {
         const definition = panelDefinition || ({})
         const section = definition[sectionName]
@@ -156,10 +185,145 @@ Item {
         return definitionValue("iconStyle", key, flatKey, fallback)
     }
 
+    function values(value) {
+        return value && value.length !== undefined ? value : []
+    }
+
+    function themeRecord(collection, state, orientation) {
+        const candidates = values(collection)
+        for (let index = 0; index < candidates.length; ++index) {
+            const candidate = candidates[index]
+            if (String(candidate.state || "") === state
+                    && String(candidate.orientation || "") === orientation)
+                return candidate
+        }
+        return null
+    }
+
+    function usableSkinMetadata() {
+        if (String(resolvedRendererTier || "").toLowerCase() !== "skinned2d")
+            return false
+        const theme = themeDefinition || ({})
+        if (theme.valid !== true
+                || String(theme.format || "") !== "org.archdock.theme"
+                || Number(theme.version || 0) !== 2)
+            return false
+        const candidateId = String(theme.id || theme.themeId || "")
+        if (themeId.length > 0 && candidateId.length > 0
+                && candidateId !== themeId)
+            return false
+        const slice = activeThemeSlice
+        const region = activeThemeContentRegion
+        if (!slice || !slice.sourceRect || !region || !region.rect
+                || String(region.shape || "rect") !== "rect")
+            return false
+        const source = slice.sourceRect
+        const content = region.rect
+        const sourceWidth = Number(source.width || 0)
+        const sourceHeight = Number(source.height || 0)
+        const fixedStart = Number(slice.fixedStart || 0)
+        const fixedEnd = Number(slice.fixedEnd || 0)
+        const centerStart = Number(source.x || 0) + fixedStart
+        const centerEnd = Number(source.x || 0) + sourceWidth - fixedEnd
+        const contentStart = Number(content.x || 0)
+        const contentEnd = contentStart + Number(content.width || 0)
+        return sourceWidth > 0 && sourceHeight > 0
+            && fixedStart >= 0 && fixedEnd >= 0
+            && fixedStart + fixedEnd < sourceWidth
+            && Number(content.width || 0) > 0
+            && Number(content.height || 0) > 0
+            && Number(content.y || 0) >= Number(source.y || 0)
+            && Number(content.y || 0) + Number(content.height || 0)
+                <= Number(source.y || 0) + sourceHeight
+            && contentStart >= centerStart && contentEnd <= centerEnd
+    }
+
+    function buildSurfaceMetrics() {
+        if (!skinMetadataUsable) {
+            return {
+                width: layoutGeometry.width,
+                height: layoutGeometry.height,
+                contentX: 0,
+                contentY: 0,
+                effectLeft: effectMargin,
+                effectTop: effectMargin,
+                effectRight: effectMargin,
+                effectBottom: effectMargin
+            }
+        }
+
+        const source = activeThemeSlice.sourceRect
+        const content = activeThemeContentRegion.rect
+        const sourceX = Number(source.x || 0)
+        const sourceY = Number(source.y || 0)
+        const sourceWidth = Number(source.width || 0)
+        const sourceHeight = Number(source.height || 0)
+        const fixedStart = Number(activeThemeSlice.fixedStart || 0)
+        const fixedEnd = Number(activeThemeSlice.fixedEnd || 0)
+        const centerSourceWidth = sourceWidth - fixedStart - fixedEnd
+        const verticalScale = layoutGeometry.height
+            / Number(content.height || 1)
+        const centerScale = layoutGeometry.width
+            / Number(content.width || 1)
+        const startWidth = fixedStart * verticalScale
+        const endWidth = fixedEnd * verticalScale
+        const centerWidth = centerSourceWidth * centerScale
+        const margins = themeDefinition.effectMargins || ({})
+        return {
+            width: startWidth + centerWidth + endWidth,
+            height: sourceHeight * verticalScale,
+            contentX: startWidth
+                + (Number(content.x || 0) - sourceX - fixedStart)
+                    * centerScale,
+            contentY: (Number(content.y || 0) - sourceY) * verticalScale,
+            effectLeft: Math.max(0, Number(margins.left || 0))
+                * verticalScale,
+            effectTop: Math.max(0, Number(margins.top || 0))
+                * verticalScale,
+            effectRight: Math.max(0, Number(margins.right || 0))
+                * verticalScale,
+            effectBottom: Math.max(0, Number(margins.bottom || 0))
+                * verticalScale
+        }
+    }
+
+    function buildRendererGeometry() {
+        const result = ({})
+        const keys = Object.keys(layoutGeometry || ({}))
+        for (let index = 0; index < keys.length; ++index)
+            result[keys[index]] = layoutGeometry[keys[index]]
+        result.width = surfaceMetrics.width
+        result.height = surfaceMetrics.height
+        return result
+    }
+
     function entryGeometryAt(index) {
-        return LayoutEngine.entryGeometry(
+        const geometry = LayoutEngine.entryGeometry(
             layoutPath, index, entryCount, layoutGeometry, layoutAngle,
             polygonSides, pathOrientation, geometryCompatibilityProfile)
+        const result = ({})
+        const keys = Object.keys(geometry || ({}))
+        for (let keyIndex = 0; keyIndex < keys.length; ++keyIndex)
+            result[keys[keyIndex]] = geometry[keys[keyIndex]]
+        result.position = {
+            x: Number(geometry.position.x || 0) + contentBounds.x,
+            y: Number(geometry.position.y || 0) + contentBounds.y
+        }
+        result.x = result.position.x
+        result.y = result.position.y
+        result.depthOrder = Number(geometry.depthOrder || 0) + contentBounds.y
+        result.bounds = contentBounds
+        result.panelBounds = contentBounds
+        result.safeInputRegion = contentBounds
+        if (geometry.entryBounds) {
+            result.entryBounds = {
+                x: Number(geometry.entryBounds.x || 0) + contentBounds.x,
+                y: Number(geometry.entryBounds.y || 0) + contentBounds.y,
+                width: Number(geometry.entryBounds.width || 0),
+                height: Number(geometry.entryBounds.height || 0)
+            }
+        }
+        return result
     }
 
     function entryLabel(entry, index) {
@@ -182,24 +346,24 @@ Item {
         const configuredSize = Number(definitionValue(
             "visibility", "revealZone", "revealZone", 8))
         const size = Math.max(1, Math.min(
-            Math.max(layoutGeometry.width, layoutGeometry.height),
+            Math.max(surfaceMetrics.width, surfaceMetrics.height),
             isFinite(configuredSize) ? configuredSize : 8))
         let rect = {
             x: 0,
-            y: layoutGeometry.height - size,
-            width: layoutGeometry.width,
+            y: surfaceMetrics.height - size,
+            width: surfaceMetrics.width,
             height: size
         }
         if (edge === "top")
-            rect = { x: 0, y: 0, width: layoutGeometry.width, height: size }
+            rect = { x: 0, y: 0, width: surfaceMetrics.width, height: size }
         else if (edge === "left")
-            rect = { x: 0, y: 0, width: size, height: layoutGeometry.height }
+            rect = { x: 0, y: 0, width: size, height: surfaceMetrics.height }
         else if (edge === "right") {
             rect = {
-                x: layoutGeometry.width - size,
+                x: surfaceMetrics.width - size,
                 y: 0,
                 width: size,
-                height: layoutGeometry.height
+                height: surfaceMetrics.height
             }
         }
         return {
@@ -237,16 +401,16 @@ Item {
             primary: anchors.length > 0 ? anchors[primaryIndex] : {
                 index: -1,
                 entryId: "",
-                x: layoutGeometry.width / 2,
-                y: layoutGeometry.height / 2,
+                x: surfaceMetrics.width / 2,
+                y: surfaceMetrics.height / 2,
                 outwardNormal: { x: 0, y: -1, angle: -90 }
             },
             entries: anchors
         }
     }
 
-    width: layoutGeometry.width
-    height: layoutGeometry.height
+    width: surfaceMetrics.width
+    height: surfaceMetrics.height
 
     PanelSurfaceLoader {
         id: surfaceLoader
@@ -257,7 +421,8 @@ Item {
         themeSource: root.themeSource
         themeDefinition: root.themeDefinition
         layout: root.layoutPath
-        geometry: root.layoutGeometry
+        presentationState: root.presentationState
+        geometry: root.rendererGeometry
         layoutAngle: root.layoutAngle
         polygonSides: root.polygonSides
         appearance: root.appearance

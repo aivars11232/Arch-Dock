@@ -1,0 +1,194 @@
+{
+  "format": "org.archdock.theme",
+  "version": 2,
+  "id": "sci-fi-chassis-blue",
+  "name": "Sci-Fi Chassis Blue",
+  "packageRevision": 1,
+  "author": "Arch Dock project",
+  "description": "Original horizontal blue chassis artwork created from a blank canvas for Arch Dock",
+  "license": {
+    "spdx": "NOASSERTION",
+    "redistribution": "allowed",
+    "evidence": "User explicitly authorized newly created original TASK-0027 artwork for redistribution as part of Arch Dock; no public license was selected"
+  },
+  "capabilities": {
+    "hosts": ["native-edge", "free-desktop"],
+    "rendererTiers": ["skinned2d", "procedural2d"],
+    "preferredRendererTier": "skinned2d",
+    "fallbackRendererTiers": ["procedural2d"],
+    "layouts": ["horizontal"],
+    "orientations": ["horizontal"],
+    "features": ["icon-state-styling"],
+    "presentationMechanisms": ["open", "collapse-horizontal", "split"],
+    "rotation": {"mode": "none"}
+  },
+  "assets": [
+    {
+      "id": "surface",
+      "path": "assets/surface.svg",
+      "kind": "vector",
+      "mimeType": "image/svg+xml",
+      "sha256": "a0d0755ee69f9b69e2b7423dddf78ffa5b81def7a784de68d157cc9da4e983ca",
+      "naturalSize": {"width": 1200, "height": 160}
+    },
+    {
+      "id": "glow",
+      "path": "assets/glow.svg",
+      "kind": "vector",
+      "mimeType": "image/svg+xml",
+      "sha256": "80b1331113883b0f34b76947815f45916aa3f62a3689767e6e68086088b1a8c8",
+      "naturalSize": {"width": 1200, "height": 160}
+    },
+    {
+      "id": "input-mask",
+      "path": "masks/input.svg",
+      "kind": "mask",
+      "mimeType": "image/svg+xml",
+      "sha256": "9b0a9d44fafc7adfab236127b1ba1db41f1631364ed0236128238abbf7c2f13c",
+      "naturalSize": {"width": 1200, "height": 160}
+    },
+    {
+      "id": "preview",
+      "path": "assets/surface.svg",
+      "kind": "vector",
+      "mimeType": "image/svg+xml",
+      "sha256": "a0d0755ee69f9b69e2b7423dddf78ffa5b81def7a784de68d157cc9da4e983ca",
+      "naturalSize": {"width": 1200, "height": 160}
+    },
+    {
+      "id": "production-record",
+      "path": "metadata/production-record.json",
+      "kind": "material",
+      "mimeType": "application/json",
+      "sha256": "695e985cef4d2de1647bb340347c143d1600d7707361438d1f700cad1f90edd0"
+    },
+    {
+      "id": "visual-review",
+      "path": "metadata/visual-review.json",
+      "kind": "material",
+      "mimeType": "application/json",
+      "sha256": "36264a28be23472bb93f1da44c7d269cbf5789a02237b98503aec33a352cfd3a"
+    }
+  ],
+  "states": [
+    {"id": "normal", "layers": ["base-start", "base-center", "base-end", "glow-normal"]},
+    {"id": "open", "layers": ["base-start", "base-center", "base-end", "glow-open"]},
+    {"id": "collapsed", "layers": ["base-start", "base-center", "base-end", "glow-collapsed"]}
+  ],
+  "layers": [
+    {
+      "id": "base-start",
+      "asset": "surface",
+      "role": "split-start",
+      "sourceRect": {"x": 0, "y": 0, "width": 152, "height": 160},
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "base-center",
+      "asset": "surface",
+      "role": "split-center",
+      "sourceRect": {"x": 152, "y": 0, "width": 896, "height": 160},
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "base-end",
+      "asset": "surface",
+      "role": "split-end",
+      "sourceRect": {"x": 1048, "y": 0, "width": 152, "height": 160},
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "glow-normal",
+      "asset": "glow",
+      "role": "glow",
+      "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160},
+      "opacity": 0.72,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "glow-open",
+      "asset": "glow",
+      "role": "glow",
+      "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160},
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "glow-collapsed",
+      "asset": "glow",
+      "role": "glow",
+      "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160},
+      "opacity": 0.38,
+      "blendMode": "source-over"
+    }
+  ],
+  "slices": [
+    {
+      "id": "normal-horizontal",
+      "asset": "surface",
+      "state": "normal",
+      "orientation": "horizontal",
+      "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160},
+      "fixedStart": 152,
+      "fixedEnd": 152,
+      "centerMode": "stretch"
+    },
+    {
+      "id": "open-horizontal",
+      "asset": "surface",
+      "state": "open",
+      "orientation": "horizontal",
+      "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160},
+      "fixedStart": 152,
+      "fixedEnd": 152,
+      "centerMode": "stretch"
+    },
+    {
+      "id": "collapsed-horizontal",
+      "asset": "surface",
+      "state": "collapsed",
+      "orientation": "horizontal",
+      "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160},
+      "fixedStart": 152,
+      "fixedEnd": 152,
+      "centerMode": "stretch"
+    }
+  ],
+  "contentRegions": [
+    {
+      "id": "normal-content",
+      "state": "normal",
+      "orientation": "horizontal",
+      "shape": "rect",
+      "rect": {"x": 168, "y": 36, "width": 864, "height": 88},
+      "baseline": 72
+    },
+    {
+      "id": "open-content",
+      "state": "open",
+      "orientation": "horizontal",
+      "shape": "rect",
+      "rect": {"x": 168, "y": 36, "width": 864, "height": 88},
+      "baseline": 72
+    },
+    {
+      "id": "collapsed-content",
+      "state": "collapsed",
+      "orientation": "horizontal",
+      "shape": "rect",
+      "rect": {"x": 168, "y": 36, "width": 864, "height": 88},
+      "baseline": 72
+    }
+  ],
+  "effectMargins": {"left": 14, "top": 12, "right": 14, "bottom": 14},
+  "inputMasks": [
+    {"id": "normal-input", "asset": "input-mask", "state": "normal", "orientation": "horizontal", "threshold": 0.5},
+    {"id": "open-input", "asset": "input-mask", "state": "open", "orientation": "horizontal", "threshold": 0.5},
+    {"id": "collapsed-input", "asset": "input-mask", "state": "collapsed", "orientation": "horizontal", "threshold": 0.5}
+  ],
+  "iconStyleRef": {"id": "metallic-blue"},
+  "animationProfileRefs": []
+}

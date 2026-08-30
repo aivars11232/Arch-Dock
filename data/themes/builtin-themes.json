@@ -121,6 +121,87 @@
       "animationStyle": {"iconAnimation": "none", "animationTrigger": "hover", "animationSpeed": 1.0, "animationIntensity": 1.0},
       "layoutStyle": {"layout": "horizontal", "layoutScale": 1.0},
       "previewConfiguration": {"active": true}
+    },
+    {
+      "id": "sci-fi-chassis-dark",
+      "name": "Sci-Fi Chassis Dark",
+      "version": 2,
+      "builtIn": true,
+      "category": "chassis",
+      "packageManifest": "sci-fi-chassis-dark/archdock-theme.json",
+      "iconStyleRef": {"id": "dark-orb"},
+      "capabilities": {
+        "hosts": ["native-edge", "free-desktop"],
+        "layouts": ["horizontal"],
+        "orientations": ["horizontal"],
+        "features": ["icon-state-styling"],
+        "presentationMechanisms": ["open", "collapse-horizontal", "split"],
+        "rendererTiers": ["skinned2d", "procedural2d"],
+        "preferredRendererTier": "skinned2d",
+        "fallbackRendererTiers": ["procedural2d"],
+        "rotation": {"mode": "none"}
+      },
+      "panelStyle": {"rendererTier": "skinned2d"},
+      "iconStyle": {"iconShape": "rounded", "iconSize": 52, "spacing": 8},
+      "tileStyle": {},
+      "indicatorStyle": {},
+      "animationStyle": {"iconAnimation": "scale", "animationTrigger": "hover", "animationSpeed": 1.0, "animationIntensity": 1.0},
+      "layoutStyle": {"layout": "horizontal", "layoutScale": 1.0},
+      "previewConfiguration": {"active": true, "mode": "horizontal", "presentationState": "open", "stateEntry": 1, "iconState": "hover", "seed": "chassis-family-v1"}
+    },
+    {
+      "id": "sci-fi-chassis-red",
+      "name": "Sci-Fi Chassis Red",
+      "version": 2,
+      "builtIn": true,
+      "category": "chassis",
+      "packageManifest": "sci-fi-chassis-red/archdock-theme.json",
+      "iconStyleRef": {"id": "metallic-red"},
+      "capabilities": {
+        "hosts": ["native-edge", "free-desktop"],
+        "layouts": ["horizontal"],
+        "orientations": ["horizontal"],
+        "features": ["icon-state-styling"],
+        "presentationMechanisms": ["open", "collapse-horizontal", "split"],
+        "rendererTiers": ["skinned2d", "procedural2d"],
+        "preferredRendererTier": "skinned2d",
+        "fallbackRendererTiers": ["procedural2d"],
+        "rotation": {"mode": "none"}
+      },
+      "panelStyle": {"rendererTier": "skinned2d"},
+      "iconStyle": {"iconShape": "rounded", "iconSize": 52, "spacing": 8},
+      "tileStyle": {},
+      "indicatorStyle": {},
+      "animationStyle": {"iconAnimation": "scale", "animationTrigger": "hover", "animationSpeed": 1.0, "animationIntensity": 1.0},
+      "layoutStyle": {"layout": "horizontal", "layoutScale": 1.0},
+      "previewConfiguration": {"active": true, "mode": "horizontal", "presentationState": "open", "stateEntry": 1, "iconState": "hover", "seed": "chassis-family-v1"}
+    },
+    {
+      "id": "sci-fi-chassis-blue",
+      "name": "Sci-Fi Chassis Blue",
+      "version": 2,
+      "builtIn": true,
+      "category": "chassis",
+      "packageManifest": "sci-fi-chassis-blue/archdock-theme.json",
+      "iconStyleRef": {"id": "metallic-blue"},
+      "capabilities": {
+        "hosts": ["native-edge", "free-desktop"],
+        "layouts": ["horizontal"],
+        "orientations": ["horizontal"],
+        "features": ["icon-state-styling"],
+        "presentationMechanisms": ["open", "collapse-horizontal", "split"],
+        "rendererTiers": ["skinned2d", "procedural2d"],
+        "preferredRendererTier": "skinned2d",
+        "fallbackRendererTiers": ["procedural2d"],
+        "rotation": {"mode": "none"}
+      },
+      "panelStyle": {"rendererTier": "skinned2d"},
+      "iconStyle": {"iconShape": "rounded", "iconSize": 52, "spacing": 8},
+      "tileStyle": {},
+      "indicatorStyle": {},
+      "animationStyle": {"iconAnimation": "scale", "animationTrigger": "hover", "animationSpeed": 1.0, "animationIntensity": 1.0},
+      "layoutStyle": {"layout": "horizontal", "layoutScale": 1.0},
+      "previewConfiguration": {"active": true, "mode": "horizontal", "presentationState": "open", "stateEntry": 1, "iconState": "hover", "seed": "chassis-family-v1"}
     }
   ]
 }

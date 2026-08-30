@@ -723,7 +723,10 @@ HostCapabilityProfile PanelCapabilityResolver::productionHostProfile(
         PanelLayoutKind::Horizontal,
         PanelLayoutKind::Vertical,
     };
-    profile.rendererTiers = {RendererTier::Procedural2D};
+    profile.rendererTiers = {
+        RendererTier::Procedural2D,
+        RendererTier::Skinned2D,
+    };
     return profile;
 }
 
@@ -767,12 +770,6 @@ ThemeCapabilityProfile PanelCapabilityResolver::legacyThemeProfile(
         !definition.surface.themePackageId.trimmed().isEmpty()
             ? definition.surface.themePackageId
             : QStringLiteral("legacy-theme-v1"));
-    profile.rendererTiers = {
-        RendererTier::Skinned2D,
-        RendererTier::Procedural2D,
-    };
-    profile.preferredRendererTier = RendererTier::Skinned2D;
-    profile.fallbackRendererTiers = {RendererTier::Procedural2D};
     return profile;
 }
 
@@ -872,9 +869,9 @@ QVector<RendererAvailability> PanelCapabilityResolver::productionRenderers()
          6,
          true},
         {RendererTier::Skinned2D,
-         false,
-         false,
-         {PanelHostKind::FreeDesktop},
+         true,
+         true,
+         {PanelHostKind::NativeEdge, PanelHostKind::FreeDesktop},
          {QStringLiteral("arch")},
          6,
          true},

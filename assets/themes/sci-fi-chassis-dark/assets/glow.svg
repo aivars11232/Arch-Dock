@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="160" viewBox="0 0 1200 160">
+  <defs>
+    <filter id="soft-glow" x="-20%" y="-100%" width="140%" height="300%">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+    <linearGradient id="accent" x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9aaeff" stop-opacity="0"/>
+      <stop offset="0.12" stop-color="#9aaeff"/>
+      <stop offset="0.5" stop-color="#d7deff"/>
+      <stop offset="0.88" stop-color="#9aaeff"/>
+      <stop offset="1" stop-color="#9aaeff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <path d="M152 29H1048" stroke="url(#accent)" stroke-width="12" stroke-linecap="round"
+        opacity="0.42" filter="url(#soft-glow)"/>
+  <path d="M152 29H1048" stroke="url(#accent)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M152 131H1048" stroke="#7185b6" stroke-width="2" stroke-linecap="round" opacity="0.68"/>
+  <g fill="#d7deff">
+    <circle cx="70" cy="80" r="4"/>
+    <circle cx="1130" cy="80" r="4"/>
+  </g>
+</svg>

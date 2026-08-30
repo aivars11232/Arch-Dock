@@ -77,6 +77,30 @@ QVariantList builtInThemes()
     return themes;
 }
 
+bool normalizedCatalogPackageManifest(const QVariantMap &theme,
+                                      QString *relativePath)
+{
+    const QString manifest = theme.value(
+        QStringLiteral("packageManifest")).toString().trimmed();
+    if (manifest.isEmpty() || manifest.contains(QLatin1Char('\\')) ||
+        QDir::isAbsolutePath(manifest))
+    {
+        return false;
+    }
+    const QString clean = QDir::cleanPath(manifest);
+    if (clean != manifest || clean == QStringLiteral(".") ||
+        clean == QStringLiteral("..") ||
+        clean.startsWith(QStringLiteral("../")))
+    {
+        return false;
+    }
+    if (relativePath)
+    {
+        *relativePath = clean;
+    }
+    return true;
+}
+
 QVariantList validatedThemeDefinitions(const QVariantList &themes)
 {
     QVariantList result;
@@ -94,7 +118,21 @@ QVariantList validatedThemeDefinitions(const QVariantList &themes)
                         : errorCode);
             return {};
         }
-        result.append(candidate.toMap());
+        const QVariantMap theme = candidate.toMap();
+        if (theme.contains(QStringLiteral("packageManifest")))
+        {
+            QString packageManifest;
+            if (!normalizedCatalogPackageManifest(theme, &packageManifest) ||
+                packageManifest !=
+                    theme.value(QStringLiteral("id")).toString() +
+                        QStringLiteral("/archdock-theme.json"))
+            {
+                qWarning().noquote()
+                    << "Theme catalog rejected: invalid-package-manifest";
+                return {};
+            }
+        }
+        result.append(theme);
     }
     return result;
 }
@@ -693,6 +731,39 @@ PanelRegistry::themeCapabilityProfile(
     const ArchDock::PanelDefinition &definition,
     QString *errorCode) const
 {
+    const QString themeId = !definition.surface.completeThemeId.trimmed().isEmpty()
+        ? definition.surface.completeThemeId.trimmed()
+        : definition.surface.panelThemeId.trimmed();
+    if (!themeId.isEmpty())
+    {
+        for (const QVariant &candidate : m_themeDefinitions)
+        {
+            const QVariantMap theme = candidate.toMap();
+            if (theme.value(QStringLiteral("id")).toString() != themeId)
+            {
+                continue;
+            }
+            if (!theme.contains(QStringLiteral("packageManifest")))
+            {
+                return ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
+                    theme, errorCode);
+            }
+            const std::optional<QVariantMap> projection =
+                builtInThemeRuntimeProjection(themeId, errorCode);
+            if (!projection.has_value())
+            {
+                return std::nullopt;
+            }
+            return ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
+                *projection, errorCode);
+        }
+        if (errorCode)
+        {
+            *errorCode = QStringLiteral("theme-capability-undeclared");
+        }
+        return std::nullopt;
+    }
+
     const QString manifestValue =
         definition.surface.themePackageManifest.trimmed();
     if (!manifestValue.isEmpty())
@@ -752,34 +823,235 @@ PanelRegistry::themeCapabilityProfile(
         return ArchDock::PanelCapabilityResolver::legacyThemeProfile(definition);
     }
 
-    const QString themeId = !definition.surface.completeThemeId.trimmed().isEmpty()
-        ? definition.surface.completeThemeId.trimmed()
-        : definition.surface.panelThemeId.trimmed();
-    if (themeId.isEmpty())
+    if (errorCode)
+    {
+        errorCode->clear();
+    }
+    return ArchDock::PanelCapabilityResolver::proceduralThemeProfile();
+}
+
+std::optional<QVariantMap> PanelRegistry::builtInThemeRuntimeProjection(
+    const QString &themeId,
+    QString *errorCode) const
+{
+    const QString normalizedThemeId = themeId.trimmed();
+    QVariantMap catalogTheme;
+    for (const QVariant &candidate : m_themeDefinitions)
+    {
+        const QVariantMap theme = candidate.toMap();
+        if (theme.value(QStringLiteral("id")).toString() == normalizedThemeId)
+        {
+            catalogTheme = theme;
+            break;
+        }
+    }
+    if (catalogTheme.isEmpty())
+    {
+        if (errorCode)
+        {
+            *errorCode = QStringLiteral("theme-not-found");
+        }
+        return std::nullopt;
+    }
+    if (!catalogTheme.contains(QStringLiteral("packageManifest")))
     {
         if (errorCode)
         {
             errorCode->clear();
         }
-        return ArchDock::PanelCapabilityResolver::proceduralThemeProfile();
+        return std::nullopt;
     }
 
-    for (const QVariant &candidate : m_themeDefinitions)
+    QString relativeManifest;
+    if (!normalizedCatalogPackageManifest(catalogTheme, &relativeManifest))
     {
-        const QVariantMap theme = candidate.toMap();
-        if (theme.value(QStringLiteral("id")).toString() != themeId)
+        if (errorCode)
         {
-            continue;
+            *errorCode = QStringLiteral("invalid-package-manifest");
         }
-        return ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
-            theme, errorCode);
+        return std::nullopt;
+    }
+
+    const QString installedRelativePath =
+        QStringLiteral("arch-dock/themes/") + relativeManifest;
+    QString manifestPath = QStandardPaths::locate(
+        QStandardPaths::GenericDataLocation,
+        installedRelativePath,
+        QStandardPaths::LocateFile);
+#ifdef ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT
+    if (manifestPath.isEmpty())
+    {
+        const QString sourceCandidate = QDir(
+            QString::fromUtf8(ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT))
+                                            .filePath(relativeManifest);
+        const QFileInfo sourceInfo(sourceCandidate);
+        if (sourceInfo.isFile() && sourceInfo.isReadable())
+        {
+            manifestPath = sourceInfo.absoluteFilePath();
+        }
+    }
+#endif
+    if (manifestPath.isEmpty())
+    {
+        if (errorCode)
+        {
+            *errorCode = QStringLiteral("theme-package-unavailable");
+        }
+        return std::nullopt;
+    }
+
+    const ArchDock::ThemePackageLoadResult loaded =
+        ArchDock::ThemePackage::load(manifestPath);
+    if (!loaded.isValid())
+    {
+        if (errorCode)
+        {
+            *errorCode = loaded.primaryCode().isEmpty()
+                ? QStringLiteral("invalid-capability-input")
+                : loaded.primaryCode();
+        }
+        return std::nullopt;
+    }
+    if (loaded.package->sourceVersion() !=
+        catalogTheme.value(QStringLiteral("version")).toInt())
+    {
+        if (errorCode)
+        {
+            *errorCode = QStringLiteral("unsupported-version");
+        }
+        return std::nullopt;
+    }
+    if (loaded.package->definition().id != normalizedThemeId)
+    {
+        if (errorCode)
+        {
+            *errorCode = QStringLiteral("theme-package-identity-mismatch");
+        }
+        return std::nullopt;
+    }
+
+    QString catalogCapabilityError;
+    QString packageCapabilityError;
+    const std::optional<ArchDock::ThemeCapabilityProfile> catalogProfile =
+        ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
+            catalogTheme, &catalogCapabilityError);
+    const std::optional<ArchDock::ThemeCapabilityProfile> packageProfile =
+        ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
+            loaded.package->definition().toVariantMap(),
+            &packageCapabilityError);
+    if (!catalogProfile.has_value() || !packageProfile.has_value() ||
+        *catalogProfile != *packageProfile)
+    {
+        if (errorCode)
+        {
+            *errorCode = QStringLiteral("theme-capability-mismatch");
+        }
+        return std::nullopt;
     }
 
     if (errorCode)
     {
-        *errorCode = QStringLiteral("theme-capability-undeclared");
+        errorCode->clear();
     }
-    return std::nullopt;
+    return loaded.package->runtimeProjection();
+}
+
+std::optional<QVariantMap> PanelRegistry::themeRuntimeProjection(
+    const ArchDock::PanelDefinition &definition,
+    QString *errorCode) const
+{
+    const QString themeId = !definition.surface.completeThemeId.trimmed().isEmpty()
+        ? definition.surface.completeThemeId.trimmed()
+        : definition.surface.panelThemeId.trimmed();
+    if (!themeId.isEmpty())
+    {
+        for (const QVariant &candidate : m_themeDefinitions)
+        {
+            const QVariantMap theme = candidate.toMap();
+            if (theme.value(QStringLiteral("id")).toString() != themeId)
+            {
+                continue;
+            }
+            return builtInThemeRuntimeProjection(themeId, errorCode);
+        }
+        if (errorCode)
+        {
+            *errorCode = QStringLiteral("theme-capability-undeclared");
+        }
+        return std::nullopt;
+    }
+
+    const QString manifestValue =
+        definition.surface.themePackageManifest.trimmed();
+    if (manifestValue.isEmpty())
+    {
+        if (errorCode)
+        {
+            errorCode->clear();
+        }
+        return std::nullopt;
+    }
+
+    const QUrl manifestUrl(manifestValue);
+    if (!manifestUrl.isLocalFile())
+    {
+        if (errorCode)
+        {
+            *errorCode = QStringLiteral("unsafe-package-root");
+        }
+        return std::nullopt;
+    }
+
+    const ArchDock::ThemePackageLoadResult loaded =
+        ArchDock::ThemePackage::load(manifestUrl.toLocalFile());
+    if (!loaded.isValid())
+    {
+        if (errorCode)
+        {
+            *errorCode = loaded.primaryCode().isEmpty()
+                ? QStringLiteral("invalid-capability-input")
+                : loaded.primaryCode();
+        }
+        return std::nullopt;
+    }
+
+    if (!definition.surface.themePackageFormat.trimmed().isEmpty() &&
+        definition.surface.themePackageFormat.trimmed() != themePackageFormat)
+    {
+        if (errorCode)
+        {
+            *errorCode = QStringLiteral("unsupported-format");
+        }
+        return std::nullopt;
+    }
+    if (definition.surface.themePackageVersion > 0 &&
+        loaded.package->sourceVersion() !=
+            definition.surface.themePackageVersion)
+    {
+        if (errorCode)
+        {
+            *errorCode = QStringLiteral("unsupported-version");
+        }
+        return std::nullopt;
+    }
+
+    const QString expectedPackageId =
+        definition.surface.themePackageId.trimmed();
+    if (!expectedPackageId.isEmpty() &&
+        loaded.package->definition().id != expectedPackageId)
+    {
+        if (errorCode)
+        {
+            *errorCode = QStringLiteral("theme-package-identity-mismatch");
+        }
+        return std::nullopt;
+    }
+
+    if (errorCode)
+    {
+        errorCode->clear();
+    }
+    return loaded.package->runtimeProjection();
 }
 
 ArchDock::CapabilityResolution PanelRegistry::resolvePanelCapabilities(
@@ -1482,6 +1754,26 @@ QVariantMap PanelRegistry::themeCandidate(const QString &panelId,
         if (theme.value(QStringLiteral("id")).toString() != themeId)
             continue;
 
+        if (theme.contains(QStringLiteral("packageManifest")))
+        {
+            QString projectionError;
+            if (!builtInThemeRuntimeProjection(
+                    themeId, &projectionError).has_value())
+            {
+                return {
+                    {QStringLiteral("success"), false},
+                    {QStringLiteral("status"), QStringLiteral("validation-failed")},
+                    {QStringLiteral("errorCode"), projectionError.isEmpty()
+                         ? QStringLiteral("theme-package-unavailable")
+                         : projectionError},
+                    {QStringLiteral("panelId"), panelId},
+                    {QStringLiteral("themeId"), themeId},
+                    {QStringLiteral("layer"), normalizedLayer},
+                    {QStringLiteral("values"), QVariantMap{}},
+                };
+            }
+        }
+
         QVariantMap changes;
         const auto mergeStyle = [&changes](const QVariantMap &style)
         {
@@ -1866,6 +2158,9 @@ bool PanelRegistry::importTheme(const QString &panelId, const QUrl &sourceUrl)
         fit = QStringLiteral("cover");
     }
     QVariantMap values{
+        {QStringLiteral("panelThemeId"), QString{}},
+        {QStringLiteral("completeThemeId"), QString{}},
+        {QStringLiteral("rendererTier"), QString{}},
         {QStringLiteral("themeSource"), managedSource.isEmpty()
              ? QString{} : QUrl::fromLocalFile(managedSource).toString()},
         {QStringLiteral("themeAsset"), QString{}},

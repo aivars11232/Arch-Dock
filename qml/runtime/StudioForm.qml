@@ -101,6 +101,8 @@ ScrollView {
                             border.color: "#3a5868"
                             readonly property var rendererCandidate:
                                 root.studio.themeRendererCandidate(modelData)
+                            readonly property var previewConfiguration:
+                                modelData.previewConfiguration || ({})
 
                             RowLayout {
                                 anchors.fill: parent
@@ -141,11 +143,25 @@ ScrollView {
                                         animationProfiles:
                                             themeSample.rendererCandidate
                                         previewMode:
-                                            root.studio.rendererPreviewMode(
-                                                themeSample
-                                                    .rendererCandidate)
-                                        stateEntry: 1
-                                        iconState: "hover"
+                                            String(themeSample
+                                                .previewConfiguration.mode
+                                                || root.studio
+                                                    .rendererPreviewMode(
+                                                        themeSample
+                                                            .rendererCandidate))
+                                        presentationState:
+                                            String(themeSample
+                                                .previewConfiguration
+                                                    .presentationState
+                                                || "open")
+                                        stateEntry: Number(themeSample
+                                            .previewConfiguration.stateEntry
+                                            === undefined ? 1
+                                            : themeSample.previewConfiguration
+                                                .stateEntry)
+                                        iconState: String(themeSample
+                                            .previewConfiguration.iconState
+                                            || "hover")
                                         contentMargin: 4
                                     }
 

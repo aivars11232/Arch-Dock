@@ -73,6 +73,74 @@ TestCase {
         ]
     }
 
+    function chassisThemeDefinition() {
+        const packageRoot = Qt.resolvedUrl(
+            "../assets/themes/sci-fi-chassis-dark/")
+        const sourceRect = { x: 0, y: 0, width: 1200, height: 160 }
+        return {
+            format: "org.archdock.theme",
+            version: 2,
+            id: "sci-fi-chassis-dark",
+            valid: true,
+            loadable: true,
+            status: "valid",
+            assets: [
+                {
+                    id: "surface",
+                    naturalSize: { width: 1200, height: 160 }
+                },
+                {
+                    id: "glow",
+                    naturalSize: { width: 1200, height: 160 }
+                },
+                {
+                    id: "input-mask",
+                    naturalSize: { width: 1200, height: 160 }
+                }
+            ],
+            layers: [{
+                id: "glow-open",
+                asset: "glow",
+                role: "glow",
+                sourceRect: sourceRect,
+                opacity: 1,
+                blendMode: "source-over"
+            }],
+            states: [{ id: "open", layers: ["glow-open"] }],
+            slices: [{
+                id: "open-horizontal",
+                asset: "surface",
+                state: "open",
+                orientation: "horizontal",
+                sourceRect: sourceRect,
+                fixedStart: 152,
+                fixedEnd: 152,
+                centerMode: "stretch"
+            }],
+            contentRegions: [{
+                id: "open-content",
+                state: "open",
+                orientation: "horizontal",
+                shape: "rect",
+                rect: { x: 168, y: 36, width: 864, height: 88 },
+                baseline: 72
+            }],
+            inputMasks: [{
+                id: "open-input",
+                asset: "input-mask",
+                state: "open",
+                orientation: "horizontal",
+                threshold: 0.5
+            }],
+            effectMargins: { left: 14, top: 12, right: 14, bottom: 14 },
+            assetPaths: {
+                surface: packageRoot + "assets/surface.svg",
+                glow: packageRoot + "assets/glow.svg",
+                "input-mask": packageRoot + "masks/input.svg"
+            }
+        }
+    }
+
     function createScene(properties) {
         const values = {
             panelDefinition: definition(),
@@ -156,7 +224,7 @@ TestCase {
         compare(invalid.fallbackApplied, true)
         compare(invalid.fallbackReason, "theme-unavailable")
 
-        const unavailableRenderer = createScene({
+        const incompleteTheme = createScene({
             panelDefinition: definition({
                 rendererTier: "skinned2d",
                 panelThemeId: "valid-theme"
@@ -164,9 +232,9 @@ TestCase {
             hostCapabilities: ({ available: true }),
             themeDefinition: ({ id: "valid-theme", valid: true })
         })
-        compare(unavailableRenderer.effectiveRendererTier, "procedural2d")
-        compare(unavailableRenderer.fallbackApplied, true)
-        compare(unavailableRenderer.fallbackReason, "renderer-unavailable")
+        compare(incompleteTheme.effectiveRendererTier, "procedural2d")
+        compare(incompleteTheme.fallbackApplied, true)
+        compare(incompleteTheme.fallbackReason, "theme-contract-invalid")
 
         const missingLegacyAsset = createScene({
             panelDefinition: definition({
@@ -231,6 +299,112 @@ TestCase {
         verify(image.alpha(trackGapX, Math.round(scene.height / 2)) > 0,
                "the procedural panel surface was not rendered")
         verify(scene.visualPanel.rendererReady)
+    }
+
+    function test_skinned2DWrapsLayoutInSafeThemeGeometry() {
+        const scene = createScene({
+            panelDefinition: definition({
+                rendererTier: "skinned2d",
+                panelThemeId: "sci-fi-chassis-dark"
+            }),
+            runtimeState: {
+                hovered: false,
+                hoveredEntry: 1,
+                rendererFallback: "",
+                presentationState: "open"
+            },
+            hostCapabilities: {
+                available: true,
+                renderer: {
+                    effectiveTier: "skinned2d",
+                    fallbackApplied: false
+                }
+            },
+            themeDefinition: chassisThemeDefinition()
+        })
+        tryVerify(function() {
+            return scene.effectiveRendererTier === "skinned2d"
+        }, 3000)
+
+        compare(scene.fallbackApplied, false)
+        compare(scene.fallbackReason, "")
+        compare(scene.presentationState, "open")
+        compare(scene.contentBounds.width, scene.layoutGeometry.width)
+        compare(scene.contentBounds.height, scene.layoutGeometry.height)
+        verify(scene.contentBounds.x > 0)
+        verify(scene.contentBounds.y > 0)
+        verify(scene.width > scene.contentBounds.width)
+        verify(scene.height > scene.contentBounds.height)
+        compare(scene.visualBounds.width, scene.width)
+        compare(scene.visualBounds.height, scene.height)
+        verify(scene.effectBounds.width > scene.visualBounds.width)
+        verify(scene.effectBounds.height > scene.visualBounds.height)
+
+        const first = scene.entryGeometryAt(0)
+        verify(first.position.x >= scene.contentBounds.x)
+        verify(first.position.y >= scene.contentBounds.y)
+        verify(scene.popupAnchors.entries[0].x >= scene.contentBounds.x)
+        verify(scene.contains(Qt.point(scene.width / 2, scene.height / 2)))
+        verify(!scene.contains(Qt.point(0, 0)))
+        verify(scene.visualPanel.rendererReady)
+    }
+
+    function test_chassisSkinWorksForHorizontalFreeAndRejectsVertical() {
+        const rendererCapabilities = {
+            available: true,
+            renderer: {
+                effectiveTier: "skinned2d",
+                fallbackApplied: false
+            }
+        }
+        const freeScene = createScene({
+            panelDefinition: definition({
+                id: "free-chassis",
+                edge: "free",
+                layout: "horizontal",
+                rendererTier: "skinned2d",
+                panelThemeId: "sci-fi-chassis-dark"
+            }),
+            runtimeState: {
+                hovered: false,
+                hoveredEntry: 1,
+                rendererFallback: "",
+                presentationState: "open"
+            },
+            hostCapabilities: rendererCapabilities,
+            themeDefinition: chassisThemeDefinition(),
+            geometryCompatibilityProfile: "live",
+            entryDelegateContext: { hostKind: "free" }
+        })
+        tryCompare(freeScene, "effectiveRendererTier", "skinned2d", 3000)
+        compare(freeScene.fallbackApplied, false)
+        compare(freeScene.layoutPath, "horizontal")
+        compare(freeScene.themeOrientation, "horizontal")
+        compare(freeScene.geometryCompatibilityProfile, "live")
+        verify(freeScene.visualPanel.rendererReady)
+
+        const verticalScene = createScene({
+            panelDefinition: definition({
+                id: "vertical-chassis",
+                edge: "left",
+                layout: "vertical",
+                rendererTier: "skinned2d",
+                panelThemeId: "sci-fi-chassis-dark"
+            }),
+            runtimeState: {
+                hovered: false,
+                hoveredEntry: 1,
+                rendererFallback: "",
+                presentationState: "open"
+            },
+            hostCapabilities: rendererCapabilities,
+            themeDefinition: chassisThemeDefinition()
+        })
+        tryCompare(verticalScene, "fallbackReason",
+                   "theme-orientation-unavailable", 3000)
+        compare(verticalScene.effectiveRendererTier, "procedural2d")
+        compare(verticalScene.fallbackApplied, true)
+        verify(verticalScene.visualPanel.rendererReady)
     }
 
     function test_publicInputsAndOutputs() {

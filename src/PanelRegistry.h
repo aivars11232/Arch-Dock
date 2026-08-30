@@ -68,6 +68,12 @@ public:
     [[nodiscard]] std::optional<ArchDock::ThemeCapabilityProfile>
     themeCapabilityProfile(const ArchDock::PanelDefinition &definition,
                            QString *errorCode = nullptr) const;
+    [[nodiscard]] std::optional<QVariantMap> themeRuntimeProjection(
+        const ArchDock::PanelDefinition &definition,
+        QString *errorCode = nullptr) const;
+    [[nodiscard]] std::optional<QVariantMap> builtInThemeRuntimeProjection(
+        const QString &themeId,
+        QString *errorCode = nullptr) const;
     [[nodiscard]] ArchDock::CapabilityResolution resolvePanelCapabilities(
         const ArchDock::PanelDefinition &definition,
         QString *errorCode = nullptr) const;

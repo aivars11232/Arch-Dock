@@ -1,0 +1,119 @@
+{
+  "format": "org.archdock.clean-room-artwork-recipe",
+  "version": 1,
+  "task": "TASK-0027",
+  "method": "deterministic-hand-authored-svg",
+  "pixelInput": false,
+  "sourceDerivative": false,
+  "authorizationEvidence": "assets/source-samples/chassis/REFERENCE_RIGHTS.md",
+  "inspirationReferences": [
+    {
+      "catalogId": "panel-screenshot-20260802-010007",
+      "sha256": "0473b25760fbad37fc3c6cf807d5afaf0f7a7f0d6d509bc6024f6eb0e63ea702",
+      "permittedUse": "broad-concept-only",
+      "pixelInput": false
+    },
+    {
+      "catalogId": "panel-screenshot-20260802-010039",
+      "sha256": "c100992da4a00853a55315b6b754fe6eb48d427112603e085d50b958bdf427e0",
+      "permittedUse": "broad-concept-only",
+      "pixelInput": false
+    },
+    {
+      "catalogId": "panel-screenshot-20260802-010048",
+      "sha256": "e6e5e2503dddebfee231001db8dbf32bd6ee55fbfc9f7076376882088d885c0b",
+      "permittedUse": "broad-concept-only",
+      "pixelInput": false
+    }
+  ],
+  "canvas": {
+    "width": 1200,
+    "height": 160,
+    "transparent": true
+  },
+  "geometry": {
+    "outerSilhouette": "M 56 24 L 120 6 H 1080 L 1144 24 L 1194 80 L 1144 136 L 1080 154 H 120 L 56 136 L 6 80 Z",
+    "innerWindow": {
+      "x": 136,
+      "y": 32,
+      "width": 928,
+      "height": 96,
+      "radius": 22
+    },
+    "fixedStart": 152,
+    "fixedEnd": 152,
+    "centerMode": "stretch",
+    "minimumOutput": {
+      "width": 352,
+      "height": 64
+    }
+  },
+  "contentRegion": {
+    "x": 168,
+    "y": 36,
+    "width": 864,
+    "height": 88,
+    "baseline": 72
+  },
+  "effectMargins": {
+    "left": 14,
+    "top": 12,
+    "right": 14,
+    "bottom": 14
+  },
+  "inputMask": {
+    "shape": "outerSilhouette",
+    "threshold": 0.5
+  },
+  "states": {
+    "normal": {
+      "accentOpacity": 0.72,
+      "glowDeviation": 4
+    },
+    "open": {
+      "accentOpacity": 1.0,
+      "glowDeviation": 7
+    },
+    "collapsed": {
+      "accentOpacity": 0.38,
+      "glowDeviation": 2
+    }
+  },
+  "variants": [
+    {
+      "id": "sci-fi-chassis-dark",
+      "base": "#111621",
+      "mid": "#263146",
+      "edge": "#6f82aa",
+      "accent": "#9aaeff",
+      "window": "#0a0f18",
+      "iconStyleRef": "dark-orb"
+    },
+    {
+      "id": "sci-fi-chassis-red",
+      "base": "#1b1017",
+      "mid": "#3d1d28",
+      "edge": "#9c4053",
+      "accent": "#ff4f70",
+      "window": "#120910",
+      "iconStyleRef": "metallic-red"
+    },
+    {
+      "id": "sci-fi-chassis-blue",
+      "base": "#0b1720",
+      "mid": "#16384a",
+      "edge": "#2e86a8",
+      "accent": "#42d5ff",
+      "window": "#061118",
+      "iconStyleRef": "metallic-blue"
+    }
+  ],
+  "prohibitedElements": [
+    "source-image-pixels",
+    "tracing",
+    "third-party-logos",
+    "third-party-glyphs",
+    "text",
+    "distinctive-source-ornament"
+  ]
+}

@@ -84,25 +84,67 @@ and fallback-tier declarations. The package is rejected before it replaces the
 active theme when those declarations are invalid or incompatible with the
 panel host and no safe renderer result exists.
 
-The current production renderer inventory contains only procedural 2D.
-Skinned 2D, baked 2.5D, and true 3D remain declared vocabulary, but are reported
-as not installed until their live renderers exist. A valid package may select
-procedural 2D through an explicitly declared fallback; the capability result
-then reports both the requested tier and `renderer-not-installed` fallback.
-Panel Studio derives layout, rotation, dynamic-tint, icon-style, procedural
-surface, and artwork-fit visibility from that resolved result. Invalid package
-metadata yields no effective tier and removes the unsupported controls, while
-the shared scene remains on its safe procedural surface.
+The production renderer inventory contains procedural 2D and Theme v2 skinned
+2D. Baked 2.5D and true 3D remain declared vocabulary but are reported as not
+installed. A valid package can prefer `skinned2d` and declare `procedural2d` as
+its safe fallback. The live applet and Panel Studio receive the same
+backend-revalidated runtime projection with absolute paths confined to the
+managed package.
+
+The current skinned renderer supports declared horizontal slices only. Each
+slice provides fixed start/end cap widths, a stretched or tiled center, a safe
+content rectangle, effect margins, and an alpha input mask. `normal`, `open`,
+and `collapsed` parts may share assets or declare distinct parts; selection is
+deterministic and non-interactive until the presentation engine is implemented.
+The ordinary Qt Quick image path supports only source-over composition, so any
+other declared blend mode fails safely instead of being approximated.
+
+A panel must already use a layout declared by the package. Importing a
+horizontal-only package into `adaptive`, vertical, circular, or another
+undeclared layout is rejected with `theme-layout-unsupported`; callers can
+commit `layout=horizontal` through the atomic settings transaction and retry.
+Invalid package metadata yields no effective tier and removes unsupported
+controls, while the shared scene remains on its safe procedural surface.
+
+## Installed Chassis Family
+
+TASK-0027 installs three independently authored Theme v2 packages under
+`share/arch-dock/themes`: `sci-fi-chassis-dark`, `sci-fi-chassis-red`, and
+`sci-fi-chassis-blue`. Each stable catalog entry names its package manifest,
+default icon-style reference, exact capability profile, and deterministic
+preview inputs. The catalog and package capability profiles must match exactly;
+a missing, invalid, identity-mismatched, or capability-mismatched package is
+unavailable rather than silently approximated.
+
+Each variant provides separate original `surface.svg`, `glow.svg`, and
+`masks/input.svg` resources. Fixed 152-unit caps surround a stretchable center
+on the 1200 by 160 design grid. The safe content rectangle is 168,36 through
+1032,124; the effect margins are 14,12,14,14; and the minimum reviewed scene is
+352 by 64. The variants declare native-edge and free-desktop hosts, horizontal
+layout/orientation, deterministic normal/open/collapsed state accents,
+`skinned2d` with procedural fallback, and no whole-panel rotation. Vertical and
+other unsupported layouts therefore use the safe procedural fallback with an
+explicit reason.
+
+The `dark-orb`, `metallic-red`, and `metallic-blue` icon-style IDs are
+declarative references; these chassis packages contain no application glyphs
+or third-party icon artwork. Production metadata records deterministic
+hand-authored SVG construction and exact output hashes. The third-party sample
+screenshots remain reference-only, `NOASSERTION`, non-installable inputs and no
+sample pixels are packaged. The new Arch Dock artwork separately records the
+user's redistribution authorization and `NOASSERTION` because no public license
+was selected.
 
 ## Version 1 Capability Mapping
 
-Version 1 packages do not declare a capability model. Arch Dock therefore maps
-them conservatively and deterministically instead of inferring future renderer
-features from file extensions or metadata:
+Version 1 packages do not declare slice, content-safe, effect-margin, state, or
+input-mask contracts. Arch Dock therefore maps them conservatively and
+deterministically instead of inferring future renderer features from file
+extensions or metadata:
 
-- a managed surface asset requests the skinned 2D tier;
-- the existing procedural 2D surface is its only safe fallback;
-- skinned 2D is usable only on a host whose current renderer consumes the asset;
+- a managed version 1 surface remains on procedural 2D compatibility rendering;
+- it is not upgraded to the Theme v2 `PanelSkin2D` path merely because a raster
+  asset exists;
 - no version 1 package declares baked 2.5D, live true 3D, split or shutter
   presentation, radial opening, or nonrectangular input support.
 

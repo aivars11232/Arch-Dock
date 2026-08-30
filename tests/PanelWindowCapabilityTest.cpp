@@ -89,6 +89,7 @@ private slots:
     void rendererProjectionPreservesConsumedValuesWithoutProtectedState();
     void editorDraftResolutionIsReadOnlyAndCannotAuthorizeHiddenState();
     void builtInThemeCandidateCommitsThroughUnifiedTransaction();
+    void builtInChassisCandidateProjectsIntoStudioAndRenderer();
     void screenIdentityIsDerivedServerSideAndCannotBeForged();
     void compatibilityConfigurationSurfaceRemainsExactlyBounded();
     void rejectedCapabilityTransactionStopsBeforePersistenceAndHosts();
@@ -279,6 +280,14 @@ void PanelWindowCapabilityTest::managedVersionTwoCapabilitiesDriveFallbackAndEdi
     const QVariantMap validSnapshot = window.panelSettingsEditorSnapshot(
         panelId, QStringLiteral("studio"));
     QVERIFY(validSnapshot.value(QStringLiteral("success")).toBool());
+    QCOMPARE(validSnapshot.value(
+                 QStringLiteral("themeProjectionStatus")).toString(),
+             QStringLiteral("ready"));
+    QCOMPARE(validSnapshot.value(QStringLiteral("themeDefinition"))
+                 .toMap()
+                 .value(QStringLiteral("id"))
+                 .toString(),
+             QStringLiteral("fixture-baked-ring"));
     const QVariantMap validResolution = validSnapshot.value(
         QStringLiteral("capabilityResolution")).toMap();
     QVERIFY(validResolution.value(QStringLiteral("available")).toBool());
@@ -312,6 +321,21 @@ void PanelWindowCapabilityTest::managedVersionTwoCapabilitiesDriveFallbackAndEdi
     QVERIFY(!validKeys.contains(QStringLiteral("layoutRows")));
     QVERIFY(!validKeys.contains(QStringLiteral("pathSides")));
 
+    const QVariantMap validRendererConfiguration =
+        window.panelRendererConfiguration(panelId);
+    QCOMPARE(validRendererConfiguration.value(
+                 QStringLiteral("themeProjectionStatus")).toString(),
+             QStringLiteral("ready"));
+    QVERIFY(validRendererConfiguration.value(
+        QStringLiteral("themeProjectionError")).toString().isEmpty());
+    const QVariantMap validThemeDefinition = validRendererConfiguration.value(
+        QStringLiteral("themeDefinition")).toMap();
+    QCOMPARE(validThemeDefinition.value(QStringLiteral("id")).toString(),
+             QStringLiteral("fixture-baked-ring"));
+    QVERIFY(validThemeDefinition.value(QStringLiteral("valid")).toBool());
+    QVERIFY(!validThemeDefinition.value(
+        QStringLiteral("assetPaths")).toMap().isEmpty());
+
     const QUrl managedManifest(registry->panelValue(
         panelId, QStringLiteral("themePackageManifest")).toString());
     QVERIFY(managedManifest.isLocalFile());
@@ -323,6 +347,14 @@ void PanelWindowCapabilityTest::managedVersionTwoCapabilitiesDriveFallbackAndEdi
     const QVariantMap invalidSnapshot = window.panelSettingsEditorSnapshot(
         panelId, QStringLiteral("studio"));
     QVERIFY(invalidSnapshot.value(QStringLiteral("success")).toBool());
+    QCOMPARE(invalidSnapshot.value(
+                 QStringLiteral("themeProjectionStatus")).toString(),
+             QStringLiteral("error"));
+    QCOMPARE(invalidSnapshot.value(
+                 QStringLiteral("themeProjectionError")).toString(),
+             QStringLiteral("invalid-json"));
+    QVERIFY(invalidSnapshot.value(
+        QStringLiteral("themeDefinition")).toMap().isEmpty());
     const QVariantMap invalidResolution = invalidSnapshot.value(
         QStringLiteral("capabilityResolution")).toMap();
     QVERIFY(!invalidResolution.value(QStringLiteral("available")).toBool());
@@ -333,6 +365,16 @@ void PanelWindowCapabilityTest::managedVersionTwoCapabilitiesDriveFallbackAndEdi
                 .value(QStringLiteral("effectiveTier"))
                 .toString()
                 .isEmpty());
+    const QVariantMap invalidRendererConfiguration =
+        window.panelRendererConfiguration(panelId);
+    QCOMPARE(invalidRendererConfiguration.value(
+                 QStringLiteral("themeProjectionStatus")).toString(),
+             QStringLiteral("error"));
+    QCOMPARE(invalidRendererConfiguration.value(
+                 QStringLiteral("themeProjectionError")).toString(),
+             QStringLiteral("invalid-json"));
+    QVERIFY(invalidRendererConfiguration.value(
+        QStringLiteral("themeDefinition")).toMap().isEmpty());
 
     const QSet<QString> invalidKeys = fieldKeys(invalidSnapshot.value(
         QStringLiteral("panelFields")).toList());
@@ -400,6 +442,12 @@ void PanelWindowCapabilityTest::rendererProjectionPreservesConsumedValuesWithout
     }
     QVERIFY(renderer.contains(QStringLiteral("capabilityResolution")));
     QVERIFY(renderer.contains(QStringLiteral("effectiveRendererTier")));
+    QCOMPARE(renderer.value(
+                 QStringLiteral("themeProjectionStatus")).toString(),
+             QStringLiteral("unavailable"));
+    QVERIFY(renderer.value(
+        QStringLiteral("themeProjectionError")).toString().isEmpty());
+    QVERIFY(renderer.value(QStringLiteral("themeDefinition")).toMap().isEmpty());
 
     for (const QString &protectedOrDiagnostic : {
              QStringLiteral("id"),
@@ -513,7 +561,11 @@ void PanelWindowCapabilityTest::builtInThemeCandidateCommitsThroughUnifiedTransa
 
     const QVariantMap result = window.applyPanelSettingsTransaction(
         QStringLiteral("bottom"), revision, values, {});
-    QVERIFY(result.value(QStringLiteral("success")).toBool());
+    QVERIFY2(result.value(QStringLiteral("success")).toBool(),
+             qPrintable(QStringLiteral("%1/%2: %3")
+                            .arg(result.value(QStringLiteral("status")).toString(),
+                                 result.value(QStringLiteral("errorCode")).toString(),
+                                 result.value(QStringLiteral("errorMessage")).toString())));
     QCOMPARE(result.value(QStringLiteral("status")).toString(),
              QStringLiteral("succeeded"));
     QCOMPARE(result.value(QStringLiteral("revision")).toULongLong(),
@@ -529,6 +581,84 @@ void PanelWindowCapabilityTest::builtInThemeCandidateCommitsThroughUnifiedTransa
     QCOMPARE(persisted.value(QStringLiteral("opacity")).toReal(), 0.88);
     QCOMPARE(persisted.value(QStringLiteral("settingsRevision")).toULongLong(),
              revision + 1);
+}
+
+void PanelWindowCapabilityTest::builtInChassisCandidateProjectsIntoStudioAndRenderer()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    PanelRegistry *registry = qobject_cast<PanelRegistry *>(
+        engine.rootContext()
+            ->contextProperty(QStringLiteral("panelRegistry"))
+            .value<QObject *>());
+    QVERIFY(registry);
+
+    const QVariantMap snapshot = window.panelSettingsEditorSnapshot(
+        QStringLiteral("bottom"), QStringLiteral("studio"));
+    QVERIFY(snapshot.value(QStringLiteral("success")).toBool());
+    const quint64 revision = snapshot.value(QStringLiteral("revision")).toULongLong();
+    const QVariantList themes = snapshot.value(QStringLiteral("themes")).toList();
+    QCOMPARE(themes.size(), 8);
+    int chassisThemeCount = 0;
+    for (const QVariant &value : themes)
+    {
+        const QVariantMap theme = value.toMap();
+        if (theme.value(QStringLiteral("category")).toString() !=
+            QStringLiteral("chassis"))
+        {
+            continue;
+        }
+        ++chassisThemeCount;
+        QVERIFY(theme.value(QStringLiteral("available")).toBool());
+        QCOMPARE(theme.value(
+                     QStringLiteral("themeProjectionStatus")).toString(),
+                 QStringLiteral("ready"));
+        QVERIFY(theme.value(QStringLiteral("valid")).toBool());
+        QVERIFY(!theme.value(
+            QStringLiteral("assetPaths")).toMap().isEmpty());
+        QCOMPARE(theme.value(QStringLiteral("previewConfiguration"))
+                     .toMap()
+                     .value(QStringLiteral("seed"))
+                     .toString(),
+                 QStringLiteral("chassis-family-v1"));
+    }
+    QCOMPARE(chassisThemeCount, 3);
+
+    const QVariantMap theme = registry->themeCandidate(
+        QStringLiteral("bottom"),
+        QStringLiteral("sci-fi-chassis-red"),
+        QStringLiteral("complete"));
+    QVERIFY(theme.value(QStringLiteral("success")).toBool());
+    const QVariantMap values = theme.value(QStringLiteral("values")).toMap();
+    QCOMPARE(values.value(QStringLiteral("rendererTier")).toString(),
+             QStringLiteral("skinned2d"));
+    QCOMPARE(values.value(QStringLiteral("layout")).toString(),
+             QStringLiteral("horizontal"));
+
+    const QVariantMap result = window.applyPanelSettingsTransaction(
+        QStringLiteral("bottom"), revision, values, {});
+    QVERIFY2(result.value(QStringLiteral("success")).toBool(),
+             qPrintable(QStringLiteral("%1/%2: %3")
+                            .arg(result.value(QStringLiteral("status")).toString(),
+                                 result.value(QStringLiteral("errorCode")).toString(),
+                                 result.value(QStringLiteral("errorMessage")).toString())));
+    QCOMPARE(result.value(QStringLiteral("status")).toString(),
+             QStringLiteral("succeeded"));
+
+    const QVariantMap renderer = window.panelRendererConfiguration(
+        QStringLiteral("bottom"));
+    QCOMPARE(renderer.value(QStringLiteral("effectiveRendererTier")).toString(),
+             QStringLiteral("skinned2d"));
+    QCOMPARE(renderer.value(
+                 QStringLiteral("themeProjectionStatus")).toString(),
+             QStringLiteral("ready"));
+    QCOMPARE(renderer.value(QStringLiteral("themeDefinition"))
+                 .toMap()
+                 .value(QStringLiteral("id"))
+                 .toString(),
+             QStringLiteral("sci-fi-chassis-red"));
+    QCOMPARE(renderer.value(QStringLiteral("layout")).toString(),
+             QStringLiteral("horizontal"));
 }
 
 void PanelWindowCapabilityTest::screenIdentityIsDerivedServerSideAndCannotBeForged()

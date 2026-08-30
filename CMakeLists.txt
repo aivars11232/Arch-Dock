@@ -35,6 +35,8 @@ set(ARCHDOCK_RENDERING_IMPORT_ROOT
     "${CMAKE_CURRENT_BINARY_DIR}/qml-imports")
 set(ARCHDOCK_RENDERING_BUILD_DIR
     "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Rendering")
+set(ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/themes")
 set(ARCHDOCK_RENDERING_MODULE_FILES
     qmldir
     RenderingModuleProbe.qml
@@ -43,8 +45,10 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     PanelScene.qml
     PanelSurfaceLoader.qml
     RunningIndicator.qml
+    inputs/AlphaHitMask.qml
     previews/LivePanelPreview.qml
-    renderers/PanelProcedural2D.qml)
+    renderers/PanelProcedural2D.qml
+    renderers/PanelSkin2D.qml)
 set(ARCHDOCK_RENDERING_MODULE_SOURCES)
 
 file(MAKE_DIRECTORY "${ARCHDOCK_RENDERING_BUILD_DIR}")
@@ -207,6 +211,23 @@ if(BUILD_TESTING)
   add_test(NAME theme-package-test COMMAND theme-package-test)
 
   qt_add_executable(
+    chassis-asset-test
+    tests/ChassisAssetTest.cpp
+    src/model/ThemeDefinition.h
+    src/model/ThemeDefinition.cpp
+    src/themes/ThemePackage.h
+    src/themes/ThemePackage.cpp)
+  target_include_directories(
+    chassis-asset-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    chassis-asset-test
+    PRIVATE Qt6::Core
+            Qt6::Gui
+            Qt6::Test)
+  add_test(NAME chassis-asset-test COMMAND chassis-asset-test)
+
+  qt_add_executable(
     source-asset-catalog-test
     tests/SourceAssetCatalogTest.cpp
     src/model/ThemeDefinition.h
@@ -357,6 +378,9 @@ if(BUILD_TESTING)
     PRIVATE Qt6::Core
             Qt6::Gui
             Qt6::Test)
+  target_compile_definitions(
+    panel-registry-test
+    PRIVATE ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT="${ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT}")
   add_test(NAME panel-registry-test COMMAND panel-registry-test)
   set_tests_properties(
     panel-registry-test
@@ -437,7 +461,8 @@ if(BUILD_TESTING)
             KF6::Kirigami)
   target_compile_definitions(
     panel-window-capability-test
-    PRIVATE ARCHDOCK_SOURCE_KWIN_SCRIPT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/kwin-script/contents/code/main.js")
+    PRIVATE ARCHDOCK_SOURCE_KWIN_SCRIPT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/kwin-script/contents/code/main.js"
+            ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT="${ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT}")
   add_test(
     NAME panel-window-capability-test
     COMMAND panel-window-capability-test)
@@ -531,6 +556,15 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PanelScene.qml)
   set_tests_properties(
     panel-scene-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME panel-skin-2d-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PanelSkin2D.qml)
+  set_tests_properties(
+    panel-skin-2d-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(
@@ -697,6 +731,14 @@ foreach(rendering_file IN LISTS ARCHDOCK_RENDERING_MODULE_FILES)
       "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Rendering/${rendering_directory}")
 endforeach()
 install(FILES data/themes/builtin-themes.json DESTINATION share/arch-dock/themes)
+foreach(chassis_theme
+        sci-fi-chassis-dark
+        sci-fi-chassis-red
+        sci-fi-chassis-blue)
+  install(
+    DIRECTORY "assets/themes/${chassis_theme}"
+    DESTINATION share/arch-dock/themes)
+endforeach()
 install(
   DIRECTORY kwin-script/
   DESTINATION share/kwin/scripts/org.archdock.windowwatcher)
