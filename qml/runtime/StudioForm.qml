@@ -137,6 +137,7 @@ ScrollView {
                                             themeSample.modelData
                                         iconStyleDefinition:
                                             themeSample.rendererCandidate
+                                                .iconStyleDefinition || ({})
                                         indicatorStyleDefinition:
                                             themeSample.modelData
                                                 .indicatorStyle || ({})

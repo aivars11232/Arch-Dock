@@ -6,7 +6,9 @@
 #include "../PlasmaScriptResult.h"
 #include "../ScreenIdentity.h"
 #include "../integration/PlasmaPanelAdapter.h"
+#include "../model/IconEntryIdentity.h"
 #include "../model/PanelSettingsSchema.h"
+#include "IconOverrideTransaction.h"
 
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
@@ -610,6 +612,20 @@ QVariantMap PanelWindow::panelRendererConfiguration(const QString &panelId) cons
                 : QStringLiteral("error"));
     configuration.insert(
         QStringLiteral("themeProjectionError"), themeProjectionError);
+    QString iconStyleProjectionError;
+    const std::optional<QVariantMap> iconStyleProjection =
+        m_panelRegistry.iconStyleRuntimeProjection(
+            *definition, &iconStyleProjectionError);
+    configuration.insert(
+        QStringLiteral("iconStyleDefinition"),
+        iconStyleProjection.value_or(QVariantMap{}));
+    configuration.insert(
+        QStringLiteral("iconStyleProjectionStatus"),
+        iconStyleProjection.has_value()
+            ? QStringLiteral("ready")
+            : QStringLiteral("error"));
+    configuration.insert(
+        QStringLiteral("iconStyleProjectionError"), iconStyleProjectionError);
     return configuration;
 }
 
@@ -770,6 +786,11 @@ QVariantList PanelWindow::resolvedThemeDefinitions(
     return result;
 }
 
+QVariantList PanelWindow::iconStyleDefinitions() const
+{
+    return m_panelRegistry.iconStyleDefinitions();
+}
+
 QVariantList PanelWindow::panelSettingsEditorFields(
     const ArchDock::PanelDefinition &candidate,
     const ArchDock::CapabilityResolution &resolution,
@@ -875,7 +896,25 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         }
 
         QStringList choices = field.value(QStringLiteral("choices")).toStringList();
-        if (key == QStringLiteral("layout"))
+        if (key == QStringLiteral("iconStyle"))
+        {
+            choices.clear();
+            for (const QVariant &styleValue : m_panelRegistry.iconStyleDefinitions())
+            {
+                const QString styleId = styleValue.toMap()
+                    .value(QStringLiteral("id")).toString();
+                if (!styleId.isEmpty())
+                {
+                    choices.append(styleId);
+                }
+            }
+            if (choices.isEmpty())
+            {
+                continue;
+            }
+            field.insert(QStringLiteral("choices"), choices);
+        }
+        else if (key == QStringLiteral("layout"))
         {
             QStringList availableChoices;
             for (const QString &choice : choices)
@@ -920,7 +959,20 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         }
 
         QVariantList options;
-        for (const QString &choice : choices)
+        if (key == QStringLiteral("iconStyle"))
+        {
+            for (const QVariant &styleValue : m_panelRegistry.iconStyleDefinitions())
+            {
+                const QVariantMap style = styleValue.toMap();
+                options.append(QVariantMap{
+                    {QStringLiteral("description"),
+                     style.value(QStringLiteral("description"))},
+                    {QStringLiteral("label"), style.value(QStringLiteral("name"))},
+                    {QStringLiteral("value"), style.value(QStringLiteral("id"))},
+                });
+            }
+        }
+        else for (const QString &choice : choices)
         {
             options.append(QVariantMap{
                 {QStringLiteral("label"), choice},
@@ -1165,6 +1217,10 @@ QVariantMap PanelWindow::panelSettingsEditorSnapshot(
     const std::optional<QVariantMap> themeProjection =
         m_panelRegistry.themeRuntimeProjection(
             *definition, &themeProjectionError);
+    QString iconStyleProjectionError;
+    const std::optional<QVariantMap> iconStyleProjection =
+        m_panelRegistry.iconStyleRuntimeProjection(
+            *definition, &iconStyleProjectionError);
 
     return {
         {QStringLiteral("success"), true},
@@ -1190,6 +1246,13 @@ QVariantMap PanelWindow::panelSettingsEditorSnapshot(
                  ? QStringLiteral("unavailable")
                  : QStringLiteral("error")},
         {QStringLiteral("themeProjectionError"), themeProjectionError},
+        {QStringLiteral("iconStyleDefinition"),
+         iconStyleProjection.value_or(QVariantMap{})},
+        {QStringLiteral("iconStyleProjectionStatus"),
+         iconStyleProjection.has_value()
+             ? QStringLiteral("ready") : QStringLiteral("error")},
+        {QStringLiteral("iconStyleProjectionError"), iconStyleProjectionError},
+        {QStringLiteral("iconStyles"), m_panelRegistry.iconStyleDefinitions()},
         {QStringLiteral("themes"), resolvedThemeDefinitions(panelId)},
     };
 }
@@ -1238,6 +1301,10 @@ QVariantMap PanelWindow::resolvePanelSettingsEditorDraft(
     const std::optional<QVariantMap> themeProjection =
         m_panelRegistry.themeRuntimeProjection(
             draft->candidatePanel, &themeProjectionError);
+    QString iconStyleProjectionError;
+    const std::optional<QVariantMap> iconStyleProjection =
+        m_panelRegistry.iconStyleRuntimeProjection(
+            draft->candidatePanel, &iconStyleProjectionError);
 
     return {
         {QStringLiteral("success"), true},
@@ -1264,6 +1331,13 @@ QVariantMap PanelWindow::resolvePanelSettingsEditorDraft(
                  ? QStringLiteral("unavailable")
                  : QStringLiteral("error")},
         {QStringLiteral("themeProjectionError"), themeProjectionError},
+        {QStringLiteral("iconStyleDefinition"),
+         iconStyleProjection.value_or(QVariantMap{})},
+        {QStringLiteral("iconStyleProjectionStatus"),
+         iconStyleProjection.has_value()
+             ? QStringLiteral("ready") : QStringLiteral("error")},
+        {QStringLiteral("iconStyleProjectionError"), iconStyleProjectionError},
+        {QStringLiteral("iconStyles"), m_panelRegistry.iconStyleDefinitions()},
         {QStringLiteral("themes"),
          resolvedThemeDefinitions(panelId, panelValues)},
     };
@@ -1607,10 +1681,10 @@ QVariantList PanelWindow::dockEntries(const QString &panelType) const
 QVariantList PanelWindow::dockEntriesForPanel(const QString &panelId,
                                               const QString &panelType) const
 {
+    QVariantList entries;
     if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() ==
         QStringLiteral("free"))
     {
-        QVariantList entries;
         const QStringList urls = m_panelRegistry.panelValue(
             panelId, QStringLiteral("contentUrls")).toStringList();
         QMimeDatabase mimeDatabase;
@@ -1644,11 +1718,13 @@ QVariantList PanelWindow::dockEntriesForPanel(const QString &panelId,
             {
                 iconName = mimeDatabase.mimeTypeForFile(info).iconName();
             }
-            entries.append(QVariantMap{
+            QVariantMap entry{
                 {QStringLiteral("appId"), QStringLiteral("free-url:") +
                     QString::fromUtf8(url.toEncoded())},
                 {QStringLiteral("desktopFileName"), QString{}},
+                {QStringLiteral("baseIconName"), iconName},
                 {QStringLiteral("iconName"), iconName},
+                {QStringLiteral("baseDisplayName"), displayName},
                 {QStringLiteral("displayName"), displayName},
                 {QStringLiteral("pinned"), true},
                 {QStringLiteral("running"), false},
@@ -1657,11 +1733,338 @@ QVariantList PanelWindow::dockEntriesForPanel(const QString &panelId,
                 {QStringLiteral("windowCount"), 0},
                 {QStringLiteral("windowIds"), QStringList{}},
                 {QStringLiteral("windowTitles"), QStringList{}},
-                {QStringLiteral("isFolder"), info.isDir()}});
+                {QStringLiteral("isFolder"), info.isDir()}};
+            entry.insert(
+                QStringLiteral("stableIdentity"),
+                ArchDock::IconEntryIdentity::forEntry(entry));
+            entries.append(entry);
         }
+    }
+    else
+    {
+        entries = m_dockModel.panelEntries(panelType);
+    }
+
+    const std::optional<ArchDock::PanelDefinition> definition =
+        m_panelRegistry.panelDefinition(panelId);
+    if (!definition.has_value())
+    {
         return entries;
     }
-    return m_dockModel.panelEntries(panelType);
+    for (QVariant &value : entries)
+    {
+        QVariantMap entry = value.toMap();
+        const QString identity = ArchDock::IconEntryIdentity::forEntry(entry);
+        entry.insert(QStringLiteral("stableIdentity"), identity);
+        entry.insert(
+            QStringLiteral("iconPropertiesSupported"),
+            ArchDock::IconEntryIdentity::isValid(identity) &&
+                entry.value(QStringLiteral("pinned")).toBool());
+        const QVariantMap resolution =
+            m_panelRegistry.resolveIconEntryOverride(*definition, entry);
+        entry.insert(QStringLiteral("iconOverrideResolution"), resolution);
+        entry.insert(
+            QStringLiteral("iconOverride"),
+            resolution.value(QStringLiteral("override")));
+        entry.insert(
+            QStringLiteral("iconOverrideApplied"),
+            resolution.value(QStringLiteral("overrideApplied")));
+        entry.insert(
+            QStringLiteral("resolvedGlyph"),
+            resolution.value(QStringLiteral("resolvedGlyph")));
+        entry.insert(
+            QStringLiteral("resolvedLabel"),
+            resolution.value(QStringLiteral("resolvedLabel")));
+        entry.insert(
+            QStringLiteral("tileEnabled"),
+            resolution.value(QStringLiteral("tileEnabled")));
+        entry.insert(
+            QStringLiteral("animationProfileReference"),
+            resolution.value(QStringLiteral("animationProfileReference")));
+        entry.insert(
+            QStringLiteral("resolvedIconStyleDefinition"),
+            resolution.value(QStringLiteral("iconStyleDefinition")));
+        entry.insert(
+            QStringLiteral("iconName"),
+            resolution.value(QStringLiteral("resolvedGlyph")));
+        entry.insert(
+            QStringLiteral("displayName"),
+            resolution.value(QStringLiteral("resolvedLabel")));
+        value = entry;
+    }
+    return entries;
+}
+
+std::optional<QVariantMap> PanelWindow::iconEntryForIdentity(
+    const QString &panelId,
+    const QString &entryIdentity) const
+{
+    const QString identity = entryIdentity.trimmed();
+    if (!ArchDock::IconEntryIdentity::isValid(identity))
+    {
+        return std::nullopt;
+    }
+    const std::optional<ArchDock::PanelDefinition> definition =
+        m_panelRegistry.panelDefinition(panelId);
+    if (!definition.has_value())
+    {
+        return std::nullopt;
+    }
+    for (const QVariant &value : dockEntriesForPanel(
+             panelId, definition->content.type))
+    {
+        const QVariantMap entry = value.toMap();
+        if (entry.value(QStringLiteral("stableIdentity")).toString() == identity)
+        {
+            return entry;
+        }
+    }
+    return std::nullopt;
+}
+
+QVariantMap PanelWindow::iconOverrideSnapshot(
+    const QString &panelId,
+    const QVariantMap &entry) const
+{
+    const std::optional<ArchDock::PanelDefinition> definition =
+        m_panelRegistry.panelDefinition(panelId);
+    const QString identity = ArchDock::IconEntryIdentity::forEntry(entry);
+    if (!definition.has_value() ||
+        !ArchDock::IconEntryIdentity::isValid(identity))
+    {
+        return {
+            {QStringLiteral("success"), false},
+            {QStringLiteral("status"), QStringLiteral("unavailable")},
+            {QStringLiteral("panelId"), panelId},
+            {QStringLiteral("entryIdentity"), identity},
+            {QStringLiteral("errorCode"),
+             definition.has_value()
+                 ? QStringLiteral("invalid-entry-identity")
+                 : QStringLiteral("panel-not-found")},
+        };
+    }
+
+    const QVariantMap resolution =
+        m_panelRegistry.resolveIconEntryOverride(*definition, entry);
+    return {
+        {QStringLiteral("success"), true},
+        {QStringLiteral("status"), QStringLiteral("loaded")},
+        {QStringLiteral("panelId"), panelId},
+        {QStringLiteral("revision"),
+         QVariant::fromValue<qulonglong>(definition->settingsRevision)},
+        {QStringLiteral("entryIdentity"), identity},
+        {QStringLiteral("baseGlyph"),
+         entry.value(QStringLiteral("baseIconName"),
+                     entry.value(QStringLiteral("iconName")))},
+        {QStringLiteral("baseLabel"),
+         entry.value(QStringLiteral("baseDisplayName"),
+                     entry.value(QStringLiteral("displayName")))},
+        {QStringLiteral("override"),
+         resolution.value(QStringLiteral("override"))},
+        {QStringLiteral("resolution"), resolution},
+        {QStringLiteral("iconStyles"), m_panelRegistry.iconStyleDefinitions()},
+    };
+}
+
+QVariantMap PanelWindow::iconOverrideSnapshotForIdentity(
+    const QString &panelId,
+    const QString &entryIdentity) const
+{
+    const std::optional<ArchDock::PanelDefinition> definition =
+        m_panelRegistry.panelDefinition(panelId);
+    const QString identity = entryIdentity.trimmed();
+    if (!definition.has_value() ||
+        !ArchDock::IconEntryIdentity::isValid(identity))
+    {
+        return {
+            {QStringLiteral("success"), false},
+            {QStringLiteral("status"), QStringLiteral("unavailable")},
+            {QStringLiteral("panelId"), panelId},
+            {QStringLiteral("entryIdentity"), identity},
+            {QStringLiteral("errorCode"),
+             definition.has_value()
+                 ? QStringLiteral("invalid-entry-identity")
+                 : QStringLiteral("panel-not-found")},
+        };
+    }
+
+    const std::optional<QVariantMap> entry = iconEntryForIdentity(
+        panelId, identity);
+    if (!entry.has_value())
+    {
+        return {
+            {QStringLiteral("success"), false},
+            {QStringLiteral("status"), QStringLiteral("unavailable")},
+            {QStringLiteral("panelId"), panelId},
+            {QStringLiteral("entryIdentity"), identity},
+            {QStringLiteral("errorCode"), QStringLiteral("entry-not-found")},
+        };
+    }
+    if (!entry->value(QStringLiteral("iconPropertiesSupported")).toBool())
+    {
+        return {
+            {QStringLiteral("success"), false},
+            {QStringLiteral("status"), QStringLiteral("unavailable")},
+            {QStringLiteral("panelId"), panelId},
+            {QStringLiteral("entryIdentity"), identity},
+            {QStringLiteral("errorCode"), QStringLiteral("entry-not-supported")},
+        };
+    }
+    return iconOverrideSnapshot(panelId, *entry);
+}
+
+QVariantMap PanelWindow::applyIconOverrideTransaction(
+    const QString &panelId,
+    qulonglong expectedRevision,
+    const QString &entryIdentity,
+    const QVariantMap &overrideValues)
+{
+    return commitIconOverrideTransaction(
+        panelId,
+        expectedRevision,
+        entryIdentity,
+        overrideValues,
+        false);
+}
+
+QVariantMap PanelWindow::resetIconOverrideTransaction(
+    const QString &panelId,
+    qulonglong expectedRevision,
+    const QString &entryIdentity)
+{
+    return commitIconOverrideTransaction(
+        panelId,
+        expectedRevision,
+        entryIdentity,
+        {},
+        true);
+}
+
+QVariantMap PanelWindow::commitIconOverrideTransaction(
+    const QString &panelId,
+    qulonglong expectedRevision,
+    const QString &entryIdentity,
+    const QVariantMap &overrideValues,
+    bool reset)
+{
+    ArchDock::IconOverrideTransactionOutcome outcome;
+    const std::optional<ArchDock::PanelDefinition> current =
+        m_panelRegistry.panelDefinition(panelId);
+    if (!current.has_value())
+    {
+        outcome.panelId = panelId;
+        outcome.entryIdentity = entryIdentity;
+        outcome.expectedRevision = expectedRevision;
+        outcome.errorCode = QStringLiteral("panel-not-found");
+        outcome.errorMessage = QStringLiteral("the target panel does not exist");
+        return outcome.toVariantMap();
+    }
+
+    bool currentEntry = false;
+    bool iconPropertiesSupported = false;
+    QVariantMap entryAfterCommit;
+    for (const QVariant &value : dockEntriesForPanel(panelId, current->content.type))
+    {
+        const QVariantMap entry = value.toMap();
+        if (entry.value(QStringLiteral("stableIdentity")).toString() ==
+            entryIdentity.trimmed())
+        {
+            currentEntry = true;
+            iconPropertiesSupported = entry.value(
+                QStringLiteral("iconPropertiesSupported")).toBool();
+            entryAfterCommit = entry;
+            break;
+        }
+    }
+    if (!currentEntry)
+    {
+        outcome.panelId = panelId;
+        outcome.entryIdentity = entryIdentity;
+        outcome.expectedRevision = expectedRevision;
+        outcome.previousRevision = current->settingsRevision;
+        outcome.revision = current->settingsRevision;
+        outcome.reset = reset;
+        outcome.errorCode = QStringLiteral("entry-not-found");
+        outcome.errorMessage = QStringLiteral(
+            "the target entry is no longer present on this panel");
+        return outcome.toVariantMap();
+    }
+    if (!iconPropertiesSupported)
+    {
+        outcome.panelId = panelId;
+        outcome.entryIdentity = entryIdentity;
+        outcome.expectedRevision = expectedRevision;
+        outcome.previousRevision = current->settingsRevision;
+        outcome.revision = current->settingsRevision;
+        outcome.reset = reset;
+        outcome.errorCode = QStringLiteral("entry-not-supported");
+        outcome.errorMessage = QStringLiteral(
+            "running-only or transient entries cannot store icon properties");
+        return outcome.toVariantMap();
+    }
+
+    const auto draft = ArchDock::IconOverrideTransaction::prepare(
+        *current,
+        {panelId,
+         expectedRevision,
+         entryIdentity,
+         overrideValues,
+         reset},
+        &outcome,
+        [this](const QString &styleReference)
+        {
+            const QVariantMap style =
+                m_panelRegistry.iconStyleDefinition(styleReference);
+            return style.value(QStringLiteral("selectionStatus")).toString() ==
+                    QStringLiteral("selected") &&
+                style.value(QStringLiteral("resolvedStyleId")).toString() ==
+                    styleReference;
+        });
+    if (!draft.has_value())
+    {
+        return outcome.toVariantMap();
+    }
+
+    QString persistenceError;
+    if (!m_panelRegistry.persistPanelDefinitionTransaction(
+            draft->previousPanel,
+            draft->candidatePanel,
+            m_settings.transactionSnapshot(),
+            &persistenceError))
+    {
+        const std::optional<ArchDock::PanelDefinition> latest =
+            m_panelRegistry.panelDefinition(panelId);
+        const bool conflict = latest.has_value() &&
+            latest->settingsRevision != expectedRevision;
+        outcome.status = conflict
+            ? ArchDock::IconOverrideTransactionStatus::RevisionConflict
+            : ArchDock::IconOverrideTransactionStatus::PersistenceFailed;
+        outcome.errorCode = conflict
+            ? QStringLiteral("stale-revision")
+            : QStringLiteral("persistence-failed");
+        outcome.errorMessage = persistenceError;
+        return outcome.toVariantMap();
+    }
+
+    outcome.status = ArchDock::IconOverrideTransactionStatus::Succeeded;
+    outcome.revision = draft->candidatePanel.settingsRevision;
+    m_panelRegistry.notifyPanelSettingsTransactionAdopted(false);
+    QVariantMap result = outcome.toVariantMap();
+    for (const QVariant &value : dockEntriesForPanel(
+             panelId, draft->candidatePanel.content.type))
+    {
+        const QVariantMap entry = value.toMap();
+        if (entry.value(QStringLiteral("stableIdentity")).toString() ==
+            entryIdentity.trimmed())
+        {
+            entryAfterCommit = entry;
+            break;
+        }
+    }
+    result.insert(
+        QStringLiteral("resolution"),
+        entryAfterCommit.value(QStringLiteral("iconOverrideResolution")));
+    return result;
 }
 
 bool PanelWindow::activateDockEntry(const QString &appId)
@@ -5156,12 +5559,15 @@ bool PanelWindow::openKdeWidgetPreview(const QString &panelId, const QString &ap
          QStringLiteral("--size"), QStringLiteral("%1x%2").arg(size.width()).arg(size.height())});
 }
 
-void PanelWindow::showIconProperties(int row)
+QVariantMap PanelWindow::showIconProperties(
+    const QString &panelId,
+    const QString &entryIdentity)
 {
-    const QModelIndex index = m_dockModel.index(row, 0);
-    if (!index.isValid())
+    QVariantMap snapshot = iconOverrideSnapshotForIdentity(
+        panelId, entryIdentity);
+    if (!snapshot.value(QStringLiteral("success")).toBool())
     {
-        return;
+        return snapshot;
     }
 
     if (!m_iconPropertiesWindow)
@@ -5172,17 +5578,23 @@ void PanelWindow::showIconProperties(int row)
 
     if (!m_iconPropertiesWindow)
     {
-        return;
+        snapshot.insert(QStringLiteral("success"), false);
+        snapshot.insert(QStringLiteral("status"), QStringLiteral("unavailable"));
+        snapshot.insert(
+            QStringLiteral("errorCode"),
+            QStringLiteral("editor-window-unavailable"));
+        snapshot.insert(
+            QStringLiteral("errorMessage"),
+            QStringLiteral("the Icon Properties window could not be created"));
+        return snapshot;
     }
 
-    m_iconPropertiesWindow->setProperty("targetRow", row);
-    m_iconPropertiesWindow->setProperty(
-        "appName",
-        m_dockModel.data(index, DockModel::DisplayNameRole));
-    m_iconPropertiesWindow->setProperty(
-        "currentIconName",
-        m_dockModel.data(index, DockModel::IconNameRole));
+    m_iconPropertiesWindow->setProperty("editorSnapshot", snapshot);
     presentUtilityWindow(m_iconPropertiesWindow);
+    snapshot.insert(QStringLiteral("status"), QStringLiteral("opened"));
+    snapshot.insert(QStringLiteral("editorVisible"),
+                    m_iconPropertiesWindow->isVisible());
+    return snapshot;
 }
 
 QWindow *PanelWindow::createUtilityWindow(const QUrl &source)

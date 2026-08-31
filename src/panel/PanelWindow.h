@@ -66,6 +66,7 @@ public slots:
     QVariantList resolvedThemeDefinitions(
         const QString &panelId,
         const QVariantMap &candidateValues = {}) const;
+    QVariantList iconStyleDefinitions() const;
     QVariantMap panelSettingsEditorSnapshot(const QString &panelId,
                                             const QString &consumer) const;
     QVariantMap resolvePanelSettingsEditorDraft(
@@ -88,6 +89,21 @@ public slots:
     bool setDockBooleanConfiguration(const QString &panelId, const QString &key, bool value);
     QVariantList dockEntries(const QString &panelType) const;
     QVariantList dockEntriesForPanel(const QString &panelId, const QString &panelType) const;
+    QVariantMap iconOverrideSnapshot(
+        const QString &panelId,
+        const QVariantMap &entry) const;
+    QVariantMap iconOverrideSnapshotForIdentity(
+        const QString &panelId,
+        const QString &entryIdentity) const;
+    QVariantMap applyIconOverrideTransaction(
+        const QString &panelId,
+        qulonglong expectedRevision,
+        const QString &entryIdentity,
+        const QVariantMap &overrideValues);
+    QVariantMap resetIconOverrideTransaction(
+        const QString &panelId,
+        qulonglong expectedRevision,
+        const QString &entryIdentity);
     bool activateDockEntry(const QString &appId);
     bool activateDockWindow(const QString &appId, const QString &windowId);
     bool minimizeDockEntry(const QString &appId);
@@ -124,8 +140,8 @@ public slots:
     void toggleBottomPanel();
     void applyProfile(const QString &profileName);
     void openSystemSettings(const QString &module);
-
-    void showIconProperties(int row);
+    QVariantMap showIconProperties(const QString &panelId,
+                                   const QString &entryIdentity);
 
 signals:
     void screenRevisionChanged();
@@ -171,6 +187,15 @@ private:
         const QVariantMap &panelValues,
         const QVariantMap &globalValues,
         ArchDock::PanelSettingsTransactionOutcome *outcome) const;
+    [[nodiscard]] QVariantMap commitIconOverrideTransaction(
+        const QString &panelId,
+        qulonglong expectedRevision,
+        const QString &entryIdentity,
+        const QVariantMap &overrideValues,
+        bool reset);
+    [[nodiscard]] std::optional<QVariantMap> iconEntryForIdentity(
+        const QString &panelId,
+        const QString &entryIdentity) const;
 
     void updateDesktopSuite();
     void syncRegistryFromLegacySettings();

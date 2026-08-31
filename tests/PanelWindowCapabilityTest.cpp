@@ -4,6 +4,7 @@
 #include "PanelRegistry.h"
 #include "panel/PanelWindow.h"
 #include "ScreenIdentity.h"
+#include "WindowModel.h"
 
 #include <QDir>
 #include <QFile>
@@ -11,7 +12,10 @@
 #include <QGuiApplication>
 #include <QJsonDocument>
 #include <QQmlApplicationEngine>
+#include <QQmlComponent>
 #include <QQmlContext>
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -94,6 +98,9 @@ private slots:
     void screenIdentityIsDerivedServerSideAndCannotBeForged();
     void compatibilityConfigurationSurfaceRemainsExactlyBounded();
     void rejectedCapabilityTransactionStopsBeforePersistenceAndHosts();
+    void iconOverridesCommitResolveAndResetOneEntryOnly();
+    void iconPropertiesPublicInteractionIsTransactional();
+    void runningOnlyIconPropertiesAreUnavailable();
 
 private:
     QTemporaryDir m_settingsDirectory;
@@ -192,10 +199,11 @@ void PanelWindowCapabilityTest::editorSnapshotsExposeOnlyProjectedEditableState(
     const QVariantList nativeFields = nativeSnapshot.value(
         QStringLiteral("panelFields")).toList();
     const QSet<QString> nativeKeys = fieldKeys(nativeFields);
-    QCOMPARE(nativeKeys.size(), 3);
+    QCOMPARE(nativeKeys.size(), 4);
     QVERIFY(nativeKeys.contains(QStringLiteral("visible")));
     QVERIFY(nativeKeys.contains(QStringLiteral("visibilityMode")));
     QVERIFY(nativeKeys.contains(QStringLiteral("acceptDrops")));
+    QVERIFY(nativeKeys.contains(QStringLiteral("iconStyle")));
     QVERIFY(!nativeKeys.contains(QStringLiteral("layout")));
     QVERIFY(!nativeKeys.contains(QStringLiteral("layoutAngle")));
     QVERIFY(!nativeKeys.contains(QStringLiteral("layoutRadius")));
@@ -205,6 +213,24 @@ void PanelWindowCapabilityTest::editorSnapshotsExposeOnlyProjectedEditableState(
     QCOMPARE(visibilityMode.value(QStringLiteral("choices")).toStringList(),
              window.nativePanelVisibilityStatus(QStringLiteral("bottom"))
                  .value(QStringLiteral("supportedModes")).toStringList());
+    const QVariantMap iconStyle = fieldByKey(
+        nativeFields, QStringLiteral("iconStyle"));
+    QCOMPARE(iconStyle.value(QStringLiteral("choices")).toStringList(),
+             QStringList({QStringLiteral("plain-original"),
+                          QStringLiteral("metallic-blue"),
+                          QStringLiteral("metallic-red"),
+                          QStringLiteral("neon-green"),
+                          QStringLiteral("neon-orange"),
+                          QStringLiteral("dark-orb")}));
+    const QVariantList iconStyleOptions = iconStyle.value(
+        QStringLiteral("options")).toList();
+    QCOMPARE(iconStyleOptions.size(), 6);
+    QCOMPARE(iconStyleOptions.constFirst().toMap()
+                 .value(QStringLiteral("label")).toString(),
+             QStringLiteral("Plain Original"));
+    QCOMPARE(iconStyleOptions.constLast().toMap()
+                 .value(QStringLiteral("label")).toString(),
+             QStringLiteral("Dark Orb"));
 
     const QSet<QString> nativeGlobalKeys = fieldKeys(nativeSnapshot.value(
         QStringLiteral("globalFields")).toList());
@@ -232,6 +258,7 @@ void PanelWindowCapabilityTest::editorSnapshotsExposeOnlyProjectedEditableState(
              QStringLiteral("physicsEnabled"),
              QStringLiteral("folderLayout"),
              QStringLiteral("pathAnchor"),
+             QStringLiteral("iconThemeId"),
              QStringLiteral("surface3D")})
     {
         QVERIFY2(!nativeValues.contains(protectedOrInternal),
@@ -254,6 +281,14 @@ void PanelWindowCapabilityTest::editorSnapshotsExposeOnlyProjectedEditableState(
     QVERIFY(!studioKeys.contains(QStringLiteral("layoutRadius")));
     QVERIFY(!studioKeys.contains(QStringLiteral("pathSides")));
     QVERIFY(!studioKeys.contains(QStringLiteral("surface3D")));
+    QCOMPARE(studioSnapshot.value(
+                 QStringLiteral("iconStyleProjectionStatus")).toString(),
+             QStringLiteral("ready"));
+    QCOMPARE(studioSnapshot.value(QStringLiteral("iconStyleDefinition"))
+                 .toMap().value(QStringLiteral("id")).toString(),
+             QStringLiteral("plain-original"));
+    QVERIFY(!studioSnapshot.value(QStringLiteral("iconStyles")).toList().isEmpty());
+    QVERIFY(!window.iconStyleDefinitions().isEmpty());
 }
 
 void PanelWindowCapabilityTest::managedVersionTwoCapabilitiesDriveFallbackAndEditorVisibility()
@@ -418,6 +453,7 @@ void PanelWindowCapabilityTest::rendererProjectionPreservesConsumedValuesWithout
         QStringLiteral("iconAnimation"),
         QStringLiteral("iconShape"),
         QStringLiteral("iconSize"),
+        QStringLiteral("iconStyle"),
         QStringLiteral("layout"),
         QStringLiteral("layoutAngle"),
         QStringLiteral("layoutPadding"),
@@ -449,6 +485,16 @@ void PanelWindowCapabilityTest::rendererProjectionPreservesConsumedValuesWithout
     QVERIFY(renderer.value(
         QStringLiteral("themeProjectionError")).toString().isEmpty());
     QVERIFY(renderer.value(QStringLiteral("themeDefinition")).toMap().isEmpty());
+    QCOMPARE(renderer.value(
+                 QStringLiteral("iconStyleProjectionStatus")).toString(),
+             QStringLiteral("ready"));
+    QVERIFY(renderer.value(
+        QStringLiteral("iconStyleProjectionError")).toString().isEmpty());
+    const QVariantMap iconStyleDefinition = renderer.value(
+        QStringLiteral("iconStyleDefinition")).toMap();
+    QCOMPARE(iconStyleDefinition.value(QStringLiteral("id")).toString(),
+             QStringLiteral("plain-original"));
+    QVERIFY(iconStyleDefinition.value(QStringLiteral("valid")).toBool());
 
     for (const QString &protectedOrDiagnostic : {
              QStringLiteral("id"),
@@ -458,6 +504,7 @@ void PanelWindowCapabilityTest::rendererProjectionPreservesConsumedValuesWithout
              QStringLiteral("nativePanelId"),
              QStringLiteral("nativeOwnershipToken"),
              QStringLiteral("nativeRecoveryState"),
+             QStringLiteral("iconThemeId"),
              QStringLiteral("surface3D"),
              QStringLiteral("themeStatus")})
     {
@@ -868,12 +915,455 @@ void PanelWindowCapabilityTest::rejectedCapabilityTransactionStopsBeforePersiste
     QCOMPARE(settingsSnapshot(), settingsBefore);
 }
 
+void PanelWindowCapabilityTest::iconOverridesCommitResolveAndResetOneEntryOnly()
+{
+    QTemporaryDir desktopEntries;
+    QVERIFY(desktopEntries.isValid());
+    const auto writeDesktopEntry = [&desktopEntries](
+        const QString &fileName,
+        const QString &name,
+        const QString &iconName)
+    {
+        const QString path = desktopEntries.filePath(fileName);
+        QFile file(path);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        {
+            return QString{};
+        }
+        file.write("[Desktop Entry]\nType=Application\nName=");
+        file.write(name.toUtf8());
+        file.write("\nIcon=");
+        file.write(iconName.toUtf8());
+        file.write("\nExec=/bin/true\n");
+        file.close();
+        return path;
+    };
+    const QString firstPath = writeDesktopEntry(
+        QStringLiteral("org.example.first.desktop"),
+        QStringLiteral("First app"),
+        QStringLiteral("applications-system"));
+    const QString secondPath = writeDesktopEntry(
+        QStringLiteral("org.example.second.desktop"),
+        QStringLiteral("Second app"),
+        QStringLiteral("utilities-terminal"));
+    QVERIFY(!firstPath.isEmpty());
+    QVERIFY(!secondPath.isEmpty());
+
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    QVERIFY(window.pinDockUrls({QUrl::fromLocalFile(firstPath).toString(),
+                               QUrl::fromLocalFile(secondPath).toString()}));
+    QVariantList entries = window.dockEntriesForPanel(
+        QStringLiteral("bottom"), QStringLiteral("hybrid"));
+    QCOMPARE(entries.size(), 2);
+    const QVariantMap first = entries.at(0).toMap();
+    const QVariantMap second = entries.at(1).toMap();
+    QVERIFY(first.value(QStringLiteral("iconPropertiesSupported")).toBool());
+    QVERIFY(second.value(QStringLiteral("iconPropertiesSupported")).toBool());
+    const QVariantMap snapshot = window.iconOverrideSnapshot(
+        QStringLiteral("bottom"), first);
+    QVERIFY(snapshot.value(QStringLiteral("success")).toBool());
+    QCOMPARE(snapshot.value(QStringLiteral("status")).toString(),
+             QStringLiteral("loaded"));
+    const QString firstIdentity = snapshot.value(
+        QStringLiteral("entryIdentity")).toString();
+    QVERIFY(!firstIdentity.isEmpty());
+    const QVariantMap stableSnapshot = window.iconOverrideSnapshotForIdentity(
+        QStringLiteral("bottom"), firstIdentity);
+    QVERIFY(stableSnapshot.value(QStringLiteral("success")).toBool());
+    QCOMPARE(stableSnapshot.value(QStringLiteral("entryIdentity")).toString(),
+             firstIdentity);
+    QCOMPARE(stableSnapshot.value(QStringLiteral("baseGlyph")).toString(),
+             first.value(QStringLiteral("baseIconName")).toString());
+    QCOMPARE(stableSnapshot.value(QStringLiteral("baseLabel")).toString(),
+             first.value(QStringLiteral("baseDisplayName")).toString());
+    const quint64 revision = snapshot.value(
+        QStringLiteral("revision")).toULongLong();
+
+    const QVariantMap applied = window.applyIconOverrideTransaction(
+        QStringLiteral("bottom"),
+        revision,
+        firstIdentity,
+        {
+            {QStringLiteral("customGlyph"),
+             QStringLiteral("file:///missing/window-test.svg")},
+            {QStringLiteral("customLabel"), QStringLiteral("Only first")},
+            {QStringLiteral("tileEnabled"), false},
+            {QStringLiteral("styleReference"), QStringLiteral("dark-orb")},
+            {QStringLiteral("animationProfileReference"),
+             QStringLiteral("future-orbit")},
+        });
+    QVERIFY2(applied.value(QStringLiteral("success")).toBool(),
+             qPrintable(applied.value(QStringLiteral("errorMessage")).toString()));
+    QCOMPARE(applied.value(QStringLiteral("status")).toString(),
+             QStringLiteral("succeeded"));
+    QCOMPARE(applied.value(QStringLiteral("revision")).toULongLong(),
+             revision + 1);
+
+    entries = window.dockEntriesForPanel(
+        QStringLiteral("bottom"), QStringLiteral("hybrid"));
+    QCOMPARE(entries.size(), 2);
+    const QVariantMap resolvedFirst = entries.at(0).toMap();
+    const QVariantMap resolvedSecond = entries.at(1).toMap();
+    QCOMPARE(resolvedFirst.value(QStringLiteral("stableIdentity")).toString(),
+             firstIdentity);
+    QVERIFY(resolvedFirst.value(
+        QStringLiteral("iconOverrideApplied")).toBool());
+    QCOMPARE(resolvedFirst.value(QStringLiteral("iconName")).toString(),
+             QStringLiteral("applications-system"));
+    QCOMPARE(resolvedFirst.value(QStringLiteral("displayName")).toString(),
+             QStringLiteral("Only first"));
+    QVERIFY(!resolvedFirst.value(QStringLiteral("tileEnabled")).toBool());
+    QCOMPARE(resolvedFirst.value(
+                 QStringLiteral("resolvedIconStyleDefinition")).toMap()
+                 .value(QStringLiteral("id")).toString(),
+             QStringLiteral("dark-orb"));
+    QVERIFY(!resolvedSecond.value(
+        QStringLiteral("iconOverrideApplied")).toBool());
+    QCOMPARE(resolvedSecond.value(QStringLiteral("iconName")).toString(),
+             second.value(QStringLiteral("iconName")).toString());
+    QCOMPARE(resolvedSecond.value(QStringLiteral("displayName")).toString(),
+             second.value(QStringLiteral("displayName")).toString());
+
+    const QVariantMap stale = window.applyIconOverrideTransaction(
+        QStringLiteral("bottom"),
+        revision,
+        firstIdentity,
+        {{QStringLiteral("customLabel"), QStringLiteral("Stale")}});
+    QVERIFY(!stale.value(QStringLiteral("success")).toBool());
+    QCOMPARE(stale.value(QStringLiteral("errorCode")).toString(),
+             QStringLiteral("stale-revision"));
+
+    const QVariantMap reset = window.resetIconOverrideTransaction(
+        QStringLiteral("bottom"), revision + 1, firstIdentity);
+    QVERIFY(reset.value(QStringLiteral("success")).toBool());
+    QCOMPARE(reset.value(QStringLiteral("revision")).toULongLong(),
+             revision + 2);
+    entries = window.dockEntriesForPanel(
+        QStringLiteral("bottom"), QStringLiteral("hybrid"));
+    QVERIFY(!entries.at(0).toMap().value(
+        QStringLiteral("iconOverrideApplied")).toBool());
+    QVERIFY(!entries.at(1).toMap().value(
+        QStringLiteral("iconOverrideApplied")).toBool());
+    QCOMPARE(entries.at(1).toMap().value(QStringLiteral("iconName")).toString(),
+             second.value(QStringLiteral("iconName")).toString());
+}
+
+void PanelWindowCapabilityTest::iconPropertiesPublicInteractionIsTransactional()
+{
+    QTemporaryDir desktopEntries;
+    QVERIFY(desktopEntries.isValid());
+    const QString desktopPath = desktopEntries.filePath(
+        QStringLiteral("org.example.interaction.desktop"));
+    QFile desktopFile(desktopPath);
+    QVERIFY(desktopFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    desktopFile.write(
+        "[Desktop Entry]\n"
+        "Type=Application\n"
+        "Name=Interaction app\n"
+        "Icon=applications-development\n"
+        "Exec=/bin/true\n");
+    desktopFile.close();
+
+    const QDir sourceRoot(QFileInfo(QString::fromUtf8(__FILE__))
+                              .absoluteDir()
+                              .filePath(QStringLiteral("..")));
+    QQmlApplicationEngine engine;
+    engine.addImportPath(sourceRoot.filePath(QStringLiteral("qml")));
+    PanelWindow window(engine);
+    QVERIFY(window.pinDockUrl(QUrl::fromLocalFile(desktopPath).toString()));
+
+    const QVariantList initialEntries = window.dockEntriesForPanel(
+        QStringLiteral("bottom"), QStringLiteral("hybrid"));
+    QCOMPARE(initialEntries.size(), 1);
+    const QVariantMap initialEntry = initialEntries.constFirst().toMap();
+    QVERIFY(initialEntry.value(
+        QStringLiteral("iconPropertiesSupported")).toBool());
+    const QString identity = initialEntry.value(
+        QStringLiteral("stableIdentity")).toString();
+    QVERIFY(!identity.isEmpty());
+
+    QQmlComponent harnessComponent(
+        &engine,
+        QUrl::fromLocalFile(sourceRoot.filePath(
+            QStringLiteral("tests/IconPropertiesInteractionHarness.qml"))));
+    QVERIFY2(harnessComponent.isReady(),
+             qPrintable(harnessComponent.errorString()));
+    std::unique_ptr<QObject> harnessObject(
+        harnessComponent.createWithInitialProperties({
+            {QStringLiteral("interactionEntry"), initialEntry},
+        }));
+    QVERIFY2(harnessObject, qPrintable(harnessComponent.errorString()));
+    auto *harnessWindow = qobject_cast<QQuickWindow *>(harnessObject.get());
+    QVERIFY(harnessWindow);
+    QVERIFY(QTest::qWaitForWindowExposed(harnessWindow));
+
+    auto *liveEntry = harnessWindow->findChild<QQuickItem *>(
+        QStringLiteral("liveDockEntry"));
+    auto *pointerTarget = harnessWindow->findChild<QQuickItem *>(
+        QStringLiteral("dockEntryPointerTarget"));
+    auto *propertiesAction = harnessWindow->findChild<QQuickItem *>(
+        QStringLiteral("iconPropertiesAction"));
+    QVERIFY(liveEntry);
+    QVERIFY(pointerTarget);
+    QVERIFY(propertiesAction);
+
+    const auto clickItem = [](QQuickItem *item, Qt::MouseButton button)
+    {
+        if (!item || !item->window())
+        {
+            return false;
+        }
+        const QPointF sceneCenter = item->mapToScene(
+            QPointF(item->width() / 2.0, item->height() / 2.0));
+        QTest::mouseClick(item->window(), button, Qt::NoModifier,
+                          sceneCenter.toPoint());
+        return true;
+    };
+    const auto waitUntil = [](const auto &predicate, int timeout = 5000)
+    {
+        QElapsedTimer timer;
+        timer.start();
+        while (!predicate() && timer.elapsed() < timeout)
+        {
+            QTest::qWait(20);
+        }
+        return predicate();
+    };
+    const auto editorWindow = []() -> QQuickWindow *
+    {
+        for (QWindow *candidate : QGuiApplication::allWindows())
+        {
+            if (candidate->objectName() == QStringLiteral("iconPropertiesWindow"))
+            {
+                return qobject_cast<QQuickWindow *>(candidate);
+            }
+        }
+        return nullptr;
+    };
+    const auto openEditorFromLiveMenu = [&]()
+    {
+        if (!clickItem(pointerTarget, Qt::RightButton) ||
+            !waitUntil([&]
+            {
+                return liveEntry->property("contextMenuVisible").toBool() &&
+                    propertiesAction->isVisible();
+            }))
+        {
+            return static_cast<QQuickWindow *>(nullptr);
+        }
+        if (!clickItem(propertiesAction, Qt::LeftButton) ||
+            !waitUntil([&]
+            {
+                QQuickWindow *candidate = editorWindow();
+                return candidate && candidate->isVisible();
+            }))
+        {
+            return static_cast<QQuickWindow *>(nullptr);
+        }
+        if (liveEntry->property("contextMenuVisible").toBool())
+        {
+            return static_cast<QQuickWindow *>(nullptr);
+        }
+        return editorWindow();
+    };
+    const auto replaceText = [&](QQuickItem *field, const QString &text)
+    {
+        if (!clickItem(field, Qt::LeftButton) || !field->window())
+        {
+            return false;
+        }
+        if (!waitUntil([&]
+            {
+                return field->hasActiveFocus();
+            }))
+        {
+            return false;
+        }
+        QTest::keySequence(field->window(), QKeySequence::SelectAll);
+        for (const QChar character : text)
+        {
+            QTest::keyClick(field->window(), character.toLatin1());
+        }
+        return waitUntil([&]
+        {
+            return field->property("text").toString() == text;
+        });
+    };
+
+    QQuickWindow *propertiesWindow = openEditorFromLiveMenu();
+    QVERIFY(propertiesWindow);
+    const QVariantMap openResult = harnessWindow->property(
+        "lastOpenResult").toMap();
+    QVERIFY(openResult.value(QStringLiteral("success")).toBool());
+    QCOMPARE(openResult.value(QStringLiteral("status")).toString(),
+             QStringLiteral("opened"));
+    QCOMPARE(openResult.value(QStringLiteral("entryIdentity")).toString(),
+             identity);
+
+    auto *labelField = propertiesWindow->findChild<QQuickItem *>(
+        QStringLiteral("customLabelField"));
+    auto *applyButton = propertiesWindow->findChild<QQuickItem *>(
+        QStringLiteral("applyButton"));
+    QVERIFY(labelField);
+    QVERIFY(applyButton);
+    QVERIFY(replaceText(labelField, QStringLiteral("Applied through live UI")));
+    QVERIFY(waitUntil([&]
+    {
+        return applyButton->isEnabled();
+    }));
+    QVERIFY(clickItem(applyButton, Qt::LeftButton));
+    QVERIFY(waitUntil([&]
+    {
+        return !propertiesWindow->isVisible();
+    }));
+
+    QVariantList entries = window.dockEntriesForPanel(
+        QStringLiteral("bottom"), QStringLiteral("hybrid"));
+    QCOMPARE(entries.size(), 1);
+    QCOMPARE(entries.constFirst().toMap().value(
+                 QStringLiteral("displayName")).toString(),
+             QStringLiteral("Applied through live UI"));
+    QVERIFY(entries.constFirst().toMap().value(
+        QStringLiteral("iconOverrideApplied")).toBool());
+    const quint64 appliedRevision = window.dockConfiguration(
+        QStringLiteral("bottom"))
+                                        .value(QStringLiteral("settingsRevision"))
+                                        .toULongLong();
+
+    propertiesWindow = openEditorFromLiveMenu();
+    QVERIFY(propertiesWindow);
+    labelField = propertiesWindow->findChild<QQuickItem *>(
+        QStringLiteral("customLabelField"));
+    auto *cancelButton = propertiesWindow->findChild<QQuickItem *>(
+        QStringLiteral("cancelButton"));
+    QVERIFY(labelField);
+    QVERIFY(cancelButton);
+    QVERIFY(replaceText(labelField, QStringLiteral("Discarded draft")));
+    QVERIFY(clickItem(cancelButton, Qt::LeftButton));
+    QVERIFY(waitUntil([&]
+    {
+        return !propertiesWindow->isVisible();
+    }));
+    QCOMPARE(window.dockConfiguration(QStringLiteral("bottom"))
+                 .value(QStringLiteral("settingsRevision"))
+                 .toULongLong(),
+             appliedRevision);
+    entries = window.dockEntriesForPanel(
+        QStringLiteral("bottom"), QStringLiteral("hybrid"));
+    QCOMPARE(entries.constFirst().toMap().value(
+                 QStringLiteral("displayName")).toString(),
+             QStringLiteral("Applied through live UI"));
+
+    propertiesWindow = openEditorFromLiveMenu();
+    QVERIFY(propertiesWindow);
+    labelField = propertiesWindow->findChild<QQuickItem *>(
+        QStringLiteral("customLabelField"));
+    QVERIFY(labelField);
+    QVERIFY(replaceText(labelField, QStringLiteral("Window-close draft")));
+    propertiesWindow->close();
+    QVERIFY(waitUntil([&]
+    {
+        return !propertiesWindow->isVisible();
+    }));
+    QCOMPARE(window.dockConfiguration(QStringLiteral("bottom"))
+                 .value(QStringLiteral("settingsRevision"))
+                 .toULongLong(),
+             appliedRevision);
+
+    propertiesWindow = openEditorFromLiveMenu();
+    QVERIFY(propertiesWindow);
+    labelField = propertiesWindow->findChild<QQuickItem *>(
+        QStringLiteral("customLabelField"));
+    QVERIFY(labelField);
+    QCOMPARE(labelField->property("text").toString(),
+             QStringLiteral("Applied through live UI"));
+    auto *resetButton = propertiesWindow->findChild<QQuickItem *>(
+        QStringLiteral("resetButton"));
+    QVERIFY(resetButton);
+    QVERIFY(waitUntil([&]
+    {
+        return resetButton->isEnabled();
+    }));
+    QVERIFY(clickItem(resetButton, Qt::LeftButton));
+    QVERIFY(waitUntil([&]
+    {
+        return !propertiesWindow->isVisible();
+    }));
+    entries = window.dockEntriesForPanel(
+        QStringLiteral("bottom"), QStringLiteral("hybrid"));
+    QCOMPARE(entries.constFirst().toMap().value(
+                 QStringLiteral("displayName")).toString(),
+             QStringLiteral("Interaction app"));
+    QVERIFY(!entries.constFirst().toMap().value(
+        QStringLiteral("iconOverrideApplied")).toBool());
+}
+
+void PanelWindowCapabilityTest::runningOnlyIconPropertiesAreUnavailable()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    WindowModel *windowModel = qobject_cast<WindowModel *>(
+        engine.rootContext()
+            ->contextProperty(QStringLiteral("windowModel"))
+            .value<QObject *>());
+    QVERIFY(windowModel);
+
+    WindowItem running;
+    running.internalId = QStringLiteral("transient-window");
+    running.resourceClass = QStringLiteral("transient-only-app");
+    running.iconName = QStringLiteral("application-x-executable");
+    running.caption = QStringLiteral("Transient only");
+    windowModel->setWindows({running});
+
+    const QVariantList entries = window.dockEntriesForPanel(
+        QStringLiteral("bottom"), QStringLiteral("tasks"));
+    QCOMPARE(entries.size(), 1);
+    const QVariantMap entry = entries.constFirst().toMap();
+    QVERIFY(entry.value(QStringLiteral("running")).toBool());
+    QVERIFY(!entry.value(QStringLiteral("pinned")).toBool());
+    QVERIFY(!entry.value(
+        QStringLiteral("iconPropertiesSupported")).toBool());
+    const QString identity = entry.value(
+        QStringLiteral("stableIdentity")).toString();
+    QVERIFY(!identity.isEmpty());
+
+    const QVariantMap snapshot = window.iconOverrideSnapshotForIdentity(
+        QStringLiteral("bottom"), identity);
+    QVERIFY(!snapshot.value(QStringLiteral("success")).toBool());
+    QCOMPARE(snapshot.value(QStringLiteral("errorCode")).toString(),
+             QStringLiteral("entry-not-supported"));
+
+    const QVariantMap shown = window.showIconProperties(
+        QStringLiteral("bottom"), identity);
+    QVERIFY(!shown.value(QStringLiteral("success")).toBool());
+    QCOMPARE(shown.value(QStringLiteral("errorCode")).toString(),
+             QStringLiteral("entry-not-supported"));
+
+    const quint64 revision = window.dockConfiguration(
+        QStringLiteral("bottom"))
+                                   .value(QStringLiteral("settingsRevision"))
+                                   .toULongLong();
+    const QVariantMap applied = window.applyIconOverrideTransaction(
+        QStringLiteral("bottom"), revision, identity,
+        {{QStringLiteral("customLabel"), QStringLiteral("Not allowed")}});
+    QVERIFY(!applied.value(QStringLiteral("success")).toBool());
+    QCOMPARE(applied.value(QStringLiteral("errorCode")).toString(),
+             QStringLiteral("entry-not-supported"));
+}
+
 int main(int argc, char **argv)
 {
-    qputenv("QT_QPA_PLATFORM", QByteArrayLiteral("offscreen"));
-    qputenv(
-        "DBUS_SESSION_BUS_ADDRESS",
-        QByteArrayLiteral("unix:path=/nonexistent/archdock-phase-b-session-bus"));
+    if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
+    {
+        qputenv("QT_QPA_PLATFORM", QByteArrayLiteral("offscreen"));
+    }
+    if (qEnvironmentVariableIsEmpty("ARCHDOCK_PRIVATE_INTERACTION_TEST"))
+    {
+        qputenv(
+            "DBUS_SESSION_BUS_ADDRESS",
+            QByteArrayLiteral("unix:path=/nonexistent/archdock-phase-b-session-bus"));
+    }
     QGuiApplication application(argc, argv);
     QCoreApplication::setOrganizationName(QStringLiteral("ArchDockTests"));
     QCoreApplication::setApplicationName(QStringLiteral("PanelWindowCapabilityTest"));

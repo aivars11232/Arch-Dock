@@ -1,6 +1,7 @@
 #include "DockModel.h"
 
 #include "WindowModel.h"
+#include "model/IconEntryIdentity.h"
 
 #include <QCoreApplication>
 #include <QDesktopServices>
@@ -89,10 +90,17 @@ QVariant DockModel::data(const QModelIndex &index, int role) const
     {
     case AppIdRole:
         return application.appId;
+    case StableIdentityRole:
+        return ArchDock::IconEntryIdentity::forApplication(
+            application.appId, application.desktopFileName);
     case DesktopFileNameRole:
         return application.desktopFileName;
+    case BaseIconNameRole:
+        return application.iconName;
     case IconNameRole:
         return application.iconName;
+    case BaseDisplayNameRole:
+        return application.displayName;
     case DisplayNameRole:
         return application.displayName;
     case PinnedRole:
@@ -136,8 +144,11 @@ QHash<int, QByteArray> DockModel::roleNames() const
 {
     return {
         {AppIdRole, "appId"},
+        {StableIdentityRole, "stableIdentity"},
         {DesktopFileNameRole, "desktopFileName"},
+        {BaseIconNameRole, "baseIconName"},
         {IconNameRole, "iconName"},
+        {BaseDisplayNameRole, "baseDisplayName"},
         {DisplayNameRole, "displayName"},
         {PinnedRole, "pinned"},
         {RunningRole, "running"},
@@ -318,53 +329,6 @@ void DockModel::unpin(int row)
             m_pinnedApplications.removeAt(index);
             break;
         }
-    }
-
-    savePinnedApplications();
-    rebuild();
-}
-
-void DockModel::setCustomIcon(int row, const QString &iconName)
-{
-    if (row < 0 || row >= m_items.size())
-    {
-        return;
-    }
-
-    const QString appId = m_items.at(row).appId;
-    const QString customIcon = iconName.trimmed();
-    if (appId.isEmpty())
-    {
-        return;
-    }
-
-    if (customIcon.isEmpty())
-    {
-        clearCustomIcon(row);
-        return;
-    }
-
-    if (m_customIcons.value(appId) == customIcon)
-    {
-        return;
-    }
-
-    m_customIcons.insert(appId, customIcon);
-    savePinnedApplications();
-    rebuild();
-}
-
-void DockModel::clearCustomIcon(int row)
-{
-    if (row < 0 || row >= m_items.size())
-    {
-        return;
-    }
-
-    const QString appId = m_items.at(row).appId;
-    if (!m_customIcons.remove(appId))
-    {
-        return;
     }
 
     savePinnedApplications();
@@ -616,8 +580,13 @@ QVariantList DockModel::panelEntries(const QString &panelType) const
 
         entries.append(QVariantMap{
             {QStringLiteral("appId"), application.appId},
+            {QStringLiteral("stableIdentity"),
+             ArchDock::IconEntryIdentity::forApplication(
+                 application.appId, application.desktopFileName)},
             {QStringLiteral("desktopFileName"), application.desktopFileName},
+            {QStringLiteral("baseIconName"), application.iconName},
             {QStringLiteral("iconName"), application.iconName},
+            {QStringLiteral("baseDisplayName"), application.displayName},
             {QStringLiteral("displayName"), application.displayName},
             {QStringLiteral("pinned"), application.pinned},
             {QStringLiteral("running"), running},
@@ -959,7 +928,7 @@ void DockModel::loadPinnedApplications()
             const QString iconName = iterator.value().toString().trimmed();
             if (!iconName.isEmpty())
             {
-                m_customIcons.insert(iterator.key(), iconName);
+                m_legacyCustomIcons.insert(iterator.key(), iconName);
             }
         }
     }
@@ -1003,19 +972,10 @@ void DockModel::savePinnedApplications() const
                 {QStringLiteral("launchCommand"), application.launchCommand}});
     }
 
-    QJsonObject customIcons;
-    for (auto iterator = m_customIcons.cbegin(); iterator != m_customIcons.cend(); ++iterator)
-    {
-        customIcons.insert(iterator.key(), iterator.value());
-    }
-
     QSettings settings;
     settings.setValue(
         QStringLiteral("dock/pinnedApplications"),
         QJsonDocument(applications).toJson(QJsonDocument::Compact));
-    settings.setValue(
-        QStringLiteral("dock/customIcons"),
-        QJsonDocument(customIcons).toJson(QJsonDocument::Compact));
     settings.setValue(QStringLiteral("dock/order"), m_order);
     settings.sync();
 }
@@ -1062,8 +1022,8 @@ void DockModel::rebuild()
 
     for (auto iterator = applications.begin(); iterator != applications.end(); ++iterator)
     {
-        const auto customIcon = m_customIcons.constFind(iterator.key());
-        if (customIcon != m_customIcons.cend())
+        const auto customIcon = m_legacyCustomIcons.constFind(iterator.key());
+        if (customIcon != m_legacyCustomIcons.cend())
         {
             iterator->iconName = customIcon.value();
         }

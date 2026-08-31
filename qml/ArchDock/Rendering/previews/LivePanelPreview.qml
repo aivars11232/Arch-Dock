@@ -224,6 +224,7 @@ Item {
 
             anchors.fill: parent
             entry: previewEntry
+            iconStyleDefinition: root.iconStyleDefinition
             logicalSize: Number(parent.sceneGeometry.iconSize || width)
             tileShape: String(root.iconValue(
                 "shape", "iconShape", "rounded"))
@@ -245,6 +246,10 @@ Item {
                 || root.stateEnabled("minimized", previewIndex)
             urgent: Boolean(previewEntry.attention || previewEntry.urgent)
                 || root.stateEnabled("urgent", previewIndex)
+            launching: Boolean(previewEntry.launching)
+                || root.stateEnabled("launching", previewIndex)
+            disabled: Boolean(previewEntry.disabled)
+                || root.stateEnabled("disabled", previewIndex)
             dropTarget: root.stateEnabled("drop", previewIndex)
             editMode: root.stateEnabled("edit", previewIndex)
             indicatorStyle: root.indicatorStyleDefinition

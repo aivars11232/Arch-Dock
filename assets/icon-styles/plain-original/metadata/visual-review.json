@@ -1,0 +1,22 @@
+{
+  "format": "org.archdock.visual-review",
+  "version": 1,
+  "iconStyleId": "plain-original",
+  "reviewedAt": "2026-08-31",
+  "reviewSurface": "asset-free manifest and runtime-projection contract",
+  "checks": {
+    "applicationGlyphPreserved": "pass",
+    "externalAssets": "absent",
+    "sourcePixels": "absent",
+    "thirdPartyBranding": "absent",
+    "thirdPartyGlyphs": "absent",
+    "mappedReplacementGuessing": "absent",
+    "allRequiredStates": "pass",
+    "boundedValues": "pass",
+    "fallbackVisibility": "pass"
+  },
+  "contactSheetSha256": "",
+  "contactSheetSizes": [],
+  "status": "contract-approved",
+  "notes": "Asset-free fallback review only. Native private-session rendering is recorded by the TASK-0029 verification gate, not inferred here."
+}

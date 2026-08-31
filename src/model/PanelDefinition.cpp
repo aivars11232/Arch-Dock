@@ -3,6 +3,9 @@
 #include "PanelSettingsSchema.h"
 
 #include <QCoreApplication>
+#include <QMetaType>
+#include <QRegularExpression>
+#include <QSet>
 #include <QtGlobal>
 
 #include <array>
@@ -70,6 +73,35 @@ void insertIfNotEmpty(QVariantMap *record, const QString &key, const QVariantMap
     }
 }
 
+bool validIconOverrideIdentity(const QString &identity)
+{
+    static const QRegularExpression pattern(
+        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$"));
+    return pattern.match(identity).hasMatch() &&
+        (identity.startsWith(QStringLiteral("desktop.")) ||
+         identity.startsWith(QStringLiteral("application.")) ||
+         identity.startsWith(QStringLiteral("free.sha256-")));
+}
+
+bool validIconOverrideReference(const QString &reference)
+{
+    static const QRegularExpression pattern(
+        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$"));
+    return reference.isEmpty() || pattern.match(reference).hasMatch();
+}
+
+bool containsControlCharacter(const QString &value)
+{
+    for (const QChar character : value)
+    {
+        if (character.isNull() || character.category() == QChar::Other_Control)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 QVariantMap persistentExtensions(const QVariantMap &extensions)
 {
     QVariantMap result;
@@ -96,6 +128,124 @@ void insertOptional(QVariantMap *record, const QString &key, const std::optional
 
 namespace ArchDock
 {
+
+bool PanelIconStyleDefinition::EntryOverride::isEmpty() const
+{
+    return customGlyph.isEmpty() && customLabel.isEmpty() &&
+        !tileEnabled.has_value() && styleReference.isEmpty() &&
+        animationProfileReference.isEmpty() && extensions.isEmpty();
+}
+
+QVariantMap PanelIconStyleDefinition::EntryOverride::toVariantMap() const
+{
+    QVariantMap result;
+    insertIfNotEmpty(&result, QStringLiteral("customGlyph"), customGlyph);
+    insertIfNotEmpty(&result, QStringLiteral("customLabel"), customLabel);
+    if (tileEnabled.has_value())
+    {
+        result.insert(QStringLiteral("tileEnabled"), *tileEnabled);
+    }
+    insertIfNotEmpty(&result, QStringLiteral("styleReference"), styleReference);
+    insertIfNotEmpty(
+        &result,
+        QStringLiteral("animationProfileReference"),
+        animationProfileReference);
+    insertIfNotEmpty(&result, QStringLiteral("extensions"), extensions);
+    return result;
+}
+
+std::optional<PanelIconStyleDefinition::EntryOverride>
+PanelIconStyleDefinition::EntryOverride::fromVariantMap(
+    const QVariantMap &record,
+    QString *errorMessage)
+{
+    static const QSet<QString> allowedFields{
+        QStringLiteral("customGlyph"),
+        QStringLiteral("customLabel"),
+        QStringLiteral("tileEnabled"),
+        QStringLiteral("styleReference"),
+        QStringLiteral("animationProfileReference"),
+        QStringLiteral("extensions"),
+    };
+    for (auto it = record.cbegin(); it != record.cend(); ++it)
+    {
+        if (!allowedFields.contains(it.key()))
+        {
+            setError(errorMessage, QStringLiteral("unknown icon override field: %1")
+                .arg(it.key()));
+            return std::nullopt;
+        }
+    }
+
+    EntryOverride result;
+    const auto readString = [&record, errorMessage](
+        const QString &key,
+        qsizetype maximumBytes,
+        QString *target)
+    {
+        if (!record.contains(key))
+        {
+            return true;
+        }
+        const QVariant value = record.value(key);
+        if (value.metaType().id() != QMetaType::QString)
+        {
+            setError(errorMessage, QStringLiteral("icon override field '%1' must be a string")
+                .arg(key));
+            return false;
+        }
+        const QString normalized = value.toString().trimmed();
+        if (normalized.toUtf8().size() > maximumBytes ||
+            containsControlCharacter(normalized))
+        {
+            setError(errorMessage, QStringLiteral("icon override field '%1' is invalid")
+                .arg(key));
+            return false;
+        }
+        *target = normalized;
+        return true;
+    };
+    if (!readString(QStringLiteral("customGlyph"), 4096, &result.customGlyph) ||
+        !readString(QStringLiteral("customLabel"), 1024, &result.customLabel) ||
+        !readString(QStringLiteral("styleReference"), 256,
+                    &result.styleReference) ||
+        !readString(QStringLiteral("animationProfileReference"), 256,
+                    &result.animationProfileReference))
+    {
+        return std::nullopt;
+    }
+    if (!validIconOverrideReference(result.styleReference) ||
+        !validIconOverrideReference(result.animationProfileReference))
+    {
+        setError(errorMessage, QStringLiteral(
+            "icon override style or animation reference is invalid"));
+        return std::nullopt;
+    }
+    if (record.contains(QStringLiteral("tileEnabled")))
+    {
+        const QVariant value = record.value(QStringLiteral("tileEnabled"));
+        if (value.metaType().id() != QMetaType::Bool)
+        {
+            setError(errorMessage, QStringLiteral(
+                "icon override field 'tileEnabled' must be a boolean"));
+            return std::nullopt;
+        }
+        result.tileEnabled = value.toBool();
+    }
+    if (record.contains(QStringLiteral("extensions")))
+    {
+        const QVariant value = record.value(QStringLiteral("extensions"));
+        if (value.metaType().id() != QMetaType::QVariantMap)
+        {
+            setError(errorMessage, QStringLiteral(
+                "icon override field 'extensions' must be a map"));
+            return std::nullopt;
+        }
+        result.extensions = value.toMap();
+    }
+    setError(errorMessage, QString{});
+    return result;
+}
 
 std::optional<PanelLayoutKind> panelLayoutKindFromName(const QString &name)
 {
@@ -463,8 +613,18 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         &definition.surface.themeRenderOutcome,
         true);
 
+    const bool hasExplicitIconStyle = record.contains(QStringLiteral("iconStyle"));
     setString(QStringLiteral("iconStyle"), &definition.iconStyle.styleReference);
     setString(QStringLiteral("iconThemeId"), &definition.iconStyle.themeId);
+    if (!hasExplicitIconStyle && !definition.iconStyle.themeId.isEmpty())
+    {
+        definition.iconStyle.styleReference = definition.iconStyle.themeId;
+    }
+    if (definition.iconStyle.styleReference.isEmpty())
+    {
+        definition.iconStyle.styleReference = QStringLiteral("plain-original");
+    }
+    definition.iconStyle.themeId = definition.iconStyle.styleReference;
     definition.iconStyle.shape = normalized(
         QStringLiteral("iconShape"), definition.iconStyle.shape).toString();
     definition.iconStyle.size = normalized(
@@ -473,8 +633,47 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         QStringLiteral("spacing"), definition.iconStyle.spacing).toReal();
     definition.iconStyle.globalDefaults = record.value(
         QStringLiteral("iconGlobalDefaults")).toMap();
-    definition.iconStyle.perEntryOverrides = record.value(
-        QStringLiteral("iconOverrides")).toMap();
+    const QVariant overridesValue = record.value(QStringLiteral("iconOverrides"));
+    if (record.contains(QStringLiteral("iconOverrides")) &&
+        overridesValue.metaType().id() != QMetaType::QVariantMap)
+    {
+        setError(errorMessage, QStringLiteral("icon overrides must be a map"));
+        return std::nullopt;
+    }
+    const QVariantMap overrides = overridesValue.toMap();
+    if (overrides.size() > 512)
+    {
+        setError(errorMessage, QStringLiteral("too many icon overrides"));
+        return std::nullopt;
+    }
+    for (auto it = overrides.cbegin(); it != overrides.cend(); ++it)
+    {
+        if (!validIconOverrideIdentity(it.key()))
+        {
+            setError(errorMessage, QStringLiteral("invalid icon override identity: %1")
+                .arg(it.key()));
+            return std::nullopt;
+        }
+        if (it.value().metaType().id() != QMetaType::QVariantMap)
+        {
+            setError(errorMessage, QStringLiteral("icon override '%1' must be a map")
+                .arg(it.key()));
+            return std::nullopt;
+        }
+        QString overrideError;
+        const auto parsed = PanelIconStyleDefinition::EntryOverride::fromVariantMap(
+            it.value().toMap(), &overrideError);
+        if (!parsed.has_value())
+        {
+            setError(errorMessage, QStringLiteral("icon override '%1': %2")
+                .arg(it.key(), overrideError));
+            return std::nullopt;
+        }
+        if (!parsed->isEmpty())
+        {
+            definition.iconStyle.perEntryOverrides.insert(it.key(), *parsed);
+        }
+    }
 
     definition.motion.iconProfile = normalized(
         QStringLiteral("iconAnimation"), definition.motion.iconProfile).toString();
@@ -581,6 +780,28 @@ bool PanelDefinition::isValid(QString *errorMessage) const
     {
         setError(errorMessage, QStringLiteral("panel host kind does not match its edge"));
         return false;
+    }
+    if (iconStyle.perEntryOverrides.size() > 512)
+    {
+        setError(errorMessage, QStringLiteral("too many icon overrides"));
+        return false;
+    }
+    for (auto it = iconStyle.perEntryOverrides.cbegin();
+         it != iconStyle.perEntryOverrides.cend(); ++it)
+    {
+        if (!validIconOverrideIdentity(it.key()) || it->isEmpty())
+        {
+            setError(errorMessage, QStringLiteral("icon override is invalid: %1")
+                .arg(it.key()));
+            return false;
+        }
+        QString overrideError;
+        if (!PanelIconStyleDefinition::EntryOverride::fromVariantMap(
+                it->toVariantMap(), &overrideError).has_value())
+        {
+            setError(errorMessage, overrideError);
+            return false;
+        }
     }
     setError(errorMessage, QString{});
     return true;
@@ -710,7 +931,7 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("themeRenderOutcome"), surface.themeRenderOutcome);
 
     insertIfNotEmpty(&record, QStringLiteral("iconStyle"), iconStyle.styleReference);
-    insertIfNotEmpty(&record, QStringLiteral("iconThemeId"), iconStyle.themeId);
+    insertIfNotEmpty(&record, QStringLiteral("iconThemeId"), iconStyle.styleReference);
     record.insert(QStringLiteral("iconShape"), iconStyle.shape);
     record.insert(QStringLiteral("iconSize"), iconStyle.size);
     record.insert(QStringLiteral("spacing"), iconStyle.spacing);
@@ -718,10 +939,16 @@ QVariantMap PanelDefinition::toLegacyMap() const
         &record,
         QStringLiteral("iconGlobalDefaults"),
         iconStyle.globalDefaults);
+    QVariantMap serializedIconOverrides;
+    for (auto it = iconStyle.perEntryOverrides.cbegin();
+         it != iconStyle.perEntryOverrides.cend(); ++it)
+    {
+        serializedIconOverrides.insert(it.key(), it->toVariantMap());
+    }
     insertIfNotEmpty(
         &record,
         QStringLiteral("iconOverrides"),
-        iconStyle.perEntryOverrides);
+        serializedIconOverrides);
 
     record.insert(QStringLiteral("iconAnimation"), motion.iconProfile);
     record.insert(QStringLiteral("animationTrigger"), motion.trigger);

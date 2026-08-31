@@ -15,7 +15,8 @@ TestCase {
             panelValues: {
                 visible: true,
                 opacity: 0.9,
-                layout: "adaptive"
+                layout: "adaptive",
+                iconStyle: "plain-original"
             },
             globalValues: {
                 showTooltips: true
@@ -33,6 +34,11 @@ TestCase {
                 },
                 {
                     key: "layout",
+                    scope: "panel",
+                    control: "combo"
+                },
+                {
+                    key: "iconStyle",
                     scope: "panel",
                     control: "combo"
                 }
@@ -56,6 +62,19 @@ TestCase {
             },
             themeProjectionStatus: "ready",
             themeProjectionError: "",
+            iconStyles: [
+                {
+                    id: "plain-original",
+                    name: "Plain Original"
+                }
+            ],
+            iconStyleDefinition: {
+                id: "plain-original",
+                valid: true,
+                glyphPolicy: { mode: "original" }
+            },
+            iconStyleProjectionStatus: "ready",
+            iconStyleProjectionError: "",
             capabilityResolution: {
                 available: true
             }
@@ -74,13 +93,18 @@ TestCase {
         compare(session.themeDefinition.id, "fixture-split-skin");
         compare(session.themeProjectionStatus, "ready");
         compare(session.themeProjectionError, "");
+        compare(session.iconStyleDefinition.id, "plain-original");
+        compare(session.iconStyleProjectionStatus, "ready");
+        compare(session.iconStyles.length, 1);
         verify(!EditorModel.dirty(session));
 
         source.panelValues.opacity = 0.1;
         source.themeDefinition.assetPaths.surface = "/forged/surface.svg";
+        source.iconStyleDefinition.glyphPolicy.mode = "mapped-replacement";
         compare(EditorModel.panelValue(session, "opacity", 0), 0.9);
         compare(session.themeDefinition.assetPaths.surface,
                 "/managed/surface.svg");
+        compare(session.iconStyleDefinition.glyphPolicy.mode, "original");
         verify(!Object.prototype.hasOwnProperty.call(EditorModel.panelCandidate(session), "id"));
     }
 
@@ -124,12 +148,15 @@ TestCase {
                 "skinned2d");
         compare(candidate.capabilityResolution.renderer.fallbackApplied,
                 true);
+        compare(candidate.iconStyleDefinition.id, "plain-original");
 
         candidate.opacity = 0.1;
         candidate.capabilityResolution.renderer.effectiveTier = "true3d";
+        candidate.iconStyleDefinition.id = "forged";
         compare(EditorModel.panelValue(edited, "opacity", 0), 0.55);
         compare(edited.capabilityResolution.renderer.effectiveTier,
                 "procedural2d");
+        compare(edited.iconStyleDefinition.id, "plain-original");
     }
 
     function test_rendererThemeCandidateIsAnIsolatedResolvedCardDraft() {
@@ -148,6 +175,9 @@ TestCase {
             layoutStyle: {
                 layout: "ring",
                 layoutRadius: 96
+            },
+            iconStyleRef: {
+                id: "dark-orb"
             },
             capabilityResolution: {
                 available: true,
@@ -168,6 +198,10 @@ TestCase {
         compare(candidate.layout, "ring");
         compare(candidate.layoutRadius, 96);
         compare(candidate.completeThemeId, "holographic-ring");
+        compare(candidate.recommendedIconStyleId, "dark-orb");
+        compare(candidate.iconStyle, "plain-original");
+        compare(candidate.iconStyleDefinition.id, "plain-original");
+        compare(candidate.iconThemeId, undefined);
         compare(candidate.capabilityResolution.renderer.effectiveTier,
                 "procedural2d");
 
@@ -245,6 +279,18 @@ TestCase {
             },
             themeProjectionStatus: "ready",
             themeProjectionError: "",
+            iconStyles: [
+                {
+                    id: "metallic-blue",
+                    name: "Metallic Blue"
+                }
+            ],
+            iconStyleDefinition: {
+                id: "metallic-blue",
+                valid: true
+            },
+            iconStyleProjectionStatus: "ready",
+            iconStyleProjectionError: "",
             capabilityResolution: {
                 available: true,
                 themeId: "procedural"
@@ -259,6 +305,8 @@ TestCase {
         compare(projected.revision, 5);
         compare(projected.themeDefinition.id, "fixture-projected-skin");
         compare(projected.themeProjectionStatus, "ready");
+        compare(projected.iconStyleDefinition.id, "metallic-blue");
+        compare(projected.iconStyles.length, 1);
 
         const radiusDraft = EditorModel.setPanelValue(projected, "layoutRadius", 230);
         const hiddenAgain = EditorModel.withProjection(radiusDraft, {

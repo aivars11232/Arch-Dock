@@ -12,6 +12,7 @@
 
 #include "model/PanelDefinition.h"
 #include "model/PanelCapabilityResolver.h"
+#include "iconstyles/IconStyleStore.h"
 #include "panel/PanelSettingsTransaction.h"
 
 class QSettings;
@@ -79,6 +80,11 @@ public:
         QString *errorCode = nullptr) const;
     [[nodiscard]] bool persistPanelSettingsTransaction(
         const ArchDock::PanelSettingsTransactionDraft &draft,
+        QString *errorMessage = nullptr);
+    [[nodiscard]] bool persistPanelDefinitionTransaction(
+        const ArchDock::PanelDefinition &previousPanel,
+        const ArchDock::PanelDefinition &candidatePanel,
+        const QVariantMap &globalSettings,
         QString *errorMessage = nullptr);
     [[nodiscard]] bool rollbackPanelSettingsTransaction(
         const ArchDock::PanelSettingsTransactionDraft &draft,
@@ -149,6 +155,14 @@ public:
         const QString &panelId,
         const QString &errorCode);
     Q_INVOKABLE QVariantList themeDefinitions() const;
+    Q_INVOKABLE QVariantList iconStyleDefinitions() const;
+    Q_INVOKABLE QVariantMap iconStyleDefinition(const QString &styleId) const;
+    [[nodiscard]] QVariantMap resolveIconEntryOverride(
+        const ArchDock::PanelDefinition &definition,
+        const QVariantMap &entry) const;
+    [[nodiscard]] std::optional<QVariantMap> iconStyleRuntimeProjection(
+        const ArchDock::PanelDefinition &definition,
+        QString *errorCode = nullptr) const;
     Q_INVOKABLE QVariantMap themeCandidate(const QString &panelId,
                                            const QString &themeId,
                                            const QString &layer) const;
@@ -214,6 +228,8 @@ private:
 
     QList<QVariantMap> m_panels;
     QVariantList m_themeDefinitions;
+    std::optional<ArchDock::IconStyleStore> m_iconStyleStore;
+    QString m_iconStyleStoreError;
     QHash<QString, RenderRequest> m_activeRenders;
     QHash<QString, RenderRequest> m_pendingRenders;
     QString m_activePanelId = QStringLiteral("bottom");

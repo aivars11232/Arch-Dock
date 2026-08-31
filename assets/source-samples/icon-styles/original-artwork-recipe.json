@@ -1,0 +1,112 @@
+{
+  "format": "org.archdock.clean-room-artwork-recipe",
+  "version": 1,
+  "task": "TASK-0029",
+  "method": "deterministic-hand-authored-procedural-qml",
+  "pixelInput": false,
+  "sourceDerivative": false,
+  "aiGenerated": false,
+  "authorizationEvidence": "assets/source-samples/icon-styles/REFERENCE_RIGHTS.md",
+  "referenceBoundary": {
+    "assetClass": "H-icon-style-reference-sheet",
+    "catalogCount": 16,
+    "permittedUse": "broad-concept-only",
+    "installable": false
+  },
+  "inspirationReferences": [
+    {"catalogId": "icon-screenshot-20260801-181319", "sha256": "1383fdf782f32989cc8c45607aec3a080a0101be189f33c8c4affe4674db8d9a"},
+    {"catalogId": "icon-screenshot-20260801-181332", "sha256": "8b4ee614d88cc2ddae0e41e392acb7615c7c95bc2f99e13aadd2764db156f28a"},
+    {"catalogId": "icon-screenshot-20260801-181345", "sha256": "7baf3ccb5ed57c98e56241e396a585f9889b484c14f2e4ca8d9312772ddbb756"},
+    {"catalogId": "icon-screenshot-20260801-181357", "sha256": "effdbfbe99721c50538c78fe5c0da3adde936c07f5f895105ab7b5871942662f"},
+    {"catalogId": "icon-screenshot-20260801-181406", "sha256": "39683aa7eda915e516cbda9db302e44bfb444a70a4e7f9b88756ae5929f1b995"},
+    {"catalogId": "icon-screenshot-20260801-181413", "sha256": "316d71d26bdecf534b088e12f49814e16a22d16dcf3357e2cb4b41b89bf55ce3"},
+    {"catalogId": "icon-screenshot-20260801-181428", "sha256": "5e731ba6b8f5b200adf2da5df7b26e4a8c7ea29b4c5f9333c38b51e56cc72f2d"},
+    {"catalogId": "icon-screenshot-20260801-181439", "sha256": "ee7275029673c4be09f9db569f13d9b287deb3516fcce7e0719d1d4d49ca9dbc"},
+    {"catalogId": "icon-screenshot-20260801-181447", "sha256": "b844d53b738911a4eb2b4f37cb431c09f84f4142600b6425882bd8dfaf1d73a6"},
+    {"catalogId": "icon-screenshot-20260801-181454", "sha256": "d32f0b5e8af47c62c6f1c6126d4d5bcbf86da73c7a4f1a7e4f3742e6bf55945a"},
+    {"catalogId": "icon-screenshot-20260801-181514", "sha256": "b3655250739cea874b9f7edeb8b0487abf7c0ada28383d0599823ae93825e5a3"},
+    {"catalogId": "icon-screenshot-20260801-181524", "sha256": "2e7174cb6bfe0398e63355fdcc1de6c2545f399346c70380c30373caec08bbe5"},
+    {"catalogId": "icon-screenshot-20260801-181834", "sha256": "1fa6b34f793002942766c49e5d326d97e6071babd9b57c61b2f5cff5613201bc"},
+    {"catalogId": "icon-screenshot-20260801-184115", "sha256": "6ed44e70809d218ba1dccac04ada7fcd352a066d1b49fa99d8184da5f798a123"},
+    {"catalogId": "icon-screenshot-20260801-184251", "sha256": "1a1b29664f34e0a48d1933e765f1f4ba52653463d9a42d97ba7df7939b5693a5"},
+    {"catalogId": "icon-screenshot-20260801-184309", "sha256": "9e4bc016e62185582200309a4e0b81a71ab22d4e57fdd173f369c7a2429ba12c"}
+  ],
+  "logicalCanvas": {
+    "width": 1,
+    "height": 1,
+    "transparent": true,
+    "coordinateSystem": "normalized"
+  },
+  "layerOrder": [
+    "rear",
+    "base",
+    "application-glyph",
+    "front",
+    "running-indicator",
+    "status"
+  ],
+  "variants": [
+    {
+      "id": "metallic-blue",
+      "family": "metallic",
+      "shape": "rounded-rect",
+      "base": "#172534",
+      "secondary": "#395f7d",
+      "accent": "#6fd8ff",
+      "highlight": "#d9f5ff"
+    },
+    {
+      "id": "metallic-red",
+      "family": "metallic",
+      "shape": "rounded-rect",
+      "base": "#32191d",
+      "secondary": "#7b3038",
+      "accent": "#ff7180",
+      "highlight": "#ffe1e4"
+    },
+    {
+      "id": "neon-green",
+      "family": "neon",
+      "shape": "diamond",
+      "base": "#071d16",
+      "secondary": "#104631",
+      "accent": "#61ffad",
+      "highlight": "#d9ffeb"
+    },
+    {
+      "id": "neon-orange",
+      "family": "neon",
+      "shape": "diamond",
+      "base": "#261208",
+      "secondary": "#633119",
+      "accent": "#ff9a4d",
+      "highlight": "#fff0d8"
+    },
+    {
+      "id": "dark-orb",
+      "family": "orb",
+      "shape": "orb",
+      "base": "#080b13",
+      "secondary": "#202b3b",
+      "accent": "#8a79ff",
+      "highlight": "#e5e0ff"
+    }
+  ],
+  "statePolicy": {
+    "precedence": ["edit", "disabled", "drop", "urgent", "pressed", "hover", "launching", "active", "minimized", "running", "normal"],
+    "glyphPolicy": "original",
+    "reducedMotionOwnedByHost": true,
+    "logicalInputGeometryMutable": false
+  },
+  "prohibitedElements": [
+    "source-image-pixels",
+    "tracing",
+    "third-party-logos",
+    "third-party-glyphs",
+    "text",
+    "embedded-raster-images",
+    "ai-generated-images",
+    "executable-package-code",
+    "distinctive-source-ornament"
+  ]
+}

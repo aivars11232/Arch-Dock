@@ -1,0 +1,51 @@
+{
+  "format": "org.archdock.icon-style",
+  "version": 1,
+  "id": "dark-orb",
+  "name": "Dark Orb",
+  "revision": 1,
+  "author": "Arch Dock contributors",
+  "description": "A dark glass orb on a compact pedestal with a violet energy ring around the original application glyph.",
+  "license": {
+    "spdx": "NOASSERTION",
+    "redistribution": "allowed",
+    "evidence": "Original procedural TASK-0029 resource authorized for redistribution as part of Arch Dock"
+  },
+  "glyphPolicy": {"mode": "original", "compatibleOnly": true},
+  "safeGlyphInset": {"left": 0.18, "top": 0.15, "right": 0.18, "bottom": 0.22},
+  "layers": {
+    "rear": [
+      {"id": "orb-shadow", "kind": "procedural", "shape": "orb", "color": "#020309", "secondaryColor": "#171d2a", "opacity": 0.72, "inset": 0.02, "radius": 1, "borderColor": "#30394c", "borderWidth": 0.025}
+    ],
+    "base": [
+      {"id": "orb-pedestal", "kind": "procedural", "shape": "plate", "color": "#0a0d15", "secondaryColor": "#313a4c", "opacity": 0.96, "inset": 0.04, "radius": 0.46, "borderColor": "#6659c7", "borderWidth": 0.024},
+      {"id": "orb-glass", "kind": "procedural", "shape": "orb", "color": "#080b13", "secondaryColor": "#202b3b", "opacity": 0.92, "inset": 0.1, "radius": 1, "borderColor": "#8a79ff", "borderWidth": 0.028}
+    ],
+    "front": [
+      {"id": "orb-energy-ring", "kind": "procedural", "shape": "ring", "color": "transparent", "secondaryColor": "#e5e0ff", "opacity": 0.88, "inset": 0.085, "radius": 1, "borderColor": "#a79bff", "borderWidth": 0.034}
+    ],
+    "reflection": {"id": "orb-reflection", "kind": "procedural", "shape": "orb", "color": "#e5e0ff", "opacity": 0.18, "inset": 0.16, "radius": 1, "borderColor": "transparent", "borderWidth": 0},
+    "shadow": {"id": "pedestal-shadow", "kind": "procedural", "shape": "plate", "color": "#010207", "opacity": 0.78, "inset": 0.01, "radius": 0.48, "borderColor": "transparent", "borderWidth": 0},
+    "glow": {"id": "orb-glow", "kind": "procedural", "shape": "ring", "color": "#8a79ff", "opacity": 0.72, "inset": 0.025, "radius": 1, "borderColor": "#8a79ff", "borderWidth": 0.05}
+  },
+  "states": [
+    {"id": "normal", "rearOpacity": 0.52, "baseOpacity": 1, "frontOpacity": 0.7, "glyphOpacity": 1, "glyphScale": 0.84, "borderColor": "#8a79ff", "glowColor": "#8a79ff", "glowOpacity": 0.18, "reflectionOpacity": 0.13, "indicatorColor": "#a79bff", "indicatorOpacity": 0},
+    {"id": "hover", "rearOpacity": 0.92, "baseOpacity": 1, "frontOpacity": 1, "glyphOpacity": 1, "glyphScale": 0.89, "borderColor": "#e5e0ff", "glowColor": "#a79bff", "glowOpacity": 0.72, "reflectionOpacity": 0.25, "indicatorColor": "#c8c0ff", "indicatorOpacity": 0},
+    {"id": "pressed", "rearOpacity": 0.7, "baseOpacity": 0.92, "frontOpacity": 0.86, "glyphOpacity": 0.95, "glyphScale": 0.8, "borderColor": "#8a79ff", "glowColor": "#7665e8", "glowOpacity": 0.4, "reflectionOpacity": 0.08, "indicatorColor": "#a79bff", "indicatorOpacity": 0},
+    {"id": "active", "rearOpacity": 1, "baseOpacity": 1, "frontOpacity": 1, "glyphOpacity": 1, "glyphScale": 0.89, "borderColor": "#e5e0ff", "glowColor": "#a79bff", "glowOpacity": 0.86, "reflectionOpacity": 0.28, "indicatorColor": "#e5e0ff", "indicatorOpacity": 1},
+    {"id": "running", "rearOpacity": 0.72, "baseOpacity": 1, "frontOpacity": 0.84, "glyphOpacity": 1, "glyphScale": 0.86, "borderColor": "#a79bff", "glowColor": "#8a79ff", "glowOpacity": 0.42, "reflectionOpacity": 0.17, "indicatorColor": "#a79bff", "indicatorOpacity": 0.92},
+    {"id": "minimized", "rearOpacity": 0.26, "baseOpacity": 0.62, "frontOpacity": 0.4, "glyphOpacity": 0.54, "glyphScale": 0.84, "borderColor": "#554f78", "glowColor": "#554f78", "glowOpacity": 0.06, "reflectionOpacity": 0.03, "indicatorColor": "#777198", "indicatorOpacity": 0.5},
+    {"id": "urgent", "rearOpacity": 1, "baseOpacity": 1, "frontOpacity": 1, "glyphOpacity": 1, "glyphScale": 0.91, "borderColor": "#ff667a", "glowColor": "#ff3654", "glowOpacity": 1, "reflectionOpacity": 0.18, "indicatorColor": "#ff8a99", "indicatorOpacity": 1},
+    {"id": "launching", "rearOpacity": 0.88, "baseOpacity": 0.95, "frontOpacity": 0.9, "glyphOpacity": 0.9, "glyphScale": 0.84, "borderColor": "#c8c0ff", "glowColor": "#a79bff", "glowOpacity": 0.72, "reflectionOpacity": 0.18, "indicatorColor": "#c8c0ff", "indicatorOpacity": 0.64},
+    {"id": "drop", "rearOpacity": 1, "baseOpacity": 1, "frontOpacity": 1, "glyphOpacity": 1, "glyphScale": 0.87, "borderColor": "#64ffba", "glowColor": "#48eaa3", "glowOpacity": 0.9, "reflectionOpacity": 0.18, "indicatorColor": "#64ffba", "indicatorOpacity": 0.72},
+    {"id": "edit", "rearOpacity": 0.72, "baseOpacity": 0.88, "frontOpacity": 1, "glyphOpacity": 0.9, "glyphScale": 0.84, "borderColor": "#ffd76a", "glowColor": "#ffc846", "glowOpacity": 0.46, "reflectionOpacity": 0.1, "indicatorColor": "#ffd76a", "indicatorOpacity": 0.5},
+    {"id": "disabled", "rearOpacity": 0.16, "baseOpacity": 0.38, "frontOpacity": 0.22, "glyphOpacity": 0.32, "glyphScale": 0.84, "borderColor": "#575a66", "glowColor": "#575a66", "glowOpacity": 0, "reflectionOpacity": 0, "indicatorColor": "#575a66", "indicatorOpacity": 0}
+  ],
+  "capabilities": {
+    "rendererTiers": ["procedural2d"],
+    "features": ["tile", "reflection", "shadow", "glow", "safe-glyph-inset", "state-styling"],
+    "animationCapabilities": ["hover-scale", "press-scale", "glow-pulse", "urgent-pulse", "launching-pulse", "indicator-transition"],
+    "supports3D": false
+  },
+  "preview": {"seed": "dark-orb-v1", "iconName": "preferences-system", "state": "active", "tileSize": 64}
+}

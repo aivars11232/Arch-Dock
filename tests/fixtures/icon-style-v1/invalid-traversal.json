@@ -1,0 +1,217 @@
+{
+  "format": "org.archdock.icon-style",
+  "version": 1,
+  "id": "invalid-traversal",
+  "name": "Invalid Traversal",
+  "revision": 1,
+  "author": "Arch Dock test suite",
+  "description": "Contained vector asset fixture.",
+  "license": {
+    "spdx": "MIT",
+    "redistribution": "allowed",
+    "evidence": "tests/fixtures/icon-style-v1/assets/base.svg"
+  },
+  "glyphPolicy": {
+    "mode": "original",
+    "compatibleOnly": true
+  },
+  "safeGlyphInset": {
+    "left": 0.1,
+    "top": 0.1,
+    "right": 0.1,
+    "bottom": 0.1
+  },
+  "layers": {
+    "rear": [],
+    "base": [
+      {
+        "id": "fixture-base",
+        "kind": "asset",
+        "asset": "../base.svg",
+        "opacity": 1,
+        "inset": 0.02,
+        "borderWidth": 0,
+        "borderColor": "transparent"
+      }
+    ],
+    "front": []
+  },
+  "states": [
+    {
+      "id": "normal",
+      "rearOpacity": 1,
+      "baseOpacity": 1,
+      "frontOpacity": 1,
+      "glyphOpacity": 1,
+      "glyphScale": 1,
+      "borderColor": "transparent",
+      "glowColor": "transparent",
+      "glowOpacity": 0,
+      "reflectionOpacity": 0,
+      "indicatorColor": "#78a9ff",
+      "indicatorOpacity": 0
+    },
+    {
+      "id": "hover",
+      "rearOpacity": 1,
+      "baseOpacity": 1,
+      "frontOpacity": 1,
+      "glyphOpacity": 1,
+      "glyphScale": 1.06,
+      "borderColor": "#78a9ff",
+      "glowColor": "#78a9ff",
+      "glowOpacity": 0.35,
+      "reflectionOpacity": 0,
+      "indicatorColor": "#78a9ff",
+      "indicatorOpacity": 0
+    },
+    {
+      "id": "pressed",
+      "rearOpacity": 1,
+      "baseOpacity": 0.9,
+      "frontOpacity": 1,
+      "glyphOpacity": 0.9,
+      "glyphScale": 0.96,
+      "borderColor": "#78a9ff",
+      "glowColor": "#78a9ff",
+      "glowOpacity": 0.2,
+      "reflectionOpacity": 0,
+      "indicatorColor": "#78a9ff",
+      "indicatorOpacity": 0
+    },
+    {
+      "id": "active",
+      "rearOpacity": 1,
+      "baseOpacity": 1,
+      "frontOpacity": 1,
+      "glyphOpacity": 1,
+      "glyphScale": 1,
+      "borderColor": "#78a9ff",
+      "glowColor": "#78a9ff",
+      "glowOpacity": 0.2,
+      "reflectionOpacity": 0,
+      "indicatorColor": "#78a9ff",
+      "indicatorOpacity": 1
+    },
+    {
+      "id": "running",
+      "rearOpacity": 1,
+      "baseOpacity": 1,
+      "frontOpacity": 1,
+      "glyphOpacity": 1,
+      "glyphScale": 1,
+      "borderColor": "transparent",
+      "glowColor": "transparent",
+      "glowOpacity": 0,
+      "reflectionOpacity": 0,
+      "indicatorColor": "#78a9ff",
+      "indicatorOpacity": 1
+    },
+    {
+      "id": "minimized",
+      "rearOpacity": 0.8,
+      "baseOpacity": 0.8,
+      "frontOpacity": 0.8,
+      "glyphOpacity": 0.68,
+      "glyphScale": 0.94,
+      "borderColor": "transparent",
+      "glowColor": "transparent",
+      "glowOpacity": 0,
+      "reflectionOpacity": 0,
+      "indicatorColor": "#78a9ff",
+      "indicatorOpacity": 0.65
+    },
+    {
+      "id": "urgent",
+      "rearOpacity": 1,
+      "baseOpacity": 1,
+      "frontOpacity": 1,
+      "glyphOpacity": 1,
+      "glyphScale": 1.08,
+      "borderColor": "#ff4d6d",
+      "glowColor": "#ff4d6d",
+      "glowOpacity": 1,
+      "reflectionOpacity": 0,
+      "indicatorColor": "#ff4d6d",
+      "indicatorOpacity": 1
+    },
+    {
+      "id": "launching",
+      "rearOpacity": 0.9,
+      "baseOpacity": 0.9,
+      "frontOpacity": 0.9,
+      "glyphOpacity": 0.85,
+      "glyphScale": 0.92,
+      "borderColor": "#78a9ff",
+      "glowColor": "#78a9ff",
+      "glowOpacity": 0.45,
+      "reflectionOpacity": 0,
+      "indicatorColor": "#78a9ff",
+      "indicatorOpacity": 0.5
+    },
+    {
+      "id": "drop",
+      "rearOpacity": 1,
+      "baseOpacity": 1,
+      "frontOpacity": 1,
+      "glyphOpacity": 1,
+      "glyphScale": 1.04,
+      "borderColor": "#50fa7b",
+      "glowColor": "#50fa7b",
+      "glowOpacity": 0.5,
+      "reflectionOpacity": 0,
+      "indicatorColor": "#50fa7b",
+      "indicatorOpacity": 0.8
+    },
+    {
+      "id": "edit",
+      "rearOpacity": 1,
+      "baseOpacity": 1,
+      "frontOpacity": 1,
+      "glyphOpacity": 1,
+      "glyphScale": 1,
+      "borderColor": "#ffffff",
+      "glowColor": "#ffffff",
+      "glowOpacity": 0.25,
+      "reflectionOpacity": 0,
+      "indicatorColor": "#ffffff",
+      "indicatorOpacity": 0.5
+    },
+    {
+      "id": "disabled",
+      "rearOpacity": 0.5,
+      "baseOpacity": 0.5,
+      "frontOpacity": 0.5,
+      "glyphOpacity": 0.4,
+      "glyphScale": 1,
+      "borderColor": "transparent",
+      "glowColor": "transparent",
+      "glowOpacity": 0,
+      "reflectionOpacity": 0,
+      "indicatorColor": "transparent",
+      "indicatorOpacity": 0
+    }
+  ],
+  "capabilities": {
+    "rendererTiers": [
+      "skinned2d",
+      "procedural2d"
+    ],
+    "features": [
+      "tile",
+      "safe-glyph-inset",
+      "state-styling"
+    ],
+    "animationCapabilities": [
+      "hover-scale",
+      "press-scale"
+    ],
+    "supports3D": false
+  },
+  "preview": {
+    "seed": "invalid-traversal-v1",
+    "iconName": "applications-system",
+    "state": "normal",
+    "tileSize": 64
+  }
+}

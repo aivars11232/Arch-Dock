@@ -482,6 +482,8 @@ Item {
             readonly property var sceneRuntimeState: root.runtimeState
             readonly property var scenePanelDefinition: root.panelDefinition
             readonly property var sceneHostCapabilities: root.hostCapabilities
+            readonly property var sceneIconStyleDefinition:
+                root.iconStyleDefinition
             readonly property var sceneContext: root.entryDelegateContext
             readonly property var delegateItem: entryLoader.item
 
@@ -510,6 +512,8 @@ Item {
                     entryItem.scenePanelDefinition
                 readonly property var sceneHostCapabilities:
                     entryItem.sceneHostCapabilities
+                readonly property var sceneIconStyleDefinition:
+                    entryItem.sceneIconStyleDefinition
                 readonly property var sceneContext: entryItem.sceneContext
 
                 anchors.fill: parent
@@ -521,28 +525,26 @@ Item {
     Component {
         id: defaultEntryDelegate
 
-        Item {
-            id: defaultEntry
-
-            readonly property var entry: parent.sceneEntry
+        IconScene {
             readonly property int entryIndex: parent.sceneIndex
 
-            Rectangle {
-                anchors.fill: parent
-                radius: root.iconShape === "circle" ? width / 2 : width * 0.24
-                color: root.entryColor(defaultEntry.entry)
-                border.width: 1
-                border.color: "#e8ffffff"
-            }
-
-            Text {
-                anchors.centerIn: parent
-                text: root.entryLabel(defaultEntry.entry,
-                                      defaultEntry.entryIndex)
-                color: "#18232b"
-                font.bold: true
-                font.pixelSize: Math.max(10, parent.width * 0.42)
-            }
+            anchors.fill: parent
+            entry: parent.sceneEntry
+            iconStyleDefinition: parent.sceneIconStyleDefinition
+            logicalSize: Number(parent.sceneGeometry.iconSize || width)
+            tileShape: root.iconShape
+            appearance: root.appearance
+            vertical: root.verticalLayout
+            hovered: Number(root.runtimeState
+                            ? root.runtimeState.hoveredEntry : -1)
+                === entryIndex
+            editMode: Boolean(root.runtimeState
+                              ? root.runtimeState.editMode : false)
+            showReflection: Boolean(root.definitionValue(
+                "iconStyle", "showReflection", "showReflections", false))
+            showIndicator: Boolean(root.definitionValue(
+                "indicator", "visible", "showIndicators", true))
+            reducedMotion: root.reducedMotion
         }
     }
 

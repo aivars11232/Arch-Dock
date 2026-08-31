@@ -59,6 +59,9 @@ private slots:
     void legacyRecordConvertsWithDeterministicDefaults();
     void settingsRevisionRoundTripsWithoutSchemaBump();
     void currentFieldsAndExtensionsRoundTripWithoutLoss();
+    void iconStyleSelectionOwnsItsLegacyMirror();
+    void iconOverridesRoundTripAsTypedRecords();
+    void invalidIconOverridesFailClosed();
     void provenanceIsOptionalAndSelfContained();
     void runtimeStateStartsFromSafeDefaults();
     void serializationExcludesTransientRuntimeState();
@@ -92,12 +95,128 @@ void PanelModelTest::defaultsExposeEveryVersionTwoSection()
     QCOMPARE(definition.surface.appearance, QStringLiteral("glass"));
     QCOMPARE(definition.surface.glowIntensity, 1.0);
     QCOMPARE(definition.iconStyle.shape, QStringLiteral("rounded"));
+    QCOMPARE(definition.iconStyle.styleReference,
+             QStringLiteral("plain-original"));
+    QCOMPARE(definition.toLegacyMap().value(QStringLiteral("iconThemeId")).toString(),
+             QStringLiteral("plain-original"));
     QCOMPARE(definition.motion.iconProfile, QStringLiteral("scale"));
     QVERIFY(!definition.presetOrigin.has_value());
     QVERIFY(definition.extensions.isEmpty());
 
     QString errorMessage;
     QVERIFY2(definition.isValid(&errorMessage), qPrintable(errorMessage));
+}
+
+void PanelModelTest::iconStyleSelectionOwnsItsLegacyMirror()
+{
+    const QVariantMap legacyOnly{
+        {QStringLiteral("id"), QStringLiteral("legacy-icons")},
+        {QStringLiteral("name"), QStringLiteral("Legacy icons")},
+        {QStringLiteral("edge"), QStringLiteral("bottom")},
+        {QStringLiteral("iconThemeId"), QStringLiteral("metallic-blue")},
+    };
+    const auto migrated = PanelDefinition::fromLegacyMap(legacyOnly);
+    QVERIFY(migrated.has_value());
+    QCOMPARE(migrated->iconStyle.styleReference,
+             QStringLiteral("metallic-blue"));
+    QCOMPARE(migrated->iconStyle.themeId, QStringLiteral("metallic-blue"));
+
+    QVariantMap explicitSelection = legacyOnly;
+    explicitSelection.insert(QStringLiteral("iconStyle"),
+                             QStringLiteral("neon-green"));
+    explicitSelection.insert(QStringLiteral("iconThemeId"),
+                             QStringLiteral("obsolete-panel-theme"));
+    const auto explicitDefinition = PanelDefinition::fromLegacyMap(
+        explicitSelection);
+    QVERIFY(explicitDefinition.has_value());
+    QCOMPARE(explicitDefinition->iconStyle.styleReference,
+             QStringLiteral("neon-green"));
+    QCOMPARE(explicitDefinition->iconStyle.themeId,
+             QStringLiteral("neon-green"));
+    const QVariantMap persisted = explicitDefinition->toPersistedMap();
+    QCOMPARE(persisted.value(QStringLiteral("iconStyle")).toString(),
+             QStringLiteral("neon-green"));
+    QCOMPARE(persisted.value(QStringLiteral("iconThemeId")).toString(),
+             QStringLiteral("neon-green"));
+}
+
+void PanelModelTest::iconOverridesRoundTripAsTypedRecords()
+{
+    const QVariantMap firstOverride{
+        {QStringLiteral("customGlyph"), QStringLiteral("file:///tmp/custom.svg")},
+        {QStringLiteral("customLabel"), QStringLiteral("Custom editor")},
+        {QStringLiteral("tileEnabled"), false},
+        {QStringLiteral("styleReference"), QStringLiteral("metallic-red")},
+        {QStringLiteral("animationProfileReference"),
+         QStringLiteral("future-bounce")},
+    };
+    const QVariantMap secondOverride{
+        {QStringLiteral("styleReference"), QStringLiteral("dark-orb")},
+    };
+    const QVariantMap record{
+        {QStringLiteral("id"), QStringLiteral("typed-overrides")},
+        {QStringLiteral("name"), QStringLiteral("Typed overrides")},
+        {QStringLiteral("edge"), QStringLiteral("bottom")},
+        {QStringLiteral("iconOverrides"), QVariantMap{
+            {QStringLiteral("desktop.org.example.editor.desktop"),
+             firstOverride},
+            {QStringLiteral("application.org.example.helper"),
+             secondOverride},
+        }},
+    };
+
+    const auto definition = PanelDefinition::fromLegacyMap(record);
+    QVERIFY(definition.has_value());
+    QCOMPARE(definition->iconStyle.perEntryOverrides.size(), 2);
+    const auto first = definition->iconStyle.perEntryOverrides.value(
+        QStringLiteral("desktop.org.example.editor.desktop"));
+    QCOMPARE(first.customGlyph, QStringLiteral("file:///tmp/custom.svg"));
+    QCOMPARE(first.customLabel, QStringLiteral("Custom editor"));
+    QVERIFY(first.tileEnabled.has_value());
+    QVERIFY(!*first.tileEnabled);
+    QCOMPARE(first.styleReference, QStringLiteral("metallic-red"));
+    QCOMPARE(first.animationProfileReference,
+             QStringLiteral("future-bounce"));
+
+    const QVariantMap persistedOverrides = definition->toPersistedMap()
+        .value(QStringLiteral("iconOverrides")).toMap();
+    QCOMPARE(persistedOverrides.value(
+                 QStringLiteral("desktop.org.example.editor.desktop")).toMap(),
+             firstOverride);
+    const auto reparsed = PanelDefinition::fromLegacyMap(
+        definition->toPersistedMap());
+    QVERIFY(reparsed.has_value());
+    QCOMPARE(*reparsed, *definition);
+}
+
+void PanelModelTest::invalidIconOverridesFailClosed()
+{
+    const auto reject = [](const QString &identity,
+                           const QVariant &overrideValue,
+                           const QString &expectedError)
+    {
+        const QVariantMap record{
+            {QStringLiteral("id"), QStringLiteral("invalid-overrides")},
+            {QStringLiteral("name"), QStringLiteral("Invalid overrides")},
+            {QStringLiteral("edge"), QStringLiteral("bottom")},
+            {QStringLiteral("iconOverrides"),
+             QVariantMap{{identity, overrideValue}}},
+        };
+        QString errorMessage;
+        QVERIFY(!PanelDefinition::fromLegacyMap(
+            record, &errorMessage).has_value());
+        QVERIFY2(errorMessage.contains(expectedError), qPrintable(errorMessage));
+    };
+
+    reject(QStringLiteral("raw unsafe key"),
+           QVariantMap{{QStringLiteral("customLabel"), QStringLiteral("x")}},
+           QStringLiteral("invalid icon override identity"));
+    reject(QStringLiteral("application.example"),
+           QVariantMap{{QStringLiteral("tileEnabled"), QStringLiteral("false")}},
+           QStringLiteral("must be a boolean"));
+    reject(QStringLiteral("application.example"),
+           QVariantMap{{QStringLiteral("unknown"), true}},
+           QStringLiteral("unknown icon override field"));
 }
 
 void PanelModelTest::legacyRecordConvertsWithDeterministicDefaults()

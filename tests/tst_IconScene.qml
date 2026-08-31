@@ -73,6 +73,9 @@ TestCase {
         compare(scene.visualState, "running")
         scene.minimized = true
         compare(scene.visualState, "minimized")
+        scene.launching = true
+        compare(scene.visualState, "launching")
+        scene.launching = false
         scene.active = true
         compare(scene.visualState, "active")
         scene.hovered = true
@@ -85,6 +88,29 @@ TestCase {
         compare(scene.visualState, "drop")
         scene.editMode = true
         compare(scene.visualState, "edit")
+        scene.editMode = false
+        scene.disabled = true
+        compare(scene.visualState, "disabled")
+    }
+
+    function test_invalidStyleFallsBackWithoutReplacingTheGlyph() {
+        const scene = createScene({
+            iconStyleDefinition: ({
+                format: "org.archdock.icon-style",
+                version: 1,
+                id: "invalid-style",
+                valid: false,
+                loadable: false,
+                states: []
+            })
+        })
+
+        compare(scene.resolvedIconStyle.valid, false)
+        compare(scene.resolvedIconStyle.styleId, "plain-original")
+        compare(scene.resolvedIconStyle.fallbackApplied, true)
+        compare(scene.resolvedIconStyle.replacementApplied, false)
+        compare(scene.resolvedIconSource, "application-x-executable")
+        compare(scene.styledLayersActive, false)
     }
 
     function test_visualScaleDoesNotChangeLogicalBounds() {

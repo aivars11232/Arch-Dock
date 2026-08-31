@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QMap>
 #include <QString>
 #include <QStringList>
 #include <QVariantMap>
@@ -214,13 +215,30 @@ struct PanelSurfaceDefinition
 
 struct PanelIconStyleDefinition
 {
-    QString styleReference;
+    QString styleReference = QStringLiteral("plain-original");
     QString themeId;
     QString shape = QStringLiteral("rounded");
     int size = 52;
     qreal spacing = 8.0;
     QVariantMap globalDefaults;
-    QVariantMap perEntryOverrides;
+    struct EntryOverride
+    {
+        QString customGlyph;
+        QString customLabel;
+        std::optional<bool> tileEnabled;
+        QString styleReference;
+        QString animationProfileReference;
+        QVariantMap extensions;
+
+        [[nodiscard]] bool isEmpty() const;
+        [[nodiscard]] QVariantMap toVariantMap() const;
+        [[nodiscard]] static std::optional<EntryOverride> fromVariantMap(
+            const QVariantMap &record,
+            QString *errorMessage = nullptr);
+
+        bool operator==(const EntryOverride &) const = default;
+    };
+    QMap<QString, EntryOverride> perEntryOverrides;
 
     bool operator==(const PanelIconStyleDefinition &) const = default;
 };

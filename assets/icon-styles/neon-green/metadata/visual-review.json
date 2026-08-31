@@ -1,0 +1,20 @@
+{
+  "format": "org.archdock.visual-review",
+  "version": 1,
+  "iconStyleId": "neon-green",
+  "reviewedAt": "2026-08-31",
+  "reviewSurface": "declarative package, QML signature matrix, and isolated Plasma native/free hosts",
+  "checks": {
+    "applicationGlyphPreserved": "pass",
+    "sourcePixels": "absent",
+    "thirdPartyBranding": "absent",
+    "thirdPartyGlyphs": "absent",
+    "allRequiredStates": "declared",
+    "boundedValues": "parser-gated",
+    "liveAndPreviewRendering": "pass"
+  },
+  "contactSheetSha256": "",
+  "contactSheetSizes": [],
+  "status": "runtime-verified",
+  "notes": "The icon-style-visual-test signature matrix and staged rendering-import-smoke on isolated native/free Plasma hosts passed on 2026-08-31; contact-sheet capture was not used."
+}

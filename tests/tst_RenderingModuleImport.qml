@@ -20,6 +20,12 @@ TestCase {
     }
 
     Component {
+        id: iconStyleRendererComponent
+
+        IconStyle2D {}
+    }
+
+    Component {
         id: livePanelPreviewComponent
 
         LivePanelPreview {}
@@ -68,6 +74,30 @@ TestCase {
         compare(scene.width, 36)
         compare(scene.visualState, "running")
         compare(scene.indicatorItem.objectName, "running-indicator")
+    }
+
+    function test_iconStyleRendererContractLoads() {
+        const renderer = createTemporaryObject(
+            iconStyleRendererComponent, testCase, {
+                width: 48,
+                height: 48,
+                role: "base",
+                styleDefinition: ({
+                    layers: {
+                        base: [{
+                            id: "probe",
+                            kind: "procedural",
+                            shape: "circle",
+                            color: "#123456"
+                        }]
+                    }
+                })
+            })
+        verify(renderer !== null)
+        compare(renderer.layerCount, 1)
+        compare(renderer.renderedLayerIds[0], "probe")
+        compare(IconStyleResolver.stateId({ disabled: true, edit: false }),
+                "disabled")
     }
 
     function test_livePanelPreviewContractLoads() {

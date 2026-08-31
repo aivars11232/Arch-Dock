@@ -37,16 +37,22 @@ set(ARCHDOCK_RENDERING_BUILD_DIR
     "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Rendering")
 set(ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/themes")
+set(ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon-styles")
+set(ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/icon-styles/builtin-icon-styles.json")
 set(ARCHDOCK_RENDERING_MODULE_FILES
     qmldir
     RenderingModuleProbe.qml
     LayoutEngine.js
+    IconStyleResolver.js
     IconScene.qml
     PanelScene.qml
     PanelSurfaceLoader.qml
     RunningIndicator.qml
     inputs/AlphaHitMask.qml
     previews/LivePanelPreview.qml
+    renderers/IconStyle2D.qml
     renderers/PanelProcedural2D.qml
     renderers/PanelSkin2D.qml
     renderers/PanelSkinLayer2D.qml)
@@ -87,12 +93,20 @@ qt_add_executable(
   src/PanelRegistry.cpp
   src/model/ThemeDefinition.h
   src/model/ThemeDefinition.cpp
+  src/model/IconStyleDefinition.h
+  src/model/IconStyleDefinition.cpp
+  src/iconstyles/IconStylePackage.h
+  src/iconstyles/IconStylePackage.cpp
+  src/iconstyles/IconStyleStore.h
+  src/iconstyles/IconStyleStore.cpp
   src/themes/ThemeAssetProcessor.h
   src/themes/ThemeAssetProcessor.cpp
   src/themes/ThemePackage.h
   src/themes/ThemePackage.cpp
   src/model/PanelDefinition.h
   src/model/PanelDefinition.cpp
+  src/model/IconEntryIdentity.h
+  src/model/IconEntryIdentity.cpp
   src/model/PanelSettingsSchema.h
   src/model/PanelSettingsSchema.cpp
   src/model/PanelCapabilityResolver.h
@@ -123,6 +137,8 @@ qt_add_executable(
   src/panel/FreePanelController.cpp
   src/panel/PanelSettingsTransaction.h
   src/panel/PanelSettingsTransaction.cpp
+  src/panel/IconOverrideTransaction.h
+  src/panel/IconOverrideTransaction.cpp
   src/panel/PanelWindow.h
   src/panel/PanelWindow.cpp
   src/WindowItem.h
@@ -141,6 +157,7 @@ qt_add_qml_module(
   ${ARCHDOCK_RENDERING_IMPORT_ROOT}
   QML_FILES
   qml/runtime/CapabilityModel.js
+  qml/runtime/IconPropertiesDraft.js
   qml/runtime/IconProperties.qml
   qml/runtime/IconPropertiesWindow.qml
   qml/runtime/PlacementStatus.js
@@ -156,6 +173,11 @@ qt_add_resources(
   theme-catalog
   PREFIX "/archdock"
   FILES data/themes/builtin-themes.json)
+qt_add_resources(
+  arch-dock
+  icon-style-catalog
+  PREFIX "/archdock"
+  FILES data/icon-styles/builtin-icon-styles.json)
 
 target_link_libraries(
   arch-dock
@@ -169,7 +191,9 @@ target_link_libraries(
 
 target_compile_definitions(
   arch-dock
-  PRIVATE ARCHDOCK_SOURCE_KWIN_SCRIPT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/kwin-script/contents/code/main.js")
+  PRIVATE ARCHDOCK_SOURCE_KWIN_SCRIPT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/kwin-script/contents/code/main.js"
+          ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH="${ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH}"
+          ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT="${ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT}")
 
 include(CTest)
 if(BUILD_TESTING)
@@ -196,6 +220,22 @@ if(BUILD_TESTING)
   add_test(NAME panel-model-test COMMAND panel-model-test)
 
   qt_add_executable(
+    icon-entry-identity-test
+    tests/IconEntryIdentityTest.cpp
+    src/model/IconEntryIdentity.h
+    src/model/IconEntryIdentity.cpp)
+  target_include_directories(
+    icon-entry-identity-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    icon-entry-identity-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(
+    NAME icon-entry-identity-test
+    COMMAND icon-entry-identity-test)
+
+  qt_add_executable(
     theme-package-test
     tests/ThemePackageTest.cpp
     src/model/ThemeDefinition.h
@@ -210,6 +250,42 @@ if(BUILD_TESTING)
     PRIVATE Qt6::Core
             Qt6::Test)
   add_test(NAME theme-package-test COMMAND theme-package-test)
+
+  qt_add_executable(
+    icon-style-package-test
+    tests/IconStylePackageTest.cpp
+    src/model/IconStyleDefinition.h
+    src/model/IconStyleDefinition.cpp
+    src/iconstyles/IconStylePackage.h
+    src/iconstyles/IconStylePackage.cpp
+    src/iconstyles/IconStyleStore.h
+    src/iconstyles/IconStyleStore.cpp)
+  target_include_directories(
+    icon-style-package-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    icon-style-package-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(NAME icon-style-package-test COMMAND icon-style-package-test)
+
+  qt_add_executable(
+    icon-style-asset-test
+    tests/IconStyleAssetTest.cpp
+    src/model/IconStyleDefinition.h
+    src/model/IconStyleDefinition.cpp
+    src/iconstyles/IconStylePackage.h
+    src/iconstyles/IconStylePackage.cpp
+    src/iconstyles/IconStyleStore.h
+    src/iconstyles/IconStyleStore.cpp)
+  target_include_directories(
+    icon-style-asset-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    icon-style-asset-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(NAME icon-style-asset-test COMMAND icon-style-asset-test)
 
   qt_add_executable(
     chassis-asset-test
@@ -349,6 +425,30 @@ if(BUILD_TESTING)
     COMMAND panel-settings-transaction-test)
 
   qt_add_executable(
+    icon-override-transaction-test
+    tests/IconOverrideTransactionTest.cpp
+    src/panel/IconOverrideTransaction.h
+    src/panel/IconOverrideTransaction.cpp
+    src/model/IconEntryIdentity.h
+    src/model/IconEntryIdentity.cpp
+    src/model/PanelDefinition.h
+    src/model/PanelDefinition.cpp
+    src/model/PanelSettingsSchema.h
+    src/model/PanelSettingsSchema.cpp
+    src/model/PanelRuntimeState.h
+    src/model/PanelRuntimeState.cpp)
+  target_include_directories(
+    icon-override-transaction-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    icon-override-transaction-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(
+    NAME icon-override-transaction-test
+    COMMAND icon-override-transaction-test)
+
+  qt_add_executable(
     panel-registry-test
     tests/PanelRegistryTest.cpp
     src/DockSettings.h
@@ -357,6 +457,12 @@ if(BUILD_TESTING)
     src/PanelRegistry.cpp
     src/model/ThemeDefinition.h
     src/model/ThemeDefinition.cpp
+    src/model/IconStyleDefinition.h
+    src/model/IconStyleDefinition.cpp
+    src/iconstyles/IconStylePackage.h
+    src/iconstyles/IconStylePackage.cpp
+    src/iconstyles/IconStyleStore.h
+    src/iconstyles/IconStyleStore.cpp
     src/themes/ThemeAssetProcessor.h
     src/themes/ThemeAssetProcessor.cpp
     src/themes/ThemePackage.h
@@ -377,6 +483,8 @@ if(BUILD_TESTING)
     src/panel/FreePanelController.cpp
     src/panel/PanelSettingsTransaction.h
     src/panel/PanelSettingsTransaction.cpp
+    src/panel/IconOverrideTransaction.h
+    src/panel/IconOverrideTransaction.cpp
     src/PanelPlacement.h
     src/PanelPlacement.cpp
     src/PanelVisibility.h
@@ -387,7 +495,9 @@ if(BUILD_TESTING)
     src/WindowModel.h
     src/WindowModel.cpp
     src/DockModel.h
-    src/DockModel.cpp)
+    src/DockModel.cpp
+    src/model/IconEntryIdentity.h
+    src/model/IconEntryIdentity.cpp)
   target_include_directories(
     panel-registry-test
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -398,12 +508,37 @@ if(BUILD_TESTING)
             Qt6::Test)
   target_compile_definitions(
     panel-registry-test
-    PRIVATE ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT="${ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT}")
+    PRIVATE ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT="${ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT}"
+            ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH="${ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH}"
+            ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT="${ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT}")
   add_test(NAME panel-registry-test COMMAND panel-registry-test)
   set_tests_properties(
     panel-registry-test
     PROPERTIES ENVIRONMENT
                "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-data/panel-registry")
+
+  qt_add_executable(
+    dock-model-test
+    tests/DockModelTest.cpp
+    src/DockModel.h
+    src/DockModel.cpp
+    src/model/IconEntryIdentity.h
+    src/model/IconEntryIdentity.cpp
+    src/WindowItem.h
+    src/WindowModel.h
+    src/WindowModel.cpp)
+  target_include_directories(
+    dock-model-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    dock-model-test
+    PRIVATE Qt6::Core
+            Qt6::Gui
+            Qt6::Test)
+  add_test(NAME dock-model-test COMMAND dock-model-test)
+  set_tests_properties(
+    dock-model-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   qt_add_executable(
     panel-window-capability-test
@@ -416,6 +551,12 @@ if(BUILD_TESTING)
     src/PanelRegistry.cpp
     src/model/ThemeDefinition.h
     src/model/ThemeDefinition.cpp
+    src/model/IconStyleDefinition.h
+    src/model/IconStyleDefinition.cpp
+    src/iconstyles/IconStylePackage.h
+    src/iconstyles/IconStylePackage.cpp
+    src/iconstyles/IconStyleStore.h
+    src/iconstyles/IconStyleStore.cpp
     src/themes/ThemeAssetProcessor.h
     src/themes/ThemeAssetProcessor.cpp
     src/themes/ThemePackage.h
@@ -452,11 +593,15 @@ if(BUILD_TESTING)
     src/panel/FreePanelController.cpp
     src/panel/PanelSettingsTransaction.h
     src/panel/PanelSettingsTransaction.cpp
+    src/panel/IconOverrideTransaction.h
+    src/panel/IconOverrideTransaction.cpp
     src/panel/PanelWindow.h
     src/panel/PanelWindow.cpp
     src/WindowItem.h
     src/WindowModel.h
     src/WindowModel.cpp
+    src/model/IconEntryIdentity.h
+    src/model/IconEntryIdentity.cpp
     src/WindowWatcher.h
     src/WindowWatcher.cpp)
   qt_add_resources(
@@ -464,6 +609,15 @@ if(BUILD_TESTING)
     panel-window-capability-theme-catalog
     PREFIX "/archdock"
     FILES data/themes/builtin-themes.json)
+  qt_add_resources(
+    panel-window-capability-test
+    panel-window-capability-icon-properties-runtime
+    PREFIX "/qt/qml/ArchDock/qml/runtime"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/qml/runtime"
+    FILES
+    qml/runtime/IconPropertiesDraft.js
+    qml/runtime/IconProperties.qml
+    qml/runtime/IconPropertiesWindow.qml)
   target_include_directories(
     panel-window-capability-test
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -480,7 +634,9 @@ if(BUILD_TESTING)
   target_compile_definitions(
     panel-window-capability-test
     PRIVATE ARCHDOCK_SOURCE_KWIN_SCRIPT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/kwin-script/contents/code/main.js"
-            ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT="${ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT}")
+            ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT="${ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT}"
+            ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH="${ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH}"
+            ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT="${ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT}")
   add_test(
     NAME panel-window-capability-test
     COMMAND panel-window-capability-test)
@@ -613,12 +769,39 @@ if(BUILD_TESTING)
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(
+    NAME icon-style-visual-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_IconStyleVisual.qml)
+  set_tests_properties(
+    icon-style-visual-test
+    PROPERTIES ENVIRONMENT
+               "QT_QPA_PLATFORM=offscreen;QML_XHR_ALLOW_FILE_READ=1")
+
+  add_test(
+    NAME icon-override-resolution-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_IconOverrideResolution.qml)
+  set_tests_properties(
+    icon-override-resolution-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
     NAME dock-entry-test
     COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
             -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_DockEntry.qml)
   set_tests_properties(
     dock-entry-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME icon-properties-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_IconProperties.qml)
+  set_tests_properties(
+    icon-properties-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(
@@ -749,6 +932,20 @@ foreach(rendering_file IN LISTS ARCHDOCK_RENDERING_MODULE_FILES)
       "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Rendering/${rendering_directory}")
 endforeach()
 install(FILES data/themes/builtin-themes.json DESTINATION share/arch-dock/themes)
+install(
+  FILES data/icon-styles/builtin-icon-styles.json
+  DESTINATION share/arch-dock/icon-styles)
+foreach(packaged_icon_style
+        plain-original
+        metallic-blue
+        metallic-red
+        neon-green
+        neon-orange
+        dark-orb)
+  install(
+    DIRECTORY "assets/icon-styles/${packaged_icon_style}"
+    DESTINATION share/arch-dock/icon-styles)
+endforeach()
 foreach(packaged_theme
         sci-fi-chassis-dark
         sci-fi-chassis-red

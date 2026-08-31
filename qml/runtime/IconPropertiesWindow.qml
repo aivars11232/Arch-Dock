@@ -4,16 +4,25 @@ import QtQuick.Window
 Window {
     id: root
 
-    property int targetRow: -1
-    property string appName: ""
-    property string currentIconName: ""
+    objectName: "iconPropertiesWindow"
+    property var editorSnapshot: ({})
+    property var transactionController: panelController
+    property bool editorRequestedClose: false
+    readonly property string entryIdentity: String(
+        editorSnapshot && editorSnapshot.entryIdentity
+            ? editorSnapshot.entryIdentity : "")
 
-    width: 520
-    height: 310
+    width: 620
+    height: 590
     visible: false
     color: "transparent"
     flags: Qt.Tool | Qt.FramelessWindowHint
-    title: qsTr("Customize Arch Dock icon")
+    title: qsTr("Arch Dock Icon Properties")
+    onClosing: {
+        if (!editorRequestedClose)
+            editor.discardDraft()
+        editorRequestedClose = false
+    }
 
     Rectangle {
         anchors.fill: parent
@@ -27,12 +36,16 @@ Window {
     }
 
     IconProperties {
+        id: editor
+
+        objectName: "iconPropertiesEditor"
         anchors.fill: parent
         anchors.margins: 18
-        targetRow: root.targetRow
-        appName: root.appName
-        currentIconName: root.currentIconName
-        onCloseRequested: root.close()
+        editorSnapshot: root.editorSnapshot
+        transactionController: root.transactionController
+        onCloseRequested: {
+            root.editorRequestedClose = true
+            root.close()
+        }
     }
-
 }

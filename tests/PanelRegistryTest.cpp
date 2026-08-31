@@ -7,6 +7,7 @@
 #include "DockSettings.h"
 #include "DockModel.h"
 #include "WindowModel.h"
+#include "panel/IconOverrideTransaction.h"
 
 #include <QDir>
 #include <QFile>
@@ -323,6 +324,7 @@ private slots:
     void checksBatchPersistenceBeforeRevision();
     void persistsAndRollsBackSettingsTransactionsAtomically();
     void rejectsPreparedTransactionAfterInterveningUpdate();
+    void persistsAndResolvesIconOverridesAtomically();
     void persistsNativePanelRecoveryOutcomes();
     void persistsNativePanelRediscoveryOutcomes();
     void reconcilesNativeContainmentLifecycle();
@@ -345,6 +347,7 @@ private slots:
     void targetsStableApplicationWindowIds();
     void supportsPinnedFolderSnapshotsAndReordering();
     void validatesBuiltInCapabilityCatalog();
+    void resolvesIconStylesIndependentlyFromPanelThemes();
     void resolvesBuiltInChassisPackagesAndImportPrecedence();
     void resolvesThemeCandidatesWithoutMutation();
     void rejectsIncompatibleThemeWithoutRecordMutation();
@@ -981,6 +984,102 @@ void PanelRegistryTest::rejectsPreparedTransactionAfterInterveningUpdate()
                  QStringLiteral("bottom"), QStringLiteral("iconSize")).toInt(),
              61);
     QVERIFY(errorMessage.contains(QStringLiteral("changed")));
+}
+
+void PanelRegistryTest::persistsAndResolvesIconOverridesAtomically()
+{
+    PanelRegistry registry;
+    DockSettings dockSettings;
+    const auto before = registry.panelDefinition(QStringLiteral("bottom"));
+    QVERIFY(before.has_value());
+    const QString firstIdentity = QStringLiteral(
+        "desktop.org.example.first.desktop");
+    const QString secondIdentity = QStringLiteral(
+        "desktop.org.example.second.desktop");
+    ArchDock::IconOverrideTransactionOutcome outcome;
+    const auto draft = ArchDock::IconOverrideTransaction::prepare(
+        *before,
+        {QStringLiteral("bottom"), before->settingsRevision, firstIdentity,
+         {
+             {QStringLiteral("customGlyph"),
+              QStringLiteral("file:///missing/custom-icon.svg")},
+             {QStringLiteral("customLabel"), QStringLiteral("First custom")},
+             {QStringLiteral("tileEnabled"), false},
+             {QStringLiteral("styleReference"), QStringLiteral("dark-orb")},
+             {QStringLiteral("animationProfileReference"),
+              QStringLiteral("future-orbit")},
+         },
+         false},
+        &outcome,
+        [&registry](const QString &styleId)
+        {
+            return registry.iconStyleDefinition(styleId)
+                    .value(QStringLiteral("selectionStatus")).toString() ==
+                QStringLiteral("selected");
+        });
+    QVERIFY(draft.has_value());
+
+    QString persistenceError;
+    QSignalSpy revisionSpy(&registry, &PanelRegistry::revisionChanged);
+    QVERIFY2(registry.persistPanelDefinitionTransaction(
+                 draft->previousPanel,
+                 draft->candidatePanel,
+                 dockSettings.transactionSnapshot(),
+                 &persistenceError),
+             qPrintable(persistenceError));
+    QCOMPARE(revisionSpy.count(), 0);
+    registry.notifyPanelSettingsTransactionAdopted(false);
+    QCOMPARE(revisionSpy.count(), 1);
+
+    const auto persisted = registry.panelDefinition(QStringLiteral("bottom"));
+    QVERIFY(persisted.has_value());
+    QCOMPARE(persisted->settingsRevision, before->settingsRevision + 1);
+    QVERIFY(persisted->iconStyle.perEntryOverrides.contains(firstIdentity));
+
+    const QVariantMap firstEntry{
+        {QStringLiteral("stableIdentity"), firstIdentity},
+        {QStringLiteral("baseIconName"), QStringLiteral("applications-system")},
+        {QStringLiteral("baseDisplayName"), QStringLiteral("First")},
+    };
+    const QVariantMap firstResolution = registry.resolveIconEntryOverride(
+        *persisted, firstEntry);
+    QVERIFY(firstResolution.value(
+        QStringLiteral("overrideApplied")).toBool());
+    QCOMPARE(firstResolution.value(QStringLiteral("resolvedGlyph")).toString(),
+             QStringLiteral("applications-system"));
+    QVERIFY(firstResolution.value(
+        QStringLiteral("glyphFallbackApplied")).toBool());
+    QCOMPARE(firstResolution.value(QStringLiteral("resolvedLabel")).toString(),
+             QStringLiteral("First custom"));
+    QVERIFY(!firstResolution.value(QStringLiteral("tileEnabled")).toBool());
+    QCOMPARE(firstResolution.value(QStringLiteral("styleReference")).toString(),
+             QStringLiteral("dark-orb"));
+    QCOMPARE(firstResolution.value(QStringLiteral("iconStyleDefinition"))
+                 .toMap().value(QStringLiteral("id")).toString(),
+             QStringLiteral("dark-orb"));
+
+    const QVariantMap secondEntry{
+        {QStringLiteral("stableIdentity"), secondIdentity},
+        {QStringLiteral("baseIconName"), QStringLiteral("utilities-terminal")},
+        {QStringLiteral("baseDisplayName"), QStringLiteral("Second")},
+    };
+    const QVariantMap secondResolution = registry.resolveIconEntryOverride(
+        *persisted, secondEntry);
+    QVERIFY(!secondResolution.value(
+        QStringLiteral("overrideApplied")).toBool());
+    QCOMPARE(secondResolution.value(QStringLiteral("resolvedGlyph")).toString(),
+             QStringLiteral("utilities-terminal"));
+    QCOMPARE(secondResolution.value(QStringLiteral("resolvedLabel")).toString(),
+             QStringLiteral("Second"));
+    QCOMPARE(secondResolution.value(QStringLiteral("styleReference")).toString(),
+             QStringLiteral("plain-original"));
+
+    QVERIFY(!registry.persistPanelDefinitionTransaction(
+        draft->previousPanel,
+        draft->candidatePanel,
+        dockSettings.transactionSnapshot(),
+        &persistenceError));
+    QVERIFY(persistenceError.contains(QStringLiteral("changed")));
 }
 
 void PanelRegistryTest::persistsNativePanelRecoveryOutcomes()
@@ -2793,6 +2892,75 @@ void PanelRegistryTest::resolvesBuiltInChassisPackagesAndImportPrecedence()
     QVERIFY2(selectedProjection.has_value(), qPrintable(projectionError));
     QCOMPARE(selectedProjection->value(QStringLiteral("id")).toString(),
              QStringLiteral("sci-fi-chassis-blue"));
+}
+
+void PanelRegistryTest::resolvesIconStylesIndependentlyFromPanelThemes()
+{
+    PanelRegistry registry(taskThemeDefinitions());
+    const QVariantList styles = registry.iconStyleDefinitions();
+    QCOMPARE(styles.size(), 6);
+    QCOMPARE(styles.constFirst().toMap().value(QStringLiteral("id")).toString(),
+             QStringLiteral("plain-original"));
+    QCOMPARE(styles.constLast().toMap().value(QStringLiteral("id")).toString(),
+             QStringLiteral("dark-orb"));
+
+    const auto initial = registry.panelDefinition(QStringLiteral("bottom"));
+    QVERIFY(initial.has_value());
+    QCOMPARE(initial->iconStyle.styleReference,
+             QStringLiteral("plain-original"));
+    QString projectionError;
+    const auto projection = registry.iconStyleRuntimeProjection(
+        *initial, &projectionError);
+    QVERIFY2(projection.has_value(), qPrintable(projectionError));
+    QCOMPARE(projection->value(QStringLiteral("id")).toString(),
+             QStringLiteral("plain-original"));
+    QCOMPARE(projection->value(QStringLiteral("selectionStatus")).toString(),
+             QStringLiteral("selected"));
+
+    const QVariantMap unknown = registry.iconStyleDefinition(
+        QStringLiteral("not-installed"));
+    QVERIFY(unknown.value(QStringLiteral("valid")).toBool());
+    QVERIFY(unknown.value(QStringLiteral("fellBack")).toBool());
+    QCOMPARE(unknown.value(QStringLiteral("resolvedStyleId")).toString(),
+             QStringLiteral("plain-original"));
+
+    registry.setPanelValue(QStringLiteral("bottom"),
+                           QStringLiteral("iconStyle"),
+                           QStringLiteral("metallic-blue"));
+    const auto styled = registry.panelDefinition(QStringLiteral("bottom"));
+    QVERIFY(styled.has_value());
+    QCOMPARE(styled->iconStyle.styleReference,
+             QStringLiteral("metallic-blue"));
+    const auto styledProjection = registry.iconStyleRuntimeProjection(
+        *styled, &projectionError);
+    QVERIFY2(styledProjection.has_value(), qPrintable(projectionError));
+    QCOMPARE(styledProjection->value(QStringLiteral("id")).toString(),
+             QStringLiteral("metallic-blue"));
+    QCOMPARE(styledProjection->value(QStringLiteral("glyphPolicy")).toMap()
+                 .value(QStringLiteral("mode")).toString(),
+             QStringLiteral("original"));
+
+    const QVariantMap candidate = registry.themeCandidate(
+        QStringLiteral("bottom"),
+        QStringLiteral("sci-fi-chassis-dark"),
+        QStringLiteral("complete"));
+    QVERIFY(candidate.value(QStringLiteral("success")).toBool());
+    QCOMPARE(candidate.value(QStringLiteral("recommendedIconStyleId")).toString(),
+             QStringLiteral("dark-orb"));
+    const QVariantMap values = candidate.value(QStringLiteral("values")).toMap();
+    QVERIFY(!values.contains(QStringLiteral("iconStyle")));
+    QVERIFY(!values.contains(QStringLiteral("iconThemeId")));
+
+    QVERIFY(registry.applyTheme(
+        QStringLiteral("bottom"),
+        QStringLiteral("sci-fi-chassis-dark"),
+        QStringLiteral("complete")));
+    const auto themed = registry.panelDefinition(QStringLiteral("bottom"));
+    QVERIFY(themed.has_value());
+    QCOMPARE(themed->iconStyle.styleReference,
+             QStringLiteral("metallic-blue"));
+    QCOMPARE(themed->iconStyle.themeId,
+             QStringLiteral("metallic-blue"));
 }
 
 void PanelRegistryTest::resolvesThemeCandidatesWithoutMutation()

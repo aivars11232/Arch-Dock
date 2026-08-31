@@ -643,6 +643,109 @@ TestCase {
         compare(skin.effectiveOverlayPhase, 0)
     }
 
+    function test_waylandEnergyEffectPixels() {
+        if (Qt.platform.pluginName !== "wayland") {
+            skip("requires the private Wayland scenegraph")
+            return
+        }
+
+        const skin = createSkin("energy-frame-cyan", {
+            width: 720,
+            height: 96,
+            themeDefinition: energyThemeDefinition("energy-frame-cyan", false),
+            presentationState: "normal",
+            hovered: false,
+            tintColor: "#44ddea",
+            glowIntensity: 1.15,
+            reducedMotion: true
+        })
+        waitForRenderer(skin)
+        wait(40)
+
+        const normal = grabImage(skin)
+        compare(normal.width, 720)
+        compare(normal.height, 96)
+        verify(normal.alpha(360, 48) > 0)
+
+        let visibleSamples = 0
+        let cyanSamples = 0
+        let cyanMinimumX = normal.width
+        let cyanMinimumY = normal.height
+        let cyanMaximumX = -1
+        let cyanMaximumY = -1
+        for (let y = 0; y < normal.height; y += 4) {
+            for (let x = 0; x < normal.width; x += 4) {
+                if (normal.alpha(x, y) <= 0)
+                    continue
+                ++visibleSamples
+                if (normal.green(x, y) > normal.red(x, y)
+                        && normal.blue(x, y) > normal.red(x, y)) {
+                    ++cyanSamples
+                    cyanMinimumX = Math.min(cyanMinimumX, x)
+                    cyanMinimumY = Math.min(cyanMinimumY, y)
+                    cyanMaximumX = Math.max(cyanMaximumX, x)
+                    cyanMaximumY = Math.max(cyanMaximumY, y)
+                }
+            }
+        }
+        verify(visibleSamples > 100, "energy surface produced too few pixels")
+        verify(cyanSamples > 20, "cyan mask effects were not rendered")
+        verify(cyanMinimumX > 0 && cyanMinimumY > 0
+               && cyanMaximumX < normal.width - 1
+               && cyanMaximumY < normal.height - 1,
+               "energy effect pixels reached a clipped item boundary")
+
+        skin.presentationState = "open"
+        skin.hovered = true
+        tryCompare(skin, "effectiveState", "hover", 3000)
+        waitForRenderer(skin)
+        wait(40)
+        const hover = grabImage(skin)
+        verify(!normal.equals(hover), "hover pixels equal normal pixels")
+
+        skin.hovered = false
+        tryCompare(skin, "effectiveState", "open", 3000)
+        waitForRenderer(skin)
+        wait(40)
+        const open = grabImage(skin)
+        verify(!normal.equals(open), "open pixels equal normal pixels")
+        verify(!hover.equals(open), "open pixels equal hover pixels")
+
+        skin.presentationState = "collapsed"
+        tryCompare(skin, "effectiveState", "collapsed", 3000)
+        waitForRenderer(skin)
+        wait(40)
+        const collapsed = grabImage(skin)
+        verify(!open.equals(collapsed), "collapsed pixels equal open pixels")
+
+        skin.presentationState = "open"
+        skin.reducedMotion = false
+        tryCompare(skin, "effectiveState", "open", 3000)
+        tryVerify(function() {
+            return skin.overlayAnimationRunning
+                && skin.effectiveOverlayPhase > 0.35
+                && skin.effectiveOverlayPhase < 0.65
+        }, 3000)
+        const moving = grabImage(skin)
+
+        skin.reducedMotion = true
+        tryCompare(skin, "overlayAnimationRunning", false, 3000)
+        compare(skin.effectiveOverlayPhase, 0)
+        wait(40)
+        const reducedFirst = grabImage(skin)
+        verify(!moving.equals(reducedFirst),
+               "reduced-motion pixels equal the animated frame")
+        wait(80)
+        const reducedSecond = grabImage(skin)
+        verify(reducedFirst.equals(reducedSecond),
+               "reduced-motion pixels were not static")
+
+        verify(skin.contains(Qt.point(360, 48)))
+        verify(!skin.contains(Qt.point(0, 0)))
+        verify(!skin.contains(Qt.point(-1, 48)))
+        verify(!skin.contains(Qt.point(720, 48)))
+    }
+
     function test_missingOptionalLayerAndUnsafeTintFailSafe() {
         const skin = createSkin("energy-frame-cyan", {
             themeDefinition: energyThemeDefinition("energy-frame-cyan", true),

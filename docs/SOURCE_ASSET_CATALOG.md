@@ -94,6 +94,38 @@ and visual-review records establish the independent production boundary. No
 reference screenshot, crop, logo, text, application glyph, or source pixel is
 contained in or installed with those packages.
 
+## TASK-0028 clean-room energy-family boundary
+
+Four class-D screenshots were selected as broad-concept references only. They
+remain opaque, redistribution-unknown, `reference-only`, and non-installable:
+
+| Production palette | Catalog ID | SHA-256 |
+| --- | --- | --- |
+| Cyan/blue | `panel-screenshot-20260811-193105` | `ce30234a578093e5a943c6c2045ff8025c952da4cc08ec2568d2ac445397b427` |
+| Green | `panel-screenshot-20260811-192733` | `638662753e315b59ffe295d640699c207bf834d233a82422497ef48794596a2c` |
+| Orange/red | `panel-screenshot-20260811-192943` | `a9aab4f4612cf4f1ec7bee06a1c99b6e7fec8a7698f978f62e8979b229ed9588` |
+| Purple | `panel-screenshot-20260811-193642` | `bd3268a2607f04a10bff2a606817ae67c8800bc43006ece749e6ca88f51d0e57` |
+
+The exact rights declaration and deterministic blank-canvas recipe are
+retained in `assets/source-samples/energy/REFERENCE_RIGHTS.md` and
+`assets/source-samples/energy/original-artwork-recipe.json`. The recipe marks
+each reference hash as excluded with `pixelInput: false`; no screenshot was
+copied, cropped, traced, recolored, segmented, or processed into production
+artwork.
+
+TASK-0028 ships four separate original Arch Dock packages:
+
+- `energy-frame-cyan`
+- `energy-frame-green`
+- `energy-frame-orange`
+- `energy-frame-purple`
+
+Each package records its generated SVG outputs, deterministic hashes, fixed-cap
+and animation-safe bounds, `sourceDerivative: false`, `pixelInput: false`, and
+SPDX `NOASSERTION`. The shared four-size review contact sheet has SHA-256
+`0a9bc4a12cbfe59e858e37c50ae36e65783f34b7ac2ef4ba83c2ab8f49459ea7`.
+Neither that review artifact nor any reference screenshot is installed.
+
 Future clean artwork must enter as a new content-hashed source record or a
 separately validated production package with its own provenance evidence. It
 must not silently inherit approval from a screenshot that inspired it.

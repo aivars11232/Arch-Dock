@@ -9,7 +9,8 @@ file(READ "${SOURCE_DIR}/qml/runtime/StudioForm.qml" studio_form)
 foreach(required_editor_contract
         "function rendererCandidate(session)"
         "function rendererThemeCandidate(session, theme)"
-        "result.capabilityResolution = copyValue")
+        "result.capabilityResolution = copyValue"
+        "result.iconStyleDefinition = copyValue")
   string(FIND "${editor_model}" "${required_editor_contract}"
          editor_contract_position)
   if(editor_contract_position EQUAL -1)
@@ -25,6 +26,7 @@ foreach(required_studio_contract
         "panelDefinition: root.selectedRendererCandidate"
         "hostCapabilities:"
         "root.selectedCapabilityResolution"
+        ".iconStyleDefinition || ({})"
         "Draft only — desktop unchanged"
         "applyPanelSettingsTransaction")
   string(FIND "${settings_popup}" "${required_studio_contract}"
@@ -39,6 +41,7 @@ foreach(required_theme_card_contract
         "LivePanelPreview {"
         "root.studio.themeRendererCandidate(modelData)"
         "themeSample.rendererCandidate"
+        ".iconStyleDefinition || ({})"
         "themePreview.rendererStatusText")
   string(FIND "${studio_form}" "${required_theme_card_contract}"
          theme_card_contract_position)

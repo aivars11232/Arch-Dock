@@ -73,6 +73,7 @@ PlasmoidItem {
         themeAsset: "",
         themeFit: "cover",
         themeStatus: "",
+        iconStyleDefinition: ({}),
         iconAnimation: "scale",
         animationTrigger: "hover",
         animationSpeed: 1,
@@ -281,6 +282,23 @@ PlasmoidItem {
                  panelId.length > 0 ? [panelId] : []);
     }
 
+    function openIconProperties(entry) {
+        const candidate = entry || ({});
+        const identity = String(candidate.stableIdentity || "");
+        if (!dockService.registered || panelId.length === 0
+                || candidate.iconPropertiesSupported !== true
+                || identity.length === 0)
+            return false;
+        callDock("showIconProperties", [panelId, identity], function(reply) {
+            const result = normalizeReply(reply);
+            if (!result || result.success !== true)
+                console.warn("Arch Dock Icon Properties could not open:",
+                             result && result.errorCode
+                                 ? result.errorCode : "unavailable");
+        });
+        return true;
+    }
+
     PlasmaCore.Action {
         id: configurePanelStudioAction
         text: qsTr("Configure Arch Dock…")
@@ -308,7 +326,8 @@ PlasmoidItem {
                 orderedEntries: root.entries
                 hostCapabilities: root.sceneHostCapabilities
                 themeDefinition: root.configuration.themeDefinition || ({})
-                iconStyleDefinition: ({})
+                iconStyleDefinition:
+                    root.configuration.iconStyleDefinition || ({})
                 animationProfiles: ({
                     reducedMotion: root.configuration.reducedMotion,
                     duration: root.motionDuration
@@ -373,6 +392,10 @@ PlasmoidItem {
             anchors.centerIn: parent
             entry: parent.sceneEntry
             entryIndex: parent.sceneIndex
+            iconStyleDefinition:
+                parent.sceneIconStyleDefinition || ({})
+            iconOverrideResolution:
+                parent.sceneEntry.iconOverrideResolution || ({})
             vertical: root.freeSurface ? false : root.vertical
             baseSize: Number(parent.sceneGeometry.iconSize || root.baseCellSize)
             magnification: root.magnification
@@ -396,6 +419,7 @@ PlasmoidItem {
             pinUrls: root.pinDroppedUrls
             setHoveredIndex: function(value) { root.hoveredIndex = value }
             openPanelStudio: root.openPanelStudio
+            openIconProperties: root.openIconProperties
         }
     }
 

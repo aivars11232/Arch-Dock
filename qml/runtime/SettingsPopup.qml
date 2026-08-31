@@ -345,7 +345,7 @@ Window {
     }
 
     function overviewIconRows() {
-        return [section(qsTr("Icons"), qsTr("Settings currently applied to icons in the selected panel."), true), readOnlyRow(qsTr("Size"), panelValue("iconSize", 52) + qsTr(" px")), readOnlyRow(qsTr("Spacing"), Math.round(Number(panelValue("spacing", 8))) + qsTr(" px")), readOnlyRow(qsTr("Shape"), optionLabel("iconShape", panelValue("iconShape", "rounded"))), readOnlyRow(qsTr("Animation"), optionLabel("iconAnimation", panelValue("iconAnimation", "scale"))), readOnlyRow(qsTr("Magnification"), globalValue("magnificationEnabled", true) ? Number(globalValue("magnification", 1.65)).toFixed(2) + "×" : qsTr("Off"))];
+        return [section(qsTr("Icons"), qsTr("Settings currently applied to icons in the selected panel."), true), readOnlyRow(qsTr("Style"), optionLabel("iconStyle", panelValue("iconStyle", "plain-original"))), readOnlyRow(qsTr("Size"), panelValue("iconSize", 52) + qsTr(" px")), readOnlyRow(qsTr("Spacing"), Math.round(Number(panelValue("spacing", 8))) + qsTr(" px")), readOnlyRow(qsTr("Shape"), optionLabel("iconShape", panelValue("iconShape", "rounded"))), readOnlyRow(qsTr("Animation"), optionLabel("iconAnimation", panelValue("iconAnimation", "scale"))), readOnlyRow(qsTr("Magnification"), globalValue("magnificationEnabled", true) ? Number(globalValue("magnification", 1.65)).toFixed(2) + "×" : qsTr("Off"))];
     }
 
     function panelGeneralRows() {
@@ -977,6 +977,7 @@ Window {
                         themeDefinition: root.selectedPreviewTheme
                         iconStyleDefinition:
                             root.selectedRendererCandidate
+                                .iconStyleDefinition || ({})
                         indicatorStyleDefinition:
                             root.selectedPreviewTheme.indicatorStyle || ({})
                         animationProfiles:

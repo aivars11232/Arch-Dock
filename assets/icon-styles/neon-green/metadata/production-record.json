@@ -1,0 +1,28 @@
+{
+  "format": "org.archdock.production-record",
+  "version": 1,
+  "iconStyleId": "neon-green",
+  "task": "TASK-0029",
+  "method": "deterministic-hand-authored-procedural-qml",
+  "sourceDerivative": false,
+  "pixelInput": false,
+  "aiGenerated": false,
+  "recipe": "assets/source-samples/icon-styles/original-artwork-recipe.json",
+  "authorizationEvidence": "APPROVED: IMPLEMENT TASK-0029 EXACTLY AS PLANNED.",
+  "outputs": [
+    {"path": "archdock-icon-style.json", "sha256": "f3cd6328dde2cae109489a055069a7ecc5ff967b3de59dc506a72e697a892f3b"}
+  ],
+  "parameters": {
+    "family": "neon",
+    "glyphPolicy": "original",
+    "externalAssets": 0,
+    "proceduralLayers": 5,
+    "requiredStates": 11,
+    "rendererTiers": ["procedural2d"]
+  },
+  "license": {
+    "spdx": "NOASSERTION",
+    "redistribution": "allowed",
+    "evidence": "User approved creation and redistribution of original TASK-0029 resources as part of Arch Dock; no public license was selected"
+  }
+}

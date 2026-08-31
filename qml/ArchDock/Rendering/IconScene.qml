@@ -5,6 +5,7 @@ Item {
     id: root
 
     property var entry: ({})
+    property var iconStyleDefinition: ({})
     property real logicalSize: 52
     property real visualScale: 1
     property string tileShape: "rounded"
@@ -18,6 +19,8 @@ Item {
     property bool running: Boolean(entry && entry.running)
     property bool minimized: Boolean(entry && entry.minimized)
     property bool urgent: Boolean(entry && (entry.attention || entry.urgent))
+    property bool launching: Boolean(entry && entry.launching)
+    property bool disabled: Boolean(entry && entry.disabled)
     property bool dropTarget: false
     property bool editMode: false
     property int windowCount: Math.max(1, Number(
@@ -34,14 +37,43 @@ Item {
     property bool glowAnimating: false
     property int glowDuration: 170
 
-    readonly property string visualState: editMode ? "edit"
-        : dropTarget ? "drop"
-        : urgent ? "urgent"
-        : pressed ? "pressed"
-        : hovered ? "hover"
-        : active ? "active"
-        : minimized ? "minimized"
-        : running ? "running" : "normal"
+    readonly property var resolvedIconStyle: IconStyleResolver.resolve(
+        iconStyleDefinition,
+        {
+            edit: editMode,
+            disabled: disabled,
+            drop: dropTarget,
+            urgent: urgent,
+            pressed: pressed,
+            hover: hovered,
+            launching: launching,
+            active: active,
+            minimized: minimized,
+            running: running
+        },
+        resolverEntry())
+    readonly property string visualState: resolvedIconStyle.stateId
+    readonly property var styleState: resolvedIconStyle.state || ({})
+    readonly property var styleInset:
+        resolvedIconStyle.safeGlyphInset || ({
+            left: 0, top: 0, right: 0, bottom: 0
+        })
+    readonly property bool styledLayersActive:
+        Boolean(resolvedIconStyle.renderStyledLayers)
+    readonly property bool styleGlyphTreatmentActive:
+        Boolean(resolvedIconStyle.valid)
+        && String(resolvedIconStyle.styleId || "plain-original")
+            !== "plain-original"
+    readonly property bool tileRenderingEnabled:
+        resolvedIconStyle.tileEnabled === undefined
+        ? true : Boolean(resolvedIconStyle.tileEnabled)
+    readonly property var effectiveIconStyleDefinition:
+        resolvedIconStyle.styleDefinition || iconStyleDefinition
+    readonly property string resolvedIconSource: String(
+        resolvedIconStyle.glyphSource || iconSource)
+    readonly property var resolvedIndicatorStyle:
+        IconStyleResolver.indicatorStyle(
+            indicatorStyle, resolvedIconStyle)
     readonly property var logicalInputRegion: ({
         x: 0,
         y: 0,
@@ -55,8 +87,15 @@ Item {
     readonly property alias rearLayerItem: rearLayer
     readonly property alias baseLayerItem: baseLayer
     readonly property alias glyphLayerItem: glyphLayer
+    readonly property alias glyphItem: glyph
     readonly property alias frontLayerItem: frontLayer
     readonly property alias indicatorItem: runningIndicator
+    readonly property alias tileTransformItem: baseLayer
+    readonly property alias glyphTransformItem: glyphLayer
+    readonly property alias indicatorTransformItem: runningIndicator
+    readonly property alias styleRearItem: styleRear
+    readonly property alias styleBaseItem: styleBase
+    readonly property alias styleFrontItem: styleFront
     readonly property alias statusLayerItem: statusLayer
     readonly property alias badgeItem: badge
     readonly property alias progressItem: progressTrack
@@ -73,6 +112,16 @@ Item {
         if (tileShape === "squircle")
             return logicalSize * 0.32
         return logicalSize * 0.22
+    }
+
+    function resolverEntry() {
+        const source = entry || ({})
+        const result = ({})
+        const keys = Object.keys(source)
+        for (let index = 0; index < keys.length; ++index)
+            result[keys[index]] = source[keys[index]]
+        result.iconSource = iconSource
+        return result
     }
 
     width: logicalSize
@@ -93,6 +142,44 @@ Item {
             objectName: "icon-layer-rear"
             anchors.fill: parent
 
+            IconStyle2D {
+                anchors.fill: parent
+                styleDefinition: root.effectiveIconStyleDefinition
+                resolvedStyle: root.resolvedIconStyle
+                role: "shadow"
+                logicalSize: root.logicalSize
+                roleOpacity: root.styleState.rearOpacity === undefined
+                    ? 1 : Number(root.styleState.rearOpacity)
+                visible: root.styledLayersActive
+            }
+
+            IconStyle2D {
+                anchors.fill: parent
+                styleDefinition: root.effectiveIconStyleDefinition
+                resolvedStyle: root.resolvedIconStyle
+                role: "glow"
+                logicalSize: root.logicalSize
+                roleOpacity: Math.max(
+                    Number(root.styleState.glowOpacity || 0),
+                    root.glowAmount)
+                stateGlowColor: String(
+                    root.styleState.glowColor || "transparent")
+                visible: root.styledLayersActive
+            }
+
+            IconStyle2D {
+                id: styleRear
+
+                anchors.fill: parent
+                styleDefinition: root.effectiveIconStyleDefinition
+                resolvedStyle: root.resolvedIconStyle
+                role: "rear"
+                logicalSize: root.logicalSize
+                roleOpacity: root.styleState.rearOpacity === undefined
+                    ? 1 : Number(root.styleState.rearOpacity)
+                visible: root.styledLayersActive
+            }
+
             Rectangle {
                 anchors.centerIn: parent
                 width: parent.width * 0.98
@@ -110,8 +197,9 @@ Item {
                         : root.alphaColor(
                             Kirigami.Theme.highlightColor,
                             root.glowAmount * 0.75)
-                visible: root.dropTarget || root.urgent
-                    || root.glowAmount > 0.01
+                visible: !root.styledLayersActive
+                    && (root.dropTarget || root.urgent
+                        || root.glowAmount > 0.01)
 
                 SequentialAnimation on opacity {
                     running: root.glowAnimating && !root.reducedMotion
@@ -136,14 +224,28 @@ Item {
             objectName: "icon-layer-base"
             anchors.fill: parent
 
+            IconStyle2D {
+                id: styleBase
+
+                anchors.fill: parent
+                styleDefinition: root.effectiveIconStyleDefinition
+                resolvedStyle: root.resolvedIconStyle
+                role: "base"
+                logicalSize: root.logicalSize
+                roleOpacity: root.styleState.baseOpacity === undefined
+                    ? 1 : Number(root.styleState.baseOpacity)
+                visible: root.styledLayersActive
+            }
+
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: Math.max(1, root.logicalSize * 0.04)
                 radius: root.tileRadius()
-                visible: root.appearance === "plate"
-                    || root.appearance === "platform"
-                    || root.appearance === "floating-glass"
-                    || root.hovered || root.active || root.dropTarget
+                visible: root.tileRenderingEnabled && !root.styledLayersActive
+                    && (root.appearance === "plate"
+                        || root.appearance === "platform"
+                        || root.appearance === "floating-glass"
+                        || root.hovered || root.active || root.dropTarget)
                 color: root.active
                     ? root.alphaColor(Kirigami.Theme.highlightColor, 0.28)
                     : root.dropTarget
@@ -163,7 +265,8 @@ Item {
                 anchors.bottom: parent.bottom
                 width: parent.width * 0.92
                 height: parent.height * 0.32
-                visible: root.appearance === "pedestal"
+                visible: root.tileRenderingEnabled && !root.styledLayersActive
+                    && root.appearance === "pedestal"
 
                 Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -201,10 +304,25 @@ Item {
                 id: glyph
 
                 anchors.centerIn: parent
-                width: root.logicalSize * 0.72
-                height: width
-                source: root.iconSource
-                opacity: root.minimized ? 0.52 : 1
+                width: root.styleGlyphTreatmentActive
+                    ? root.logicalSize * Math.max(
+                        0.1, 1 - Number(root.styleInset.left || 0)
+                            - Number(root.styleInset.right || 0))
+                    : root.logicalSize * 0.72
+                height: root.styleGlyphTreatmentActive
+                    ? root.logicalSize * Math.max(
+                        0.1, 1 - Number(root.styleInset.top || 0)
+                            - Number(root.styleInset.bottom || 0))
+                    : width
+                source: root.resolvedIconSource
+                opacity: root.styleGlyphTreatmentActive
+                    ? Number(root.styleState.glyphOpacity === undefined
+                             ? 1 : root.styleState.glyphOpacity)
+                    : root.minimized ? 0.52 : 1
+                scale: root.styleGlyphTreatmentActive
+                    ? Number(root.styleState.glyphScale === undefined
+                             ? 1 : root.styleState.glyphScale)
+                    : 1
             }
 
             Kirigami.Icon {
@@ -214,11 +332,23 @@ Item {
                 width: glyph.width
                 height: glyph.height * 0.28
                 source: glyph.source
-                opacity: root.showReflection ? 0.16 : 0
+                opacity: !root.styledLayersActive && root.showReflection
+                    ? 0.16 : 0
                 transform: Scale {
                     yScale: -0.28
                     origin.y: 0
                 }
+            }
+
+            IconStyle2D {
+                anchors.fill: parent
+                styleDefinition: root.effectiveIconStyleDefinition
+                resolvedStyle: root.resolvedIconStyle
+                role: "reflection"
+                logicalSize: root.logicalSize
+                roleOpacity: Number(
+                    root.styleState.reflectionOpacity || 0)
+                visible: root.styledLayersActive && root.showReflection
             }
         }
 
@@ -227,6 +357,21 @@ Item {
 
             objectName: "icon-layer-front"
             anchors.fill: parent
+
+            IconStyle2D {
+                id: styleFront
+
+                anchors.fill: parent
+                styleDefinition: root.effectiveIconStyleDefinition
+                resolvedStyle: root.resolvedIconStyle
+                role: "front"
+                logicalSize: root.logicalSize
+                roleOpacity: root.styleState.frontOpacity === undefined
+                    ? 1 : Number(root.styleState.frontOpacity)
+                stateBorderColor: String(
+                    root.styleState.borderColor || "transparent")
+                visible: root.styledLayersActive
+            }
 
             Rectangle {
                 anchors.fill: parent
@@ -237,20 +382,25 @@ Item {
                 border.color: root.editMode
                     ? Kirigami.Theme.neutralTextColor
                     : Kirigami.Theme.positiveTextColor
-                visible: border.width > 0
+                visible: !root.styledLayersActive && border.width > 0
             }
         }
 
         RunningIndicator {
             id: runningIndicator
 
-            visible: root.showIndicator && root.running
+            visible: root.showIndicator
+                && (root.running || root.active || root.launching)
+                && Number(root.styleState.indicatorOpacity === undefined
+                          ? 1 : root.styleState.indicatorOpacity) > 0
+            opacity: Number(root.styleState.indicatorOpacity === undefined
+                            ? 1 : root.styleState.indicatorOpacity)
             vertical: root.vertical
             active: root.active
             urgent: root.urgent
             windowCount: root.windowCount
             reducedMotion: root.reducedMotion
-            style: root.indicatorStyle
+            style: root.resolvedIndicatorStyle
             anchors.horizontalCenter: root.vertical
                 ? undefined : parent.horizontalCenter
             anchors.verticalCenter: root.vertical

@@ -3,12 +3,14 @@ if(NOT DEFINED ARCHDOCK_SOURCE_DIR)
 endif()
 
 set(rendering_sources
+    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/IconStyleResolver.js"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/IconScene.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/PanelScene.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/PanelSurfaceLoader.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/RunningIndicator.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/inputs/AlphaHitMask.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/previews/LivePanelPreview.qml"
+    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/IconStyle2D.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelProcedural2D.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelSkin2D.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelSkinLayer2D.qml")

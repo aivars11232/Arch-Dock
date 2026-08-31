@@ -128,6 +128,10 @@ function emptySession(errorCode, errorMessage) {
         themeDefinition: {},
         themeProjectionStatus: "unavailable",
         themeProjectionError: "",
+        iconStyles: [],
+        iconStyleDefinition: {},
+        iconStyleProjectionStatus: "unavailable",
+        iconStyleProjectionError: "",
         capabilityResolution: {},
         status: "load-failed",
         errorCode: String(errorCode || "invalid-editor-snapshot"),
@@ -157,6 +161,12 @@ function load(snapshot) {
         themeProjectionStatus: String(
             snapshot.themeProjectionStatus || "unavailable"),
         themeProjectionError: String(snapshot.themeProjectionError || ""),
+        iconStyles: (snapshot.iconStyles || []).slice(),
+        iconStyleDefinition: copyValue(snapshot.iconStyleDefinition || {}),
+        iconStyleProjectionStatus: String(
+            snapshot.iconStyleProjectionStatus || "unavailable"),
+        iconStyleProjectionError: String(
+            snapshot.iconStyleProjectionError || ""),
         capabilityResolution: copyMap(snapshot.capabilityResolution),
         status: "loaded",
         errorCode: "",
@@ -244,6 +254,8 @@ function rendererCandidate(session) {
         ? result.capabilityResolution.renderer : {};
     result.effectiveRendererTier = String(renderer.effectiveTier
         || result.rendererTier || "procedural2d");
+    result.iconStyleDefinition = copyValue(
+        session.iconStyleDefinition || {});
     return result;
 }
 
@@ -262,9 +274,10 @@ function rendererThemeCandidate(session, theme) {
     const themeId = String(source.id || "");
     if (themeId.length > 0) {
         result.panelThemeId = themeId;
-        result.iconThemeId = themeId;
         result.completeThemeId = themeId;
     }
+    result.recommendedIconStyleId = String(source.iconStyleRef
+        && source.iconStyleRef.id || "");
     if (source.capabilityResolution
             && typeof source.capabilityResolution === "object") {
         result.capabilityResolution = copyValue(
@@ -313,6 +326,13 @@ function withProjection(session, projection) {
         projection.themeProjectionStatus || "unavailable");
     result.themeProjectionError = String(
         projection.themeProjectionError || "");
+    result.iconStyles = (projection.iconStyles || []).slice();
+    result.iconStyleDefinition = copyValue(
+        projection.iconStyleDefinition || {});
+    result.iconStyleProjectionStatus = String(
+        projection.iconStyleProjectionStatus || "unavailable");
+    result.iconStyleProjectionError = String(
+        projection.iconStyleProjectionError || "");
     result.capabilityResolution = copyMap(projection.capabilityResolution);
     result.status = dirty(session) ? "editing" : "loaded";
     result.errorCode = "";

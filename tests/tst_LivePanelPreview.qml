@@ -144,7 +144,7 @@ TestCase {
 
         const states = [
             "pressed", "active", "running", "minimized", "urgent",
-            "drop", "edit"
+            "launching", "drop", "disabled", "edit"
         ]
         preview.hoveredEntry = -1
         for (let index = 0; index < states.length; ++index) {

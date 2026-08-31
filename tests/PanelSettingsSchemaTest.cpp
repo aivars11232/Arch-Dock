@@ -4,6 +4,8 @@
 #include <QSet>
 #include <QTest>
 
+#include <algorithm>
+
 using ArchDock::PanelDefinition;
 using ArchDock::PanelSettingsFieldAccess;
 using ArchDock::PanelSettingsFieldScope;
@@ -94,6 +96,8 @@ void PanelSettingsSchemaTest::editorCandidatesExcludeProtectedAndHiddenState()
         {QStringLiteral("screenId"), QStringLiteral("forged")},
         {QStringLiteral("visible"), true},
         {QStringLiteral("opacity"), 0.75},
+        {QStringLiteral("iconStyle"), QStringLiteral("plain-original")},
+        {QStringLiteral("iconThemeId"), QStringLiteral("forged-theme")},
         {QStringLiteral("glowIntensity"), 1.4},
         {QStringLiteral("physicsEnabled"), true},
         {QStringLiteral("folderLayout"), QStringLiteral("fan")},
@@ -106,6 +110,9 @@ void PanelSettingsSchemaTest::editorCandidatesExcludeProtectedAndHiddenState()
     QVERIFY(editor.contains(QStringLiteral("visible")));
     QVERIFY(editor.contains(QStringLiteral("opacity")));
     QVERIFY(editor.contains(QStringLiteral("glowIntensity")));
+    QCOMPARE(editor.value(QStringLiteral("iconStyle")).toString(),
+             QStringLiteral("plain-original"));
+    QVERIFY(!editor.contains(QStringLiteral("iconThemeId")));
     QVERIFY(!editor.contains(QStringLiteral("id")));
     QVERIFY(!editor.contains(QStringLiteral("builtIn")));
     QVERIFY(!editor.contains(QStringLiteral("nativeOwnershipToken")));
@@ -131,6 +138,8 @@ void PanelSettingsSchemaTest::runtimeProjectionContainsOnlyDeclaredConsumerValue
         {QStringLiteral("visible"), true},
         {QStringLiteral("opacity"), 0.74},
         {QStringLiteral("glowIntensity"), 1.25},
+        {QStringLiteral("iconStyle"), QStringLiteral("plain-original")},
+        {QStringLiteral("iconThemeId"), QStringLiteral("plain-original")},
         {QStringLiteral("themeAsset"), QStringLiteral("file:///managed.png")},
         {QStringLiteral("surface3D"), QVariantMap{{QStringLiteral("depth"), 12}}},
         {QStringLiteral("themeStatus"), QStringLiteral("diagnostic")},
@@ -141,6 +150,9 @@ void PanelSettingsSchemaTest::runtimeProjectionContainsOnlyDeclaredConsumerValue
     QCOMPARE(runtime.value(QStringLiteral("visible")).toBool(), true);
     QCOMPARE(runtime.value(QStringLiteral("opacity")).toReal(), 0.74);
     QCOMPARE(runtime.value(QStringLiteral("glowIntensity")).toReal(), 1.25);
+    QCOMPARE(runtime.value(QStringLiteral("iconStyle")).toString(),
+             QStringLiteral("plain-original"));
+    QVERIFY(!runtime.contains(QStringLiteral("iconThemeId")));
     QCOMPARE(runtime.value(QStringLiteral("themeAsset")).toString(),
              QStringLiteral("file:///managed.png"));
     QVERIFY(!runtime.contains(QStringLiteral("id")));
@@ -220,6 +232,14 @@ void PanelSettingsSchemaTest::panelNormalizationMatchesTheDurableModelContract()
                  QStringLiteral("iconSize"), 999).toInt(),
              128);
     QCOMPARE(PanelSettingsSchema::normalizePanelValue(
+                 QStringLiteral("iconStyle"),
+                 QStringLiteral("not-installed")).toString(),
+             QStringLiteral("plain-original"));
+    QCOMPARE(PanelSettingsSchema::normalizePanelValue(
+                 QStringLiteral("iconStyle"),
+                 QStringLiteral("neon-orange")).toString(),
+             QStringLiteral("neon-orange"));
+    QCOMPARE(PanelSettingsSchema::normalizePanelValue(
                  QStringLiteral("layoutAngle"), -900.0).toReal(),
              -180.0);
     QCOMPARE(PanelSettingsSchema::normalizePanelValue(
@@ -244,6 +264,20 @@ void PanelSettingsSchemaTest::panelNormalizationMatchesTheDurableModelContract()
     QCOMPARE(glow->editor.capability, QStringLiteral("dynamic-glow"));
     QCOMPARE(glow->minimumValue.toReal(), 0.0);
     QCOMPARE(glow->maximumValue.toReal(), 2.0);
+
+    const auto *iconStyle = PanelSettingsSchema::panelDescriptor(
+        QStringLiteral("iconStyle"));
+    QVERIFY(iconStyle);
+    QCOMPARE(iconStyle->access, PanelSettingsFieldAccess::Editor);
+    QCOMPARE(iconStyle->defaultValue.toString(),
+             QStringLiteral("plain-original"));
+    QCOMPARE(iconStyle->editor.control, QStringLiteral("combo"));
+    QVERIFY(iconStyle->editor.consumers.contains(QStringLiteral("studio")));
+    QVERIFY(iconStyle->editor.consumers.contains(QStringLiteral("native")));
+    QVERIFY(PanelSettingsSchema::isTransactionPanelField(
+        QStringLiteral("iconStyle")));
+    QVERIFY(!PanelSettingsSchema::isTransactionPanelField(
+        QStringLiteral("iconThemeId")));
 }
 
 void PanelSettingsSchemaTest::globalNormalizationIsSchemaDrivenAndStrictForChoices()
@@ -296,6 +330,15 @@ void PanelSettingsSchemaTest::consumerProjectionCannotBroadenTransactionAuthorit
     const QVariantList native = PanelSettingsSchema::editorDescriptors(
         PanelSettingsFieldScope::Panel, QStringLiteral("native"));
     QVERIFY(studio.size() > native.size());
+    const auto containsKey = [](const QVariantList &fields, const QString &key)
+    {
+        return std::any_of(fields.cbegin(), fields.cend(), [&key](const QVariant &value)
+        {
+            return value.toMap().value(QStringLiteral("key")).toString() == key;
+        });
+    };
+    QVERIFY(containsKey(studio, QStringLiteral("iconStyle")));
+    QVERIFY(containsKey(native, QStringLiteral("iconStyle")));
 
     for (const QVariantList &projection : {studio, native})
     {

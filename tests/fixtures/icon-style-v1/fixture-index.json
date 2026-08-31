@@ -1,0 +1,39 @@
+{
+  "format": "org.archdock.icon-style-fixture-index",
+  "version": 1,
+  "fixtures": [
+    {
+      "file": "valid-original.json",
+      "valid": true
+    },
+    {
+      "file": "valid-asset.json",
+      "valid": true
+    },
+    {
+      "file": "invalid-absolute-path.json",
+      "valid": false,
+      "diagnostic": "unsafe-path"
+    },
+    {
+      "file": "invalid-traversal.json",
+      "valid": false,
+      "diagnostic": "unsafe-path"
+    },
+    {
+      "file": "invalid-missing-asset.json",
+      "valid": false,
+      "diagnostic": "missing-asset"
+    },
+    {
+      "file": "invalid-state.json",
+      "valid": false,
+      "diagnostic": "invalid-state"
+    },
+    {
+      "file": "invalid-mapped-without-map.json",
+      "valid": false,
+      "diagnostic": "missing-mapping"
+    }
+  ]
+}

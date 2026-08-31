@@ -303,6 +303,13 @@ An optional `iconStyleRef` has a required `id` and an optional safe relative
 `manifest` path. It identifies an icon-style resource; it does not embed an
 icon preset or replace application icons implicitly.
 
+The reference is a recommendation for an editor or future preset workflow. It
+does not select an icon style when the panel theme is loaded, previewed, or
+applied. `PanelDefinition.iconStyle.styleReference` is the independent,
+authoritative selection; its validated package or `plain-original` is rendered
+regardless of the active panel theme. A missing or invalid recommendation is
+reported as metadata and cannot displace the current selection.
+
 `animationProfileRefs` is an array of objects with a required `id`, optional
 safe relative `manifest`, and optional `states` array. Reduced-motion policy is
 always enforced by the host. A theme cannot disable it.

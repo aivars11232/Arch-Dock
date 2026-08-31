@@ -1,0 +1,50 @@
+{
+  "format": "org.archdock.icon-style",
+  "version": 1,
+  "id": "metallic-red",
+  "name": "Metallic Red",
+  "revision": 1,
+  "author": "Arch Dock contributors",
+  "description": "A deep red metallic tile with a warm illuminated bevel around the original application glyph.",
+  "license": {
+    "spdx": "NOASSERTION",
+    "redistribution": "allowed",
+    "evidence": "Original procedural TASK-0029 resource authorized for redistribution as part of Arch Dock"
+  },
+  "glyphPolicy": {"mode": "original", "compatibleOnly": true},
+  "safeGlyphInset": {"left": 0.16, "top": 0.16, "right": 0.16, "bottom": 0.16},
+  "layers": {
+    "rear": [
+      {"id": "red-aura", "kind": "procedural", "shape": "ring", "color": "#9b3040", "secondaryColor": "#ff8190", "opacity": 0.42, "inset": 0.01, "radius": 0.26, "borderColor": "#ff7180", "borderWidth": 0.05}
+    ],
+    "base": [
+      {"id": "red-metal", "kind": "procedural", "shape": "rounded-rect", "color": "#32191d", "secondaryColor": "#7b3038", "opacity": 1, "inset": 0.06, "radius": 0.25, "borderColor": "#ff7180", "borderWidth": 0.025}
+    ],
+    "front": [
+      {"id": "red-bevel", "kind": "procedural", "shape": "ring", "color": "transparent", "secondaryColor": "#ffe1e4", "opacity": 0.82, "inset": 0.075, "radius": 0.25, "borderColor": "#ffc1c8", "borderWidth": 0.026}
+    ],
+    "reflection": {"id": "red-reflection", "kind": "procedural", "shape": "rounded-rect", "color": "#ffe1e4", "opacity": 0.2, "inset": 0.12, "radius": 0.23, "borderColor": "transparent", "borderWidth": 0},
+    "shadow": {"id": "red-shadow", "kind": "procedural", "shape": "rounded-rect", "color": "#0e0507", "opacity": 0.55, "inset": 0.025, "radius": 0.27, "borderColor": "transparent", "borderWidth": 0},
+    "glow": {"id": "red-glow", "kind": "procedural", "shape": "ring", "color": "#ff6070", "opacity": 0.7, "inset": 0, "radius": 0.28, "borderColor": "#ff6070", "borderWidth": 0.045}
+  },
+  "states": [
+    {"id": "normal", "rearOpacity": 0.45, "baseOpacity": 1, "frontOpacity": 0.68, "glyphOpacity": 1, "glyphScale": 0.86, "borderColor": "#ff7180", "glowColor": "#ff6070", "glowOpacity": 0.16, "reflectionOpacity": 0.12, "indicatorColor": "#ff7180", "indicatorOpacity": 0},
+    {"id": "hover", "rearOpacity": 0.9, "baseOpacity": 1, "frontOpacity": 1, "glyphOpacity": 1, "glyphScale": 0.9, "borderColor": "#ffe1e4", "glowColor": "#ff8190", "glowOpacity": 0.62, "reflectionOpacity": 0.24, "indicatorColor": "#ffc1c8", "indicatorOpacity": 0},
+    {"id": "pressed", "rearOpacity": 0.7, "baseOpacity": 0.94, "frontOpacity": 0.86, "glyphOpacity": 0.96, "glyphScale": 0.82, "borderColor": "#ff7180", "glowColor": "#ff6070", "glowOpacity": 0.38, "reflectionOpacity": 0.08, "indicatorColor": "#ff7180", "indicatorOpacity": 0},
+    {"id": "active", "rearOpacity": 1, "baseOpacity": 1, "frontOpacity": 1, "glyphOpacity": 1, "glyphScale": 0.9, "borderColor": "#ffe1e4", "glowColor": "#ff8190", "glowOpacity": 0.78, "reflectionOpacity": 0.26, "indicatorColor": "#ffc1c8", "indicatorOpacity": 1},
+    {"id": "running", "rearOpacity": 0.68, "baseOpacity": 1, "frontOpacity": 0.82, "glyphOpacity": 1, "glyphScale": 0.88, "borderColor": "#ff7180", "glowColor": "#ff6070", "glowOpacity": 0.34, "reflectionOpacity": 0.16, "indicatorColor": "#ff7180", "indicatorOpacity": 0.9},
+    {"id": "minimized", "rearOpacity": 0.28, "baseOpacity": 0.68, "frontOpacity": 0.45, "glyphOpacity": 0.58, "glyphScale": 0.86, "borderColor": "#79464d", "glowColor": "#8c555c", "glowOpacity": 0.08, "reflectionOpacity": 0.04, "indicatorColor": "#a96d74", "indicatorOpacity": 0.52},
+    {"id": "urgent", "rearOpacity": 1, "baseOpacity": 1, "frontOpacity": 1, "glyphOpacity": 1, "glyphScale": 0.92, "borderColor": "#fff0ae", "glowColor": "#ffcc45", "glowOpacity": 0.96, "reflectionOpacity": 0.2, "indicatorColor": "#fff0ae", "indicatorOpacity": 1},
+    {"id": "launching", "rearOpacity": 0.86, "baseOpacity": 0.96, "frontOpacity": 0.88, "glyphOpacity": 0.9, "glyphScale": 0.86, "borderColor": "#ffc1c8", "glowColor": "#ff8190", "glowOpacity": 0.66, "reflectionOpacity": 0.18, "indicatorColor": "#ffc1c8", "indicatorOpacity": 0.62},
+    {"id": "drop", "rearOpacity": 1, "baseOpacity": 1, "frontOpacity": 1, "glyphOpacity": 1, "glyphScale": 0.88, "borderColor": "#64ffba", "glowColor": "#48eaa3", "glowOpacity": 0.88, "reflectionOpacity": 0.18, "indicatorColor": "#64ffba", "indicatorOpacity": 0.72},
+    {"id": "edit", "rearOpacity": 0.72, "baseOpacity": 0.9, "frontOpacity": 1, "glyphOpacity": 0.9, "glyphScale": 0.86, "borderColor": "#ffd76a", "glowColor": "#ffc846", "glowOpacity": 0.44, "reflectionOpacity": 0.12, "indicatorColor": "#ffd76a", "indicatorOpacity": 0.5},
+    {"id": "disabled", "rearOpacity": 0.18, "baseOpacity": 0.42, "frontOpacity": 0.24, "glyphOpacity": 0.34, "glyphScale": 0.86, "borderColor": "#786468", "glowColor": "#786468", "glowOpacity": 0, "reflectionOpacity": 0, "indicatorColor": "#786468", "indicatorOpacity": 0}
+  ],
+  "capabilities": {
+    "rendererTiers": ["procedural2d"],
+    "features": ["tile", "reflection", "shadow", "glow", "safe-glyph-inset", "state-styling"],
+    "animationCapabilities": ["hover-scale", "press-scale", "glow-pulse", "urgent-pulse", "launching-pulse", "indicator-transition"],
+    "supports3D": false
+  },
+  "preview": {"seed": "metallic-red-v1", "iconName": "utilities-terminal", "state": "hover", "tileSize": 64}
+}

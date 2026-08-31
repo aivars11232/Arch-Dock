@@ -1,0 +1,127 @@
+{
+  "format": "org.archdock.icon-style-catalog",
+  "version": 1,
+  "fallbackStyleId": "plain-original",
+  "iconStyles": [
+    {
+      "id": "plain-original",
+      "name": "Plain Original",
+      "description": "Fail-closed fallback that preserves the application's original glyph.",
+      "author": "Arch Dock contributors",
+      "category": "fallback",
+      "packageManifest": "plain-original/archdock-icon-style.json",
+      "capabilities": {
+        "rendererTiers": ["procedural2d"],
+        "features": ["safe-glyph-inset", "state-styling"],
+        "animationCapabilities": [],
+        "supports3D": false
+      },
+      "preview": {
+        "seed": "plain-original-v1",
+        "iconName": "applications-system",
+        "state": "running",
+        "tileSize": 64
+      }
+    },
+    {
+      "id": "metallic-blue",
+      "name": "Metallic Blue",
+      "description": "A cool metallic tile with a cyan rim around the original application glyph.",
+      "author": "Arch Dock contributors",
+      "category": "metallic",
+      "packageManifest": "metallic-blue/archdock-icon-style.json",
+      "capabilities": {
+        "rendererTiers": ["procedural2d"],
+        "features": ["tile", "reflection", "shadow", "glow", "safe-glyph-inset", "state-styling"],
+        "animationCapabilities": ["hover-scale", "press-scale", "glow-pulse", "urgent-pulse", "launching-pulse", "indicator-transition"],
+        "supports3D": false
+      },
+      "preview": {
+        "seed": "metallic-blue-v1",
+        "iconName": "applications-internet",
+        "state": "active",
+        "tileSize": 64
+      }
+    },
+    {
+      "id": "metallic-red",
+      "name": "Metallic Red",
+      "description": "A deep red metallic tile with a warm illuminated bevel around the original application glyph.",
+      "author": "Arch Dock contributors",
+      "category": "metallic",
+      "packageManifest": "metallic-red/archdock-icon-style.json",
+      "capabilities": {
+        "rendererTiers": ["procedural2d"],
+        "features": ["tile", "reflection", "shadow", "glow", "safe-glyph-inset", "state-styling"],
+        "animationCapabilities": ["hover-scale", "press-scale", "glow-pulse", "urgent-pulse", "launching-pulse", "indicator-transition"],
+        "supports3D": false
+      },
+      "preview": {
+        "seed": "metallic-red-v1",
+        "iconName": "utilities-terminal",
+        "state": "hover",
+        "tileSize": 64
+      }
+    },
+    {
+      "id": "neon-green",
+      "name": "Neon Green",
+      "description": "A dark diamond tile with a clean green neon frame around the original application glyph.",
+      "author": "Arch Dock contributors",
+      "category": "neon",
+      "packageManifest": "neon-green/archdock-icon-style.json",
+      "capabilities": {
+        "rendererTiers": ["procedural2d"],
+        "features": ["tile", "shadow", "glow", "safe-glyph-inset", "state-styling"],
+        "animationCapabilities": ["hover-scale", "press-scale", "glow-pulse", "urgent-pulse", "launching-pulse", "indicator-transition"],
+        "supports3D": false
+      },
+      "preview": {
+        "seed": "neon-green-v1",
+        "iconName": "system-file-manager",
+        "state": "running",
+        "tileSize": 64
+      }
+    },
+    {
+      "id": "neon-orange",
+      "name": "Neon Orange",
+      "description": "A dark diamond tile with a vivid orange neon frame around the original application glyph.",
+      "author": "Arch Dock contributors",
+      "category": "neon",
+      "packageManifest": "neon-orange/archdock-icon-style.json",
+      "capabilities": {
+        "rendererTiers": ["procedural2d"],
+        "features": ["tile", "shadow", "glow", "safe-glyph-inset", "state-styling"],
+        "animationCapabilities": ["hover-scale", "press-scale", "glow-pulse", "urgent-pulse", "launching-pulse", "indicator-transition"],
+        "supports3D": false
+      },
+      "preview": {
+        "seed": "neon-orange-v1",
+        "iconName": "applications-graphics",
+        "state": "hover",
+        "tileSize": 64
+      }
+    },
+    {
+      "id": "dark-orb",
+      "name": "Dark Orb",
+      "description": "A dark glass orb on a compact pedestal with a violet energy ring around the original application glyph.",
+      "author": "Arch Dock contributors",
+      "category": "orb",
+      "packageManifest": "dark-orb/archdock-icon-style.json",
+      "capabilities": {
+        "rendererTiers": ["procedural2d"],
+        "features": ["tile", "reflection", "shadow", "glow", "safe-glyph-inset", "state-styling"],
+        "animationCapabilities": ["hover-scale", "press-scale", "glow-pulse", "urgent-pulse", "launching-pulse", "indicator-transition"],
+        "supports3D": false
+      },
+      "preview": {
+        "seed": "dark-orb-v1",
+        "iconName": "preferences-system",
+        "state": "active",
+        "tileSize": 64
+      }
+    }
+  ]
+}

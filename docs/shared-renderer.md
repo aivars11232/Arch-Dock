@@ -165,13 +165,28 @@ semantics are introduced.
 
 The staged-install gate runs module import, preview, and deterministic parity
 tests against installed files, then starts the staged service/Studio and real
-native/free applet hosts in a disposable private KWin/Plasma session. The live
-skin smoke selects the same installed `energy-frame-cyan` catalog entry for
-both isolated panel records through the atomic settings transaction. It
-requires both renderer configurations to report `skinned2d`, a ready
-projection, `dynamic-glow`, and the exact staged manifest path. The
-staged-install gate also requires all three chassis packages and all four
+native/free applet hosts in a disposable private KWin/Plasma session. Before
+the service starts, an exact `PanelSkin2D` test runs against the staged QML
+module on the private Wayland scenegraph. It captures normal, hover, open,
+collapsed, animated, and reduced-motion cyan pixels; requires visible tinted
+effect pixels to remain inset from the item boundary; proves reduced-motion
+frames remain static; and checks center, corner, and out-of-bounds item-level
+containment. This is isolated runtime evidence, not personal-desktop or
+compositor-wide click-through acceptance.
+
+The live host smoke then selects `energy-frame-green`,
+`energy-frame-orange`, `energy-frame-purple`, and finally
+`energy-frame-cyan` for both isolated panel records through atomic settings
+transactions. For every variant, both renderer configurations must report
+`skinned2d`, a ready projection, `dynamic-glow`, the exact package ID, and its
+exact staged manifest path; the service and Plasma shell must remain alive and
+free of relevant QML import errors. Finishing on cyan restores the deterministic
+default used by later checks.
+
+The staged-install gate also requires all three chassis packages and all four
 energy packages, and rejects any installed source-sample or `Screenshot_*`
-file. The parity harness feeds the same deterministic
-definitions to preview and direct `PanelScene` instances and compares geometry
-contracts plus safe procedural surface pixels.
+file. The parity harness feeds the same deterministic definitions to preview
+and direct `PanelScene` instances. It compares geometry contracts and safe
+procedural pixels for the baseline renderer, then compares direct-versus-preview
+energy state, layer order, glow, reduced-motion, input containment, and surface
+pixels for normal, hover, open, and collapsed states.

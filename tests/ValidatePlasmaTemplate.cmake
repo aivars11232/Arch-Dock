@@ -41,6 +41,12 @@ file(READ
   "${SOURCE_DIR}/plasma-dock-widget/contents/ui/DockEntry.qml"
   dock_entry)
 file(READ
+  "${SOURCE_DIR}/qml/runtime/IconProperties.qml"
+  icon_properties_editor)
+file(READ
+  "${SOURCE_DIR}/src/DockModel.h"
+  dock_model_header)
+file(READ
   "${SOURCE_DIR}/plasma-dock-widget/contents/ui/configLayout.qml"
   dock_layout_page)
 file(READ
@@ -87,6 +93,8 @@ foreach(required_runtime_contract
     "reorder: root.reorderEntry"
     "pinUrls: root.pinDroppedUrls"
     "openPanelStudio: root.openPanelStudio"
+    "openIconProperties: root.openIconProperties"
+    "showIconProperties"
     "PlasmaCore.Types.NoBackground")
   string(FIND
     "${dock_main}"
@@ -95,6 +103,54 @@ foreach(required_runtime_contract
   if(main_runtime_contract_position EQUAL -1)
     message(FATAL_ERROR
       "The dock runtime is missing ${required_runtime_contract}.")
+  endif()
+endforeach()
+
+foreach(required_icon_properties_contract
+    "Icon Properties…"
+    "iconPropertiesSupported"
+    "contextInteractionAllowed"
+    "requestIconProperties"
+    "contextMenu.close()")
+  string(FIND
+    "${dock_entry}"
+    "${required_icon_properties_contract}"
+    icon_properties_contract_position)
+  if(icon_properties_contract_position EQUAL -1)
+    message(FATAL_ERROR
+      "DockEntry is missing Icon Properties contract ${required_icon_properties_contract}.")
+  endif()
+endforeach()
+
+foreach(required_editor_transaction_contract
+    "applyIconOverrideTransaction"
+    "resetIconOverrideTransaction"
+    "applyDraft"
+    "cancelDraft"
+    "resetOverride"
+    "entryIdentity"
+    "revision")
+  string(FIND
+    "${icon_properties_editor}"
+    "${required_editor_transaction_contract}"
+    editor_transaction_contract_position)
+  if(editor_transaction_contract_position EQUAL -1)
+    message(FATAL_ERROR
+      "Icon Properties is missing transaction contract ${required_editor_transaction_contract}.")
+  endif()
+endforeach()
+
+foreach(forbidden_legacy_icon_write
+    "setCustomIcon"
+    "clearCustomIcon"
+    "targetRow")
+  string(FIND
+    "${icon_properties_editor}${dock_model_header}"
+    "${forbidden_legacy_icon_write}"
+    legacy_icon_write_position)
+  if(NOT legacy_icon_write_position EQUAL -1)
+    message(FATAL_ERROR
+      "The legacy row-based icon write remains: ${forbidden_legacy_icon_write}.")
   endif()
 endforeach()
 

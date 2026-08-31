@@ -22,8 +22,11 @@ public:
     enum Role
     {
         AppIdRole = Qt::UserRole + 1,
+        StableIdentityRole,
         DesktopFileNameRole,
+        BaseIconNameRole,
         IconNameRole,
+        BaseDisplayNameRole,
         DisplayNameRole,
         PinnedRole,
         RunningRole,
@@ -53,8 +56,6 @@ public:
     Q_INVOKABLE void pin(int row);
     Q_INVOKABLE void unpin(int row);
     Q_INVOKABLE void move(int from, int to);
-    Q_INVOKABLE void setCustomIcon(int row, const QString &iconName);
-    Q_INVOKABLE void clearCustomIcon(int row);
     Q_INVOKABLE bool pinUrl(const QUrl &url);
     [[nodiscard]] QString applicationIdForUrl(const QUrl &url) const;
     [[nodiscard]] QUrl urlForApplicationId(const QString &appId) const;
@@ -122,6 +123,6 @@ private:
     QList<PinnedApplication> m_pinnedApplications;
     QList<DockApplication> m_items;
     QStringList m_order;
-    QHash<QString, QString> m_customIcons;
+    QHash<QString, QString> m_legacyCustomIcons;
     QHash<QString, int> m_nextWindowByApplication;
 };

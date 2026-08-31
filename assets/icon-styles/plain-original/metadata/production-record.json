@@ -1,0 +1,29 @@
+{
+  "format": "org.archdock.production-record",
+  "version": 1,
+  "iconStyleId": "plain-original",
+  "task": "TASK-0029",
+  "method": "asset-free-schema-authored-package",
+  "sourceDerivative": false,
+  "pixelInput": false,
+  "recipe": "docs/ICON_STYLE_PACKAGE.md",
+  "authorizationEvidence": "APPROVED: IMPLEMENT TASK-0029 EXACTLY AS PLANNED.",
+  "outputs": [
+    {
+      "path": "archdock-icon-style.json",
+      "sha256": "1651b68b6afef88140698d5aa51f10db7bfcffd1fbab115650309af31c7dfb59"
+    }
+  ],
+  "parameters": {
+    "glyphPolicy": "original",
+    "externalAssets": 0,
+    "rendererTiers": ["procedural2d"],
+    "requiredStates": 11,
+    "fallback": true
+  },
+  "license": {
+    "spdx": "NOASSERTION",
+    "redistribution": "allowed",
+    "evidence": "User approved creation and redistribution of original TASK-0029 package resources as part of Arch Dock; no public license was selected"
+  }
+}

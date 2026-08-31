@@ -31,6 +31,11 @@ Item {
     required property var pinUrls
     required property var setHoveredIndex
     required property var openPanelStudio
+    required property var openIconProperties
+    property var iconStyleDefinition: ({})
+    property var iconOverrideResolution:
+        entry && entry.iconOverrideResolution
+        ? entry.iconOverrideResolution : ({})
 
     readonly property int indexDistance: hoveredIndex < 0 ? 99 : Math.abs(hoveredIndex - entryIndex)
     readonly property real influence: !magnificationEnabled || hoveredIndex < 0
@@ -59,6 +64,27 @@ Item {
         height: baseSize
     })
     readonly property string iconVisualState: visual.visualState
+    readonly property string resolvedIconStyleId:
+        visual.resolvedIconStyle.styleId || "plain-original"
+    readonly property string resolvedIconSource: visual.resolvedIconSource
+    readonly property bool tileRenderingEnabled: visual.tileRenderingEnabled
+    readonly property bool iconPropertiesSupported: Boolean(
+        entry && entry.iconPropertiesSupported === true
+        && String(entry.stableIdentity || "").length > 0)
+    readonly property bool contextInteractionAllowed: inputEnabled
+        && !editMode && !dragging
+    readonly property bool contextMenuVisible: contextMenu.visible
+    readonly property bool iconPropertiesActionVisible:
+        iconPropertiesSupported
+    readonly property var sceneEntry: {
+        const result = ({})
+        const source = root.entry || ({})
+        const keys = Object.keys(source)
+        for (let index = 0; index < keys.length; ++index)
+            result[keys[index]] = source[keys[index]]
+        result.iconOverrideResolution = root.iconOverrideResolution || ({})
+        return result
+    }
 
     function resetMotionLayer() {
         motionLayer.x = 0;
@@ -67,8 +93,25 @@ Item {
         motionLayer.rotation = 0;
     }
 
+    function openEntryContextMenu() {
+        if (!contextInteractionAllowed)
+            return false
+        contextMenu.open()
+        return true
+    }
+
+    function requestIconProperties() {
+        if (!contextInteractionAllowed || !iconPropertiesSupported)
+            return false
+        contextMenu.close()
+        openIconProperties(entry)
+        return true
+    }
+
     onMotionChanged: resetMotionLayer()
     onMotionActiveChanged: if (!motionActive) resetMotionLayer()
+    onEditModeChanged: if (editMode) contextMenu.close()
+    onDraggingChanged: if (dragging) contextMenu.close()
     onInputEnabledChanged: {
         if (!inputEnabled) {
             dragging = false;
@@ -106,7 +149,8 @@ Item {
                 id: visual
 
                 anchors.fill: parent
-                entry: root.entry
+                entry: root.sceneEntry
+                iconStyleDefinition: root.iconStyleDefinition
                 logicalSize: root.baseSize
                 tileShape: root.tileShape
                 appearance: root.appearance
@@ -117,6 +161,8 @@ Item {
                 running: Boolean(root.entry.running)
                 minimized: Boolean(root.entry.minimized)
                 urgent: Boolean(root.entry.attention || root.entry.urgent)
+                launching: Boolean(root.entry.launching)
+                disabled: Boolean(root.entry.disabled)
                 dropTarget: root.dragging || entryDropArea.containsDrag
                 editMode: root.editMode
                 windowCount: Math.max(1, root.entry.windowCount || 1)
@@ -235,6 +281,8 @@ Item {
 
     MouseArea {
         id: hoverArea
+
+        objectName: "dockEntryPointerTarget"
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         hoverEnabled: true
@@ -251,7 +299,7 @@ Item {
                 return;
             root.fireTrigger();
             if (mouse.button === Qt.RightButton)
-                contextMenu.open();
+                root.openEntryContextMenu();
             else
                 root.invoke("activateDockEntry", root.entry.appId);
         }
@@ -312,6 +360,19 @@ Item {
             onTriggered: root.openPanelStudio()
         }
         QQC2.MenuSeparator {}
+        QQC2.MenuItem {
+            id: iconPropertiesAction
+
+            objectName: "iconPropertiesAction"
+            text: qsTr("Icon Properties…")
+            icon.name: "document-properties"
+            visible: root.iconPropertiesSupported
+            enabled: root.contextInteractionAllowed
+            onTriggered: root.requestIconProperties()
+        }
+        QQC2.MenuSeparator {
+            visible: root.iconPropertiesSupported
+        }
         QQC2.MenuItem {
             text: entry.pinned ? qsTr("Unpin") : qsTr("Pin")
             onTriggered: root.invoke("togglePinnedDockEntry", entry.appId)

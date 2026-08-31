@@ -1,8 +1,10 @@
 #include "PanelRegistry.h"
 #include "DockSettings.h"
 #include "model/PanelDefinition.h"
+#include "model/IconEntryIdentity.h"
 #include "model/PanelSettingsSchema.h"
 #include "model/SettingsMigration.h"
+#include "panel/IconOverrideTransaction.h"
 #include "themes/ThemeAssetProcessor.h"
 #include "themes/ThemePackage.h"
 
@@ -75,6 +77,36 @@ QVariantList builtInThemes()
         return catalog.value(QStringLiteral("themes")).toArray().toVariantList();
     }();
     return themes;
+}
+
+ArchDock::IconStyleStoreLoadResult builtInIconStyles()
+{
+    const QString installedCatalog = QStandardPaths::locate(
+        QStandardPaths::GenericDataLocation,
+        QStringLiteral("arch-dock/icon-styles/builtin-icon-styles.json"),
+        QStandardPaths::LocateFile);
+    if (!installedCatalog.isEmpty())
+    {
+        return ArchDock::IconStyleStore::loadCatalog(
+            installedCatalog, QFileInfo(installedCatalog).absolutePath());
+    }
+#if defined(ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH) && \
+    defined(ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT)
+    const QString sourceCatalog = QString::fromUtf8(
+        ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH);
+    const QString sourcePackages = QString::fromUtf8(
+        ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT);
+    if (QFileInfo(sourceCatalog).isFile() && QFileInfo(sourcePackages).isDir())
+    {
+        return ArchDock::IconStyleStore::loadCatalog(
+            sourceCatalog, sourcePackages);
+    }
+#endif
+    return {
+        {},
+        {{QStringLiteral("missing-asset"), QString{}, QStringLiteral("error"),
+          QStringLiteral("built-in icon-style catalog is unavailable")}},
+    };
 }
 
 bool normalizedCatalogPackageManifest(const QVariantMap &theme,
@@ -636,6 +668,19 @@ PanelRegistry::PanelRegistry(const QVariantList &themeDefinitions,
     : QObject(parent),
       m_themeDefinitions(validatedThemeDefinitions(themeDefinitions))
 {
+    ArchDock::IconStyleStoreLoadResult iconStyles = builtInIconStyles();
+    if (iconStyles.isValid())
+    {
+        m_iconStyleStore = std::move(iconStyles.store);
+    }
+    else
+    {
+        m_iconStyleStoreError = iconStyles.primaryCode().isEmpty()
+            ? QStringLiteral("icon-style-store-unavailable")
+            : iconStyles.primaryCode();
+        qWarning().noquote() << "Icon-style catalog rejected:"
+                             << m_iconStyleStoreError;
+    }
     load();
 }
 
@@ -1090,11 +1135,24 @@ bool PanelRegistry::persistPanelSettingsTransaction(
     const ArchDock::PanelSettingsTransactionDraft &draft,
     QString *errorMessage)
 {
+    return persistPanelDefinitionTransaction(
+        draft.previousPanel,
+        draft.candidatePanel,
+        draft.candidateGlobals,
+        errorMessage);
+}
+
+bool PanelRegistry::persistPanelDefinitionTransaction(
+    const ArchDock::PanelDefinition &previousPanel,
+    const ArchDock::PanelDefinition &candidatePanel,
+    const QVariantMap &globalSettings,
+    QString *errorMessage)
+{
     qsizetype panelIndex = -1;
     for (qsizetype index = 0; index < m_panels.size(); ++index)
     {
         if (m_panels.at(index).value(QStringLiteral("id")).toString() ==
-            draft.previousPanel.identity.id)
+            previousPanel.identity.id)
         {
             panelIndex = index;
             break;
@@ -1112,7 +1170,7 @@ bool PanelRegistry::persistPanelSettingsTransaction(
     QString currentError;
     const std::optional<ArchDock::PanelDefinition> current =
         ArchDock::PanelDefinition::fromLegacyMap(m_panels.at(panelIndex), &currentError);
-    if (!current.has_value() || *current != draft.previousPanel)
+    if (!current.has_value() || *current != previousPanel)
     {
         if (errorMessage)
         {
@@ -1122,9 +1180,10 @@ bool PanelRegistry::persistPanelSettingsTransaction(
         }
         return false;
     }
-    if (draft.candidatePanel.settingsRevision !=
-            draft.previousPanel.settingsRevision + 1 ||
-        draft.candidatePanel.identity.id != draft.previousPanel.identity.id)
+    if (candidatePanel.settingsRevision !=
+            previousPanel.settingsRevision + 1 ||
+        candidatePanel.identity.id != previousPanel.identity.id ||
+        candidatePanel.identity.builtIn != previousPanel.identity.builtIn)
     {
         if (errorMessage)
         {
@@ -1134,8 +1193,8 @@ bool PanelRegistry::persistPanelSettingsTransaction(
     }
 
     QList<QVariantMap> stagedPanels = m_panels;
-    stagedPanels[panelIndex] = draft.candidatePanel.toLegacyMap();
-    if (!persistPanelState(stagedPanels, draft.candidateGlobals, errorMessage))
+    stagedPanels[panelIndex] = candidatePanel.toLegacyMap();
+    if (!persistPanelState(stagedPanels, globalSettings, errorMessage))
     {
         return false;
     }
@@ -1726,6 +1785,84 @@ QVariantList PanelRegistry::themeDefinitions() const
     return m_themeDefinitions;
 }
 
+QVariantList PanelRegistry::iconStyleDefinitions() const
+{
+    return m_iconStyleStore.has_value()
+        ? m_iconStyleStore->catalogEntries() : QVariantList{};
+}
+
+QVariantMap PanelRegistry::iconStyleDefinition(const QString &styleId) const
+{
+    if (!m_iconStyleStore.has_value())
+    {
+        return {
+            {QStringLiteral("diagnostics"), QVariantList{}},
+            {QStringLiteral("errorCode"), m_iconStyleStoreError},
+            {QStringLiteral("loadable"), false},
+            {QStringLiteral("requestedStyleId"), styleId.trimmed()},
+            {QStringLiteral("selectionStatus"), QStringLiteral("invalid")},
+            {QStringLiteral("valid"), false},
+        };
+    }
+    return m_iconStyleStore->resolve(styleId);
+}
+
+QVariantMap PanelRegistry::resolveIconEntryOverride(
+    const ArchDock::PanelDefinition &definition,
+    const QVariantMap &entry) const
+{
+    return ArchDock::IconOverrideTransaction::resolve(
+        definition,
+        ArchDock::IconEntryIdentity::forEntry(entry),
+        entry.value(
+            QStringLiteral("baseIconName"),
+            entry.value(QStringLiteral("iconName"))).toString(),
+        entry.value(
+            QStringLiteral("baseDisplayName"),
+            entry.value(QStringLiteral("displayName"))).toString(),
+        [this](const QString &styleReference)
+        {
+            return m_iconStyleStore.has_value()
+                ? m_iconStyleStore->resolve(styleReference)
+                : QVariantMap{
+                    {QStringLiteral("errorCode"), m_iconStyleStoreError},
+                    {QStringLiteral("loadable"), false},
+                    {QStringLiteral("valid"), false},
+                };
+        });
+}
+
+std::optional<QVariantMap> PanelRegistry::iconStyleRuntimeProjection(
+    const ArchDock::PanelDefinition &definition,
+    QString *errorCode) const
+{
+    if (!m_iconStyleStore.has_value())
+    {
+        if (errorCode)
+        {
+            *errorCode = m_iconStyleStoreError.isEmpty()
+                ? QStringLiteral("icon-style-store-unavailable")
+                : m_iconStyleStoreError;
+        }
+        return std::nullopt;
+    }
+    QVariantMap projection = m_iconStyleStore->resolve(
+        definition.iconStyle.styleReference);
+    if (!projection.value(QStringLiteral("valid")).toBool())
+    {
+        if (errorCode)
+        {
+            *errorCode = QStringLiteral("icon-style-fallback-unavailable");
+        }
+        return std::nullopt;
+    }
+    if (errorCode)
+    {
+        errorCode->clear();
+    }
+    return projection;
+}
+
 QVariantMap PanelRegistry::themeCandidate(const QString &panelId,
                                           const QString &themeId,
                                           const QString &layer) const
@@ -1788,7 +1925,6 @@ QVariantMap PanelRegistry::themeCandidate(const QString &panelId,
         if (normalizedLayer == QStringLiteral("icon") || normalizedLayer == QStringLiteral("complete"))
         {
             mergeStyle(theme.value(QStringLiteral("iconStyle")).toMap());
-            changes.insert(QStringLiteral("iconThemeId"), themeId);
         }
         if (normalizedLayer == QStringLiteral("complete"))
         {
@@ -1881,6 +2017,9 @@ QVariantMap PanelRegistry::themeCandidate(const QString &panelId,
             {QStringLiteral("errorCode"), QString{}},
             {QStringLiteral("panelId"), panelId},
             {QStringLiteral("themeId"), themeId},
+            {QStringLiteral("recommendedIconStyleId"),
+             theme.value(QStringLiteral("iconStyleRef"))
+                 .toMap().value(QStringLiteral("id"))},
             {QStringLiteral("layer"), normalizedLayer},
             {QStringLiteral("values"), normalizedChanges},
             {QStringLiteral("capabilityResolution"), resolution.toVariantMap()},

@@ -1,0 +1,28 @@
+{
+  "format": "org.archdock.production-record",
+  "version": 1,
+  "iconStyleId": "metallic-blue",
+  "task": "TASK-0029",
+  "method": "deterministic-hand-authored-procedural-qml",
+  "sourceDerivative": false,
+  "pixelInput": false,
+  "aiGenerated": false,
+  "recipe": "assets/source-samples/icon-styles/original-artwork-recipe.json",
+  "authorizationEvidence": "APPROVED: IMPLEMENT TASK-0029 EXACTLY AS PLANNED.",
+  "outputs": [
+    {"path": "archdock-icon-style.json", "sha256": "c1c004d0cfb4e6a229010e8db180f38207c550a87d4b8495a6576e00f889035a"}
+  ],
+  "parameters": {
+    "family": "metallic",
+    "glyphPolicy": "original",
+    "externalAssets": 0,
+    "proceduralLayers": 6,
+    "requiredStates": 11,
+    "rendererTiers": ["procedural2d"]
+  },
+  "license": {
+    "spdx": "NOASSERTION",
+    "redistribution": "allowed",
+    "evidence": "User approved creation and redistribution of original TASK-0029 resources as part of Arch Dock; no public license was selected"
+  }
+}
