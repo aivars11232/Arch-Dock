@@ -266,6 +266,7 @@ if(BUILD_TESTING)
   target_link_libraries(
     icon-style-package-test
     PRIVATE Qt6::Core
+            Qt6::Gui
             Qt6::Test)
   add_test(NAME icon-style-package-test COMMAND icon-style-package-test)
 
@@ -284,6 +285,7 @@ if(BUILD_TESTING)
   target_link_libraries(
     icon-style-asset-test
     PRIVATE Qt6::Core
+            Qt6::Gui
             Qt6::Test)
   add_test(NAME icon-style-asset-test COMMAND icon-style-asset-test)
 

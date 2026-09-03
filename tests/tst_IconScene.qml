@@ -130,6 +130,148 @@ TestCase {
         compare(scene.visualLayerItem.scale, 1.75)
     }
 
+    function styleWith(overrides) {
+        const definition = {
+            format: "org.archdock.icon-style",
+            version: 1,
+            id: "treatment-style",
+            valid: true,
+            loadable: true,
+            glyphPolicy: { mode: "original", compatibleOnly: true },
+            layers: { rear: [], base: [], front: [] },
+            assetPaths: ({}),
+            states: [{ id: "normal", glyphOpacity: 1, glyphScale: 1 }]
+        }
+        const additions = overrides || ({})
+        for (const key of Object.keys(additions))
+            definition[key] = additions[key]
+        return definition
+    }
+
+    function test_plainFallbackAppliesPerStateGlyphStyling() {
+        // Without a style the glyph still has to read as disabled/minimized.
+        const disabledScene = createScene({ disabled: true })
+        compare(disabledScene.styleGlyphTreatmentActive, false)
+        compare(disabledScene.visualState, "disabled")
+        compare(disabledScene.glyphItem.opacity, 0.4)
+
+        const minimizedScene = createScene({ minimized: true })
+        compare(minimizedScene.visualState, "minimized")
+        compare(minimizedScene.glyphItem.opacity, 0.68)
+
+        const normalScene = createScene()
+        compare(normalScene.glyphItem.opacity, 1)
+    }
+
+    function test_tintIsNotAppliedToIncompatibleGlyph() {
+        // A colorful application icon must never be silently recolored.
+        const scene = createScene({
+            iconStyleDefinition: styleWith({
+                glyphPolicy: {
+                    mode: "tinted", tint: "#ff0000", compatibleOnly: true
+                }
+            })
+        })
+
+        compare(scene.resolvedIconStyle.glyphPolicy, "tinted")
+        compare(scene.glyphTreatment, "original")
+        compare(scene.resolvedIconStyle.glyphTreatmentReason,
+                "glyph-not-compatible")
+        compare(scene.glyphIsMask, false)
+        compare(scene.glyphItem.layer.enabled, false)
+        compare(scene.resolvedIconSource, "application-x-executable")
+    }
+
+    function test_tintAppliesOnlyToACompatibleGlyph() {
+        const scene = createScene({
+            entry: {
+                appId: "org.example.app",
+                iconName: "example-symbolic"
+            },
+            iconStyleDefinition: styleWith({
+                glyphPolicy: {
+                    mode: "tinted", tint: "#ff0000", compatibleOnly: true
+                }
+            })
+        })
+
+        compare(scene.resolvedIconStyle.glyphCompatible, true)
+        compare(scene.glyphTreatment, "tinted")
+        compare(scene.glyphTint, "#ff0000")
+        compare(scene.glyphItem.layer.enabled, true)
+    }
+
+    function test_monochromeUsesTheNativeMaskPath() {
+        const scene = createScene({
+            entry: {
+                appId: "org.example.app",
+                iconName: "application-x-executable",
+                glyphCompatible: true
+            },
+            iconStyleDefinition: styleWith({
+                glyphPolicy: {
+                    mode: "monochrome", tint: "#00ff00", compatibleOnly: true
+                }
+            })
+        })
+
+        compare(scene.glyphTreatment, "monochrome")
+        compare(scene.glyphIsMask, true)
+        compare(scene.glyphItem.isMask, true)
+        compare(scene.glyphItem.color.toString(), "#00ff00")
+        // Monochrome uses Kirigami's own mask path, not a MultiEffect.
+        compare(scene.glyphItem.layer.enabled, false)
+    }
+
+    function test_mappedReplacementRequiresAnApplicationMapping() {
+        const scene = createScene({
+            iconStyleDefinition: styleWith({
+                glyphPolicy: { mode: "mapped-replacement" },
+                mappedReplacements: ({ "org.other.app": "other.svg" }),
+                assetPaths: ({ "other.svg": "file:///tmp/other.svg" })
+            })
+        })
+
+        compare(scene.glyphTreatment, "original")
+        compare(scene.resolvedIconStyle.replacementApplied, false)
+        compare(scene.resolvedIconStyle.glyphTreatmentReason,
+                "no-application-mapping")
+        compare(scene.resolvedIconSource, "application-x-executable")
+    }
+
+    function test_failedStyleAssetCollapsesToTheSafeOriginalGlyph() {
+        const scene = createScene({
+            iconStyleDefinition: styleWith({
+                glyphPolicy: {
+                    mode: "monochrome", tint: "#00ff00", compatibleOnly: false
+                },
+                layers: {
+                    rear: [],
+                    base: [{
+                        id: "broken-base",
+                        kind: "asset",
+                        asset: "missing.png",
+                        opacity: 1
+                    }],
+                    front: []
+                },
+                assetPaths: ({
+                    "missing.png":
+                        "file:///nonexistent/archdock-missing-asset.png"
+                })
+            })
+        })
+
+        tryVerify(function() { return scene.styleAssetsFailed }, 3000)
+        // The whole treatment collapses, not just the failed layer.
+        compare(scene.styledLayersActive, false)
+        compare(scene.styleGlyphTreatmentActive, false)
+        compare(scene.glyphTreatment, "original")
+        compare(scene.glyphIsMask, false)
+        compare(scene.glyphItem.isMask, false)
+        compare(scene.resolvedIconSource, "application-x-executable")
+    }
+
     function test_indicatorStyleAndStateAreSharedInputs() {
         const scene = createScene({
             vertical: true,

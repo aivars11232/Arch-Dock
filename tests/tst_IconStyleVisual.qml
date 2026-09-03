@@ -242,6 +242,123 @@ TestCase {
         }
     }
 
+    function styleWithPolicy(styleId, policy, extras) {
+        const style = loadStyle(styleId)
+        style.glyphPolicy = policy
+        const additions = extras || ({})
+        for (const key of Object.keys(additions))
+            style[key] = additions[key]
+        return style
+    }
+
+    function sceneWithStyle(style, properties) {
+        const values = { iconStyleDefinition: style }
+        const additions = properties || ({})
+        for (const key of Object.keys(additions))
+            values[key] = additions[key]
+        const scene = createTemporaryObject(
+            iconSceneComponent, testCase, values)
+        verify(scene !== null)
+        wait(0)
+        return scene
+    }
+
+    function test_shippedFamiliesNeverRecolorTheApplicationGlyph() {
+        // Identity preservation is the default across every shipped family
+        // and every declared state, not just the normal state.
+        for (let styleIndex = 0; styleIndex < styleIds.length; ++styleIndex) {
+            const scene = createScene(styleIds[styleIndex])
+            for (let index = 0; index < stateIds.length; ++index) {
+                applyState(scene, stateIds[index])
+                const label = styleIds[styleIndex] + ":" + stateIds[index]
+                compare(scene.glyphTreatment, "original", label)
+                compare(scene.glyphIsMask, false, label)
+                compare(scene.glyphItem.isMask, false, label)
+                compare(scene.glyphItem.layer.enabled, false, label)
+                compare(scene.resolvedIconSource, "applications-internet",
+                        label)
+            }
+        }
+    }
+
+    function test_declaredTintAndMonochromeTreatmentsActuallyRender() {
+        // A tint declared for an incompatible glyph must not be applied.
+        const guarded = sceneWithStyle(styleWithPolicy("metallic-blue", {
+            mode: "tinted", tint: "#3355ff", compatibleOnly: true
+        }))
+        compare(guarded.resolvedIconStyle.glyphPolicy, "tinted")
+        compare(guarded.glyphTreatment, "original")
+        compare(guarded.glyphItem.layer.enabled, false)
+
+        // Declared compatible: the tint is genuinely applied.
+        const tinted = sceneWithStyle(styleWithPolicy("metallic-blue", {
+            mode: "tinted", tint: "#3355ff", compatibleOnly: false
+        }))
+        compare(tinted.glyphTreatment, "tinted")
+        compare(tinted.glyphTint, "#3355ff")
+        compare(tinted.glyphItem.layer.enabled, true)
+
+        // Monochrome uses Kirigami's native mask path.
+        const mono = sceneWithStyle(styleWithPolicy("dark-orb", {
+            mode: "monochrome", tint: "#22ddaa", compatibleOnly: false
+        }))
+        compare(mono.glyphTreatment, "monochrome")
+        compare(mono.glyphIsMask, true)
+        compare(mono.glyphItem.isMask, true)
+        compare(mono.glyphItem.color.toString(), "#22ddaa")
+        compare(mono.glyphItem.layer.enabled, false)
+
+        wait(20)
+        const image = grabImage(mono)
+        verify(image.alpha(48, 48) > 0, "monochrome glyph did not render")
+    }
+
+    function test_declaredMaskShapesTheTileComposite() {
+        const maskUrl = Qt.resolvedUrl(
+            "fixtures/icon-style-v1/assets/base.svg")
+        const style = styleWithPolicy("metallic-blue",
+                                      { mode: "original", compatibleOnly: true },
+                                      { assetPaths: ({ "mask.svg": maskUrl }) })
+        style.layers.mask = { id: "tile-mask", kind: "asset",
+                              asset: "mask.svg", opacity: 1 }
+
+        const scene = sceneWithStyle(style)
+        verify(scene.styleMaskLayer !== null)
+        compare(scene.styleMaskActive, true)
+        tryVerify(function() {
+            return scene.baseLayerItem.layer.enabled
+        }, 3000, "declared mask did not shape the tile composite")
+
+        // The mask shapes the tile only; the glyph keeps its own identity.
+        compare(scene.styleAssetsFailed, false)
+        compare(scene.glyphTreatment, "original")
+        compare(scene.resolvedIconSource, "applications-internet")
+    }
+
+    function test_unloadableStyleAssetFallsBackToTheSafeOriginalGlyph() {
+        const style = styleWithPolicy("neon-green", {
+            mode: "monochrome", tint: "#22ddaa", compatibleOnly: false
+        }, {
+            assetPaths: ({
+                "broken.png": "file:///nonexistent/archdock-broken.png"
+            })
+        })
+        style.layers.base = [{ id: "broken-base", kind: "asset",
+                               asset: "broken.png", opacity: 1 }]
+
+        const scene = sceneWithStyle(style)
+        tryVerify(function() { return scene.styleAssetsFailed }, 3000)
+        compare(scene.styledLayersActive, false)
+        compare(scene.glyphTreatment, "original")
+        compare(scene.glyphItem.isMask, false)
+        compare(scene.resolvedIconSource, "applications-internet")
+
+        wait(20)
+        const image = grabImage(scene)
+        verify(image.alpha(48, 48) > 0,
+               "safe original glyph did not render after asset failure")
+    }
+
     function test_statePrecedenceIsDeterministic() {
         const scene = createScene("metallic-blue")
         scene.running = true

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import org.kde.kirigami as Kirigami
 
 Item {
@@ -58,12 +59,35 @@ Item {
         resolvedIconStyle.safeGlyphInset || ({
             left: 0, top: 0, right: 0, bottom: 0
         })
+    // Any style asset that fails at load time collapses the whole treatment
+    // to the safe original glyph rather than leaving a half-drawn icon.
+    readonly property bool styleAssetsFailed:
+        styleShadow.assetFailed || styleGlow.assetFailed
+        || styleRear.assetFailed || styleBase.assetFailed
+        || styleReflection.assetFailed || styleFront.assetFailed
+        || styleMaskFailed
+    property bool styleMaskFailed: false
+
     readonly property bool styledLayersActive:
-        Boolean(resolvedIconStyle.renderStyledLayers)
+        Boolean(resolvedIconStyle.renderStyledLayers) && !styleAssetsFailed
     readonly property bool styleGlyphTreatmentActive:
         Boolean(resolvedIconStyle.valid)
         && String(resolvedIconStyle.styleId || "plain-original")
             !== "plain-original"
+        && !styleAssetsFailed
+
+    // Effective glyph treatment, already compatibility-gated by the resolver.
+    readonly property string glyphTreatment: styleAssetsFailed ? "original"
+        : String(resolvedIconStyle.glyphTreatment || "original")
+    readonly property string glyphTint:
+        String(resolvedIconStyle.glyphTint || "")
+    readonly property bool glyphIsMask:
+        !styleAssetsFailed && Boolean(resolvedIconStyle.glyphIsMask)
+        && glyphTint.length > 0
+    readonly property var styleMaskLayer:
+        styleAssetsFailed ? null : (resolvedIconStyle.maskLayer || null)
+    readonly property bool styleMaskActive:
+        styledLayersActive && styleMaskLayer !== null
     readonly property bool tileRenderingEnabled:
         resolvedIconStyle.tileEnabled === undefined
         ? true : Boolean(resolvedIconStyle.tileEnabled)
@@ -143,6 +167,8 @@ Item {
             anchors.fill: parent
 
             IconStyle2D {
+                id: styleShadow
+
                 anchors.fill: parent
                 styleDefinition: root.effectiveIconStyleDefinition
                 resolvedStyle: root.resolvedIconStyle
@@ -154,6 +180,8 @@ Item {
             }
 
             IconStyle2D {
+                id: styleGlow
+
                 anchors.fill: parent
                 styleDefinition: root.effectiveIconStyleDefinition
                 resolvedStyle: root.resolvedIconStyle
@@ -218,11 +246,39 @@ Item {
             }
         }
 
+        // Mask source for the tile silhouette. Kept outside baseLayer so it
+        // is not consumed by the layer it masks.
+        Image {
+            id: styleMaskImage
+
+            objectName: "icon-style-mask-source"
+            anchors.fill: parent
+            visible: false
+            asynchronous: false
+            cache: true
+            fillMode: Image.PreserveAspectFit
+            source: root.styleMaskLayer
+                ? String(root.styleMaskLayer.source) : ""
+            onStatusChanged: {
+                if (status === Image.Error)
+                    root.styleMaskFailed = true
+            }
+        }
+
         Item {
             id: baseLayer
 
             objectName: "icon-layer-base"
             anchors.fill: parent
+
+            // MultiEffect is instantiated only when a mask is actually
+            // declared and its source loaded.
+            layer.enabled: root.styleMaskActive
+                && styleMaskImage.status === Image.Ready
+            layer.effect: MultiEffect {
+                maskEnabled: true
+                maskSource: styleMaskImage
+            }
 
             IconStyle2D {
                 id: styleBase
@@ -315,14 +371,26 @@ Item {
                             - Number(root.styleInset.bottom || 0))
                     : width
                 source: root.resolvedIconSource
-                opacity: root.styleGlyphTreatmentActive
-                    ? Number(root.styleState.glyphOpacity === undefined
-                             ? 1 : root.styleState.glyphOpacity)
-                    : root.minimized ? 0.52 : 1
-                scale: root.styleGlyphTreatmentActive
-                    ? Number(root.styleState.glyphScale === undefined
-                             ? 1 : root.styleState.glyphScale)
-                    : 1
+
+                // Kirigami's native monochrome path: only ever reached for a
+                // glyph the resolver proved safe to recolor.
+                isMask: root.glyphIsMask
+                color: root.glyphIsMask ? root.glyphTint : "transparent"
+
+                // State styling applies to the plain fallback too; the
+                // resolver supplies per-state values in both cases.
+                opacity: Number(root.styleState.glyphOpacity === undefined
+                                ? 1 : root.styleState.glyphOpacity)
+                scale: Number(root.styleState.glyphScale === undefined
+                              ? 1 : root.styleState.glyphScale)
+
+                // MultiEffect is instantiated only when a tint is requested.
+                layer.enabled: root.glyphTreatment === "tinted"
+                    && root.glyphTint.length > 0
+                layer.effect: MultiEffect {
+                    colorization: 1
+                    colorizationColor: root.glyphTint
+                }
             }
 
             Kirigami.Icon {
@@ -341,6 +409,8 @@ Item {
             }
 
             IconStyle2D {
+                id: styleReflection
+
                 anchors.fill: parent
                 styleDefinition: root.effectiveIconStyleDefinition
                 resolvedStyle: root.resolvedIconStyle

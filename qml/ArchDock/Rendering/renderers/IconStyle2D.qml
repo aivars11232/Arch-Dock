@@ -20,6 +20,33 @@ Item {
     readonly property var renderedLayerIds: IconStyleResolver.layerIds(
         styleDefinition, role)
 
+    // A layer asset that fails at load time must not simply disappear and
+    // leave a half-drawn style behind; the scene collapses to the safe
+    // original glyph instead.
+    //
+    // Failures are remembered per asset URL rather than counted, so a result
+    // cannot be lost to load/reset ordering and cannot go stale when the
+    // declared layer set changes.
+    property var failedAssetSources: ({})
+    readonly property bool assetFailed: {
+        for (let index = 0; index < roleLayers.length; ++index) {
+            const assetUrl = IconStyleResolver.assetSource(
+                styleDefinition, roleLayers[index])
+            if (assetUrl.length > 0 && failedAssetSources[assetUrl] === true)
+                return true
+        }
+        return false
+    }
+
+    function recordAssetFailure(assetUrl) {
+        const next = ({})
+        const keys = Object.keys(failedAssetSources)
+        for (let index = 0; index < keys.length; ++index)
+            next[keys[index]] = true
+        next[assetUrl] = true
+        failedAssetSources = next
+    }
+
     function clamped(value, minimum, maximum, fallback) {
         const candidate = Number(value)
         return Math.max(minimum, Math.min(maximum,
@@ -144,6 +171,11 @@ Item {
                 asynchronous: false
                 cache: true
                 mipmap: true
+                onStatusChanged: {
+                    if (status === Image.Error
+                            && source.toString().length > 0)
+                        root.recordAssetFailure(source.toString())
+                }
             }
         }
     }

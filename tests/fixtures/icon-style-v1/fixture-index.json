@@ -34,6 +34,16 @@
       "file": "invalid-mapped-without-map.json",
       "valid": false,
       "diagnostic": "missing-mapping"
+    },
+    {
+      "file": "invalid-undecodable-layer-asset.json",
+      "valid": false,
+      "diagnostic": "asset-not-decodable"
+    },
+    {
+      "file": "invalid-undecodable-mapped-asset.json",
+      "valid": false,
+      "diagnostic": "asset-not-decodable"
     }
   ]
 }

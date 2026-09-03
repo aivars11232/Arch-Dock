@@ -175,28 +175,85 @@ function entryTileEnabled(entry) {
     return true;
 }
 
+// A colorful application glyph must never be recolored just because a style
+// asked for it. Compatibility is an explicit entry declaration; the symbolic
+// naming convention is accepted as a second, equally explicit signal.
+function glyphCompatible(entry) {
+    const source = objectValue(entry);
+    if (source.glyphCompatible !== undefined && source.glyphCompatible !== null)
+        return Boolean(source.glyphCompatible);
+    if (source.symbolicGlyph !== undefined && source.symbolicGlyph !== null)
+        return Boolean(source.symbolicGlyph);
+    return /-symbolic$/.test(originalGlyph(entry));
+}
+
+function plainGlyph(entry, requested, compatible, reason) {
+    return {
+        source: originalGlyph(entry),
+        replacementApplied: false,
+        policy: requested,
+        treatment: "original",
+        tint: "",
+        isMask: false,
+        compatible: compatible,
+        reason: reason
+    };
+}
+
 function resolvedGlyph(styleDefinition, entry) {
     const style = objectValue(styleDefinition);
-    const original = originalGlyph(entry);
     const policy = objectValue(style.glyphPolicy);
-    if (String(policy.mode || "original") !== "mapped-replacement") {
+    const requested = String(policy.mode || "original");
+    const compatibleOnly = policy.compatibleOnly === undefined
+        || policy.compatibleOnly === null
+        ? true : Boolean(policy.compatibleOnly);
+    const compatible = glyphCompatible(entry);
+
+    if (requested === "original")
+        return plainGlyph(entry, requested, compatible, "");
+
+    if (requested === "mapped-replacement") {
+        // No complete replacement without an exact application-identity map.
+        const identity = entryIdentity(entry);
+        const replacements = objectValue(style.mappedReplacements);
+        const relativePath = identity.length > 0
+            ? String(replacements[identity] || "") : "";
+        const paths = objectValue(style.assetPaths);
+        const replacement = relativePath.length > 0
+            ? String(paths[relativePath] || "") : "";
+        if (replacement.length === 0) {
+            return plainGlyph(entry, requested, compatible,
+                              "no-application-mapping");
+        }
         return {
-            source: original,
-            replacementApplied: false,
-            policy: String(policy.mode || "original")
+            source: replacement,
+            replacementApplied: true,
+            policy: requested,
+            treatment: "mapped-replacement",
+            tint: "",
+            isMask: false,
+            compatible: compatible,
+            reason: ""
         };
     }
-    const identity = entryIdentity(entry);
-    const replacements = objectValue(style.mappedReplacements);
-    const relativePath = identity.length > 0
-        ? String(replacements[identity] || "") : "";
-    const paths = objectValue(style.assetPaths);
-    const replacement = relativePath.length > 0
-        ? String(paths[relativePath] || "") : "";
+
+    // tinted and monochrome both require a declared tint and, unless the
+    // style explicitly opts out, a glyph that is safe to recolor.
+    const tint = String(policy.tint || "");
+    if (tint.length === 0)
+        return plainGlyph(entry, requested, compatible, "missing-tint");
+    if (compatibleOnly && !compatible)
+        return plainGlyph(entry, requested, compatible, "glyph-not-compatible");
+
     return {
-        source: replacement.length > 0 ? replacement : original,
-        replacementApplied: replacement.length > 0,
-        policy: "mapped-replacement"
+        source: originalGlyph(entry),
+        replacementApplied: false,
+        policy: requested,
+        treatment: requested,
+        tint: tint,
+        isMask: requested === "monochrome",
+        compatible: compatible,
+        reason: ""
     };
 }
 
@@ -216,6 +273,24 @@ function assetSource(styleDefinition, layer) {
     const relativePath = String(source.asset || "");
     return String(objectValue(objectValue(styleDefinition).assetPaths)
                   [relativePath] || "");
+}
+
+// The mask role shapes the styled composite; it is not itself a visible
+// layer, so it never counts toward hasRenderableLayers().
+function maskLayerFor(styleDefinition) {
+    const layers = layersForRole(styleDefinition, "mask");
+    if (layers.length === 0)
+        return null;
+    const layer = objectValue(layers[0]);
+    const source = assetSource(styleDefinition, layer);
+    if (source.length === 0)
+        return null;
+    return {
+        id: String(layer.id || "mask"),
+        source: source,
+        inset: bounded(layer.inset, 0, 0.45, 0),
+        opacity: bounded(layer.opacity, 0, 1, 1)
+    };
 }
 
 function hasRenderableLayers(styleDefinition) {
@@ -248,6 +323,12 @@ function resolve(styleDefinition, flags, entry) {
                       : fallbackState(requestedState),
         glyphSource: glyph.source,
         glyphPolicy: glyph.policy,
+        glyphTreatment: usable ? glyph.treatment : "original",
+        glyphTint: usable ? glyph.tint : "",
+        glyphIsMask: usable ? glyph.isMask : false,
+        glyphCompatible: glyph.compatible,
+        glyphTreatmentReason: usable ? glyph.reason : "",
+        maskLayer: usable ? maskLayerFor(style) : null,
         replacementApplied: glyph.replacementApplied,
         safeGlyphInset: usable ? normalizedInset(style)
                                : {left: 0, top: 0, right: 0, bottom: 0},

@@ -55,6 +55,35 @@ object. Executable package code, scripts and plugins are forbidden.
 never guesses an asset: the original application glyph is rendered. Colorful
 application glyphs are never blindly recolored.
 
+### Compatibility gate
+
+`tinted` and `monochrome` both require a declared `tint`. When
+`compatibleOnly` is `true` — the default — the treatment is applied only to a
+glyph that is proved safe to recolor. An entry proves this by setting
+`glyphCompatible` (or `symbolicGlyph`), and the symbolic icon-naming
+convention (`*-symbolic`) is accepted as an equivalent declaration.
+
+When the gate is not satisfied the renderer falls back to the unmodified
+original glyph and reports the reason through `glyphTreatmentReason`:
+
+| Reason | Meaning |
+| --- | --- |
+| `glyph-not-compatible` | `compatibleOnly` held and the glyph is not declared safe to recolor |
+| `missing-tint` | `tinted`/`monochrome` was requested without a tint |
+| `no-application-mapping` | `mapped-replacement` had no exact identity match |
+
+`monochrome` renders through Kirigami's native icon mask path. `tinted`
+instantiates a `MultiEffect` colorization only when a tint is actually
+applied. Neither effect is created for the default `original` policy.
+
+### Fail-closed rendering
+
+Validation decode-probes every renderable layer and mapped-replacement asset,
+so an undecodable file never enters the package asset table, the content
+digest, or the runtime projection. If a style asset nevertheless fails at load
+time, the **entire** style treatment is withdrawn and the plain original glyph
+is rendered. A partially drawn style is never shown.
+
 ## Layers
 
 `layers` contains the stable roles `rear`, `base`, and `front`. Each role is an
@@ -67,6 +96,11 @@ The application glyph and running indicator are host-owned layers between
 these package layers. Styles cannot move or resize the logical pointer target.
 The optional `mask`, `reflection`, `shadow`, and `glow` fields use the same
 asset-or-procedural declaration rules.
+
+`reflection`, `shadow`, and `glow` are drawn as visible layers. `mask` is not
+a visible layer: an asset-backed `mask` shapes the tile composite through a
+`MultiEffect` mask and leaves the application glyph and the running indicator
+unclipped. A `mask` therefore never makes a style renderable on its own.
 
 `safeGlyphInset` has finite `left`, `top`, `right`, and `bottom` values from
 `0.0` through `0.45`. It constrains visual glyph placement only.

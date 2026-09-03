@@ -5,6 +5,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QImage>
+#include <QImageReader>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -405,7 +407,35 @@ private:
         return true;
     }
 
-    QString resolveAsset(const QString &path, const QString &pointer)
+    bool probeRenderableAsset(const QString &path, const QString &canonicalPath,
+                              const QString &pointer)
+    {
+        if (m_renderableAssets.contains(path))
+        {
+            return true;
+        }
+        QImageReader reader(canonicalPath);
+        reader.setDecideFormatFromContent(true);
+        const QSize declaredSize = reader.size();
+        if (!reader.canRead() || declaredSize.isEmpty())
+        {
+            add(QStringLiteral("asset-not-decodable"), pointer,
+                QStringLiteral("declared render asset cannot be decoded as an image"));
+            return false;
+        }
+        QImage decoded;
+        if (!reader.read(&decoded) || decoded.isNull())
+        {
+            add(QStringLiteral("asset-not-decodable"), pointer,
+                QStringLiteral("declared render asset failed to decode completely"));
+            return false;
+        }
+        m_renderableAssets.insert(path);
+        return true;
+    }
+
+    QString resolveAsset(const QString &path, const QString &pointer,
+                         bool requireRenderable = false)
     {
         if (!lexicallySafePath(path, pointer))
         {
@@ -413,7 +443,13 @@ private:
         }
         if (m_assetPaths->contains(path))
         {
-            return m_assetPaths->value(path);
+            const QString cachedPath = m_assetPaths->value(path);
+            if (requireRenderable &&
+                !probeRenderableAsset(path, cachedPath, pointer))
+            {
+                return {};
+            }
+            return cachedPath;
         }
         const QFileInfo info(QDir(m_packageRoot).filePath(path));
         if (!info.exists())
@@ -446,6 +482,11 @@ private:
         {
             add(QStringLiteral("asset-too-large"), pointer,
                 QStringLiteral("declared assets exceed the package byte limit"));
+            return {};
+        }
+        if (requireRenderable &&
+            !probeRenderableAsset(path, canonicalPath, pointer))
+        {
             return {};
         }
         m_assetPaths->insert(path, canonicalPath);
@@ -607,7 +648,8 @@ private:
             layer.asset = stringValue(object, QStringLiteral("asset"), pointer, true);
             if (!layer.asset.isEmpty())
             {
-                resolveAsset(layer.asset, pointerChild(pointer, QStringLiteral("asset")));
+                resolveAsset(layer.asset, pointerChild(pointer, QStringLiteral("asset")),
+                             true);
             }
         }
         else
@@ -949,7 +991,7 @@ private:
             }
             if (!path.isEmpty())
             {
-                resolveAsset(path, pointer);
+                resolveAsset(path, pointer, true);
             }
             else
             {
@@ -1055,6 +1097,7 @@ private:
     QString m_manifestPath;
     qint64 m_totalAssetBytes = 0;
     QHash<QString, QString> *m_assetPaths = nullptr;
+    QSet<QString> m_renderableAssets;
     QVector<IconStyleValidationDiagnostic> m_diagnostics;
 };
 

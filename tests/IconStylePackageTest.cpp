@@ -60,6 +60,8 @@ private slots:
     void symlinkEscapeIsRejectedBeforeUse();
     void manifestLimitIsEnforcedBeforeParsing();
     void invalidResultDoesNotProjectPartialPackage();
+    void undecodableRenderAssetIsRejected();
+    void threeDReferenceAssetsAreNotDecodeProbed();
     void builtInCatalogMatchesPackages();
     void unknownSelectionFallsBackToPlainOriginal();
 };
@@ -78,7 +80,7 @@ void IconStylePackageTest::fixtures_data()
                                     .object()
                                     .value(QStringLiteral("fixtures"))
                                     .toArray();
-    QCOMPARE(fixtures.size(), 7);
+    QCOMPARE(fixtures.size(), 9);
     for (const QJsonValue &value : fixtures)
     {
         const QJsonObject fixture = value.toObject();
@@ -240,6 +242,91 @@ void IconStylePackageTest::unknownSelectionFallsBackToPlainOriginal()
              QStringLiteral("defaulted"));
     QCOMPARE(defaulted.value(QStringLiteral("resolvedStyleId")).toString(),
              QStringLiteral("plain-original"));
+}
+
+void IconStylePackageTest::undecodableRenderAssetIsRejected()
+{
+    // A render asset may be present, contained and within the byte limits and
+    // still be unusable. Digest acceptance alone would let it reach the scene
+    // and produce a partially styled icon instead of the plain original glyph.
+    const QString manifestPath = fixturePath(
+        QStringLiteral("invalid-undecodable-layer-asset.json"));
+    QVERIFY(!manifestPath.isEmpty());
+    const QString assetPath = fixturePath(QStringLiteral("assets/corrupt.svg"));
+    QVERIFY(QFileInfo(assetPath).isFile());
+    QVERIFY(QFileInfo(assetPath).size() > 0);
+
+    const auto layerResult = IconStylePackage::load(manifestPath);
+    QVERIFY(!layerResult.isValid());
+    QVERIFY(!layerResult.package.has_value());
+    QVERIFY2(containsDiagnostic(layerResult.diagnostics,
+                                QStringLiteral("asset-not-decodable")),
+             qPrintable(layerResult.primaryMessage()));
+
+    const auto mappedResult = IconStylePackage::load(
+        fixturePath(QStringLiteral("invalid-undecodable-mapped-asset.json")));
+    QVERIFY(!mappedResult.isValid());
+    QVERIFY(!mappedResult.package.has_value());
+    QVERIFY2(containsDiagnostic(mappedResult.diagnostics,
+                                QStringLiteral("asset-not-decodable")),
+             qPrintable(mappedResult.primaryMessage()));
+
+    // The readable sibling asset must stay acceptable, so the probe rejects
+    // the undecodable bytes rather than the asset layer kind itself.
+    const auto valid = IconStylePackage::load(
+        fixturePath(QStringLiteral("valid-asset.json")));
+    QVERIFY(valid.isValid());
+}
+
+void IconStylePackageTest::threeDReferenceAssetsAreNotDecodeProbed()
+{
+    // Optional 3D mesh/material resources are bounded path-only assets. They
+    // are not images, so the render-asset decode probe must not reach them.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString root = directory.path();
+
+    QFile source(fixturePath(QStringLiteral("valid-original.json")));
+    QVERIFY(source.open(QIODevice::ReadOnly));
+    QJsonObject manifest = QJsonDocument::fromJson(source.readAll()).object();
+    source.close();
+
+    manifest.insert(QStringLiteral("id"), QStringLiteral("fixture-three-d"));
+    QJsonObject capabilities =
+        manifest.value(QStringLiteral("capabilities")).toObject();
+    capabilities.insert(QStringLiteral("supports3D"), true);
+    QJsonArray rendererTiers =
+        capabilities.value(QStringLiteral("rendererTiers")).toArray();
+    rendererTiers.append(QStringLiteral("true3d"));
+    capabilities.insert(QStringLiteral("rendererTiers"), rendererTiers);
+    manifest.insert(QStringLiteral("capabilities"), capabilities);
+    manifest.insert(QStringLiteral("threeD"),
+                    QJsonObject{{QStringLiteral("mesh"),
+                                 QStringLiteral("assets/tile.mesh")},
+                                {QStringLiteral("material"),
+                                 QStringLiteral("assets/tile.material")},
+                                {QStringLiteral("fallbackStyleId"),
+                                 QStringLiteral("plain-original")}});
+
+    QVERIFY(writeBytes(root + QStringLiteral("/assets/tile.mesh"),
+                       QByteArrayLiteral("archdock-mesh-placeholder")));
+    QVERIFY(writeBytes(root + QStringLiteral("/assets/tile.material"),
+                       QByteArrayLiteral("archdock-material-placeholder")));
+    const QString manifestPath = root + QStringLiteral("/archdock-icon-style.json");
+    QVERIFY(writeBytes(manifestPath,
+                       QJsonDocument(manifest).toJson(QJsonDocument::Compact)));
+
+    const auto result = IconStylePackage::load(manifestPath);
+    QVERIFY2(result.isValid(), qPrintable(result.primaryMessage()));
+    QVERIFY(!containsDiagnostic(result.diagnostics,
+                                QStringLiteral("asset-not-decodable")));
+    QVERIFY(result.package.has_value());
+    QVERIFY(QFileInfo(result.package->assetPath(
+                          QStringLiteral("assets/tile.mesh")))
+                .isFile());
+    QVERIFY(QFileInfo(result.package->assetPath(
+                          QStringLiteral("assets/tile.material")))
+                .isFile());
 }
 
 QTEST_GUILESS_MAIN(IconStylePackageTest)
