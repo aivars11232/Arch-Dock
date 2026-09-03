@@ -6,31 +6,37 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-08-31 (Europe/Amsterdam). Current TASK-0029
-statements come from the approved working tree based on `dfb315c`, including
-the completed TASK-0028 corrective dependency changes. In one external Debug
-build, the sequential TASK-0029 gates passed Phase A focused 2/2 plus full
-46/46, Phase B focused 7/7 plus full 46/46, Phase C focused 7/7 plus full
-46/46, and Phase D focused 6/6 plus full 46/46. A separate fresh completion
-configure/build and full 46/46 CTest run also passed. Runtime claims come only
-from disposable private D-Bus, virtual KWin Wayland, and private PlasmaShell
-sessions; no personal desktop session was contacted. Older lifecycle details
-below retain their earlier isolated-session evidence.
+**Evidence snapshot:** 2026-09-03 (Europe/Amsterdam). The earlier TASK-0029
+implementation described below was committed as `a34fbd9`, which carries the
+subject `task28`; the working tree was clean at the start of this session.
+The statements here therefore describe `a34fbd9` plus the TASK-0029 Phase A
+and Phase B corrections listed under "Verification boundary", which the owner
+committed as `ef84d86`.
+
+All figures below come from external Debug build directories created during
+this session; none reuse the in-tree `build/` or `build-codex-task-0014`
+directories. Runtime claims come only from disposable private D-Bus, virtual
+KWin Wayland, and private PlasmaShell sessions; no personal desktop session
+was contacted. Older lifecycle details below retain their earlier
+isolated-session evidence.
 
 ## Repository state
 
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`
-- TASK-0028 baseline `HEAD`: `dfb315c45adc8252ac2fef4cac49b8ba8146e973`
-  (`task28`).
-- The locally recorded `origin/main` is the same commit; `HEAD...origin/main`
-  reports zero ahead and zero behind. No network fetch was performed.
+- Current `HEAD`: `ef84d86d5371bac3459f52fdb9bcb229d0531f91`, subject
+  `task29`. The owner committed the TASK-0029 Phase A and Phase B corrections
+  from this session as that commit.
+- `a34fbd92d4a7dcb76d43538dee7598bf69972245`, subject `task28`, is its
+  parent. Despite that subject it contains the bulk of the earlier TASK-0029
+  implementation together with the TASK-0028 corrective closure.
+- `dfb315c45adc8252ac2fef4cac49b8ba8146e973` (`task28`) is the TASK-0028
+  baseline and is an ancestor of `HEAD`.
 - TASK-0027 is committed at `c857fd70209646028fc710ef100f49c716384762`
   and is an ancestor of the TASK-0028 baseline.
-- The working tree contains the approved, unstaged TASK-0028 corrective closure
-  plus the approved TASK-0029 implementation and its audit-proved corrections.
-  These two task boundaries coexist because the owner has not requested a
-  commit; a whole-tree commit would therefore not be TASK-0029-only.
+- The working tree was clean at the start of this session and now contains
+  only this file. The TASK-0029 implementation therefore spans two commits,
+  `a34fbd9` and `ef84d86`; neither alone is the whole consolidated task.
 - Codex did not stage, commit, push, globally install, or mutate the personal
   Plasma session.
 
@@ -295,6 +301,54 @@ and none of this evidence claims a physical desktop or hardware acceptance
 test. A separate final fresh Debug configure/build passed, followed by all 46
 CTests including the 65.87-second staged private runtime smoke. The generated
 repair and final build directories were removed after verification.
+
+### 2026-09-03 corrective session
+
+Two corrections were applied on top of `a34fbd9` and were committed by the
+owner as `ef84d86` (`task29`).
+
+Phase A closed a contract gap in package validation. Renderable layer assets
+and mapped-replacement assets were accepted on path, size and digest alone
+and were never decode-probed, so an undecodable file could enter the asset
+table, the content digest and the runtime projection. `IconStylePackage` now
+decode-probes those assets with `QImageReader` before insertion into
+`assetPaths`; optional 3D `mesh`/`material` resources remain bounded
+path-only. `icon-style-package-test` and `icon-style-asset-test` gained the
+`Qt6::Gui` link this requires.
+
+Phase B closed a renderer truthfulness gap. The parser accepted `tinted`,
+`monochrome` and `mask`, and the documentation described all three, but the
+renderer honoured none of them. `IconStyleResolver` now resolves the effective
+treatment behind an explicit compatibility gate and reports a named fallback
+reason; `IconScene` renders monochrome through Kirigami's native mask path and
+instantiates `MultiEffect` only when a tint or an asset-backed mask is
+actually requested. Two defects were fixed with it: the plain fallback left
+the `disabled` state completely undimmed, and a style asset that failed at
+load time vanished silently while the remaining layers still drew. Any style
+asset failure now withdraws the whole treatment in favour of the plain
+original glyph.
+
+Phase C and Phase D required no source change and were verified only.
+
+Fresh evidence from this session: baseline full CTest 46/46 before any edit;
+Phase A focused 19/19 with a fresh clean configure/build and full 46/46;
+Phase B gate full 46/46; Phase C focused 7/7; Phase D focused 5/6. A single
+consolidated fresh configure/build then passed with full 46/46, including the
+65.55-second staged private runtime smoke.
+
+`rendering-import-smoke` is flaky in this environment and must not be read as
+unconditionally green: across this session it passed four times and failed
+twice, in two different modes. One failure was a timeout-margin miss against
+its `TIMEOUT 120` budget at a typical runtime near 66 seconds. The other was a
+`stale-revision` conflict while selecting an icon style on the private native
+host. That second failure is a race in the harness, not the product: the
+script reads `settingsRevision` and then calls
+`applyPanelSettingsTransaction` with it, while applying a setting triggers an
+asynchronous `renderer-notification` publish that can advance the revision
+between the two calls. The product rejected the stale draft correctly. The
+same unguarded read-then-write pattern appears in the script's Icon Properties
+section. The cause was not introduced by these corrections and was left
+unmodified, since weakening or rewriting the test was out of scope.
 
 The retained TASK-0028 dependency evidence follows.
 
