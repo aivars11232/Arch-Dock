@@ -1,0 +1,712 @@
+{
+  "format": "org.archdock.animation-profile-catalog",
+  "version": 1,
+  "fallbackProfileId": "none",
+  "animationProfiles": [
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "none",
+      "name": "None",
+      "description": "No icon motion.",
+      "author": "Arch Dock contributors",
+      "category": "none",
+      "target": "icon",
+      "trigger": "idle",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "bounce",
+      "name": "Bounce",
+      "description": "A vertical hop above the resting position.",
+      "author": "Arch Dock contributors",
+      "category": "translation",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "hop",
+          "property": "translate-y",
+          "from": 0,
+          "to": -0.22,
+          "easing": "out-cubic",
+          "duration": 85,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "elastic",
+      "name": "Elastic",
+      "description": "A vertical hop that overshoots and settles.",
+      "author": "Arch Dock contributors",
+      "category": "translation",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "hop",
+          "property": "translate-y",
+          "from": 0,
+          "to": -0.275,
+          "easing": "out-elastic",
+          "duration": 170,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "spring",
+      "name": "Spring",
+      "description": "A vertical hop with a springy return.",
+      "author": "Arch Dock contributors",
+      "category": "translation",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "hop",
+          "property": "translate-y",
+          "from": 0,
+          "to": -0.22,
+          "easing": "out-back",
+          "duration": 170,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "float",
+      "name": "Float",
+      "description": "A slow vertical drift.",
+      "author": "Arch Dock contributors",
+      "category": "translation",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "drift",
+          "property": "translate-y",
+          "from": 0,
+          "to": -0.14300000000000002,
+          "easing": "in-out-sine",
+          "duration": 170,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "wave",
+      "name": "Wave",
+      "description": "A vertical drift staggered across neighbouring entries.",
+      "author": "Arch Dock contributors",
+      "category": "translation",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "drift",
+          "property": "translate-y",
+          "from": 0,
+          "to": -0.198,
+          "easing": "in-out-sine",
+          "duration": 170,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0,
+          "phase": 45
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "orbit",
+      "name": "Orbit",
+      "description": "A circular path around the resting position.",
+      "author": "Arch Dock contributors",
+      "category": "translation",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "sweep-x",
+          "property": "translate-x",
+          "from": -0.22,
+          "to": 0.22,
+          "easing": "in-out-sine",
+          "duration": 170,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        },
+        {
+          "id": "sweep-y",
+          "property": "translate-y",
+          "from": -0.22,
+          "to": 0.22,
+          "easing": "in-out-sine",
+          "duration": 170,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0,
+          "delay": 85
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "pulse",
+      "name": "Pulse",
+      "description": "A gentle size pulse.",
+      "author": "Arch Dock contributors",
+      "category": "scale",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "swell",
+          "property": "scale",
+          "from": 1,
+          "to": 1.16,
+          "easing": "in-out-sine",
+          "duration": 170,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": [
+        "scale"
+      ]
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "breathe",
+      "name": "Breathe",
+      "description": "A slow size pulse.",
+      "author": "Arch Dock contributors",
+      "category": "scale",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "swell",
+          "property": "scale",
+          "from": 1,
+          "to": 1.16,
+          "easing": "in-out-sine",
+          "duration": 340,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "ripple",
+      "name": "Ripple",
+      "description": "A wider size pulse.",
+      "author": "Arch Dock contributors",
+      "category": "scale",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "swell",
+          "property": "scale",
+          "from": 1,
+          "to": 1.208,
+          "easing": "in-out-sine",
+          "duration": 170,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "magnetic",
+      "name": "Magnetic",
+      "description": "The widest size pulse.",
+      "author": "Arch Dock contributors",
+      "category": "scale",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "swell",
+          "property": "scale",
+          "from": 1,
+          "to": 1.256,
+          "easing": "in-out-sine",
+          "duration": 170,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "spin",
+      "name": "Spin",
+      "description": "A continuous flat rotation.",
+      "author": "Arch Dock contributors",
+      "category": "rotation",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "turn",
+          "property": "rotate-z",
+          "from": 0,
+          "to": 360,
+          "easing": "linear",
+          "duration": 340,
+          "direction": "normal",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "idle-rotate",
+      "name": "Idle Rotate",
+      "description": "A very slow flat rotation.",
+      "author": "Arch Dock contributors",
+      "category": "rotation",
+      "target": "icon",
+      "trigger": "idle",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "turn",
+          "property": "rotate-z",
+          "from": 0,
+          "to": 360,
+          "easing": "linear",
+          "duration": 1360,
+          "direction": "normal",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "swing",
+      "name": "Swing",
+      "description": "A wide side-to-side tilt.",
+      "author": "Arch Dock contributors",
+      "category": "rotation",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "tilt",
+          "property": "rotate-z",
+          "from": -14,
+          "to": 14,
+          "easing": "linear",
+          "duration": 170,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "wobble",
+      "name": "Wobble",
+      "description": "A medium side-to-side tilt.",
+      "author": "Arch Dock contributors",
+      "category": "rotation",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "tilt",
+          "property": "rotate-z",
+          "from": -9,
+          "to": 9,
+          "easing": "linear",
+          "duration": 170,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "wiggle",
+      "name": "Wiggle",
+      "description": "A quick narrow tilt.",
+      "author": "Arch Dock contributors",
+      "category": "rotation",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "tilt",
+          "property": "rotate-z",
+          "from": -6,
+          "to": 6,
+          "easing": "linear",
+          "duration": 59,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "shake",
+      "name": "Shake",
+      "description": "A quick minimal tilt.",
+      "author": "Arch Dock contributors",
+      "category": "rotation",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "tilt",
+          "property": "rotate-z",
+          "from": -3,
+          "to": 3,
+          "easing": "linear",
+          "duration": 59,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "glow",
+      "name": "Glow",
+      "description": "A pulsing glow around the icon.",
+      "author": "Arch Dock contributors",
+      "category": "glow",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "pulse",
+          "property": "glow",
+          "from": 0.25,
+          "to": 1,
+          "easing": "linear",
+          "duration": 170,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "none"
+      },
+      "legacyNames": []
+    }
+  ]
+}

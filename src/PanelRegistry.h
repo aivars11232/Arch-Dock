@@ -12,6 +12,7 @@
 
 #include "model/PanelDefinition.h"
 #include "model/PanelCapabilityResolver.h"
+#include "animation/AnimationProfileCatalog.h"
 #include "iconstyles/IconStyleStore.h"
 #include "panel/PanelSettingsTransaction.h"
 
@@ -157,6 +158,11 @@ public:
     Q_INVOKABLE QVariantList themeDefinitions() const;
     Q_INVOKABLE QVariantList iconStyleDefinitions() const;
     Q_INVOKABLE QVariantMap iconStyleDefinition(const QString &styleId) const;
+    Q_INVOKABLE QVariantList animationProfileDefinitions() const;
+    // Resolves a legacy `iconAnimation` value or a profile id to its validated
+    // runtime projection, falling back safely when neither matches.
+    Q_INVOKABLE QVariantMap animationProfileResolution(
+        const QString &requestedProfileId) const;
     [[nodiscard]] QVariantMap resolveIconEntryOverride(
         const ArchDock::PanelDefinition &definition,
         const QVariantMap &entry) const;
@@ -230,6 +236,8 @@ private:
     QVariantList m_themeDefinitions;
     std::optional<ArchDock::IconStyleStore> m_iconStyleStore;
     QString m_iconStyleStoreError;
+    std::optional<ArchDock::AnimationProfileCatalog> m_animationProfileCatalog;
+    QString m_animationProfileCatalogError;
     QHash<QString, RenderRequest> m_activeRenders;
     QHash<QString, RenderRequest> m_pendingRenders;
     QString m_activePanelId = QStringLiteral("bottom");

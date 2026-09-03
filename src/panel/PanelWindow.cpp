@@ -626,6 +626,17 @@ QVariantMap PanelWindow::panelRendererConfiguration(const QString &panelId) cons
             : QStringLiteral("error"));
     configuration.insert(
         QStringLiteral("iconStyleProjectionError"), iconStyleProjectionError);
+    const QVariantMap animationResolution =
+        m_panelRegistry.animationProfileResolution(definition->motion.iconProfile);
+    configuration.insert(
+        QStringLiteral("animationProfile"),
+        animationResolution.value(QStringLiteral("profile")).toMap());
+    configuration.insert(
+        QStringLiteral("animationProfileFallbackApplied"),
+        animationResolution.value(QStringLiteral("fallbackApplied")));
+    configuration.insert(
+        QStringLiteral("animationProfiles"),
+        m_panelRegistry.animationProfileDefinitions());
     return configuration;
 }
 
@@ -1253,6 +1264,8 @@ QVariantMap PanelWindow::panelSettingsEditorSnapshot(
              ? QStringLiteral("ready") : QStringLiteral("error")},
         {QStringLiteral("iconStyleProjectionError"), iconStyleProjectionError},
         {QStringLiteral("iconStyles"), m_panelRegistry.iconStyleDefinitions()},
+        {QStringLiteral("animationProfiles"),
+         m_panelRegistry.animationProfileDefinitions()},
         {QStringLiteral("themes"), resolvedThemeDefinitions(panelId)},
     };
 }
@@ -1338,6 +1351,8 @@ QVariantMap PanelWindow::resolvePanelSettingsEditorDraft(
              ? QStringLiteral("ready") : QStringLiteral("error")},
         {QStringLiteral("iconStyleProjectionError"), iconStyleProjectionError},
         {QStringLiteral("iconStyles"), m_panelRegistry.iconStyleDefinitions()},
+        {QStringLiteral("animationProfiles"),
+         m_panelRegistry.animationProfileDefinitions()},
         {QStringLiteral("themes"),
          resolvedThemeDefinitions(panelId, panelValues)},
     };
@@ -1863,6 +1878,8 @@ QVariantMap PanelWindow::iconOverrideSnapshot(
          resolution.value(QStringLiteral("override"))},
         {QStringLiteral("resolution"), resolution},
         {QStringLiteral("iconStyles"), m_panelRegistry.iconStyleDefinitions()},
+        {QStringLiteral("animationProfiles"),
+         m_panelRegistry.animationProfileDefinitions()},
     };
 }
 

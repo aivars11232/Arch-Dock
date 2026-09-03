@@ -1,0 +1,25 @@
+{
+  "format": "org.archdock.animation-profile",
+  "version": 1,
+  "id": "fixture-simple",
+  "name": "Fixture Simple",
+  "description": "A single bounded translation track on the whole icon.",
+  "category": "fixture",
+  "target": "icon",
+  "trigger": "hover-enter",
+  "timing": {"baseDuration": 200, "speedScale": 1.0, "startDelay": 0},
+  "tracks": [
+    {
+      "id": "lift",
+      "property": "translate-y",
+      "from": 0,
+      "to": -12,
+      "easing": "out-cubic",
+      "duration": 200,
+      "repeat": 1
+    }
+  ],
+  "rendererRequirements": ["procedural2d"],
+  "reducedMotion": {"mode": "none"},
+  "legacyNames": ["fixture-lift"]
+}

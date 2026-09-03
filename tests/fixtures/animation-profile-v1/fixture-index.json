@@ -1,0 +1,15 @@
+{
+  "format": "org.archdock.animation-profile-fixture-index",
+  "version": 1,
+  "fixtures": [
+    {"file": "valid-simple.json", "valid": true},
+    {"file": "valid-composed.json", "valid": true},
+    {"file": "invalid-target.json", "valid": false, "diagnostic": "invalid-target"},
+    {"file": "invalid-trigger.json", "valid": false, "diagnostic": "invalid-trigger"},
+    {"file": "invalid-property.json", "valid": false, "diagnostic": "invalid-property"},
+    {"file": "invalid-track-conflict.json", "valid": false, "diagnostic": "track-conflict"},
+    {"file": "invalid-range.json", "valid": false, "diagnostic": "value-out-of-range"},
+    {"file": "invalid-renderer.json", "valid": false, "diagnostic": "unsupported-renderer"},
+    {"file": "invalid-missing-reduced-motion.json", "valid": false, "diagnostic": "missing-reduced-motion"}
+  ]
+}

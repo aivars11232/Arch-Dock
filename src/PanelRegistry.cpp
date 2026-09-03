@@ -109,6 +109,31 @@ ArchDock::IconStyleStoreLoadResult builtInIconStyles()
     };
 }
 
+ArchDock::AnimationProfileCatalogLoadResult builtInAnimationProfiles()
+{
+    const QString installedCatalog = QStandardPaths::locate(
+        QStandardPaths::GenericDataLocation,
+        QStringLiteral(
+            "arch-dock/animation-profiles/builtin-animation-profiles.json"),
+        QStandardPaths::LocateFile);
+    if (!installedCatalog.isEmpty())
+    {
+        return ArchDock::AnimationProfileCatalog::loadCatalog(installedCatalog);
+    }
+#if defined(ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH)
+    const QString sourceCatalog = QString::fromUtf8(
+        ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH);
+    if (QFileInfo(sourceCatalog).isFile())
+    {
+        return ArchDock::AnimationProfileCatalog::loadCatalog(sourceCatalog);
+    }
+#endif
+    // The catalog is also compiled in, so a stage-install without data files
+    // still resolves every built-in profile.
+    return ArchDock::AnimationProfileCatalog::loadCatalog(QStringLiteral(
+        ":/archdock/data/animation-profiles/builtin-animation-profiles.json"));
+}
+
 bool normalizedCatalogPackageManifest(const QVariantMap &theme,
                                       QString *relativePath)
 {
@@ -680,6 +705,21 @@ PanelRegistry::PanelRegistry(const QVariantList &themeDefinitions,
             : iconStyles.primaryCode();
         qWarning().noquote() << "Icon-style catalog rejected:"
                              << m_iconStyleStoreError;
+    }
+    ArchDock::AnimationProfileCatalogLoadResult animationProfiles =
+        builtInAnimationProfiles();
+    if (animationProfiles.isValid())
+    {
+        m_animationProfileCatalog = std::move(animationProfiles.catalog);
+    }
+    else
+    {
+        m_animationProfileCatalogError =
+            animationProfiles.primaryCode().isEmpty()
+                ? QStringLiteral("animation-profile-catalog-unavailable")
+                : animationProfiles.primaryCode();
+        qWarning().noquote() << "Animation-profile catalog rejected:"
+                             << m_animationProfileCatalogError;
     }
     load();
 }
@@ -1789,6 +1829,29 @@ QVariantList PanelRegistry::iconStyleDefinitions() const
 {
     return m_iconStyleStore.has_value()
         ? m_iconStyleStore->catalogEntries() : QVariantList{};
+}
+
+QVariantList PanelRegistry::animationProfileDefinitions() const
+{
+    return m_animationProfileCatalog.has_value()
+        ? m_animationProfileCatalog->profileProjections() : QVariantList{};
+}
+
+QVariantMap PanelRegistry::animationProfileResolution(
+    const QString &requestedProfileId) const
+{
+    if (!m_animationProfileCatalog.has_value())
+    {
+        return {
+            {QStringLiteral("errorCode"), m_animationProfileCatalogError},
+            {QStringLiteral("fallbackApplied"), true},
+            {QStringLiteral("profile"), QVariantMap{}},
+            {QStringLiteral("profileId"), QString{}},
+            {QStringLiteral("requestedProfileId"), requestedProfileId},
+            {QStringLiteral("resolved"), false},
+        };
+    }
+    return m_animationProfileCatalog->resolve(requestedProfileId);
 }
 
 QVariantMap PanelRegistry::iconStyleDefinition(const QString &styleId) const

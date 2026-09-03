@@ -1,0 +1,14 @@
+{
+  "format": "org.archdock.animation-profile",
+  "version": 1,
+  "id": "fixture-invalid-target",
+  "name": "Fixture Invalid Target",
+  "target": "entire-desktop",
+  "trigger": "idle",
+  "timing": {"baseDuration": 200},
+  "tracks": [
+    {"id": "lift", "property": "translate-y", "from": 0, "to": -8, "duration": 200}
+  ],
+  "rendererRequirements": ["procedural2d"],
+  "reducedMotion": {"mode": "none"}
+}

@@ -36,6 +36,26 @@ PlasmoidItem {
             / Math.max(0.2, Number(configuration.animationSpeed || 1))))
     readonly property var capabilityResolution:
         configuration.capabilityResolution || ({})
+    // The validated profile selected for this panel, plus the catalog used to
+    // resolve reduced-motion substitutes.
+    readonly property var activeAnimationProfiles: {
+        const profile = root.configuration.animationProfile
+        return profile && profile.id ? [profile] : []
+    }
+    readonly property var animationCatalogMap: {
+        const result = ({})
+        const list = root.configuration.animationProfiles || []
+        for (let index = 0; index < list.length; ++index) {
+            const profile = list[index]
+            if (profile && profile.id)
+                result[profile.id] = profile
+        }
+        return result
+    }
+    // Profile timings are declared against a 170 ms baseline, so passing the
+    // ratio keeps the user's animation-duration setting authoritative.
+    readonly property real motionSpeedScale:
+        170 / Math.max(80, Math.min(1200, Number(motionDuration) || 170))
     readonly property string effectiveRendererTier:
         String(configuration.effectiveRendererTier || "")
     readonly property bool sceneInputEnabled: freeSurface
@@ -85,7 +105,9 @@ PlasmoidItem {
         showIndicators: true,
         showTooltips: true,
         animationDuration: 170,
-        reducedMotion: false
+        reducedMotion: false,
+        animationProfile: ({}),
+        animationProfiles: []
     })
     property int hoveredIndex: -1
     property bool requestFailed: false
@@ -410,6 +432,9 @@ PlasmoidItem {
             motionTrigger: root.configuration.animationTrigger
             motionIntensity: root.configuration.animationIntensity
             motionDuration: root.motionDuration
+            motionSpeed: root.motionSpeedScale
+            animationProfiles: root.activeAnimationProfiles
+            animationCatalog: root.animationCatalogMap
             reducedMotion: root.configuration.reducedMotion
             inputEnabled: parent.sceneInputEnabled
             editMode: root.plasmaEditMode

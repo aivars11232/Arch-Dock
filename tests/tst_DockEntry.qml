@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtTest
 import "../plasma-dock-widget/contents/ui" as DockUi
 
@@ -17,6 +18,19 @@ TestCase {
         id: dockEntryComponent
 
         DockUi.DockEntry {}
+    }
+
+    // Real pointer delivery needs a shown window, matching the existing
+    // IconPropertiesInteractionHarness pattern.
+    Component {
+        id: hostWindowComponent
+
+        Window {
+            width: 220
+            height: 220
+            visible: true
+            color: "#202833"
+        }
     }
 
     function entry(overrides) {
@@ -39,7 +53,7 @@ TestCase {
         return result
     }
 
-    function createEntry(properties) {
+    function createEntry(properties, host) {
         lastHoveredIndex = -2
         propertiesRequests = []
         const values = {
@@ -78,8 +92,18 @@ TestCase {
         for (const key of Object.keys(additions))
             values[key] = additions[key]
         const item = createTemporaryObject(
-            dockEntryComponent, testCase, values)
+            dockEntryComponent, host || testCase, values)
         verify(item !== null)
+        wait(0)
+        return item
+    }
+
+    function createHostedEntry(properties) {
+        const window = createTemporaryObject(hostWindowComponent, testCase)
+        verify(window !== null)
+        verify(waitForRendering(window.contentItem))
+        const item = createEntry(properties, window.contentItem)
+        item.anchors.centerIn = window.contentItem
         wait(0)
         return item
     }
@@ -202,6 +226,146 @@ TestCase {
         compare(propertiesRequests.length, 1)
         compare(propertiesRequests[0].stableIdentity,
                 "application.org.example.app")
+    }
+
+    function motionProfile(overrides) {
+        const result = {
+            id: "test-motion",
+            name: "Test Motion",
+            valid: true,
+            target: "icon",
+            trigger: "hover-hold",
+            timing: { baseDuration: 200, speedScale: 1, startDelay: 0 },
+            tracks: [{
+                id: "travel",
+                property: "translate-y",
+                from: 0,
+                to: -24,
+                easing: "linear",
+                duration: 80,
+                delay: 0,
+                phase: 0,
+                direction: "normal",
+                repeat: 1,
+                intensityScale: 1,
+                blend: "replace",
+                priority: 0
+            }],
+            rendererRequirements: ["procedural2d"],
+            reducedMotion: { mode: "none" },
+            totalDuration: 80,
+            continuous: false
+        }
+        const additions = overrides || ({})
+        for (const key of Object.keys(additions))
+            result[key] = additions[key]
+        return result
+    }
+
+    // A visual transform must never move the logical pointer target. This is
+    // the boundary that keeps profile motion from stealing clicks.
+    function test_profileMotionNeverMovesTheLogicalInputRegion() {
+        const item = createEntry({ reducedMotion: false })
+        // The hit-area guarantee belongs to the controller, so bind it there
+        // directly rather than through the effect-selection gate.
+        item.motionController.profiles = [motionProfile()]
+        wait(0)
+        compare(item.logicalInputRegion.x, 0)
+        compare(item.logicalInputRegion.y, 0)
+        compare(item.logicalInputRegion.width, 60)
+        compare(item.logicalInputRegion.height, 60)
+
+        item.motionController.hovered = true
+        wait(0)
+        compare(item.motionController.activeTracks.length, 1)
+
+        // Let the track travel, then confirm the entry itself never moved.
+        tryVerify(function() {
+            return item.motionController.channelValue("icon", "translate-y")
+                < -2
+        }, 2000)
+
+        compare(item.width, 60)
+        compare(item.height, 60)
+        compare(item.x, 0)
+        compare(item.y, 0)
+        compare(item.logicalInputRegion.x, 0)
+        compare(item.logicalInputRegion.y, 0)
+        compare(item.logicalInputRegion.width, 60)
+        compare(item.logicalInputRegion.height, 60)
+    }
+
+    // Composed scale is a visual transform too, and must not resize the entry.
+    function test_profileScaleDoesNotResizeTheEntry() {
+        const item = createEntry({ reducedMotion: false })
+        item.motionController.profiles = [motionProfile({
+                id: "grow",
+                tracks: [{
+                    id: "swell",
+                    property: "scale",
+                    from: 1,
+                    to: 2,
+                    easing: "linear",
+                    duration: 80,
+                    delay: 0,
+                    phase: 0,
+                    direction: "normal",
+                    repeat: 1,
+                    intensityScale: 1,
+                    blend: "replace",
+                    priority: 0
+                }]
+        })]
+        wait(0)
+        item.motionController.hovered = true
+        wait(0)
+        tryVerify(function() {
+            return item.motionController.channelValue("icon", "scale") > 1.2
+        }, 2000)
+
+        compare(item.width, 60)
+        compare(item.height, 60)
+        compare(item.logicalInputRegion.width, 60)
+        compare(item.logicalInputRegion.height, 60)
+    }
+
+    function test_pointerHandlersDispatchTruthfulMotionEvents() {
+        const item = createHostedEntry({ reducedMotion: false })
+        const seen = []
+        item.motionController.eventDispatched.connect(function(name) {
+            seen.push(name)
+        })
+
+        mouseMove(item, 30, 30)
+        mouseClick(item, 30, 30)
+        wait(0)
+
+        verify(seen.indexOf("click") >= 0)
+        // A click asks for a launch; it never reports one as succeeded.
+        verify(seen.indexOf("launch-requested") >= 0)
+        verify(seen.indexOf("launch-succeeded") < 0)
+        verify(seen.indexOf("launch-failed") < 0)
+    }
+
+    function test_runningTransitionsAreReportedTruthfully() {
+        const item = createEntry({ reducedMotion: false })
+        const seen = []
+        item.motionController.eventDispatched.connect(function(name) {
+            seen.push(name)
+        })
+
+        // Running is continuous: the controller carries it as state, which is
+        // what a `running-started` trigger reads.
+        item.entry = entry({ running: true })
+        wait(0)
+        compare(item.motionController.running, true)
+        verify(seen.indexOf("running-stopped") < 0)
+
+        // Stopping is a discrete transition and is dispatched as an event.
+        item.entry = entry({ running: false })
+        wait(0)
+        compare(item.motionController.running, false)
+        verify(seen.indexOf("running-stopped") >= 0)
     }
 
     function test_runningOnlyEditAndDragStatesCannotOpenProperties() {

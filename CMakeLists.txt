@@ -41,12 +41,17 @@ set(ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon-styles")
 set(ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/data/icon-styles/builtin-icon-styles.json")
+set(ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/animation-profiles/builtin-animation-profiles.json")
 set(ARCHDOCK_RENDERING_MODULE_FILES
     qmldir
     RenderingModuleProbe.qml
     LayoutEngine.js
     IconStyleResolver.js
+    AnimationProfileRuntime.js
     IconScene.qml
+    IconMotionController.qml
+    MotionTrackRunner.qml
     PanelScene.qml
     PanelSurfaceLoader.qml
     RunningIndicator.qml
@@ -95,10 +100,14 @@ qt_add_executable(
   src/model/ThemeDefinition.cpp
   src/model/IconStyleDefinition.h
   src/model/IconStyleDefinition.cpp
+  src/model/AnimationProfile.h
+  src/model/AnimationProfile.cpp
   src/iconstyles/IconStylePackage.h
   src/iconstyles/IconStylePackage.cpp
   src/iconstyles/IconStyleStore.h
   src/iconstyles/IconStyleStore.cpp
+  src/animation/AnimationProfileCatalog.h
+  src/animation/AnimationProfileCatalog.cpp
   src/themes/ThemeAssetProcessor.h
   src/themes/ThemeAssetProcessor.cpp
   src/themes/ThemePackage.h
@@ -178,6 +187,11 @@ qt_add_resources(
   icon-style-catalog
   PREFIX "/archdock"
   FILES data/icon-styles/builtin-icon-styles.json)
+qt_add_resources(
+  arch-dock
+  animation-profile-catalog
+  PREFIX "/archdock"
+  FILES data/animation-profiles/builtin-animation-profiles.json)
 
 target_link_libraries(
   arch-dock
@@ -193,7 +207,8 @@ target_compile_definitions(
   arch-dock
   PRIVATE ARCHDOCK_SOURCE_KWIN_SCRIPT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/kwin-script/contents/code/main.js"
           ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH="${ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH}"
-          ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT="${ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT}")
+          ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT="${ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT}"
+          ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH="${ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH}")
 
 include(CTest)
 if(BUILD_TESTING)
@@ -381,6 +396,37 @@ if(BUILD_TESTING)
     COMMAND panel-settings-schema-test)
 
   qt_add_executable(
+    animation-profile-test
+    tests/AnimationProfileTest.cpp
+    src/model/AnimationProfile.h
+    src/model/AnimationProfile.cpp
+    src/animation/AnimationProfileCatalog.h
+    src/animation/AnimationProfileCatalog.cpp
+    src/model/PanelCapabilityResolver.h
+    src/model/PanelCapabilityResolver.cpp
+    src/model/PanelDefinition.h
+    src/model/PanelDefinition.cpp
+    src/model/PanelSettingsSchema.h
+    src/model/PanelSettingsSchema.cpp
+    src/model/PanelRuntimeState.h
+    src/model/PanelRuntimeState.cpp
+    src/model/SettingsMigration.h
+    src/model/SettingsMigration.cpp)
+  target_include_directories(
+    animation-profile-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_compile_definitions(
+    animation-profile-test
+    PRIVATE ARCHDOCK_ANIMATION_PROFILE_FIXTURE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/animation-profile-v1"
+            ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH="${ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH}")
+  target_link_libraries(
+    animation-profile-test
+    PRIVATE Qt6::Core
+            Qt6::Gui
+            Qt6::Test)
+  add_test(NAME animation-profile-test COMMAND animation-profile-test)
+
+  qt_add_executable(
     panel-capability-resolver-test
     tests/PanelCapabilityResolverTest.cpp
     src/model/PanelDefinition.h
@@ -465,6 +511,10 @@ if(BUILD_TESTING)
     src/iconstyles/IconStylePackage.cpp
     src/iconstyles/IconStyleStore.h
     src/iconstyles/IconStyleStore.cpp
+    src/model/AnimationProfile.h
+    src/model/AnimationProfile.cpp
+    src/animation/AnimationProfileCatalog.h
+    src/animation/AnimationProfileCatalog.cpp
     src/themes/ThemeAssetProcessor.h
     src/themes/ThemeAssetProcessor.cpp
     src/themes/ThemePackage.h
@@ -559,6 +609,10 @@ if(BUILD_TESTING)
     src/iconstyles/IconStylePackage.cpp
     src/iconstyles/IconStyleStore.h
     src/iconstyles/IconStyleStore.cpp
+    src/model/AnimationProfile.h
+    src/model/AnimationProfile.cpp
+    src/animation/AnimationProfileCatalog.h
+    src/animation/AnimationProfileCatalog.cpp
     src/themes/ThemeAssetProcessor.h
     src/themes/ThemeAssetProcessor.cpp
     src/themes/ThemePackage.h
@@ -790,6 +844,31 @@ if(BUILD_TESTING)
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(
+    NAME animation-profile-runtime-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_AnimationProfileRuntime.qml)
+  set_tests_properties(
+    animation-profile-runtime-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME dock-entry-motion-contract-test
+    COMMAND ${CMAKE_COMMAND}
+            -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ValidateDockEntryMotion.cmake)
+
+  add_test(
+    NAME icon-motion-migration-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_IconMotionMigration.qml)
+  set_tests_properties(
+    icon-motion-migration-test
+    PROPERTIES ENVIRONMENT
+               "QT_QPA_PLATFORM=offscreen;QML_XHR_ALLOW_FILE_READ=1")
+
+  add_test(
     NAME dock-entry-test
     COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
             -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
@@ -937,6 +1016,9 @@ install(FILES data/themes/builtin-themes.json DESTINATION share/arch-dock/themes
 install(
   FILES data/icon-styles/builtin-icon-styles.json
   DESTINATION share/arch-dock/icon-styles)
+install(
+  FILES data/animation-profiles/builtin-animation-profiles.json
+  DESTINATION share/arch-dock/animation-profiles)
 foreach(packaged_icon_style
         plain-original
         metallic-blue

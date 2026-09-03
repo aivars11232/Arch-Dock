@@ -1,0 +1,64 @@
+{
+  "format": "org.archdock.animation-profile",
+  "version": 1,
+  "id": "fixture-composed",
+  "name": "Fixture Composed",
+  "description": "Distinct layers plus one deterministic additive pair.",
+  "category": "fixture",
+  "target": "icon",
+  "trigger": "idle",
+  "timing": {"baseDuration": 400, "speedScale": 0.5, "startDelay": 20},
+  "tracks": [
+    {
+      "id": "glyph-turn",
+      "target": "glyph",
+      "property": "rotate-y",
+      "from": 0,
+      "to": 360,
+      "easing": "linear",
+      "duration": 4000,
+      "repeat": -1
+    },
+    {
+      "id": "tile-breathe",
+      "target": "tile",
+      "property": "scale",
+      "from": 1,
+      "to": 1.08,
+      "easing": "in-out-sine",
+      "duration": 800,
+      "direction": "alternate",
+      "repeat": -1
+    },
+    {
+      "id": "drift-a",
+      "property": "translate-y",
+      "from": 0,
+      "to": -4,
+      "duration": 600,
+      "blend": "add",
+      "repeat": -1
+    },
+    {
+      "id": "drift-b",
+      "property": "translate-y",
+      "from": 0,
+      "to": -2,
+      "duration": 900,
+      "blend": "add",
+      "repeat": -1
+    },
+    {
+      "id": "indicator-glow",
+      "target": "indicator",
+      "property": "glow",
+      "from": 0.2,
+      "to": 1,
+      "duration": 700,
+      "direction": "alternate",
+      "repeat": -1
+    }
+  ],
+  "rendererRequirements": ["procedural2d", "skinned2d"],
+  "reducedMotion": {"mode": "static", "property": "glow", "value": 0.6}
+}

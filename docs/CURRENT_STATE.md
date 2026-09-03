@@ -6,7 +6,10 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-09-03 (Europe/Amsterdam). The earlier TASK-0029
+**Evidence snapshot:** 2026-09-03 (Europe/Amsterdam). TASK-0030 was
+implemented on top of `8e54b2b` and is described under "TASK-0030 —
+animation-profile engine" below; its changes are unstaged and uncommitted for
+owner review. The earlier TASK-0029
 implementation described below was committed as `a34fbd9`, which carries the
 subject `task28`; the working tree was clean at the start of this session.
 The statements here therefore describe `a34fbd9` plus the TASK-0029 Phase A
@@ -390,6 +393,114 @@ This evidence is representative of the required Arch Linux, Plasma 6, Qt 6,
 Wayland integration, but it remains an isolated virtual session. It does not
 claim hardware-specific monitor behavior or mutation of a user's live desktop.
 
+## TASK-0030 — animation-profile engine
+
+AD-0011 is now data-driven. Icon motion is described by validated animation
+profiles rather than by a growing conditional block in `DockEntry.qml`.
+
+### Phase A — schema and validator
+
+`src/model/AnimationProfile.*` defines the profile, its track model and the
+target, trigger and property vocabularies from master plan sections 14.2 to
+14.4. `src/animation/AnimationProfileCatalog.*` parses and validates catalogs
+fail-closed: any error loads no profiles at all. Renderer requirements are
+checked against the capability resolver's own tier vocabulary rather than a
+second copy of it.
+
+`click` and `launch-succeeded` are separate triggers. The pre-migration
+umbrella value `launch` is not in the vocabulary and is mapped to
+`launch-requested` by the compatibility layer, so a click can never present
+itself as a verified launch. Every profile must declare a reduced-motion
+behaviour; an absent declaration is a `missing-reduced-motion` error, a
+substitute must exist, and a substitute may not itself substitute.
+
+Nine fixtures in `tests/fixtures/animation-profile-v1/` cover one validator
+outcome each and are indexed by `fixture-index.json`. `animation-profile-test`
+asserts every fixture produces exactly its declared diagnostic code and that a
+conflict diagnostic points at the second writer (`/tracks/1`).
+
+### Phase B — dispatch and composition
+
+`qml/ArchDock/Rendering/AnimationProfileRuntime.js` holds the event vocabulary
+and the composition rules, with no QML types, so composition is testable
+without a window. `IconMotionController.qml` runs the accepted tracks and is
+the only track runner; `MotionTrackRunner.qml` animates one track each.
+
+A runner animates only its own `progress` property and never writes to a scene
+item, so two runners cannot race. The controller composes their values into
+per-target channels and the host binds the result. Two writers on the same
+target and property are permitted only when the outcome is deterministic —
+both additive, or distinct priorities. Anything else is rejected, both
+claimants are withdrawn, and the clash is reported through `conflictDetected`.
+
+Composition is order-independent: presenting the same profiles in reverse
+order produces an identical track list. `DockEntry` dispatches hover enter and
+exit, press, click, launch-requested, drop-entered, drop-committed and
+running-stopped from the real pointer and state handlers; hover-hold, running,
+urgent, drop and reveal are carried as state.
+
+The controller writes only visual transforms on a layer nested inside the
+entry, so `root` keeps its logical size and input region. Two regression tests
+drive a travelling translation and a 2x scale and assert the entry's width,
+height, position and `logicalInputRegion` never move.
+
+### Phase C — migration
+
+`data/animation-profiles/builtin-animation-profiles.json` carries 18 built-in
+profiles covering all 19 selectable `iconAnimation` values; `scale` is a legacy
+alias of `pulse`. Amplitude, cycle length and per-entry stagger are preserved
+exactly. Translation is expressed in logical units, reproducing the previous
+`baseSize * 0.22` arithmetic at any icon size, and intensity scales endpoints
+about each property's resting value so a symmetric tilt narrows towards its
+centre exactly as before. Two multi-leg effects are expressed as a single
+alternating track carrying the same shape: `elastic` through `out-elastic` and
+`spring` through `out-back`. The full migration table is in
+[ANIMATION_PROFILE.md](ANIMATION_PROFILE.md).
+
+Seven effect families were migrated one at a time, each verified before its
+legacy branch was deleted: orbit, oscillating rotation, continuous rotation,
+scale, staggered translation, translation, and glow. `DockEntry.qml` fell from
+392 to 350 lines and now contains no effect name, no per-effect conditional
+and no animation of its own. `dock-entry-motion-contract-test` fails the build
+if any of those reappear; it was confirmed non-vacuous by running it against
+the pre-migration file, which it rejects.
+
+The catalog reaches QML through `PanelRegistry` and the panel configuration
+that `PanelWindow` publishes, and is compiled in as a Qt resource so a
+stage-install without data files still resolves every profile. Because the
+effect and the event that starts it remain separate user settings, `DockEntry`
+overrides each bound profile's nominal trigger with the configured one.
+
+`animation-profile-test` asserts that the catalog's profile ids plus legacy
+names are exactly the set of values the `iconAnimation` settings field offers,
+in both directions, so the editor cannot list an unvalidated preset and the
+catalog cannot hold one the editor cannot select.
+
+### Verification boundary
+
+Baseline before any edit: fresh configure, build and 46/46 CTest. Phase A gate:
+fresh build and 47/47. Phase B gate: fresh build, 48/48, and the isolated
+`rendering-import-smoke` at 65.75 s. Consolidated gate figures are recorded
+with the final result.
+
+One focused correction was made during Phase B after a diagnostic probe proved
+the cause. Binding the controller's `sceneVisible` to the entry's `visible`
+made the controller inert in any headless host and imported concealment gating
+that TASK-0031 owns, so the binding was removed; the controller keeps the
+capability and it remains covered by a test. In the same correction,
+`running-started` was confirmed to be a state trigger, matching the legacy
+`trigger === "running"` meaning, so only the stop transition is dispatched as
+a discrete event.
+
+The known `rendering-import-smoke` flakiness recorded for TASK-0029 was not
+modified and remains a property of that harness, not of this work.
+
+Reduced motion currently rests every icon effect, which is exactly the
+pre-migration behaviour; each profile declares `mode: "none"` explicitly.
+Richer per-preset reduced-motion substitutes, the requested new motions, and
+verified launch-succeeded and launch-failed events from `DockModel` are owned
+by TASK-0031 and were deliberately not implemented here.
+
 ## Next task boundary
 
 TASK-0028 is the completed AD-0009 dependency. TASK-0029 has passed its four
@@ -397,7 +508,12 @@ sequential phase gates and consolidated completion gate, closing the scoped
 AD-0010 implementation under the isolated-runtime evidence boundary above.
 Its changes remain unstaged and uncommitted for owner review.
 
-The task pack identifies **TASK-0030 — Implement animation profiles and the
-shared animation engine** as the next dependency-bound task. Do not begin it
-without the separate planning and owner-approval protocol required by that
-task.
+TASK-0030 has passed its three sequential phase gates and its consolidated
+completion gate, closing the scoped AD-0011 implementation under the
+isolated-runtime evidence boundary above. Its changes remain unstaged and
+uncommitted for owner review.
+
+The task pack identifies **TASK-0031 — Implement requested icon motions,
+launch-event truth, reduced motion, and safety** as the next dependency-bound
+task. Do not begin it without the separate planning and owner-approval
+protocol required by that task.

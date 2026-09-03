@@ -1,0 +1,14 @@
+{
+  "format": "org.archdock.animation-profile",
+  "version": 1,
+  "id": "fixture-invalid-renderer",
+  "name": "Fixture Invalid Renderer",
+  "target": "icon",
+  "trigger": "idle",
+  "timing": {"baseDuration": 200},
+  "tracks": [
+    {"id": "lift", "property": "translate-y", "from": 0, "to": -8, "duration": 200}
+  ],
+  "rendererRequirements": ["holographic9d"],
+  "reducedMotion": {"mode": "none"}
+}

@@ -1,0 +1,14 @@
+{
+  "format": "org.archdock.animation-profile",
+  "version": 1,
+  "id": "fixture-invalid-range",
+  "name": "Fixture Invalid Range",
+  "target": "icon",
+  "trigger": "idle",
+  "timing": {"baseDuration": 200},
+  "tracks": [
+    {"id": "over-fade", "property": "opacity", "from": 0, "to": 4.5, "duration": 200}
+  ],
+  "rendererRequirements": ["procedural2d"],
+  "reducedMotion": {"mode": "none"}
+}

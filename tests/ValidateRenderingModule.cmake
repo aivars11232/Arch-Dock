@@ -4,7 +4,10 @@ endif()
 
 set(rendering_sources
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/IconStyleResolver.js"
+    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/AnimationProfileRuntime.js"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/IconScene.qml"
+    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/IconMotionController.qml"
+    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/MotionTrackRunner.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/PanelScene.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/PanelSurfaceLoader.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/RunningIndicator.qml"
