@@ -31,6 +31,12 @@ TestCase {
         LivePanelPreview {}
     }
 
+    Component {
+        id: presentationControllerComponent
+
+        PanelPresentationController {}
+    }
+
     function test_installedModuleIdentity() {
         compare(RenderingModuleProbe.uri, "ArchDock.Rendering")
         compare(RenderingModuleProbe.majorVersion, 1)
@@ -117,5 +123,21 @@ TestCase {
         compare(preview.panelSceneItem.layoutPath, "vertical")
         compare(preview.activeRendererTier, "procedural2d")
         verify(preview.panelSceneItem.visualPanel !== null)
+    }
+
+    function test_presentationControllerContractLoads() {
+        const controller = createTemporaryObject(
+            presentationControllerComponent, testCase, {
+                restingState: "collapsed"
+            })
+        verify(controller !== null)
+        compare(controller.phase, "collapsed")
+        compare(controller.surfaceState, "collapsed")
+        compare(controller.transitionState, "idle")
+        compare(controller.hostPhase, "revealed")
+        compare(controller.hostVisible, true)
+        compare(controller.progress, -1)
+        compare(PresentationStates.isRestingState("collapsed"), true)
+        compare(PresentationStates.isRestingState("collapsing"), false)
     }
 }

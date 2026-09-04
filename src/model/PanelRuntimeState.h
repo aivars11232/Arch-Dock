@@ -11,7 +11,20 @@ enum class PanelTransitionState
 {
     Idle,
     Opening,
-    Closing
+    Closing,
+    // Host visibility, deliberately part of the same transient record but
+    // never reported to a surface renderer as an open/collapsed
+    // interpolation. Concealing a panel is not collapsing it.
+    Concealing,
+    Revealing
+};
+
+// What the panel surface is drawing. Independent of whether the host is
+// showing the panel at all, so a panel can be host-visible and collapsed.
+enum class PanelSurfaceState
+{
+    Open,
+    Collapsed
 };
 
 struct PanelRuntimeState
@@ -21,6 +34,8 @@ struct PanelRuntimeState
     bool editMode = false;
     bool popupOpen = false;
     bool dragInProgress = false;
+    PanelSurfaceState surfaceState = PanelSurfaceState::Open;
+    bool hostConcealed = false;
     PanelTransitionState transition = PanelTransitionState::Idle;
     qreal presentationProgress = -1.0;
     bool windowOverlap = false;
@@ -32,6 +47,7 @@ struct PanelRuntimeState
     [[nodiscard]] QVariantMap toRuntimeMap() const;
     [[nodiscard]] static bool isTransientLegacyKey(const QString &key);
     [[nodiscard]] static QString transitionName(PanelTransitionState state);
+    [[nodiscard]] static QString surfaceStateName(PanelSurfaceState state);
 
     bool operator==(const PanelRuntimeState &) const = default;
 };

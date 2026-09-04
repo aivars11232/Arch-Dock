@@ -438,6 +438,8 @@ void PanelModelTest::runtimeStateStartsFromSafeDefaults()
     QVERIFY(!first.popupOpen);
     QVERIFY(!first.dragInProgress);
     QCOMPARE(first.transition, PanelTransitionState::Idle);
+    QCOMPARE(first.surfaceState, ArchDock::PanelSurfaceState::Open);
+    QVERIFY(!first.hostConcealed);
     QVERIFY(!first.windowOverlap);
     QVERIFY(first.rendererFallback.isEmpty());
     QCOMPARE(first.frameQuality, QStringLiteral("normal"));
@@ -450,6 +452,25 @@ void PanelModelTest::runtimeStateStartsFromSafeDefaults()
     QCOMPARE(runtime.value(QStringLiteral("hoveredEntry")).toInt(), -1);
     QCOMPARE(runtime.value(QStringLiteral("presentationProgress")).toReal(), -1.0);
     QVERIFY(runtime.contains(QStringLiteral("currentScreenGeometry")));
+
+    // The surface state the renderer consumes must actually be published, and
+    // host concealment must be reported beside it rather than folded into it.
+    QCOMPARE(runtime.value(QStringLiteral("presentationState")).toString(),
+             QStringLiteral("open"));
+    QVERIFY(!runtime.value(QStringLiteral("hostConcealed")).toBool());
+
+    PanelRuntimeState collapsedAndConcealed;
+    collapsedAndConcealed.surfaceState = ArchDock::PanelSurfaceState::Collapsed;
+    collapsedAndConcealed.hostConcealed = true;
+    collapsedAndConcealed.transition = PanelTransitionState::Revealing;
+    const QVariantMap concealedRuntime = collapsedAndConcealed.toRuntimeMap();
+    QCOMPARE(concealedRuntime.value(QStringLiteral("presentationState")).toString(),
+             QStringLiteral("collapsed"));
+    QVERIFY(concealedRuntime.value(QStringLiteral("hostConcealed")).toBool());
+    // A host reveal is never reported to a surface renderer as an open or
+    // close interpolation.
+    QCOMPARE(concealedRuntime.value(QStringLiteral("transitionState")).toString(),
+             QStringLiteral("revealing"));
 }
 
 void PanelModelTest::serializationExcludesTransientRuntimeState()
@@ -464,6 +485,8 @@ void PanelModelTest::serializationExcludesTransientRuntimeState()
         {QStringLiteral("popupOpen"), true},
         {QStringLiteral("dragging"), true},
         {QStringLiteral("transitionState"), QStringLiteral("opening")},
+        {QStringLiteral("presentationState"), QStringLiteral("collapsed")},
+        {QStringLiteral("hostConcealed"), true},
         {QStringLiteral("presentationProgress"), 0.4},
         {QStringLiteral("windowOverlap"), true},
         {QStringLiteral("rendererFallback"), QStringLiteral("software")},
@@ -497,6 +520,8 @@ void PanelModelTest::serializationExcludesTransientRuntimeState()
         QStringLiteral("dragging"),
         QStringLiteral("moving"),
         QStringLiteral("transitionState"),
+        QStringLiteral("presentationState"),
+        QStringLiteral("hostConcealed"),
         QStringLiteral("presentationProgress"),
         QStringLiteral("windowOverlap"),
         QStringLiteral("rendererFallback"),

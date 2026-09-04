@@ -18,6 +18,8 @@ QVariantMap PanelRuntimeState::toRuntimeMap() const
         {QStringLiteral("editMode"), editMode},
         {QStringLiteral("popupOpen"), popupOpen},
         {QStringLiteral("dragInProgress"), dragInProgress},
+        {QStringLiteral("presentationState"), surfaceStateName(surfaceState)},
+        {QStringLiteral("hostConcealed"), hostConcealed},
         {QStringLiteral("transitionState"), transitionName(transition)},
         {QStringLiteral("presentationProgress"), presentationProgress},
         {QStringLiteral("windowOverlap"), windowOverlap},
@@ -44,6 +46,12 @@ bool PanelRuntimeState::isTransientLegacyKey(const QString &key)
         QStringLiteral("initialized"),
         QStringLiteral("transitionstate"),
         QStringLiteral("currenttransition"),
+        QStringLiteral("presentationstate"),
+        QStringLiteral("surfacestate"),
+        QStringLiteral("presentationphase"),
+        QStringLiteral("resttarget"),
+        QStringLiteral("hostconcealed"),
+        QStringLiteral("concealed"),
         QStringLiteral("presentationprogress"),
         QStringLiteral("transitionprogress"),
         QStringLiteral("windowoverlap"),
@@ -66,10 +74,26 @@ QString PanelRuntimeState::transitionName(PanelTransitionState state)
         return QStringLiteral("opening");
     case PanelTransitionState::Closing:
         return QStringLiteral("closing");
+    case PanelTransitionState::Concealing:
+        return QStringLiteral("concealing");
+    case PanelTransitionState::Revealing:
+        return QStringLiteral("revealing");
     case PanelTransitionState::Idle:
         return QStringLiteral("idle");
     }
     return QStringLiteral("idle");
+}
+
+QString PanelRuntimeState::surfaceStateName(PanelSurfaceState state)
+{
+    switch (state)
+    {
+    case PanelSurfaceState::Collapsed:
+        return QStringLiteral("collapsed");
+    case PanelSurfaceState::Open:
+        return QStringLiteral("open");
+    }
+    return QStringLiteral("open");
 }
 
 }

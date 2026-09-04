@@ -50,9 +50,11 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     IconStyleResolver.js
     AnimationProfileRuntime.js
     MotionChannels.js
+    PresentationStates.js
     IconScene.qml
     IconMotionController.qml
     MotionTrackRunner.qml
+    PanelPresentationController.qml
     PanelScene.qml
     PanelSurfaceLoader.qml
     RunningIndicator.qml
@@ -860,6 +862,33 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_AnimationProfileRuntime.qml)
   set_tests_properties(
     animation-profile-runtime-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME panel-presentation-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PanelPresentation.qml)
+  set_tests_properties(
+    panel-presentation-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME panel-presentation-guards-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PanelPresentationGuards.qml)
+  set_tests_properties(
+    panel-presentation-guards-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME panel-guard-interaction-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PanelGuardInteraction.qml)
+  set_tests_properties(
+    panel-guard-interaction-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(

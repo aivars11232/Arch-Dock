@@ -40,6 +40,11 @@ Item {
     required property var setHoveredIndex
     required property var openPanelStudio
     required property var openIconProperties
+    // Reports this entry's interaction guards to the panel, which is what
+    // stops the panel closing underneath an open menu or an active drag.
+    // Defaulted rather than required so an existing host that does not yet
+    // collect guards keeps working unchanged.
+    property var setEntryGuard: function(index, name, active) {}
     property var iconStyleDefinition: ({})
     property var iconOverrideResolution:
         entry && entry.iconOverrideResolution
@@ -171,13 +176,25 @@ Item {
     onEntryRunningChanged: if (!entryRunning) dispatchMotionEvent("running-stopped")
 
     onEditModeChanged: if (editMode) contextMenu.close()
-    onDraggingChanged: if (dragging) contextMenu.close()
+    onDraggingChanged: {
+        if (dragging)
+            contextMenu.close();
+        setEntryGuard(entryIndex, "drag", dragging);
+    }
+    onContextMenuVisibleChanged:
+        setEntryGuard(entryIndex, "menu", contextMenuVisible)
     onInputEnabledChanged: {
         if (!inputEnabled) {
             dragging = false;
             clickPulse = false;
             setHoveredIndex(-1);
         }
+    }
+    // An entry that goes away must not leave a guard behind holding the panel
+    // open forever.
+    Component.onDestruction: {
+        setEntryGuard(entryIndex, "drag", false);
+        setEntryGuard(entryIndex, "menu", false);
     }
 
     width: baseSize

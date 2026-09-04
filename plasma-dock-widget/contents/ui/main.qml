@@ -125,6 +125,42 @@ PlasmoidItem {
     property bool requestFailed: false
     property bool bootstrapRequested: false
 
+    // Interaction guards collected from the whole panel. Per-entry guards are
+    // reported by the delegates, keyed by entry so two open menus cannot
+    // cancel each other out; panel-wide guards come from the representation.
+    property var entryGuardFlags: ({})
+    property bool panelPointerInside: false
+    property bool panelKeyboardFocus: false
+    property bool panelDropActive: false
+
+    readonly property bool entryMenuOpen: guardActive("menu")
+    readonly property bool entryDragActive: guardActive("drag")
+
+    function setEntryGuard(index, name, active) {
+        const key = String(name) + ":" + String(index);
+        const source = entryGuardFlags || ({});
+        if (Boolean(source[key]) === Boolean(active))
+            return;
+        const next = ({});
+        for (const existing of Object.keys(source)) {
+            if (existing !== key)
+                next[existing] = source[existing];
+        }
+        if (active)
+            next[key] = true;
+        entryGuardFlags = next;
+    }
+
+    function guardActive(name) {
+        const prefix = String(name) + ":";
+        const source = entryGuardFlags || ({});
+        for (const key of Object.keys(source)) {
+            if (key.indexOf(prefix) === 0 && source[key])
+                return true;
+        }
+        return false;
+    }
+
     Plasmoid.title: qsTr("Arch Dock")
     Plasmoid.icon: "applications-system"
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
@@ -368,6 +404,30 @@ PlasmoidItem {
         return true;
     }
 
+    // The panel's own presentation state machine. Phase B feeds it every
+    // declared guard; the surface state it publishes is wired into the scene
+    // and to host visibility in Phase D.
+    PanelPresentationController {
+        id: presentationController
+
+        restingState: String(root.configuration.presentationMode || "open")
+        openDelay: Number(root.configuration.openDelay || 0)
+        closeDelay: Number(root.configuration.closeDelay || 0)
+        transitionDuration: root.motionDuration
+        reducedMotion: Boolean(root.configuration.reducedMotion)
+
+        popupOpen: root.entryMenuOpen
+        dragActive: root.entryDragActive || root.panelDropActive
+        pointerInside: root.panelPointerInside
+        keyboardFocus: root.panelKeyboardFocus
+        editMode: root.plasmaEditMode
+        // Grouped window previews are owned by TASK-0037. The guard exists and
+        // is fed with a truthful `false` rather than being silently omitted.
+        windowPreviewOpen: false
+        // Panel Studio's preview lock does not apply to the live applet.
+        previewLock: false
+    }
+
     PlasmaCore.Action {
         id: configurePanelStudioAction
         text: qsTr("Configure Arch Dock…")
@@ -395,6 +455,23 @@ PlasmoidItem {
                     && (!Window.window.visible
                         || Window.visibility === Window.Hidden
                         || Window.visibility === Window.Minimized))
+
+            // Panel-wide interaction guards. The pointer being anywhere over
+            // the panel holds it open, not merely the pointer being over an
+            // icon, so the gaps between entries are not a way to make a dock
+            // close under the user's cursor.
+            HoverHandler {
+                id: panelHover
+
+                onHoveredChanged: root.panelPointerInside = hovered
+            }
+
+            onActiveFocusChanged: root.panelKeyboardFocus = activeFocus
+            Component.onDestruction: {
+                root.panelPointerInside = false;
+                root.panelKeyboardFocus = false;
+                root.panelDropActive = false;
+            }
 
             PanelScene {
                 id: panelScene
@@ -453,13 +530,17 @@ PlasmoidItem {
             }
 
             DropArea {
+                id: panelDropArea
+
                 anchors.fill: parent
                 enabled: root.configuration.acceptDrops && !root.plasmaEditMode
                 keys: ["text/uri-list"]
+                onContainsDragChanged: root.panelDropActive = containsDrag
                 onDropped: drop => {
                     if (drop.hasUrls)
                         root.pinDroppedUrls(drop.urls);
                     drop.acceptProposedAction();
+                    root.panelDropActive = false;
                 }
             }
         }
@@ -507,6 +588,7 @@ PlasmoidItem {
             reorder: root.reorderEntry
             pinUrls: root.pinDroppedUrls
             setHoveredIndex: function(value) { root.hoveredIndex = value }
+            setEntryGuard: root.setEntryGuard
             openPanelStudio: root.openPanelStudio
             openIconProperties: root.openIconProperties
         }
