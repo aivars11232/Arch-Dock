@@ -2094,6 +2094,58 @@ bool PanelWindow::activateDockEntry(const QString &appId)
     return m_dockModel.activateApplication(appId);
 }
 
+// The same activation as activateDockEntry, but reporting what happened.
+//
+// `succeeded` means a program was started and the start was confirmed.
+// `requested` means the activation was handed to the compositor, which does not
+// report back: the caller must not treat it as success. `failed` means the
+// entry could not be launched at all. The bool-returning activateDockEntry is
+// unchanged, so existing callers keep their exact contract.
+QVariantMap PanelWindow::activateDockEntryOutcome(const QString &appId)
+{
+    QVariantMap result;
+    result.insert(QStringLiteral("appId"), appId);
+    result.insert(QStringLiteral("reason"), QString{});
+
+    if (appId.startsWith(QStringLiteral("free-url:")))
+    {
+        const bool opened =
+            m_dockModel.openUrl(QUrl::fromEncoded(appId.mid(9).toUtf8()));
+        result.insert(QStringLiteral("outcome"),
+                      opened ? QStringLiteral("succeeded")
+                             : QStringLiteral("failed"));
+        if (!opened)
+        {
+            result.insert(QStringLiteral("reason"),
+                          QStringLiteral("no-url-handler"));
+        }
+        return result;
+    }
+
+    switch (m_dockModel.activateApplicationOutcome(appId))
+    {
+    case DockModel::ActivationOutcome::Launched:
+        result.insert(QStringLiteral("outcome"), QStringLiteral("succeeded"));
+        break;
+    case DockModel::ActivationOutcome::ActivationRequested:
+        result.insert(QStringLiteral("outcome"), QStringLiteral("requested"));
+        result.insert(QStringLiteral("reason"),
+                      QStringLiteral("activation-not-verifiable"));
+        break;
+    case DockModel::ActivationOutcome::Failed:
+        result.insert(QStringLiteral("outcome"), QStringLiteral("failed"));
+        result.insert(QStringLiteral("reason"),
+                      QStringLiteral("launch-failed"));
+        break;
+    case DockModel::ActivationOutcome::UnknownEntry:
+        result.insert(QStringLiteral("outcome"), QStringLiteral("failed"));
+        result.insert(QStringLiteral("reason"),
+                      QStringLiteral("unknown-entry"));
+        break;
+    }
+    return result;
+}
+
 bool PanelWindow::activateDockWindow(const QString &appId, const QString &windowId)
 {
     return m_dockModel.activateApplicationWindow(appId, windowId);

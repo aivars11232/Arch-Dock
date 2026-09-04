@@ -71,8 +71,16 @@ Item {
     // Bumped by every runner so `channels` recomputes as animations advance.
     property int runnerRevision: 0
 
+    function bumpRevision() {
+        root.runnerRevision = root.runnerRevision + 1
+    }
+
     readonly property var channels: {
-        // Reading the revision is what makes this binding follow the runners.
+        // Two dependencies, and only two: the track set, which says which
+        // runners exist, and the revision, which advances as they animate.
+        // Reading `trackRunners` itself would let object creation invalidate
+        // this binding while it is still evaluating.
+        const tracks = root.activeTracks
         const revision = root.runnerRevision
         const result = ({})
         const additive = ({})
@@ -208,8 +216,11 @@ Item {
             onColorValueChanged: root.runnerRevision = root.runnerRevision + 1
         }
 
-        onObjectAdded: root.runnerRevision = root.runnerRevision + 1
-        onObjectRemoved: root.runnerRevision = root.runnerRevision + 1
+        // Deferred: a runner can be created while `channels` is evaluating, and
+        // bumping the revision from inside that evaluation would invalidate the
+        // binding that caused it.
+        onObjectAdded: Qt.callLater(root.bumpRevision)
+        onObjectRemoved: Qt.callLater(root.bumpRevision)
     }
 
     Timer {

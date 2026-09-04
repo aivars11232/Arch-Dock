@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
 import ArchDock.Rendering 1.0
@@ -61,9 +62,18 @@ PlasmoidItem {
     readonly property bool sceneInputEnabled: freeSurface
         ? FreeEntryPolicy.interactionEnabled(plasmaEditMode)
         : dockService.registered && !plasmaEditMode
+    // Headroom the panel must reserve so an effect is not clipped by the host
+    // it lives in: magnification growth plus the furthest the bound profile can
+    // actually travel. Reduced motion holds still, so it reserves nothing.
+    readonly property real motionHeadroom: configuration.reducedMotion
+        ? 0
+        : baseCellSize * MotionChannels.maximumDisplacement(
+            activeAnimationProfiles,
+            Number(configuration.animationIntensity || 1))
     readonly property real nativeScenePadding: Kirigami.Units.largeSpacing
         + (configuration.magnificationEnabled
             ? baseCellSize * Math.max(0, magnification - 1) : 0)
+        + motionHeadroom
     readonly property var scenePanelDefinition: buildScenePanelDefinition()
     readonly property var sceneRuntimeState: ({
         hovered: hoveredIndex >= 0,
@@ -101,6 +111,8 @@ PlasmoidItem {
         acceptDrops: true,
         magnification: 1.65,
         magnificationEnabled: true,
+        magnificationRadius: 2.4,
+        magnificationFalloff: "linear",
         showReflections: false,
         showIndicators: true,
         showTooltips: true,
@@ -268,20 +280,55 @@ PlasmoidItem {
         });
     }
 
-    function invokeEntry(methodName, appId) {
-        if (freeSurface && methodName === "activateDockEntry") {
-            const targetUrl = FreeEntryPolicy.encodedUrl(appId);
-            if (targetUrl.length > 0) {
-                if (!Qt.openUrlExternally(targetUrl) && dockService.registered)
-                    callDock(methodName, [appId]);
-                return;
-            }
+    function invokeEntry(methodName, appId, onOutcome) {
+        if (methodName === "activateDockEntry") {
+            activateEntry(appId, onOutcome);
+            return;
         }
         if (freeSurface && methodName === "togglePinnedDockEntry") {
             callDock("removePanelContent", [panelId, appId], refresh);
             return;
         }
         callDock(methodName, [appId], refresh);
+    }
+
+    // Activates an entry and reports what actually happened.
+    //
+    // "succeeded" is only ever reported for an outcome the platform confirmed.
+    // When it cannot confirm one - a window handed to the compositor, which
+    // never answers - the outcome stays "requested" and the caller must not
+    // present it as a success.
+    function activateEntry(appId, onOutcome) {
+        function report(outcome, reason) {
+            if (onOutcome)
+                onOutcome({ outcome: outcome, reason: reason || "" });
+        }
+        if (freeSurface) {
+            const targetUrl = FreeEntryPolicy.encodedUrl(appId);
+            if (targetUrl.length > 0) {
+                if (Qt.openUrlExternally(targetUrl)) {
+                    report("succeeded", "");
+                    return;
+                }
+                if (!dockService.registered) {
+                    report("failed", "no-url-handler");
+                    return;
+                }
+            }
+        }
+        if (!dockService.registered) {
+            report("failed", "service-unavailable");
+            return;
+        }
+        callDock("activateDockEntryOutcome", [appId], function(reply) {
+            const value = normalizeReply(reply);
+            report(value && value.outcome ? String(value.outcome) : "requested",
+                   value && value.reason ? String(value.reason) : "");
+            refresh();
+        }, function(error) {
+            report("failed", error && error.name
+                   ? String(error.name) : "call-failed");
+        });
     }
 
     function reorderEntry(appId, beforeAppId) {
@@ -339,6 +386,16 @@ PlasmoidItem {
             Layout.minimumWidth: implicitWidth
             Layout.minimumHeight: implicitHeight
 
+            // The panel is concealed when its own item is hidden or fully
+            // transparent, or when the window holding it is not on screen -
+            // which is what a Plasma auto-hide panel does. Nothing is inferred
+            // from focus: a dock stays visible while another window is active.
+            readonly property bool hostConcealed: !visible || opacity <= 0
+                || (Window.window !== null
+                    && (!Window.window.visible
+                        || Window.visibility === Window.Hidden
+                        || Window.visibility === Window.Minimized))
+
             PanelScene {
                 id: panelScene
 
@@ -356,6 +413,7 @@ PlasmoidItem {
                 })
                 entryDelegate: liveEntryDelegate
                 entryInteractionEnabled: root.sceneInputEnabled
+                sceneConcealed: representation.hostConcealed
                 geometryCompatibilityProfile: root.freeSurface
                     ? "live" : "canonical"
                 entryDelegateContext: ({
@@ -420,8 +478,13 @@ PlasmoidItem {
                 parent.sceneEntry.iconOverrideResolution || ({})
             vertical: root.freeSurface ? false : root.vertical
             baseSize: Number(parent.sceneGeometry.iconSize || root.baseCellSize)
+            entryGeometry: parent.sceneGeometry
             magnification: root.magnification
             magnificationEnabled: root.configuration.magnificationEnabled
+            magnificationRadius: Number(
+                root.configuration.magnificationRadius || 2.4)
+            magnificationFalloff: String(
+                root.configuration.magnificationFalloff || "linear")
             hoveredIndex: root.hoveredIndex
             tileShape: root.configuration.iconShape
             appearance: root.configuration.appearance
@@ -437,6 +500,7 @@ PlasmoidItem {
             animationCatalog: root.animationCatalogMap
             reducedMotion: root.configuration.reducedMotion
             inputEnabled: parent.sceneInputEnabled
+            sceneVisible: parent.sceneVisible
             editMode: root.plasmaEditMode
             acceptDrops: root.configuration.acceptDrops
             invoke: root.invokeEntry

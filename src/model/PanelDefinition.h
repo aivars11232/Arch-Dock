@@ -249,6 +249,11 @@ struct PanelMotionDefinition
     QString trigger = QStringLiteral("hover");
     qreal speed = 1.0;
     qreal intensity = 1.0;
+    // How far the hovered icon's magnification reaches, in entry positions,
+    // and the shape of its decay. Visual influence only: the layout and every
+    // hit area stay exactly where they were.
+    qreal magnifyRadius = 2.4;
+    QString magnifyFalloff = QStringLiteral("linear");
     bool physicsEnabled = false;
     QString panelProfile;
     QString revealProfile;

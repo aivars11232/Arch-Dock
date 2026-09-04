@@ -63,7 +63,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     },
@@ -102,7 +104,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     },
@@ -141,7 +145,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     },
@@ -180,7 +186,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     },
@@ -220,7 +228,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     },
@@ -229,9 +239,9 @@
       "version": 1,
       "id": "orbit",
       "name": "Orbit",
-      "description": "A circular path around the resting position.",
+      "description": "A circular path around the resting position, traced as an angle and a radius.",
       "author": "Arch Dock contributors",
-      "category": "translation",
+      "category": "path",
       "target": "icon",
       "trigger": "hover-hold",
       "timing": {
@@ -241,31 +251,30 @@
       },
       "tracks": [
         {
-          "id": "sweep-x",
-          "property": "translate-x",
-          "from": -0.22,
-          "to": 0.22,
-          "easing": "in-out-sine",
-          "duration": 170,
-          "direction": "alternate",
+          "id": "sweep",
+          "property": "orbit",
+          "from": 0,
+          "to": 360,
+          "easing": "linear",
+          "duration": 340,
+          "direction": "normal",
           "repeat": -1,
           "intensityScale": 1,
           "blend": "replace",
           "priority": 0
         },
         {
-          "id": "sweep-y",
-          "property": "translate-y",
-          "from": -0.22,
+          "id": "reach",
+          "property": "path-radius",
+          "from": 0.22,
           "to": 0.22,
-          "easing": "in-out-sine",
-          "duration": 170,
-          "direction": "alternate",
+          "easing": "linear",
+          "duration": 340,
+          "direction": "normal",
           "repeat": -1,
           "intensityScale": 1,
           "blend": "replace",
-          "priority": 0,
-          "delay": 85
+          "priority": 0
         }
       ],
       "rendererRequirements": [
@@ -273,7 +282,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     },
@@ -312,7 +323,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": [
         "scale"
@@ -353,7 +366,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     },
@@ -392,7 +407,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     },
@@ -431,7 +448,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     },
@@ -470,7 +489,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     },
@@ -509,7 +530,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     },
@@ -548,7 +571,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     },
@@ -587,7 +612,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     },
@@ -626,7 +653,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     },
@@ -665,7 +694,9 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     },
@@ -704,7 +735,307 @@
         "skinned2d"
       ],
       "reducedMotion": {
-        "mode": "none"
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "slow-y-turn",
+      "name": "Slow Y turn",
+      "description": "A slow left-to-right turn of the glyph around its vertical axis.",
+      "author": "Arch Dock contributors",
+      "category": "rotation",
+      "target": "glyph",
+      "trigger": "idle",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "turn",
+          "property": "rotate-y",
+          "from": 0,
+          "to": 360,
+          "easing": "linear",
+          "duration": 2040,
+          "direction": "normal",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "jump",
+      "name": "Jump",
+      "description": "A hop away from the panel along its outward normal.",
+      "author": "Arch Dock contributors",
+      "category": "translation",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "hop",
+          "property": "translate-normal",
+          "from": 0,
+          "to": 0.28,
+          "easing": "out-cubic",
+          "duration": 130,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        },
+        {
+          "id": "stretch",
+          "property": "scale-y",
+          "from": 1,
+          "to": 1.06,
+          "easing": "out-cubic",
+          "duration": 130,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        },
+        {
+          "id": "squash",
+          "property": "scale-x",
+          "from": 1,
+          "to": 0.97,
+          "easing": "out-cubic",
+          "duration": 130,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "shake-tangent",
+      "name": "Shake",
+      "description": "A bounded shake along the panel run, with a small tilt, for as long as it is asked for.",
+      "author": "Arch Dock contributors",
+      "category": "translation",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "slide",
+          "property": "translate-tangent",
+          "from": -0.06,
+          "to": 0.06,
+          "easing": "linear",
+          "duration": 55,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        },
+        {
+          "id": "tilt",
+          "property": "rotate-z",
+          "from": -2,
+          "to": 2,
+          "easing": "linear",
+          "duration": 55,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "enlarge",
+      "name": "Enlarge",
+      "description": "A depth-aware swell of the tile and the glyph it holds.",
+      "author": "Arch Dock contributors",
+      "category": "scale",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "tile-swell",
+          "property": "scale",
+          "from": 1,
+          "to": 1.12,
+          "easing": "out-cubic",
+          "duration": 170,
+          "direction": "normal",
+          "repeat": 1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0,
+          "target": "tile"
+        },
+        {
+          "id": "glyph-swell",
+          "property": "scale",
+          "from": 1,
+          "to": 1.18,
+          "easing": "out-cubic",
+          "duration": 170,
+          "direction": "normal",
+          "repeat": 1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0,
+          "target": "glyph"
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
+      },
+      "legacyNames": []
+    },
+    {
+      "format": "org.archdock.animation-profile",
+      "version": 1,
+      "id": "spiral",
+      "name": "Spiral",
+      "description": "A short bounded spiral around the anchor.",
+      "author": "Arch Dock contributors",
+      "category": "path",
+      "target": "icon",
+      "trigger": "hover-hold",
+      "timing": {
+        "baseDuration": 170,
+        "speedScale": 1.0,
+        "startDelay": 0
+      },
+      "tracks": [
+        {
+          "id": "sweep",
+          "property": "spiral",
+          "from": 0,
+          "to": 360,
+          "easing": "linear",
+          "duration": 680,
+          "direction": "normal",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        },
+        {
+          "id": "reach",
+          "property": "path-radius",
+          "from": 0,
+          "to": 0.18,
+          "easing": "in-out-sine",
+          "duration": 340,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        },
+        {
+          "id": "swell",
+          "property": "scale",
+          "from": 1,
+          "to": 1.08,
+          "easing": "in-out-sine",
+          "duration": 340,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        },
+        {
+          "id": "fade",
+          "property": "opacity",
+          "from": 1,
+          "to": 0.85,
+          "easing": "in-out-sine",
+          "duration": 340,
+          "direction": "alternate",
+          "repeat": -1,
+          "intensityScale": 1,
+          "blend": "replace",
+          "priority": 0
+        }
+      ],
+      "rendererRequirements": [
+        "procedural2d",
+        "skinned2d"
+      ],
+      "reducedMotion": {
+        "mode": "static",
+        "property": "glow",
+        "value": 0.6
       },
       "legacyNames": []
     }

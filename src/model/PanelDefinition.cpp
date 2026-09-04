@@ -683,6 +683,12 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         QStringLiteral("animationSpeed"), definition.motion.speed).toReal();
     definition.motion.intensity = normalized(
         QStringLiteral("animationIntensity"), definition.motion.intensity).toReal();
+    definition.motion.magnifyRadius = normalized(
+        QStringLiteral("magnificationRadius"),
+        definition.motion.magnifyRadius).toReal();
+    definition.motion.magnifyFalloff = normalized(
+        QStringLiteral("magnificationFalloff"),
+        definition.motion.magnifyFalloff).toString();
     definition.motion.physicsEnabled = normalized(
         QStringLiteral("physicsEnabled"), definition.motion.physicsEnabled).toBool();
     setString(QStringLiteral("panelMotionProfile"), &definition.motion.panelProfile);
@@ -954,6 +960,8 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("animationTrigger"), motion.trigger);
     record.insert(QStringLiteral("animationSpeed"), motion.speed);
     record.insert(QStringLiteral("animationIntensity"), motion.intensity);
+    record.insert(QStringLiteral("magnificationRadius"), motion.magnifyRadius);
+    record.insert(QStringLiteral("magnificationFalloff"), motion.magnifyFalloff);
     record.insert(QStringLiteral("physicsEnabled"), motion.physicsEnabled);
     insertIfNotEmpty(&record, QStringLiteral("panelMotionProfile"), motion.panelProfile);
     insertIfNotEmpty(&record, QStringLiteral("revealMotionProfile"), motion.revealProfile);

@@ -49,6 +49,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     LayoutEngine.js
     IconStyleResolver.js
     AnimationProfileRuntime.js
+    MotionChannels.js
     IconScene.qml
     IconMotionController.qml
     MotionTrackRunner.qml
@@ -844,6 +845,15 @@ if(BUILD_TESTING)
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(
+    NAME motion-channels-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_MotionChannels.qml)
+  set_tests_properties(
+    motion-channels-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
     NAME animation-profile-runtime-test
     COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
             -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
@@ -865,6 +875,16 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_IconMotionMigration.qml)
   set_tests_properties(
     icon-motion-migration-test
+    PROPERTIES ENVIRONMENT
+               "QT_QPA_PLATFORM=offscreen;QML_XHR_ALLOW_FILE_READ=1")
+
+  add_test(
+    NAME requested-icon-motions-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_RequestedIconMotions.qml)
+  set_tests_properties(
+    requested-icon-motions-test
     PROPERTIES ENVIRONMENT
                "QT_QPA_PLATFORM=offscreen;QML_XHR_ALLOW_FILE_READ=1")
 

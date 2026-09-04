@@ -1,0 +1,16 @@
+{
+  "format": "org.archdock.animation-profile",
+  "version": 1,
+  "id": "fixture-invalid-path-radius-color",
+  "name": "Fixture Invalid Path Radius Color",
+  "target": "icon",
+  "trigger": "idle",
+  "timing": {"baseDuration": 200},
+  "tracks": [
+    {"id": "sweep", "property": "orbit", "from": 0, "to": 360, "duration": 200},
+    {"id": "reach", "property": "path-radius", "fromColor": "#101010",
+     "toColor": "#202020", "duration": 200}
+  ],
+  "rendererRequirements": ["procedural2d"],
+  "reducedMotion": {"mode": "none"}
+}

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Effects
 import org.kde.kirigami as Kirigami
+import "MotionChannels.js" as MotionChannels
 
 Item {
     id: root
@@ -37,6 +38,21 @@ Item {
     property real glowAmount: 0
     property bool glowAnimating: false
     property int glowDuration: 170
+
+    // Per-layer motion, as resolved by MotionChannels. The scene applies these
+    // to visual transforms only; `logicalInputRegion` never follows them, so a
+    // moving icon keeps a stationary pointer target.
+    property var glyphMotion: ({})
+    property var tileMotion: ({})
+    property var indicatorMotion: ({})
+    readonly property var resolvedGlyphMotion: normalizedMotion(glyphMotion)
+    readonly property var resolvedTileMotion: normalizedMotion(tileMotion)
+    readonly property var resolvedIndicatorMotion:
+        normalizedMotion(indicatorMotion)
+    // A flat-card turn is a Y-axis rotation, not the flat Z spin: the card
+    // narrows towards its centre and one edge recedes under perspective.
+    readonly property real glyphTurnAngle: Number(resolvedGlyphMotion.rotateY)
+    readonly property bool glyphTurnActive: Math.abs(glyphTurnAngle) > 0.01
 
     readonly property var resolvedIconStyle: IconStyleResolver.resolve(
         iconStyleDefinition,
@@ -136,6 +152,19 @@ Item {
         if (tileShape === "squircle")
             return logicalSize * 0.32
         return logicalSize * 0.22
+    }
+
+    function normalizedMotion(value) {
+        const resting = MotionChannels.restingMotion()
+        const source = value || ({})
+        const keys = Object.keys(source)
+        for (let index = 0; index < keys.length; ++index) {
+            const key = keys[index]
+            if (resting.hasOwnProperty(key) && source[key] !== undefined
+                    && source[key] !== null)
+                resting[key] = source[key]
+        }
+        return resting
     }
 
     function resolverEntry() {
@@ -270,6 +299,26 @@ Item {
 
             objectName: "icon-layer-base"
             anchors.fill: parent
+            opacity: root.resolvedTileMotion.opacity
+            transform: [
+                Scale {
+                    origin.x: baseLayer.width / 2
+                    origin.y: baseLayer.height / 2
+                    xScale: root.resolvedTileMotion.scale
+                        * root.resolvedTileMotion.scaleX
+                    yScale: root.resolvedTileMotion.scale
+                        * root.resolvedTileMotion.scaleY
+                },
+                Rotation {
+                    origin.x: baseLayer.width / 2
+                    origin.y: baseLayer.height / 2
+                    angle: root.resolvedTileMotion.rotateZ
+                },
+                Translate {
+                    x: root.resolvedTileMotion.x
+                    y: root.resolvedTileMotion.y
+                }
+            ]
 
             // MultiEffect is instantiated only when a mask is actually
             // declared and its source loaded.
@@ -355,6 +404,35 @@ Item {
 
             objectName: "icon-layer-glyph"
             anchors.fill: parent
+            opacity: root.resolvedGlyphMotion.opacity
+            transform: [
+                // The turn comes first so scale, spin and displacement act on
+                // the already-turned card rather than fighting it.
+                Matrix4x4 {
+                    matrix: root.glyphTurnActive
+                        ? MotionChannels.turnMatrix(
+                            root.glyphTurnAngle, glyphLayer.width,
+                            glyphLayer.height, root.logicalSize * 2.4)
+                        : Qt.matrix4x4()
+                },
+                Scale {
+                    origin.x: glyphLayer.width / 2
+                    origin.y: glyphLayer.height / 2
+                    xScale: root.resolvedGlyphMotion.scale
+                        * root.resolvedGlyphMotion.scaleX
+                    yScale: root.resolvedGlyphMotion.scale
+                        * root.resolvedGlyphMotion.scaleY
+                },
+                Rotation {
+                    origin.x: glyphLayer.width / 2
+                    origin.y: glyphLayer.height / 2
+                    angle: root.resolvedGlyphMotion.rotateZ
+                },
+                Translate {
+                    x: root.resolvedGlyphMotion.x
+                    y: root.resolvedGlyphMotion.y
+                }
+            ]
 
             Kirigami.Icon {
                 id: glyph
@@ -420,6 +498,35 @@ Item {
                     root.styleState.reflectionOpacity || 0)
                 visible: root.styledLayersActive && root.showReflection
             }
+
+            // Lighting for the turn: a soft band that sweeps across the card as
+            // it rotates. It is derived from the turn itself, so it cannot fall
+            // out of step, and it is completely absent while the card rests.
+            Item {
+                id: glyphHighlight
+
+                objectName: "icon-layer-glyph-highlight"
+                anchors.fill: parent
+                visible: root.glyphTurnActive
+                opacity: Math.min(0.42, Math.abs(
+                    root.resolvedGlyphMotion.highlight) * 0.42)
+
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    height: parent.height
+                    width: Math.max(1, parent.width * 0.5
+                        * MotionChannels.turnCompression(root.glyphTurnAngle))
+                    x: (parent.width - width) / 2
+                        + root.resolvedGlyphMotion.highlight
+                            * parent.width * 0.3
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: "transparent" }
+                        GradientStop { position: 0.5; color: "#ffffff" }
+                        GradientStop { position: 1.0; color: "transparent" }
+                    }
+                }
+            }
         }
 
         Item {
@@ -477,6 +584,20 @@ Item {
                 ? parent.verticalCenter : undefined
             anchors.bottom: root.vertical ? undefined : parent.bottom
             anchors.left: root.vertical ? parent.left : undefined
+            transform: [
+                Scale {
+                    origin.x: runningIndicator.width / 2
+                    origin.y: runningIndicator.height / 2
+                    xScale: root.resolvedIndicatorMotion.scale
+                        * root.resolvedIndicatorMotion.scaleX
+                    yScale: root.resolvedIndicatorMotion.scale
+                        * root.resolvedIndicatorMotion.scaleY
+                },
+                Translate {
+                    x: root.resolvedIndicatorMotion.x
+                    y: root.resolvedIndicatorMotion.y
+                }
+            ]
         }
 
         Item {

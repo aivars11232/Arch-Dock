@@ -86,6 +86,7 @@ private slots:
     void projectionReportsDerivedRuntimeFacts();
     void builtInCatalogIsValid();
     void builtInCatalogCoversEverySelectableAnimation();
+    void builtInProfileIdsAreFrozen();
 };
 
 // The fixture index is the contract: every listed file must produce exactly the
@@ -411,6 +412,51 @@ void AnimationProfileTest::builtInCatalogCoversEverySelectableAnimation()
         QVERIFY2(catalog.contains(resolved), qPrintable(choice));
         // No selectable value may silently degrade to the fallback.
         const QVariantMap resolution = catalog.resolve(choice);
+        QCOMPARE(resolution.value(QStringLiteral("fallbackApplied")).toBool(),
+                 false);
+    }
+}
+
+// TASK-0031 freezes these ids. The built-in Panel and Icon Presets that
+// TASK-0040 must deliver name motion by id, so a rename here would silently
+// break a shipped preset. Adding an id is a deliberate act that updates this
+// list, the settings schema and the migration test together; removing or
+// renaming one is a compatibility break.
+void AnimationProfileTest::builtInProfileIdsAreFrozen()
+{
+    const AnimationProfileCatalogLoadResult result =
+        AnimationProfileCatalog::loadCatalog(
+            QStringLiteral(ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH));
+    QVERIFY(result.isValid());
+
+    QStringList frozen = {
+        // Migrated by TASK-0030.
+        QStringLiteral("none"),        QStringLiteral("bounce"),
+        QStringLiteral("elastic"),     QStringLiteral("spring"),
+        QStringLiteral("float"),       QStringLiteral("wave"),
+        QStringLiteral("orbit"),       QStringLiteral("pulse"),
+        QStringLiteral("breathe"),     QStringLiteral("ripple"),
+        QStringLiteral("magnetic"),    QStringLiteral("spin"),
+        QStringLiteral("idle-rotate"), QStringLiteral("swing"),
+        QStringLiteral("wobble"),      QStringLiteral("wiggle"),
+        QStringLiteral("shake"),       QStringLiteral("glow"),
+        // Requested motions, added by TASK-0031.
+        QStringLiteral("slow-y-turn"), QStringLiteral("jump"),
+        QStringLiteral("shake-tangent"), QStringLiteral("enlarge"),
+        QStringLiteral("spiral"),
+    };
+    frozen.sort();
+
+    QStringList shipped = result.catalog->profileIds();
+    shipped.sort();
+    QCOMPARE(shipped, frozen);
+
+    // Every frozen id must still resolve to itself, never to the fallback.
+    for (const QString &profileId : frozen)
+    {
+        const QVariantMap resolution = result.catalog->resolve(profileId);
+        QCOMPARE(resolution.value(QStringLiteral("profileId")).toString(),
+                 profileId);
         QCOMPARE(resolution.value(QStringLiteral("fallbackApplied")).toBool(),
                  false);
     }

@@ -105,6 +105,7 @@ public slots:
         qulonglong expectedRevision,
         const QString &entryIdentity);
     bool activateDockEntry(const QString &appId);
+    QVariantMap activateDockEntryOutcome(const QString &appId);
     bool activateDockWindow(const QString &appId, const QString &windowId);
     bool minimizeDockEntry(const QString &appId);
     bool closeDockEntry(const QString &appId);

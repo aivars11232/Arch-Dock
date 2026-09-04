@@ -614,20 +614,32 @@ QVariantList DockModel::panelEntriesForIds(const QStringList &appIds) const
     return entries;
 }
 
-bool DockModel::activateApplication(const QString &appId)
+DockModel::ActivationOutcome DockModel::activateApplicationOutcome(
+    const QString &appId)
 {
     const int row = indexForApplication(appId);
     if (row < 0)
     {
-        return false;
+        return ActivationOutcome::UnknownEntry;
     }
 
     if (m_items.at(row).windows.isEmpty())
     {
-        return launch(row);
+        // QProcess tells us whether the program actually started, so this is a
+        // verified outcome in both directions.
+        return launch(row) ? ActivationOutcome::Launched
+                           : ActivationOutcome::Failed;
     }
+    // Raising a window is a request to the compositor with no reply.
     activate(row);
-    return true;
+    return ActivationOutcome::ActivationRequested;
+}
+
+bool DockModel::activateApplication(const QString &appId)
+{
+    const ActivationOutcome outcome = activateApplicationOutcome(appId);
+    return outcome == ActivationOutcome::Launched
+        || outcome == ActivationOutcome::ActivationRequested;
 }
 
 bool DockModel::activateApplicationWindow(const QString &appId, const QString &windowId)

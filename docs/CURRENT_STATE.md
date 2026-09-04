@@ -6,15 +6,13 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-09-03 (Europe/Amsterdam). TASK-0030 was
-implemented on top of `8e54b2b` and is described under "TASK-0030 —
-animation-profile engine" below; its changes are unstaged and uncommitted for
-owner review. The earlier TASK-0029
-implementation described below was committed as `a34fbd9`, which carries the
-subject `task28`; the working tree was clean at the start of this session.
-The statements here therefore describe `a34fbd9` plus the TASK-0029 Phase A
-and Phase B corrections listed under "Verification boundary", which the owner
-committed as `ef84d86`.
+**Evidence snapshot:** 2026-09-04 (Europe/Amsterdam). TASK-0031 was
+implemented on top of `c9fbbbf` and is described under "TASK-0031 — requested
+icon motions, launch truth, and animation safety" below; its changes are
+unstaged and uncommitted for owner review. TASK-0030, described under
+"TASK-0030 — animation-profile engine", was committed by the owner as
+`c9fbbbf`, subject `task30`. The earlier TASK-0029 implementation spans
+`a34fbd9` and `ef84d86`.
 
 All figures below come from external Debug build directories created during
 this session; none reuse the in-tree `build/` or `build-codex-task-0014`
@@ -26,27 +24,23 @@ isolated-session evidence.
 ## Repository state
 
 - Repository root: `/mnt/F/Arch Dock`
-- Branch: `main`
-- Current `HEAD`: `ef84d86d5371bac3459f52fdb9bcb229d0531f91`, subject
-  `task29`. The owner committed the TASK-0029 Phase A and Phase B corrections
-  from this session as that commit.
-- `a34fbd92d4a7dcb76d43538dee7598bf69972245`, subject `task28`, is its
-  parent. Despite that subject it contains the bulk of the earlier TASK-0029
-  implementation together with the TASK-0028 corrective closure.
-- `dfb315c45adc8252ac2fef4cac49b8ba8146e973` (`task28`) is the TASK-0028
-  baseline and is an ancestor of `HEAD`.
+- Branch: `main`, tracking `origin/main` and level with it.
+- Current `HEAD`: `c9fbbbf71ce8fcfbe4817ca6b2a9452af1e27119`, subject
+  `task30`. The owner committed the TASK-0030 implementation as that commit;
+  it is the TASK-0031 baseline.
+- `8e54b2b` (`TASK29.`) and `ef84d86` (`task29`) are its ancestors and carry
+  the TASK-0029 closure; `a34fbd9` and `dfb315c` (both `task28`) precede them.
 - TASK-0027 is committed at `c857fd70209646028fc710ef100f49c716384762`
   and is an ancestor of the TASK-0028 baseline.
 - The working tree was clean at the start of this session and now contains
-  only this file. The TASK-0029 implementation therefore spans two commits,
-  `a34fbd9` and `ef84d86`; neither alone is the whole consolidated task.
+  only the TASK-0031 changes listed below.
 - Codex did not stage, commit, push, globally install, or mutate the personal
   Plasma session.
 
 ## Inspected platform
 
 - Arch Linux, rolling release
-- Kernel `7.1.11-arch1-1`
+- Kernel `7.2.2-arch1-1` (TASK-0031 host; earlier records used `7.1.11-arch1-1`)
 - KDE Plasma and KWin `6.7.4`
 - Wayland KDE session (`WAYLAND_DISPLAY=wayland-0`)
 - Qt base `6.11.2-3`
@@ -76,6 +70,8 @@ ran Arch Dock against the personal desktop session.
   [shared-renderer.md](shared-renderer.md)
 - Icon Style Package v1, selection, overrides, and live editor contract:
   [ICON_STYLE_PACKAGE.md](ICON_STYLE_PACKAGE.md)
+- Animation profile v1, motion vocabulary, requested presets, frozen ids, and
+  motion safety: [ANIMATION_PROFILE.md](ANIMATION_PROFILE.md)
 - Native and free Plasma ownership, recovery, and rollback safeguards:
   [plasma-lifecycle.md](plasma-lifecycle.md)
 - Canonical baseline checkpoint and task handoff:
@@ -251,7 +247,9 @@ disposable private Plasma Wayland session, not inferred from inspection.
 - Settings expose panel and icon 3D values, but the shared true-3D scene and
   renderer architecture required by the master plan is not present.
 - Per-entry `animationProfileReference` is validated and persisted but remains
-  intentionally hidden and has no runtime animation engine until TASK-0030.
+  intentionally hidden. The animation engine delivered by TASK-0030 and
+  TASK-0031 selects one profile per panel; routing a per-entry reference into it
+  is not implemented and no active task in the pack claims it.
 - The shipped icon-style families preserve the original application glyph. No
   complete mapped-replacement icon pack or global icon-theme mutation is
   implemented by TASK-0029.
@@ -501,6 +499,111 @@ Richer per-preset reduced-motion substitutes, the requested new motions, and
 verified launch-succeeded and launch-failed events from `DockModel` are owned
 by TASK-0031 and were deliberately not implemented here.
 
+## TASK-0031 — requested icon motions, launch truth, and animation safety
+
+AD-0011 is closed. The motions the master plan asks for by name exist as
+catalog data, launch events report only what the platform actually confirmed,
+and continuous motion stops when nobody can see it.
+
+### Phase A — slow Y turn, jump, and shake
+
+`qml/ArchDock/Rendering/MotionChannels.js` is the single mapping from composed
+channels to concrete transforms. It reads the entry's own geometry, so
+`translate-normal` and `translate-tangent` have a meaning rather than a fixed
+screen direction, and it is free of QML types so the mapping is provable
+without a window.
+
+`LayoutEngine.entryGeometry` gained an optional trailing `edge`. A linear row
+has no outward side of its own, so the edge supplies one: a bottom panel jumps
+up, a top panel down, a left panel right, a right panel left, while radial
+layouts keep their own path-derived normals. Omitting the edge reproduces the
+previous values exactly, which is why every existing geometry, scene and parity
+test passed unchanged; `PanelScene` supplies the real edge, so popup anchors on
+top and right panels became edge-correct as a side effect.
+
+`slow-y-turn` is a turn, not a spin. `MotionChannels.turnMatrix` composes a
+translation to the centre, a rotation about Y, a perspective divide and a
+translation back, so the card narrows and its receding edge foreshortens; the
+highlight is derived from the same angle and cannot fall out of step. No mesh
+is involved. `IconScene` applies motion per layer through `glyphMotion`,
+`tileMotion` and `indicatorMotion`, all defaulting to an exact identity.
+
+`PanelScene` publishes a per-entry `effectAllowance` from the effect bounds.
+Every translation contribution is summed and the sum is clamped once, so no
+contribution is silently dropped and nothing draws outside the reserved margin.
+The live host additionally reserves headroom equal to the furthest the bound
+profile can travel.
+
+### Phase B — enlarge, neighbour influence, spiral, and orbit
+
+`path-radius` joins the property vocabulary as the companion distance for
+`orbit` and `spiral`, so a path motion is an angle and a radius rather than two
+hand-synchronised sweeps. Both rest at zero and every offset is computed from
+absolute channel values, never accumulated, so no number of cycles can leave an
+icon drifted off its anchor. `orbit` was re-expressed on those primitives at
+its original 0.22 amplitude and 340 ms cycle.
+
+`motion.magnifyRadius` and `motion.magnifyFalloff` make neighbour influence
+configurable; the defaults, 2.4 and `linear`, are the historical curve, so an
+existing panel magnifies exactly as before. Every falloff peaks at 1, decreases
+monotonically and is exactly 0 at and beyond its reach. The influence is
+visual only: it never changes an entry's logical size, position or hit area, and
+no user-facing physical-rearrangement setting was introduced, so there is no
+control that claims to move icons and does not.
+
+### Phase C — launch truth, reduced motion, and safety
+
+`DockModel::activateApplicationOutcome` separates a verified start from an
+unverifiable request. Starting a program either succeeds or fails and QProcess
+reports which; raising an existing window is handed to the compositor, which
+never answers, so that outcome is `requested` and runs nothing. The new
+`activateDockEntryOutcome` D-Bus method carries the answer to the applet, which
+dispatches `launch-succeeded` or `launch-failed` only from a proved outcome.
+The bool-returning `activateDockEntry` is unchanged.
+
+Every built-in profile that moves something now substitutes a static glow under
+reduced motion instead of resting silently; only `none` rests. The renderer
+takes the glow from whichever layer declares it, so a glyph-targeted preset
+reaches the same feedback an icon-targeted one does.
+
+`PanelScene.sceneConcealed` reports that the panel cannot be seen, derived in
+the live host from item visibility and opacity and from window visibility, which
+is what a Plasma auto-hide panel changes. Nothing is inferred from focus. While
+it holds, the controller withdraws every track. Trigger and concealment cycles
+return to exactly the profile's own track count, so runners are never
+accumulated.
+
+The 23 built-in profile ids are frozen and asserted, because the built-in Panel
+and Icon Presets that TASK-0040 must deliver will name motion by id.
+
+### Verification boundary
+
+Baseline before any edit: fresh configure, build and 50/50 CTest. Phase A gate:
+clean configure, build and 52/52. Phase B gate: clean configure, build and
+52/52. Consolidated gate: clean configure, build and 52/52, with
+`rendering-import-smoke` at 65.68 s in a disposable private D-Bus, virtual KWin
+Wayland and private PlasmaShell session, and a `DESTDIR` staged install that
+carries `MotionChannels.js` and the updated catalog. The staged prefix was
+removed afterwards. No personal desktop session was contacted, nothing was
+installed globally and PlasmaShell was not restarted.
+
+Two focused corrections were made, each after its cause was proved. A test
+assertion required `turnMatrix` to be literally the identity at rest; the matrix
+carries an inert perspective row at `z = 0`, so the assertion was replaced by
+the stronger one that every point of the card maps to itself. Separately, the
+controller's `channels` binding was invalidated by revision bumps fired from
+`Instantiator` object creation during its own evaluation; Qt broke that loop and
+left a stale channel, which withdrew a track without clearing its value. The
+bumps are now deferred and `channels` depends on the track set directly. The
+binding-loop warning is gone from the whole suite.
+
+Two runtime facts are proved by automated tests rather than by observation on a
+live desktop: that the Y turn reads as a vertical-axis turn and that a jump is
+seen to leave the panel edge. The isolated session renders both but asserts
+neither. Observing them on the personal desktop would require
+`plasmashell --replace` against the live session, which the contract forbids
+without explicit authorisation.
+
 ## Next task boundary
 
 TASK-0028 is the completed AD-0009 dependency. TASK-0029 has passed its four
@@ -508,12 +611,14 @@ sequential phase gates and consolidated completion gate, closing the scoped
 AD-0010 implementation under the isolated-runtime evidence boundary above.
 Its changes remain unstaged and uncommitted for owner review.
 
-TASK-0030 has passed its three sequential phase gates and its consolidated
-completion gate, closing the scoped AD-0011 implementation under the
-isolated-runtime evidence boundary above. Its changes remain unstaged and
-uncommitted for owner review.
+TASK-0030 was committed by the owner as `c9fbbbf` and is the TASK-0031
+baseline.
 
-The task pack identifies **TASK-0031 — Implement requested icon motions,
-launch-event truth, reduced motion, and safety** as the next dependency-bound
-task. Do not begin it without the separate planning and owner-approval
-protocol required by that task.
+TASK-0031 has passed its three sequential phase gates and its consolidated
+completion gate, closing AD-0011 under the isolated-runtime evidence boundary
+above. Its changes remain unstaged and uncommitted for owner review.
+
+The task pack identifies **TASK-0032 — Implement panel presentation states,
+guards, opening mechanisms, and host integration** as the next dependency-bound
+task. Do not begin it without the separate planning and owner-approval protocol
+required by that task.

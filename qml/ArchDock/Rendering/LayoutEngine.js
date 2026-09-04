@@ -19,6 +19,31 @@ function shapeSides(layout, fallback) {
     return clamp(Math.round(Number(fallback || 6)), 3, 12);
 }
 
+// Layouts whose geometry defines its own outward direction. Everything else is
+// a straight run of icons that has no intrinsic outward side.
+var radialLayoutNames = [
+    "circular", "ring", "ellipse", "radial", "polygon", "triangle",
+    "square", "pentagon", "hexagon", "octagon", "star", "arc",
+    "semicircle", "fan", "spiral"
+];
+
+// Outward normal for a panel docked to a host edge, in degrees.
+//
+// A linear row has no outward side of its own, so the edge supplies it: a
+// bottom panel points up, a top panel down, a left panel right, a right panel
+// left. Returns null when the caller gave no edge or the layout already
+// carries its own normal, which reproduces the historical path-derived value.
+function hostEdgeNormalAngle(edge, resolvedLayout) {
+    var name = String(edge || "");
+    if (name === "" || radialLayoutNames.includes(resolvedLayout))
+        return null;
+    if (name === "bottom") return -90;
+    if (name === "top") return 90;
+    if (name === "left") return 0;
+    if (name === "right") return 180;
+    return null;
+}
+
 function metrics(layout, count, iconSize, spacing, scale, radius, rows,
                  padding, vertical, angle, polygonSides) {
     const resolvedLayout = normalizedLayout(layout, vertical);
@@ -139,7 +164,7 @@ function starPoint(progress, points, radius) {
 }
 
 function entryGeometry(layout, index, count, geometry, angle, polygonSides,
-                       pathOrientation, compatibilityProfile) {
+                       pathOrientation, compatibilityProfile, edge) {
     const resolvedLayout = geometry.layout || normalizedLayout(layout, false);
     const safeCount = Math.max(1, count);
     const safeIndex = clamp(Math.round(Number(index || 0)), 0, safeCount - 1);
@@ -266,13 +291,8 @@ function entryGeometry(layout, index, count, geometry, angle, polygonSides,
     y = rotatedPoint.y - size / 2;
 
     const orientation = pathOrientation || "upright";
-    const radialLayouts = [
-        "circular", "ring", "ellipse", "radial", "polygon", "triangle",
-        "square", "pentagon", "hexagon", "octagon", "star", "arc",
-        "semicircle", "fan", "spiral"
-    ];
     const legacyRuntimeRadial = profile === "runtime"
-        && !radialLayouts.includes(resolvedLayout);
+        && !radialLayoutNames.includes(resolvedLayout);
     const orientationRadial = legacyRuntimeRadial ? 0 : radial;
     if (profile !== "live") {
         if (orientation === "tangent")
@@ -284,7 +304,8 @@ function entryGeometry(layout, index, count, geometry, angle, polygonSides,
             rotation += safeAngle * 0.35;
     }
 
-    const normalAngle = radial + safeAngle;
+    const edgeNormal = hostEdgeNormalAngle(edge, resolvedLayout);
+    const normalAngle = (edgeNormal === null ? radial : edgeNormal) + safeAngle;
     const normalRadians = normalAngle * Math.PI / 180;
     const closedLayouts = [
         "circular", "ellipse", "ring", "polygon", "triangle", "square",
@@ -327,10 +348,10 @@ function entryGeometry(layout, index, count, geometry, angle, polygonSides,
 }
 
 function position(layout, index, count, geometry, angle, polygonSides,
-                  pathOrientation, compatibilityProfile) {
+                  pathOrientation, compatibilityProfile, edge) {
     const result = entryGeometry(
         layout, index, count, geometry, angle, polygonSides,
-        pathOrientation, compatibilityProfile);
+        pathOrientation, compatibilityProfile, edge);
     return {
         x: result.position.x,
         y: result.position.y,

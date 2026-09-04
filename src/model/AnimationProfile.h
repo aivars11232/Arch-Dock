@@ -34,7 +34,9 @@ struct AnimationValidationDiagnostic
 // distinct members: a click may never be reported as a successful launch.
 [[nodiscard]] const QStringList &animationTriggerVocabulary();
 
-// Primitive track properties from master plan 14.4.
+// Primitive track properties from master plan 14.4. `orbit` and `spiral` carry
+// the polar angle; `path-radius` is their companion distance, so a path motion
+// is expressed as an angle and a radius rather than as raw X/Y translation.
 [[nodiscard]] const QStringList &animationPropertyVocabulary();
 
 [[nodiscard]] bool animationPropertyIsColor(const QString &property);

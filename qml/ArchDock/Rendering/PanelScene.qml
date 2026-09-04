@@ -15,6 +15,13 @@ Item {
     property var availableBounds: ({ x: 0, y: 0, width: 0, height: 0 })
     property Component entryDelegate: null
     property bool entryInteractionEnabled: true
+    // Set by the host when the panel cannot be seen - hidden window, concealed
+    // by auto-hide, or drawn at zero opacity. Continuous motion stops while it
+    // is true. The default is false so a host that reports nothing still
+    // animates rather than silently freezing.
+    property bool sceneConcealed: false
+    readonly property bool entriesAnimatable:
+        !sceneConcealed && visible && opacity > 0
     property string geometryCompatibilityProfile: "canonical"
     property var entryDelegateContext: ({})
 
@@ -42,6 +49,10 @@ Item {
         "layout", "polygonSides", "pathSides", 6))
     readonly property string pathOrientation: String(definitionValue(
         "layout", "orientation", "pathOrientation", "upright"))
+    // The host edge this panel is docked to. A linear row has no outward side
+    // of its own, so the edge is what tells motion which way is "out".
+    readonly property string placementEdge: String(definitionValue(
+        "placement", "edge", "edge", "bottom"))
     readonly property real iconSize: Number(iconValue("size", "iconSize", 52))
     readonly property real iconSpacing: Number(iconValue("spacing", "spacing", 8))
     readonly property string iconShape: String(iconValue(
@@ -327,7 +338,8 @@ Item {
     function entryGeometryAt(index) {
         const geometry = LayoutEngine.entryGeometry(
             layoutPath, index, entryCount, layoutGeometry, layoutAngle,
-            polygonSides, pathOrientation, geometryCompatibilityProfile)
+            polygonSides, pathOrientation, geometryCompatibilityProfile,
+            placementEdge)
         const result = ({})
         const keys = Object.keys(geometry || ({}))
         for (let keyIndex = 0; keyIndex < keys.length; ++keyIndex)
@@ -350,7 +362,26 @@ Item {
                 height: Number(geometry.entryBounds.height || 0)
             }
         }
+        result.effectBounds = effectBounds
+        result.effectAllowance = entryEffectAllowance(result.entryBounds)
         return result
+    }
+
+    // How far this entry may be displaced on each side before it escapes the
+    // declared effect bounds. Motion clamps against these, so an effect can
+    // never draw outside the margin the theme actually reserved.
+    function entryEffectAllowance(entryBounds) {
+        const bounds = entryBounds || ({})
+        const left = Number(bounds.x || 0)
+        const top = Number(bounds.y || 0)
+        const right = left + Number(bounds.width || 0)
+        const bottom = top + Number(bounds.height || 0)
+        return {
+            left: Math.max(0, left - effectBounds.x),
+            top: Math.max(0, top - effectBounds.y),
+            right: Math.max(0, effectBounds.x + effectBounds.width - right),
+            bottom: Math.max(0, effectBounds.y + effectBounds.height - bottom)
+        }
     }
 
     function entryLabel(entry, index) {
@@ -368,8 +399,7 @@ Item {
     }
 
     function buildRevealHandle() {
-        const edge = String(definitionValue(
-            "placement", "edge", "edge", "bottom"))
+        const edge = placementEdge
         const configuredSize = Number(definitionValue(
             "visibility", "revealZone", "revealZone", 8))
         const size = Math.max(1, Math.min(
@@ -478,6 +508,7 @@ Item {
             readonly property int sceneIndex: index
             readonly property bool sceneInputEnabled:
                 root.entryInteractionEnabled
+            readonly property bool sceneVisible: root.entriesAnimatable
             readonly property var sceneGeometry: geometryOutput
             readonly property var sceneRuntimeState: root.runtimeState
             readonly property var scenePanelDefinition: root.panelDefinition
@@ -505,6 +536,7 @@ Item {
                 readonly property int sceneIndex: entryItem.sceneIndex
                 readonly property bool sceneInputEnabled:
                     entryItem.sceneInputEnabled
+                readonly property bool sceneVisible: entryItem.sceneVisible
                 readonly property var sceneGeometry: entryItem.sceneGeometry
                 readonly property var sceneRuntimeState:
                     entryItem.sceneRuntimeState

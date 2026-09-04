@@ -27,6 +27,9 @@ Item {
     // to resolve reduced-motion substitutes.
     property var animationProfiles: []
     property var animationCatalog: ({})
+    // False while the panel cannot be seen. Continuous motion is pointless then
+    // and costs frames, so the controller withdraws every track.
+    property bool sceneVisible: true
     property real motionSpeed: 1
     required property bool inputEnabled
     required property bool editMode
@@ -42,10 +45,16 @@ Item {
         entry && entry.iconOverrideResolution
         ? entry.iconOverrideResolution : ({})
 
+    // How far magnification reaches and how it decays. Defaults are the
+    // historical curve, so a panel that configures neither behaves as before.
+    property real magnificationRadius: 2.4
+    property string magnificationFalloff: "linear"
     readonly property int indexDistance: hoveredIndex < 0 ? 99 : Math.abs(hoveredIndex - entryIndex)
     readonly property real influence: !magnificationEnabled || hoveredIndex < 0
-        ? 0 : Math.max(0, 1 - indexDistance / 2.4)
-    readonly property real hoverScale: 1 + (Math.max(1, magnification) - 1) * influence
+        ? 0 : MotionChannels.magnificationInfluence(
+            indexDistance, magnificationRadius, magnificationFalloff)
+    readonly property real hoverScale: MotionChannels.magnificationScale(
+        magnification, influence)
     property bool clickPulse: false
     property bool dragging: false
     readonly property int cycleDuration: Math.max(80, motionDuration)
@@ -75,6 +84,28 @@ Item {
         }
         return result
     }
+    // This entry's place in its panel: which way is out, which way is along the
+    // run, and how much room an effect may use. Supplied by PanelScene; the
+    // safe default is an upright, unbounded entry so a host that supplies
+    // nothing still renders.
+    property var entryGeometry: ({})
+    readonly property var motionContext: ({
+        size: baseSize,
+        normal: entryGeometry && entryGeometry.outwardNormal
+            ? entryGeometry.outwardNormal : ({ x: 0, y: -1 }),
+        tangentAngle: entryGeometry && entryGeometry.tangentAngle !== undefined
+            ? Number(entryGeometry.tangentAngle) : 0,
+        allowance: entryGeometry && entryGeometry.effectAllowance
+            ? entryGeometry.effectAllowance : null
+    })
+    readonly property var iconMotion: MotionChannels.motionFor(
+        motionController.channels, "icon", motionContext)
+    readonly property var glyphMotion: MotionChannels.motionFor(
+        motionController.channels, "glyph", motionContext)
+    readonly property var tileMotion: MotionChannels.motionFor(
+        motionController.channels, "tile", motionContext)
+    readonly property var indicatorMotion: MotionChannels.motionFor(
+        motionController.channels, "indicator", motionContext)
     readonly property alias motionController: motionController
     readonly property var motionConflicts: motionController.conflicts
     readonly property var activeMotionProfiles: motionController.activeProfileIds
@@ -105,6 +136,18 @@ Item {
     // running, urgent, drop) are derived from properties instead.
     function dispatchMotionEvent(event) {
         return motionController.dispatch(event);
+    }
+
+    // What the activation actually did. A verified start is a success and a
+    // proved failure is a failure; anything the platform could not confirm is
+    // reported as neither, so no success animation can run without a success.
+    function reportLaunchOutcome(result) {
+        const outcome = String((result && result.outcome) || "requested")
+        if (outcome === "succeeded")
+            return dispatchMotionEvent("launch-succeeded")
+        if (outcome === "failed")
+            return dispatchMotionEvent("launch-failed")
+        return false
     }
 
     function openEntryContextMenu() {
@@ -150,6 +193,7 @@ Item {
         intensity: root.motionIntensity
         speed: root.motionSpeed
         reducedMotion: root.reducedMotion
+        sceneVisible: root.sceneVisible
         hovered: hoverArea.containsMouse
         pressed: hoverArea.pressed || root.clickPulse
         running: Boolean(root.entry.running)
@@ -182,13 +226,25 @@ Item {
 
             width: parent.width
             height: parent.height
-            x: motionController.channelValue("icon", "translate-x")
-               * root.baseSize
-            y: motionController.channelValue("icon", "translate-y")
-               * root.baseSize
-            scale: motionController.channelValue("icon", "scale")
-            rotation: motionController.channelValue("icon", "rotate-z")
-            opacity: motionController.channelValue("icon", "opacity")
+            x: root.iconMotion.x
+            y: root.iconMotion.y
+            rotation: root.iconMotion.rotateZ
+            opacity: root.iconMotion.opacity
+            transform: [
+                Matrix4x4 {
+                    matrix: Math.abs(root.iconMotion.rotateY) > 0.01
+                        ? MotionChannels.turnMatrix(
+                            root.iconMotion.rotateY, profileMotionLayer.width,
+                            profileMotionLayer.height, root.baseSize * 2.4)
+                        : Qt.matrix4x4()
+                },
+                Scale {
+                    origin.x: profileMotionLayer.width / 2
+                    origin.y: profileMotionLayer.height / 2
+                    xScale: root.iconMotion.scale * root.iconMotion.scaleX
+                    yScale: root.iconMotion.scale * root.iconMotion.scaleY
+                }
+            ]
 
             IconScene {
                 id: visual
@@ -214,7 +270,12 @@ Item {
                 showReflection: root.showReflection
                 showIndicator: root.showIndicator
                 reducedMotion: root.reducedMotion
-                glowAmount: motionController.channelValue("icon", "glow")
+                glyphMotion: root.glyphMotion
+                tileMotion: root.tileMotion
+                indicatorMotion: root.indicatorMotion
+                glowAmount: Math.max(
+                    root.iconMotion.glow,
+                    Math.max(root.glyphMotion.glow, root.tileMotion.glow))
                 // The profile supplies the pulse; the renderer no longer runs
                 // an animation of its own for it.
                 glowAnimating: false
@@ -257,9 +318,10 @@ Item {
                 return;
             }
             // A launch was asked for. Whether it succeeded is a separate,
-            // verified outcome and is not reported here.
+            // verified outcome, reported back through reportLaunchOutcome.
             root.dispatchMotionEvent("launch-requested");
-            root.invoke("activateDockEntry", root.entry.appId);
+            root.invoke("activateDockEntry", root.entry.appId,
+                        root.reportLaunchOutcome);
         }
         onPositionChanged: {
             if (drag.active)

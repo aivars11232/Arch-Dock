@@ -10,6 +10,7 @@
     {"file": "invalid-track-conflict.json", "valid": false, "diagnostic": "track-conflict"},
     {"file": "invalid-range.json", "valid": false, "diagnostic": "value-out-of-range"},
     {"file": "invalid-renderer.json", "valid": false, "diagnostic": "unsupported-renderer"},
-    {"file": "invalid-missing-reduced-motion.json", "valid": false, "diagnostic": "missing-reduced-motion"}
+    {"file": "invalid-missing-reduced-motion.json", "valid": false, "diagnostic": "missing-reduced-motion"},
+    {"file": "invalid-path-radius-color.json", "valid": false, "diagnostic": "missing-field"}
   ]
 }

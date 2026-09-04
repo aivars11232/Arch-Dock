@@ -3,6 +3,7 @@ singleton RenderingModuleProbe 1.0 RenderingModuleProbe.qml
 LayoutEngine 1.0 LayoutEngine.js
 IconStyleResolver 1.0 IconStyleResolver.js
 AnimationProfileRuntime 1.0 AnimationProfileRuntime.js
+MotionChannels 1.0 MotionChannels.js
 IconScene 1.0 IconScene.qml
 IconMotionController 1.0 IconMotionController.qml
 MotionTrackRunner 1.0 MotionTrackRunner.qml

@@ -153,6 +153,15 @@ Its outer logical root and pointer/drop regions remain fixed at the base icon
 size, so magnification and motion do not move the hit target. The former
 applet-local `IconVisual` and `RunningIndicator` implementations were removed.
 
+`MotionChannels.js` is the single mapping from composed animation channels to
+concrete transforms. It reads the entry's own geometry — outward normal, tangent
+and the room the theme reserved — so `translate-normal` and `translate-tangent`
+mean the same thing in the applet and in a preview. `IconScene` takes the
+resolved result as `glyphMotion`, `tileMotion` and `indicatorMotion` and applies
+it to those layers only; all three default to an exact identity, so a host that
+supplies nothing renders precisely as before. The glyph layer additionally
+carries the flat-card Y-axis turn and its derived highlight.
+
 Panel Studio builds a pure renderer candidate from its loaded editor baseline,
 local panel/global changes, and backend capability result. The active editor
 preview and every available built-in theme card use `LivePanelPreview`; the old

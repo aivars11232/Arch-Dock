@@ -165,14 +165,25 @@ TestCase {
         }
     }
 
+    // The values a pre-TASK-0030 configuration can still hold. This list is
+    // frozen history: it may never lose a member, because an existing setting
+    // would then silently fall back to "none".
+    readonly property var legacyValues: [
+        "none", "bounce", "elastic", "pulse", "scale", "spin",
+        "idle-rotate", "orbit", "swing", "wobble", "wiggle", "shake",
+        "glow", "breathe", "float", "wave", "ripple", "magnetic", "spring"
+    ]
+
+    // Everything the settings schema offers today: the legacy values plus the
+    // motions TASK-0031 added. Mirrors the iconAnimation choice list, which
+    // animation-profile-test checks against the catalog from the C++ side.
+    readonly property var selectableValues: legacyValues.concat([
+        "slow-y-turn", "jump", "shake-tangent", "enlarge", "spiral"
+    ])
+
     // Every legacy name the settings schema can still hold must resolve to a
     // profile rather than silently falling back to "none".
     function test_everyLegacySettingValueStillResolves() {
-        const legacyValues = [
-            "none", "bounce", "elastic", "pulse", "scale", "spin",
-            "idle-rotate", "orbit", "swing", "wobble", "wiggle", "shake",
-            "glow", "breathe", "float", "wave", "ripple", "magnetic", "spring"
-        ]
         for (let index = 0; index < legacyValues.length; ++index) {
             const name = legacyValues[index]
             const profile = profileFor(name)
@@ -180,7 +191,7 @@ TestCase {
         }
         // And the catalog offers nothing the settings schema cannot select.
         const offered = selectableNames().slice().sort()
-        compare(offered, legacyValues.slice().sort())
+        compare(offered, selectableValues.slice().sort())
     }
 
     function test_reducedMotionRestsEveryMigratedEffect() {

@@ -39,6 +39,21 @@ public:
     };
     Q_ENUM(Role)
 
+    // What actually happened when an entry was activated.
+    //
+    // A click asks for an activation; only some answers are verifiable. Starting
+    // a process either succeeds or fails and we are told which. Raising an
+    // existing window is handed to the compositor, which does not report back,
+    // so it is a request and must never be presented as a verified success.
+    enum class ActivationOutcome
+    {
+        UnknownEntry,
+        Launched,
+        ActivationRequested,
+        Failed
+    };
+    Q_ENUM(ActivationOutcome)
+
     explicit DockModel(WindowModel &windowModel, QObject *parent = nullptr);
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
@@ -69,6 +84,7 @@ public:
     [[nodiscard]] QVariantList panelEntries(const QString &panelType) const;
     [[nodiscard]] QVariantList panelEntriesForIds(const QStringList &appIds) const;
     bool activateApplication(const QString &appId);
+    ActivationOutcome activateApplicationOutcome(const QString &appId);
     bool activateApplicationWindow(const QString &appId, const QString &windowId);
     bool minimizeApplication(const QString &appId);
     bool closeApplication(const QString &appId);
