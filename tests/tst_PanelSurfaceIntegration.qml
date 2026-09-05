@@ -64,15 +64,37 @@ TestCase {
                 hostPhase: presentationController.hostPhase
             })
 
+            // Mirrors the applet's pointer rule after the TASK-0032 closure
+            // correction: hover and edge open on entry, click opens through a
+            // tap, every non-manual trigger closes once the pointer leaves,
+            // and a manual panel moves only by explicit request.
             function pointerEntered() {
                 presentationController.pointerInside = true
+                if (presentationTrigger === "manual")
+                    return
                 if (opensOnHover)
                     presentationController.requestOpen()
             }
 
             function pointerLeft() {
                 presentationController.pointerInside = false
-                if (opensOnHover && presentationMode === "collapsed")
+                if (presentationTrigger === "manual")
+                    return
+                if (presentationMode === "collapsed")
+                    presentationController.requestCollapse()
+            }
+
+            function tapped() {
+                if (presentationTrigger === "click"
+                        && panelScene.collapseProgress >= 1)
+                    presentationController.requestOpen()
+            }
+
+            function deliverRequest(request) {
+                if (request === "open")
+                    presentationController.requestOpen()
+                else if (request === "collapse"
+                         && presentationMode === "collapsed")
                     presentationController.requestCollapse()
             }
 
@@ -170,6 +192,67 @@ TestCase {
             compare(panel.scene.motionTracks[role].offsetX, 0,
                     role + " back at rest")
         }
+    }
+
+    // The TASK-0032 closure gap: a click could open a panel that then never
+    // closed, because only hover asked for a collapse. Every pointer-driven
+    // trigger must close once the pointer has left and the guards are clear.
+    function test_everyPointerTriggerClosesAfterLeaving_data() {
+        return [
+            { tag: "hover", trigger: "hover" },
+            { tag: "click", trigger: "click" },
+            { tag: "edge", trigger: "edge" }
+        ]
+    }
+
+    function test_everyPointerTriggerClosesAfterLeaving(data) {
+        const panel = makePanel({ presentationTrigger: data.trigger })
+        settle(panel)
+        compare(panel.controller.surfaceState, "collapsed")
+
+        panel.pointerEntered()
+        if (data.trigger === "click") {
+            compare(panel.controller.surfaceState, "collapsed",
+                    "hovering alone does not open a click-triggered panel")
+            panel.tapped()
+        }
+        settle(panel)
+        compare(panel.controller.surfaceState, "open", data.tag + " opened")
+
+        panel.pointerLeft()
+        settle(panel)
+        compare(panel.controller.surfaceState, "collapsed",
+                data.tag + " closed after the pointer left")
+        compare(panel.scene.collapseProgress, 1)
+    }
+
+    // A manual panel is driven by explicit requests only. The pointer never
+    // opens or closes it, so it can rest collapsed without becoming
+    // unreachable, and it stays open until something asks it to close.
+    function test_manualMovesOnlyByExplicitRequest() {
+        const panel = makePanel({ presentationTrigger: "manual" })
+        settle(panel)
+        compare(panel.controller.surfaceState, "collapsed")
+
+        panel.pointerEntered()
+        panel.tapped()
+        settle(panel)
+        compare(panel.controller.surfaceState, "collapsed",
+                "the pointer never drives a manual panel")
+
+        panel.deliverRequest("open")
+        settle(panel)
+        compare(panel.controller.surfaceState, "open")
+
+        panel.pointerLeft()
+        settle(panel)
+        compare(panel.controller.surfaceState, "open",
+                "leaving does not close a manual panel")
+
+        panel.deliverRequest("collapse")
+        settle(panel)
+        compare(panel.controller.surfaceState, "collapsed")
+        compare(panel.scene.collapseProgress, 1)
     }
 
     function test_hoverOpensAndLeavingCloses() {

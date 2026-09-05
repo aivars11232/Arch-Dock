@@ -39,6 +39,9 @@ struct PanelRuntimeState
     PanelTransitionState transition = PanelTransitionState::Idle;
     qreal presentationProgress = -1.0;
     bool windowOverlap = false;
+    // The whole-scene rotation offset a free panel is currently drawn at, in
+    // degrees. Transient: a restart draws the configured layout angle.
+    qreal sceneRotation = 0.0;
     QString rendererFallback;
     QString frameQuality = QStringLiteral("normal");
     QRect currentScreenGeometry;

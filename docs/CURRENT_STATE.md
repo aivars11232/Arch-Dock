@@ -6,16 +6,15 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-09-05 (Europe/Amsterdam). TASK-0032 Phases C and
-D were implemented on top of `026b8b3` and are described under "TASK-0032 —
-panel presentation states, guards, opening mechanisms, and host integration"
-below; their changes are unstaged and uncommitted for owner review. TASK-0032
-Phases A and B were committed by the owner as `026b8b3`, subject `task32`;
-that commit carried the presentation state machine and the interaction guards
-but not the opening mechanisms or the host integration, which is why this
-session reopened the task rather than starting TASK-0033. TASK-0031 was
-committed as `c400364`, TASK-0030 as `c9fbbbf`, and the earlier TASK-0029
-implementation spans `a34fbd9` and `ef84d86`.
+**Evidence snapshot:** 2026-09-05 (Europe/Amsterdam). This session began
+from `f61c9ab`, whose subject `Task33` is misleading: that commit carries
+TASK-0032 Phases C and D, not TASK-0033. An independent audit of the
+repository against the consolidated task pack found the TASK-0032 closure
+gaps recorded under "TASK-0032 corrective closure" below, so the session
+first closed those gaps and then implemented TASK-0033, described in its own
+section. The commit-to-task mapping table under "Repository state" is the
+authoritative record of which commit carries which task; commit subjects are
+not.
 
 All figures below come from external Debug build directories created during
 this session; none reuse the in-tree `build/` or `build-codex-task-0014`
@@ -28,16 +27,40 @@ isolated-session evidence.
 
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`, tracking `origin/main` and level with it.
-- Current `HEAD`: `026b8b3571f55ab301cc912a286da216f4372cd0`, subject
-  `task32`. It carries TASK-0032 Phases A and B and is the baseline for the
-  Phase C and D work described below.
-- `c400364` (`task31`) and `c9fbbbf` (`task30`) are its ancestors; `8e54b2b`
-  (`TASK29.`) and `ef84d86` (`task29`) carry the TASK-0029 closure, and
-  `a34fbd9` and `dfb315c` (both `task28`) precede them.
-- TASK-0027 is committed at `c857fd70209646028fc710ef100f49c716384762`
-  and is an ancestor of the TASK-0028 baseline.
+- Current `HEAD`: `f61c9ab`, subject `Task33`. It carries TASK-0032 Phases C
+  and D and is the baseline for the corrective closure and the TASK-0033 work
+  described below.
 - The working tree was clean at the start of this session and now contains
-  only the TASK-0032 Phase C and D changes listed below.
+  only the TASK-0032 corrective closure and TASK-0033 changes listed below.
+- `build-codex-task-0014/` is still tracked at `HEAD`. It is a build
+  directory committed by mistake in `75232e5` and must be removed with
+  `git rm -r build-codex-task-0014`; `.gitignore` now excludes every
+  `build-codex-*/` directory so the mistake cannot recur.
+
+### Commit-to-task mapping
+
+Commit subjects drifted from their content twice, so this table, not the
+subject line, records which commit carries which task.
+
+| Commit | Subject | Actual content |
+| --- | --- | --- |
+| `f30d5fa` | `task22` | TASK-0022 |
+| `c55a89b` | `task23` | TASK-0023 |
+| `2ed1a91` | `task24` | TASK-0024 |
+| `a7f818e` | `task25` | TASK-0025 |
+| `c2473ff` | `task26` | TASK-0026 |
+| `c857fd7` | `task27` | TASK-0027 |
+| `dfb315c` | `task28` | TASK-0028 |
+| `a34fbd9` | `task28` | TASK-0029 Phases A to D |
+| `ef84d86` | `task29` | TASK-0029 corrective session |
+| `8e54b2b` | `TASK29.` | TASK-0029 documentation closure |
+| `c9fbbbf` | `task30` | TASK-0030 |
+| `c400364` | `task31` | TASK-0031 |
+| `026b8b3` | `task32` | TASK-0032 Phases A and B |
+| `f61c9ab` | `Task33` | TASK-0032 Phases C and D |
+
+The TASK-0032 corrective closure and TASK-0033 are the uncommitted working
+tree on top of `f61c9ab`.
 - Codex did not stage, commit, push, globally install, or mutate the personal
   Plasma session.
 
@@ -241,15 +264,18 @@ disposable private Plasma Wayland session, not inferred from inspection.
 - CMake declares the application, QML, theme, and icon-style resources, all
   seven installed Theme v2 packages, all six installed Icon Style v1 packages,
   Plasma applets and templates, D-Bus and systemd metadata, source-only catalog
-  exclusions, and 46 tests.
+  exclusions, and the CTest suite whose exact count is recorded with the most
+  recent task gate below.
 
 ## Known defects and incomplete behavior
 
 - The installed systemd user unit starts `%h/.local/bin/arch-dock`, while the
   application and D-Bus metadata invoke `arch-dock` from `PATH`. The startup and
   installation strategy is not yet aligned.
-- Settings expose panel and icon 3D values, but the shared true-3D scene and
-  renderer architecture required by the master plan is not present.
+- No 3D control is exposed in Panel Studio, Icon Properties, or the native
+  configuration pages. The schema keeps `surface3D` as an internal,
+  non-editable field so persisted values survive, and the shared true-3D scene
+  and renderer architecture required by the master plan is not present.
 - Per-entry `animationProfileReference` is validated and persisted but remains
   intentionally hidden. The animation engine delivered by TASK-0030 and
   TASK-0031 selects one profile per panel; routing a per-entry reference into it
@@ -756,30 +782,190 @@ contract forbids without explicit authorisation.
 - `windowPreviewOpen` still has no producer. It remains a first-class guard fed
   a truthful `false` until TASK-0037 delivers grouped window previews.
 
+## TASK-0032 corrective closure
+
+An independent audit of `f61c9ab` against the consolidated task pack found
+that TASK-0032 could not be proved closed. The gaps and their corrections:
+
+- **Click trigger never closed.** `main.qml` requested a collapse on pointer
+  leave only for the hover and edge triggers, so a click-opened panel stayed
+  open forever. Every non-manual trigger now requests a collapse when the
+  pointer leaves; the controller still holds it until the guards clear.
+- **The `manual` trigger had no producer.** A panel resting collapsed with
+  that trigger could never open. `PanelWindow` gained two additive D-Bus
+  channels: `requestPanelPresentation(panelId, open|collapse)` queues one
+  request per panel and publishes `presentationRequestRevision`, and the
+  applet takes it exactly once through `takePanelPresentationRequest`.
+  Explicit requests are honoured for every trigger; `manual` is driven by
+  nothing else.
+- **The live applet's presentation state was unobservable.** The applet now
+  reports `surfaceState`, `transitionState` and `hostPhase` through
+  `reportPanelPresentationState`, readable as `panelPresentationState`.
+  Progress is deliberately excluded. This is runtime state only.
+- **No live integration scenario existed.** `run-rendering-import-smoke.sh`
+  now runs `tst_PanelSurfaceIntegration.qml` under the private Wayland
+  scenegraph and then, on both the private native and free hosts, collapses
+  the panel into a manual shell through the settings transaction, asserts the
+  applet's own report reaches `collapsed`, opens and collapses it again
+  through explicit requests, and restores an open hover panel.
+- **`git diff --check` had failed since `c9fbbbf`** on a blank line at the
+  end of `AnimationProfileRuntime.js`. Removed.
+- **Free desktop hosts were reported concealed forever.** The new live check
+  exposed it: Plasma instantiates the dock representation twice for a desktop
+  applet, and the hidden compact instance wrote `hostConcealed = true` last.
+  Every free panel therefore ran with its host phase `concealed`, which also
+  withdrew icon motion on free hosts. Only the `fullRepresentationItem` may
+  report host facts now, and a free host publishes its guards and presentation
+  state as soon as bootstrap assigns its panel id. There is no offscreen
+  reproduction because the double instantiation is Plasma's; the smoke's
+  free-host assertion is the regression test.
+- **The smoke's applet-error check had been vacuous.** Qt routes messages to
+  journald when stderr is not a console, so `plasmashell.log` was always
+  empty. The applet host now runs with `QT_FORCE_STDERR_LOGGING=1` and the
+  check also matches `error when loading applet`. The service keeps default
+  routing: Panel Studio has a pre-existing binding loop on `StudioForm.rows`
+  at `SettingsPopup.qml:1047`, a genuine QML diagnostic owned by the TASK-0044
+  cleanup and outside this closure.
+- **Test hygiene.** `ValidateThemeV2Fixtures.cmake` is registered as
+  `theme-v2-fixture-scaffold-test`; `PanelRegistryTest::cleanup()` refuses to
+  delete application data unless CTest redirected `XDG_DATA_HOME`;
+  `THEME_PACKAGE_V2.md` states how adapted v1 packages are actually resolved.
+
+Evidence: fresh configure and build in `build-codex-task-0033`, 57 of 57
+CTests excluding the smoke, then `rendering-import-smoke` passed in 68.8 s
+against its 120 s budget with the new scenario, `git diff --check` clean. The
+closure was reached with two proved corrections after the live check failed,
+each recorded above; the temporary diagnostics used to prove the free-host
+cause were removed.
+
+## TASK-0033 — free and multi-shape content, geometry, transformed input, rotation, and lifecycle verification
+
+AD-0013 is closed under the evidence boundary below. Its four phases follow the
+TASK-0032 corrective closure in this working tree.
+
+### Phase A — free content semantics and panel-specific order
+
+- A free panel's content type is its record's `type`. The applet's
+  `panelType=empty` is an ownership marker and is no longer consulted for what
+  a free host shows. `empty` shows nothing, `launcher` the panel's own ordered
+  entries, `tasks` the running applications, and `hybrid` the panel's entries
+  followed by running-only applications; a running instance of a pinned
+  desktop entry is merged into that entry, which keeps its identity and gains
+  the running state plus `runningAppId` for window actions.
+- `PanelContent.entryOrder` (`contentOrder`) is one canonical ordered list of
+  `free-url:` ids across the panel's entries, derived deterministically for
+  legacy records and repaired when a stored order names unknown or repeated
+  ids. It is Internal: it changes only through the content operations.
+- `PanelContentTransaction` (`src/panel/`) is the pure add/remove/move/set-order
+  transaction; `PanelWindow` exposes `addPanelEntries`, `removePanelEntry`,
+  `movePanelEntryBefore`, `setPanelEntryOrder` and `panelEntryOrder`, each
+  committed as the next settings revision through the same registry path as
+  every other change. Native panels refuse them; `moveDockEntryBefore` refuses
+  free ids; `pinPanelUrls` and `removePanelContent` are compatibility
+  wrappers. An application id is pinned to a free panel as its desktop file,
+  so the free panel never references the global pin list.
+- The applet routes free reorder, unpin, running-only pin and drops to the
+  panel operations by `panelEntryId`, targets window actions at
+  `runningAppId`, and follows task-model churn only for `tasks` and `hybrid`
+  free panels (`FreeEntryPolicy.followsTaskModel`).
+
+### Phase B — geometry hardening
+
+- `LayoutEngine` coerces every numeric input through one finite guard, shares
+  one sweep table between open-path entries and their surface, keeps the fan's
+  historical angle frame, sizes the `diagonal` layout so its last entry stays
+  inside the panel, and makes `upright` mean upright for the canonical and live
+  profiles while the frozen `runtime` profile keeps its legacy tilt.
+- The geometry test now runs a property matrix of every layout at counts 0, 1,
+  7 and 24 against five hostile input sets, and asserts deterministic order and
+  direction, upright versus tangent orientation, and entry-to-surface
+  agreement; the visual harness checks sparse and dense radial layouts stay
+  inside their bounds.
+
+### Phase C — transformed input and whole-scene rotation
+
+- `panelRotationMode`, `panelRotationSpeed` and `panelRotationTrigger` are
+  editor fields in `panels-layout`, gated by `whole-panel-rotation` (never
+  available on a native host) and offered only for radial layouts. The
+  configured values persist; the running angle (`sceneRotation`) is transient.
+  The trigger vocabulary is `idle` and `hover`; a `manual` rotation trigger was
+  not added because nothing would produce it.
+- `SceneRotationController` yields one angle offset and pauses for drag, Edit
+  Mode, configuration, concealment and reduced motion; `PanelScene` adds the
+  offset to the configured layout angle and feeds the sum to every geometry
+  call, keeps a square envelope while rotation is enabled, and centres open
+  paths on it so an arc pivots on its own circle centre.
+- `GeometryHitRegion` is the scene's `containmentMask` for free, non-skinned
+  radial scenes: input is accepted on the drawn band and on the entries at the
+  effective angle; the empty interior and corners pass through. This narrows
+  Qt Quick item hit testing only, and `nonrectangular-input` remains
+  unclaimed because a Plasma desktop applet is still a rectangle to the
+  compositor.
+- Previews report rotation but never animate it.
+
+### Phase D — lifecycle and integration verification
+
+- The isolated lifecycle matrix (`tests/run-plasma-lifecycle.sh`, out of band)
+  exercises free content semantics, panel-specific reorder, native and shared
+  refusals, the ring-plus-rotation configuration, and persistence of order and
+  rotation through the real PlasmaShell restart and a service restart, on the
+  template free host, before the existing verified removal.
+- The staged smoke configures a rotating procedural ring on the private free
+  host through the ordinary transaction, requires the backend to publish the
+  rotation with the capability available and the applet host to stay alive
+  without QML errors, then restores the cyan energy panel.
+
+### Verification boundary
+
+- Fresh configure and build in `build-codex-task-0033` on `f61c9ab` plus this
+  working tree. Phase gates: Phase A 58 of 58 CTests excluding the smoke and
+  `rendering-import-smoke` in 67.7 s; Phase B 58 of 58 and 68.4 s; Phase C 60
+  of 60 and 68.3 s; Phase D smoke with the rotation scenario in 69.0 s, all
+  against the 120 s budget. Final gate on the finished tree: the incremental
+  build rebuilt nothing, and 61 of 61 CTests passed including the smoke in
+  68.0 s. `git diff --check` is clean.
+- The isolated lifecycle matrix, run out of band as
+  `ARCHDOCK_BUILD_DIR="$PWD/build-codex-task-0033" bash tests/run-plasma-lifecycle.sh`,
+  completed all 35 phases on its fifth attempt in 3 min 57 s, including the
+  free content, order and rotation phase and both persistence phases after
+  the real PlasmaShell restart and the service restart. The first attempt died
+  silently on a `grep` exit status under `set -e` in the new phase, which was
+  corrected. Attempts two and three passed the new phase and failed later in
+  pre-existing native placement phases (`setNativePanelType hybrid` returned
+  false; `readback-mismatch` on `fixedLength`), and attempt four failed at
+  native panel creation with `readback-mismatch` (observed 88, requested 720).
+  The same creation failure with the same values reproduced on an untouched
+  export of `f61c9ab` built and run from a scratch directory, so the
+  intermittent read-back failures are environmental and predate this task.
+  They are not corrected here.
+- Whole-scene turning is proved offscreen by `scene-rotation-test`; the live
+  smoke proves the rotating configuration reaches the applet and the applet
+  keeps running. No desktop observation was made and the live desktop was
+  not touched.
+- `build-codex-task-0014` remains tracked from an earlier session; removing
+  it needs `git rm -r build-codex-task-0014`, a Git-state change reserved to
+  the owner.
+
+### Known limitations of this work
+
+- The input region is item-level. Outside the applet's rectangle nothing is
+  claimed; inside it, the compositor still delivers events to the applet
+  window and Qt Quick declines them off the band.
+- The live smoke proves the rotating configuration reaches the applet and that
+  the applet keeps running; that the scene visibly turns is proved by the
+  offscreen scene test, not by observation on a desktop.
+- Free entries are local URLs. A running application pinned to a free panel
+  becomes its desktop file; an application the model cannot locate a desktop
+  file for cannot be pinned to a free panel.
+
 ## Next task boundary
 
-TASK-0028 is the completed AD-0009 dependency. TASK-0029 has passed its four
-sequential phase gates and consolidated completion gate, closing the scoped
-AD-0010 implementation under the isolated-runtime evidence boundary above.
-Its changes remain unstaged and uncommitted for owner review.
+TASK-0022 through TASK-0032 are committed; the commit-to-task mapping table
+above records where. TASK-0032 is closed by the corrective closure recorded in
+its own section, and TASK-0033 is implemented in this working tree. Both are
+uncommitted for owner review.
 
-TASK-0030 was committed by the owner as `c9fbbbf` and is the TASK-0031
-baseline.
-
-TASK-0031 has passed its three sequential phase gates and its consolidated
-completion gate, closing AD-0011 under the isolated-runtime evidence boundary
-above. Its changes remain unstaged and uncommitted for owner review.
-
-TASK-0032 Phases A and B were committed by the owner as `026b8b3`. Phases C
-and D have now passed their gates and their changes are unstaged and
-uncommitted for owner review, closing AD-0012 under the evidence boundary
-recorded above.
-
-The task pack identifies **TASK-0033 — Complete free and multi-shape content,
-geometry, transformed input, rotation, and lifecycle verification** as the next
-dependency-bound task. Its read-only plan already exists from the session that
-found the TASK-0032 closure gap, but it must be re-verified against the
-repository state once TASK-0032 is committed, because Phase C of TASK-0033
-depends on the concealed/collapsed authority that Phase D has just introduced.
-Do not begin it without the separate planning and owner-approval protocol
-required by that task.
+The task pack identifies **TASK-0034 — Implement and verify baked 2.5D ring,
+octagonal, and arc themes** as the next dependency-bound task. Do not begin it
+without the separate read-only planning and owner-approval protocol that task
+requires, and re-verify TASK-0033 closure against the committed tree first.

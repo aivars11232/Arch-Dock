@@ -83,6 +83,13 @@ public:
     Q_INVOKABLE int panelEntryCount(const QString &panelType) const;
     [[nodiscard]] QVariantList panelEntries(const QString &panelType) const;
     [[nodiscard]] QVariantList panelEntriesForIds(const QStringList &appIds) const;
+    // One entry snapshot regardless of pinned or running state; empty when the
+    // model does not know the application.
+    [[nodiscard]] QVariantMap applicationEntry(const QString &appId) const;
+    // The absolute desktop-file path for a known application, or empty when
+    // none can be located. Used to pin a running application to a free panel
+    // as a panel-specific desktop entry.
+    [[nodiscard]] QString desktopFileForApplication(const QString &appId) const;
     bool activateApplication(const QString &appId);
     ActivationOutcome activateApplicationOutcome(const QString &appId);
     bool activateApplicationWindow(const QString &appId, const QString &windowId);
@@ -134,6 +141,7 @@ private:
     int preferredWindowIndex(const DockApplication &application);
     int indexForApplication(const QString &appId) const;
     static bool matchesPanelType(const DockApplication &application, const QString &panelType);
+    [[nodiscard]] QVariantMap entrySnapshot(const DockApplication &application) const;
 
     WindowModel &m_windowModel;
     QList<PinnedApplication> m_pinnedApplications;

@@ -187,6 +187,32 @@ be removed without a Plasma mutation. Conflict, query failure, ownership
 mismatch, or uncertain absence preserves the record and does not target an
 unrelated applet.
 
+## Free-Panel Content Semantics
+
+A free panel's content type is the registry record's `type`, not the applet's
+`panelType`, which a free host stores as `empty` purely as an ownership marker.
+The backend applies the record:
+
+- `empty` shows nothing;
+- `launcher` shows the panel's own ordered entries;
+- `tasks` shows running applications from the shared application model;
+- `hybrid` shows the panel's own entries first and running-only applications
+  after them. A running instance of a pinned desktop entry is merged into that
+  entry: it keeps its identity, label and glyph, gains the running state, and
+  carries the application id under `runningAppId` so window actions reach the
+  application model.
+
+Free entries are panel-specific local URLs stored in `contentUrls` and ordered
+by `contentOrder`, one canonical list of `free-url:` ids that is repaired on
+load if it names unknown or repeated entries. They change only through
+`addPanelEntries`, `removePanelEntry`, `movePanelEntryBefore` and
+`setPanelEntryOrder`, each committed as the panel's next settings revision
+through `PanelContentTransaction`; an application id is pinned to a free panel
+as its desktop file. Native panels refuse these operations, and the shared
+application reorder refuses free ids, so a free panel never reads or writes the
+global pin list. A launcher-only free panel does not refetch on task-model
+churn; `tasks` and `hybrid` free panels do.
+
 ## Runtime Behavior
 
 - Screen add/remove signals cause Arch Dock to resolve each saved stable screen
@@ -255,6 +281,16 @@ zero/one/multiple token matches, output disconnect/restore, PlasmaShell restart,
 detached-record idempotence, verified applet removal, and final absence. A
 separate unrelated free applet is snapshotted and checked throughout alongside
 the unrelated native panel.
+
+TASK-0033 added the free-content cases on the template host: an empty panel
+shows nothing even with stored entries, `launcher` shows the panel's ordered
+entries, a reorder through `movePanelEntryBefore` changes what is shown and
+what is persisted, free ids are refused by the shared application reorder and
+by a native panel, `tasks` shows no pinned entry, `hybrid` leads with the
+panel's own order, and a ring layout with clockwise rotation reaches the
+renderer configuration. The saved order and rotation are re-checked after the
+real PlasmaShell restart and after a service restart, and the final verified
+removal still leaves no host or record.
 
 TASK-0015 was freshly verified on 2026-08-22 using Arch Linux, Plasma/KWin
 6.7.4, Qt 6.11.2, and KF6 6.29.0. The focused C++ test, bootstrap-coordinator QML

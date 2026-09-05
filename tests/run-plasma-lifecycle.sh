@@ -578,6 +578,63 @@ panel_registry_record_snapshot() {
         'first(.[] | select(.id == $panel_id))'
 }
 
+# TASK-0033: free-panel content helpers.
+panel_settings_revision() {
+    panel_call dockConfiguration "$1" | sed -n \
+        "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p"
+}
+
+apply_panel_settings() {
+    local panel_id="$1"
+    local values="$2"
+    local context="$3"
+    local revision
+    revision="$(panel_settings_revision "$panel_id")"
+    [[ "$revision" =~ ^[0-9]+$ ]] || {
+        printf 'Could not read the settings revision of %s before %s.\n' \
+            "$panel_id" "$context" >&2
+        exit 1
+    }
+    local reply
+    reply="$(panel_call applyPanelSettingsTransaction \
+        "$panel_id" "uint64 $revision" "$values" '{}')"
+    [[ "$reply" == *"'success': <true>"* &&
+        "$reply" == *"'status': <'succeeded'>"* ]] || {
+        printf 'Settings transaction for %s failed during %s: %s\n' \
+            "$panel_id" "$context" "$reply" >&2
+        exit 1
+    }
+}
+
+# The entry ids the backend currently shows for a panel, comma-joined in order.
+# The requested type is deliberately meaningless for free panels; the record
+# decides.
+panel_entry_ids() {
+    local reply
+    reply="$(panel_call dockEntriesForPanel "$1" empty)"
+    # No entries is a valid answer, so a non-matching grep must not fail the
+    # pipeline under `set -o pipefail`.
+    { grep -o "'appId': <'[^']*'>" <<<"$reply" || true; } \
+        | sed "s/'appId': <'\\(.*\\)'>/\\1/" \
+        | paste -sd, -
+}
+
+wait_for_panel_entry_ids() {
+    local panel_id="$1"
+    local expected="$2"
+    local context="$3"
+    local attempt
+    local actual=''
+    for ((attempt = 0; attempt < 50; ++attempt)); do
+        actual="$(panel_entry_ids "$panel_id")"
+        [[ "$actual" == "$expected" ]] && return
+        sleep 0.1
+    done
+    printf 'Free panel %s did not show the expected entries during %s: expected=%s actual=%s\n' \
+        "$panel_id" "$context" "$expected" "$actual" >&2
+    exit 1
+}
+
 free_panel_ids_json() {
     panel_registry_json | jq -c '[.[] | select(.edge == "free") | .id] | sort'
 }
@@ -1517,7 +1574,10 @@ log_session_phase() {
 
 start_plasmashell() {
     local log_name="$1"
-    plasmashell --no-respawn >"$ARCHDOCK_TEST_LOG_DIR/$log_name" 2>&1 &
+    # Qt routes messages to journald when stderr is not a console; forcing
+    # stderr keeps the private shell's diagnostics in the session log tail.
+    QT_FORCE_STDERR_LOGGING=1 plasmashell --no-respawn \
+        >"$ARCHDOCK_TEST_LOG_DIR/$log_name" 2>&1 &
     ARCHDOCK_SESSION_PLASMASHELL_PID=$!
     gdbus wait --session --timeout=20 org.kde.plasmashell
 }
@@ -1534,7 +1594,8 @@ arch_dock_service_pid() {
 
 start_arch_dock() {
     local log_name="$1"
-    "$ARCHDOCK_TEST_BINARY" >"$ARCHDOCK_TEST_LOG_DIR/$log_name" 2>&1 &
+    QT_FORCE_STDERR_LOGGING=1 "$ARCHDOCK_TEST_BINARY" \
+        >"$ARCHDOCK_TEST_LOG_DIR/$log_name" 2>&1 &
     local launched_pid=$!
     gdbus wait --session --timeout=20 org.archdock.ArchDock
     ARCHDOCK_SESSION_ARCH_DOCK_PID="$(arch_dock_service_pid)"
@@ -1748,6 +1809,93 @@ run_session() {
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'duplicate template bootstrap'
     log_session_phase 'reused template free-panel host without duplication'
+
+    # TASK-0033 Phases A, C and D on a real free host: the record's content type
+    # decides what the panel shows, entries are panel-specific and ordered, the
+    # order and the rotation configuration are committed as revisions, free ids
+    # never reach the shared application reorder, and a native panel refuses
+    # panel-specific content. Persistence is re-checked after the PlasmaShell
+    # restart and after a service restart later in this session.
+    local content_root="$XDG_DATA_HOME/archdock-lifecycle-content"
+    mkdir -p "$content_root/LifecycleFolder"
+    printf '[Desktop Entry]\nType=Application\nName=Lifecycle Alpha\nIcon=applications-system\nExec=/bin/true\n' \
+        >"$content_root/lifecycle-alpha.desktop"
+    printf '[Desktop Entry]\nType=Application\nName=Lifecycle Beta\nIcon=applications-utilities\nExec=/bin/true\n' \
+        >"$content_root/lifecycle-beta.desktop"
+    local alpha_url="file://$content_root/lifecycle-alpha.desktop"
+    local beta_url="file://$content_root/lifecycle-beta.desktop"
+    local folder_url="file://$content_root/LifecycleFolder"
+    local alpha_id="free-url:$alpha_url"
+    local beta_id="free-url:$beta_url"
+    local folder_id="free-url:$folder_url"
+    [[ "$(panel_registry_value "$template_panel_id" type)" == 'empty' ]] || {
+        printf 'A new free panel must start with the empty content type.\n' >&2
+        exit 1
+    }
+    require_true_reply "$(panel_call addPanelEntries \
+        "$template_panel_id" "['$alpha_url', '$folder_url']")"
+    [[ "$(panel_registry_value "$template_panel_id" contentOrder | jq -r 'join(",")')" == "$alpha_id,$folder_id" ]] || {
+        printf 'Added free entries were not persisted in order.\n' >&2
+        exit 1
+    }
+    [[ -z "$(panel_entry_ids "$template_panel_id")" ]] || {
+        printf 'An empty free panel showed entries.\n' >&2
+        exit 1
+    }
+    apply_panel_settings "$template_panel_id" "{'type': <'launcher'>}" 'launcher content'
+    wait_for_panel_entry_ids "$template_panel_id" "$alpha_id,$folder_id" 'launcher content'
+    require_true_reply "$(panel_call addPanelEntries "$template_panel_id" "['$beta_url']")"
+    require_true_reply "$(panel_call movePanelEntryBefore \
+        "$template_panel_id" "$beta_id" "$alpha_id")"
+    local lifecycle_order="$beta_id,$alpha_id,$folder_id"
+    wait_for_panel_entry_ids "$template_panel_id" "$lifecycle_order" 'free reorder'
+    require_false_reply "$(panel_call moveDockEntryBefore "$alpha_id" "$beta_id")"
+    require_false_reply "$(panel_call setPanelEntryOrder "$template_panel_id" "['$alpha_id']")"
+    require_false_reply "$(panel_call addPanelEntries bottom "['$alpha_url']")"
+    require_false_reply "$(panel_call movePanelEntryBefore bottom "$alpha_id" '')"
+    apply_panel_settings "$template_panel_id" "{'type': <'tasks'>}" 'tasks content'
+    local attempt
+    local tasks_entries=''
+    for ((attempt = 0; attempt < 50; ++attempt)); do
+        tasks_entries="$(panel_entry_ids "$template_panel_id")"
+        [[ "$tasks_entries" != *'free-url:'* ]] && break
+        sleep 0.1
+    done
+    [[ "$tasks_entries" != *'free-url:'* ]] || {
+        printf 'A tasks free panel still showed pinned entries: %s\n' "$tasks_entries" >&2
+        exit 1
+    }
+    apply_panel_settings "$template_panel_id" "{'type': <'hybrid'>}" 'hybrid content'
+    local hybrid_entries=''
+    for ((attempt = 0; attempt < 50; ++attempt)); do
+        hybrid_entries="$(panel_entry_ids "$template_panel_id")"
+        [[ "$hybrid_entries" == "$lifecycle_order"* ]] && break
+        sleep 0.1
+    done
+    [[ "$hybrid_entries" == "$lifecycle_order"* ]] || {
+        printf 'A hybrid free panel did not lead with its own ordered entries: %s\n' \
+            "$hybrid_entries" >&2
+        exit 1
+    }
+    apply_panel_settings "$template_panel_id" "{'type': <'launcher'>}" 'launcher content restore'
+    wait_for_panel_entry_ids "$template_panel_id" "$lifecycle_order" 'launcher content restore'
+    apply_panel_settings "$template_panel_id" \
+        "{'layout': <'ring'>, 'panelRotationMode': <'clockwise'>, 'panelRotationSpeed': <45.0>, 'panelRotationTrigger': <'idle'>}" \
+        'free rotation'
+    local rotation_configuration
+    rotation_configuration="$(panel_call panelRendererConfiguration "$template_panel_id")"
+    [[ "$rotation_configuration" == *"'panelRotationMode': <'clockwise'>"* &&
+        "$rotation_configuration" == *"'layout': <'ring'>"* &&
+        "$(panel_registry_value "$template_panel_id" panelRotationMode)" == 'clockwise' ]] || {
+        printf 'Free rotation configuration did not reach the renderer configuration: %s\n' \
+            "$rotation_configuration" >&2
+        exit 1
+    }
+    require_current_free_panel_host \
+        "$template_panel_id" "$template_token" 'content-configured template'
+    require_unrelated_panel_unchanged \
+        "$unrelated_containment_id" "$unrelated_snapshot" 'free content and rotation configuration'
+    log_session_phase 'applied free content semantics, panel-specific order, and rotation'
 
     local sentinel_host
     sentinel_host="$(create_unrelated_free_host_sentinel)"
@@ -2841,6 +2989,15 @@ run_session() {
         "$unrelated_containment_id" "$unrelated_snapshot" 'PlasmaShell restart recovery'
     log_session_phase 'recovered unique free hosts after a real private PlasmaShell restart'
 
+    [[ "$(panel_entry_ids "$template_panel_id")" == "$lifecycle_order" &&
+        "$(panel_registry_value "$template_panel_id" contentOrder | jq -r 'join(",")')" == "$lifecycle_order" &&
+        "$(panel_registry_value "$template_panel_id" layout)" == 'ring' &&
+        "$(panel_registry_value "$template_panel_id" panelRotationMode)" == 'clockwise' ]] || {
+        printf 'Free content order or rotation did not survive the PlasmaShell restart.\n' >&2
+        exit 1
+    }
+    log_session_phase 'preserved free content order and rotation through the PlasmaShell restart'
+
     local free_count_before_cleanup
     free_count_before_cleanup="$(free_panel_count)"
     studio_containment_id="$(panel_registry_value \
@@ -2860,6 +3017,12 @@ run_session() {
     start_signal_monitor nativePanelRecoveryFinished
     wait_for_panel_registry_value "$studio_panel_id" freeHostState detached
     wait_for_signal_monitor nativePanelRecoveryFinished
+    [[ "$(panel_entry_ids "$template_panel_id")" == "$lifecycle_order" &&
+        "$(panel_registry_value "$template_panel_id" panelRotationMode)" == 'clockwise' ]] || {
+        printf 'Free content order or rotation did not survive a service restart.\n' >&2
+        exit 1
+    }
+    log_session_phase 'preserved free content order and rotation through a service restart'
     [[ "$(panel_registry_value "$studio_panel_id" freeDesktopContainmentId)" == '-1' &&
         "$(panel_registry_value "$studio_panel_id" freeDockAppletId)" == '-1' &&
         -z "$(panel_registry_value "$studio_panel_id" freeOwnershipToken)" &&

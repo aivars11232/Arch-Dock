@@ -3,6 +3,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSettings>
@@ -22,6 +23,7 @@ private slots:
     void freeEntriesUseCanonicalIdentity();
     void legacyCustomGlyphRemainsExplicitBaseData();
     void activationOutcomeSeparatesVerifiedLaunchFromRequest();
+    void applicationEntryAndDesktopFileAreAvailableRegardlessOfPinning();
 
 private:
     QString writeDesktopEntry(const QString &fileName,
@@ -104,6 +106,45 @@ void DockModelTest::pinnedAndRunningRepresentationsShareOneIdentity()
              pinnedIdentity);
     QVERIFY(merged.value(QStringLiteral("pinned")).toBool());
     QVERIFY(merged.value(QStringLiteral("running")).toBool());
+}
+
+// TASK-0033 Phase A: a free panel pins an application as its desktop entry,
+// so the model must hand out one snapshot and one desktop file for any
+// application it knows, whether that application is pinned globally or only
+// running.
+void DockModelTest::applicationEntryAndDesktopFileAreAvailableRegardlessOfPinning()
+{
+    const QString desktopPath = writeDesktopEntry(
+        QStringLiteral("org.example.runner.desktop"),
+        QStringLiteral("Runner"),
+        QStringLiteral("applications-games"));
+    QVERIFY(!desktopPath.isEmpty());
+
+    WindowModel windowModel;
+    DockModel model(windowModel);
+    QVERIFY(model.applicationEntry(QStringLiteral("org.example.runner.desktop")).isEmpty());
+    QVERIFY(model.desktopFileForApplication(QStringLiteral("org.example.runner.desktop")).isEmpty());
+
+    WindowItem window;
+    window.internalId = QStringLiteral("runner-window");
+    window.desktopFileName = desktopPath;
+    window.resourceClass = QStringLiteral("runner");
+    window.caption = QStringLiteral("Running");
+    windowModel.setWindows({window});
+
+    const QVariantList running = model.panelEntries(QStringLiteral("tasks"));
+    QCOMPARE(running.size(), 1);
+    const QString appId = running.constFirst().toMap().value(QStringLiteral("appId")).toString();
+    QVERIFY(!appId.isEmpty());
+
+    const QVariantMap entry = model.applicationEntry(appId);
+    QCOMPARE(entry.value(QStringLiteral("appId")).toString(), appId);
+    QVERIFY(entry.value(QStringLiteral("running")).toBool());
+    QVERIFY(!entry.value(QStringLiteral("pinned")).toBool());
+    QCOMPARE(entry.value(QStringLiteral("stableIdentity")),
+             running.constFirst().toMap().value(QStringLiteral("stableIdentity")));
+    QCOMPARE(model.desktopFileForApplication(appId),
+             QFileInfo(desktopPath).absoluteFilePath());
 }
 
 void DockModelTest::freeEntriesUseCanonicalIdentity()

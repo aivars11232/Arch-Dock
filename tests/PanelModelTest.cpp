@@ -1,5 +1,6 @@
 #include "model/PanelDefinition.h"
 #include "model/PanelRuntimeState.h"
+#include "model/PanelSettingsSchema.h"
 #include "model/SettingsMigration.h"
 
 #include <QFile>
@@ -10,8 +11,10 @@
 
 #include <limits>
 
+using ArchDock::PanelContent;
 using ArchDock::PanelDefinition;
 using ArchDock::PanelHostKind;
+using ArchDock::PanelSettingsSchema;
 using ArchDock::PanelPresetOrigin;
 using ArchDock::PanelMigrationStatus;
 using ArchDock::PanelRuntimeState;
@@ -57,6 +60,7 @@ class PanelModelTest final : public QObject
 private slots:
     void defaultsExposeEveryVersionTwoSection();
     void legacyRecordConvertsWithDeterministicDefaults();
+    void contentOrderIsCanonicalAndDerived();
     void settingsRevisionRoundTripsWithoutSchemaBump();
     void currentFieldsAndExtensionsRoundTripWithoutLoss();
     void iconStyleSelectionOwnsItsLegacyMirror();
@@ -258,6 +262,61 @@ void PanelModelTest::legacyRecordConvertsWithDeterministicDefaults()
         first->content.applicationIds,
         QStringList{QStringLiteral("org.kde.kate")});
     QCOMPARE(first->normalized(), *first);
+}
+
+// TASK-0033 Phase A: a free panel's content is one ordered list across its
+// application and URL entries. Legacy records carry no order, so it is derived
+// deterministically; a stored order that names unknown or repeated ids is
+// repaired rather than trusted.
+void PanelModelTest::contentOrderIsCanonicalAndDerived()
+{
+    const QString folder = PanelContent::urlEntryId(QStringLiteral("file:///tmp/Folder/"));
+    const QString example = PanelContent::urlEntryId(
+        QStringLiteral("file:///tmp/example.desktop"));
+    const QVariantMap legacy{
+        {QStringLiteral("id"), QStringLiteral("free-4")},
+        {QStringLiteral("edge"), QStringLiteral("free")},
+        {QStringLiteral("type"), QStringLiteral("launcher")},
+        {QStringLiteral("contentAppIds"), QStringList{QStringLiteral("org.kde.kate")}},
+        {QStringLiteral("contentUrls"),
+         QStringList{QStringLiteral("file:///tmp/example.desktop"),
+                     QStringLiteral("file:///tmp/Folder/")}},
+    };
+
+    QString errorMessage;
+    const auto derived = PanelDefinition::fromLegacyMap(legacy, &errorMessage);
+    QVERIFY2(derived.has_value(), qPrintable(errorMessage));
+    QCOMPARE(derived->content.entryOrder,
+             QStringList({QStringLiteral("org.kde.kate"), example, folder}));
+    QCOMPARE(derived->toLegacyMap().value(QStringLiteral("contentOrder")).toStringList(),
+             derived->content.entryOrder);
+
+    QVariantMap reordered = legacy;
+    reordered.insert(QStringLiteral("contentOrder"),
+                     QStringList{folder, QStringLiteral("bogus"), folder,
+                                 QStringLiteral("org.kde.kate")});
+    const auto repaired = PanelDefinition::fromLegacyMap(reordered, &errorMessage);
+    QVERIFY2(repaired.has_value(), qPrintable(errorMessage));
+    QCOMPARE(repaired->content.entryOrder,
+             QStringList({folder, QStringLiteral("org.kde.kate"), example}));
+    QCOMPARE(repaired->normalized(), *repaired);
+    QVERIFY(PanelSettingsSchema::isKnownPanelField(QStringLiteral("contentOrder")));
+
+    // TASK-0033 Phase C: rotation is configuration; its running angle is not.
+    QVariantMap rotating = legacy;
+    rotating.insert(QStringLiteral("panelRotationMode"), QStringLiteral("Clockwise"));
+    rotating.insert(QStringLiteral("panelRotationSpeed"), 999);
+    rotating.insert(QStringLiteral("panelRotationTrigger"), QStringLiteral("whenever"));
+    rotating.insert(QStringLiteral("sceneRotation"), 123.0);
+    const auto turned = PanelDefinition::fromLegacyMap(rotating, &errorMessage);
+    QVERIFY2(turned.has_value(), qPrintable(errorMessage));
+    QCOMPARE(turned->layout.rotationMode, QStringLiteral("clockwise"));
+    QCOMPARE(turned->layout.rotationSpeed, 180.0);
+    QCOMPARE(turned->layout.rotationTrigger, QStringLiteral("idle"));
+    QVERIFY(!turned->toPersistedMap().contains(QStringLiteral("sceneRotation")));
+    QVERIFY(PanelRuntimeState::isTransientLegacyKey(QStringLiteral("sceneRotation")));
+    QCOMPARE(derived->layout.rotationMode, QStringLiteral("none"));
+    QCOMPARE(derived->layout.rotationSpeed, 12.0);
 }
 
 void PanelModelTest::settingsRevisionRoundTripsWithoutSchemaBump()

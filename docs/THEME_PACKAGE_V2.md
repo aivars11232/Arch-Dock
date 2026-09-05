@@ -377,6 +377,14 @@ ThemeDefinition with:
 The adapter does not rewrite the source manifest, infer capabilities from its
 extension, or claim that TASK-0026 supplies a production skinned renderer.
 
+The preferred tier above is the adapted definition's declaration only. A
+version 1 package carries no slice, content-region, or input-mask metadata, so
+the capability resolver maps adapted legacy artwork to the procedural theme
+profile and the live scene stays on procedural 2D, as
+[theme-packages.md](theme-packages.md#version-1-capability-mapping) records.
+The declared `skinned2d` preference becomes effective only for a package that
+is re-authored as version 2 with the slice metadata `PanelSkin2D` requires.
+
 ## 12. Complete example
 
 ```json

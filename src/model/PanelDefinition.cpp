@@ -6,6 +6,7 @@
 #include <QMetaType>
 #include <QRegularExpression>
 #include <QSet>
+#include <QUrl>
 #include <QtGlobal>
 
 #include <array>
@@ -421,6 +422,9 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         QStringLiteral("contentAppIds"), definition.content.applicationIds).toStringList();
     definition.content.urls = normalized(
         QStringLiteral("contentUrls"), definition.content.urls).toStringList();
+    definition.content.entryOrder = normalized(
+        QStringLiteral("contentOrder"), definition.content.entryOrder).toStringList();
+    definition.content.entryOrder = definition.content.canonicalEntryOrder();
     definition.content.kdeWidgets = normalized(
         QStringLiteral("kdeWidgets"), definition.content.kdeWidgets).toStringList();
     definition.content.acceptDrops = normalized(
@@ -531,6 +535,12 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         QStringLiteral("pathOrientation"), definition.layout.orientation).toString();
     definition.layout.anchor = normalized(
         QStringLiteral("pathAnchor"), definition.layout.anchor).toString();
+    definition.layout.rotationMode = normalized(
+        QStringLiteral("panelRotationMode"), definition.layout.rotationMode).toString();
+    definition.layout.rotationSpeed = normalized(
+        QStringLiteral("panelRotationSpeed"), definition.layout.rotationSpeed).toReal();
+    definition.layout.rotationTrigger = normalized(
+        QStringLiteral("panelRotationTrigger"), definition.layout.rotationTrigger).toString();
 
     setString(QStringLiteral("rendererTier"), &definition.surface.rendererTier, true);
     setString(QStringLiteral("panelThemeId"), &definition.surface.panelThemeId);
@@ -847,6 +857,7 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("type"), content.type);
     record.insert(QStringLiteral("contentAppIds"), content.applicationIds);
     record.insert(QStringLiteral("contentUrls"), content.urls);
+    record.insert(QStringLiteral("contentOrder"), content.canonicalEntryOrder());
     record.insert(QStringLiteral("kdeWidgets"), content.kdeWidgets);
     record.insert(QStringLiteral("acceptDrops"), content.acceptDrops);
     record.insert(QStringLiteral("folderLayout"), content.folderLayout);
@@ -899,6 +910,9 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("pathSides"), layout.polygonSides);
     record.insert(QStringLiteral("pathOrientation"), layout.orientation);
     record.insert(QStringLiteral("pathAnchor"), layout.anchor);
+    record.insert(QStringLiteral("panelRotationMode"), layout.rotationMode);
+    record.insert(QStringLiteral("panelRotationSpeed"), layout.rotationSpeed);
+    record.insert(QStringLiteral("panelRotationTrigger"), layout.rotationTrigger);
 
     insertIfNotEmpty(&record, QStringLiteral("rendererTier"), surface.rendererTier);
     insertIfNotEmpty(&record, QStringLiteral("panelThemeId"), surface.panelThemeId);
@@ -1008,6 +1022,77 @@ QVariantMap PanelDefinition::toPersistedMap() const
         record.insert(QStringLiteral("extensions"), filteredExtensions);
     }
     return record;
+}
+
+QString PanelContent::urlEntryId(const QString &url)
+{
+    const QUrl parsed(url.trimmed());
+    if (!parsed.isValid() || parsed.isEmpty())
+    {
+        return {};
+    }
+    return QStringLiteral("free-url:") + QString::fromUtf8(parsed.toEncoded());
+}
+
+bool PanelContent::isUrlEntryId(const QString &entryId)
+{
+    return entryId.startsWith(QStringLiteral("free-url:"));
+}
+
+QString PanelContent::urlFromEntryId(const QString &entryId)
+{
+    if (!isUrlEntryId(entryId))
+    {
+        return {};
+    }
+    const QUrl parsed = QUrl::fromEncoded(entryId.mid(9).toUtf8());
+    return parsed.isValid() && !parsed.isEmpty() ? parsed.toString() : QString{};
+}
+
+QStringList PanelContent::knownEntryIds() const
+{
+    QStringList known;
+    known.reserve(applicationIds.size() + urls.size());
+    for (const QString &applicationId : applicationIds)
+    {
+        const QString trimmed = applicationId.trimmed();
+        if (!trimmed.isEmpty() && !isUrlEntryId(trimmed) && !known.contains(trimmed))
+        {
+            known.append(trimmed);
+        }
+    }
+    for (const QString &url : urls)
+    {
+        const QString entryId = urlEntryId(url);
+        if (!entryId.isEmpty() && !known.contains(entryId))
+        {
+            known.append(entryId);
+        }
+    }
+    return known;
+}
+
+QStringList PanelContent::canonicalEntryOrder() const
+{
+    const QStringList known = knownEntryIds();
+    QStringList result;
+    result.reserve(known.size());
+    for (const QString &entryId : entryOrder)
+    {
+        const QString trimmed = entryId.trimmed();
+        if (known.contains(trimmed) && !result.contains(trimmed))
+        {
+            result.append(trimmed);
+        }
+    }
+    for (const QString &entryId : known)
+    {
+        if (!result.contains(entryId))
+        {
+            result.append(entryId);
+        }
+    }
+    return result;
 }
 
 bool PanelDefinition::isDurableLegacyKey(const QString &key)

@@ -56,10 +56,12 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     MotionTrackRunner.qml
     PanelPresentationController.qml
     PanelMotionController.qml
+    SceneRotationController.qml
     PanelScene.qml
     PanelSurfaceLoader.qml
     RunningIndicator.qml
     inputs/AlphaHitMask.qml
+    inputs/GeometryHitRegion.qml
     previews/LivePanelPreview.qml
     renderers/IconStyle2D.qml
     renderers/PanelProcedural2D.qml
@@ -150,6 +152,8 @@ qt_add_executable(
   src/panel/FreePanelController.cpp
   src/panel/PanelSettingsTransaction.h
   src/panel/PanelSettingsTransaction.cpp
+  src/panel/PanelContentTransaction.h
+  src/panel/PanelContentTransaction.cpp
   src/panel/IconOverrideTransaction.h
   src/panel/IconOverrideTransaction.cpp
   src/panel/PanelWindow.h
@@ -477,6 +481,28 @@ if(BUILD_TESTING)
     COMMAND panel-settings-transaction-test)
 
   qt_add_executable(
+    panel-content-transaction-test
+    tests/PanelContentTransactionTest.cpp
+    src/panel/PanelContentTransaction.h
+    src/panel/PanelContentTransaction.cpp
+    src/model/PanelDefinition.h
+    src/model/PanelDefinition.cpp
+    src/model/PanelSettingsSchema.h
+    src/model/PanelSettingsSchema.cpp
+    src/model/PanelRuntimeState.h
+    src/model/PanelRuntimeState.cpp)
+  target_include_directories(
+    panel-content-transaction-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    panel-content-transaction-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(
+    NAME panel-content-transaction-test
+    COMMAND panel-content-transaction-test)
+
+  qt_add_executable(
     icon-override-transaction-test
     tests/IconOverrideTransactionTest.cpp
     src/panel/IconOverrideTransaction.h
@@ -653,6 +679,8 @@ if(BUILD_TESTING)
     src/panel/FreePanelController.cpp
     src/panel/PanelSettingsTransaction.h
     src/panel/PanelSettingsTransaction.cpp
+    src/panel/PanelContentTransaction.h
+    src/panel/PanelContentTransaction.cpp
     src/panel/IconOverrideTransaction.h
     src/panel/IconOverrideTransaction.cpp
     src/panel/PanelWindow.h
@@ -790,6 +818,24 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PanelMotionTracks.qml)
   set_tests_properties(
     panel-motion-tracks-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME scene-rotation-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_SceneRotation.qml)
+  set_tests_properties(
+    scene-rotation-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME geometry-hit-region-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_GeometryHitRegion.qml)
+  set_tests_properties(
+    geometry-hit-region-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(
@@ -958,6 +1004,12 @@ if(BUILD_TESTING)
     COMMAND ${CMAKE_COMMAND}
             -DARCHDOCK_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ValidateRenderingModule.cmake)
+
+  add_test(
+    NAME theme-v2-fixture-scaffold-test
+    COMMAND ${CMAKE_COMMAND}
+            -DARCHDOCK_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ValidateThemeV2Fixtures.cmake)
 
   add_test(
     NAME rendering-module-import-test

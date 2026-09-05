@@ -15,11 +15,16 @@ PlasmoidItem {
     readonly property bool renderingModuleReady: RenderingModuleProbe.ready
     readonly property string panelId: Plasmoid.configuration.panelId || ""
     readonly property string configuredPanelType: Plasmoid.configuration.panelType || "hybrid"
-    readonly property string panelType: ["empty", "launcher", "tasks", "hybrid"].includes(configuredPanelType)
-        ? configuredPanelType : "hybrid"
     readonly property bool bootstrapPending: panelId.length === 0
         && Boolean(Plasmoid.configuration.bootstrapFreeDock)
     readonly property bool freeSurface: panelId.startsWith("free-") || bootstrapPending
+    // A free host's applet stores panelType=empty as an ownership marker, so
+    // its content type comes from the panel record the backend publishes.
+    // Native applets keep their own configured type.
+    readonly property string panelType: freeSurface
+        ? String(configuration.type || "empty")
+        : ["empty", "launcher", "tasks", "hybrid"].includes(configuredPanelType)
+            ? configuredPanelType : "hybrid"
     readonly property bool vertical: Plasmoid.formFactor === PlasmaCore.Types.Vertical
     readonly property bool plasmaEditMode: {
         const containment = Plasmoid.containment;
@@ -80,9 +85,10 @@ PlasmoidItem {
     // was permanently "open" however the panel was configured. These three
     // fields are the wiring: one state machine, one surface.
     readonly property var sceneRuntimeState: ({
-        hovered: hoveredIndex >= 0,
+        hovered: hoveredIndex >= 0 || panelPointerInside,
         hoveredEntry: hoveredIndex,
         editMode: plasmaEditMode,
+        dragInProgress: entryDragActive || panelDropActive,
         rendererFallback: "",
         presentationState: presentationController.surfaceState,
         transitionState: presentationController.transitionState,
@@ -340,8 +346,21 @@ PlasmoidItem {
             activateEntry(appId, onOutcome);
             return;
         }
-        if (freeSurface && methodName === "togglePinnedDockEntry") {
-            callDock("removePanelContent", [panelId, appId], refresh);
+        if (freeSurface) {
+            // Pinning on a free panel is panel-specific: an owned entry is
+            // removed from this panel only, and a running-only application is
+            // added to this panel as its desktop entry. The global pin list is
+            // never touched from a free surface.
+            if (methodName === "togglePinnedDockEntry") {
+                const ownedId = FreeEntryPolicy.panelEntryId(root.entries, appId);
+                if (ownedId.length > 0)
+                    callDock("removePanelEntry", [panelId, ownedId], refresh);
+                else
+                    callDock("addPanelEntries", [panelId, [appId]], refresh);
+                return;
+            }
+            callDock(methodName,
+                     [FreeEntryPolicy.actionAppId(root.entries, appId)], refresh);
             return;
         }
         callDock(methodName, [appId], refresh);
@@ -358,8 +377,14 @@ PlasmoidItem {
             if (onOutcome)
                 onOutcome({ outcome: outcome, reason: reason || "" });
         }
+        let targetAppId = appId;
         if (freeSurface) {
-            const targetUrl = FreeEntryPolicy.encodedUrl(appId);
+            // A pinned desktop entry with a running instance activates that
+            // instance through the application model; otherwise the entry's
+            // own URL is opened.
+            targetAppId = FreeEntryPolicy.actionAppId(root.entries, appId);
+            const targetUrl = targetAppId === appId
+                ? FreeEntryPolicy.encodedUrl(appId) : "";
             if (targetUrl.length > 0) {
                 if (Qt.openUrlExternally(targetUrl)) {
                     report("succeeded", "");
@@ -375,7 +400,7 @@ PlasmoidItem {
             report("failed", "service-unavailable");
             return;
         }
-        callDock("activateDockEntryOutcome", [appId], function(reply) {
+        callDock("activateDockEntryOutcome", [targetAppId], function(reply) {
             const value = normalizeReply(reply);
             report(value && value.outcome ? String(value.outcome) : "requested",
                    value && value.reason ? String(value.reason) : "");
@@ -389,6 +414,17 @@ PlasmoidItem {
     function reorderEntry(appId, beforeAppId) {
         if (appId === beforeAppId)
             return;
+        if (freeSurface) {
+            // Free entries reorder within their own panel. A running-only
+            // entry is not owned by the panel and cannot be ordered.
+            const movedId = FreeEntryPolicy.panelEntryId(root.entries, appId);
+            const beforeId = beforeAppId
+                ? FreeEntryPolicy.panelEntryId(root.entries, beforeAppId) : "";
+            if (movedId.length === 0 || (beforeAppId && beforeId.length === 0))
+                return;
+            callDock("movePanelEntryBefore", [panelId, movedId, beforeId], refresh);
+            return;
+        }
         callDock("moveDockEntryBefore", [appId, beforeAppId], refresh);
     }
 
@@ -397,7 +433,7 @@ PlasmoidItem {
         for (const url of urls)
             values.push(url.toString());
         if (values.length > 0)
-            callDock(root.freeSurface ? "pinPanelUrls" : "pinDockUrls",
+            callDock(root.freeSurface ? "addPanelEntries" : "pinDockUrls",
                      root.freeSurface ? [panelId, values] : [values], refresh);
     }
 
@@ -469,12 +505,50 @@ PlasmoidItem {
         callDock("reportPanelInteractionGuards", [panelId, reportedGuards]);
     }
 
+    // The resting surface state and host phase this panel has actually
+    // reached, reported to the backend so the live panel can be observed
+    // without injecting input. Progress is deliberately excluded: it changes
+    // every frame and the observer only needs the endpoints.
+    readonly property var reportedPresentation: ({
+        surfaceState: presentationController.surfaceState,
+        transitionState: presentationController.transitionState,
+        hostPhase: presentationController.hostPhase
+    })
+
+    onReportedPresentationChanged: root.publishPresentationState()
+
+    function publishPresentationState() {
+        if (panelId.length === 0 || !dockService.registered)
+            return;
+        callDock("reportPanelPresentationState", [panelId, reportedPresentation]);
+    }
+
+    // Explicit requests are the producer for the "manual" trigger and are
+    // honoured for every trigger. A request is taken from the backend exactly
+    // once, so a request cannot be replayed after the panel has acted on it.
+    function consumePresentationRequest() {
+        if (panelId.length === 0 || !dockService.registered)
+            return;
+        callDock("takePanelPresentationRequest", [panelId], function(reply) {
+            const value = normalizeReply(reply);
+            if (!value || value.pending !== true)
+                return;
+            const request = String(value.request || "");
+            if (request === "open")
+                root.requestPresentationOpen();
+            else if (request === "collapse")
+                root.requestPresentationCollapse();
+        });
+    }
+
     // Opening and closing requests.
     //
-    // The pointer entering the panel opens it; the pointer leaving asks it to
-    // close, and the controller holds that request until every guard clears.
-    // A collapsed panel with no configured trigger stays collapsed until
-    // something asks it to open, which is what "manual" means.
+    // Hover and edge open the panel when the pointer enters it; click opens it
+    // through the tap handler below. Whatever opened it, the pointer leaving
+    // asks it to close, and the controller holds that request until every
+    // guard clears. "manual" is the one trigger the pointer never drives: such
+    // a panel opens and closes only through an explicit request delivered by
+    // the backend, so it can rest collapsed without becoming unreachable.
     property bool revealZoneActive: false
 
     function requestPresentationOpen() {
@@ -488,12 +562,14 @@ PlasmoidItem {
     }
 
     onPanelPointerInsideChanged: {
-        if (!root.opensOnHover)
+        if (root.presentationTrigger === "manual")
             return;
-        if (root.panelPointerInside)
-            root.requestPresentationOpen();
-        else
+        if (root.panelPointerInside) {
+            if (root.opensOnHover)
+                root.requestPresentationOpen();
+        } else {
             root.requestPresentationCollapse();
+        }
     }
 
     // The host has actually taken the panel off screen, or put it back. This is
@@ -567,8 +643,24 @@ PlasmoidItem {
                         || Window.visibility === Window.Hidden
                         || Window.visibility === Window.Minimized))
 
-            onHostConcealedChanged: root.hostConcealed = hostConcealed
-            Component.onCompleted: root.hostConcealed = hostConcealed
+            // Plasma instantiates this component twice for a desktop applet,
+            // once as the compact and once as the full representation, and
+            // only the full one is shown. The hidden instance is permanently
+            // invisible, so if every instance reported its own visibility the
+            // hidden one would declare the host concealed forever and the free
+            // panel would never reveal. Only the representation Plasma is
+            // actually showing may report host facts.
+            readonly property bool authoritativeHost:
+                root.fullRepresentationItem === representation
+
+            function publishHostConcealed() {
+                if (authoritativeHost)
+                    root.hostConcealed = hostConcealed;
+            }
+
+            onHostConcealedChanged: publishHostConcealed()
+            onAuthoritativeHostChanged: publishHostConcealed()
+            Component.onCompleted: publishHostConcealed()
 
             // Panel-wide interaction guards. The pointer being anywhere over
             // the panel holds it open, not merely the pointer being over an
@@ -752,6 +844,8 @@ PlasmoidItem {
             root.bootstrapFreeDock();
             root.refresh();
             root.publishGuards();
+            root.publishPresentationState();
+            root.consumePresentationRequest();
         }
     }
 
@@ -763,8 +857,12 @@ PlasmoidItem {
         onPropertiesChanged: function(interfaceName, changedProperties) {
             if (changedProperties.dockRevision !== undefined)
                 root.refresh();
-            else if (changedProperties.dockEntriesRevision !== undefined && !root.freeSurface)
+            else if (changedProperties.dockEntriesRevision !== undefined
+                     && (!root.freeSurface
+                         || FreeEntryPolicy.followsTaskModel(root.configuration.type)))
                 root.refreshEntries();
+            if (changedProperties.presentationRequestRevision !== undefined)
+                root.consumePresentationRequest();
         }
         onRefreshed: root.refresh()
     }
@@ -776,8 +874,14 @@ PlasmoidItem {
             root.bootstrapFreeDock();
         }
 
+        // A free host learns its panel id only after bootstrap, so everything
+        // that was skipped for an empty id is published now: an unchanged
+        // resting state would otherwise never be reported at all.
         function onPanelIdChanged() {
             root.refresh();
+            root.publishGuards();
+            root.publishPresentationState();
+            root.consumePresentationRequest();
         }
     }
 
@@ -785,5 +889,7 @@ PlasmoidItem {
         Plasmoid.setInternalAction("configure", configurePanelStudioAction);
         root.bootstrapFreeDock();
         root.refresh();
+        root.publishPresentationState();
+        root.consumePresentationRequest();
     }
 }

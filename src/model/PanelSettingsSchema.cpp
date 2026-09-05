@@ -397,6 +397,11 @@ const QVector<Descriptor> &schemaFields()
               Normalization::StringList, QStringList{}, "content.applicationIds"),
         panel("contentUrls", Access::Internal, Type::StringList, Normalization::UrlList,
               QStringList{}, "content.urls"),
+        // The canonical order across application and URL entries. Internal:
+        // it changes only through the panel content operations, never through
+        // an editor field.
+        panel("contentOrder", Access::Internal, Type::StringList,
+              Normalization::StringList, QStringList{}, "content.entryOrder"),
         panel("kdeWidgets", Access::Internal, Type::StringList,
               Normalization::StringList, QStringList{}, "content.kdeWidgets"),
         exposedTo(panel("acceptDrops", Access::Editor, Type::Boolean, Normalization::Boolean, true,
@@ -570,6 +575,35 @@ const QVector<Descriptor> &schemaFields()
               Normalization::ChoiceLower, QStringLiteral("center"), "layout.anchor", {}, {},
               {"top-left", "top", "top-right", "left", "center", "right",
                "bottom-left", "bottom", "bottom-right"}),
+        // Whole-scene rotation. Gated by the same capability as the static
+        // layout angle, so a native panel never sees these controls, and
+        // offered only for the radial layouts a turning scene makes sense for.
+        panel("panelRotationMode", Access::Editor, Type::String,
+              Normalization::ChoiceLower, QStringLiteral("none"),
+              "layout.rotationMode", {}, {},
+              {"none", "clockwise", "counter-clockwise"}, false, true,
+              editor("panels-layout", "Panel rotation", "combo", {"studio"},
+                     "whole-panel-rotation",
+                     {"circular", "ellipse", "ring", "radial", "arc", "semicircle",
+                      "fan", "spiral", "polygon", "triangle", "square", "pentagon",
+                      "hexagon", "octagon", "star"})),
+        panel("panelRotationSpeed", Access::Editor, Type::Real, Normalization::RealRange,
+              12.0, "layout.rotationSpeed", 1.0, 180.0, {}, false, true,
+              editor("panels-layout", "Rotation speed", "spin", {"studio"},
+                     "whole-panel-rotation",
+                     {"circular", "ellipse", "ring", "radial", "arc", "semicircle",
+                      "fan", "spiral", "polygon", "triangle", "square", "pentagon",
+                      "hexagon", "octagon", "star"},
+                     {{QStringLiteral("step"), 1},
+                      {QStringLiteral("suffix"), QStringLiteral("°/s")}})),
+        panel("panelRotationTrigger", Access::Editor, Type::String,
+              Normalization::ChoiceLower, QStringLiteral("idle"),
+              "layout.rotationTrigger", {}, {}, {"idle", "hover"}, false, true,
+              editor("panels-layout", "Rotation runs", "combo", {"studio"},
+                     "whole-panel-rotation",
+                     {"circular", "ellipse", "ring", "radial", "arc", "semicircle",
+                      "fan", "spiral", "polygon", "triangle", "square", "pentagon",
+                      "hexagon", "octagon", "star"})),
 
         panel("rendererTier", Access::Editor, Type::String, Normalization::LowerString,
               QString{}, "surface.rendererTier", {}, {}, {}, true, true),

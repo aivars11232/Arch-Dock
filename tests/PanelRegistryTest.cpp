@@ -379,7 +379,19 @@ void PanelRegistryTest::cleanup()
     QSettings settings;
     settings.clear();
     settings.sync();
-    QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)).removeRecursively();
+    // Test mode is disabled above so the registry sees the same application
+    // data location the service uses. CTest redirects XDG_DATA_HOME into the
+    // build directory; refuse to delete anything when that redirection is
+    // absent, so running the binary by hand cannot erase a real profile.
+    const QString dataHome = qEnvironmentVariable("XDG_DATA_HOME");
+    const QString applicationData =
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QVERIFY2(!dataHome.isEmpty() &&
+                 applicationData.startsWith(
+                     QDir(dataHome).absolutePath() + QLatin1Char('/')),
+             "refusing to delete application data outside the CTest-provided "
+             "XDG_DATA_HOME");
+    QDir(applicationData).removeRecursively();
 }
 
 void PanelRegistryTest::provisionsPanelFamiliesAndNativeBridgeState()

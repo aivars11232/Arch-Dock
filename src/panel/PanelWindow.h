@@ -22,6 +22,7 @@
 #include "../WindowWatcher.h"
 #include "../integration/PlasmaPanelAdapter.h"
 #include "FreePanelController.h"
+#include "PanelContentTransaction.h"
 
 class QQmlApplicationEngine;
 class QScreen;
@@ -37,6 +38,7 @@ class PanelWindow final : public QObject
     Q_PROPERTY(qulonglong dockEntriesRevision READ dockEntriesRevision NOTIFY dockEntriesRevisionChanged)
     Q_PROPERTY(qulonglong nativePlacementRevision READ nativePlacementRevision NOTIFY nativePlacementRevisionChanged)
     Q_PROPERTY(qulonglong nativeVisibilityRevision READ nativeVisibilityRevision NOTIFY nativeVisibilityRevisionChanged)
+    Q_PROPERTY(qulonglong presentationRequestRevision READ presentationRequestRevision NOTIFY presentationRequestRevisionChanged)
 
 public:
     explicit PanelWindow(QQmlApplicationEngine &engine,
@@ -48,6 +50,7 @@ public:
     [[nodiscard]] qulonglong dockEntriesRevision() const;
     [[nodiscard]] qulonglong nativePlacementRevision() const;
     [[nodiscard]] qulonglong nativeVisibilityRevision() const;
+    [[nodiscard]] qulonglong presentationRequestRevision() const;
     bool setDockConfiguration(const QString &panelId, const QString &key, const QVariant &value);
 
 public slots:
@@ -117,6 +120,18 @@ public slots:
     bool pinDockUrls(const QStringList &urls);
     bool pinPanelUrls(const QString &panelId, const QStringList &urls);
     bool removePanelContent(const QString &panelId, const QString &entryId);
+    // Panel-specific content operations for free desktop panels. Each one is
+    // committed as the panel's next settings revision through the same
+    // registry transaction path as every other panel change. Items may be
+    // local URLs or application ids the dock model knows; an application is
+    // pinned to the panel as its desktop entry. Native panels refuse them.
+    bool addPanelEntries(const QString &panelId, const QStringList &entries);
+    bool removePanelEntry(const QString &panelId, const QString &entryId);
+    bool movePanelEntryBefore(const QString &panelId,
+                              const QString &entryId,
+                              const QString &beforeEntryId);
+    bool setPanelEntryOrder(const QString &panelId, const QStringList &entryIds);
+    [[nodiscard]] QStringList panelEntryOrder(const QString &panelId) const;
     QVariantList dockFolderEntries(const QString &appId) const;
     bool openDockUrl(const QString &url);
     QStringList availableKdeWidgets() const;
@@ -140,6 +155,18 @@ public slots:
     bool reportPanelInteractionGuards(const QString &panelId,
                                       const QVariantMap &guards);
     [[nodiscard]] QVariantMap panelInteractionGuards(const QString &panelId) const;
+    // The applet reports the resting surface state and host phase its
+    // presentation controller has reached. This is runtime state, never
+    // persisted; it exists so a harness or Studio can observe the live panel
+    // without injecting input into the compositor.
+    bool reportPanelPresentationState(const QString &panelId,
+                                      const QVariantMap &state);
+    [[nodiscard]] QVariantMap panelPresentationState(const QString &panelId) const;
+    // Explicit open/collapse requests. They are the producer for the `manual`
+    // presentation trigger: a panel resting collapsed with that trigger opens
+    // only through this channel. The applet takes the pending request once.
+    bool requestPanelPresentation(const QString &panelId, const QString &request);
+    QVariantMap takePanelPresentationRequest(const QString &panelId);
     void resetSettings();
     void toggleAutoHide();
     void toggleDesktopSuite();
@@ -158,6 +185,7 @@ signals:
     void dockEntriesRevisionChanged();
     void nativePlacementRevisionChanged();
     void nativeVisibilityRevisionChanged();
+    void presentationRequestRevisionChanged();
     void nativePanelRecoveryFinished();
 
 private:
@@ -204,6 +232,11 @@ private:
     [[nodiscard]] std::optional<QVariantMap> iconEntryForIdentity(
         const QString &panelId,
         const QString &entryIdentity) const;
+    bool commitPanelContentTransaction(
+        const QString &panelId,
+        const ArchDock::PanelContentRequest &request);
+    [[nodiscard]] QVariantList freePanelEntries(
+        const ArchDock::PanelDefinition &definition) const;
 
     void updateDesktopSuite();
     void syncRegistryFromLegacySettings();
@@ -352,6 +385,9 @@ private:
     int m_screenRevision = 0;
     int m_visibilityRevision = 0;
     QHash<QString, ArchDock::PanelVisibilityLocks> m_panelInteractionGuards;
+    QHash<QString, QVariantMap> m_panelPresentationStates;
+    QHash<QString, QString> m_pendingPresentationRequests;
+    qulonglong m_presentationRequestRevision = 0;
     qulonglong m_dockRevision = 0;
     qulonglong m_dockEntriesRevision = 0;
     qulonglong m_nativePlacementRevision = 0;

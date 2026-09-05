@@ -11,7 +11,7 @@ TestCase {
     height: 380
 
     property string currentLayout: "horizontal"
-    readonly property int entryCount: 6
+    property int entryCount: 6
     readonly property var currentGeometry: LayoutEngine.metrics(
         currentLayout, entryCount, 40, 8, 1, 120, 2, 12, false, 0, 6)
 
@@ -95,6 +95,42 @@ TestCase {
             { tag: "fan", layout: "fan" },
             { tag: "spiral", layout: "spiral" }
         ]
+    }
+
+    // TASK-0033 Phase B: sparse and dense free layouts render, and every
+    // entry stays inside the panel the engine sized for it.
+    function test_denseAndSparseLayoutsStayInsideTheirBounds_data() {
+        const rows = []
+        for (const layout of ["ring", "arc", "semicircle", "fan", "spiral",
+                              "octagon"]) {
+            for (const count of [1, 24])
+                rows.push({ tag: layout + "/" + count, layout: layout,
+                            count: count })
+        }
+        return rows
+    }
+
+    function test_denseAndSparseLayoutsStayInsideTheirBounds(data) {
+        currentLayout = data.layout
+        entryCount = data.count
+        wait(0)
+
+        const image = grabImage(canonicalFixture)
+        compare(image.width, currentGeometry.width)
+        compare(image.height, currentGeometry.height)
+        verify(image.alpha(1, 1) > 0, data.tag + " fixture did not render")
+        for (let index = 0; index < entryCount; ++index) {
+            const point = LayoutEngine.position(
+                currentLayout, index, entryCount, currentGeometry, 0, 6,
+                "upright", "canonical")
+            verify(point.x >= -0.0001 && point.y >= -0.0001
+                   && point.x + currentGeometry.iconSize
+                       <= currentGeometry.width + 0.0001
+                   && point.y + currentGeometry.iconSize
+                       <= currentGeometry.height + 0.0001,
+                   data.tag + "[" + index + "] is inside the panel")
+        }
+        entryCount = 6
     }
 
     function test_currentLayoutPixelParity(data) {

@@ -374,4 +374,3 @@ function compose(profiles, state, catalog) {
         active: active
     };
 }
-

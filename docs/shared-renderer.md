@@ -50,6 +50,49 @@ The `live` profile preserves free-applet placement compatibility. The
 service-side free window was removed. Native live scenes, previews, and new
 shared-scene code use the `canonical` profile.
 
+## Geometry hardening, upright icons, and whole-scene rotation
+
+TASK-0033 hardened `LayoutEngine` and added whole-scene rotation for free
+radial panels.
+
+- Every numeric input to `metrics()`, `entryGeometry()` and `surface()` is
+  coerced through one finite guard. NaN, Infinity, strings, negative sizes,
+  zero scale and absurd radii yield a finite, non-empty panel with unit
+  normals and progress in `[0, 1]`; the geometry property test exercises every
+  layout at counts 0, 1, 7 and 24 against five hostile input sets.
+- The open paths (`arc`, `semicircle`, `fan`, `radial`) read one sweep table,
+  so the first and last entries sit exactly on the end points of the surface
+  drawn under them. The fan keeps its historical angle frame so existing
+  tangent and normal values are unchanged.
+- `pathOrientation: "upright"` now means exactly that for the canonical and
+  live profiles: the decorative tilt the fan, ribbon and floating paths carried
+  is applied only by the frozen `runtime` compatibility profile. `tangent`
+  follows the path; `radial` faces outward.
+- The `diagonal` layout is sized by `(count - 1)` steps plus one icon, so its
+  last entry no longer overhangs the panel once several entries are present.
+- `SceneRotationController` turns a free radial scene. It yields one angle
+  offset from the configured mode (`none`, `clockwise`, `counter-clockwise`),
+  speed in degrees per second and trigger (`idle`, `hover`); it runs only when
+  the resolver reports whole-panel rotation available, the layout is radial,
+  and nothing pauses it: a drag, Plasma Edit Mode, configuration, concealment
+  and reduced motion all stop it. A pause holds the angle; switching rotation
+  off, losing the capability or enabling reduced motion returns to the
+  configured layout angle. The offset is runtime state and is never persisted.
+- `PanelScene` adds the offset to the configured layout angle and passes the
+  sum to every geometry call, so entries, hover targets, drop targets, popup
+  anchors and the drawn surface turn together. While rotation is enabled the
+  scene keeps the square envelope every angle fits in
+  (`LayoutEngine.rotationEnvelope`) and open paths are centred on it, so the
+  host is never asked to resize on every frame and an arc pivots on its own
+  circle centre.
+- `GeometryHitRegion` is installed as the scene's `containmentMask` for free,
+  non-skinned radial scenes. It accepts input on the band the surface draws and
+  on the entries themselves, at the same effective angle, so the empty
+  interior and corners of a ring or arc pass through. This narrows Qt Quick
+  item hit testing only; a Plasma desktop applet is still a rectangle to the
+  compositor, and the `nonrectangular-input` host capability is not claimed.
+  `activeInputRegionKind` reports `alpha-mask`, `geometry-band` or `rectangle`.
+
 ## PanelScene inputs
 
 | Property | Contract |
@@ -66,7 +109,8 @@ shared-scene code use the `canonical` profile.
 | `entryDelegate` | Optional host delegate. The live applet supplies `DockEntry`; previews use the shared `IconScene`. |
 | `entryInteractionEnabled` | Host-owned input gate mirrored to every delegate without changing scene geometry. |
 | `geometryCompatibilityProfile` | Explicit canonical or retained compatibility profile. |
-| `entryDelegateContext` | Host-neutral context values mirrored to delegates. |
+| `entryDelegateContext` | Host-neutral context values mirrored to delegates. `hostKind` (`free` or `native`) selects the geometry hit region for free radial scenes. |
+| `rotationAnimationEnabled` | Previews set this false to show the configured angle without turning. |
 
 The scene accepts these inputs as values. It does not query or mutate a Plasma
 host and does not call the Arch Dock service.
@@ -87,7 +131,10 @@ host and does not call the Arch Dock service.
 | `fallbackApplied` / `fallbackReason` | Truthful safe-fallback result. |
 | `visualPanel` | Instantiated surface item. |
 | `iconDelegates` / `entryItemAt(index)` | Rendered entry-delegate access for hosts and tests. |
-| `entryGeometryAt(index)` | Full canonical geometry output for an ordered entry. |
+| `entryGeometryAt(index)` | Full canonical geometry output for an ordered entry at the effective angle. |
+| `sceneRotationEnabled` / `sceneRotationActive` / `sceneRotationAngle` | Whether whole-scene rotation is configured and permitted, whether it is advancing right now, and the current offset in degrees. |
+| `effectiveLayoutAngle` | Configured layout angle plus the rotation offset; the angle every geometry consumer receives. |
+| `activeInputRegionKind` / `containsInputPoint(point)` | Which input region is active and the predicate it applies. |
 
 ## Skinned 2D and safe fallback
 

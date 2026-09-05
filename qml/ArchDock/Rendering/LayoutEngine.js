@@ -4,6 +4,59 @@ function clamp(value, minimum, maximum) {
     return Math.max(minimum, Math.min(maximum, value));
 }
 
+// Every numeric input is coerced through here. A NaN, Infinity, string or
+// undefined from a half-loaded configuration must never reach the trigonometry
+// below, because one non-finite coordinate poisons the whole scene.
+function finite(value, fallback) {
+    const number = Number(value);
+    return isFinite(number) ? number : fallback;
+}
+
+function finiteAtLeast(value, minimum, fallback) {
+    const number = finite(value, fallback);
+    return number >= minimum ? number : fallback;
+}
+
+// Open-path layouts share one sweep table so an entry and the surface drawn
+// under it are computed from the same numbers. Degrees; `start` is where the
+// path begins in the surface's angular frame.
+var pathSweeps = {
+    "arc": { sweep: 130, start: 205 },
+    "semicircle": { sweep: 180, start: 180 },
+    // The fan keeps its historical frame (-148 to -32 degrees), which is the
+    // same direction as 212 to 328 but preserves the numeric tangent and
+    // normal values existing consumers were built against.
+    "fan": { sweep: 116, start: -148 },
+    "radial": { sweep: 300, start: -150 }
+};
+
+function pathSweep(layout) {
+    return pathSweeps[layout] || null;
+}
+
+// Whole-scene rotation is offered only where a turning scene is meaningful:
+// the radial layouts. A straight row has no centre to turn about.
+function supportsWholeSceneRotation(layout) {
+    return radialLayoutNames.includes(String(layout || ""));
+}
+
+// The square box a radial scene fits inside at every angle. Entries sit at
+// most `radius + iconSize / 2` from the centre, so this is the diameter of
+// that circle plus the padding on both sides; the scene keeps this size while
+// it turns instead of resizing its host every frame.
+function rotationEnvelope(geometry) {
+    const source = safeGeometry(geometry, geometry ? geometry.layout : "");
+    const side = Math.max(1, Math.ceil(
+        2 * (source.radius + source.iconSize / 2 + source.padding)));
+    const result = {};
+    for (const key of Object.keys(source))
+        result[key] = source[key];
+    result.width = side;
+    result.height = side;
+    result.rotationEnvelope = true;
+    return result;
+}
+
 function normalizedLayout(layout, vertical) {
     if (layout === "adaptive")
         return vertical ? "vertical" : "horizontal";
@@ -47,12 +100,13 @@ function hostEdgeNormalAngle(edge, resolvedLayout) {
 function metrics(layout, count, iconSize, spacing, scale, radius, rows,
                  padding, vertical, angle, polygonSides) {
     const resolvedLayout = normalizedLayout(layout, vertical);
-    const safeCount = Math.max(1, count);
-    const size = Math.max(16, iconSize * scale);
-    const gap = Math.max(0, spacing * scale);
-    const safePadding = Math.max(0, padding);
-    const safeRadius = Math.max(size * 0.75, radius * scale);
-    const safeRows = clamp(Math.round(rows), 1, 8);
+    const safeCount = Math.max(1, Math.round(finite(count, 0)));
+    const safeScale = finiteAtLeast(scale, 0.05, 1);
+    const size = Math.max(16, finiteAtLeast(iconSize, 1, 52) * safeScale);
+    const gap = Math.max(0, finite(spacing, 0) * safeScale);
+    const safePadding = Math.max(0, finite(padding, 0));
+    const safeRadius = Math.max(size * 0.75, finite(radius, 0) * safeScale);
+    const safeRows = clamp(Math.round(finite(rows, 1)), 1, 8);
     const slot = size + gap;
     const linearLength = safeCount * size + Math.max(0, safeCount - 1) * gap;
     let width = linearLength + safePadding * 2;
@@ -62,7 +116,11 @@ function metrics(layout, count, iconSize, spacing, scale, radius, rows,
         width = size + safePadding * 2;
         height = linearLength + safePadding * 2;
     } else if (resolvedLayout === "diagonal") {
-        width = Math.max(size, safeCount * slot * 0.78) + safePadding * 2;
+        // The last entry ends at (count - 1) steps plus its own size on both
+        // axes; sizing the width by count whole steps left the final icon
+        // hanging past the panel once a few entries were present.
+        width = Math.max(size, size + Math.max(0, safeCount - 1) * slot * 0.78)
+            + safePadding * 2;
         height = Math.max(size, size + Math.max(0, safeCount - 1) * slot * 0.34)
             + safePadding * 2;
     } else if (["circular", "ellipse", "ring", "radial", "polygon",
@@ -86,12 +144,12 @@ function metrics(layout, count, iconSize, spacing, scale, radius, rows,
             + safePadding * 2;
     }
 
-    const radians = Number(angle || 0) * Math.PI / 180;
+    const radians = finite(angle, 0) * Math.PI / 180;
     const cosine = Math.abs(Math.cos(radians));
     const sine = Math.abs(Math.sin(radians));
     return {
-        width: Math.ceil(width * cosine + height * sine),
-        height: Math.ceil(width * sine + height * cosine),
+        width: Math.max(1, Math.ceil(width * cosine + height * sine)),
+        height: Math.max(1, Math.ceil(width * sine + height * cosine)),
         iconSize: size,
         spacing: gap,
         radius: safeRadius,
@@ -99,6 +157,27 @@ function metrics(layout, count, iconSize, spacing, scale, radius, rows,
         sides: shapeSides(resolvedLayout, polygonSides),
         padding: safePadding,
         layout: resolvedLayout
+    };
+}
+
+// A geometry object handed back in by a caller may be stale or partial; every
+// field the path math reads is coerced once here.
+function safeGeometry(geometry, layout) {
+    const source = geometry || {};
+    const size = Math.max(1, finite(source.iconSize, 52));
+    return {
+        width: Math.max(1, finite(source.width, size)),
+        height: Math.max(1, finite(source.height, size)),
+        iconSize: size,
+        spacing: Math.max(0, finite(source.spacing, 0)),
+        radius: Math.max(size * 0.75, finite(source.radius, size * 0.75)),
+        rows: clamp(Math.round(finite(source.rows, 1)), 1, 8),
+        sides: clamp(Math.round(finite(source.sides, 6)), 3, 12),
+        padding: Math.max(0, finite(source.padding, 0)),
+        layout: source.layout || normalizedLayout(layout, false),
+        // Set by rotationEnvelope(): open paths are then centred on the box
+        // so a turning scene pivots on its own circle centre.
+        rotationEnvelope: Boolean(source.rotationEnvelope)
     };
 }
 
@@ -163,11 +242,12 @@ function starPoint(progress, points, radius) {
     };
 }
 
-function entryGeometry(layout, index, count, geometry, angle, polygonSides,
+function entryGeometry(layout, index, count, rawGeometry, angle, polygonSides,
                        pathOrientation, compatibilityProfile, edge) {
-    const resolvedLayout = geometry.layout || normalizedLayout(layout, false);
-    const safeCount = Math.max(1, count);
-    const safeIndex = clamp(Math.round(Number(index || 0)), 0, safeCount - 1);
+    const geometry = safeGeometry(rawGeometry, layout);
+    const resolvedLayout = geometry.layout;
+    const safeCount = Math.max(1, Math.round(finite(count, 0)));
+    const safeIndex = clamp(Math.round(finite(index, 0)), 0, safeCount - 1);
     const size = geometry.iconSize;
     const slot = size + geometry.spacing;
     const centerX = geometry.width / 2;
@@ -226,24 +306,24 @@ function entryGeometry(layout, index, count, geometry, angle, polygonSides,
         radial = local.radial;
     } else if (resolvedLayout === "arc" || resolvedLayout === "semicircle"
                || resolvedLayout === "fan") {
-        const sweep = resolvedLayout === "semicircle" ? 180
-            : resolvedLayout === "fan" ? 116 : 130;
-        const pathDegrees = resolvedLayout === "fan"
-            ? -58 + progress * 116
-            : 270 - sweep / 2 + progress * sweep;
-        const radians = (resolvedLayout === "fan"
-            ? pathDegrees - 90 : pathDegrees) * Math.PI / 180;
+        // The same sweep table draws the surface, so an entry always sits on
+        // the path drawn under it.
+        const path = pathSweep(resolvedLayout);
+        const pathDegrees = path.start + progress * path.sweep;
+        const radians = pathDegrees * Math.PI / 180;
         const runtimeProfile = profile === "runtime";
         const verticalFactor = resolvedLayout === "fan"
             ? (runtimeProfile ? 0.48 : 0.58)
             : (runtimeProfile ? 0.64 : 0.58);
+        const pathCenterY = geometry.rotationEnvelope
+            ? centerY
+            : geometry.height - geometry.padding - size * verticalFactor;
         x = centerX + Math.cos(radians) * geometry.radius - size / 2;
-        y = geometry.height - geometry.padding - size * verticalFactor
-            + Math.sin(radians) * geometry.radius - size / 2;
+        y = pathCenterY + Math.sin(radians) * geometry.radius - size / 2;
         radial = radians * 180 / Math.PI;
         tangent = radial + 90;
         if (resolvedLayout === "fan")
-            rotation = pathDegrees * 0.18;
+            rotation = (pathDegrees + 90) * 0.18;
     } else if (resolvedLayout === "spiral") {
         const radians = -Math.PI / 2 + safeIndex * 1.25;
         const distance = geometry.radius * (0.26 + 0.74 * progress);
@@ -283,7 +363,7 @@ function entryGeometry(layout, index, count, geometry, angle, polygonSides,
         }
     }
 
-    const safeAngle = Number(angle || 0);
+    const safeAngle = finite(angle, 0);
     const rotatedPoint = rotate(
         { x: x + size / 2, y: y + size / 2 },
         centerX, centerY, safeAngle);
@@ -303,6 +383,18 @@ function entryGeometry(layout, index, count, geometry, angle, polygonSides,
                  && (resolvedLayout === "fan" || resolvedLayout === "ribbon"))
             rotation += safeAngle * 0.35;
     }
+    // Upright means upright. The fan, ribbon and floating paths carry a small
+    // decorative tilt that only the frozen runtime profile keeps; the canonical
+    // and live scenes draw a configured-upright icon with no rotation, which is
+    // what lets a rotated free panel keep its glyphs readable.
+    if (orientation === "upright" && profile !== "runtime")
+        rotation = 0;
+    if (!isFinite(rotation))
+        rotation = 0;
+    if (!isFinite(tangent))
+        tangent = 0;
+    if (!isFinite(radial))
+        radial = -90;
 
     const edgeNormal = hostEdgeNormalAngle(edge, resolvedLayout);
     const normalAngle = (edgeNormal === null ? radial : edgeNormal) + safeAngle;
@@ -359,8 +451,10 @@ function position(layout, index, count, geometry, angle, polygonSides,
     };
 }
 
-function surface(layout, geometry, angle, polygonSides) {
-    const resolvedLayout = geometry.layout || normalizedLayout(layout, false);
+function surface(layout, rawGeometry, rawAngle, polygonSides) {
+    const geometry = safeGeometry(rawGeometry, layout);
+    const resolvedLayout = geometry.layout;
+    const angle = finite(rawAngle, 0);
     const centerX = geometry.width / 2;
     const centerY = geometry.height / 2;
     const radius = geometry.radius;
@@ -397,14 +491,13 @@ function surface(layout, geometry, angle, polygonSides) {
         }
     } else if (resolvedLayout === "arc" || resolvedLayout === "semicircle"
                || resolvedLayout === "fan" || resolvedLayout === "radial") {
-        const sweep = resolvedLayout === "semicircle" ? 180
-            : resolvedLayout === "fan" ? 116
-            : resolvedLayout === "radial" ? 300 : 130;
-        const start = resolvedLayout === "radial" ? -150 : 270 - sweep / 2;
+        const path = pathSweep(resolvedLayout);
+        const sweep = path.sweep;
+        const start = path.start;
         for (let index = 0; index < samples; ++index) {
             const radians = (start + index / (samples - 1) * sweep)
                 * Math.PI / 180;
-            const yCenter = resolvedLayout === "radial"
+            const yCenter = resolvedLayout === "radial" || geometry.rotationEnvelope
                 ? centerY : geometry.height - geometry.padding
                     - geometry.iconSize * 0.58;
             points.push(rotate({

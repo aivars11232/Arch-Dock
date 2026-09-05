@@ -213,7 +213,13 @@ Item {
             entryDelegate: previewIconDelegate
             entryInteractionEnabled: false
             geometryCompatibilityProfile: "canonical"
-            entryDelegateContext: ({ preview: true })
+            // A preview shows the configured angle and reports whether the
+            // scene would rotate; it never animates the turn itself.
+            rotationAnimationEnabled: false
+            entryDelegateContext: ({
+                preview: true,
+                hostKind: root.previewMode === "free" ? "free" : "native"
+            })
         }
     }
 

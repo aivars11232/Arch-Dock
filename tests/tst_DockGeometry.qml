@@ -188,6 +188,193 @@ TestCase {
                     "glass", "#123456", 52).stroke, "#123456")
     }
 
+    readonly property var pathLayouts: [
+        "horizontal", "vertical", "diagonal", "circular", "ring", "ellipse",
+        "radial", "polygon", "triangle", "square", "pentagon", "hexagon",
+        "octagon", "star", "arc", "semicircle", "fan", "spiral", "ribbon",
+        "horizontal-curve", "vertical-curve", "grid", "floating"
+    ]
+
+    function collectNonFinite(value, path, problems) {
+        if (value === null || value === undefined)
+            return
+        if (typeof value === "number") {
+            if (!isFinite(value))
+                problems.push(path)
+            return
+        }
+        if (typeof value === "object") {
+            for (const key of Object.keys(value))
+                collectNonFinite(value[key], path + "." + key, problems)
+        }
+    }
+
+    // TASK-0033 Phase B: no layout, entry count or hostile numeric input may
+    // yield a non-finite coordinate, a zero-sized panel, a normal that is not
+    // a unit vector, or an entry outside its unrotated panel.
+    function test_degenerateInputsNeverProduceNonFiniteGeometry_data() {
+        const hostile = [
+            { tag: "nan", iconSize: NaN, spacing: NaN, scale: NaN, radius: NaN,
+              rows: NaN, padding: NaN, angle: NaN, sides: NaN, inside: true },
+            { tag: "infinite", iconSize: 40, spacing: 8, scale: 1,
+              radius: Infinity, rows: 2, padding: 12, angle: Infinity, sides: 6,
+              inside: true },
+            { tag: "zero-negative", iconSize: 0, spacing: -4, scale: 0,
+              radius: -50, rows: 0, padding: -3, angle: 0, sides: 1,
+              inside: true },
+            { tag: "huge-rotated", iconSize: 4096, spacing: 500, scale: 2.5,
+              radius: 1e6, rows: 99, padding: 240, angle: 1e6, sides: 99,
+              inside: false },
+            { tag: "strings", iconSize: "48", spacing: undefined, scale: "x",
+              radius: "150", rows: "2", padding: null, angle: "12", sides: "6",
+              inside: false }
+        ]
+        const rows = []
+        for (const layout of pathLayouts) {
+            for (const count of [0, 1, 7, 24]) {
+                for (const inputs of hostile) {
+                    const row = Object.assign({}, inputs)
+                    row.tag = layout + "/" + count + "/" + inputs.tag
+                    row.layout = layout
+                    row.count = count
+                    rows.push(row)
+                }
+            }
+        }
+        return rows
+    }
+
+    function test_degenerateInputsNeverProduceNonFiniteGeometry(data) {
+        const value = LayoutEngine.metrics(
+            data.layout, data.count, data.iconSize, data.spacing, data.scale,
+            data.radius, data.rows, data.padding, false, data.angle, data.sides)
+        const problems = []
+        collectNonFinite(value, "metrics", problems)
+        compare(problems.join(","), "", "metrics carry a non-finite value")
+        verify(value.width >= 1 && value.height >= 1, "panel has a size")
+        verify(value.iconSize >= 16, "icon size floor")
+
+        const surface = LayoutEngine.surface(
+            data.layout, value, data.angle, data.sides)
+        collectNonFinite(surface.points, "surface", problems)
+        compare(problems.join(","), "", "surface carries a non-finite point")
+        verify(surface.points.length >= 3, "surface has a path")
+
+        for (let index = 0; index < Math.max(1, data.count); ++index) {
+            const result = LayoutEngine.entryGeometry(
+                data.layout, index, data.count, value, data.angle, data.sides,
+                "upright", "canonical")
+            collectNonFinite(result, "entry[" + index + "]", problems)
+            compare(problems.join(","), "", "entry carries a non-finite value")
+            verify(result.pathProgress >= 0 && result.pathProgress <= 1,
+                   "progress stays in [0, 1]")
+            fuzzy(Math.hypot(result.outwardNormal.x, result.outwardNormal.y), 1,
+                  "outward normal is a unit vector")
+            compare(result.rotation, 0, "upright entry has no rotation")
+            if (data.inside)
+                verifyPointInside(result.position, value,
+                                  data.layout + "[" + index + "]")
+        }
+    }
+
+    // Entry order follows index, positions are distinct, open and closed
+    // paths advance in one direction, and the same input always yields the
+    // same output.
+    function test_entryOrderAndPathDirectionAreDeterministic_data() {
+        return [
+            { tag: "ring", layout: "ring", monotonic: true },
+            { tag: "arc", layout: "arc", monotonic: true },
+            { tag: "semicircle", layout: "semicircle", monotonic: true },
+            { tag: "fan", layout: "fan", monotonic: true },
+            { tag: "spiral", layout: "spiral", monotonic: true },
+            { tag: "polygon", layout: "polygon", monotonic: false },
+            { tag: "star", layout: "star", monotonic: false }
+        ]
+    }
+
+    function test_entryOrderAndPathDirectionAreDeterministic(data) {
+        const count = 6
+        const value = geometry(data.layout, count)
+        let previousProgress = -1
+        let previousAngle = -Infinity
+        const seen = []
+        for (let index = 0; index < count; ++index) {
+            const result = LayoutEngine.entryGeometry(
+                data.layout, index, count, value, 0, 6, "upright", "canonical")
+            verify(result.pathProgress > previousProgress,
+                   data.layout + " progress increases with index")
+            previousProgress = result.pathProgress
+            const key = result.x.toFixed(3) + "," + result.y.toFixed(3)
+            verify(!seen.includes(key), data.layout + " positions are distinct")
+            seen.push(key)
+            if (data.monotonic) {
+                verify(result.outwardNormal.angle > previousAngle,
+                       data.layout + " advances in one direction")
+                previousAngle = result.outwardNormal.angle
+            }
+            const again = LayoutEngine.entryGeometry(
+                data.layout, index, count, value, 0, 6, "upright", "canonical")
+            compare(JSON.stringify(again), JSON.stringify(result))
+        }
+    }
+
+    // Upright means upright for the canonical and live scenes even on paths
+    // that carry a decorative tilt; tangent follows the path exactly.
+    function test_configuredUprightIconsHaveNoRotation_data() {
+        return [
+            { tag: "ring", layout: "ring" },
+            { tag: "arc", layout: "arc" },
+            { tag: "fan", layout: "fan" },
+            { tag: "spiral", layout: "spiral" },
+            { tag: "ribbon", layout: "ribbon" },
+            { tag: "floating", layout: "floating" },
+            { tag: "ellipse", layout: "ellipse" }
+        ]
+    }
+
+    function test_configuredUprightIconsHaveNoRotation(data) {
+        const count = 5
+        const value = geometry(data.layout, count, 23)
+        for (let index = 0; index < count; ++index) {
+            for (const profile of ["canonical", "live"]) {
+                const upright = LayoutEngine.entryGeometry(
+                    data.layout, index, count, value, 23, 6, "upright", profile)
+                compare(upright.rotation, 0,
+                        data.layout + "/" + profile + " upright rotation")
+            }
+            const tangent = LayoutEngine.entryGeometry(
+                data.layout, index, count, value, 23, 6, "tangent", "canonical")
+            fuzzy(tangent.rotation, tangent.tangentAngle,
+                  data.layout + " tangent follows the path")
+        }
+    }
+
+    // The entry path and the surface drawn under it come from one sweep table,
+    // so the first and last entries sit exactly on the surface's end points.
+    function test_openPathsShareOneSweepWithTheirSurface_data() {
+        return [
+            { tag: "arc", layout: "arc" },
+            { tag: "semicircle", layout: "semicircle" },
+            { tag: "fan", layout: "fan" }
+        ]
+    }
+
+    function test_openPathsShareOneSweepWithTheirSurface(data) {
+        const count = 7
+        const value = geometry(data.layout, count)
+        const surface = LayoutEngine.surface(data.layout, value, 0, 6)
+        const first = LayoutEngine.entryGeometry(
+            data.layout, 0, count, value, 0, 6, "upright", "canonical")
+        const last = LayoutEngine.entryGeometry(
+            data.layout, count - 1, count, value, 0, 6, "upright", "canonical")
+        const startPoint = surface.points[0]
+        const endPoint = surface.points[surface.points.length - 1]
+        fuzzy(first.x + value.iconSize / 2, startPoint.x, data.layout + " start x")
+        fuzzy(first.y + value.iconSize / 2, startPoint.y, data.layout + " start y")
+        fuzzy(last.x + value.iconSize / 2, endPoint.x, data.layout + " end x")
+        fuzzy(last.y + value.iconSize / 2, endPoint.y, data.layout + " end y")
+    }
+
     function test_compatibilityUtilitiesRemainAvailable() {
         const value = geometry("horizontal", 3)
         compare(LayoutEngine.nearestIndex(

@@ -86,6 +86,30 @@ panel_call() {
         "$@"
 }
 
+# Waits until the live applet for one panel reports the expected resting
+# surface state while the host still shows it. The report comes from the
+# applet's own presentation controller, so this observes the real scene rather
+# than the saved intent.
+wait_for_presentation_state() {
+    local panel="$1"
+    local expected="$2"
+    local attempt
+    local state=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        state="$(panel_call panelPresentationState "$panel")"
+        if [[ "$state" == *"'reported': <true>"* &&
+              "$state" == *"'surfaceState': <'$expected'>"* &&
+              "$state" == *"'transitionState': <'idle'>"* &&
+              "$state" == *"'hostPhase': <'revealed'>"* ]]; then
+            return 0
+        fi
+        sleep 0.1
+    done
+    printf 'The live %s host did not report the %s presentation state: %s\n' \
+        "$panel" "$expected" "${state:-unavailable}" >&2
+    return 1
+}
+
 wait_for_wayland_socket() {
     local socket_path="$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"
     local attempt
@@ -106,7 +130,7 @@ require_no_import_errors() {
     for log_file in "$ARCHDOCK_RENDERING_LOG_DIR/service.log" \
                     "$ARCHDOCK_RENDERING_LOG_DIR/plasmashell.log"; do
         if rg -n -i \
-            'module "ArchDock\.Rendering" is not installed|RenderingModuleProbe[^[:cntrl:]]*(not a type|unavailable)|Panel(Scene|SurfaceLoader|Procedural2D|Skin2D|SkinLayer2D)[^[:cntrl:]]*(not a type|unavailable|not installed)|AlphaHitMask[^[:cntrl:]]*(not a type|unavailable|not installed)|(IconScene|RunningIndicator|LivePanelPreview)[^[:cntrl:]]*(not a type|unavailable|not installed)|(SettingsPopup|StudioForm|IconProperties|IconPropertiesWindow)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|org\.archdock\.dock/contents/ui/(main|DockEntry|IconVisual|RunningIndicator)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|ArchDock/Rendering/(PanelScene|PanelSurfaceLoader|renderers/PanelSkin2D|renderers/PanelSkinLayer2D|inputs/AlphaHitMask|IconScene|RunningIndicator|previews/LivePanelPreview)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(typeerror|referenceerror|cannot assign|unable to assign|binding loop)|Error loading QML file[^[:cntrl:]]*org\.archdock\.dock' \
+            'error when loading applet "org\.archdock\.dock"|module "ArchDock\.Rendering" is not installed|RenderingModuleProbe[^[:cntrl:]]*(not a type|unavailable)|Panel(Scene|SurfaceLoader|Procedural2D|Skin2D|SkinLayer2D)[^[:cntrl:]]*(not a type|unavailable|not installed)|AlphaHitMask[^[:cntrl:]]*(not a type|unavailable|not installed)|(IconScene|RunningIndicator|LivePanelPreview)[^[:cntrl:]]*(not a type|unavailable|not installed)|(SettingsPopup|StudioForm|IconProperties|IconPropertiesWindow)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|org\.archdock\.dock/contents/ui/(main|DockEntry|IconVisual|RunningIndicator)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|ArchDock/Rendering/(PanelScene|PanelSurfaceLoader|renderers/PanelSkin2D|renderers/PanelSkinLayer2D|inputs/AlphaHitMask|IconScene|RunningIndicator|previews/LivePanelPreview)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(typeerror|referenceerror|cannot assign|unable to assign|binding loop)|Error loading QML file[^[:cntrl:]]*org\.archdock\.dock' \
             "$log_file"; then
             printf 'Staged rendering import failed; relevant QML errors were logged in %s.\n' \
                 "$log_file" >&2
@@ -143,6 +167,11 @@ run_private_session() {
             "$ARCHDOCK_RENDERING_PANEL_SKIN_TEST" >&2
         return 1
     }
+    [[ -r "$ARCHDOCK_RENDERING_PANEL_SURFACE_TEST" ]] || {
+        printf 'The presentation join test is unavailable: %s\n' \
+            "$ARCHDOCK_RENDERING_PANEL_SURFACE_TEST" >&2
+        return 1
+    }
     [[ -d "$ARCHDOCK_RENDERING_STAGED_ICON_STYLE_ROOT" ]] || {
         printf 'The staged icon-style root is unavailable: %s\n' \
             "$ARCHDOCK_RENDERING_STAGED_ICON_STYLE_ROOT" >&2
@@ -171,13 +200,25 @@ run_private_session() {
         -input "$ARCHDOCK_RENDERING_PANEL_SKIN_TEST" \
         PanelSkin2D::test_waylandEnergyEffectPixels
 
+    printf 'Running the presentation join test against the staged module under private KWin.\n'
+    "$ARCHDOCK_RENDERING_QMLTESTRUNNER" \
+        -import "$QML_IMPORT_PATH" \
+        -input "$ARCHDOCK_RENDERING_PANEL_SURFACE_TEST"
+
     "$ARCHDOCK_RENDERING_STAGED_BINARY" --settings \
         >"$ARCHDOCK_RENDERING_LOG_DIR/service.log" 2>&1 &
     ARCHDOCK_RENDERING_SERVICE_PID=$!
     gdbus wait --session --timeout=20 org.archdock.ArchDock
     kill -0 "$ARCHDOCK_RENDERING_SERVICE_PID"
 
-    plasmashell --no-respawn \
+    # Qt routes messages to journald when stderr is not a console, which had
+    # left plasmashell.log empty and the applet-error check below vacuous.
+    # Forcing stderr logging for the applet host makes that check observe the
+    # real applet. The service keeps its default routing: Panel Studio has a
+    # known pre-existing binding loop (SettingsPopup.qml `rows`) owned by the
+    # TASK-0044 diagnostics cleanup, and this smoke asserts the applet, not
+    # Studio internals.
+    QT_FORCE_STDERR_LOGGING=1 plasmashell --no-respawn \
         >"$ARCHDOCK_RENDERING_LOG_DIR/plasmashell.log" 2>&1 &
     ARCHDOCK_RENDERING_PLASMASHELL_PID=$!
     gdbus wait --session --timeout=20 org.kde.plasmashell
@@ -584,6 +625,169 @@ run_private_session() {
     kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
     require_no_import_errors
 
+    # TASK-0032 Phase D live evidence. Each real host is switched to a
+    # collapsed manual shell through the settings transaction; its own applet
+    # must report that it rests collapsed while the host still shows it. An
+    # explicit request then opens it and another collapses it again, which is
+    # the producer the manual trigger relies on. Both hosts are restored to an
+    # open hover panel afterwards.
+    local presentation_panel
+    local presentation_revision
+    local presentation_reply
+    local presentation_values="{'presentationMode': <'collapsed'>, 'collapseMechanism': <'collapse-horizontal'>, 'collapseAxis': <'horizontal'>, 'presentationTrigger': <'manual'>}"
+    local restore_presentation_values="{'presentationMode': <'open'>, 'collapseMechanism': <'open'>, 'presentationTrigger': <'hover'>}"
+    for presentation_panel in bottom "$free_panel_id"; do
+        wait_for_presentation_state "$presentation_panel" open || return 1
+
+        presentation_revision="$(sed -n \
+            "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
+            <<<"$(panel_call dockConfiguration "$presentation_panel")")"
+        [[ "$presentation_revision" =~ ^[0-9]+$ ]] || {
+            printf 'Could not read the revision before collapsing %s.\n' \
+                "$presentation_panel" >&2
+            return 1
+        }
+        printf 'Collapsing the private %s host into a manual shell through the settings transaction.\n' \
+            "$presentation_panel"
+        presentation_reply="$(panel_call applyPanelSettingsTransaction \
+            "$presentation_panel" "uint64 $presentation_revision" \
+            "$presentation_values" '{}')"
+        [[ "$presentation_reply" == *"'success': <true>"* &&
+           "$presentation_reply" == *"'status': <'succeeded'>"* ]] || {
+            printf 'Could not collapse %s: %s\n' \
+                "$presentation_panel" "$presentation_reply" >&2
+            return 1
+        }
+        wait_for_presentation_state "$presentation_panel" collapsed || return 1
+
+        printf 'Opening the private %s host through an explicit request.\n' \
+            "$presentation_panel"
+        [[ "$(panel_call requestPanelPresentation "$presentation_panel" open)" == '(true,)' ]] || {
+            printf 'The explicit open request for %s was refused.\n' \
+                "$presentation_panel" >&2
+            return 1
+        }
+        wait_for_presentation_state "$presentation_panel" open || return 1
+
+        [[ "$(panel_call requestPanelPresentation "$presentation_panel" collapse)" == '(true,)' ]] || {
+            printf 'The explicit collapse request for %s was refused.\n' \
+                "$presentation_panel" >&2
+            return 1
+        }
+        wait_for_presentation_state "$presentation_panel" collapsed || return 1
+
+        presentation_revision="$(sed -n \
+            "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
+            <<<"$(panel_call dockConfiguration "$presentation_panel")")"
+        [[ "$presentation_revision" =~ ^[0-9]+$ ]] || {
+            printf 'Could not read the revision before restoring %s.\n' \
+                "$presentation_panel" >&2
+            return 1
+        }
+        presentation_reply="$(panel_call applyPanelSettingsTransaction \
+            "$presentation_panel" "uint64 $presentation_revision" \
+            "$restore_presentation_values" '{}')"
+        [[ "$presentation_reply" == *"'success': <true>"* &&
+           "$presentation_reply" == *"'status': <'succeeded'>"* ]] || {
+            printf 'Could not restore the open presentation on %s: %s\n' \
+                "$presentation_panel" "$presentation_reply" >&2
+            return 1
+        }
+        wait_for_presentation_state "$presentation_panel" open || return 1
+    done
+    kill -0 "$ARCHDOCK_RENDERING_SERVICE_PID"
+    kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
+    require_no_import_errors
+
+    # TASK-0033 Phase C live evidence. The private free host is switched to a
+    # procedural ring with clockwise rotation through the ordinary settings
+    # transaction; the backend must publish the rotation with the capability
+    # available, and the live applet must keep running without QML errors while
+    # its scene turns. The host is then restored to the cyan energy panel.
+    local rotation_revision
+    local rotation_reply
+    local rotation_renderer=''
+    rotation_revision="$(sed -n \
+        "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
+        <<<"$(panel_call dockConfiguration "$free_panel_id")")"
+    [[ "$rotation_revision" =~ ^[0-9]+$ ]] || {
+        printf 'Could not read the revision before rotating the free host.\n' >&2
+        return 1
+    }
+    printf 'Turning the private free host into a rotating procedural ring.\n'
+    rotation_reply="$(panel_call applyPanelSettingsTransaction \
+        "$free_panel_id" "uint64 $rotation_revision" \
+        "{'layout': <'ring'>, 'rendererTier': <'procedural2d'>, 'panelThemeId': <'holographic-ring'>, 'completeThemeId': <'holographic-ring'>, 'panelRotationMode': <'clockwise'>, 'panelRotationSpeed': <60.0>, 'panelRotationTrigger': <'idle'>}" \
+        '{}')"
+    [[ "$rotation_reply" == *"'success': <true>"* &&
+       "$rotation_reply" == *"'status': <'succeeded'>"* ]] || {
+        printf 'Could not configure free rotation: %s\n' "$rotation_reply" >&2
+        return 1
+    }
+    for ((attempt = 0; attempt < 50; ++attempt)); do
+        rotation_renderer="$(panel_call panelRendererConfiguration "$free_panel_id")"
+        if [[ "$rotation_renderer" == *"'panelRotationMode': <'clockwise'>"* &&
+              "$rotation_renderer" == *"'layout': <'ring'>"* &&
+              "$rotation_renderer" == *"'effectiveRendererTier': <'procedural2d'>"* ]]; then
+            break
+        fi
+        sleep 0.1
+    done
+    [[ "$rotation_renderer" == *"'panelRotationMode': <'clockwise'>"* &&
+       "$rotation_renderer" == *"'layout': <'ring'>"* &&
+       "$rotation_renderer" == *"'effectiveRendererTier': <'procedural2d'>"* ]] || {
+        printf 'The free host did not publish the rotating ring configuration: %s\n' \
+            "$rotation_renderer" >&2
+        return 1
+    }
+    [[ "$rotation_renderer" == *"'rotation': <{'available': <true>"* ]] || {
+        printf 'The free host did not resolve whole-panel rotation as available: %s\n' \
+            "$rotation_renderer" >&2
+        return 1
+    }
+    sleep 1
+    kill -0 "$ARCHDOCK_RENDERING_SERVICE_PID"
+    kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
+    require_no_import_errors
+
+    # Rotation is switched off while the layout is still radial: the
+    # transaction rightly refuses a rotation field on a candidate whose linear
+    # layout hides that control, so the restore is two revisions.
+    rotation_revision="$(sed -n \
+        "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
+        <<<"$(panel_call dockConfiguration "$free_panel_id")")"
+    rotation_reply="$(panel_call applyPanelSettingsTransaction \
+        "$free_panel_id" "uint64 $rotation_revision" \
+        "{'panelRotationMode': <'none'>}" '{}')"
+    [[ "$rotation_reply" == *"'success': <true>"* ]] || {
+        printf 'Could not switch free rotation off: %s\n' "$rotation_reply" >&2
+        return 1
+    }
+    rotation_revision="$(sed -n \
+        "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
+        <<<"$(panel_call dockConfiguration "$free_panel_id")")"
+    rotation_reply="$(panel_call applyPanelSettingsTransaction \
+        "$free_panel_id" "uint64 $rotation_revision" \
+        "{'layout': <'horizontal'>, 'rendererTier': <'skinned2d'>, 'panelThemeId': <'energy-frame-cyan'>, 'completeThemeId': <'energy-frame-cyan'>}" \
+        '{}')"
+    [[ "$rotation_reply" == *"'success': <true>"* ]] || {
+        printf 'Could not restore the cyan energy free host after rotation: %s\n' \
+            "$rotation_reply" >&2
+        return 1
+    }
+    for ((attempt = 0; attempt < 50; ++attempt)); do
+        rotation_renderer="$(panel_call panelRendererConfiguration "$free_panel_id")"
+        [[ "$rotation_renderer" == *"'id': <'energy-frame-cyan'>"* &&
+           "$rotation_renderer" == *"'panelRotationMode': <'none'>"* ]] && break
+        sleep 0.1
+    done
+    [[ "$rotation_renderer" == *"'id': <'energy-frame-cyan'>"* ]] || {
+        printf 'The free host did not return to the cyan energy panel: %s\n' \
+            "$rotation_renderer" >&2
+        return 1
+    }
+    require_no_import_errors
+
     plasma_script \
         "var desktop = desktopById($desktop_id); var freeWidget = desktop ? desktop.widgetById($free_applet_id) : null; if (freeWidget) { freeWidget.remove(); } var panel = panelById($panel_id); if (panel) { panel.remove(); } print('removed');" \
         >/dev/null
@@ -756,6 +960,7 @@ run_outer() {
         ARCHDOCK_RENDERING_LOG_DIR="$log_dir" \
         ARCHDOCK_RENDERING_ICON_PROPERTIES_INTERACTION_TEST="$build_dir/panel-window-capability-test" \
         ARCHDOCK_RENDERING_PANEL_SKIN_TEST="$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_PanelSkin2D.qml" \
+        ARCHDOCK_RENDERING_PANEL_SURFACE_TEST="$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_PanelSurfaceIntegration.qml" \
         ARCHDOCK_RENDERING_QMLTESTRUNNER="$qmltestrunner_binary" \
         ARCHDOCK_RENDERING_SMOKE_DESKTOP_FILE="$stage_root/share/applications/org.archdock.ArchDock.desktop" \
         ARCHDOCK_RENDERING_STAGED_ICON_STYLE_ROOT="$icon_style_root" \

@@ -19,6 +19,8 @@
 #include <QDBusReply>
 #include <QDBusServiceWatcher>
 #include <QDebug>
+#include <QFileInfo>
+#include <QHash>
 #include <QDir>
 #include <QFile>
 #include <QGuiApplication>
@@ -386,6 +388,11 @@ int PanelWindow::visibilityRevision() const
 qulonglong PanelWindow::dockRevision() const
 {
     return m_dockRevision;
+}
+
+qulonglong PanelWindow::presentationRequestRevision() const
+{
+    return m_presentationRequestRevision;
 }
 
 qulonglong PanelWindow::dockEntriesRevision() const
@@ -902,7 +909,10 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         if (capability == QStringLiteral("whole-panel-rotation"))
         {
             available = resolution.rotation.available;
-            if (available)
+            // Only the static layout angle takes the resolved degree range;
+            // the rotation mode, speed and trigger fields share the gate but
+            // keep their own schema bounds.
+            if (available && key == QStringLiteral("layoutAngle"))
             {
                 field.insert(QStringLiteral("minimumValue"),
                              resolution.rotation.minimumDegrees);
@@ -1759,75 +1769,180 @@ QVariantList PanelWindow::dockEntries(const QString &panelType) const
     return m_dockModel.panelEntries(panelType);
 }
 
+namespace
+{
+
+// One panel-specific free entry built from a local URL. A desktop file also
+// records the desktop identity it launches, so a running instance of the same
+// application can be merged into this entry on a hybrid panel.
+QVariantMap freeUrlEntry(const QUrl &url,
+                         const QString &entryId,
+                         QMimeDatabase &mimeDatabase,
+                         QString *desktopIdentity)
+{
+    const QFileInfo info(url.toLocalFile());
+    QString iconName;
+    QString displayName = info.fileName();
+    if (info.isDir())
+    {
+        iconName = QStringLiteral("folder");
+    }
+    else if (info.suffix().compare(QStringLiteral("desktop"), Qt::CaseInsensitive) == 0)
+    {
+        QSettings desktopEntry(info.absoluteFilePath(), QSettings::IniFormat);
+        desktopEntry.beginGroup(QStringLiteral("Desktop Entry"));
+        displayName = desktopEntry.value(
+            QStringLiteral("Name"), info.completeBaseName()).toString();
+        iconName = desktopEntry.value(
+            QStringLiteral("Icon"), QStringLiteral("application-x-executable")).toString();
+        desktopEntry.endGroup();
+        if (desktopIdentity)
+        {
+            *desktopIdentity = ArchDock::IconEntryIdentity::forApplication(
+                QString{}, info.fileName());
+        }
+    }
+    else
+    {
+        iconName = mimeDatabase.mimeTypeForFile(info).iconName();
+    }
+    QVariantMap entry{
+        {QStringLiteral("appId"), entryId},
+        {QStringLiteral("panelEntryId"), entryId},
+        {QStringLiteral("desktopFileName"), QString{}},
+        {QStringLiteral("baseIconName"), iconName},
+        {QStringLiteral("iconName"), iconName},
+        {QStringLiteral("baseDisplayName"), displayName},
+        {QStringLiteral("displayName"), displayName},
+        {QStringLiteral("pinned"), true},
+        {QStringLiteral("running"), false},
+        {QStringLiteral("active"), false},
+        {QStringLiteral("minimized"), false},
+        {QStringLiteral("windowCount"), 0},
+        {QStringLiteral("windowIds"), QStringList{}},
+        {QStringLiteral("windowTitles"), QStringList{}},
+        {QStringLiteral("isFolder"), info.isDir()}};
+    entry.insert(
+        QStringLiteral("stableIdentity"),
+        ArchDock::IconEntryIdentity::forEntry(entry));
+    return entry;
+}
+
+}
+
+// The free-panel content semantics: `empty` shows nothing, `launcher` shows
+// the panel's own ordered entries, `tasks` shows running applications, and
+// `hybrid` shows the panel's entries with running-only applications after
+// them. A running instance of a pinned desktop entry is merged into that
+// entry: the entry keeps its own identity, label and glyph, gains the running
+// state, and carries the application id under `runningAppId` so window
+// actions reach the application model.
+QVariantList PanelWindow::freePanelEntries(
+    const ArchDock::PanelDefinition &definition) const
+{
+    QVariantList entries;
+    const QString contentType = definition.content.type;
+    if (contentType == QStringLiteral("empty"))
+    {
+        return entries;
+    }
+
+    QHash<QString, int> panelIndexByIdentity;
+    if (contentType != QStringLiteral("tasks"))
+    {
+        QMimeDatabase mimeDatabase;
+        for (const QString &entryId : definition.content.canonicalEntryOrder())
+        {
+            if (ArchDock::PanelContent::isUrlEntryId(entryId))
+            {
+                const QUrl url = QUrl::fromEncoded(entryId.mid(9).toUtf8());
+                if (!url.isLocalFile() || !QFileInfo::exists(url.toLocalFile()))
+                {
+                    continue;
+                }
+                QString desktopIdentity;
+                QVariantMap entry = freeUrlEntry(
+                    url, entryId, mimeDatabase, &desktopIdentity);
+                if (!desktopIdentity.isEmpty())
+                {
+                    panelIndexByIdentity.insert(desktopIdentity, entries.size());
+                }
+                entries.append(entry);
+                continue;
+            }
+            QVariantMap entry = m_dockModel.applicationEntry(entryId);
+            if (entry.isEmpty())
+            {
+                continue;
+            }
+            entry.insert(QStringLiteral("pinned"), true);
+            entry.insert(QStringLiteral("panelEntryId"), entryId);
+            panelIndexByIdentity.insert(
+                entry.value(QStringLiteral("stableIdentity")).toString(),
+                entries.size());
+            entries.append(entry);
+        }
+    }
+
+    if (contentType == QStringLiteral("tasks") || contentType == QStringLiteral("hybrid"))
+    {
+        static const QStringList runningStateKeys{
+            QStringLiteral("running"),
+            QStringLiteral("active"),
+            QStringLiteral("minimized"),
+            QStringLiteral("windowCount"),
+            QStringLiteral("windowIds"),
+            QStringLiteral("windowTitles"),
+        };
+        for (const QVariant &value : m_dockModel.panelEntries(QStringLiteral("tasks")))
+        {
+            QVariantMap running = value.toMap();
+            const auto merged = panelIndexByIdentity.constFind(
+                running.value(QStringLiteral("stableIdentity")).toString());
+            if (merged != panelIndexByIdentity.cend())
+            {
+                QVariantMap target = entries.at(*merged).toMap();
+                for (const QString &key : runningStateKeys)
+                {
+                    target.insert(key, running.value(key));
+                }
+                target.insert(
+                    QStringLiteral("runningAppId"),
+                    running.value(QStringLiteral("appId")));
+                entries[*merged] = target;
+                continue;
+            }
+            running.insert(QStringLiteral("pinned"), false);
+            running.insert(QStringLiteral("panelEntryId"), QString{});
+            entries.append(running);
+        }
+    }
+    return entries;
+}
+
 QVariantList PanelWindow::dockEntriesForPanel(const QString &panelId,
                                               const QString &panelType) const
 {
     QVariantList entries;
+    const std::optional<ArchDock::PanelDefinition> definition =
+        m_panelRegistry.panelDefinition(panelId);
     if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() ==
         QStringLiteral("free"))
     {
-        const QStringList urls = m_panelRegistry.panelValue(
-            panelId, QStringLiteral("contentUrls")).toStringList();
-        QMimeDatabase mimeDatabase;
-        for (const QString &urlString : urls)
+        // A free host's applet stores `panelType=empty` as an ownership
+        // marker; the record's content type is authoritative for what it
+        // shows, so the requested type is deliberately ignored here.
+        if (!definition.has_value())
         {
-            const QUrl url(urlString);
-            if (!url.isLocalFile())
-            {
-                continue;
-            }
-            const QFileInfo info(url.toLocalFile());
-            if (!info.exists())
-            {
-                continue;
-            }
-            QString iconName;
-            QString displayName = info.fileName();
-            if (info.isDir())
-            {
-                iconName = QStringLiteral("folder");
-            }
-            else if (info.suffix().compare(QStringLiteral("desktop"), Qt::CaseInsensitive) == 0)
-            {
-                QSettings desktopEntry(info.absoluteFilePath(), QSettings::IniFormat);
-                desktopEntry.beginGroup(QStringLiteral("Desktop Entry"));
-                displayName = desktopEntry.value(QStringLiteral("Name"), info.completeBaseName()).toString();
-                iconName = desktopEntry.value(QStringLiteral("Icon"), QStringLiteral("application-x-executable")).toString();
-                desktopEntry.endGroup();
-            }
-            else
-            {
-                iconName = mimeDatabase.mimeTypeForFile(info).iconName();
-            }
-            QVariantMap entry{
-                {QStringLiteral("appId"), QStringLiteral("free-url:") +
-                    QString::fromUtf8(url.toEncoded())},
-                {QStringLiteral("desktopFileName"), QString{}},
-                {QStringLiteral("baseIconName"), iconName},
-                {QStringLiteral("iconName"), iconName},
-                {QStringLiteral("baseDisplayName"), displayName},
-                {QStringLiteral("displayName"), displayName},
-                {QStringLiteral("pinned"), true},
-                {QStringLiteral("running"), false},
-                {QStringLiteral("active"), false},
-                {QStringLiteral("minimized"), false},
-                {QStringLiteral("windowCount"), 0},
-                {QStringLiteral("windowIds"), QStringList{}},
-                {QStringLiteral("windowTitles"), QStringList{}},
-                {QStringLiteral("isFolder"), info.isDir()}};
-            entry.insert(
-                QStringLiteral("stableIdentity"),
-                ArchDock::IconEntryIdentity::forEntry(entry));
-            entries.append(entry);
+            return entries;
         }
+        entries = freePanelEntries(*definition);
     }
     else
     {
         entries = m_dockModel.panelEntries(panelType);
     }
 
-    const std::optional<ArchDock::PanelDefinition> definition =
-        m_panelRegistry.panelDefinition(panelId);
     if (!definition.has_value())
     {
         return entries;
@@ -2239,6 +2354,14 @@ bool PanelWindow::togglePinnedDockEntry(const QString &appId)
 
 bool PanelWindow::moveDockEntryBefore(const QString &appId, const QString &beforeAppId)
 {
+    // Free entries are panel-specific and reorder through
+    // movePanelEntryBefore; the shared application model cannot order them
+    // and must never receive them.
+    if (ArchDock::PanelContent::isUrlEntryId(appId) ||
+        ArchDock::PanelContent::isUrlEntryId(beforeAppId))
+    {
+        return false;
+    }
     return m_dockModel.moveApplicationBefore(appId, beforeAppId);
 }
 
@@ -2268,51 +2391,138 @@ bool PanelWindow::pinPanelUrls(const QString &panelId, const QStringList &urls)
     {
         return pinDockUrls(urls);
     }
-
-    QStringList contentUrls = m_panelRegistry.panelValue(
-        panelId, QStringLiteral("contentUrls")).toStringList();
-    bool addedAny = false;
-    for (const QString &urlString : urls)
-    {
-        const QUrl url = QUrl::fromUserInput(urlString);
-        if (!url.isLocalFile() || !QFileInfo::exists(url.toLocalFile()))
-        {
-            continue;
-        }
-        const QString normalized = url.toString();
-        if (!contentUrls.contains(normalized))
-        {
-            contentUrls.append(normalized);
-        }
-        addedAny = true;
-    }
-    if (addedAny)
-    {
-        m_panelRegistry.setPanelValue(
-            panelId, QStringLiteral("contentUrls"), contentUrls);
-    }
-    return addedAny;
+    return addPanelEntries(panelId, urls);
 }
 
 bool PanelWindow::removePanelContent(const QString &panelId, const QString &entryId)
 {
     if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() !=
-            QStringLiteral("free") ||
-        !entryId.startsWith(QStringLiteral("free-url:")))
+        QStringLiteral("free"))
     {
         return false;
     }
+    return removePanelEntry(panelId, entryId);
+}
 
-    const QUrl url = QUrl::fromEncoded(entryId.mid(9).toUtf8());
-    QStringList contentUrls = m_panelRegistry.panelValue(
-        panelId, QStringLiteral("contentUrls")).toStringList();
-    if (contentUrls.removeAll(url.toString()) == 0)
+bool PanelWindow::commitPanelContentTransaction(
+    const QString &panelId,
+    const ArchDock::PanelContentRequest &request)
+{
+    const std::optional<ArchDock::PanelDefinition> current =
+        m_panelRegistry.panelDefinition(panelId);
+    if (!current.has_value())
     {
         return false;
     }
-    m_panelRegistry.setPanelValue(
-        panelId, QStringLiteral("contentUrls"), contentUrls);
+    ArchDock::PanelContentOutcome outcome;
+    const std::optional<ArchDock::PanelDefinition> candidate =
+        ArchDock::PanelContentTransaction::prepare(*current, request, &outcome);
+    if (!outcome.success)
+    {
+        qWarning().noquote() << "Arch Dock panel content"
+                             << ArchDock::PanelContentTransaction::operationName(
+                                    request.operation)
+                             << "refused for" << panelId << outcome.errorCode
+                             << outcome.errorMessage;
+        return false;
+    }
+    if (!candidate.has_value())
+    {
+        // Valid but nothing to change: no revision is spent.
+        return true;
+    }
+    QString persistenceError;
+    if (!m_panelRegistry.persistPanelDefinitionTransaction(
+            *current, *candidate, m_settings.transactionSnapshot(), &persistenceError))
+    {
+        qWarning().noquote() << "Arch Dock panel content" << panelId
+                             << "could not be persisted:" << persistenceError;
+        return false;
+    }
+    m_panelRegistry.notifyPanelSettingsTransactionAdopted(false);
     return true;
+}
+
+bool PanelWindow::addPanelEntries(const QString &panelId, const QStringList &entries)
+{
+    ArchDock::PanelContentRequest request;
+    request.operation = ArchDock::PanelContentOperation::Add;
+    for (const QString &item : entries)
+    {
+        const QString trimmed = item.trimmed();
+        if (trimmed.isEmpty())
+        {
+            continue;
+        }
+        QUrl url;
+        if (ArchDock::PanelContent::isUrlEntryId(trimmed))
+        {
+            url = QUrl::fromEncoded(trimmed.mid(9).toUtf8());
+        }
+        else if (trimmed.contains(QStringLiteral("://")) ||
+                 trimmed.startsWith(QLatin1Char('/')))
+        {
+            url = QUrl::fromUserInput(trimmed);
+        }
+        else
+        {
+            // An application id is pinned to the panel as its desktop entry,
+            // so the panel owns a plain local file rather than a reference
+            // into the shared model.
+            const QString desktopFile = m_dockModel.desktopFileForApplication(trimmed);
+            if (desktopFile.isEmpty())
+            {
+                continue;
+            }
+            url = QUrl::fromLocalFile(desktopFile);
+        }
+        if (!url.isLocalFile() || !QFileInfo::exists(url.toLocalFile()))
+        {
+            continue;
+        }
+        request.urls.append(url.toString());
+    }
+    if (request.urls.isEmpty())
+    {
+        return false;
+    }
+    return commitPanelContentTransaction(panelId, request);
+}
+
+bool PanelWindow::removePanelEntry(const QString &panelId, const QString &entryId)
+{
+    ArchDock::PanelContentRequest request;
+    request.operation = ArchDock::PanelContentOperation::Remove;
+    request.entryId = entryId;
+    return commitPanelContentTransaction(panelId, request);
+}
+
+bool PanelWindow::movePanelEntryBefore(const QString &panelId,
+                                       const QString &entryId,
+                                       const QString &beforeEntryId)
+{
+    ArchDock::PanelContentRequest request;
+    request.operation = ArchDock::PanelContentOperation::MoveBefore;
+    request.entryId = entryId;
+    request.beforeEntryId = beforeEntryId;
+    return commitPanelContentTransaction(panelId, request);
+}
+
+bool PanelWindow::setPanelEntryOrder(const QString &panelId, const QStringList &entryIds)
+{
+    ArchDock::PanelContentRequest request;
+    request.operation = ArchDock::PanelContentOperation::SetOrder;
+    request.order = entryIds;
+    return commitPanelContentTransaction(panelId, request);
+}
+
+QStringList PanelWindow::panelEntryOrder(const QString &panelId) const
+{
+    const std::optional<ArchDock::PanelDefinition> definition =
+        m_panelRegistry.panelDefinition(panelId);
+    return definition.has_value()
+        ? definition->content.canonicalEntryOrder()
+        : QStringList{};
 }
 
 QVariantList PanelWindow::dockFolderEntries(const QString &appId) const
@@ -2660,6 +2870,106 @@ QVariantMap PanelWindow::panelInteractionGuards(const QString &panelId) const
         {QStringLiteral("dragActive"), locks.dragActive},
         {QStringLiteral("keyboardFocus"), locks.keyboardFocus},
         {QStringLiteral("editMode"), locks.editMode},
+    };
+}
+
+bool PanelWindow::reportPanelPresentationState(const QString &panelId,
+                                              const QVariantMap &state)
+{
+    if (!m_panelRegistry.panelIds().contains(panelId))
+    {
+        return false;
+    }
+
+    static const QSet<QString> surfaceStates{
+        QStringLiteral("open"), QStringLiteral("collapsed")};
+    static const QSet<QString> transitionStates{
+        QStringLiteral("idle"), QStringLiteral("opening"), QStringLiteral("closing")};
+    static const QSet<QString> hostPhases{
+        QStringLiteral("revealed"), QStringLiteral("concealing"),
+        QStringLiteral("concealed"), QStringLiteral("revealing")};
+
+    const QString surfaceState = state.value(
+        QStringLiteral("surfaceState")).toString().trimmed().toLower();
+    const QString transitionState = state.value(
+        QStringLiteral("transitionState"),
+        QStringLiteral("idle")).toString().trimmed().toLower();
+    const QString hostPhase = state.value(
+        QStringLiteral("hostPhase"),
+        QStringLiteral("revealed")).toString().trimmed().toLower();
+    if (!surfaceStates.contains(surfaceState) ||
+        !transitionStates.contains(transitionState) ||
+        !hostPhases.contains(hostPhase))
+    {
+        return false;
+    }
+
+    const QVariantMap normalized{
+        {QStringLiteral("reported"), true},
+        {QStringLiteral("surfaceState"), surfaceState},
+        {QStringLiteral("transitionState"), transitionState},
+        {QStringLiteral("hostPhase"), hostPhase},
+    };
+    const auto existing = m_panelPresentationStates.constFind(panelId);
+    if (existing != m_panelPresentationStates.cend() && *existing == normalized)
+    {
+        return true;
+    }
+    m_panelPresentationStates.insert(panelId, normalized);
+    return true;
+}
+
+QVariantMap PanelWindow::panelPresentationState(const QString &panelId) const
+{
+    const auto existing = m_panelPresentationStates.constFind(panelId);
+    if (existing != m_panelPresentationStates.cend())
+    {
+        return *existing;
+    }
+    return {
+        {QStringLiteral("reported"), false},
+        {QStringLiteral("surfaceState"), QString{}},
+        {QStringLiteral("transitionState"), QString{}},
+        {QStringLiteral("hostPhase"), QString{}},
+    };
+}
+
+bool PanelWindow::requestPanelPresentation(const QString &panelId,
+                                          const QString &request)
+{
+    if (!m_panelRegistry.panelIds().contains(panelId))
+    {
+        return false;
+    }
+    const QString normalized = request.trimmed().toLower();
+    if (normalized != QStringLiteral("open") &&
+        normalized != QStringLiteral("collapse"))
+    {
+        return false;
+    }
+
+    m_pendingPresentationRequests.insert(panelId, normalized);
+    ++m_presentationRequestRevision;
+    emit presentationRequestRevisionChanged();
+
+    QDBusMessage propertiesChanged = QDBusMessage::createSignal(
+        QStringLiteral("/Control"),
+        QStringLiteral("org.freedesktop.DBus.Properties"),
+        QStringLiteral("PropertiesChanged"));
+    propertiesChanged << QStringLiteral("local.PanelWindow")
+                      << QVariantMap{{QStringLiteral("presentationRequestRevision"),
+                                      m_presentationRequestRevision}}
+                      << QStringList{};
+    QDBusConnection::sessionBus().send(propertiesChanged);
+    return true;
+}
+
+QVariantMap PanelWindow::takePanelPresentationRequest(const QString &panelId)
+{
+    const QString request = m_pendingPresentationRequests.take(panelId);
+    return {
+        {QStringLiteral("pending"), !request.isEmpty()},
+        {QStringLiteral("request"), request},
     };
 }
 

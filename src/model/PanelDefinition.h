@@ -101,12 +101,23 @@ struct PanelContent
     QString type = QStringLiteral("hybrid");
     QStringList applicationIds;
     QStringList urls;
+    // One ordered list of panel-specific entry ids across both lists above:
+    // application ids verbatim and URLs as `free-url:<encoded>`. It is always
+    // kept canonical (every known entry exactly once, unknown ids dropped), so
+    // reordering a free panel is a permutation of this list and nothing else.
+    QStringList entryOrder;
     QStringList kdeWidgets;
     bool acceptDrops = true;
     QString folderLayout = QStringLiteral("fan");
     int folderSpeed = 260;
     QString folderEasing = QStringLiteral("outBack");
     bool folderExpandOnClick = true;
+
+    [[nodiscard]] static QString urlEntryId(const QString &url);
+    [[nodiscard]] static bool isUrlEntryId(const QString &entryId);
+    [[nodiscard]] static QString urlFromEntryId(const QString &entryId);
+    [[nodiscard]] QStringList knownEntryIds() const;
+    [[nodiscard]] QStringList canonicalEntryOrder() const;
 
     bool operator==(const PanelContent &) const = default;
 };
@@ -167,6 +178,12 @@ struct PanelLayoutDefinition
     int polygonSides = 6;
     QString orientation = QStringLiteral("upright");
     QString anchor = QStringLiteral("center");
+    // Whole-scene rotation for free panels: `none`, `clockwise` or
+    // `counter-clockwise`, in degrees per second, started by `idle` or
+    // `hover`. The running angle offset is runtime state and is never stored.
+    QString rotationMode = QStringLiteral("none");
+    qreal rotationSpeed = 12.0;
+    QString rotationTrigger = QStringLiteral("idle");
 
     bool operator==(const PanelLayoutDefinition &) const = default;
 };

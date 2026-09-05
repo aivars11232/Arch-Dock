@@ -102,7 +102,10 @@ private slots:
     void iconPropertiesPublicInteractionIsTransactional();
     void runningOnlyIconPropertiesAreUnavailable();
     void interactionGuardsReachTheHostVisibilityDecision();
+    void presentationStateAndRequestsAreObservableThroughTheBackend();
     void presentationProfileIsPublishedForLaterPresets();
+    void freePanelContentFollowsItsRecordAndOrdersItsOwnEntries();
+    void wholePanelRotationFieldsAreGatedByTheResolver();
 
 private:
     QTemporaryDir m_settingsDirectory;
@@ -1411,6 +1414,299 @@ void PanelWindowCapabilityTest::interactionGuardsReachTheHostVisibilityDecision(
     QCOMPARE(window.panelInteractionGuards(QStringLiteral("bottom"))
                  .value(QStringLiteral("popupOpen")).toBool(),
              false);
+}
+
+// TASK-0032 closure: the live applet's resting presentation state is
+// observable, and an explicit request reaches it. The first is how a harness
+// proves a real applet collapsed without injecting input; the second is the
+// producer the `manual` trigger lacked, which had left a collapsed manual
+// panel with no way to open.
+void PanelWindowCapabilityTest::presentationStateAndRequestsAreObservableThroughTheBackend()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+
+    const QVariantMap initial = window.panelPresentationState(
+        QStringLiteral("bottom"));
+    QCOMPARE(initial.value(QStringLiteral("reported")).toBool(), false);
+    QVERIFY(initial.value(QStringLiteral("surfaceState")).toString().isEmpty());
+
+    // Only the controller's vocabulary is accepted, and only for owned panels.
+    QVERIFY(!window.reportPanelPresentationState(
+        QStringLiteral("bottom"),
+        {{QStringLiteral("surfaceState"), QStringLiteral("sideways")}}));
+    QVERIFY(!window.reportPanelPresentationState(
+        QStringLiteral("not-a-panel"),
+        {{QStringLiteral("surfaceState"), QStringLiteral("collapsed")}}));
+    QCOMPARE(window.panelPresentationState(QStringLiteral("bottom"))
+                 .value(QStringLiteral("reported")).toBool(),
+             false);
+
+    QVERIFY(window.reportPanelPresentationState(
+        QStringLiteral("bottom"),
+        {{QStringLiteral("surfaceState"), QStringLiteral("Collapsed")}}));
+    const QVariantMap reported = window.panelPresentationState(
+        QStringLiteral("bottom"));
+    QCOMPARE(reported.value(QStringLiteral("reported")).toBool(), true);
+    QCOMPARE(reported.value(QStringLiteral("surfaceState")).toString(),
+             QStringLiteral("collapsed"));
+    QCOMPARE(reported.value(QStringLiteral("transitionState")).toString(),
+             QStringLiteral("idle"));
+    QCOMPARE(reported.value(QStringLiteral("hostPhase")).toString(),
+             QStringLiteral("revealed"));
+
+    // Requests: invalid vocabulary and unknown panels change nothing.
+    const qulonglong revisionBefore = window.presentationRequestRevision();
+    QVERIFY(!window.requestPanelPresentation(
+        QStringLiteral("bottom"), QStringLiteral("explode")));
+    QVERIFY(!window.requestPanelPresentation(
+        QStringLiteral("not-a-panel"), QStringLiteral("open")));
+    QCOMPARE(window.presentationRequestRevision(), revisionBefore);
+    QCOMPARE(window.takePanelPresentationRequest(QStringLiteral("bottom"))
+                 .value(QStringLiteral("pending")).toBool(),
+             false);
+
+    // A valid request advances the revision the applet listens to, and is
+    // taken exactly once. The most recent request wins if several queue up.
+    QVERIFY(window.requestPanelPresentation(
+        QStringLiteral("bottom"), QStringLiteral("collapse")));
+    QVERIFY(window.requestPanelPresentation(
+        QStringLiteral("bottom"), QStringLiteral("Open")));
+    QCOMPARE(window.presentationRequestRevision(), revisionBefore + 2);
+    const QVariantMap taken = window.takePanelPresentationRequest(
+        QStringLiteral("bottom"));
+    QCOMPARE(taken.value(QStringLiteral("pending")).toBool(), true);
+    QCOMPARE(taken.value(QStringLiteral("request")).toString(),
+             QStringLiteral("open"));
+    QCOMPARE(window.takePanelPresentationRequest(QStringLiteral("bottom"))
+                 .value(QStringLiteral("pending")).toBool(),
+             false);
+
+    // Requests are per panel: another panel's queue is untouched.
+    QVERIFY(window.requestPanelPresentation(
+        QStringLiteral("top"), QStringLiteral("open")));
+    QCOMPARE(window.takePanelPresentationRequest(QStringLiteral("bottom"))
+                 .value(QStringLiteral("pending")).toBool(),
+             false);
+    QCOMPARE(window.takePanelPresentationRequest(QStringLiteral("top"))
+                 .value(QStringLiteral("request")).toString(),
+             QStringLiteral("open"));
+}
+
+// TASK-0033 Phase A: a free panel's content type decides what it shows, its
+// entries are panel-specific and ordered, the order is committed as a
+// revision and survives a registry reload, and free ids never enter the
+// shared application reorder.
+void PanelWindowCapabilityTest::freePanelContentFollowsItsRecordAndOrdersItsOwnEntries()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    PanelRegistry *registry = qobject_cast<PanelRegistry *>(
+        engine.rootContext()
+            ->contextProperty(QStringLiteral("panelRegistry"))
+            .value<QObject *>());
+    QVERIFY(registry);
+
+    QTemporaryDir files;
+    QVERIFY(files.isValid());
+    const auto writeDesktop = [&files](const QString &name, const QString &title)
+    {
+        QFile file(files.filePath(name));
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        {
+            return QString{};
+        }
+        file.write(QStringLiteral("[Desktop Entry]\nType=Application\nName=%1\n"
+                                  "Icon=applications-system\nExec=/bin/true\n")
+                       .arg(title).toUtf8());
+        file.close();
+        return QFileInfo(file.fileName()).absoluteFilePath();
+    };
+    const QString alphaPath = writeDesktop(QStringLiteral("alpha.desktop"), QStringLiteral("Alpha"));
+    const QString betaPath = writeDesktop(QStringLiteral("beta.desktop"), QStringLiteral("Beta"));
+    QVERIFY(!alphaPath.isEmpty() && !betaPath.isEmpty());
+    const QString folderPath = files.filePath(QStringLiteral("Folder"));
+    QVERIFY(QDir().mkpath(folderPath));
+    const QUrl alphaUrl = QUrl::fromLocalFile(alphaPath);
+    const QUrl betaUrl = QUrl::fromLocalFile(betaPath);
+    const QUrl folderUrl = QUrl::fromLocalFile(folderPath);
+    const QString alphaId = ArchDock::PanelContent::urlEntryId(alphaUrl.toString());
+    const QString betaId = ArchDock::PanelContent::urlEntryId(betaUrl.toString());
+    const QString folderId = ArchDock::PanelContent::urlEntryId(folderUrl.toString());
+
+    const QString panelId = registry->addFreePanel();
+    QVERIFY(!panelId.isEmpty());
+    QCOMPARE(registry->panelDefinition(panelId)->content.type, QStringLiteral("empty"));
+
+    // Native panels never accept panel-specific content.
+    QVERIFY(!window.addPanelEntries(QStringLiteral("bottom"), {alphaUrl.toString()}));
+    QVERIFY(!window.movePanelEntryBefore(QStringLiteral("bottom"), alphaId, QString{}));
+
+    // Entries are stored even while the type is empty, but nothing is shown.
+    const quint64 revisionBefore = registry->panelDefinition(panelId)->settingsRevision;
+    QVERIFY(window.addPanelEntries(panelId, {alphaUrl.toString(), folderUrl.toString()}));
+    QCOMPARE(window.panelEntryOrder(panelId), QStringList({alphaId, folderId}));
+    QCOMPARE(registry->panelDefinition(panelId)->settingsRevision, revisionBefore + 1);
+    QVERIFY(window.dockEntriesForPanel(panelId, QStringLiteral("hybrid")).isEmpty());
+    // Missing files and unknown application ids add nothing and spend no revision.
+    QVERIFY(!window.addPanelEntries(panelId, {QStringLiteral("file:///nonexistent/x.desktop"),
+                                             QStringLiteral("org.example.unknown")}));
+    QCOMPARE(registry->panelDefinition(panelId)->settingsRevision, revisionBefore + 1);
+
+    const auto setType = [&window, registry, &panelId](const QString &type)
+    {
+        const QVariantMap result = window.applyPanelSettingsTransaction(
+            panelId,
+            registry->panelDefinition(panelId)->settingsRevision,
+            {{QStringLiteral("type"), type}});
+        return result.value(QStringLiteral("success")).toBool();
+    };
+    const auto shownIds = [&window, &panelId]
+    {
+        QStringList ids;
+        for (const QVariant &value : window.dockEntriesForPanel(panelId, QStringLiteral("empty")))
+        {
+            ids.append(value.toMap().value(QStringLiteral("appId")).toString());
+        }
+        return ids;
+    };
+
+    // Launcher shows the panel's own ordered entries and ignores the applet's
+    // requested type.
+    QVERIFY(setType(QStringLiteral("launcher")));
+    QCOMPARE(shownIds(), QStringList({alphaId, folderId}));
+    const QVariantMap alphaEntry = window.dockEntriesForPanel(
+        panelId, QStringLiteral("empty")).constFirst().toMap();
+    QCOMPARE(alphaEntry.value(QStringLiteral("displayName")).toString(), QStringLiteral("Alpha"));
+    QCOMPARE(alphaEntry.value(QStringLiteral("panelEntryId")).toString(), alphaId);
+    QVERIFY(alphaEntry.value(QStringLiteral("pinned")).toBool());
+    QVERIFY(!alphaEntry.value(QStringLiteral("running")).toBool());
+    QVERIFY(alphaEntry.value(QStringLiteral("iconPropertiesSupported")).toBool());
+
+    // Reordering is a panel operation, refuses unknown ids, and persists.
+    QVERIFY(window.addPanelEntries(panelId, {betaUrl.toString()}));
+    QVERIFY(window.movePanelEntryBefore(panelId, betaId, alphaId));
+    QCOMPARE(shownIds(), QStringList({betaId, alphaId, folderId}));
+    QVERIFY(!window.movePanelEntryBefore(panelId, QStringLiteral("free-url:file:///nope"), alphaId));
+    QVERIFY(!window.setPanelEntryOrder(panelId, {alphaId, betaId}));
+    QVERIFY(window.setPanelEntryOrder(panelId, {folderId, alphaId, betaId}));
+    QCOMPARE(shownIds(), QStringList({folderId, alphaId, betaId}));
+    QVERIFY(!window.moveDockEntryBefore(alphaId, betaId));
+    {
+        PanelRegistry reloaded;
+        QCOMPARE(reloaded.panelDefinition(panelId)->content.entryOrder,
+                 QStringList({folderId, alphaId, betaId}));
+    }
+
+    // Tasks shows running applications only; nothing runs here, so nothing
+    // is shown and the panel's own entries stay stored.
+    QVERIFY(setType(QStringLiteral("tasks")));
+    QVERIFY(shownIds().isEmpty());
+    QCOMPARE(window.panelEntryOrder(panelId), QStringList({folderId, alphaId, betaId}));
+
+    // Hybrid shows the panel's entries and would append running-only apps.
+    QVERIFY(setType(QStringLiteral("hybrid")));
+    QCOMPARE(shownIds(), QStringList({folderId, alphaId, betaId}));
+
+    // Removal drops exactly one entry and is also refused for unknown ids.
+    QVERIFY(!window.removePanelEntry(panelId, QStringLiteral("free-url:file:///nope")));
+    QVERIFY(window.removePanelEntry(panelId, alphaId));
+    QCOMPARE(shownIds(), QStringList({folderId, betaId}));
+    QVERIFY(window.removePanelContent(panelId, folderId));
+    QCOMPARE(window.panelEntryOrder(panelId), QStringList({betaId}));
+}
+
+// TASK-0033 Phase C: the rotation controls exist only where the resolver says
+// the host can turn the scene. A native edge panel never sees them; a free
+// radial panel does, with the static angle carrying the resolved degree range
+// and the speed keeping its own schema bounds.
+void PanelWindowCapabilityTest::wholePanelRotationFieldsAreGatedByTheResolver()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    PanelRegistry *registry = qobject_cast<PanelRegistry *>(
+        engine.rootContext()
+            ->contextProperty(QStringLiteral("panelRegistry"))
+            .value<QObject *>());
+    QVERIFY(registry);
+
+    const auto fieldMap = [](const QVariantMap &snapshot)
+    {
+        QHash<QString, QVariantMap> fields;
+        for (const QVariant &value : snapshot.value(QStringLiteral("panelFields")).toList())
+        {
+            const QVariantMap field = value.toMap();
+            fields.insert(field.value(QStringLiteral("key")).toString(), field);
+        }
+        return fields;
+    };
+    const QStringList rotationKeys{
+        QStringLiteral("panelRotationMode"),
+        QStringLiteral("panelRotationSpeed"),
+        QStringLiteral("panelRotationTrigger"),
+    };
+
+    const QHash<QString, QVariantMap> nativeFields = fieldMap(
+        window.panelSettingsEditorSnapshot(QStringLiteral("bottom"), QStringLiteral("studio")));
+    for (const QString &key : rotationKeys)
+    {
+        QVERIFY2(!nativeFields.contains(key),
+                 qPrintable(QStringLiteral("native panel exposes %1").arg(key)));
+    }
+    QVERIFY(!nativeFields.contains(QStringLiteral("layoutAngle")));
+
+    const QString panelId = registry->addFreePanel();
+    QVERIFY(!panelId.isEmpty());
+    registry->setPanelValue(panelId, QStringLiteral("layout"), QStringLiteral("ring"));
+    const QHash<QString, QVariantMap> freeFields = fieldMap(
+        window.panelSettingsEditorSnapshot(panelId, QStringLiteral("studio")));
+    for (const QString &key : rotationKeys)
+    {
+        QVERIFY2(freeFields.contains(key),
+                 qPrintable(QStringLiteral("free ring panel lacks %1").arg(key)));
+    }
+    QVERIFY(freeFields.contains(QStringLiteral("layoutAngle")));
+    QCOMPARE(freeFields.value(QStringLiteral("layoutAngle"))
+                 .value(QStringLiteral("minimumValue")).toReal(), -180.0);
+    QCOMPARE(freeFields.value(QStringLiteral("panelRotationSpeed"))
+                 .value(QStringLiteral("minimumValue")).toReal(), 1.0);
+    QCOMPARE(freeFields.value(QStringLiteral("panelRotationSpeed"))
+                 .value(QStringLiteral("maximumValue")).toReal(), 180.0);
+    QCOMPARE(freeFields.value(QStringLiteral("panelRotationMode"))
+                 .value(QStringLiteral("choices")).toStringList(),
+             QStringList({QStringLiteral("none"), QStringLiteral("clockwise"),
+                          QStringLiteral("counter-clockwise")}));
+
+    // A linear free layout has no centre to turn about: no rotation controls.
+    registry->setPanelValue(panelId, QStringLiteral("layout"), QStringLiteral("horizontal"));
+    const QHash<QString, QVariantMap> linearFields = fieldMap(
+        window.panelSettingsEditorSnapshot(panelId, QStringLiteral("studio")));
+    for (const QString &key : rotationKeys)
+    {
+        QVERIFY2(!linearFields.contains(key),
+                 qPrintable(QStringLiteral("linear free panel exposes %1").arg(key)));
+    }
+
+    // The values persist through the ordinary transaction and reach the
+    // renderer configuration the applet consumes.
+    registry->setPanelValue(panelId, QStringLiteral("layout"), QStringLiteral("ring"));
+    const QVariantMap result = window.applyPanelSettingsTransaction(
+        panelId,
+        registry->panelDefinition(panelId)->settingsRevision,
+        {{QStringLiteral("panelRotationMode"), QStringLiteral("Counter-Clockwise")},
+         {QStringLiteral("panelRotationSpeed"), 999},
+         {QStringLiteral("panelRotationTrigger"), QStringLiteral("hover")}});
+    QVERIFY2(result.value(QStringLiteral("success")).toBool(),
+             qPrintable(result.value(QStringLiteral("errorMessage")).toString()));
+    const QVariantMap configuration = window.panelRendererConfiguration(panelId);
+    QCOMPARE(configuration.value(QStringLiteral("panelRotationMode")).toString(),
+             QStringLiteral("counter-clockwise"));
+    QCOMPARE(configuration.value(QStringLiteral("panelRotationSpeed")).toReal(), 180.0);
+    QCOMPARE(configuration.value(QStringLiteral("panelRotationTrigger")).toString(),
+             QStringLiteral("hover"));
+    QVERIFY(configuration.value(QStringLiteral("capabilityResolution")).toMap()
+                .value(QStringLiteral("rotation")).toMap()
+                .value(QStringLiteral("available")).toBool());
 }
 
 void PanelWindowCapabilityTest::presentationProfileIsPublishedForLaterPresets()

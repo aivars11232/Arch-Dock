@@ -12,6 +12,8 @@ set(rendering_sources
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/MotionTrackRunner.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/PanelPresentationController.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/PanelMotionController.qml"
+    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/SceneRotationController.qml"
+    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/inputs/GeometryHitRegion.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/PanelScene.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/PanelSurfaceLoader.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/RunningIndicator.qml"

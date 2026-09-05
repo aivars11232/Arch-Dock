@@ -542,6 +542,54 @@ int DockModel::panelEntryCount(const QString &panelType) const
     return count;
 }
 
+QVariantMap DockModel::entrySnapshot(const DockApplication &application) const
+{
+    const bool running = !application.windows.isEmpty();
+    const bool active = std::any_of(
+        application.windows.cbegin(),
+        application.windows.cend(),
+        [](const WindowItem &window)
+        {
+            return window.active;
+        });
+    const bool minimized = running && std::all_of(
+        application.windows.cbegin(),
+        application.windows.cend(),
+        [](const WindowItem &window)
+        {
+            return window.minimized;
+        });
+
+    QStringList windowIds;
+    QStringList windowTitles;
+    windowIds.reserve(application.windows.size());
+    windowTitles.reserve(application.windows.size());
+    for (const WindowItem &window : application.windows)
+    {
+        windowIds.append(window.internalId);
+        windowTitles.append(window.caption.isEmpty() ? application.displayName : window.caption);
+    }
+
+    return QVariantMap{
+        {QStringLiteral("appId"), application.appId},
+        {QStringLiteral("stableIdentity"),
+         ArchDock::IconEntryIdentity::forApplication(
+             application.appId, application.desktopFileName)},
+        {QStringLiteral("desktopFileName"), application.desktopFileName},
+        {QStringLiteral("baseIconName"), application.iconName},
+        {QStringLiteral("iconName"), application.iconName},
+        {QStringLiteral("baseDisplayName"), application.displayName},
+        {QStringLiteral("displayName"), application.displayName},
+        {QStringLiteral("pinned"), application.pinned},
+        {QStringLiteral("running"), running},
+        {QStringLiteral("active"), active},
+        {QStringLiteral("minimized"), minimized},
+        {QStringLiteral("windowCount"), application.windows.size()},
+        {QStringLiteral("windowIds"), windowIds},
+        {QStringLiteral("windowTitles"), windowTitles},
+        {QStringLiteral("isFolder"), !folderPath(application).isEmpty()}};
+}
+
 QVariantList DockModel::panelEntries(const QString &panelType) const
 {
     QVariantList entries;
@@ -551,53 +599,42 @@ QVariantList DockModel::panelEntries(const QString &panelType) const
         {
             continue;
         }
-
-        const bool running = !application.windows.isEmpty();
-        const bool active = std::any_of(
-            application.windows.cbegin(),
-            application.windows.cend(),
-            [](const WindowItem &window)
-            {
-                return window.active;
-            });
-        const bool minimized = running && std::all_of(
-            application.windows.cbegin(),
-            application.windows.cend(),
-            [](const WindowItem &window)
-            {
-                return window.minimized;
-            });
-
-        QStringList windowIds;
-        QStringList windowTitles;
-        windowIds.reserve(application.windows.size());
-        windowTitles.reserve(application.windows.size());
-        for (const WindowItem &window : application.windows)
-        {
-            windowIds.append(window.internalId);
-            windowTitles.append(window.caption.isEmpty() ? application.displayName : window.caption);
-        }
-
-        entries.append(QVariantMap{
-            {QStringLiteral("appId"), application.appId},
-            {QStringLiteral("stableIdentity"),
-             ArchDock::IconEntryIdentity::forApplication(
-                 application.appId, application.desktopFileName)},
-            {QStringLiteral("desktopFileName"), application.desktopFileName},
-            {QStringLiteral("baseIconName"), application.iconName},
-            {QStringLiteral("iconName"), application.iconName},
-            {QStringLiteral("baseDisplayName"), application.displayName},
-            {QStringLiteral("displayName"), application.displayName},
-            {QStringLiteral("pinned"), application.pinned},
-            {QStringLiteral("running"), running},
-            {QStringLiteral("active"), active},
-            {QStringLiteral("minimized"), minimized},
-            {QStringLiteral("windowCount"), application.windows.size()},
-            {QStringLiteral("windowIds"), windowIds},
-            {QStringLiteral("windowTitles"), windowTitles},
-            {QStringLiteral("isFolder"), !folderPath(application).isEmpty()}});
+        entries.append(entrySnapshot(application));
     }
     return entries;
+}
+
+QVariantMap DockModel::applicationEntry(const QString &appId) const
+{
+    const int row = indexForApplication(appId);
+    if (row < 0)
+    {
+        return {};
+    }
+    return entrySnapshot(m_items.at(row));
+}
+
+QString DockModel::desktopFileForApplication(const QString &appId) const
+{
+    const int row = indexForApplication(appId);
+    if (row < 0)
+    {
+        return {};
+    }
+    const DockApplication &application = m_items.at(row);
+    QString path = desktopFilePath(
+        application.desktopFileName.isEmpty()
+            ? application.appId
+            : application.desktopFileName);
+    // A running application's desktop id was normalized to its bare name; if
+    // that name is not installed under a standard applications directory,
+    // the window's own report may still name the file directly.
+    for (auto window = application.windows.cbegin();
+         path.isEmpty() && window != application.windows.cend(); ++window)
+    {
+        path = desktopFilePath(window->desktopFileName);
+    }
+    return path.isEmpty() ? QString{} : QFileInfo(path).absoluteFilePath();
 }
 
 QVariantList DockModel::panelEntriesForIds(const QStringList &appIds) const

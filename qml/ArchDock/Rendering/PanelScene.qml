@@ -24,6 +24,9 @@ Item {
         !sceneConcealed && visible && opacity > 0
     property string geometryCompatibilityProfile: "canonical"
     property var entryDelegateContext: ({})
+    // Previews freeze whole-scene rotation at the configured angle while still
+    // reporting whether it is configured and available.
+    property bool rotationAnimationEnabled: true
 
     readonly property int entryCount:
         orderedEntries && orderedEntries.length !== undefined
@@ -115,10 +118,43 @@ Item {
         verticalLayout ? "vertical"
         : ["horizontal", "adaptive"].includes(layoutPath)
             ? "horizontal" : "free"
-    readonly property var layoutGeometry: LayoutEngine.metrics(
+    // Whole-scene rotation (free radial layouts only). The controller yields
+    // one angle offset; it is added to the configured layout angle and the sum
+    // is what every geometry call receives, so entries, hover targets, drop
+    // targets, popup anchors and the drawn surface all turn together.
+    readonly property bool freeHost:
+        String(entryDelegateContext && entryDelegateContext.hostKind
+               ? entryDelegateContext.hostKind : "") === "free"
+    readonly property bool rotationCapabilityAvailable:
+        Boolean(hostCapabilities && hostCapabilities.rotation
+                && typeof hostCapabilities.rotation === "object"
+                && hostCapabilities.rotation.available === true)
+    readonly property string rotationMode: String(definitionValue(
+        "layout", "rotationMode", "panelRotationMode", "none"))
+    readonly property real rotationSpeed: Number(definitionValue(
+        "layout", "rotationSpeed", "panelRotationSpeed", 12))
+    readonly property string rotationTrigger: String(definitionValue(
+        "layout", "rotationTrigger", "panelRotationTrigger", "idle"))
+    readonly property bool rotationLayoutSupported:
+        LayoutEngine.supportsWholeSceneRotation(layoutPath)
+    readonly property bool sceneRotationEnabled: rotationController.enabled
+    readonly property bool sceneRotationActive: rotationController.running
+    readonly property real sceneRotationAngle: rotationController.angleOffset
+    readonly property real effectiveLayoutAngle:
+        layoutAngle + rotationController.angleOffset
+    readonly property bool dragInProgress:
+        Boolean(runtimeState ? runtimeState.dragInProgress : false)
+    readonly property bool editModeActive:
+        Boolean(runtimeState ? runtimeState.editMode : false)
+    readonly property var configuredLayoutGeometry: LayoutEngine.metrics(
         layoutPath, entryCount, iconSize, iconSpacing, layoutScale,
         layoutRadius, layoutRows, layoutPadding, verticalLayout,
         layoutAngle, polygonSides)
+    // While rotation is enabled the scene keeps the square every angle fits
+    // in, so the host is not asked to resize on every frame.
+    readonly property var layoutGeometry: sceneRotationEnabled
+        ? LayoutEngine.rotationEnvelope(configuredLayoutGeometry)
+        : configuredLayoutGeometry
     readonly property var activeThemeSlice: themeRecord(
         themeDefinition ? themeDefinition.slices : [],
         presentationState, themeOrientation)
@@ -229,8 +265,41 @@ Item {
     })
     readonly property var visualPanel: surfaceLoader.surfaceItem
     readonly property var iconDelegates: entryRepeater
+    // Which input region is active: the package alpha mask for a skin, the
+    // geometry band for a free radial scene, or the plain rectangle.
+    readonly property bool geometryHitRegionActive:
+        freeHost && !surfaceLoader.inputMaskItem
+        && LayoutEngine.supportsWholeSceneRotation(layoutPath)
+    readonly property string activeInputRegionKind:
+        surfaceLoader.inputMaskItem ? "alpha-mask"
+        : geometryHitRegionActive ? "geometry-band" : "rectangle"
+    readonly property var entryRects: buildEntryRects()
 
     containmentMask: surfaceLoader.inputMaskItem
+        ? surfaceLoader.inputMaskItem
+        : geometryHitRegionActive ? geometryHitRegion : null
+
+    function containsInputPoint(point) {
+        if (surfaceLoader.inputMaskItem)
+            return surfaceLoader.inputMaskItem.contains(point)
+        if (geometryHitRegionActive)
+            return geometryHitRegion.contains(point)
+        const x = Number(point.x)
+        const y = Number(point.y)
+        return x >= 0 && y >= 0 && x <= width && y <= height
+    }
+
+    function buildEntryRects() {
+        const rects = []
+        for (let index = 0; index < entryCount; ++index) {
+            const output = entryGeometryAt(index)
+            rects.push(output.entryBounds || {
+                x: output.position.x, y: output.position.y,
+                width: layoutGeometry.iconSize, height: layoutGeometry.iconSize
+            })
+        }
+        return rects
+    }
 
     function definitionValue(sectionName, key, flatKey, fallback) {
         const definition = panelDefinition || ({})
@@ -385,7 +454,7 @@ Item {
 
     function entryGeometryAt(index) {
         const geometry = LayoutEngine.entryGeometry(
-            layoutPath, index, entryCount, layoutGeometry, layoutAngle,
+            layoutPath, index, entryCount, layoutGeometry, effectiveLayoutAngle,
             polygonSides, pathOrientation, geometryCompatibilityProfile,
             placementEdge)
         const result = ({})
@@ -517,6 +586,34 @@ Item {
     width: surfaceMetrics.width
     height: surfaceMetrics.height
 
+    SceneRotationController {
+        id: rotationController
+
+        mode: root.rotationLayoutSupported ? root.rotationMode : "none"
+        speedDegreesPerSecond: root.rotationSpeed
+        trigger: root.rotationTrigger
+        available: root.rotationCapabilityAvailable
+        hovered: root.panelHovered
+        dragActive: root.dragInProgress
+        editMode: root.editModeActive
+        sceneConcealed: root.sceneConcealed || !root.visible
+        reducedMotion: root.reducedMotion
+        animationEnabled: root.rotationAnimationEnabled
+    }
+
+    GeometryHitRegion {
+        id: geometryHitRegion
+
+        layout: root.layoutPath
+        geometry: root.layoutGeometry
+        angle: root.effectiveLayoutAngle
+        polygonSides: root.polygonSides
+        entryRects: root.entryRects
+        bandWidth: root.layoutGeometry.iconSize * 1.2
+        entryMargin: root.layoutGeometry.iconSize * 0.4
+        enabled: root.geometryHitRegionActive
+    }
+
     PanelMotionController {
         id: motionController
 
@@ -550,7 +647,7 @@ Item {
         glowIntensity: root.glowIntensity
         reducedMotion: root.reducedMotion
         geometry: root.rendererGeometry
-        layoutAngle: root.layoutAngle
+        layoutAngle: root.effectiveLayoutAngle
         polygonSides: root.polygonSides
         appearance: root.appearance
         customColor: root.customColor
