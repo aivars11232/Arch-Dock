@@ -198,6 +198,15 @@ CapabilityDecision resolvePresentation(
 {
     CapabilityDecision decision;
     decision.id = panelPresentationMechanismName(mechanism);
+    if (mechanism == PanelPresentationMechanism::Open)
+    {
+        // Being open is not a capability. It is what a panel does when it is
+        // not collapsed, so refusing it would mean refusing to show the panel
+        // at all. Only the mechanisms that actually move something have to be
+        // declared by both the host and the theme.
+        decision.available = true;
+        return decision;
+    }
     if (!contains(host.presentationMechanisms, mechanism))
     {
         decision.reason = CapabilityReasonCode::PresentationMechanismUnavailable;
@@ -705,6 +714,17 @@ HostCapabilityProfile PanelCapabilityResolver::productionHostProfile(
             PanelCapability::IconStateStyling,
         };
         profile.layouts = allLayouts();
+        // The free host animates entirely inside its own desktop applet, so
+        // every declared mechanism is reachable here. Radial is included only
+        // for this host: it needs a surface that is not a fixed rectangle.
+        profile.presentationMechanisms = {
+            PanelPresentationMechanism::Open,
+            PanelPresentationMechanism::CollapseHorizontal,
+            PanelPresentationMechanism::CollapseVertical,
+            PanelPresentationMechanism::CollapseRadial,
+            PanelPresentationMechanism::Split,
+            PanelPresentationMechanism::Shutter,
+        };
         profile.rendererTiers = {
             RendererTier::Procedural2D,
             RendererTier::Skinned2D,
@@ -728,6 +748,17 @@ HostCapabilityProfile PanelCapabilityResolver::productionHostProfile(
         PanelLayoutKind::Adaptive,
         PanelLayoutKind::Horizontal,
         PanelLayoutKind::Vertical,
+    };
+    // A native panel collapses its own surface inside a containment whose
+    // geometry stays fixed, so the linear mechanisms are all available. Radial
+    // is not: a Plasma edge panel is a rectangle and an iris inside it would
+    // be a decoration pretending to be a mechanism.
+    profile.presentationMechanisms = {
+        PanelPresentationMechanism::Open,
+        PanelPresentationMechanism::CollapseHorizontal,
+        PanelPresentationMechanism::CollapseVertical,
+        PanelPresentationMechanism::Split,
+        PanelPresentationMechanism::Shutter,
     };
     profile.rendererTiers = {
         RendererTier::Procedural2D,

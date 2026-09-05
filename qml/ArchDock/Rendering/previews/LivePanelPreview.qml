@@ -37,10 +37,15 @@ Item {
     readonly property string rendererStatusText:
         activeRendererTier + (fallbackApplied
             ? " · " + (fallbackReason || "fallback") : "")
-    readonly property real presentationOpacity:
-        presentationState === "collapsed" ? 0.34 : 1
-    readonly property real presentationScale:
-        presentationState === "collapsed" ? 0.78 : 1
+    // The collapse a viewer sees is the panel's own, drawn by PanelScene from
+    // PanelMotionController. The preview used to fade and shrink the whole
+    // card on its own, which meant a preset card could show a collapse the
+    // desktop would never perform. These forward the scene's answer instead.
+    readonly property real collapseProgress: panelScene.collapseProgress
+    readonly property string presentationTrackForm:
+        panelScene.presentationTrackForm
+    readonly property string mechanismFallbackReason:
+        panelScene.mechanismFallbackReason
     readonly property real sceneFitScale: Math.max(0, Math.min(
         1,
         (width - contentMargin * 2) / Math.max(1, panelScene.width),
@@ -193,8 +198,7 @@ Item {
         anchors.centerIn: parent
         width: panelScene.width
         height: panelScene.height
-        opacity: root.presentationOpacity
-        scale: root.sceneFitScale * root.presentationScale
+        scale: root.sceneFitScale
 
         PanelScene {
             id: panelScene

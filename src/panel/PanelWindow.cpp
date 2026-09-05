@@ -637,6 +637,44 @@ QVariantMap PanelWindow::panelRendererConfiguration(const QString &panelId) cons
     configuration.insert(
         QStringLiteral("animationProfiles"),
         m_panelRegistry.animationProfileDefinitions());
+
+    // A stable description of how this panel presents itself, published as one
+    // record so a later Panel Preset can capture and restore it without having
+    // to know which individual settings keys made it up. The id is derived
+    // from the resolved values, so two panels that present identically carry
+    // the same id and a preset can compare them.
+    QStringList availableMechanisms;
+    for (const QVariant &value :
+         capabilityResolution.value(QStringLiteral("presentationMechanisms")).toList())
+    {
+        const QVariantMap decision = value.toMap();
+        if (decision.value(QStringLiteral("available")).toBool())
+        {
+            availableMechanisms.append(
+                decision.value(QStringLiteral("id")).toString());
+        }
+    }
+    const QString profileId = QStringLiteral("%1:%2:%3:%4:%5")
+        .arg(definition->presentation.mode,
+             definition->presentation.collapseMechanism,
+             definition->presentation.collapseAxis,
+             definition->presentation.trigger,
+             definition->presentation.revealHandle);
+    configuration.insert(
+        QStringLiteral("presentationProfile"),
+        QVariantMap{
+            {QStringLiteral("id"), profileId},
+            {QStringLiteral("restingState"), definition->presentation.mode},
+            {QStringLiteral("trigger"), definition->presentation.trigger},
+            {QStringLiteral("mechanism"),
+             definition->presentation.collapseMechanism},
+            {QStringLiteral("axis"), definition->presentation.collapseAxis},
+            {QStringLiteral("revealHandle"),
+             definition->presentation.revealHandle},
+            {QStringLiteral("openDelay"), definition->visibility.openDelay},
+            {QStringLiteral("closeDelay"), definition->visibility.closeDelay},
+            {QStringLiteral("availableMechanisms"), availableMechanisms},
+        });
     return configuration;
 }
 
@@ -870,6 +908,34 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                              resolution.rotation.minimumDegrees);
                 field.insert(QStringLiteral("maximumValue"),
                              resolution.rotation.maximumDegrees);
+            }
+        }
+        else if (capability == QStringLiteral("presentation-mechanism"))
+        {
+            // Only mechanisms this panel's host and theme both declare may be
+            // offered. The whole presentation group disappears when the panel
+            // has no way to collapse at all, rather than presenting a resting
+            // state or a reveal handle that nothing could ever draw.
+            QStringList mechanisms;
+            for (const ArchDock::CapabilityDecision &decision :
+                 resolution.presentationMechanisms)
+            {
+                if (decision.available)
+                {
+                    mechanisms.append(decision.id);
+                }
+            }
+            const bool collapsible = std::any_of(
+                mechanisms.cbegin(),
+                mechanisms.cend(),
+                [](const QString &mechanism)
+                {
+                    return mechanism != QStringLiteral("open");
+                });
+            available = resolution.available && collapsible;
+            if (available && key == QStringLiteral("collapseMechanism"))
+            {
+                field.insert(QStringLiteral("choices"), mechanisms);
             }
         }
         else if (capability == QStringLiteral("layout"))
@@ -2534,6 +2600,10 @@ ArchDock::PanelVisibilityDecision PanelWindow::nativePanelVisibilityDecision(
         screen->geometry(), *placementResult.placement);
     input.panelScreenIndex = screenIndex;
     input.manualHideRequested = !visible;
+    // A panel the user is actively using may not be concealed. The applet is
+    // the only thing that knows a menu is open or a drag is in flight, so its
+    // last reported guards are the input here.
+    input.locks = m_panelInteractionGuards.value(panelId);
     input.windows.reserve(m_windowModel.windows().size());
     for (const WindowItem &window : m_windowModel.windows())
     {
@@ -2545,6 +2615,52 @@ ArchDock::PanelVisibilityDecision PanelWindow::nativePanelVisibilityDecision(
                               window.fullScreen});
     }
     return ArchDock::decidePanelVisibility(input);
+}
+
+bool PanelWindow::reportPanelInteractionGuards(const QString &panelId,
+                                              const QVariantMap &guards)
+{
+    if (!m_panelRegistry.panelIds().contains(panelId))
+    {
+        return false;
+    }
+
+    ArchDock::PanelVisibilityLocks locks;
+    locks.pointerInside = guards.value(QStringLiteral("pointerInside")).toBool();
+    locks.revealZoneActive =
+        guards.value(QStringLiteral("revealZoneActive")).toBool();
+    locks.popupOpen = guards.value(QStringLiteral("popupOpen")).toBool();
+    locks.dragActive = guards.value(QStringLiteral("dragActive")).toBool();
+    locks.keyboardFocus = guards.value(QStringLiteral("keyboardFocus")).toBool();
+    locks.editMode = guards.value(QStringLiteral("editMode")).toBool();
+
+    const auto existing = m_panelInteractionGuards.constFind(panelId);
+    if (existing != m_panelInteractionGuards.cend() && *existing == locks)
+    {
+        return true;
+    }
+    m_panelInteractionGuards.insert(panelId, locks);
+    // A guard that has just been raised or cleared can change whether the host
+    // should be showing the panel, so the decision is announced rather than
+    // waiting for the next unrelated change. Only the revision is published:
+    // reporting a guard must not trigger a recovery sweep.
+    ++m_visibilityRevision;
+    emit visibilityRevisionChanged();
+    return true;
+}
+
+QVariantMap PanelWindow::panelInteractionGuards(const QString &panelId) const
+{
+    const ArchDock::PanelVisibilityLocks locks =
+        m_panelInteractionGuards.value(panelId);
+    return {
+        {QStringLiteral("pointerInside"), locks.pointerInside},
+        {QStringLiteral("revealZoneActive"), locks.revealZoneActive},
+        {QStringLiteral("popupOpen"), locks.popupOpen},
+        {QStringLiteral("dragActive"), locks.dragActive},
+        {QStringLiteral("keyboardFocus"), locks.keyboardFocus},
+        {QStringLiteral("editMode"), locks.editMode},
+    };
 }
 
 bool PanelWindow::shouldConcealPanel(const QString &panelId) const

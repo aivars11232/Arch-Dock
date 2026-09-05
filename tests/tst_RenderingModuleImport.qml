@@ -37,6 +37,12 @@ TestCase {
         PanelPresentationController {}
     }
 
+    Component {
+        id: motionControllerComponent
+
+        PanelMotionController {}
+    }
+
     function test_installedModuleIdentity() {
         compare(RenderingModuleProbe.uri, "ArchDock.Rendering")
         compare(RenderingModuleProbe.majorVersion, 1)
@@ -139,5 +145,25 @@ TestCase {
         compare(controller.progress, -1)
         compare(PresentationStates.isRestingState("collapsed"), true)
         compare(PresentationStates.isRestingState("collapsing"), false)
+    }
+
+    function test_motionControllerContractLoads() {
+        const controller = createTemporaryObject(
+            motionControllerComponent, testCase, {
+                surfaceWidth: 300,
+                surfaceHeight: 60,
+                handleExtent: 30,
+                mechanism: "collapse-horizontal",
+                axis: "horizontal",
+                surfaceState: "collapsed",
+                transitionState: "idle"
+            })
+        verify(controller !== null)
+        compare(controller.trackForm, "center-slide")
+        compare(controller.resolvedMechanism, "collapse-horizontal")
+        compare(controller.fallbackReason, "")
+        compare(controller.collapseProgress, 1)
+        verify(controller.tracks["split-center"] !== undefined)
+        verify(controller.contentClip !== undefined)
     }
 }

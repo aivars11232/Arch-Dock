@@ -178,6 +178,10 @@ private slots:
     void nativeEdgeUsesOnlyLinearProceduralCapabilities();
     void nativeEdgeRejectsRingTheme();
     void freeDesktopAcceptsRingTheme();
+    void hostsDeclareTheMechanismsTheySurfaceCanActuallyRun();
+    void aMechanismNeedsBothHostAndThemeDeclaration();
+    void radialIsFreeHostOnly();
+    void openIsNotADeclarableMechanism();
     void freeDesktopResolvesBoundedRotation();
     void productionNativeRotationIsUnavailable();
     void syntheticNativeRotationCanBeBounded();
@@ -271,6 +275,149 @@ void PanelCapabilityResolverTest::freeDesktopAcceptsRingTheme()
 
     QVERIFY(result.available);
     QVERIFY(decisionById(result.layouts, QStringLiteral("ring"))->available);
+}
+
+// A mechanism the host cannot run is not a mechanism.
+//
+// Before this, neither production host declared any presentation mechanism at
+// all, so every mechanism resolved unavailable and the editor could never offer
+// one. These three tests pin the two halves of the intersection separately so a
+// future profile edit cannot quietly re-open or close the whole set.
+void PanelCapabilityResolverTest::hostsDeclareTheMechanismsTheySurfaceCanActuallyRun()
+{
+    ThemeCapabilityProfile theme = PanelCapabilityResolver::proceduralThemeProfile();
+    theme.presentationMechanisms = {
+        PanelPresentationMechanism::Open,
+        PanelPresentationMechanism::CollapseHorizontal,
+        PanelPresentationMechanism::CollapseVertical,
+        PanelPresentationMechanism::CollapseRadial,
+        PanelPresentationMechanism::Split,
+        PanelPresentationMechanism::Shutter,
+    };
+
+    const CapabilityResolution nativeResult = PanelCapabilityResolver::resolve(
+        panelFor(PanelHostKind::NativeEdge),
+        PanelCapabilityResolver::productionHostProfile(PanelHostKind::NativeEdge),
+        theme,
+        PanelCapabilityResolver::productionRenderers(),
+        PanelCapabilityResolver::productionPlatform());
+
+    for (const QString &mechanism : {QStringLiteral("open"),
+                                     QStringLiteral("collapse-horizontal"),
+                                     QStringLiteral("collapse-vertical"),
+                                     QStringLiteral("split"),
+                                     QStringLiteral("shutter")})
+    {
+        const CapabilityDecision *decision = decisionById(
+            nativeResult.presentationMechanisms, mechanism);
+        QVERIFY2(decision, qPrintable(mechanism));
+        QVERIFY2(decision->available, qPrintable(mechanism));
+    }
+
+    const CapabilityResolution freeResult = PanelCapabilityResolver::resolve(
+        panelFor(PanelHostKind::FreeDesktop),
+        PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop),
+        theme,
+        PanelCapabilityResolver::productionRenderers(),
+        PanelCapabilityResolver::productionPlatform());
+
+    for (int value = 0;
+         value < static_cast<int>(PanelPresentationMechanism::Count);
+         ++value)
+    {
+        const QString mechanism = panelPresentationMechanismName(
+            static_cast<PanelPresentationMechanism>(value));
+        const CapabilityDecision *decision = decisionById(
+            freeResult.presentationMechanisms, mechanism);
+        QVERIFY2(decision, qPrintable(mechanism));
+        QVERIFY2(decision->available, qPrintable(mechanism));
+    }
+}
+
+void PanelCapabilityResolverTest::aMechanismNeedsBothHostAndThemeDeclaration()
+{
+    // The shipped procedural themes declare no mechanism. A host that can run
+    // one must not make it appear anyway: the theme has no parts to move.
+    const CapabilityResolution undeclared = PanelCapabilityResolver::resolve(
+        panelFor(PanelHostKind::FreeDesktop),
+        PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop),
+        PanelCapabilityResolver::proceduralThemeProfile(),
+        PanelCapabilityResolver::productionRenderers(),
+        PanelCapabilityResolver::productionPlatform());
+
+    const CapabilityDecision *blocked = decisionById(
+        undeclared.presentationMechanisms, QStringLiteral("split"));
+    QVERIFY(blocked);
+    QVERIFY(!blocked->available);
+    QCOMPARE(blocked->reason,
+             CapabilityReasonCode::PresentationMechanismUnavailable);
+    QCOMPARE(blocked->blockedBy,
+             PanelCapabilityResolver::proceduralThemeProfile().id);
+}
+
+void PanelCapabilityResolverTest::radialIsFreeHostOnly()
+{
+    ThemeCapabilityProfile theme = PanelCapabilityResolver::proceduralThemeProfile();
+    theme.presentationMechanisms = {PanelPresentationMechanism::CollapseRadial};
+
+    const CapabilityResolution nativeResult = PanelCapabilityResolver::resolve(
+        panelFor(PanelHostKind::NativeEdge),
+        PanelCapabilityResolver::productionHostProfile(PanelHostKind::NativeEdge),
+        theme,
+        PanelCapabilityResolver::productionRenderers(),
+        PanelCapabilityResolver::productionPlatform());
+    const CapabilityDecision *nativeRadial = decisionById(
+        nativeResult.presentationMechanisms,
+        QStringLiteral("collapse-radial"));
+    QVERIFY(nativeRadial);
+    QVERIFY(!nativeRadial->available);
+    QCOMPARE(nativeRadial->blockedBy,
+             PanelCapabilityResolver::productionHostProfile(
+                 PanelHostKind::NativeEdge).id);
+
+    const CapabilityResolution freeResult = PanelCapabilityResolver::resolve(
+        panelFor(PanelHostKind::FreeDesktop),
+        PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop),
+        theme,
+        PanelCapabilityResolver::productionRenderers(),
+        PanelCapabilityResolver::productionPlatform());
+    QVERIFY(decisionById(freeResult.presentationMechanisms,
+                         QStringLiteral("collapse-radial"))->available);
+}
+
+// Being open is what a panel does when it is not collapsed.
+//
+// Treating it as a declarable capability made every panel with a procedural
+// theme resolve unavailable, because no theme profile declares "open" - and an
+// unavailable resolution refuses every settings transaction on that panel. The
+// rule is pinned here in both directions: open survives an empty declaration on
+// either side, and a real mechanism still does not.
+void PanelCapabilityResolverTest::openIsNotADeclarableMechanism()
+{
+    HostCapabilityProfile host = PanelCapabilityResolver::productionHostProfile(
+        PanelHostKind::NativeEdge);
+    host.presentationMechanisms.clear();
+    ThemeCapabilityProfile theme = PanelCapabilityResolver::proceduralThemeProfile();
+    QVERIFY(theme.presentationMechanisms.isEmpty());
+
+    const CapabilityResolution result = PanelCapabilityResolver::resolve(
+        panelFor(PanelHostKind::NativeEdge),
+        host,
+        theme,
+        PanelCapabilityResolver::productionRenderers(),
+        PanelCapabilityResolver::productionPlatform());
+
+    QVERIFY(decisionById(result.presentationMechanisms,
+                         QStringLiteral("open"))->available);
+    QVERIFY(!decisionById(result.presentationMechanisms,
+                          QStringLiteral("split"))->available);
+
+    // The panel as a whole stays usable: a default definition asks for the
+    // "open" mechanism, and that must never make the panel unresolvable.
+    PanelDefinition definition = panelFor(PanelHostKind::NativeEdge);
+    QCOMPARE(definition.presentation.collapseMechanism, QStringLiteral("open"));
+    QVERIFY(result.available);
+    QCOMPARE(result.reason, CapabilityReasonCode::None);
 }
 
 void PanelCapabilityResolverTest::freeDesktopResolvesBoundedRotation()

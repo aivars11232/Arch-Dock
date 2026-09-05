@@ -22,6 +22,7 @@ Item {
     property string appearance: "glass"
     property string customColor: ""
     property real panelOpacity: 0.9
+    property var motionTracks: null
 
     readonly property string normalizedRequestedTier:
         String(requestedRendererTier || "procedural2d").toLowerCase()
@@ -120,6 +121,7 @@ Item {
             appearance: root.appearance
             customColor: root.customColor
             panelOpacity: root.panelOpacity
+            motionTracks: root.motionTracks
         }
     }
 
@@ -139,6 +141,7 @@ Item {
             glowIntensity: root.glowIntensity
             reducedMotion: root.reducedMotion
             panelOpacity: root.panelOpacity
+            motionTracks: root.motionTracks
         }
     }
 }

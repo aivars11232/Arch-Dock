@@ -121,13 +121,35 @@ TestCase {
     function test_openCollapsedHoverAndExplicitIconStates() {
         const preview = createPreview()
         compare(preview.presentationState, "open")
-        compare(preview.presentationOpacity, 1)
+        compare(preview.collapseProgress, 0)
         compare(preview.previewRuntimeState.hovered, false)
 
+        // The preview no longer fades and shrinks its own card. Its collapse
+        // is the scene's collapse, so a card cannot advertise a mechanism the
+        // desktop would not perform. A procedural panel with no declared
+        // mechanism therefore reports a collapse that draws nothing, which is
+        // the truthful answer rather than a fabricated shrink.
         preview.presentationState = "collapsed"
         wait(0)
-        verify(preview.presentationOpacity < 1)
-        verify(preview.presentationScale < 1)
+        compare(preview.collapseProgress, 1)
+        compare(preview.collapseProgress,
+                preview.panelSceneItem.collapseProgress)
+        compare(preview.presentationTrackForm,
+                preview.panelSceneItem.presentationTrackForm)
+        compare(preview.presentationTrackForm, "identity")
+
+        // Given a mechanism the resolver allows, the same preview draws the
+        // real track - and it is the scene's, not one of its own.
+        preview.panelDefinition = definition({
+            collapseMechanism: "collapse-horizontal",
+            collapseAxis: "horizontal"
+        })
+        wait(0)
+        compare(preview.presentationTrackForm, "center-slide")
+        compare(preview.presentationTrackForm,
+                preview.panelSceneItem.presentationTrackForm)
+        compare(preview.mechanismFallbackReason, "")
+        verify(preview.panelSceneItem.motionTracks["split-center"].scaleX < 1)
 
         preview.presentationState = "open"
         preview.hoveredEntry = 1

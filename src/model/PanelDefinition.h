@@ -144,10 +144,14 @@ struct PanelVisibilityDefinition
 
 struct PanelPresentationDefinition
 {
-    QString mode;
-    QString collapseAxis;
-    QString collapseMechanism;
-    QString revealHandle;
+    // These were empty placeholders while nothing could honour them. They
+    // carry real defaults now that the panel has a motion engine: an empty
+    // mechanism would leave a collapsed panel with no way to be drawn.
+    QString mode = QStringLiteral("open");
+    QString trigger = QStringLiteral("hover");
+    QString collapseAxis = QStringLiteral("horizontal");
+    QString collapseMechanism = QStringLiteral("open");
+    QString revealHandle = QStringLiteral("edge-strip");
 
     bool operator==(const PanelPresentationDefinition &) const = default;
 };

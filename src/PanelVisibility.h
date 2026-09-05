@@ -65,6 +65,8 @@ struct PanelVisibilityLocks
     bool dragActive = false;
     bool keyboardFocus = false;
     bool editMode = false;
+
+    bool operator==(const PanelVisibilityLocks &) const = default;
 };
 
 struct PanelVisibilityInput

@@ -16,6 +16,19 @@ Item {
     property real motionOffset: 0
     property real motionOverflow: 0
 
+    // Presentation track for this layer's role, supplied by PanelSkin2D from
+    // PanelMotionController. It moves and scales the whole drawn part; the
+    // slice geometry inside it is untouched, so a declared cap keeps its
+    // proportions however far the track carries it.
+    property real motionTranslateX: 0
+    property real motionTranslateY: 0
+    property real motionScaleX: 1
+    property real motionScaleY: 1
+
+    readonly property bool motionActive:
+        motionTranslateX !== 0 || motionTranslateY !== 0
+        || motionScaleX !== 1 || motionScaleY !== 1
+
     readonly property string layerId: String(
         layerDefinition ? layerDefinition.id || "" : "")
     readonly property string role: String(
@@ -88,6 +101,22 @@ Item {
 
     opacity: Math.max(0, Math.min(1, layerOpacity))
     visible: assetAvailable && rawImage.status === Image.Ready
+
+    // The scale is taken about the part's own drawn centre, not the panel's,
+    // so an asymmetric pair of end caps still converges on the middle of the
+    // part that is actually shrinking.
+    transform: [
+        Scale {
+            origin.x: root.outputX() + root.outputWidth() / 2
+            origin.y: root.height / 2
+            xScale: Math.max(0, root.motionScaleX)
+            yScale: Math.max(0, root.motionScaleY)
+        },
+        Translate {
+            x: root.motionTranslateX
+            y: root.motionTranslateY
+        }
+    ]
 
     Image {
         id: rawImage

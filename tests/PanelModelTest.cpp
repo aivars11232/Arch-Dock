@@ -90,7 +90,14 @@ void PanelModelTest::defaultsExposeEveryVersionTwoSection()
     QCOMPARE(definition.placement.height, 420);
     QVERIFY(definition.visibility.visible);
     QCOMPARE(definition.visibility.hostMode, QStringLiteral("always"));
-    QVERIFY(definition.presentation.mode.isEmpty());
+    // Presentation carries real defaults now that a motion engine can honour
+    // them. Pinning the values is stronger than the previous emptiness check:
+    // an empty mechanism would leave a collapsed panel undrawable.
+    QCOMPARE(definition.presentation.mode, QStringLiteral("open"));
+    QCOMPARE(definition.presentation.trigger, QStringLiteral("hover"));
+    QCOMPARE(definition.presentation.collapseMechanism, QStringLiteral("open"));
+    QCOMPARE(definition.presentation.collapseAxis, QStringLiteral("horizontal"));
+    QCOMPARE(definition.presentation.revealHandle, QStringLiteral("edge-strip"));
     QCOMPARE(definition.layout.pathType, QStringLiteral("circular"));
     QCOMPARE(definition.surface.appearance, QStringLiteral("glass"));
     QCOMPARE(definition.surface.glowIntensity, 1.0);

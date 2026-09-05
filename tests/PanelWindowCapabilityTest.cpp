@@ -101,6 +101,8 @@ private slots:
     void iconOverridesCommitResolveAndResetOneEntryOnly();
     void iconPropertiesPublicInteractionIsTransactional();
     void runningOnlyIconPropertiesAreUnavailable();
+    void interactionGuardsReachTheHostVisibilityDecision();
+    void presentationProfileIsPublishedForLaterPresets();
 
 private:
     QTemporaryDir m_settingsDirectory;
@@ -1350,6 +1352,97 @@ void PanelWindowCapabilityTest::runningOnlyIconPropertiesAreUnavailable()
     QVERIFY(!applied.value(QStringLiteral("success")).toBool());
     QCOMPARE(applied.value(QStringLiteral("errorCode")).toString(),
              QStringLiteral("entry-not-supported"));
+}
+
+// TASK-0032 Phase D: the applet's guards reach the backend.
+//
+// decidePanelVisibility already refused to conceal a locked panel, and
+// PanelVisibilityTest proves that rule for every guard. What was missing is the
+// channel: nothing ever populated those locks, so the decision always ran with
+// every guard false. Only the applet knows a menu is open. This proves the
+// channel carries it, is idempotent, and refuses a panel Arch Dock does not own.
+void PanelWindowCapabilityTest::interactionGuardsReachTheHostVisibilityDecision()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+
+    const QVariantMap initial = window.panelInteractionGuards(
+        QStringLiteral("bottom"));
+    QCOMPARE(initial.value(QStringLiteral("popupOpen")).toBool(), false);
+    QCOMPARE(initial.value(QStringLiteral("pointerInside")).toBool(), false);
+
+    const int revisionBefore = window.visibilityRevision();
+    QVERIFY(window.reportPanelInteractionGuards(
+        QStringLiteral("bottom"),
+        {{QStringLiteral("popupOpen"), true},
+         {QStringLiteral("pointerInside"), true}}));
+    QVERIFY(window.visibilityRevision() > revisionBefore);
+
+    const QVariantMap stored = window.panelInteractionGuards(
+        QStringLiteral("bottom"));
+    QCOMPARE(stored.value(QStringLiteral("popupOpen")).toBool(), true);
+    QCOMPARE(stored.value(QStringLiteral("pointerInside")).toBool(), true);
+    QCOMPARE(stored.value(QStringLiteral("dragActive")).toBool(), false);
+    QCOMPARE(stored.value(QStringLiteral("editMode")).toBool(), false);
+
+    // Reporting the same guards again must not spin the visibility revision
+    // and wake every listener for nothing.
+    const int revisionAfterFirst = window.visibilityRevision();
+    QVERIFY(window.reportPanelInteractionGuards(
+        QStringLiteral("bottom"),
+        {{QStringLiteral("popupOpen"), true},
+         {QStringLiteral("pointerInside"), true}}));
+    QCOMPARE(window.visibilityRevision(), revisionAfterFirst);
+
+    // A panel Arch Dock does not own cannot report anything.
+    QVERIFY(!window.reportPanelInteractionGuards(
+        QStringLiteral("not-a-panel"),
+        {{QStringLiteral("popupOpen"), true}}));
+
+    // Whatever the mode, a panel holding a guard is never concealed.
+    window.setPanelVisibilityMode(QStringLiteral("bottom"),
+                                  QStringLiteral("auto-hide"));
+    QVERIFY(!window.shouldConcealPanel(QStringLiteral("bottom")));
+
+    QVERIFY(window.reportPanelInteractionGuards(
+        QStringLiteral("bottom"),
+        {{QStringLiteral("popupOpen"), false},
+         {QStringLiteral("pointerInside"), false}}));
+    QCOMPARE(window.panelInteractionGuards(QStringLiteral("bottom"))
+                 .value(QStringLiteral("popupOpen")).toBool(),
+             false);
+}
+
+void PanelWindowCapabilityTest::presentationProfileIsPublishedForLaterPresets()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+
+    const QVariantMap configuration = window.panelRendererConfiguration(
+        QStringLiteral("bottom"));
+    const QVariantMap profile = configuration.value(
+        QStringLiteral("presentationProfile")).toMap();
+    QVERIFY(!profile.isEmpty());
+    QCOMPARE(profile.value(QStringLiteral("restingState")).toString(),
+             QStringLiteral("open"));
+    QCOMPARE(profile.value(QStringLiteral("mechanism")).toString(),
+             QStringLiteral("open"));
+    QCOMPARE(profile.value(QStringLiteral("trigger")).toString(),
+             QStringLiteral("hover"));
+    QCOMPARE(profile.value(QStringLiteral("axis")).toString(),
+             QStringLiteral("horizontal"));
+
+    // The id is derived from the resolved values, so two panels that present
+    // identically carry the same id and a later preset can compare them.
+    QCOMPARE(profile.value(QStringLiteral("id")).toString(),
+             QStringLiteral("open:open:horizontal:hover:edge-strip"));
+
+    // Being open is always reachable; a real collapse is not, because the
+    // default procedural theme declares no mechanism to perform one.
+    const QStringList available = profile.value(
+        QStringLiteral("availableMechanisms")).toStringList();
+    QVERIFY(available.contains(QStringLiteral("open")));
+    QVERIFY(!available.contains(QStringLiteral("split")));
 }
 
 int main(int argc, char **argv)

@@ -75,12 +75,31 @@ PlasmoidItem {
             ? baseCellSize * Math.max(0, magnification - 1) : 0)
         + motionHeadroom
     readonly property var scenePanelDefinition: buildScenePanelDefinition()
+    // The runtime state the scene draws from. Until TASK-0032 Phase D the
+    // presentation controller existed but nothing read it, so the live surface
+    // was permanently "open" however the panel was configured. These three
+    // fields are the wiring: one state machine, one surface.
     readonly property var sceneRuntimeState: ({
         hovered: hoveredIndex >= 0,
         hoveredEntry: hoveredIndex,
         editMode: plasmaEditMode,
-        rendererFallback: ""
+        rendererFallback: "",
+        presentationState: presentationController.surfaceState,
+        transitionState: presentationController.transitionState,
+        presentationProgress: presentationController.progress,
+        hostPhase: presentationController.hostPhase
     })
+
+    // How the panel is asked to open. "manual" leaves it to an explicit
+    // request, which is what a panel driven only by its host wants.
+    readonly property string presentationTrigger: {
+        const value = String(configuration.presentationTrigger || "hover")
+        return ["hover", "click", "edge", "manual"].includes(value)
+            ? value : "hover"
+    }
+    readonly property bool opensOnHover:
+        presentationTrigger === "hover" || presentationTrigger === "edge"
+    readonly property bool opensOnClick: presentationTrigger === "click"
     readonly property var sceneHostCapabilities:
         capabilityResolution && typeof capabilityResolution === "object"
             && Object.keys(capabilityResolution).length > 0
@@ -421,11 +440,78 @@ PlasmoidItem {
         pointerInside: root.panelPointerInside
         keyboardFocus: root.panelKeyboardFocus
         editMode: root.plasmaEditMode
+        revealZoneActive: root.revealZoneActive
         // Grouped window previews are owned by TASK-0037. The guard exists and
         // is fed with a truthful `false` rather than being silently omitted.
         windowPreviewOpen: false
         // Panel Studio's preview lock does not apply to the live applet.
         previewLock: false
+    }
+
+    // The guards this panel is currently holding, reported to the backend so
+    // the host visibility decision cannot conceal a panel that is in use. The
+    // controller owns the surface; the backend owns the host; this is the one
+    // channel between them.
+    readonly property var reportedGuards: ({
+        pointerInside: presentationController.pointerInside,
+        revealZoneActive: presentationController.revealZoneActive,
+        popupOpen: presentationController.popupOpen,
+        dragActive: presentationController.dragActive,
+        keyboardFocus: presentationController.keyboardFocus,
+        editMode: presentationController.editMode
+    })
+
+    onReportedGuardsChanged: root.publishGuards()
+
+    function publishGuards() {
+        if (panelId.length === 0 || !dockService.registered)
+            return;
+        callDock("reportPanelInteractionGuards", [panelId, reportedGuards]);
+    }
+
+    // Opening and closing requests.
+    //
+    // The pointer entering the panel opens it; the pointer leaving asks it to
+    // close, and the controller holds that request until every guard clears.
+    // A collapsed panel with no configured trigger stays collapsed until
+    // something asks it to open, which is what "manual" means.
+    property bool revealZoneActive: false
+
+    function requestPresentationOpen() {
+        presentationController.requestOpen();
+    }
+
+    function requestPresentationCollapse() {
+        if (String(root.configuration.presentationMode || "open") !== "collapsed")
+            return;
+        presentationController.requestCollapse();
+    }
+
+    onPanelPointerInsideChanged: {
+        if (!root.opensOnHover)
+            return;
+        if (root.panelPointerInside)
+            root.requestPresentationOpen();
+        else
+            root.requestPresentationCollapse();
+    }
+
+    // The host has actually taken the panel off screen, or put it back. This is
+    // an observed fact rather than a request, so it goes straight to the one
+    // state machine instead of becoming a second notion of "concealed".
+    property bool hostConcealed: false
+
+    onHostConcealedChanged: presentationController.applyHostVisibility(
+        !root.hostConcealed)
+
+    Connections {
+        target: presentationController
+
+        // A panel reconfigured mid-transition must not keep animating toward a
+        // target that no longer exists.
+        function onRestingStateChanged() {
+            presentationController.reset();
+        }
     }
 
     PlasmaCore.Action {
@@ -441,8 +527,29 @@ PlasmoidItem {
         Item {
             id: representation
 
-            implicitWidth: panelScene.width
-            implicitHeight: panelScene.height
+            // Size is deliberately independent of the collapse.
+            //
+            // Native: the scene's size comes from the panel's entries and its
+            // theme slice, never from the presentation track, so collapsing
+            // moves artwork inside fixed bounds and the Plasma panel geometry
+            // is not renegotiated on every hover. That is the first safe
+            // implementation the plan asks for; animating a real panel's length
+            // is a later capability-gated change.
+            //
+            // Free: the widget must additionally cover the theme's declared
+            // effect margins, so a glow or an open-state overhang is not
+            // clipped by the applet that draws it.
+            readonly property real sceneEffectWidth:
+                Math.max(panelScene.width,
+                         Number(panelScene.effectBounds.width || 0))
+            readonly property real sceneEffectHeight:
+                Math.max(panelScene.height,
+                         Number(panelScene.effectBounds.height || 0))
+
+            implicitWidth: root.freeSurface
+                ? sceneEffectWidth : panelScene.width
+            implicitHeight: root.freeSurface
+                ? sceneEffectHeight : panelScene.height
             Layout.minimumWidth: implicitWidth
             Layout.minimumHeight: implicitHeight
 
@@ -450,11 +557,18 @@ PlasmoidItem {
             // transparent, or when the window holding it is not on screen -
             // which is what a Plasma auto-hide panel does. Nothing is inferred
             // from focus: a dock stays visible while another window is active.
+            //
+            // This is reported to the presentation controller rather than used
+            // directly: host concealment and surface collapse are separate
+            // layers, and only the controller may combine them.
             readonly property bool hostConcealed: !visible || opacity <= 0
                 || (Window.window !== null
                     && (!Window.window.visible
                         || Window.visibility === Window.Hidden
                         || Window.visibility === Window.Minimized))
+
+            onHostConcealedChanged: root.hostConcealed = hostConcealed
+            Component.onCompleted: root.hostConcealed = hostConcealed
 
             // Panel-wide interaction guards. The pointer being anywhere over
             // the panel holds it open, not merely the pointer being over an
@@ -464,6 +578,39 @@ PlasmoidItem {
                 id: panelHover
 
                 onHoveredChanged: root.panelPointerInside = hovered
+            }
+
+            // The reveal zone is the strip the panel keeps when it is
+            // collapsed. It is deliberately inside the applet's own bounds: an
+            // edge-approach detector outside the widget is not something this
+            // host can honestly provide, so the handle the user can actually
+            // see is what opens the panel.
+            Item {
+                id: revealZone
+
+                x: Number(panelScene.revealHandle.x || 0)
+                y: Number(panelScene.revealHandle.y || 0)
+                width: Number(panelScene.revealHandle.width || 0)
+                height: Number(panelScene.revealHandle.height || 0)
+                visible: root.presentationTrigger === "edge"
+                    && presentationController.hostVisible
+                    && panelScene.collapseProgress > 0
+                z: 30
+
+                HoverHandler {
+                    enabled: revealZone.visible
+                    onHoveredChanged: root.revealZoneActive = hovered
+                }
+            }
+
+            // Click-to-open applies only while the panel is closed, so it can
+            // never intercept a click meant for an entry that is on screen.
+            TapHandler {
+                enabled: root.opensOnClick
+                    && panelScene.collapseProgress >= 1
+                    && !root.plasmaEditMode
+                gesturePolicy: TapHandler.ReleaseWithinBounds
+                onTapped: root.requestPresentationOpen()
             }
 
             onActiveFocusChanged: root.panelKeyboardFocus = activeFocus
@@ -490,7 +637,7 @@ PlasmoidItem {
                 })
                 entryDelegate: liveEntryDelegate
                 entryInteractionEnabled: root.sceneInputEnabled
-                sceneConcealed: representation.hostConcealed
+                sceneConcealed: !presentationController.hostVisible
                 geometryCompatibilityProfile: root.freeSurface
                     ? "live" : "canonical"
                 entryDelegateContext: ({
@@ -604,6 +751,7 @@ PlasmoidItem {
         onRegisteredChanged: {
             root.bootstrapFreeDock();
             root.refresh();
+            root.publishGuards();
         }
     }
 

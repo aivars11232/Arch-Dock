@@ -16,6 +16,7 @@
 #include "../NativeContainmentLifecycle.h"
 #include "../PanelPlacement.h"
 #include "../PanelRegistry.h"
+#include "../PanelVisibility.h"
 #include "../SystemStatus.h"
 #include "../WindowModel.h"
 #include "../WindowWatcher.h"
@@ -133,6 +134,12 @@ public slots:
                                                const QString &visibilityMode);
     QVariantMap nativePanelVisibilityStatus(const QString &panelId) const;
     bool shouldConcealPanel(const QString &panelId) const;
+    // The applet reports which interaction guards it is currently holding.
+    // Without this the host visibility decision runs with every lock false and
+    // can conceal a panel under an open context menu.
+    bool reportPanelInteractionGuards(const QString &panelId,
+                                      const QVariantMap &guards);
+    [[nodiscard]] QVariantMap panelInteractionGuards(const QString &panelId) const;
     void resetSettings();
     void toggleAutoHide();
     void toggleDesktopSuite();
@@ -344,6 +351,7 @@ private:
     QPointer<QWindow> m_iconPropertiesWindow;
     int m_screenRevision = 0;
     int m_visibilityRevision = 0;
+    QHash<QString, ArchDock::PanelVisibilityLocks> m_panelInteractionGuards;
     qulonglong m_dockRevision = 0;
     qulonglong m_dockEntriesRevision = 0;
     qulonglong m_nativePlacementRevision = 0;

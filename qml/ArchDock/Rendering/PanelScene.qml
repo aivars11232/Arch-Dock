@@ -130,6 +130,16 @@ Item {
     readonly property var rendererGeometry: buildRendererGeometry()
     readonly property var rendererStyle: LayoutEngine.themeStyle(
         appearance, customColor, layoutGeometry.iconSize)
+    // Requested presentation mechanism and axis, and the mechanisms the
+    // resolver actually allowed. The scene passes all three to the motion
+    // controller and never decides availability itself.
+    readonly property string collapseMechanism: String(definitionValue(
+        "presentation", "collapseMechanism", "collapseMechanism", "open"))
+    readonly property string collapseAxis: String(definitionValue(
+        "presentation", "collapseAxis", "collapseAxis", ""))
+    readonly property var availablePresentationMechanisms:
+        availableMechanismIds()
+
     readonly property real effectMargin: Math.ceil(
         Math.max(0, Number(rendererStyle.blur || 0))
         + Number(rendererStyle.lineWidth || 0) / 2)
@@ -160,6 +170,26 @@ Item {
         width: surfaceMetrics.width,
         height: surfaceMetrics.height
     })
+    // Presentation tracks. These are outputs of one controller, so the live
+    // applet, the Studio preview and a preset card cannot draw a collapse
+    // differently from one another.
+    readonly property var motionTracks: motionController.tracks
+    readonly property string presentationTrackForm: motionController.trackForm
+    readonly property string resolvedPresentationMechanism:
+        motionController.resolvedMechanism
+    readonly property string mechanismFallbackReason:
+        motionController.fallbackReason
+    readonly property string mechanismRequiredRendererTier:
+        motionController.requiresRendererTier
+    readonly property real collapseProgress: motionController.collapseProgress
+    // Where entries may still be drawn. While the panel is open this is the
+    // whole scene box, so magnification and motion headroom are untouched.
+    readonly property var entryClipRect: collapseProgress > 0
+        ? motionController.contentClip
+        : ({ x: 0, y: 0, width: surfaceMetrics.width,
+             height: surfaceMetrics.height })
+    readonly property bool entryClipActive: collapseProgress > 0
+
     readonly property var revealHandle: buildRevealHandle()
     readonly property var popupAnchors: buildPopupAnchors()
     readonly property var previewAnchors: ({
@@ -238,6 +268,20 @@ Item {
         return null
     }
 
+    function availableMechanismIds() {
+        const source = hostCapabilities && typeof hostCapabilities === "object"
+            ? hostCapabilities.presentationMechanisms : null
+        const decisions = values(source)
+        const result = []
+        for (let index = 0; index < decisions.length; ++index) {
+            const decision = decisions[index]
+            if (decision && typeof decision === "object"
+                    && decision.available === true)
+                result.push(String(decision.id || ""))
+        }
+        return result
+    }
+
     function usableSkinMetadata() {
         if (String(resolvedRendererTier || "").toLowerCase() !== "skinned2d")
             return false
@@ -286,7 +330,8 @@ Item {
                 effectLeft: effectMargin,
                 effectTop: effectMargin,
                 effectRight: effectMargin,
-                effectBottom: effectMargin
+                effectBottom: effectMargin,
+                handleExtent: 0
             }
         }
 
@@ -321,7 +366,10 @@ Item {
             effectRight: Math.max(0, Number(margins.right || 0))
                 * verticalScale,
             effectBottom: Math.max(0, Number(margins.bottom || 0))
-                * verticalScale
+                * verticalScale,
+            // The declared end caps are what a fully collapsed shell keeps,
+            // and therefore what the user has left to hover it back open.
+            handleExtent: startWidth + endWidth
         }
     }
 
@@ -469,6 +517,22 @@ Item {
     width: surfaceMetrics.width
     height: surfaceMetrics.height
 
+    PanelMotionController {
+        id: motionController
+
+        surfaceWidth: root.surfaceMetrics.width
+        surfaceHeight: root.surfaceMetrics.height
+        handleExtent: Number(root.surfaceMetrics.handleExtent || 0)
+        contentBounds: root.contentBounds
+        mechanism: root.collapseMechanism
+        axis: root.collapseAxis
+        availableMechanisms: root.availablePresentationMechanisms
+        surfaceState: root.presentationState
+        transitionState: root.transitionState
+        presentationProgress: root.presentationProgress
+        reducedMotion: root.reducedMotion
+    }
+
     PanelSurfaceLoader {
         id: surfaceLoader
 
@@ -491,7 +555,28 @@ Item {
         appearance: root.appearance
         customColor: root.customColor
         panelOpacity: root.panelOpacity
+        motionTracks: root.motionTracks
     }
+
+    // Entries are clipped by the same track that closes the shell, so an icon
+    // is never left drawn outside a panel that has already collapsed. While the
+    // panel is open the clipper covers the whole scene and does nothing.
+    Item {
+        id: entryClipper
+
+        x: root.entryClipRect.x
+        y: root.entryClipRect.y
+        width: root.entryClipRect.width
+        height: root.entryClipRect.height
+        clip: root.entryClipActive
+
+    Item {
+        id: entryLayer
+
+        x: -entryClipper.x
+        y: -entryClipper.y
+        width: root.surfaceMetrics.width
+        height: root.surfaceMetrics.height
 
     Repeater {
         id: entryRepeater
@@ -552,6 +637,8 @@ Item {
                 sourceComponent: root.entryDelegate || defaultEntryDelegate
             }
         }
+    }
+    }
     }
 
     Component {

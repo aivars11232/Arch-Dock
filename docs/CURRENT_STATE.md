@@ -6,13 +6,16 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-09-04 (Europe/Amsterdam). TASK-0031 was
-implemented on top of `c9fbbbf` and is described under "TASK-0031 — requested
-icon motions, launch truth, and animation safety" below; its changes are
-unstaged and uncommitted for owner review. TASK-0030, described under
-"TASK-0030 — animation-profile engine", was committed by the owner as
-`c9fbbbf`, subject `task30`. The earlier TASK-0029 implementation spans
-`a34fbd9` and `ef84d86`.
+**Evidence snapshot:** 2026-09-05 (Europe/Amsterdam). TASK-0032 Phases C and
+D were implemented on top of `026b8b3` and are described under "TASK-0032 —
+panel presentation states, guards, opening mechanisms, and host integration"
+below; their changes are unstaged and uncommitted for owner review. TASK-0032
+Phases A and B were committed by the owner as `026b8b3`, subject `task32`;
+that commit carried the presentation state machine and the interaction guards
+but not the opening mechanisms or the host integration, which is why this
+session reopened the task rather than starting TASK-0033. TASK-0031 was
+committed as `c400364`, TASK-0030 as `c9fbbbf`, and the earlier TASK-0029
+implementation spans `a34fbd9` and `ef84d86`.
 
 All figures below come from external Debug build directories created during
 this session; none reuse the in-tree `build/` or `build-codex-task-0014`
@@ -25,15 +28,16 @@ isolated-session evidence.
 
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`, tracking `origin/main` and level with it.
-- Current `HEAD`: `c9fbbbf71ce8fcfbe4817ca6b2a9452af1e27119`, subject
-  `task30`. The owner committed the TASK-0030 implementation as that commit;
-  it is the TASK-0031 baseline.
-- `8e54b2b` (`TASK29.`) and `ef84d86` (`task29`) are its ancestors and carry
-  the TASK-0029 closure; `a34fbd9` and `dfb315c` (both `task28`) precede them.
+- Current `HEAD`: `026b8b3571f55ab301cc912a286da216f4372cd0`, subject
+  `task32`. It carries TASK-0032 Phases A and B and is the baseline for the
+  Phase C and D work described below.
+- `c400364` (`task31`) and `c9fbbbf` (`task30`) are its ancestors; `8e54b2b`
+  (`TASK29.`) and `ef84d86` (`task29`) carry the TASK-0029 closure, and
+  `a34fbd9` and `dfb315c` (both `task28`) precede them.
 - TASK-0027 is committed at `c857fd70209646028fc710ef100f49c716384762`
   and is an ancestor of the TASK-0028 baseline.
 - The working tree was clean at the start of this session and now contains
-  only the TASK-0031 changes listed below.
+  only the TASK-0032 Phase C and D changes listed below.
 - Codex did not stage, commit, push, globally install, or mutate the personal
   Plasma session.
 
@@ -278,8 +282,10 @@ following named systems remain outside TASK-0029:
 Chassis, energy, and icon-style states are deterministic renderer inputs only.
 TASK-0028 adds bounded energy-layer motion and explicit interpolation input;
 TASK-0029 adds icon-state styling and a future animation-profile reference.
-Neither task adds the final hover/open interaction controller, host geometry
-animation, an animation-profile engine, or a true-3D renderer.
+The hover/open interaction controller these tasks deferred is delivered by
+TASK-0032 and described in its own section below; host geometry animation and
+the true-3D renderer remain outside it, and the animation-profile engine
+arrived with TASK-0030.
 
 ## Verification boundary
 
@@ -604,6 +610,152 @@ neither. Observing them on the personal desktop would require
 `plasmashell --replace` against the live session, which the contract forbids
 without explicit authorisation.
 
+## TASK-0032 — panel presentation states, guards, opening mechanisms, and host integration
+
+Phases A and B are the owner's commit `026b8b3`. Phases C and D are this
+session's work and are described here.
+
+### Closure gap that reopened the task
+
+`026b8b3` delivered the state machine (`PresentationStates.js`,
+`PanelPresentationController.qml`) and the interaction guards, with 30 + 18 + 6
+tests covering them. It did not deliver Phase C or Phase D: there was no
+`PanelMotionController.qml`, `collapseMechanism` and `collapseAxis` had no
+consumer anywhere in the tree, and the controller instantiated in
+`plasma-dock-widget/contents/ui/main.qml` had no reader — `sceneRuntimeState`
+never carried its output, so the live surface was permanently `open` whatever
+the panel was configured to do. The gap was found while verifying predecessor
+closure for TASK-0033 and was reported before any planning of that task.
+
+### Phase C — opening mechanisms and panel glow
+
+- `PanelMotionController.qml` is the single source of presentation geometry.
+  Given a mechanism, an axis and a progress it returns per-role offset, scale,
+  clip and opacity for `surface`, `split-start`, `split-center`, `split-end`,
+  `glow` and `overlay`, plus a content clip. It reads no host and mutates
+  nothing, so the live applet, the Studio preview and a future preset card
+  produce identical motion.
+- Track forms: `center-slide` (also extend-track, reversed),
+  `thickness-reveal` (also vertical slide, reversed), `split-horizontal`,
+  `split-vertical`, `shutter-horizontal`, `lid` (front plate), `identity`, and
+  `radial-interface`. A form and its reverse are one track, not two.
+- Radial/iris/fan is **declared, not implemented in 2D**. It reports
+  `requiresRendererTier: "baked25d"` and
+  `fallbackReason: "mechanism-requires-baked25d"`, then falls back to a centred
+  clip and a fade. Nothing scales or rotates in a way that could be mistaken
+  for a real iris. AD-0014 owns the renderer that can perform it.
+- A collapsed shell always keeps a hoverable handle: the theme's declared end
+  caps, or a bounded minimum when none are declared. A panel that collapsed to
+  nothing could never be reopened.
+- Both production host profiles now declare the mechanisms their surface can
+  actually run. The free desktop host declares all six; the native edge host
+  declares all but `collapse-radial`, because a Plasma edge panel is a
+  rectangle. Theme declaration still gates every mechanism on top of that: the
+  seven packaged themes declare `open`, `collapse-horizontal` and `split`, and
+  the five procedural themes declare none.
+- `open` is explicitly **not** a declarable capability. It is what a panel does
+  when it is not collapsed, so it resolves available regardless of host and
+  theme declarations. Treating it as declarable made every panel with a
+  procedural theme resolve unavailable and refused every settings transaction
+  on it; that is now pinned by a regression test.
+- `PanelSkin2D` applies the tracks to the theme's own `split-*` parts, and to
+  the parts it synthesises from the slice when a theme declares none. Clip
+  tracks narrow the drawn window without moving artwork. `PanelProcedural2D`
+  honours a mechanism the only way a drawn shape truthfully can: clip and fade.
+- Input remains bound to the package alpha mask. Raising the glow changes what
+  is drawn and never what the panel accepts a click on; this is asserted
+  directly rather than inferred.
+- `LivePanelPreview` no longer fades and shrinks its own card. It reads the
+  scene's track, so a preview cannot advertise a collapse the desktop would not
+  perform.
+- `presentationMode`, `presentationTrigger`, `collapseMechanism`,
+  `collapseAxis` and `revealHandle` are editor fields in the `panels-behavior`
+  section, gated by the `presentation-mechanism` capability. The mechanism
+  choice list is narrowed to what the resolver allowed for that panel, and the
+  whole group is withheld when the panel has no way to collapse at all.
+
+### Phase D — host visibility integrated with surface presentation
+
+- The applet publishes `presentationState`, `transitionState`,
+  `presentationProgress` and `hostPhase` into `sceneRuntimeState`. This is the
+  wiring whose absence made the whole Phase A/B state machine invisible.
+- Host concealment is reported *to* the controller through
+  `applyHostVisibility()` rather than used directly, and the scene's
+  `sceneConcealed` is driven by the controller's `hostVisible`. There is one
+  authority for concealment, and a conceal is never reported to a renderer as
+  a collapse.
+- Hover, click and edge triggers request open and collapse. The reveal zone is
+  the strip the panel keeps when collapsed, deliberately inside the applet's
+  own bounds: an edge-approach detector outside the widget is not something a
+  Plasma desktop applet can honestly provide.
+- Native panel geometry is unchanged by a collapse. The scene's size comes from
+  the panel's entries and its theme slice, never from the presentation track,
+  so a hover does not renegotiate Plasma panel geometry. Animating a real
+  panel's length remains a later capability-gated change.
+- Free panels size to the theme's declared effect margins, so an open-state
+  overhang or glow is not clipped by the applet drawing it.
+- The applet reports its interaction guards to the backend through
+  `reportPanelInteractionGuards`. `decidePanelVisibility` already refused to
+  conceal a locked panel, but nothing had ever populated those locks, so the
+  decision always ran with every guard false and a native auto-hide panel could
+  conceal under an open context menu.
+- `panelRendererConfiguration` publishes a `presentationProfile` record with a
+  derived stable id, the resolved values and the available mechanisms, so a
+  later Panel Preset can capture and restore presentation without knowing which
+  individual settings keys composed it.
+
+### Verification boundary
+
+Baseline before any edit: fresh configure, build and 55/55 CTest. Phase C gate:
+build green and 56/56. Consolidated: 57/57, including
+`panel-motion-tracks-test` (16 cases), `panel-surface-integration-test` (14
+cases) and the 66.69 s `rendering-import-smoke` in a disposable private D-Bus,
+virtual KWin Wayland and private PlasmaShell session.
+
+The isolated native/free Plasma lifecycle matrix
+(`tests/run-plasma-lifecycle.sh`, which is **not** registered in CTest and is
+run out of band) was executed four times against the task build directory. It
+succeeded three times and failed once, on the first run of the session, at
+`setNativePanelType <panel> hybrid` returning `(false,)`. That failure did not
+reproduce in three subsequent runs, and the same harness succeeded against a
+clean `026b8b3` worktree. The failing run also logged unrelated session noise
+(`org.kde.KSplash exited with status 1`, a broken X display pipe, and a missing
+`libcec.so.7` for `plasma-bigscreen-inputhandler`). The failure is therefore
+recorded as observed and unexplained rather than attributed to either the
+change or the environment. The exact command is:
+
+```bash
+ARCHDOCK_BUILD_DIR="$PWD/build-codex-task-0032cd" bash tests/run-plasma-lifecycle.sh
+```
+
+One focused correction was made during implementation, after its cause was
+proved by a temporary diagnostic that was then removed: giving
+`collapseMechanism` a real default routed `open` through the capability gate,
+where no theme profile declares it, so every panel with a procedural theme
+resolved unavailable and refused every settings transaction. The rule that
+`open` is the baseline rather than a declarable mechanism is now a test.
+
+Two behaviours are proved by automated tests rather than by observation on a
+live desktop: that a collapsed chassis panel reads as a closed shell, and that
+the reveal handle is large enough to hover comfortably. The isolated session
+renders both but asserts neither, and observing them on the personal desktop
+would require `plasmashell --replace` against the live session, which the
+contract forbids without explicit authorisation.
+
+### Known limitations of this work
+
+- Radial, iris and fan mechanisms are interfaces only. They report the renderer
+  tier they need and fall back to clip-and-fade in 2D.
+- The vertical mechanism family is implemented but no shipped theme declares
+  `collapse-vertical`, so it is reachable only through a user-supplied Theme
+  Package v2 manifest.
+- The chassis and energy families remain horizontal only; a vertical panel
+  still falls back to procedural 2D.
+- The reveal zone is inside the applet's own bounds. Compositor-level edge
+  approach outside the widget is not claimed.
+- `windowPreviewOpen` still has no producer. It remains a first-class guard fed
+  a truthful `false` until TASK-0037 delivers grouped window previews.
+
 ## Next task boundary
 
 TASK-0028 is the completed AD-0009 dependency. TASK-0029 has passed its four
@@ -618,7 +770,16 @@ TASK-0031 has passed its three sequential phase gates and its consolidated
 completion gate, closing AD-0011 under the isolated-runtime evidence boundary
 above. Its changes remain unstaged and uncommitted for owner review.
 
-The task pack identifies **TASK-0032 — Implement panel presentation states,
-guards, opening mechanisms, and host integration** as the next dependency-bound
-task. Do not begin it without the separate planning and owner-approval protocol
+TASK-0032 Phases A and B were committed by the owner as `026b8b3`. Phases C
+and D have now passed their gates and their changes are unstaged and
+uncommitted for owner review, closing AD-0012 under the evidence boundary
+recorded above.
+
+The task pack identifies **TASK-0033 — Complete free and multi-shape content,
+geometry, transformed input, rotation, and lifecycle verification** as the next
+dependency-bound task. Its read-only plan already exists from the session that
+found the TASK-0032 closure gap, but it must be re-verified against the
+repository state once TASK-0032 is committed, because Phase C of TASK-0033
+depends on the concealed/collapsed authority that Phase D has just introduced.
+Do not begin it without the separate planning and owner-approval protocol
 required by that task.

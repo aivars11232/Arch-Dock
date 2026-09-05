@@ -55,6 +55,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     IconMotionController.qml
     MotionTrackRunner.qml
     PanelPresentationController.qml
+    PanelMotionController.qml
     PanelScene.qml
     PanelSurfaceLoader.qml
     RunningIndicator.qml
@@ -780,6 +781,24 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_LayoutEngineVisual.qml)
   set_tests_properties(
     layout-engine-visual-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME panel-motion-tracks-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PanelMotionTracks.qml)
+  set_tests_properties(
+    panel-motion-tracks-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME panel-surface-integration-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PanelSurfaceIntegration.qml)
+  set_tests_properties(
+    panel-surface-integration-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(

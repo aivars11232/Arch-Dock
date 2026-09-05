@@ -19,6 +19,45 @@ Item {
     property string customColor: ""
     property real panelOpacity: 0.9
 
+    // The safe presentation track. A procedural surface has no declared parts
+    // to slide or split, so it honours a mechanism the only truthful way a
+    // drawn shape can: it clips and fades. PanelMotionController has already
+    // decided the geometry; this only applies it.
+    property var motionTracks: null
+
+    readonly property var surfaceMotionTrack: {
+        const source = motionTracks && typeof motionTracks === "object"
+            ? motionTracks : null
+        const track = source ? source["surface"] : null
+        return track && typeof track === "object" ? track : null
+    }
+    readonly property real motionOpacity: {
+        const value = Number(surfaceMotionTrack
+                             && surfaceMotionTrack.opacity !== undefined
+                             ? surfaceMotionTrack.opacity : 1)
+        return isFinite(value) ? Math.max(0, Math.min(1, value)) : 1
+    }
+    readonly property var motionClipRect: {
+        const clip = surfaceMotionTrack && surfaceMotionTrack.clip
+                && typeof surfaceMotionTrack.clip === "object"
+            ? surfaceMotionTrack.clip : null
+        function number(value, fallback) {
+            const candidate = Number(value)
+            return isFinite(candidate) ? candidate : fallback
+        }
+        if (!clip)
+            return Qt.rect(0, 0, Math.max(0, width), Math.max(0, height))
+        return Qt.rect(
+            Math.max(0, number(clip.x, 0)),
+            Math.max(0, number(clip.y, 0)),
+            Math.max(0, number(clip.width, width)),
+            Math.max(0, number(clip.height, height)))
+    }
+    readonly property bool motionClipActive:
+        motionClipRect.width < width - 0.0001
+        || motionClipRect.height < height - 0.0001
+        || motionClipRect.x > 0.0001 || motionClipRect.y > 0.0001
+
     readonly property bool rendererReady: width > 0 && height > 0
     readonly property var surfacePath: LayoutEngine.surface(
         layout, geometry, layoutAngle, polygonSides)
@@ -28,11 +67,24 @@ Item {
     width: Number(geometry.width || 0)
     height: Number(geometry.height || 0)
 
+    Item {
+        id: motionClipper
+
+        x: root.motionClipRect.x
+        y: root.motionClipRect.y
+        width: root.motionClipRect.width
+        height: root.motionClipRect.height
+        clip: root.motionClipActive
+
     Canvas {
         id: canvas
 
-        anchors.fill: parent
+        x: -motionClipper.x
+        y: -motionClipper.y
+        width: root.width
+        height: root.height
         opacity: Math.max(0, Math.min(1, root.panelOpacity))
+            * root.motionOpacity
         renderStrategy: Canvas.Cooperative
 
         onPaint: {
@@ -72,5 +124,6 @@ Item {
             function onCustomColorChanged() { canvas.requestPaint() }
             function onPanelOpacityChanged() { canvas.requestPaint() }
         }
+    }
     }
 }

@@ -761,4 +761,86 @@ TestCase {
         compare(skin.layerItemById("energy-open").skipped, true)
         verify(grabImage(skin).alpha(300, 40) > 0)
     }
+
+    // TASK-0032 Phase C: the presentation tracks reach the declared parts.
+    //
+    // PanelMotionController computes the geometry and tst_PanelMotionTracks
+    // proves the maths. This proves the wiring: that a track actually moves the
+    // theme's own split parts, and - the criterion that matters for input -
+    // that raising the glow never widens what the panel will accept a click on.
+    function test_motionTracksMoveTheDeclaredParts() {
+        const skin = createSkin("sci-fi-chassis-dark", {
+            motionTracks: ({
+                "split-start": { offsetX: -40, offsetY: 0, scaleX: 1,
+                                 scaleY: 1, opacity: 1 },
+                "split-center": { offsetX: 0, offsetY: 0, scaleX: 0.5,
+                                  scaleY: 1, opacity: 1 },
+                "split-end": { offsetX: 40, offsetY: 0, scaleX: 1,
+                               scaleY: 1, opacity: 1 }
+            })
+        })
+        waitForRenderer(skin)
+        // This fixture declares only glow layers, so the split parts are the
+        // ones PanelSkin2D synthesises from the slice. That is the harder
+        // case: a theme that declares no parts of its own must still collapse.
+        compare(skin.layerItemById("__slice-base-start").motionTranslateX, -40)
+        compare(skin.layerItemById("__slice-base-end").motionTranslateX, 40)
+        compare(skin.layerItemById("__slice-base-center").motionScaleX, 0.5)
+        verify(skin.layerItemById("__slice-base-start").motionActive)
+        // An untracked role is left exactly alone.
+        compare(skin.layerItemById("glow-open").motionTranslateX, 0)
+        compare(skin.layerItemById("glow-open").motionScaleX, 1)
+        verify(!skin.layerItemById("glow-open").motionActive)
+    }
+
+    function test_glowDoesNotWidenTheInteractiveRegion() {
+        // The energy family is the one that declares dynamic-glow, so it is
+        // where raising the glow can actually change what is drawn.
+        const dim = createSkin("energy-frame-cyan", {
+            themeDefinition: energyThemeDefinition("energy-frame-cyan"),
+            glowIntensity: 0
+        })
+        waitForRenderer(dim)
+        const bright = createSkin("energy-frame-cyan", {
+            themeDefinition: energyThemeDefinition("energy-frame-cyan"),
+            glowIntensity: 2,
+            hovered: true
+        })
+        waitForRenderer(bright)
+
+        verify(bright.effectiveGlowIntensity > dim.effectiveGlowIntensity)
+
+        // Input follows the package alpha mask, never the glow rectangle, so
+        // the same points are accepted and refused at both glow levels.
+        for (const point of [Qt.point(300, 40), Qt.point(20, 40),
+                             Qt.point(580, 40)]) {
+            compare(bright.inputMaskItem.contains(point),
+                    dim.inputMaskItem.contains(point),
+                    "input unchanged at " + point.x + "," + point.y)
+        }
+        verify(!bright.inputMaskItem.contains(Qt.point(0, 0)))
+        verify(!bright.inputMaskItem.contains(Qt.point(-1, 40)))
+        verify(!bright.inputMaskItem.contains(Qt.point(620, 40)))
+    }
+
+    // A clip-based track narrows what is drawn without moving the parts.
+    function test_aClipTrackNarrowsTheDrawnWindowOnly() {
+        const skin = createSkin("sci-fi-chassis-dark", {
+            motionTracks: ({
+                "surface": { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1,
+                             opacity: 1,
+                             clip: { x: 220, y: 0, width: 160, height: 80 } }
+            })
+        })
+        waitForRenderer(skin)
+        verify(skin.motionClipActive)
+        compare(skin.motionClipRect.x, 220)
+        compare(skin.motionClipRect.width, 160)
+        compare(skin.layerItemById("__slice-base-start").motionTranslateX, 0)
+
+        const open = createSkin("sci-fi-chassis-dark")
+        waitForRenderer(open)
+        verify(!open.motionClipActive)
+        compare(open.motionClipRect.width, open.width)
+    }
 }

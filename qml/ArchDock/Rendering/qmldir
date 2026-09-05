@@ -9,6 +9,7 @@ IconScene 1.0 IconScene.qml
 IconMotionController 1.0 IconMotionController.qml
 MotionTrackRunner 1.0 MotionTrackRunner.qml
 PanelPresentationController 1.0 PanelPresentationController.qml
+PanelMotionController 1.0 PanelMotionController.qml
 IconStyle2D 1.0 renderers/IconStyle2D.qml
 PanelScene 1.0 PanelScene.qml
 PanelSurfaceLoader 1.0 PanelSurfaceLoader.qml

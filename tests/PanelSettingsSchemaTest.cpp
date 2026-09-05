@@ -8,6 +8,7 @@
 
 using ArchDock::PanelDefinition;
 using ArchDock::PanelSettingsFieldAccess;
+using ArchDock::PanelSettingsFieldDescriptor;
 using ArchDock::PanelSettingsFieldScope;
 using ArchDock::PanelSettingsSchema;
 
@@ -126,8 +127,33 @@ void PanelSettingsSchemaTest::editorCandidatesExcludeProtectedAndHiddenState()
         QStringLiteral("physicsEnabled")));
     QVERIFY(!PanelSettingsSchema::isTransactionPanelField(
         QStringLiteral("surface3D")));
-    QVERIFY(!PanelSettingsSchema::isTransactionPanelField(
-        QStringLiteral("presentationMode")));
+
+    // Presentation left the hidden-state group when TASK-0032 Phase C gave it
+    // a renderer. physicsEnabled and surface3D stay hidden because the features
+    // behind them still do not exist; presentation is now a real editor field,
+    // and it is gated by capability rather than by concealment.
+    for (const QString &key : {QStringLiteral("presentationMode"),
+                               QStringLiteral("presentationTrigger"),
+                               QStringLiteral("collapseMechanism"),
+                               QStringLiteral("collapseAxis"),
+                               QStringLiteral("revealHandle")})
+    {
+        QVERIFY2(PanelSettingsSchema::isTransactionPanelField(key),
+                 qPrintable(key));
+        QVERIFY2(PanelSettingsSchema::isEditorField(
+                     PanelSettingsFieldScope::Panel, key),
+                 qPrintable(key));
+        const PanelSettingsFieldDescriptor *descriptor =
+            PanelSettingsSchema::panelDescriptor(key);
+        QVERIFY2(descriptor, qPrintable(key));
+        QCOMPARE(descriptor->editor.section, QStringLiteral("panels-behavior"));
+        QCOMPARE(descriptor->editor.capability,
+                 QStringLiteral("presentation-mechanism"));
+        QVERIFY2(!descriptor->choices.isEmpty(), qPrintable(key));
+        QVERIFY2(descriptor->choices.contains(
+                     descriptor->defaultValue.toString()),
+                 qPrintable(key));
+    }
 }
 
 void PanelSettingsSchemaTest::runtimeProjectionContainsOnlyDeclaredConsumerValues()

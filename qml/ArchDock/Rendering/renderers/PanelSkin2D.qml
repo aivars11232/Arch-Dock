@@ -15,6 +15,11 @@ Item {
     property bool reducedMotion: false
     property real panelOpacity: 1
 
+    // Per-role presentation tracks from PanelMotionController. Null means the
+    // panel is simply open: every layer then draws exactly where it always did,
+    // so a theme with no mechanism is unaffected by this path.
+    property var motionTracks: null
+
     property real overlayPhase: 0
 
     readonly property string normalizedPresentationState:
@@ -112,6 +117,49 @@ Item {
     readonly property string errorReason: validationError()
     readonly property var inputMaskItem: alphaMask.containmentObject
     readonly property var surfaceItem: layerStack
+
+    readonly property var surfaceMotionTrack: trackForRole("surface")
+    readonly property var motionClipRect: resolveMotionClip()
+    // A clip is only engaged when the track actually narrows the window. An
+    // open panel keeps the untouched full-box path it has always used.
+    readonly property bool motionClipActive:
+        motionClipRect.width < width - 0.0001
+        || motionClipRect.height < height - 0.0001
+        || motionClipRect.x > 0.0001 || motionClipRect.y > 0.0001
+
+    function trackForRole(role) {
+        const source = motionTracks && typeof motionTracks === "object"
+            ? motionTracks : null
+        if (!source)
+            return null
+        const track = source[String(role || "")]
+        return track && typeof track === "object" ? track : null
+    }
+
+    function trackNumber(track, key, fallback) {
+        const value = Number(track && track[key] !== undefined
+                             ? track[key] : fallback)
+        return isFinite(value) ? value : fallback
+    }
+
+    function resolveMotionClip() {
+        const track = surfaceMotionTrack
+        const clip = track && track.clip && typeof track.clip === "object"
+            ? track.clip : null
+        if (!clip) {
+            return Qt.rect(0, 0, Math.max(0, width), Math.max(0, height))
+        }
+        return Qt.rect(
+            Math.max(0, trackNumber(clip, "x", 0)),
+            Math.max(0, trackNumber(clip, "y", 0)),
+            Math.max(0, trackNumber(clip, "width", width)),
+            Math.max(0, trackNumber(clip, "height", height)))
+    }
+
+    function motionOpacityForLayer(layer) {
+        const track = trackForRole(layer ? layer.role || "" : "")
+        return Math.max(0, Math.min(1, trackNumber(track, "opacity", 1)))
+    }
 
     function values(value) {
         return value && value.length !== undefined ? value : []
@@ -465,9 +513,21 @@ Item {
     }
 
     Item {
-        id: layerStack
+        id: motionClipper
 
-        anchors.fill: parent
+        x: root.motionClipRect.x
+        y: root.motionClipRect.y
+        width: root.motionClipRect.width
+        height: root.motionClipRect.height
+        clip: root.motionClipActive
+
+        Item {
+            id: layerStack
+
+            x: -motionClipper.x
+            y: -motionClipper.y
+            width: root.width
+            height: root.height
 
         Repeater {
             id: layerRepeater
@@ -492,12 +552,22 @@ Item {
                 fixedEndPixels: root.fixedEndPixels
                 layerOpacity: root.stateOpacityForLayer(modelData.definition)
                     * root.runtimeOpacityMultiplier(modelData.definition)
+                    * root.motionOpacityForLayer(modelData.definition)
                 tintEnabled: root.dynamicTintSupported
                 tintColor: root.safeTintColor
                 motionOffset: root.motionOffsetForLayer(modelData.definition)
                 motionOverflow: root.isEnergyOverlay(modelData.definition)
                     ? 3 : 0
+                motionTranslateX: root.trackNumber(
+                    root.trackForRole(modelData.definition.role), "offsetX", 0)
+                motionTranslateY: root.trackNumber(
+                    root.trackForRole(modelData.definition.role), "offsetY", 0)
+                motionScaleX: root.trackNumber(
+                    root.trackForRole(modelData.definition.role), "scaleX", 1)
+                motionScaleY: root.trackNumber(
+                    root.trackForRole(modelData.definition.role), "scaleY", 1)
             }
+        }
         }
     }
 

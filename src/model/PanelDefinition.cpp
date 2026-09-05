@@ -494,22 +494,24 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         &definition.visibility.windowOverlapPolicy,
         true);
 
-    setString(
+    // Normalized through the schema rather than merely lower-cased, so a
+    // legacy record holding an empty or unknown value resolves to the declared
+    // default instead of reaching a renderer as a state it cannot draw.
+    definition.presentation.mode = normalized(
         QStringLiteral("presentationMode"),
-        &definition.presentation.mode,
-        true);
-    setString(
+        definition.presentation.mode).toString();
+    definition.presentation.trigger = normalized(
+        QStringLiteral("presentationTrigger"),
+        definition.presentation.trigger).toString();
+    definition.presentation.collapseAxis = normalized(
         QStringLiteral("collapseAxis"),
-        &definition.presentation.collapseAxis,
-        true);
-    setString(
+        definition.presentation.collapseAxis).toString();
+    definition.presentation.collapseMechanism = normalized(
         QStringLiteral("collapseMechanism"),
-        &definition.presentation.collapseMechanism,
-        true);
-    setString(
+        definition.presentation.collapseMechanism).toString();
+    definition.presentation.revealHandle = normalized(
         QStringLiteral("revealHandle"),
-        &definition.presentation.revealHandle,
-        true);
+        definition.presentation.revealHandle).toString();
 
     definition.layout.pathType = normalized(
         QStringLiteral("layout"), definition.layout.pathType).toString();
@@ -877,6 +879,10 @@ QVariantMap PanelDefinition::toLegacyMap() const
         visibility.windowOverlapPolicy);
 
     insertIfNotEmpty(&record, QStringLiteral("presentationMode"), presentation.mode);
+    insertIfNotEmpty(
+        &record,
+        QStringLiteral("presentationTrigger"),
+        presentation.trigger);
     insertIfNotEmpty(&record, QStringLiteral("collapseAxis"), presentation.collapseAxis);
     insertIfNotEmpty(
         &record,
