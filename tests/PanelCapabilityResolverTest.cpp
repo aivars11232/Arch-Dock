@@ -188,7 +188,7 @@ private slots:
     void freeRotationVocabularyMapsToArbitrary();
     void productionSkinnedTwoDIsAvailableOnSupportedHosts();
     void dynamicGlowRequiresHostAndThemeDeclaration();
-    void bakedTwoPointFiveDCanBeAvailableInSyntheticInventory();
+    void bakedTwoPointFiveDIsAvailableOnTheFreeHostOnly();
     void trueThreeDReportsNotInstalled();
     void trueThreeDReportsDisabledSeparately();
     void selectsFirstSafeFallback();
@@ -597,35 +597,58 @@ void PanelCapabilityResolverTest::dynamicGlowRequiresHostAndThemeDeclaration()
              std::optional<PanelCapability>(PanelCapability::DynamicGlow));
 }
 
-void PanelCapabilityResolverTest::bakedTwoPointFiveDCanBeAvailableInSyntheticInventory()
+// TASK-0034 installs the baked 2.5D renderer, but only the free desktop host
+// can present it: a Plasma edge panel is a fixed rectangle and cannot host a
+// perspective platform. A native panel therefore falls back rather than
+// pretending the tier is unavailable everywhere.
+void PanelCapabilityResolverTest::bakedTwoPointFiveDIsAvailableOnTheFreeHostOnly()
 {
-    HostCapabilityProfile host =
-        PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop);
-    host.rendererTiers.append(RendererTier::Baked2_5D);
     ThemeCapabilityProfile theme = themeFor(
         QStringLiteral("baked"),
-        {PanelHostKind::FreeDesktop},
+        {PanelHostKind::FreeDesktop, PanelHostKind::NativeEdge},
         {PanelLayoutKind::Adaptive},
-        {RendererTier::Baked2_5D},
+        {RendererTier::Baked2_5D, RendererTier::Procedural2D},
         RendererTier::Baked2_5D);
-    QVector<RendererAvailability> renderers =
-        PanelCapabilityResolver::productionRenderers();
-    RendererAvailability *baked = rendererByTier(
-        &renderers, RendererTier::Baked2_5D);
-    QVERIFY(baked);
-    baked->installed = true;
-    baked->enabled = true;
+    theme.fallbackRendererTiers = {RendererTier::Procedural2D};
 
-    const CapabilityResolution result = PanelCapabilityResolver::resolve(
+    const CapabilityResolution freeResult = PanelCapabilityResolver::resolve(
         panelFor(PanelHostKind::FreeDesktop),
-        host,
+        PanelCapabilityResolver::productionHostProfile(
+            PanelHostKind::FreeDesktop),
         theme,
-        renderers,
+        PanelCapabilityResolver::productionRenderers(),
         PanelCapabilityResolver::productionPlatform());
 
-    QVERIFY(result.available);
-    QCOMPARE(result.renderer.effectiveTier,
+    QVERIFY(freeResult.available);
+    QVERIFY(!freeResult.renderer.fallbackApplied);
+    QCOMPARE(freeResult.renderer.effectiveTier,
              std::optional<RendererTier>(RendererTier::Baked2_5D));
+    const RendererCandidateDecision *freeChoice = rendererChoiceByTier(
+        freeResult.rendererChoices, RendererTier::Baked2_5D);
+    QVERIFY(freeChoice);
+    QVERIFY(freeChoice->available);
+    QCOMPARE(freeChoice->reason, CapabilityReasonCode::None);
+
+    const CapabilityResolution nativeResult = PanelCapabilityResolver::resolve(
+        panelFor(PanelHostKind::NativeEdge),
+        PanelCapabilityResolver::productionHostProfile(
+            PanelHostKind::NativeEdge),
+        theme,
+        PanelCapabilityResolver::productionRenderers(),
+        PanelCapabilityResolver::productionPlatform());
+
+    QVERIFY(nativeResult.available);
+    QVERIFY(nativeResult.renderer.fallbackApplied);
+    QCOMPARE(nativeResult.renderer.effectiveTier,
+             std::optional<RendererTier>(RendererTier::Procedural2D));
+    QCOMPARE(nativeResult.renderer.reason,
+             CapabilityReasonCode::RendererHostUnsupported);
+    const RendererCandidateDecision *nativeChoice = rendererChoiceByTier(
+        nativeResult.rendererChoices, RendererTier::Baked2_5D);
+    QVERIFY(nativeChoice);
+    QVERIFY(!nativeChoice->available);
+    QCOMPARE(nativeChoice->reason,
+             CapabilityReasonCode::RendererHostUnsupported);
 }
 
 void PanelCapabilityResolverTest::trueThreeDReportsNotInstalled()

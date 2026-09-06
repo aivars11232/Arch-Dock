@@ -44,9 +44,9 @@ if(NOT index_format STREQUAL "org.archdock.theme-fixture-index" OR
 endif()
 
 string(JSON fixture_count LENGTH "${fixture_index}" fixtures)
-if(NOT fixture_count EQUAL 10)
+if(NOT fixture_count EQUAL 11)
   message(FATAL_ERROR
-          "Theme fixture index must contain exactly 10 fixtures; found ${fixture_count}")
+          "Theme fixture index must contain exactly 11 fixtures; found ${fixture_count}")
 endif()
 
 set(seen_paths)
@@ -109,9 +109,9 @@ foreach(fixture_index_number RANGE 0 ${fixture_last})
   endif()
 endforeach()
 
-if(NOT valid_count EQUAL 4 OR NOT invalid_count EQUAL 6)
+if(NOT valid_count EQUAL 4 OR NOT invalid_count EQUAL 7)
   message(FATAL_ERROR
-          "Expected 4 valid and 6 invalid fixtures; found ${valid_count} and ${invalid_count}")
+          "Expected 4 valid and 7 invalid fixtures; found ${valid_count} and ${invalid_count}")
 endif()
 
 message(STATUS

@@ -27,6 +27,7 @@ public:
     static constexpr qsizetype MaximumLayers = 128;
     static constexpr qsizetype MaximumSlices = 64;
     static constexpr qsizetype MaximumContentRegions = 64;
+    static constexpr qsizetype MaximumTracks = 32;
     static constexpr qsizetype MaximumInputMasks = 64;
     static constexpr qint64 MaximumAssetBytes = 67108864;
     static constexpr qint64 MaximumPackageAssetBytes = 268435456;

@@ -5,6 +5,7 @@ IconStyleResolver 1.0 IconStyleResolver.js
 AnimationProfileRuntime 1.0 AnimationProfileRuntime.js
 MotionChannels 1.0 MotionChannels.js
 PresentationStates 1.0 PresentationStates.js
+ThemeStateSelection 1.0 ThemeStateSelection.js
 IconScene 1.0 IconScene.qml
 IconMotionController 1.0 IconMotionController.qml
 MotionTrackRunner 1.0 MotionTrackRunner.qml
@@ -21,3 +22,4 @@ AlphaHitMask 1.0 inputs/AlphaHitMask.qml
 PanelProcedural2D 1.0 renderers/PanelProcedural2D.qml
 PanelSkin2D 1.0 renderers/PanelSkin2D.qml
 PanelSkinLayer2D 1.0 renderers/PanelSkinLayer2D.qml
+PanelBaked25D 1.0 renderers/PanelBaked25D.qml

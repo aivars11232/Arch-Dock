@@ -375,6 +375,239 @@ TestCase {
         fuzzy(last.y + value.iconSize / 2, endPoint.y, data.layout + " end y")
     }
 
+    // ---- Baked 2.5D anchor tracks -------------------------------------
+
+    function ringTrack(overrides) {
+        const result = {
+            id: "ring-track",
+            shape: "ellipse",
+            center: { x: 600, y: 300 },
+            radiusX: 450,
+            radiusY: 160,
+            startDegrees: 0,
+            sweepDegrees: 360,
+            sides: 8,
+            depth: { farScale: 0.6, nearScale: 1.0, occlusionDepth: 0.5 },
+            tilt: { minimumDegrees: -12, maximumDegrees: 12, defaultDegrees: 0 }
+        }
+        const additions = overrides || ({})
+        for (const key of Object.keys(additions))
+            result[key] = additions[key]
+        return result
+    }
+
+    function trackMetrics(track, count, radius, tilt) {
+        return LayoutEngine.trackMetrics(
+            track, 1200, 600, count, 48, 10,
+            radius === undefined ? 450 : radius, tilt)
+    }
+
+    // Criterion: depth scale and order are deterministic, and an icon's size
+    // follows how far down the perspective path it sits.
+    function test_trackDepthScaleAndOrderAreDeterministic() {
+        const track = ringTrack()
+        const count = 8
+        const metrics = trackMetrics(track, count)
+        let previousDepth = -1
+        const first = LayoutEngine.trackEntryGeometry(
+            track, 0, count, metrics, 0, "upright")
+        compare(first.depth, 0, "the first entry sits at the far edge")
+        fuzzy(first.scaleFactor, 0.6, "far entries take the declared far scale")
+
+        for (let index = 0; index < count; ++index) {
+            const entry = LayoutEngine.trackEntryGeometry(
+                track, index, count, metrics, 0, "upright")
+            const repeat = LayoutEngine.trackEntryGeometry(
+                track, index, count, metrics, 0, "upright")
+            compare(entry.depth, repeat.depth, "depth is repeatable")
+            compare(entry.x, repeat.x, "position is repeatable")
+            verify(entry.depth >= 0 && entry.depth <= 1, "depth stays normalized")
+            verify(entry.scaleFactor >= 0.6 - 0.0001
+                   && entry.scaleFactor <= 1 + 0.0001,
+                   "scale stays inside the declared range")
+            compare(entry.depthOrder, entry.depth, "depth drives draw order")
+            compare(entry.inFront, entry.depth >= 0.5,
+                    "occlusion depth decides which side an entry passes")
+            compare(entry.rotation, 0, "an upright entry has no rotation")
+            if (index <= count / 2)
+                verify(entry.depth >= previousDepth, "depth advances downwards")
+            previousDepth = entry.depth
+        }
+
+        const nearest = LayoutEngine.trackEntryGeometry(
+            track, count / 2, count, metrics, 0, "upright")
+        compare(nearest.depth, 1, "the opposite entry sits at the near edge")
+        fuzzy(nearest.scaleFactor, 1, "near entries take the declared near scale")
+        verify(nearest.entryBounds.width > first.entryBounds.width,
+               "a near icon is drawn larger than a far one")
+    }
+
+    // Criterion: every entry and the platform fit inside the reported box, at
+    // several radii and entry counts.
+    function test_trackSceneBoxContainsPlatformAndEveryEntry_data() {
+        const rows = []
+        for (const count of [0, 1, 3, 12, 24]) {
+            for (const radius of [120, 450, 900]) {
+                rows.push({ tag: count + "@" + radius,
+                            count: count, radius: radius })
+            }
+        }
+        return rows
+    }
+
+    function test_trackSceneBoxContainsPlatformAndEveryEntry(data) {
+        const track = ringTrack()
+        const metrics = trackMetrics(track, data.count, data.radius)
+        verify(metrics.width >= 1 && metrics.height >= 1, "the box has a size")
+        verify(metrics.platform.x >= -0.0001
+               && metrics.platform.y >= -0.0001
+               && metrics.platform.x + metrics.platform.width
+                   <= metrics.width + 0.0001
+               && metrics.platform.y + metrics.platform.height
+                   <= metrics.height + 0.0001,
+               "the drawn platform fits the box")
+        for (let index = 0; index < data.count; ++index) {
+            const entry = LayoutEngine.trackEntryGeometry(
+                track, index, data.count, metrics, 0, "upright")
+            const bounds = entry.entryBounds
+            verify(bounds.x >= -0.0001 && bounds.y >= -0.0001
+                   && bounds.x + bounds.width <= metrics.width + 0.0001
+                   && bounds.y + bounds.height <= metrics.height + 0.0001,
+                   "entry " + index + " fits the box")
+        }
+    }
+
+    // Criterion: hostile inputs never produce non-finite geometry.
+    function test_trackDegenerateInputsStayFinite_data() {
+        return [
+            { tag: "nan", track: { shape: "ellipse", center: { x: NaN, y: NaN },
+                                   radiusX: NaN, radiusY: NaN,
+                                   startDegrees: NaN, sweepDegrees: NaN,
+                                   sides: NaN,
+                                   depth: { farScale: NaN, nearScale: NaN,
+                                            occlusionDepth: NaN } },
+              count: 5, radius: NaN },
+            { tag: "infinite", track: { shape: "arc", center: { x: 0, y: 0 },
+                                        radiusX: Infinity, radiusY: Infinity,
+                                        startDegrees: Infinity,
+                                        sweepDegrees: Infinity, sides: 8,
+                                        depth: { farScale: 0.5, nearScale: 1,
+                                                 occlusionDepth: 0.5 } },
+              count: 3, radius: Infinity },
+            { tag: "zero-negative", track: { shape: "polygon",
+                                             center: { x: -10, y: -10 },
+                                             radiusX: 0, radiusY: -5,
+                                             startDegrees: 0, sweepDegrees: 0,
+                                             sides: 1,
+                                             depth: { farScale: -1,
+                                                      nearScale: -2,
+                                                      occlusionDepth: -3 } },
+              count: 4, radius: -50 },
+            { tag: "strings", track: { shape: "wobble", center: { x: "600", y: "300" },
+                                       radiusX: "450", radiusY: "160",
+                                       startDegrees: "x", sweepDegrees: "y",
+                                       sides: "8",
+                                       depth: { farScale: "a", nearScale: "b",
+                                                occlusionDepth: "c" } },
+              count: 6, radius: "450" },
+            { tag: "empty", track: {}, count: 2, radius: 300 }
+        ]
+    }
+
+    function test_trackDegenerateInputsStayFinite(data) {
+        const metrics = trackMetrics(data.track, data.count, data.radius)
+        const problems = []
+        collectNonFinite(metrics, "metrics", problems)
+        compare(problems.join(","), "", "metrics carry a non-finite value")
+        verify(metrics.width >= 1 && metrics.height >= 1, "the box has a size")
+        for (let index = 0; index < data.count; ++index) {
+            const entry = LayoutEngine.trackEntryGeometry(
+                data.track, index, data.count, metrics, 0, "upright")
+            collectNonFinite(entry, "entry[" + index + "]", problems)
+            compare(problems.join(","), "", "entry carries a non-finite value")
+            verify(entry.pathProgress >= 0 && entry.pathProgress <= 1,
+                   "progress stays in [0, 1]")
+            fuzzy(Math.hypot(entry.outwardNormal.x, entry.outwardNormal.y), 1,
+                  "outward normal is a unit vector")
+            verify(entry.scaleFactor > 0, "scale stays positive")
+        }
+    }
+
+    // Criterion: a closed track turns with the scene; an open one does not,
+    // because sweeping an arc would carry entries off the drawn platform.
+    function test_closedTracksRotateAndOpenTracksDoNot() {
+        const ring = ringTrack()
+        verify(LayoutEngine.trackSupportsRotation(ring), "a ring turns")
+        verify(LayoutEngine.trackSupportsRotation(
+                   ringTrack({ shape: "polygon" })), "a polygon turns")
+        verify(!LayoutEngine.trackSupportsRotation(
+                   ringTrack({ shape: "arc", sweepDegrees: 140 })),
+               "an arc does not turn")
+
+        const metrics = trackMetrics(ring, 6)
+        const resting = LayoutEngine.trackEntryGeometry(
+            ring, 0, 6, metrics, 0, "upright")
+        const turned = LayoutEngine.trackEntryGeometry(
+            ring, 0, 6, metrics, 90, "upright")
+        verify(Math.abs(turned.x - resting.x) > 1, "a turned ring moves")
+        const full = LayoutEngine.trackEntryGeometry(
+            ring, 0, 6, metrics, 360, "upright")
+        fuzzy(full.x, resting.x, "a full turn returns to the start")
+
+        const arc = ringTrack({ shape: "arc", sweepDegrees: 140 })
+        const arcMetrics = trackMetrics(arc, 6)
+        const arcResting = LayoutEngine.trackEntryGeometry(
+            arc, 0, 6, arcMetrics, 0, "upright")
+        const arcTurned = LayoutEngine.trackEntryGeometry(
+            arc, 0, 6, arcMetrics, 90, "upright")
+        compare(arcTurned.x, arcResting.x, "an open track ignores rotation")
+    }
+
+    // Criterion: tilt is bounded by the theme and moves the platform and the
+    // track together, so icons keep sitting on the artwork.
+    function test_tiltIsClampedAndMovesPlatformWithTrack() {
+        const track = ringTrack()
+        const level = trackMetrics(track, 6, 450, 0)
+        const tilted = trackMetrics(track, 6, 450, 12)
+        const beyond = trackMetrics(track, 6, 450, 900)
+        const flat = trackMetrics(track, 6, 450, -900)
+
+        verify(tilted.tiltFactor > level.tiltFactor, "a positive tilt opens up")
+        compare(beyond.tiltFactor, tilted.tiltFactor,
+                "a tilt beyond the declared maximum is clamped to it")
+        verify(flat.tiltFactor < level.tiltFactor,
+               "a negative tilt flattens within the declared minimum")
+        verify(flat.tiltFactor > 0, "a clamped tilt stays usable")
+
+        fuzzy(tilted.radiusY / level.radiusY, tilted.tiltFactor,
+              "the track radius takes the tilt factor")
+        fuzzy(tilted.platform.height / level.platform.height,
+              tilted.tiltFactor, "the platform takes the same tilt factor")
+        compare(tilted.radiusX, level.radiusX, "tilt leaves the width alone")
+
+        const untiltable = ringTrack({ tilt: undefined })
+        compare(trackMetrics(untiltable, 6, 450, 30).tiltFactor, 1,
+                "a theme that declares no tilt does not tilt")
+    }
+
+    // Criterion: the logical order the accessibility tree walks is the entry
+    // order, whatever the depth order draws first.
+    function test_logicalOrderIsIndependentOfDepthOrder() {
+        const track = ringTrack()
+        const count = 8
+        const metrics = trackMetrics(track, count)
+        const progress = []
+        for (let index = 0; index < count; ++index) {
+            const entry = LayoutEngine.trackEntryGeometry(
+                track, index, count, metrics, 0, "upright")
+            progress.push(entry.pathProgress)
+        }
+        for (let index = 1; index < progress.length; ++index) {
+            verify(progress[index] > progress[index - 1],
+                   "entry " + index + " follows its predecessor on the path")
+        }
+    }
+
     function test_compatibilityUtilitiesRemainAvailable() {
         const value = geometry("horizontal", 3)
         compare(LayoutEngine.nearestIndex(

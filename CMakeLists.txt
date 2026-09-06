@@ -51,6 +51,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     AnimationProfileRuntime.js
     MotionChannels.js
     PresentationStates.js
+    ThemeStateSelection.js
     IconScene.qml
     IconMotionController.qml
     MotionTrackRunner.qml
@@ -66,7 +67,8 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     renderers/IconStyle2D.qml
     renderers/PanelProcedural2D.qml
     renderers/PanelSkin2D.qml
-    renderers/PanelSkinLayer2D.qml)
+    renderers/PanelSkinLayer2D.qml
+    renderers/PanelBaked25D.qml)
 set(ARCHDOCK_RENDERING_MODULE_SOURCES)
 
 file(MAKE_DIRECTORY "${ARCHDOCK_RENDERING_BUILD_DIR}")

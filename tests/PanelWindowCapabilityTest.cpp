@@ -336,13 +336,15 @@ void PanelWindowCapabilityTest::managedVersionTwoCapabilitiesDriveFallbackAndEdi
              QStringLiteral("fixture-baked-ring"));
     const QVariantMap validRenderer = validResolution.value(
         QStringLiteral("renderer")).toMap();
+    // The free host presents the baked renderer TASK-0034 installed, so this
+    // package now resolves to the tier it asked for instead of falling back.
     QCOMPARE(validRenderer.value(QStringLiteral("requestedTier")).toString(),
              QStringLiteral("baked2.5d"));
     QCOMPARE(validRenderer.value(QStringLiteral("effectiveTier")).toString(),
-             QStringLiteral("procedural2d"));
-    QVERIFY(validRenderer.value(QStringLiteral("fallbackApplied")).toBool());
+             QStringLiteral("baked2.5d"));
+    QVERIFY(!validRenderer.value(QStringLiteral("fallbackApplied")).toBool());
     QCOMPARE(validRenderer.value(QStringLiteral("reasonCode")).toString(),
-             QStringLiteral("renderer-not-installed"));
+             QStringLiteral("available"));
 
     const QVariantList validFields = validSnapshot.value(
         QStringLiteral("panelFields")).toList();
@@ -353,9 +355,12 @@ void PanelWindowCapabilityTest::managedVersionTwoCapabilitiesDriveFallbackAndEdi
     QVERIFY(validKeys.contains(QStringLiteral("layoutAngle")));
     QVERIFY(validKeys.contains(QStringLiteral("layoutRadius")));
     QVERIFY(validKeys.contains(QStringLiteral("pathOrientation")));
-    QVERIFY(validKeys.contains(QStringLiteral("appearance")));
-    QVERIFY(validKeys.contains(QStringLiteral("shape")));
-    QVERIFY(validKeys.contains(QStringLiteral("opacity")));
+    // The procedural surface controls belong to the procedural renderer. This
+    // package is drawn by the baked renderer, so offering them would be the
+    // kind of non-working control the interface rules forbid.
+    QVERIFY(!validKeys.contains(QStringLiteral("appearance")));
+    QVERIFY(!validKeys.contains(QStringLiteral("shape")));
+    QVERIFY(!validKeys.contains(QStringLiteral("opacity")));
     QVERIFY(validKeys.contains(QStringLiteral("themeFit")));
     QVERIFY(validKeys.contains(QStringLiteral("iconShape")));
     QVERIFY(!validKeys.contains(QStringLiteral("color")));

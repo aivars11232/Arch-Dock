@@ -24,20 +24,12 @@ Item {
 
     readonly property string normalizedPresentationState:
         normalizedState(presentationState)
-    readonly property bool interpolationActive:
-        ["opening", "closing"].includes(
-            String(transitionState || "idle").toLowerCase())
-        && isFinite(Number(presentationProgress))
-        && Number(presentationProgress) >= 0
-        && Number(presentationProgress) <= 1
-        && stateById(transitionFromState) !== null
-        && stateById(transitionToState) !== null
+    readonly property bool interpolationActive: ThemeStateSelection.interpolationActive(
+        themeDefinition, transitionState, presentationProgress)
     readonly property string transitionFromState:
-        String(transitionState || "idle").toLowerCase() === "opening"
-        ? "collapsed" : "open"
+        ThemeStateSelection.transitionFromState(transitionState)
     readonly property string transitionToState:
-        String(transitionState || "idle").toLowerCase() === "opening"
-        ? "open" : "collapsed"
+        ThemeStateSelection.transitionToState(transitionState)
     readonly property string effectiveState: effectiveStateId()
     readonly property var stateDefinition: stateById(effectiveState)
     readonly property var sliceDefinition: sliceFor(
@@ -94,9 +86,7 @@ Item {
         overlayAnimationRunning ? overlayPhase : 0
     readonly property int skippedLayerCount: skippedLayers()
     readonly property bool structuralValid:
-        themeDefinition && themeDefinition.valid === true
-        && String(themeDefinition.format || "") === "org.archdock.theme"
-        && Number(themeDefinition.version || 0) === 2
+        ThemeStateSelection.isThemeProjection(themeDefinition)
         && stateDefinition !== null
         && sliceDefinition !== null
         && contentRegionDefinition !== null
@@ -161,140 +151,73 @@ Item {
         return Math.max(0, Math.min(1, trackNumber(track, "opacity", 1)))
     }
 
+    // Every function below is the shared Theme v2 selection contract, so the
+    // skinned and baked renderers cannot drift apart on what a state means.
     function values(value) {
-        return value && value.length !== undefined ? value : []
+        return ThemeStateSelection.values(value)
     }
 
     function objectById(collection, id) {
-        const expected = String(id || "")
-        const candidates = values(collection)
-        for (let index = 0; index < candidates.length; ++index) {
-            if (String(candidates[index].id || "") === expected)
-                return candidates[index]
-        }
-        return null
+        return ThemeStateSelection.objectById(collection, id)
     }
 
     function hasFeature(feature) {
-        const capabilities = themeDefinition
-                && themeDefinition.capabilities
-            ? themeDefinition.capabilities : ({})
-        const features = values(capabilities.features)
-        return features.map(function(value) {
-            return String(value || "").toLowerCase()
-        }).includes(feature)
+        return ThemeStateSelection.hasFeature(themeDefinition, feature)
     }
 
     function stateById(id) {
-        return objectById(themeDefinition ? themeDefinition.states : [], id)
+        return ThemeStateSelection.stateById(themeDefinition, id)
     }
 
     function normalizedState(value) {
-        const requested = String(value || "normal").toLowerCase()
-        return ["normal", "open", "collapsed"].includes(requested)
-            ? requested : "normal"
+        return ThemeStateSelection.normalizedState(value)
     }
 
     function effectiveStateId() {
-        if (!interpolationActive && hovered && stateById("hover"))
-            return "hover"
-        return normalizedPresentationState
+        return ThemeStateSelection.effectiveStateId(
+            themeDefinition, presentationState, transitionState,
+            presentationProgress, hovered)
     }
 
     function sliceFor(state, requestedOrientation) {
-        const candidates = values(themeDefinition
-                                  ? themeDefinition.slices : [])
-        for (let index = 0; index < candidates.length; ++index) {
-            const candidate = candidates[index]
-            if (String(candidate.state || "") === state
-                    && String(candidate.orientation || "")
-                        === requestedOrientation)
-                return candidate
-        }
-        return null
+        return ThemeStateSelection.recordFor(
+            themeDefinition ? themeDefinition.slices : [],
+            state, requestedOrientation)
     }
 
     function contentRegionFor(state, requestedOrientation) {
-        const candidates = values(themeDefinition
-                                  ? themeDefinition.contentRegions : [])
-        for (let index = 0; index < candidates.length; ++index) {
-            const candidate = candidates[index]
-            if (String(candidate.state || "") === state
-                    && String(candidate.orientation || "")
-                        === requestedOrientation)
-                return candidate
-        }
-        return null
+        return ThemeStateSelection.recordFor(
+            themeDefinition ? themeDefinition.contentRegions : [],
+            state, requestedOrientation)
     }
 
     function inputMaskFor(state, requestedOrientation) {
-        const candidates = values(themeDefinition
-                                  ? themeDefinition.inputMasks : [])
-        for (let index = 0; index < candidates.length; ++index) {
-            const candidate = candidates[index]
-            if (String(candidate.state || "") === state
-                    && String(candidate.orientation || "")
-                        === requestedOrientation)
-                return candidate
-        }
-        return null
+        return ThemeStateSelection.recordFor(
+            themeDefinition ? themeDefinition.inputMasks : [],
+            state, requestedOrientation)
     }
 
     function layerForRole(state, role) {
-        if (!state)
-            return null
-        const layerIds = values(state.layers)
-        for (let index = 0; index < layerIds.length; ++index) {
-            const layer = objectById(themeDefinition.layers, layerIds[index])
-            if (layer && String(layer.role || "") === role)
-                return layer
-        }
-        return null
+        return state
+            ? ThemeStateSelection.layerForRole(themeDefinition, state.id, role) : null
     }
 
     function assetUrl(assetId) {
-        const paths = themeDefinition && themeDefinition.assetPaths
-            && typeof themeDefinition.assetPaths === "object"
-            ? themeDefinition.assetPaths : ({})
-        const path = String(paths[String(assetId || "")] || "")
-        if (path.startsWith("file:") || path.startsWith("qrc:")
-                || path.startsWith("image:"))
-            return path
-        if (path.startsWith("/"))
-            return "file://" + encodeURI(path)
-        return ""
+        return ThemeStateSelection.assetUrl(themeDefinition, assetId)
     }
 
     function stateLayerIds(stateId) {
-        const state = stateById(stateId)
-        return state ? values(state.layers) : []
+        return ThemeStateSelection.stateLayerIds(themeDefinition, stateId)
     }
 
     function layerInState(layerId, stateId) {
-        return stateLayerIds(stateId).map(function(value) {
-            return String(value || "")
-        }).includes(String(layerId || ""))
+        return ThemeStateSelection.layerInState(themeDefinition, layerId, stateId)
     }
 
     function orderedActiveLayerIds() {
-        const first = interpolationActive
-            ? stateLayerIds(transitionFromState)
-            : stateLayerIds(effectiveState)
-        const result = []
-        for (let index = 0; index < first.length; ++index) {
-            const id = String(first[index] || "")
-            if (id.length > 0 && !result.includes(id))
-                result.push(id)
-        }
-        if (interpolationActive) {
-            const second = stateLayerIds(transitionToState)
-            for (let index = 0; index < second.length; ++index) {
-                const id = String(second[index] || "")
-                if (id.length > 0 && !result.includes(id))
-                    result.push(id)
-            }
-        }
-        return result
+        return ThemeStateSelection.orderedActiveLayerIds(
+            themeDefinition, presentationState, transitionState,
+            presentationProgress, hovered)
     }
 
     function syntheticBaseLayers() {
@@ -359,21 +282,8 @@ Item {
     }
 
     function stateOpacityForLayer(layer) {
-        const base = Math.max(0, Math.min(1, Number(
-            layer ? layer.opacity === undefined ? 1 : layer.opacity : 0)))
-        if (!interpolationActive || String(layer.id || "").startsWith("__"))
-            return base
-        const inFrom = layerInState(layer.id, transitionFromState)
-        const inTo = layerInState(layer.id, transitionToState)
-        if (inFrom && inTo)
-            return base
-        const progress = Math.max(0, Math.min(1,
-            Number(presentationProgress)))
-        if (inFrom)
-            return base * (1 - progress)
-        if (inTo)
-            return base * progress
-        return 0
+        return ThemeStateSelection.stateLayerOpacity(
+            themeDefinition, layer, transitionState, presentationProgress)
     }
 
     function isEnergyOverlay(layer) {
@@ -476,8 +386,7 @@ Item {
     function validationError() {
         if (!themeDefinition || themeDefinition.valid !== true)
             return "theme-unavailable"
-        if (String(themeDefinition.format || "") !== "org.archdock.theme"
-                || Number(themeDefinition.version || 0) !== 2)
+        if (!ThemeStateSelection.isThemeProjection(themeDefinition))
             return "theme-contract-invalid"
         if (!stateDefinition)
             return "theme-state-unavailable"

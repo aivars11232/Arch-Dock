@@ -451,6 +451,273 @@ function position(layout, index, count, geometry, angle, polygonSides,
     };
 }
 
+// ---------------------------------------------------------------------------
+// Baked 2.5D anchor tracks
+//
+// A track is theme metadata: it says where real application icons sit on a
+// perspective platform and how far they shrink at the far side. Everything
+// below is pure geometry. Nothing here draws, reads a host, or makes a
+// renderer available; a track without an installed baked renderer is simply
+// unused data.
+//
+// Depth is normalized: 0 at the far edge of the path, 1 at the near edge. The
+// icon scale is interpolated between the theme's declared far and near scales,
+// and the theme's occlusion depth decides which entries pass behind the
+// declared foreground layers.
+// ---------------------------------------------------------------------------
+
+function trackShape(track) {
+    const name = String(track && track.shape ? track.shape : "ellipse");
+    return ["ellipse", "polygon", "arc"].includes(name) ? name : "ellipse";
+}
+
+function trackClosed(track) {
+    const shape = trackShape(track);
+    return shape === "ellipse" || shape === "polygon";
+}
+
+// Only a closed track can turn. Sweeping an open arc would carry its entries
+// off the platform drawn under them.
+function trackSupportsRotation(track) {
+    return trackClosed(track);
+}
+
+// The artwork's own viewing angle is encoded in the ratio of its declared
+// radii. A tilt request moves that angle by a bounded amount, and the same
+// factor is applied to the drawn platform, so icons and artwork stay aligned.
+function trackTiltFactor(track, requestedDegrees) {
+    const source = track || {};
+    const tilt = source.tilt;
+    if (!tilt || typeof tilt !== "object")
+        return 1;
+    const minimum = finite(tilt.minimumDegrees, 0);
+    const maximum = finite(tilt.maximumDegrees, 0);
+    if (maximum < minimum)
+        return 1;
+    const fallback = clamp(finite(tilt.defaultDegrees, 0), minimum, maximum);
+    const requested = requestedDegrees === undefined || requestedDegrees === null
+        ? fallback
+        : clamp(finite(requestedDegrees, fallback), minimum, maximum);
+    const radiusX = Math.max(1, finite(source.radiusX, 1));
+    const radiusY = Math.max(0, finite(source.radiusY, 0));
+    const baseAngle = Math.asin(clamp(radiusY / radiusX, 0, 1));
+    if (baseAngle <= 0.0001)
+        return 1;
+    const tilted = Math.sin(baseAngle + requested * Math.PI / 180);
+    const factor = tilted / Math.sin(baseAngle);
+    return isFinite(factor) ? clamp(factor, 0.05, 4) : 1;
+}
+
+// The scene box for a baked panel. The user's configured radius drives one
+// uniform artwork scale, and the box is the union of the drawn platform and
+// every scaled icon, so nothing the theme positions is cut off.
+function trackMetrics(track, artworkWidth, artworkHeight, count, iconSize,
+                      padding, layoutRadius, tiltDegrees) {
+    const source = track || {};
+    const size = Math.max(1, finiteAtLeast(iconSize, 1, 52));
+    const safePadding = Math.max(0, finite(padding, 0));
+    const safeCount = Math.max(0, Math.round(finite(count, 0)));
+    const artwork = {
+        width: Math.max(1, finite(artworkWidth, 1)),
+        height: Math.max(1, finite(artworkHeight, 1))
+    };
+    const trackRadiusX = Math.max(1, finite(source.radiusX, 1));
+    const trackRadiusY = Math.max(0, finite(source.radiusY, 0));
+    const requestedRadius = finite(layoutRadius, 0);
+    const scale = requestedRadius > 0
+        ? clamp(requestedRadius / trackRadiusX, 0.02, 50) : 1;
+    const tiltFactor = trackTiltFactor(source, tiltDegrees);
+    const depth = source.depth && typeof source.depth === "object"
+        ? source.depth : {};
+    const farScale = clamp(finite(depth.farScale, 1), 0.01, 4);
+    const nearScale = clamp(finite(depth.nearScale, 1), farScale, 4);
+    const occlusionDepth = clamp(finite(depth.occlusionDepth, 0.5), 0, 1);
+
+    const centerSource = source.center && typeof source.center === "object"
+        ? source.center : {};
+    const centerX = finite(centerSource.x, artwork.width / 2) * scale;
+    const centerY = finite(centerSource.y, artwork.height / 2) * scale;
+    // The platform is squashed about the track centre by the tilt factor, the
+    // same factor the track's own vertical radius takes.
+    const platform = {
+        x: 0,
+        y: centerY - centerY * tiltFactor,
+        width: artwork.width * scale,
+        height: artwork.height * scale * tiltFactor
+    };
+
+    const metrics = {
+        shape: trackShape(source),
+        closed: trackClosed(source),
+        sides: clamp(Math.round(finite(source.sides, 8)), 3, 12),
+        startDegrees: finite(source.startDegrees, 0),
+        sweepDegrees: trackClosed(source) ? 360 : finite(source.sweepDegrees, 360),
+        scale: scale,
+        tiltFactor: tiltFactor,
+        farScale: farScale,
+        nearScale: nearScale,
+        occlusionDepth: occlusionDepth,
+        iconSize: size,
+        padding: safePadding,
+        count: safeCount,
+        center: { x: centerX, y: centerY * tiltFactor + platform.y },
+        radiusX: trackRadiusX * scale,
+        radiusY: trackRadiusY * scale * tiltFactor,
+        platform: platform,
+        offsetX: 0,
+        offsetY: 0,
+        width: Math.max(1, Math.ceil(platform.width)),
+        height: Math.max(1, Math.ceil(platform.height))
+    };
+
+    let left = platform.x;
+    let top = platform.y;
+    let right = platform.x + platform.width;
+    let bottom = platform.y + platform.height;
+    for (let index = 0; index < safeCount; ++index) {
+        const point = trackPoint(metrics, index, safeCount, 0);
+        const extent = size * point.scaleFactor / 2;
+        left = Math.min(left, point.x - extent);
+        top = Math.min(top, point.y - extent);
+        right = Math.max(right, point.x + extent);
+        bottom = Math.max(bottom, point.y + extent);
+    }
+    left -= safePadding;
+    top -= safePadding;
+    right += safePadding;
+    bottom += safePadding;
+
+    metrics.offsetX = -left;
+    metrics.offsetY = -top;
+    metrics.center = { x: metrics.center.x - left, y: metrics.center.y - top };
+    metrics.platform = {
+        x: platform.x - left,
+        y: platform.y - top,
+        width: platform.width,
+        height: platform.height
+    };
+    metrics.width = Math.max(1, Math.ceil(right - left));
+    metrics.height = Math.max(1, Math.ceil(bottom - top));
+    return metrics;
+}
+
+// One anchor point in the metrics' own coordinate space, before the box
+// offset is applied. Kept separate so trackMetrics can size the box from the
+// same numbers the entries will use.
+function trackPoint(metrics, index, count, rotationDegrees) {
+    const safeCount = Math.max(1, Math.round(finite(count, 0)));
+    const safeIndex = clamp(Math.round(finite(index, 0)), 0, safeCount - 1);
+    const closed = metrics.closed;
+    const progress = closed
+        ? safeIndex / safeCount
+        : (safeCount === 1 ? 0.5 : safeIndex / (safeCount - 1));
+    const degrees = metrics.startDegrees + progress * metrics.sweepDegrees
+        + (closed ? finite(rotationDegrees, 0) : 0);
+    const radians = (degrees - 90) * Math.PI / 180;
+
+    let unitX = Math.cos(radians);
+    let unitY = Math.sin(radians);
+    if (metrics.shape === "polygon") {
+        const local = polygonPoint(
+            ((degrees % 360) + 360) % 360 / 360, metrics.sides, 1);
+        unitX = local.x;
+        unitY = local.y;
+    }
+    const x = metrics.center.x + unitX * metrics.radiusX;
+    const y = metrics.center.y + unitY * metrics.radiusY;
+    // Depth follows how far down the path the point sits: the top of a
+    // perspective ring is its far side.
+    const depth = clamp((unitY + 1) / 2, 0, 1);
+    const scaleFactor = metrics.farScale
+        + (metrics.nearScale - metrics.farScale) * depth;
+    return {
+        x: x,
+        y: y,
+        unitX: unitX,
+        unitY: unitY,
+        radians: radians,
+        degrees: degrees,
+        progress: progress,
+        depth: depth,
+        scaleFactor: isFinite(scaleFactor) ? scaleFactor : 1
+    };
+}
+
+// The full geometry contract for one entry on a track, in the same shape the
+// linear and radial layouts return, so a scene consumes either without knowing
+// which produced it.
+function trackEntryGeometry(track, index, count, metrics, rotationDegrees,
+                            pathOrientation, tiltDegrees) {
+    const resolved = metrics && metrics.center
+        ? metrics
+        : trackMetrics(track, 0, 0, count, 0, 0, 0, tiltDegrees);
+    const safeCount = Math.max(1, Math.round(finite(count, 0)));
+    const point = trackPoint(resolved, index, safeCount, rotationDegrees);
+    const size = resolved.iconSize;
+    const x = point.x + resolved.offsetX - size / 2;
+    const y = point.y + resolved.offsetY - size / 2;
+    const visualExtent = size * point.scaleFactor;
+
+    // The outward direction of an ellipse is its gradient, not the ray from
+    // the centre; a popup anchored on the ray would drift at the flanks.
+    const normalX = resolved.radiusX > 0
+        ? point.unitX / resolved.radiusX : point.unitX;
+    const normalY = resolved.radiusY > 0
+        ? point.unitY / resolved.radiusY : point.unitY;
+    const normalLength = Math.hypot(normalX, normalY);
+    const outwardX = normalLength > 0 ? normalX / normalLength : 0;
+    const outwardY = normalLength > 0 ? normalY / normalLength : -1;
+    const normalAngle = Math.atan2(outwardY, outwardX) * 180 / Math.PI;
+    const tangentAngle = Math.atan2(
+        point.unitX * resolved.radiusY,
+        -point.unitY * resolved.radiusX) * 180 / Math.PI;
+
+    const orientation = pathOrientation || "upright";
+    let rotation = 0;
+    if (orientation === "tangent")
+        rotation = tangentAngle;
+    else if (orientation === "radial")
+        rotation = normalAngle;
+    if (!isFinite(rotation))
+        rotation = 0;
+
+    const panelBounds = {
+        x: 0,
+        y: 0,
+        width: resolved.width,
+        height: resolved.height
+    };
+    const entryBounds = {
+        x: point.x + resolved.offsetX - visualExtent / 2,
+        y: point.y + resolved.offsetY - visualExtent / 2,
+        width: visualExtent,
+        height: visualExtent
+    };
+    return {
+        position: { x: x, y: y },
+        x: x,
+        y: y,
+        rotation: rotation,
+        tangentAngle: isFinite(tangentAngle) ? tangentAngle : 0,
+        outwardNormal: {
+            x: outwardX,
+            y: outwardY,
+            angle: isFinite(normalAngle) ? normalAngle : -90
+        },
+        depth: point.depth,
+        depthOrder: point.depth,
+        inFront: point.depth >= resolved.occlusionDepth,
+        scaleFactor: point.scaleFactor,
+        pathProgress: point.progress,
+        bounds: panelBounds,
+        panelBounds: panelBounds,
+        entryBounds: entryBounds,
+        safeInputRegion: panelBounds,
+        position3D: null,
+        orientation3D: null
+    };
+}
+
 function surface(layout, rawGeometry, rawAngle, polygonSides) {
     const geometry = safeGeometry(rawGeometry, layout);
     const resolvedLayout = geometry.layout;

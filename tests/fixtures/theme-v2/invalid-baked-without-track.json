@@ -1,0 +1,37 @@
+{
+  "format": "org.archdock.theme",
+  "version": 2,
+  "id": "fixture-baked-without-track",
+  "name": "Fixture Baked Without Track",
+  "capabilities": {
+    "hosts": ["free-desktop"],
+    "rendererTiers": ["baked2.5d", "procedural2d"],
+    "preferredRendererTier": "baked2.5d",
+    "fallbackRendererTiers": ["procedural2d"],
+    "layouts": ["ring"],
+    "orientations": ["free"],
+    "features": [],
+    "presentationMechanisms": [],
+    "rotation": {"mode": "free"}
+  },
+  "assets": [
+    {
+      "id": "platform-rear",
+      "path": "assets/platform-rear.svg",
+      "kind": "vector",
+      "mimeType": "image/svg+xml",
+      "naturalSize": {"width": 1200, "height": 600}
+    }
+  ],
+  "states": [{"id": "normal", "layers": ["rear-layer"]}],
+  "layers": [
+    {
+      "id": "rear-layer",
+      "asset": "platform-rear",
+      "role": "rear",
+      "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 600},
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    }
+  ]
+}

@@ -26,6 +26,20 @@ QtObject {
     property real entryMargin: 4
     property bool enabled: true
 
+    // A baked 2.5D panel draws a solid platform rather than a thin band, so it
+    // supplies the package's own alpha mask here. The mask then decides the
+    // surface, and the entry rectangles are still accepted on top of it, so an
+    // icon standing proud of the platform stays clickable.
+    property var maskItem: null
+    // Where the mask sits inside the scene. The mask reads its own local
+    // pixels, so a point has to be moved into its space before it is asked.
+    property real maskOriginX: 0
+    property real maskOriginY: 0
+
+    readonly property bool maskActive:
+        maskItem !== null && maskItem !== undefined
+        && Boolean(maskItem.ready)
+
     readonly property var surface: LayoutEngine.surface(
         layout, geometry, angle, polygonSides)
 
@@ -78,6 +92,10 @@ QtObject {
         for (let index = 0; index < rects.length; ++index) {
             if (rectContains(rects[index], x, y, entryMargin))
                 return true
+        }
+        if (maskActive) {
+            return Boolean(maskItem.contains(
+                Qt.point(x - maskOriginX, y - maskOriginY)))
         }
         return distanceToPath(x, y) <= Math.max(1, bandWidth) / 2
     }

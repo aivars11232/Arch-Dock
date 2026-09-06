@@ -65,6 +65,7 @@ The following limits are part of version 2 and are evaluated before use:
 | Layers | 128 |
 | Slices | 64 |
 | Content regions | 64 |
+| Tracks | 32 |
 | Input masks | 64 |
 | One asset | 67,108,864 bytes |
 | All declared assets | 268,435,456 bytes |
@@ -98,6 +99,7 @@ semantics fail closed.
 | `layers` | array | no | empty |
 | `slices` | array | no | empty |
 | `contentRegions` | array | no | empty |
+| `tracks` | array | no | empty |
 | `effectMargins` | object | no | all zero |
 | `inputMasks` | array | no | empty |
 | `iconStyleRef` | object | no | absent |
@@ -165,7 +167,10 @@ Required arrays MUST be non-empty and contain no duplicate value.
   finite minimum not greater than its finite maximum.
 
 A procedural theme MAY have no assets. `skinned2d` and `baked2.5d` require at
-least one raster or vector surface asset. `true3d` requires a declared mesh
+least one raster or vector surface asset. `baked2.5d` additionally requires at
+least one declared track, because a perspective package must say where real
+icons sit on its artwork; artwork alone is a flat picture, not a depth
+renderer. `true3d` requires a declared mesh
 asset and MUST NOT be satisfied by a flat raster or vector image. A package may
 declare true-3D capability with a 2D fallback without making true 3D mandatory.
 
@@ -243,7 +248,8 @@ Each layer declares one asset and an explicit role:
 }
 ```
 
-Layer roles are `surface`, `split-start`, `split-center`, `split-end`, `glow`,
+Layer roles are `surface`, `split-start`, `split-center`, `split-end`, `rear`,
+`foreground`, `glow`,
 `overlay`, `shadow`, `reflection`, `mask`, `mesh`, and `material`. Opacity is in
 the inclusive range `0.0` through `1.0`. Supported blend modes are
 `source-over`, `multiply`, `screen`, and `add`. References MUST exist and role
@@ -296,6 +302,70 @@ Input masks declare an asset, state, orientation, and `threshold` from `0.0` to
 `1.0`. The mask affects input only when the selected host and renderer report
 non-rectangular input support. Otherwise input remains the safe rectangular
 region and the fallback status records the limitation.
+
+## 7A. Tracks
+
+A track is a baked 2.5D anchor path in the artwork's own coordinate space. It
+says where real application icons sit on a perspective platform and how they
+shrink with depth. A track is never drawn, and declaring one does not make the
+baked renderer available.
+
+```json
+{
+  "id": "ring-track",
+  "state": "normal",
+  "shape": "ellipse",
+  "center": {"x": 600, "y": 300},
+  "radiusX": 450,
+  "radiusY": 160,
+  "startDegrees": 0,
+  "sweepDegrees": 360,
+  "sides": 8,
+  "depth": {"farScale": 0.62, "nearScale": 1.0, "occlusionDepth": 0.5},
+  "tilt": {"minimumDegrees": -12, "maximumDegrees": 12, "defaultDegrees": 0}
+}
+```
+
+| Member | Type | Required | Default |
+| --- | --- | --- | --- |
+| `id` | identifier | yes | none |
+| `state` | string | no | every state |
+| `shape` | enum | yes | none |
+| `center` | point object | yes | none |
+| `radiusX` | number | yes | none |
+| `radiusY` | number | yes | none |
+| `startDegrees` | number | no | `0` |
+| `sweepDegrees` | number | arc only | `360` |
+| `sides` | integer | no | `8` |
+| `depth` | object | yes | none |
+| `tilt` | object | no | absent |
+
+`shape` is `ellipse`, `polygon`, or `arc`. `ellipse` and `polygon` are closed:
+they sweep a full turn, and a declared `sweepDegrees` MUST be `360`. `arc` is
+open and MUST declare its own sweep. A sweep MUST be non-zero and within one
+turn; a negative sweep runs the path in the opposite direction. `startDegrees`
+MUST be within one turn and is measured clockwise from the twelve o'clock
+position. `sides` applies to `polygon` and MUST be between `3` and `12`.
+
+A point object has finite, non-negative `x` and `y`. Both radii MUST be
+positive. A track that names a `state` MUST name a declared one; a track
+without a `state` applies to every state.
+
+`depth` is required and has finite `farScale`, `nearScale`, and
+`occlusionDepth`. The scales are the icon size multipliers at the furthest and
+nearest points of the path. Both MUST be positive and at most `4`, and
+`farScale` MUST NOT exceed `nearScale`. `occlusionDepth` is a normalized depth
+from `0.0` to `1.0`: an entry whose depth is below it is drawn behind the
+declared `foreground` layers, and an entry at or above it in front of them.
+This is what lets a real icon pass behind a platform rim.
+
+`tilt` is optional and declares the bounded visual tilt the theme supports,
+with finite `minimumDegrees`, `maximumDegrees`, and an optional
+`defaultDegrees`. The minimum MUST NOT exceed the maximum, both MUST be within
+45 degrees of level, and the default MUST lie inside the range. A theme that
+declares no tilt does not tilt, and a requested tilt is always clamped into the
+declared range. Tilt is a visual adjustment: it never changes logical entry
+order or the size of the input region.
 
 ## 8. Referenced icon styles and animation profiles
 

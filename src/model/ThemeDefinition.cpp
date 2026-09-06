@@ -56,6 +56,14 @@ QVariantMap ThemeRect::toVariantMap() const
     };
 }
 
+QVariantMap ThemePoint::toVariantMap() const
+{
+    return {
+        {QStringLiteral("x"), x},
+        {QStringLiteral("y"), y},
+    };
+}
+
 QVariantMap ThemeRotationDefinition::toVariantMap() const
 {
     QVariantMap result{{QStringLiteral("mode"), mode}};
@@ -173,6 +181,45 @@ QVariantMap ThemeContentRegionDefinition::toVariantMap() const
     return result;
 }
 
+QVariantMap ThemeTrackDepthDefinition::toVariantMap() const
+{
+    return {
+        {QStringLiteral("farScale"), farScale},
+        {QStringLiteral("nearScale"), nearScale},
+        {QStringLiteral("occlusionDepth"), occlusionDepth},
+    };
+}
+
+QVariantMap ThemeTrackTiltDefinition::toVariantMap() const
+{
+    return {
+        {QStringLiteral("defaultDegrees"), defaultDegrees},
+        {QStringLiteral("maximumDegrees"), maximumDegrees},
+        {QStringLiteral("minimumDegrees"), minimumDegrees},
+    };
+}
+
+QVariantMap ThemeTrackDefinition::toVariantMap() const
+{
+    QVariantMap result{
+        {QStringLiteral("center"), center.toVariantMap()},
+        {QStringLiteral("depth"), depth.toVariantMap()},
+        {QStringLiteral("id"), id},
+        {QStringLiteral("radiusX"), radiusX},
+        {QStringLiteral("radiusY"), radiusY},
+        {QStringLiteral("shape"), shape},
+        {QStringLiteral("sides"), sides},
+        {QStringLiteral("startDegrees"), startDegrees},
+        {QStringLiteral("state"), state},
+        {QStringLiteral("sweepDegrees"), sweepDegrees},
+    };
+    if (tilt.has_value())
+    {
+        result.insert(QStringLiteral("tilt"), tilt->toVariantMap());
+    }
+    return result;
+}
+
 QVariantMap ThemeEffectMargins::toVariantMap() const
 {
     return {
@@ -237,6 +284,7 @@ QVariantMap ThemeDefinition::toVariantMap() const
         {QStringLiteral("packageRevision"), packageRevision},
         {QStringLiteral("slices"), serialized(slices)},
         {QStringLiteral("states"), serialized(states)},
+        {QStringLiteral("tracks"), serialized(tracks)},
         {QStringLiteral("version"), version},
     };
     if (iconStyleRef.has_value())

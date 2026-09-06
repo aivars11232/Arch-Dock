@@ -25,6 +25,14 @@ using namespace ArchDock;
 const QString manifestFormat = QStringLiteral("org.archdock.theme");
 const QString manifestFileName = QStringLiteral("archdock-theme.json");
 
+// Baked 2.5D track bounds. A perspective platform shrinks distant icons; these
+// keep a declared shrink, tilt and polygon within values a panel can still be
+// used at, so a malformed manifest cannot produce an unusable dock.
+constexpr qreal MaximumTrackScale = 4.0;
+constexpr qreal MaximumTrackTiltDegrees = 45.0;
+constexpr int MinimumTrackSides = 3;
+constexpr int MaximumTrackSides = 12;
+
 struct ParsedThemePackage
 {
     ThemeDefinition definition;
@@ -115,6 +123,7 @@ public:
             QStringLiteral("capabilities"), QStringLiteral("assets"),
             QStringLiteral("states"), QStringLiteral("layers"),
             QStringLiteral("slices"), QStringLiteral("contentRegions"),
+            QStringLiteral("tracks"),
             QStringLiteral("effectMargins"), QStringLiteral("inputMasks"),
             QStringLiteral("iconStyleRef"), QStringLiteral("animationProfileRefs")
         }, QString{});
@@ -135,6 +144,7 @@ public:
         parseLayers(manifest, &definition);
         parseSlices(manifest, &definition);
         parseContentRegions(manifest, &definition);
+        parseTracks(manifest, &definition);
         parseEffectMargins(manifest, &definition);
         parseInputMasks(manifest, &definition);
         parseResourceReferences(manifest, &definition);
@@ -912,6 +922,7 @@ private:
         const QSet<QString> roles{
             QStringLiteral("surface"), QStringLiteral("split-start"),
             QStringLiteral("split-center"), QStringLiteral("split-end"),
+            QStringLiteral("rear"), QStringLiteral("foreground"),
             QStringLiteral("glow"), QStringLiteral("overlay"),
             QStringLiteral("shadow"), QStringLiteral("reflection"),
             QStringLiteral("mask"), QStringLiteral("mesh"),
@@ -1206,6 +1217,239 @@ private:
         }
     }
 
+    std::optional<ThemePoint> parsePoint(const QJsonValue &value,
+                                         const QString &pointer)
+    {
+        if (!value.isObject())
+        {
+            add(QStringLiteral("invalid-type"), pointer,
+                QStringLiteral("point must be an object"));
+            return std::nullopt;
+        }
+        const QJsonObject object = value.toObject();
+        rejectUnknown(object, {QStringLiteral("x"), QStringLiteral("y")}, pointer);
+        ThemePoint point;
+        point.x = numberValue(object, QStringLiteral("x"), pointer, true, 0.0);
+        point.y = numberValue(object, QStringLiteral("y"), pointer, true, 0.0);
+        if (point.x < 0.0 || point.y < 0.0)
+        {
+            add(QStringLiteral("invalid-bounds"), pointer,
+                QStringLiteral("point values must be non-negative"));
+        }
+        return point;
+    }
+
+    void parseTrackDepth(const QJsonObject &object,
+                         const QString &pointer,
+                         ThemeTrackDefinition *track)
+    {
+        if (!object.contains(QStringLiteral("depth")))
+        {
+            add(QStringLiteral("missing-field"),
+                pointerChild(pointer, QStringLiteral("depth")),
+                QStringLiteral("track requires a depth object"));
+            return;
+        }
+        const QString depthPointer = pointerChild(pointer, QStringLiteral("depth"));
+        const QJsonValue value = object.value(QStringLiteral("depth"));
+        if (!value.isObject())
+        {
+            add(QStringLiteral("invalid-type"), depthPointer,
+                QStringLiteral("depth must be an object"));
+            return;
+        }
+        const QJsonObject depth = value.toObject();
+        rejectUnknown(depth, {QStringLiteral("farScale"), QStringLiteral("nearScale"),
+                              QStringLiteral("occlusionDepth")},
+                      depthPointer);
+        track->depth.farScale = numberValue(
+            depth, QStringLiteral("farScale"), depthPointer, true, 1.0);
+        track->depth.nearScale = numberValue(
+            depth, QStringLiteral("nearScale"), depthPointer, true, 1.0);
+        track->depth.occlusionDepth = numberValue(
+            depth, QStringLiteral("occlusionDepth"), depthPointer, true, 0.5);
+        if (track->depth.farScale <= 0.0 || track->depth.nearScale <= 0.0 ||
+            track->depth.farScale > MaximumTrackScale ||
+            track->depth.nearScale > MaximumTrackScale ||
+            track->depth.farScale > track->depth.nearScale)
+        {
+            add(QStringLiteral("invalid-value"), depthPointer,
+                QStringLiteral("depth scales must be positive, bounded, and near "
+                               "must not be smaller than far"));
+        }
+        if (track->depth.occlusionDepth < 0.0 || track->depth.occlusionDepth > 1.0)
+        {
+            add(QStringLiteral("invalid-value"),
+                pointerChild(depthPointer, QStringLiteral("occlusionDepth")),
+                QStringLiteral("occlusion depth must be between zero and one"));
+        }
+    }
+
+    void parseTrackTilt(const QJsonObject &object,
+                        const QString &pointer,
+                        ThemeTrackDefinition *track)
+    {
+        if (!object.contains(QStringLiteral("tilt")))
+        {
+            return;
+        }
+        const QString tiltPointer = pointerChild(pointer, QStringLiteral("tilt"));
+        const QJsonValue value = object.value(QStringLiteral("tilt"));
+        if (!value.isObject())
+        {
+            add(QStringLiteral("invalid-type"), tiltPointer,
+                QStringLiteral("tilt must be an object"));
+            return;
+        }
+        const QJsonObject tiltObject = value.toObject();
+        rejectUnknown(tiltObject, {QStringLiteral("minimumDegrees"),
+                                   QStringLiteral("maximumDegrees"),
+                                   QStringLiteral("defaultDegrees")},
+                      tiltPointer);
+        ThemeTrackTiltDefinition tilt;
+        tilt.minimumDegrees = numberValue(
+            tiltObject, QStringLiteral("minimumDegrees"), tiltPointer, true, 0.0);
+        tilt.maximumDegrees = numberValue(
+            tiltObject, QStringLiteral("maximumDegrees"), tiltPointer, true, 0.0);
+        tilt.defaultDegrees = numberValue(
+            tiltObject, QStringLiteral("defaultDegrees"), tiltPointer, false, 0.0);
+        if (tilt.minimumDegrees < -MaximumTrackTiltDegrees ||
+            tilt.maximumDegrees > MaximumTrackTiltDegrees ||
+            tilt.minimumDegrees > tilt.maximumDegrees ||
+            tilt.defaultDegrees < tilt.minimumDegrees ||
+            tilt.defaultDegrees > tilt.maximumDegrees)
+        {
+            add(QStringLiteral("invalid-value"), tiltPointer,
+                QStringLiteral("tilt must be a bounded range containing its default"));
+        }
+        track->tilt = tilt;
+    }
+
+    // Anchor paths for the baked 2.5D renderer. A track is metadata: it says
+    // where real icons sit on the perspective artwork and how they shrink with
+    // depth. Nothing here draws, and no track makes a renderer available.
+    void parseTracks(const QJsonObject &manifest, ThemeDefinition *definition)
+    {
+        if (!manifest.contains(QStringLiteral("tracks")))
+        {
+            return;
+        }
+        const QJsonValue value = manifest.value(QStringLiteral("tracks"));
+        if (!value.isArray())
+        {
+            add(QStringLiteral("invalid-type"), QStringLiteral("/tracks"),
+                QStringLiteral("tracks must be an array"));
+            return;
+        }
+        const QJsonArray array = value.toArray();
+        if (array.size() > ThemePackage::MaximumTracks)
+        {
+            add(QStringLiteral("limit-exceeded"), QStringLiteral("/tracks"),
+                QStringLiteral("too many tracks"));
+        }
+        const QSet<QString> shapes{QStringLiteral("ellipse"),
+                                   QStringLiteral("polygon"),
+                                   QStringLiteral("arc")};
+        QSet<QString> ids;
+        for (qsizetype index = 0; index < array.size(); ++index)
+        {
+            const QString pointer = QStringLiteral("/tracks/") +
+                QString::number(index);
+            if (!array.at(index).isObject())
+            {
+                add(QStringLiteral("invalid-type"), pointer,
+                    QStringLiteral("track must be an object"));
+                continue;
+            }
+            const QJsonObject object = array.at(index).toObject();
+            rejectUnknown(object, {QStringLiteral("id"), QStringLiteral("state"),
+                                   QStringLiteral("shape"), QStringLiteral("center"),
+                                   QStringLiteral("radiusX"), QStringLiteral("radiusY"),
+                                   QStringLiteral("startDegrees"),
+                                   QStringLiteral("sweepDegrees"),
+                                   QStringLiteral("sides"), QStringLiteral("depth"),
+                                   QStringLiteral("tilt")},
+                          pointer);
+            ThemeTrackDefinition track;
+            track.id = identifier(object, QStringLiteral("id"), pointer, true);
+            if (!track.id.isEmpty() && ids.contains(track.id))
+            {
+                add(QStringLiteral("duplicate-id"),
+                    pointerChild(pointer, QStringLiteral("id")),
+                    QStringLiteral("track identifier is duplicated"));
+            }
+            ids.insert(track.id);
+            track.state = stringValue(object, QStringLiteral("state"), pointer, false);
+            track.shape = stringValue(object, QStringLiteral("shape"), pointer, true);
+            if (!shapes.contains(track.shape))
+            {
+                add(QStringLiteral("invalid-enum"),
+                    pointerChild(pointer, QStringLiteral("shape")),
+                    QStringLiteral("unsupported track shape"));
+            }
+            if (object.contains(QStringLiteral("center")))
+            {
+                const std::optional<ThemePoint> center = parsePoint(
+                    object.value(QStringLiteral("center")),
+                    pointerChild(pointer, QStringLiteral("center")));
+                track.center = center.value_or(ThemePoint{});
+            }
+            else
+            {
+                add(QStringLiteral("missing-field"),
+                    pointerChild(pointer, QStringLiteral("center")),
+                    QStringLiteral("track requires a center point"));
+            }
+            track.radiusX = numberValue(
+                object, QStringLiteral("radiusX"), pointer, true, 0.0);
+            track.radiusY = numberValue(
+                object, QStringLiteral("radiusY"), pointer, true, 0.0);
+            if (track.radiusX <= 0.0 || track.radiusY <= 0.0)
+            {
+                add(QStringLiteral("invalid-bounds"), pointer,
+                    QStringLiteral("track radii must be positive"));
+            }
+            track.startDegrees = numberValue(
+                object, QStringLiteral("startDegrees"), pointer, false, 0.0);
+            if (track.startDegrees < -360.0 || track.startDegrees > 360.0)
+            {
+                add(QStringLiteral("invalid-value"),
+                    pointerChild(pointer, QStringLiteral("startDegrees")),
+                    QStringLiteral("start must be within one turn"));
+            }
+            const bool closedShape = track.shape == QStringLiteral("ellipse") ||
+                track.shape == QStringLiteral("polygon");
+            track.sweepDegrees = numberValue(
+                object, QStringLiteral("sweepDegrees"), pointer,
+                !closedShape, 360.0);
+            if (closedShape && object.contains(QStringLiteral("sweepDegrees")) &&
+                !qFuzzyCompare(track.sweepDegrees, 360.0))
+            {
+                add(QStringLiteral("invalid-value"),
+                    pointerChild(pointer, QStringLiteral("sweepDegrees")),
+                    QStringLiteral("a closed track sweeps a full turn"));
+            }
+            if (qFuzzyIsNull(track.sweepDegrees) ||
+                std::abs(track.sweepDegrees) > 360.0)
+            {
+                add(QStringLiteral("invalid-value"),
+                    pointerChild(pointer, QStringLiteral("sweepDegrees")),
+                    QStringLiteral("sweep must be non-zero and within one turn"));
+            }
+            track.sides = integerValue(
+                object, QStringLiteral("sides"), pointer, false, 8, MinimumTrackSides);
+            if (track.sides < MinimumTrackSides || track.sides > MaximumTrackSides)
+            {
+                add(QStringLiteral("invalid-value"),
+                    pointerChild(pointer, QStringLiteral("sides")),
+                    QStringLiteral("sides must be between three and twelve"));
+            }
+            parseTrackDepth(object, pointer, &track);
+            parseTrackTilt(object, pointer, &track);
+            definition->tracks.append(track);
+        }
+    }
+
     void parseEffectMargins(const QJsonObject &manifest,
                             ThemeDefinition *definition)
     {
@@ -1445,6 +1689,19 @@ private:
                     QStringLiteral("content region references an unknown mask asset"));
             }
         }
+        for (qsizetype index = 0; index < definition->tracks.size(); ++index)
+        {
+            const auto &track = definition->tracks.at(index);
+            // A track without a state applies to every state; one that names a
+            // state must name a declared one.
+            if (!track.state.isEmpty() && !stateIds.contains(track.state))
+            {
+                add(QStringLiteral("invalid-reference"),
+                    QStringLiteral("/tracks/") + QString::number(index) +
+                        QStringLiteral("/state"),
+                    QStringLiteral("track references an unknown state"));
+            }
+        }
         for (qsizetype index = 0; index < definition->inputMasks.size(); ++index)
         {
             const auto &mask = definition->inputMasks.at(index);
@@ -1512,6 +1769,15 @@ private:
         {
             add(QStringLiteral("renderer-asset-mismatch"), QStringLiteral("/assets"),
                 QStringLiteral("true3d requires a declared mesh asset"));
+        }
+        // A baked 2.5D package must say where real icons sit on its
+        // perspective artwork. Without a track it is a flat picture claiming a
+        // depth renderer, which is exactly the mismatch this code rejects.
+        if (tiers.contains(QStringLiteral("baked2.5d")) &&
+            definition.tracks.isEmpty())
+        {
+            add(QStringLiteral("renderer-asset-mismatch"), QStringLiteral("/tracks"),
+                QStringLiteral("baked2.5d requires a declared icon track"));
         }
     }
 

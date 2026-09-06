@@ -45,6 +45,15 @@ struct ThemeRect
     bool operator==(const ThemeRect &) const = default;
 };
 
+struct ThemePoint
+{
+    qreal x = 0.0;
+    qreal y = 0.0;
+
+    [[nodiscard]] QVariantMap toVariantMap() const;
+    bool operator==(const ThemePoint &) const = default;
+};
+
 struct ThemeRotationDefinition
 {
     QString mode = QStringLiteral("none");
@@ -146,6 +155,52 @@ struct ThemeContentRegionDefinition
     bool operator==(const ThemeContentRegionDefinition &) const = default;
 };
 
+// How far an icon shrinks along a baked 2.5D anchor path, and where the
+// declared foreground layers cut across it. `occlusionDepth` is a normalized
+// depth in [0, 1]: an entry whose depth is below it is drawn behind the
+// foreground, an entry at or above it in front.
+struct ThemeTrackDepthDefinition
+{
+    qreal farScale = 1.0;
+    qreal nearScale = 1.0;
+    qreal occlusionDepth = 0.5;
+
+    [[nodiscard]] QVariantMap toVariantMap() const;
+    bool operator==(const ThemeTrackDepthDefinition &) const = default;
+};
+
+// The limited visual tilt a baked theme allows. The renderer clamps a
+// requested tilt into this range; a theme that declares none does not tilt.
+struct ThemeTrackTiltDefinition
+{
+    qreal minimumDegrees = 0.0;
+    qreal maximumDegrees = 0.0;
+    qreal defaultDegrees = 0.0;
+
+    [[nodiscard]] QVariantMap toVariantMap() const;
+    bool operator==(const ThemeTrackTiltDefinition &) const = default;
+};
+
+// One anchor path in the artwork's own coordinate space. Real icons are
+// positioned on it; it is not itself drawn.
+struct ThemeTrackDefinition
+{
+    QString id;
+    QString state;
+    QString shape = QStringLiteral("ellipse");
+    ThemePoint center;
+    qreal radiusX = 0.0;
+    qreal radiusY = 0.0;
+    qreal startDegrees = 0.0;
+    qreal sweepDegrees = 360.0;
+    int sides = 8;
+    ThemeTrackDepthDefinition depth;
+    std::optional<ThemeTrackTiltDefinition> tilt;
+
+    [[nodiscard]] QVariantMap toVariantMap() const;
+    bool operator==(const ThemeTrackDefinition &) const = default;
+};
+
 struct ThemeEffectMargins
 {
     qreal left = 0.0;
@@ -197,6 +252,7 @@ struct ThemeDefinition
     QVector<ThemeLayerDefinition> layers;
     QVector<ThemeSliceDefinition> slices;
     QVector<ThemeContentRegionDefinition> contentRegions;
+    QVector<ThemeTrackDefinition> tracks;
     ThemeEffectMargins effectMargins;
     QVector<ThemeInputMaskDefinition> inputMasks;
     std::optional<ThemeResourceReference> iconStyleRef;

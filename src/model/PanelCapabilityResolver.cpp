@@ -725,9 +725,13 @@ HostCapabilityProfile PanelCapabilityResolver::productionHostProfile(
             PanelPresentationMechanism::Split,
             PanelPresentationMechanism::Shutter,
         };
+        // Baked 2.5D is offered on the free desktop host only. A perspective
+        // platform needs a surface that is not a fixed rectangle, which is
+        // exactly what a Plasma edge panel cannot give it.
         profile.rendererTiers = {
             RendererTier::Procedural2D,
             RendererTier::Skinned2D,
+            RendererTier::Baked2_5D,
         };
         profile.rotation = {RotationSupport::Arbitrary, -180.0, 180.0};
         return profile;
@@ -913,8 +917,8 @@ QVector<RendererAvailability> PanelCapabilityResolver::productionRenderers()
          6,
          true},
         {RendererTier::Baked2_5D,
-         false,
-         false,
+         true,
+         true,
          {PanelHostKind::FreeDesktop},
          {QStringLiteral("arch")},
          6,

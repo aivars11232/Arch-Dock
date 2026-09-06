@@ -51,6 +51,11 @@
       "path": "invalid-duplicate-layer.json",
       "expectValid": false,
       "expectedCode": "duplicate-id"
+    },
+    {
+      "path": "invalid-baked-without-track.json",
+      "expectValid": false,
+      "expectedCode": "renderer-asset-mismatch"
     }
   ]
 }

@@ -7,6 +7,7 @@ set(rendering_sources
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/AnimationProfileRuntime.js"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/MotionChannels.js"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/PresentationStates.js"
+    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/ThemeStateSelection.js"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/IconScene.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/IconMotionController.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/MotionTrackRunner.qml"
@@ -22,7 +23,8 @@ set(rendering_sources
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/IconStyle2D.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelProcedural2D.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelSkin2D.qml"
-    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelSkinLayer2D.qml")
+    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelSkinLayer2D.qml"
+    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelBaked25D.qml")
 
 foreach(rendering_source IN LISTS rendering_sources)
   if(NOT EXISTS "${rendering_source}")

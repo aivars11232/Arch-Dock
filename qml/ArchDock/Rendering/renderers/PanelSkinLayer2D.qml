@@ -37,8 +37,11 @@ Item {
     readonly property bool splitCenter: role === "split-center"
     readonly property bool splitEnd: role === "split-end"
     readonly property bool splitLayer: splitStart || splitCenter || splitEnd
+    // A rear platform is the baked 2.5D equivalent of a surface: without it
+    // there is nothing for icons to stand on, so it fails rather than being
+    // skipped like a decorative layer.
     readonly property bool requiredLayer:
-        role === "surface" || splitLayer
+        role === "surface" || role === "rear" || splitLayer
     readonly property bool assetAvailable:
         source.length > 0 && assetDefinition
         && typeof assetDefinition === "object"

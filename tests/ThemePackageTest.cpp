@@ -113,7 +113,7 @@ void ThemePackageTest::fixtures_data()
                                     .object()
                                     .value(QStringLiteral("fixtures"))
                                     .toArray();
-    QCOMPARE(fixtures.size(), 10);
+    QCOMPARE(fixtures.size(), 11);
     for (const QJsonValue &value : fixtures)
     {
         const QJsonObject fixture = value.toObject();

@@ -16,20 +16,42 @@
   },
   "assets": [
     {
-      "id": "platform",
-      "path": "assets/surface.svg",
+      "id": "platform-rear",
+      "path": "assets/platform-rear.svg",
       "kind": "vector",
       "mimeType": "image/svg+xml",
-      "naturalSize": {"width": 1200, "height": 160}
+      "naturalSize": {"width": 1200, "height": 600}
+    },
+    {
+      "id": "platform-front",
+      "path": "assets/platform-front.svg",
+      "kind": "vector",
+      "mimeType": "image/svg+xml",
+      "naturalSize": {"width": 1200, "height": 600}
+    },
+    {
+      "id": "input-mask",
+      "path": "assets/ring-input.svg",
+      "kind": "mask",
+      "mimeType": "image/svg+xml",
+      "naturalSize": {"width": 1200, "height": 600}
     }
   ],
-  "states": [{"id": "normal", "layers": ["platform-layer"]}],
+  "states": [{"id": "normal", "layers": ["rear-layer", "front-layer"]}],
   "layers": [
     {
-      "id": "platform-layer",
-      "asset": "platform",
-      "role": "surface",
-      "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 160},
+      "id": "rear-layer",
+      "asset": "platform-rear",
+      "role": "rear",
+      "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 600},
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "front-layer",
+      "asset": "platform-front",
+      "role": "foreground",
+      "sourceRect": {"x": 0, "y": 0, "width": 1200, "height": 600},
       "opacity": 1.0,
       "blendMode": "source-over"
     }
@@ -40,7 +62,29 @@
       "state": "normal",
       "orientation": "free",
       "shape": "rect",
-      "rect": {"x": 160, "y": 24, "width": 880, "height": 112}
+      "rect": {"x": 80, "y": 110, "width": 1040, "height": 380}
+    }
+  ],
+  "tracks": [
+    {
+      "id": "ring-track",
+      "state": "normal",
+      "shape": "ellipse",
+      "center": {"x": 600, "y": 300},
+      "radiusX": 450,
+      "radiusY": 160,
+      "startDegrees": 0,
+      "depth": {"farScale": 0.62, "nearScale": 1.0, "occlusionDepth": 0.5},
+      "tilt": {"minimumDegrees": -12, "maximumDegrees": 12, "defaultDegrees": 0}
+    }
+  ],
+  "inputMasks": [
+    {
+      "id": "normal-input",
+      "asset": "input-mask",
+      "state": "normal",
+      "orientation": "free",
+      "threshold": 0.5
     }
   ]
 }
