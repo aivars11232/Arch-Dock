@@ -84,9 +84,11 @@ and fallback-tier declarations. The package is rejected before it replaces the
 active theme when those declarations are invalid or incompatible with the
 panel host and no safe renderer result exists.
 
-The production renderer inventory contains procedural 2D and Theme v2 skinned
-2D. Baked 2.5D and true 3D remain declared vocabulary but are reported as not
-installed. A valid package can prefer `skinned2d` and declare `procedural2d` as
+The production renderer inventory contains procedural 2D, Theme v2 skinned 2D
+and, on the free desktop host only, Theme v2 baked 2.5D. True 3D remains
+declared vocabulary but is reported as not installed. A baked package must
+declare at least one icon track; artwork alone is a flat picture and is
+rejected. A valid package can prefer `skinned2d` and declare `procedural2d` as
 its safe fallback. The live applet and Panel Studio receive the same
 backend-revalidated runtime projection with absolute paths confined to the
 managed package.

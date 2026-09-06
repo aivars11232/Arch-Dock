@@ -16,6 +16,20 @@ Item {
     property real motionOffset: 0
     property real motionOverflow: 0
 
+    // Raster budget, in pixels per axis. Zero keeps Qt's own behaviour: the
+    // asset is decoded at its natural size and every size it has been drawn at
+    // stays in the shared pixmap cache. A positive budget rasterises the layer
+    // at the size it is actually drawn, capped, and drops it from that cache
+    // when the layer goes away - which is what lets a panel switch between
+    // large perspective platforms without accumulating textures.
+    property int rasterBudget: 0
+    property bool cacheImage: true
+
+    readonly property int rasterWidth: rasterBudget > 0
+        ? Math.max(1, Math.min(rasterBudget, Math.ceil(outputWidth()))) : 0
+    readonly property int rasterHeight: rasterBudget > 0
+        ? Math.max(1, Math.min(rasterBudget, Math.ceil(height))) : 0
+
     // Presentation track for this layer's role, supplied by PanelSkin2D from
     // PanelMotionController. It moves and scales the whole drawn part; the
     // slice geometry inside it is untouched, so a declared cap keeps its
@@ -133,9 +147,11 @@ Item {
         fillMode: root.splitCenter && root.sliceDefinition
                 && String(root.sliceDefinition.centerMode || "stretch") === "tile"
             ? Image.TileHorizontally : Image.Stretch
+        sourceSize.width: root.rasterWidth
+        sourceSize.height: root.rasterHeight
         smooth: true
         asynchronous: false
-        cache: true
+        cache: root.cacheImage
         layer.enabled: root.tintActive
         layer.effect: MultiEffect {
             colorization: 1

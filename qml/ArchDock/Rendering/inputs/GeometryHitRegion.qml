@@ -80,7 +80,13 @@ QtObject {
     }
 
     // Qt Quick calls this with a point in the scene's local coordinates.
-    function contains(point) {
+    //
+    // The signature is annotated deliberately: an item's containmentMask is
+    // only consulted when its `contains` is invokable as `contains(point):
+    // bool`. Without the annotations Qt logs "Object set as mask does not have
+    // an invokable contains method" and silently falls back to the plain
+    // rectangle, which would make every narrowed-input claim untrue.
+    function contains(point: point): bool {
         if (!enabled)
             return true
         const x = Number(point.x)

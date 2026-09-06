@@ -110,6 +110,17 @@ wait_for_presentation_state() {
     return 1
 }
 
+# Resident memory of the private PlasmaShell, in kilobytes. Used to show that
+# repeatedly swapping large perspective platforms does not accumulate textures.
+plasmashell_rss_kb() {
+    local status_file="/proc/$ARCHDOCK_RENDERING_PLASMASHELL_PID/status"
+    [[ -r "$status_file" ]] || {
+        printf 'unavailable\n'
+        return 1
+    }
+    sed -n 's/^VmRSS:[[:space:]]*\([0-9][0-9]*\) kB$/\1/p' "$status_file"
+}
+
 wait_for_wayland_socket() {
     local socket_path="$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"
     local attempt
@@ -130,7 +141,7 @@ require_no_import_errors() {
     for log_file in "$ARCHDOCK_RENDERING_LOG_DIR/service.log" \
                     "$ARCHDOCK_RENDERING_LOG_DIR/plasmashell.log"; do
         if rg -n -i \
-            'error when loading applet "org\.archdock\.dock"|module "ArchDock\.Rendering" is not installed|RenderingModuleProbe[^[:cntrl:]]*(not a type|unavailable)|Panel(Scene|SurfaceLoader|Procedural2D|Skin2D|SkinLayer2D)[^[:cntrl:]]*(not a type|unavailable|not installed)|AlphaHitMask[^[:cntrl:]]*(not a type|unavailable|not installed)|(IconScene|RunningIndicator|LivePanelPreview)[^[:cntrl:]]*(not a type|unavailable|not installed)|(SettingsPopup|StudioForm|IconProperties|IconPropertiesWindow)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|org\.archdock\.dock/contents/ui/(main|DockEntry|IconVisual|RunningIndicator)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|ArchDock/Rendering/(PanelScene|PanelSurfaceLoader|renderers/PanelSkin2D|renderers/PanelSkinLayer2D|inputs/AlphaHitMask|IconScene|RunningIndicator|previews/LivePanelPreview)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(typeerror|referenceerror|cannot assign|unable to assign|binding loop)|Error loading QML file[^[:cntrl:]]*org\.archdock\.dock' \
+            'error when loading applet "org\.archdock\.dock"|module "ArchDock\.Rendering" is not installed|RenderingModuleProbe[^[:cntrl:]]*(not a type|unavailable)|Panel(Scene|SurfaceLoader|Procedural2D|Skin2D|SkinLayer2D|Baked25D)[^[:cntrl:]]*(not a type|unavailable|not installed)|AlphaHitMask[^[:cntrl:]]*(not a type|unavailable|not installed)|(IconScene|RunningIndicator|LivePanelPreview)[^[:cntrl:]]*(not a type|unavailable|not installed)|(SettingsPopup|StudioForm|IconProperties|IconPropertiesWindow)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|org\.archdock\.dock/contents/ui/(main|DockEntry|IconVisual|RunningIndicator)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|ArchDock/Rendering/(PanelScene|PanelSurfaceLoader|renderers/PanelSkin2D|renderers/PanelSkinLayer2D|renderers/PanelBaked25D|inputs/AlphaHitMask|inputs/GeometryHitRegion|IconScene|RunningIndicator|previews/LivePanelPreview)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(typeerror|referenceerror|cannot assign|unable to assign|binding loop)|Error loading QML file[^[:cntrl:]]*org\.archdock\.dock' \
             "$log_file"; then
             printf 'Staged rendering import failed; relevant QML errors were logged in %s.\n' \
                 "$log_file" >&2
@@ -380,6 +391,167 @@ run_private_session() {
         kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
         require_no_import_errors
     done
+
+    # Baked 2.5D is a free-desktop tier: a perspective platform needs a
+    # surface that is not a fixed rectangle. Each family is selected on the
+    # private free host through the ordinary settings transaction and must
+    # resolve to the baked renderer with its own package.
+    local perspective_theme_id
+    local perspective_layout
+    local perspective_tint
+    local perspective_manifest
+    local perspective_reply
+    local perspective_renderer=''
+    for perspective_theme_id in ring-platform-blue octagon-platform-steel \
+                                arc-platform-orange; do
+        case "$perspective_theme_id" in
+            ring-platform-blue)
+                perspective_layout='ring'; perspective_tint='#58c8f0' ;;
+            octagon-platform-steel)
+                perspective_layout='octagon'; perspective_tint='#9fb0be' ;;
+            arc-platform-orange)
+                perspective_layout='arc'; perspective_tint='#ff8f47' ;;
+        esac
+        perspective_manifest="$ARCHDOCK_RENDERING_STAGED_THEME_ROOT/$perspective_theme_id/archdock-theme.json"
+        [[ -r "$perspective_manifest" ]] || {
+            printf 'The staged perspective theme is unavailable: %s\n' \
+                "$perspective_manifest" >&2
+            return 1
+        }
+
+        free_configuration="$(panel_call dockConfiguration "$free_panel_id")"
+        free_revision="$(sed -n \
+            "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
+            <<<"$free_configuration")"
+        [[ "$free_revision" =~ ^[0-9]+$ ]] || {
+            printf 'Could not read the free revision before selecting %s: %s\n' \
+                "$perspective_theme_id" "$free_revision" >&2
+            return 1
+        }
+
+        printf 'Selecting staged perspective theme %s on the private free host.\n' \
+            "$perspective_theme_id"
+        perspective_reply="$(panel_call applyPanelSettingsTransaction \
+            "$free_panel_id" "uint64 $free_revision" \
+            "{'layout': <'$perspective_layout'>, 'rendererTier': <'baked2.5d'>, 'panelThemeId': <'$perspective_theme_id'>, 'completeThemeId': <'$perspective_theme_id'>, 'color': <'$perspective_tint'>, 'layoutRadius': <int32 300>}" \
+            '{}')"
+        [[ "$perspective_reply" == *"'success': <true>"* &&
+           "$perspective_reply" == *"'status': <'succeeded'>"* ]] || {
+            printf 'Could not select perspective theme %s: %s\n' \
+                "$perspective_theme_id" "$perspective_reply" >&2
+            return 1
+        }
+
+        perspective_renderer=''
+        for ((attempt = 0; attempt < 50; ++attempt)); do
+            perspective_renderer="$(panel_call panelRendererConfiguration "$free_panel_id")"
+            if [[ "$perspective_renderer" == *"'effectiveRendererTier': <'baked2.5d'>"* &&
+                  "$perspective_renderer" == *"'themeProjectionStatus': <'ready'>"* &&
+                  "$perspective_renderer" == *"'id': <'$perspective_theme_id'>"* &&
+                  "$perspective_renderer" == *"'manifestPath': <'$perspective_manifest'>"* ]]; then
+                break
+            fi
+            sleep 0.1
+        done
+        [[ "$perspective_renderer" == *"'effectiveRendererTier': <'baked2.5d'>"* &&
+           "$perspective_renderer" == *"'themeProjectionStatus': <'ready'>"* &&
+           "$perspective_renderer" == *"'id': <'$perspective_theme_id'>"* &&
+           "$perspective_renderer" == *"'manifestPath': <'$perspective_manifest'>"* ]] || {
+            printf 'The free host did not resolve perspective theme %s: %s\n' \
+                "$perspective_theme_id" "$perspective_renderer" >&2
+            return 1
+        }
+        kill -0 "$ARCHDOCK_RENDERING_SERVICE_PID"
+        kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
+        require_no_import_errors
+    done
+
+    # Repeated theme changes must release the previous platform's textures.
+    # Four passes over three large perspective families plus the energy skin,
+    # measured against the private PlasmaShell's own resident memory.
+    local rss_before
+    local rss_after
+    local rss_growth
+    local cycle
+    rss_before="$(plasmashell_rss_kb)"
+    [[ "$rss_before" =~ ^[0-9]+$ ]] || {
+        printf 'Could not read the private PlasmaShell resident memory: %s\n' \
+            "$rss_before" >&2
+        return 1
+    }
+    printf 'Cycling perspective families for resource behaviour (RSS %s kB).\n' \
+        "$rss_before"
+    for ((cycle = 0; cycle < 4; ++cycle)); do
+        for perspective_theme_id in ring-platform-blue octagon-platform-steel \
+                                    arc-platform-orange energy-frame-cyan; do
+            case "$perspective_theme_id" in
+                ring-platform-blue)
+                    perspective_layout='ring'; perspective_tint='#58c8f0' ;;
+                octagon-platform-steel)
+                    perspective_layout='octagon'; perspective_tint='#9fb0be' ;;
+                arc-platform-orange)
+                    perspective_layout='arc'; perspective_tint='#ff8f47' ;;
+                energy-frame-cyan)
+                    perspective_layout='horizontal'; perspective_tint='#44ddea' ;;
+            esac
+            free_configuration="$(panel_call dockConfiguration "$free_panel_id")"
+            free_revision="$(sed -n \
+                "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
+                <<<"$free_configuration")"
+            [[ "$free_revision" =~ ^[0-9]+$ ]] || {
+                printf 'Could not read the free revision during cycle %s\n' \
+                    "$cycle" >&2
+                return 1
+            }
+            if [[ "$perspective_theme_id" == 'energy-frame-cyan' ]]; then
+                perspective_reply="$(panel_call applyPanelSettingsTransaction \
+                    "$free_panel_id" "uint64 $free_revision" \
+                    "{'layout': <'horizontal'>, 'rendererTier': <'skinned2d'>, 'panelThemeId': <'$perspective_theme_id'>, 'completeThemeId': <'$perspective_theme_id'>, 'color': <'$perspective_tint'>, 'glowIntensity': <1.15>}" \
+                    '{}')"
+            else
+                perspective_reply="$(panel_call applyPanelSettingsTransaction \
+                    "$free_panel_id" "uint64 $free_revision" \
+                    "{'layout': <'$perspective_layout'>, 'rendererTier': <'baked2.5d'>, 'panelThemeId': <'$perspective_theme_id'>, 'completeThemeId': <'$perspective_theme_id'>, 'color': <'$perspective_tint'>, 'layoutRadius': <int32 300>}" \
+                    '{}')"
+            fi
+            [[ "$perspective_reply" == *"'success': <true>"* ]] || {
+                printf 'Theme cycle %s failed on %s: %s\n' \
+                    "$cycle" "$perspective_theme_id" "$perspective_reply" >&2
+                return 1
+            }
+        done
+        kill -0 "$ARCHDOCK_RENDERING_SERVICE_PID"
+        kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
+    done
+    require_no_import_errors
+    rss_after="$(plasmashell_rss_kb)"
+    [[ "$rss_after" =~ ^[0-9]+$ ]] || {
+        printf 'Could not re-read the private PlasmaShell resident memory.\n' >&2
+        return 1
+    }
+    rss_growth=$((rss_after - rss_before))
+    printf 'PlasmaShell resident memory after 16 theme changes: %s kB (growth %s kB).\n' \
+        "$rss_after" "$rss_growth"
+    (( rss_growth < 131072 )) || {
+        printf 'Repeated theme changes grew resident memory by %s kB.\n' \
+            "$rss_growth" >&2
+        return 1
+    }
+
+    # Restore the deterministic cyan energy free host the later checks expect.
+    free_configuration="$(panel_call dockConfiguration "$free_panel_id")"
+    free_revision="$(sed -n \
+        "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
+        <<<"$free_configuration")"
+    perspective_reply="$(panel_call applyPanelSettingsTransaction \
+        "$free_panel_id" "uint64 $free_revision" \
+        "{'layout': <'horizontal'>, 'rendererTier': <'skinned2d'>, 'panelThemeId': <'energy-frame-cyan'>, 'completeThemeId': <'energy-frame-cyan'>, 'color': <'#44ddea'>, 'glowIntensity': <1.15>}" \
+        '{}')"
+    [[ "$perspective_reply" == *"'success': <true>"* ]] || {
+        printf 'Could not restore the cyan energy free host: %s\n' \
+            "$perspective_reply" >&2
+        return 1
+    }
 
     local free_pin_reply
     free_pin_reply="$(panel_call pinPanelUrls "$free_panel_id" "['$smoke_desktop_url']")"
@@ -863,6 +1035,8 @@ run_outer() {
        -r "$module_root/renderers/PanelProcedural2D.qml" &&
        -r "$module_root/renderers/PanelSkin2D.qml" &&
        -r "$module_root/renderers/PanelSkinLayer2D.qml" &&
+       -r "$module_root/renderers/PanelBaked25D.qml" &&
+       -r "$module_root/ThemeStateSelection.js" &&
        -r "$module_root/renderers/IconStyle2D.qml" &&
        -r "$module_root/inputs/AlphaHitMask.qml" ]] || {
         printf 'The staged ArchDock.Rendering module is incomplete: %s\n' \
@@ -924,6 +1098,23 @@ run_outer() {
             return 1
         }
     done
+    for theme_id in ring-platform-blue octagon-platform-steel \
+                    arc-platform-orange; do
+        [[ -r "$theme_root/$theme_id/archdock-theme.json" &&
+           -r "$theme_root/$theme_id/assets/platform-rear.svg" &&
+           -r "$theme_root/$theme_id/assets/platform-front.svg" &&
+           -r "$theme_root/$theme_id/assets/platform-shadow.svg" &&
+           -r "$theme_root/$theme_id/assets/platform-reflection.svg" &&
+           -r "$theme_root/$theme_id/assets/glow-mask.svg" &&
+           -r "$theme_root/$theme_id/masks/input.svg" &&
+           -r "$theme_root/$theme_id/metadata/production-record.json" &&
+           -r "$theme_root/$theme_id/metadata/visual-review.json" ]] || {
+            printf 'The staged perspective package is incomplete: %s\n' \
+                "$theme_id" >&2
+            return 1
+        }
+    done
+
     local forbidden_reference
     forbidden_reference="$(find "$stage_root" -type f \
         \( -iname 'Screenshot_*' -o -path '*/source-samples/*' \) \

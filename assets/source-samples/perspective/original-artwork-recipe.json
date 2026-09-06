@@ -1,0 +1,151 @@
+{
+  "format": "org.archdock.clean-room-artwork-recipe",
+  "version": 1,
+  "task": "TASK-0034",
+  "method": "deterministic-hand-authored-svg",
+  "pixelInput": false,
+  "sourceDerivative": false,
+  "authorizationEvidence": "assets/source-samples/perspective/REFERENCE_RIGHTS.md",
+  "inspirationReferences": [
+    {
+      "catalogId": "panel-screenshot-20260811-195427",
+      "sha256": "20639a8a6f26462e876f357fa8d60d77705ae9aabcb28e3d2b06b93f94d4cd1a",
+      "variant": "ring-platform-blue",
+      "permittedUse": "broad-concept-only",
+      "pixelInput": false
+    },
+    {
+      "catalogId": "panel-screenshot-20260811-200136",
+      "sha256": "c35ea87ab7332c36649c9683f5777707fcfe2fc637565f7cf530d5f6ef2366e2",
+      "variant": "octagon-platform-steel",
+      "permittedUse": "broad-concept-only",
+      "pixelInput": false
+    },
+    {
+      "catalogId": "panel-screenshot-20260811-200511",
+      "sha256": "4f50a2b8f5998f27d9792edeac96a8603225c0ceee0bea7360937e8b62b62a3e",
+      "variant": "arc-platform-orange",
+      "permittedUse": "broad-concept-only",
+      "pixelInput": false
+    }
+  ],
+  "canvas": {
+    "width": 1200,
+    "height": 600,
+    "transparent": true
+  },
+  "geometry": {
+    "note": "One perspective platform per family, centred on the canvas. The rear layer is the whole platform; the foreground layer is only the near rim that real icons may pass behind. Placeholder icons are never drawn.",
+    "center": {
+      "x": 600,
+      "y": 300
+    },
+    "families": {
+      "ring-platform-blue": {
+        "shape": "ellipse",
+        "outerRadiusX": 520,
+        "outerRadiusY": 190,
+        "innerRadiusX": 372,
+        "innerRadiusY": 136,
+        "rimHeight": 38,
+        "trackRadiusX": 446,
+        "trackRadiusY": 163
+      },
+      "octagon-platform-steel": {
+        "shape": "polygon",
+        "sides": 8,
+        "outerRadiusX": 520,
+        "outerRadiusY": 190,
+        "innerRadiusX": 368,
+        "innerRadiusY": 134,
+        "rimHeight": 34,
+        "trackRadiusX": 444,
+        "trackRadiusY": 162
+      },
+      "arc-platform-orange": {
+        "shape": "arc",
+        "outerRadiusX": 520,
+        "outerRadiusY": 190,
+        "innerRadiusX": 366,
+        "innerRadiusY": 134,
+        "rimHeight": 34,
+        "trackRadiusX": 443,
+        "trackRadiusY": 162,
+        "startDegrees": 110,
+        "sweepDegrees": 140
+      }
+    }
+  },
+  "depth": {
+    "farScale": 0.62,
+    "nearScale": 1.0,
+    "occlusionDepth": 0.62,
+    "note": "Depth is normalized 0 at the far edge of the track and 1 at the near edge. The occlusion depth is set just beyond the flanks so only entries approaching the near rim are drawn in front of it."
+  },
+  "tilt": {
+    "minimumDegrees": -10,
+    "maximumDegrees": 10,
+    "defaultDegrees": 0
+  },
+  "layers": [
+    "rear",
+    "shadow",
+    "reflection",
+    "glow-mask",
+    "foreground",
+    "input-mask"
+  ],
+  "states": {
+    "normal": {
+      "glowOpacity": 0.5
+    },
+    "hover": {
+      "glowOpacity": 0.9
+    },
+    "open": {
+      "glowOpacity": 0.72
+    },
+    "collapsed": {
+      "glowOpacity": 0.28
+    }
+  },
+  "variants": [
+    {
+      "id": "ring-platform-blue",
+      "base": "#08202e",
+      "mid": "#123c52",
+      "edge": "#2f9fd0",
+      "accent": "#74e2ff",
+      "highlight": "#d6f6ff",
+      "defaultTint": "#58c8f0"
+    },
+    {
+      "id": "octagon-platform-steel",
+      "base": "#1d2229",
+      "mid": "#39414c",
+      "edge": "#7d8b99",
+      "accent": "#c3d0dc",
+      "highlight": "#eef3f7",
+      "defaultTint": "#9fb0be"
+    },
+    {
+      "id": "arc-platform-orange",
+      "base": "#251006",
+      "mid": "#4d2110",
+      "edge": "#e0672a",
+      "accent": "#ffab5e",
+      "highlight": "#ffe6c8",
+      "defaultTint": "#ff8f47"
+    }
+  ],
+  "prohibitedElements": [
+    "source-image-pixels",
+    "tracing",
+    "third-party-logos",
+    "third-party-glyphs",
+    "text",
+    "embedded-raster-images",
+    "placeholder-icons",
+    "distinctive-source-ornament"
+  ]
+}

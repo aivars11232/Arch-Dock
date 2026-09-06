@@ -78,7 +78,7 @@ Item {
         trackForm === "identity" && normalizedMechanism !== "open"
             ? "open" : normalizedMechanism
     readonly property string requiresRendererTier:
-        normalizedMechanism === "collapse-radial" ? "baked25d" : ""
+        normalizedMechanism === "collapse-radial" ? "baked2.5d" : ""
     readonly property string fallbackReason: resolveFallbackReason()
     readonly property bool fallbackApplied: fallbackReason.length > 0
 
@@ -171,7 +171,7 @@ Item {
         if (!mechanismAvailable)
             return "mechanism-unavailable"
         if (normalizedMechanism === "collapse-radial")
-            return "mechanism-requires-baked25d"
+            return "mechanism-requires-baked2.5d"
         if (surfaceWidth <= 0 || surfaceHeight <= 0)
             return "surface-geometry-invalid"
         return ""

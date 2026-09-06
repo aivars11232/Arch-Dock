@@ -477,4 +477,47 @@ TestCase {
         compare(slot.height, scene.layoutGeometry.iconSize)
         compare(slot.rotation, 0)
     }
+
+    // A panel that is not on the baked tier must not pick up any of its
+    // geometry. Track metrics are the marker: they exist only when the scene
+    // is actually laid out on a theme's anchor path.
+    function test_nonBakedScenesReportNoTrackGeometry_data() {
+        return [
+            { tag: "procedural-horizontal", tier: "procedural2d",
+              layout: "horizontal", edge: "bottom" },
+            { tag: "procedural-ring", tier: "procedural2d",
+              layout: "ring", edge: "free" },
+            { tag: "skinned-horizontal", tier: "skinned2d",
+              layout: "horizontal", edge: "bottom" }
+        ]
+    }
+
+    function test_nonBakedScenesReportNoTrackGeometry(data) {
+        const scene = createTemporaryObject(sceneComponent, testCase, {
+            panelDefinition: definition({
+                rendererTier: data.tier,
+                layout: data.layout,
+                edge: data.edge
+            }),
+            orderedEntries: entries(),
+            hostCapabilities: ({
+                available: true,
+                renderer: {
+                    requestedTier: data.tier,
+                    effectiveTier: data.tier,
+                    fallbackApplied: false
+                }
+            }),
+            entryDelegateContext: ({
+                hostKind: data.edge === "free" ? "free" : "native"
+            })
+        })
+        verify(scene !== null)
+        verify(!scene.bakedTierRequested, "the baked tier is not requested")
+        verify(!scene.bakedMetadataUsable, "no baked metadata is usable")
+        compare(scene.activeTrackMetrics, null, "no track geometry is used")
+        verify(scene.activeInputRegionKind !== "platform-mask",
+               "the platform mask is not claimed")
+        verify(scene.width > 0 && scene.height > 0, "the scene has a size")
+    }
 }

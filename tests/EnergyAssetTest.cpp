@@ -441,7 +441,7 @@ void EnergyAssetTest::energyFamilyIsCataloguedWithRuntimeCapabilities()
         QStringLiteral("data/themes/builtin-themes.json")))
                                   .value(QStringLiteral("themes"))
                                   .toArray();
-    QCOMPARE(themes.size(), 12);
+    QCOMPARE(themes.size(), 15);
 
     int observedEnergyThemes = 0;
     for (const EnergySpec &spec : energySpecs)

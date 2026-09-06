@@ -39,6 +39,13 @@ Item {
 
     property real glowPhase: 0
 
+    // A perspective platform is drawn far larger than a rail skin, so its
+    // layers are rasterised at the size they are drawn, capped per axis, and
+    // are not kept in the shared pixmap cache. Switching families therefore
+    // releases the previous platform's textures instead of retaining one entry
+    // per size it was ever drawn at.
+    readonly property int rasterBudget: 2048
+
     readonly property string effectiveState: ThemeStateSelection.effectiveStateId(
         themeDefinition, presentationState, transitionState,
         presentationProgress, hovered)
@@ -360,6 +367,8 @@ Item {
                     * root.runtimeOpacityMultiplier(modelData.definition)
                 tintEnabled: root.dynamicTintSupported
                 tintColor: root.safeTintColor
+                rasterBudget: root.rasterBudget
+                cacheImage: false
             }
         }
     }
@@ -370,6 +379,9 @@ Item {
     Component {
         id: foregroundLayers
 
+        // The host sizes this to the whole scene; the platform rectangle is
+        // applied one level in, so the component can be instantiated by a
+        // Loader without its own position being overwritten.
         Item {
             id: foregroundRoot
 
@@ -380,37 +392,44 @@ Item {
                 return items
             }
 
-            x: root.platformRect.x
-            y: root.platformRect.y
-            width: root.platformRect.width
-            height: root.platformRect.height
             // The platform draws itself; input belongs to the scene's mask and
             // to the entries, so this never swallows a click.
             enabled: false
 
-            Repeater {
-                id: foregroundRepeater
+            Item {
+                id: foregroundPlatform
 
-                model: root.foregroundEntries
+                x: root.platformRect.x
+                y: root.platformRect.y
+                width: root.platformRect.width
+                height: root.platformRect.height
 
-                delegate: PanelSkinLayer2D {
-                    required property var modelData
-                    required property int index
+                Repeater {
+                    id: foregroundRepeater
 
-                    anchors.fill: parent
-                    z: index
-                    objectName: "panel-baked-foreground-"
-                        + String(modelData.definition.id || index)
-                    layerDefinition: modelData.definition
-                    assetDefinition: root.objectById(
-                        root.themeDefinition
-                            ? root.themeDefinition.assets : [],
-                        modelData.definition.asset)
-                    source: root.assetUrl(modelData.definition.asset)
-                    layerOpacity: root.stateOpacityForLayer(
-                        modelData.definition)
-                    tintEnabled: root.dynamicTintSupported
-                    tintColor: root.safeTintColor
+                    model: root.foregroundEntries
+
+                    delegate: PanelSkinLayer2D {
+                        required property var modelData
+                        required property int index
+
+                        anchors.fill: parent
+                        z: index
+                        objectName: "panel-baked-foreground-"
+                            + String(modelData.definition.id || index)
+                        layerDefinition: modelData.definition
+                        assetDefinition: root.objectById(
+                            root.themeDefinition
+                                ? root.themeDefinition.assets : [],
+                            modelData.definition.asset)
+                        source: root.assetUrl(modelData.definition.asset)
+                        layerOpacity: root.stateOpacityForLayer(
+                            modelData.definition)
+                        tintEnabled: root.dynamicTintSupported
+                        tintColor: root.safeTintColor
+                        rasterBudget: root.rasterBudget
+                        cacheImage: false
+                    }
                 }
             }
         }
@@ -422,6 +441,7 @@ Item {
         // Kept out of the drawn tree here. PanelScene reparents an instance of
         // foregroundComponent into its entry layer; this instance exists only
         // so the renderer can report whether its foreground layers loaded.
+        anchors.fill: parent
         active: root.hasForeground
         sourceComponent: foregroundLayers
         visible: false

@@ -1,0 +1,91 @@
+{
+  "format": "org.archdock.production-record",
+  "version": 1,
+  "themeId": "arc-platform-orange",
+  "task": "TASK-0034",
+  "method": "deterministic-hand-authored-svg",
+  "sourceDerivative": false,
+  "pixelInput": false,
+  "recipe": "assets/source-samples/perspective/original-artwork-recipe.json",
+  "authorizationEvidence": "assets/source-samples/perspective/REFERENCE_RIGHTS.md",
+  "excludedReferences": [
+    {
+      "catalogId": "panel-screenshot-20260811-200511",
+      "sha256": "4f50a2b8f5998f27d9792edeac96a8603225c0ceee0bea7360937e8b62b62a3e",
+      "role": "broad-concept-only",
+      "pixelInput": false
+    }
+  ],
+  "outputs": [
+    {
+      "path": "assets/platform-rear.svg",
+      "sha256": "d3f8bda0193af0486a1500dc228ecf8ea55d00dadb894b0cbc192283b951322d"
+    },
+    {
+      "path": "assets/platform-front.svg",
+      "sha256": "5bd86a31da4c9937d9b59f2c9b25a9e60a4f084f8bad7efc946a659215959485"
+    },
+    {
+      "path": "assets/platform-shadow.svg",
+      "sha256": "2e20e90f6145f21bcc1db9369dde6bf1138f35157d7aead0fae35b9b8458fa5d"
+    },
+    {
+      "path": "assets/platform-reflection.svg",
+      "sha256": "b2fd170a1a1af6b83019d307eeea26b013fb1187195ce84932b0224323db3261"
+    },
+    {
+      "path": "assets/glow-mask.svg",
+      "sha256": "973d411a9a115ec1cb29ba2d8453a6f8ff3fb0710f13c3910d26e74e84e24195"
+    },
+    {
+      "path": "masks/input.svg",
+      "sha256": "2ca4172c90afba7360bf3432c7b265b8d45d3ee45cdc3c23867d23ae6cc552ed"
+    }
+  ],
+  "parameters": {
+    "canvas": {
+      "width": 1200,
+      "height": 600
+    },
+    "shape": "arc",
+    "outerRadius": {
+      "x": 520,
+      "y": 190
+    },
+    "innerRadius": {
+      "x": 366,
+      "y": 134
+    },
+    "track": {
+      "radiusX": 443,
+      "radiusY": 162
+    },
+    "depth": {
+      "farScale": 0.62,
+      "nearScale": 1.0,
+      "occlusionDepth": 0.62
+    },
+    "tilt": {
+      "minimumDegrees": -10,
+      "maximumDegrees": 10,
+      "defaultDegrees": 0
+    },
+    "effectMargins": {
+      "left": 16,
+      "top": 16,
+      "right": 16,
+      "bottom": 16
+    },
+    "orientation": "free",
+    "tintableMasks": [
+      "glow-mask"
+    ],
+    "transparentCentre": false,
+    "placeholderIcons": false
+  },
+  "license": {
+    "spdx": "NOASSERTION",
+    "redistribution": "allowed",
+    "evidence": "User approved creation and redistribution of newly created original TASK-0034 artwork as part of Arch Dock; no public license was selected"
+  }
+}

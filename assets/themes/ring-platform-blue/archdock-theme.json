@@ -1,0 +1,338 @@
+{
+  "format": "org.archdock.theme",
+  "version": 2,
+  "id": "ring-platform-blue",
+  "name": "Blue Ring Platform",
+  "packageRevision": 1,
+  "author": "Arch Dock project",
+  "description": "Original perspective ring platform created from a blank canvas for Arch Dock",
+  "license": {
+    "spdx": "NOASSERTION",
+    "redistribution": "allowed",
+    "evidence": "User approved creation and redistribution of newly created original TASK-0034 artwork as part of Arch Dock; no public license was selected"
+  },
+  "capabilities": {
+    "hosts": [
+      "free-desktop"
+    ],
+    "rendererTiers": [
+      "baked2.5d",
+      "procedural2d"
+    ],
+    "preferredRendererTier": "baked2.5d",
+    "fallbackRendererTiers": [
+      "procedural2d"
+    ],
+    "layouts": [
+      "ring",
+      "circular"
+    ],
+    "orientations": [
+      "free"
+    ],
+    "features": [
+      "dynamic-tint",
+      "dynamic-glow",
+      "icon-state-styling"
+    ],
+    "presentationMechanisms": [
+      "open"
+    ],
+    "rotation": {
+      "mode": "free"
+    }
+  },
+  "assets": [
+    {
+      "id": "platform-rear",
+      "path": "assets/platform-rear.svg",
+      "kind": "vector",
+      "mimeType": "image/svg+xml",
+      "sha256": "ff65bf704691ab760023b82966f72457422e1b85f5fe1aa2a680df2c93f444af",
+      "naturalSize": {
+        "width": 1200,
+        "height": 600
+      }
+    },
+    {
+      "id": "platform-front",
+      "path": "assets/platform-front.svg",
+      "kind": "vector",
+      "mimeType": "image/svg+xml",
+      "sha256": "86778c90aac96ec8773e854956b8f29a03b9cb42edb627d3d2e36749dd97f92e",
+      "naturalSize": {
+        "width": 1200,
+        "height": 600
+      }
+    },
+    {
+      "id": "platform-shadow",
+      "path": "assets/platform-shadow.svg",
+      "kind": "vector",
+      "mimeType": "image/svg+xml",
+      "sha256": "31728c7a3e7103fc19d6226b0896f85c258820f1ecd0c6d99e3088d8cc861a94",
+      "naturalSize": {
+        "width": 1200,
+        "height": 600
+      }
+    },
+    {
+      "id": "platform-reflection",
+      "path": "assets/platform-reflection.svg",
+      "kind": "vector",
+      "mimeType": "image/svg+xml",
+      "sha256": "d4a85c621253c09d019ae54f2a8d86981fb7d8e9e8a8209e4d7801bffbdfa940",
+      "naturalSize": {
+        "width": 1200,
+        "height": 600
+      }
+    },
+    {
+      "id": "glow-mask",
+      "path": "assets/glow-mask.svg",
+      "kind": "mask",
+      "mimeType": "image/svg+xml",
+      "sha256": "56d734c2e7cd9712ee48db498da8edd72fdfc231681cd74ac1d46cb4ad9eab43",
+      "naturalSize": {
+        "width": 1200,
+        "height": 600
+      }
+    },
+    {
+      "id": "input-mask",
+      "path": "masks/input.svg",
+      "kind": "mask",
+      "mimeType": "image/svg+xml",
+      "sha256": "84a674669e2e1538c56436896dde778d9db8ff8468eb475a8ba4a9b144399bd0",
+      "naturalSize": {
+        "width": 1200,
+        "height": 600
+      }
+    },
+    {
+      "id": "production-record",
+      "path": "metadata/production-record.json",
+      "kind": "material",
+      "mimeType": "application/json",
+      "sha256": "4173b037ce964c6869f1453273ac11119f71a9fe9d688eed4b3bca07433ae4c2"
+    },
+    {
+      "id": "visual-review",
+      "path": "metadata/visual-review.json",
+      "kind": "material",
+      "mimeType": "application/json",
+      "sha256": "a1acf36de5d87bca35095bff8c4345a0fb36c73e571c7ae841220b321b510c16"
+    }
+  ],
+  "states": [
+    {
+      "id": "normal",
+      "layers": [
+        "shadow",
+        "rear",
+        "reflection",
+        "glow-normal",
+        "front"
+      ]
+    },
+    {
+      "id": "hover",
+      "layers": [
+        "shadow",
+        "rear",
+        "reflection",
+        "glow-hover",
+        "front"
+      ]
+    },
+    {
+      "id": "open",
+      "layers": [
+        "shadow",
+        "rear",
+        "reflection",
+        "glow-open",
+        "front"
+      ]
+    },
+    {
+      "id": "collapsed",
+      "layers": [
+        "shadow",
+        "rear",
+        "reflection",
+        "glow-collapsed",
+        "front"
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "id": "shadow",
+      "asset": "platform-shadow",
+      "role": "shadow",
+      "sourceRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1200,
+        "height": 600
+      },
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "rear",
+      "asset": "platform-rear",
+      "role": "rear",
+      "sourceRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1200,
+        "height": 600
+      },
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "reflection",
+      "asset": "platform-reflection",
+      "role": "reflection",
+      "sourceRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1200,
+        "height": 600
+      },
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "glow-normal",
+      "asset": "glow-mask",
+      "role": "glow",
+      "sourceRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1200,
+        "height": 600
+      },
+      "opacity": 0.5,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "glow-hover",
+      "asset": "glow-mask",
+      "role": "glow",
+      "sourceRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1200,
+        "height": 600
+      },
+      "opacity": 0.9,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "glow-open",
+      "asset": "glow-mask",
+      "role": "glow",
+      "sourceRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1200,
+        "height": 600
+      },
+      "opacity": 0.72,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "glow-collapsed",
+      "asset": "glow-mask",
+      "role": "glow",
+      "sourceRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1200,
+        "height": 600
+      },
+      "opacity": 0.28,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "front",
+      "asset": "platform-front",
+      "role": "foreground",
+      "sourceRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1200,
+        "height": 600
+      },
+      "opacity": 1.0,
+      "blendMode": "source-over"
+    }
+  ],
+  "tracks": [
+    {
+      "id": "platform-track",
+      "shape": "ellipse",
+      "center": {
+        "x": 600,
+        "y": 300
+      },
+      "radiusX": 446,
+      "radiusY": 163,
+      "startDegrees": 0,
+      "depth": {
+        "farScale": 0.62,
+        "nearScale": 1.0,
+        "occlusionDepth": 0.62
+      },
+      "tilt": {
+        "minimumDegrees": -10,
+        "maximumDegrees": 10,
+        "defaultDegrees": 0
+      }
+    }
+  ],
+  "effectMargins": {
+    "left": 16,
+    "top": 16,
+    "right": 16,
+    "bottom": 16
+  },
+  "inputMasks": [
+    {
+      "id": "normal-input",
+      "asset": "input-mask",
+      "state": "normal",
+      "orientation": "free",
+      "threshold": 0.5
+    },
+    {
+      "id": "hover-input",
+      "asset": "input-mask",
+      "state": "hover",
+      "orientation": "free",
+      "threshold": 0.5
+    },
+    {
+      "id": "open-input",
+      "asset": "input-mask",
+      "state": "open",
+      "orientation": "free",
+      "threshold": 0.5
+    },
+    {
+      "id": "collapsed-input",
+      "asset": "input-mask",
+      "state": "collapsed",
+      "orientation": "free",
+      "threshold": 0.5
+    }
+  ],
+  "iconStyleRef": {
+    "id": "metallic-blue"
+  },
+  "animationProfileRefs": []
+}

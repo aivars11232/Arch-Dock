@@ -548,9 +548,15 @@ const QVector<Descriptor> &schemaFields()
                      "whole-panel-rotation")),
         panel("layoutRadius", Access::Editor, Type::Integer,
               Normalization::IntegerRange, 150, "layout.radius", 48, 2048, {}, false, true,
+              // The polygon family is sized from this radius exactly as the
+              // round layouts are - LayoutEngine places a polygon's entries on
+              // a circle of it - so omitting them left an octagon panel with
+              // no way to be sized at all.
               editor("panels-layout", "Radius", "spin", {"studio"}, "layout",
                      {"circular", "ellipse", "ring", "radial", "arc", "semicircle",
-                      "fan", "spiral"}, {{QStringLiteral("step"), 2}})),
+                      "fan", "spiral", "polygon", "triangle", "square",
+                      "pentagon", "hexagon", "octagon", "star"},
+                     {{QStringLiteral("step"), 2}})),
         panel("layoutRows", Access::Editor, Type::Integer,
               Normalization::IntegerRange, 2, "layout.rows", 1, 8, {}, false, true,
               editor("panels-layout", "Grid rows", "spin", {"studio"}, "layout",

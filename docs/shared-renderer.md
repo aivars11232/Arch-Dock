@@ -38,6 +38,15 @@ contract.
   effect, and input bounds.
 - `PanelSkinLayer2D` renders one declared layer and applies colorization only to
   assets typed as masks.
+- `PanelBaked25D` is the Theme v2 baked 2.5D renderer. It draws a perspective
+  platform as layered artwork and supplies the foreground layers the scene
+  interleaves with real icons. It is not a mesh scene and must not be described
+  as true 3D.
+- `ThemeStateSelection` is the single Theme v2 state and layer selection
+  contract: which declared layers are active, in what order, and at what
+  opacity. Both `PanelSkin2D` and `PanelBaked25D` read it, so a state, a hover
+  and an opening crossfade cannot mean two different things depending on which
+  renderer drew the panel.
 - `AlphaHitMask` samples the package input-mask alpha through a bounded cached
   raster and supplies the scene containment predicate.
 - `LivePanelPreview` hosts exactly one `PanelScene` with draft or preset data.
@@ -91,7 +100,10 @@ radial panels.
   interior and corners of a ring or arc pass through. This narrows Qt Quick
   item hit testing only; a Plasma desktop applet is still a rectangle to the
   compositor, and the `nonrectangular-input` host capability is not claimed.
-  `activeInputRegionKind` reports `alpha-mask`, `geometry-band` or `rectangle`.
+  `activeInputRegionKind` reports `alpha-mask`, `platform-mask`,
+  `geometry-band` or `rectangle`. The predicate is annotated
+  `contains(point): bool` so Qt actually consults it; an unannotated signature
+  is silently ignored and falls back to the plain rectangle.
 
 ## PanelScene inputs
 
@@ -135,6 +147,8 @@ host and does not call the Arch Dock service.
 | `sceneRotationEnabled` / `sceneRotationActive` / `sceneRotationAngle` | Whether whole-scene rotation is configured and permitted, whether it is advancing right now, and the current offset in degrees. |
 | `effectiveLayoutAngle` | Configured layout angle plus the rotation offset; the angle every geometry consumer receives. |
 | `activeInputRegionKind` / `containsInputPoint(point)` | Which input region is active and the predicate it applies. |
+| `activeTrackMetrics` | Baked 2.5D scene geometry, or `null` when the scene is not laid out on a theme track. |
+| `occlusionDepth` / `foregroundOcclusionItem` | The declared depth at which foreground layers cut across the entries, and the instantiated layer. |
 
 ## Skinned 2D and safe fallback
 
@@ -158,10 +172,94 @@ geometry animation.
 A named theme that is absent, mismatched, invalid, failed, unavailable, or
 explicitly not loadable reports `theme-unavailable` and uses procedural 2D. A
 backend capability fallback or runtime fallback is also reflected in the scene
-status. Baked 2.5D and true 3D remain unavailable.
+status. True 3D remains unavailable; baked 2.5D is available on the free
+desktop host and is described under "Baked 2.5D" below.
 
 The fallback always retains deterministic geometry, visible entries, bounds,
 input-region output, and popup/reveal anchors.
+
+## Baked 2.5D
+
+TASK-0034 adds the `baked2.5d` tier. It renders a perspective ring, polygon or
+arc platform as layered artwork with real application icons standing on it. It
+requires no Qt Quick 3D module, declares no mesh, and is never described as
+true 3D; the module validator fails the build if any shared rendering source
+imports a 3D module.
+
+The tier is installed and enabled for the **free desktop host only**. A Plasma
+edge panel is a fixed rectangle and cannot present a perspective platform, so a
+native panel resolves `renderer-host-unsupported` and falls back through the
+package's declared fallback tiers.
+
+Geometry comes from the theme's declared `tracks`, not from the configured
+path. `LayoutEngine.trackMetrics()` scales the artwork so the track's own
+radius matches the configured layout radius, applies the theme's bounded tilt
+to the track and the drawn platform together, and returns a scene box that is
+the union of the platform and every scaled icon. `trackEntryGeometry()` returns
+the same output contract every other layout returns, plus a normalized `depth`,
+the interpolated `scaleFactor`, and `inFront`.
+
+Depth is normalized: `0` at the far edge of the path, `1` at the near edge. An
+entry's `z` is its depth, and the theme's `occlusionDepth` becomes the `z` of
+the foreground layers the scene instantiates among the entries. An entry nearer
+than that depth paints over the platform rim; a further one paints under it.
+That ordering is the only reason a real icon can pass behind the artwork. The
+logical order the keyboard and accessibility tree walk is the entry order and
+is unaffected: only paint order changes.
+
+A closed track (`ellipse`, `polygon`) supports whole-scene rotation and is
+measured around its whole path so a turning ring never asks its host to resize.
+An open `arc` does not rotate, because sweeping it would carry entries off the
+platform drawn beneath them.
+
+Input is the package's own alpha mask, positioned at the platform rectangle,
+combined with the entry rectangles; `activeInputRegionKind` reports
+`platform-mask`. The empty desktop inside and around a ring passes through,
+while an icon standing proud of the rim stays clickable. As with every other
+tier this narrows Qt Quick item hit testing only: a Plasma desktop applet is
+still a rectangle to the compositor, and `nonrectangular-input` remains
+unclaimed.
+
+A missing or undecodable platform layer fails closed to procedural 2D with a
+specific reason and leaves every entry rendered; a decorative layer that fails
+is skipped and counted instead, because losing a reflection is not worth losing
+the dock. The bounded glow modulation runs only when the package declares
+`dynamic-glow`, a glow layer is present, reduced motion is off, and the panel
+can be seen.
+
+### Resource policy
+
+A perspective platform is drawn far larger than a rail skin, so its layers
+carry a raster budget. `PanelSkinLayer2D.rasterBudget` is zero for skins, which
+keeps Qt's own behaviour: the asset is decoded at its natural size and every
+size it has been drawn at stays in the shared pixmap cache. `PanelBaked25D`
+sets a budget of 2048 pixels per axis and `cacheImage: false`, so each layer is
+rasterised at the size it is actually drawn, capped, and released when the
+layer goes away.
+
+That is what bounds resource use across repeated theme changes: switching
+families destroys the previous platform's layer delegates and its textures with
+them, instead of retaining one cache entry per size each platform was ever
+drawn at. The staged smoke measures it directly — sixteen theme changes across
+the three perspective families and the cyan energy skin, with the private
+PlasmaShell's resident memory required not to grow.
+
+### Supported hosts and limitations
+
+- The tier is available on the free desktop host only. A native edge panel
+  resolves `renderer-host-unsupported` and falls back.
+- A baked package declares no end caps, so a collapsed baked panel keeps no
+  handle of its own; the presentation controller supplies the bounded minimum.
+- `collapse-radial` remains an interface only. It reports the tier it needs
+  (`baked2.5d`) and falls back to a centred clip and fade; no shipped
+  perspective package declares it, and implementing a real iris is not part of
+  TASK-0034.
+- Input narrowing is Qt Quick item hit testing only. A Plasma desktop applet
+  is still a rectangle to the compositor, so `nonrectangular-input` stays
+  unclaimed.
+- Tilt is read from the internal `surface.parameters2_5D` map and clamped to
+  the theme's declared range. No editor exposes it yet, so no visible control
+  claims it.
 
 The alpha mask filters QML item hit testing through `containmentMask`. It does
 not claim compositor-wide click-through outside the applet's enclosing window:

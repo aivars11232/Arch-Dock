@@ -9,22 +9,57 @@
       "builtIn": true,
       "category": "glass",
       "capabilities": {
-        "hosts": ["native-edge", "free-desktop"],
-        "layouts": ["adaptive", "horizontal", "vertical"],
-        "features": ["dynamic-tint", "icon-state-styling"],
+        "hosts": [
+          "native-edge",
+          "free-desktop"
+        ],
+        "layouts": [
+          "adaptive",
+          "horizontal",
+          "vertical"
+        ],
+        "features": [
+          "dynamic-tint",
+          "icon-state-styling"
+        ],
         "presentationMechanisms": [],
-        "rendererTiers": ["procedural2d"],
+        "rendererTiers": [
+          "procedural2d"
+        ],
         "preferredRendererTier": "procedural2d",
         "fallbackRendererTiers": [],
-        "rotation": {"mode": "bounded", "minimumDegrees": -180, "maximumDegrees": 180}
+        "rotation": {
+          "mode": "bounded",
+          "minimumDegrees": -180,
+          "maximumDegrees": 180
+        }
       },
-      "panelStyle": {"appearance": "glass", "shape": "pill", "color": "#161b26", "opacity": 0.88},
-      "iconStyle": {"iconShape": "rounded", "iconSize": 52, "spacing": 8},
+      "panelStyle": {
+        "appearance": "glass",
+        "shape": "pill",
+        "color": "#161b26",
+        "opacity": 0.88
+      },
+      "iconStyle": {
+        "iconShape": "rounded",
+        "iconSize": 52,
+        "spacing": 8
+      },
       "tileStyle": {},
       "indicatorStyle": {},
-      "animationStyle": {"iconAnimation": "scale", "animationTrigger": "hover", "animationSpeed": 1.0, "animationIntensity": 1.0},
-      "layoutStyle": {"layout": "adaptive", "layoutScale": 1.0},
-      "previewConfiguration": {"active": true}
+      "animationStyle": {
+        "iconAnimation": "scale",
+        "animationTrigger": "hover",
+        "animationSpeed": 1.0,
+        "animationIntensity": 1.0
+      },
+      "layoutStyle": {
+        "layout": "adaptive",
+        "layoutScale": 1.0
+      },
+      "previewConfiguration": {
+        "active": true
+      }
     },
     {
       "id": "neon-segments",
@@ -33,22 +68,57 @@
       "builtIn": true,
       "category": "neon",
       "capabilities": {
-        "hosts": ["native-edge", "free-desktop"],
-        "layouts": ["adaptive", "horizontal", "vertical"],
-        "features": ["dynamic-tint", "icon-state-styling"],
+        "hosts": [
+          "native-edge",
+          "free-desktop"
+        ],
+        "layouts": [
+          "adaptive",
+          "horizontal",
+          "vertical"
+        ],
+        "features": [
+          "dynamic-tint",
+          "icon-state-styling"
+        ],
         "presentationMechanisms": [],
-        "rendererTiers": ["procedural2d"],
+        "rendererTiers": [
+          "procedural2d"
+        ],
         "preferredRendererTier": "procedural2d",
         "fallbackRendererTiers": [],
-        "rotation": {"mode": "bounded", "minimumDegrees": -180, "maximumDegrees": 180}
+        "rotation": {
+          "mode": "bounded",
+          "minimumDegrees": -180,
+          "maximumDegrees": 180
+        }
       },
-      "panelStyle": {"appearance": "neon", "shape": "rounded", "color": "#101126", "opacity": 0.94},
-      "iconStyle": {"iconShape": "squircle", "iconSize": 52, "spacing": 10},
+      "panelStyle": {
+        "appearance": "neon",
+        "shape": "rounded",
+        "color": "#101126",
+        "opacity": 0.94
+      },
+      "iconStyle": {
+        "iconShape": "squircle",
+        "iconSize": 52,
+        "spacing": 10
+      },
       "tileStyle": {},
       "indicatorStyle": {},
-      "animationStyle": {"iconAnimation": "glow", "animationTrigger": "hover", "animationSpeed": 1.0, "animationIntensity": 1.2},
-      "layoutStyle": {"layout": "adaptive", "layoutScale": 1.0},
-      "previewConfiguration": {"active": true}
+      "animationStyle": {
+        "iconAnimation": "glow",
+        "animationTrigger": "hover",
+        "animationSpeed": 1.0,
+        "animationIntensity": 1.2
+      },
+      "layoutStyle": {
+        "layout": "adaptive",
+        "layoutScale": 1.0
+      },
+      "previewConfiguration": {
+        "active": true
+      }
     },
     {
       "id": "metallic-shelf",
@@ -57,22 +127,55 @@
       "builtIn": true,
       "category": "metallic",
       "capabilities": {
-        "hosts": ["native-edge", "free-desktop"],
-        "layouts": ["horizontal"],
-        "features": ["dynamic-tint", "icon-state-styling"],
+        "hosts": [
+          "native-edge",
+          "free-desktop"
+        ],
+        "layouts": [
+          "horizontal"
+        ],
+        "features": [
+          "dynamic-tint",
+          "icon-state-styling"
+        ],
         "presentationMechanisms": [],
-        "rendererTiers": ["procedural2d"],
+        "rendererTiers": [
+          "procedural2d"
+        ],
         "preferredRendererTier": "procedural2d",
         "fallbackRendererTiers": [],
-        "rotation": {"mode": "bounded", "minimumDegrees": -180, "maximumDegrees": 180}
+        "rotation": {
+          "mode": "bounded",
+          "minimumDegrees": -180,
+          "maximumDegrees": 180
+        }
       },
-      "panelStyle": {"appearance": "metallic", "shape": "pill", "color": "#3a414b", "opacity": 0.96},
-      "iconStyle": {"iconShape": "rounded", "iconSize": 54, "spacing": 7},
+      "panelStyle": {
+        "appearance": "metallic",
+        "shape": "pill",
+        "color": "#3a414b",
+        "opacity": 0.96
+      },
+      "iconStyle": {
+        "iconShape": "rounded",
+        "iconSize": 54,
+        "spacing": 7
+      },
       "tileStyle": {},
       "indicatorStyle": {},
-      "animationStyle": {"iconAnimation": "bounce", "animationTrigger": "hover", "animationSpeed": 0.9, "animationIntensity": 0.8},
-      "layoutStyle": {"layout": "horizontal", "layoutScale": 1.0},
-      "previewConfiguration": {"active": true}
+      "animationStyle": {
+        "iconAnimation": "bounce",
+        "animationTrigger": "hover",
+        "animationSpeed": 0.9,
+        "animationIntensity": 0.8
+      },
+      "layoutStyle": {
+        "layout": "horizontal",
+        "layoutScale": 1.0
+      },
+      "previewConfiguration": {
+        "active": true
+      }
     },
     {
       "id": "holographic-ring",
@@ -81,22 +184,54 @@
       "builtIn": true,
       "category": "holographic",
       "capabilities": {
-        "hosts": ["free-desktop"],
-        "layouts": ["ring"],
-        "features": ["dynamic-tint", "icon-state-styling"],
+        "hosts": [
+          "free-desktop"
+        ],
+        "layouts": [
+          "ring"
+        ],
+        "features": [
+          "dynamic-tint",
+          "icon-state-styling"
+        ],
         "presentationMechanisms": [],
-        "rendererTiers": ["procedural2d"],
+        "rendererTiers": [
+          "procedural2d"
+        ],
         "preferredRendererTier": "procedural2d",
         "fallbackRendererTiers": [],
-        "rotation": {"mode": "bounded", "minimumDegrees": -180, "maximumDegrees": 180}
+        "rotation": {
+          "mode": "bounded",
+          "minimumDegrees": -180,
+          "maximumDegrees": 180
+        }
       },
-      "panelStyle": {"appearance": "futuristic", "shape": "hexagon", "color": "#082a35", "opacity": 0.9},
-      "iconStyle": {"iconShape": "circle", "iconSize": 48, "spacing": 10},
+      "panelStyle": {
+        "appearance": "futuristic",
+        "shape": "hexagon",
+        "color": "#082a35",
+        "opacity": 0.9
+      },
+      "iconStyle": {
+        "iconShape": "circle",
+        "iconSize": 48,
+        "spacing": 10
+      },
       "tileStyle": {},
       "indicatorStyle": {},
-      "animationStyle": {"iconAnimation": "orbit", "animationTrigger": "hover", "animationSpeed": 0.8, "animationIntensity": 0.8},
-      "layoutStyle": {"layout": "ring", "layoutScale": 1.0},
-      "previewConfiguration": {"active": true}
+      "animationStyle": {
+        "iconAnimation": "orbit",
+        "animationTrigger": "hover",
+        "animationSpeed": 0.8,
+        "animationIntensity": 0.8
+      },
+      "layoutStyle": {
+        "layout": "ring",
+        "layoutScale": 1.0
+      },
+      "previewConfiguration": {
+        "active": true
+      }
     },
     {
       "id": "minimal-underline",
@@ -105,22 +240,55 @@
       "builtIn": true,
       "category": "minimal",
       "capabilities": {
-        "hosts": ["native-edge", "free-desktop"],
-        "layouts": ["horizontal"],
-        "features": ["dynamic-tint", "icon-state-styling"],
+        "hosts": [
+          "native-edge",
+          "free-desktop"
+        ],
+        "layouts": [
+          "horizontal"
+        ],
+        "features": [
+          "dynamic-tint",
+          "icon-state-styling"
+        ],
         "presentationMechanisms": [],
-        "rendererTiers": ["procedural2d"],
+        "rendererTiers": [
+          "procedural2d"
+        ],
         "preferredRendererTier": "procedural2d",
         "fallbackRendererTiers": [],
-        "rotation": {"mode": "bounded", "minimumDegrees": -180, "maximumDegrees": 180}
+        "rotation": {
+          "mode": "bounded",
+          "minimumDegrees": -180,
+          "maximumDegrees": 180
+        }
       },
-      "panelStyle": {"appearance": "minimal", "shape": "rounded", "color": "#20242c", "opacity": 0.82},
-      "iconStyle": {"iconShape": "square", "iconSize": 48, "spacing": 12},
+      "panelStyle": {
+        "appearance": "minimal",
+        "shape": "rounded",
+        "color": "#20242c",
+        "opacity": 0.82
+      },
+      "iconStyle": {
+        "iconShape": "square",
+        "iconSize": 48,
+        "spacing": 12
+      },
       "tileStyle": {},
       "indicatorStyle": {},
-      "animationStyle": {"iconAnimation": "none", "animationTrigger": "hover", "animationSpeed": 1.0, "animationIntensity": 1.0},
-      "layoutStyle": {"layout": "horizontal", "layoutScale": 1.0},
-      "previewConfiguration": {"active": true}
+      "animationStyle": {
+        "iconAnimation": "none",
+        "animationTrigger": "hover",
+        "animationSpeed": 1.0,
+        "animationIntensity": 1.0
+      },
+      "layoutStyle": {
+        "layout": "horizontal",
+        "layoutScale": 1.0
+      },
+      "previewConfiguration": {
+        "active": true
+      }
     },
     {
       "id": "sci-fi-chassis-dark",
@@ -129,25 +297,68 @@
       "builtIn": true,
       "category": "chassis",
       "packageManifest": "sci-fi-chassis-dark/archdock-theme.json",
-      "iconStyleRef": {"id": "dark-orb"},
-      "capabilities": {
-        "hosts": ["native-edge", "free-desktop"],
-        "layouts": ["horizontal"],
-        "orientations": ["horizontal"],
-        "features": ["icon-state-styling"],
-        "presentationMechanisms": ["open", "collapse-horizontal", "split"],
-        "rendererTiers": ["skinned2d", "procedural2d"],
-        "preferredRendererTier": "skinned2d",
-        "fallbackRendererTiers": ["procedural2d"],
-        "rotation": {"mode": "none"}
+      "iconStyleRef": {
+        "id": "dark-orb"
       },
-      "panelStyle": {"rendererTier": "skinned2d"},
-      "iconStyle": {"iconShape": "rounded", "iconSize": 52, "spacing": 8},
+      "capabilities": {
+        "hosts": [
+          "native-edge",
+          "free-desktop"
+        ],
+        "layouts": [
+          "horizontal"
+        ],
+        "orientations": [
+          "horizontal"
+        ],
+        "features": [
+          "icon-state-styling"
+        ],
+        "presentationMechanisms": [
+          "open",
+          "collapse-horizontal",
+          "split"
+        ],
+        "rendererTiers": [
+          "skinned2d",
+          "procedural2d"
+        ],
+        "preferredRendererTier": "skinned2d",
+        "fallbackRendererTiers": [
+          "procedural2d"
+        ],
+        "rotation": {
+          "mode": "none"
+        }
+      },
+      "panelStyle": {
+        "rendererTier": "skinned2d"
+      },
+      "iconStyle": {
+        "iconShape": "rounded",
+        "iconSize": 52,
+        "spacing": 8
+      },
       "tileStyle": {},
       "indicatorStyle": {},
-      "animationStyle": {"iconAnimation": "scale", "animationTrigger": "hover", "animationSpeed": 1.0, "animationIntensity": 1.0},
-      "layoutStyle": {"layout": "horizontal", "layoutScale": 1.0},
-      "previewConfiguration": {"active": true, "mode": "horizontal", "presentationState": "open", "stateEntry": 1, "iconState": "hover", "seed": "chassis-family-v1"}
+      "animationStyle": {
+        "iconAnimation": "scale",
+        "animationTrigger": "hover",
+        "animationSpeed": 1.0,
+        "animationIntensity": 1.0
+      },
+      "layoutStyle": {
+        "layout": "horizontal",
+        "layoutScale": 1.0
+      },
+      "previewConfiguration": {
+        "active": true,
+        "mode": "horizontal",
+        "presentationState": "open",
+        "stateEntry": 1,
+        "iconState": "hover",
+        "seed": "chassis-family-v1"
+      }
     },
     {
       "id": "sci-fi-chassis-red",
@@ -156,25 +367,68 @@
       "builtIn": true,
       "category": "chassis",
       "packageManifest": "sci-fi-chassis-red/archdock-theme.json",
-      "iconStyleRef": {"id": "metallic-red"},
-      "capabilities": {
-        "hosts": ["native-edge", "free-desktop"],
-        "layouts": ["horizontal"],
-        "orientations": ["horizontal"],
-        "features": ["icon-state-styling"],
-        "presentationMechanisms": ["open", "collapse-horizontal", "split"],
-        "rendererTiers": ["skinned2d", "procedural2d"],
-        "preferredRendererTier": "skinned2d",
-        "fallbackRendererTiers": ["procedural2d"],
-        "rotation": {"mode": "none"}
+      "iconStyleRef": {
+        "id": "metallic-red"
       },
-      "panelStyle": {"rendererTier": "skinned2d"},
-      "iconStyle": {"iconShape": "rounded", "iconSize": 52, "spacing": 8},
+      "capabilities": {
+        "hosts": [
+          "native-edge",
+          "free-desktop"
+        ],
+        "layouts": [
+          "horizontal"
+        ],
+        "orientations": [
+          "horizontal"
+        ],
+        "features": [
+          "icon-state-styling"
+        ],
+        "presentationMechanisms": [
+          "open",
+          "collapse-horizontal",
+          "split"
+        ],
+        "rendererTiers": [
+          "skinned2d",
+          "procedural2d"
+        ],
+        "preferredRendererTier": "skinned2d",
+        "fallbackRendererTiers": [
+          "procedural2d"
+        ],
+        "rotation": {
+          "mode": "none"
+        }
+      },
+      "panelStyle": {
+        "rendererTier": "skinned2d"
+      },
+      "iconStyle": {
+        "iconShape": "rounded",
+        "iconSize": 52,
+        "spacing": 8
+      },
       "tileStyle": {},
       "indicatorStyle": {},
-      "animationStyle": {"iconAnimation": "scale", "animationTrigger": "hover", "animationSpeed": 1.0, "animationIntensity": 1.0},
-      "layoutStyle": {"layout": "horizontal", "layoutScale": 1.0},
-      "previewConfiguration": {"active": true, "mode": "horizontal", "presentationState": "open", "stateEntry": 1, "iconState": "hover", "seed": "chassis-family-v1"}
+      "animationStyle": {
+        "iconAnimation": "scale",
+        "animationTrigger": "hover",
+        "animationSpeed": 1.0,
+        "animationIntensity": 1.0
+      },
+      "layoutStyle": {
+        "layout": "horizontal",
+        "layoutScale": 1.0
+      },
+      "previewConfiguration": {
+        "active": true,
+        "mode": "horizontal",
+        "presentationState": "open",
+        "stateEntry": 1,
+        "iconState": "hover",
+        "seed": "chassis-family-v1"
+      }
     },
     {
       "id": "sci-fi-chassis-blue",
@@ -183,25 +437,68 @@
       "builtIn": true,
       "category": "chassis",
       "packageManifest": "sci-fi-chassis-blue/archdock-theme.json",
-      "iconStyleRef": {"id": "metallic-blue"},
-      "capabilities": {
-        "hosts": ["native-edge", "free-desktop"],
-        "layouts": ["horizontal"],
-        "orientations": ["horizontal"],
-        "features": ["icon-state-styling"],
-        "presentationMechanisms": ["open", "collapse-horizontal", "split"],
-        "rendererTiers": ["skinned2d", "procedural2d"],
-        "preferredRendererTier": "skinned2d",
-        "fallbackRendererTiers": ["procedural2d"],
-        "rotation": {"mode": "none"}
+      "iconStyleRef": {
+        "id": "metallic-blue"
       },
-      "panelStyle": {"rendererTier": "skinned2d"},
-      "iconStyle": {"iconShape": "rounded", "iconSize": 52, "spacing": 8},
+      "capabilities": {
+        "hosts": [
+          "native-edge",
+          "free-desktop"
+        ],
+        "layouts": [
+          "horizontal"
+        ],
+        "orientations": [
+          "horizontal"
+        ],
+        "features": [
+          "icon-state-styling"
+        ],
+        "presentationMechanisms": [
+          "open",
+          "collapse-horizontal",
+          "split"
+        ],
+        "rendererTiers": [
+          "skinned2d",
+          "procedural2d"
+        ],
+        "preferredRendererTier": "skinned2d",
+        "fallbackRendererTiers": [
+          "procedural2d"
+        ],
+        "rotation": {
+          "mode": "none"
+        }
+      },
+      "panelStyle": {
+        "rendererTier": "skinned2d"
+      },
+      "iconStyle": {
+        "iconShape": "rounded",
+        "iconSize": 52,
+        "spacing": 8
+      },
       "tileStyle": {},
       "indicatorStyle": {},
-      "animationStyle": {"iconAnimation": "scale", "animationTrigger": "hover", "animationSpeed": 1.0, "animationIntensity": 1.0},
-      "layoutStyle": {"layout": "horizontal", "layoutScale": 1.0},
-      "previewConfiguration": {"active": true, "mode": "horizontal", "presentationState": "open", "stateEntry": 1, "iconState": "hover", "seed": "chassis-family-v1"}
+      "animationStyle": {
+        "iconAnimation": "scale",
+        "animationTrigger": "hover",
+        "animationSpeed": 1.0,
+        "animationIntensity": 1.0
+      },
+      "layoutStyle": {
+        "layout": "horizontal",
+        "layoutScale": 1.0
+      },
+      "previewConfiguration": {
+        "active": true,
+        "mode": "horizontal",
+        "presentationState": "open",
+        "stateEntry": 1,
+        "iconState": "hover",
+        "seed": "chassis-family-v1"
+      }
     },
     {
       "id": "energy-frame-cyan",
@@ -210,25 +507,72 @@
       "builtIn": true,
       "category": "energy",
       "packageManifest": "energy-frame-cyan/archdock-theme.json",
-      "iconStyleRef": {"id": "metallic-blue"},
-      "capabilities": {
-        "hosts": ["native-edge", "free-desktop"],
-        "rendererTiers": ["skinned2d", "procedural2d"],
-        "preferredRendererTier": "skinned2d",
-        "fallbackRendererTiers": ["procedural2d"],
-        "layouts": ["horizontal"],
-        "orientations": ["horizontal"],
-        "features": ["dynamic-tint", "dynamic-glow", "icon-state-styling"],
-        "presentationMechanisms": ["open", "collapse-horizontal", "split"],
-        "rotation": {"mode": "none"}
+      "iconStyleRef": {
+        "id": "metallic-blue"
       },
-      "panelStyle": {"rendererTier": "skinned2d", "color": "#44ddea", "glowIntensity": 1.15},
-      "iconStyle": {"iconShape": "rounded", "iconSize": 52, "spacing": 8},
+      "capabilities": {
+        "hosts": [
+          "native-edge",
+          "free-desktop"
+        ],
+        "rendererTiers": [
+          "skinned2d",
+          "procedural2d"
+        ],
+        "preferredRendererTier": "skinned2d",
+        "fallbackRendererTiers": [
+          "procedural2d"
+        ],
+        "layouts": [
+          "horizontal"
+        ],
+        "orientations": [
+          "horizontal"
+        ],
+        "features": [
+          "dynamic-tint",
+          "dynamic-glow",
+          "icon-state-styling"
+        ],
+        "presentationMechanisms": [
+          "open",
+          "collapse-horizontal",
+          "split"
+        ],
+        "rotation": {
+          "mode": "none"
+        }
+      },
+      "panelStyle": {
+        "rendererTier": "skinned2d",
+        "color": "#44ddea",
+        "glowIntensity": 1.15
+      },
+      "iconStyle": {
+        "iconShape": "rounded",
+        "iconSize": 52,
+        "spacing": 8
+      },
       "tileStyle": {},
       "indicatorStyle": {},
-      "animationStyle": {"iconAnimation": "glow", "animationTrigger": "hover", "animationSpeed": 0.85, "animationIntensity": 0.9},
-      "layoutStyle": {"layout": "horizontal", "layoutScale": 1.0},
-      "previewConfiguration": {"active": true, "mode": "horizontal", "presentationState": "open", "stateEntry": 1, "iconState": "hover", "seed": "energy-family-v1-cyan"}
+      "animationStyle": {
+        "iconAnimation": "glow",
+        "animationTrigger": "hover",
+        "animationSpeed": 0.85,
+        "animationIntensity": 0.9
+      },
+      "layoutStyle": {
+        "layout": "horizontal",
+        "layoutScale": 1.0
+      },
+      "previewConfiguration": {
+        "active": true,
+        "mode": "horizontal",
+        "presentationState": "open",
+        "stateEntry": 1,
+        "iconState": "hover",
+        "seed": "energy-family-v1-cyan"
+      }
     },
     {
       "id": "energy-frame-green",
@@ -237,25 +581,72 @@
       "builtIn": true,
       "category": "energy",
       "packageManifest": "energy-frame-green/archdock-theme.json",
-      "iconStyleRef": {"id": "neon-green"},
-      "capabilities": {
-        "hosts": ["native-edge", "free-desktop"],
-        "rendererTiers": ["skinned2d", "procedural2d"],
-        "preferredRendererTier": "skinned2d",
-        "fallbackRendererTiers": ["procedural2d"],
-        "layouts": ["horizontal"],
-        "orientations": ["horizontal"],
-        "features": ["dynamic-tint", "dynamic-glow", "icon-state-styling"],
-        "presentationMechanisms": ["open", "collapse-horizontal", "split"],
-        "rotation": {"mode": "none"}
+      "iconStyleRef": {
+        "id": "neon-green"
       },
-      "panelStyle": {"rendererTier": "skinned2d", "color": "#4ee68a", "glowIntensity": 1.15},
-      "iconStyle": {"iconShape": "rounded", "iconSize": 52, "spacing": 8},
+      "capabilities": {
+        "hosts": [
+          "native-edge",
+          "free-desktop"
+        ],
+        "rendererTiers": [
+          "skinned2d",
+          "procedural2d"
+        ],
+        "preferredRendererTier": "skinned2d",
+        "fallbackRendererTiers": [
+          "procedural2d"
+        ],
+        "layouts": [
+          "horizontal"
+        ],
+        "orientations": [
+          "horizontal"
+        ],
+        "features": [
+          "dynamic-tint",
+          "dynamic-glow",
+          "icon-state-styling"
+        ],
+        "presentationMechanisms": [
+          "open",
+          "collapse-horizontal",
+          "split"
+        ],
+        "rotation": {
+          "mode": "none"
+        }
+      },
+      "panelStyle": {
+        "rendererTier": "skinned2d",
+        "color": "#4ee68a",
+        "glowIntensity": 1.15
+      },
+      "iconStyle": {
+        "iconShape": "rounded",
+        "iconSize": 52,
+        "spacing": 8
+      },
       "tileStyle": {},
       "indicatorStyle": {},
-      "animationStyle": {"iconAnimation": "glow", "animationTrigger": "hover", "animationSpeed": 0.85, "animationIntensity": 0.9},
-      "layoutStyle": {"layout": "horizontal", "layoutScale": 1.0},
-      "previewConfiguration": {"active": true, "mode": "horizontal", "presentationState": "open", "stateEntry": 1, "iconState": "hover", "seed": "energy-family-v1-green"}
+      "animationStyle": {
+        "iconAnimation": "glow",
+        "animationTrigger": "hover",
+        "animationSpeed": 0.85,
+        "animationIntensity": 0.9
+      },
+      "layoutStyle": {
+        "layout": "horizontal",
+        "layoutScale": 1.0
+      },
+      "previewConfiguration": {
+        "active": true,
+        "mode": "horizontal",
+        "presentationState": "open",
+        "stateEntry": 1,
+        "iconState": "hover",
+        "seed": "energy-family-v1-green"
+      }
     },
     {
       "id": "energy-frame-orange",
@@ -264,25 +655,72 @@
       "builtIn": true,
       "category": "energy",
       "packageManifest": "energy-frame-orange/archdock-theme.json",
-      "iconStyleRef": {"id": "neon-orange"},
-      "capabilities": {
-        "hosts": ["native-edge", "free-desktop"],
-        "rendererTiers": ["skinned2d", "procedural2d"],
-        "preferredRendererTier": "skinned2d",
-        "fallbackRendererTiers": ["procedural2d"],
-        "layouts": ["horizontal"],
-        "orientations": ["horizontal"],
-        "features": ["dynamic-tint", "dynamic-glow", "icon-state-styling"],
-        "presentationMechanisms": ["open", "collapse-horizontal", "split"],
-        "rotation": {"mode": "none"}
+      "iconStyleRef": {
+        "id": "neon-orange"
       },
-      "panelStyle": {"rendererTier": "skinned2d", "color": "#ff873c", "glowIntensity": 1.15},
-      "iconStyle": {"iconShape": "rounded", "iconSize": 52, "spacing": 8},
+      "capabilities": {
+        "hosts": [
+          "native-edge",
+          "free-desktop"
+        ],
+        "rendererTiers": [
+          "skinned2d",
+          "procedural2d"
+        ],
+        "preferredRendererTier": "skinned2d",
+        "fallbackRendererTiers": [
+          "procedural2d"
+        ],
+        "layouts": [
+          "horizontal"
+        ],
+        "orientations": [
+          "horizontal"
+        ],
+        "features": [
+          "dynamic-tint",
+          "dynamic-glow",
+          "icon-state-styling"
+        ],
+        "presentationMechanisms": [
+          "open",
+          "collapse-horizontal",
+          "split"
+        ],
+        "rotation": {
+          "mode": "none"
+        }
+      },
+      "panelStyle": {
+        "rendererTier": "skinned2d",
+        "color": "#ff873c",
+        "glowIntensity": 1.15
+      },
+      "iconStyle": {
+        "iconShape": "rounded",
+        "iconSize": 52,
+        "spacing": 8
+      },
       "tileStyle": {},
       "indicatorStyle": {},
-      "animationStyle": {"iconAnimation": "glow", "animationTrigger": "hover", "animationSpeed": 0.85, "animationIntensity": 0.9},
-      "layoutStyle": {"layout": "horizontal", "layoutScale": 1.0},
-      "previewConfiguration": {"active": true, "mode": "horizontal", "presentationState": "open", "stateEntry": 1, "iconState": "hover", "seed": "energy-family-v1-orange"}
+      "animationStyle": {
+        "iconAnimation": "glow",
+        "animationTrigger": "hover",
+        "animationSpeed": 0.85,
+        "animationIntensity": 0.9
+      },
+      "layoutStyle": {
+        "layout": "horizontal",
+        "layoutScale": 1.0
+      },
+      "previewConfiguration": {
+        "active": true,
+        "mode": "horizontal",
+        "presentationState": "open",
+        "stateEntry": 1,
+        "iconState": "hover",
+        "seed": "energy-family-v1-orange"
+      }
     },
     {
       "id": "energy-frame-purple",
@@ -291,25 +729,306 @@
       "builtIn": true,
       "category": "energy",
       "packageManifest": "energy-frame-purple/archdock-theme.json",
-      "iconStyleRef": {"id": "dark-orb"},
-      "capabilities": {
-        "hosts": ["native-edge", "free-desktop"],
-        "rendererTiers": ["skinned2d", "procedural2d"],
-        "preferredRendererTier": "skinned2d",
-        "fallbackRendererTiers": ["procedural2d"],
-        "layouts": ["horizontal"],
-        "orientations": ["horizontal"],
-        "features": ["dynamic-tint", "dynamic-glow", "icon-state-styling"],
-        "presentationMechanisms": ["open", "collapse-horizontal", "split"],
-        "rotation": {"mode": "none"}
+      "iconStyleRef": {
+        "id": "dark-orb"
       },
-      "panelStyle": {"rendererTier": "skinned2d", "color": "#b96cff", "glowIntensity": 1.15},
-      "iconStyle": {"iconShape": "rounded", "iconSize": 52, "spacing": 8},
+      "capabilities": {
+        "hosts": [
+          "native-edge",
+          "free-desktop"
+        ],
+        "rendererTiers": [
+          "skinned2d",
+          "procedural2d"
+        ],
+        "preferredRendererTier": "skinned2d",
+        "fallbackRendererTiers": [
+          "procedural2d"
+        ],
+        "layouts": [
+          "horizontal"
+        ],
+        "orientations": [
+          "horizontal"
+        ],
+        "features": [
+          "dynamic-tint",
+          "dynamic-glow",
+          "icon-state-styling"
+        ],
+        "presentationMechanisms": [
+          "open",
+          "collapse-horizontal",
+          "split"
+        ],
+        "rotation": {
+          "mode": "none"
+        }
+      },
+      "panelStyle": {
+        "rendererTier": "skinned2d",
+        "color": "#b96cff",
+        "glowIntensity": 1.15
+      },
+      "iconStyle": {
+        "iconShape": "rounded",
+        "iconSize": 52,
+        "spacing": 8
+      },
       "tileStyle": {},
       "indicatorStyle": {},
-      "animationStyle": {"iconAnimation": "glow", "animationTrigger": "hover", "animationSpeed": 0.85, "animationIntensity": 0.9},
-      "layoutStyle": {"layout": "horizontal", "layoutScale": 1.0},
-      "previewConfiguration": {"active": true, "mode": "horizontal", "presentationState": "open", "stateEntry": 1, "iconState": "hover", "seed": "energy-family-v1-purple"}
+      "animationStyle": {
+        "iconAnimation": "glow",
+        "animationTrigger": "hover",
+        "animationSpeed": 0.85,
+        "animationIntensity": 0.9
+      },
+      "layoutStyle": {
+        "layout": "horizontal",
+        "layoutScale": 1.0
+      },
+      "previewConfiguration": {
+        "active": true,
+        "mode": "horizontal",
+        "presentationState": "open",
+        "stateEntry": 1,
+        "iconState": "hover",
+        "seed": "energy-family-v1-purple"
+      }
+    },
+    {
+      "id": "ring-platform-blue",
+      "name": "Blue Ring Platform",
+      "version": 2,
+      "builtIn": true,
+      "category": "perspective",
+      "packageManifest": "ring-platform-blue/archdock-theme.json",
+      "iconStyleRef": {
+        "id": "metallic-blue"
+      },
+      "capabilities": {
+        "hosts": [
+          "free-desktop"
+        ],
+        "rendererTiers": [
+          "baked2.5d",
+          "procedural2d"
+        ],
+        "preferredRendererTier": "baked2.5d",
+        "fallbackRendererTiers": [
+          "procedural2d"
+        ],
+        "layouts": [
+          "ring",
+          "circular"
+        ],
+        "orientations": [
+          "free"
+        ],
+        "features": [
+          "dynamic-tint",
+          "dynamic-glow",
+          "icon-state-styling"
+        ],
+        "presentationMechanisms": [
+          "open"
+        ],
+        "rotation": {
+          "mode": "free"
+        }
+      },
+      "panelStyle": {
+        "rendererTier": "baked2.5d",
+        "color": "#58c8f0",
+        "glowIntensity": 1.1
+      },
+      "iconStyle": {
+        "iconShape": "circle",
+        "iconSize": 52,
+        "spacing": 10
+      },
+      "tileStyle": {},
+      "indicatorStyle": {},
+      "animationStyle": {
+        "iconAnimation": "scale",
+        "animationTrigger": "hover",
+        "animationSpeed": 0.9,
+        "animationIntensity": 0.9
+      },
+      "layoutStyle": {
+        "layout": "ring",
+        "layoutScale": 1.0,
+        "layoutRadius": 300
+      },
+      "previewConfiguration": {
+        "active": true,
+        "mode": "free",
+        "presentationState": "open",
+        "stateEntry": 1,
+        "iconState": "hover",
+        "seed": "perspective-family-v1-ring"
+      },
+      "presetIntent": {
+        "panelPresetId": "circular-blue-ring",
+        "fallbackThemeId": "holographic-ring",
+        "fallbackRendererTier": "procedural2d"
+      }
+    },
+    {
+      "id": "octagon-platform-steel",
+      "name": "Steel Octagon Platform",
+      "version": 2,
+      "builtIn": true,
+      "category": "perspective",
+      "packageManifest": "octagon-platform-steel/archdock-theme.json",
+      "iconStyleRef": {
+        "id": "dark-orb"
+      },
+      "capabilities": {
+        "hosts": [
+          "free-desktop"
+        ],
+        "rendererTiers": [
+          "baked2.5d",
+          "procedural2d"
+        ],
+        "preferredRendererTier": "baked2.5d",
+        "fallbackRendererTiers": [
+          "procedural2d"
+        ],
+        "layouts": [
+          "octagon",
+          "polygon"
+        ],
+        "orientations": [
+          "free"
+        ],
+        "features": [
+          "dynamic-tint",
+          "dynamic-glow",
+          "icon-state-styling"
+        ],
+        "presentationMechanisms": [
+          "open"
+        ],
+        "rotation": {
+          "mode": "free"
+        }
+      },
+      "panelStyle": {
+        "rendererTier": "baked2.5d",
+        "color": "#9fb0be",
+        "glowIntensity": 1.1
+      },
+      "iconStyle": {
+        "iconShape": "circle",
+        "iconSize": 52,
+        "spacing": 10
+      },
+      "tileStyle": {},
+      "indicatorStyle": {},
+      "animationStyle": {
+        "iconAnimation": "scale",
+        "animationTrigger": "hover",
+        "animationSpeed": 0.9,
+        "animationIntensity": 0.9
+      },
+      "layoutStyle": {
+        "layout": "octagon",
+        "layoutScale": 1.0,
+        "layoutRadius": 300
+      },
+      "previewConfiguration": {
+        "active": true,
+        "mode": "free",
+        "presentationState": "open",
+        "stateEntry": 1,
+        "iconState": "hover",
+        "seed": "perspective-family-v1-octagon"
+      },
+      "presetIntent": {
+        "panelPresetId": "octagonal-platform",
+        "fallbackThemeId": "holographic-ring",
+        "fallbackRendererTier": "procedural2d"
+      }
+    },
+    {
+      "id": "arc-platform-orange",
+      "name": "Orange Arc Platform",
+      "version": 2,
+      "builtIn": true,
+      "category": "perspective",
+      "packageManifest": "arc-platform-orange/archdock-theme.json",
+      "iconStyleRef": {
+        "id": "neon-orange"
+      },
+      "capabilities": {
+        "hosts": [
+          "free-desktop"
+        ],
+        "rendererTiers": [
+          "baked2.5d",
+          "procedural2d"
+        ],
+        "preferredRendererTier": "baked2.5d",
+        "fallbackRendererTiers": [
+          "procedural2d"
+        ],
+        "layouts": [
+          "arc",
+          "semicircle"
+        ],
+        "orientations": [
+          "free"
+        ],
+        "features": [
+          "dynamic-tint",
+          "dynamic-glow",
+          "icon-state-styling"
+        ],
+        "presentationMechanisms": [
+          "open"
+        ],
+        "rotation": {
+          "mode": "none"
+        }
+      },
+      "panelStyle": {
+        "rendererTier": "baked2.5d",
+        "color": "#ff8f47",
+        "glowIntensity": 1.1
+      },
+      "iconStyle": {
+        "iconShape": "circle",
+        "iconSize": 52,
+        "spacing": 10
+      },
+      "tileStyle": {},
+      "indicatorStyle": {},
+      "animationStyle": {
+        "iconAnimation": "scale",
+        "animationTrigger": "hover",
+        "animationSpeed": 0.9,
+        "animationIntensity": 0.9
+      },
+      "layoutStyle": {
+        "layout": "arc",
+        "layoutScale": 1.0,
+        "layoutRadius": 300
+      },
+      "previewConfiguration": {
+        "active": true,
+        "mode": "free",
+        "presentationState": "open",
+        "stateEntry": 1,
+        "iconState": "hover",
+        "seed": "perspective-family-v1-arc"
+      },
+      "presetIntent": {
+        "panelPresetId": "orange-arc-dock",
+        "fallbackThemeId": "holographic-ring",
+        "fallbackRendererTier": "procedural2d"
+      }
     }
   ]
 }

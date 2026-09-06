@@ -251,8 +251,8 @@ TestCase {
             transitionState: "idle"
         })
         compare(controller.trackForm, "radial-interface")
-        compare(controller.requiresRendererTier, "baked25d")
-        compare(controller.fallbackReason, "mechanism-requires-baked25d")
+        compare(controller.requiresRendererTier, "baked2.5d")
+        compare(controller.fallbackReason, "mechanism-requires-baked2.5d")
         verify(controller.fallbackApplied)
 
         // The fallback is a centred clip and a fade. No rotation, no per-part

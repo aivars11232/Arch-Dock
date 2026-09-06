@@ -126,6 +126,45 @@ SPDX `NOASSERTION`. The shared four-size review contact sheet has SHA-256
 `0a9bc4a12cbfe59e858e37c50ae36e65783f34b7ac2ef4ba83c2ab8f49459ea7`.
 Neither that review artifact nor any reference screenshot is installed.
 
+## TASK-0034 clean-room perspective-family boundary
+
+The 42 class-F ring/polygon and class-G arc screenshots numbered 81 through 122
+were reviewed in TASK-0026 as baked 2.5D candidates. All 42 remain opaque,
+redistribution-unknown, `reference-only` and non-installable. Three were
+selected as broad-concept references only:
+
+| Production family | Catalog ID | SHA-256 |
+| --- | --- | --- |
+| Ring | `panel-screenshot-20260811-195427` | `20639a8a6f26462e876f357fa8d60d77705ae9aabcb28e3d2b06b93f94d4cd1a` |
+| Octagon | `panel-screenshot-20260811-200136` | `c35ea87ab7332c36649c9683f5777707fcfe2fc637565f7cf530d5f6ef2366e2` |
+| Arc | `panel-screenshot-20260811-200511` | `4f50a2b8f5998f27d9792edeac96a8603225c0ceee0bea7360937e8b62b62a3e` |
+
+The exact rights declaration and deterministic blank-canvas recipe are retained
+in `assets/source-samples/perspective/REFERENCE_RIGHTS.md` and
+`assets/source-samples/perspective/original-artwork-recipe.json`. The recipe
+marks each reference hash as excluded with `pixelInput: false`; no screenshot
+was copied, cropped, traced, recolored, segmented, or processed into production
+artwork.
+
+TASK-0034 ships three separate original Arch Dock packages:
+
+- `ring-platform-blue`
+- `octagon-platform-steel`
+- `arc-platform-orange`
+
+Each is a perspective platform drawn as separable rear, foreground rim, shadow,
+reflection and neutral-glow layers, with an input mask that matches the drawn
+silhouette. Each records its generated SVG outputs, deterministic hashes,
+`sourceDerivative: false`, `pixelInput: false`, `placeholderIcons: false` and
+SPDX `NOASSERTION`. The shared four-size review contact sheet has SHA-256
+`d3b10f5ec9ef7affa55beb1d7c9dfd0a3cb510f65856f451a108fbfeec4e8740`. Neither
+that review artifact nor any reference screenshot is installed.
+
+Because these are baked 2.5D packages, none of them draws a placeholder icon:
+real application icons are positioned by the declared track instead. That is
+recorded as an explicit prohibition in the recipe and asserted by
+`baked-25d-asset-test`.
+
 Future clean artwork must enter as a new content-hashed source record or a
 separately validated production package with its own provenance evidence. It
 must not silently inherit approval from a screenshot that inspired it.

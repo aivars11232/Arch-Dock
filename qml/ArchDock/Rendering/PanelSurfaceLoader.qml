@@ -23,6 +23,9 @@ Item {
     property string customColor: ""
     property real panelOpacity: 0.9
     property var motionTracks: null
+    // Scene geometry for the active baked track, from LayoutEngine.
+    property var trackMetrics: ({})
+    property bool sceneConcealed: false
 
     readonly property string normalizedRequestedTier:
         String(requestedRendererTier || "procedural2d").toLowerCase()
@@ -31,16 +34,23 @@ Item {
     readonly property bool themeUsable: isThemeUsable(themeDefinition)
     readonly property bool skinnedRequested:
         normalizedRequestedTier === "skinned2d"
+    readonly property bool bakedRequested:
+        normalizedRequestedTier === "baked2.5d"
     readonly property bool rendererSupported:
-        ["procedural2d", "skinned2d"]
+        ["procedural2d", "skinned2d", "baked2.5d"]
             .includes(normalizedRequestedTier)
     readonly property var skinnedItem: skinnedRenderer.item
     readonly property bool skinnedReady:
         skinnedRequested && themeUsable && skinnedItem
         && Boolean(skinnedItem.rendererReady)
+    readonly property var bakedItem: bakedRenderer.item
+    readonly property bool bakedReady:
+        bakedRequested && themeUsable && bakedItem
+        && Boolean(bakedItem.rendererReady)
     readonly property bool fallbackApplied:
         !rendererSupported || (themeRequested && !themeUsable)
         || (skinnedRequested && !skinnedReady)
+        || (bakedRequested && !bakedReady)
     readonly property string fallbackReason: {
         if (themeRequested && !themeUsable)
             return "theme-unavailable"
@@ -51,14 +61,34 @@ Item {
                 return skinnedItem.errorReason
             return "renderer-loading"
         }
+        if (bakedRequested && !bakedReady) {
+            if (bakedItem && bakedItem.errorReason.length > 0)
+                return bakedItem.errorReason
+            return "renderer-loading"
+        }
         return ""
     }
     readonly property string effectiveRendererTier:
-        skinnedReady ? "skinned2d" : "procedural2d"
+        bakedReady ? "baked2.5d" : skinnedReady ? "skinned2d" : "procedural2d"
     readonly property var surfaceItem:
-        skinnedReady ? skinnedItem : proceduralRenderer.item
+        bakedReady ? bakedItem
+        : skinnedReady ? skinnedItem : proceduralRenderer.item
     readonly property var inputMaskItem:
-        skinnedReady ? skinnedItem.inputMaskItem : null
+        bakedReady ? bakedItem.inputMaskItem
+        : skinnedReady ? skinnedItem.inputMaskItem : null
+    // Where the baked mask sits inside the scene. A skin's mask covers the
+    // whole scene, so it needs no offset.
+    readonly property real inputMaskOriginX:
+        bakedReady ? bakedItem.inputMaskOriginX : 0
+    readonly property real inputMaskOriginY:
+        bakedReady ? bakedItem.inputMaskOriginY : 0
+    // The occlusion layers PanelScene interleaves with its entries, and the
+    // depth at which they cut across them.
+    readonly property var foregroundComponent:
+        bakedReady && bakedItem.hasForeground
+        ? bakedItem.foregroundComponent : null
+    readonly property real occlusionDepth:
+        bakedReady ? bakedItem.occlusionDepth : 0.5
     readonly property var contentRegionDefinition:
         skinnedReady ? skinnedItem.contentRegionDefinition : null
     readonly property var sliceDefinition:
@@ -110,6 +140,15 @@ Item {
         visible: root.skinnedReady
     }
 
+    Loader {
+        id: bakedRenderer
+
+        anchors.fill: parent
+        active: root.bakedRequested && root.themeUsable
+        sourceComponent: bakedComponent
+        visible: root.bakedReady
+    }
+
     Component {
         id: proceduralComponent
 
@@ -122,6 +161,24 @@ Item {
             customColor: root.customColor
             panelOpacity: root.panelOpacity
             motionTracks: root.motionTracks
+        }
+    }
+
+    Component {
+        id: bakedComponent
+
+        PanelBaked25D {
+            themeDefinition: root.themeDefinition
+            trackMetrics: root.trackMetrics
+            presentationState: root.presentationState
+            transitionState: root.transitionState
+            presentationProgress: root.presentationProgress
+            hovered: root.hovered
+            tintColor: root.tintColor
+            glowIntensity: root.glowIntensity
+            reducedMotion: root.reducedMotion
+            sceneConcealed: root.sceneConcealed
+            panelOpacity: root.panelOpacity
         }
     }
 

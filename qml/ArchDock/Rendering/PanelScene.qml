@@ -135,8 +135,13 @@ Item {
         "layout", "rotationSpeed", "panelRotationSpeed", 12))
     readonly property string rotationTrigger: String(definitionValue(
         "layout", "rotationTrigger", "panelRotationTrigger", "idle"))
+    // A baked panel turns when its own track is closed, whatever the
+    // configured path says: the artwork, not the layout, decides whether
+    // sweeping the entries keeps them on the platform.
     readonly property bool rotationLayoutSupported:
-        LayoutEngine.supportsWholeSceneRotation(layoutPath)
+        bakedTierRequested && activeThemeTrack !== null
+        ? LayoutEngine.trackSupportsRotation(activeThemeTrack)
+        : LayoutEngine.supportsWholeSceneRotation(layoutPath)
     readonly property bool sceneRotationEnabled: rotationController.enabled
     readonly property bool sceneRotationActive: rotationController.running
     readonly property real sceneRotationAngle: rotationController.angleOffset
@@ -162,6 +167,46 @@ Item {
         themeDefinition ? themeDefinition.contentRegions : [],
         presentationState, themeOrientation)
     readonly property bool skinMetadataUsable: usableSkinMetadata()
+
+    // ---- Baked 2.5D ------------------------------------------------------
+    // A baked panel is laid out on the theme's declared anchor track rather
+    // than by the path engine. The artwork fixes where an icon may stand, so
+    // the track is the geometry; the configured radius only says how large the
+    // artwork is drawn, and the configured angle turns it.
+    readonly property bool bakedTierRequested:
+        String(resolvedRendererTier || "").toLowerCase() === "baked2.5d"
+    readonly property var activeThemeTrack:
+        ThemeStateSelection.trackFor(themeDefinition, presentationState)
+    readonly property var bakedArtworkSize: buildBakedArtworkSize()
+    readonly property bool bakedMetadataUsable: usableBakedMetadata()
+    // Limited tilt, declared and clamped by the theme. It lives in the
+    // internal 2.5D parameter map rather than as a visible control, because no
+    // editor exposes it yet and a control that nothing reads would be untrue.
+    readonly property real bakedTiltDegrees: {
+        // definitionValue() deliberately refuses object values on the flat
+        // form, because every flat key is a scalar. The 2.5D parameter map is
+        // the exception, so it is read directly from both shapes.
+        const definition = panelDefinition || ({})
+        const section = definition.surface
+        const nested = section && typeof section === "object"
+            ? section.parameters2_5D : null
+        const parameters = nested && typeof nested === "object"
+            ? nested
+            : definition.surface2_5D && typeof definition.surface2_5D === "object"
+                ? definition.surface2_5D : null
+        if (!parameters)
+            return NaN
+        const value = Number(parameters.tilt)
+        return isFinite(value) ? value : NaN
+    }
+    readonly property var bakedTrackMetrics: bakedMetadataUsable
+        ? LayoutEngine.trackMetrics(
+            activeThemeTrack, bakedArtworkSize.width, bakedArtworkSize.height,
+            entryCount, configuredLayoutGeometry.iconSize,
+            configuredLayoutGeometry.padding, configuredLayoutGeometry.radius,
+            bakedTiltDegrees, rotationController.enabled)
+        : null
+
     readonly property var surfaceMetrics: buildSurfaceMetrics()
     readonly property var rendererGeometry: buildRendererGeometry()
     readonly property var rendererStyle: LayoutEngine.themeStyle(
@@ -180,11 +225,15 @@ Item {
         Math.max(0, Number(rendererStyle.blur || 0))
         + Number(rendererStyle.lineWidth || 0) / 2)
 
+    // A baked panel's content area is the whole scene box: its entries are
+    // placed by the track in scene coordinates, not inset into a rectangle.
     readonly property var contentBounds: ({
         x: surfaceMetrics.contentX,
         y: surfaceMetrics.contentY,
-        width: layoutGeometry.width,
-        height: layoutGeometry.height
+        width: bakedMetadataUsable
+            ? surfaceMetrics.width : layoutGeometry.width,
+        height: bakedMetadataUsable
+            ? surfaceMetrics.height : layoutGeometry.height
     })
     readonly property var visualBounds: ({
         x: 0,
@@ -265,25 +314,45 @@ Item {
     })
     readonly property var visualPanel: surfaceLoader.surfaceItem
     readonly property var iconDelegates: entryRepeater
+    // Baked 2.5D outputs. `activeTrackMetrics` is null whenever the scene is
+    // not laid out on a track, so a consumer cannot mistake a procedural or
+    // skinned panel for a perspective one.
+    // The instantiated renderer item for the active tier. `visualPanel` is the
+    // drawn stack inside it; this is the renderer that owns that stack, which
+    // is what a host or a test asks about resource and animation state.
+    readonly property var activeSurfaceRenderer:
+        surfaceLoader.bakedReady ? surfaceLoader.bakedItem
+        : surfaceLoader.skinnedReady ? surfaceLoader.skinnedItem : null
+    readonly property var activeTrackMetrics: bakedTrackMetrics
+    readonly property real occlusionDepth: surfaceLoader.occlusionDepth
+    readonly property var foregroundOcclusionItem: foregroundOcclusion.item
     // Which input region is active: the package alpha mask for a skin, the
     // geometry band for a free radial scene, or the plain rectangle.
+    // A baked platform is a solid shape inside a much larger box, so its input
+    // region is the package's own alpha mask combined with the entry
+    // rectangles: the empty desktop around and inside the platform passes
+    // through, while an icon standing proud of the rim stays clickable.
+    readonly property bool bakedInputActive:
+        bakedMetadataUsable && surfaceLoader.inputMaskItem !== null
     readonly property bool geometryHitRegionActive:
-        freeHost && !surfaceLoader.inputMaskItem
-        && LayoutEngine.supportsWholeSceneRotation(layoutPath)
+        freeHost && (bakedInputActive
+                     || (!surfaceLoader.inputMaskItem
+                         && LayoutEngine.supportsWholeSceneRotation(layoutPath)))
     readonly property string activeInputRegionKind:
-        surfaceLoader.inputMaskItem ? "alpha-mask"
+        bakedInputActive && geometryHitRegionActive ? "platform-mask"
+        : surfaceLoader.inputMaskItem ? "alpha-mask"
         : geometryHitRegionActive ? "geometry-band" : "rectangle"
     readonly property var entryRects: buildEntryRects()
 
-    containmentMask: surfaceLoader.inputMaskItem
-        ? surfaceLoader.inputMaskItem
-        : geometryHitRegionActive ? geometryHitRegion : null
+    containmentMask: geometryHitRegionActive
+        ? geometryHitRegion
+        : surfaceLoader.inputMaskItem ? surfaceLoader.inputMaskItem : null
 
     function containsInputPoint(point) {
-        if (surfaceLoader.inputMaskItem)
-            return surfaceLoader.inputMaskItem.contains(point)
         if (geometryHitRegionActive)
             return geometryHitRegion.contains(point)
+        if (surfaceLoader.inputMaskItem)
+            return surfaceLoader.inputMaskItem.contains(point)
         const x = Number(point.x)
         const y = Number(point.y)
         return x >= 0 && y >= 0 && x <= width && y <= height
@@ -389,7 +458,74 @@ Item {
             && contentStart >= centerStart && contentEnd <= centerEnd
     }
 
+    // Which declared state's artwork describes the panel's size. Kept strict:
+    // a theme that does not declare the state it is asked for has no baked
+    // geometry, and the scene falls back rather than guessing at one.
+    function buildBakedArtworkSize() {
+        const stateId = ThemeStateSelection.normalizedState(presentationState)
+        const roles = ["rear", "surface"]
+        for (let index = 0; index < roles.length; ++index) {
+            const layer = ThemeStateSelection.layerForRole(
+                themeDefinition, stateId, roles[index])
+            if (!layer)
+                continue
+            const rect = layer.sourceRect
+            if (rect && Number(rect.width) > 0 && Number(rect.height) > 0) {
+                return {
+                    width: Number(rect.width),
+                    height: Number(rect.height)
+                }
+            }
+            const asset = ThemeStateSelection.objectById(
+                themeDefinition ? themeDefinition.assets : [], layer.asset)
+            const natural = asset ? asset.naturalSize : null
+            if (natural && Number(natural.width) > 0
+                    && Number(natural.height) > 0) {
+                return {
+                    width: Number(natural.width),
+                    height: Number(natural.height)
+                }
+            }
+        }
+        return { width: 0, height: 0 }
+    }
+
+    function usableBakedMetadata() {
+        if (!bakedTierRequested)
+            return false
+        if (!ThemeStateSelection.isThemeProjection(themeDefinition))
+            return false
+        const candidateId = String(
+            themeDefinition.id || themeDefinition.themeId || "")
+        if (themeId.length > 0 && candidateId.length > 0
+                && candidateId !== themeId)
+            return false
+        const track = activeThemeTrack
+        if (!track)
+            return false
+        return bakedArtworkSize.width > 0 && bakedArtworkSize.height > 0
+            && Number(track.radiusX) > 0 && Number(track.radiusY) > 0
+    }
+
     function buildSurfaceMetrics() {
+        if (bakedMetadataUsable && bakedTrackMetrics) {
+            const margins = themeDefinition.effectMargins || ({})
+            const scale = Number(bakedTrackMetrics.scale || 1)
+            return {
+                width: bakedTrackMetrics.width,
+                height: bakedTrackMetrics.height,
+                contentX: 0,
+                contentY: 0,
+                effectLeft: Math.max(0, Number(margins.left || 0)) * scale,
+                effectTop: Math.max(0, Number(margins.top || 0)) * scale,
+                effectRight: Math.max(0, Number(margins.right || 0)) * scale,
+                effectBottom: Math.max(0, Number(margins.bottom || 0)) * scale,
+                // A baked platform declares no end caps, so a collapse keeps
+                // no handle of its own; the presentation controller supplies
+                // the bounded minimum instead.
+                handleExtent: 0
+            }
+        }
         if (!skinMetadataUsable) {
             return {
                 width: layoutGeometry.width,
@@ -453,6 +589,21 @@ Item {
     }
 
     function entryGeometryAt(index) {
+        if (bakedMetadataUsable && bakedTrackMetrics) {
+            // Track output is already in scene coordinates, so it needs no
+            // content offset. Depth order stays the normalized 0..1 depth,
+            // which is the same space the foreground layer's z uses.
+            const track = LayoutEngine.trackEntryGeometry(
+                activeThemeTrack, index, entryCount, bakedTrackMetrics,
+                effectiveLayoutAngle, pathOrientation, bakedTiltDegrees)
+            const output = ({})
+            const trackKeys = Object.keys(track || ({}))
+            for (let keyIndex = 0; keyIndex < trackKeys.length; ++keyIndex)
+                output[trackKeys[keyIndex]] = track[trackKeys[keyIndex]]
+            output.effectBounds = effectBounds
+            output.effectAllowance = entryEffectAllowance(output.entryBounds)
+            return output
+        }
         const geometry = LayoutEngine.entryGeometry(
             layoutPath, index, entryCount, layoutGeometry, effectiveLayoutAngle,
             polygonSides, pathOrientation, geometryCompatibilityProfile,
@@ -612,6 +763,9 @@ Item {
         bandWidth: root.layoutGeometry.iconSize * 1.2
         entryMargin: root.layoutGeometry.iconSize * 0.4
         enabled: root.geometryHitRegionActive
+        maskItem: root.bakedInputActive ? surfaceLoader.inputMaskItem : null
+        maskOriginX: surfaceLoader.inputMaskOriginX
+        maskOriginY: surfaceLoader.inputMaskOriginY
     }
 
     PanelMotionController {
@@ -653,6 +807,8 @@ Item {
         customColor: root.customColor
         panelOpacity: root.panelOpacity
         motionTracks: root.motionTracks
+        trackMetrics: root.bakedTrackMetrics || ({})
+        sceneConcealed: root.sceneConcealed || !root.visible
     }
 
     // Entries are clipped by the same track that closes the shell, so an icon
@@ -674,6 +830,20 @@ Item {
         y: -entryClipper.y
         width: root.surfaceMetrics.width
         height: root.surfaceMetrics.height
+
+    // Foreground occlusion. Declared before the entries and given the theme's
+    // occlusion depth as its z, so an entry nearer than that depth paints over
+    // it and a further one paints under it. This is the only reason a real
+    // application icon can pass behind a perspective platform rim.
+    Loader {
+        id: foregroundOcclusion
+
+        anchors.fill: parent
+        active: root.bakedMetadataUsable
+            && surfaceLoader.foregroundComponent !== null
+        sourceComponent: surfaceLoader.foregroundComponent
+        z: surfaceLoader.occlusionDepth
+    }
 
     Repeater {
         id: entryRepeater

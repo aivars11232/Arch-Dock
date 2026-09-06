@@ -2760,11 +2760,12 @@ void PanelRegistryTest::supportsPinnedFolderSnapshotsAndReordering()
 void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
 {
     const QVariantList definitions = taskThemeDefinitions();
-    QCOMPARE(definitions.size(), 12);
+    QCOMPARE(definitions.size(), 15);
     PanelRegistry registry(definitions);
     QCOMPARE(registry.themeDefinitions().size(), definitions.size());
 
     int packagedThemeCount = 0;
+    int perspectiveThemeCount = 0;
     for (const QVariant &candidate : registry.themeDefinitions())
     {
         const QVariantMap theme = candidate.toMap();
@@ -2776,30 +2777,60 @@ void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
         QVERIFY(profile->rendererTiers.contains(
             ArchDock::RendererTier::Procedural2D));
         QVERIFY(!profile->rendererTiers.contains(
-            ArchDock::RendererTier::Baked2_5D));
-        QVERIFY(!profile->rendererTiers.contains(
             ArchDock::RendererTier::True3D));
         QVERIFY(!profile->capabilities.contains(
             ArchDock::PanelCapability::NonRectangularInput));
+        const bool perspective = theme.value(
+            QStringLiteral("category")).toString() ==
+            QStringLiteral("perspective");
         if (theme.contains(QStringLiteral("packageManifest")))
         {
             ++packagedThemeCount;
-            QVERIFY(profile->rendererTiers.contains(
-                ArchDock::RendererTier::Skinned2D));
+            // Every packaged theme prefers a real renderer and keeps
+            // procedural 2D as its only safe fallback. The perspective
+            // families differ only in which renderer that is, and in being
+            // free-host radial rather than native horizontal.
+            const ArchDock::RendererTier preferred = perspective
+                ? ArchDock::RendererTier::Baked2_5D
+                : ArchDock::RendererTier::Skinned2D;
+            QVERIFY(profile->rendererTiers.contains(preferred));
             QCOMPARE(profile->preferredRendererTier,
-                     std::optional<ArchDock::RendererTier>(
-                         ArchDock::RendererTier::Skinned2D));
+                     std::optional<ArchDock::RendererTier>(preferred));
             QCOMPARE(profile->fallbackRendererTiers,
                      QVector<ArchDock::RendererTier>{
                          ArchDock::RendererTier::Procedural2D});
-            QCOMPARE(profile->layouts,
-                     QVector<ArchDock::PanelLayoutKind>{
-                         ArchDock::PanelLayoutKind::Horizontal});
-            QCOMPARE(profile->presentationMechanisms.size(), 3);
             const QVariantMap preview = theme.value(
                 QStringLiteral("previewConfiguration")).toMap();
-            QCOMPARE(preview.value(QStringLiteral("mode")).toString(),
-                     QStringLiteral("horizontal"));
+            if (perspective)
+            {
+                ++perspectiveThemeCount;
+                QCOMPARE(profile->hostKinds,
+                         QVector<ArchDock::PanelHostKind>{
+                             ArchDock::PanelHostKind::FreeDesktop});
+                QCOMPARE(profile->layouts.size(), 2);
+                QCOMPARE(profile->presentationMechanisms.size(), 1);
+                QCOMPARE(preview.value(QStringLiteral("mode")).toString(),
+                         QStringLiteral("free"));
+                // Preset lineage for the built-in catalog TASK-0040 owns.
+                const QVariantMap intent = theme.value(
+                    QStringLiteral("presetIntent")).toMap();
+                QVERIFY(!intent.value(
+                    QStringLiteral("panelPresetId")).toString().isEmpty());
+                QCOMPARE(intent.value(
+                             QStringLiteral("fallbackRendererTier")).toString(),
+                         QStringLiteral("procedural2d"));
+            }
+            else
+            {
+                QVERIFY(!profile->rendererTiers.contains(
+                    ArchDock::RendererTier::Baked2_5D));
+                QCOMPARE(profile->layouts,
+                         QVector<ArchDock::PanelLayoutKind>{
+                             ArchDock::PanelLayoutKind::Horizontal});
+                QCOMPARE(profile->presentationMechanisms.size(), 3);
+                QCOMPARE(preview.value(QStringLiteral("mode")).toString(),
+                         QStringLiteral("horizontal"));
+            }
             QCOMPARE(preview.value(
                          QStringLiteral("presentationState")).toString(),
                      QStringLiteral("open"));
@@ -2810,10 +2841,13 @@ void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
         {
             QVERIFY(!profile->rendererTiers.contains(
                 ArchDock::RendererTier::Skinned2D));
+            QVERIFY(!profile->rendererTiers.contains(
+                ArchDock::RendererTier::Baked2_5D));
             QVERIFY(profile->presentationMechanisms.isEmpty());
         }
     }
-    QCOMPARE(packagedThemeCount, 7);
+    QCOMPARE(packagedThemeCount, 10);
+    QCOMPARE(perspectiveThemeCount, 3);
 
     const QVariantMap ringTheme = registry.themeDefinitions().at(3).toMap();
     QCOMPARE(ringTheme.value(QStringLiteral("id")).toString(),
@@ -3017,7 +3051,7 @@ void PanelRegistryTest::resolvesThemeCandidatesWithoutMutation()
 void PanelRegistryTest::rejectsIncompatibleThemeWithoutRecordMutation()
 {
     const QVariantList definitions = taskThemeDefinitions();
-    QCOMPARE(definitions.size(), 12);
+    QCOMPARE(definitions.size(), 15);
     PanelRegistry registry(definitions);
     const QVariantMap before = registry.panelSnapshot(QStringLiteral("bottom"));
     const int registryRevisionBefore = registry.revision();

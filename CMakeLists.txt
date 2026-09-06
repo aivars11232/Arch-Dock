@@ -349,6 +349,26 @@ if(BUILD_TESTING)
   add_test(NAME energy-asset-test COMMAND energy-asset-test)
 
   qt_add_executable(
+    baked-25d-asset-test
+    tests/Baked25DAssetTest.cpp
+    src/model/ThemeDefinition.h
+    src/model/ThemeDefinition.cpp
+    src/themes/ThemePackage.h
+    src/themes/ThemePackage.cpp)
+  target_include_directories(
+    baked-25d-asset-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    baked-25d-asset-test
+    PRIVATE Qt6::Core
+            Qt6::Gui
+            Qt6::Test)
+  add_test(NAME baked-25d-asset-test COMMAND baked-25d-asset-test)
+  set_tests_properties(
+    baked-25d-asset-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  qt_add_executable(
     source-asset-catalog-test
     tests/SourceAssetCatalogTest.cpp
     src/model/ThemeDefinition.h
@@ -868,6 +888,15 @@ if(BUILD_TESTING)
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(
+    NAME panel-baked-25d-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PanelBaked25D.qml)
+  set_tests_properties(
+    panel-baked-25d-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
     NAME live-panel-preview-test
     COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
             -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
@@ -1159,7 +1188,10 @@ foreach(packaged_theme
         energy-frame-cyan
         energy-frame-green
         energy-frame-orange
-        energy-frame-purple)
+        energy-frame-purple
+        ring-platform-blue
+        octagon-platform-steel
+        arc-platform-orange)
   install(
     DIRECTORY "assets/themes/${packaged_theme}"
     DESTINATION share/arch-dock/themes)

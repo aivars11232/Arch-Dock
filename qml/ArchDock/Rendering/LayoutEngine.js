@@ -512,7 +512,7 @@ function trackTiltFactor(track, requestedDegrees) {
 // uniform artwork scale, and the box is the union of the drawn platform and
 // every scaled icon, so nothing the theme positions is cut off.
 function trackMetrics(track, artworkWidth, artworkHeight, count, iconSize,
-                      padding, layoutRadius, tiltDegrees) {
+                      padding, layoutRadius, tiltDegrees, rotating) {
     const source = track || {};
     const size = Math.max(1, finiteAtLeast(iconSize, 1, 52));
     const safePadding = Math.max(0, finite(padding, 0));
@@ -574,8 +574,14 @@ function trackMetrics(track, artworkWidth, artworkHeight, count, iconSize,
     let top = platform.y;
     let right = platform.x + platform.width;
     let bottom = platform.y + platform.height;
-    for (let index = 0; index < safeCount; ++index) {
-        const point = trackPoint(metrics, index, safeCount, 0);
+    // A turning ring puts icons at angles no resting entry occupies, so the
+    // box is measured around the whole closed path instead of the entries the
+    // panel happens to hold. Otherwise the host would be asked to resize as
+    // the scene rotated, which is exactly what the envelope exists to avoid.
+    const samples = rotating && metrics.closed && safeCount > 0
+        ? Math.max(safeCount, 72) : safeCount;
+    for (let index = 0; index < samples; ++index) {
+        const point = trackPoint(metrics, index, samples, 0);
         const extent = size * point.scaleFactor / 2;
         left = Math.min(left, point.x - extent);
         top = Math.min(top, point.y - extent);

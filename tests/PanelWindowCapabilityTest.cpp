@@ -656,7 +656,7 @@ void PanelWindowCapabilityTest::builtInChassisCandidateProjectsIntoStudioAndRend
     QVERIFY(snapshot.value(QStringLiteral("success")).toBool());
     const quint64 revision = snapshot.value(QStringLiteral("revision")).toULongLong();
     const QVariantList themes = snapshot.value(QStringLiteral("themes")).toList();
-    QCOMPARE(themes.size(), 12);
+    QCOMPARE(themes.size(), 15);
     int chassisThemeCount = 0;
     for (const QVariant &value : themes)
     {

@@ -61,4 +61,16 @@ foreach(forbidden_preview_implementation
   endif()
 endforeach()
 
+# Baked 2.5D is layered artwork with a depth ordering, not a mesh scene. The
+# module must therefore keep working with no Qt Quick 3D module installed, so
+# no shared rendering source may import one.
+foreach(rendering_source IN LISTS rendering_sources)
+  file(READ "${rendering_source}" rendering_content)
+  if(rendering_content MATCHES "QtQuick3D|QtQuick\\.Scene3D|Qt3D")
+    message(
+      FATAL_ERROR
+        "Optional 3D module imported by a shared rendering source: ${rendering_source}")
+  endif()
+endforeach()
+
 message(STATUS "Shared rendering sources are host-neutral")

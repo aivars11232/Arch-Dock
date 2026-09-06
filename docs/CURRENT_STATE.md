@@ -6,15 +6,18 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-09-05 (Europe/Amsterdam). This session began
-from `f61c9ab`, whose subject `Task33` is misleading: that commit carries
-TASK-0032 Phases C and D, not TASK-0033. An independent audit of the
-repository against the consolidated task pack found the TASK-0032 closure
-gaps recorded under "TASK-0032 corrective closure" below, so the session
-first closed those gaps and then implemented TASK-0033, described in its own
-section. The commit-to-task mapping table under "Repository state" is the
-authoritative record of which commit carries which task; commit subjects are
-not.
+**Evidence snapshot:** 2026-09-06 (Europe/Amsterdam). TASK-0033 is committed.
+This session implemented TASK-0034 on top of it. The commit-to-task mapping
+table under "Repository state" is the authoritative record of which commit
+carries which task; commit subjects are not.
+
+Earlier context, retained because it explains two mislabelled commits: the
+session that produced `f61c9ab` began from a tree whose subject `Task33` is
+misleading, because that commit carries TASK-0032 Phases C and D rather than
+TASK-0033. An independent audit against the consolidated task pack found the
+TASK-0032 closure gaps recorded under "TASK-0032 corrective closure" below;
+those gaps were closed and TASK-0033 was then implemented, as its own section
+describes.
 
 All figures below come from external Debug build directories created during
 this session; none reuse the in-tree `build/` or `build-codex-task-0014`
@@ -27,11 +30,11 @@ isolated-session evidence.
 
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`, tracking `origin/main` and level with it.
-- Current `HEAD`: `f61c9ab`, subject `Task33`. It carries TASK-0032 Phases C
-  and D and is the baseline for the corrective closure and the TASK-0033 work
-  described below.
+- Current `HEAD`: `197a515`, subject `Arch Dock task 34`. It carries the first
+  part of TASK-0034 Phase A; the remainder of TASK-0034 is the uncommitted
+  working tree on top of it.
 - The working tree was clean at the start of this session and now contains
-  only the TASK-0032 corrective closure and TASK-0033 changes listed below.
+  only the TASK-0034 changes listed below.
 - `build-codex-task-0014/` is still tracked at `HEAD`. It is a build
   directory committed by mistake in `75232e5` and must be removed with
   `git rm -r build-codex-task-0014`; `.gitignore` now excludes every
@@ -58,9 +61,10 @@ subject line, records which commit carries which task.
 | `c400364` | `task31` | TASK-0031 |
 | `026b8b3` | `task32` | TASK-0032 Phases A and B |
 | `f61c9ab` | `Task33` | TASK-0032 Phases C and D |
+| `b13c1c9` | `Arch Dock Codex task package audit` | TASK-0032 corrective closure and TASK-0033 |
+| `197a515` | `Arch Dock task 34` | TASK-0034 Phase A, first part |
 
-The TASK-0032 corrective closure and TASK-0033 are the uncommitted working
-tree on top of `f61c9ab`.
+TASK-0034 is the uncommitted working tree on top of `197a515`.
 - Codex did not stage, commit, push, globally install, or mutate the personal
   Plasma session.
 
@@ -958,14 +962,147 @@ TASK-0032 corrective closure in this working tree.
   becomes its desktop file; an application the model cannot locate a desktop
   file for cannot be pinned to a free panel.
 
+## TASK-0034 — baked 2.5D ring, octagonal, and arc themes
+
+AD-0014 is closed under the evidence boundary below. Its three phases follow
+TASK-0033.
+
+### Phase A — the baked 2.5D renderer contract
+
+- Theme Package v2 gains `tracks`: anchor paths in the artwork's own
+  coordinate space that say where real icons stand and how far they shrink.
+  A track declares a shape (`ellipse`, `polygon`, `arc`), a centre, two radii,
+  a start and sweep, optional polygon sides, a required `depth` block
+  (`farScale`, `nearScale`, `occlusionDepth`) and an optional bounded `tilt`.
+  Layer roles gain `rear` and `foreground`. A package that declares
+  `baked2.5d` without a track is rejected as `renderer-asset-mismatch`:
+  artwork alone is a flat picture, not a depth renderer.
+- `LayoutEngine` gains `trackMetrics()`, `trackEntryGeometry()`,
+  `trackPoint()`, `trackTiltFactor()` and `trackSupportsRotation()`. The
+  configured layout radius drives one uniform artwork scale; the declared tilt
+  is applied to the track and the drawn platform together so icons keep
+  sitting on the artwork; the scene box is the union of the platform and every
+  scaled icon, measured around the whole closed path while the scene rotates
+  so a turning ring never asks its host to resize.
+- Depth is normalized: 0 at the far edge, 1 at the near edge. An entry's `z`
+  is its depth and the theme's `occlusionDepth` becomes the `z` of the
+  foreground layers `PanelScene` instantiates among the entries. That ordering
+  is the only reason a real icon can pass behind a platform rim. Logical entry
+  order is untouched; only paint order changes.
+- `PanelBaked25D.qml` draws the platform: rear, shadow, reflection, glow and
+  overlay behind the entries, and a `foregroundComponent` the scene
+  interleaves with them. It requires no Qt Quick 3D module and declares no
+  mesh; `ValidateRenderingModule.cmake` now fails the build if any shared
+  rendering source imports one.
+- `ThemeStateSelection.js` is the single Theme v2 state and layer selection
+  contract. `PanelSkin2D` was refactored onto it rather than the baked
+  renderer growing a second copy, so a state, a hover and an opening crossfade
+  cannot mean two different things depending on which renderer drew the panel.
+- The baked renderer is installed and enabled for the **free desktop host
+  only**; a native edge panel resolves `renderer-host-unsupported` and falls
+  back. The radial mechanism's required-tier string was canonicalised from
+  `baked25d` to `baked2.5d` so it can be compared against the real tier.
+- Input is the package alpha mask positioned at the platform rectangle,
+  combined with the entry rectangles; `activeInputRegionKind` reports
+  `platform-mask`.
+
+### Phase B — ring, octagonal, and arc families
+
+- Three original clean-room packages ship: `ring-platform-blue`,
+  `octagon-platform-steel` and `arc-platform-orange`. Each is a perspective
+  annulus with separable rear, foreground rim, shadow, reflection and neutral
+  glow layers, a transparent centre on the closed families, and an input mask
+  that matches the stroked drawn silhouette. Each declares one track, four
+  states, four input masks, and `procedural2d` as its only fallback.
+- The 42 class-F and class-G screenshots remain opaque, redistribution
+  unknown and non-installable. Three were consulted as broad-concept
+  references only; the rights boundary and the deterministic recipe are in
+  `assets/source-samples/perspective/`. No screenshot pixel entered a package,
+  and no package draws a placeholder icon, because real icons are placed by
+  the track instead.
+- The built-in catalog grows from 12 to 15 themes. Each perspective entry
+  carries `presetIntent` naming its future Panel Preset id
+  (`circular-blue-ring`, `octagonal-platform`, `orange-arc-dock`) and a safe
+  fallback theme and tier, which is the lineage TASK-0040 consumes.
+
+### Phase C — depth, fallback, resources and documentation
+
+- `PanelSkinLayer2D` gains a raster budget. Skins keep Qt's behaviour;
+  baked layers rasterise at the drawn size capped at 2048 pixels per axis and
+  are not kept in the shared pixmap cache, so switching families releases the
+  previous platform's textures.
+- Fallback is truthful for every failure mode: a missing platform or mask
+  falls back to procedural 2D with a reason while keeping every entry, and a
+  missing decorative layer is skipped and counted without costing the tier.
+
+### Verification boundary
+
+- Fresh configure and build in `build-codex-task-0034`. Phase gates: Phase A
+  62 of 62 CTests including the private-session smoke; Phase B 63 of 63;
+  Phase C 63 of 63. `git diff --check` is clean.
+- `panel-baked-25d-test` (44 cases) proves the renderer contract offscreen,
+  including an A/B pixel proof that the same icon at the same place is hidden
+  by the foreground band at `occlusionDepth` 0.5 and drawn over it at 0, that
+  depth order is stable across repeated reads, that logical order survives
+  depth sorting, and that the glow pulse stops when concealed and under
+  reduced motion.
+- `baked-25d-asset-test` (9 cases) proves provenance and asset hygiene,
+  including a pixel comparison that every pixel the package paints lies inside
+  its input mask.
+- The staged smoke selects all three families on the private free host through
+  the ordinary settings transaction; each resolves `baked2.5d` with its own
+  staged manifest. It then performs 16 theme changes across the three families
+  and the cyan energy skin: the private PlasmaShell's resident memory went
+  from 653580 kB to 649684 kB, a decrease of 3896 kB, so repeated theme
+  changes release their textures rather than accumulating them.
+- One intermittent failure was observed: on the first run of the extended
+  smoke, the pre-existing in-session
+  `PanelWindowCapabilityTest::iconPropertiesPublicInteractionIsTransactional`
+  failed amid xdg-desktop-portal and PipeWire registration warnings. Four
+  consecutive re-runs passed. The failure is in an interaction test this task
+  did not touch and is treated as environmental.
+- The isolated Plasma lifecycle matrix (`tests/run-plasma-lifecycle.sh`) was
+  not run: no TASK-0034 phase requires it, and this task changes no panel
+  lifecycle behaviour.
+
+### Defects found and corrected in adjacent code
+
+- `GeometryHitRegion.contains()` was declared without type annotations, so Qt
+  never accepted it as a `containmentMask` and logged "Object set as mask does
+  not have an invokable contains method" while silently falling back to the
+  plain rectangle. TASK-0033's `geometry-band` input narrowing was therefore
+  reported but not applied. The signature is now `contains(point): bool` and
+  the warning is gone from the rotation suite as well.
+- `layoutRadius` was offered for every radial layout except the polygon
+  family, although `LayoutEngine` sizes those layouts from that radius. An
+  octagonal panel could not be sized at all and the settings transaction
+  refused the field. The polygon layouts were added to its editor gate.
+
+### Known limitations of this work
+
+- `collapse-radial` is still an interface only. It reports the tier it needs
+  and falls back to a centred clip and fade; no shipped perspective package
+  declares it. A real iris mechanism is not part of TASK-0034 and remains
+  open for the owner to schedule.
+- Tilt is read from the internal `surface.parameters2_5D` map and clamped to
+  the theme's declared range. No editor exposes it, so no visible control
+  claims it.
+- Input narrowing remains item-level. Outside the applet's rectangle nothing
+  is claimed, and `nonrectangular-input` stays unclaimed.
+- The perspective families are free-desktop only. A native edge panel cannot
+  present them and falls back to procedural 2D.
+- Frame timing was not measured. The performance evidence is bounded resident
+  memory across repeated theme changes plus a surviving, error-free applet.
+
 ## Next task boundary
 
-TASK-0022 through TASK-0032 are committed; the commit-to-task mapping table
-above records where. TASK-0032 is closed by the corrective closure recorded in
-its own section, and TASK-0033 is implemented in this working tree. Both are
-uncommitted for owner review.
+TASK-0022 through TASK-0033 are committed; the commit-to-task mapping table
+above records where. TASK-0034 Phase A's first part is committed as `197a515`
+and the remainder is implemented in this working tree, uncommitted for owner
+review.
 
-The task pack identifies **TASK-0034 — Implement and verify baked 2.5D ring,
-octagonal, and arc themes** as the next dependency-bound task. Do not begin it
-without the separate read-only planning and owner-approval protocol that task
-requires, and re-verify TASK-0033 closure against the committed tree first.
+The task pack identifies **TASK-0035 — Add optional true-3D capability
+detection and the base scene renderer** as the next dependency-bound task. Do
+not begin it without the separate read-only planning and owner-approval
+protocol that task requires, and re-verify TASK-0034 closure against the
+committed tree first.

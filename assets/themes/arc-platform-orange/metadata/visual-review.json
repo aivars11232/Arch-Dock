@@ -1,0 +1,32 @@
+{
+  "format": "org.archdock.visual-review",
+  "version": 1,
+  "themeId": "arc-platform-orange",
+  "reviewedAt": "2026-09-06",
+  "reviewSurface": "composited platform layers at four output sizes",
+  "checks": {
+    "transparentExterior": "pass",
+    "transparentCentre": "not-applicable",
+    "embeddedText": "absent",
+    "thirdPartyBranding": "absent",
+    "thirdPartyGlyphs": "absent",
+    "placeholderIcons": "absent",
+    "distinctiveReferenceDesign": "absent",
+    "sourcePixels": "absent",
+    "layerSeparation": "pass",
+    "rimSeam": "pass",
+    "inputMaskMatchesDrawnSilhouette": "pass",
+    "smallScale": "pass",
+    "mediumScale": "pass",
+    "largeScale": "pass"
+  },
+  "contactSheetSha256": "d3b10f5ec9ef7affa55beb1d7c9dfd0a3cb510f65856f451a108fbfeec4e8740",
+  "contactSheetSizes": [
+    "320x160",
+    "520x260",
+    "760x380",
+    "1000x500"
+  ],
+  "status": "production-approved",
+  "notes": "Clean-room perspective platform with separable rear, foreground rim, shadow, reflection and neutral glow layers. Reviewed at four output sizes with no clipping, no seam across the near rim, transparent exterior, and an input mask that matches the stroked drawn silhouette."
+}
