@@ -5,6 +5,23 @@ import "../qml/runtime/SettingsEditorModel.js" as EditorModel
 TestCase {
     name: "SettingsEditorModel"
 
+    QtObject {
+        id: nativeSequences
+        property list<string> tiers: ["true3d", "procedural2d"]
+        property list<real> position: [1, 2, 3]
+    }
+
+    function test_nativeThemeSequencesRemainArrays() {
+        const source = snapshot("free-1", 1)
+        source.themeDefinition.capabilities = { rendererTiers: nativeSequences.tiers }
+        source.themeDefinition.scene3DResources = { mesh: { positions: [nativeSequences.position] } }
+        const copied = EditorModel.load(source).themeDefinition
+        verify(Array.isArray(copied.capabilities.rendererTiers))
+        compare(copied.capabilities.rendererTiers, ["true3d", "procedural2d"])
+        verify(Array.isArray(copied.scene3DResources.mesh.positions[0]))
+        compare(copied.scene3DResources.mesh.positions[0], [1, 2, 3])
+    }
+
     function snapshot(panelId, revision) {
         return {
             success: true,

@@ -1029,6 +1029,73 @@
         "fallbackThemeId": "holographic-ring",
         "fallbackRendererTier": "procedural2d"
       }
+    },
+    {
+      "id": "mesh-platform-cyan",
+      "name": "Cyan Mesh Platform",
+      "version": 2,
+      "builtIn": true,
+      "category": "mesh",
+      "packageManifest": "mesh-platform-cyan/archdock-theme.json",
+      "capabilities": {
+        "hosts": [
+          "free-desktop"
+        ],
+        "rendererTiers": [
+          "true3d",
+          "procedural2d"
+        ],
+        "preferredRendererTier": "true3d",
+        "fallbackRendererTiers": [
+          "procedural2d"
+        ],
+        "layouts": [
+          "ring",
+          "circular",
+          "octagon",
+          "polygon"
+        ],
+        "orientations": [
+          "free"
+        ],
+        "features": [
+          "icon-state-styling"
+        ],
+        "presentationMechanisms": [
+          "open"
+        ],
+        "rotation": {
+          "mode": "free"
+        }
+      },
+      "panelStyle": {
+        "rendererTier": "true3d"
+      },
+      "iconStyle": {
+        "iconShape": "circle",
+        "iconSize": 52,
+        "spacing": 10
+      },
+      "tileStyle": {},
+      "indicatorStyle": {},
+      "animationStyle": {
+        "iconAnimation": "none",
+        "animationTrigger": "hover",
+        "animationSpeed": 1,
+        "animationIntensity": 1
+      },
+      "layoutStyle": {
+        "layout": "ring",
+        "layoutScale": 1,
+        "layoutRadius": 180
+      },
+      "previewConfiguration": {
+        "active": true,
+        "mode": "free",
+        "presentationState": "open",
+        "iconState": "normal",
+        "seed": "mesh-platform-v1"
+      }
     }
   ]
 }

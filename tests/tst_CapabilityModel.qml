@@ -5,6 +5,40 @@ import "../qml/runtime/CapabilityModel.js" as CapabilityModel
 TestCase {
     name: "CapabilityModel"
 
+    QtObject {
+        id: nativeSequences
+        property list<string> tiers: ["true3d", "procedural2d"]
+    }
+
+    function test_nativeSequencesPreserveCapabilityDecisions() {
+        const resolution = { rendererChoices: [{ tier: "true3d", available: true }] }
+        const theme = { valid: true, scene3D: {},
+            scene3DResources: { mesh: {}, iconMesh: {}, material: {} },
+            capabilities: { rendererTiers: nativeSequences.tiers } }
+        verify(CapabilityModel.scene3DControlsAvailable(resolution, theme, { rendererAvailable: true }))
+        compare(CapabilityModel.normalized(nativeSequences.tiers), ["true3d", "procedural2d"])
+    }
+
+    function test_sceneControlsRequireAllThreeAuthorities() {
+        const resolution = { rendererChoices: [{ tier: "true3d", available: true }] }
+        const theme = { valid: true, scene3D: { mesh: "mesh" },
+            scene3DResources: { mesh: {}, iconMesh: {}, material: {} },
+            capabilities: { rendererTiers: ["true3d", "procedural2d"] } }
+        const consumer = { rendererAvailable: true }
+        verify(CapabilityModel.scene3DControlsAvailable(resolution, theme, consumer))
+        verify(!CapabilityModel.scene3DControlsAvailable({}, theme, consumer))
+        verify(!CapabilityModel.scene3DControlsAvailable(resolution, {}, consumer))
+        verify(!CapabilityModel.scene3DControlsAvailable(resolution, theme, {}))
+        for (const missing of ["valid", "scene3D", "scene3DResources", "capabilities"]) {
+            const partial = JSON.parse(JSON.stringify(theme))
+            delete partial[missing]
+            verify(!CapabilityModel.scene3DControlsAvailable(resolution, partial, consumer), missing)
+        }
+        // A saved setting cannot replace the consumer's successful probe.
+        verify(!CapabilityModel.scene3DControlsAvailable(resolution,
+            { rendererTier: "true3d", scene3DQuality: "high" }, { rendererAvailable: false }))
+    }
+
     function test_normalizesNestedValueWrappers() {
         const source = {
             value: {
@@ -67,6 +101,30 @@ TestCase {
         compare(missing.reasonCode, "invalid-capability-result")
         compare(CapabilityModel.availableOptions(
             [{ label: "Unknown", value: "unknown" }], {}, "controls").length, 0)
+    }
+
+    function test_unavailableThreeDOptionsRemainHidden_data() {
+        return ["renderer-not-installed", "renderer-disabled",
+                "renderer-import-unavailable", "renderer-backend-unsupported",
+                "renderer-scene-unavailable", "theme-capability-undeclared"]
+            .map(function(reason) { return { tag: reason, reason: reason } })
+    }
+
+    function test_unavailableThreeDOptionsRemainHidden(data) {
+        const resolution = {
+            rendererChoices: [
+                { tier: "procedural2d", available: true },
+                { tier: "true3d", available: false, reasonCode: data.reason }
+            ]
+        }
+        const options = CapabilityModel.availableOptions([
+            { label: "2D", value: "procedural2d" },
+            { label: "3D", value: "true3d" }
+        ], resolution, "rendererChoices")
+        compare(options.length, 1)
+        compare(options[0].value, "procedural2d")
+        compare(CapabilityModel.reasonText(
+            CapabilityModel.rendererChoice(resolution, "true3d")), data.reason)
     }
 
     function test_filtersBackendResolvedItemsWithoutNameRules() {

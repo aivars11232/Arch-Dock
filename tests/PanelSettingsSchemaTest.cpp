@@ -26,7 +26,29 @@ private slots:
     void panelNormalizationMatchesTheDurableModelContract();
     void globalNormalizationIsSchemaDrivenAndStrictForChoices();
     void consumerProjectionCannotBroadenTransactionAuthority();
+    void sceneQualityIsBoundedAndReversible();
 };
+
+void PanelSettingsSchemaTest::sceneQualityIsBoundedAndReversible()
+{
+    QVariantMap values{{QStringLiteral("id"), QStringLiteral("quality-test")},
+        {QStringLiteral("surface3D"), QVariantMap{{QStringLiteral("futureData"), 7}}}};
+    for (const QString &quality : {QStringLiteral("low"), QStringLiteral("high"), QStringLiteral("low")})
+    {
+        values.insert(QStringLiteral("scene3DQuality"), quality);
+        const auto definition = PanelDefinition::fromLegacyMap(values);
+        QVERIFY(definition.has_value());
+        QCOMPARE(definition->surface.parameters3D.value(QStringLiteral("quality")).toString(), quality);
+        QCOMPARE(definition->surface.parameters3D.value(QStringLiteral("futureData")).toInt(), 7);
+        values = definition->toPersistedMap();
+        QCOMPARE(values.value(QStringLiteral("scene3DQuality")).toString(), quality);
+    }
+    values.insert(QStringLiteral("scene3DQuality"), QStringLiteral("unbounded"));
+    const auto normalized = PanelDefinition::fromLegacyMap(values);
+    QVERIFY(normalized.has_value());
+    QCOMPARE(normalized->surface.parameters3D
+                 .value(QStringLiteral("quality")).toString(), QStringLiteral("medium"));
+}
 
 void PanelSettingsSchemaTest::descriptorsAreUniqueAndComplete()
 {

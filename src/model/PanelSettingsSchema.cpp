@@ -613,6 +613,10 @@ const QVector<Descriptor> &schemaFields()
 
         panel("rendererTier", Access::Editor, Type::String, Normalization::LowerString,
               QString{}, "surface.rendererTier", {}, {}, {}, true, true),
+        panel("scene3DQuality", Access::Editor, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("medium"), "surface.parameters3D.quality", {}, {},
+              {"low", "medium", "high"}, true, true,
+              editor("panels-appearance", "3D quality", "combo", {"studio"}, "scene3d-quality")),
         panel("panelThemeId", Access::Editor, Type::String,
               Normalization::TrimmedString, QString{}, "surface.panelThemeId", {}, {}, {}, true,
               true),

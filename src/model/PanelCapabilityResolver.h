@@ -66,6 +66,7 @@ enum class CapabilityReasonCode
     ThemeLayoutUnsupported,
     RendererNotInstalled,
     RendererDisabled,
+    RendererSceneUnavailable,
     RendererHostUnsupported,
     RendererPlatformUnsupported,
     PresentationMechanismUnavailable,
@@ -119,6 +120,8 @@ struct RendererAvailability
     QStringList operatingSystems;
     int minimumPlasmaMajorVersion = 6;
     bool supportsWayland = true;
+    // Build eligibility only; each consumer also checks its engine/window.
+    bool sceneImplemented = true;
 
     bool operator==(const RendererAvailability &) const = default;
 };

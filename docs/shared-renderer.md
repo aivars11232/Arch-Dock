@@ -17,6 +17,45 @@ import ArchDock.Rendering 1.0
 No source-tree-relative or absolute repository path is part of the module
 contract.
 
+## Optional spatial renderer capability
+
+`ARCHDOCK_ENABLE_QUICK3D` accepts `AUTO` (the default), `OFF`, or `ON`.
+`AUTO` packages the optional QML resources when `Qt6Quick3D` is found; `OFF`
+does not search for or package them; `ON` requires the development module at
+configure time. None of these modes links the core service to Quick 3D.
+Explicit build/install lists keep optional files out of disabled builds,
+including when an existing build is reconfigured from ON to OFF.
+
+Generated `RendererBuildConfig` metadata records build facts in C++ and QML.
+`RendererCapabilityProbe` compiles a fixed application-owned import probe in
+the consuming QML engine, without creating a spatial scene. It reads
+`GraphicsInfo.api` from that consumer's window. On the supported Linux target,
+OpenGL and Vulkan are eligible; the Qt Quick software and null backends are
+not. A window without an initialized graphics backend fails closed until its
+actual API is known. This capability is never read from saved panel settings.
+
+`PanelScene.true3DCapability`, also exposed as
+`runtimeCapabilityStatus.true3d`, contains `buildAvailable`, `importAvailable`,
+`backendSupported`, `graphicsApi`, `moduleAvailable`, `sceneBuilt`,
+`rendererAvailable`, `reasonCode`, and `importDiagnostic`. Reasons distinguish
+`renderer-not-installed`, `renderer-import-loading`,
+`renderer-import-unavailable`, `renderer-backend-uninitialized`,
+`renderer-backend-unsupported`, and `renderer-scene-unavailable`.
+
+Phase A detects the module but keeps `sceneBuilt` false. The resolver reports
+that separate boundary, follows the theme's declared fallback order, and
+does not claim a rendered mesh. Detailed 3D editor fields remain absent;
+`surface3D` stays internal. Runtime eligibility is necessary, but a selected
+theme's validated scene support is also required before detailed controls
+could be exposed.
+
+The software and missing-module tests run in separate processes. The latter
+blocks optional import URLs in its engine, preventing the installed system
+module or another engine's cache from satisfying the negative case. The
+staged import smoke checks generated metadata and probes a real graphics
+backend in its disposable KWin Wayland session. Full OFF and ON builds and
+CTest suites are the phase gate; successful import alone is not visual proof.
+
 ## Exported foundation types
 
 - `RenderingModuleProbe` is the harmless module identity/import probe.

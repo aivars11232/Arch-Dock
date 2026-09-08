@@ -16,7 +16,11 @@ function copyMap(source) {
 }
 
 function copyValue(source) {
-    if (Array.isArray(source)) {
+    // Qt's sequential containers have length and slice, but Array.isArray()
+    // returns false. Preserve nested resource arrays when copying snapshots.
+    if (Array.isArray(source) || (source !== null && typeof source === "object"
+            && Number.isInteger(source.length) && source.length >= 0
+            && typeof source.slice === "function")) {
         const result = [];
         for (let index = 0; index < source.length; ++index)
             result.push(copyValue(source[index]));

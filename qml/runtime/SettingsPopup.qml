@@ -46,6 +46,11 @@ Window {
         EditorModel.rendererCandidate(editorSession)
     readonly property var selectedPreviewTheme:
         rendererPreviewTheme(selectedRendererCandidate)
+    readonly property bool scene3DControlsAvailable: Boolean(
+        CapabilityModel.scene3DControlsAvailable(selectedCapabilityResolution,
+            selectedPreviewTheme, embeddedRendererPreview.panelSceneItem.true3DCapability))
+    readonly property bool scene3DQualityVisible: scene3DControlsAvailable
+        && embeddedRendererPreview.panelSceneItem.effectiveRendererTier === "true3d"
     readonly property var selectedPlacementResult: {
         const revision = placementRevision;
         return panelController.nativePanelPlacementStatus(selectedPanelId);
@@ -321,6 +326,8 @@ Window {
         for (let sourceIndex = 0; sourceIndex < sources.length; ++sourceIndex) {
             const source = sources[sourceIndex] || [];
             for (let index = 0; index < source.length; ++index) {
+                if (String(source[index].key) === "scene3DQuality" && !scene3DQualityVisible)
+                    continue;
                 if (String(source[index].section) === sectionId)
                     result.push(editorRow(source[index]));
             }
@@ -380,6 +387,16 @@ Window {
 
     function panelAppearanceRows() {
         const rows = schemaSectionRows("panels-appearance", qsTr("Appearance"), qsTr("Surface styling for the selected panel."));
+        if (scene3DControlsAvailable) {
+            const tiers = selectedPreviewTheme.capabilities.rendererTiers;
+            const labels = { "true3d": qsTr("3D mesh"), "baked2.5d": qsTr("Baked 2.5D"),
+                "skinned2d": qsTr("Skinned 2D"), "procedural2d": qsTr("Procedural 2D") };
+            rows.splice(1, 0, { kind: "combo", key: "rendererTier", scope: "panel",
+                label: qsTr("Renderer"), fallback: selectedPreviewTheme.capabilities.preferredRendererTier,
+                options: tiers.filter(function(tier) {
+                    return CapabilityModel.rendererChoice(root.selectedCapabilityResolution, tier).available === true;
+                }).map(function(tier) { return { label: labels[tier] || tier, value: tier }; }) });
+        }
         rows.splice(1, 0, {
             kind: "themeSamples",
             label: qsTr("Built-in themes"),

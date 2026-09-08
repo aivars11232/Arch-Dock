@@ -17,6 +17,31 @@ qt_standard_project_setup(REQUIRES 6.8)
 
 include(GNUInstallDirs)
 
+set(ARCHDOCK_ENABLE_QUICK3D AUTO CACHE STRING
+    "Optional Qt Quick 3D support: AUTO, OFF, or ON")
+set_property(CACHE ARCHDOCK_ENABLE_QUICK3D PROPERTY STRINGS AUTO OFF ON)
+if(NOT ARCHDOCK_ENABLE_QUICK3D MATCHES "^(AUTO|OFF|ON)$")
+  message(FATAL_ERROR "ARCHDOCK_ENABLE_QUICK3D must be AUTO, OFF, or ON")
+endif()
+set(ARCHDOCK_QUICK3D_BUILT 0)
+set(ARCHDOCK_QUICK3D_QML_BOOL false)
+if(NOT ARCHDOCK_ENABLE_QUICK3D STREQUAL "OFF")
+  find_package(Qt6Quick3D QUIET)
+  if(Qt6Quick3D_FOUND)
+    set(ARCHDOCK_QUICK3D_BUILT 1)
+    set(ARCHDOCK_QUICK3D_QML_BOOL true)
+  elseif(ARCHDOCK_ENABLE_QUICK3D STREQUAL "ON")
+    message(FATAL_ERROR "Quick 3D was requested but Qt6Quick3D is unavailable")
+  endif()
+endif()
+# The scene is packaged only when its optional native module was discovered.
+set(ARCHDOCK_SCENE3D_BUILT ${ARCHDOCK_QUICK3D_BUILT})
+set(ARCHDOCK_SCENE3D_QML_BOOL ${ARCHDOCK_QUICK3D_QML_BOOL})
+configure_file(cmake/RendererBuildConfig.h.in
+               generated/RendererBuildConfig.h)
+include_directories("${CMAKE_CURRENT_BINARY_DIR}/generated")
+message(STATUS "Arch Dock optional Quick 3D build: ${ARCHDOCK_QUICK3D_QML_BOOL}")
+
 set(
   ARCHDOCK_QML_INSTALL_DIR
   "${CMAKE_INSTALL_LIBDIR}/qt6/qml"
@@ -45,6 +70,7 @@ set(ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/data/animation-profiles/builtin-animation-profiles.json")
 set(ARCHDOCK_RENDERING_MODULE_FILES
     qmldir
+    RendererCapabilityProbe.qml
     RenderingModuleProbe.qml
     LayoutEngine.js
     IconStyleResolver.js
@@ -70,8 +96,25 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     renderers/PanelSkinLayer2D.qml
     renderers/PanelBaked25D.qml)
 set(ARCHDOCK_RENDERING_MODULE_SOURCES)
+set(ARCHDOCK_OPTIONAL_RENDERING_FILES
+    optional3d/RendererImportProbe.qml
+    optional3d/PanelScene3D.qml
+    optional3d/IconStyle3D.qml)
+# These are owned build outputs. Remove stale optional files on ON -> OFF.
+foreach(rendering_file IN LISTS ARCHDOCK_OPTIONAL_RENDERING_FILES)
+  if(NOT ARCHDOCK_QUICK3D_BUILT)
+    file(REMOVE "${ARCHDOCK_RENDERING_BUILD_DIR}/${rendering_file}")
+  endif()
+endforeach()
+if(ARCHDOCK_QUICK3D_BUILT)
+  list(APPEND ARCHDOCK_RENDERING_MODULE_FILES ${ARCHDOCK_OPTIONAL_RENDERING_FILES})
+endif()
 
 file(MAKE_DIRECTORY "${ARCHDOCK_RENDERING_BUILD_DIR}")
+configure_file(
+  "${ARCHDOCK_RENDERING_SOURCE_DIR}/RendererBuildConfig.qml.in"
+  "${ARCHDOCK_RENDERING_BUILD_DIR}/RendererBuildConfig.qml" @ONLY)
+set(ARCHDOCK_RENDERING_COPY_COMMANDS)
 foreach(rendering_file IN LISTS ARCHDOCK_RENDERING_MODULE_FILES)
   list(
     APPEND ARCHDOCK_RENDERING_MODULE_SOURCES
@@ -83,15 +126,17 @@ foreach(rendering_file IN LISTS ARCHDOCK_RENDERING_MODULE_FILES)
     "${ARCHDOCK_RENDERING_SOURCE_DIR}/${rendering_file}"
     "${ARCHDOCK_RENDERING_BUILD_DIR}/${rendering_file}"
     COPYONLY)
+  list(APPEND ARCHDOCK_RENDERING_COPY_COMMANDS
+       COMMAND ${CMAKE_COMMAND} -E copy_if_different
+       "${ARCHDOCK_RENDERING_SOURCE_DIR}/${rendering_file}"
+       "${ARCHDOCK_RENDERING_BUILD_DIR}/${rendering_file}")
 endforeach()
 
 add_custom_target(
   archdock-rendering-module ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory
           "${ARCHDOCK_RENDERING_BUILD_DIR}"
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-          "${ARCHDOCK_RENDERING_SOURCE_DIR}"
-          "${ARCHDOCK_RENDERING_BUILD_DIR}"
+  ${ARCHDOCK_RENDERING_COPY_COMMANDS}
   DEPENDS ${ARCHDOCK_RENDERING_MODULE_SOURCES}
   COMMENT "Preparing the ArchDock.Rendering QML module")
 
@@ -455,6 +500,21 @@ if(BUILD_TESTING)
             Qt6::Gui
             Qt6::Test)
   add_test(NAME animation-profile-test COMMAND animation-profile-test)
+
+  qt_add_executable(renderer-capability-test tests/RendererCapabilityTest.cpp
+    src/model/ThemeDefinition.cpp src/themes/ThemePackage.cpp)
+  target_include_directories(renderer-capability-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(renderer-capability-test PRIVATE Qt6::Quick Qt6::Test)
+  target_compile_definitions(renderer-capability-test PRIVATE
+    ARCHDOCK_RENDERING_IMPORT_ROOT="${ARCHDOCK_RENDERING_IMPORT_ROOT}"
+    ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT="${ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT}")
+  add_dependencies(renderer-capability-test archdock-rendering-module)
+  add_test(NAME renderer-capability-software-test COMMAND renderer-capability-test)
+  set_tests_properties(renderer-capability-software-test PROPERTIES ENVIRONMENT
+    "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
+  add_test(NAME renderer-capability-missing-module-test COMMAND renderer-capability-test)
+  set_tests_properties(renderer-capability-missing-module-test PROPERTIES ENVIRONMENT
+    "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;ARCHDOCK_TEST_MISSING_3D=1")
 
   qt_add_executable(
     panel-capability-resolver-test
@@ -1156,6 +1216,8 @@ if(BUILD_TESTING)
 endif()
 
 install(TARGETS arch-dock RUNTIME DESTINATION bin)
+install(FILES "${ARCHDOCK_RENDERING_BUILD_DIR}/RendererBuildConfig.qml"
+        DESTINATION "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Rendering")
 foreach(rendering_file IN LISTS ARCHDOCK_RENDERING_MODULE_FILES)
   get_filename_component(rendering_directory "${rendering_file}" DIRECTORY)
   install(
@@ -1191,7 +1253,8 @@ foreach(packaged_theme
         energy-frame-purple
         ring-platform-blue
         octagon-platform-steel
-        arc-platform-orange)
+        arc-platform-orange
+        mesh-platform-cyan)
   install(
     DIRECTORY "assets/themes/${packaged_theme}"
     DESTINATION share/arch-dock/themes)

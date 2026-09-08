@@ -1,4 +1,5 @@
 #include "model/PanelCapabilityResolver.h"
+#include "RendererBuildConfig.h"
 
 #include <QJsonDocument>
 #include <QtTest>
@@ -56,6 +57,13 @@ RendererAvailability *rendererByTier(QVector<RendererAvailability> *renderers,
             return renderer.tier == tier;
         });
     return found == renderers->end() ? nullptr : &*found;
+}
+
+QVector<RendererAvailability> withoutThreeD()
+{
+    auto renderers = PanelCapabilityResolver::productionRenderers();
+    rendererByTier(&renderers, RendererTier::True3D)->installed = false;
+    return renderers;
 }
 
 const CapabilityDecision *decisionById(const QVector<CapabilityDecision> &decisions,
@@ -190,6 +198,7 @@ private slots:
     void dynamicGlowRequiresHostAndThemeDeclaration();
     void bakedTwoPointFiveDIsAvailableOnTheFreeHostOnly();
     void trueThreeDReportsNotInstalled();
+    void productionBuildFactsAreNotSettings();
     void trueThreeDReportsDisabledSeparately();
     void selectsFirstSafeFallback();
     void noFallbackReturnsDeterministicUnavailableResult();
@@ -667,7 +676,7 @@ void PanelCapabilityResolverTest::trueThreeDReportsNotInstalled()
         panelFor(PanelHostKind::FreeDesktop),
         host,
         theme,
-        PanelCapabilityResolver::productionRenderers(),
+        withoutThreeD(),
         PanelCapabilityResolver::productionPlatform());
 
     QVERIFY(!result.available);
@@ -680,6 +689,35 @@ void PanelCapabilityResolverTest::trueThreeDReportsNotInstalled()
     QVERIFY(choice);
     QVERIFY(!choice->available);
     QCOMPARE(choice->reason, CapabilityReasonCode::RendererNotInstalled);
+}
+
+void PanelCapabilityResolverTest::productionBuildFactsAreNotSettings()
+{
+    auto renderers = PanelCapabilityResolver::productionRenderers();
+    const auto *renderer = rendererByTier(&renderers, RendererTier::True3D);
+    QVERIFY(renderer);
+    QCOMPARE(renderer->installed, ARCHDOCK_QUICK3D_BUILT != 0);
+    QCOMPARE(renderer->sceneImplemented, ARCHDOCK_SCENE3D_BUILT != 0);
+    auto definition = panelFor(PanelHostKind::FreeDesktop);
+    const auto host = PanelCapabilityResolver::productionHostProfile(
+        PanelHostKind::FreeDesktop);
+    const auto theme = PanelCapabilityResolver::proceduralThemeProfile();
+    const auto platform = PanelCapabilityResolver::productionPlatform();
+    const auto before = PanelCapabilityResolver::resolve(
+        definition, host, theme, renderers, platform);
+    definition.surface.rendererTier = QStringLiteral("true3d");
+    const auto after = PanelCapabilityResolver::resolve(
+        definition, host, theme, renderers, platform);
+    QCOMPARE(before.rendererChoices, after.rendererChoices);
+    const auto *choice = rendererChoiceByTier(after.rendererChoices, RendererTier::True3D);
+    QVERIFY(choice);
+    if (!ARCHDOCK_QUICK3D_BUILT)
+        QCOMPARE(choice->reason, CapabilityReasonCode::RendererNotInstalled);
+    else if (!ARCHDOCK_SCENE3D_BUILT)
+        QCOMPARE(choice->reason, CapabilityReasonCode::RendererSceneUnavailable);
+    // A request cannot add true3d support to a procedural-only theme.
+    QCOMPARE(after.renderer.evaluatedTiers.first().reason,
+             CapabilityReasonCode::ThemeCapabilityUndeclared);
 }
 
 void PanelCapabilityResolverTest::trueThreeDReportsDisabledSeparately()
@@ -736,7 +774,7 @@ void PanelCapabilityResolverTest::selectsFirstSafeFallback()
         RendererTier::Procedural2D,
     };
     QVector<RendererAvailability> renderers =
-        PanelCapabilityResolver::productionRenderers();
+        withoutThreeD();
     RendererAvailability *baked = rendererByTier(
         &renderers, RendererTier::Baked2_5D);
     QVERIFY(baked);
@@ -774,13 +812,13 @@ void PanelCapabilityResolverTest::noFallbackReturnsDeterministicUnavailableResul
         panelFor(PanelHostKind::FreeDesktop),
         host,
         theme,
-        PanelCapabilityResolver::productionRenderers(),
+        withoutThreeD(),
         PanelCapabilityResolver::productionPlatform());
     const CapabilityResolution second = PanelCapabilityResolver::resolve(
         panelFor(PanelHostKind::FreeDesktop),
         host,
         theme,
-        PanelCapabilityResolver::productionRenderers(),
+        withoutThreeD(),
         PanelCapabilityResolver::productionPlatform());
 
     QVERIFY(!first.available);

@@ -3,6 +3,7 @@ if(NOT DEFINED ARCHDOCK_SOURCE_DIR)
 endif()
 
 set(rendering_sources
+    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/RendererCapabilityProbe.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/IconStyleResolver.js"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/AnimationProfileRuntime.js"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/MotionChannels.js"
@@ -26,7 +27,12 @@ set(rendering_sources
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelSkinLayer2D.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelBaked25D.qml")
 
-foreach(rendering_source IN LISTS rendering_sources)
+file(GLOB optional_rendering_sources
+     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/optional3d/*.qml")
+if(NOT optional_rendering_sources)
+  message(FATAL_ERROR "Missing optional renderer import probe")
+endif()
+foreach(rendering_source IN LISTS rendering_sources optional_rendering_sources)
   if(NOT EXISTS "${rendering_source}")
     message(FATAL_ERROR "Missing rendering source: ${rendering_source}")
   endif()
@@ -61,9 +67,8 @@ foreach(forbidden_preview_implementation
   endif()
 endforeach()
 
-# Baked 2.5D is layered artwork with a depth ordering, not a mesh scene. The
-# module must therefore keep working with no Qt Quick 3D module installed, so
-# no shared rendering source may import one.
+# Core rendering must keep working without the optional module installed.
+# Only dynamically loaded files inside optional3d may import spatial types.
 foreach(rendering_source IN LISTS rendering_sources)
   file(READ "${rendering_source}" rendering_content)
   if(rendering_content MATCHES "QtQuick3D|QtQuick\\.Scene3D|Qt3D")

@@ -302,6 +302,7 @@ Item {
     }
     readonly property string effectiveRendererTier:
         surfaceLoader.effectiveRendererTier
+    readonly property var true3DCapability: rendererCapabilityProbe.capability
     readonly property var runtimeCapabilityStatus: ({
         available: hostCapabilities
             && hostCapabilities.available !== undefined
@@ -309,9 +310,13 @@ Item {
         requestedRendererTier: requestedRendererTier,
         resolvedRendererTier: resolvedRendererTier,
         effectiveRendererTier: effectiveRendererTier,
+        true3d: true3DCapability,
         fallbackApplied: fallbackApplied,
         fallbackReason: fallbackReason
     })
+    RendererCapabilityProbe {
+        id: rendererCapabilityProbe
+    }
     readonly property var visualPanel: surfaceLoader.surfaceItem
     readonly property var iconDelegates: entryRepeater
     // Baked 2.5D outputs. `activeTrackMetrics` is null whenever the scene is
@@ -321,7 +326,8 @@ Item {
     // drawn stack inside it; this is the renderer that owns that stack, which
     // is what a host or a test asks about resource and animation state.
     readonly property var activeSurfaceRenderer:
-        surfaceLoader.bakedReady ? surfaceLoader.bakedItem
+        surfaceLoader.true3DReady ? surfaceLoader.true3DItem
+        : surfaceLoader.bakedReady ? surfaceLoader.bakedItem
         : surfaceLoader.skinnedReady ? surfaceLoader.skinnedItem : null
     readonly property var activeTrackMetrics: bakedTrackMetrics
     readonly property real occlusionDepth: surfaceLoader.occlusionDepth
@@ -808,6 +814,14 @@ Item {
         panelOpacity: root.panelOpacity
         motionTracks: root.motionTracks
         trackMetrics: root.bakedTrackMetrics || ({})
+        true3DCapability: root.true3DCapability
+        sceneQuality: String(root.definitionValue("surface", "parameters3D", "surface3D", ({})).quality
+            || root.panelDefinition.scene3DQuality
+            || (root.themeDefinition.scene3D || ({})).defaultQuality || "medium")
+        entryGeometry: root.entryRects.map(function(rect) {
+            return { centerX: rect.x + rect.width / 2, centerY: rect.y + rect.height / 2,
+                     width: rect.width, height: rect.height }
+        })
         sceneConcealed: root.sceneConcealed || !root.visible
     }
 

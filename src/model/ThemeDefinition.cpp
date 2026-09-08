@@ -265,6 +265,22 @@ const ThemeAssetDefinition *ThemeDefinition::assetById(const QString &assetId) c
     return match == assets.cend() ? nullptr : &*match;
 }
 
+QVariantMap ThemeScene3DDefinition::toVariantMap() const
+{
+    return {
+        {QStringLiteral("mesh"), mesh},
+        {QStringLiteral("iconMesh"), iconMesh},
+        {QStringLiteral("material"), material},
+        {QStringLiteral("texture"), texture},
+        {QStringLiteral("fieldOfView"), fieldOfView},
+        {QStringLiteral("cameraPitch"), cameraPitch},
+        {QStringLiteral("cameraYaw"), cameraYaw},
+        {QStringLiteral("keyLightBrightness"), keyLightBrightness},
+        {QStringLiteral("fillLightBrightness"), fillLightBrightness},
+        {QStringLiteral("defaultQuality"), defaultQuality},
+    };
+}
+
 QVariantMap ThemeDefinition::toVariantMap() const
 {
     QVariantMap result{
@@ -290,6 +306,10 @@ QVariantMap ThemeDefinition::toVariantMap() const
     if (iconStyleRef.has_value())
     {
         result.insert(QStringLiteral("iconStyleRef"), iconStyleRef->toVariantMap());
+    }
+    if (scene3D.has_value())
+    {
+        result.insert(QStringLiteral("scene3D"), scene3D->toVariantMap());
     }
     return result;
 }

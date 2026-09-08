@@ -1,0 +1,6 @@
+#pragma once
+
+// Build facts only. The consumer's QML engine and graphics backend must still
+// prove runtime availability; saved panel settings never set these flags.
+#cmakedefine01 ARCHDOCK_QUICK3D_BUILT
+#cmakedefine01 ARCHDOCK_SCENE3D_BUILT

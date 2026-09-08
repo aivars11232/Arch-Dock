@@ -1,4 +1,5 @@
 #include "PanelCapabilityResolver.h"
+#include "RendererBuildConfig.h"
 
 #include <QtGlobal>
 
@@ -256,6 +257,11 @@ RendererCandidateDecision resolveRendererAvailability(
     if (!renderer->enabled)
     {
         decision.reason = CapabilityReasonCode::RendererDisabled;
+        return decision;
+    }
+    if (!renderer->sceneImplemented)
+    {
+        decision.reason = CapabilityReasonCode::RendererSceneUnavailable;
         return decision;
     }
     if (!contains(host.rendererTiers, tier) ||
@@ -684,6 +690,8 @@ QString capabilityReasonCodeName(CapabilityReasonCode reason)
         return QStringLiteral("renderer-not-installed");
     case CapabilityReasonCode::RendererDisabled:
         return QStringLiteral("renderer-disabled");
+    case CapabilityReasonCode::RendererSceneUnavailable:
+        return QStringLiteral("renderer-scene-unavailable");
     case CapabilityReasonCode::RendererHostUnsupported:
         return QStringLiteral("renderer-host-unsupported");
     case CapabilityReasonCode::RendererPlatformUnsupported:
@@ -732,6 +740,7 @@ HostCapabilityProfile PanelCapabilityResolver::productionHostProfile(
             RendererTier::Procedural2D,
             RendererTier::Skinned2D,
             RendererTier::Baked2_5D,
+            RendererTier::True3D,
         };
         profile.rotation = {RotationSupport::Arbitrary, -180.0, 180.0};
         return profile;
@@ -924,12 +933,13 @@ QVector<RendererAvailability> PanelCapabilityResolver::productionRenderers()
          6,
          true},
         {RendererTier::True3D,
-         false,
-         false,
+         ARCHDOCK_QUICK3D_BUILT != 0,
+         true,
          {PanelHostKind::FreeDesktop},
          {QStringLiteral("arch")},
          6,
-         true},
+         true,
+         ARCHDOCK_SCENE3D_BUILT != 0},
     };
 }
 

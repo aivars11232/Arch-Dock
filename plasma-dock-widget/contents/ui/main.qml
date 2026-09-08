@@ -517,6 +517,12 @@ PlasmoidItem {
 
     onReportedPresentationChanged: root.publishPresentationState()
 
+    LoggingCategory {
+        id: rendererLog
+        name: "org.archdock.rendering"
+        defaultLogLevel: LoggingCategory.Warning
+    }
+
     function publishPresentationState() {
         if (panelId.length === 0 || !dockService.registered)
             return;
@@ -714,6 +720,20 @@ PlasmoidItem {
 
             PanelScene {
                 id: panelScene
+
+                readonly property string rendererObservation: JSON.stringify({
+                    panelId: root.panelId, appletId: Number(Plasmoid.id),
+                    themeId: String((root.configuration.themeDefinition || ({})).id || ""),
+                    requested: requestedRendererTier, effective: effectiveRendererTier,
+                    reason: fallbackReason,
+                    triangles: activeSurfaceRenderer ? Number(activeSurfaceRenderer.triangleCount || 0) : 0,
+                    frameRendered: activeSurfaceRenderer ? Boolean(activeSurfaceRenderer.frameRendered) : false,
+                    quality: activeSurfaceRenderer ? activeSurfaceRenderer.qualityState || ({}) : ({})
+                })
+                onRendererObservationChanged: {
+                    if (requestedRendererTier === "true3d")
+                        console.debug(rendererLog, "ArchDockRenderer " + rendererObservation);
+                }
 
                 anchors.centerIn: parent
                 panelDefinition: root.scenePanelDefinition

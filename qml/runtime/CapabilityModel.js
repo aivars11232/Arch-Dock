@@ -1,7 +1,9 @@
 .pragma library
 
 function normalized(value) {
-    if (Array.isArray(value)) {
+    if (Array.isArray(value) || (value !== null && typeof value === "object"
+            && Number.isInteger(value.length) && value.length >= 0
+            && typeof value.slice === "function")) {
         const result = []
         for (let index = 0; index < value.length; ++index)
             result.push(normalized(value[index]))
@@ -44,6 +46,19 @@ function decision(resolution, group, id) {
 
 function rendererChoice(resolution, tier) {
     return decision(resolution, "rendererChoices", tier)
+}
+
+function scene3DControlsAvailable(resolution, theme, consumer) {
+    const selected = normalized(theme)
+    const runtime = normalized(consumer)
+    return rendererChoice(resolution, "true3d").available === true
+        && runtime && runtime.rendererAvailable === true
+        && selected && selected.valid === true
+        && selected.scene3D && selected.scene3DResources
+        && selected.scene3DResources.mesh && selected.scene3DResources.iconMesh
+        && selected.scene3DResources.material
+        && selected.capabilities && Array.isArray(selected.capabilities.rendererTiers)
+        && selected.capabilities.rendererTiers.includes("true3d")
 }
 
 function availableOptions(options, resolution, group) {

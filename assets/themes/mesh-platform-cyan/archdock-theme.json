@@ -1,0 +1,92 @@
+{
+  "format": "org.archdock.theme",
+  "version": 2,
+  "id": "mesh-platform-cyan",
+  "name": "Cyan Mesh Platform",
+  "packageRevision": 1,
+  "author": "Arch Dock project",
+  "description": "Original indexed octagonal ring with bevels, side walls, underside and mesh icon bases; created numerically for TASK-0035.",
+  "license": {
+    "spdx": "NOASSERTION",
+    "redistribution": "allowed",
+    "evidence": "User approved creation and redistribution of newly created original TASK-0035 theme assets as part of Arch Dock; no public license was selected. Geometry, material and texture were authored from scratch without external source assets."
+  },
+  "capabilities": {
+    "hosts": [
+      "free-desktop"
+    ],
+    "rendererTiers": [
+      "true3d",
+      "procedural2d"
+    ],
+    "preferredRendererTier": "true3d",
+    "fallbackRendererTiers": [
+      "procedural2d"
+    ],
+    "layouts": [
+      "ring",
+      "circular",
+      "octagon",
+      "polygon"
+    ],
+    "orientations": [
+      "free"
+    ],
+    "features": [
+      "icon-state-styling"
+    ],
+    "presentationMechanisms": [
+      "open"
+    ],
+    "rotation": {
+      "mode": "free"
+    }
+  },
+  "assets": [
+    {
+      "id": "platform",
+      "path": "assets/platform.json",
+      "kind": "mesh",
+      "mimeType": "application/json",
+      "sha256": "5d45a0208472b7d7c5134622991fa138eaaf4d834c8c8afa1c86b15c3fa26db6"
+    },
+    {
+      "id": "metal",
+      "path": "assets/material.json",
+      "kind": "material",
+      "mimeType": "application/json",
+      "sha256": "b2ce55ca20c0b9845a245d2e04d9730fd01b821983accdef6703de0e3f9f9814"
+    },
+    {
+      "id": "surface",
+      "path": "assets/texture.svg",
+      "kind": "vector",
+      "mimeType": "image/svg+xml",
+      "sha256": "e16738720143df26dba625b8402cfb5ce72db723ff8a3ed493103949f6431780",
+      "naturalSize": {
+        "width": 64,
+        "height": 64
+      }
+    }
+  ],
+  "scene3D": {
+    "mesh": "platform",
+    "iconMesh": "platform",
+    "material": "metal",
+    "texture": "surface",
+    "fieldOfView": 40,
+    "cameraPitch": 25,
+    "cameraYaw": 10,
+    "keyLightBrightness": 1.2,
+    "fillLightBrightness": 0.45,
+    "defaultQuality": "medium"
+  },
+  "states": [
+    {
+      "id": "normal",
+      "layers": []
+    }
+  ],
+  "layers": [],
+  "animationProfileRefs": []
+}

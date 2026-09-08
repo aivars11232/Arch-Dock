@@ -234,6 +234,25 @@ struct ThemeResourceReference
     bool operator==(const ThemeResourceReference &) const = default;
 };
 
+// Declarative scene inputs. Mesh/material bytes are validated package assets;
+// packages never supply executable QML, shaders, or conversion commands.
+struct ThemeScene3DDefinition
+{
+    QString mesh;
+    QString iconMesh;
+    QString material;
+    QString texture;
+    qreal fieldOfView = 40.0;
+    qreal cameraPitch = 25.0;
+    qreal cameraYaw = 0.0;
+    qreal keyLightBrightness = 1.0;
+    qreal fillLightBrightness = 0.4;
+    QString defaultQuality = QStringLiteral("medium");
+
+    [[nodiscard]] QVariantMap toVariantMap() const;
+    bool operator==(const ThemeScene3DDefinition &) const = default;
+};
+
 struct ThemeDefinition
 {
     static constexpr int CurrentVersion = 2;
@@ -257,6 +276,7 @@ struct ThemeDefinition
     QVector<ThemeInputMaskDefinition> inputMasks;
     std::optional<ThemeResourceReference> iconStyleRef;
     QVector<ThemeResourceReference> animationProfileRefs;
+    std::optional<ThemeScene3DDefinition> scene3D;
 
     int sourceVersion = CurrentVersion;
     bool adaptedFromVersion1 = false;

@@ -966,6 +966,21 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             available = resolution.available &&
                 !candidate.surface.themeSource.trimmed().isEmpty();
         }
+        else if (capability == QStringLiteral("scene3d-quality"))
+        {
+            const auto renderer = std::find_if(resolution.rendererChoices.cbegin(),
+                resolution.rendererChoices.cend(), [](const auto &choice) {
+                    return choice.tier == ArchDock::RendererTier::True3D && choice.available;
+                });
+            available = freeHost && resolution.available && renderer != resolution.rendererChoices.cend();
+            if (available)
+            {
+                const auto theme = m_panelRegistry.themeRuntimeProjection(candidate);
+                available = theme && theme->value(QStringLiteral("valid")).toBool()
+                    && !theme->value(QStringLiteral("scene3D")).toMap().isEmpty()
+                    && !theme->value(QStringLiteral("scene3DResources")).toMap().isEmpty();
+            }
+        }
         else if (const std::optional<ArchDock::PanelCapability> parsed =
                      ArchDock::panelCapabilityFromName(capability);
                  parsed.has_value())

@@ -81,6 +81,62 @@ QByteArray versionTwoRasterManifest(const QString &path,
     }).toJson(QJsonDocument::Compact);
 }
 
+QJsonObject sceneMeshFixture()
+{
+    return QJsonDocument::fromJson(R"({
+        "format":"org.archdock.mesh", "version":1,
+        "positions":[[0,0,0],[10,0,0],[0,10,0],[0,0,10]],
+        "normals":[[0,0,1],[0,0,1],[0,0,1],[0,0,1]],
+        "uv0s":[[0,0],[1,0],[0,1],[1,1]],
+        "indexes":[0,2,1,0,1,3,1,2,3,2,0,3]
+    })").object();
+}
+
+QJsonObject sceneMaterialFixture()
+{
+    return QJsonDocument::fromJson(R"({
+        "format":"org.archdock.material", "version":1,
+        "baseColor":"#6688aa", "emissiveColor":"#006688",
+        "emissiveStrength":0.5, "metalness":0.6, "roughness":0.35
+    })").object();
+}
+
+QJsonObject sceneManifestFixture()
+{
+    QJsonObject manifest = QJsonDocument::fromJson(
+        versionTwoRasterManifest(QStringLiteral("texture.svg"))).object();
+    QJsonObject capabilities = manifest[QStringLiteral("capabilities")].toObject();
+    capabilities[QStringLiteral("hosts")] = QJsonArray{QStringLiteral("free-desktop")};
+    capabilities[QStringLiteral("rendererTiers")] = QJsonArray{
+        QStringLiteral("true3d"), QStringLiteral("procedural2d")};
+    capabilities[QStringLiteral("preferredRendererTier")] = QStringLiteral("true3d");
+    manifest[QStringLiteral("capabilities")] = capabilities;
+    QJsonArray assets = manifest[QStringLiteral("assets")].toArray();
+    assets.append(QJsonObject{{QStringLiteral("id"), QStringLiteral("mesh")},
+                              {QStringLiteral("path"), QStringLiteral("mesh.json")},
+                              {QStringLiteral("kind"), QStringLiteral("mesh")}});
+    assets.append(QJsonObject{{QStringLiteral("id"), QStringLiteral("metal")},
+                              {QStringLiteral("path"), QStringLiteral("material.json")},
+                              {QStringLiteral("kind"), QStringLiteral("material")}});
+    manifest[QStringLiteral("assets")] = assets;
+    manifest[QStringLiteral("scene3D")] = QJsonObject{
+        {QStringLiteral("mesh"), QStringLiteral("mesh")},
+        {QStringLiteral("iconMesh"), QStringLiteral("mesh")},
+        {QStringLiteral("material"), QStringLiteral("metal")},
+        {QStringLiteral("texture"), QStringLiteral("surface")}};
+    return manifest;
+}
+
+bool writeSceneFixture(const QTemporaryDir &root)
+{
+    return writeBytes(root.filePath(QStringLiteral("mesh.json")),
+                      QJsonDocument(sceneMeshFixture()).toJson()) &&
+        writeBytes(root.filePath(QStringLiteral("material.json")),
+                   QJsonDocument(sceneMaterialFixture()).toJson()) &&
+        writeBytes(root.filePath(QStringLiteral("texture.svg")), QByteArrayLiteral(
+            "<svg xmlns='http://www.w3.org/2000/svg' width='1' height='1'><path fill='white' d='M0 0h1v1H0z'/></svg>"));
+}
+
 }
 
 class ThemePackageTest final : public QObject
@@ -97,7 +153,31 @@ private slots:
     void manifestLimitIsEnforcedBeforeParsing();
     void managedCopyIsAtomicAndReusable();
     void dynamicGlowCapabilityIsVersionedAndStrict();
+    void scene3DResourcesAreValidatedAndMaterialized();
+    void scene3DRejectsUnsafeData_data();
+    void scene3DRejectsUnsafeData();
+    void scene3DMissingAndOversizedResourcesFailClosed();
+    void originalMeshThemeLoadsAndCopies();
 };
+
+void ThemePackageTest::originalMeshThemeLoadsAndCopies()
+{
+    const QString path = QFINDTESTDATA("../assets/themes/mesh-platform-cyan/archdock-theme.json");
+    QVERIFY(!path.isEmpty());
+    const auto result = ThemePackage::load(path);
+    QVERIFY2(result.isValid(), qPrintable(result.primaryCode()));
+    QVERIFY(result.package->definition().scene3D.has_value());
+    const QVariantMap mesh = result.package->runtimeProjection()
+        .value(QStringLiteral("scene3DResources")).toMap().value(QStringLiteral("mesh")).toMap();
+    QCOMPARE(mesh.value(QStringLiteral("positions")).toList().size(), 192);
+    QCOMPARE(mesh.value(QStringLiteral("indexes")).toList().size(), 288);
+    QTemporaryDir managed;
+    const auto copied = result.package->materialize(managed.path());
+    QVERIFY2(copied.isValid(), qPrintable(copied.diagnostics.isEmpty()
+        ? QString{} : copied.diagnostics.first().message));
+    QCOMPARE(copied.package->runtimeProjection().value(QStringLiteral("scene3DResources")),
+             result.package->runtimeProjection().value(QStringLiteral("scene3DResources")));
+}
 
 void ThemePackageTest::fixtures_data()
 {
@@ -314,6 +394,128 @@ void ThemePackageTest::dynamicGlowCapabilityIsVersionedAndStrict()
     const auto invalid = ThemePackage::load(rejected);
     QVERIFY(!invalid.isValid());
     QCOMPARE(invalid.primaryCode(), QStringLiteral("invalid-enum"));
+}
+
+void ThemePackageTest::scene3DResourcesAreValidatedAndMaterialized()
+{
+    QTemporaryDir root;
+    QTemporaryDir managed;
+    QVERIFY(root.isValid() && managed.isValid());
+    QVERIFY(writeSceneFixture(root));
+    const auto result = ThemePackage::loadBytes(
+        QJsonDocument(sceneManifestFixture()).toJson(), root.path());
+    QVERIFY2(result.isValid(), qPrintable(result.primaryMessage()));
+    QVERIFY(result.package->definition().scene3D.has_value());
+    QCOMPARE(result.package->definition().scene3D->fieldOfView, 40);
+    QCOMPARE(result.package->definition().scene3D->defaultQuality, QStringLiteral("medium"));
+    const QVariantMap resources = result.package->runtimeProjection()
+        .value(QStringLiteral("scene3DResources")).toMap();
+    QCOMPARE(resources.value(QStringLiteral("mesh")).toMap(), sceneMeshFixture().toVariantMap());
+    QCOMPARE(resources.value(QStringLiteral("material")).toMap(), sceneMaterialFixture().toVariantMap());
+    QVERIFY(!result.package->definition().toVariantMap().contains(QStringLiteral("scene3DResources")));
+    const auto copy = result.package->materialize(managed.path());
+    QVERIFY2(copy.isValid(), qPrintable(copy.diagnostics.isEmpty() ? QString{} : copy.diagnostics.first().message));
+    QCOMPARE(copy.package->runtimeProjection().value(QStringLiteral("scene3DResources")).toMap(), resources);
+    QVERIFY(copy.package->assetPath(QStringLiteral("mesh")).startsWith(managed.path()));
+}
+
+void ThemePackageTest::scene3DRejectsUnsafeData_data()
+{
+    QTest::addColumn<QString>("target");
+    QTest::addColumn<QString>("key");
+    QTest::addColumn<QVariant>("value");
+    QTest::addColumn<QString>("code");
+    const auto row = [](const char *name, const char *target, const char *key,
+                        QVariant value, const char *code)
+    {
+        QTest::newRow(name) << QString::fromLatin1(target) << QString::fromLatin1(key)
+                            << value << QString::fromLatin1(code);
+    };
+    row("wide-camera", "scene", "fieldOfView", 100, "invalid-bounds");
+    row("camera-pitch", "scene", "cameraPitch", 61, "invalid-bounds");
+    row("camera-yaw", "scene", "cameraYaw", -181, "invalid-bounds");
+    row("key-light", "scene", "keyLightBrightness", 4.1, "invalid-bounds");
+    row("fill-light", "scene", "fillLightBrightness", -1, "invalid-bounds");
+    row("quality", "scene", "defaultQuality", "ultra", "invalid-enum");
+    row("scene-script", "scene", "script", "run.qml", "unknown-field");
+    row("wrong-mesh-kind", "scene", "mesh", "surface", "invalid-scene3d-resource");
+    row("missing-texture-reference", "scene", "texture", "absent", "invalid-scene3d-resource");
+    row("material-script", "material", "shader", "shader.frag", "unknown-field");
+    row("unbounded-emission", "material", "emissiveStrength", 100, "invalid-scene3d-material");
+    row("material-color", "material", "baseColor", "javascript:run()", "invalid-scene3d-material");
+    row("material-metalness", "material", "metalness", -1, "invalid-scene3d-material");
+    row("material-roughness", "material", "roughness", 1.1, "invalid-scene3d-material");
+    row("out-of-range-index", "mesh", "indexes", QVariantList{0, 1, 4}, "invalid-scene3d-mesh");
+    row("fractional-index", "mesh", "indexes", QVariantList{0, 1, 1.5}, "invalid-scene3d-mesh");
+    row("missing-triangle", "mesh", "indexes", QVariantList{0, 1}, "invalid-scene3d-mesh");
+    row("degenerate-triangle", "mesh", "indexes", QVariantList{0, 0, 0}, "invalid-scene3d-mesh");
+    row("unused-depth-vertex", "mesh", "indexes", QVariantList{0, 2, 1}, "invalid-scene3d-mesh");
+    row("missing-normals", "mesh", "normals", QVariantList{}, "invalid-scene3d-mesh");
+    row("mesh-script", "mesh", "generator", "generate.js", "unknown-field");
+    QJsonArray flat = sceneMeshFixture()[QStringLiteral("positions")].toArray();
+    flat[3] = QJsonArray{1, 1, 0};
+    row("flat-is-not-3d", "mesh", "positions", flat.toVariantList(), "invalid-scene3d-mesh");
+    QJsonArray oversized = sceneMeshFixture()[QStringLiteral("positions")].toArray();
+    oversized[3] = QJsonArray{0, 0, 1001};
+    row("unbounded-coordinate", "mesh", "positions", oversized.toVariantList(), "invalid-scene3d-mesh");
+    row("asset-escape", "asset", "path", "../outside.json", "unsafe-path");
+}
+
+void ThemePackageTest::scene3DRejectsUnsafeData()
+{
+    QFETCH(QString, target);
+    QFETCH(QString, key);
+    QFETCH(QVariant, value);
+    QFETCH(QString, code);
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    QVERIFY(writeSceneFixture(root));
+    QJsonObject manifest = sceneManifestFixture();
+    if (target == QStringLiteral("scene"))
+    {
+        QJsonObject scene = manifest[QStringLiteral("scene3D")].toObject();
+        scene[key] = QJsonValue::fromVariant(value);
+        manifest[QStringLiteral("scene3D")] = scene;
+    }
+    else if (target == QStringLiteral("asset"))
+    {
+        QJsonArray assets = manifest[QStringLiteral("assets")].toArray();
+        QJsonObject asset = assets[1].toObject();
+        asset[key] = QJsonValue::fromVariant(value);
+        assets[1] = asset;
+        manifest[QStringLiteral("assets")] = assets;
+    }
+    else
+    {
+        QJsonObject resource = target == QStringLiteral("mesh")
+            ? sceneMeshFixture() : sceneMaterialFixture();
+        resource[key] = QJsonValue::fromVariant(value);
+        QVERIFY(writeBytes(root.filePath(target + QStringLiteral(".json")), QJsonDocument(resource).toJson()));
+    }
+    const auto result = ThemePackage::loadBytes(QJsonDocument(manifest).toJson(), root.path());
+    QVERIFY(!result.isValid());
+    QCOMPARE(result.primaryCode(), code);
+}
+
+void ThemePackageTest::scene3DMissingAndOversizedResourcesFailClosed()
+{
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    for (const QString &file : {QStringLiteral("mesh.json"), QStringLiteral("material.json"),
+                                QStringLiteral("texture.svg")})
+    {
+        QVERIFY(writeSceneFixture(root));
+        QVERIFY(QFile::remove(root.filePath(file)));
+        const auto result = ThemePackage::loadBytes(QJsonDocument(sceneManifestFixture()).toJson(), root.path());
+        QVERIFY(!result.isValid());
+        QCOMPARE(result.primaryCode(), QStringLiteral("missing-asset"));
+    }
+    QVERIFY(writeSceneFixture(root));
+    QVERIFY(writeBytes(root.filePath(QStringLiteral("mesh.json")),
+                       QByteArray(ThemePackage::MaximumSceneMeshBytes + 1, ' ')));
+    const auto oversized = ThemePackage::loadBytes(QJsonDocument(sceneManifestFixture()).toJson(), root.path());
+    QVERIFY(!oversized.isValid());
+    QCOMPARE(oversized.primaryCode(), QStringLiteral("scene3d-resource-limit"));
 }
 
 QTEST_GUILESS_MAIN(ThemePackageTest)

@@ -15,6 +15,7 @@
 #include <QTemporaryDir>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace
@@ -39,6 +40,7 @@ struct ParsedThemePackage
     QString legacyFit = QStringLiteral("cover");
     QVariantMap sourceManifest;
     QHash<QString, QString> assetPaths;
+    QVariantMap scene3DResources;
 };
 
 ThemeValidationDiagnostic diagnostic(const QString &code,
@@ -123,7 +125,7 @@ public:
             QStringLiteral("capabilities"), QStringLiteral("assets"),
             QStringLiteral("states"), QStringLiteral("layers"),
             QStringLiteral("slices"), QStringLiteral("contentRegions"),
-            QStringLiteral("tracks"),
+            QStringLiteral("tracks"), QStringLiteral("scene3D"),
             QStringLiteral("effectMargins"), QStringLiteral("inputMasks"),
             QStringLiteral("iconStyleRef"), QStringLiteral("animationProfileRefs")
         }, QString{});
@@ -140,6 +142,7 @@ public:
         parseLicense(manifest, &definition);
         parseCapabilities(manifest, &definition);
         parseAssets(manifest, &definition, &parsed.assetPaths);
+        parseScene3D(manifest, &parsed);
         parseStates(manifest, &definition);
         parseLayers(manifest, &definition);
         parseSlices(manifest, &definition);
@@ -808,6 +811,235 @@ private:
             }
             definition->assets.append(asset);
         }
+    }
+
+    QJsonObject sceneResource(const QString &id, const QString &kind,
+                              const QString &pointer, const ParsedThemePackage &parsed,
+                              qsizetype maximumBytes)
+    {
+        const auto *asset = parsed.definition.assetById(id);
+        const QString path = parsed.assetPaths.value(id);
+        if (!asset || asset->kind != kind || path.isEmpty() ||
+            QFileInfo(path).suffix().toLower() != QStringLiteral("json"))
+        {
+            add(QStringLiteral("invalid-scene3d-resource"), pointer,
+                QStringLiteral("scene resource must reference a validated JSON asset of the required kind"));
+            return {};
+        }
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly) || file.size() > maximumBytes)
+        {
+            add(QStringLiteral("scene3d-resource-limit"), pointer,
+                QStringLiteral("scene resource is unreadable or exceeds its byte limit"));
+            return {};
+        }
+        const QByteArray bytes = file.read(maximumBytes + 1);
+        QJsonParseError error;
+        const QJsonDocument document = QJsonDocument::fromJson(bytes, &error);
+        if (bytes.size() > maximumBytes || error.error != QJsonParseError::NoError ||
+            !document.isObject())
+        {
+            add(QStringLiteral("invalid-scene3d-resource"), pointer,
+                QStringLiteral("scene resource must be a bounded JSON object"));
+            return {};
+        }
+        return document.object();
+    }
+
+    QVariantMap parseSceneMesh(const QString &id, const QString &pointer,
+                               const ParsedThemePackage &parsed)
+    {
+        const QJsonObject object = sceneResource(id, QStringLiteral("mesh"), pointer,
+                                                 parsed, ThemePackage::MaximumSceneMeshBytes);
+        if (object.isEmpty())
+            return {};
+        rejectUnknown(object, {QStringLiteral("format"), QStringLiteral("version"),
+                               QStringLiteral("positions"), QStringLiteral("normals"),
+                               QStringLiteral("uv0s"), QStringLiteral("indexes")}, pointer);
+        const QJsonArray positions = object.value(QStringLiteral("positions")).toArray();
+        const QJsonArray normals = object.value(QStringLiteral("normals")).toArray();
+        const QJsonArray uvs = object.value(QStringLiteral("uv0s")).toArray();
+        const QJsonArray indexes = object.value(QStringLiteral("indexes")).toArray();
+        bool valid = object.value(QStringLiteral("format")).toString() ==
+                         QStringLiteral("org.archdock.mesh") &&
+            object.value(QStringLiteral("version")) == QJsonValue(1) &&
+            positions.size() >= 4 && positions.size() <= ThemePackage::MaximumSceneVertices &&
+            normals.size() == positions.size() && uvs.size() == positions.size() &&
+            !indexes.isEmpty() && indexes.size() <= ThemePackage::MaximumSceneIndices &&
+            indexes.size() % 3 == 0;
+        std::array<double, 3> minimum{1000, 1000, 1000};
+        std::array<double, 3> maximum{-1000, -1000, -1000};
+        const auto vectorIsValid = [](const QJsonValue &value, int size, double limit)
+        {
+            if (!value.isArray() || value.toArray().size() != size)
+                return false;
+            for (const QJsonValue &coordinate : value.toArray())
+            {
+                if (!isFiniteNumber(coordinate) || std::abs(coordinate.toDouble()) > limit)
+                    return false;
+            }
+            return true;
+        };
+        if (valid)
+        {
+            for (qsizetype index = 0; index < positions.size(); ++index)
+            {
+                if (!vectorIsValid(positions[index], 3, 1000) ||
+                    !vectorIsValid(normals[index], 3, 1) ||
+                    !vectorIsValid(uvs[index], 2, 16))
+                {
+                    valid = false;
+                    break;
+                }
+                const QJsonArray normal = normals[index].toArray();
+                double normalLengthSquared = 0;
+                for (int axis = 0; axis < 3; ++axis)
+                {
+                    normalLengthSquared += normal[axis].toDouble() * normal[axis].toDouble();
+                }
+                valid = valid && normalLengthSquared >= 0.99 && normalLengthSquared <= 1.01;
+            }
+            for (const QJsonValue &index : indexes)
+            {
+                valid = valid && isInteger(index) && index.toDouble() >= 0 &&
+                    index.toDouble() < positions.size();
+            }
+        }
+        if (valid)
+        {
+            for (qsizetype triangle = 0; triangle < indexes.size(); triangle += 3)
+            {
+                std::array<std::array<double, 3>, 3> vertices;
+                for (int corner = 0; corner < 3; ++corner)
+                {
+                    const QJsonArray position = positions[indexes[triangle + corner].toInt()].toArray();
+                    for (int axis = 0; axis < 3; ++axis)
+                    {
+                        vertices[corner][axis] = position[axis].toDouble();
+                        minimum[axis] = std::min(minimum[axis], vertices[corner][axis]);
+                        maximum[axis] = std::max(maximum[axis], vertices[corner][axis]);
+                    }
+                }
+                std::array<double, 3> first, second;
+                for (int axis = 0; axis < 3; ++axis)
+                {
+                    first[axis] = vertices[1][axis] - vertices[0][axis];
+                    second[axis] = vertices[2][axis] - vertices[0][axis];
+                }
+                double areaSquared = 0;
+                for (int axis = 0; axis < 3; ++axis)
+                {
+                    const int next = (axis + 1) % 3;
+                    const int last = (axis + 2) % 3;
+                    const double cross = first[next] * second[last] - first[last] * second[next];
+                    areaSquared += cross * cross;
+                }
+                valid = valid && areaSquared > 1e-12;
+            }
+            // Only indexed geometry can establish a visible mesh's three-dimensional extent.
+            for (int axis = 0; axis < 3; ++axis)
+                valid = valid && maximum[axis] - minimum[axis] > 0.000001;
+        }
+        if (!valid)
+        {
+            add(QStringLiteral("invalid-scene3d-mesh"), pointer,
+                QStringLiteral("mesh requires bounded finite 3D vertices, unit normals, UVs and valid triangle indices"));
+            return {};
+        }
+        return object.toVariantMap();
+    }
+
+    QVariantMap parseSceneMaterial(const QString &id, const QString &pointer,
+                                   const ParsedThemePackage &parsed)
+    {
+        const QJsonObject object = sceneResource(id, QStringLiteral("material"), pointer,
+                                                 parsed, 16384);
+        if (object.isEmpty())
+            return {};
+        rejectUnknown(object, {QStringLiteral("format"), QStringLiteral("version"),
+                               QStringLiteral("baseColor"), QStringLiteral("emissiveColor"),
+                               QStringLiteral("emissiveStrength"), QStringLiteral("metalness"),
+                               QStringLiteral("roughness")}, pointer);
+        static const QRegularExpression color(QStringLiteral("^#[0-9a-fA-F]{6}$"));
+        bool valid = object.value(QStringLiteral("format")).toString() ==
+                         QStringLiteral("org.archdock.material") &&
+            object.value(QStringLiteral("version")) == QJsonValue(1) &&
+            color.match(object.value(QStringLiteral("baseColor")).toString()).hasMatch() &&
+            color.match(object.value(QStringLiteral("emissiveColor")).toString()).hasMatch();
+        for (const QString &key : {QStringLiteral("metalness"), QStringLiteral("roughness"),
+                                   QStringLiteral("emissiveStrength")})
+        {
+            const QJsonValue value = object.value(key);
+            const double upper = key == QStringLiteral("emissiveStrength") ? 2.0 : 1.0;
+            valid = valid && isFiniteNumber(value) && value.toDouble() >= 0 && value.toDouble() <= upper;
+        }
+        if (!valid)
+        {
+            add(QStringLiteral("invalid-scene3d-material"), pointer,
+                QStringLiteral("material requires RGB colors and bounded metalness, roughness and emission"));
+            return {};
+        }
+        return object.toVariantMap();
+    }
+
+    void parseScene3D(const QJsonObject &manifest, ParsedThemePackage *parsed)
+    {
+        if (!manifest.contains(QStringLiteral("scene3D")))
+            return; // Earlier v2 packages can declare optional assets without a scene.
+        const QString pointer = QStringLiteral("/scene3D");
+        if (!manifest.value(QStringLiteral("scene3D")).isObject())
+        {
+            add(QStringLiteral("invalid-type"), pointer, QStringLiteral("scene3D must be an object"));
+            return;
+        }
+        const QJsonObject object = manifest.value(QStringLiteral("scene3D")).toObject();
+        rejectUnknown(object, {QStringLiteral("mesh"), QStringLiteral("iconMesh"),
+                               QStringLiteral("material"), QStringLiteral("texture"),
+                               QStringLiteral("fieldOfView"), QStringLiteral("cameraPitch"),
+                               QStringLiteral("cameraYaw"), QStringLiteral("keyLightBrightness"),
+                               QStringLiteral("fillLightBrightness"), QStringLiteral("defaultQuality")}, pointer);
+        ThemeScene3DDefinition scene;
+        scene.mesh = identifier(object, QStringLiteral("mesh"), pointer, true);
+        scene.iconMesh = identifier(object, QStringLiteral("iconMesh"), pointer, true);
+        scene.material = identifier(object, QStringLiteral("material"), pointer, true);
+        scene.texture = identifier(object, QStringLiteral("texture"), pointer, false);
+        const auto bounded = [this, &object, &pointer](const QString &key, qreal fallback,
+                                                       qreal minimum, qreal maximum)
+        {
+            const qreal value = numberValue(object, key, pointer, false, fallback);
+            if (value < minimum || value > maximum)
+                add(QStringLiteral("invalid-bounds"), pointerChild(pointer, key),
+                    QStringLiteral("scene parameter is outside its supported range"));
+            return value;
+        };
+        scene.fieldOfView = bounded(QStringLiteral("fieldOfView"), 40, 20, 70);
+        scene.cameraPitch = bounded(QStringLiteral("cameraPitch"), 25, -60, 60);
+        scene.cameraYaw = bounded(QStringLiteral("cameraYaw"), 0, -180, 180);
+        scene.keyLightBrightness = bounded(QStringLiteral("keyLightBrightness"), 1, 0, 4);
+        scene.fillLightBrightness = bounded(QStringLiteral("fillLightBrightness"), 0.4, 0, 2);
+        scene.defaultQuality = stringValue(object, QStringLiteral("defaultQuality"), pointer,
+                                           false, QStringLiteral("medium"));
+        if (!QStringList{QStringLiteral("low"), QStringLiteral("medium"), QStringLiteral("high")}
+                 .contains(scene.defaultQuality))
+            add(QStringLiteral("invalid-enum"), pointerChild(pointer, QStringLiteral("defaultQuality")),
+                QStringLiteral("quality must be low, medium or high"));
+        if (!parsed->definition.capabilities.rendererTiers.contains(QStringLiteral("true3d")))
+            add(QStringLiteral("invalid-scene3d"), pointer,
+                QStringLiteral("scene requires the true3d renderer declaration"));
+        if (!scene.texture.isEmpty())
+        {
+            const auto *asset = parsed->definition.assetById(scene.texture);
+            if (!asset || !QStringList{QStringLiteral("raster"), QStringLiteral("vector")}.contains(asset->kind)
+                || parsed->assetPaths.value(scene.texture).isEmpty())
+                add(QStringLiteral("invalid-scene3d-resource"), pointerChild(pointer, QStringLiteral("texture")),
+                    QStringLiteral("texture must reference a validated image asset"));
+        }
+        parsed->scene3DResources = {
+            {QStringLiteral("mesh"), parseSceneMesh(scene.mesh, pointer + QStringLiteral("/mesh"), *parsed)},
+            {QStringLiteral("iconMesh"), parseSceneMesh(scene.iconMesh, pointer + QStringLiteral("/iconMesh"), *parsed)},
+            {QStringLiteral("material"), parseSceneMaterial(scene.material, pointer + QStringLiteral("/material"), *parsed)},
+        };
+        parsed->definition.scene3D = scene;
     }
 
     void parseStates(const QJsonObject &manifest, ThemeDefinition *definition)
@@ -1946,6 +2178,7 @@ ThemePackageLoadResult ThemePackage::loadBytes(const QByteArray &manifestBytes,
     package.m_legacyFit = parsed.legacyFit;
     package.m_sourceManifest = parsed.sourceManifest;
     package.m_assetPaths = parsed.assetPaths;
+    package.m_scene3DResources = parsed.scene3DResources;
     package.m_contentDigest = packageDigest(parsed);
     result.package = std::move(package);
     return result;
@@ -2163,6 +2396,8 @@ QVariantMap ThemePackage::runtimeProjection() const
     projection.insert(QStringLiteral("manifestPath"), m_manifestPath);
     projection.insert(QStringLiteral("primarySurfacePath"), primarySurfacePath());
     projection.insert(QStringLiteral("sourceRoot"), m_sourceRoot);
+    if (m_definition.scene3D.has_value())
+        projection.insert(QStringLiteral("scene3DResources"), m_scene3DResources);
     return projection;
 }
 

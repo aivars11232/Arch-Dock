@@ -33,6 +33,9 @@ public:
     static constexpr qint64 MaximumPackageAssetBytes = 268435456;
     static constexpr int MaximumRasterDimension = 16384;
     static constexpr qint64 MaximumRasterPixels = 16777216;
+    static constexpr qsizetype MaximumSceneMeshBytes = 2097152;
+    static constexpr qsizetype MaximumSceneVertices = 4096;
+    static constexpr qsizetype MaximumSceneIndices = 24576;
 
     [[nodiscard]] static ThemePackageLoadResult load(
         const QString &manifestPath);
@@ -63,6 +66,7 @@ private:
     QByteArray m_contentDigest;
     QVariantMap m_sourceManifest;
     QHash<QString, QString> m_assetPaths;
+    QVariantMap m_scene3DResources;
 
     friend struct ThemePackageLoadResult;
 };

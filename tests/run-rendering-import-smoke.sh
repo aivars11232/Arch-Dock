@@ -8,6 +8,7 @@ readonly ARCHDOCK_RENDERING_PROJECT_ROOT="$(cd -- "$ARCHDOCK_RENDERING_SCRIPT_DI
 ARCHDOCK_RENDERING_STATE_ROOT=''
 ARCHDOCK_RENDERING_KWIN_PID=''
 ARCHDOCK_RENDERING_SERVICE_PID=''
+ARCHDOCK_RENDERING_LAUNCH_PID=''
 ARCHDOCK_RENDERING_PLASMASHELL_PID=''
 
 require_command() {
@@ -34,6 +35,120 @@ stop_process() {
     fi
 }
 
+
+# The launcher may forward --settings to a D-Bus-activated instance and exit.
+# Pin the actual owner's identity; never accept a replacement during assertions.
+private_service_owner() {
+    python3 - "$1" <<'PY_OWNER'
+import json
+import os
+from pathlib import Path
+import re
+import select
+import signal
+import subprocess
+import sys
+
+mode = sys.argv[1]
+root = Path(os.environ['ARCHDOCK_RENDERING_SESSION_ROOT']).resolve(strict=True)
+assert root.parent == Path('/tmp') and root.name.startswith('archdock-rendering-import.')
+assert root.stat().st_uid == os.getuid()
+address = os.environ['DBUS_SESSION_BUS_ADDRESS']
+assert address and address != os.environ.get('ARCHDOCK_RENDERING_PARENT_BUS'), 'not a private bus'
+private_dirs = {'XDG_RUNTIME_DIR': 'runtime', 'XDG_CONFIG_HOME': 'config',
+                'XDG_CONFIG_DIRS': 'config-dirs', 'XDG_DATA_HOME': 'data',
+                'XDG_CACHE_HOME': 'cache', 'XDG_STATE_HOME': 'state'}
+for key, directory in private_dirs.items():
+    assert Path(os.environ[key]).resolve(strict=True) == root / directory, key
+binary = (root / 'stage/bin/arch-dock').resolve(strict=True)
+assert Path(os.environ['ARCHDOCK_RENDERING_STAGED_BINARY']).resolve(strict=True) == binary
+record_path = root / 'logs/service-owner.json'
+
+def bus(method, *args):
+    return subprocess.check_output([
+        'gdbus', 'call', '--address', address, '--timeout=5',
+        '--dest', 'org.freedesktop.DBus', '--object-path', '/org/freedesktop/DBus',
+        '--method', 'org.freedesktop.DBus.' + method, *args
+    ], text=True, timeout=6).strip()
+
+def owner():
+    if bus('NameHasOwner', 'org.archdock.ArchDock') == '(false,)':
+        return None
+    unique = re.fullmatch(r"\('(:[0-9]+\.[0-9]+)',\)",
+                         bus('GetNameOwner', 'org.archdock.ArchDock')).group(1)
+    pid = int(re.fullmatch(r'\(uint32 ([0-9]+),\)',
+                          bus('GetConnectionUnixProcessID', unique)).group(1))
+    return {'unique': unique, 'pid': pid}
+
+def identify(record):
+    # pidfd protects signalling against PID reuse; the birth time and unique
+    # bus name additionally bind later checks to the originally accepted owner.
+    fd = os.pidfd_open(record['pid'])
+    try:
+        if select.select([fd], [], [], 0)[0]:
+            raise ProcessLookupError('service owner exited')
+        proc = Path('/proc') / str(record['pid'])
+        assert proc.stat().st_uid == os.getuid(), 'wrong service user'
+        assert (proc / 'exe').resolve(strict=True) == binary, 'wrong service executable'
+        env = dict(item.split(b'=', 1) for item in (proc / 'environ').read_bytes().split(b'\0')
+                   if b'=' in item)
+        for key in (*private_dirs, 'DBUS_SESSION_BUS_ADDRESS', 'QML_IMPORT_PATH'):
+            assert env.get(key.encode()) == os.environ[key].encode(), 'wrong service environment: ' + key
+        start = (proc / 'stat').read_text().rsplit(')', 1)[1].split()[19]
+        assert record.get('startTicks', start) == start, 'service PID reused'
+        return fd, dict(record, startTicks=start)
+    except BaseException as error:
+        # /proc may disappear during shutdown after pidfd_open succeeded.
+        # Accept that race only in cleanup, after the pinned process exits.
+        exited = (mode == 'cleanup'
+                  and isinstance(error, (FileNotFoundError, ProcessLookupError))
+                  and bool(select.select([fd], [], [], 5)[0]))
+        os.close(fd)
+        if exited:
+            raise ProcessLookupError('service owner exited during cleanup') from error
+        raise
+
+if mode in ('capture', 'check'):
+    current = owner()
+    assert current, 'private Arch Dock has no D-Bus owner'
+    if mode == 'check':
+        expected = json.loads(record_path.read_text())
+        assert all(current[key] == expected[key] for key in ('unique', 'pid')), 'service owner changed'
+        current = expected
+    fd, current = identify(current)
+    os.close(fd)
+    if mode == 'capture':
+        record_path.write_text(json.dumps(current))
+        print(current['pid'])
+        print('Private staged service owner:', json.dumps(current), file=sys.stderr)
+elif mode == 'cleanup':
+    # Hosts are stopped first, so window/app-let events cannot reactivate it.
+    # Also handle activation before the explicit launch or an early test failure.
+    current = owner()
+    records = [json.loads(record_path.read_text())] if record_path.exists() else []
+    if current and not any(r['pid'] == current['pid'] for r in records):
+        records.append(current)
+    for record in records:
+        try:
+            fd, verified = identify(record)
+        except ProcessLookupError:
+            continue  # Already exited during private host shutdown.
+        try:
+            signal.pidfd_send_signal(fd, signal.SIGTERM)
+            if not select.select([fd], [], [], 5)[0]:
+                signal.pidfd_send_signal(fd, signal.SIGKILL)
+                assert select.select([fd], [], [], 5)[0], 'private service did not exit'
+        except ProcessLookupError:
+            assert select.select([fd], [], [], 5)[0], 'service signal failed before exit'
+        finally:
+            os.close(fd)
+        print('Private staged service cleaned:', verified['pid'], file=sys.stderr)
+    assert owner() is None, 'private service name survived cleanup'
+else:
+    raise AssertionError('unknown owner operation: ' + mode)
+PY_OWNER
+}
+
 cleanup_session() {
     local exit_status=$?
     if ((exit_status != 0)) && [[ -n "${ARCHDOCK_RENDERING_LOG_DIR:-}" ]]; then
@@ -47,9 +162,13 @@ cleanup_session() {
             fi
         done
     fi
-    stop_process "$ARCHDOCK_RENDERING_SERVICE_PID"
     stop_process "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
     stop_process "$ARCHDOCK_RENDERING_KWIN_PID"
+    local cleanup_status=0
+    private_service_owner cleanup || cleanup_status=$?
+    if ((exit_status == 0)); then
+        return "$cleanup_status"
+    fi
     return "$exit_status"
 }
 
@@ -74,6 +193,28 @@ plasma_script() {
         "$1"
 }
 
+
+# desktopForScreen() can manufacture a metadata-free "null" containment while
+# Plasma is still loading its activities. Observe existing desktops instead,
+# then bind creation to the verified desktop ID without invoking that fallback.
+wait_for_private_desktop() {
+    local snapshot=''
+    local attempt
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        snapshot="$(plasma_script "var activity = currentActivity(); var candidates = desktops().filter(function(d) { return Number(d.screen) === 0 && String(d.type).length > 0 && String(d.type) !== 'null'; }); if (activity && activity !== '00000000-0000-0000-0000-000000000000' && candidates.length === 1) { print(String(candidates[0].id) + '|' + String(candidates[0].type)); } else { print('pending|' + String(activity) + '|' + JSON.stringify(desktops().map(function(d) { return {id:d.id,type:d.type,screen:d.screen}; }))); }" | gvariant_string)"
+        if [[ "$snapshot" =~ ^[0-9]+\|[a-zA-Z0-9_.-]+$ ]]; then
+            printf 'Private desktop ready: %s\n' "$snapshot" >&2
+            printf '%s\n' "${snapshot%%|*}"
+            return 0
+        fi
+        kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
+        sleep 0.1
+    done
+    printf 'Private Plasma did not initialize one valid desktop on screen 0: %s\n' \
+        "$snapshot" >&2
+    return 1
+}
+
 panel_call() {
     local method="$1"
     shift
@@ -84,6 +225,53 @@ panel_call() {
         --object-path /Control \
         --method "local.PanelWindow.$method" \
         "$@"
+}
+
+# Observe the real applet, after this mutation's log offset. Backend selection
+# alone cannot establish that the applet created a scene or rendered a frame.
+wait_for_mesh_renderer() {
+    local panel="$1" applet="$2" tier="$3" quality="$4" offset="$5"
+    local observation attempt
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        if observation="$(python3 - "$ARCHDOCK_RENDERING_LOG_DIR/plasmashell.log" \
+            "$panel" "$applet" "$tier" "$quality" "$offset" <<'PY_RENDERER'
+import json
+import sys
+path, panel, applet, tier, quality, offset = sys.argv[1:]
+with open(path, encoding='utf-8', errors='replace') as stream:
+    stream.seek(int(offset))
+    lines = stream.readlines()
+for line in reversed(lines):
+    if 'ArchDockRenderer ' not in line:
+        continue
+    try:
+        value = json.loads(line.split('ArchDockRenderer ', 1)[1])
+    except json.JSONDecodeError:
+        continue
+    if value.get('panelId') != panel or value.get('appletId') != int(applet):
+        continue
+    if value.get('requested') != 'true3d' or value.get('effective') != tier:
+        continue
+    if tier == 'true3d':
+        state = value.get('quality', {})
+        if (not value.get('frameRendered') or value.get('triangles', 0) < 96
+            or state.get('quality') != quality
+            or not 0 < state.get('targetWidth', 0) <= 2048
+            or not 0 < state.get('targetHeight', 0) <= 2048):
+            continue
+    print(json.dumps(value, sort_keys=True))
+    sys.exit(0)
+sys.exit(1)
+PY_RENDERER
+        )"; then
+            printf 'Actual private applet renderer: %s\n' "$observation"
+            return 0
+        fi
+        kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
+        sleep 0.1
+    done
+    printf 'No fresh %s renderer observation for applet %s quality %s.\n' "$tier" "$applet" "$quality" >&2
+    return 1
 }
 
 # Waits until the live applet for one panel reports the expected resting
@@ -200,10 +388,16 @@ run_private_session() {
     ARCHDOCK_RENDERING_KWIN_PID=$!
     wait_for_wayland_socket
 
+    printf 'Checking staged renderer capability against the private Wayland graphics backend.\n'
+    ARCHDOCK_TEST_RHI=1 \
+    ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \
+        "$ARCHDOCK_RENDERING_CAPABILITY_TEST"
+
     printf 'Driving live DockEntry Icon Properties Apply, Cancel, and Reset under private Wayland.\n'
     ARCHDOCK_PRIVATE_INTERACTION_TEST=1 \
         "$ARCHDOCK_RENDERING_ICON_PROPERTIES_INTERACTION_TEST" \
-        iconPropertiesPublicInteractionIsTransactional
+        iconPropertiesPublicInteractionIsTransactional \
+        meshSceneEditorIsGatedAndTransactional
 
     printf 'Running the staged PanelSkin2D energy pixel test under private KWin.\n'
     "$ARCHDOCK_RENDERING_QMLTESTRUNNER" \
@@ -218,9 +412,28 @@ run_private_session() {
 
     "$ARCHDOCK_RENDERING_STAGED_BINARY" --settings \
         >"$ARCHDOCK_RENDERING_LOG_DIR/service.log" 2>&1 &
-    ARCHDOCK_RENDERING_SERVICE_PID=$!
+    ARCHDOCK_RENDERING_LAUNCH_PID=$!
     gdbus wait --session --timeout=20 org.archdock.ArchDock
-    kill -0 "$ARCHDOCK_RENDERING_SERVICE_PID"
+    ARCHDOCK_RENDERING_SERVICE_PID="$(private_service_owner capture)"
+    if [[ "$ARCHDOCK_RENDERING_LAUNCH_PID" != "$ARCHDOCK_RENDERING_SERVICE_PID" ]]; then
+        wait "$ARCHDOCK_RENDERING_LAUNCH_PID"
+        printf 'Settings forwarder %s exited successfully; service owner is %s.\n' \
+            "$ARCHDOCK_RENDERING_LAUNCH_PID" "$ARCHDOCK_RENDERING_SERVICE_PID"
+    fi
+    private_service_owner check
+
+    # Exercise the same startup boundary without running the later renderer
+    # scenarios. A second invocation must forward while the owner stays alive.
+    if [[ "${ARCHDOCK_RENDERING_OWNERSHIP_ONLY:-}" == '1' ]]; then
+        "$ARCHDOCK_RENDERING_STAGED_BINARY" --settings \
+            >>"$ARCHDOCK_RENDERING_LOG_DIR/service.log" 2>&1 &
+        local forwarding_pid=$!
+        wait "$forwarding_pid"
+        private_service_owner check
+        printf 'Private ownership check passed: owner=%s, second forwarder=%s exited 0.\n' \
+            "$ARCHDOCK_RENDERING_SERVICE_PID" "$forwarding_pid"
+        return 0
+    fi
 
     # Qt routes messages to journald when stderr is not a console, which had
     # left plasmashell.log empty and the applet-error check below vacuous.
@@ -229,10 +442,12 @@ run_private_session() {
     # known pre-existing binding loop (SettingsPopup.qml `rows`) owned by the
     # TASK-0044 diagnostics cleanup, and this smoke asserts the applet, not
     # Studio internals.
-    QT_FORCE_STDERR_LOGGING=1 plasmashell --no-respawn \
+    QT_FORCE_STDERR_LOGGING=1 QT_LOGGING_RULES='org.archdock.rendering.debug=true' plasmashell --no-respawn \
         >"$ARCHDOCK_RENDERING_LOG_DIR/plasmashell.log" 2>&1 &
     ARCHDOCK_RENDERING_PLASMASHELL_PID=$!
     gdbus wait --session --timeout=20 org.kde.plasmashell
+    local ready_desktop_id
+    ready_desktop_id="$(wait_for_private_desktop)"
 
     [[ -r "$ARCHDOCK_RENDERING_SMOKE_DESKTOP_FILE" ]] || {
         printf 'The staged smoke-test desktop entry is unavailable: %s\n' \
@@ -248,9 +463,34 @@ run_private_session() {
         return 1
     }
 
+    # Wait for the service's normal startup recovery to commit its native host.
+    # A manually added, unregistered panel races that association; invoking
+    # creation before Plasma initializes panel views fails screen readback.
+    local native_configuration
+    local native_ready_attempt
+    for ((native_ready_attempt = 0; native_ready_attempt < 100; ++native_ready_attempt)); do
+        native_configuration="$(panel_call dockConfiguration bottom)"
+        [[ "$native_configuration" == *"'nativeRecoveryState': <'ready'>"* ]] && break
+        kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
+        sleep 0.1
+    done
+    local panel_id
+    local native_applet_id
+    local native_token
+    panel_id="$(sed -n "s/.*'nativePanelId': <\\([0-9][0-9]*\\)>.*/\\1/p" <<<"$native_configuration")"
+    native_applet_id="$(sed -n "s/.*'nativeDockAppletId': <\\([0-9][0-9]*\\)>.*/\\1/p" <<<"$native_configuration")"
+    native_token="$(sed -n "s/.*'nativeOwnershipToken': <'\\([0-9a-f-]*\\)'>.*/\\1/p" <<<"$native_configuration")"
+    [[ "$panel_id" =~ ^[0-9]+$ && "$native_applet_id" =~ ^[0-9]+$ &&
+       "$native_token" =~ ^[0-9a-f-]{36}$ &&
+       "$native_configuration" == *"'nativeRecoveryState': <'ready'>"* ]] || {
+        printf 'Private native host association is not ready: %s\n' "$native_configuration" >&2
+        return 1
+    }
+    printf 'Private native association ready: panel=%s applet=%s.\n' "$panel_id" "$native_applet_id"
+
     local host_ids
     host_ids="$(plasma_script \
-        "var result = (function() { var panel = null; var freeWidget = null; try { panel = new Panel; panel.screen = 0; panel.location = 'bottom'; var nativeWidget = panel.addWidget('org.archdock.dock'); if (!nativeWidget) { panel.remove(); return 'missing-native-widget'; } nativeWidget.currentConfigGroup = ['General']; nativeWidget.writeConfig('panelId', 'bottom'); nativeWidget.writeConfig('panelType', 'hybrid'); nativeWidget.reloadConfig(); var desktop = desktopForScreen(0); if (!desktop) { panel.remove(); return 'missing-desktop'; } freeWidget = desktop.addWidget('org.archdock.dock', Math.round(gridUnit * 2), Math.round(gridUnit * 2), Math.round(gridUnit * 20), Math.round(gridUnit * 10)); if (!freeWidget) { panel.remove(); return 'missing-free-widget'; } freeWidget.currentConfigGroup = ['General']; freeWidget.writeConfig('panelId', ''); freeWidget.writeConfig('panelType', 'hybrid'); freeWidget.writeConfig('bootstrapFreeDock', true); freeWidget.reloadConfig(); return [String(panel.id), String(nativeWidget.id), String(desktop.id), String(freeWidget.id)].join('|'); } catch (error) { if (freeWidget) { freeWidget.remove(); } if (panel) { panel.remove(); } return 'exception:' + String(error); } })(); print(result);" | gvariant_string)"
+        "var result = (function() { var panel = null; var freeWidget = null; try { panel = panelById($panel_id); if (!panel) { return 'missing-native-panel'; } panel.currentConfigGroup = ['ArchDock']; if (panel.readConfig('ownerToken', '') !== '$native_token' || panel.readConfig('panelId', '') !== 'bottom') { return 'native-owner-mismatch'; } var nativeWidget = panel.widgetById($native_applet_id); if (!nativeWidget || String(nativeWidget.type) !== 'org.archdock.dock') { return 'missing-native-widget'; } var desktop = desktopById($ready_desktop_id); if (!desktop || Number(desktop.screen) !== 0 || !String(desktop.type)) { panel.remove(); return 'missing-desktop'; } freeWidget = desktop.addWidget('org.archdock.dock', Math.round(gridUnit * 2), Math.round(gridUnit * 2), Math.round(gridUnit * 20), Math.round(gridUnit * 10)); if (!freeWidget || String(freeWidget.type) !== 'org.archdock.dock') { panel.remove(); return 'missing-free-widget:' + String(freeWidget); } freeWidget.currentConfigGroup = ['General']; freeWidget.writeConfig('panelId', ''); freeWidget.writeConfig('panelType', 'hybrid'); freeWidget.writeConfig('bootstrapFreeDock', true); freeWidget.reloadConfig(); return [String(panel.id), String(nativeWidget.id), String(desktop.id), String(freeWidget.id)].join('|'); } catch (error) { if (freeWidget && typeof freeWidget.remove === 'function') { freeWidget.remove(); } if (panel && typeof panel.remove === 'function') { panel.remove(); } return 'exception:' + String(error); } })(); print(result);" | gvariant_string)"
 
     [[ "$host_ids" =~ ^[0-9]+\|[0-9]+\|[0-9]+\|[0-9]+$ ]] || {
         printf 'Private PlasmaShell did not create native and free Arch Dock hosts: %s\n' \
@@ -258,8 +498,6 @@ run_private_session() {
         return 1
     }
 
-    local panel_id=''
-    local native_applet_id=''
     local desktop_id=''
     local free_applet_id=''
     IFS='|' read -r panel_id native_applet_id desktop_id free_applet_id \
@@ -291,7 +529,6 @@ run_private_session() {
     }
 
     IFS='|' read -r _ free_panel_id _ _ _ _ <<<"$free_snapshot"
-    local native_configuration
     local free_configuration
     local native_revision
     local free_revision
@@ -387,7 +624,7 @@ run_private_session() {
                 "$energy_theme_id" "$energy_free_renderer" >&2
             return 1
         }
-        kill -0 "$ARCHDOCK_RENDERING_SERVICE_PID"
+        private_service_owner check
         kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
         require_no_import_errors
     done
@@ -461,8 +698,35 @@ run_private_session() {
                 "$perspective_theme_id" "$perspective_renderer" >&2
             return 1
         }
-        kill -0 "$ARCHDOCK_RENDERING_SERVICE_PID"
+        private_service_owner check
         kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
+        require_no_import_errors
+    done
+
+    local mesh_tier='procedural2d'
+    local mesh_quality=''
+    local mesh_offset mesh_reply mesh_values
+    local mesh_qualities=('unavailable')
+    if [[ -r "$QML_IMPORT_PATH/ArchDock/Rendering/optional3d/PanelScene3D.qml" ]]; then
+        mesh_tier='true3d'
+        mesh_qualities=(low high low)
+    fi
+    for mesh_quality in "${mesh_qualities[@]}"; do
+        free_configuration="$(panel_call dockConfiguration "$free_panel_id")"
+        free_revision="$(sed -n "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" <<<"$free_configuration")"
+        [[ "$free_revision" =~ ^[0-9]+$ ]]
+        mesh_values="{'layout': <'ring'>, 'rendererTier': <'true3d'>, 'panelThemeId': <'mesh-platform-cyan'>, 'completeThemeId': <'mesh-platform-cyan'>}"
+        if [[ "$mesh_tier" == 'true3d' ]]; then
+            mesh_values="${mesh_values%\}}, 'scene3DQuality': <'$mesh_quality'>}"
+        fi
+        mesh_offset="$(stat -c %s "$ARCHDOCK_RENDERING_LOG_DIR/plasmashell.log")"
+        mesh_reply="$(panel_call applyPanelSettingsTransaction "$free_panel_id" "uint64 $free_revision" "$mesh_values" '{}')"
+        [[ "$mesh_reply" == *"'success': <true>"* ]] || {
+            printf 'Mesh theme/quality transaction failed: %s\n' "$mesh_reply" >&2
+            return 1
+        }
+        wait_for_mesh_renderer "$free_panel_id" "$free_applet_id" "$mesh_tier" "$mesh_quality" "$mesh_offset"
+        private_service_owner check
         require_no_import_errors
     done
 
@@ -520,7 +784,7 @@ run_private_session() {
                 return 1
             }
         done
-        kill -0 "$ARCHDOCK_RENDERING_SERVICE_PID"
+        private_service_owner check
         kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
     done
     require_no_import_errors
@@ -647,7 +911,7 @@ run_private_session() {
                 "$style_id" "$free_renderer" >&2
             return 1
         }
-        kill -0 "$ARCHDOCK_RENDERING_SERVICE_PID"
+        private_service_owner check
         kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
         require_no_import_errors
     done
@@ -793,7 +1057,7 @@ run_private_session() {
         return 1
     }
     sleep 1
-    kill -0 "$ARCHDOCK_RENDERING_SERVICE_PID"
+    private_service_owner check
     kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
     require_no_import_errors
 
@@ -867,7 +1131,7 @@ run_private_session() {
         }
         wait_for_presentation_state "$presentation_panel" open || return 1
     done
-    kill -0 "$ARCHDOCK_RENDERING_SERVICE_PID"
+    private_service_owner check
     kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
     require_no_import_errors
 
@@ -918,7 +1182,7 @@ run_private_session() {
         return 1
     }
     sleep 1
-    kill -0 "$ARCHDOCK_RENDERING_SERVICE_PID"
+    private_service_owner check
     kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
     require_no_import_errors
 
@@ -976,6 +1240,7 @@ run_outer() {
     require_command qmake6
     require_command rg
     require_command timeout
+    require_command python3
 
     local build_dir="${ARCHDOCK_BUILD_DIR:-$ARCHDOCK_RENDERING_PROJECT_ROOT/build}"
     local qml_install_dir="${ARCHDOCK_QML_INSTALL_DIR:-lib/qt6/qml}"
@@ -1024,6 +1289,8 @@ run_outer() {
 
     cmake --install "$build_dir" --prefix "$stage_root"
     [[ -r "$module_root/qmldir" &&
+       -r "$module_root/RendererBuildConfig.qml" &&
+       -r "$module_root/RendererCapabilityProbe.qml" &&
        -r "$module_root/RenderingModuleProbe.qml" &&
        -r "$module_root/LayoutEngine.js" &&
        -r "$module_root/IconStyleResolver.js" &&
@@ -1126,6 +1393,11 @@ run_outer() {
     }
 
     QT_QPA_PLATFORM=offscreen \
+    QT_QUICK_BACKEND=software \
+    ARCHDOCK_RENDERING_IMPORT_ROOT="$import_root" \
+        "$build_dir/renderer-capability-test"
+
+    QT_QPA_PLATFORM=offscreen \
     QML_IMPORT_PATH="$import_root" \
     QML2_IMPORT_PATH="$import_root" \
         "$qmltestrunner_binary" \
@@ -1147,8 +1419,11 @@ run_outer() {
             -input "$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_RendererParity.qml"
 
     env \
+        ARCHDOCK_RENDERING_PARENT_BUS="${DBUS_SESSION_BUS_ADDRESS:-}" \
+        ARCHDOCK_RENDERING_SESSION_ROOT="$ARCHDOCK_RENDERING_STATE_ROOT" \
         ARCHDOCK_RENDERING_IMPORT_SESSION=1 \
         ARCHDOCK_RENDERING_LOG_DIR="$log_dir" \
+        ARCHDOCK_RENDERING_CAPABILITY_TEST="$build_dir/renderer-capability-test" \
         ARCHDOCK_RENDERING_ICON_PROPERTIES_INTERACTION_TEST="$build_dir/panel-window-capability-test" \
         ARCHDOCK_RENDERING_PANEL_SKIN_TEST="$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_PanelSkin2D.qml" \
         ARCHDOCK_RENDERING_PANEL_SURFACE_TEST="$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_PanelSurfaceIntegration.qml" \

@@ -1,0 +1,7 @@
+pragma Singleton
+import QtQml
+
+QtObject {
+    readonly property bool quick3DBuilt: @ARCHDOCK_QUICK3D_QML_BOOL@
+    readonly property bool scene3DBuilt: @ARCHDOCK_SCENE3D_QML_BOOL@
+}

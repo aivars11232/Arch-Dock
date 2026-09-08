@@ -1,4 +1,5 @@
 #include "model/PanelCapabilityResolver.h"
+#include "RendererBuildConfig.h"
 #include "model/PanelDefinition.h"
 #include "model/PanelSettingsSchema.h"
 #include "PanelRegistry.h"
@@ -106,10 +107,99 @@ private slots:
     void presentationProfileIsPublishedForLaterPresets();
     void freePanelContentFollowsItsRecordAndOrdersItsOwnEntries();
     void wholePanelRotationFieldsAreGatedByTheResolver();
+    void meshSceneEditorIsGatedAndTransactional();
 
 private:
     QTemporaryDir m_settingsDirectory;
 };
+
+void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(qEnvironmentVariable("QML_IMPORT_PATH",
+        QCoreApplication::applicationDirPath() + QStringLiteral("/qml-imports")));
+    PanelWindow window(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("panelRegistry")).value<QObject *>());
+    QVERIFY(registry);
+    const QString panelId = registry->addFreePanel();
+    QVERIFY(!panelId.isEmpty());
+    const auto theme = registry->themeCandidate(panelId, QStringLiteral("mesh-platform-cyan"),
+                                               QStringLiteral("complete"));
+    QVERIFY(theme.value(QStringLiteral("success")).toBool());
+    const auto applied = window.applyPanelSettingsTransaction(panelId,
+        registry->panelDefinition(panelId)->settingsRevision, theme.value(QStringLiteral("values")).toMap(), {});
+    QVERIFY2(applied.value(QStringLiteral("success")).toBool(),
+             qPrintable(applied.value(QStringLiteral("errorMessage")).toString()));
+    const bool available = ARCHDOCK_QUICK3D_BUILT && ARCHDOCK_SCENE3D_BUILT;
+    const auto snapshot = window.panelSettingsEditorSnapshot(panelId, QStringLiteral("studio"));
+    QCOMPARE(fieldKeys(snapshot.value(QStringLiteral("panelFields")).toList())
+        .contains(QStringLiteral("scene3DQuality")), available);
+    const auto configuration = window.panelRendererConfiguration(panelId);
+    QCOMPARE(configuration.value(QStringLiteral("effectiveRendererTier")).toString(),
+             available ? QStringLiteral("true3d") : QStringLiteral("procedural2d"));
+    QVERIFY(configuration.value(QStringLiteral("themeDefinition")).toMap()
+        .contains(QStringLiteral("scene3DResources")));
+    if (available)
+    {
+        for (const QString &quality : {QStringLiteral("low"), QStringLiteral("high"), QStringLiteral("low")})
+        {
+            const auto changed = window.applyPanelSettingsTransaction(panelId,
+                registry->panelDefinition(panelId)->settingsRevision,
+                {{QStringLiteral("scene3DQuality"), quality}}, {});
+            QVERIFY2(changed.value(QStringLiteral("success")).toBool(),
+                     qPrintable(changed.value(QStringLiteral("errorMessage")).toString()));
+            QCOMPARE(window.panelRendererConfiguration(panelId).value(QStringLiteral("scene3DQuality")).toString(), quality);
+        }
+    }
+    else
+    {
+        const auto rejected = window.applyPanelSettingsTransaction(panelId,
+            registry->panelDefinition(panelId)->settingsRevision,
+            {{QStringLiteral("scene3DQuality"), QStringLiteral("high")}}, {});
+        QVERIFY(!rejected.value(QStringLiteral("success")).toBool());
+    }
+    if (qEnvironmentVariableIsEmpty("ARCHDOCK_PRIVATE_INTERACTION_TEST"))
+        return;
+    const QString popupSource = QFINDTESTDATA("../qml/runtime/SettingsPopup.qml");
+    QQmlComponent component(&engine, QUrl::fromLocalFile(popupSource));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> popup(component.createWithInitialProperties({
+        {QStringLiteral("selectedPanelId"), panelId}, {QStringLiteral("mainTabIndex"), 1},
+        {QStringLiteral("subTabIndex"), 2}}));
+    QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
+    auto *studio = qobject_cast<QQuickWindow *>(popup.get());
+    QVERIFY(studio);
+    studio->show();
+    QVERIFY(QTest::qWaitForWindowExposed(studio));
+    if (available)
+    {
+        QTRY_VERIFY_WITH_TIMEOUT(popup->property("scene3DControlsAvailable").toBool(), 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(popup->property("scene3DQualityVisible").toBool(), 5000);
+        const QVariant field = QVariantMap{{QStringLiteral("scope"), QStringLiteral("panel")},
+                                           {QStringLiteral("key"), QStringLiteral("rendererTier")}};
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue", Q_ARG(QVariant, field),
+                                          Q_ARG(QVariant, QVariant(QStringLiteral("procedural2d")))));
+        QTRY_VERIFY(!popup->property("scene3DQualityVisible").toBool());
+        QVERIFY(popup->property("scene3DControlsAvailable").toBool());
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "applyStudioChanges"));
+        QTRY_COMPARE(window.panelRendererConfiguration(panelId).value(QStringLiteral("effectiveRendererTier")).toString(),
+                     QStringLiteral("procedural2d"));
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue", Q_ARG(QVariant, field),
+                                          Q_ARG(QVariant, QVariant(QStringLiteral("true3d")))));
+        QTRY_VERIFY2(popup->property("scene3DQualityVisible").toBool(),
+                     qPrintable(popup->property("studioError").toString()));
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "cancelStudioChanges"));
+        QTRY_VERIFY(!popup->property("scene3DQualityVisible").toBool());
+    }
+    else
+    {
+        QVERIFY(!popup->property("scene3DControlsAvailable").toBool());
+        QVERIFY(!popup->property("scene3DQualityVisible").toBool());
+    }
+    studio->close();
+    qInfo() << "Private Studio mesh controls and transaction checks passed; build available:" << available;
+}
 
 void PanelWindowCapabilityTest::initTestCase()
 {
@@ -656,7 +746,13 @@ void PanelWindowCapabilityTest::builtInChassisCandidateProjectsIntoStudioAndRend
     QVERIFY(snapshot.value(QStringLiteral("success")).toBool());
     const quint64 revision = snapshot.value(QStringLiteral("revision")).toULongLong();
     const QVariantList themes = snapshot.value(QStringLiteral("themes")).toList();
-    QCOMPARE(themes.size(), 15);
+    QCOMPARE(themes.size(), 16);
+    const auto meshTheme = std::find_if(themes.cbegin(), themes.cend(), [](const QVariant &value) {
+        return value.toMap().value(QStringLiteral("id")).toString() == QStringLiteral("mesh-platform-cyan");
+    });
+    QVERIFY(meshTheme != themes.cend());
+    QVERIFY(meshTheme->toMap().value(QStringLiteral("valid")).toBool());
+    QVERIFY(!meshTheme->toMap().value(QStringLiteral("available")).toBool());
     int chassisThemeCount = 0;
     for (const QVariant &value : themes)
     {
@@ -1079,7 +1175,13 @@ void PanelWindowCapabilityTest::iconPropertiesPublicInteractionIsTransactional()
                               .absoluteDir()
                               .filePath(QStringLiteral("..")));
     QQmlApplicationEngine engine;
-    engine.addImportPath(sourceRoot.filePath(QStringLiteral("qml")));
+    // The module contains generated build facts. Normal tests consume the
+    // build module; the private smoke supplies its staged QML_IMPORT_PATH.
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_PRIVATE_INTERACTION_TEST"))
+    {
+        engine.addImportPath(QDir(QCoreApplication::applicationDirPath())
+                                 .filePath(QStringLiteral("qml-imports")));
+    }
     PanelWindow window(engine);
     QVERIFY(window.pinDockUrl(QUrl::fromLocalFile(desktopPath).toString()));
 

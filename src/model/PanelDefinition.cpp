@@ -562,6 +562,9 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     definition.surface.parameters2D = record.value(QStringLiteral("surface2D")).toMap();
     definition.surface.parameters2_5D = record.value(QStringLiteral("surface2_5D")).toMap();
     definition.surface.parameters3D = record.value(QStringLiteral("surface3D")).toMap();
+    if (record.contains(QStringLiteral("scene3DQuality")))
+        definition.surface.parameters3D.insert(QStringLiteral("quality"),
+            normalized(QStringLiteral("scene3DQuality"), QStringLiteral("medium")));
     setString(QStringLiteral("themeAsset"), &definition.surface.themeAsset);
     setString(QStringLiteral("themeSource"), &definition.surface.themeSource);
     definition.surface.themeFit = normalized(
@@ -929,6 +932,9 @@ QVariantMap PanelDefinition::toLegacyMap() const
     insertIfNotEmpty(&record, QStringLiteral("surface2D"), surface.parameters2D);
     insertIfNotEmpty(&record, QStringLiteral("surface2_5D"), surface.parameters2_5D);
     insertIfNotEmpty(&record, QStringLiteral("surface3D"), surface.parameters3D);
+    if (surface.parameters3D.contains(QStringLiteral("quality")))
+        record.insert(QStringLiteral("scene3DQuality"),
+            surface.parameters3D.value(QStringLiteral("quality")));
     record.insert(QStringLiteral("themeAsset"), surface.themeAsset);
     record.insert(QStringLiteral("themeSource"), surface.themeSource);
     record.insert(QStringLiteral("themeFit"), surface.themeFit);
