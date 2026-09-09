@@ -700,6 +700,8 @@ QString capabilityReasonCodeName(CapabilityReasonCode reason)
         return QStringLiteral("presentation-mechanism-unavailable");
     case CapabilityReasonCode::RotationRangeIncompatible:
         return QStringLiteral("rotation-range-incompatible");
+    case CapabilityReasonCode::RendererRotationUnavailable:
+        return QStringLiteral("renderer-rotation-unavailable");
     case CapabilityReasonCode::NoSafeRendererFallback:
         return QStringLiteral("no-safe-renderer-fallback");
     }
@@ -939,7 +941,8 @@ QVector<RendererAvailability> PanelCapabilityResolver::productionRenderers()
          {QStringLiteral("arch")},
          6,
          true,
-         ARCHDOCK_SCENE3D_BUILT != 0},
+         ARCHDOCK_SCENE3D_BUILT != 0,
+         false}, // The base mesh scene does not implement whole-panel motion.
     };
 }
 
@@ -959,6 +962,25 @@ CapabilityResolution PanelCapabilityResolver::resolve(
     result.hostProfileId = host.id;
     result.themeId = theme.id;
     result.rotation = resolveRotation(host, theme);
+
+    const QString requestedTierName = definition.surface.rendererTier.trimmed();
+    const std::optional<RendererTier> parsedRequestedTier = requestedTierName.isEmpty()
+        ? theme.preferredRendererTier
+        : rendererTierFromName(requestedTierName);
+    const RendererTier requestedTier = parsedRequestedTier.value_or(
+        RendererTier::Procedural2D);
+    result.renderer = resolveRenderer(
+        requestedTier, host, theme, renderers, platform);
+    if (result.rotation.available && result.renderer.effectiveTier.has_value())
+    {
+        const auto *renderer = rendererForTier(renderers, *result.renderer.effectiveTier);
+        if (renderer && !renderer->wholePanelRotation)
+        {
+            result.rotation = {};
+            result.rotation.reason = CapabilityReasonCode::RendererRotationUnavailable;
+            result.rotation.blockedBy = rendererTierName(renderer->tier);
+        }
+    }
 
     for (PanelCapability capability : allCapabilities())
     {
@@ -982,15 +1004,6 @@ CapabilityResolution PanelCapabilityResolver::resolve(
             renderers,
             platform));
     }
-
-    const QString requestedTierName = definition.surface.rendererTier.trimmed();
-    const std::optional<RendererTier> parsedRequestedTier = requestedTierName.isEmpty()
-        ? theme.preferredRendererTier
-        : rendererTierFromName(requestedTierName);
-    const RendererTier requestedTier = parsedRequestedTier.value_or(
-        RendererTier::Procedural2D);
-    result.renderer = resolveRenderer(
-        requestedTier, host, theme, renderers, platform);
 
     if (definition.host.kind != host.kind || host.id.trimmed().isEmpty() ||
         theme.id.trimmed().isEmpty() || platform.operatingSystem.trimmed().isEmpty() ||

@@ -71,6 +71,10 @@ The following limits are part of version 2 and are evaluated before use:
 | All declared assets | 268,435,456 bytes |
 | Raster width or height | 16,384 pixels |
 | Decoded raster area | 16,777,216 pixels |
+| One scene mesh JSON resource | 2,097,152 bytes |
+| Vertices in one scene mesh | 4,096 |
+| Indices in one scene mesh | 24,576 |
+| One scene material JSON resource | 16,384 bytes |
 
 All numeric values MUST be finite. Counts, dimensions, margins, insets, and
 rectangle sizes MUST be non-negative. A rectangle tied to an asset with a
@@ -100,6 +104,7 @@ semantics fail closed.
 | `slices` | array | no | empty |
 | `contentRegions` | array | no | empty |
 | `tracks` | array | no | empty |
+| `scene3D` | object | no | absent |
 | `effectMargins` | object | no | all zero |
 | `inputMasks` | array | no | empty |
 | `iconStyleRef` | object | no | absent |
@@ -210,6 +215,59 @@ Each asset object has this form:
 Asset kinds are `raster`, `vector`, `mask`, `mesh`, `material`, and
 `animation-data`. An extension or MIME label does not override detected content
 or turn a raster into a mesh. A supplied digest MUST match the file bytes.
+
+## 5A. Optional 3D scene
+
+TASK-0035 adds optional `scene3D` to version 2. Earlier packages without it
+remain valid, including packages that only declare optional mesh assets;
+rendering an actual scene requires this contract and validated resources.
+The scene requires `true3d` in `capabilities.rendererTiers`.
+
+| Member | Required | Contract/default |
+| --- | --- | --- |
+| `mesh` | yes | Declared mesh asset ID for the platform |
+| `iconMesh` | yes | Declared mesh asset ID for icon bases; may reuse `mesh` |
+| `material` | yes | Declared material asset ID |
+| `texture` | no | Declared raster/vector asset ID; absent means untextured |
+| `fieldOfView` | no | 20–70 degrees; default 40 |
+| `cameraPitch` | no | −60–60 degrees; default 25 |
+| `cameraYaw` | no | −180–180 degrees; default 0 |
+| `keyLightBrightness` | no | 0–4; default 1 |
+| `fillLightBrightness` | no | 0–2; default 0.4 |
+| `defaultQuality` | no | `low`, `medium`, or `high`; default `medium` |
+
+Unknown scene members are rejected. Asset IDs resolve through the same
+validated package paths and hashes as other assets; scenes cannot load an
+arbitrary external path. Mesh and material resources use JSON objects and the
+byte limits above.
+
+A mesh uses `format: "org.archdock.mesh"` and `version: 1`. Its only other
+members are `positions`, `normals`, `uv0s`, and `indexes`. At least four
+positions are required. Each position and normal has three finite numbers;
+positions have absolute coordinate values at most 1000. Normal components
+have absolute values at most 1 and squared length in `[0.99, 1.01]`.
+Each UV has two finite values with absolute
+value at most 16. Position, normal and UV counts must match. Indices are
+in-range nonnegative integers in complete triangles. Degenerate triangles are
+rejected, and referenced vertices must span more than `0.000001` on each of
+the three axes. Unused vertices cannot establish that extent. Unknown mesh
+members, including generators or scripts, are rejected.
+
+A material uses `format: "org.archdock.material"` and `version: 1`. All five
+material values are required: `baseColor` and `emissiveColor` are six-digit
+RGB hex colors, `metalness` and `roughness` are finite values in `[0, 1]`, and
+`emissiveStrength` is finite in `[0, 2]`. Other members are rejected. Materials
+describe the application-owned native material; they cannot provide shaders,
+scripts or QML.
+
+The runtime projection adds `scene3DResources` containing parsed mesh,
+icon-mesh and material data. That map is not a manifest field and cannot be
+supplied by a package. Canonical manifests retain resource IDs rather than
+inlining the projection. Missing or invalid resources cause package validation
+failure or runtime renderer fallback, as appropriate to when the loss occurs.
+The selected consumer must independently prove module and backend capability.
+See [the shared renderer](shared-renderer.md#base-true-3d-renderer) for quality
+limits, fallback order, input geometry and the base renderer's motion limits.
 
 ## 6. States, layers, and split parts
 

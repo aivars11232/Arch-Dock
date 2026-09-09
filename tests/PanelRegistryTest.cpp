@@ -2760,12 +2760,13 @@ void PanelRegistryTest::supportsPinnedFolderSnapshotsAndReordering()
 void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
 {
     const QVariantList definitions = taskThemeDefinitions();
-    QCOMPARE(definitions.size(), 15);
+    QCOMPARE(definitions.size(), 16);
     PanelRegistry registry(definitions);
     QCOMPARE(registry.themeDefinitions().size(), definitions.size());
 
     int packagedThemeCount = 0;
     int perspectiveThemeCount = 0;
+    int meshThemeCount = 0;
     for (const QVariant &candidate : registry.themeDefinitions())
     {
         const QVariantMap theme = candidate.toMap();
@@ -2776,8 +2777,9 @@ void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
         QVERIFY2(profile.has_value(), qPrintable(errorCode));
         QVERIFY(profile->rendererTiers.contains(
             ArchDock::RendererTier::Procedural2D));
-        QVERIFY(!profile->rendererTiers.contains(
-            ArchDock::RendererTier::True3D));
+        const bool mesh = theme.value(QStringLiteral("id")).toString() ==
+            QStringLiteral("mesh-platform-cyan");
+        QCOMPARE(profile->rendererTiers.contains(ArchDock::RendererTier::True3D), mesh);
         QVERIFY(!profile->capabilities.contains(
             ArchDock::PanelCapability::NonRectangularInput));
         const bool perspective = theme.value(
@@ -2786,11 +2788,10 @@ void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
         if (theme.contains(QStringLiteral("packageManifest")))
         {
             ++packagedThemeCount;
-            // Every packaged theme prefers a real renderer and keeps
-            // procedural 2D as its only safe fallback. The perspective
-            // families differ only in which renderer that is, and in being
-            // free-host radial rather than native horizontal.
-            const ArchDock::RendererTier preferred = perspective
+            // Each packaged family declares its actual renderer and keeps
+            // procedural 2D as its safe fallback, including optional meshes.
+            const ArchDock::RendererTier preferred = mesh
+                ? ArchDock::RendererTier::True3D : perspective
                 ? ArchDock::RendererTier::Baked2_5D
                 : ArchDock::RendererTier::Skinned2D;
             QVERIFY(profile->rendererTiers.contains(preferred));
@@ -2801,7 +2802,17 @@ void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
                          ArchDock::RendererTier::Procedural2D});
             const QVariantMap preview = theme.value(
                 QStringLiteral("previewConfiguration")).toMap();
-            if (perspective)
+            if (mesh)
+            {
+                ++meshThemeCount;
+                QCOMPARE(theme.value(QStringLiteral("category")).toString(), QStringLiteral("mesh"));
+                QCOMPARE(profile->hostKinds,
+                         QVector<ArchDock::PanelHostKind>{ArchDock::PanelHostKind::FreeDesktop});
+                QCOMPARE(profile->layouts.size(), 4);
+                QCOMPARE(profile->presentationMechanisms.size(), 1);
+                QCOMPARE(preview.value(QStringLiteral("mode")).toString(), QStringLiteral("free"));
+            }
+            else if (perspective)
             {
                 ++perspectiveThemeCount;
                 QCOMPARE(profile->hostKinds,
@@ -2834,8 +2845,8 @@ void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
             QCOMPARE(preview.value(
                          QStringLiteral("presentationState")).toString(),
                      QStringLiteral("open"));
-            QVERIFY(!theme.value(
-                QStringLiteral("iconStyleRef")).toMap().isEmpty());
+            if (!mesh)
+                QVERIFY(!theme.value(QStringLiteral("iconStyleRef")).toMap().isEmpty());
         }
         else
         {
@@ -2846,8 +2857,9 @@ void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
             QVERIFY(profile->presentationMechanisms.isEmpty());
         }
     }
-    QCOMPARE(packagedThemeCount, 10);
+    QCOMPARE(packagedThemeCount, 11);
     QCOMPARE(perspectiveThemeCount, 3);
+    QCOMPARE(meshThemeCount, 1);
 
     const QVariantMap ringTheme = registry.themeDefinitions().at(3).toMap();
     QCOMPARE(ringTheme.value(QStringLiteral("id")).toString(),
@@ -3051,7 +3063,7 @@ void PanelRegistryTest::resolvesThemeCandidatesWithoutMutation()
 void PanelRegistryTest::rejectsIncompatibleThemeWithoutRecordMutation()
 {
     const QVariantList definitions = taskThemeDefinitions();
-    QCOMPARE(definitions.size(), 15);
+    QCOMPARE(definitions.size(), 16);
     PanelRegistry registry(definitions);
     const QVariantMap before = registry.panelSnapshot(QStringLiteral("bottom"));
     const int registryRevisionBefore = registry.revision();

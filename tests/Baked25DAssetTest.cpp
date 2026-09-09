@@ -486,7 +486,7 @@ void Baked25DAssetTest::familyIsCataloguedWithRuntimeCapabilities()
     const QJsonObject catalog = readObject(
         repositoryFile(QStringLiteral("data/themes/builtin-themes.json")));
     const QJsonArray themes = catalog.value(QStringLiteral("themes")).toArray();
-    QCOMPARE(themes.size(), 15);
+    QCOMPARE(themes.size(), 16);
 
     int observed = 0;
     for (const PerspectiveSpec &spec : perspectiveSpecs)

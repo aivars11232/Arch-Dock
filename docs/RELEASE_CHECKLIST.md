@@ -63,3 +63,24 @@ See [CURRENT_STATE.md](CURRENT_STATE.md) for the current implementation boundary
 - [ ] Desktop audition changes only the selected/temporary owned host and rolls back exactly on Cancel.
 - [ ] Icon Preset audition does not change panel theme/layout/placement.
 - [ ] No canceled preview leaves an applet, record, default, or ownership token.
+
+## TASK-0035 verification record — 2026-09-09
+
+The optional base true-3D renderer passed separate OFF/AUTO/ON Debug builds
+and 65/65 CTests in each mode. OFF explicitly disabled Quick3D discovery and
+omitted optional resources; AUTO found the installed module; ON required it.
+The core executable did not link to Quick3D in any mode.
+
+Required staged installation and private D-Bus/KWin Wayland/PlasmaShell checks
+passed with real `org.archdock.dock` applets. Enabled modes rendered the
+original mesh theme, changed quality low/high/low within its target bounds,
+and exercised missing mesh/texture fallback. OFF selected procedural 2D and
+hid 3D controls. Studio Apply, Cancel and reopen passed. Unsupported base-scene
+rotation is gated; TASK-0036 motion is not implemented by this task.
+
+This task evidence does not close the broader release checklist above.
+Personal desktop, physical GPU/monitor, hardware hotplug, clean-clone release
+packaging, and desktop audition acceptance are not claimed by these private
+checks. See [CURRENT_STATE.md](CURRENT_STATE.md#task-0035--optional-true-3d-capability-and-base-scene-renderer)
+for exact results and [shared-renderer.md](shared-renderer.md#base-true-3d-renderer)
+for the implemented limits.

@@ -175,6 +175,7 @@ Item {
     // artwork is drawn, and the configured angle turns it.
     readonly property bool bakedTierRequested:
         String(resolvedRendererTier || "").toLowerCase() === "baked2.5d"
+        || (surfaceLoader.true3DRequested && surfaceLoader.bakedRequested)
     readonly property var activeThemeTrack:
         ThemeStateSelection.trackFor(themeDefinition, presentationState)
     readonly property var bakedArtworkSize: buildBakedArtworkSize()
@@ -427,7 +428,8 @@ Item {
     }
 
     function usableSkinMetadata() {
-        if (String(resolvedRendererTier || "").toLowerCase() !== "skinned2d")
+        if (String(resolvedRendererTier || "").toLowerCase() !== "skinned2d"
+                && !(surfaceLoader.true3DRequested && surfaceLoader.skinnedRequested))
             return false
         const theme = themeDefinition || ({})
         if (theme.valid !== true

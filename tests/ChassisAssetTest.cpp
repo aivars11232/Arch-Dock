@@ -334,7 +334,7 @@ void ChassisAssetTest::catalogDeclaresOriginalFamilyPackages()
         QStringLiteral("data/themes/builtin-themes.json")))
                                   .value(QStringLiteral("themes"))
                                   .toArray();
-    QCOMPARE(themes.size(), 15);
+    QCOMPARE(themes.size(), 16);
 
     QHash<QString, QJsonObject> chassisThemes;
     for (const QJsonValue &value : themes)

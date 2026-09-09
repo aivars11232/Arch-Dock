@@ -71,6 +71,7 @@ enum class CapabilityReasonCode
     RendererPlatformUnsupported,
     PresentationMechanismUnavailable,
     RotationRangeIncompatible,
+    RendererRotationUnavailable,
     NoSafeRendererFallback
 };
 
@@ -122,6 +123,7 @@ struct RendererAvailability
     bool supportsWayland = true;
     // Build eligibility only; each consumer also checks its engine/window.
     bool sceneImplemented = true;
+    bool wholePanelRotation = true;
 
     bool operator==(const RendererAvailability &) const = default;
 };

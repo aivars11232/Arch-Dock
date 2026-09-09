@@ -1243,6 +1243,14 @@ PanelWindow::preparePanelSettingsDraft(
         availableFields.insert(
             value.toMap().value(QStringLiteral("key")).toString());
     }
+    QSet<QString> previousFields;
+    for (const QVariant &value : panelSettingsEditorFields(*currentPanel,
+             m_panelRegistry.resolvePanelCapabilities(*currentPanel), QStringLiteral("studio")))
+    {
+        previousFields.insert(value.toMap().value(QStringLiteral("key")).toString());
+    }
+    const QVariantMap currentValues = currentPanel->toLegacyMap();
+    const QVariantMap candidateValues = draft->candidatePanel.toLegacyMap();
     for (auto it = panelValues.cbegin(); it != panelValues.cend(); ++it)
     {
         const ArchDock::PanelSettingsFieldDescriptor *field =
@@ -1250,6 +1258,15 @@ PanelWindow::preparePanelSettingsDraft(
         if (field && field->access == ArchDock::PanelSettingsFieldAccess::Editor &&
             field->editor.isPresented() && !availableFields.contains(it.key()))
         {
+            // Studio submits its full snapshot when changing capabilities.
+            // Retain inactive values only if they were previously available
+            // and the normalized candidate leaves them unchanged.
+            if (previousFields.contains(it.key()) &&
+                candidateValues.value(it.key(), field->defaultValue) ==
+                    currentValues.value(it.key(), field->defaultValue))
+            {
+                continue;
+            }
             if (outcome)
             {
                 outcome->status = ArchDock::PanelSettingsTransactionStatus::ValidationFailed;

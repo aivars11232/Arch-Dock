@@ -360,6 +360,29 @@ TestCase {
         compare(scene.visualPanel.reducedMotion, false)
     }
 
+    function test_true3DFallbackKeepsSkinContentGeometry() {
+        const theme = chassisThemeDefinition();
+        theme.capabilities = {rendererTiers: ["true3d", "skinned2d", "procedural2d"],
+            fallbackRendererTiers: ["skinned2d", "procedural2d"]};
+        const direct = createScene({
+            panelDefinition: definition({rendererTier: "skinned2d", panelThemeId: theme.id}),
+            themeDefinition: theme,
+            hostCapabilities: {available: true, renderer: {effectiveTier: "skinned2d"}}
+        });
+        tryCompare(direct, "effectiveRendererTier", "skinned2d");
+        const fallback = createScene({
+            panelDefinition: definition({rendererTier: "true3d", panelThemeId: theme.id}),
+            themeDefinition: theme,
+            hostCapabilities: {available: true, renderer: {effectiveTier: "true3d"}}
+        });
+        tryCompare(fallback, "effectiveRendererTier", "skinned2d");
+        verify(fallback.fallbackApplied);
+        compare(JSON.stringify(fallback.contentBounds), JSON.stringify(direct.contentBounds));
+        compare(JSON.stringify(fallback.entryRects), JSON.stringify(direct.entryRects));
+        compare(fallback.width, direct.width);
+        compare(fallback.height, direct.height);
+    }
+
     function test_chassisSkinWorksForHorizontalFreeAndRejectsVertical() {
         const rendererCapabilities = {
             available: true,

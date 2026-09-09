@@ -42,12 +42,11 @@ actual API is known. This capability is never read from saved panel settings.
 `renderer-import-unavailable`, `renderer-backend-uninitialized`,
 `renderer-backend-unsupported`, and `renderer-scene-unavailable`.
 
-Phase A detects the module but keeps `sceneBuilt` false. The resolver reports
-that separate boundary, follows the theme's declared fallback order, and
-does not claim a rendered mesh. Detailed 3D editor fields remain absent;
-`surface3D` stays internal. Runtime eligibility is necessary, but a selected
-theme's validated scene support is also required before detailed controls
-could be exposed.
+TASK-0035 Phase A established these facts with `sceneBuilt` false. Phase B
+implements and packages the actual scene, so enabled builds now report both
+build facts true. OFF reports both false. Runtime eligibility and the selected
+theme's validated scene support are required before detailed controls appear;
+saved settings cannot grant either capability. `surface3D` remains internal.
 
 The software and missing-module tests run in separate processes. The latter
 blocks optional import URLs in its engine, preventing the installed system
@@ -55,6 +54,93 @@ module or another engine's cache from satisfying the negative case. The
 staged import smoke checks generated metadata and probes a real graphics
 backend in its disposable KWin Wayland session. Full OFF and ON builds and
 CTest suites are the phase gate; successful import alone is not visual proof.
+
+## Base true-3D renderer
+
+`optional3d/PanelScene3D.qml` owns a native Qt Quick 3D `View3D`, perspective
+camera, two directional lights, textured/emissive materials, one platform mesh,
+and mesh icon bases. `optional3d/IconStyle3D.qml` uses Qt's `ProceduralMesh`
+with validated numeric vertices, normals, UVs and triangle indices. The import
+probe compiles the same native helper type used by the renderer. Only these
+optional files import Quick 3D; the core service does not link to it.
+
+Scene inputs are explicit: `sceneDefinition`, `resources`, `textureSource`,
+`entryGeometry`, `quality`, `panelOpacity`, and `sceneConcealed`. Mesh/material
+data comes from the bounded ThemePackage parser, not executable package code.
+The [Theme v2 scene contract](THEME_PACKAGE_V2.md#5a-optional-3d-scene)
+defines resource IDs, camera/light parameters and numeric limits. A package
+cannot supply QML, shaders or scripts to this renderer.
+
+The original `mesh-platform-cyan` theme has a beveled octagonal ring with side
+walls and an underside: 192 vertices and 96 triangles. A material and UV
+texture are applied to real geometry. It is the sixteenth built-in theme and
+the eleventh packaged theme. Its asset record identifies original authorship
+and the user's redistribution authorization; it does not invent a public
+license identifier.
+
+Logical entry rectangles, glyphs, pointer handling, keyboard order and
+accessibility stay in the shared 2D delegates. Mesh nodes are not pickable.
+Camera-local icon mesh positions project onto the same logical pixel centers;
+changing camera orientation or quality does not move those input rectangles.
+
+### Fallback and diagnostics
+
+The selected backend tier is further checked in each consumer's QML engine
+and graphics window. If the optional module/backend or validated scene
+resources are unavailable, the surface loader follows the theme's declared
+`fallbackRendererTiers` in order. Procedural 2D terminates that search. A baked
+fallback uses its anchor track, depth ordering and platform input mask; a
+skinned fallback uses its declared content bounds. Their geometry matches a
+direct selection of the same renderer. Invalid/unavailable themes retain the
+procedural safety surface and real entries.
+
+Scene failures distinguish `scene3d-resources-unavailable`,
+`scene3d-mesh-unavailable`, `scene3d-texture-unavailable`, `scene3d-load-failed`
+and loading state. Missing textures make the scene unavailable without
+crashing; restoring valid inputs can select the mesh scene again.
+
+### Quality and editor boundaries
+
+| Quality | Render scale | Maximum target axis | Antialiasing |
+| --- | ---: | ---: | --- |
+| low | 0.5 | 1024 | off |
+| medium | 0.75 | 1536 | 2 samples |
+| high | 1.0 | 2048 | 4 samples |
+
+Both target axes are at least one pixel and retain the scene's aspect ratio
+under the cap. Texture decoding is capped at 1024 by 1024; texture caching is
+disabled for that source. Quality changes reuse the same logical geometry.
+`scene3DQuality` is the schema-backed editor field stored in
+`surface.parameters3D.quality`; invalid choices normalize to `medium`, and
+other persisted members of that parameter map survive.
+
+Studio offers renderer selection only when the backend, theme and actual
+preview consumer support 3D. Detailed quality controls additionally require
+the active preview to be true 3D. Apply uses the ordinary revisioned settings
+transaction. Unchanged formerly available fields may survive a renderer
+switch; changing an unavailable field or submitting protected state is still
+rejected. Cancel closes the draft, and reopening reloads the saved renderer.
+
+The base renderer is available on the free desktop host only. Native edge
+hosts do not gain true 3D. Whole-panel rotation is separately gated by the
+selected renderer: the base mesh scene reports `renderer-rotation-unavailable`,
+while supported 2D fallbacks keep rotation. True Y-axis icon motion, pedestal
+motion, emissive hover and 3D part animation belong to TASK-0036 and are not
+claimed here. Item-level input geometry does not claim compositor-wide
+nonrectangular click-through.
+
+### Verification boundary
+
+The 2026-09-09 final gates passed 65/65 CTests in each of OFF, AUTO and ON.
+OFF disables dependency discovery and omits optional QML resources. Separate
+tests block optional imports and use the software backend. Enabled private
+Wayland checks render mesh pixels, verify projected icon centers and camera
+changes, exercise low/high/low quality and missing resources, and drive Studio
+Apply/Cancel/reopen. The staged smoke creates real `org.archdock.dock` applets
+and observes rendered frames and bounded quality targets in the actual applet.
+These are disposable private D-Bus/KWin/PlasmaShell results, not personal
+desktop or physical GPU/monitor acceptance. Exact results are recorded in
+[CURRENT_STATE.md](CURRENT_STATE.md).
 
 ## Exported foundation types
 
@@ -211,8 +297,8 @@ geometry animation.
 A named theme that is absent, mismatched, invalid, failed, unavailable, or
 explicitly not loadable reports `theme-unavailable` and uses procedural 2D. A
 backend capability fallback or runtime fallback is also reflected in the scene
-status. True 3D remains unavailable; baked 2.5D is available on the free
-desktop host and is described under "Baked 2.5D" below.
+status. True 3D is optional and capability-gated as described above; baked
+2.5D is available on the free desktop host and is described below.
 
 The fallback always retains deterministic geometry, visible entries, bounds,
 input-region output, and popup/reveal anchors.
@@ -222,8 +308,8 @@ input-region output, and popup/reveal anchors.
 TASK-0034 adds the `baked2.5d` tier. It renders a perspective ring, polygon or
 arc platform as layered artwork with real application icons standing on it. It
 requires no Qt Quick 3D module, declares no mesh, and is never described as
-true 3D; the module validator fails the build if any shared rendering source
-imports a 3D module.
+true 3D; the module validator rejects 3D imports outside the dynamically
+loaded `optional3d` directory.
 
 The tier is installed and enabled for the **free desktop host only**. A Plasma
 edge panel is a fixed rectangle and cannot present a perspective platform, so a

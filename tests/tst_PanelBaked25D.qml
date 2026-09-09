@@ -204,6 +204,31 @@ TestCase {
                message + ": actual=" + actual + " expected=" + expected)
     }
 
+    function test_true3DFallbackKeepsBakedGeometryAndDeclaredOrder() {
+        const theme = bakedTheme();
+        theme.capabilities.rendererTiers = ["true3d", "baked2.5d", "procedural2d"];
+        theme.capabilities.fallbackRendererTiers = ["baked2.5d", "procedural2d"];
+        const direct = createScene({theme: theme});
+        waitForTier(direct, "baked2.5d");
+        const fallback = createScene({
+            definition: {rendererTier: "true3d"}, theme: theme,
+            capabilities: {available: true, renderer: {effectiveTier: "true3d"}}
+        });
+        waitForTier(fallback, "baked2.5d");
+        verify(fallback.fallbackApplied);
+        verify(fallback.activeTrackMetrics !== null,
+               "fallback must place icons on the baked platform track");
+        compare(JSON.stringify(fallback.entryRects), JSON.stringify(direct.entryRects));
+        compare(fallback.width, direct.width);
+        compare(fallback.height, direct.height);
+        const proceduralFirst = bakedTheme();
+        proceduralFirst.capabilities.rendererTiers = ["true3d", "baked2.5d", "procedural2d"];
+        proceduralFirst.capabilities.fallbackRendererTiers = ["procedural2d", "baked2.5d"];
+        fallback.themeDefinition = proceduralFirst;
+        waitForTier(fallback, "procedural2d");
+        compare(fallback.activeTrackMetrics, null);
+    }
+
     // Criterion: real application icons can pass behind and in front of
     // platform layers, and the theme's declared occlusion depth is what
     // decides which. The same scene is rendered twice with only that depth

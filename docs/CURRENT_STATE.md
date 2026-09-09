@@ -6,10 +6,11 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-09-06 (Europe/Amsterdam). TASK-0033 is committed.
-This session implemented TASK-0034 on top of it. The commit-to-task mapping
-table under "Repository state" is the authoritative record of which commit
-carries which task; commit subjects are not.
+**Evidence snapshot:** 2026-09-09 (Europe/Amsterdam). TASK-0034 is committed
+as `abc6dfd`. TASK-0035 is implemented and its final OFF/AUTO/ON gates pass.
+The owner committed checkpoint `e84e1bf` while work was paused; completion
+fixes and documentation remain unstaged on top of that checkpoint. The
+commit-to-task mapping below records content rather than relying on subjects.
 
 Earlier context, retained because it explains two mislabelled commits: the
 session that produced `f61c9ab` began from a tree whose subject `Task33` is
@@ -19,22 +20,21 @@ TASK-0032 closure gaps recorded under "TASK-0032 corrective closure" below;
 those gaps were closed and TASK-0033 was then implemented, as its own section
 describes.
 
-All figures below come from external Debug build directories created during
-this session; none reuse the in-tree `build/` or `build-codex-task-0014`
-directories. Runtime claims come only from disposable private D-Bus, virtual
-KWin Wayland, and private PlasmaShell sessions; no personal desktop session
-was contacted. Older lifecycle details below retain their earlier
-isolated-session evidence.
+The TASK-0035 figures below come from fresh external Debug build directories;
+none reuse the in-tree `build/` or `build-codex-task-0014` directories. Its
+runtime evidence uses disposable private D-Bus, virtual KWin Wayland, and
+private PlasmaShell sessions. The personal Plasma session was not mutated.
+Earlier task sections retain their historical evidence and boundaries.
 
 ## Repository state
 
 - Repository root: `/mnt/F/Arch Dock`
-- Branch: `main`, tracking `origin/main` and level with it.
-- Current `HEAD`: `197a515`, subject `Arch Dock task 34`. It carries the first
-  part of TASK-0034 Phase A; the remainder of TASK-0034 is the uncommitted
-  working tree on top of it.
-- The working tree was clean at the start of this session and now contains
-  only the TASK-0034 changes listed below.
+- Branch: `main`, tracking `origin/main`, one commit ahead of the local
+  upstream reference. No fetch, push, or sync was performed by Codex.
+- Current `HEAD`: `e84e1bfc34d2365cf6e4b220ff5dc81bf6cdb899`, subject
+  `Arch Dock task35`, the owner's TASK-0035 checkpoint.
+- The working tree was clean when work resumed on September 9. It now
+  contains only the TASK-0035 completion changes described below, unstaged.
 - `build-codex-task-0014/` is still tracked at `HEAD`. It is a build
   directory committed by mistake in `75232e5` and must be removed with
   `git rm -r build-codex-task-0014`; `.gitignore` now excludes every
@@ -63,18 +63,22 @@ subject line, records which commit carries which task.
 | `f61c9ab` | `Task33` | TASK-0032 Phases C and D |
 | `b13c1c9` | `Arch Dock Codex task package audit` | TASK-0032 corrective closure and TASK-0033 |
 | `197a515` | `Arch Dock task 34` | TASK-0034 Phase A, first part |
+| `abc6dfd` | `Implement baked 2.5D ring, octagonal, and arc themes` | TASK-0034 completion |
+| `e84e1bf` | `Arch Dock task35` | TASK-0035 Phase A and partial Phase B checkpoint, committed by the owner |
 
-TASK-0034 is the uncommitted working tree on top of `197a515`.
+TASK-0035 completion fixes and documentation are the working tree on top of
+`e84e1bf`.
 - Codex did not stage, commit, push, globally install, or mutate the personal
   Plasma session.
 
 ## Inspected platform
 
 - Arch Linux, rolling release
-- Kernel `7.2.2-arch1-1` (TASK-0031 host; earlier records used `7.1.11-arch1-1`)
+- Kernel `7.2.3-arch1-3` for the final TASK-0035 verification
 - KDE Plasma and KWin `6.7.4`
-- Wayland KDE session (`WAYLAND_DISPLAY=wayland-0`)
+- Runtime verification: private virtual KWin Wayland and real PlasmaShell applets
 - Qt base `6.11.2-3`
+- Qt Declarative and optional Quick3D `6.11.2-1`
 - KDE Frameworks Core Addons and Kirigami `6.29.0-1`
 
 These versions describe the inspection and verification host. TASK-0028 and
@@ -261,12 +265,12 @@ disposable private Plasma Wayland session, not inferred from inspection.
   platform intersection. Unsupported layouts, rotation, presentation features,
   and renderer tiers remain hidden or fall back with an explicit reason; a flat
   image cannot satisfy true-3D capability.
-- The embedded catalog contains the five retained procedural themes, three
-  package-backed chassis themes, and four package-backed energy themes. The
+- The embedded catalog contains five procedural, three chassis, four energy,
+  three perspective, and one mesh theme: 16 themes in total. The
   later Panel/Icon preset system and its exact 15+15 libraries remain a
   separate contract.
 - CMake declares the application, QML, theme, and icon-style resources, all
-  seven installed Theme v2 packages, all six installed Icon Style v1 packages,
+  eleven installed Theme v2 packages, all six installed Icon Style v1 packages,
   Plasma applets and templates, D-Bus and systemd metadata, source-only catalog
   exclusions, and the CTest suite whose exact count is recorded with the most
   recent task gate below.
@@ -276,10 +280,11 @@ disposable private Plasma Wayland session, not inferred from inspection.
 - The installed systemd user unit starts `%h/.local/bin/arch-dock`, while the
   application and D-Bus metadata invoke `arch-dock` from `PATH`. The startup and
   installation strategy is not yet aligned.
-- No 3D control is exposed in Panel Studio, Icon Properties, or the native
-  configuration pages. The schema keeps `surface3D` as an internal,
-  non-editable field so persisted values survive, and the shared true-3D scene
-  and renderer architecture required by the master plan is not present.
+- The optional base mesh renderer and its quality controls are implemented.
+  Studio exposes them only with a supported free host, validated scene theme,
+  and available consumer backend. `surface3D` remains internal. Whole-panel
+  3D rotation, true Y-axis icon motion, emissive hover, and 3D part animation
+  remain TASK-0036 work; unsupported rotation controls are hidden and rejected.
 - Per-entry `animationProfileReference` is validated and persisted but remains
   intentionally hidden. The animation engine delivered by TASK-0030 and
   TASK-0031 selects one profile per panel; routing a per-entry reference into it
@@ -297,7 +302,7 @@ disposable private Plasma Wayland session, not inferred from inspection.
   compositor-wide click-through outside the applet's enclosing window, so the
   native/free host profiles do not claim `nonrectangular-input` from this work.
 
-## Planned but not implemented
+## Historical planning boundary after TASK-0029
 
 The master plan and preset specification describe target behavior. The
 following named systems remain outside TASK-0029:
@@ -1094,15 +1099,109 @@ TASK-0033.
 - Frame timing was not measured. The performance evidence is bounded resident
   memory across repeated theme changes plus a surviving, error-free applet.
 
+## TASK-0035 — optional true-3D capability and base scene renderer
+
+### Phase A and implementation boundary
+
+Phase A completed before Phase B began. `ARCHDOCK_ENABLE_QUICK3D` supports
+OFF/AUTO/ON, with generated C++ and QML facts, optional resource packaging,
+consumer import/backend probing, precise diagnostics and safe fallback.
+During Phase A the scene-built fact was false. Phase B now supplies the real
+scene, so ON and discovered AUTO report both build facts true; OFF reports
+both false. Saved settings cannot override them. The final combined gates
+below reverify every Phase A acceptance criterion against the completed code.
+
+### Phase B implementation
+
+- `PanelScene3D.qml` and `IconStyle3D.qml` use native Qt Quick 3D meshes,
+  perspective camera, two lights, materials, emission and a validated texture.
+  The original cyan platform has bevels, side walls and an underside, with
+  192 vertices and 96 triangles. Each icon base uses actual mesh geometry.
+- Theme v2 now has an optional strict `scene3D` contract. Mesh/material JSON
+  is bounded and validated; executable package shaders, scripts and QML are
+  not accepted. Missing resources fail safely. The core remains independent
+  of the optional native module.
+- The loader follows the declared fallback order. Baked fallback uses its
+  anchor track, and skinned fallback uses its content bounds. Real entries,
+  logical hit targets and accessibility remain in the shared 2D delegates.
+- Low/medium/high quality uses render scales 0.5/0.75/1, axis caps
+  1024/1536/2048, and off/2/4-sample antialiasing. Persisted quality is bounded
+  and reversible. Studio hides detail controls when unavailable or off.
+- Whole-panel rotation is a separate renderer capability. The base scene
+  reports `renderer-rotation-unavailable`; supported 2D fallback keeps its
+  rotation behavior. No TASK-0036 motion implementation is claimed.
+
+See [shared-renderer.md](shared-renderer.md#base-true-3d-renderer) and
+[THEME_PACKAGE_V2.md](THEME_PACKAGE_V2.md#5a-optional-3d-scene) for contracts.
+
+### Blockers diagnosed and repaired
+
+| Boundary | Proved cause and bounded repair | Verification |
+| --- | --- | --- |
+| Private service ownership | KWin requests Arch Dock during the Icon Properties startup check, activating the staged service before the explicit launcher. The launcher forwards settings and exits. The smoke now tracks the actual unique D-Bus owner/PID, validates staged executable and private XDG/bus identity, detects replacement, and uses pidfd-safe cleanup. | Narrow ownership pass; every final private smoke pass. AUTO owner 214193, forwarder 214747 exited successfully. |
+| Private desktop creation | Calling `desktopForScreen(0)` during startup could create a metadata-free desktop before the activity/containment existed, yielding AppletError. The smoke waits for and selects the initialized desktop, with guarded failed-creation cleanup. | Real native and free applets created in every final mode. |
+| Private native startup | Manual fixture creation raced normal service recovery and its revision change. The harness waits for the actual recovered, ownership-verified native panel instead. A cleanup exit race is accepted only when the pidfd confirms exit. | Full private startup, revision and owner checks pass. |
+| Qt sequence projections | Qt sequential containers are array-like but `Array.isArray()` returns false. Snapshot copying discarded their shape. SettingsEditorModel and CapabilityModel now preserve nested sequences; loader tier lists are copied explicitly. | Native sequence regressions and private Studio pass. |
+| Mesh icon alignment | Construction-time projection read uninitialized camera matrices. Camera-local mesh positions now map to logical pixel centers. | Two projected icon centers verified within one pixel; camera and quality checks pass. |
+| Studio renderer switch | Full snapshots carry unchanged formerly available fields, which candidate validation rejected. Only unchanged previously available values may now survive a capability switch; unavailable changes and protected state still fail. | Public transaction regression; private 3D/2D/3D Apply and Cancel/reopen pass. |
+| Cancel test | The new assertion inspected a closed preview instead of reopening saved state. The test now checks closure, saved 2D state and the reopened UI. | Private interaction pass. |
+| Runtime fallback geometry/order | Baked and skin fallback selected artwork while retaining procedural geometry; the loader also ignored procedural-first ordering. Geometry now follows the selected fallback, in declared order. | 45/45 baked QML checks and 14/14 shared scene checks. |
+| Catalog fixtures | Old assertions expected 15 themes, ten packages and no 3D profile. They now assert 16 themes, eleven packages and exactly one mesh profile, retaining prior family checks. | All four affected targets pass; full suites pass. |
+| Renderer rotation gate | Host/theme rotation was exposed without renderer support. An explicit renderer fact now gates the resolution, runtime and editor. | Public API regression and final ON/OFF/AUTO suites pass. |
+
+### Final verification — 2026-09-09
+
+All modes used separate fresh out-of-tree Debug configurations under
+`/tmp/archdock-task0035-resume.JvaKHyp4/`. ON and OFF were rebuilt after the
+focused corrections. AUTO was configured and built from scratch after the
+last code change. All builds and CTests ran serially.
+
+| Mode | Configure | Build facts: module / scene | Full CTest |
+| --- | --- | --- | --- |
+| OFF | PASS; `-DARCHDOCK_ENABLE_QUICK3D=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Qt6Quick3D=TRUE` | 0 / 0 | 65/65, 126.74 s |
+| AUTO | PASS; discovered `/usr/lib/cmake/Qt6Quick3D` | 1 / 1 | 65/65, 132.36 s |
+| ON | PASS; required installed Quick3D | 1 / 1 | 65/65, 132.33 s |
+
+The commands were `cmake -S . -B <fresh-directory>` with each mode above and
+`-DCMAKE_BUILD_TYPE=Debug`, `cmake --build <directory> --parallel 1`, then
+`ctest --test-dir <directory> --output-on-failure --parallel 1`. The parent
+test environment used an intentionally nonexistent session-bus address; the
+smoke creates its own private bus. No mode links the core executable to
+Quick3D. Staged install and optional-resource presence/absence passed.
+
+Enabled scene tests observed 33,674 nontransparent mesh pixels, verified two
+mesh icon centers, camera changes, quality reversal and missing mesh/texture
+fallback. ON and AUTO captures were byte-identical and the ON capture was
+visually inspected. The real staged free applet reported rendered frames,
+96 platform triangles, and quality targets 344×344 → 688×688 → 344×344 for
+low/high/low. OFF reported requested `true3d`, effective `procedural2d`, reason
+`renderer-not-installed`, no 3D frame and no 3D quality control.
+
+The first broad ON gate exposed four catalog targets with stale expectations;
+those failures were diagnosed before correction. They are not counted as a
+pass. The final totals above are complete reruns after corrections. Required
+module, fallback, editor, package, geometry, staged applet, ownership and
+resource-cycle checks all passed. Personal desktop, physical GPU/monitor and
+hardware hotplug acceptance were not performed or claimed.
+
+### Acceptance criteria
+
+| Phase | Criterion | Result |
+| --- | --- | --- |
+| A | Core configures/builds without 3D | PASS — OFF clean configure/build and full suite |
+| A | Availability is independent of saved settings | PASS — generated facts and consumer probe tests |
+| A | 3D controls absent when unavailable | PASS — OFF private Studio and missing-module/software tests |
+| A | Deterministic fallback | PASS — declared-order, baked/skin geometry and real OFF applet checks |
+| B | Actual mesh scene renders with capability | PASS — pixel checks and real staged applet frames |
+| B | Missing mesh/texture falls back without crashing | PASS — package and private scene tests |
+| B | Quality bounded and reversible | PASS — schema persistence, pixels and live low/high/low targets |
+| B | 2D build independent | PASS — OFF build, omitted optional files, core dependency check and 65/65 CTest |
+
 ## Next task boundary
 
-TASK-0022 through TASK-0033 are committed; the commit-to-task mapping table
-above records where. TASK-0034 Phase A's first part is committed as `197a515`
-and the remainder is implemented in this working tree, uncommitted for owner
-review.
+TASK-0035 implementation and required verification are complete. The owner
+controls Git closure; Codex did not stage, commit, push, sync or globally
+install. Runtime work remained inside disposable private environments.
 
-The task pack identifies **TASK-0035 — Add optional true-3D capability
-detection and the base scene renderer** as the next dependency-bound task. Do
-not begin it without the separate read-only planning and owner-approval
-protocol that task requires, and re-verify TASK-0034 closure against the
-committed tree first.
+**TASK-0036 — Complete true-3D motion, fallback, editor gating, and regression
+coverage — has NOT started.** It requires its own planning and approval gate.

@@ -53,12 +53,30 @@ Item {
             result.push(String(source[index]))
         return result
     }
+    readonly property var fallbackTiers: {
+        const source = themeDefinition && themeDefinition.capabilities
+            ? themeDefinition.capabilities.fallbackRendererTiers || [] : []
+        const result = []
+        for (let index = 0; index < Number(source.length || 0); ++index) {
+            const tier = String(source[index])
+            if (tier === "procedural2d")
+                break
+            if (["baked2.5d", "skinned2d"].includes(tier)
+                    && themeTiers.includes(tier) && !result.includes(tier))
+                result.push(tier)
+        }
+        return result
+    }
+    readonly property int bakedFallbackIndex: fallbackTiers.indexOf("baked2.5d")
+    readonly property int skinnedFallbackIndex: fallbackTiers.indexOf("skinned2d")
     readonly property bool skinnedRequested:
         normalizedRequestedTier === "skinned2d"
-        || (true3DRequested && !true3DReady && !bakedReady && themeTiers.includes("skinned2d"))
+        || (true3DRequested && !true3DReady && skinnedFallbackIndex >= 0
+            && (bakedFallbackIndex < 0 || skinnedFallbackIndex < bakedFallbackIndex || !bakedReady))
     readonly property bool bakedRequested:
         normalizedRequestedTier === "baked2.5d"
-        || (true3DRequested && !true3DReady && themeTiers.includes("baked2.5d"))
+        || (true3DRequested && !true3DReady && bakedFallbackIndex >= 0
+            && (skinnedFallbackIndex < 0 || bakedFallbackIndex < skinnedFallbackIndex || !skinnedReady))
     readonly property bool rendererSupported:
         ["procedural2d", "skinned2d", "baked2.5d", "true3d"]
             .includes(normalizedRequestedTier)

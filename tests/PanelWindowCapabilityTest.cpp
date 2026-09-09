@@ -108,10 +108,57 @@ private slots:
     void freePanelContentFollowsItsRecordAndOrdersItsOwnEntries();
     void wholePanelRotationFieldsAreGatedByTheResolver();
     void meshSceneEditorIsGatedAndTransactional();
+    void rendererSwitchRetainsOnlyUnchangedInactiveFields();
 
 private:
     QTemporaryDir m_settingsDirectory;
 };
+
+void PanelWindowCapabilityTest::rendererSwitchRetainsOnlyUnchangedInactiveFields()
+{
+    if (!(ARCHDOCK_QUICK3D_BUILT && ARCHDOCK_SCENE3D_BUILT))
+        return;
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("panelRegistry")).value<QObject *>());
+    QVERIFY(registry);
+    const QString panelId = registry->addFreePanel();
+    auto values = registry->themeCandidate(panelId, QStringLiteral("mesh-platform-cyan"),
+        QStringLiteral("complete")).value(QStringLiteral("values")).toMap();
+    values.insert(QStringLiteral("rendererTier"), QStringLiteral("procedural2d"));
+    QVERIFY(window.applyPanelSettingsTransaction(panelId,
+        registry->panelDefinition(panelId)->settingsRevision, values, {})
+        .value(QStringLiteral("success")).toBool());
+    const auto snapshot = window.panelSettingsEditorSnapshot(panelId, QStringLiteral("studio"));
+    const auto revision = registry->panelDefinition(panelId)->settingsRevision;
+    const auto before = registry->panelDefinition(panelId)->toPersistedMap();
+    values = snapshot.value(QStringLiteral("panelValues")).toMap();
+    QVERIFY(values.contains(QStringLiteral("appearance")));
+    values.insert(QStringLiteral("rendererTier"), QStringLiteral("true3d"));
+    const auto resolved = window.resolvePanelSettingsEditorDraft(panelId, revision,
+        values, {}, QStringLiteral("studio"));
+    QVERIFY2(resolved.value(QStringLiteral("success")).toBool(),
+             qPrintable(resolved.value(QStringLiteral("errorMessage")).toString()));
+    QVERIFY(!fieldKeys(resolved.value(QStringLiteral("panelFields")).toList())
+        .contains(QStringLiteral("appearance")));
+    QCOMPARE(registry->panelDefinition(panelId)->toPersistedMap(), before);
+    auto invalid = values;
+    invalid.insert(QStringLiteral("appearance"), values.value(QStringLiteral("appearance")) ==
+        QStringLiteral("platform") ? QStringLiteral("flat") : QStringLiteral("platform"));
+    const auto rejected = window.applyPanelSettingsTransaction(panelId, revision, invalid, {});
+    QCOMPARE(rejected.value(QStringLiteral("errorCode")).toString(),
+             QStringLiteral("unavailable-panel-field"));
+    invalid = values;
+    invalid.insert(QStringLiteral("hostKind"), QStringLiteral("free-desktop"));
+    QCOMPARE(window.applyPanelSettingsTransaction(panelId, revision, invalid, {})
+        .value(QStringLiteral("errorCode")).toString(), QStringLiteral("protected-panel-field"));
+    QCOMPARE(registry->panelDefinition(panelId)->toPersistedMap(), before);
+    QVERIFY(window.applyPanelSettingsTransaction(panelId, revision, values, {})
+        .value(QStringLiteral("success")).toBool());
+    QCOMPARE(window.panelRendererConfiguration(panelId)
+        .value(QStringLiteral("effectiveRendererTier")).toString(), QStringLiteral("true3d"));
+}
 
 void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
 {
@@ -135,13 +182,24 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
     const auto snapshot = window.panelSettingsEditorSnapshot(panelId, QStringLiteral("studio"));
     QCOMPARE(fieldKeys(snapshot.value(QStringLiteral("panelFields")).toList())
         .contains(QStringLiteral("scene3DQuality")), available);
+    const auto keys = fieldKeys(snapshot.value(QStringLiteral("panelFields")).toList());
+    for (const QString &key : {QStringLiteral("layoutAngle"), QStringLiteral("panelRotationMode"),
+                               QStringLiteral("panelRotationSpeed"), QStringLiteral("panelRotationTrigger")})
+        QCOMPARE(keys.contains(key), !available);
     const auto configuration = window.panelRendererConfiguration(panelId);
+    QCOMPARE(configuration.value(QStringLiteral("capabilityResolution")).toMap()
+        .value(QStringLiteral("rotation")).toMap().value(QStringLiteral("available")).toBool(), !available);
     QCOMPARE(configuration.value(QStringLiteral("effectiveRendererTier")).toString(),
              available ? QStringLiteral("true3d") : QStringLiteral("procedural2d"));
     QVERIFY(configuration.value(QStringLiteral("themeDefinition")).toMap()
         .contains(QStringLiteral("scene3DResources")));
     if (available)
     {
+        const auto rejectedRotation = window.resolvePanelSettingsEditorDraft(panelId,
+            registry->panelDefinition(panelId)->settingsRevision,
+            {{QStringLiteral("panelRotationMode"), QStringLiteral("clockwise")}}, {}, QStringLiteral("studio"));
+        QCOMPARE(rejectedRotation.value(QStringLiteral("errorCode")).toString(),
+                 QStringLiteral("unavailable-panel-field"));
         for (const QString &quality : {QStringLiteral("low"), QStringLiteral("high"), QStringLiteral("low")})
         {
             const auto changed = window.applyPanelSettingsTransaction(panelId,
@@ -190,6 +248,11 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
         QTRY_VERIFY2(popup->property("scene3DQualityVisible").toBool(),
                      qPrintable(popup->property("studioError").toString()));
         QVERIFY(QMetaObject::invokeMethod(popup.get(), "cancelStudioChanges"));
+        QVERIFY(!studio->isVisible());
+        QCOMPARE(window.panelRendererConfiguration(panelId)
+            .value(QStringLiteral("effectiveRendererTier")).toString(), QStringLiteral("procedural2d"));
+        studio->show();
+        QVERIFY(QTest::qWaitForWindowExposed(studio));
         QTRY_VERIFY(!popup->property("scene3DQualityVisible").toBool());
     }
     else
