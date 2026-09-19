@@ -10,15 +10,20 @@
 committed as `7b4706e`; its verification below is historical. The owner
 committed the partial TASK-0036 implementation as `0211331`, its earlier
 blocker record as `5f41ced`, and the partial TASK-0037 preview implementation
-as `4cdb234`. The owner then requested resolving the predecessor blocker.
-The TASK-0036 glyph-motion blocker is now repaired: a fresh ON build passed
-and the staged private Wayland renderer suite passed 6/6 cases, including
-visible mesh motion and fallback cleanup. The integrated Phase A gate remains
-**BLOCKED**: full CTest stopped with 54 passed, 1 failed and 12 not run at the
-subsequent TASK-0037 grouped-window fixture, which did not receive its first
-window through the KWin watcher. TASK-0036 Phase B and TASK-0037 Phases B/C have
-not started. Neither consolidated task is complete. See the blocker-repair
-record below for current evidence; the earlier failure records are historical.
+as `4cdb234`, then committed the glyph-motion blocker repair as `d7c6021`.
+The owner approved the TASK-0038 plan, which retains predecessor closure as
+an implementation gate. The earlier instruction to resolve the blocker first
+was reused for the prerequisite investigation. WindowWatcher now explicitly
+declares its existing D-Bus interface: the private trace proved that KWin's
+window events previously received `UnknownInterface` replies in the fixture.
+The unchanged standalone grouped-window test now passes 3/3 QtTest cases.
+A fresh complete ON build passed, but integrated acceptance remains **BLOCKED**:
+full CTest stopped with 54 passed, 1 failed and 12 not run. Both windows now
+reach the model; the new failure is the restore readback at
+`tests/PanelWindowCapabilityTest.cpp:184`. TASK-0036 Phase B, TASK-0037 Phases
+B/C and TASK-0038 Phases A/B have not started. None of these consolidated
+tasks is complete. See the TASK-0038 prerequisite record below; earlier
+failure records are historical.
 
 Earlier context, retained because it explains two mislabelled commits: the
 session that produced `f61c9ab` began from a tree whose subject `Task33` is
@@ -39,13 +44,13 @@ Earlier task sections retain their historical evidence and boundaries.
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`, matching the local `origin/main` reference. No fetch, push,
   or sync was performed by Codex.
-- Blocker-repair baseline and final `HEAD`:
-  `4cdb234946d0689bd7d0da2a16501bf6c58a65d9`, subject
-  `Arch Dock - Add TASK-0037 preview foundation and record blocked Phase A`.
-- The working tree was clean when this repair began. The owner has committed
-  the preceding TASK-0037 changes. Only the renderer test, surface-loader
-  teardown guard and two evidence documents are now modified and unstaged.
-  `PanelScene3D.qml` and the TASK-0037 grouped-window fixture remain unchanged.
+- TASK-0038 prerequisite-repair baseline and final `HEAD`:
+  `d7c6021f58437e11725fba7bdabf271815d4b3a3`, subject
+  `Arch Dock - Fix isolated 3D motion verification and theme teardown`.
+- The working tree was clean when this repair began. Only `WindowWatcher.h`
+  and the two evidence documents are modified and unstaged. The grouped-window
+  test, KWin action bridge and TASK-0038 folder/segment implementation remain
+  unchanged.
 - `build-codex-task-0014/` is still tracked at `HEAD`. It is a build
   directory committed by mistake in `75232e5` and must be removed with
   `git rm -r build-codex-task-0014`; `.gitignore` now excludes every
@@ -1441,6 +1446,9 @@ the evidence above. The source changes remain unstaged for owner review.
 
 ## TASK-0036 — glyph-motion blocker repair, 2026-09-19
 
+Historical repair, committed by the owner as `d7c6021`. Its grouped-window
+arrival failure is superseded by the prerequisite investigation below.
+
 **Original blocker: RESOLVED. Integrated gate: BLOCKED at TASK-0037.** The owner
 requested resolving the predecessor blocker before TASK-0038 planning. The
 existing TASK-0036 plan, implementation and earlier diagnostics were reused.
@@ -1531,13 +1539,103 @@ private diagnostic environments. The task-owned build/log/capture root was
 removed after recording these results. The final diff passed whitespace
 checks. Source and evidence changes remain unstaged for owner review.
 
+## TASK-0038 — approval and prerequisite watcher repair, 2026-09-19
+
+**Status: BLOCKED before Phase A.** The owner supplied
+`APPROVED: IMPLEMENT TASK-0038 EXACTLY AS PLANNED.` The approved plan explicitly
+retains predecessor closure as a gate. That approval is retained; another
+TASK-0038 plan or repeated approval is not required. The earlier instruction
+to resolve the blocker first authorized this bounded prerequisite repair.
+No folder or segment implementation was started. An execution-order question
+about completing the remaining predecessor phases versus an explicit sequencing
+exception was pending when the integrated test reached another failure; no
+exception or test waiver is assumed.
+
+### Proven cause and correction
+
+The active task pack passed all 174 manifest entries. Baseline and final HEAD
+are `d7c6021f58437e11725fba7bdabf271815d4b3a3`, on clean-at-start `main`, matching
+the local `origin/main` reference without fetching. The platform was Arch Linux,
+Plasma/KWin 6.7.5-1 and Qt base 6.11.2-3 / Declarative 6.11.2-2.
+
+A fresh targeted build reproduced the original grouped-window assertion at
+line 157 in private virtual KWin Wayland. A private D-Bus trace showed actual
+`windowAdded` messages for both fixture windows, addressed to
+`local.WindowWatcher`, followed by `org.freedesktop.DBus.Error.UnknownInterface`:
+`No such interface 'local.WindowWatcher' at object path '/WindowWatcher'`.
+
+Without explicit class metadata, [Qt's interface-name generation](https://github.com/qt/qtbase/blob/v6.11.2/src/dbus/qdbusmisc.cpp)
+depends on the application name. The fixture has a different application name
+from the main executable. `src/WindowWatcher.h` now declares
+`Q_CLASSINFO("D-Bus Interface", "local.WindowWatcher")`, preserving the existing
+KWin script contract independently of executable identity. This is the only
+functional change: two added lines including its explanatory comment. No
+window rule, script, action implementation, assertion or timeout was changed.
+
+### Verification and first unresolved boundary
+
+| Check | Result |
+| --- | --- |
+| Fresh ON Debug configure and complete serial build | PASS |
+| Original standalone grouped-window reproduction | FAIL at line 157; 2 passed, 1 failed including setup/cleanup; 15,298 ms |
+| Unchanged standalone test after the interface correction | PASS, 3/3 QtTest cases, 446 ms; grouping, title update, minimize/restore/activation and removal; no UnknownInterface reply |
+| Full CTest with stop on first failure | FAIL, 54 passed, 1 failed, 12 not run of 67 registered; 75.37 seconds |
+| Staged private renderer suite inside the full run | PASS, 6/6 QtTest cases |
+| Staged grouped-window fixture | Both window arrivals, grouping, title update and minimized readback passed; activation request accepted, but the second window remained minimized |
+| First remaining failure | `PanelWindowCapabilityTest::groupedWindowsFollowLiveKWinUpdates`, `tests/PanelWindowCapabilityTest.cpp:184`, `!rowForId(secondId).value("minimized").toBool()` |
+| Later private popup/editor/applet stages | NOT EXECUTED after the restore failure |
+| TASK-0038 Phase A: layouts, unavailable paths, shared geometry, open-panel guard | NOT EXECUTED; implementation not started |
+| TASK-0038 Phase B: single-segment equivalence, independent persistence/rendering, capabilities, entry ownership | NOT EXECUTED; implementation not started |
+
+The standalone restore success does not establish integrated reliability.
+The staged failure's cause is unproved. Read-only inspection traced the request
+through `PanelWindow::activateDockWindow`, DockModel and
+`KWinActionBridge::runScript`; no speculative change, retry of the failed suite
+or later-phase execution followed. TASK-0036's remaining Phase A acceptance
+and Phase B matrix, and TASK-0037's Phase A completion and Phases B/C remain open.
+
+The task-owned root was `/tmp/archdock-task0038-prerequisite.wJ0qaf`. Commands
+used its `build` subdirectory, created fresh for this investigation:
+
+```bash
+cmake -S '/mnt/F/Arch Dock' -B "$task38_root/build" \
+  -DCMAKE_BUILD_TYPE=Debug -DARCHDOCK_ENABLE_QUICK3D=ON
+cmake --build "$task38_root/build" --target panel-window-capability-test --parallel 1
+# The private diagnostic ran this unchanged QtTest function before/after repair:
+# panel-window-capability-test groupedWindowsFollowLiveKWinUpdates
+cmake --build "$task38_root/build" --parallel 1
+env DBUS_SESSION_BUS_ADDRESS="unix:path=$task38_root/no-parent-bus" \
+  ctest --test-dir "$task38_root/build" \
+  --output-on-failure --parallel 1 --stop-on-failure
+```
+
+After a proved correction to the restore failure, the pending integrated target
+is the same full CTest command; a focused staged reproduction is:
+
+```bash
+env DBUS_SESSION_BUS_ADDRESS="unix:path=$task38_root/no-parent-bus" \
+  ctest --test-dir "$task38_root/build" \
+  -R '^rendering-import-smoke$' --output-on-failure --parallel 1
+```
+
+All execution used private D-Bus/XDG state and virtual KWin Wayland. The staged
+smoke used `/tmp/archdock-rendering-import.ucAHrp`. These results do not prove
+personal-desktop or hardware acceptance. File change order was WindowWatcher
+interface declaration, this current-state record, then the release checklist.
+The staged root is absent, no process retains either private environment or
+task-owned executable/working directory, and the task-owned build, traces and
+diagnostic harness were removed after recording this evidence. Whitespace
+and local-document-link checks passed. Only the three stated files remain
+modified and unstaged.
+
 ## Next task boundary
 
-The original TASK-0036 visible-motion blocker is resolved. The next unresolved
-integrated boundary is TASK-0037's live grouped-window watcher fixture at
-`tests/PanelWindowCapabilityTest.cpp:157`. TASK-0036 still needs its remaining
-Phase A acceptance and Phase B gates; TASK-0037 still needs its Phase A gate
-and planned Phases B/C. Do not start TASK-0038. The owner controls Git closure;
-Codex did not stage, commit, push, globally install or mutate the personal
-Plasma session. One sequential primary session performed this repair; no
-background, delegated or parallel agent was used.
+The glyph-motion and watcher-interface blockers are resolved. The first
+unresolved integrated boundary is now the grouped-window restore readback at
+`tests/PanelWindowCapabilityTest.cpp:184`. Investigate that boundary in the
+existing TASK-0037 work before advancing any mandatory phase gate. TASK-0038's
+approved plan is retained, with Phases A/B unstarted. Predecessor closure and
+the pending execution-order clarification remain open; no sequencing exception
+or failure waiver is assumed. The owner controls Git closure. No delegated or
+parallel agent, staging, commit, push, global installation or personal Plasma
+mutation was used.

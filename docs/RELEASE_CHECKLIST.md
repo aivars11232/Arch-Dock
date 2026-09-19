@@ -130,6 +130,9 @@ for exact commands, file purposes and all inherited acceptance statuses.
 
 ## TASK-0036 blocker-repair verification — 2026-09-19
 
+Historical repair, committed by the owner as `d7c6021`. The arrival failure
+below is superseded by the TASK-0038 prerequisite verification that follows.
+
 **Original glyph-motion blocker resolved; integrated acceptance remains
 BLOCKED.** Baseline and final HEAD are
 `4cdb234946d0689bd7d0da2a16501bf6c58a65d9`; repair changes remain unstaged.
@@ -163,3 +166,33 @@ original blocker has positive runtime evidence; the new integrated failure
 must be resolved before claiming full acceptance. See the
 [blocker-repair evidence](CURRENT_STATE.md#task-0036--glyph-motion-blocker-repair-2026-09-19)
 for the cause, exact commands, cleanup and next boundary.
+
+## TASK-0038 prerequisite verification — 2026-09-19
+
+**BLOCKED before TASK-0038 Phase A.** Its implementation approval is retained,
+but the approved predecessor gate is still open. Baseline and final HEAD are
+`d7c6021f58437e11725fba7bdabf271815d4b3a3`. The only functional change is the
+explicit existing `local.WindowWatcher` D-Bus interface in `WindowWatcher.h`.
+
+The original private trace proved that KWin sent both fixture windows and Qt
+rejected the calls with `UnknownInterface`. The unchanged test passed after
+the declaration; its assertions and timeout were preserved.
+
+- Pack integrity: **174/174 PASS**.
+- Fresh ON Debug configure and complete serial build: **PASS**.
+- Standalone grouped-window test after correction: **3/3 PASS**, including
+  live grouping, title updates, minimize/restore/activation and removal.
+- Full CTest: **54 passed, 1 failed, 12 not run**, of 67 registered.
+- Staged private renderer suite: **6/6 PASS**.
+- Staged grouped-window test: arrivals/grouping/title/minimize now pass, but
+  restore after the accepted activation request fails at
+  `tests/PanelWindowCapabilityTest.cpp:184`.
+- The standalone restore pass does **not** establish integrated reliability.
+  The new failure's cause is unproved; later smoke stages were not executed.
+- TASK-0036 Phase B, TASK-0037 Phases B/C and TASK-0038 Phases A/B remain
+  **NOT EXECUTED**. Their earlier phase gates remain unclosed.
+
+No release checkbox is closed. No runtime test, assertion or acceptance
+criterion was bypassed. See the
+[prerequisite evidence](CURRENT_STATE.md#task-0038--approval-and-prerequisite-watcher-repair-2026-09-19)
+for the exact cause, commands, remaining boundary and approval status.

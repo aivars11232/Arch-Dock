@@ -8,6 +8,8 @@ class WindowModel;
 class WindowWatcher final : public QObject
 {
     Q_OBJECT
+    // Keep the KWin script's interface independent of the executable name.
+    Q_CLASSINFO("D-Bus Interface", "local.WindowWatcher")
     Q_PROPERTY(bool available READ available NOTIFY availableChanged)
 
 public:
