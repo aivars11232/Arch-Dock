@@ -10,6 +10,24 @@ Model {
     required property var materialData
     property Texture surfaceTexture: null
     property real emissionScale: 1
+    property var partDefinition: null
+    property real openAmount: 1
+    readonly property real boundedOpenAmount: Math.max(0, Math.min(1, openAmount))
+
+    function partVector(key, fallback) {
+        const values = partDefinition ? partDefinition[key] : null
+        return values && values.length === 3
+            ? Qt.vector3d(Number(values[0]), Number(values[1]), Number(values[2])) : fallback
+    }
+    function partTransform(closedKey, openKey) {
+        const closed = partVector(closedKey, Qt.vector3d(0, 0, 0))
+        const opened = partVector(openKey, Qt.vector3d(0, 0, 0))
+        return closed.times(1 - boundedOpenAmount).plus(opened.times(boundedOpenAmount))
+    }
+    position: partTransform("closedPosition", "openPosition")
+    eulerRotation: partTransform("closedRotation", "openRotation")
+    pivot: partVector("pivot", Qt.vector3d(0, 0, 0))
+    scale: partVector("scale", Qt.vector3d(1, 1, 1))
     readonly property bool meshReady: meshData !== null
         && meshData.format === "org.archdock.mesh"
         && meshData.positions !== undefined && meshData.positions.length >= 4

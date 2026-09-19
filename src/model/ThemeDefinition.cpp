@@ -265,6 +265,27 @@ const ThemeAssetDefinition *ThemeDefinition::assetById(const QString &assetId) c
     return match == assets.cend() ? nullptr : &*match;
 }
 
+QVariantMap ThemeScenePart3DDefinition::toVariantMap() const
+{
+    const auto vector = [](const std::array<qreal, 3> &v) {
+        return QVariantList{v[0], v[1], v[2]};
+    };
+    return {
+        {QStringLiteral("id"), id},
+        {QStringLiteral("mesh"), mesh},
+        {QStringLiteral("material"), material},
+        {QStringLiteral("kind"), kind},
+        {QStringLiteral("scope"), scope},
+        {QStringLiteral("mechanism"), mechanism},
+        {QStringLiteral("pivot"), vector(pivot)},
+        {QStringLiteral("closedPosition"), vector(closedPosition)},
+        {QStringLiteral("openPosition"), vector(openPosition)},
+        {QStringLiteral("closedRotation"), vector(closedRotation)},
+        {QStringLiteral("openRotation"), vector(openRotation)},
+        {QStringLiteral("scale"), vector(scale)},
+    };
+}
+
 QVariantMap ThemeScene3DDefinition::toVariantMap() const
 {
     return {
@@ -278,6 +299,7 @@ QVariantMap ThemeScene3DDefinition::toVariantMap() const
         {QStringLiteral("keyLightBrightness"), keyLightBrightness},
         {QStringLiteral("fillLightBrightness"), fillLightBrightness},
         {QStringLiteral("defaultQuality"), defaultQuality},
+        {QStringLiteral("parts"), serialized(parts)},
     };
 }
 

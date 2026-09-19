@@ -185,21 +185,21 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
     const auto keys = fieldKeys(snapshot.value(QStringLiteral("panelFields")).toList());
     for (const QString &key : {QStringLiteral("layoutAngle"), QStringLiteral("panelRotationMode"),
                                QStringLiteral("panelRotationSpeed"), QStringLiteral("panelRotationTrigger")})
-        QCOMPARE(keys.contains(key), !available);
+        QVERIFY(keys.contains(key));
     const auto configuration = window.panelRendererConfiguration(panelId);
     QCOMPARE(configuration.value(QStringLiteral("capabilityResolution")).toMap()
-        .value(QStringLiteral("rotation")).toMap().value(QStringLiteral("available")).toBool(), !available);
+        .value(QStringLiteral("rotation")).toMap().value(QStringLiteral("available")).toBool(), true);
     QCOMPARE(configuration.value(QStringLiteral("effectiveRendererTier")).toString(),
              available ? QStringLiteral("true3d") : QStringLiteral("procedural2d"));
     QVERIFY(configuration.value(QStringLiteral("themeDefinition")).toMap()
         .contains(QStringLiteral("scene3DResources")));
     if (available)
     {
-        const auto rejectedRotation = window.resolvePanelSettingsEditorDraft(panelId,
+        const auto rotationDraft = window.resolvePanelSettingsEditorDraft(panelId,
             registry->panelDefinition(panelId)->settingsRevision,
             {{QStringLiteral("panelRotationMode"), QStringLiteral("clockwise")}}, {}, QStringLiteral("studio"));
-        QCOMPARE(rejectedRotation.value(QStringLiteral("errorCode")).toString(),
-                 QStringLiteral("unavailable-panel-field"));
+        QVERIFY2(rotationDraft.value(QStringLiteral("success")).toBool(),
+                 qPrintable(rotationDraft.value(QStringLiteral("errorMessage")).toString()));
         for (const QString &quality : {QStringLiteral("low"), QStringLiteral("high"), QStringLiteral("low")})
         {
             const auto changed = window.applyPanelSettingsTransaction(panelId,

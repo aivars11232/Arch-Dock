@@ -59,6 +59,10 @@ Item {
     property string transitionState: "idle"
     property real presentationProgress: -1
     property bool reducedMotion: false
+    property string rendererTier: "procedural2d"
+    property var partMechanisms: []
+    readonly property bool meshPartsAvailable: rendererTier === "true3d"
+        && values(partMechanisms).includes(normalizedMechanism)
 
     readonly property string normalizedMechanism:
         normalizeMechanism(mechanism)
@@ -78,7 +82,8 @@ Item {
         trackForm === "identity" && normalizedMechanism !== "open"
             ? "open" : normalizedMechanism
     readonly property string requiresRendererTier:
-        normalizedMechanism === "collapse-radial" ? "baked2.5d" : ""
+        meshPartsAvailable ? "true3d"
+        : normalizedMechanism === "collapse-radial" ? "baked2.5d" : ""
     readonly property string fallbackReason: resolveFallbackReason()
     readonly property bool fallbackApplied: fallbackReason.length > 0
 
@@ -153,6 +158,10 @@ Item {
             return "identity"
         if (!mechanismAvailable)
             return "safe-fade"
+        if (meshPartsAvailable)
+            return "mesh-parts"
+        if (rendererTier === "true3d")
+            return "safe-fade"
         if (name === "collapse-radial")
             return "radial-interface"
         if (name === "collapse-horizontal")
@@ -170,6 +179,10 @@ Item {
             return ""
         if (!mechanismAvailable)
             return "mechanism-unavailable"
+        if (meshPartsAvailable)
+            return ""
+        if (rendererTier === "true3d")
+            return "scene3d-mechanism-unavailable"
         if (normalizedMechanism === "collapse-radial")
             return "mechanism-requires-baked2.5d"
         if (surfaceWidth <= 0 || surfaceHeight <= 0)

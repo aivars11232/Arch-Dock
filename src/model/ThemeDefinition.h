@@ -7,6 +7,7 @@
 #include <QVector>
 
 #include <optional>
+#include <array>
 
 namespace ArchDock
 {
@@ -236,6 +237,25 @@ struct ThemeResourceReference
 
 // Declarative scene inputs. Mesh/material bytes are validated package assets;
 // packages never supply executable QML, shaders, or conversion commands.
+struct ThemeScenePart3DDefinition
+{
+    QString id;
+    QString mesh;
+    QString material;
+    QString kind;
+    QString scope = QStringLiteral("panel");
+    QString mechanism;
+    std::array<qreal, 3> pivot{0, 0, 0};
+    std::array<qreal, 3> closedPosition{0, 0, 0};
+    std::array<qreal, 3> openPosition{0, 0, 0};
+    std::array<qreal, 3> closedRotation{0, 0, 0};
+    std::array<qreal, 3> openRotation{0, 0, 0};
+    std::array<qreal, 3> scale{1, 1, 1};
+
+    [[nodiscard]] QVariantMap toVariantMap() const;
+    bool operator==(const ThemeScenePart3DDefinition &) const = default;
+};
+
 struct ThemeScene3DDefinition
 {
     QString mesh;
@@ -248,6 +268,7 @@ struct ThemeScene3DDefinition
     qreal keyLightBrightness = 1.0;
     qreal fillLightBrightness = 0.4;
     QString defaultQuality = QStringLiteral("medium");
+    QVector<ThemeScenePart3DDefinition> parts;
 
     [[nodiscard]] QVariantMap toVariantMap() const;
     bool operator==(const ThemeScene3DDefinition &) const = default;

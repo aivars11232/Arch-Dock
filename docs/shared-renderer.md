@@ -65,7 +65,9 @@ probe compiles the same native helper type used by the renderer. Only these
 optional files import Quick 3D; the core service does not link to it.
 
 Scene inputs are explicit: `sceneDefinition`, `resources`, `textureSource`,
-`entryGeometry`, `quality`, `panelOpacity`, and `sceneConcealed`. Mesh/material
+`entryGeometry`, `entryVisuals`, `layoutAngle`, `collapseProgress`, `mechanism`,
+`hovered`, `reducedMotion`, `glowIntensity`, `quality`, `panelOpacity`, and
+`sceneConcealed`. Mesh/material
 data comes from the bounded ThemePackage parser, not executable package code.
 The [Theme v2 scene contract](THEME_PACKAGE_V2.md#5a-optional-3d-scene)
 defines resource IDs, camera/light parameters and numeric limits. A package
@@ -78,8 +80,11 @@ the eleventh packaged theme. Its asset record identifies original authorship
 and the user's redistribution authorization; it does not invent a public
 license identifier.
 
-Logical entry rectangles, glyphs, pointer handling, keyboard order and
-accessibility stay in the shared 2D delegates. Mesh nodes are not pickable.
+Logical entry rectangles, pointer handling, keyboard order and accessibility
+stay in the shared 2D delegates. Their glyph and tile items supply textures to
+the optional mesh scene while their duplicate drawing is suppressed. Source
+items and the mesh consumer share one window; no cross-window texture is used.
+Mesh nodes are not pickable.
 Camera-local icon mesh positions project onto the same logical pixel centers;
 changing camera orientation or quality does not move those input rectangles.
 
@@ -122,11 +127,22 @@ switch; changing an unavailable field or submitting protected state is still
 rejected. Cancel closes the draft, and reopening reloads the saved renderer.
 
 The base renderer is available on the free desktop host only. Native edge
-hosts do not gain true 3D. Whole-panel rotation is separately gated by the
-selected renderer: the base mesh scene reports `renderer-rotation-unavailable`,
-while supported 2D fallbacks keep rotation. True Y-axis icon motion, pedestal
-motion, emissive hover and 3D part animation belong to TASK-0036 and are not
-claimed here. Item-level input geometry does not claim compositor-wide
+hosts do not gain true 3D. TASK-0036 connects free mesh scenes to the existing
+whole-panel rotation controller: its angle drives both the platform and shared
+entry geometry. Per-entry Y rotation and emission consume the existing icon
+motion channels. Preview entries use the same controller class and backend
+catalog; live entries retain their existing controller. Glyph texture transforms
+are neutral while the mesh applies them, preventing double application.
+
+Declarative lids, shutters, ring segments and pedestals consume the shared
+presentation progress. Only validated mechanisms on the active mesh tier expose
+part controls. Reduced motion selects static states. Concealed scenes, zero
+opacity and hidden windows stop motion; theme/tier changes reset the context.
+The built-in cyan platform reuses its existing mesh/material for ring segments
+and pedestals. Entry mesh nodes are retained while angles change, bounded by
+the expanded index budget, and destroyed when the optional loader unloads.
+Runtime failure reports the resource reason and restores the ordinary glyph
+and tile drawing. Item-level input geometry does not claim compositor-wide
 nonrectangular click-through.
 
 ### Verification boundary

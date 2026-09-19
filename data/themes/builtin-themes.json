@@ -1059,10 +1059,13 @@
           "free"
         ],
         "features": [
-          "icon-state-styling"
+          "icon-state-styling",
+          "dynamic-glow",
+          "whole-panel-rotation"
         ],
         "presentationMechanisms": [
-          "open"
+          "open",
+          "collapse-radial"
         ],
         "rotation": {
           "mode": "free"

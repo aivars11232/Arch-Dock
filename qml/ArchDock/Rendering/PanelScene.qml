@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import ArchDock.Rendering 1.0
 
 Item {
@@ -22,6 +23,37 @@ Item {
     property bool sceneConcealed: false
     readonly property bool entriesAnimatable:
         !sceneConcealed && visible && opacity > 0
+        && (!Window.window || Window.window.visible)
+    property int entryVisualRevision: 0
+    property int motionContextRevision: 0
+    onThemeDefinitionChanged: motionContextRevision += 1
+    readonly property string motionContextKey: String(motionContextRevision) + ":" + effectiveRendererTier
+    readonly property var entryVisuals: {
+        const revision = entryVisualRevision
+        const result = []
+        for (let index = 0; index < entryRepeater.count; ++index)
+            result.push(entryRepeater.itemAt(index))
+        return result
+    }
+    readonly property var motionCatalog: {
+        const result = ({})
+        const list = animationProfiles.animationProfiles || panelDefinition.animationProfiles || []
+        for (let index = 0; index < list.length; ++index)
+            result[list[index].id] = list[index]
+        return result
+    }
+    readonly property var defaultIconProfiles: {
+        const context = motionContextKey
+        const selected = animationProfiles.animationProfile || panelDefinition.animationProfile
+            || motionCatalog[String(animationProfiles.iconAnimation
+                || definitionValue("motion", "iconProfile", "iconAnimation", "none"))]
+        if (!selected) return []
+        const copy = Object.assign({}, selected)
+        const trigger = AnimationProfileRuntime.normalizeTrigger(animationProfiles.animationTrigger
+            || panelDefinition.animationTrigger || selected.trigger)
+        if (trigger) copy.trigger = trigger
+        return [copy]
+    }
     property string geometryCompatibilityProfile: "canonical"
     property var entryDelegateContext: ({})
     // Previews freeze whole-scene rotation at the configured angle while still
@@ -755,7 +787,7 @@ Item {
         hovered: root.panelHovered
         dragActive: root.dragInProgress
         editMode: root.editModeActive
-        sceneConcealed: root.sceneConcealed || !root.visible
+        sceneConcealed: !root.entriesAnimatable
         reducedMotion: root.reducedMotion
         animationEnabled: root.rotationAnimationEnabled
     }
@@ -790,6 +822,10 @@ Item {
         transitionState: root.transitionState
         presentationProgress: root.presentationProgress
         reducedMotion: root.reducedMotion
+        rendererTier: root.effectiveRendererTier
+        partMechanisms: ((root.themeDefinition.scene3D || ({})).parts || []).map(function(part) {
+            return part.mechanism
+        })
     }
 
     PanelSurfaceLoader {
@@ -815,16 +851,20 @@ Item {
         customColor: root.customColor
         panelOpacity: root.panelOpacity
         motionTracks: root.motionTracks
+        collapseProgress: root.collapseProgress
+        mechanism: root.collapseMechanism
         trackMetrics: root.bakedTrackMetrics || ({})
         true3DCapability: root.true3DCapability
         sceneQuality: String(root.definitionValue("surface", "parameters3D", "surface3D", ({})).quality
             || root.panelDefinition.scene3DQuality
             || (root.themeDefinition.scene3D || ({})).defaultQuality || "medium")
-        entryGeometry: root.entryRects.map(function(rect) {
+        entryVisuals: root.entryVisuals
+        entryGeometry: root.entryRects.map(function(rect, index) {
             return { centerX: rect.x + rect.width / 2, centerY: rect.y + rect.height / 2,
-                     width: rect.width, height: rect.height }
+                     width: rect.width, height: rect.height,
+                     rotation: root.entryGeometryAt(index).rotation }
         })
-        sceneConcealed: root.sceneConcealed || !root.visible
+        sceneConcealed: !root.entriesAnimatable
     }
 
     // Entries are clipped by the same track that closes the shell, so an icon
@@ -865,6 +905,8 @@ Item {
         id: entryRepeater
 
         model: root.orderedEntries || []
+        onItemAdded: Qt.callLater(function() { root.entryVisualRevision += 1 })
+        onItemRemoved: Qt.callLater(function() { root.entryVisualRevision += 1 })
 
         delegate: Item {
             id: entryItem
@@ -885,6 +927,19 @@ Item {
                 root.iconStyleDefinition
             readonly property var sceneContext: root.entryDelegateContext
             readonly property var delegateItem: entryLoader.item
+            readonly property var meshVisualItem: delegateItem ? delegateItem.meshVisualItem || null : null
+            readonly property var motionController: delegateItem && delegateItem.motionController
+                ? delegateItem.motionController : fallbackMotion.item
+            readonly property var motionContext: ({ size: width,
+                normal: geometryOutput.outwardNormal, tangentAngle: geometryOutput.tangentAngle,
+                allowance: geometryOutput.effectAllowance })
+            readonly property var motionChannels: motionController ? motionController.channels : ({})
+            readonly property var iconMotion: MotionChannels.motionFor(motionChannels, "icon", motionContext)
+            readonly property var glyphMotion: MotionChannels.motionFor(motionChannels, "glyph", motionContext)
+            readonly property var tileMotion: MotionChannels.motionFor(motionChannels, "tile", motionContext)
+            readonly property var indicatorMotion: MotionChannels.motionFor(motionChannels, "indicator", motionContext)
+            readonly property real visualScale: delegateItem && delegateItem.hoverScale !== undefined
+                ? delegateItem.hoverScale : 1
 
             objectName: "panel-entry-" + index
             x: geometryOutput.position.x
@@ -896,6 +951,34 @@ Item {
             scale: geometryOutput.scaleFactor
             opacity: root.entryDelegate === null && modelData
                 && modelData.minimized ? 0.55 : 1
+
+            Loader {
+                id: fallbackMotion
+                active: entryLoader.item !== null && !entryLoader.item.motionController
+                    && root.defaultIconProfiles.length > 0
+                readonly property int sceneIndex: entryItem.index
+                readonly property var visual: entryLoader.item
+                visible: false
+                sourceComponent: Component {
+                    IconMotionController {
+                        profiles: root.defaultIconProfiles
+                        catalog: root.motionCatalog
+                        entryIndex: parent.sceneIndex
+                        reducedMotion: root.reducedMotion
+                        sceneVisible: root.entriesAnimatable
+                        intensity: Number(root.animationProfiles.animationIntensity
+                            || root.panelDefinition.animationIntensity || 1)
+                        speed: 170 / Math.max(80, Math.min(1200,
+                            Number(root.animationProfiles.animationDuration || root.panelDefinition.animationDuration || 170)
+                            / Math.max(0.2, Number(root.animationProfiles.animationSpeed || root.panelDefinition.animationSpeed || 1))))
+                        hovered: Boolean(parent.visual && parent.visual.hovered)
+                        pressed: Boolean(parent.visual && parent.visual.pressed)
+                        running: Boolean(parent.visual && parent.visual.running)
+                        urgent: Boolean(parent.visual && parent.visual.urgent)
+                        revealed: root.presentationState === "open"
+                    }
+                }
+            }
 
             Loader {
                 id: entryLoader
@@ -915,6 +998,11 @@ Item {
                 readonly property var sceneIconStyleDefinition:
                     entryItem.sceneIconStyleDefinition
                 readonly property var sceneContext: entryItem.sceneContext
+                readonly property bool sceneMeshActive: surfaceLoader.true3DReady
+                readonly property string sceneMotionContextKey: root.motionContextKey
+                readonly property var sceneGlyphMotion: entryItem.glyphMotion
+                readonly property var sceneTileMotion: entryItem.tileMotion
+                readonly property var sceneIndicatorMotion: entryItem.indicatorMotion
 
                 anchors.fill: parent
                 sourceComponent: root.entryDelegate || defaultEntryDelegate
@@ -947,6 +1035,10 @@ Item {
             showIndicator: Boolean(root.definitionValue(
                 "indicator", "visible", "showIndicators", true))
             reducedMotion: root.reducedMotion
+            meshVisualActive: Boolean(parent.sceneMeshActive)
+            glyphMotion: parent.sceneGlyphMotion
+            tileMotion: parent.sceneTileMotion
+            indicatorMotion: parent.sceneIndicatorMotion
         }
     }
 

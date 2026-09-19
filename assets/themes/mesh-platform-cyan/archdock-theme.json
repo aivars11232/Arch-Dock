@@ -3,7 +3,7 @@
   "version": 2,
   "id": "mesh-platform-cyan",
   "name": "Cyan Mesh Platform",
-  "packageRevision": 1,
+  "packageRevision": 2,
   "author": "Arch Dock project",
   "description": "Original indexed octagonal ring with bevels, side walls, underside and mesh icon bases; created numerically for TASK-0035.",
   "license": {
@@ -33,10 +33,13 @@
       "free"
     ],
     "features": [
-      "icon-state-styling"
+      "icon-state-styling",
+      "dynamic-glow",
+      "whole-panel-rotation"
     ],
     "presentationMechanisms": [
-      "open"
+      "open",
+      "collapse-radial"
     ],
     "rotation": {
       "mode": "free"
@@ -79,7 +82,44 @@
     "cameraYaw": 10,
     "keyLightBrightness": 1.2,
     "fillLightBrightness": 0.45,
-    "defaultQuality": "medium"
+    "defaultQuality": "medium",
+    "parts": [
+      {
+        "id": "left-segment",
+        "kind": "ring-segment",
+        "scope": "panel",
+        "mechanism": "collapse-radial",
+        "mesh": "platform",
+        "material": "metal",
+        "scale": [0.24, 0.24, 0.2],
+        "closedPosition": [-0.4, 0, 0.06],
+        "openPosition": [-0.62, 0, 0.1],
+        "openRotation": [0, 0, -30]
+      },
+      {
+        "id": "right-segment",
+        "kind": "ring-segment",
+        "scope": "panel",
+        "mechanism": "collapse-radial",
+        "mesh": "platform",
+        "material": "metal",
+        "scale": [0.24, 0.24, 0.2],
+        "closedPosition": [0.4, 0, 0.06],
+        "openPosition": [0.62, 0, 0.1],
+        "openRotation": [0, 0, 30]
+      },
+      {
+        "id": "icon-pedestal",
+        "kind": "pedestal",
+        "scope": "entry",
+        "mechanism": "collapse-radial",
+        "mesh": "platform",
+        "material": "metal",
+        "scale": [0.6, 0.6, 0.2],
+        "closedPosition": [0, 0, -0.2],
+        "openPosition": [0, 0, 0.3]
+      }
+    ]
   },
   "states": [
     {

@@ -841,6 +841,8 @@ PlasmoidItem {
             reducedMotion: root.configuration.reducedMotion
             inputEnabled: parent.sceneInputEnabled
             sceneVisible: parent.sceneVisible
+            meshVisualActive: parent.sceneMeshActive
+            motionContextKey: parent.sceneMotionContextKey
             editMode: root.plasmaEditMode
             acceptDrops: root.configuration.acceptDrops
             invoke: root.invokeEntry

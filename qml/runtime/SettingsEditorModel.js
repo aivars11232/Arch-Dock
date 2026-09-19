@@ -133,6 +133,7 @@ function emptySession(errorCode, errorMessage) {
         themeProjectionStatus: "unavailable",
         themeProjectionError: "",
         iconStyles: [],
+        animationProfiles: [],
         iconStyleDefinition: {},
         iconStyleProjectionStatus: "unavailable",
         iconStyleProjectionError: "",
@@ -166,6 +167,7 @@ function load(snapshot) {
             snapshot.themeProjectionStatus || "unavailable"),
         themeProjectionError: String(snapshot.themeProjectionError || ""),
         iconStyles: (snapshot.iconStyles || []).slice(),
+        animationProfiles: copyValue(snapshot.animationProfiles || []),
         iconStyleDefinition: copyValue(snapshot.iconStyleDefinition || {}),
         iconStyleProjectionStatus: String(
             snapshot.iconStyleProjectionStatus || "unavailable"),
@@ -260,6 +262,7 @@ function rendererCandidate(session) {
         || result.rendererTier || "procedural2d");
     result.iconStyleDefinition = copyValue(
         session.iconStyleDefinition || {});
+    result.animationProfiles = copyValue(session.animationProfiles || []);
     return result;
 }
 
@@ -331,6 +334,7 @@ function withProjection(session, projection) {
     result.themeProjectionError = String(
         projection.themeProjectionError || "");
     result.iconStyles = (projection.iconStyles || []).slice();
+    result.animationProfiles = copyValue(projection.animationProfiles || session.animationProfiles || []);
     result.iconStyleDefinition = copyValue(
         projection.iconStyleDefinition || {});
     result.iconStyleProjectionStatus = String(

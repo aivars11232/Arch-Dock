@@ -22,6 +22,19 @@ TestCase {
         compare(copied.scene3DResources.mesh.positions[0], [1, 2, 3])
     }
 
+    function test_previewRetainsCatalogWithoutPersistingIt() {
+        const source = snapshot("free-1", 1)
+        source.animationProfiles = [{id: "slow-y-turn", tracks: [{property: "rotate-y", to: 360}]}]
+        const session = EditorModel.load(source)
+        source.animationProfiles[0].tracks[0].to = 0
+        const candidate = EditorModel.rendererCandidate(session)
+        compare(candidate.animationProfiles[0].tracks[0].to, 360)
+        candidate.animationProfiles[0].tracks[0].to = 90
+        compare(session.animationProfiles[0].tracks[0].to, 360)
+        compare(EditorModel.panelCandidate(session).animationProfiles, undefined)
+        verify(!EditorModel.dirty(session))
+    }
+
     function snapshot(panelId, revision) {
         return {
             success: true,

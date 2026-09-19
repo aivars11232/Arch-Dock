@@ -275,10 +275,19 @@ image in the screen plane (`rotate-z`). `slow-y-turn` rotates the card around
 its vertical axis: `MotionChannels.turnMatrix` composes a translation to the
 centre, a rotation about Y, a perspective divide and a translation back, so the
 card narrows towards its centre and the receding edge foreshortens. The
-compression is real perspective, not a scale. No mesh is involved — AD-0015 owns
-true 3D — and because the transform is visual only, the pointer target does not
-move. Positive angles turn left-to-right; a derived profile reverses it with
+compression is real perspective, not a scale. In the optional true-3D renderer,
+TASK-0036 maps that same controller channel to the glyph mesh's Y rotation.
+The source texture remains at rest so the turn is applied once. The pointer
+target stays in the shared logical entry rectangle. Positive angles turn
+left-to-right; a derived profile reverses it with
 `direction: "reverse"`.
+
+`none`, `glow`, and `slow-y-turn` declare the optional mesh tier as well as
+their 2D substitutes. Mesh hover glow uses the existing channels to scale
+bounded native material emission. Concealed scenes and hidden windows stop
+the shared controller; reduced motion resolves the same static profile state
+in every tier. Changing theme or effective renderer resets the profile
+context. The renderer does not create a second per-entry animation controller.
 
 **Bounds.** `PanelScene` publishes, per entry, how much room the theme actually
 reserved on each side (`effectAllowance`, derived from the effect bounds).

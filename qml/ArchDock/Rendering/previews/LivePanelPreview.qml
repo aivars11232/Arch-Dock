@@ -265,6 +265,10 @@ Item {
             indicatorStyle: root.indicatorStyleDefinition
             reducedMotion: Boolean(root.animationValue(
                 "reducedMotion", "reducedMotion", true))
+            meshVisualActive: Boolean(parent.sceneMeshActive)
+            glyphMotion: parent.sceneGlyphMotion || ({})
+            tileMotion: parent.sceneTileMotion || ({})
+            indicatorMotion: parent.sceneIndicatorMotion || ({})
         }
     }
 }

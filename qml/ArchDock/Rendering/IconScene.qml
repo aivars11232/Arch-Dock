@@ -38,6 +38,12 @@ Item {
     property real glowAmount: 0
     property bool glowAnimating: false
     property int glowDuration: 170
+    // Each consumer owns its own texture sources. Input, status overlays and
+    // accessibility remain on the original entry, outside the mesh scene.
+    property bool meshVisualActive: false
+    readonly property var meshVisualItem: root
+    readonly property alias glyphTextureItem: glyphTexture
+    readonly property alias tileTextureItem: tileTexture
 
     // Per-layer motion, as resolved by MotionChannels. The scene applies these
     // to visual transforms only; `logicalInputRegion` never follows them, so a
@@ -45,8 +51,8 @@ Item {
     property var glyphMotion: ({})
     property var tileMotion: ({})
     property var indicatorMotion: ({})
-    readonly property var resolvedGlyphMotion: normalizedMotion(glyphMotion)
-    readonly property var resolvedTileMotion: normalizedMotion(tileMotion)
+    readonly property var resolvedGlyphMotion: normalizedMotion(meshVisualActive ? null : glyphMotion)
+    readonly property var resolvedTileMotion: normalizedMotion(meshVisualActive ? null : tileMotion)
     readonly property var resolvedIndicatorMotion:
         normalizedMotion(indicatorMotion)
     // A flat-card turn is a Y-axis rotation, not the flat Z spin: the card
@@ -179,6 +185,24 @@ Item {
 
     width: logicalSize
     height: logicalSize
+
+    ShaderEffectSource {
+        id: glyphTexture
+        sourceItem: root.meshVisualActive ? glyphLayer : null
+        hideSource: root.meshVisualActive
+        live: root.meshVisualActive
+        visible: false
+        textureSize: Qt.size(Math.min(512, Math.max(1, root.logicalSize * 2)),
+                             Math.min(512, Math.max(1, root.logicalSize * 2)))
+    }
+    ShaderEffectSource {
+        id: tileTexture
+        sourceItem: root.meshVisualActive ? baseLayer : null
+        hideSource: root.meshVisualActive
+        live: root.meshVisualActive
+        visible: false
+        textureSize: glyphTexture.textureSize
+    }
 
     Item {
         id: visualLayer

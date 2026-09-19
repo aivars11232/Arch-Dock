@@ -30,6 +30,9 @@ Item {
     // False while the panel cannot be seen. Continuous motion is pointless then
     // and costs frames, so the controller withdraws every track.
     property bool sceneVisible: true
+    property bool meshVisualActive: false
+    property string motionContextKey: ""
+    readonly property var meshVisualItem: visual
     property real motionSpeed: 1
     required property bool inputEnabled
     required property bool editMode
@@ -73,6 +76,7 @@ Item {
     // The effect and the event that starts it are separate user settings, so
     // the configured trigger overrides the profile's nominal one.
     readonly property var boundAnimationProfiles: {
+        const context = root.motionContextKey
         const source = animationProfiles || []
         const trigger = AnimationProfileRuntime.normalizeTrigger(motionTrigger)
         const result = []
@@ -287,6 +291,7 @@ Item {
                 showReflection: root.showReflection
                 showIndicator: root.showIndicator
                 reducedMotion: root.reducedMotion
+                meshVisualActive: root.meshVisualActive
                 glyphMotion: root.glyphMotion
                 tileMotion: root.tileMotion
                 indicatorMotion: root.indicatorMotion

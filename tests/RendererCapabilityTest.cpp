@@ -2,9 +2,13 @@
 #include "themes/ThemePackage.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QJSValue>
+#include <QPointer>
 #include <QQmlAbstractUrlInterceptor>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -78,6 +82,12 @@ private slots:
         QVERIFY2(package.isValid(), qPrintable(package.primaryCode()));
         QVariantMap theme = package.package->runtimeProjection();
         QQmlEngine engine;
+        QStringList unexpectedWarnings;
+        connect(&engine, &QQmlEngine::warnings, &engine, [&](const QList<QQmlError> &warnings) {
+            for (const auto &warning : warnings)
+                if (!warning.description().contains(QStringLiteral("/nonexistent/archdock-scene-texture.svg")))
+                    unexpectedWarnings.append(warning.toString());
+        });
         engine.addImportPath(importRoot());
         QQmlComponent component(&engine);
         component.setData(R"(
@@ -87,6 +97,8 @@ private slots:
                 panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
                                    scene3DQuality: "low", iconSize: 40, layoutPadding: 10})
                 entryDelegateContext: ({hostKind: "free"})
+                hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [
+                    {id: "open", available: true}, {id: "collapse-radial", available: true}]})
                 orderedEntries: [{id: "one", displayName: "One"}, {id: "two", displayName: "Two"}]
             }
         )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/SceneConsumer.qml")));
@@ -106,10 +118,13 @@ private slots:
         QVERIFY(capability(scene).value(QStringLiteral("rendererAvailable")).toBool());
         auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
         QVERIFY(renderer);
-        QCOMPARE(renderer->property("triangleCount").toInt(), 288);
+        QCOMPARE(renderer->property("triangleCount").toInt(), 696);
         const QVariant geometry = plainValue(scene->property("entryRects"));
-        const auto pixels = [renderer]() -> QImage
+        const auto pixels = [scene]() -> QImage
         {
+            auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+            if (!renderer)
+                return {};
             auto *viewport = qobject_cast<QQuickItem *>(objectValue(renderer->property("viewport")));
             if (!viewport)
                 return {};
@@ -127,9 +142,10 @@ private slots:
         QObject *viewport = objectValue(renderer->property("viewport"));
         for (QObject *model : renderer->findChildren<QObject *>())
         {
-            const QVariantMap expected = plainValue(model->property("modelData")).toMap();
-            if (!expected.contains(QStringLiteral("centerX")))
+            if (!model->objectName().startsWith(QStringLiteral("mesh-entry-"))
+                || model->objectName().startsWith(QStringLiteral("mesh-entry-part-")))
                 continue;
+            const QVariantMap expected = plainValue(model->property("rect")).toMap();
             const QVector3D position = model->property("scenePosition").value<QVector3D>();
             QVector3D projected;
             QVERIFY(QMetaObject::invokeMethod(viewport, "mapFrom3DScene",
@@ -181,11 +197,126 @@ private slots:
             QVERIFY(!pixels().isNull());
             QCOMPARE(plainValue(scene->property("entryRects")), geometry);
         }
+
+        // Use the shipped logical profile with the same controller used by 2D.
+        QFile catalog(QFINDTESTDATA("../data/animation-profiles/builtin-animation-profiles.json"));
+        QVERIFY(catalog.open(QIODevice::ReadOnly));
+        const auto profiles = QJsonDocument::fromJson(catalog.readAll()).object()
+            .toVariantMap().value(QStringLiteral("animationProfiles")).toList();
+        QVariantMap turn;
+        QVariantMap glow;
+        for (const QVariant &profile : profiles)
+        {
+            const auto value = profile.toMap();
+            if (value.value(QStringLiteral("id")) == QStringLiteral("slow-y-turn")) turn = value;
+            if (value.value(QStringLiteral("id")) == QStringLiteral("glow")) glow = value;
+        }
+        QVERIFY(!turn.isEmpty() && !glow.isEmpty());
+        QVariantMap motion{{QStringLiteral("animationProfile"), turn},
+                           {QStringLiteral("animationTrigger"), QStringLiteral("idle")}};
+        scene->setProperty("animationProfiles", motion);
+        QVariant entryValue;
+        QVERIFY(QMetaObject::invokeMethod(scene, "entryItemAt",
+            Q_RETURN_ARG(QVariant, entryValue), Q_ARG(QVariant, QVariant(0))));
+        QObject *entry = objectValue(entryValue);
+        QVERIFY(entry);
+        QTRY_VERIFY(objectValue(entry->property("motionController")));
+        QObject *controller = objectValue(entry->property("motionController"));
+        QObject *glyph = renderer->findChild<QObject *>(QStringLiteral("mesh-glyph-0"));
+        QVERIFY(glyph);
+        QTRY_VERIFY(qAbs(glyph->property("eulerRotation").value<QVector3D>().y()) > 5);
+        const auto channels = plainValue(controller->property("channels")).toMap();
+        QVERIFY(qAbs(glyph->property("eulerRotation").value<QVector3D>().y()
+            - channels.value(QStringLiteral("glyph/rotate-y")).toDouble()) < 0.01);
+        QVERIFY(!controller->property("hasConflict").toBool());
+        QCOMPARE(plainValue(scene->property("entryRects")), geometry);
+        QObject *visual = objectValue(entry->property("meshVisualItem"));
+        QVERIFY(visual);
+        QCOMPARE(plainValue(visual->property("resolvedGlyphMotion")).toMap()
+            .value(QStringLiteral("rotateY")).toDouble(), 0.0);
+        const QImage turning = pixels();
+        QVERIFY(!turning.isNull());
+        QTest::qWait(180);
+        QVERIFY(turning != pixels());
+
+        scene->setProperty("sceneConcealed", true);
+        QTRY_COMPARE(plainValue(controller->property("activeTracks")).toList().size(), 0);
+        QCOMPARE(glyph->property("eulerRotation").value<QVector3D>().y(), 0.0f);
+        scene->setProperty("sceneConcealed", false);
+        QTRY_VERIFY(!plainValue(controller->property("activeTracks")).toList().isEmpty());
+        window.hide();
+        QTRY_COMPARE(plainValue(controller->property("activeTracks")).toList().size(), 0);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTRY_VERIFY(!plainValue(controller->property("activeTracks")).toList().isEmpty());
+        motion.insert(QStringLiteral("reducedMotion"), true);
+        scene->setProperty("animationProfiles", motion);
+        QTRY_COMPARE(plainValue(controller->property("activeTracks")).toList().size(), 0);
+        QCOMPARE(glyph->property("eulerRotation").value<QVector3D>().y(), 0.0f);
+
+        motion.insert(QStringLiteral("reducedMotion"), false);
+        motion.insert(QStringLiteral("animationProfile"), glow);
+        motion.insert(QStringLiteral("animationTrigger"), QStringLiteral("hover"));
+        scene->setProperty("animationProfiles", motion);
+        scene->setProperty("runtimeState", QVariantMap{{QStringLiteral("hovered"), true},
+            {QStringLiteral("hoveredEntry"), 0}});
+        QTRY_VERIFY(plainValue(controller->property("channels")).toMap()
+            .value(QStringLiteral("icon/glow")).toDouble() > 0);
+        QVERIFY(renderer->property("emissionScale").toDouble() > 1);
+        QObject *meshEntry = renderer->findChild<QObject *>(QStringLiteral("mesh-entry-0"));
+        QVERIFY(meshEntry);
+        QVERIFY(meshEntry->property("glow").toDouble() > 0);
+        const double baseEmission = theme.value(QStringLiteral("scene3DResources")).toMap()
+            .value(QStringLiteral("material")).toMap().value(QStringLiteral("emissiveStrength")).toDouble()
+            * renderer->property("emissionScale").toDouble();
+        bool emitted = false;
+        for (QObject *child : meshEntry->findChildren<QObject *>())
+            if (child->property("strength").isValid())
+                emitted |= child->property("strength").toDouble() > baseEmission;
+        QVERIFY(emitted);
+
+        definition.insert(QStringLiteral("panelRotationMode"), QStringLiteral("clockwise"));
+        definition.insert(QStringLiteral("panelRotationSpeed"), 30);
+        definition.insert(QStringLiteral("collapseMechanism"), QStringLiteral("collapse-radial"));
+        scene->setProperty("panelDefinition", definition);
+        QTRY_VERIFY(scene->property("sceneRotationAngle").toDouble() > 2);
+        QObject *platform = renderer->findChild<QObject *>(QStringLiteral("mesh-platform-motion"));
+        QVERIFY(platform);
+        QVERIFY(qAbs(platform->property("eulerRotation").value<QVector3D>().z()
+            + scene->property("effectiveLayoutAngle").toDouble()) < 0.01);
+        QVERIFY(plainValue(scene->property("entryRects")) != geometry);
+        motion.insert(QStringLiteral("reducedMotion"), true);
+        scene->setProperty("animationProfiles", motion);
+        QTRY_VERIFY(!scene->property("sceneRotationActive").toBool());
+        QCOMPARE(scene->property("sceneRotationAngle").toDouble(), 0.0);
+        QObject *part = renderer->findChild<QObject *>(QStringLiteral("mesh-panel-part-0"));
+        QVERIFY(part);
+        const QVector3D openPosition = part->property("position").value<QVector3D>();
+        scene->setProperty("runtimeState", QVariantMap{
+            {QStringLiteral("presentationState"), QStringLiteral("collapsed")},
+            {QStringLiteral("presentationProgress"), 1.0}});
+        QTRY_COMPARE(part->property("openAmount").toDouble(), 0.0);
+        QVERIFY(part->property("position").value<QVector3D>() != openPosition);
+        scene->setProperty("runtimeState", QVariantMap{
+            {QStringLiteral("presentationState"), QStringLiteral("open")},
+            {QStringLiteral("presentationProgress"), 0.0}});
+        QTRY_COMPARE(part->property("position").value<QVector3D>(), openPosition);
+
+        motion.insert(QStringLiteral("reducedMotion"), false);
+        motion.insert(QStringLiteral("animationProfile"), turn);
+        motion.insert(QStringLiteral("animationTrigger"), QStringLiteral("idle"));
+        scene->setProperty("animationProfiles", motion);
+        QTRY_VERIFY(!plainValue(controller->property("activeTracks")).toList().isEmpty());
+        QPointer<QObject> oldRenderer(renderer);
         QVariantMap missing = theme;
         missing.remove(QStringLiteral("scene3DResources"));
         scene->setProperty("themeDefinition", missing);
         QTRY_COMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("procedural2d"));
         QVERIFY(scene->property("fallbackApplied").toBool());
+        QTRY_VERIFY(oldRenderer.isNull());
+        QVERIFY(!scene->findChild<QObject *>(QStringLiteral("mesh-glyph-0")));
+        QVERIFY(!controller->property("hasConflict").toBool());
+        QVERIFY(!visual->property("meshVisualActive").toBool());
         missing = theme;
         QVariantMap paths = missing.value(QStringLiteral("assetPaths")).toMap();
         paths.insert(QStringLiteral("surface"), QStringLiteral("/nonexistent/archdock-scene-texture.svg"));
@@ -195,7 +326,33 @@ private slots:
         QCOMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("procedural2d"));
         scene->setProperty("themeDefinition", theme);
         QTRY_COMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("true3d"));
-        qInfo() << "Real staged mesh scene:" << visiblePixels << "visible pixels; camera, quality and missing-resource fallback passed";
+        renderer = objectValue(scene->property("activeSurfaceRenderer"));
+        QVERIFY(!pixels().isNull());
+        const int resourcesAfterRecovery = renderer->findChildren<QObject *>().size();
+        for (int cycle = 0; cycle < 3; ++cycle)
+        {
+            QPointer<QObject> previous(renderer);
+            scene->setProperty("themeDefinition", QVariantMap{});
+            QTRY_COMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("procedural2d"));
+            QTRY_VERIFY(previous.isNull());
+            scene->setProperty("themeDefinition", theme);
+            QTRY_COMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("true3d"));
+            renderer = objectValue(scene->property("activeSurfaceRenderer"));
+            QVERIFY(!pixels().isNull());
+            QCOMPARE(renderer->findChildren<QObject *>().size(), resourcesAfterRecovery);
+            QCOMPARE(renderer->property("triangleCount").toInt(), 696);
+        }
+        QVariantList excessiveEntries;
+        for (int index = 0; index < 1000; ++index)
+            excessiveEntries.append(QVariantMap{{QStringLiteral("width"), 40}});
+        renderer->setProperty("entryGeometry", excessiveEntries);
+        QTRY_COMPARE(scene->property("fallbackReason").toString(), QStringLiteral("scene3d-resource-limit"));
+        QVERIFY(!renderer->findChild<QObject *>(QStringLiteral("mesh-entry-0")));
+        QCOMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("procedural2d"));
+        QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
+        qInfo() << "Real staged mesh scene:" << visiblePixels
+                << "visible pixels; shared motion, parts, concealment, reduced motion, camera, quality,"
+                   " active fallback and bounded recovery resources passed";
     }
 
     void packagedBuildFacts()

@@ -29,6 +29,9 @@ Item {
     property bool sceneConcealed: false
     property var true3DCapability: ({ rendererAvailable: false, reasonCode: "renderer-unavailable" })
     property var entryGeometry: []
+    property var entryVisuals: []
+    property real collapseProgress: 0
+    property string mechanism: "open"
     property string sceneQuality: "medium"
 
     readonly property string normalizedRequestedTier:
@@ -186,6 +189,13 @@ Item {
                 return ThemeStates.assetUrl(root.themeDefinition, root.themeDefinition.scene3D.texture)
             }),
             entryGeometry: Qt.binding(function() { return root.entryGeometry }),
+            entryVisuals: Qt.binding(function() { return root.entryVisuals }),
+            layoutAngle: Qt.binding(function() { return root.layoutAngle }),
+            collapseProgress: Qt.binding(function() { return root.collapseProgress }),
+            mechanism: Qt.binding(function() { return root.mechanism }),
+            hovered: Qt.binding(function() { return root.hovered }),
+            reducedMotion: Qt.binding(function() { return root.reducedMotion }),
+            glowIntensity: Qt.binding(function() { return root.glowIntensity }),
             quality: Qt.binding(function() { return root.sceneQuality }),
             panelOpacity: Qt.binding(function() { return root.panelOpacity }),
             sceneConcealed: Qt.binding(function() { return root.sceneConcealed })

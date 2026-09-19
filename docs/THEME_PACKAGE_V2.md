@@ -235,6 +235,7 @@ The scene requires `true3d` in `capabilities.rendererTiers`.
 | `keyLightBrightness` | no | 0–4; default 1 |
 | `fillLightBrightness` | no | 0–2; default 0.4 |
 | `defaultQuality` | no | `low`, `medium`, or `high`; default `medium` |
+| `parts` | no | Up to 32 declarative moving mesh parts; default empty |
 
 Unknown scene members are rejected. Asset IDs resolve through the same
 validated package paths and hashes as other assets; scenes cannot load an
@@ -260,8 +261,28 @@ RGB hex colors, `metalness` and `roughness` are finite values in `[0, 1]`, and
 describe the application-owned native material; they cannot provide shaders,
 scripts or QML.
 
+TASK-0036 adds flat `scene3D.parts` declarations. Each part has a unique `id`,
+declared `mesh` and `material` asset IDs, `kind` (`lid`, `shutter`,
+`ring-segment`, or `pedestal`), `scope` (`panel` or `entry`, default `panel`),
+and a non-`open` `mechanism` also declared in `capabilities.presentationMechanisms`.
+The optional three-number vectors `pivot`, `closedPosition`, `openPosition`,
+`closedRotation`, and `openRotation` default to zero; `scale` defaults to one.
+Coordinates and pivots are bounded to ±4, rotations to ±360 degrees, and scale
+components to `[0.001, 2]`. All numbers must be finite. At least one position
+or rotation endpoint must differ. Unknown members, executable content,
+undeclared resources and malformed vectors fail validation.
+
+Opening interpolates the declared endpoints using the shared presentation
+progress. The renderer applies panel parts in platform coordinates and entry
+parts in each entry's local coordinates. Reused assets are parsed once.
+The parser limits the base scene plus declared parts to 262,144 expanded
+indices; the runtime applies the same budget after multiplying entry parts
+by entry count and including glyph geometry. Exceeding it selects fallback
+with `scene3d-resource-limit` before creating entry mesh nodes. Part controls
+require a validated part declaration and the active true-3D tier.
+
 The runtime projection adds `scene3DResources` containing parsed mesh,
-icon-mesh and material data. That map is not a manifest field and cannot be
+icon-mesh, material, part-resource and index-budget data. That map is not a manifest field and cannot be
 supplied by a package. Canonical manifests retain resource IDs rather than
 inlining the projection. Missing or invalid resources cause package validation
 failure or runtime renderer fallback, as appropriate to when the loss occurs.

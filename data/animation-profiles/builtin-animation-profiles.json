@@ -21,7 +21,9 @@
       "tracks": [],
       "rendererRequirements": [
         "procedural2d",
-        "skinned2d"
+        "skinned2d",
+        "baked2.5d",
+        "true3d"
       ],
       "reducedMotion": {
         "mode": "none"
@@ -732,7 +734,9 @@
       ],
       "rendererRequirements": [
         "procedural2d",
-        "skinned2d"
+        "skinned2d",
+        "baked2.5d",
+        "true3d"
       ],
       "reducedMotion": {
         "mode": "static",
@@ -773,7 +777,9 @@
       ],
       "rendererRequirements": [
         "procedural2d",
-        "skinned2d"
+        "skinned2d",
+        "baked2.5d",
+        "true3d"
       ],
       "reducedMotion": {
         "mode": "static",

@@ -997,7 +997,8 @@ private:
                                QStringLiteral("material"), QStringLiteral("texture"),
                                QStringLiteral("fieldOfView"), QStringLiteral("cameraPitch"),
                                QStringLiteral("cameraYaw"), QStringLiteral("keyLightBrightness"),
-                               QStringLiteral("fillLightBrightness"), QStringLiteral("defaultQuality")}, pointer);
+                               QStringLiteral("fillLightBrightness"), QStringLiteral("defaultQuality"),
+                               QStringLiteral("parts")}, pointer);
         ThemeScene3DDefinition scene;
         scene.mesh = identifier(object, QStringLiteral("mesh"), pointer, true);
         scene.iconMesh = identifier(object, QStringLiteral("iconMesh"), pointer, true);
@@ -1039,6 +1040,100 @@ private:
             {QStringLiteral("iconMesh"), parseSceneMesh(scene.iconMesh, pointer + QStringLiteral("/iconMesh"), *parsed)},
             {QStringLiteral("material"), parseSceneMaterial(scene.material, pointer + QStringLiteral("/material"), *parsed)},
         };
+        // Parse each referenced resource once. Parts may share a mesh/material,
+        // but every rendered instance still counts against the scene budget.
+        QHash<QString, QVariantMap> meshes{
+            {scene.mesh, parsed->scene3DResources.value(QStringLiteral("mesh")).toMap()},
+            {scene.iconMesh, parsed->scene3DResources.value(QStringLiteral("iconMesh")).toMap()}};
+        QHash<QString, QVariantMap> materials{
+            {scene.material, parsed->scene3DResources.value(QStringLiteral("material")).toMap()}};
+        QVariantList resources;
+        const QJsonValue partsValue = object.value(QStringLiteral("parts"));
+        if (!partsValue.isUndefined() && !partsValue.isArray())
+            add(QStringLiteral("invalid-type"), pointer + QStringLiteral("/parts"),
+                QStringLiteral("parts must be an array"));
+        const QJsonArray parts = partsValue.toArray();
+        if (parts.size() > ThemePackage::MaximumSceneParts)
+        {
+            add(QStringLiteral("scene3d-resource-limit"), pointer + QStringLiteral("/parts"),
+                QStringLiteral("too many scene parts"));
+            return;
+        }
+        QSet<QString> ids;
+        qsizetype expandedIndices = meshes.value(scene.mesh).value(QStringLiteral("indexes")).toList().size()
+            + meshes.value(scene.iconMesh).value(QStringLiteral("indexes")).toList().size();
+        for (qsizetype index = 0; index < parts.size(); ++index)
+        {
+            const QString partPointer = pointer + QStringLiteral("/parts/") + QString::number(index);
+            if (!parts[index].isObject())
+            {
+                add(QStringLiteral("invalid-type"), partPointer, QStringLiteral("part must be an object"));
+                continue;
+            }
+            const QJsonObject partObject = parts[index].toObject();
+            rejectUnknown(partObject, {QStringLiteral("id"), QStringLiteral("mesh"),
+                QStringLiteral("material"), QStringLiteral("kind"), QStringLiteral("scope"),
+                QStringLiteral("mechanism"), QStringLiteral("pivot"), QStringLiteral("closedPosition"),
+                QStringLiteral("openPosition"), QStringLiteral("closedRotation"),
+                QStringLiteral("openRotation"), QStringLiteral("scale")}, partPointer);
+            ThemeScenePart3DDefinition part;
+            part.id = identifier(partObject, QStringLiteral("id"), partPointer, true);
+            if (ids.contains(part.id))
+                add(QStringLiteral("duplicate-id"), partPointer, QStringLiteral("part ID must be unique"));
+            ids.insert(part.id);
+            part.mesh = identifier(partObject, QStringLiteral("mesh"), partPointer, true);
+            part.material = identifier(partObject, QStringLiteral("material"), partPointer, true);
+            part.kind = stringValue(partObject, QStringLiteral("kind"), partPointer, true);
+            part.scope = stringValue(partObject, QStringLiteral("scope"), partPointer, false, QStringLiteral("panel"));
+            part.mechanism = stringValue(partObject, QStringLiteral("mechanism"), partPointer, true);
+            if (!QStringList{QStringLiteral("lid"), QStringLiteral("shutter"),
+                    QStringLiteral("ring-segment"), QStringLiteral("pedestal")}.contains(part.kind)
+                || !QStringList{QStringLiteral("panel"), QStringLiteral("entry")}.contains(part.scope)
+                || part.mechanism == QStringLiteral("open")
+                || !parsed->definition.capabilities.presentationMechanisms.contains(part.mechanism))
+                add(QStringLiteral("invalid-scene3d-part"), partPointer,
+                    QStringLiteral("part kind, scope and declared presentation mechanism must be supported"));
+            const auto vector = [this, &partObject, &partPointer](const QString &key,
+                std::array<qreal, 3> fallback, qreal minimum, qreal maximum)
+            {
+                if (!partObject.contains(key)) return fallback;
+                const QJsonValue value = partObject.value(key);
+                const QJsonArray array = value.toArray();
+                bool valid = value.isArray() && array.size() == 3;
+                for (int axis = 0; valid && axis < 3; ++axis)
+                {
+                    valid = isFiniteNumber(array[axis]) && array[axis].toDouble() >= minimum
+                        && array[axis].toDouble() <= maximum;
+                    if (valid) fallback[axis] = array[axis].toDouble();
+                }
+                if (!valid)
+                    add(QStringLiteral("invalid-bounds"), pointerChild(partPointer, key),
+                        QStringLiteral("part transform must contain three bounded finite numbers"));
+                return fallback;
+            };
+            part.pivot = vector(QStringLiteral("pivot"), part.pivot, -4, 4);
+            part.closedPosition = vector(QStringLiteral("closedPosition"), part.closedPosition, -4, 4);
+            part.openPosition = vector(QStringLiteral("openPosition"), part.openPosition, -4, 4);
+            part.closedRotation = vector(QStringLiteral("closedRotation"), part.closedRotation, -360, 360);
+            part.openRotation = vector(QStringLiteral("openRotation"), part.openRotation, -360, 360);
+            part.scale = vector(QStringLiteral("scale"), part.scale, 0.001, 2);
+            if (part.closedPosition == part.openPosition && part.closedRotation == part.openRotation)
+                add(QStringLiteral("invalid-scene3d-part"), partPointer,
+                    QStringLiteral("moving part must declare different open and closed transforms"));
+            if (!meshes.contains(part.mesh))
+                meshes.insert(part.mesh, parseSceneMesh(part.mesh, partPointer + QStringLiteral("/mesh"), *parsed));
+            if (!materials.contains(part.material))
+                materials.insert(part.material, parseSceneMaterial(part.material, partPointer + QStringLiteral("/material"), *parsed));
+            expandedIndices += meshes.value(part.mesh).value(QStringLiteral("indexes")).toList().size();
+            resources.append(QVariantMap{{QStringLiteral("mesh"), meshes.value(part.mesh)},
+                                         {QStringLiteral("material"), materials.value(part.material)}});
+            scene.parts.append(part);
+        }
+        if (expandedIndices > ThemePackage::MaximumSceneExpandedIndices)
+            add(QStringLiteral("scene3d-resource-limit"), pointer + QStringLiteral("/parts"),
+                QStringLiteral("expanded part geometry exceeds the scene index budget"));
+        parsed->scene3DResources.insert(QStringLiteral("parts"), resources);
+        parsed->scene3DResources.insert(QStringLiteral("indexBudget"), ThemePackage::MaximumSceneExpandedIndices);
         parsed->definition.scene3D = scene;
     }
 

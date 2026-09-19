@@ -200,6 +200,7 @@ private slots:
     void trueThreeDReportsNotInstalled();
     void productionBuildFactsAreNotSettings();
     void trueThreeDReportsDisabledSeparately();
+    void meshPartsRequireDeclaredPartsAndAnActiveMeshRenderer();
     void selectsFirstSafeFallback();
     void noFallbackReturnsDeterministicUnavailableResult();
     void equivalentSourceMapsSerializeIdentically();
@@ -754,6 +755,35 @@ void PanelCapabilityResolverTest::trueThreeDReportsDisabledSeparately()
     QVERIFY(choice);
     QVERIFY(!choice->available);
     QCOMPARE(choice->reason, CapabilityReasonCode::RendererDisabled);
+}
+
+void PanelCapabilityResolverTest::meshPartsRequireDeclaredPartsAndAnActiveMeshRenderer()
+{
+    auto host = PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop);
+    host.rendererTiers.append(RendererTier::True3D);
+    auto theme = themeFor(QStringLiteral("parts"), {PanelHostKind::FreeDesktop},
+        {PanelLayoutKind::Ring}, {RendererTier::True3D, RendererTier::Procedural2D}, RendererTier::True3D);
+    theme.fallbackRendererTiers = {RendererTier::Procedural2D};
+    theme.presentationMechanisms = {PanelPresentationMechanism::CollapseRadial};
+    auto renderers = PanelCapabilityResolver::productionRenderers();
+    auto *mesh = rendererByTier(&renderers, RendererTier::True3D);
+    mesh->installed = true;
+    mesh->enabled = true;
+    mesh->sceneImplemented = true;
+    const auto resolve = [&] {
+        return PanelCapabilityResolver::resolve(panelFor(PanelHostKind::FreeDesktop, QStringLiteral("ring")),
+            host, theme, renderers, PanelCapabilityResolver::productionPlatform());
+    };
+    auto result = resolve();
+    QCOMPARE(result.renderer.effectiveTier, std::optional<RendererTier>(RendererTier::True3D));
+    QVERIFY(!decisionById(result.presentationMechanisms, QStringLiteral("collapse-radial"))->available);
+    theme.scene3DMechanisms = {PanelPresentationMechanism::CollapseRadial};
+    result = resolve();
+    QVERIFY(decisionById(result.presentationMechanisms, QStringLiteral("collapse-radial"))->available);
+    mesh->installed = false;
+    result = resolve();
+    QCOMPARE(result.renderer.effectiveTier, std::optional<RendererTier>(RendererTier::Procedural2D));
+    QVERIFY(!decisionById(result.presentationMechanisms, QStringLiteral("collapse-radial"))->available);
 }
 
 void PanelCapabilityResolverTest::selectsFirstSafeFallback()

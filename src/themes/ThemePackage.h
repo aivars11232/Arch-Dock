@@ -36,6 +36,8 @@ public:
     static constexpr qsizetype MaximumSceneMeshBytes = 2097152;
     static constexpr qsizetype MaximumSceneVertices = 4096;
     static constexpr qsizetype MaximumSceneIndices = 24576;
+    static constexpr qsizetype MaximumSceneParts = 32;
+    static constexpr qsizetype MaximumSceneExpandedIndices = 262144;
 
     [[nodiscard]] static ThemePackageLoadResult load(
         const QString &manifestPath);

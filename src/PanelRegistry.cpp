@@ -1017,13 +1017,17 @@ std::optional<QVariantMap> PanelRegistry::builtInThemeRuntimeProjection(
 
     QString catalogCapabilityError;
     QString packageCapabilityError;
-    const std::optional<ArchDock::ThemeCapabilityProfile> catalogProfile =
+    std::optional<ArchDock::ThemeCapabilityProfile> catalogProfile =
         ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
             catalogTheme, &catalogCapabilityError);
     const std::optional<ArchDock::ThemeCapabilityProfile> packageProfile =
         ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
             loaded.package->definition().toVariantMap(),
             &packageCapabilityError);
+    // Part support is derived from the validated package scene, not a second
+    // catalog declaration. Keep equality strict for every declared capability.
+    if (catalogProfile && packageProfile)
+        catalogProfile->scene3DMechanisms = packageProfile->scene3DMechanisms;
     if (!catalogProfile.has_value() || !packageProfile.has_value() ||
         *catalogProfile != *packageProfile)
     {

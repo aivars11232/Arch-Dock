@@ -108,6 +108,7 @@ struct ThemeCapabilityProfile
     std::optional<RendererTier> preferredRendererTier;
     QVector<RendererTier> fallbackRendererTiers;
     RotationCapability rotation;
+    QVector<PanelPresentationMechanism> scene3DMechanisms;
 
     bool operator==(const ThemeCapabilityProfile &) const = default;
 };

@@ -158,6 +158,10 @@ private slots:
     void scene3DRejectsUnsafeData();
     void scene3DMissingAndOversizedResourcesFailClosed();
     void originalMeshThemeLoadsAndCopies();
+    void scenePartsAreValidatedAndMaterialized();
+    void scenePartsRejectUnsafeDeclarations_data();
+    void scenePartsRejectUnsafeDeclarations();
+    void scenePartsEnforceExpandedBudget();
 };
 
 void ThemePackageTest::originalMeshThemeLoadsAndCopies()
@@ -516,6 +520,124 @@ void ThemePackageTest::scene3DMissingAndOversizedResourcesFailClosed()
     const auto oversized = ThemePackage::loadBytes(QJsonDocument(sceneManifestFixture()).toJson(), root.path());
     QVERIFY(!oversized.isValid());
     QCOMPARE(oversized.primaryCode(), QStringLiteral("scene3d-resource-limit"));
+}
+
+void ThemePackageTest::scenePartsAreValidatedAndMaterialized()
+{
+    QTemporaryDir root;
+    QVERIFY(writeSceneFixture(root));
+    QJsonObject manifest = sceneManifestFixture();
+    auto capabilities = manifest[QStringLiteral("capabilities")].toObject();
+    capabilities[QStringLiteral("presentationMechanisms")] = QJsonArray{"open", "shutter"};
+    manifest[QStringLiteral("capabilities")] = capabilities;
+    QJsonArray parts;
+    for (const QString &kind : {QStringLiteral("lid"), QStringLiteral("shutter"),
+                               QStringLiteral("ring-segment"), QStringLiteral("pedestal")})
+        parts.append(QJsonObject{{"id", kind}, {"kind", kind}, {"mesh", "mesh"},
+            {"material", "metal"}, {"mechanism", "shutter"},
+            {"scope", kind == QStringLiteral("pedestal") ? "entry" : "panel"},
+            {"openPosition", QJsonArray{0, 0.2, 0}}, {"openRotation", QJsonArray{0, 45, 0}}});
+    auto scene = manifest[QStringLiteral("scene3D")].toObject();
+    scene[QStringLiteral("parts")] = parts;
+    manifest[QStringLiteral("scene3D")] = scene;
+    const auto result = ThemePackage::loadBytes(QJsonDocument(manifest).toJson(), root.path());
+    QVERIFY2(result.isValid(), qPrintable(result.primaryCode()));
+    const auto definition = result.package->definition().scene3D.value();
+    QCOMPARE(definition.parts.size(), 4);
+    QCOMPARE(definition.parts.last().scope, QStringLiteral("entry"));
+    QCOMPARE(definition.parts.first().openRotation[1], 45);
+    const auto resources = result.package->runtimeProjection().value(QStringLiteral("scene3DResources")).toMap();
+    QCOMPARE(resources.value(QStringLiteral("parts")).toList().size(), 4);
+    QCOMPARE(resources.value(QStringLiteral("parts")).toList().first().toMap().value(QStringLiteral("mesh")),
+             resources.value(QStringLiteral("mesh")));
+    QVERIFY(!definition.toVariantMap().contains(QStringLiteral("resources")));
+    QTemporaryDir managed;
+    const auto copy = result.package->materialize(managed.path());
+    QVERIFY(copy.isValid());
+    QCOMPARE(copy.package->definition().scene3D, result.package->definition().scene3D);
+    QCOMPARE(copy.package->runtimeProjection().value(QStringLiteral("scene3DResources")).toMap(), resources);
+}
+
+void ThemePackageTest::scenePartsRejectUnsafeDeclarations_data()
+{
+    QTest::addColumn<QString>("key");
+    QTest::addColumn<QVariant>("value");
+    QTest::addColumn<QString>("code");
+    QTest::newRow("script") << QStringLiteral("script") << QVariant("run.qml") << QStringLiteral("unknown-field");
+    QTest::newRow("missing-mesh") << QStringLiteral("mesh") << QVariant("absent") << QStringLiteral("invalid-scene3d-resource");
+    QTest::newRow("wrong-material") << QStringLiteral("material") << QVariant("mesh") << QStringLiteral("invalid-scene3d-resource");
+    QTest::newRow("kind") << QStringLiteral("kind") << QVariant("physics") << QStringLiteral("invalid-scene3d-part");
+    QTest::newRow("scope") << QStringLiteral("scope") << QVariant("desktop") << QStringLiteral("invalid-scene3d-part");
+    QTest::newRow("undeclared-mechanism") << QStringLiteral("mechanism") << QVariant("split") << QStringLiteral("invalid-scene3d-part");
+    QTest::newRow("stationary") << QStringLiteral("openPosition") << QVariant(QVariantList{0, 0, 0}) << QStringLiteral("invalid-scene3d-part");
+    for (const QString &key : {QStringLiteral("pivot"), QStringLiteral("closedPosition"),
+                               QStringLiteral("openPosition"), QStringLiteral("closedRotation"),
+                               QStringLiteral("openRotation"), QStringLiteral("scale")})
+    {
+        QTest::newRow(qPrintable(key + "-size")) << key << QVariant(QVariantList{0, 1}) << QStringLiteral("invalid-bounds");
+        QTest::newRow(qPrintable(key + "-bound")) << key << QVariant(QVariantList{0, 1001, 0}) << QStringLiteral("invalid-bounds");
+        QTest::newRow(qPrintable(key + "-type")) << key << QVariant(QVariantList{0, "NaN", 0}) << QStringLiteral("invalid-bounds");
+    }
+    QTest::newRow("zero-scale") << QStringLiteral("scale") << QVariant(QVariantList{1, 0, 1}) << QStringLiteral("invalid-bounds");
+}
+
+void ThemePackageTest::scenePartsRejectUnsafeDeclarations()
+{
+    QFETCH(QString, key);
+    QFETCH(QVariant, value);
+    QFETCH(QString, code);
+    QTemporaryDir root;
+    QVERIFY(writeSceneFixture(root));
+    auto manifest = sceneManifestFixture();
+    auto capabilities = manifest[QStringLiteral("capabilities")].toObject();
+    capabilities[QStringLiteral("presentationMechanisms")] = QJsonArray{"open", "shutter"};
+    manifest[QStringLiteral("capabilities")] = capabilities;
+    QJsonObject part{{"id", "lid"}, {"kind", "lid"}, {"mesh", "mesh"}, {"material", "metal"},
+                     {"mechanism", "shutter"}, {"openPosition", QJsonArray{0, 0.2, 0}}};
+    part[key] = QJsonValue::fromVariant(value);
+    auto scene = manifest[QStringLiteral("scene3D")].toObject();
+    scene[QStringLiteral("parts")] = QJsonArray{part};
+    manifest[QStringLiteral("scene3D")] = scene;
+    const auto result = ThemePackage::loadBytes(QJsonDocument(manifest).toJson(), root.path());
+    QVERIFY(!result.isValid());
+    QCOMPARE(result.primaryCode(), code);
+}
+
+void ThemePackageTest::scenePartsEnforceExpandedBudget()
+{
+    QTemporaryDir root;
+    QVERIFY(writeSceneFixture(root));
+    auto manifest = sceneManifestFixture();
+    auto capabilities = manifest[QStringLiteral("capabilities")].toObject();
+    capabilities[QStringLiteral("presentationMechanisms")] = QJsonArray{"shutter"};
+    manifest[QStringLiteral("capabilities")] = capabilities;
+    auto scene = manifest[QStringLiteral("scene3D")].toObject();
+    QJsonObject part{{"id", "lid"}, {"kind", "lid"}, {"mesh", "mesh"}, {"material", "metal"},
+                     {"mechanism", "shutter"}, {"openRotation", QJsonArray{90, 0, 0}}};
+    const auto resultFor = [&](const QJsonValue &parts) {
+        scene[QStringLiteral("parts")] = parts;
+        manifest[QStringLiteral("scene3D")] = scene;
+        return ThemePackage::loadBytes(QJsonDocument(manifest).toJson(), root.path());
+    };
+    QCOMPARE(resultFor(QJsonArray{part, part}).primaryCode(), QStringLiteral("duplicate-id"));
+    QCOMPARE(resultFor(QJsonObject{}).primaryCode(), QStringLiteral("invalid-type"));
+    QJsonArray parts;
+    for (int i = 0; i <= ThemePackage::MaximumSceneParts; ++i)
+    {
+        part[QStringLiteral("id")] = QStringLiteral("part-%1").arg(i);
+        parts.append(part);
+    }
+    QCOMPARE(resultFor(parts).primaryCode(), QStringLiteral("scene3d-resource-limit"));
+    parts.removeLast();
+    QVERIFY(resultFor(parts).isValid());
+    auto mesh = sceneMeshFixture();
+    const auto triangle = mesh[QStringLiteral("indexes")].toArray();
+    QJsonArray indices;
+    while (indices.size() < ThemePackage::MaximumSceneIndices)
+        for (const auto &index : triangle) indices.append(index);
+    mesh[QStringLiteral("indexes")] = indices;
+    QVERIFY(writeBytes(root.filePath(QStringLiteral("mesh.json")), QJsonDocument(mesh).toJson()));
+    QCOMPARE(resultFor(parts).primaryCode(), QStringLiteral("scene3d-resource-limit"));
 }
 
 QTEST_GUILESS_MAIN(ThemePackageTest)

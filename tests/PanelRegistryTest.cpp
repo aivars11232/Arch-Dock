@@ -2809,7 +2809,10 @@ void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
                 QCOMPARE(profile->hostKinds,
                          QVector<ArchDock::PanelHostKind>{ArchDock::PanelHostKind::FreeDesktop});
                 QCOMPARE(profile->layouts.size(), 4);
-                QCOMPARE(profile->presentationMechanisms.size(), 1);
+                QCOMPARE(profile->presentationMechanisms,
+                    (QVector<ArchDock::PanelPresentationMechanism>{
+                        ArchDock::PanelPresentationMechanism::Open,
+                        ArchDock::PanelPresentationMechanism::CollapseRadial}));
                 QCOMPARE(preview.value(QStringLiteral("mode")).toString(), QStringLiteral("free"));
             }
             else if (perspective)

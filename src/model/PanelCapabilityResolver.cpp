@@ -906,6 +906,18 @@ PanelCapabilityResolver::themeProfileFromVariantMap(const QVariantMap &theme,
         return std::nullopt;
     }
 
+    const auto parts = theme.value(QStringLiteral("scene3D")).toMap()
+        .value(QStringLiteral("parts")).toList();
+    for (const QVariant &value : parts)
+    {
+        const auto part = value.toMap();
+        const auto mechanism = panelPresentationMechanismFromName(
+            part.value(QStringLiteral("mechanism")).toString());
+        if (mechanism && *mechanism != PanelPresentationMechanism::Open
+            && contains(profile.presentationMechanisms, *mechanism))
+            appendUnique(&profile.scene3DMechanisms, *mechanism);
+    }
+
     setError(errorCode, QString{});
     return profile;
 }
@@ -942,7 +954,7 @@ QVector<RendererAvailability> PanelCapabilityResolver::productionRenderers()
          6,
          true,
          ARCHDOCK_SCENE3D_BUILT != 0,
-         false}, // The base mesh scene does not implement whole-panel motion.
+         true}, // Shared scene angle also drives the physical platform node.
     };
 }
 
@@ -993,8 +1005,17 @@ CapabilityResolution PanelCapabilityResolver::resolve(
     }
     for (PanelPresentationMechanism mechanism : allPresentationMechanisms())
     {
-        result.presentationMechanisms.append(resolvePresentation(
-            mechanism, host, theme));
+        auto decision = resolvePresentation(mechanism, host, theme);
+        const bool meshSelected = result.renderer.effectiveTier == RendererTier::True3D;
+        const bool meshPart = contains(theme.scene3DMechanisms, mechanism);
+        if (decision.available && mechanism != PanelPresentationMechanism::Open
+            && ((meshSelected && !meshPart) || (!meshSelected && meshPart)))
+        {
+            decision.available = false;
+            decision.reason = CapabilityReasonCode::PresentationMechanismUnavailable;
+            decision.blockedBy = QStringLiteral("scene3d-parts");
+        }
+        result.presentationMechanisms.append(decision);
     }
     for (int value = 0; value < static_cast<int>(RendererTier::Count); ++value)
     {
