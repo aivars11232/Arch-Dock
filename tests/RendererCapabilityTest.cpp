@@ -12,6 +12,7 @@
 #include <QQmlAbstractUrlInterceptor>
 #include <QQmlComponent>
 #include <QQmlEngine>
+#include <QQmlProperty>
 #include <QQuickItem>
 #include <QQuickItemGrabResult>
 #include <QQuickWindow>
@@ -393,10 +394,12 @@ private slots:
         QVariantList excessiveEntries;
         for (int index = 0; index < 1000; ++index)
             excessiveEntries.append(QVariantMap{{QStringLiteral("width"), 40}});
-        renderer->setProperty("entryGeometry", excessiveEntries);
+        // Detach the live geometry binding so rotation cannot undo this fault.
+        QVERIFY(QQmlProperty::write(renderer, QStringLiteral("entryGeometry"), excessiveEntries));
         QTRY_COMPARE(scene->property("fallbackReason").toString(), QStringLiteral("scene3d-resource-limit"));
         // Repeater3D releases removed delegates through Qt's deferred deletion.
         QTRY_VERIFY(!renderer->findChild<QObject *>(QStringLiteral("mesh-entry-0")));
+        QCOMPARE(plainValue(renderer->property("entryGeometry")).toList().size(), 1000);
         QCOMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("procedural2d"));
         QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
         qInfo() << "Real staged mesh scene:" << visiblePixels

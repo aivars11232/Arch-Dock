@@ -3,12 +3,13 @@
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusMessage>
+#include <QDBusReply>
+#include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QStandardPaths>
-#include <QTimer>
 #include <QUuid>
 
 namespace
@@ -65,40 +66,43 @@ void KWinActionBridge::runScript(const QString &source)
     script.write(source.toUtf8());
     script.close();
 
-    auto *scripting = new QDBusInterface(
+    QDBusInterface scripting(
         QStringLiteral("org.kde.KWin"),
         QStringLiteral("/Scripting"),
         QStringLiteral("org.kde.kwin.Scripting"),
-        QDBusConnection::sessionBus(),
-        this);
-    if (!scripting->isValid())
+        QDBusConnection::sessionBus());
+    if (!scripting.isValid())
     {
         script.remove();
-        scripting->deleteLater();
         return;
     }
 
-    const QDBusMessage loadReply = scripting->call(
+    const QDBusReply<int> loadReply = scripting.call(
         QStringLiteral("loadScript"),
         scriptPath,
         pluginName);
-    if (loadReply.type() == QDBusMessage::ErrorMessage)
+    if (!loadReply.isValid() || loadReply.value() < 0)
     {
+        qWarning() << "Failed to load Arch Dock KWin action:"
+                   << loadReply.error().message() << "script id" << loadReply.value();
         script.remove();
-        scripting->deleteLater();
         return;
     }
 
-    scripting->call(QStringLiteral("start"));
-    QTimer::singleShot(
-        500,
-        this,
-        [scripting, scriptPath, pluginName]
-        {
-            scripting->call(QStringLiteral("unloadScript"), pluginName);
-            QFile::remove(scriptPath);
-            scripting->deleteLater();
-        });
+    // Global start() reapplies package enablement and can unload our watcher.
+    // Run only this action; KWin replies after evaluating its script.
+    QDBusInterface actionScript(
+        QStringLiteral("org.kde.KWin"),
+        QStringLiteral("/Scripting/Script%1").arg(loadReply.value()),
+        QStringLiteral("org.kde.kwin.Script"),
+        QDBusConnection::sessionBus());
+    const QDBusMessage runReply = actionScript.call(QStringLiteral("run"));
+    if (runReply.type() == QDBusMessage::ErrorMessage)
+    {
+        qWarning() << "Failed to run Arch Dock KWin action:" << runReply.errorMessage();
+    }
+    scripting.call(QStringLiteral("unloadScript"), pluginName);
+    script.remove();
 }
 
 QString KWinActionBridge::commandScript(const QString &internalId, const QString &action)

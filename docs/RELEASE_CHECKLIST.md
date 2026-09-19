@@ -169,6 +169,9 @@ for the cause, exact commands, cleanup and next boundary.
 
 ## TASK-0038 prerequisite verification — 2026-09-19
 
+Historical watcher-interface repair, committed by the owner as `7c16581`.
+The restore failure below is superseded by the green verification that follows.
+
 **BLOCKED before TASK-0038 Phase A.** Its implementation approval is retained,
 but the approved predecessor gate is still open. Baseline and final HEAD are
 `d7c6021f58437e11725fba7bdabf271815d4b3a3`. The only functional change is the
@@ -196,3 +199,35 @@ No release checkbox is closed. No runtime test, assertion or acceptance
 criterion was bypassed. See the
 [prerequisite evidence](CURRENT_STATE.md#task-0038--approval-and-prerequisite-watcher-repair-2026-09-19)
 for the exact cause, commands, remaining boundary and approval status.
+
+## Restore and fallback repair verification — 2026-09-19
+
+**Failure repair COMPLETE; current suite green.** Baseline and final HEAD are
+`7c16581485a3164ff379f7bca3c651a7bc267c58`; the two code/test files and two
+evidence documents remain modified and unstaged.
+
+KWin's global script start reapplied package enablement and unloaded the
+installed watcher. The bridge now runs and cleans up only its own action
+script, preserving live window updates. The renderer test also needed a
+persistent resource-limit fault: its old C++ property write left a QML
+binding active, allowing rotation to restore ordinary geometry. The corrected
+write detaches that binding. Original behavior assertions remain enforced.
+
+- Active pack integrity: **174/174 PASS**.
+- Fresh ON Debug configure and complete serial build: **PASS**.
+- Corrected staged private Wayland smoke: **1/1 PASS**, 82.07 seconds.
+- Final full serial CTest: **67/67 PASS**, zero failures or unrun tests,
+  139.28 seconds; its staged smoke also passed, in 82.19 seconds.
+- Private renderer: **6/6 PASS**; grouped windows: **3/3 PASS**; preview popup:
+  **13/13 PASS**; Icon Properties/mesh editor: **4/4 PASS**; energy pixels and
+  surface integration: **3/3 and 19/19 PASS**.
+- Actual staged native/free Plasma applets, theme/icon-style changes, quality,
+  rotation, memory bound and owned-host cleanup: **PASS**.
+- TASK-0036 Phase B, TASK-0037 Phases B/C and TASK-0038 Phases A/B remain
+  **NOT EXECUTED**. Existing test success does not implement these phases.
+
+No failed check remains in the final suite. No release checkbox is closed by
+this bounded repair, and private virtual KWin evidence does not establish
+personal-desktop, physical GPU/monitor or release acceptance. See the
+[restore and fallback repair record](CURRENT_STATE.md#task-0038-prerequisite--restore-and-fallback-repair-2026-09-19)
+for native research, diagnostic proof, exact commands and cleanup.

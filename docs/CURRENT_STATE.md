@@ -6,24 +6,26 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-09-19 (Europe/Amsterdam). TASK-0035 completion is
-committed as `7b4706e`; its verification below is historical. The owner
-committed the partial TASK-0036 implementation as `0211331`, its earlier
-blocker record as `5f41ced`, and the partial TASK-0037 preview implementation
-as `4cdb234`, then committed the glyph-motion blocker repair as `d7c6021`.
-The owner approved the TASK-0038 plan, which retains predecessor closure as
-an implementation gate. The earlier instruction to resolve the blocker first
-was reused for the prerequisite investigation. WindowWatcher now explicitly
-declares its existing D-Bus interface: the private trace proved that KWin's
-window events previously received `UnknownInterface` replies in the fixture.
-The unchanged standalone grouped-window test now passes 3/3 QtTest cases.
-A fresh complete ON build passed, but integrated acceptance remains **BLOCKED**:
-full CTest stopped with 54 passed, 1 failed and 12 not run. Both windows now
-reach the model; the new failure is the restore readback at
-`tests/PanelWindowCapabilityTest.cpp:184`. TASK-0036 Phase B, TASK-0037 Phases
-B/C and TASK-0038 Phases A/B have not started. None of these consolidated
-tasks is complete. See the TASK-0038 prerequisite record below; earlier
-failure records are historical.
+**Evidence snapshot:** 2026-09-19 (Europe/Amsterdam). The prerequisite test
+failures are **RESOLVED**. From the owner's clean `7c16581` watcher-interface
+checkpoint, a fresh complete ON Debug build and all **67/67 CTests passed**.
+The staged private Wayland smoke passed both independently and inside the
+full suite, including renderer fallback, grouped-window restore/removal,
+popup/editor interaction and real native/free Plasma applets.
+
+Two additional causes were proved and corrected: KWin's global scripting
+`start` unloaded the installed watcher, and the renderer test's resource-limit
+fault was overwritten by its still-active QML geometry binding. The action
+bridge now runs only its own script; the test now detaches the binding when
+injecting the fault. Original restore, fallback and delegate-destruction
+assertions remain enforced. See the restore and fallback repair record below.
+
+TASK-0035 completion is committed as `7b4706e`. The partial TASK-0036 and
+TASK-0037 implementations and earlier repairs remain historical checkpoints.
+TASK-0036 Phase B, TASK-0037 Phases B/C and TASK-0038 Phases A/B have not
+started. These consolidated tasks are not complete. The TASK-0038 approval
+is retained, including its predecessor-closure gate; passing the existing
+suite does not implement the remaining phases.
 
 Earlier context, retained because it explains two mislabelled commits: the
 session that produced `f61c9ab` began from a tree whose subject `Task33` is
@@ -44,13 +46,13 @@ Earlier task sections retain their historical evidence and boundaries.
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`, matching the local `origin/main` reference. No fetch, push,
   or sync was performed by Codex.
-- TASK-0038 prerequisite-repair baseline and final `HEAD`:
-  `d7c6021f58437e11725fba7bdabf271815d4b3a3`, subject
-  `Arch Dock - Fix isolated 3D motion verification and theme teardown`.
-- The working tree was clean when this repair began. Only `WindowWatcher.h`
-  and the two evidence documents are modified and unstaged. The grouped-window
-  test, KWin action bridge and TASK-0038 folder/segment implementation remain
-  unchanged.
+- Restore/fallback-repair baseline and final `HEAD`:
+  `7c16581485a3164ff379f7bca3c651a7bc267c58`, subject
+  `Arch Dock - Stabilize the KWin watcher D-Bus interface`.
+- The working tree was clean when this repair began. `KWinActionBridge.cpp`,
+  `RendererCapabilityTest.cpp` and the two evidence documents are modified
+  and unstaged. The grouped-window test and TASK-0038 folder/segment
+  implementation remain unchanged.
 - `build-codex-task-0014/` is still tracked at `HEAD`. It is a build
   directory committed by mistake in `75232e5` and must be removed with
   `git rm -r build-codex-task-0014`; `.gitignore` now excludes every
@@ -1541,6 +1543,9 @@ checks. Source and evidence changes remain unstaged for owner review.
 
 ## TASK-0038 — approval and prerequisite watcher repair, 2026-09-19
 
+Historical repair, committed by the owner as `7c16581`. Its remaining restore
+failure is superseded by the verified repair below.
+
 **Status: BLOCKED before Phase A.** The owner supplied
 `APPROVED: IMPLEMENT TASK-0038 EXACTLY AS PLANNED.` The approved plan explicitly
 retains predecessor closure as a gate. That approval is retained; another
@@ -1628,14 +1633,104 @@ diagnostic harness were removed after recording this evidence. Whitespace
 and local-document-link checks passed. Only the three stated files remain
 modified and unstaged.
 
+## TASK-0038 prerequisite — restore and fallback repair, 2026-09-19
+
+**Status: COMPLETE for the failure repair.** The owner's instruction, "Some
+things have failed, don't leave task with failed things", authorized resolving
+the outstanding failures and continuing the existing verification sequence.
+No replacement TASK-0038 plan, test waiver or sequencing exception was used.
+Baseline and final HEAD are `7c16581485a3164ff379f7bca3c651a7bc267c58`.
+The active pack passed all 174 manifest entries. Platform: Arch Linux,
+Plasma/KWin 6.7.5-1, Qt base 6.11.2-3, Declarative 6.11.2-2 and
+KCoreAddons 6.30.0-1.
+
+### Causes and changes, in file order
+
+1. `src/KWinActionBridge.cpp`: the bridge previously called KWin's global
+   `start` after loading each action. [KWin's implementation](https://github.com/KDE/kwin/blob/Plasma/6.7/src/scripting/scripting.cpp)
+   reapplies installed package enablement during that call. A private native
+   probe using the actual watcher package metadata proved that its loaded
+   state changed from true to false after global `start`. This removed window
+   updates after activation and left the model's minimized state stale.
+   Per-script `run` plus action-only cleanup preserved the watcher in the
+   same probe. The bridge now uses that existing watcher API pattern, checks
+   the returned script ID and execution reply, and cleans its own script
+   after KWin's completion reply instead of a fixed 500 ms timer.
+2. `tests/RendererCapabilityTest.cpp`: the first focused smoke then exposed
+   an intermittent resource-limit test failure before reaching restore.
+   Temporary readback logging proved that the injected geometry changed from
+   1,000 entries / budget exceeded / resource-limit fallback to two entries /
+   within budget / no fallback after rotation updated. `QObject::setProperty`
+   retains a QML binding; [Qt documents that `QQmlProperty::write` detaches it](https://doc.qt.io/qt-6/qtqml-cppintegration-interactqmlfromcpp.html).
+   Fault injection now uses the latter and checks the retained 1,000-entry
+   value. The original fallback and deferred delegate-destruction checks
+   remain. Temporary logging and its diagnostic delay were removed.
+3. `docs/CURRENT_STATE.md`: current status, causes, fresh results and remaining
+   phase boundaries.
+4. `docs/RELEASE_CHECKLIST.md`: matching verification record without claiming
+   completion of unimplemented phases or release acceptance.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| Active pack manifest | PASS, 174/174 |
+| Native KWin probe | Global start unloads the staged watcher; per-script run and cleanup preserve it |
+| Fresh ON Debug configure and complete serial build | PASS |
+| Initial focused smoke | FAIL at renderer delegate cleanup; restore not reached |
+| Focused diagnostic | Proved that the live geometry binding overwrote the resource-limit fault |
+| Complete build after the test correction | PASS |
+| Corrected staged smoke | PASS, 1/1 CTest, 82.07 seconds |
+| Final full serial CTest | PASS, 67/67, zero failed, zero not run; 139.28 seconds |
+| Staged smoke inside final full suite | PASS, 82.19 seconds |
+| Private renderer suite | PASS, 6/6 QtTest cases; 34,878 visible pixels, motion, parts, concealment, reduced motion, fallback and bounded recovery |
+| Private grouped-window fixture | PASS, 3/3 QtTest cases; arrivals, grouping, title, minimize, restore, active state and removal; original assertions unchanged |
+| Private preview popup | PASS, 13/13 QtTest cases |
+| Private Icon Properties and mesh editor interaction | PASS, 4/4 QtTest cases |
+| Private energy pixels / surface integration | PASS, 3/3 and 19/19 QtTest cases |
+| Real staged native/free applets | PASS; energy/perspective themes, icon styles, quality changes, rotation and owned-host cleanup |
+| Repeated theme changes | PASS; 16 changes, private PlasmaShell RSS growth -124 kB in the final run |
+
+The fresh task-owned directory was `/tmp/archdock-restore-repair.Cy0bUp`.
+Commands used its `build` subdirectory:
+
+```bash
+cmake -S '/mnt/F/Arch Dock' -B "$repair_root/build" \
+  -DCMAKE_BUILD_TYPE=Debug -DARCHDOCK_ENABLE_QUICK3D=ON
+cmake --build "$repair_root/build" --parallel 1
+# After the narrow diagnostic, rebuild the corrected test and all targets:
+cmake --build "$repair_root/build" --parallel 1
+env DBUS_SESSION_BUS_ADDRESS="unix:path=$repair_root/no-parent-bus" \
+  ctest --test-dir "$repair_root/build" -R '^rendering-import-smoke$' \
+  --output-on-failure --parallel 1
+env DBUS_SESSION_BUS_ADDRESS="unix:path=$repair_root/no-parent-bus" \
+  ctest --test-dir "$repair_root/build" \
+  --output-on-failure --parallel 1 --stop-on-failure
+```
+
+Runtime checks used disposable private D-Bus/XDG, virtual KWin Wayland and
+real staged Plasma applets. No personal desktop, physical GPU, monitor/hotplug
+or full release acceptance is claimed. OFF/AUTO builds and the remaining
+TASK-0036 Phase B restart matrix were not run for this bounded repair.
+
+Both previously failing boundaries now have positive integrated evidence;
+there is no failed check left in the final suite. TASK-0038 Phase A's four
+criteria (live layouts, unavailable-path safety, shared geometry, open-panel
+guard) and Phase B's four criteria (single-segment equivalence, independent
+render/order/persistence, capability filtering, entry ownership) remain
+**NOT EXECUTED**, because those features have not been implemented.
+
+All private session roots and processes were cleaned. The task-owned build,
+diagnostic scripts and logs were removed after recording the evidence.
+Whitespace and local-document-link checks passed. The four files above remain
+modified and unstaged; the owner controls Git closure.
+
 ## Next task boundary
 
-The glyph-motion and watcher-interface blockers are resolved. The first
-unresolved integrated boundary is now the grouped-window restore readback at
-`tests/PanelWindowCapabilityTest.cpp:184`. Investigate that boundary in the
-existing TASK-0037 work before advancing any mandatory phase gate. TASK-0038's
-approved plan is retained, with Phases A/B unstarted. Predecessor closure and
-the pending execution-order clarification remain open; no sequencing exception
-or failure waiver is assumed. The owner controls Git closure. No delegated or
-parallel agent, staging, commit, push, global installation or personal Plasma
-mutation was used.
+The existing suite is green. Resume the outstanding approved predecessor
+phases: TASK-0036 Phase B and TASK-0037 Phases B/C, with their mandatory
+acceptance gates, before TASK-0038's retained folder/segment plan. No remaining
+phase is declared complete merely because the current 67 tests pass. No new
+plan or repeated TASK-0038 approval is required. No delegated or parallel
+agent, staging, commit, push, global installation or personal Plasma mutation
+was used.
