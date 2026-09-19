@@ -84,3 +84,18 @@ packaging, and desktop audition acceptance are not claimed by these private
 checks. See [CURRENT_STATE.md](CURRENT_STATE.md#task-0035--optional-true-3d-capability-and-base-scene-renderer)
 for exact results and [shared-renderer.md](shared-renderer.md#base-true-3d-renderer)
 for the implemented limits.
+
+## TASK-0036 resumed verification — 2026-09-19
+
+**BLOCKED in Phase A; Phase B has not started.** Commit `0211331` is the
+owner's partial implementation checkpoint, not task completion. A fresh ON
+Debug configure and full serial build passed. Private Wayland rendering
+reproduced unchanged pixels while the mesh glyph's Y angle changed and its
+icon source was valid. The focused diagnostic pass also observed unchanged
+full-window captures; a safe production correction was not established.
+
+The pixel assertion remains enforced. No complete CTest run or Phase B
+OFF/AUTO/ON, live fallback or service-restart acceptance was performed in the
+resumed session. No release checkbox is closed by these results. See the
+[TASK-0036 current-state record](CURRENT_STATE.md#task-0036--resumed-phase-a-investigation-2026-09-19)
+for commands, diagnostic observations and acceptance statuses.

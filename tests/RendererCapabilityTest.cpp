@@ -236,8 +236,32 @@ private slots:
             .value(QStringLiteral("rotateY")).toDouble(), 0.0);
         const QImage turning = pixels();
         QVERIFY(!turning.isNull());
+        const auto firstAngle = glyph->property("eulerRotation").value<QVector3D>().y();
         QTest::qWait(180);
-        QVERIFY(turning != pixels());
+        const QImage advanced = pixels();
+        QVERIFY(!advanced.isNull());
+        if (!evidence.isEmpty())
+        {
+            QVERIFY(turning.save(QDir(evidence).filePath(QStringLiteral("mesh-motion-before.png"))));
+            QVERIFY(advanced.save(QDir(evidence).filePath(QStringLiteral("mesh-motion-after.png"))));
+        }
+        QObject *glyphSource = objectValue(visual->property("glyphItem"));
+        QVERIFY(glyphSource);
+        if (turning == advanced && !evidence.isEmpty())
+        {
+            const QImage wholeBefore = window.grabWindow();
+            QVERIFY(wholeBefore.save(QDir(evidence).filePath(QStringLiteral("whole-before.png"))));
+            QTest::qWait(180);
+            const QImage wholeAfter = window.grabWindow();
+            QVERIFY(wholeAfter.save(QDir(evidence).filePath(QStringLiteral("whole-after.png"))));
+            qInfo() << "Whole window motion changes pixels:" << (wholeBefore != wholeAfter);
+        }
+        QVERIFY2(turning != advanced, qPrintable(QStringLiteral(
+            "Mesh glyph angle %1 -> %2 produced unchanged pixels; glyph source=%3 valid=%4 size=%5x%6")
+            .arg(firstAngle).arg(glyph->property("eulerRotation").value<QVector3D>().y())
+            .arg(glyphSource->property("source").toString())
+            .arg(glyphSource->property("valid").toBool())
+            .arg(glyphSource->property("width").toDouble()).arg(glyphSource->property("height").toDouble())));
 
         scene->setProperty("sceneConcealed", true);
         QTRY_COMPARE(plainValue(controller->property("activeTracks")).toList().size(), 0);

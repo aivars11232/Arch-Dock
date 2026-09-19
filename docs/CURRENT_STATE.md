@@ -6,11 +6,12 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-09-09 (Europe/Amsterdam). TASK-0034 is committed
-as `abc6dfd`. TASK-0035 is implemented and its final OFF/AUTO/ON gates pass.
-The owner committed checkpoint `e84e1bf` while work was paused; completion
-fixes and documentation remain unstaged on top of that checkpoint. The
-commit-to-task mapping below records content rather than relying on subjects.
+**Evidence snapshot:** 2026-09-19 (Europe/Amsterdam). TASK-0035 completion is
+committed as `7b4706e`; its verification below is historical. The owner
+committed the partial TASK-0036 implementation as `0211331`. TASK-0036 remains
+**BLOCKED in Phase A** at visible mesh-glyph motion verification. Phase B has
+not started. The resumed investigation reproduced the failure in a fresh ON
+build and records its evidence below; the commit subject is not closure proof.
 
 Earlier context, retained because it explains two mislabelled commits: the
 session that produced `f61c9ab` began from a tree whose subject `Task33` is
@@ -29,12 +30,13 @@ Earlier task sections retain their historical evidence and boundaries.
 ## Repository state
 
 - Repository root: `/mnt/F/Arch Dock`
-- Branch: `main`, tracking `origin/main`, one commit ahead of the local
-  upstream reference. No fetch, push, or sync was performed by Codex.
-- Current `HEAD`: `e84e1bfc34d2365cf6e4b220ff5dc81bf6cdb899`, subject
-  `Arch Dock task35`, the owner's TASK-0035 checkpoint.
-- The working tree was clean when work resumed on September 9. It now
-  contains only the TASK-0035 completion changes described below, unstaged.
+- Branch: `main`, matching the local `origin/main` reference. No fetch, push,
+  or sync was performed by Codex.
+- Baseline and final `HEAD`: `021133174e70dfbd4b9006eff4a3fb546dce2171`, subject
+  `Arch dock task 36`, the owner's partial TASK-0036 checkpoint.
+- The working tree was clean when work resumed on September 19. The resumed
+  changes are the renderer test's failure diagnostics and the current-state
+  and release-checklist records, unstaged. Production renderer code is unchanged.
 - `build-codex-task-0014/` is still tracked at `HEAD`. It is a build
   directory committed by mistake in `75232e5` and must be removed with
   `git rm -r build-codex-task-0014`; `.gitignore` now excludes every
@@ -65,9 +67,11 @@ subject line, records which commit carries which task.
 | `197a515` | `Arch Dock task 34` | TASK-0034 Phase A, first part |
 | `abc6dfd` | `Implement baked 2.5D ring, octagonal, and arc themes` | TASK-0034 completion |
 | `e84e1bf` | `Arch Dock task35` | TASK-0035 Phase A and partial Phase B checkpoint, committed by the owner |
+| `7b4706e` | `Arch Dock task 35 full` | TASK-0035 completion |
+| `0211331` | `Arch dock task 36` | TASK-0036 partial Phase A; visual-motion failure unresolved, Phase B not started |
 
-TASK-0035 completion fixes and documentation are the working tree on top of
-`e84e1bf`.
+The TASK-0036 checkpoint contains the previous session's 29 changed files,
+956 insertions and 64 deletions. It does not close that session's BLOCKED result.
 - Codex did not stage, commit, push, globally install, or mutate the personal
   Plasma session.
 
@@ -1197,11 +1201,70 @@ hardware hotplug acceptance were not performed or claimed.
 | B | Quality bounded and reversible | PASS — schema persistence, pixels and live low/high/low targets |
 | B | 2D build independent | PASS — OFF build, omitted optional files, core dependency check and 65/65 CTest |
 
+## TASK-0036 — resumed Phase A investigation, 2026-09-19
+
+**Status: BLOCKED in Phase A. Phase B has not started.** The earlier approved
+plan and implementation were reused after the owner explicitly requested
+completion of TASK-0036. No renderer workaround was applied without proof.
+
+The inspected platform was Arch Linux, Plasma/KWin 6.7.5-1, Qt base 6.11.2-3,
+Qt Declarative 6.11.2-2, Qt Quick 3D 6.11.2-1, and KCoreAddons 6.30.0-1.
+The complete fresh ON Debug build passed using the installed Make generator.
+An initial Ninja configuration invocation failed because Ninja is absent;
+the approved default-generator command succeeded in a separate fresh directory.
+
+The first private Wayland reproduction measured a mesh glyph Y angle change
+from 11.6471 to 46.9412 degrees, a valid `application-x-executable` icon, and
+28.8 by 28.8 source dimensions, but identical before/after viewport pixels.
+The captures showed the platform without the glyph. The focused diagnostic
+pass additionally checked provider sizing, source/texture captures, material
+sampling, and full-window capture. Full-window captures were also unchanged.
+These observations do not establish a production correction or blame KDE/Qt.
+Temporary state-changing diagnostic code was removed; the retained test adds
+non-null image checks, optional viewport/full-window evidence captures and an
+informative failure message, preserving the visible-motion requirement.
+
+| Fresh verification | Result |
+| --- | --- |
+| Pack SHA-256 integrity | PASS, 174/174 manifest entries |
+| ON configure and complete serial build | PASS |
+| Targeted renderer rebuilds after diagnostic changes | PASS |
+| Private rendering smoke | FAIL in each of four diagnostic invocations at the unchanged-pixels assertion; private renderer QtTest reports 5 passed, 1 failed per invocation |
+| Full CTest | NOT RUN in this resumed session; the unresolved runtime gate stopped later verification |
+| Phase B OFF/AUTO/ON and service-restart matrix | NOT EXECUTED |
+| Final diff and cleanup | PASS — `git diff --check`; four private session roots absent, no process retaining their private environment, task-owned temporary build/logs/captures removed |
+
+Exact build and initial reproduction commands (the temporary root was task-owned):
+
+```bash
+cmake -S '/mnt/F/Arch Dock' -B /tmp/archdock-task0036-resume.yEoOWWXB/phase-a-on \
+  -DCMAKE_BUILD_TYPE=Debug -DARCHDOCK_ENABLE_QUICK3D=ON
+cmake --build /tmp/archdock-task0036-resume.yEoOWWXB/phase-a-on --parallel 1
+env DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/archdock-task0036-resume.yEoOWWXB/no-parent-bus \
+  ARCHDOCK_SCENE_EVIDENCE_DIR=/tmp/archdock-task0036-resume.yEoOWWXB/evidence \
+  ctest --test-dir /tmp/archdock-task0036-resume.yEoOWWXB/phase-a-on \
+  -R '^rendering-import-smoke$' --output-on-failure --parallel 1
+```
+
+The diagnostic directory must exist when supplying `ARCHDOCK_SCENE_EVIDENCE_DIR`.
+The smoke staged the build and used a disposable private D-Bus and virtual
+KWin Wayland session. It failed before the subsequent Studio, Plasma applet,
+live fallback and recovery stages. No personal-desktop acceptance is claimed.
+
+| Acceptance criterion | Current result |
+| --- | --- |
+| A: 3D motion corresponds to logical profiles | FAIL at visual verification; numeric Y mapping passes |
+| A: No conflict/orphan after theme change | NOT EXECUTED to completion |
+| A: Reduced-motion static/low-motion states | NOT EXECUTED in the new 3D runtime path |
+| A: Unsupported themes hide part controls | Prior backend tests passed; private UI acceptance NOT EXECUTED |
+| B: Failure cannot crash or remove the panel | NOT EXECUTED |
+| B: Saved intent remains truthful when unavailable | NOT EXECUTED to Phase B acceptance |
+| B: Detailed controls disappear when off/unsupported | NOT EXECUTED to Phase B acceptance |
+| B: 2D/2.5D remain usable | Phase B matrix NOT EXECUTED |
+
 ## Next task boundary
 
-TASK-0035 implementation and required verification are complete. The owner
-controls Git closure; Codex did not stage, commit, push, sync or globally
-install. Runtime work remained inside disposable private environments.
-
-**TASK-0036 — Complete true-3D motion, fallback, editor gating, and regression
-coverage — has NOT started.** It requires its own planning and approval gate.
+TASK-0036 requires a proved correction of the visible mesh-glyph motion failure,
+then completion of Phase A and Phase B. TASK-0037 planning remains blocked by
+the predecessor-closure rule. The owner controls Git closure; Codex did not
+stage, commit, push, globally install or mutate the personal Plasma session.
