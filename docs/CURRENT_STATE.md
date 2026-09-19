@@ -8,14 +8,17 @@
 
 **Evidence snapshot:** 2026-09-19 (Europe/Amsterdam). TASK-0035 completion is
 committed as `7b4706e`; its verification below is historical. The owner
-committed the partial TASK-0036 implementation as `0211331` and its resumed
-blocker record as `5f41ced`. TASK-0036 remains **BLOCKED in Phase A** at visible
-mesh-glyph motion verification; its Phase B has not started. The owner then
-explicitly requested TASK-0037 and approved its complete plan despite that
-predecessor gap. TASK-0037 now has partial Phase A preview implementation,
-but is also **BLOCKED in Phase A**: its fresh AUTO build passed and its full
-CTest gate stopped at the same renderer failure after 54 passing tests.
-TASK-0037 Phases B and C have not started. Neither task is complete.
+committed the partial TASK-0036 implementation as `0211331`, its earlier
+blocker record as `5f41ced`, and the partial TASK-0037 preview implementation
+as `4cdb234`. The owner then requested resolving the predecessor blocker.
+The TASK-0036 glyph-motion blocker is now repaired: a fresh ON build passed
+and the staged private Wayland renderer suite passed 6/6 cases, including
+visible mesh motion and fallback cleanup. The integrated Phase A gate remains
+**BLOCKED**: full CTest stopped with 54 passed, 1 failed and 12 not run at the
+subsequent TASK-0037 grouped-window fixture, which did not receive its first
+window through the KWin watcher. TASK-0036 Phase B and TASK-0037 Phases B/C have
+not started. Neither consolidated task is complete. See the blocker-repair
+record below for current evidence; the earlier failure records are historical.
 
 Earlier context, retained because it explains two mislabelled commits: the
 session that produced `f61c9ab` began from a tree whose subject `Task33` is
@@ -36,13 +39,13 @@ Earlier task sections retain their historical evidence and boundaries.
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`, matching the local `origin/main` reference. No fetch, push,
   or sync was performed by Codex.
-- TASK-0037 baseline and final `HEAD`:
-  `5f41ced7e3f07f4f4eb1c48f3172ee8dd1a12056`, subject
-  `Arch Dock - Record TASK-0036 visual-motion blocker`.
-- The working tree was clean when TASK-0037 began. Its preview implementation,
-  tests, build integration and evidence documents are now unstaged, including
-  new untracked source/test files. The TASK-0036 renderer test and production
-  `PanelScene3D.qml` are unchanged from this baseline.
+- Blocker-repair baseline and final `HEAD`:
+  `4cdb234946d0689bd7d0da2a16501bf6c58a65d9`, subject
+  `Arch Dock - Add TASK-0037 preview foundation and record blocked Phase A`.
+- The working tree was clean when this repair began. The owner has committed
+  the preceding TASK-0037 changes. Only the renderer test, surface-loader
+  teardown guard and two evidence documents are now modified and unstaged.
+  `PanelScene3D.qml` and the TASK-0037 grouped-window fixture remain unchanged.
 - `build-codex-task-0014/` is still tracked at `HEAD`. It is a build
   directory committed by mistake in `75232e5` and must be removed with
   `git rm -r build-codex-task-0014`; `.gitignore` now excludes every
@@ -1210,6 +1213,9 @@ hardware hotplug acceptance were not performed or claimed.
 
 ## TASK-0036 — resumed Phase A investigation, 2026-09-19
 
+Historical run: the glyph-motion failure below is superseded by the
+TASK-0036 blocker-repair record later in this document.
+
 **Status: BLOCKED in Phase A. Phase B has not started.** The earlier approved
 plan and implementation were reused after the owner explicitly requested
 completion of TASK-0036. No renderer workaround was applied without proof.
@@ -1270,6 +1276,9 @@ live fallback and recovery stages. No personal-desktop acceptance is claimed.
 | B: 2D/2.5D remain usable | Phase B matrix NOT EXECUTED |
 
 ## TASK-0037 — partial preview implementation, 2026-09-19
+
+Historical implementation run: its changes are now committed as `4cdb234`.
+The current full-suite stopping point is recorded in the blocker repair below.
 
 **Status: BLOCKED in Phase A. Phases B and C have not started.** The owner
 explicitly requested continuation from the existing TASK-0037 plan after the
@@ -1430,11 +1439,105 @@ environment or the task build's executable/working directory, and the owned
 `/tmp/archdock-task0037.obs1WOQt` build/log/probe root was removed after recording
 the evidence above. The source changes remain unstaged for owner review.
 
+## TASK-0036 — glyph-motion blocker repair, 2026-09-19
+
+**Original blocker: RESOLVED. Integrated gate: BLOCKED at TASK-0037.** The owner
+requested resolving the predecessor blocker before TASK-0038 planning. The
+existing TASK-0036 plan, implementation and earlier diagnostics were reused.
+This repair does not close TASK-0036 Phase B or complete TASK-0037.
+
+The inspected platform was Arch Linux, Plasma/KWin 6.7.5-1, Qt base 6.11.2-3,
+Qt Declarative 6.11.2-2, Qt Quick 3D 6.11.2-1 and Kirigami 6.30.0-1. No new
+dependency or KWin window rule was needed.
+
+### Proven cause and retained changes
+
+The unchanged renderer test reproduced the original failure in a fresh private
+KWin Wayland session. The glyph's named icon, `application-x-executable`, had
+Kirigami `status: Error` despite `valid: true`. Both its own image capture and
+its layer capture were entirely transparent. A correctly typed diagnostic
+assignment removing the texture made the cube visible. Readback showed that
+the earlier `QObject *` null assignment had not actually cleared the typed
+texture property; its result could not exclude the texture source.
+
+KDE's [Icon implementation](https://github.com/KDE/kirigami/blob/v6.30.0/src/primitives/icon.cpp)
+can retain a non-null transparent image after an unsuccessful icon lookup.
+The retained test therefore reuses `tests/fixtures/icon-style-v1/assets/base.svg`
+as a deterministic glyph source. It requires native `Ready` status and more
+than 100 nontransparent source pixels before asserting that actual mesh
+rotation changes viewport pixels. The existing motion/channel, input geometry,
+concealment, reduced-motion and fallback assertions remain enforced.
+
+Once motion passed, the same test reached two cleanup boundaries:
+
+- `PanelSurfaceLoader.qml` dereferenced `scene3D.texture` while a theme was
+  being removed. Its three scene-input bindings now supply empty/null values
+  during teardown, avoiding the QML error while preserving fallback reasons.
+- The resource-limit check inspected a removed Repeater3D delegate before
+  deferred deletion. It now waits for actual absence. This follows Qt's
+  [Repeater3D ownership and deletion contract](https://doc.qt.io/qt-6/qml-qtquick3d-repeater3d.html#objectRemoved-signal);
+  it does not remove or destroy the delegate manually.
+
+File change order: renderer test diagnostics and fixture/precondition repair;
+surface-loader teardown guard; renderer test deletion wait; this evidence
+document; release checklist. Temporary diagnostic mutations were removed.
+The production mesh, texture-provider and motion implementation was preserved.
+
+### Fresh evidence
+
+| Check | Result |
+| --- | --- |
+| Active pack integrity | PASS, 174/174 manifest entries |
+| Fresh ON Debug configure and complete serial build | PASS |
+| Focused PanelScene CTest | PASS, 1/1 |
+| Repaired motion/fallback case in private KWin Wayland | PASS, 3 QtTest cases including setup/cleanup |
+| Staged private renderer suite inside `rendering-import-smoke` | PASS, 6/6; 34,878 visible mesh pixels; physical glyph motion, parts, concealment, reduced motion, quality, active fallback and bounded recovery |
+| Full CTest, stop on first failure | FAIL, 54 passed, 1 failed, 12 not run of 67 registered; 76.47 seconds |
+| First remaining failure | `PanelWindowCapabilityTest::groupedWindowsFollowLiveKWinUpdates`, `tests/PanelWindowCapabilityTest.cpp:157`; the first window title did not appear in WindowModel |
+| Later private popup/editor/applet checks | NOT EXECUTED after the grouped-window failure |
+| TASK-0036 Phase B OFF/AUTO/ON and service-restart completion matrix | NOT EXECUTED by this blocker repair |
+
+The new failure is in the unchanged TASK-0037 fixture, after the renderer suite
+has passed. No later phase, independent rerun of later smoke stages, or test
+bypass was used. TASK-0036's supported-part UI acceptance and its complete
+Phase A/full-suite gate remain unclosed; the targeted 3D motion, termination,
+reduced-motion and resource-cleanup behavior above was directly observed.
+
+The fresh build directory was
+`/tmp/archdock-task0036-fix.3N1HXeqJ/on`. The integrated commands were:
+
+```bash
+cmake -S '/mnt/F/Arch Dock' -B "$task36_root/on" \
+  -DCMAKE_BUILD_TYPE=Debug -DARCHDOCK_ENABLE_QUICK3D=ON
+cmake --build "$task36_root/on" --parallel 1
+env DBUS_SESSION_BUS_ADDRESS="unix:path=$task36_root/no-parent-bus" \
+  ctest --test-dir "$task36_root/on" \
+  --output-on-failure --parallel 1 --stop-on-failure
+```
+
+The pending integrated runtime target, after resolving the grouped-window
+failure and making a fresh build, remains:
+
+```bash
+env DBUS_SESSION_BUS_ADDRESS="unix:path=$task36_root/no-parent-bus" \
+  ctest --test-dir "$task36_root/on" \
+  -R '^rendering-import-smoke$' --output-on-failure --parallel 1
+```
+
+All rendering evidence used private D-Bus/XDG state and virtual KWin Wayland;
+it does not establish personal-desktop, hardware or monitor acceptance. The
+smoke cleaned `/tmp/archdock-rendering-import.yYQk54`; no process retained the
+private diagnostic environments. The task-owned build/log/capture root was
+removed after recording these results. The final diff passed whitespace
+checks. Source and evidence changes remain unstaged for owner review.
+
 ## Next task boundary
 
-TASK-0036 still requires a proved correction of visible mesh-glyph motion and
-completion of its Phase A/B gates. TASK-0037 must then complete its own Phase A
-runtime/full-suite gate before the already planned Phases B and C. Do not start
-TASK-0038. The owner controls Git closure; Codex did not stage, commit, push,
-globally install or mutate the personal Plasma session. One sequential primary
-session performed the work; no background, delegated or parallel agent was used.
+The original TASK-0036 visible-motion blocker is resolved. The next unresolved
+integrated boundary is TASK-0037's live grouped-window watcher fixture at
+`tests/PanelWindowCapabilityTest.cpp:157`. TASK-0036 still needs its remaining
+Phase A acceptance and Phase B gates; TASK-0037 still needs its Phase A gate
+and planned Phases B/C. Do not start TASK-0038. The owner controls Git closure;
+Codex did not stage, commit, push, globally install or mutate the personal
+Plasma session. One sequential primary session performed this repair; no
+background, delegated or parallel agent was used.

@@ -81,6 +81,10 @@ private slots:
             + QStringLiteral("/mesh-platform-cyan/archdock-theme.json"));
         QVERIFY2(package.isValid(), qPrintable(package.primaryCode()));
         QVariantMap theme = package.package->runtimeProjection();
+        // A private XDG session need not have a desktop icon theme configured.
+        // Reuse a local fixture so this gate measures mesh motion, not icon lookup.
+        const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
+        QVERIFY(!glyphFixture.isEmpty());
         QQmlEngine engine;
         QStringList unexpectedWarnings;
         connect(&engine, &QQmlEngine::warnings, &engine, [&](const QList<QQmlError> &warnings) {
@@ -94,18 +98,21 @@ private slots:
             import QtQuick
             import ArchDock.Rendering 1.0
             PanelScene {
+                required property string glyphFixture
                 panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
                                    scene3DQuality: "low", iconSize: 40, layoutPadding: 10})
                 entryDelegateContext: ({hostKind: "free"})
                 hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [
                     {id: "open", available: true}, {id: "collapse-radial", available: true}]})
-                orderedEntries: [{id: "one", displayName: "One"}, {id: "two", displayName: "Two"}]
+                orderedEntries: [{id: "one", displayName: "One", iconName: glyphFixture},
+                                 {id: "two", displayName: "Two", iconName: glyphFixture}]
             }
         )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/SceneConsumer.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QQuickWindow window;
         std::unique_ptr<QObject> object(component.createWithInitialProperties({
-            {QStringLiteral("themeDefinition"), theme}}));
+            {QStringLiteral("themeDefinition"), theme},
+            {QStringLiteral("glyphFixture"), QUrl::fromLocalFile(glyphFixture).toString()}}));
         QVERIFY2(object != nullptr, qPrintable(component.errorString()));
         auto *scene = qobject_cast<QQuickItem *>(object.get());
         QVERIFY(scene);
@@ -234,6 +241,25 @@ private slots:
         QVERIFY(visual);
         QCOMPARE(plainValue(visual->property("resolvedGlyphMotion")).toMap()
             .value(QStringLiteral("rotateY")).toDouble(), 0.0);
+        auto *glyphSource = qobject_cast<QQuickItem *>(objectValue(visual->property("glyphItem")));
+        QVERIFY(glyphSource);
+        const QMetaProperty status = glyphSource->metaObject()->property(
+            glyphSource->metaObject()->indexOfProperty("status"));
+        const int readyStatus = status.enumerator().keyToValue("Ready");
+        QVERIFY(readyStatus >= 0);
+        QTRY_COMPARE(glyphSource->property("status").toInt(), readyStatus);
+        const auto glyphGrab = glyphSource->grabToImage();
+        QVERIFY(glyphGrab);
+        QSignalSpy glyphReady(glyphGrab.get(), &QQuickItemGrabResult::ready);
+        QVERIFY(glyphReady.wait(5000));
+        const QImage glyphImage = glyphGrab->image();
+        QVERIFY(!glyphImage.isNull());
+        int glyphPixels = 0;
+        for (int y = 0; y < glyphImage.height(); ++y)
+            for (int x = 0; x < glyphImage.width(); ++x)
+                glyphPixels += glyphImage.pixelColor(x, y).alpha() > 32;
+        QVERIFY2(glyphPixels > 100, qPrintable(QStringLiteral(
+            "Expected visible glyph texture, got %1 pixels").arg(glyphPixels)));
         const QImage turning = pixels();
         QVERIFY(!turning.isNull());
         const auto firstAngle = glyph->property("eulerRotation").value<QVector3D>().y();
@@ -245,8 +271,6 @@ private slots:
             QVERIFY(turning.save(QDir(evidence).filePath(QStringLiteral("mesh-motion-before.png"))));
             QVERIFY(advanced.save(QDir(evidence).filePath(QStringLiteral("mesh-motion-after.png"))));
         }
-        QObject *glyphSource = objectValue(visual->property("glyphItem"));
-        QVERIFY(glyphSource);
         if (turning == advanced && !evidence.isEmpty())
         {
             const QImage wholeBefore = window.grabWindow();
@@ -371,7 +395,8 @@ private slots:
             excessiveEntries.append(QVariantMap{{QStringLiteral("width"), 40}});
         renderer->setProperty("entryGeometry", excessiveEntries);
         QTRY_COMPARE(scene->property("fallbackReason").toString(), QStringLiteral("scene3d-resource-limit"));
-        QVERIFY(!renderer->findChild<QObject *>(QStringLiteral("mesh-entry-0")));
+        // Repeater3D releases removed delegates through Qt's deferred deletion.
+        QTRY_VERIFY(!renderer->findChild<QObject *>(QStringLiteral("mesh-entry-0")));
         QCOMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("procedural2d"));
         QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
         qInfo() << "Real staged mesh scene:" << visiblePixels

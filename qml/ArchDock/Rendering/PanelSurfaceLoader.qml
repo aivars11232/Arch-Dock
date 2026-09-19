@@ -183,10 +183,15 @@ Item {
             return
         }
         true3DRenderer.setSource(Qt.resolvedUrl("optional3d/PanelScene3D.qml"), {
-            sceneDefinition: Qt.binding(function() { return root.themeDefinition.scene3D }),
-            resources: Qt.binding(function() { return root.themeDefinition.scene3DResources }),
+            sceneDefinition: Qt.binding(function() {
+                return root.themeDefinition && root.themeDefinition.scene3D || ({})
+            }),
+            resources: Qt.binding(function() {
+                return root.themeDefinition && root.themeDefinition.scene3DResources || null
+            }),
             textureSource: Qt.binding(function() {
-                return ThemeStates.assetUrl(root.themeDefinition, root.themeDefinition.scene3D.texture)
+                const definition = root.themeDefinition || ({})
+                return ThemeStates.assetUrl(definition, (definition.scene3D || ({})).texture)
             }),
             entryGeometry: Qt.binding(function() { return root.entryGeometry }),
             entryVisuals: Qt.binding(function() { return root.entryVisuals }),

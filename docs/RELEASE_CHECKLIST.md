@@ -87,6 +87,9 @@ for the implemented limits.
 
 ## TASK-0036 resumed verification — 2026-09-19
 
+Historical run; the original glyph-motion failure is superseded by the
+blocker-repair verification below.
+
 **BLOCKED in Phase A; Phase B has not started.** Commit `0211331` is the
 owner's partial implementation checkpoint, not task completion. A fresh ON
 Debug configure and full serial build passed. Private Wayland rendering
@@ -101,6 +104,9 @@ resumed session. No release checkbox is closed by these results. See the
 for commands, diagnostic observations and acceptance statuses.
 
 ## TASK-0037 partial Phase A verification — 2026-09-19
+
+Historical implementation run, now committed as `4cdb234`. The blocker-repair
+run below reached a later failure in its grouped-window fixture.
 
 **BLOCKED in Phase A; Phases B and C have not started.** The owner explicitly
 requested and approved TASK-0037 after the TASK-0036 blocker record at
@@ -121,3 +127,39 @@ live popup positioning and the complete action/edge/free-layout matrix are
 unverified. No release checkbox is closed by these results. See the
 [TASK-0037 current-state record](CURRENT_STATE.md#task-0037--partial-preview-implementation-2026-09-19)
 for exact commands, file purposes and all inherited acceptance statuses.
+
+## TASK-0036 blocker-repair verification — 2026-09-19
+
+**Original glyph-motion blocker resolved; integrated acceptance remains
+BLOCKED.** Baseline and final HEAD are
+`4cdb234946d0689bd7d0da2a16501bf6c58a65d9`; repair changes remain unstaged.
+
+The private session could not load the test's desktop icon name. Kirigami
+reported `Error` while retaining a non-null, fully transparent fallback image.
+The existing renderer test now reuses a repository image fixture and requires
+both native `Ready` status and visible glyph pixels. Its original assertion
+that actual mesh rotation changes viewport pixels remains enforced.
+
+The newly reachable cleanup checks also exposed an unsafe scene-input binding
+during theme removal and a test that checked a Repeater3D delegate before
+deferred deletion. The loader now guards absent scene data, and the test waits
+for actual delegate destruction.
+
+- Fresh ON Debug configure and complete serial build: **PASS**.
+- Focused PanelScene CTest: **1/1 PASS**.
+- Targeted private motion/fallback case: **PASS**.
+- Staged private renderer suite: **6/6 PASS**, including visible glyph motion,
+  parts, concealment, reduced motion, active fallback and bounded recovery.
+- Full CTest: **54 passed, 1 failed, 12 not run**, out of 67 registered.
+- First remaining failure: unchanged TASK-0037
+  `groupedWindowsFollowLiveKWinUpdates`, at
+  `tests/PanelWindowCapabilityTest.cpp:157`; WindowModel did not receive the
+  first fixture window's title.
+- Later private popup/editor/applet checks and the TASK-0036 Phase B build and
+  service-restart matrix: **NOT EXECUTED** in this repair.
+
+No release checkbox or consolidated task-completion gate is closed. The
+original blocker has positive runtime evidence; the new integrated failure
+must be resolved before claiming full acceptance. See the
+[blocker-repair evidence](CURRENT_STATE.md#task-0036--glyph-motion-blocker-repair-2026-09-19)
+for the cause, exact commands, cleanup and next boundary.
