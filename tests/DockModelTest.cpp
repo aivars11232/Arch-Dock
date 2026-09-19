@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSettings>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QUrl>
@@ -24,6 +25,7 @@ private slots:
     void legacyCustomGlyphRemainsExplicitBaseData();
     void activationOutcomeSeparatesVerifiedLaunchFromRequest();
     void applicationEntryAndDesktopFileAreAvailableRegardlessOfPinning();
+    void groupedPreviewsFollowWindowChangesAndSelectById();
 
 private:
     QString writeDesktopEntry(const QString &fileName,
@@ -145,6 +147,47 @@ void DockModelTest::applicationEntryAndDesktopFileAreAvailableRegardlessOfPinnin
              running.constFirst().toMap().value(QStringLiteral("stableIdentity")));
     QCOMPARE(model.desktopFileForApplication(appId),
              QFileInfo(desktopPath).absoluteFilePath());
+}
+
+void DockModelTest::groupedPreviewsFollowWindowChangesAndSelectById()
+{
+    WindowModel source;
+    DockModel model(source);
+    QSignalSpy actions(&model, &DockModel::windowActionRequested);
+    WindowItem first;
+    first.internalId = QStringLiteral("first-window");
+    first.desktopFileName = QStringLiteral("org.example.group.desktop");
+    first.caption = QStringLiteral("First document");
+    first.canActivate = true;
+    WindowItem second = first;
+    second.internalId = QStringLiteral("second-window");
+    second.caption = QStringLiteral("Second document");
+    second.minimized = true;
+    source.setWindows({first, second});
+    QCOMPARE(model.rowCount(), 1);
+    const QString appId = model.data(model.index(0), DockModel::AppIdRole).toString();
+    auto previews = [&model, &appId] {
+        return model.applicationEntry(appId).value("windowPreviews").toList();
+    };
+    QCOMPARE(previews().size(), 2);
+    QCOMPARE(model.data(model.index(0), DockModel::WindowPreviewsRole).toList(), previews());
+    QVERIFY(previews().at(1).toMap().value("minimized").toBool());
+    QVERIFY(model.activateApplicationWindow(appId, second.internalId));
+    QCOMPARE(actions.size(), 1);
+    QCOMPARE(actions.at(0).at(0).toString(), second.internalId);
+    QCOMPARE(actions.at(0).at(1).toString(), QStringLiteral("activate"));
+    second.caption = QStringLiteral("Renamed document");
+    QVERIFY(source.updateWindow(second));
+    QCOMPARE(previews().at(1).toMap().value("title").toString(), second.caption);
+    QVERIFY(source.removeWindow(first.internalId));
+    QCOMPARE(previews().size(), 1);
+    QCOMPARE(previews().first().toMap().value("windowId").toString(), second.internalId);
+    QVERIFY(!model.activateApplicationWindow(appId, first.internalId));
+    QCOMPARE(actions.size(), 1);
+    QVERIFY(source.removeWindow(second.internalId));
+    QVERIFY(previews().isEmpty());
+    QVERIFY(!model.activateApplicationWindow(appId, second.internalId));
+    QCOMPARE(actions.size(), 1);
 }
 
 void DockModelTest::freeEntriesUseCanonicalIdentity()

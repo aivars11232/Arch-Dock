@@ -35,7 +35,8 @@ public:
         WindowCountRole,
         WindowIdsRole,
         WindowTitlesRole,
-        FolderRole
+        FolderRole,
+        WindowPreviewsRole
     };
     Q_ENUM(Role)
 

@@ -368,6 +368,46 @@ TestCase {
         verify(seen.indexOf("running-stopped") >= 0)
     }
 
+    function test_windowPreviewUsesItsOwnRouteAndHonorsInteractionGuards() {
+        let requests = []
+        let launches = 0
+        let menuGuardAtPreviewClose = []
+        const item = createHostedEntry({
+            entry: entry({ running: true, windowPreviews: [
+                { windowId: "one", title: "Document", canActivate: true }
+            ] }),
+            openWindowPreview: function(candidate, keyboard) {
+                requests.push({ appId: candidate.appId, keyboard: keyboard })
+                return true
+            },
+            invoke: function() { ++launches },
+            closeWindowPreview: function() {
+                menuGuardAtPreviewClose.push(item.contextMenuVisible)
+            }
+        })
+        verify(item.windowPreviewAvailable)
+        verify(item.openEntryContextMenu())
+        tryCompare(item, "contextMenuVisible", true)
+        compare(menuGuardAtPreviewClose.length, 1)
+        compare(menuGuardAtPreviewClose[0], true)
+        const action = findChild(item, "showWindowPreviewAction")
+        verify(action !== null)
+        verify(action.visible)
+        verify(item.requestWindowPreview(true))
+        tryCompare(item, "contextMenuVisible", false)
+        compare(requests.length, 1)
+        compare(requests[0].appId, item.entry.appId)
+        compare(requests[0].keyboard, true)
+        compare(launches, 0)
+        item.editMode = true
+        verify(!item.requestWindowPreview(false))
+        item.editMode = false
+        item.entry = entry({ windowPreviews: [] })
+        verify(!item.windowPreviewAvailable)
+        verify(!item.requestWindowPreview(true))
+        compare(requests.length, 1)
+    }
+
     function test_runningOnlyEditAndDragStatesCannotOpenProperties() {
         const runningOnly = createEntry({
             entry: entry({

@@ -159,6 +159,8 @@ PlasmoidItem {
     property bool panelDropActive: false
 
     readonly property bool entryMenuOpen: guardActive("menu")
+    readonly property bool entryPreviewOpen: fullRepresentationItem !== null
+        && fullRepresentationItem.windowPreviewVisible === true
     readonly property bool entryDragActive: guardActive("drag")
 
     function setEntryGuard(index, name, active) {
@@ -477,9 +479,7 @@ PlasmoidItem {
         keyboardFocus: root.panelKeyboardFocus
         editMode: root.plasmaEditMode
         revealZoneActive: root.revealZoneActive
-        // Grouped window previews are owned by TASK-0037. The guard exists and
-        // is fed with a truthful `false` rather than being silently omitted.
-        windowPreviewOpen: false
+        windowPreviewOpen: root.entryPreviewOpen
         // Panel Studio's preview lock does not apply to the live applet.
         previewLock: false
     }
@@ -491,7 +491,7 @@ PlasmoidItem {
     readonly property var reportedGuards: ({
         pointerInside: presentationController.pointerInside,
         revealZoneActive: presentationController.revealZoneActive,
-        popupOpen: presentationController.popupOpen,
+        popupOpen: presentationController.popupOpen || presentationController.windowPreviewOpen,
         dragActive: presentationController.dragActive,
         keyboardFocus: presentationController.keyboardFocus,
         editMode: presentationController.editMode
@@ -609,6 +609,54 @@ PlasmoidItem {
         Item {
             id: representation
 
+            property string previewAppId: ""
+            readonly property int previewEntryIndex: {
+                for (let index = 0; index < root.entries.length; ++index) {
+                    if (String(root.entries[index].appId) === previewAppId)
+                        return index
+                }
+                return -1
+            }
+            readonly property var previewEntry: previewEntryIndex >= 0
+                ? root.entries[previewEntryIndex] : ({})
+            readonly property var previewAnchorData: previewEntryIndex >= 0
+                ? panelScene.popupAnchors.entries[previewEntryIndex] : null
+            readonly property bool windowPreviewVisible: windowPreview.visible
+
+            function showWindowPreview(entry, keyboard) {
+                previewAppId = String(entry.appId || "")
+                return windowPreview.openPreview(keyboard)
+            }
+            function hideWindowPreview() { windowPreview.closePreview() }
+
+            Item {
+                id: previewAnchor
+                parent: panelScene
+                x: representation.previewAnchorData ? representation.previewAnchorData.x : 0
+                y: representation.previewAnchorData ? representation.previewAnchorData.y : 0
+                width: 1
+                height: 1
+            }
+
+            WindowPreviewHost {
+                id: windowPreview
+                visualParent: previewAnchor
+                windowEntries: representation.previewEntry.windowPreviews || []
+                applicationTitle: String(representation.previewEntry.displayName || "")
+                panelEdge: root.freeSurface ? "free" : String(root.configuration.edge || "bottom")
+                outwardNormal: representation.previewAnchorData
+                    ? representation.previewAnchorData.outwardNormal : ({ x: 0, y: -1 })
+                anchorHovered: root.hoveredIndex === representation.previewEntryIndex
+                    && root.panelPointerInside
+                interactionAllowed: representation.authoritativeHost && dockService.registered
+                    && root.sceneInputEnabled && !root.plasmaEditMode
+                    && !root.entryDragActive && !root.requestFailed
+                onWindowSelected: windowId => {
+                    const appId = FreeEntryPolicy.actionAppId(root.entries, representation.previewAppId)
+                    root.callDock("activateDockWindow", [appId, windowId], root.refreshEntries)
+                }
+            }
+
             // Size is deliberately independent of the collapse.
             //
             // Native: the scene's size comes from the panel's entries and its
@@ -664,7 +712,11 @@ PlasmoidItem {
                     root.hostConcealed = hostConcealed;
             }
 
-            onHostConcealedChanged: publishHostConcealed()
+            onHostConcealedChanged: {
+                publishHostConcealed()
+                if (hostConcealed)
+                    hideWindowPreview()
+            }
             onAuthoritativeHostChanged: publishHostConcealed()
             Component.onCompleted: publishHostConcealed()
 
@@ -850,6 +902,14 @@ PlasmoidItem {
             pinUrls: root.pinDroppedUrls
             setHoveredIndex: function(value) { root.hoveredIndex = value }
             setEntryGuard: root.setEntryGuard
+            openWindowPreview: function(entry, keyboard) {
+                return root.fullRepresentationItem !== null
+                    && root.fullRepresentationItem.showWindowPreview(entry, keyboard)
+            }
+            closeWindowPreview: function() {
+                if (root.fullRepresentationItem !== null)
+                    root.fullRepresentationItem.hideWindowPreview()
+            }
             openPanelStudio: root.openPanelStudio
             openIconProperties: root.openIconProperties
         }

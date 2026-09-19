@@ -1925,6 +1925,7 @@ QVariantList PanelWindow::freePanelEntries(
             QStringLiteral("windowCount"),
             QStringLiteral("windowIds"),
             QStringLiteral("windowTitles"),
+            QStringLiteral("windowPreviews"),
         };
         for (const QVariant &value : m_dockModel.panelEntries(QStringLiteral("tasks")))
         {

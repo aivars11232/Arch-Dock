@@ -90,6 +90,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     inputs/AlphaHitMask.qml
     inputs/GeometryHitRegion.qml
     previews/LivePanelPreview.qml
+    previews/WindowPreviewPopup.qml
     renderers/IconStyle2D.qml
     renderers/PanelProcedural2D.qml
     renderers/PanelSkin2D.qml
@@ -145,6 +146,7 @@ qt_add_executable(
   src/main.cpp
   src/DockModel.h
   src/DockModel.cpp
+  src/content/WindowPreviewModel.cpp
   src/DockSettings.h
   src/DockSettings.cpp
   src/PanelRegistry.h
@@ -660,6 +662,7 @@ if(BUILD_TESTING)
     src/WindowModel.cpp
     src/DockModel.h
     src/DockModel.cpp
+    src/content/WindowPreviewModel.cpp
     src/model/IconEntryIdentity.h
     src/model/IconEntryIdentity.cpp)
   target_include_directories(
@@ -681,11 +684,22 @@ if(BUILD_TESTING)
     PROPERTIES ENVIRONMENT
                "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-data/panel-registry")
 
+  qt_add_executable(window-preview-model-test
+    tests/WindowPreviewModelTest.cpp
+    src/content/WindowPreviewModel.cpp
+    src/WindowModel.h
+    src/WindowModel.cpp)
+  target_include_directories(window-preview-model-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(window-preview-model-test PRIVATE Qt6::Core Qt6::Test)
+  add_test(NAME window-preview-model-test COMMAND window-preview-model-test)
+
   qt_add_executable(
     dock-model-test
     tests/DockModelTest.cpp
     src/DockModel.h
     src/DockModel.cpp
+    src/content/WindowPreviewModel.cpp
     src/model/IconEntryIdentity.h
     src/model/IconEntryIdentity.cpp
     src/WindowItem.h
@@ -709,6 +723,7 @@ if(BUILD_TESTING)
     tests/PanelWindowCapabilityTest.cpp
     src/DockModel.h
     src/DockModel.cpp
+    src/content/WindowPreviewModel.cpp
     src/DockSettings.h
     src/DockSettings.cpp
     src/PanelRegistry.h
@@ -954,6 +969,13 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PanelBaked25D.qml)
   set_tests_properties(
     panel-baked-25d-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(NAME window-preview-popup-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+      -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+      -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_WindowPreviewPopup.qml)
+  set_tests_properties(window-preview-popup-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(

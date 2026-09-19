@@ -19,4 +19,7 @@ public:
     bool minimized = false;
     bool maximized = false;
     bool fullScreen = false;
+    bool canActivate = false;
+    bool canMinimize = false;
+    bool canClose = false;
 };

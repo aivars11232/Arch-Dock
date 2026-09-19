@@ -195,6 +195,9 @@ void WindowWatcher::windowAdded(const QString &internalId,
     window.minimized = minimized;
     window.maximized = state.value(QStringLiteral("maximized")).toBool();
     window.fullScreen = state.value(QStringLiteral("fullScreen")).toBool();
+    window.canActivate = state.value(QStringLiteral("canActivate")).toBool();
+    window.canMinimize = state.value(QStringLiteral("canMinimize")).toBool();
+    window.canClose = state.value(QStringLiteral("canClose")).toBool();
 
     m_windowModel.addWindow(window);
 }
@@ -230,6 +233,9 @@ void WindowWatcher::windowUpdated(const QString &internalId,
     window.minimized = minimized;
     window.maximized = state.value(QStringLiteral("maximized")).toBool();
     window.fullScreen = state.value(QStringLiteral("fullScreen")).toBool();
+    window.canActivate = state.value(QStringLiteral("canActivate")).toBool();
+    window.canMinimize = state.value(QStringLiteral("canMinimize")).toBool();
+    window.canClose = state.value(QStringLiteral("canClose")).toBool();
 
     m_windowModel.updateWindow(window);
 }

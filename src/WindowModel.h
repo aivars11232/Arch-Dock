@@ -24,7 +24,10 @@ public:
         ActiveRole,
         MinimizedRole,
         MaximizedRole,
-        FullScreenRole
+        FullScreenRole,
+        CanActivateRole,
+        CanMinimizeRole,
+        CanCloseRole
     };
     Q_ENUM(Role)
 

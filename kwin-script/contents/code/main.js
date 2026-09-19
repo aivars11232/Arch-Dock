@@ -29,7 +29,10 @@ function windowState(window) {
             : (typeof window.screen === "number" ? window.screen : -1),
         outputName: output && typeof output.name === "string" ? output.name : "",
         maximized: typeof window.maximized === "boolean" ? window.maximized : maximizeMode === 3,
-        fullScreen: window.fullScreen === true
+        fullScreen: window.fullScreen === true,
+        canActivate: window.wantsInput === true && window.deleted !== true,
+        canMinimize: window.minimizable === true && window.deleted !== true,
+        canClose: window.closeable === true && window.deleted !== true
     };
 }
 
@@ -84,6 +87,7 @@ function watchWindow(window) {
     window.activeChanged.connect(function() { sendWindowUpdated(window); });
     window.minimizedChanged.connect(function() { sendWindowUpdated(window); });
     window.desktopFileNameChanged.connect(function() { sendWindowUpdated(window); });
+    window.captionChanged.connect(function() { sendWindowUpdated(window); });
     if (window.frameGeometryChanged)
         window.frameGeometryChanged.connect(function() { sendWindowUpdated(window); });
     if (window.outputChanged)

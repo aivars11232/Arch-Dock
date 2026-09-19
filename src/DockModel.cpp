@@ -1,6 +1,7 @@
 #include "DockModel.h"
 
 #include "WindowModel.h"
+#include "content/WindowPreviewModel.h"
 #include "model/IconEntryIdentity.h"
 
 #include <QCoreApplication>
@@ -135,6 +136,9 @@ QVariant DockModel::data(const QModelIndex &index, int role) const
     }
     case FolderRole:
         return !folderPath(application).isEmpty();
+    case WindowPreviewsRole:
+        return ArchDock::WindowPreviewModel::entries(
+            application.windows, application.displayName);
     default:
         return {};
     }
@@ -157,7 +161,8 @@ QHash<int, QByteArray> DockModel::roleNames() const
         {WindowCountRole, "windowCount"},
         {WindowIdsRole, "windowIds"},
         {WindowTitlesRole, "windowTitles"},
-        {FolderRole, "isFolder"}};
+        {FolderRole, "isFolder"},
+        {WindowPreviewsRole, "windowPreviews"}};
 }
 
 void DockModel::activate(int row)
@@ -587,6 +592,8 @@ QVariantMap DockModel::entrySnapshot(const DockApplication &application) const
         {QStringLiteral("windowCount"), application.windows.size()},
         {QStringLiteral("windowIds"), windowIds},
         {QStringLiteral("windowTitles"), windowTitles},
+        {QStringLiteral("windowPreviews"), ArchDock::WindowPreviewModel::entries(
+             application.windows, application.displayName)},
         {QStringLiteral("isFolder"), !folderPath(application).isEmpty()}};
 }
 

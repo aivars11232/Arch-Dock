@@ -48,6 +48,10 @@ Item {
     // Defaulted rather than required so an existing host that does not yet
     // collect guards keeps working unchanged.
     property var setEntryGuard: function(index, name, active) {}
+    property var openWindowPreview: function(entry, keyboard) { return false }
+    property var closeWindowPreview: function() {}
+    readonly property bool windowPreviewAvailable: Boolean(
+        entry && entry.windowPreviews && entry.windowPreviews.length > 0)
     property var iconStyleDefinition: ({})
     property var iconOverrideResolution:
         entry && entry.iconOverrideResolution
@@ -163,7 +167,17 @@ Item {
         if (!contextInteractionAllowed)
             return false
         contextMenu.open()
+        closeWindowPreview()
         return true
+    }
+
+    function requestWindowPreview(keyboard) {
+        if (!contextInteractionAllowed || !windowPreviewAvailable)
+            return false
+        const opened = openWindowPreview(entry, Boolean(keyboard))
+        if (opened)
+            contextMenu.close()
+        return opened
     }
 
     function requestIconProperties() {
@@ -179,16 +193,24 @@ Item {
     property bool entryRunning: Boolean(entry && entry.running)
     onEntryRunningChanged: if (!entryRunning) dispatchMotionEvent("running-stopped")
 
-    onEditModeChanged: if (editMode) contextMenu.close()
+    onEditModeChanged: {
+        if (editMode) {
+            contextMenu.close()
+            closeWindowPreview()
+        }
+    }
     onDraggingChanged: {
-        if (dragging)
+        if (dragging) {
             contextMenu.close();
+            closeWindowPreview();
+        }
         setEntryGuard(entryIndex, "drag", dragging);
     }
     onContextMenuVisibleChanged:
         setEntryGuard(entryIndex, "menu", contextMenuVisible)
     onInputEnabledChanged: {
         if (!inputEnabled) {
+            closeWindowPreview();
             dragging = false;
             clickPulse = false;
             setHoveredIndex(-1);
@@ -388,7 +410,16 @@ Item {
         }
     }
 
+    Timer {
+        interval: Kirigami.Units.toolTipDelay
+        running: root.showTooltip && hoverArea.containsMouse
+            && root.contextInteractionAllowed && root.windowPreviewAvailable
+            && !root.contextMenuVisible
+        onTriggered: root.requestWindowPreview(false)
+    }
+
     QQC2.ToolTip.visible: root.showTooltip && hoverArea.containsMouse && !root.dragging
+        && !root.windowPreviewAvailable
     QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
     QQC2.ToolTip.text: entry.windowCount > 1
         ? qsTr("%1 (%2 windows)").arg(entry.displayName).arg(entry.windowCount)
@@ -396,6 +427,13 @@ Item {
 
     QQC2.Menu {
         id: contextMenu
+        QQC2.MenuItem {
+            objectName: "showWindowPreviewAction"
+            text: qsTr("Windows…")
+            visible: root.windowPreviewAvailable
+            enabled: root.contextInteractionAllowed
+            onTriggered: root.requestWindowPreview(true)
+        }
         QQC2.MenuItem {
             text: qsTr("Open Panel Studio…")
             icon.name: "configure"

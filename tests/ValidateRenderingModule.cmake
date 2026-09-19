@@ -21,6 +21,7 @@ set(rendering_sources
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/RunningIndicator.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/inputs/AlphaHitMask.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/previews/LivePanelPreview.qml"
+    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/previews/WindowPreviewPopup.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/IconStyle2D.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelProcedural2D.qml"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/renderers/PanelSkin2D.qml"

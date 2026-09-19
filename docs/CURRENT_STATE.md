@@ -8,10 +8,14 @@
 
 **Evidence snapshot:** 2026-09-19 (Europe/Amsterdam). TASK-0035 completion is
 committed as `7b4706e`; its verification below is historical. The owner
-committed the partial TASK-0036 implementation as `0211331`. TASK-0036 remains
-**BLOCKED in Phase A** at visible mesh-glyph motion verification. Phase B has
-not started. The resumed investigation reproduced the failure in a fresh ON
-build and records its evidence below; the commit subject is not closure proof.
+committed the partial TASK-0036 implementation as `0211331` and its resumed
+blocker record as `5f41ced`. TASK-0036 remains **BLOCKED in Phase A** at visible
+mesh-glyph motion verification; its Phase B has not started. The owner then
+explicitly requested TASK-0037 and approved its complete plan despite that
+predecessor gap. TASK-0037 now has partial Phase A preview implementation,
+but is also **BLOCKED in Phase A**: its fresh AUTO build passed and its full
+CTest gate stopped at the same renderer failure after 54 passing tests.
+TASK-0037 Phases B and C have not started. Neither task is complete.
 
 Earlier context, retained because it explains two mislabelled commits: the
 session that produced `f61c9ab` began from a tree whose subject `Task33` is
@@ -32,11 +36,13 @@ Earlier task sections retain their historical evidence and boundaries.
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`, matching the local `origin/main` reference. No fetch, push,
   or sync was performed by Codex.
-- Baseline and final `HEAD`: `021133174e70dfbd4b9006eff4a3fb546dce2171`, subject
-  `Arch dock task 36`, the owner's partial TASK-0036 checkpoint.
-- The working tree was clean when work resumed on September 19. The resumed
-  changes are the renderer test's failure diagnostics and the current-state
-  and release-checklist records, unstaged. Production renderer code is unchanged.
+- TASK-0037 baseline and final `HEAD`:
+  `5f41ced7e3f07f4f4eb1c48f3172ee8dd1a12056`, subject
+  `Arch Dock - Record TASK-0036 visual-motion blocker`.
+- The working tree was clean when TASK-0037 began. Its preview implementation,
+  tests, build integration and evidence documents are now unstaged, including
+  new untracked source/test files. The TASK-0036 renderer test and production
+  `PanelScene3D.qml` are unchanged from this baseline.
 - `build-codex-task-0014/` is still tracked at `HEAD`. It is a build
   directory committed by mistake in `75232e5` and must be removed with
   `git rm -r build-codex-task-0014`; `.gitignore` now excludes every
@@ -69,6 +75,7 @@ subject line, records which commit carries which task.
 | `e84e1bf` | `Arch Dock task35` | TASK-0035 Phase A and partial Phase B checkpoint, committed by the owner |
 | `7b4706e` | `Arch Dock task 35 full` | TASK-0035 completion |
 | `0211331` | `Arch dock task 36` | TASK-0036 partial Phase A; visual-motion failure unresolved, Phase B not started |
+| `5f41ced` | `Arch Dock - Record TASK-0036 visual-motion blocker` | TASK-0036 resumed diagnostics and blocked-state documentation; no closure |
 
 The TASK-0036 checkpoint contains the previous session's 29 changed files,
 956 insertions and 64 deletions. It does not close that session's BLOCKED result.
@@ -1262,9 +1269,172 @@ live fallback and recovery stages. No personal-desktop acceptance is claimed.
 | B: Detailed controls disappear when off/unsupported | NOT EXECUTED to Phase B acceptance |
 | B: 2D/2.5D remain usable | Phase B matrix NOT EXECUTED |
 
+## TASK-0037 — partial preview implementation, 2026-09-19
+
+**Status: BLOCKED in Phase A. Phases B and C have not started.** The owner
+explicitly requested continuation from the existing TASK-0037 plan after the
+TASK-0036 investigation, then supplied
+`APPROVED: IMPLEMENT TASK-0037 EXACTLY AS PLANNED.` A subsequent pause was
+lifted before implementation resumed. This sequencing exception does not
+close TASK-0036 or waive a phase gate. The existing audit, plan and verified
+pack inventory were reused; no replacement plan or delegated agent was used.
+
+The platform for this work was Arch Linux, Plasma/KWin 6.7.5-1, Qt base
+6.11.2-3, Qt Declarative 6.11.2-2, KCoreAddons/KService/KIO 6.30.0-1 and
+KPipeWire 6.7.5-1. No dependency was installed. KService/KIO launch and desktop
+actions remain planned Phase B work, with no CMake dependency added yet.
+
+### Implemented Phase A behavior and reuse
+
+Window capability flags and caption changes flow through the existing KWin
+watcher and WindowModel. A small `WindowPreviewModel` projection derives
+per-window IDs, titles, active/minimized states and action availability from
+that authoritative model. DockModel exposes those rows through its existing
+model roles and snapshots; free-panel pinned entries reuse the same snapshot
+merge. No second window tracker or new PanelWindow D-Bus method was added.
+
+The shared `WindowPreviewPopup` provides title/state rows, keyboard navigation,
+specific-ID selection, live row updates and safe empty-list dismissal. The
+Plasma host uses `PlasmaCore.Dialog`, existing PanelScene anchors and the
+presentation controller's preview guard. Hover or the new Windows menu item
+opens it; menu handoff keeps the guard held. Edit/drag/input restrictions and
+backend disappearance close or prevent the preview. Phase A adds selection
+only; minimize, restore, close, New Instance and desktop actions remain Phase B.
+
+The optional KDE adapter uses `TaskManager.ScreencastingRequest` and
+`PipeWireSourceItem`. Missing imports or unavailable frames leave the title
+list usable. Installed QML types and upstream KPipeWire source were inspected:
+the stream must be visible to obtain its first frame, so it is not hidden
+behind its own readiness property. A focused QML fixture checks that lifecycle;
+it does not prove a live thumbnail stream. Actual thumbnail availability in
+the target session remains unverified.
+
+The private multi-window fixture reuses the existing C++ Qt/PanelWindow test
+target because PySide6 is absent. It creates two real QQuickWindows in the
+existing disposable KWin session and checks watcher updates and ID-based
+selection. This changes fixture placement only. The fixture is integrated but
+was not reached at the failed runtime gate; no live acceptance is claimed.
+
+Files first changed in implementation order (subsequent focused corrections
+remain within these files):
+
+| Order | File(s) | Purpose |
+| --- | --- | --- |
+| 1 | `src/WindowItem.h` | Per-window capability facts |
+| 2 | `src/WindowModel.h`, `src/WindowModel.cpp` | Append roles and update notifications |
+| 3 | `src/WindowWatcher.cpp` | Parse capabilities through existing payloads |
+| 4 | `kwin-script/contents/code/main.js` | Native capability facts and caption updates |
+| 5 | `src/content/WindowPreviewModel.h`, `src/content/WindowPreviewModel.cpp` | Reusable projection with title fallback |
+| 6 | `tests/WindowPreviewModelTest.cpp` | Projection, update and removal coverage |
+| 7 | `CMakeLists.txt` | Source/test registration and shared-QML packaging |
+| 8 | `src/DockModel.h`, `src/DockModel.cpp` | Preview roles and snapshots |
+| 9 | `tests/DockModelTest.cpp` | Group updates and exact-ID selection |
+| 10 | `src/panel/PanelWindow.cpp` | Free-panel snapshot merge |
+| 11 | `tests/PanelWindowCapabilityTest.cpp` | Merge assertions and private KWin fixture |
+| 12 | `qml/ArchDock/Rendering/previews/WindowPreviewPopup.qml` | Shared preview content |
+| 13 | `qml/ArchDock/Rendering/qmldir` | Register shared component |
+| 14 | `tests/tst_WindowPreviewPopup.qml` | Selection, updates, fallback, guards and anchor mapping |
+| 15 | `plasma-dock-widget/contents/ui/WindowPreviewHost.qml` | Plasma popup lifecycle and anchoring |
+| 16 | `plasma-dock-widget/contents/ui/KdeWindowThumbnail.qml` | Optional KDE/PipeWire adapter |
+| 17 | `plasma-dock-widget/contents/ui/DockEntry.qml` | Hover/menu entry points and guard handoff |
+| 18 | `plasma-dock-widget/contents/ui/main.qml` | Bind snapshots, anchors, guards and selection |
+| 19 | `tests/tst_DockEntry.qml` | Menu routing, input restrictions and guard handoff |
+| 20 | `tests/ValidateRenderingModule.cmake` | Include popup in host-neutral boundary check |
+| 21 | `tests/run-rendering-import-smoke.sh` | Reuse private harness for new runtime fixtures |
+| 22 | `docs/CURRENT_STATE.md`, `docs/RELEASE_CHECKLIST.md` | Record partial implementation and blocked acceptance |
+
+### Fresh verification and exact stopping boundary
+
+| Verification | Result |
+| --- | --- |
+| Consolidated pack integrity at planning | PASS, 174/174 manifest entries; reused during implementation |
+| Fresh Debug AUTO configure, Unix Makefiles | PASS |
+| Complete serial build and final refresh after corrections | PASS |
+| Focused model/backend/QML/guard/host-neutral selection | PASS, 7/7 CTest entries |
+| Final full available CTest invocation | FAIL, 54 passed, 1 failed, 12 not run; 67 registered, stopped at first failure |
+| Window preview model unit cases | PASS, 4 passed, 0 failed |
+| Dock model unit cases | PASS, 9 passed, 0 failed |
+| PanelWindow headless cases | 23 passed, 0 failed, 1 skipped; private grouped-window case requires the disposable session |
+| Window preview QML cases | PASS, 13 passed, 0 failed; offscreen evidence only |
+| Guard interaction / DockEntry QML cases | PASS, 8 / 13 passed, 0 failed |
+| C++/JavaScript/shell syntax and QML lint checks | PASS; lint warnings are not live acceptance |
+| Private renderer capability cases | FAIL, 5 passed, 1 failed at unchanged mesh-glyph pixels |
+| New private grouped-window and popup checks | NOT EXECUTED; earlier renderer assertion stopped the smoke |
+| Full native-edge/free-layout action matrix | NOT EXECUTED; Phase C not started |
+
+The exact fresh build and final phase gate were:
+
+```bash
+cmake -S '/mnt/F/Arch Dock' -B /tmp/archdock-task0037.obs1WOQt/build \
+  -G 'Unix Makefiles' -DCMAKE_BUILD_TYPE=Debug -DARCHDOCK_ENABLE_QUICK3D=AUTO
+cmake --build /tmp/archdock-task0037.obs1WOQt/build --parallel 1
+env DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/archdock-task0037.obs1WOQt/no-parent-bus \
+  ctest --test-dir /tmp/archdock-task0037.obs1WOQt/build \
+  --output-on-failure --parallel 1 --stop-on-failure
+```
+
+CTest stopped at test 55, `rendering-import-smoke`, after 58.21 seconds total.
+Staged module imports and the existing preview/parity checks passed. Inside
+the private KWin session, `RendererCapabilityTest::realScenePixelsQualityAndFallback`
+then failed at `tests/RendererCapabilityTest.cpp:259`:
+
+```text
+'turning != advanced' returned FALSE.
+Mesh glyph angle 11.6471 -> 46.9412 produced unchanged pixels;
+glyph source=application-x-executable valid=1 size=28.8x28.8
+```
+
+The focused diagnostic comparison confirmed both that test and
+`qml/ArchDock/Rendering/optional3d/PanelScene3D.qml` are unchanged from `HEAD`.
+This reproduces the documented TASK-0036 blocker. No speculative renderer
+change, test bypass or repeated smoke was attempted. The contract requires
+stopping here rather than continuing into TASK-0037 Phase B.
+
+The pending live target remains the existing harness command below, after a
+proved TASK-0036 correction and a fresh build. It was not invoked separately
+after the full suite failed, and is not an environment waiver:
+
+```bash
+env DBUS_SESSION_BUS_ADDRESS="unix:path=$task37_root/no-parent-bus" \
+  ctest --test-dir "$task37_build" \
+  -R '^rendering-import-smoke$' --output-on-failure --parallel 1
+```
+
+### Inherited acceptance status
+
+`NOT EXECUTED` below means the full acceptance check remains outstanding;
+passing unit/offscreen subsets do not close required live checks.
+
+| Phase / criterion | Result and evidence boundary |
+| --- | --- |
+| A: Multiple windows individually show correct titles/states | NOT EXECUTED to live acceptance; model/snapshot/QML subsets pass |
+| A: No-thumbnail environments remain fully usable | NOT EXECUTED to live acceptance; offscreen title-list selection and fallback pass |
+| A: Last-window removal safely dismisses/updates the popup | NOT EXECUTED to live acceptance; model removal and QML dismissal/guard release pass |
+| A: Positioning works on all edges/free layouts | NOT EXECUTED to live acceptance; QML location mapping covers four edges and representative ring/arc directions |
+| B: Every shown action has a backend path | NOT EXECUTED; Phase B not started |
+| B: Specific actions target the selected ID | NOT EXECUTED for the full action set; existing selection path has passing unit coverage |
+| B: Running-only/transient entries hide invalid actions | NOT EXECUTED; Phase B not started |
+| B: Menu dismissal and guards remain correct | NOT EXECUTED for Phase B; Phase A guard/handoff subsets pass |
+| C: Multiple windows individually seen and controlled | NOT EXECUTED; Phase C not started |
+| C: No stale action remains after removal | NOT EXECUTED for the full action set; Phase A selection rejects removed IDs |
+| C: Popup/menu clicks do not launch the underlying icon | NOT EXECUTED to live acceptance; Phase A menu routing subset passes |
+| C: All targeted/full tests pass | FAIL; mandatory full suite stopped at the pre-existing renderer failure |
+
+No release checkbox or task-completion gate is closed. Phase B individual
+actions and Phase C full regression/runtime coverage remain owned by TASK-0037;
+they have not been deferred to another task. TASK-0036 owns the renderer blocker.
+
+Final cleanup and whitespace checks passed. The smoke's private root
+`/tmp/archdock-rendering-import.KMSQ5o` is absent, no process retained its private
+environment or the task build's executable/working directory, and the owned
+`/tmp/archdock-task0037.obs1WOQt` build/log/probe root was removed after recording
+the evidence above. The source changes remain unstaged for owner review.
+
 ## Next task boundary
 
-TASK-0036 requires a proved correction of the visible mesh-glyph motion failure,
-then completion of Phase A and Phase B. TASK-0037 planning remains blocked by
-the predecessor-closure rule. The owner controls Git closure; Codex did not
-stage, commit, push, globally install or mutate the personal Plasma session.
+TASK-0036 still requires a proved correction of visible mesh-glyph motion and
+completion of its Phase A/B gates. TASK-0037 must then complete its own Phase A
+runtime/full-suite gate before the already planned Phases B and C. Do not start
+TASK-0038. The owner controls Git closure; Codex did not stage, commit, push,
+globally install or mutate the personal Plasma session. One sequential primary
+session performed the work; no background, delegated or parallel agent was used.

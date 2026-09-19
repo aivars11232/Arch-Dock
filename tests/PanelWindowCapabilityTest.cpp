@@ -8,6 +8,7 @@
 #include "WindowModel.h"
 
 #include <QDir>
+#include <QDBusConnection>
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
@@ -18,6 +19,7 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSettings>
+#include <QScopeGuard>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QUrl>
@@ -109,10 +111,85 @@ private slots:
     void wholePanelRotationFieldsAreGatedByTheResolver();
     void meshSceneEditorIsGatedAndTransactional();
     void rendererSwitchRetainsOnlyUnchangedInactiveFields();
+    void groupedWindowsFollowLiveKWinUpdates();
 
 private:
     QTemporaryDir m_settingsDirectory;
 };
+
+void PanelWindowCapabilityTest::groupedWindowsFollowLiveKWinUpdates()
+{
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_PRIVATE_INTERACTION_TEST"))
+        QSKIP("Requires the disposable KWin Wayland rendering-import-smoke session");
+    QCOMPARE(QGuiApplication::platformName(), QStringLiteral("wayland"));
+    QVERIFY(!qEnvironmentVariableIsEmpty("ARCHDOCK_RENDERING_SESSION_ROOT"));
+    auto bus = QDBusConnection::sessionBus();
+    const QString service = QStringLiteral("org.archdock.ArchDock");
+    QVERIFY(bus.registerService(service));
+    const QString oldDesktopFile = QGuiApplication::desktopFileName();
+    const auto release = qScopeGuard([&] {
+        bus.unregisterService(service);
+        QGuiApplication::setDesktopFileName(oldDesktopFile);
+    });
+    QGuiApplication::setDesktopFileName(QStringLiteral("org.archdock.previewfixture"));
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *windows = qobject_cast<WindowModel *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("windowModel")).value<QObject *>());
+    auto *dock = qobject_cast<DockModel *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("dockModel")).value<QObject *>());
+    QVERIFY(windows);
+    QVERIFY(dock);
+    QQuickWindow first;
+    QQuickWindow second;
+    first.setTitle(QStringLiteral("Arch Dock preview first"));
+    second.setTitle(QStringLiteral("Arch Dock preview second"));
+    first.resize(320, 180);
+    second.resize(320, 180);
+    first.show();
+    second.show();
+    const auto idForTitle = [&](const QString &title) {
+        for (const WindowItem &item : windows->windows())
+            if (item.caption == title)
+                return item.internalId;
+        return QString{};
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(!idForTitle(first.title()).isEmpty(), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(!idForTitle(second.title()).isEmpty(), 5000);
+    const QString firstId = idForTitle(first.title());
+    const QString secondId = idForTitle(second.title());
+    QVERIFY(firstId != secondId);
+    QString appId;
+    for (const QVariant &value : dock->panelEntries(QStringLiteral("tasks")))
+    {
+        const auto entry = value.toMap();
+        if (entry.value("windowIds").toStringList().contains(firstId))
+            appId = entry.value("appId").toString();
+    }
+    QVERIFY(!appId.isEmpty());
+    const auto rows = [&] { return dock->applicationEntry(appId).value("windowPreviews").toList(); };
+    const auto rowForId = [&](const QString &id) {
+        for (const QVariant &value : rows())
+            if (value.toMap().value("windowId").toString() == id)
+                return value.toMap();
+        return QVariantMap{};
+    };
+    QCOMPARE(rows().size(), 2);
+    QVERIFY(rowForId(secondId).value("canActivate").toBool());
+    second.setTitle(QStringLiteral("Arch Dock preview renamed"));
+    QTRY_COMPARE(rowForId(secondId).value("title").toString(), second.title());
+    second.showMinimized();
+    QTRY_VERIFY(rowForId(secondId).value("minimized").toBool());
+    QVERIFY(backend.activateDockWindow(appId, secondId));
+    QTRY_VERIFY(!rowForId(secondId).value("minimized").toBool());
+    QTRY_VERIFY(rowForId(secondId).value("active").toBool());
+    first.close();
+    QTRY_COMPARE(rows().size(), 1);
+    QVERIFY(rowForId(firstId).isEmpty());
+    QVERIFY(!backend.activateDockWindow(appId, firstId));
+    second.close();
+    QTRY_VERIFY(rows().isEmpty());
+}
 
 void PanelWindowCapabilityTest::rendererSwitchRetainsOnlyUnchangedInactiveFields()
 {
@@ -1776,6 +1853,42 @@ void PanelWindowCapabilityTest::freePanelContentFollowsItsRecordAndOrdersItsOwnE
 
     // Hybrid shows the panel's entries and would append running-only apps.
     QVERIFY(setType(QStringLiteral("hybrid")));
+    QCOMPARE(shownIds(), QStringList({folderId, alphaId, betaId}));
+
+    auto *windows = qobject_cast<WindowModel *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("windowModel")).value<QObject *>());
+    QVERIFY(windows);
+    WindowItem first;
+    first.internalId = QStringLiteral("alpha-one");
+    first.desktopFileName = alphaUrl.toLocalFile();
+    first.caption = QStringLiteral("First Alpha document");
+    first.canActivate = true;
+    WindowItem second = first;
+    second.internalId = QStringLiteral("alpha-two");
+    second.caption = QStringLiteral("Second Alpha document");
+    second.minimized = true;
+    windows->setWindows({first, second});
+    const auto alphaSnapshot = [&window, &panelId, &alphaId] {
+        for (const QVariant &value : window.dockEntriesForPanel(panelId, QStringLiteral("hybrid")))
+        {
+            const auto entry = value.toMap();
+            if (entry.value(QStringLiteral("appId")).toString() == alphaId)
+                return entry;
+        }
+        return QVariantMap{};
+    };
+    auto merged = alphaSnapshot();
+    QCOMPARE(merged.value("panelEntryId").toString(), alphaId);
+    QVERIFY(!merged.value("runningAppId").toString().isEmpty());
+    QCOMPARE(merged.value("windowPreviews").toList().size(), 2);
+    QCOMPARE(merged.value("windowPreviews").toList().at(1).toMap()
+                 .value("windowId").toString(), second.internalId);
+    second.caption = QStringLiteral("Renamed Alpha document");
+    QVERIFY(windows->updateWindow(second));
+    QCOMPARE(alphaSnapshot().value("windowPreviews").toList().at(1).toMap()
+                 .value("title").toString(), second.caption);
+    windows->clearWindows();
+    QVERIFY(alphaSnapshot().value("windowPreviews").toList().isEmpty());
     QCOMPARE(shownIds(), QStringList({folderId, alphaId, betaId}));
 
     // Removal drops exactly one entry and is also refused for unknown ids.

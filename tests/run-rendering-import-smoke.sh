@@ -393,6 +393,16 @@ run_private_session() {
     ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \
         "$ARCHDOCK_RENDERING_CAPABILITY_TEST"
 
+    printf 'Checking grouped windows through the live KWin watcher and action bridge.\n'
+    ARCHDOCK_PRIVATE_INTERACTION_TEST=1 \
+        "$ARCHDOCK_RENDERING_ICON_PROPERTIES_INTERACTION_TEST" \
+        groupedWindowsFollowLiveKWinUpdates
+
+    printf 'Checking the window preview popup and its presentation guard under private Wayland.\n'
+    "$ARCHDOCK_RENDERING_QMLTESTRUNNER" \
+        -import "$QML_IMPORT_PATH" \
+        -input "$ARCHDOCK_RENDERING_WINDOW_PREVIEW_TEST"
+
     printf 'Driving live DockEntry Icon Properties Apply, Cancel, and Reset under private Wayland.\n'
     ARCHDOCK_PRIVATE_INTERACTION_TEST=1 \
         "$ARCHDOCK_RENDERING_ICON_PROPERTIES_INTERACTION_TEST" \
@@ -1427,6 +1437,7 @@ run_outer() {
         ARCHDOCK_RENDERING_ICON_PROPERTIES_INTERACTION_TEST="$build_dir/panel-window-capability-test" \
         ARCHDOCK_RENDERING_PANEL_SKIN_TEST="$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_PanelSkin2D.qml" \
         ARCHDOCK_RENDERING_PANEL_SURFACE_TEST="$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_PanelSurfaceIntegration.qml" \
+        ARCHDOCK_RENDERING_WINDOW_PREVIEW_TEST="$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_WindowPreviewPopup.qml" \
         ARCHDOCK_RENDERING_QMLTESTRUNNER="$qmltestrunner_binary" \
         ARCHDOCK_RENDERING_SMOKE_DESKTOP_FILE="$stage_root/share/applications/org.archdock.ArchDock.desktop" \
         ARCHDOCK_RENDERING_STAGED_ICON_STYLE_ROOT="$icon_style_root" \

@@ -99,3 +99,25 @@ OFF/AUTO/ON, live fallback or service-restart acceptance was performed in the
 resumed session. No release checkbox is closed by these results. See the
 [TASK-0036 current-state record](CURRENT_STATE.md#task-0036--resumed-phase-a-investigation-2026-09-19)
 for commands, diagnostic observations and acceptance statuses.
+
+## TASK-0037 partial Phase A verification — 2026-09-19
+
+**BLOCKED in Phase A; Phases B and C have not started.** The owner explicitly
+requested and approved TASK-0037 after the TASK-0036 blocker record at
+`5f41ced`; this did not waive either task's verification gates.
+
+The partial implementation adds grouped-window rows, a shared title-list popup,
+an optional KDE/PipeWire thumbnail adapter, Plasma popup hosting, hover/menu
+entry points and presentation guards. It reuses the existing watcher, models,
+snapshots, selection path and private runtime harness. Individual minimize,
+restore, close, New Instance and desktop actions remain Phase B work.
+
+A fresh Debug AUTO configure and complete serial Make build passed. The final
+CTest invocation stopped with 54 passed, 1 failed and 12 not run out of 67
+registered tests. The failure is the unchanged TASK-0036 mesh-glyph pixel
+assertion in `rendering-import-smoke`. New model and offscreen QML tests passed;
+the new private multi-window fixture was not reached. Actual thumbnail streams,
+live popup positioning and the complete action/edge/free-layout matrix are
+unverified. No release checkbox is closed by these results. See the
+[TASK-0037 current-state record](CURRENT_STATE.md#task-0037--partial-preview-implementation-2026-09-19)
+for exact commands, file purposes and all inherited acceptance statuses.
