@@ -18,6 +18,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
 #include <QQmlContext>
+#include <QQmlProperty>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSettings>
@@ -114,6 +115,8 @@ private slots:
     void meshSceneEditorIsGatedAndTransactional();
     void rendererSwitchRetainsOnlyUnchangedInactiveFields();
     void groupedWindowsFollowLiveKWinUpdates();
+    void desktopLaunchIsBoundToTheSelectedPanelEntry();
+    void folderRequestsValidatePanelAndChild();
 
 private:
     QTemporaryDir m_settingsDirectory;
@@ -180,17 +183,137 @@ void PanelWindowCapabilityTest::groupedWindowsFollowLiveKWinUpdates()
     QVERIFY(rowForId(secondId).value("canActivate").toBool());
     second.setTitle(QStringLiteral("Arch Dock preview renamed"));
     QTRY_COMPARE(rowForId(secondId).value("title").toString(), second.title());
+    QVERIFY(backend.requestDockWindowAction(appId, firstId, QStringLiteral("minimize")));
+    QTRY_VERIFY(rowForId(firstId).value("minimized").toBool());
+    QVERIFY(!rowForId(secondId).value("minimized").toBool());
+    QVERIFY(backend.requestDockWindowAction(appId, firstId, QStringLiteral("restore")));
+    QTRY_VERIFY(!rowForId(firstId).value("minimized").toBool());
     second.showMinimized();
     QTRY_VERIFY(rowForId(secondId).value("minimized").toBool());
     QVERIFY(backend.activateDockWindow(appId, secondId));
     QTRY_VERIFY(!rowForId(secondId).value("minimized").toBool());
     QTRY_VERIFY(rowForId(secondId).value("active").toBool());
-    first.close();
+    QVERIFY(backend.requestDockWindowAction(appId, firstId, QStringLiteral("close")));
     QTRY_COMPARE(rows().size(), 1);
+    QTRY_VERIFY(!first.isVisible());
     QVERIFY(rowForId(firstId).isEmpty());
     QVERIFY(!backend.activateDockWindow(appId, firstId));
-    second.close();
+    QVERIFY(!backend.requestDockWindowAction(appId, firstId, QStringLiteral("close")));
+    QVERIFY(rowForId(secondId).value("active").toBool());
+    QVERIFY(backend.requestDockWindowAction(appId, secondId, QStringLiteral("close")));
     QTRY_VERIFY(rows().isEmpty());
+    QTRY_VERIFY(!second.isVisible());
+}
+
+void PanelWindowCapabilityTest::desktopLaunchIsBoundToTheSelectedPanelEntry()
+{
+    QTemporaryDir files;
+    QVERIFY(files.isValid());
+    const QString mainMarker = files.filePath(QStringLiteral("main"));
+    const QString actionMarker = files.filePath(QStringLiteral("action"));
+    const QString path = files.filePath(QStringLiteral("launcher.desktop"));
+    QFile desktop(path);
+    QVERIFY(desktop.open(QIODevice::WriteOnly));
+    desktop.write(QStringLiteral(
+        "[Desktop Entry]\nType=Application\nName=Fixture\nIcon=applications-system\n"
+        "Exec=/usr/bin/touch \"%1\"\nActions=Write;\n"
+        "[Desktop Action Write]\nName=Write\nExec=/usr/bin/touch \"%2\"\n")
+        .arg(mainMarker, actionMarker).toUtf8());
+    desktop.close();
+    QVERIFY(desktop.setPermissions(desktop.permissions() | QFileDevice::ExeOwner));
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("panelRegistry")).value<QObject *>());
+    QVERIFY(registry);
+    const QString panelId = registry->addFreePanel();
+    const QString url = QUrl::fromLocalFile(path).toString();
+    const QString entryId = ArchDock::PanelContent::urlEntryId(url);
+    QVERIFY(window.addPanelEntries(panelId, {url}));
+    QVERIFY(window.applyPanelSettingsTransaction(panelId,
+        registry->panelDefinition(panelId)->settingsRevision,
+        {{QStringLiteral("type"), QStringLiteral("launcher")}})
+        .value(QStringLiteral("success")).toBool());
+    const auto entries = window.dockEntriesForPanel(panelId, QStringLiteral("launcher"));
+    QCOMPARE(entries.size(), 1);
+    const auto entry = entries.first().toMap();
+    QCOMPARE(entry.value("appId").toString(), entryId);
+    QVERIFY(entry.value("canNewInstance").toBool());
+    QCOMPARE(entry.value("desktopActions").toList().size(), 1);
+    QVERIFY(!window.launchDockEntry(QStringLiteral("missing"), entryId, QString{}));
+    QVERIFY(!window.launchDockEntry(QStringLiteral("bottom"), entryId, QString{}));
+    QVERIFY(!window.launchDockEntry(panelId, QStringLiteral("unknown"), QString{}));
+    QVERIFY(!window.launchDockEntry(panelId, entryId, QStringLiteral("unknown")));
+    QVERIFY(window.launchDockEntry(panelId, entryId, QString{}));
+    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(mainMarker), 5000);
+    QVERIFY(window.launchDockEntry(panelId, entryId, QStringLiteral("Write")));
+    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(actionMarker), 5000);
+    QCOMPARE(window.dockEntriesForPanel(panelId, QStringLiteral("launcher"))
+        .first().toMap().value("stableIdentity"), entry.value("stableIdentity"));
+    QVERIFY(window.removePanelEntry(panelId, entryId));
+    QVERIFY(!window.launchDockEntry(panelId, entryId, QString{}));
+}
+
+void PanelWindowCapabilityTest::folderRequestsValidatePanelAndChild()
+{
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    for (const auto &name : {QStringLiteral("document.txt"), QStringLiteral("unsafe.desktop")})
+    {
+        QFile file(folder.filePath(name));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("document\n");
+    }
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("panelRegistry")).value<QObject *>());
+    QVERIFY(registry);
+    const QString freePanel = registry->addFreePanel();
+    const QString foreignPanel = registry->addFreePanel();
+    const QString url = QUrl::fromLocalFile(folder.path()).toString();
+    const QString nativeId = QStringLiteral("file:") + QFileInfo(folder.path()).canonicalFilePath();
+    const QString freeId = ArchDock::PanelContent::urlEntryId(url);
+    QVERIFY(window.pinDockUrl(url));
+    QVERIFY(window.addPanelEntries(freePanel, {url}));
+    QVERIFY(window.applyPanelSettingsTransaction(freePanel,
+        registry->panelDefinition(freePanel)->settingsRevision,
+        {{QStringLiteral("type"), QStringLiteral("launcher")}})
+        .value(QStringLiteral("success")).toBool());
+    const auto before = settingsSnapshot();
+    const auto native = window.panelFolderSnapshot(QStringLiteral("bottom"), nativeId);
+    const auto free = window.panelFolderSnapshot(freePanel, freeId);
+    QCOMPARE(native.value("status").toString(), QStringLiteral("ready"));
+    QCOMPARE(free.value("entries"), native.value("entries"));
+    const auto children = native.value("entries").toList();
+    QCOMPARE(children.size(), 2);
+    QCOMPARE(window.dockFolderEntries(nativeId).size(), 2);
+    const QString documentId = children.first().toMap().value("id").toString();
+    QCOMPARE(children.first().toMap().value("name").toString(), QStringLiteral("document.txt"));
+    const QString unsafeId = children.last().toMap().value("id").toString();
+    for (const auto &panel : {QStringLiteral("missing"), foreignPanel})
+    {
+        QCOMPARE(window.panelFolderSnapshot(panel, freeId).value("errorCode").toString(),
+                 QStringLiteral("folder-entry-unavailable"));
+        QVERIFY(!window.openPanelFolderChild(panel, freeId, documentId).value("success").toBool());
+    }
+    QVERIFY(!window.openPanelFolderChild(freePanel, nativeId, documentId).value("success").toBool());
+    QVERIFY(!window.openPanelFolderChild(freePanel, freeId, QStringLiteral("folder-child:file:///etc/passwd"))
+                 .value("success").toBool());
+    QCOMPARE(window.openPanelFolderChild(freePanel, freeId, unsafeId).value("errorCode").toString(),
+             QStringLiteral("executable-entry"));
+    QCOMPARE(settingsSnapshot(), before);
+    QVERIFY(QFile::remove(folder.filePath("document.txt")));
+    QCOMPARE(window.openPanelFolderChild(freePanel, freeId, documentId).value("errorCode").toString(),
+             QStringLiteral("child-not-listed"));
+    QVERIFY(window.removePanelEntry(freePanel, freeId));
+    QCOMPARE(window.panelFolderSnapshot(freePanel, freeId).value("errorCode").toString(),
+             QStringLiteral("folder-entry-unavailable"));
+    QVERIFY(QDir(folder.path()).removeRecursively());
+    QCOMPARE(window.panelFolderSnapshot(QStringLiteral("bottom"), nativeId).value("status").toString(),
+             QStringLiteral("unavailable"));
+    QVERIFY(!window.openPanelFolderChild(QStringLiteral("bottom"), nativeId, documentId)
+                 .value("success").toBool());
 }
 
 void PanelWindowCapabilityTest::rendererSwitchRetainsOnlyUnchangedInactiveFields()
@@ -476,11 +599,18 @@ void PanelWindowCapabilityTest::editorSnapshotsExposeOnlyProjectedEditableState(
     const QVariantList nativeFields = nativeSnapshot.value(
         QStringLiteral("panelFields")).toList();
     const QSet<QString> nativeKeys = fieldKeys(nativeFields);
-    QCOMPARE(nativeKeys.size(), 4);
+    QCOMPARE(nativeKeys.size(), 8);
     QVERIFY(nativeKeys.contains(QStringLiteral("visible")));
     QVERIFY(nativeKeys.contains(QStringLiteral("visibilityMode")));
     QVERIFY(nativeKeys.contains(QStringLiteral("acceptDrops")));
     QVERIFY(nativeKeys.contains(QStringLiteral("iconStyle")));
+    for (const QString &key : {QStringLiteral("folderLayout"), QStringLiteral("folderSpeed"),
+         QStringLiteral("folderEasing"), QStringLiteral("folderExpandOnClick")})
+        QVERIFY(nativeKeys.contains(key));
+    QCOMPARE(fieldByKey(nativeFields, QStringLiteral("folderLayout"))
+                 .value(QStringLiteral("choices")).toStringList(),
+             QStringList({QStringLiteral("fan"), QStringLiteral("grid"), QStringLiteral("stack"),
+                          QStringLiteral("arc"), QStringLiteral("ring")}));
     QVERIFY(!nativeKeys.contains(QStringLiteral("layout")));
     QVERIFY(!nativeKeys.contains(QStringLiteral("layoutAngle")));
     QVERIFY(!nativeKeys.contains(QStringLiteral("layoutRadius")));
@@ -533,7 +663,6 @@ void PanelWindowCapabilityTest::editorSnapshotsExposeOnlyProjectedEditableState(
              QStringLiteral("nativeOwnershipToken"),
              QStringLiteral("nativeRecoveryState"),
              QStringLiteral("physicsEnabled"),
-             QStringLiteral("folderLayout"),
              QStringLiteral("pathAnchor"),
              QStringLiteral("iconThemeId"),
              QStringLiteral("surface3D")})
@@ -554,6 +683,10 @@ void PanelWindowCapabilityTest::editorSnapshotsExposeOnlyProjectedEditableState(
                           QStringLiteral("horizontal"),
                           QStringLiteral("vertical")}));
     const QSet<QString> studioKeys = fieldKeys(studioFields);
+    QVERIFY(studioKeys.contains(QStringLiteral("folderLayout")));
+    QCOMPARE(fieldByKey(studioFields, QStringLiteral("folderLayout"))
+                 .value(QStringLiteral("choices")),
+             fieldByKey(nativeFields, QStringLiteral("folderLayout")).value(QStringLiteral("choices")));
     QVERIFY(!studioKeys.contains(QStringLiteral("layoutAngle")));
     QVERIFY(!studioKeys.contains(QStringLiteral("layoutRadius")));
     QVERIFY(!studioKeys.contains(QStringLiteral("pathSides")));
@@ -1401,6 +1534,13 @@ void PanelWindowCapabilityTest::iconPropertiesPublicInteractionIsTransactional()
     QVERIFY(liveEntry);
     QVERIFY(pointerTarget);
     QVERIFY(propertiesAction);
+
+    // QTest sends Qt events without a compositor input serial. This editor
+    // transaction fixture therefore uses Popup.Item (0); the EIS-driven
+    // window-interaction-smoke covers the production native popup window.
+    QObject *menu = propertiesAction->property("menu").value<QObject *>();
+    QVERIFY(menu);
+    QVERIFY(QQmlProperty::write(menu, QStringLiteral("popupType"), 0));
 
     const auto clickItem = [](QQuickItem *item, Qt::MouseButton button)
     {

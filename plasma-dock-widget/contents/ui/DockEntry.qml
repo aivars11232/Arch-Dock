@@ -50,6 +50,9 @@ Item {
     property var setEntryGuard: function(index, name, active) {}
     property var openWindowPreview: function(entry, keyboard) { return false }
     property var closeWindowPreview: function() {}
+    property bool folderExpandOnClick: true
+    property var openFolderExpansion: function(entry) { return false }
+    property var closeFolderExpansion: function() {}
     readonly property bool windowPreviewAvailable: Boolean(
         entry && entry.windowPreviews && entry.windowPreviews.length > 0)
     property var iconStyleDefinition: ({})
@@ -168,6 +171,7 @@ Item {
             return false
         contextMenu.open()
         closeWindowPreview()
+        closeFolderExpansion()
         return true
     }
 
@@ -180,11 +184,32 @@ Item {
         return opened
     }
 
+    function requestFolderExpansion() {
+        if (!contextInteractionAllowed || entry.isFolder !== true)
+            return false
+        contextMenu.close()
+        closeWindowPreview()
+        return openFolderExpansion(entry)
+    }
+
     function requestIconProperties() {
         if (!contextInteractionAllowed || !iconPropertiesSupported)
             return false
         contextMenu.close()
         openIconProperties(entry)
+        return true
+    }
+
+    function requestDesktopAction(actionName) {
+        if (!contextInteractionAllowed || entry.canNewInstance !== true)
+            return false
+        const name = String(actionName || "")
+        if (name.length > 0 && !(entry.desktopActions || []).some(function(action) {
+                return String(action.id) === name
+            }))
+            return false
+        contextMenu.close()
+        invoke("launchDockEntry", entry.appId, name)
         return true
     }
 
@@ -197,12 +222,14 @@ Item {
         if (editMode) {
             contextMenu.close()
             closeWindowPreview()
+            closeFolderExpansion()
         }
     }
     onDraggingChanged: {
         if (dragging) {
             contextMenu.close();
             closeWindowPreview();
+            closeFolderExpansion();
         }
         setEntryGuard(entryIndex, "drag", dragging);
     }
@@ -210,7 +237,9 @@ Item {
         setEntryGuard(entryIndex, "menu", contextMenuVisible)
     onInputEnabledChanged: {
         if (!inputEnabled) {
+            contextMenu.close();
             closeWindowPreview();
+            closeFolderExpansion();
             dragging = false;
             clickPulse = false;
             setHoveredIndex(-1);
@@ -361,6 +390,10 @@ Item {
                 root.openEntryContextMenu();
                 return;
             }
+            if (root.entry.isFolder === true && root.folderExpandOnClick) {
+                root.requestFolderExpansion();
+                return; // An unavailable expansion never falls through to launching the folder.
+            }
             // A launch was asked for. Whether it succeeded is a separate,
             // verified outcome, reported back through reportLaunchOutcome.
             root.dispatchMotionEvent("launch-requested");
@@ -427,6 +460,38 @@ Item {
 
     QQC2.Menu {
         id: contextMenu
+        // A native panel is much shorter than this menu. An in-scene popup
+        // clips its actions to the panel; let Wayland place a popup window.
+        popupType: QQC2.Popup.Window
+        QQC2.MenuItem {
+            objectName: "newInstanceAction"
+            text: qsTr("New Instance")
+            icon.name: "window-new"
+            visible: root.entry.canNewInstance === true
+            enabled: root.contextInteractionAllowed
+            onTriggered: root.requestDesktopAction("")
+        }
+        Instantiator {
+            model: root.entry.desktopActions || []
+            delegate: QQC2.MenuItem {
+                required property var modelData
+                objectName: "desktopAction-" + String(modelData.id)
+                text: String(modelData.text)
+                icon.name: String(modelData.iconName || "")
+                enabled: root.contextInteractionAllowed && root.entry.canNewInstance === true
+                onTriggered: root.requestDesktopAction(String(modelData.id))
+            }
+            onObjectAdded: (index, object) => contextMenu.insertItem(index + 1, object)
+            onObjectRemoved: (index, object) => contextMenu.removeItem(object)
+        }
+        QQC2.MenuSeparator { visible: root.entry.canNewInstance === true }
+        QQC2.MenuItem {
+            objectName: "showFolderContentsAction"
+            text: qsTr("Show contents…")
+            visible: root.entry.isFolder === true
+            enabled: root.contextInteractionAllowed
+            onTriggered: root.requestFolderExpansion()
+        }
         QQC2.MenuItem {
             objectName: "showWindowPreviewAction"
             text: qsTr("Windows…")
@@ -454,17 +519,27 @@ Item {
             visible: root.iconPropertiesSupported
         }
         QQC2.MenuItem {
+            objectName: "pinEntryAction"
             text: entry.pinned ? qsTr("Unpin") : qsTr("Pin")
+            visible: entry.pinned === true || entry.canPin === true
+            enabled: root.contextInteractionAllowed
             onTriggered: root.invoke("togglePinnedDockEntry", entry.appId)
         }
         QQC2.MenuItem {
+            objectName: "minimizeEntryAction"
             text: entry.minimized ? qsTr("Restore") : qsTr("Minimize")
-            visible: entry.running
+            visible: root.windowPreviewAvailable && entry.windowPreviews.length === 1
+                && entry.windowPreviews[0].canMinimize === true
+            enabled: root.contextInteractionAllowed
             onTriggered: root.invoke("minimizeDockEntry", entry.appId)
         }
         QQC2.MenuItem {
+            objectName: "closeEntryAction"
             text: entry.windowCount > 1 ? qsTr("Close all windows") : qsTr("Close")
-            visible: entry.running
+            visible: root.windowPreviewAvailable && entry.windowPreviews.every(function(window) {
+                return window.canClose === true
+            })
+            enabled: root.contextInteractionAllowed
             onTriggered: root.invoke(entry.windowCount > 1 ? "closeAllDockEntry" : "closeDockEntry",
                                      entry.appId)
         }

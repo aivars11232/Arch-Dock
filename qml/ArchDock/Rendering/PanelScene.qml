@@ -63,6 +63,12 @@ Item {
     readonly property int entryCount:
         orderedEntries && orderedEntries.length !== undefined
         ? orderedEntries.length : 0
+    // State snapshots change on every window update. Only membership/order
+    // changes may replace delegates; otherwise their open menus lose owners.
+    readonly property string entryIdentityOrder: JSON.stringify(
+        (orderedEntries || []).map(function(entry, index) {
+            return String(entry.id || entry.appId || index)
+        }))
     readonly property string layoutPath: String(definitionValue(
         "layout", "pathType", "layout", "horizontal"))
     readonly property bool verticalLayout:
@@ -904,17 +910,16 @@ Item {
     Repeater {
         id: entryRepeater
 
-        model: root.orderedEntries || []
+        model: JSON.parse(root.entryIdentityOrder)
         onItemAdded: Qt.callLater(function() { root.entryVisualRevision += 1 })
         onItemRemoved: Qt.callLater(function() { root.entryVisualRevision += 1 })
 
         delegate: Item {
             id: entryItem
 
-            required property var modelData
             required property int index
             readonly property var geometryOutput: root.entryGeometryAt(index)
-            readonly property var sceneEntry: modelData
+            readonly property var sceneEntry: root.orderedEntries[index] || ({})
             readonly property int sceneIndex: index
             readonly property bool sceneInputEnabled:
                 root.entryInteractionEnabled
@@ -949,8 +954,7 @@ Item {
             height: width
             rotation: geometryOutput.rotation
             scale: geometryOutput.scaleFactor
-            opacity: root.entryDelegate === null && modelData
-                && modelData.minimized ? 0.55 : 1
+            opacity: root.entryDelegate === null && sceneEntry.minimized ? 0.55 : 1
 
             Loader {
                 id: fallbackMotion

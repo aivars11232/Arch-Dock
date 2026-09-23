@@ -31,6 +31,7 @@ void KWinActionBridge::requestAction(const QString &internalId, const QString &a
     if (internalId.isEmpty() ||
         action != QStringLiteral("activate") &&
             action != QStringLiteral("minimize") &&
+            action != QStringLiteral("restore") &&
             action != QStringLiteral("close"))
     {
         return;
@@ -117,12 +118,17 @@ for (let index = 0; index < windows.length; ++index) {
         continue;
     }
 
-    if (requestedAction === "activate") {
+    if (window.deleted === true) {
+        break;
+    }
+    if (requestedAction === "activate" && window.wantsInput === true) {
         window.minimized = false;
         workspace.activeWindow = window;
-    } else if (requestedAction === "minimize") {
+    } else if (requestedAction === "minimize" && window.minimizable === true) {
         window.minimized = true;
-    } else if (requestedAction === "close") {
+    } else if (requestedAction === "restore" && window.minimizable === true) {
+        window.minimized = false;
+    } else if (requestedAction === "close" && window.closeable === true) {
         window.closeWindow();
     }
     break;

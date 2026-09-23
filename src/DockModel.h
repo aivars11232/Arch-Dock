@@ -94,6 +94,11 @@ public:
     bool activateApplication(const QString &appId);
     ActivationOutcome activateApplicationOutcome(const QString &appId);
     bool activateApplicationWindow(const QString &appId, const QString &windowId);
+    bool requestApplicationWindowAction(const QString &appId, const QString &windowId,
+                                        const QString &action);
+    [[nodiscard]] static QVariantMap desktopEntryActions(const QString &desktopPath);
+    // True means the native asynchronous launch was accepted, not completed.
+    bool launchDesktopEntry(const QString &desktopPath, const QString &actionName);
     bool minimizeApplication(const QString &appId);
     bool closeApplication(const QString &appId);
     bool closeAllApplication(const QString &appId);

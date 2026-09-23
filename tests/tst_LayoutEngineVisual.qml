@@ -12,6 +12,38 @@ TestCase {
 
     property string currentLayout: "horizontal"
     property int entryCount: 6
+    property string folderLayout: "fan"
+    readonly property var folderGeometry: LayoutEngine.expansionGeometry(
+        folderLayout, 8, 32, 8, 120, 3)
+    Item {
+        id: folderFixture
+        width: testCase.folderGeometry.width
+        height: testCase.folderGeometry.height
+        Repeater {
+            model: testCase.folderGeometry.entries
+            delegate: Rectangle {
+                required property var modelData
+                x: modelData.x
+                y: modelData.y
+                width: 32
+                height: 32
+                color: "cyan"
+            }
+        }
+    }
+
+    function test_folderLayoutRendersEveryExposedEntry() {
+        for (const layout of ["fan", "grid", "stack", "arc", "ring"]) {
+            folderLayout = layout
+            wait(0)
+            const image = grabImage(folderFixture)
+            compare(image.width, folderGeometry.width)
+            compare(image.height, folderGeometry.height)
+            for (const point of folderGeometry.entries)
+                verify(image.alpha(Math.floor(point.x + 8), Math.floor(point.y + 8)) > 0,
+                       layout + " child renders within its declared bounds")
+        }
+    }
     readonly property var currentGeometry: LayoutEngine.metrics(
         currentLayout, entryCount, 40, 8, 1, 120, 2, 12, false, 0, 6)
 

@@ -10,6 +10,8 @@
 #include <QtGlobal>
 
 #include <array>
+#include <algorithm>
+#include <cmath>
 
 namespace
 {
@@ -766,6 +768,91 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     return definition;
 }
 
+QVariantMap PanelSegmentDefinition::toVariantMap() const
+{
+    return {{QStringLiteral("id"), id}, {QStringLiteral("source"), source},
+        {QStringLiteral("order"), order}, {QStringLiteral("entryIds"), entryIds},
+        {QStringLiteral("background"), background}, {QStringLiteral("color"), color},
+        {QStringLiteral("padding"), padding}, {QStringLiteral("spacing"), spacing},
+        {QStringLiteral("corners"), corners}, {QStringLiteral("presentation"), presentation},
+        {QStringLiteral("motionProfile"), motionProfile}};
+}
+
+std::optional<PanelSegmentDefinition> PanelSegmentDefinition::fromVariantMap(
+    const QVariantMap &record, QString *errorMessage)
+{
+    PanelSegmentDefinition result;
+    const QVariantMap defaults = result.toVariantMap();
+    const auto fail = [errorMessage](const QString &field) -> std::optional<PanelSegmentDefinition> {
+        setError(errorMessage, QStringLiteral("invalid segment field: %1").arg(field));
+        return std::nullopt;
+    };
+    for (auto it = record.cbegin(); it != record.cend(); ++it)
+        if (!defaults.contains(it.key())) return fail(it.key());
+    for (const QString &key : {QStringLiteral("id"), QStringLiteral("source"),
+         QStringLiteral("background"), QStringLiteral("color"), QStringLiteral("corners"),
+         QStringLiteral("presentation"), QStringLiteral("motionProfile")})
+        if (record.contains(key) && record.value(key).metaType().id() != QMetaType::QString)
+            return fail(key);
+    result.id = record.value(QStringLiteral("id")).toString();
+    static const QRegularExpression identifier(QStringLiteral("^[a-z][a-z0-9-]{0,47}$"));
+    if (!identifier.match(result.id).hasMatch()) return fail(QStringLiteral("id"));
+    result.source = record.value(QStringLiteral("source"), result.source).toString();
+    if (!QStringList{QStringLiteral("inherited"), QStringLiteral("launcher"), QStringLiteral("tasks"),
+         QStringLiteral("custom"), QStringLiteral("status")}.contains(result.source))
+        return fail(QStringLiteral("source"));
+    result.background = record.value(QStringLiteral("background"), result.background).toString();
+    if (!QStringList{QStringLiteral("inherited"), QStringLiteral("solid"), QStringLiteral("none")}.contains(result.background))
+        return fail(QStringLiteral("background"));
+    result.color = record.value(QStringLiteral("color"), result.color).toString();
+    static const QRegularExpression colorPattern(QStringLiteral("^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"));
+    if (!colorPattern.match(result.color).hasMatch()) return fail(QStringLiteral("color"));
+    result.corners = record.value(QStringLiteral("corners"), result.corners).toString();
+    if (!QStringList{QStringLiteral("inherited"), QStringLiteral("square"),
+         QStringLiteral("rounded"), QStringLiteral("capsule")}.contains(result.corners))
+        return fail(QStringLiteral("corners"));
+    result.presentation = record.value(QStringLiteral("presentation"), result.presentation).toString();
+    if (result.presentation != QStringLiteral("open") && result.presentation != QStringLiteral("closed"))
+        return fail(QStringLiteral("presentation"));
+    result.motionProfile = record.value(QStringLiteral("motionProfile"), result.motionProfile).toString();
+    if (result.motionProfile.size() > 96 || result.motionProfile.contains(QChar::Null))
+        return fail(QStringLiteral("motionProfile"));
+    const auto integer = [&record](const QString &key, int *target, int minimum, int maximum) {
+        if (!record.contains(key)) return true;
+        const QVariant value = record.value(key);
+        if (value.metaType().id() == QMetaType::Bool || value.metaType().id() == QMetaType::QString) return false;
+        bool ok = false;
+        const double number = value.toDouble(&ok);
+        if (!ok || !std::isfinite(number) || number != std::floor(number)
+            || number < minimum || number > maximum) return false;
+        *target = static_cast<int>(number);
+        return true;
+    };
+    if (!integer(QStringLiteral("order"), &result.order, 0, MaximumSegments - 1)) return fail(QStringLiteral("order"));
+    if (!integer(QStringLiteral("padding"), &result.padding, -1, 64)) return fail(QStringLiteral("padding"));
+    if (!integer(QStringLiteral("spacing"), &result.spacing, -1, 64)) return fail(QStringLiteral("spacing"));
+    if (record.contains(QStringLiteral("entryIds")))
+    {
+        const QVariant value = record.value(QStringLiteral("entryIds"));
+        if (value.metaType().id() != QMetaType::QStringList && value.metaType().id() != QMetaType::QVariantList)
+            return fail(QStringLiteral("entryIds"));
+        QSet<QString> seen;
+        for (const QVariant &entry : value.toList())
+        {
+            const QString id = entry.toString();
+            if (entry.metaType().id() != QMetaType::QString || id.isEmpty() || id.size() > 8192
+                || id.contains(QChar::Null) || seen.contains(id) || seen.size() >= 512)
+                return fail(QStringLiteral("entryIds"));
+            seen.insert(id);
+            result.entryIds.append(id);
+        }
+    }
+    if (result.source == QStringLiteral("status") && !result.entryIds.isEmpty())
+        return fail(QStringLiteral("entryIds"));
+    setError(errorMessage, QString{});
+    return result;
+}
+
 PanelDefinition PanelDefinition::normalized() const
 {
     QString errorMessage;
@@ -776,6 +863,35 @@ PanelDefinition PanelDefinition::normalized() const
 
 bool PanelDefinition::isValid(QString *errorMessage) const
 {
+    if (segments.isEmpty() || segments.size() > PanelSegmentDefinition::MaximumSegments)
+    {
+        setError(errorMessage, QStringLiteral("a panel must contain 1 to 16 segments"));
+        return false;
+    }
+    QSet<QString> segmentIds;
+    QSet<QString> assignedEntries;
+    QSet<int> segmentOrders;
+    for (const PanelSegmentDefinition &segment : segments)
+    {
+        if (!PanelSegmentDefinition::fromVariantMap(segment.toVariantMap(), errorMessage)) return false;
+        if (segmentIds.contains(segment.id) || segmentOrders.contains(segment.order)
+            || segment.order >= segments.size())
+        {
+            setError(errorMessage, QStringLiteral("duplicate segment identity or invalid segment order"));
+            return false;
+        }
+        segmentIds.insert(segment.id);
+        segmentOrders.insert(segment.order);
+        for (const QString &entry : segment.entryIds)
+        {
+            if (assignedEntries.contains(entry))
+            {
+                setError(errorMessage, QStringLiteral("entry belongs to multiple segments: %1").arg(entry));
+                return false;
+            }
+            assignedEntries.insert(entry);
+        }
+    }
     if (schemaVersion != CurrentSchemaVersion)
     {
         setError(

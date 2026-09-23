@@ -501,6 +501,29 @@ TestCase {
         compare(slot.rotation, 0)
     }
 
+    function test_windowStateRefreshPreservesInteractionOwner() {
+        const scene = createTemporaryObject(sceneComponent, testCase, {
+            panelDefinition: definition(), orderedEntries: entries(),
+            entryDelegate: hostEntryComponent
+        })
+        verify(scene !== null)
+        const owner = scene.entryItemAt(1).delegateItem
+        const changed = entries()
+        changed[1].active = false
+        changed[1].minimized = true
+        changed[1].displayName = "Renamed"
+        scene.orderedEntries = changed
+        compare(scene.entryItemAt(1).delegateItem, owner,
+                "window updates must not destroy an open menu's owner")
+        compare(owner.bridgedEntry.displayName, "Renamed")
+        compare(owner.bridgedEntry.active, false)
+        compare(owner.bridgedEntry.minimized, true)
+        scene.orderedEntries = [changed[0], changed[2]]
+        compare(scene.entryCount, 2)
+        compare(scene.entryItemAt(1).sceneEntry.id, "org.example.three")
+        compare(scene.entryItemAt(2), null)
+    }
+
     // A panel that is not on the baked tier must not pick up any of its
     // geometry. Track metrics are the marker: they exist only when the scene
     // is actually laid out on a theme's anchor path.

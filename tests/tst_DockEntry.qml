@@ -108,6 +108,30 @@ TestCase {
         return item
     }
 
+    function test_folderExpansionNeverFallsThroughToLaunch() {
+        let expansions = 0
+        let launches = 0
+        let closures = 0
+        const item = createHostedEntry({
+            entry: entry({ isFolder: true }),
+            openFolderExpansion: function(value) { ++expansions; return false },
+            closeFolderExpansion: function() { ++closures },
+            invoke: function() { ++launches }
+        })
+        mouseClick(item, 30, 30)
+        compare(expansions, 1)
+        compare(launches, 0, "a failed expansion cannot launch the folder root")
+        verify(!item.requestFolderExpansion())
+        compare(expansions, 2)
+        item.folderExpandOnClick = false
+        mouseClick(item, 30, 30)
+        compare(launches, 1, "explicit expand-on-click off preserves normal activation")
+        item.editMode = true
+        verify(closures > 0)
+        verify(!item.requestFolderExpansion())
+        compare(expansions, 2)
+    }
+
     function iconStyleDefinition() {
         return {
             format: "org.archdock.icon-style",
@@ -366,6 +390,81 @@ TestCase {
         wait(0)
         compare(item.motionController.running, false)
         verify(seen.indexOf("running-stopped") >= 0)
+    }
+
+    function test_desktopActionsUseTheNamedBackendRouteAndReleaseTheMenu() {
+        let requests = []
+        let menuGuard = false
+        const item = createHostedEntry({
+            entry: entry({ canNewInstance: true, canPin: true,
+                desktopActions: [{ id: "Write", text: "Write note", iconName: "document-new" }] }),
+            invoke: function(method, appId, action) {
+                requests.push({ method: method, appId: appId, action: action })
+            },
+            setEntryGuard: function(index, name, active) {
+                if (name === "menu") menuGuard = active
+            }
+        })
+        verify(item.openEntryContextMenu())
+        tryCompare(item, "contextMenuVisible", true)
+        verify(menuGuard)
+        const newInstance = findChild(item, "newInstanceAction")
+        verify(newInstance !== null && newInstance.visible)
+        verify(waitForRendering(newInstance))
+        mouseClick(newInstance, newInstance.width / 2, newInstance.height / 2)
+        tryCompare(item, "contextMenuVisible", false)
+        verify(!menuGuard)
+        compare(requests.length, 1)
+        compare(requests[0].method, "launchDockEntry")
+        compare(requests[0].appId, item.entry.appId)
+        compare(requests[0].action, "")
+        verify(item.openEntryContextMenu())
+        tryCompare(item, "contextMenuVisible", true)
+        const named = findChild(item, "desktopAction-Write")
+        verify(named !== null && named.visible)
+        verify(waitForRendering(named))
+        mouseClick(named, named.width / 2, named.height / 2)
+        tryCompare(item, "contextMenuVisible", false)
+        verify(!menuGuard)
+        compare(requests.length, 2)
+        compare(requests[1].method, "launchDockEntry")
+        compare(requests[1].appId, item.entry.appId)
+        compare(requests[1].action, "Write")
+        item.entry = entry({ canNewInstance: true, desktopActions: [] })
+        verify(!item.requestDesktopAction("Write"))
+        verify(item.openEntryContextMenu())
+        item.inputEnabled = false
+        tryCompare(item, "contextMenuVisible", false)
+        verify(!menuGuard)
+        verify(!item.requestDesktopAction(""))
+        compare(requests.length, 2)
+    }
+
+    function test_transientMenusHideInvalidActionsAndUseIndividualWindowRoute() {
+        const item = createHostedEntry({ entry: entry({
+            pinned: false, running: true, iconPropertiesSupported: false,
+            canPin: false, canNewInstance: false, windowCount: 2,
+            windowPreviews: [
+                { windowId: "one", canActivate: true, canMinimize: true, canClose: true },
+                { windowId: "two", canActivate: true, canMinimize: true, canClose: true }
+            ]
+        }) })
+        verify(item.openEntryContextMenu())
+        tryCompare(item, "contextMenuVisible", true)
+        verify(!findChild(item, "newInstanceAction").visible)
+        verify(!findChild(item, "pinEntryAction").visible)
+        verify(!findChild(item, "iconPropertiesAction").visible)
+        verify(!findChild(item, "minimizeEntryAction").visible)
+        verify(findChild(item, "closeEntryAction").visible)
+        verify(findChild(item, "showWindowPreviewAction").visible)
+        verify(!item.requestDesktopAction(""))
+        const changed = Object.assign({}, item.entry)
+        changed.windowPreviews = [{ windowId: "one", canActivate: true,
+            canMinimize: false, canClose: false }]
+        changed.windowCount = 1
+        item.entry = changed
+        verify(!findChild(item, "closeEntryAction").visible)
+        verify(!findChild(item, "minimizeEntryAction").visible)
     }
 
     function test_windowPreviewUsesItsOwnRouteAndHonorsInteractionGuards() {

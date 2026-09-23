@@ -11,17 +11,20 @@ been implemented under its retained approval and original plan. Both internal
 phase gates now pass. Fresh ON, OFF and AUTO builds each passed **67/67 CTests**
 after the final corrections, including private runtime fallback, Studio
 interaction and service restart. No build or test failure remains in that
-matrix. Formal TASK-0036 closure is **BLOCKED only by administrative cleanup**:
-two OS-managed crash dumps from the diagnosis are root-owned and cannot be
-removed with the available user privileges. Exact paths and the remaining
-command are recorded in the resumed Phase B section below.
+matrix. TASK-0036 is **COMPLETE**: the owner committed the verified work as
+`80d0820`, and the two OS-managed diagnostic crash dumps have now been removed
+under the owner's explicit authorization. Their absence was verified.
 
 TASK-0035 completion is committed as `7b4706e`. The partial TASK-0036 and
 TASK-0037 implementations and earlier repairs remain historical checkpoints.
-TASK-0037 Phases B/C and TASK-0038 Phases A/B have not started. TASK-0038's
-approval and predecessor-closure gate are retained; no replacement plan or
-repeated approval is needed. Passing the predecessor gates does not implement
-the remaining preview actions, folder expansion or panel segments.
+TASK-0037 is **COMPLETE**: all three resumed phase gates pass, with a final
+**68/68 CTests** including both private runtime gates. TASK-0038 Phase A is
+**COMPLETE**: the bounded provider, panel-aware opening, five shared layouts,
+native popup adapter and editor controls pass a fresh build and **71/71 CTests**,
+including real native/free folder interaction. Phase B segments have not
+started. TASK-0038's approval and predecessor-closure gate are retained; no
+replacement plan or repeated approval is needed. The remaining segment phase
+and consolidated final gate still block TASK-0038 completion and TASK-0039.
 
 Earlier context, retained because it explains two mislabelled commits: the
 session that produced `f61c9ab` began from a tree whose subject `Task33` is
@@ -42,13 +45,14 @@ Earlier task sections retain their historical evidence and boundaries.
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`, matching the local `origin/main` reference. No fetch, push,
   or sync was performed by Codex.
-- TASK-0036 resume baseline and current `HEAD`:
+- TASK-0036 implementation baseline:
   `a7f366506315e4009db2332ea8ddc6edc9cdf5ba`, subject `Arch Dock task 38`.
   That subject labels the prerequisite repair, not TASK-0038 implementation.
-- The working tree was clean when this resume began. Current source, tests
-  and documentation edits implement the retained TASK-0036 Phase B plan and
-  remain unstaged. TASK-0037 actions and TASK-0038 folder/segment code are
-  not implemented by this change.
+- Current `HEAD`: `80d0820b76f9c816be75f19fb7450aab1b5a1f0e`, subject
+  `Arch Dock task 36 repair`, committed by the owner. The working tree was
+  clean at the cleanup continuation, matching the preceding passing TASK-0036
+  matrix. The working tree now contains closure documentation and the approved
+  TASK-0037 closure and the approved TASK-0038 Phase A continuation.
 - `build-codex-task-0014/` is still tracked at `HEAD`. It is a build
   directory committed by mistake in `75232e5` and must be removed with
   `git rm -r build-codex-task-0014`; `.gitignore` now excludes every
@@ -83,6 +87,7 @@ subject line, records which commit carries which task.
 | `0211331` | `Arch dock task 36` | TASK-0036 partial Phase A; visual-motion failure unresolved, Phase B not started |
 | `5f41ced` | `Arch Dock - Record TASK-0036 visual-motion blocker` | TASK-0036 resumed diagnostics and blocked-state documentation; no closure |
 | `a7f3665` | `Arch Dock task 38` | Prerequisite watcher/action and fallback-test repairs; green ON suite, no TASK-0038 folder/segment implementation |
+| `80d0820` | `Arch Dock task 36 repair` | TASK-0036 Phase B, final texture-lifetime repair and passing ON/OFF/AUTO matrix; administrative cleanup subsequently verified |
 
 The TASK-0036 checkpoint contains the previous session's 29 changed files,
 956 insertions and 64 deletions. It does not close that session's BLOCKED result.
@@ -1823,7 +1828,7 @@ create their own private session, XDG roots, staged install and virtual KWin.
 | Final full ON CTest | PASS, 67/67, 136.11 seconds; private smoke 80.76 seconds |
 | Final full OFF CTest, optional dependency discovery disabled | PASS, 67/67, 125.93 seconds; private smoke 71.06 seconds |
 | Final full AUTO CTest | PASS, 67/67, 137.79 seconds; private smoke 81.39 seconds |
-| Temporary cleanup | BLOCKED only by two root-owned OS diagnostic cores; see remaining boundary |
+| Temporary cleanup | PASS: private roots/processes/builds removed; both OS diagnostic cores removed and absence verified in the authorized continuation |
 
 The ON and AUTO private checks passed real renderer pixels/motion/parts/fallback (6/6),
 grouped windows (3/3), popup interaction (13/13), Icon Properties and mesh
@@ -1857,8 +1862,10 @@ TASK-0036's renderer acceptance; it is not claimed as a pass here.
 | B / TASK-0069: detailed controls disappear off/unsupported | PASS: backend field rejection, QML filtering and enabled/disabled real Studio switch interaction |
 | B / TASK-0069: ordinary 2D/2.5D remain usable | PASS: full OFF suite, baked-to-procedural live fallback, ordinary applets and recovery |
 
-Both internal phase gates are PASS. The consolidated completion gate remains
-BLOCKED solely by the diagnostic-artifact cleanup requirement below.
+Both internal phase gates and the consolidated completion gate are PASS.
+The results above are retained from the preceding implementation run, whose
+source and tests the owner committed unchanged as `80d0820`. The cleanup
+continuation verifies artifact removal; it does not claim a new test run.
 
 Reproduction commands (each build completes before its CTest starts):
 
@@ -1913,7 +1920,7 @@ rollback is needed. No automatic restore, staging or commit was performed.
 The suggested commit `Complete optional Arch Dock 3D support` would contain
 only this consolidated task's changes.
 
-### Remaining boundary
+### Closure and continuation boundary
 
 All nine recorded disposable private-session roots are absent. A final
 executable/environment identity scan found no task-owned runtime or build
@@ -1923,20 +1930,268 @@ this removed all three builds, staged artifacts, logs, diagnostics, extracted
 core and downloaded debug-symbol cache. No unrelated temporary directory or
 tracked build tree was removed.
 
-The remaining administrator command is:
+The initial noninteractive removal of the two OS-managed diagnostic cores
+failed because administrator authentication was required. The owner then
+authorized authenticated cleanup. Only the two exact previously identified
+`panel-window-ca` dumps for PIDs `96035` and `204088` were removed; both paths
+were verified absent. No credential was written to repository or task files.
+The administrative blocker is resolved and TASK-0036 is complete.
+
+At TASK-0036 closure, TASK-0037 Phases B/C and TASK-0038 Phases A/B remained
+unimplemented. Their approved plans were retained. No delegated or parallel
+agent, staging, commit, push, global installation or personal Plasma mutation
+was used.
+
+## TASK-0037 — resumed window interaction, 2026-09-23
+
+Baseline: clean `80d0820b76f9c816be75f19fb7450aab1b5a1f0e`, matching the local
+`origin/main`. No fetch was performed. The retained plan and literal approval
+were recovered from the September 19 local session; no replacement plan or
+repeated approval was requested. The active pack again passed all 174 checksums.
+
+Phase A's existing implementation was reused. Its popup test now also opens
+native `PlasmaCore.Dialog` windows for top, bottom, left, right, free-ring-right
+and free-arc-up directions. It checks outward placement and screen bounds.
+The initial fixture read a QML `Window.screen` property that the native Dialog
+type does not expose. Using Qt's attached `Screen` on the content item fixed
+that test API error without changing any placement assertion.
+
+- Fresh AUTO configure and complete serial build: PASS.
+- Corrected private staged smoke: PASS, 1/1, 82.14 seconds; all six placement
+  cases passed, with 19/19 popup results and 3/3 live grouped-window results.
+- Final Phase A full CTest: PASS, 67/67, 141.19 seconds.
+- Phase A inherited criteria: PASS for individual titles/states, usable
+  no-thumbnail fallback, last-window dismissal and tested edge/free directions.
+
+Phase B reuses the existing exact-ID KWin bridge and adds state/capability
+validation for activate, minimize, restore and close. The bridge also checks
+KWin's current capabilities at dispatch. New Instance and named desktop-file
+actions use [KServiceAction](https://api.kde.org/kserviceaction.html) and
+[KIO::ApplicationLauncherJob](https://api.kde.org/kio-applicationlauncherjob.html),
+as the retained plan specified. KDE's native desktop-file authorization is
+checked before exposing or dispatching launches. Hidden, empty and unknown
+actions are refused. Existing activation outcomes are unchanged; the new
+asynchronous launcher return means accepted, not verified application startup.
+
+Launcher dispatch checks current panel membership. Free desktop entries keep
+their own identity while window actions use the merged running application ID.
+Shared preview buttons target exact IDs, keep ordinary title fallback, and do
+not activate their parent row. Menus preserve Pin/Unpin and Icon Properties,
+hide invalid transient actions, and release their guards on dismissal.
+
+Current Phase B targeted evidence:
+
+- Native dependencies configure and affected backend builds: PASS.
+- Dock model: 11/11 PASS, including actual harmless native launches, stale
+  actions, wrong application IDs and changed window capabilities.
+- Panel backend: 24 PASS, 1 private-only grouped-window case skipped in this
+  ordinary offscreen invocation; the private live case passed 3/3.
+- DockEntry: 15/15 PASS, including actual menu clicks, route arguments and guards.
+- Shared popup action checks and host-neutral renderer contract: PASS.
+- Two new test-fixture errors were corrected from direct evidence: signal
+  arguments need element comparisons, and visibility must be tested with the
+  menu open. The corrected targeted checks pass; production assertions remain.
+
+- Phase B full build: PASS; private staged smoke: PASS, 1/1, 82.31 seconds,
+  including 20/20 popup results and exact-ID live minimize/restore/activate/close.
+- The first full run stopped at an older panel-registry fixture that requested
+  activation while leaving `canActivate` false. The fixture now explicitly
+  grants the capabilities its unchanged assertions require. The corrected
+  panel-registry check passed 1/1; the final full suite passed **67/67 in
+  138.18 seconds**. No Phase B failure remains.
+
+### Phase C and consolidated closure
+
+**PASS: TASK-0037 is complete.** The final fresh AUTO build passes, and the
+final serial full suite passes **68/68 in 203.89 seconds**. The original
+`rendering-import-smoke` passed in **82.37 seconds**; the new
+`window-interaction-smoke` passed in **64.00 seconds**. The latter also passed
+its focused corrected gate in 64.59 seconds. The complete original popup
+suite passed **21/21** under private Wayland, including six placement cases.
+
+The new gate extends the existing private-session harness and fixture. It
+uses GTK4 windows and KWin's native EIS input API through the already installed
+Python GObject and libei libraries. It verifies the captured compositor PID,
+executable, private D-Bus and runtime/display environment before input. The
+virtual interaction compositor uses `setpriv --no-new-privs` so Arch's KWin
+file capability does not prevent those identity reads. No ambient desktop
+input or user KWin rule/configuration change is used. Observation hooks exist
+only in disposable staged applets. Private Studio is closed by its exact
+observed ID, application and title before testing desktop-widget input.
+
+Final native results:
+
+- All four native edges and free ring/arc layouts pass actual menu opening,
+  grouped rows, exact minimize/restore, other-window isolation, popup guards,
+  Escape, outside dismissal and absence of accidental icon launch.
+- Actual row activation restores and selects the intended window. Closing one
+  window leaves the other; closing the last dismisses the popup and releases
+  its guard. The removed ID is rejected using its canonical application ID.
+- The watcher survives an explicit private KWin reconfiguration and forwards
+  the subsequent title update.
+- Unit/QML coverage includes rapid replacement, title/thumbnail fallback,
+  current capabilities, safe desktop actions, stable interaction owners and
+  stale-ID rejection. Existing host-neutral module checks were reused.
+
+The runtime matrix exposed five production gaps, all corrected and covered:
+
+1. KWin unloads a manually loaded script whose ID matches a disabled installed
+   package when it reloads configuration. The existing watcher now uses its
+   own runtime ID, `org.archdock.windowwatcher.runtime`, and cleans the legacy
+   instance before loading. It still runs only its own script. The lifecycle
+   helper's identity checks were updated; its separate full scenario was not
+   rerun or claimed as additional evidence.
+2. Thin native panels clip an in-scene menu. DockEntry now uses Qt's native
+   popup window so its actions remain reachable.
+3. Native panels can instantiate only the compact representation. Preview
+   routing and host reports now use the actual visible representation.
+4. Plasma's PopupMenu type supplied only the X11 window hint in the inspected
+   implementation. AppletPopup provides the Wayland role that keeps preview
+   controls above their owning dock.
+5. Replacing the JavaScript entry snapshot destroyed every Repeater delegate,
+   closing a context menu during active-window updates. PanelScene now rebuilds
+   delegates only when entry identity/order changes and binds their state to
+   the current snapshot. A focused regression failed before this correction
+   and passed afterward.
+
+Native research: [KWin scripting lifecycle](https://raw.githubusercontent.com/KDE/kwin/v6.7.5/src/scripting/scripting.cpp),
+[KWin EIS backend](https://raw.githubusercontent.com/KDE/kwin/v6.7.5/src/plugins/eis/eisbackend.cpp),
+[Plasma Dialog roles](https://raw.githubusercontent.com/KDE/libplasma/v6.7.5/src/plasmaquick/dialog.cpp),
+[Qt popup types](https://doc.qt.io/qt-6/qml-qtquick-controls-popup.html#popup-type),
+and [Qt Repeater lifetime](https://doc.qt.io/qt-6/qml-qtquick-repeater.html).
+
+Fixture corrections preserved the required assertions: native geometry and
+fresh hover observations synchronize input after panel relocation; menu
+bounds determine outside-click points; only the visible representation is
+observed; only supported settings deltas are sent. The existing Icon
+Properties transaction test uses synthetic Qt events, which have no Wayland
+input serial. Its test-owned menu now uses Popup.Item, retaining all actual
+Apply/Cancel/Reset assertions. Production native menus are independently
+exercised with EIS. The corrected original smoke passed 81.45 seconds before
+the final complete run. Earlier failing runs are superseded by the final
+68/68 gate; no current build or test failure remains.
+
+Reproduction (with a fresh external configured build):
 
 ```bash
-sudo rm -f -- \
-  /var/lib/systemd/coredump/core.panel-window-ca.1000.d505279303d24516a6093ec4ee10d8fd.96035.1790181243000000.zst \
-  /var/lib/systemd/coredump/core.panel-window-ca.1000.d505279303d24516a6093ec4ee10d8fd.204088.1790183708000000.zst
+cmake --build "$task37_build" --parallel 1
+ulimit -c 0
+env DBUS_SESSION_BUS_ADDRESS="unix:path=$task37_root/no-parent-bus" \
+  ctest --test-dir "$task37_build" --output-on-failure --parallel 1 --stop-on-failure
 ```
 
-These two exact root-owned files were generated by the diagnosed test crashes.
-The authorized noninteractive `sudo -n rm` attempt failed with
-`sudo: a password is required`; no password was requested or supplied to Codex.
-This is an OS privilege boundary, not a failed test or an approval-review block.
-Their removal and a final absence check are required before formal closure.
+The 41 private session roots recorded by the resume logs are absent. No
+process retained those private environment roots at closure. The exact owned
+build/log root `/tmp/archdock-task0037-resume.mlDbVP` was then removed after
+checking executable/working-directory identities; its absence was verified. Private virtual KWin/Plasma acceptance
+is not personal-desktop, physical GPU/monitor, hotplug or release acceptance.
 
-TASK-0037 Phases B/C and TASK-0038 Phases A/B remain unimplemented. Their
-approved plans are retained. No delegated or parallel agent, staging, commit,
-push, global installation or personal Plasma mutation was used.
+The TASK-0038 plan and literal approval were recovered from the September 19
+local session (plan record 620, approval record 627). They remain authoritative
+for folder Phase A followed by segment Phase B. At TASK-0037 closure,
+TASK-0038 code had not yet started; its continuation is recorded below. No new plan, approval, agent, staging, commit, push or global install
+was used for this predecessor closure.
+
+
+## TASK-0038 — Phase A complete; Phase B pending, 2026-09-23
+
+The retained September 19 plan and literal approval are reused. Predecessors
+TASK-0036 and TASK-0037 are now closed; the latter's final current-source gate
+passed 68/68 before this implementation began. HEAD remains `80d0820`; no
+staging, commit or push was performed. The working diff includes predecessor
+closure and TASK-0038 work, so a future owner commit must account for both.
+
+The fresh ON Debug Make build is
+`/tmp/archdock-task0038-resume.lR1Az5/phase-a`. The full serial build passed;
+its log is `phase-a-build.log` in the parent directory. Initial focused results:
+
+- A1: `FolderContentModel` provides one nonrecursive Qt `QDirListing` snapshot
+  for both hosts. At most 48 rows and one truncation probe are inspected;
+  only that bounded page is sorted. Empty/unavailable/error states are
+  explicit. IDs encode each immediate child URL. Links, executable entries,
+  special files and unavailable children are blocked from selection.
+  `folder-content-model-test`: PASS, 1/1, 0.02 seconds.
+- A2: the existing DockModel folder API reuses the provider. Additive
+  `panelFolderSnapshot` and `openPanelFolderChild` methods resolve against
+  authoritative panel content and revalidate children at dispatch. KIO's
+  `OpenUrlJob` has executable launching and execute-choice dialogs disabled;
+  a positive asynchronous result means accepted, not observed app startup.
+  DockModel routing test: PASS, 1/1, 0.21 seconds. Panel backend routing test:
+  PASS, 1/1, 2.22 seconds, covering shared/free parity, cross-panel rejection,
+  unsafe entries, child removal and deleted folders. The existing registry
+  folder snapshot/reorder test is retained for the full gate.
+
+Research uses the installed Qt/KF headers and native
+[QDirListing](https://doc.qt.io/qt-6/qdirlisting.html),
+[OpenUrlJob](https://api.kde.org/kio-openurljob.html) and
+[Plasma Dialog](https://api.kde.org/plasmaquick-dialog.html) APIs. The KIO
+build dependency was already supplied by TASK-0037 and is reused.
+
+A3-A6 are implemented. `LayoutEngine.expansionGeometry` bounds all five
+layouts and exposes a selectable strip for stacked children. `FolderExpansion`
+reuses `IconScene`, `IconMotionController` and canonical positions, limits its
+scrolling viewport to available space, supports keyboard/Escape/pointer input,
+and preserves stable child identity. Legacy layout names remain durable but
+explicitly fall back to Fan; editor choices are exactly fan/grid/stack/arc/ring.
+`FolderExpansionHost` reuses Plasma's AppletPopup role and PanelScene anchors.
+`main.qml` routes panel-scoped asynchronous snapshots with request invalidation,
+entry/host authority and popup guards. Folder clicks never fall through to
+root launching when expansion is requested. Duration/easing/expand-on-click
+controls use the existing schema and transactional editor.
+
+Focused checks after these changes: geometry PASS (0.75 s), visual geometry
+PASS (0.16 s), shared folder content/native adapter PASS (0.76 s), DockEntry
+PASS (0.62 s), schema round trips PASS (0.02 s), backend/editor PASS (1.94 s).
+The first new dense-popup test found a height overflow caused by the combined
+fallback/truncation labels. The viewport now subtracts actual visible label
+heights; the same test passes. A standalone `qmllint --bare` invocation lacked
+Qt import paths and is not validation evidence; runtime QML tests load the
+component successfully. No current targeted build/test failure remains.
+
+A7's `folder-interaction-smoke` passed in the final full suite (64.01 s). It reuses the
+private KWin EIS matrix in `visibility-window.py`, with real temporary folders
+and a private document handler. It covers five layouts on native/free hosts,
+four native edges, keyboard/pointer selection, no accidental root launch,
+empty folders, dismissal and presentation guards. Reduced motion is covered
+by the shared component test; live observations check the actual saved setting.
+The matrix uses `ARCHDOCK_RENDERING_INTERACTIONS=1` plus
+`ARCHDOCK_RENDERING_FOLDERS=1`; no personal desktop input or application handler
+is used. Python syntax and shell syntax checks pass.
+
+The first live run exposed a resident-service lifetime defect: after the
+controlled handler received the selected file, destruction of KJob's last
+QEventLoopLocker initiated application shutdown even though Studio's window
+closure was already disabled. `src/main.cpp` now also calls
+`setQuitLockEnabled(false)`. This necessary placement adaptation preserves the
+approved KIO opening behavior and persistent backend lifetime; no feature scope
+was added. The live matrix now requires the same D-Bus owner after each launch.
+Native references: [Qt quit locking](https://doc.qt.io/qt-6/qcoreapplication.html#quitLockEnabled-prop)
+and [KJob private lifetime](https://raw.githubusercontent.com/KDE/kcoreaddons/v6.30.0/src/lib/jobs/kjob_p.h).
+A later fixture run intermittently waited for a stale popup size during a
+layout change. The geometry waiter now refreshes QML size/child coordinates
+while matching the actual KWin window; native bounds and identity assertions
+remain intact. The diagnostic run passed (64.26 s), and the final corrected
+matrix passed in the complete suite.
+
+Final Phase A gate: fresh ON Debug build PASS; **71/71 CTests PASS, 266.85 s**.
+The staged rendering gate passed in 82.10 s, grouped-window regression in
+63.99 s, folder interaction in 64.01 s. The final log is `phase-a-ctest.log`.
+All five layouts opened the exact selected document through the private
+handler on native and free hosts; all four native edges, stack keyboard
+selection, popup guards, outside/Escape dismissal and empty folders passed.
+Unavailable/deleted roots and stale/unsafe child rejection are model/backend
+proof; reduced motion is shared-QML proof. No current build/test failure remains.
+`git diff --check` passes. The five private runtime roots named by retained
+logs are absent and no process retains those roots. This is private virtual
+KWin/Plasma proof, not physical GPU/monitor or personal-desktop acceptance.
+An additional filesystem check found no remaining
+`/tmp/archdock-rendering-import.*` directory, including the diagnostic pass
+whose terse CTest result did not retain its temporary root name.
+
+Next is the retained Phase B plan: typed bounded segments, equivalent single-
+segment migration, revisioned ownership-safe transactions, capability-filtered
+sources, independent shared surfaces/input geometry, transactional Studio
+controls, persistence/native/free runtime acceptance and a fresh full gate.
+Phase B and TASK-0039 have not started; **TASK-0038 remains incomplete** until
+segments and the consolidated final gate pass. No replacement plan or approval
+is needed. The task build/log root is retained for this active continuation.

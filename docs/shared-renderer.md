@@ -17,6 +17,35 @@ import ArchDock.Rendering 1.0
 No source-tree-relative or absolute repository path is part of the module
 contract.
 
+## Window interaction and entry lifetime
+
+TASK-0037 keeps per-window preview content in the host-neutral
+`WindowPreviewPopup`. Its optional thumbnail delegate never replaces the
+usable title list. Selection and capability-filtered minimize, restore and
+close signals carry exact window IDs; the backend revalidates membership and
+capabilities before dispatch. Native desktop actions use KService/KIO.
+
+`PanelScene` preserves entry delegates while their identity and order remain
+unchanged, binding their data to the current snapshot. Active, minimized and
+title updates therefore preserve an open menu and its guard. Membership or
+order changes rebuild the delegates and release removed owners' guards.
+
+The Plasma adapter owns native placement and window roles. DockEntry menus use
+Qt popup windows so thin native panels cannot clip actions. The preview host
+uses Plasma's Wayland AppletPopup role. Native compact-only panels and desktop
+full representations both route through the current visible representation.
+The backend-owned watcher uses a distinct runtime script ID so Plasma/KWin
+configuration reload does not unload it as a disabled installed package.
+
+The complete TASK-0037 gate passed 68/68 CTests. `window-interaction-smoke`
+reuses the staged private KWin/Plasma harness, with real EIS pointer/keyboard
+input and six edge/free-layout cases. Observation hooks are staged only;
+production components contain no test input path. The older synthetic Qt
+Icon Properties fixture selects an in-scene menu because Qt test events have
+no compositor input serial; the new gate exercises production popup windows.
+See [the current evidence](CURRENT_STATE.md#phase-c-and-consolidated-closure)
+for corrections, native research and the limits of this private evidence.
+
 ## Optional spatial renderer capability
 
 `ARCHDOCK_ENABLE_QUICK3D` accepts `AUTO` (the default), `OFF`, or `ON`.
@@ -173,9 +202,9 @@ preserves saved 3D intent and the same unique native/free hosts; enabled modes
 also prove fresh quality frames after recovery. The source/window lifetime
 regression and ordinary 2D/2.5D coverage remain part of the full suite.
 These are disposable private D-Bus/KWin/PlasmaShell results, not personal
-desktop or physical GPU/monitor acceptance. Formal task closure still requires
-removing two root-owned OS crash dumps from diagnosis. Exact results and that
-administrative cleanup boundary are recorded in
+desktop or physical GPU/monitor acceptance. The owner committed the verified
+work as `80d0820`; authenticated removal of the two diagnostic OS crash dumps
+and an absence check completed TASK-0036 cleanup. Exact results are recorded in
 [CURRENT_STATE.md](CURRENT_STATE.md#task-0036--resumed-phase-b-implementation-2026-09-23).
 
 ## Exported foundation types
@@ -505,3 +534,36 @@ and direct `PanelScene` instances. It compares geometry contracts and safe
 procedural pixels for the baseline renderer, then compares direct-versus-preview
 energy state, layer order, glow, reduced-motion, input containment, and surface
 pixels for normal, hover, open, and collapsed states.
+
+## Folder expansion — TASK-0038 Phase A
+
+`FolderContentModel` supplies a nonrecursive page of at most 48 immediate
+children, plus explicit empty/unavailable/truncated status. The legacy folder
+API and both panel hosts use this provider. Panel-scoped selection resolves the
+current entry and child again, blocks links/executables/special files, and opens
+accepted documents through KIO with execution and execute-choice dialogs off.
+KIO job completion cannot stop the resident backend: its Qt quit-lock and
+last-window automatic exits are both disabled.
+
+`LayoutEngine.expansionGeometry` owns fan/grid/stack/arc/ring positions and
+bounds. `FolderExpansion` renders those positions through `IconScene`, uses
+`IconMotionController` for opening motion and reduced-motion suppression, and
+scrolls large pages without shrinking their hit targets. Keyboard traversal
+preserves provider order; stacked children also retain exposed pointer areas.
+Legacy saved layouts are preserved and visibly fall back to Fan, while the
+transactional editor offers only the five implemented layouts.
+
+`FolderExpansionHost` supplies the native Plasma AppletPopup surface.
+`main.qml` supplies PanelScene's anchor/normal, authoritative host and panel
+identity, asynchronous request invalidation, and presentation guards while
+loading/displaying. Removal, service loss, input disable, dragging and Edit Mode
+close or invalidate expansion. Selection and dismissal do not launch the root;
+normal root activation is available only when expand-on-click is explicitly off.
+
+Phase A passed a fresh build and all 71 CTests. The private folder matrix opened
+controlled documents in all five layouts on native/free hosts, covered four
+native edges and free ring/arc hosts, checked stable service lifetime, popup
+guards, stack keyboard selection, outside/Escape dismissal and empty folders.
+Model/backend tests cover deleted/unavailable paths and stale/unsafe children;
+shared QML tests cover reduced motion and bounded dense layouts. Independent
+panel segments remain Phase B work.

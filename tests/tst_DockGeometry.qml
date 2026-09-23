@@ -5,6 +5,37 @@ import ArchDock.Rendering 1.0
 TestCase {
     name: "DockGeometry"
 
+    function test_folderExpansionBoundsAndFallback() {
+        for (const layout of ["fan", "grid", "stack", "arc", "ring"]) {
+            for (const count of [0, 1, 8, 48]) {
+                const value = LayoutEngine.expansionGeometry(layout, count, 48, 8, 120, 6)
+                compare(value.count, count)
+                compare(value.layout, layout)
+                verify(!value.fallbackApplied)
+                compare(JSON.stringify(value), JSON.stringify(
+                    LayoutEngine.expansionGeometry(layout, count, 48, 8, 120, 6)))
+                for (const point of value.entries)
+                    verifyPointInside(point, value, layout + "/" + count)
+                if (layout === "stack" && count > 1) {
+                    verify(value.entries[1].x - value.entries[0].x >= 24,
+                           "each stacked child retains an exposed pointer target")
+                }
+            }
+        }
+        const invalid = LayoutEngine.expansionGeometry("legacy", Infinity, NaN, -5, Infinity, 0)
+        compare(invalid.layout, "fan")
+        verify(invalid.fallbackApplied)
+        compare(invalid.fallbackReason, "unsupported-folder-layout")
+        verify(isFinite(invalid.width) && isFinite(invalid.height))
+        const bounded = LayoutEngine.expansionGeometry("grid", 500, 999, 999, -5, NaN)
+        compare(bounded.count, 48)
+        compare(bounded.iconSize, 128)
+        for (const point of bounded.entries)
+            verifyPointInside(point, bounded, "bounded")
+        compare(JSON.stringify(LayoutEngine.expansionOffset("ring", 2, 8, 48, 8, 120, 3)),
+                JSON.stringify(LayoutEngine.expansionOffset("circular", 2, 8, 48, 8, 120, 3)))
+    }
+
     function geometry(layout, count, angle) {
         return LayoutEngine.metrics(
             layout, count, 40, 8, 1, 120, 2, 12, false,

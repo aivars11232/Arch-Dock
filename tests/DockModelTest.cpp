@@ -26,6 +26,9 @@ private slots:
     void activationOutcomeSeparatesVerifiedLaunchFromRequest();
     void applicationEntryAndDesktopFileAreAvailableRegardlessOfPinning();
     void groupedPreviewsFollowWindowChangesAndSelectById();
+    void individualActionsRevalidateMembershipAndCapability();
+    void desktopActionsUseNativeValidationAndLaunch();
+    void folderSnapshotsUseTheBoundedProvider();
 
 private:
     QString writeDesktopEntry(const QString &fileName,
@@ -190,6 +193,125 @@ void DockModelTest::groupedPreviewsFollowWindowChangesAndSelectById()
     QCOMPARE(actions.size(), 1);
 }
 
+void DockModelTest::individualActionsRevalidateMembershipAndCapability()
+{
+    WindowModel source;
+    DockModel model(source);
+    QSignalSpy actions(&model, &DockModel::windowActionRequested);
+    WindowItem first;
+    first.internalId = QStringLiteral("first");
+    first.desktopFileName = QStringLiteral("org.example.group.desktop");
+    first.canActivate = first.canMinimize = first.canClose = true;
+    WindowItem second = first;
+    second.internalId = QStringLiteral("second");
+    WindowItem other = first;
+    other.internalId = QStringLiteral("other");
+    other.desktopFileName = QStringLiteral("org.example.other.desktop");
+    source.setWindows({first, second, other});
+    QString appId;
+    for (const auto &value : model.panelEntries(QStringLiteral("tasks")))
+        if (value.toMap().value("windowIds").toStringList().contains(first.internalId))
+            appId = value.toMap().value("appId").toString();
+    QVERIFY(!appId.isEmpty());
+    for (const auto &action : {QStringLiteral("activate"), QStringLiteral("minimize"), QStringLiteral("close")})
+    {
+        QVERIFY(model.requestApplicationWindowAction(appId, second.internalId, action));
+        QCOMPARE(actions.last().at(0).toString(), second.internalId);
+        QCOMPARE(actions.last().at(1).toString(), action);
+    }
+    QVERIFY(!model.requestApplicationWindowAction(appId, second.internalId, QStringLiteral("restore")));
+    second.minimized = true;
+    QVERIFY(source.updateWindow(second));
+    QVERIFY(model.requestApplicationWindowAction(appId, second.internalId, QStringLiteral("restore")));
+    QCOMPARE(actions.last().at(0).toString(), second.internalId);
+    QCOMPARE(actions.last().at(1).toString(), QStringLiteral("restore"));
+    const auto dispatched = actions.size();
+    QVERIFY(!model.requestApplicationWindowAction(appId, second.internalId, QStringLiteral("minimize")));
+    QVERIFY(!model.requestApplicationWindowAction(appId, other.internalId, QStringLiteral("close")));
+    QVERIFY(!model.requestApplicationWindowAction(appId, second.internalId, QStringLiteral("unknown")));
+    second.canActivate = second.canMinimize = second.canClose = false;
+    QVERIFY(source.updateWindow(second));
+    for (const auto &action : {QStringLiteral("activate"), QStringLiteral("minimize"),
+                              QStringLiteral("restore"), QStringLiteral("close")})
+        QVERIFY(!model.requestApplicationWindowAction(appId, second.internalId, action));
+    QVERIFY(source.removeWindow(second.internalId));
+    QVERIFY(!model.requestApplicationWindowAction(appId, second.internalId, QStringLiteral("close")));
+    QVERIFY(!model.requestApplicationWindowAction(QStringLiteral("missing"), first.internalId, QStringLiteral("activate")));
+    QCOMPARE(actions.size(), dispatched);
+    const auto transient = model.applicationEntry(appId);
+    QVERIFY(!transient.value("canNewInstance").toBool());
+    QVERIFY(!transient.value("canPin").toBool());
+    QVERIFY(transient.value("desktopActions").toList().isEmpty());
+}
+
+void DockModelTest::desktopActionsUseNativeValidationAndLaunch()
+{
+    const QString mainMarker = m_desktopDirectory.filePath(QStringLiteral("main-launched"));
+    const QString actionMarker = m_desktopDirectory.filePath(QStringLiteral("action-launched"));
+    const QString path = writeDesktopEntry(QStringLiteral("org.example.actions.desktop"),
+        QStringLiteral("Actions"), QStringLiteral("applications-system"),
+        QStringLiteral("/usr/bin/touch \"%1\"").arg(mainMarker));
+    QVERIFY(!path.isEmpty());
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::Append));
+    file.write(QStringLiteral(
+        "Actions=WriteNote;Hidden;Empty;\n"
+        "[Desktop Action WriteNote]\nName=Write note\nExec=/usr/bin/touch \"%1\"\n"
+        "[Desktop Action Hidden]\nName=Hidden\nExec=/bin/true\nNoDisplay=true\n"
+        "[Desktop Action Empty]\nName=Empty\n").arg(actionMarker).toUtf8());
+    file.close();
+    WindowModel source;
+    DockModel model(source);
+    QVERIFY(!DockModel::desktopEntryActions(path).value("canNewInstance").toBool());
+    QVERIFY(!model.launchDesktopEntry(path, QString{}));
+    QVERIFY(file.setPermissions(file.permissions() | QFileDevice::ExeOwner));
+    const auto metadata = DockModel::desktopEntryActions(path);
+    QVERIFY(metadata.value("canNewInstance").toBool());
+    const auto actions = metadata.value("desktopActions").toList();
+    QCOMPARE(actions.size(), 1);
+    QCOMPARE(actions.first().toMap().value("id").toString(), QStringLiteral("WriteNote"));
+    QVERIFY(!actions.first().toMap().contains("exec"));
+    QVERIFY(!model.launchDesktopEntry(path, QStringLiteral("Hidden")));
+    QVERIFY(!model.launchDesktopEntry(path, QStringLiteral("Empty")));
+    QVERIFY(!model.launchDesktopEntry(path, QStringLiteral("unknown")));
+    QVERIFY(model.launchDesktopEntry(path, QString{}));
+    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(mainMarker), 5000);
+    QVERIFY(model.launchDesktopEntry(path, QStringLiteral("WriteNote")));
+    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(actionMarker), 5000);
+    // Resolve again at dispatch: a removed desktop action must not run.
+    QCOMPARE(writeDesktopEntry(QStringLiteral("org.example.actions.desktop"),
+        QStringLiteral("Actions"), QStringLiteral("applications-system")), path);
+    QVERIFY(DockModel::desktopEntryActions(path).value("desktopActions").toList().isEmpty());
+    QVERIFY(!model.launchDesktopEntry(path, QStringLiteral("WriteNote")));
+}
+
+void DockModelTest::folderSnapshotsUseTheBoundedProvider()
+{
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    for (int index = 0; index < 52; ++index)
+    {
+        QFile file(folder.filePath(QString::number(index) + QStringLiteral(".txt")));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("document\n");
+    }
+    WindowModel windows;
+    DockModel model(windows);
+    QVERIFY(model.pinUrl(QUrl::fromLocalFile(folder.path())));
+    const auto entry = model.panelEntries(QStringLiteral("launcher")).first().toMap();
+    QVERIFY(entry.value(QStringLiteral("isFolder")).toBool());
+    const auto children = model.folderEntriesForApplication(entry.value(QStringLiteral("appId")).toString());
+    QCOMPARE(children.size(), 48);
+    for (const auto &value : children)
+    {
+        const auto child = value.toMap();
+        QVERIFY(child.value(QStringLiteral("id")).toString().startsWith(QStringLiteral("folder-child:file:")));
+        QVERIFY(child.value(QStringLiteral("url")).toUrl().isLocalFile());
+        QVERIFY(child.value(QStringLiteral("selectable")).toBool());
+    }
+    QVERIFY(model.folderEntriesForApplication(QStringLiteral("unknown")).isEmpty());
+}
+
 void DockModelTest::freeEntriesUseCanonicalIdentity()
 {
     const QString folderPath = m_desktopDirectory.filePath(
@@ -331,6 +453,6 @@ QString DockModelTest::writeDesktopEntry(const QString &fileName,
     return path;
 }
 
-QTEST_GUILESS_MAIN(DockModelTest)
+QTEST_MAIN(DockModelTest)
 
 #include "DockModelTest.moc"

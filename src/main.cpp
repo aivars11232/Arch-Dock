@@ -13,6 +13,9 @@ int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
     app.setQuitOnLastWindowClosed(false);
+    // The backend outlives its optional Studio windows and KIO jobs. Releasing
+    // KJob's last QEventLoopLocker must not stop this resident D-Bus service.
+    app.setQuitLockEnabled(false);
 
     QGuiApplication::setApplicationName(QStringLiteral("Arch Dock"));
     QGuiApplication::setOrganizationName(QStringLiteral("Arch Dock"));

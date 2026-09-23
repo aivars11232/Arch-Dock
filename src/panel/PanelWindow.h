@@ -111,6 +111,10 @@ public slots:
     bool activateDockEntry(const QString &appId);
     QVariantMap activateDockEntryOutcome(const QString &appId);
     bool activateDockWindow(const QString &appId, const QString &windowId);
+    bool requestDockWindowAction(const QString &appId, const QString &windowId,
+                                 const QString &action);
+    bool launchDockEntry(const QString &panelId, const QString &appId,
+                         const QString &desktopAction);
     bool minimizeDockEntry(const QString &appId);
     bool closeDockEntry(const QString &appId);
     bool closeAllDockEntry(const QString &appId);
@@ -133,6 +137,9 @@ public slots:
     bool setPanelEntryOrder(const QString &panelId, const QStringList &entryIds);
     [[nodiscard]] QStringList panelEntryOrder(const QString &panelId) const;
     QVariantList dockFolderEntries(const QString &appId) const;
+    QVariantMap panelFolderSnapshot(const QString &panelId, const QString &appId) const;
+    QVariantMap openPanelFolderChild(const QString &panelId, const QString &appId,
+                                    const QString &childId);
     bool openDockUrl(const QString &url);
     QStringList availableKdeWidgets() const;
     bool createNativeKdePanel(const QString &panelId);
@@ -189,6 +196,8 @@ signals:
     void nativePanelRecoveryFinished();
 
 private:
+    [[nodiscard]] QUrl panelFolderUrl(const QString &panelId, const QString &appId) const;
+
     enum class NativePanelDiscoveryStatus
     {
         QueryFailed,

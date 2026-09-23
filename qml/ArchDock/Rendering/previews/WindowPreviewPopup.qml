@@ -12,6 +12,7 @@ QQC2.Pane {
     property Component thumbnailDelegate: null
     readonly property int windowCount: windows ? windows.length : 0
     signal activateRequested(string windowId)
+    signal actionRequested(string windowId, string action)
     signal dismissRequested()
 
     objectName: "windowPreviewPopup"
@@ -46,6 +47,22 @@ QQC2.Pane {
         const next = Math.max(0, Math.min(windowCount - 1, previous + delta))
         selectedWindowId = String(windows[next].windowId)
         windowList.positionViewAtIndex(next, ListView.Contain)
+    }
+
+    function requestWindowAction(windowId, action) {
+        if (action === "activate")
+            return activateWindow(windowId)
+        const index = indexForId(windowId)
+        if (index < 0)
+            return false
+        const window = windows[index]
+        const allowed = action === "close" ? window.canClose === true
+            : action === "minimize" ? window.canMinimize === true && !window.minimized
+            : action === "restore" && window.canMinimize === true && window.minimized
+        if (!allowed)
+            return false
+        actionRequested(windowId, action)
+        return true
     }
 
     onWindowsChanged: {
@@ -94,7 +111,8 @@ QQC2.Pane {
                 text: String(modelData.title || qsTr("Untitled window"))
                     + (modelData.minimized ? qsTr(" — Minimized")
                        : modelData.active ? qsTr(" — Active") : "")
-                enabled: modelData.canActivate === true
+                enabled: modelData.canActivate === true || modelData.canMinimize === true
+                    || modelData.canClose === true
                 highlighted: String(modelData.windowId) === root.selectedWindowId
                 Accessible.name: text
                 onClicked: root.activateWindow(String(modelData.windowId))
@@ -117,12 +135,47 @@ QQC2.Pane {
                         visible: status === Loader.Ready && item !== null
                     }
                     QQC2.Label {
-                        width: parent.width - (thumbnail.width > 0 ? thumbnail.width + 8 : 0)
+                        width: Math.max(0, parent.width
+                            - (thumbnail.width > 0 ? thumbnail.width + 8 : 0)
+                            - (actionButtons.visible ? actionButtons.width + 8 : 0))
                         height: parent.height
                         text: row.text
                         textFormat: Text.PlainText
                         elide: Text.ElideRight
                         verticalAlignment: Text.AlignVCenter
+                    }
+                    Row {
+                        id: actionButtons
+                        height: parent.height
+                        spacing: 2
+                        visible: stateAction.visible || closeAction.visible
+                        QQC2.ToolButton {
+                            id: stateAction
+                            objectName: "window-state-" + String(row.modelData.windowId)
+                            width: 36; height: 40
+                            visible: row.modelData.canMinimize === true
+                            icon.name: row.modelData.minimized ? "window-restore" : "window-minimize"
+                            text: row.modelData.minimized ? qsTr("Restore") : qsTr("Minimize")
+                            display: QQC2.AbstractButton.IconOnly
+                            Accessible.name: text + " " + String(row.modelData.title || "")
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.text: text
+                            onClicked: root.requestWindowAction(String(row.modelData.windowId),
+                                row.modelData.minimized ? "restore" : "minimize")
+                        }
+                        QQC2.ToolButton {
+                            id: closeAction
+                            objectName: "window-close-" + String(row.modelData.windowId)
+                            width: 36; height: 40
+                            visible: row.modelData.canClose === true
+                            icon.name: "window-close"
+                            text: qsTr("Close")
+                            display: QQC2.AbstractButton.IconOnly
+                            Accessible.name: text + " " + String(row.modelData.title || "")
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.text: text
+                            onClicked: root.requestWindowAction(String(row.modelData.windowId), "close")
+                        }
                     }
                 }
             }

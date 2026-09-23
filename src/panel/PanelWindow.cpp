@@ -7,9 +7,11 @@
 #include "../ScreenIdentity.h"
 #include "../integration/PlasmaPanelAdapter.h"
 #include "../model/IconEntryIdentity.h"
+#include "../model/FolderContentModel.h"
 #include "../model/PanelSettingsSchema.h"
 #include "IconOverrideTransaction.h"
 
+#include <KIO/OpenUrlJob>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
 #include <QQmlContext>
@@ -1000,7 +1002,13 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         }
 
         QStringList choices = field.value(QStringLiteral("choices")).toStringList();
-        if (key == QStringLiteral("iconStyle"))
+        if (key == QStringLiteral("folderLayout"))
+        {
+            choices = {QStringLiteral("fan"), QStringLiteral("grid"),
+                       QStringLiteral("stack"), QStringLiteral("arc"), QStringLiteral("ring")};
+            field.insert(QStringLiteral("choices"), choices);
+        }
+        else if (key == QStringLiteral("iconStyle"))
         {
             choices.clear();
             for (const QVariant &styleValue : m_panelRegistry.iconStyleDefinitions())
@@ -1859,6 +1867,10 @@ QVariantMap freeUrlEntry(const QUrl &url,
     entry.insert(
         QStringLiteral("stableIdentity"),
         ArchDock::IconEntryIdentity::forEntry(entry));
+    const QVariantMap launcher = DockModel::desktopEntryActions(info.absoluteFilePath());
+    entry.insert(QStringLiteral("canPin"), true);
+    entry.insert(QStringLiteral("canNewInstance"), launcher.value(QStringLiteral("canNewInstance")));
+    entry.insert(QStringLiteral("desktopActions"), launcher.value(QStringLiteral("desktopActions")));
     return entry;
 }
 
@@ -2367,6 +2379,43 @@ bool PanelWindow::activateDockWindow(const QString &appId, const QString &window
     return m_dockModel.activateApplicationWindow(appId, windowId);
 }
 
+bool PanelWindow::requestDockWindowAction(
+    const QString &appId, const QString &windowId, const QString &action)
+{
+    return m_dockModel.requestApplicationWindowAction(appId, windowId, action);
+}
+
+bool PanelWindow::launchDockEntry(
+    const QString &panelId, const QString &appId, const QString &desktopAction)
+{
+    const auto definition = m_panelRegistry.panelDefinition(panelId);
+    if (!definition)
+    {
+        return false;
+    }
+    for (const auto &value : dockEntriesForPanel(panelId, definition->content.type))
+    {
+        const auto entry = value.toMap();
+        if (entry.value(QStringLiteral("appId")).toString() != appId)
+        {
+            continue;
+        }
+        QString desktopPath;
+        if (ArchDock::PanelContent::isUrlEntryId(appId))
+        {
+            const auto url = QUrl::fromEncoded(appId.mid(9).toUtf8());
+            if (url.isLocalFile())
+                desktopPath = url.toLocalFile();
+        }
+        else
+        {
+            desktopPath = m_dockModel.desktopFileForApplication(appId);
+        }
+        return m_dockModel.launchDesktopEntry(desktopPath, desktopAction);
+    }
+    return false;
+}
+
 bool PanelWindow::minimizeDockEntry(const QString &appId)
 {
     return m_dockModel.minimizeApplication(appId);
@@ -2570,6 +2619,64 @@ QVariantList PanelWindow::dockFolderEntries(const QString &appId) const
         entry = value;
     }
     return entries;
+}
+
+QUrl PanelWindow::panelFolderUrl(const QString &panelId, const QString &appId) const
+{
+    const auto definition = m_panelRegistry.panelDefinition(panelId);
+    if (!definition)
+        return {};
+    for (const auto &value : dockEntriesForPanel(panelId, definition->content.type))
+    {
+        if (value.toMap().value(QStringLiteral("appId")).toString() != appId)
+            continue;
+        if (ArchDock::PanelContent::isUrlEntryId(appId))
+            return QUrl::fromEncoded(ArchDock::PanelContent::urlFromEntryId(appId).toUtf8());
+        return m_dockModel.urlForApplicationId(appId);
+    }
+    return {};
+}
+
+QVariantMap PanelWindow::panelFolderSnapshot(const QString &panelId, const QString &appId) const
+{
+    const QUrl folder = panelFolderUrl(panelId, appId);
+    QVariantMap result = ArchDock::FolderContentModel::snapshot(folder);
+    if (folder.isEmpty())
+        result[QStringLiteral("errorCode")] = QStringLiteral("folder-entry-unavailable");
+    result.insert(QStringLiteral("panelId"), panelId);
+    result.insert(QStringLiteral("appId"), appId);
+    return result;
+}
+
+QVariantMap PanelWindow::openPanelFolderChild(const QString &panelId, const QString &appId,
+                                            const QString &childId)
+{
+    QVariantMap result{{QStringLiteral("success"), false},
+                       {QStringLiteral("status"), QStringLiteral("rejected")},
+                       {QStringLiteral("errorCode"), QStringLiteral("folder-entry-unavailable")}};
+    const QUrl folder = panelFolderUrl(panelId, appId);
+    if (folder.isEmpty())
+        return result;
+    QString error;
+    const QUrl child = ArchDock::FolderContentModel::resolveChild(folder, childId, &error);
+    if (child.isEmpty())
+    {
+        result[QStringLiteral("errorCode")] = error;
+        return result;
+    }
+    auto *job = new KIO::OpenUrlJob(child, this);
+    job->setRunExecutables(false);
+    job->setShowOpenOrExecuteDialog(false);
+    connect(job, &KJob::result, this, [](KJob *completed) {
+        if (completed->error())
+            qWarning() << "Arch Dock folder document open failed:" << completed->errorText();
+    });
+    job->start();
+    // Native opening is asynchronous; acceptance is not proof of app startup.
+    result[QStringLiteral("success")] = true;
+    result[QStringLiteral("status")] = QStringLiteral("accepted");
+    result[QStringLiteral("errorCode")] = QString{};
+    return result;
 }
 
 bool PanelWindow::openDockUrl(const QString &urlString)

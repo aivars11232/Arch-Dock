@@ -9,6 +9,7 @@ MotionChannels 1.0 MotionChannels.js
 PresentationStates 1.0 PresentationStates.js
 ThemeStateSelection 1.0 ThemeStateSelection.js
 IconScene 1.0 IconScene.qml
+FolderExpansion 1.0 FolderExpansion.qml
 IconMotionController 1.0 IconMotionController.qml
 MotionTrackRunner 1.0 MotionTrackRunner.qml
 PanelPresentationController 1.0 PanelPresentationController.qml

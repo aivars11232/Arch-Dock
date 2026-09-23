@@ -265,7 +265,19 @@ bool WindowWatcher::loadKWinScript()
         return false;
     }
 
-    const QString pluginName = QStringLiteral("org.archdock.windowwatcher");
+    // KWin reapplies installed-package enablement on configuration reload and
+    // Plasma startup. A backend-owned instance must not use the package id:
+    // the package is not user-enabled and KWin would silently unload it.
+    const QString packageName = QStringLiteral("org.archdock.windowwatcher");
+    const QString pluginName = QStringLiteral("org.archdock.windowwatcher.runtime");
+    const QDBusReply<bool> legacyUnload = scripting.call(
+        QStringLiteral("unloadScript"), packageName);
+    if (!legacyUnload.isValid())
+    {
+        qWarning() << "Failed to unload the legacy Arch Dock KWin script:"
+                   << legacyUnload.error().message();
+        return false;
+    }
     const QDBusReply<bool> unloadReply = scripting.call(
         QStringLiteral("unloadScript"), pluginName);
     if (!unloadReply.isValid())

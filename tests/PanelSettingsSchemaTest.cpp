@@ -27,7 +27,33 @@ private slots:
     void globalNormalizationIsSchemaDrivenAndStrictForChoices();
     void consumerProjectionCannotBroadenTransactionAuthority();
     void sceneQualityIsBoundedAndReversible();
+    void folderSettingsPreserveLegacyValues();
 };
+
+void PanelSettingsSchemaTest::folderSettingsPreserveLegacyValues()
+{
+    for (const QString &layout : {QStringLiteral("fan"), QStringLiteral("grid"),
+         QStringLiteral("stack"), QStringLiteral("arc"), QStringLiteral("ring"),
+         QStringLiteral("spiral"), QStringLiteral("physics")})
+    {
+        const auto definition = PanelDefinition::fromLegacyMap({
+            {QStringLiteral("id"), QStringLiteral("folder-test")},
+            {QStringLiteral("folderLayout"), layout},
+            {QStringLiteral("folderSpeed"), 9999},
+            {QStringLiteral("folderEasing"), QStringLiteral("spring")},
+            {QStringLiteral("folderExpandOnClick"), false}});
+        QVERIFY(definition.has_value());
+        const auto roundTrip = PanelDefinition::fromLegacyMap(definition->toPersistedMap());
+        QVERIFY(roundTrip.has_value());
+        QCOMPARE(roundTrip->content.folderLayout, layout);
+        QCOMPARE(roundTrip->content.folderSpeed, 1200);
+        QCOMPARE(roundTrip->content.folderEasing, QStringLiteral("spring"));
+        QVERIFY(!roundTrip->content.folderExpandOnClick);
+    }
+    for (const QString &key : {QStringLiteral("folderLayout"), QStringLiteral("folderSpeed"),
+         QStringLiteral("folderEasing"), QStringLiteral("folderExpandOnClick")})
+        QVERIFY(PanelSettingsSchema::isTransactionPanelField(key));
+}
 
 void PanelSettingsSchemaTest::sceneQualityIsBoundedAndReversible()
 {
@@ -141,7 +167,7 @@ void PanelSettingsSchemaTest::editorCandidatesExcludeProtectedAndHiddenState()
     QVERIFY(!editor.contains(QStringLiteral("nativeOwnershipToken")));
     QVERIFY(!editor.contains(QStringLiteral("screenId")));
     QVERIFY(!editor.contains(QStringLiteral("physicsEnabled")));
-    QVERIFY(!editor.contains(QStringLiteral("folderLayout")));
+    QCOMPARE(editor.value(QStringLiteral("folderLayout")).toString(), QStringLiteral("fan"));
     QVERIFY(!editor.contains(QStringLiteral("pathAnchor")));
     QVERIFY(!editor.contains(QStringLiteral("surface3D")));
 

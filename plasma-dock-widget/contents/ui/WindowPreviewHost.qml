@@ -17,9 +17,12 @@ PlasmaCore.Dialog {
     property Component thumbnailComponent: null
     property string thumbnailUnavailableReason: "not-probed"
     signal windowSelected(string windowId)
+    signal windowActionRequested(string windowId, string action)
 
     objectName: "windowPreviewHost"
-    type: PlasmaCore.Dialog.PopupMenu
+    // AppletPopup supplies Plasma's Wayland role above the owning dock.
+    // PopupMenu only assigns an X11 type and leaves a Tool below native panels.
+    type: PlasmaCore.Dialog.AppletPopup
     flags: Qt.Tool | Qt.FramelessWindowHint
     hideOnWindowDeactivate: true
     visible: requested && interactionAllowed && visualParent !== null
@@ -79,6 +82,7 @@ PlasmaCore.Dialog {
             root.windowSelected(windowId)
             root.closePreview()
         }
+        onActionRequested: (windowId, action) => root.windowActionRequested(windowId, action)
         onDismissRequested: root.closePreview()
 
         HoverHandler { id: popupHover }

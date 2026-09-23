@@ -159,8 +159,17 @@ PlasmoidItem {
     property bool panelDropActive: false
 
     readonly property bool entryMenuOpen: guardActive("menu")
-    readonly property bool entryPreviewOpen: fullRepresentationItem !== null
-        && fullRepresentationItem.windowPreviewVisible === true
+        || (activeDockRepresentation !== null && activeDockRepresentation.folderExpansionVisible)
+    readonly property Item activeDockRepresentation: {
+        if (fullRepresentationItem && fullRepresentationItem.visible)
+            return fullRepresentationItem;
+        if (compactRepresentationItem && compactRepresentationItem.visible)
+            return compactRepresentationItem;
+        // Retain an owner while concealed so it can report host visibility.
+        return fullRepresentationItem || compactRepresentationItem;
+    }
+    readonly property bool entryPreviewOpen: activeDockRepresentation !== null
+        && activeDockRepresentation.windowPreviewVisible === true
     readonly property bool entryDragActive: guardActive("drag")
 
     function setEntryGuard(index, name, active) {
@@ -344,6 +353,13 @@ PlasmoidItem {
     }
 
     function invokeEntry(methodName, appId, onOutcome) {
+        if (methodName === "launchDockEntry") {
+            // Launch the selected panel entry's desktop file, including a
+            // pinned free entry with a separately identified running instance.
+            callDock(methodName, [panelId, appId,
+                typeof onOutcome === "string" ? onOutcome : ""], refresh);
+            return;
+        }
         if (methodName === "activateDockEntry") {
             activateEntry(appId, onOutcome);
             return;
@@ -622,12 +638,77 @@ PlasmoidItem {
             readonly property var previewAnchorData: previewEntryIndex >= 0
                 ? panelScene.popupAnchors.entries[previewEntryIndex] : null
             readonly property bool windowPreviewVisible: windowPreview.visible
+            property string folderAppId: ""
+            property int folderRequest: 0
+            property bool folderPending: false
+            readonly property int folderEntryIndex: root.entries.findIndex(function(entry) {
+                return String(entry.appId) === representation.folderAppId && entry.isFolder === true
+            })
+            readonly property var folderEntry: folderEntryIndex >= 0 ? root.entries[folderEntryIndex] : ({})
+            readonly property var folderAnchorData: folderEntryIndex >= 0
+                ? panelScene.popupAnchors.entries[folderEntryIndex] : null
+            readonly property bool folderExpansionVisible: folderPending || folderExpansion.visible
+            onFolderEntryIndexChanged: if (folderEntryIndex < 0) hideFolderExpansion()
+
+            function hideFolderExpansion() {
+                ++folderRequest
+                folderPending = false
+                folderExpansion.closeFolder()
+            }
+            function showFolderExpansion(entry) {
+                if (!folderExpansion.interactionAllowed) return false
+                hideWindowPreview()
+                folderAppId = String(entry.appId || "")
+                if (folderEntryIndex < 0) return false
+                const request = ++folderRequest
+                folderPending = true
+                function show(snapshot) {
+                    if (request !== representation.folderRequest || !folderExpansion.interactionAllowed
+                            || representation.folderEntryIndex < 0) return
+                    folderExpansion.snapshot = snapshot
+                    folderExpansion.openFolder()
+                    representation.folderPending = false
+                }
+                root.callDock("panelFolderSnapshot", [root.panelId, folderAppId], function(reply) {
+                    const value = root.normalizeReply(reply)
+                    show(Array.isArray(value) && value.length === 1 ? value[0] : value)
+                }, function() { show({ status: "unavailable", entries: [] }) })
+                return true
+            }
 
             function showWindowPreview(entry, keyboard) {
+                hideFolderExpansion()
                 previewAppId = String(entry.appId || "")
                 return windowPreview.openPreview(keyboard)
             }
             function hideWindowPreview() { windowPreview.closePreview() }
+
+            Item {
+                id: folderAnchor
+                parent: panelScene
+                x: representation.folderAnchorData ? representation.folderAnchorData.x : 0
+                y: representation.folderAnchorData ? representation.folderAnchorData.y : 0
+                width: 1; height: 1
+            }
+            FolderExpansionHost {
+                id: folderExpansion
+                visualParent: folderAnchor
+                folderTitle: String(representation.folderEntry.displayName || "")
+                folderLayout: String(root.configuration.folderLayout || "fan")
+                folderSpeed: Number(root.configuration.folderSpeed || 260)
+                folderEasing: String(root.configuration.folderEasing || "outBack")
+                reducedMotion: Boolean(root.configuration.reducedMotion)
+                iconStyleDefinition: root.configuration.iconStyleDefinition || ({})
+                panelEdge: root.freeSurface ? "free" : String(root.configuration.edge || "bottom")
+                outwardNormal: representation.folderAnchorData
+                    ? representation.folderAnchorData.outwardNormal : ({ x: 0, y: -1 })
+                interactionAllowed: representation.authoritativeHost && dockService.registered
+                    && root.sceneInputEnabled && !root.plasmaEditMode
+                    && !root.entryDragActive && !root.requestFailed
+                onInteractionAllowedChanged: if (!interactionAllowed) representation.hideFolderExpansion()
+                onChildSelected: childId => root.callDock("openPanelFolderChild",
+                    [root.panelId, representation.folderAppId, childId], root.refreshEntries)
+            }
 
             Item {
                 id: previewAnchor
@@ -654,6 +735,10 @@ PlasmoidItem {
                 onWindowSelected: windowId => {
                     const appId = FreeEntryPolicy.actionAppId(root.entries, representation.previewAppId)
                     root.callDock("activateDockWindow", [appId, windowId], root.refreshEntries)
+                }
+                onWindowActionRequested: (windowId, action) => {
+                    const appId = FreeEntryPolicy.actionAppId(root.entries, representation.previewAppId)
+                    root.callDock("requestDockWindowAction", [appId, windowId, action], root.refreshEntries)
                 }
             }
 
@@ -697,15 +782,11 @@ PlasmoidItem {
                         || Window.visibility === Window.Hidden
                         || Window.visibility === Window.Minimized))
 
-            // Plasma instantiates this component twice for a desktop applet,
-            // once as the compact and once as the full representation, and
-            // only the full one is shown. The hidden instance is permanently
-            // invisible, so if every instance reported its own visibility the
-            // hidden one would declare the host concealed forever and the free
-            // panel would never reveal. Only the representation Plasma is
-            // actually showing may report host facts.
+            // Desktop applets may instantiate both representations, while a
+            // thin native panel may instantiate only the compact one. Only
+            // the displayed owner may report host facts or open its preview.
             readonly property bool authoritativeHost:
-                root.fullRepresentationItem === representation
+                root.activeDockRepresentation === representation
 
             function publishHostConcealed() {
                 if (authoritativeHost)
@@ -714,8 +795,10 @@ PlasmoidItem {
 
             onHostConcealedChanged: {
                 publishHostConcealed()
-                if (hostConcealed)
+                if (hostConcealed) {
                     hideWindowPreview()
+                    hideFolderExpansion()
+                }
             }
             onAuthoritativeHostChanged: publishHostConcealed()
             Component.onCompleted: publishHostConcealed()
@@ -903,12 +986,21 @@ PlasmoidItem {
             setHoveredIndex: function(value) { root.hoveredIndex = value }
             setEntryGuard: root.setEntryGuard
             openWindowPreview: function(entry, keyboard) {
-                return root.fullRepresentationItem !== null
-                    && root.fullRepresentationItem.showWindowPreview(entry, keyboard)
+                return root.activeDockRepresentation !== null
+                    && root.activeDockRepresentation.showWindowPreview(entry, keyboard)
             }
             closeWindowPreview: function() {
-                if (root.fullRepresentationItem !== null)
-                    root.fullRepresentationItem.hideWindowPreview()
+                if (root.activeDockRepresentation !== null)
+                    root.activeDockRepresentation.hideWindowPreview()
+            }
+            folderExpandOnClick: root.configuration.folderExpandOnClick !== false
+            openFolderExpansion: function(entry) {
+                return root.activeDockRepresentation !== null
+                    && root.activeDockRepresentation.showFolderExpansion(entry)
+            }
+            closeFolderExpansion: function() {
+                if (root.activeDockRepresentation !== null)
+                    root.activeDockRepresentation.hideFolderExpansion()
             }
             openPanelStudio: root.openPanelStudio
             openIconProperties: root.openIconProperties

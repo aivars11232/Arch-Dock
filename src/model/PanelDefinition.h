@@ -122,6 +122,28 @@ struct PanelContent
     bool operator==(const PanelContent &) const = default;
 };
 
+struct PanelSegmentDefinition
+{
+    static constexpr int MaximumSegments = 16;
+    QString id = QStringLiteral("main");
+    QString source = QStringLiteral("inherited");
+    int order = 0;
+    QStringList entryIds;
+    QString background = QStringLiteral("inherited");
+    QString color = QStringLiteral("#202b36");
+    // -1 inherits the panel value without changing existing geometry.
+    int padding = -1;
+    int spacing = -1;
+    QString corners = QStringLiteral("inherited");
+    QString presentation = QStringLiteral("open");
+    QString motionProfile;
+
+    [[nodiscard]] QVariantMap toVariantMap() const;
+    [[nodiscard]] static std::optional<PanelSegmentDefinition> fromVariantMap(
+        const QVariantMap &record, QString *errorMessage = nullptr);
+    bool operator==(const PanelSegmentDefinition &) const = default;
+};
+
 struct PanelPlacementDefinition
 {
     QString edge = QStringLiteral("bottom");
@@ -293,6 +315,7 @@ public:
     PanelIdentity identity;
     PanelHost host;
     PanelContent content;
+    QList<PanelSegmentDefinition> segments{PanelSegmentDefinition{}};
     PanelPlacementDefinition placement;
     PanelVisibilityDefinition visibility;
     PanelPresentationDefinition presentation;

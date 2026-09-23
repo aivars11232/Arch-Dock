@@ -333,7 +333,7 @@ require_no_import_errors() {
     for log_file in "$ARCHDOCK_RENDERING_LOG_DIR/service.log" \
                     "$ARCHDOCK_RENDERING_LOG_DIR/plasmashell.log"; do
         if rg -n -i \
-            'error when loading applet "org\.archdock\.dock"|module "ArchDock\.Rendering" is not installed|RenderingModuleProbe[^[:cntrl:]]*(not a type|unavailable)|Panel(Scene|SurfaceLoader|Procedural2D|Skin2D|SkinLayer2D|Baked25D)[^[:cntrl:]]*(not a type|unavailable|not installed)|AlphaHitMask[^[:cntrl:]]*(not a type|unavailable|not installed)|(IconScene|RunningIndicator|LivePanelPreview)[^[:cntrl:]]*(not a type|unavailable|not installed)|(SettingsPopup|StudioForm|IconProperties|IconPropertiesWindow)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|org\.archdock\.dock/contents/ui/(main|DockEntry|IconVisual|RunningIndicator)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|ArchDock/Rendering/(optional3d/PanelScene3D|optional3d/IconStyle3D|PanelScene|PanelSurfaceLoader|renderers/PanelSkin2D|renderers/PanelSkinLayer2D|renderers/PanelBaked25D|inputs/AlphaHitMask|inputs/GeometryHitRegion|IconScene|RunningIndicator|previews/LivePanelPreview)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(typeerror|referenceerror|cannot assign|unable to assign|binding loop)|Error loading QML file[^[:cntrl:]]*org\.archdock\.dock' \
+            'error when loading applet "org\.archdock\.dock"|module "ArchDock\.Rendering" is not installed|RenderingModuleProbe[^[:cntrl:]]*(not a type|unavailable)|Panel(Scene|SurfaceLoader|Procedural2D|Skin2D|SkinLayer2D|Baked25D)[^[:cntrl:]]*(not a type|unavailable|not installed)|AlphaHitMask[^[:cntrl:]]*(not a type|unavailable|not installed)|(IconScene|RunningIndicator|LivePanelPreview)[^[:cntrl:]]*(not a type|unavailable|not installed)|(SettingsPopup|StudioForm|IconProperties|IconPropertiesWindow)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|org\.archdock\.dock/contents/ui/(main|DockEntry|WindowPreviewHost|FolderExpansionHost|IconVisual|RunningIndicator)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|ArchDock/Rendering/(optional3d/PanelScene3D|optional3d/IconStyle3D|PanelScene|PanelSurfaceLoader|renderers/PanelSkin2D|renderers/PanelSkinLayer2D|renderers/PanelBaked25D|inputs/AlphaHitMask|inputs/GeometryHitRegion|FolderExpansion|IconScene|RunningIndicator|previews/LivePanelPreview|previews/WindowPreviewPopup)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(typeerror|referenceerror|cannot assign|unable to assign|binding loop)|Error loading QML file[^[:cntrl:]]*org\.archdock\.dock' \
             "$log_file"; then
             printf 'Staged rendering import failed; relevant QML errors were logged in %s.\n' \
                 "$log_file" >&2
@@ -381,7 +381,16 @@ run_private_session() {
         return 1
     }
 
-    kwin_wayland \
+    local -a compositor_command=(kwin_wayland)
+    if [[ "${ARCHDOCK_RENDERING_INTERACTIONS:-}" == '1' ]]; then
+        # Arch grants KWin cap_sys_nice, which restricts /proc identity reads.
+        # This virtual test compositor needs no scheduling privilege. Keep the
+        # strict input-driver identity checks; suppress file privilege gain.
+        require_command setpriv
+        export GDK_BACKEND=wayland
+        compositor_command=(setpriv --no-new-privs kwin_wayland)
+    fi
+    "${compositor_command[@]}" \
         --virtual \
         --width 1280 \
         --height 720 \
@@ -392,6 +401,7 @@ run_private_session() {
     ARCHDOCK_RENDERING_KWIN_PID=$!
     wait_for_wayland_socket
 
+    if [[ "${ARCHDOCK_RENDERING_INTERACTIONS:-}" != '1' ]]; then
     printf 'Checking staged renderer capability against the private Wayland graphics backend.\n'
     ARCHDOCK_TEST_RHI=1 \
     ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \
@@ -423,6 +433,7 @@ run_private_session() {
     "$ARCHDOCK_RENDERING_QMLTESTRUNNER" \
         -import "$QML_IMPORT_PATH" \
         -input "$ARCHDOCK_RENDERING_PANEL_SURFACE_TEST"
+    fi
 
     "$ARCHDOCK_RENDERING_STAGED_BINARY" --settings \
         >"$ARCHDOCK_RENDERING_LOG_DIR/service.log" 2>&1 &
@@ -543,6 +554,14 @@ run_private_session() {
     }
 
     IFS='|' read -r _ free_panel_id _ _ _ _ <<<"$free_snapshot"
+    if [[ "${ARCHDOCK_RENDERING_INTERACTIONS:-}" == '1' ]]; then
+        ARCHDOCK_RENDERING_KWIN_PID="$ARCHDOCK_RENDERING_KWIN_PID" \
+            python3 "$ARCHDOCK_RENDERING_SCRIPT_DIR/visibility-window.py" \
+                --interaction-matrix "$free_panel_id"
+        require_no_import_errors
+        printf 'Private native/free applet interaction matrix passed (folders=%s).\n' "${ARCHDOCK_RENDERING_FOLDERS:-0}"
+        return 0
+    fi
     local free_configuration
     local native_revision
     local free_revision
@@ -1313,6 +1332,10 @@ run_outer() {
     require_command rg
     require_command timeout
     require_command python3
+    if [[ "${ARCHDOCK_RENDERING_INTERACTIONS:-}" == '1' ]]; then
+        require_command setpriv
+        python3 -c 'import ctypes, gi; gi.require_version("Gtk", "4.0"); from gi.repository import Gtk, Gio; ctypes.CDLL("libei.so.1")'
+    fi
 
     local build_dir="${ARCHDOCK_BUILD_DIR:-$ARCHDOCK_RENDERING_PROJECT_ROOT/build}"
     local qml_install_dir="${ARCHDOCK_QML_INSTALL_DIR:-lib/qt6/qml}"
@@ -1360,6 +1383,10 @@ run_outer() {
     chmod 700 "$ARCHDOCK_RENDERING_STATE_ROOT/runtime"
 
     cmake --install "$build_dir" --prefix "$stage_root"
+    if [[ "${ARCHDOCK_RENDERING_INTERACTIONS:-}" == '1' ]]; then
+        python3 "$ARCHDOCK_RENDERING_SCRIPT_DIR/visibility-window.py" \
+            --instrument-interaction-stage "$stage_root"
+    fi
     [[ -r "$module_root/qmldir" &&
        -r "$module_root/RendererBuildConfig.qml" &&
        -r "$module_root/RendererCapabilityProbe.qml" &&

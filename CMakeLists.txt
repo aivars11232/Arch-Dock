@@ -12,6 +12,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Qt6 REQUIRED COMPONENTS Core DBus Gui Network Qml Quick)
 
 find_package(KF6Kirigami REQUIRED)
+find_package(KF6Service REQUIRED)
+find_package(KF6KIO REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -79,6 +81,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     PresentationStates.js
     ThemeStateSelection.js
     IconScene.qml
+    FolderExpansion.qml
     IconMotionController.qml
     MotionTrackRunner.qml
     PanelPresentationController.qml
@@ -146,6 +149,7 @@ qt_add_executable(
   src/main.cpp
   src/DockModel.h
   src/DockModel.cpp
+  src/model/FolderContentModel.cpp
   src/content/WindowPreviewModel.cpp
   src/DockSettings.h
   src/DockSettings.cpp
@@ -258,7 +262,9 @@ target_link_libraries(
           Qt6::Network
           Qt6::Qml
           Qt6::Quick
-          KF6::Kirigami)
+          KF6::Kirigami
+          KF6::Service
+          KF6::KIOGui)
 
 target_compile_definitions(
   arch-dock
@@ -662,6 +668,7 @@ if(BUILD_TESTING)
     src/WindowModel.cpp
     src/DockModel.h
     src/DockModel.cpp
+    src/model/FolderContentModel.cpp
     src/content/WindowPreviewModel.cpp
     src/model/IconEntryIdentity.h
     src/model/IconEntryIdentity.cpp)
@@ -672,7 +679,9 @@ if(BUILD_TESTING)
     panel-registry-test
     PRIVATE Qt6::Core
             Qt6::Gui
-            Qt6::Test)
+            Qt6::Test
+            KF6::Service
+            KF6::KIOGui)
   target_compile_definitions(
     panel-registry-test
     PRIVATE ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT="${ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT}"
@@ -683,6 +692,14 @@ if(BUILD_TESTING)
     panel-registry-test
     PROPERTIES ENVIRONMENT
                "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-data/panel-registry")
+
+  qt_add_executable(folder-content-model-test
+    tests/FolderContentModelTest.cpp
+    src/model/FolderContentModel.cpp)
+  target_include_directories(folder-content-model-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(folder-content-model-test PRIVATE Qt6::Core Qt6::Test)
+  add_test(NAME folder-content-model-test COMMAND folder-content-model-test)
 
   qt_add_executable(window-preview-model-test
     tests/WindowPreviewModelTest.cpp
@@ -699,6 +716,7 @@ if(BUILD_TESTING)
     tests/DockModelTest.cpp
     src/DockModel.h
     src/DockModel.cpp
+    src/model/FolderContentModel.cpp
     src/content/WindowPreviewModel.cpp
     src/model/IconEntryIdentity.h
     src/model/IconEntryIdentity.cpp
@@ -712,7 +730,9 @@ if(BUILD_TESTING)
     dock-model-test
     PRIVATE Qt6::Core
             Qt6::Gui
-            Qt6::Test)
+            Qt6::Test
+            KF6::Service
+            KF6::KIOGui)
   add_test(NAME dock-model-test COMMAND dock-model-test)
   set_tests_properties(
     dock-model-test
@@ -723,6 +743,7 @@ if(BUILD_TESTING)
     tests/PanelWindowCapabilityTest.cpp
     src/DockModel.h
     src/DockModel.cpp
+    src/model/FolderContentModel.cpp
     src/content/WindowPreviewModel.cpp
     src/DockSettings.h
     src/DockSettings.cpp
@@ -816,7 +837,9 @@ if(BUILD_TESTING)
             Qt6::Quick
             Qt6::Test
             Qt6::QuickTest
-            KF6::Kirigami)
+            KF6::Kirigami
+            KF6::Service
+            KF6::KIOGui)
   target_compile_definitions(
     panel-window-capability-test
     PRIVATE ARCHDOCK_SOURCE_KWIN_SCRIPT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/kwin-script/contents/code/main.js"
@@ -977,6 +1000,13 @@ if(BUILD_TESTING)
       -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
       -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_WindowPreviewPopup.qml)
   set_tests_properties(window-preview-popup-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(NAME folder-expansion-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+      -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+      -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_FolderExpansion.qml)
+  set_tests_properties(folder-expansion-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(
@@ -1144,6 +1174,29 @@ if(BUILD_TESTING)
   set_tests_properties(
     rendering-import-smoke
     PROPERTIES DEPENDS rendering-module-import-test TIMEOUT 120)
+
+  add_test(
+    NAME window-interaction-smoke
+    COMMAND ${CMAKE_COMMAND} -E env
+            ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
+            ARCHDOCK_QMLTESTRUNNER=$<TARGET_FILE:Qt6::qmltestrunner>
+            ARCHDOCK_RENDERING_INTERACTIONS=1
+            bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
+  set_tests_properties(
+    window-interaction-smoke
+    PROPERTIES DEPENDS rendering-import-smoke TIMEOUT 120)
+
+  add_test(NAME folder-interaction-smoke
+    COMMAND ${CMAKE_COMMAND} -E env
+            ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
+            ARCHDOCK_QMLTESTRUNNER=$<TARGET_FILE:Qt6::qmltestrunner>
+            ARCHDOCK_RENDERING_INTERACTIONS=1
+            ARCHDOCK_RENDERING_FOLDERS=1
+            bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
+  set_tests_properties(folder-interaction-smoke
+    PROPERTIES DEPENDS window-interaction-smoke TIMEOUT 120)
 
   add_test(
     NAME motion-policy-test

@@ -2,9 +2,15 @@
 
 #include "WindowModel.h"
 #include "content/WindowPreviewModel.h"
+#include "model/FolderContentModel.h"
 #include "model/IconEntryIdentity.h"
 
+#include <KDesktopFile>
+#include <KIO/ApplicationLauncherJob>
+#include <KService>
+#include <KServiceAction>
 #include <QCoreApplication>
+#include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
 #include <QDirIterator>
@@ -21,6 +27,26 @@
 
 namespace
 {
+    KService::Ptr launchableService(const QString &path)
+    {
+        const QFileInfo file(path);
+        if (!file.isFile() || !KDesktopFile::isDesktopFile(file.absoluteFilePath())
+            || !KDesktopFile::isAuthorizedDesktopFile(file.absoluteFilePath()))
+        {
+            return {};
+        }
+        KService::Ptr service(new KService(file.absoluteFilePath()));
+        return service->isValid() && service->isApplication() && !service->isDeleted()
+            ? service : KService::Ptr{};
+    }
+
+    bool visibleDesktopAction(const KServiceAction &action)
+    {
+        return !action.isSeparator() && !action.noDisplay()
+            && !action.name().isEmpty() && !action.text().isEmpty()
+            && !action.exec().trimmed().isEmpty();
+    }
+
     QString desktopFilePath(const QString &desktopFileName)
     {
         if (desktopFileName.isEmpty())
@@ -478,32 +504,8 @@ QVariantList DockModel::folderEntries(int row) const
         return {};
     }
 
-    const QDir directory(path);
-    const QFileInfoList entries = directory.entryInfoList(
-        QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Readable,
-        QDir::DirsFirst | QDir::Name | QDir::IgnoreCase);
-    QMimeDatabase mimeDatabase;
-    QVariantList result;
-    result.reserve(qMin(entries.size(), 48));
-    for (const QFileInfo &entry : entries)
-    {
-        if (result.size() == 48)
-        {
-            break;
-        }
-
-        QVariantMap item;
-        item.insert(QStringLiteral("url"), QUrl::fromLocalFile(entry.absoluteFilePath()));
-        item.insert(QStringLiteral("name"), entry.fileName());
-        item.insert(QStringLiteral("isDirectory"), entry.isDir());
-        item.insert(
-            QStringLiteral("iconName"),
-            entry.isDir()
-                ? QStringLiteral("folder")
-                : mimeDatabase.mimeTypeForFile(entry).iconName());
-        result.append(item);
-    }
-    return result;
+    return ArchDock::FolderContentModel::snapshot(QUrl::fromLocalFile(path))
+        .value(QStringLiteral("entries")).toList();
 }
 
 bool DockModel::openUrl(const QUrl &url) const
@@ -575,6 +577,8 @@ QVariantMap DockModel::entrySnapshot(const DockApplication &application) const
         windowTitles.append(window.caption.isEmpty() ? application.displayName : window.caption);
     }
 
+    const QString desktopPath = desktopFileForApplication(application.appId);
+    const QVariantMap launcher = desktopEntryActions(desktopPath);
     return QVariantMap{
         {QStringLiteral("appId"), application.appId},
         {QStringLiteral("stableIdentity"),
@@ -586,6 +590,9 @@ QVariantMap DockModel::entrySnapshot(const DockApplication &application) const
         {QStringLiteral("baseDisplayName"), application.displayName},
         {QStringLiteral("displayName"), application.displayName},
         {QStringLiteral("pinned"), application.pinned},
+        {QStringLiteral("canPin"), application.pinned || !desktopPath.isEmpty()},
+        {QStringLiteral("canNewInstance"), launcher.value(QStringLiteral("canNewInstance"))},
+        {QStringLiteral("desktopActions"), launcher.value(QStringLiteral("desktopActions"))},
         {QStringLiteral("running"), running},
         {QStringLiteral("active"), active},
         {QStringLiteral("minimized"), minimized},
@@ -688,6 +695,12 @@ bool DockModel::activateApplication(const QString &appId)
 
 bool DockModel::activateApplicationWindow(const QString &appId, const QString &windowId)
 {
+    return requestApplicationWindowAction(appId, windowId, QStringLiteral("activate"));
+}
+
+bool DockModel::requestApplicationWindowAction(
+    const QString &appId, const QString &windowId, const QString &action)
+{
     const int row = indexForApplication(appId);
     if (row < 0 || windowId.isEmpty())
     {
@@ -699,11 +712,75 @@ bool DockModel::activateApplicationWindow(const QString &appId, const QString &w
     {
         if (window.internalId == windowId)
         {
-            requestAction(windowId, QStringLiteral("activate"));
+            const bool allowed = action == QStringLiteral("activate") ? window.canActivate
+                : action == QStringLiteral("minimize") ? window.canMinimize && !window.minimized
+                : action == QStringLiteral("restore") ? window.canMinimize && window.minimized
+                : action == QStringLiteral("close") && window.canClose;
+            if (!allowed)
+            {
+                return false;
+            }
+            requestAction(windowId, action);
             return true;
         }
     }
     return false;
+}
+
+QVariantMap DockModel::desktopEntryActions(const QString &desktopPath)
+{
+    const auto service = launchableService(desktopPath);
+    QVariantList actions;
+    if (service)
+    {
+        for (const auto &action : service->actions())
+        {
+            if (visibleDesktopAction(action))
+            {
+                actions.append(QVariantMap{
+                    {QStringLiteral("id"), action.name()},
+                    {QStringLiteral("text"), action.text()},
+                    {QStringLiteral("iconName"), action.icon()}});
+            }
+        }
+    }
+    return {{QStringLiteral("canNewInstance"), bool(service)},
+            {QStringLiteral("desktopActions"), actions}};
+}
+
+bool DockModel::launchDesktopEntry(const QString &desktopPath, const QString &actionName)
+{
+    const auto service = launchableService(desktopPath);
+    if (!service)
+    {
+        return false;
+    }
+    KIO::ApplicationLauncherJob *job = nullptr;
+    if (actionName.isEmpty())
+    {
+        job = new KIO::ApplicationLauncherJob(service, this);
+    }
+    else
+    {
+        for (const auto &action : service->actions())
+        {
+            if (action.name() == actionName && visibleDesktopAction(action))
+            {
+                job = new KIO::ApplicationLauncherJob(action, this);
+                break;
+            }
+        }
+    }
+    if (!job)
+    {
+        return false;
+    }
+    connect(job, &KJob::result, this, [](KJob *result) {
+        if (result->error())
+            qWarning() << "Arch Dock desktop action failed:" << result->errorText();
+    });
+    job->start();
+    return true;
 }
 
 bool DockModel::minimizeApplication(const QString &appId)

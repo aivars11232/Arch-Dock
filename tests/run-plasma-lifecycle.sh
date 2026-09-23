@@ -98,7 +98,7 @@ unload_kwin_script() {
 }
 
 stop_arch_dock() {
-    unload_kwin_script org.archdock.windowwatcher
+    unload_kwin_script org.archdock.windowwatcher.runtime
     stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
     ARCHDOCK_SESSION_ARCH_DOCK_PID=''
 
@@ -1605,7 +1605,7 @@ start_arch_dock() {
         return 1
     }
     wait_for_kwin_script_state \
-        org.archdock.windowwatcher true 'starting Arch Dock'
+        org.archdock.windowwatcher.runtime true 'starting Arch Dock'
 }
 
 start_compositor() {

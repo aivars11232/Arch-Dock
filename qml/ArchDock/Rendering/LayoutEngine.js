@@ -934,9 +934,13 @@ function anchorOffset(anchor, containerWidth, containerHeight, geometry) {
 }
 
 function expansionOffset(layout, index, count, iconSize, spacing, radius, rows) {
-    const safeCount = Math.max(1, count);
-    const safeRadius = Math.max(iconSize * 1.2, radius);
-    const safeRows = clamp(Math.round(rows), 1, 8);
+    const safeCount = clamp(Math.floor(finite(count, 1)), 1, 48);
+    index = clamp(Math.floor(finite(index, 0)), 0, safeCount - 1);
+    iconSize = clamp(finite(iconSize, 48), 16, 128);
+    spacing = clamp(finite(spacing, 8), 0, 32);
+    const safeRadius = clamp(finite(radius, 120), iconSize * 1.2, 4096);
+    const safeRows = Math.min(safeCount,
+        clamp(Math.round(finite(rows, Math.ceil(Math.sqrt(safeCount)))), 1, 8));
     const slot = iconSize + Math.max(0, spacing);
     const progress = safeCount === 1 ? 0.5 : index / (safeCount - 1);
     if (layout === "grid") {
@@ -948,8 +952,8 @@ function expansionOffset(layout, index, count, iconSize, spacing, radius, rows) 
     }
     if (layout === "stack")
         return {
-            x: index * Math.max(4, spacing * 0.72),
-            y: -index * Math.max(5, spacing * 0.92)
+            x: index * Math.max(iconSize * 0.65, spacing),
+            y: -index * Math.max(iconSize * 0.2, spacing * 0.5)
         };
     if (layout === "vertical")
         return { x: 0, y: (index - (safeCount - 1) / 2) * slot };
@@ -960,7 +964,7 @@ function expansionOffset(layout, index, count, iconSize, spacing, radius, rows) 
         const distance = iconSize * 1.1 + index * Math.max(iconSize * 0.33, spacing);
         return { x: Math.cos(radians) * distance, y: Math.sin(radians) * distance };
     }
-    if (layout === "circular" || layout === "radial") {
+    if (layout === "ring" || layout === "circular" || layout === "radial") {
         const radians = -Math.PI / 2 + index * Math.PI * 2 / safeCount;
         return { x: Math.cos(radians) * safeRadius, y: Math.sin(radians) * safeRadius };
     }
@@ -975,4 +979,51 @@ function expansionOffset(layout, index, count, iconSize, spacing, radius, rows) 
         };
     }
     return { x: (index - (safeCount - 1) / 2) * slot, y: 0 };
+}
+
+// Folder expansion shares the canonical positions and their measured bounds.
+// Large pages may scroll; they never shrink icons into unreadable hit targets.
+function expansionGeometry(layout, count, iconSize, spacing, radius, rows) {
+    const requested = String(layout || "fan");
+    const resolved = ["fan", "grid", "stack", "arc", "ring"].includes(requested)
+        ? requested : "fan";
+    const safeCount = clamp(Math.floor(finite(count, 0)), 0, 48);
+    const size = clamp(finite(iconSize, 48), 16, 128);
+    const gap = clamp(finite(spacing, 8), 0, 32);
+    let distance = clamp(finite(radius, 120), size * 1.2, 4096);
+    if (safeCount > 1) {
+        const step = resolved === "ring" ? 2 * Math.PI / safeCount
+            : 144 * Math.PI / 180 / (safeCount - 1);
+        const needed = (size + gap) / (2 * Math.sin(step / 2));
+        if (resolved === "ring" || resolved === "arc" || resolved === "fan")
+            distance = Math.max(distance, needed / (resolved === "fan" ? 0.82 : 1));
+    }
+    const points = [];
+    let minimumX = Infinity, minimumY = Infinity;
+    let maximumX = -Infinity, maximumY = -Infinity;
+    for (let index = 0; index < safeCount; ++index) {
+        const point = expansionOffset(resolved, index, safeCount, size, gap, distance, rows);
+        points.push(point);
+        minimumX = Math.min(minimumX, point.x);
+        minimumY = Math.min(minimumY, point.y);
+        maximumX = Math.max(maximumX, point.x);
+        maximumY = Math.max(maximumY, point.y);
+    }
+    if (safeCount === 0) {
+        minimumX = minimumY = maximumX = maximumY = 0;
+    }
+    return {
+        layout: resolved,
+        requestedLayout: requested,
+        fallbackApplied: resolved !== requested,
+        fallbackReason: resolved !== requested ? "unsupported-folder-layout" : "",
+        count: safeCount,
+        iconSize: size,
+        width: Math.ceil(maximumX - minimumX + size),
+        height: Math.ceil(maximumY - minimumY + size),
+        origin: { x: size / 2 - minimumX, y: size / 2 - minimumY },
+        entries: points.map(function(point, index) {
+            return { index: index, x: point.x - minimumX, y: point.y - minimumY };
+        })
+    };
 }

@@ -2685,6 +2685,8 @@ void PanelRegistryTest::targetsStableApplicationWindowIds()
     firstWindow.resourceClass = QStringLiteral("archdock-window-actions");
     firstWindow.resourceName = QStringLiteral("archdock-window-actions");
     firstWindow.caption = QStringLiteral("First window");
+    firstWindow.canActivate = true;
+    firstWindow.canClose = true;
 
     WindowItem secondWindow = firstWindow;
     secondWindow.internalId = QStringLiteral("window-second");
