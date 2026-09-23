@@ -46,11 +46,17 @@ Window {
         EditorModel.rendererCandidate(editorSession)
     readonly property var selectedPreviewTheme:
         rendererPreviewTheme(selectedRendererCandidate)
+    readonly property string scene3DOffTier:
+        CapabilityModel.scene3DOffTier(selectedCapabilityResolution, selectedPreviewTheme)
     readonly property bool scene3DControlsAvailable: Boolean(
         CapabilityModel.scene3DControlsAvailable(selectedCapabilityResolution,
             selectedPreviewTheme, embeddedRendererPreview.panelSceneItem.true3DCapability))
+        && scene3DOffTier.length > 0
     readonly property bool scene3DQualityVisible: scene3DControlsAvailable
         && embeddedRendererPreview.panelSceneItem.effectiveRendererTier === "true3d"
+    readonly property var scenePresentationMechanisms:
+        CapabilityModel.scenePresentationMechanisms(selectedCapabilityResolution,
+            selectedPreviewTheme, embeddedRendererPreview.panelSceneItem.effectiveRendererTier)
     readonly property var selectedPlacementResult: {
         const revision = placementRevision;
         return panelController.nativePanelPlacementStatus(selectedPanelId);
@@ -198,10 +204,18 @@ Window {
     }
 
     function fieldValue(field) {
+        if (field.rendererToggle === true)
+            return String(panelValue("rendererTier", "")
+                || (selectedCapabilityResolution.renderer || {}).requestedTier) === "true3d";
         return field.scope === "settings" ? globalValue(field.key, field.fallback) : panelValue(field.key, field.fallback);
     }
 
     function setFieldValue(field, value) {
+        if (field.rendererToggle === true) {
+            value = value ? "true3d" : scene3DOffTier;
+            if (value.length === 0)
+                return;
+        }
         if (field.scope === "settings") {
             editorSession = EditorModel.setGlobalValue(editorSession, field.key, value);
         } else {
@@ -326,10 +340,20 @@ Window {
         for (let sourceIndex = 0; sourceIndex < sources.length; ++sourceIndex) {
             const source = sources[sourceIndex] || [];
             for (let index = 0; index < source.length; ++index) {
+                if (String(source[index].section) !== sectionId)
+                    continue;
                 if (String(source[index].key) === "scene3DQuality" && !scene3DQualityVisible)
                     continue;
-                if (String(source[index].section) === sectionId)
-                    result.push(editorRow(source[index]));
+                const row = editorRow(source[index]);
+                if (source[index].capability === "presentation-mechanism") {
+                    if (!scenePresentationMechanisms.some(function(id) { return id !== "open"; }))
+                        continue;
+                    if (row.key === "collapseMechanism")
+                        row.options = row.options.filter(function(option) {
+                            return root.scenePresentationMechanisms.includes(option.value);
+                        });
+                }
+                result.push(row);
             }
         }
         return result;
@@ -388,16 +412,11 @@ Window {
     function panelAppearanceRows() {
         const rows = schemaSectionRows("panels-appearance", qsTr("Appearance"), qsTr("Surface styling for the selected panel."));
         if (scene3DControlsAvailable) {
-            const tiers = selectedPreviewTheme.capabilities.rendererTiers;
-            const labels = { "true3d": qsTr("3D mesh"), "baked2.5d": qsTr("Baked 2.5D"),
-                "skinned2d": qsTr("Skinned 2D"), "procedural2d": qsTr("Procedural 2D") };
-            rows.splice(1, 0, { kind: "combo", key: "rendererTier", scope: "panel",
-                label: qsTr("Renderer"), fallback: selectedPreviewTheme.capabilities.preferredRendererTier,
-                options: tiers.filter(function(tier) {
-                    return CapabilityModel.rendererChoice(root.selectedCapabilityResolution, tier).available === true;
-                }).map(function(tier) { return { label: labels[tier] || tier, value: tier }; }) });
+            rows.splice(1, 0, { kind: "switch", key: "rendererTier", scope: "panel",
+                rendererToggle: true, label: qsTr("3D rendering"),
+                description: qsTr("Turn off to use this theme's available 2D surface.") });
         }
-        rows.splice(1, 0, {
+        rows.splice(scene3DControlsAvailable ? 2 : 1, 0, {
             kind: "themeSamples",
             label: qsTr("Built-in themes"),
             description: qsTr("Available themes are resolved by the backend for this panel."),

@@ -119,12 +119,21 @@ disabled for that source. Quality changes reuse the same logical geometry.
 `surface.parameters3D.quality`; invalid choices normalize to `medium`, and
 other persisted members of that parameter map survive.
 
-Studio offers renderer selection only when the backend, theme and actual
-preview consumer support 3D. Detailed quality controls additionally require
-the active preview to be true 3D. Apply uses the ordinary revisioned settings
-transaction. Unchanged formerly available fields may survive a renderer
-switch; changing an unavailable field or submitting protected state is still
-rejected. Cancel closes the draft, and reopening reloads the saved renderer.
+3D is optional. Studio shows its main 3D switch only when the backend, theme
+and actual preview consumer support it and the theme has an available ordinary
+surface. The switch edits the existing `rendererTier` field; it adds no separate
+saved flag. Turning it off selects a declared, available baked 2.5D, skinned 2D,
+or procedural 2D surface in that order. Detailed quality controls require the
+active preview to be true 3D, and the backend rejects quality changes while
+3D is off. Runtime fallback also hides mesh-part presentation mechanisms.
+Ordinary 2D presentation controls remain available where supported.
+
+Apply uses the ordinary revisioned settings transaction. Unchanged formerly
+available fields may survive a renderer switch; changing an unavailable field
+or submitting protected state is still rejected. Cancel closes the draft, and
+reopening reloads the saved renderer. Existing capability metadata preserves
+requested intent, effective tier and fallback reason independently, including
+when a preset requests 3D on a build without the optional module.
 
 The base renderer is available on the free desktop host only. Native edge
 hosts do not gain true 3D. TASK-0036 connects free mesh scenes to the existing
@@ -142,21 +151,32 @@ The built-in cyan platform reuses its existing mesh/material for ring segments
 and pedestals. Entry mesh nodes are retained while angles change, bounded by
 the expanded index budget, and destroyed when the optional loader unloads.
 Runtime failure reports the resource reason and restores the ordinary glyph
-and tile drawing. Item-level input geometry does not claim compositor-wide
+and tile drawing. Texture consumers detach when mesh visuals become inactive
+or their source leaves the renderer's window, before the 2D layer is released.
+This also covers destruction of Studio theme-preview scenes while their
+replacement form is being created. Item-level input geometry does not claim compositor-wide
 nonrectangular click-through.
 
 ### Verification boundary
 
-The 2026-09-09 final gates passed 65/65 CTests in each of OFF, AUTO and ON.
+The 2026-09-23 final TASK-0036 gates passed 67/67 CTests in each of OFF, AUTO
+and ON after fresh builds and the final lifetime/test-fixture corrections.
 OFF disables dependency discovery and omits optional QML resources. Separate
 tests block optional imports and use the software backend. Enabled private
 Wayland checks render mesh pixels, verify projected icon centers and camera
-changes, exercise low/high/low quality and missing resources, and drive Studio
-Apply/Cancel/reopen. The staged smoke creates real `org.archdock.dock` applets
-and observes rendered frames and bounded quality targets in the actual applet.
+changes, exercise shared motion/parts, low/high/low quality, missing resources
+and baked/procedural fallback, and drive the actual Studio switch with
+Apply/Cancel/reopen and form recreation. The staged smoke creates real
+`org.archdock.dock` applets and observes rendered frames and bounded quality
+targets in the actual applet. In every build mode, a private service restart
+preserves saved 3D intent and the same unique native/free hosts; enabled modes
+also prove fresh quality frames after recovery. The source/window lifetime
+regression and ordinary 2D/2.5D coverage remain part of the full suite.
 These are disposable private D-Bus/KWin/PlasmaShell results, not personal
-desktop or physical GPU/monitor acceptance. Exact results are recorded in
-[CURRENT_STATE.md](CURRENT_STATE.md).
+desktop or physical GPU/monitor acceptance. Formal task closure still requires
+removing two root-owned OS crash dumps from diagnosis. Exact results and that
+administrative cleanup boundary are recorded in
+[CURRENT_STATE.md](CURRENT_STATE.md#task-0036--resumed-phase-b-implementation-2026-09-23).
 
 ## Exported foundation types
 

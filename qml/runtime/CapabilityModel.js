@@ -48,6 +48,31 @@ function rendererChoice(resolution, tier) {
     return decision(resolution, "rendererChoices", tier)
 }
 
+function scene3DOffTier(resolution, theme) {
+    const selected = normalized(theme)
+    const tiers = selected && selected.capabilities
+        ? selected.capabilities.rendererTiers || [] : []
+    if (!Array.isArray(tiers))
+        return ""
+    for (const tier of ["baked2.5d", "skinned2d", "procedural2d"]) {
+        if (tiers.includes(tier) && rendererChoice(resolution, tier).available === true)
+            return tier
+    }
+    return ""
+}
+
+function scenePresentationMechanisms(resolution, theme, effectiveTier) {
+    const resolved = normalized(resolution) || {}
+    const selected = normalized(theme) || {}
+    const parts = (selected.scene3D || {}).parts || []
+    const meshMechanisms = (Array.isArray(parts) ? parts : [])
+        .map(function(part) { return String((part || {}).mechanism || "") })
+    return availableItems(resolved.presentationMechanisms)
+        .filter(function(choice) {
+            return effectiveTier === "true3d" || !meshMechanisms.includes(choice.id)
+        }).map(function(choice) { return choice.id })
+}
+
 function scene3DControlsAvailable(resolution, theme, consumer) {
     const selected = normalized(theme)
     const runtime = normalized(consumer)

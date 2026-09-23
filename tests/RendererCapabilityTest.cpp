@@ -391,6 +391,35 @@ private slots:
             QCOMPARE(renderer->findChildren<QObject *>().size(), resourcesAfterRecovery);
             QCOMPARE(renderer->property("triangleCount").toInt(), 696);
         }
+        const auto bakedPackage = ArchDock::ThemePackage::load(themeRoot
+            + QStringLiteral("/ring-platform-blue/archdock-theme.json"));
+        QVERIFY2(bakedPackage.isValid(), qPrintable(bakedPackage.primaryCode()));
+        QVariantMap fallbackTheme = bakedPackage.package->runtimeProjection();
+        auto fallbackCapabilities = fallbackTheme.value(QStringLiteral("capabilities")).toMap();
+        fallbackCapabilities.insert(QStringLiteral("rendererTiers"),
+            QStringList{QStringLiteral("true3d"), QStringLiteral("baked2.5d"), QStringLiteral("procedural2d")});
+        fallbackCapabilities.insert(QStringLiteral("fallbackRendererTiers"),
+            QStringList{QStringLiteral("baked2.5d"), QStringLiteral("procedural2d")});
+        fallbackTheme.insert(QStringLiteral("capabilities"), fallbackCapabilities);
+        // Keep valid baked artwork while making the requested mesh unavailable.
+        fallbackTheme.insert(QStringLiteral("scene3D"), theme.value(QStringLiteral("scene3D")));
+        QPointer<QObject> meshBeforeFallback(renderer);
+        scene->setProperty("themeDefinition", fallbackTheme);
+        QTRY_COMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("baked2.5d"));
+        QCOMPARE(scene->property("fallbackReason").toString(), QStringLiteral("scene3d-resources-unavailable"));
+        QTRY_VERIFY(meshBeforeFallback.isNull());
+        QCOMPARE(plainValue(scene->property("entryRects")).toList().size(), 2);
+        QVERIFY(!window.grabWindow().isNull());
+        fallbackTheme.insert(QStringLiteral("assetPaths"), QVariantMap{});
+        scene->setProperty("themeDefinition", fallbackTheme);
+        QTRY_COMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("procedural2d"));
+        QCOMPARE(plainValue(scene->property("panelDefinition")).toMap()
+            .value(QStringLiteral("rendererTier")).toString(), QStringLiteral("true3d"));
+        QCOMPARE(plainValue(scene->property("entryRects")).toList().size(), 2);
+        scene->setProperty("themeDefinition", theme);
+        QTRY_COMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("true3d"));
+        renderer = objectValue(scene->property("activeSurfaceRenderer"));
+        QVERIFY(!pixels().isNull());
         QVariantList excessiveEntries;
         for (int index = 0; index < 1000; ++index)
             excessiveEntries.append(QVariantMap{{QStringLiteral("width"), 40}});

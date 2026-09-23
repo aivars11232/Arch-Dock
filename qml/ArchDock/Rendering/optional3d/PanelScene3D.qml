@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick3D
 
 Item {
@@ -118,7 +119,8 @@ Item {
         }
         Texture {
             id: surfaceTexture
-            sourceItem: textureImage
+            sourceItem: root.Window.window && textureImage.Window.window === root.Window.window
+                ? textureImage : null
             generateMipmaps: true
             mipFilter: Texture.Linear
         }
@@ -160,11 +162,20 @@ Item {
 
                         Texture {
                             id: glyphTexture
-                            sourceItem: entryNode.visual ? entryNode.visual.glyphTextureItem : null
+                            readonly property Item candidateSource:
+                                entryNode.visual ? entryNode.visual.glyphTextureItem : null
+                            // A detached source releases its layer before QObject destruction.
+                            sourceItem: candidateSource && root.Window.window
+                                && candidateSource.Window.window === root.Window.window
+                                && entryNode.visual.meshVisualActive ? candidateSource : null
                         }
                         Texture {
                             id: tileTexture
-                            sourceItem: entryNode.visual ? entryNode.visual.tileTextureItem : null
+                            readonly property Item candidateSource:
+                                entryNode.visual ? entryNode.visual.tileTextureItem : null
+                            sourceItem: candidateSource && root.Window.window
+                                && candidateSource.Window.window === root.Window.window
+                                && entryNode.visual.meshVisualActive ? candidateSource : null
                         }
                         IconStyle3D {
                             meshData: iconResource.meshData

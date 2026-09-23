@@ -231,3 +231,44 @@ this bounded repair, and private virtual KWin evidence does not establish
 personal-desktop, physical GPU/monitor or release acceptance. See the
 [restore and fallback repair record](CURRENT_STATE.md#task-0038-prerequisite--restore-and-fallback-repair-2026-09-19)
 for native research, diagnostic proof, exact commands and cleanup.
+
+## TASK-0036 Phase B and final matrix — 2026-09-23
+
+**Phase A and Phase B verification PASS; consolidated closure BLOCKED only
+by administrative cleanup.** Baseline and current HEAD are
+`a7f366506315e4009db2332ea8ddc6edc9cdf5ba`. Its `Arch Dock task 38` subject
+describes the earlier prerequisite repair; this resumed implementation completes
+the approved TASK-0036 behavior and leaves its changes unstaged.
+
+The main 3D switch reuses `rendererTier`, detailed controls follow effective
+availability, and the backend rejects inactive quality edits. Existing fallback
+and saved-intent metadata remain authoritative. Real fallback/recovery and an
+identity-checked private service restart now have integrated coverage. The
+expanded Studio test also exposed a texture lifetime crash: its source had left
+the window while the 3D consumer retained the released layer. The renderer now
+clears the source on inactivity or window detachment. Actual switch clicks use
+Qt's native polish wait, with form recreation retained as regression coverage.
+
+| Final gate | Result |
+| --- | --- |
+| Pack integrity | PASS, 174/174 |
+| Fresh ON configure/build and full serial CTest | PASS, 67/67, 136.11 seconds |
+| Fresh OFF configure/build and full serial CTest | PASS, 67/67, 125.93 seconds |
+| Fresh AUTO configure/build and full serial CTest | PASS, 67/67, 137.79 seconds |
+| Private staged smoke within ON / OFF / AUTO | PASS, 80.76 / 71.06 / 81.39 seconds |
+| TASK-0068 inherited motion/parts/reduced-motion/cleanup criteria | PASS, 4/4 |
+| TASK-0069 inherited fallback/intent/control/ordinary-renderer criteria | PASS, 4/4 |
+| Temporary diagnostic cleanup | BLOCKED: two OS crash dumps require administrator removal |
+
+No build or test failure remains in the final matrix. The grouped-window and
+energy-pixel cases skipped in ordinary offscreen invocations both passed in
+each private smoke. The optional external source-archive comparison was not
+executed; it is outside this renderer task's acceptance. No release checkbox
+is closed by these private virtual KWin/Plasma results, and personal-desktop,
+physical GPU/monitor, hotplug and release packaging acceptance are not claimed.
+
+The failed noninteractive cleanup reported `sudo: a password is required`.
+The [current TASK-0036 evidence record](CURRENT_STATE.md#task-0036--resumed-phase-b-implementation-2026-09-23)
+contains the exact two paths, administrator command, file purposes, native
+research, diagnosis and reproduction commands. TASK-0037 Phases B/C and
+TASK-0038 Phases A/B remain unimplemented; their prior approvals are retained.

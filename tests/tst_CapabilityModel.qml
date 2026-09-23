@@ -39,6 +39,40 @@ TestCase {
             { rendererTier: "true3d", scene3DQuality: "high" }, { rendererAvailable: false }))
     }
 
+    function test_threeDOffUsesOnlyDeclaredAvailableSurface() {
+        const theme = {capabilities: {rendererTiers:
+            ["true3d", "baked2.5d", "skinned2d", "procedural2d"]}}
+        const resolution = {rendererChoices: [
+            {tier: "baked2.5d", available: true},
+            {tier: "skinned2d", available: true},
+            {tier: "procedural2d", available: true}]}
+        compare(CapabilityModel.scene3DOffTier(resolution, theme), "baked2.5d")
+        resolution.rendererChoices[0].available = false
+        compare(CapabilityModel.scene3DOffTier(resolution, theme), "skinned2d")
+        theme.capabilities.rendererTiers = ["true3d", "procedural2d"]
+        compare(CapabilityModel.scene3DOffTier(resolution, theme), "procedural2d")
+        resolution.rendererChoices[2].available = false
+        compare(CapabilityModel.scene3DOffTier(resolution, theme), "")
+        compare(CapabilityModel.scene3DOffTier({}, theme), "")
+        compare(CapabilityModel.scene3DOffTier(resolution, {}), "")
+    }
+
+    function test_runtimeFallbackHidesOnlyMeshPartMechanisms() {
+        const resolution = {presentationMechanisms: [
+            {id: "open", available: true},
+            {id: "collapse-radial", available: true},
+            {id: "collapse-horizontal", available: true},
+            {id: "shutter", available: false}]}
+        const theme = {scene3D: {parts: [{mechanism: "collapse-radial"}]}}
+        compare(CapabilityModel.scenePresentationMechanisms(resolution, theme, "true3d"),
+            ["open", "collapse-radial", "collapse-horizontal"])
+        for (const tier of ["baked2.5d", "skinned2d", "procedural2d", ""]) {
+            compare(CapabilityModel.scenePresentationMechanisms(resolution, theme, tier),
+                ["open", "collapse-horizontal"])
+        }
+        compare(CapabilityModel.scenePresentationMechanisms({}, theme, "true3d"), [])
+    }
+
     function test_normalizesNestedValueWrappers() {
         const source = {
             value: {

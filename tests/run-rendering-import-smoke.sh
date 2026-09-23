@@ -121,12 +121,15 @@ if mode in ('capture', 'check'):
         record_path.write_text(json.dumps(current))
         print(current['pid'])
         print('Private staged service owner:', json.dumps(current), file=sys.stderr)
-elif mode == 'cleanup':
+elif mode in ('cleanup', 'restart'):
     # Hosts are stopped first, so window/app-let events cannot reactivate it.
     # Also handle activation before the explicit launch or an early test failure.
     current = owner()
     records = [json.loads(record_path.read_text())] if record_path.exists() else []
-    if current and not any(r['pid'] == current['pid'] for r in records):
+    if mode == 'restart':
+        assert current and len(records) == 1, 'missing restart owner'
+        assert all(current[key] == records[0][key] for key in ('unique', 'pid')), 'restart owner changed'
+    elif current and not any(r['pid'] == current['pid'] for r in records):
         records.append(current)
     for record in records:
         try:
@@ -143,7 +146,8 @@ elif mode == 'cleanup':
         finally:
             os.close(fd)
         print('Private staged service cleaned:', verified['pid'], file=sys.stderr)
-    assert owner() is None, 'private service name survived cleanup'
+    if mode == 'cleanup':
+        assert owner() is None, 'private service name survived cleanup'
 else:
     raise AssertionError('unknown owner operation: ' + mode)
 PY_OWNER
@@ -739,6 +743,64 @@ run_private_session() {
         private_service_owner check
         require_no_import_errors
     done
+
+    # Reuse the verified process identity and live ownership queries. Applets
+    # may activate the replacement before the explicit launcher reaches it.
+    local old_service_pid="$ARCHDOCK_RENDERING_SERVICE_PID"
+    local free_token recovered_hosts
+    free_configuration="$(panel_call dockConfiguration "$free_panel_id")"
+    free_token="$(sed -n "s/.*'freeOwnershipToken': <'\\([^']*\\)'>.*/\\1/p" <<<"$free_configuration")"
+    [[ "$free_token" =~ ^archdock-free-[0-9a-f-]{36}$ ]]
+    printf 'Restarting the private service with saved 3D intent on %s.\n' "$free_panel_id"
+    private_service_owner restart
+    "$ARCHDOCK_RENDERING_STAGED_BINARY" \
+        >>"$ARCHDOCK_RENDERING_LOG_DIR/service.log" 2>&1 &
+    ARCHDOCK_RENDERING_LAUNCH_PID=$!
+    gdbus wait --session --timeout=20 org.archdock.ArchDock
+    ARCHDOCK_RENDERING_SERVICE_PID="$(private_service_owner capture)"
+    [[ "$ARCHDOCK_RENDERING_SERVICE_PID" != "$old_service_pid" ]]
+    if [[ "$ARCHDOCK_RENDERING_LAUNCH_PID" != "$ARCHDOCK_RENDERING_SERVICE_PID" ]]; then
+        wait "$ARCHDOCK_RENDERING_LAUNCH_PID"
+    fi
+    wait_for_presentation_state "$free_panel_id" open
+    free_configuration="$(panel_call dockConfiguration "$free_panel_id")"
+    [[ "$free_configuration" == *"'rendererTier': <'true3d'>"* &&
+       "$free_configuration" == *"'effectiveRendererTier': <'$mesh_tier'>"* &&
+       "$free_configuration" == *"'freeOwnershipToken': <'$free_token'>"* &&
+       "$free_configuration" == *"'freeDesktopContainmentId': <$desktop_id>"* &&
+       "$free_configuration" == *"'freeDockAppletId': <$free_applet_id>"* ]] || {
+        printf 'Free host or saved renderer changed after restart: %s\n' "$free_configuration" >&2
+        return 1
+    }
+    native_configuration="$(panel_call dockConfiguration bottom)"
+    [[ "$native_configuration" == *"'nativePanelId': <$panel_id>"* &&
+       "$native_configuration" == *"'nativeDockAppletId': <$native_applet_id>"* &&
+       "$native_configuration" == *"'nativeOwnershipToken': <'$native_token'>"* ]] || {
+        printf 'Native host changed after restart: %s\n' "$native_configuration" >&2
+        return 1
+    }
+    recovered_hosts="$(plasma_script \
+        "var matches = []; var all = desktops(); for (var index = 0; index < all.length; ++index) { var desktop = all[index]; var docks = desktop.widgets('org.archdock.dock'); for (var dockIndex = 0; dockIndex < docks.length; ++dockIndex) { var dock = desktop.widgetById(docks[dockIndex].id); if (!dock || dock.type !== 'org.archdock.dock') { continue; } dock.currentConfigGroup = ['General']; if (String(dock.readConfig('panelId', '')) === '$free_panel_id' && String(dock.readConfig('ownerToken', '')) === '$free_token') { matches.push(String(desktop.id) + '|' + String(dock.id)); } } } print(matches.join(','));" | gvariant_string)"
+    [[ "$recovered_hosts" == "$desktop_id|$free_applet_id" ]] || {
+        printf 'Free host was lost or duplicated after restart: %s\n' "$recovered_hosts" >&2
+        return 1
+    }
+    if [[ "$mesh_tier" == 'true3d' ]]; then
+        [[ "$free_configuration" == *"'scene3DQuality': <'low'>"* ]]
+        for mesh_quality in high low; do
+            free_revision="$(sed -n "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
+                <<<"$(panel_call dockConfiguration "$free_panel_id")")"
+            [[ "$free_revision" =~ ^[0-9]+$ ]]
+            mesh_offset="$(stat -c %s "$ARCHDOCK_RENDERING_LOG_DIR/plasmashell.log")"
+            mesh_reply="$(panel_call applyPanelSettingsTransaction "$free_panel_id" "uint64 $free_revision" \
+                "{'scene3DQuality': <'$mesh_quality'>}" '{}')"
+            [[ "$mesh_reply" == *"'success': <true>"* ]]
+            wait_for_mesh_renderer "$free_panel_id" "$free_applet_id" "$mesh_tier" "$mesh_quality" "$mesh_offset"
+        done
+    fi
+    private_service_owner check
+    require_no_import_errors
+    printf 'Private service restart preserved 3D intent and the same unique native/free hosts.\n'
 
     # Repeated theme changes must release the previous platform's textures.
     # Four passes over three large perspective families plus the energy skin,

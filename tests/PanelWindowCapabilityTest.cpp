@@ -13,6 +13,8 @@
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonDocument>
+#include <QJSValue>
+#include <QtQuickTest>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
 #include <QQmlContext>
@@ -208,8 +210,14 @@ void PanelWindowCapabilityTest::rendererSwitchRetainsOnlyUnchangedInactiveFields
         registry->panelDefinition(panelId)->settingsRevision, values, {})
         .value(QStringLiteral("success")).toBool());
     const auto snapshot = window.panelSettingsEditorSnapshot(panelId, QStringLiteral("studio"));
+    QVERIFY(!fieldKeys(snapshot.value(QStringLiteral("panelFields")).toList())
+        .contains(QStringLiteral("scene3DQuality")));
     const auto revision = registry->panelDefinition(panelId)->settingsRevision;
     const auto before = registry->panelDefinition(panelId)->toPersistedMap();
+    QCOMPARE(window.applyPanelSettingsTransaction(panelId, revision,
+        {{QStringLiteral("scene3DQuality"), QStringLiteral("high")}}, {})
+        .value(QStringLiteral("errorCode")).toString(), QStringLiteral("unavailable-panel-field"));
+    QCOMPARE(registry->panelDefinition(panelId)->toPersistedMap(), before);
     values = snapshot.value(QStringLiteral("panelValues")).toMap();
     QVERIFY(values.contains(QStringLiteral("appearance")));
     values.insert(QStringLiteral("rendererTier"), QStringLiteral("true3d"));
@@ -219,6 +227,8 @@ void PanelWindowCapabilityTest::rendererSwitchRetainsOnlyUnchangedInactiveFields
              qPrintable(resolved.value(QStringLiteral("errorMessage")).toString()));
     QVERIFY(!fieldKeys(resolved.value(QStringLiteral("panelFields")).toList())
         .contains(QStringLiteral("appearance")));
+    QVERIFY(fieldKeys(resolved.value(QStringLiteral("panelFields")).toList())
+        .contains(QStringLiteral("scene3DQuality")));
     QCOMPARE(registry->panelDefinition(panelId)->toPersistedMap(), before);
     auto invalid = values;
     invalid.insert(QStringLiteral("appearance"), values.value(QStringLiteral("appearance")) ==
@@ -307,21 +317,52 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
     QVERIFY(studio);
     studio->show();
     QVERIFY(QTest::qWaitForWindowExposed(studio));
+    const auto rendererToggle = [&]() -> QQuickItem * {
+        QList<QQuickItem *> pending{studio->contentItem()};
+        while (!pending.isEmpty())
+        {
+            QQuickItem *item = pending.takeLast();
+            pending.append(item->childItems());
+            if (!item->inherits("QQuickSwitch") || !item->isVisible())
+                continue;
+            for (QQuickItem *parent = item->parentItem(); parent; parent = parent->parentItem())
+            {
+                const QVariant value = parent->property("modelData");
+                const auto row = value.metaType() == QMetaType::fromType<QJSValue>()
+                    ? value.value<QJSValue>().toVariant().toMap() : value.toMap();
+                if (row.value("key").toString() == QStringLiteral("rendererTier")
+                    && row.value("rendererToggle").toBool())
+                    return item;
+            }
+        }
+        return nullptr;
+    };
     if (available)
     {
         QTRY_VERIFY_WITH_TIMEOUT(popup->property("scene3DControlsAvailable").toBool(), 5000);
         QTRY_VERIFY_WITH_TIMEOUT(popup->property("scene3DQualityVisible").toBool(), 5000);
-        const QVariant field = QVariantMap{{QStringLiteral("scope"), QStringLiteral("panel")},
-                                           {QStringLiteral("key"), QStringLiteral("rendererTier")}};
-        QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue", Q_ARG(QVariant, field),
-                                          Q_ARG(QVariant, QVariant(QStringLiteral("procedural2d")))));
+        // Recreating the form must not let a click use its unpolished geometry.
+        popup->setProperty("subTabIndex", 1);
+        popup->setProperty("subTabIndex", 2);
+        QVERIFY(QQuickTest::qWaitForPolish(studio));
+        QTRY_VERIFY(rendererToggle());
+        QVERIFY(rendererToggle()->property("checked").toBool());
+        QTest::mouseClick(studio, Qt::LeftButton, Qt::NoModifier,
+            rendererToggle()->mapToScene(QPointF(rendererToggle()->width() / 2,
+                                                rendererToggle()->height() / 2)).toPoint());
         QTRY_VERIFY(!popup->property("scene3DQualityVisible").toBool());
         QVERIFY(popup->property("scene3DControlsAvailable").toBool());
         QVERIFY(QMetaObject::invokeMethod(popup.get(), "applyStudioChanges"));
         QTRY_COMPARE(window.panelRendererConfiguration(panelId).value(QStringLiteral("effectiveRendererTier")).toString(),
                      QStringLiteral("procedural2d"));
-        QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue", Q_ARG(QVariant, field),
-                                          Q_ARG(QVariant, QVariant(QStringLiteral("true3d")))));
+        QVERIFY(!fieldKeys(window.panelSettingsEditorSnapshot(panelId, QStringLiteral("studio"))
+            .value(QStringLiteral("panelFields")).toList()).contains(QStringLiteral("scene3DQuality")));
+        QVERIFY(QQuickTest::qWaitForPolish(studio));
+        QTRY_VERIFY(rendererToggle());
+        QVERIFY(!rendererToggle()->property("checked").toBool());
+        QTest::mouseClick(studio, Qt::LeftButton, Qt::NoModifier,
+            rendererToggle()->mapToScene(QPointF(rendererToggle()->width() / 2,
+                                                rendererToggle()->height() / 2)).toPoint());
         QTRY_VERIFY2(popup->property("scene3DQualityVisible").toBool(),
                      qPrintable(popup->property("studioError").toString()));
         QVERIFY(QMetaObject::invokeMethod(popup.get(), "cancelStudioChanges"));
@@ -336,6 +377,7 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
     {
         QVERIFY(!popup->property("scene3DControlsAvailable").toBool());
         QVERIFY(!popup->property("scene3DQualityVisible").toBool());
+        QVERIFY(!rendererToggle());
     }
     studio->close();
     qInfo() << "Private Studio mesh controls and transaction checks passed; build available:" << available;

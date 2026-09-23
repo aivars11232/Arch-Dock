@@ -269,7 +269,7 @@ target_compile_definitions(
 
 include(CTest)
 if(BUILD_TESTING)
-  find_package(Qt6 REQUIRED COMPONENTS Test QmlTools)
+  find_package(Qt6 REQUIRED COMPONENTS Test QmlTools QuickTest)
 
   qt_add_executable(
     panel-model-test
@@ -815,6 +815,7 @@ if(BUILD_TESTING)
             Qt6::Qml
             Qt6::Quick
             Qt6::Test
+            Qt6::QuickTest
             KF6::Kirigami)
   target_compile_definitions(
     panel-window-capability-test

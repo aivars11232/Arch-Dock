@@ -6,26 +6,22 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-09-19 (Europe/Amsterdam). The prerequisite test
-failures are **RESOLVED**. From the owner's clean `7c16581` watcher-interface
-checkpoint, a fresh complete ON Debug build and all **67/67 CTests passed**.
-The staged private Wayland smoke passed both independently and inside the
-full suite, including renderer fallback, grouped-window restore/removal,
-popup/editor interaction and real native/free Plasma applets.
-
-Two additional causes were proved and corrected: KWin's global scripting
-`start` unloaded the installed watcher, and the renderer test's resource-limit
-fault was overwritten by its still-active QML geometry binding. The action
-bridge now runs only its own script; the test now detaches the binding when
-injecting the fault. Original restore, fallback and delegate-destruction
-assertions remain enforced. See the restore and fallback repair record below.
+**Evidence snapshot:** 2026-09-23 (Europe/Amsterdam). TASK-0036 Phase B has
+been implemented under its retained approval and original plan. Both internal
+phase gates now pass. Fresh ON, OFF and AUTO builds each passed **67/67 CTests**
+after the final corrections, including private runtime fallback, Studio
+interaction and service restart. No build or test failure remains in that
+matrix. Formal TASK-0036 closure is **BLOCKED only by administrative cleanup**:
+two OS-managed crash dumps from the diagnosis are root-owned and cannot be
+removed with the available user privileges. Exact paths and the remaining
+command are recorded in the resumed Phase B section below.
 
 TASK-0035 completion is committed as `7b4706e`. The partial TASK-0036 and
 TASK-0037 implementations and earlier repairs remain historical checkpoints.
-TASK-0036 Phase B, TASK-0037 Phases B/C and TASK-0038 Phases A/B have not
-started. These consolidated tasks are not complete. The TASK-0038 approval
-is retained, including its predecessor-closure gate; passing the existing
-suite does not implement the remaining phases.
+TASK-0037 Phases B/C and TASK-0038 Phases A/B have not started. TASK-0038's
+approval and predecessor-closure gate are retained; no replacement plan or
+repeated approval is needed. Passing the predecessor gates does not implement
+the remaining preview actions, folder expansion or panel segments.
 
 Earlier context, retained because it explains two mislabelled commits: the
 session that produced `f61c9ab` began from a tree whose subject `Task33` is
@@ -46,13 +42,13 @@ Earlier task sections retain their historical evidence and boundaries.
 - Repository root: `/mnt/F/Arch Dock`
 - Branch: `main`, matching the local `origin/main` reference. No fetch, push,
   or sync was performed by Codex.
-- Restore/fallback-repair baseline and final `HEAD`:
-  `7c16581485a3164ff379f7bca3c651a7bc267c58`, subject
-  `Arch Dock - Stabilize the KWin watcher D-Bus interface`.
-- The working tree was clean when this repair began. `KWinActionBridge.cpp`,
-  `RendererCapabilityTest.cpp` and the two evidence documents are modified
-  and unstaged. The grouped-window test and TASK-0038 folder/segment
-  implementation remain unchanged.
+- TASK-0036 resume baseline and current `HEAD`:
+  `a7f366506315e4009db2332ea8ddc6edc9cdf5ba`, subject `Arch Dock task 38`.
+  That subject labels the prerequisite repair, not TASK-0038 implementation.
+- The working tree was clean when this resume began. Current source, tests
+  and documentation edits implement the retained TASK-0036 Phase B plan and
+  remain unstaged. TASK-0037 actions and TASK-0038 folder/segment code are
+  not implemented by this change.
 - `build-codex-task-0014/` is still tracked at `HEAD`. It is a build
   directory committed by mistake in `75232e5` and must be removed with
   `git rm -r build-codex-task-0014`; `.gitignore` now excludes every
@@ -60,7 +56,7 @@ Earlier task sections retain their historical evidence and boundaries.
 
 ### Commit-to-task mapping
 
-Commit subjects drifted from their content twice, so this table, not the
+Some commit subjects differ from their content, so this table, not the
 subject line, records which commit carries which task.
 
 | Commit | Subject | Actual content |
@@ -86,6 +82,7 @@ subject line, records which commit carries which task.
 | `7b4706e` | `Arch Dock task 35 full` | TASK-0035 completion |
 | `0211331` | `Arch dock task 36` | TASK-0036 partial Phase A; visual-motion failure unresolved, Phase B not started |
 | `5f41ced` | `Arch Dock - Record TASK-0036 visual-motion blocker` | TASK-0036 resumed diagnostics and blocked-state documentation; no closure |
+| `a7f3665` | `Arch Dock task 38` | Prerequisite watcher/action and fallback-test repairs; green ON suite, no TASK-0038 folder/segment implementation |
 
 The TASK-0036 checkpoint contains the previous session's 29 changed files,
 956 insertions and 64 deletions. It does not close that session's BLOCKED result.
@@ -95,12 +92,12 @@ The TASK-0036 checkpoint contains the previous session's 29 changed files,
 ## Inspected platform
 
 - Arch Linux, rolling release
-- Kernel `7.2.3-arch1-3` for the final TASK-0035 verification
-- KDE Plasma and KWin `6.7.4`
+- Kernel `7.2.6-arch2-1` for the TASK-0036 resume
+- KDE Plasma and KWin `6.7.5-1`
 - Runtime verification: private virtual KWin Wayland and real PlasmaShell applets
 - Qt base `6.11.2-3`
-- Qt Declarative and optional Quick3D `6.11.2-1`
-- KDE Frameworks Core Addons and Kirigami `6.29.0-1`
+- Qt Declarative `6.11.2-2`; optional Quick3D `6.11.2-1`
+- KDE Frameworks Core Addons, Kirigami and KIO `6.30.0-1`
 
 These versions describe the inspection and verification host. TASK-0028 and
 TASK-0029 used external build directories and disposable staged private
@@ -1725,12 +1722,221 @@ diagnostic scripts and logs were removed after recording the evidence.
 Whitespace and local-document-link checks passed. The four files above remain
 modified and unstaged; the owner controls Git closure.
 
-## Next task boundary
+## TASK-0036 — resumed Phase B implementation, 2026-09-23
 
-The existing suite is green. Resume the outstanding approved predecessor
-phases: TASK-0036 Phase B and TASK-0037 Phases B/C, with their mandatory
-acceptance gates, before TASK-0038's retained folder/segment plan. No remaining
-phase is declared complete merely because the current 67 tests pass. No new
-plan or repeated TASK-0038 approval is required. No delegated or parallel
-agent, staging, commit, push, global installation or personal Plasma mutation
-was used.
+### Authority, scope and reuse
+
+The owner requested resuming after quota interruption. The original
+TASK-0036 plan and literal implementation approval were recovered from local
+session history, together with the later approvals for TASK-0037 and TASK-0038.
+The active consolidated pack's 174 manifest entries passed integrity checking.
+Current source and the clean `a7f3665` checkout confirmed that Phase B remained
+the earliest incomplete predecessor. No replacement plan was written.
+
+The existing native Qt Quick `Loader`, Qt Quick 3D textures, capability resolver,
+revisioned editor transaction and private Plasma harness were reused. The
+loader already implements the declared baked/skinned/procedural fallback chain
+and reports the requested/effective tier and reason; duplicating it was not
+needed. This phase adds no persisted enable flag, renderer or host controller.
+
+### Implemented behavior
+
+- Studio's main **3D rendering** switch edits `rendererTier`. It is shown only
+  for a supported renderer, valid 3D theme, capable preview consumer and
+  declared ordinary fallback. Turning it off chooses available baked 2.5D,
+  skinned 2D, then procedural 2D.
+- The backend removes `scene3DQuality` from the editable projection while 3D
+  is off and rejects attempts to change it. Unchanged inactive values retain
+  the existing transaction semantics. Apply, Cancel and reopening remain
+  revisioned operations.
+- Runtime fallback hides quality and unsupported mesh-part mechanisms while
+  preserving supported ordinary presentation controls. Existing metadata
+  preserves saved 3D intent independently of effective tier and fallback reason.
+- The real renderer test now keeps a panel alive through missing 3D resources,
+  valid baked 2.5D fallback, missing baked artwork, procedural fallback and 3D
+  recovery. It checks saved intent, entry geometry, rendered frames and
+  destruction of the replaced mesh renderer.
+- The private harness restarts only its identity-verified staged service,
+  captures the replacement D-Bus owner and checks the same native/free host
+  IDs and tokens. It rejects duplicate free hosts, checks saved renderer intent
+  and exercises rendered quality changes after enabled-renderer recovery.
+
+### Failure diagnosis and corrections during this resume
+
+The first expanded smoke stopped because its new switch lookup walked
+`QObject` ownership. A diagnostic proved that the visible `QQuickSwitch` was
+in the visual tree but absent from `findChildren()` results. The test now walks
+`QQuickWindow::contentItem()` and visual children/parents, as described by
+[Qt's visual-parent documentation](https://doc.qt.io/qt-6/qtquick-visualcanvas-visualparent.html).
+Temporary diagnostics were removed; the real mouse clicks and transaction
+assertions remain.
+
+That correction exposed a separate SIGSEGV on the real 3D-off click. The
+render-thread stack and installed-library disassembly identified
+`QQuick3DTexture::updateSpatialNode`'s `afterSynchronizing` callback, casting a
+released `QSGDynamicTexture`. Arch Dock disabled the mesh-only
+`ShaderEffectSource` while the 3D texture still referenced its provider.
+[Qt 6.11.2's texture implementation](https://github.com/qt/qtquick3d/blob/v6.11.2/src/quick3d/qquick3dtexture.cpp)
+disconnects those callbacks when `sourceItem` changes. `PanelScene3D.qml` now
+clears glyph and tile source items whenever their mesh visual becomes inactive.
+This uses the native lifetime API; it adds no delay, retry or alternate renderer.
+The same private click/fallback test then passed, followed by the full ON suite.
+
+AUTO later exposed a missed mouse click in the new fixture. The first
+instrumented run passed, so it was not treated as proof of a correction. A
+deterministic Appearance-form recreation then reproduced the original failure:
+the switch moved from `(198, 340)` to `(896, 399)` during click delivery and
+remained checked. Its visual object existed before Qt completed layout.
+The fixture now uses [Qt Quick Test's native polish wait](https://doc.qt.io/qt-6/qquicktest.html)
+before both clicks and retains the form recreation as regression coverage.
+`Qt6::QuickTest` is linked only to the test target. Diagnostic logging was
+removed; no fixed sleep, repeat click or assertion relaxation was added.
+
+The stronger form-recreation case then exposed the missing part of texture
+teardown. A core inspection with the installed Qt debug symbols proved that
+the `QQuickShaderEffectSource` still existed but had `m_texture = nullptr`,
+`m_provider = nullptr` and `QQuickItemPrivate::window = nullptr`. Its 3D
+texture still referenced it, and the 3D scene manager still had the Studio
+window. The callback reached a freed scene-graph node through the old layer.
+Gating only on `meshVisualActive` was insufficient. `PanelScene3D.qml` now also
+requires each source and its renderer to share the same non-null
+[native attached window](https://doc.qt.io/qt-6/qml-qtquick-window.html#window-attached-prop).
+Detachment clears `Texture.sourceItem` and disconnects the native callback
+before the next sync. No provider-retention workaround or fixed teardown delay
+is used. The corrected focused smoke and all three final full suites passed.
+
+### Verification record
+
+All builds used fresh task-owned directories below
+`/tmp/archdock-task0036-resume.8GqtDb`, with serial compilation and CTest.
+The parent test environment has a nonexistent D-Bus socket; runtime harnesses
+create their own private session, XDG roots, staged install and virtual KWin.
+
+| Gate | Result |
+| --- | --- |
+| Active pack integrity | PASS, 174/174 |
+| Focused backend gating/transaction cases | PASS, 4/4 QtTest results |
+| Capability QML cases | PASS, 18/18 |
+| Static Studio contract, shell syntax, whitespace | PASS |
+| Fresh ON, OFF and AUTO configure and complete serial builds | PASS in all three modes |
+| Final corrected focused private smoke (AUTO) | PASS, 1/1, 80.92 seconds |
+| Final full ON CTest | PASS, 67/67, 136.11 seconds; private smoke 80.76 seconds |
+| Final full OFF CTest, optional dependency discovery disabled | PASS, 67/67, 125.93 seconds; private smoke 71.06 seconds |
+| Final full AUTO CTest | PASS, 67/67, 137.79 seconds; private smoke 81.39 seconds |
+| Temporary cleanup | BLOCKED only by two root-owned OS diagnostic cores; see remaining boundary |
+
+The ON and AUTO private checks passed real renderer pixels/motion/parts/fallback (6/6),
+grouped windows (3/3), popup interaction (13/13), Icon Properties and mesh
+editor interaction (4/4), energy pixels (3/3), and surface integration (19/19).
+Actual native/free applets, service restart, quality recovery, theme cycles,
+resource bounds and owned-host cleanup passed. These are private virtual
+Wayland results, not personal-desktop, physical GPU/monitor or release acceptance.
+
+The OFF private run confirmed that the real Studio switch and details are
+absent, while saved `true3d` intent resolves to `procedural2d` with
+`renderer-not-installed`. Restart retained the same native/free hosts and saved
+intent. It does not claim to render a 3D frame in an OFF build.
+
+All 67 CTest entries ran in each final suite. Within the ordinary offscreen
+invocations, the KWin grouped-window and Wayland energy-pixel cases skip by
+design; both ran and passed inside each private smoke. The separate live source
+archive/catalog comparison was not executed because that optional external
+archive/root was not supplied. That historical asset-source check is outside
+TASK-0036's renderer acceptance; it is not claimed as a pass here.
+
+### Inherited acceptance criteria
+
+| Phase / legacy criterion | Final status and evidence |
+| --- | --- |
+| A / TASK-0068: same logical motion profiles | PASS: shared motion/controller tests and enabled private mesh pixel, platform, emission and part checks |
+| A / TASK-0068: no property conflicts or orphan animation after theme change | PASS: active fallback, loader/delegate destruction, bounded recovery and repeated live theme/resource checks |
+| A / TASK-0068: reduced motion uses static states | PASS: motion policy and private renderer/presentation reduced-motion checks |
+| A / TASK-0068: unsupported themes hide part controls | PASS: backend capability tests, runtime mechanism filtering and real Studio interaction |
+| B / TASK-0069: 3D failure preserves the panel | PASS for exercised missing-module/backend/resource, invalid mesh, active fallback and source-detachment paths; real panel geometry/frames and recovery remain valid |
+| B / TASK-0069: saved intent and availability stay truthful | PASS: requested/effective/reason metadata, OFF fallback and service restart persistence |
+| B / TASK-0069: detailed controls disappear off/unsupported | PASS: backend field rejection, QML filtering and enabled/disabled real Studio switch interaction |
+| B / TASK-0069: ordinary 2D/2.5D remain usable | PASS: full OFF suite, baked-to-procedural live fallback, ordinary applets and recovery |
+
+Both internal phase gates are PASS. The consolidated completion gate remains
+BLOCKED solely by the diagnostic-artifact cleanup requirement below.
+
+Reproduction commands (each build completes before its CTest starts):
+
+```bash
+ulimit -c 0
+root=$(mktemp -d /tmp/archdock-task0036-verify.XXXXXX)
+cmake -S . -B "$root/on" -DCMAKE_BUILD_TYPE=Debug -DARCHDOCK_ENABLE_QUICK3D=ON
+cmake --build "$root/on" --parallel 1
+env DBUS_SESSION_BUS_ADDRESS="unix:path=$root/no-parent-bus" \
+  ctest --test-dir "$root/on" --output-on-failure --parallel 1 --stop-on-failure
+cmake -S . -B "$root/off" -DCMAKE_BUILD_TYPE=Debug \
+  -DARCHDOCK_ENABLE_QUICK3D=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Qt6Quick3D=TRUE
+cmake --build "$root/off" --parallel 1
+env DBUS_SESSION_BUS_ADDRESS="unix:path=$root/no-parent-bus" \
+  ctest --test-dir "$root/off" --output-on-failure --parallel 1 --stop-on-failure
+cmake -S . -B "$root/auto" -DCMAKE_BUILD_TYPE=Debug -DARCHDOCK_ENABLE_QUICK3D=AUTO
+cmake --build "$root/auto" --parallel 1
+env DBUS_SESSION_BUS_ADDRESS="unix:path=$root/no-parent-bus" \
+  ctest --test-dir "$root/auto" --output-on-failure --parallel 1 --stop-on-failure
+```
+
+The final verification disabled OS core generation with `ulimit -c 0`; this
+does not mask crashes or change CTest failure handling.
+
+### Changed files and rollback
+
+The final change contains only TASK-0036 behavior, its regression coverage and
+evidence. Implementation placement was adapted to existing code; no inherited
+requirement was removed. The file purposes, in implementation order, are:
+
+1. `src/panel/PanelWindow.cpp`: reject edits to inactive 3D quality.
+2. `tests/PanelWindowCapabilityTest.cpp`: backend gating, actual switch clicks,
+   Apply/Cancel/reopen and deterministic form-recreation coverage.
+3. `qml/runtime/CapabilityModel.js`: reuse resolved choices for the off tier
+   and runtime part-control filtering.
+4. `tests/tst_CapabilityModel.qml`: declared fallback order and mechanism cases.
+5. `qml/runtime/SettingsPopup.qml`: main switch and effective-tier detail gates.
+6. `tests/RendererCapabilityTest.cpp`: rendered baked/procedural failure and
+   recovery checks, retaining existing resource assertions.
+7. `tests/run-rendering-import-smoke.sh`: identity-checked private restart and
+   host/persistence/frame observations.
+8. `qml/ArchDock/Rendering/optional3d/PanelScene3D.qml`: release texture consumers
+   when the source becomes inactive or leaves the renderer window.
+9. `CMakeLists.txt`: native Qt Quick Test polish support for the existing test
+   target only; production dependencies are unchanged.
+10. `docs/shared-renderer.md`, `docs/CURRENT_STATE.md` and
+    `docs/RELEASE_CHECKLIST.md`: behavior, evidence and closure limits.
+
+The owner can review and reverse this bounded diff against baseline `a7f3665`,
+after preserving any subsequent work. No schema migration or live desktop
+rollback is needed. No automatic restore, staging or commit was performed.
+The suggested commit `Complete optional Arch Dock 3D support` would contain
+only this consolidated task's changes.
+
+### Remaining boundary
+
+All nine recorded disposable private-session roots are absent. A final
+executable/environment identity scan found no task-owned runtime or build
+process. After recording results, the exact owned
+`/tmp/archdock-task0036-resume.8GqtDb` tree was removed and its absence verified;
+this removed all three builds, staged artifacts, logs, diagnostics, extracted
+core and downloaded debug-symbol cache. No unrelated temporary directory or
+tracked build tree was removed.
+
+The remaining administrator command is:
+
+```bash
+sudo rm -f -- \
+  /var/lib/systemd/coredump/core.panel-window-ca.1000.d505279303d24516a6093ec4ee10d8fd.96035.1790181243000000.zst \
+  /var/lib/systemd/coredump/core.panel-window-ca.1000.d505279303d24516a6093ec4ee10d8fd.204088.1790183708000000.zst
+```
+
+These two exact root-owned files were generated by the diagnosed test crashes.
+The authorized noninteractive `sudo -n rm` attempt failed with
+`sudo: a password is required`; no password was requested or supplied to Codex.
+This is an OS privilege boundary, not a failed test or an approval-review block.
+Their removal and a final absence check are required before formal closure.
+
+TASK-0037 Phases B/C and TASK-0038 Phases A/B remain unimplemented. Their
+approved plans are retained. No delegated or parallel agent, staging, commit,
+push, global installation or personal Plasma mutation was used.

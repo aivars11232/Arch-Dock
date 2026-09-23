@@ -972,7 +972,9 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 resolution.rendererChoices.cend(), [](const auto &choice) {
                     return choice.tier == ArchDock::RendererTier::True3D && choice.available;
                 });
-            available = freeHost && resolution.available && renderer != resolution.rendererChoices.cend();
+            available = freeHost && resolution.available
+                && resolution.renderer.effectiveTier == ArchDock::RendererTier::True3D
+                && renderer != resolution.rendererChoices.cend();
             if (available)
             {
                 const auto theme = m_panelRegistry.themeRuntimeProjection(candidate);
