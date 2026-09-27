@@ -35,7 +35,10 @@ Item {
     }
     onHoveredChanged: updatePresentation()
     onGuardedChanged: updatePresentation()
-    onDefinitionChanged: { presentation.reset(); updatePresentation() }
+    // Content snapshots also refresh this definition. Preserve the active
+    // state and let the controller's requests/guards handle preference changes;
+    // resetting here can hide an entry while its hover binding is evaluating.
+    onDefinitionChanged: updatePresentation()
     Component.onCompleted: updatePresentation()
     HoverHandler { id: pointer; enabled: !root.concealed }
     PanelPresentationController {

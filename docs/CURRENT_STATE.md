@@ -26,14 +26,16 @@ and its fresh ON build/full **71/71 CTest gate passed (269.13 s)**. The separate
 fresh final ON build and full suite passed **71/71 (272.29 s)**. The OFF
 application/module build and three focused shared-QML checks passed. Cleanup
 is verified. **TASK-0038 is COMPLETE**, committed by the owner as `983e5d7`.
-The owner committed the initial TASK-0039 implementation as `4502565` before
-the current continuation. **TASK-0039 remains BLOCKED at its final full gate**:
-the native concealment reporting defect is repaired and the combined Phase-B
-scenario passed, but the latest full suite stopped at a QML binding loop in
-`PanelSegment.qml` (62 passed, one failed, 12 not run). Phase A's retained
-75/75 result is historical evidence, not a passing final result for this tree.
-See the TASK-0039 continuation report below and
-[the precise handoff](TASK-0039_CONTINUATION_HANDOFF.txt).
+The owner committed the initial TASK-0039 implementation as `4502565` and its
+native-concealment repair/blocked checkpoint as `6892c13`. **TASK-0039 is COMPLETE
+in the working tree**: both phases and the final current-tree **75/75 CTest gate
+pass (285.59 s)**, including all private runtime checks with zero binding-loop
+diagnostics. The segment cycle and required test synchronization defects are
+resolved. Documentation and task-owned artifact/session cleanup are complete.
+The earlier blocked reports remain historical evidence; see
+[TASK-0039 final closure](#task-0039-final-closure--2026-09-27).
+The [old handoff](TASK-0039_CONTINUATION_HANDOFF.txt) is explicitly retired.
+The owner controls Git closure; no successor task has started.
 
 Earlier context, retained because it explains two mislabelled commits: the
 session that produced `f61c9ab` began from a tree whose subject `Task33` is
@@ -63,13 +65,17 @@ Earlier task sections retain their historical evidence and boundaries.
   matrix. The owner subsequently committed TASK-0037 closure, TASK-0038 Phase A and the
   initial segment parser as `032420afeee8ac2453f4896a57da7c2e60cf213e`.
   That was the TASK-0038 continuation baseline, now historical.
-- TASK-0039 continuation entry and unchanged final `HEAD`:
+- Previous TASK-0039 continuation entry and unchanged final `HEAD` (historical):
   `45025655bbcd7369b44b07c26549e0be6657f76d`, subject
   `Arch Dock - Complete Arch Dock content systems`. The entry tree was clean;
   the owner's commit preserves the preceding 30-file TASK-0039 implementation.
-  The current unstaged changes contain the bounded continuation repair, tests
-  and blocked-result documentation. The commit subject does not close the
-  unresolved TASK-0039 final gate.
+  The owner then committed that continuation's repair/tests/blocked-result
+  documentation as `6892c13`.
+- Final TASK-0039 continuation entry and unchanged final `HEAD`:
+  `6892c13e7827f4990c71ed2fe49a6462273ccc72`, subject
+  `Arch Dock - Complete Arch Dock content systems`. Entry was clean. The
+  unstaged changes contain the segment correction, bounded test-harness fixes,
+  regression and verified closure documentation. No Git writes were performed.
 - `build-codex-task-0014/` is still tracked at `HEAD`. It is a build
   directory committed by mistake in `75232e5` and must be removed with
   `git rm -r build-codex-task-0014`; `.gitignore` now excludes every
@@ -2484,3 +2490,164 @@ GPU, monitor/hotplug, personal-desktop or release acceptance.
 
 Suggested commit message after verified closure remains:
 `Complete Arch Dock content systems`. The owner controls Git closure.
+
+## TASK-0039 final closure — 2026-09-27
+
+**COMPLETE in the working tree; owner-controlled Git closure pending.** This section supersedes
+the blocked checkpoint above without rewriting its historical evidence. The
+owner explicitly authorized bounded diagnosis/repair cycles for mandatory
+TASK-0039 gate failures, overriding execution-contract section 3 for this task.
+The prior concealment repair and all Phase-A content work were preserved.
+
+Entry HEAD was `6892c13e7827f4990c71ed2fe49a6462273ccc72`, with a clean tree.
+The owner had committed the preceding continuation's ten files (+562/-11),
+including the blocked report, as `Arch Dock - Complete Arch Dock content
+systems`. HEAD remains unchanged. The subject did not establish completion;
+the final current-tree evidence below does. No Git writes were performed.
+
+### Proved binding graph and production correction
+
+The retained and current `PanelSegment.qml`, `PanelPresentationController.qml`
+and `PresentationStates.js` matched by SHA-256 before repair. The warning was
+not caused by a stale generated copy. Minimal segment construction passed.
+A small real `PanelScene` reproduction then failed in 83 ms when replacing
+`orderedEntries` with an identical snapshot while a closed segment was hovered.
+It required neither status data nor an application C++/D-Bus notification.
+
+The closed edge, confirmed with stack traces in a disposable module copy, was:
+
+```text
+orderedEntries -> segmentLayout/run.definition -> onDefinitionChanged
+  -> presentation.reset() / requestOpen() -> controller.machine
+  -> surfaceStateOf(machine) -> segment.expanded -> entry visibility/input
+  -> MouseArea.onExited -> runtimeState.hoveredEntry / pointerInside
+  -> guardsActive -> evaluateDeferred() -> deliver(collapse) -> machine
+```
+
+The nested writes were real opening/collapsing transitions, not no-op
+notifications. The reset discarded the guarded state during binding evaluation.
+This is a runtime transition cycle exposed by content refresh, not an initial
+construction cycle. TASK-0039 makes these refreshes frequent, but its status
+provider is not necessary to reproduce the underlying segment defect. Native
+Qt item/hover notifications carry the feedback; no Arch Dock C++ NOTIFY change
+was needed.
+
+`PanelSegment.qml` now routes definition updates through `updatePresentation()`
+without resetting the controller. The existing state machine remains the sole
+owner. The new `tst_PanelScene.qml` regression fails on binding-loop warnings and
+asserts zero transient surface changes across identical content/configuration
+refreshes, preserved entry hover, guarded preference changes, and collapse when
+the pointer leaves, in both animated and reduced-motion modes. Both cases failed
+before the production correction and pass afterward. No timer, deferred callback,
+warning exception, duplicate controller or changed product semantics was added.
+
+### Additional mandatory-gate harness corrections
+
+Three distinct test defects were reproduced and corrected in
+`tests/visibility-window.py` under the owner override:
+
+1. **Configuration acknowledgement:** after a bottom-to-top move, compositor
+   coordinates were correct, but the click trace still showed the previous
+   `open:open` presentation profile. The requested collapsed profile arrived
+   afterward and reset presentation during input. `configure()` now waits for
+   the authoritative applet's observed profile to match the backend projection
+   before proceeding. A fresh pointer sample alone was insufficient.
+2. **Partial log records:** both interaction tests raised `JSONDecodeError`
+   when the reader reached EOF during a logger write. A split-write probe against
+   the actual `pump()` reproduced the exact unterminated-string error. The reader
+   now retains incomplete lines until their newline. The probe verifies split
+   prefixes/JSON, one delivery, and continued rejection of malformed complete
+   records. Errors are not swallowed.
+3. **Keyboard readiness:** the first complete final run passed 74 tests but
+   failed folder dismissal. A focused discriminator reproduced Escape sent when
+   the popup window was active but its content lacked focus; focus arrived later
+   and the popup stayed open. Folder key delivery now waits for both native
+   window activation and content focus. It uses the original eight-second bound.
+
+Temporary pointer/stack tracing was removed. The small profile and focus
+observations remain in the existing staged-only harness. No assertion, QML-error
+scan or timeout was weakened; no arbitrary sleep or retry was added.
+
+### Final verification accounting
+
+The existing task-specific Debug/AUTO build at
+`/tmp/archdock-task0039.IZhTqK/build` was reused. Source/build identity was checked;
+the QML change triggered module reconfiguration/copying. Fresh incremental full
+builds passed against the final source. The final suite deliberately omitted
+`--stop-on-failure` and emitted JUnit accounting for all tests.
+
+| Gate | Evidence and result |
+| --- | --- |
+| Phase A | Retained 75/75, 283.47 s; all corresponding checks also pass in the final current-tree suite |
+| Segment regression | RED: both motion cases warn and make three unintended surface changes; GREEN: 4/4 QtTest entries including init/cleanup, zero warnings |
+| Adjacent scene/presentation/guard CTests | 4/4 PASS, 5.17 s |
+| Native concealment discriminator | 1/1 PASS, 64.05 s; actual hide -> one terminal report in 0.379 s; unchanged widgets and same-window reveal |
+| Corrected window plus combined content gates | 2/2 PASS, 128.17 s (64.16 / 64.00 s) |
+| First complete final run | 74 PASS, 1 FAIL, zero not run, 281.24 s; folder focus race described above |
+| Corrected folder-focus gate | 1/1 PASS, 64.34 s; combined content/coalescing/visibility/disconnect/expiry all pass |
+| Final build | PASS, exit 0, `closure-verified-build.log` |
+| Final full suite | **75/75 PASS, 285.59 s, exit 0**, `closure-verified-ctest.log` |
+| Final JUnit accounting | 75 cases, zero failures/errors/skips/disabled; zero not run |
+| Final staged rendering/Studio | PASS, 89.24 s |
+| Final window interaction | PASS, 64.00 s; four native edges, free ring/arc, exact actions and guards |
+| Final combined folder/content | PASS, 64.00 s; all five folder layouts on both hosts, three segments, content controls and source lifecycle |
+| Final QML diagnostics | Zero `Binding loop detected` messages and zero runtime QML-error gate failures in the complete detailed log |
+
+The final combined scenario measured **100 updates -> 2 global content
+revisions**, compared with one or two in focused runs and two at the original
+checkpoint. The global counter also includes status-provider updates; the
+100 ms coalescing implementation and existing update-frequency bounds were
+unchanged and all performance assertions passed. This remains within the
+previously verified range, with 98% fewer revisions than source updates.
+Native concealment produced exactly one terminal report in **1.561 s** in the
+final suite. Hidden native overlays deferred while the free host updated,
+sampling stopped with no visible status consumer, and reveal/disconnect/
+temporary-status expiry behaved correctly. Native widget IDs stayed unchanged.
+
+Exact final commands (the task-owned run root was removed after recording results):
+
+```bash
+cmake --build /tmp/archdock-task0039.IZhTqK/build --parallel 1
+env QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/tst_PanelScene.qml -import /tmp/archdock-task0039.IZhTqK/build/qml-imports PanelScene::test_contentRefreshPreservesHoveredSegment
+env DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/archdock-task0039.IZhTqK/no-parent-bus ctest --test-dir /tmp/archdock-task0039.IZhTqK/build --parallel 1 --output-on-failure -R '^(panel-scene|panel-presentation|panel-presentation-guards|panel-guard-interaction)-test$'
+env ARCHDOCK_VISIBILITY_DISCRIMINATOR=1 DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/archdock-task0039.IZhTqK/no-parent-bus ctest --test-dir /tmp/archdock-task0039.IZhTqK/build --parallel 1 --output-on-failure -R '^folder-interaction-smoke$'
+env DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/archdock-task0039.IZhTqK/no-parent-bus ctest --test-dir /tmp/archdock-task0039.IZhTqK/build --parallel 1 --output-on-failure -R '^(window|folder)-interaction-smoke$'
+env DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/archdock-task0039.IZhTqK/no-parent-bus ctest --test-dir /tmp/archdock-task0039.IZhTqK/build --parallel 1 --output-on-failure --output-junit /tmp/archdock-task0039.IZhTqK/closure-verified-junit.xml
+git diff --check
+```
+
+### Consolidated acceptance
+
+| Inherited criterion | Final proof |
+| --- | --- |
+| A: Badges/progress render in the correct layer/state | PASS: overlay/source and shared-QML tests; native/free badge, progress, attention and temporary status in live integration |
+| A: Stale/disconnected data expires or is unavailable | PASS: overlay model/source checks plus actual native/free sender disconnect and temporary expiry |
+| A: System status updates without blocking the UI | PASS: worker-based collection and unavailable-data tests; live CPU/memory readings and demand suspension |
+| A: No duplicate native applets without opt-in | PASS: status uses explicitly selected shared segments; exact native widget IDs remain unchanged |
+| B: No advertised content placeholder page remains | PASS: persisted content controls and source/capability-driven absence verified in Studio/backend/shared UI |
+| B: Visible controls persist, apply, render and are tested | PASS: model/schema/transaction/editor/QML checks plus native/free switches, folders and three segments |
+| B: Hidden/concealed content throttles appropriately | PASS: actual KWin hidden state, correct host phase, one report, hidden-overlay deferral, status pause and reveal |
+| B: Full suite passes | PASS: all 75 executed, no failures/skips/not-run tests |
+
+Phase A and Phase B verification are complete; no mandatory failure remains.
+Current continuation changes are limited to `PanelSegment.qml`,
+`tests/tst_PanelScene.qml`, `tests/visibility-window.py`, and closure documentation
+in this file, `shared-renderer.md`, `RELEASE_CHECKLIST.md` and the retired handoff.
+Earlier overlay/status/content/native-observation implementation remains in the
+owner's commits. No successor, dependency, external network, global installation,
+personal-desktop mutation or delegated/background/parallel agent was used.
+
+Final cleanup PASS: all **28** private runtime roots named in the task logs are
+absent, and no process retains those paths or the task root in its environment.
+Disposable instrumentation probes removed their own roots. After the evidence
+was recorded, the task-owned `/tmp/archdock-task0039.IZhTqK` build/log/probe root
+was removed and its absence verified. No `/tmp/archdock-rendering-import.*`
+directory remains. Temporary paths/log names above now identify historical runs,
+not retained artifacts. Documentation closure and `git diff --check` pass; all
+continuation changes remain unstaged and HEAD is unchanged.
+
+The environment is Arch Linux, Qt 6.11.2, KWin/Plasma 6.7.5 and KF6 6.30.
+Private virtual Wayland evidence does not claim physical GPU, monitor/hotplug,
+personal-desktop or release acceptance. General release boxes remain unchecked.
+The suggested owner-controlled commit remains `Complete Arch Dock content systems`;
+it contains TASK-0039 closure only, with no Git writes performed by the agent.

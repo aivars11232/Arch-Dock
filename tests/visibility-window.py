@@ -43,6 +43,7 @@ def instrument_interaction_stage(stage):
                         if (!representation.authoritativeHost) return;
                         const host = panelScene.Window.window;
                         console.warn("ArchDockInteraction " + JSON.stringify({kind: "host", panel: root.panelId,
+                            profile: String((root.configuration.presentationProfile || {}).id || ""),
                             at: Date.now(), itemVisible: representation.visible, itemOpacity: representation.opacity,
                             windowVisible: host.visible, windowVisibility: panelScene.Window.visibility,
                             nativeState: root.nativeHostState,
@@ -96,6 +97,7 @@ def instrument_interaction_stage(stage):
                 }
                 if (root.visible) visit(content);
                 console.warn("ArchDockInteraction " + JSON.stringify({kind: "folder", panel: root.observedPanelId,
+                    active: root.active, focused: content.activeFocus,
                     visible: root.visible, snapshot: root.snapshot, layout: content.geometry.layout,
                     selected: content.selectedChildId, reducedMotion: content.reducedMotion,
                     rect: [root.x, root.y, root.width, root.height], items: items}));
@@ -241,10 +243,11 @@ def run_interaction_matrix(free_panel):
     events = []
     host_trace = []
     log = (root / "logs/plasmashell.log").open()
+    log_pending = ""
     pongs = 0
 
     def pump():
-        nonlocal pongs
+        nonlocal pongs, log_pending
         main_context = GLib.MainContext.default()
         while main_context.pending():
             main_context.iteration(False)
@@ -265,7 +268,11 @@ def run_interaction_matrix(free_panel):
             if kind == 90:
                 pongs += 1
             lib.ei_event_unref(event)
-        for line in log:
+        # A live file can reach EOF halfway through a logger write. Parse only
+        # newline-terminated records, retaining the unfinished suffix verbatim.
+        lines = (log_pending + log.read()).split("\n")
+        log_pending = lines.pop()
+        for line in lines:
             if "ArchDockInteraction " in line:
                 value = json.loads(line.split("ArchDockInteraction ", 1)[1])
                 if value["kind"] in ("host-change", "presentation"):
@@ -309,6 +316,13 @@ def run_interaction_matrix(free_panel):
         key(1)
 
     def key(code):
+        folders = [key for key, row in observations.items()
+                   if key[0] == "folder" and row.get("visible")]
+        if folders:
+            # QWindow visibility precedes activation and content focus on
+            # Wayland. A key sent during that interval targets the old focus.
+            wait_for(lambda: all(observations[key].get("active") and observations[key].get("focused")
+                                 for key in folders), "folder keyboard focus ready")
         for pressed in (True, False):
             lib.ei_device_keyboard_key(devices[4], code, pressed)
             lib.ei_device_frame(devices[4], lib.ei_now(context))
@@ -416,12 +430,17 @@ def run_interaction_matrix(free_panel):
     def configure(panel, mapping):
         current = panel_call("dockConfiguration", "(s)", (panel,))
         changes = {key: value for key, value in mapping.items() if current.get(key) != value}
-        if not changes:
-            return
-        revision = current["settingsRevision"]
-        result = panel_call("applyPanelSettingsTransaction", "(sta{sv}a{sv})",
-                            (panel, revision, values(changes), {}))
-        assert result["success"], result
+        if changes:
+            revision = current["settingsRevision"]
+            result = panel_call("applyPanelSettingsTransaction", "(sta{sv}a{sv})",
+                                (panel, revision, values(changes), {}))
+            assert result["success"], result
+        # The backend transaction precedes the applet's asynchronous refresh.
+        # An old "open" report cannot acknowledge the new presentation profile:
+        # applying that profile resets the controller and can interrupt input.
+        expected = panel_call("panelRendererConfiguration", "(s)", (panel,))["presentationProfile"]["id"]
+        wait_for(lambda: observations.get(("host", panel, ""), {}).get("profile") == expected,
+                 "applet applied the configured presentation profile")
 
     def visibility_discriminator():
         def evidence():

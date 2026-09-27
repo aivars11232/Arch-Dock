@@ -607,3 +607,62 @@ preview; Apply persists atomically and Cancel restores the prior record. Optiona
 schema bounds are omitted from exported descriptors when absent, allowing the
 same snapshots to be serialized over D-Bus. Nested segment variants are decoded
 at the existing backend boundary and then checked by the typed model.
+
+## Content feedback and status — TASK-0039
+
+`OverlayModel` accepts supported `com.canonical.Unity.LauncherEntry.Update`
+feedback for installed desktop entries: unread badge, progress and attention.
+Values are validated; it does not invent counts or own the notification service.
+Source disconnection removes feedback, and source data expires after five
+minutes. Backend launch outcomes can supply temporary status for five seconds.
+The shared `IconScene` renders these layers for both native and free entries.
+Persisted badge, progress and temporary-status preferences control rendering;
+unavailable integration sources hide their corresponding editor controls.
+
+`SystemStatus` collects battery, network-interface, CPU, memory, root-disk and
+GPU readings where the backend exposes data. Collection runs on its existing
+worker thread. GPU readings require a supported `gpu_busy_percent` sysfs node;
+missing/invalid values remain unavailable. Bounded discovery precedes opt-in,
+then visible status consumers enable the two-second sampling timer. An enabled
+reading older than six seconds is unavailable. Explicitly selected unavailable
+readings are identified as unavailable rather than given fabricated values.
+
+Status entries use the existing segment transaction and exclusive ownership
+rules. They are informational, and selecting a status segment is an explicit
+choice. Standard Plasma applets remain the native-panel strategy for clock,
+sound, Wi-Fi/Bluetooth controls and notification-center functions; Arch Dock
+does not automatically add duplicate applets. Studio edits and the native/free
+runtime consume the same persisted content preferences and capabilities.
+
+`PanelWindow` reuses its content-revision transport and 100 ms coalescing timer.
+Concealed panels defer rendered feedback while visible consumers continue to
+update. With no visible status consumer, periodic status sampling stops; reveal
+resumes demand and current content. Final integration measured 100 application
+updates producing two global content revisions, within the retained one-to-two
+range; global revisions also include status-provider changes.
+
+Native visibility comes from the existing KWin watcher because compositor
+hiding can leave Qt window/item visibility true. The read-only observation
+requires a unique Plasma dock frame with matching dimensions and majority area
+overlap with the applet host. Missing/ambiguous matches remain unavailable.
+Existing ownership-token checks still govern all native mutations. The native
+revision signal feeds the existing `hostConcealed` and presentation-controller
+path, preserving a single lifecycle owner. The private discriminator verifies
+actual KWin hiding, one terminal concealed report, unchanged widgets and reveal
+of the same window.
+
+Content snapshots can refresh a segment definition without changing its
+requested presentation. `PanelSegment` therefore calls the existing guarded
+presentation request instead of resetting the controller on every definition
+notification. Resetting during hovered-entry visibility evaluation previously
+caused hover loss to re-enter the controller's `surfaceState` binding. The
+regression covers animated and reduced-motion refreshes, real preference
+changes, preserved hover, and collapse after pointer exit, with binding-loop
+warnings treated as failures. Initial state, transitions and native lifecycle
+semantics remain owned by the existing controller.
+
+The final Debug/AUTO build and full 75/75 CTest gate pass, including private
+staged rendering/Studio, window actions and combined folder/segment/content
+integration. The historical blocked checkpoints and final evidence are recorded
+in `CURRENT_STATE.md`; private virtual Wayland results are not physical hardware
+or release acceptance.

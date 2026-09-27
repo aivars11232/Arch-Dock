@@ -367,3 +367,41 @@ the results. Baseline/final HEAD is
 writes, global installation or personal-desktop mutation were used. These are
 private virtual KWin/Plasma Wayland results, not physical GPU, monitor/hotplug,
 personal-desktop or release acceptance. Status providers remain TASK-0039 scope.
+
+## TASK-0039 consolidated closure — 2026-09-27
+
+**COMPLETE in the working tree; Git closure remains owner-controlled.**
+This record supersedes the historical TASK-0039 pending statements above.
+Entry/final HEAD is `6892c13e7827f4990c71ed2fe49a6462273ccc72`; the owner had
+committed the prior blocked checkpoint before this continuation.
+
+| Gate | Final evidence |
+| --- | --- |
+| Current Debug/AUTO build | PASS using the validated retained task build; source/resource changes rebuilt |
+| Segment binding-loop regression | RED before repair, GREEN for animated/reduced motion; adjacent presentation/scene/guard CTests 4/4 PASS |
+| Native concealment discriminator | PASS, 64.05 s; actual KWin hide, one terminal report, unchanged widgets and same-window reveal |
+| Full serial CTest, no early stop | **75/75 PASS, 285.59 s**; JUnit: zero failures/errors/skips/disabled, zero not run |
+| Staged rendering/Studio | PASS, 89.24 s |
+| Native/free window interaction | PASS, 64.00 s |
+| Combined folders/three segments/content | PASS, 64.00 s; all five folder layouts, persisted switches, badges/progress/attention, real status and no duplicate applets |
+| Source lifecycle and demand | PASS: expiry/disconnect, unavailable data, asynchronous status, hidden overlay deferral, status pause and reveal |
+| Coalescing | 100 updates -> 2 global revisions; focused range 1–2, original checkpoint 2; unchanged frequency bounds pass |
+| QML runtime checks | Zero binding-loop messages and zero QML-error gate failures in the complete final detailed log |
+| Cleanup | All 28 referenced private runtime roots absent; no task processes or remaining rendering-session directories; task build/log/probe root removed after evidence was recorded |
+
+The production fix preserves segment state across content refreshes by using
+the existing guarded requests instead of resetting its presentation controller.
+Mandatory-gate diagnosis also corrected test configuration acknowledgement,
+partial log-record parsing and folder keyboard-focus readiness. All were
+reproduced before repair; assertions, timeout bounds and the QML-error gate
+remain strict. The owner explicitly authorized bounded repair cycles for this
+task. Earlier blocked records remain historical evidence.
+
+`CURRENT_STATE.md` contains the dependency trace, commands, failure accounting,
+eight inherited acceptance results and final cleanup. The old handoff is marked
+retired without deleting its checkpoint. Temporary log paths now identify
+historical runs, not retained artifacts. No Git writes, agents, dependencies,
+external network, global installation or personal-desktop mutation were used.
+These private virtual Wayland results do not establish physical GPU,
+monitor/hotplug, personal-desktop or general release acceptance; the broader
+release checkboxes remain unchanged.

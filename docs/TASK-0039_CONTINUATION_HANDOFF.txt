@@ -1,3 +1,29 @@
+RETIRED CHECKPOINT — TASK-0039 VERIFIED CLOSURE, 2026-09-27
+
+The checkpoint below is preserved verbatim as historical evidence. Its BLOCKED
+status, retained-build paths and next-action instructions are no longer current.
+The owner authorized bounded repairs of mandatory TASK-0039 gate failures.
+The subsequent continuation entered at clean HEAD
+6892c13e7827f4990c71ed2fe49a6462273ccc72 and left that HEAD unchanged.
+
+The segment binding cycle and configuration/log-framing/keyboard-readiness
+test defects were reproduced and corrected. The final current-tree full suite
+passed 75/75 in 285.59 seconds, with zero failures/errors/skips/not-run tests.
+The final detailed log contained zero binding-loop diagnostics. Native hiding,
+one terminal report, unchanged widgets and same-window reveal were verified;
+final coalescing measured 100 updates -> 2 revisions (focused range 1–2).
+
+All 28 referenced private runtime roots and the task-owned build/log/probe
+root have been removed; no retained task processes or rendering-session
+directories remain. No Git writes or personal-desktop changes were performed.
+
+Current authority and complete evidence:
+  /mnt/F/Arch Dock/docs/CURRENT_STATE.md
+  section: TASK-0039 final closure — 2026-09-27
+Do not resume the historical repair instructions below or reopen completed work.
+
+--- ORIGINAL BLOCKED CHECKPOINT (PRESERVED) ---
+
 TASK-0039 CONTINUATION HANDOFF — 2026-09-27
 
 STATUS: BLOCKED at the final full CTest gate. Do not claim completion.

@@ -108,6 +108,56 @@ TestCase {
         tryCompare(segment, "expanded", false)
     }
 
+    function test_contentRefreshPreservesHoveredSegment_data() {
+        return [{ tag: "animated", reducedMotion: false },
+                { tag: "reduced-motion", reducedMotion: true }]
+    }
+
+    function test_contentRefreshPreservesHoveredSegment(data) {
+        failOnWarning(/Binding loop detected/)
+        const window = createTemporaryObject(motionWindowComponent, testCase)
+        verify(waitForRendering(window.contentItem))
+        mouseMove(window.contentItem, 350, 300)
+        const items = entries().slice(0, 1)
+        items[0].segmentId = "main"
+        const config = definition({ reducedMotion: data.reducedMotion, segments: [{
+            id: "main", order: 0, background: "solid", color: "#226688",
+            padding: 20, spacing: -1, corners: "rounded", presentation: "closed"
+        }] })
+        const scene = createTemporaryObject(sceneComponent, window.contentItem, {
+            x: 70, y: 80, orderedEntries: items, entryDelegate: pointerEntryComponent,
+            panelDefinition: config
+        })
+        scene.entryDelegateContext = { scene: scene }
+        const segment = scene.segmentSurfaces.itemAt(0)
+        compare(segment.expanded, false)
+        mouseMove(segment, segment.width / 2, segment.height / 2)
+        tryVerify(function() { return scene.runtimeState.hoveredEntry === 0 })
+        compare(segment.expanded, true)
+        let surfaceChanges = 0
+        segment.expandedChanged.connect(function() { ++surfaceChanges })
+
+        // Content snapshots recompute segment geometry/definition without
+        // changing the requested presentation. They must not reset it and
+        // hide the hovered entry while its visibility binding is evaluating.
+        scene.orderedEntries = JSON.parse(JSON.stringify(items))
+        scene.panelDefinition = JSON.parse(JSON.stringify(config))
+        compare(surfaceChanges, 0)
+        compare(scene.runtimeState.hoveredEntry, 0)
+        compare(segment.expanded, true)
+
+        // Real preference changes still use the controller's interaction
+        // guards, then settle closed once the pointer leaves.
+        const open = JSON.parse(JSON.stringify(config))
+        open.segments[0].presentation = "open"
+        scene.panelDefinition = open
+        scene.panelDefinition = config
+        compare(surfaceChanges, 0)
+        compare(segment.expanded, true)
+        mouseMove(window.contentItem, 350, 300)
+        tryCompare(segment, "expanded", false)
+    }
+
     function test_independentSegmentsOwnSurfacesAndInput() {
         const items = entries()
         items[0].segmentId = "launchers"
