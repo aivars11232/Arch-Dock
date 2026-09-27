@@ -25,9 +25,15 @@ including real native/free folder interaction. Phase B implementation is complet
 and its fresh ON build/full **71/71 CTest gate passed (269.13 s)**. The separate
 fresh final ON build and full suite passed **71/71 (272.29 s)**. The OFF
 application/module build and three focused shared-QML checks passed. Cleanup
-is verified. **TASK-0038 is COMPLETE in the working tree**, awaiting the owner's
-Git closure. TASK-0039 has not been planned or implemented; its previously
-reported TASK-0038 implementation gap is now closed.
+is verified. **TASK-0038 is COMPLETE**, committed by the owner as `983e5d7`.
+The owner committed the initial TASK-0039 implementation as `4502565` before
+the current continuation. **TASK-0039 remains BLOCKED at its final full gate**:
+the native concealment reporting defect is repaired and the combined Phase-B
+scenario passed, but the latest full suite stopped at a QML binding loop in
+`PanelSegment.qml` (62 passed, one failed, 12 not run). Phase A's retained
+75/75 result is historical evidence, not a passing final result for this tree.
+See the TASK-0039 continuation report below and
+[the precise handoff](TASK-0039_CONTINUATION_HANDOFF.txt).
 
 Earlier context, retained because it explains two mislabelled commits: the
 session that produced `f61c9ab` began from a tree whose subject `Task33` is
@@ -56,8 +62,14 @@ Earlier task sections retain their historical evidence and boundaries.
   clean at the cleanup continuation, matching the preceding passing TASK-0036
   matrix. The owner subsequently committed TASK-0037 closure, TASK-0038 Phase A and the
   initial segment parser as `032420afeee8ac2453f4896a57da7c2e60cf213e`.
-  That is the September 27 continuation baseline and current unchanged HEAD.
-  The working tree contains the approved TASK-0038 Phase B implementation.
+  That was the TASK-0038 continuation baseline, now historical.
+- TASK-0039 continuation entry and unchanged final `HEAD`:
+  `45025655bbcd7369b44b07c26549e0be6657f76d`, subject
+  `Arch Dock - Complete Arch Dock content systems`. The entry tree was clean;
+  the owner's commit preserves the preceding 30-file TASK-0039 implementation.
+  The current unstaged changes contain the bounded continuation repair, tests
+  and blocked-result documentation. The commit subject does not close the
+  unresolved TASK-0039 final gate.
 - `build-codex-task-0014/` is still tracked at `HEAD`. It is a build
   directory committed by mistake in `75232e5` and must be removed with
   `git rm -r build-codex-task-0014`; `.gitignore` now excludes every
@@ -2356,3 +2368,119 @@ unstaged. No agent, staging, commit, push, global installation or personal-
 desktop operation was used. The suggested commit contains TASK-0038 Phase B
 and its required verification corrections only. The owner controls Git closure.
 Suggested commit: `Complete TASK-0038 independent panel segments`.
+
+## TASK-0039 continuation — BLOCKED at final gate, 2026-09-27
+
+This resumes the approved implementation and preserves the owner's checkpoint
+`45025655bbcd7369b44b07c26549e0be6657f76d`. No replanning, successor work or Git
+writes were performed. Phase A remains complete on retained evidence
+(`phase-a-ctest.log`: 75/75, 283.47 s). The combined Phase-B scenario now passes;
+Phase B and consolidated closure remain incomplete because the full gate fails.
+
+### Original blocker: Case A, production lifecycle reporting
+
+The discriminator traced `setPanelVisible("bottom", false)` through the native
+adapter result, owned Plasma configuration/widget IDs, actual KWin window,
+QML host state, presentation publication, D-Bus report and content demand.
+The API and native hiding succeeded: KWin reported `hidden=true`. Qt's
+`QWindow.visible`, `Window.visibility` and the applet's visibility remained
+visible, so no concealment event reached the existing presentation controller.
+The old backend report therefore stayed `revealed`. The eight-second oracle
+was correct; neither the timeout nor lifecycle semantics was changed.
+
+The repair reuses the KWin watcher and existing native-visibility revision
+transport. It observes Plasma dock frames and their native `hidden` state,
+correlates exactly one frame to the host bounds, and feeds that observation
+into the existing host-concealment/controller/report path. Matching requires
+equal dimensions within one pixel and majority area overlap, allowing the
+observed floating-panel client/compositor offset. Missing/ambiguous matches
+remain unavailable; the cache is bounded at 128 frames. This read-only
+correlation grants no mutation authority. Existing ownership-token checks
+still govern panel changes. The attempted window-title correlation was
+discarded after the discriminator showed an empty KWin caption despite the
+Qt window title; it is absent from the final code.
+
+Changed implementation files: `kwin-script/contents/code/main.js`,
+`src/WindowWatcher.h/.cpp`, `src/panel/PanelWindow.h/.cpp`, and
+`plasma-dock-widget/contents/ui/main.qml`. Existing badge/progress/status,
+persistence, content transactions and coalescing implementations were reused.
+`tests/PanelWindowCapabilityTest.cpp` covers observation identity, deduplication,
+ambiguity, removal and bounds. `tests/visibility-window.py` records the native
+visibility trace and verifies actual hidden state, one terminal concealment
+publication, unchanged widgets and reveal of the same native window.
+
+### Verification and first unresolved boundary
+
+All logs/builds below are retained under `/tmp/archdock-task0039.IZhTqK`.
+Each runtime CTest used the existing disposable virtual KWin/Plasma harness
+and `DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/archdock-task0039.IZhTqK/no-parent-bus`.
+
+| Check | Result |
+| --- | --- |
+| Native-frame unit case | PASS, 3 QtTest entries including init/cleanup; `frame-test.log` |
+| Targeted visibility discriminator | PASS, 1/1, 63.82 s; concealment in 0.377 s; `visibility-frame-green.log` and `visibility-frame-green-details.log` |
+| Exact previously blocked combined scenario | PASS, 1/1, 64.40 s; `phase-b-resumed.log` and `phase-b-resumed-details.log` |
+| First final full suite | FAIL, exit 8; 61 passed, one failed, 13 not run, 219.26 s; `final-ctest.log` |
+| Focused window-interaction correction | PASS, 1/1, 64.03 s; `window-input-corrected.log` and detailed companion log |
+| Final incremental build | PASS, exit 0; `final-build-verified.log` |
+| Latest final full suite | FAIL, exit 8; 62 passed, one failed, 12 not run, 283.49 s; `final-verified-ctest.log` |
+
+The first final run exposed a test synchronization defect: the pointer helper
+could accept a QML sample collected before EIS movement acknowledgement.
+Its freshness baseline now follows that acknowledgement; existing hover,
+geometry and timeout assertions remain. The targeted window gate passed,
+and the latest full run passed that gate again (64.00 s), after the rendering
+gate passed (88.92 s).
+
+In the latest run, every combined folder/content/visibility assertion passed,
+including all five folder layouts on native/free hosts, independent segments,
+persisted controls, no duplicate widgets, hidden-update deferral, demand-paused
+status sampling, reveal, source disconnect and temporary-status expiry.
+**100 source updates produced one content revision**, compared with the
+previous checkpoint's two. Native concealment published once in 1.397 s.
+
+The mandatory post-scenario QML error check then failed:
+
+```text
+PanelSegment.qml:41:5: QML PanelPresentationController:
+Binding loop detected for property "surfaceState"
+```
+
+`PanelSegment.qml` and `PanelPresentationController.qml` are unchanged from
+the TASK-0038 checkpoint. The source chain inspected is the segment
+controller's `surfaceState` -> segment `expanded` -> scene entry visibility/
+hover -> segment presentation requests. The actual cycle and whether this
+continuation triggers it are **unproved**. No assertion was bypassed, no
+speculative controller change was made and the failed command was not blindly
+retried. Execution contract section 3 requires BLOCKED at this unclear boundary.
+The failure occurs after live assertions pass, so the combined CTest result
+in this final run is still FAIL.
+
+Exact successful targeted command and failed final command:
+
+```bash
+env DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/archdock-task0039.IZhTqK/no-parent-bus ctest --test-dir /tmp/archdock-task0039.IZhTqK/build --parallel 1 --stop-on-failure --output-on-failure -R '^folder-interaction-smoke$'
+env DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/archdock-task0039.IZhTqK/no-parent-bus ctest --test-dir /tmp/archdock-task0039.IZhTqK/build --parallel 1 --stop-on-failure --output-on-failure
+```
+
+### Remaining closure and cleanup
+
+The first unresolved boundary is the segment-controller binding loop. A
+subsequent authorized continuation must prove its cause before correction,
+then pass the exact failed gate and full suite. Shared-renderer/release
+documentation closure and final artifact removal remain pending; no failed
+criterion is delegated to a successor task. The completion acceptance remains
+unchecked despite the passing targeted behavior.
+
+All 11 private runtime roots referenced by retained task logs are absent,
+and no process retains the task/runtime paths in its environment. The harness
+performed cleanup; no personal desktop was touched. The retained build and
+diagnostic logs deliberately remain for blocked-task resumption, so artifact
+cleanup is not claimed complete. `git diff --check` passes. HEAD is unchanged;
+all continuation changes are unstaged. No external network, dependencies,
+global installation, background/delegated/parallel agent, staging, commit or
+push was used. Private virtual Wayland evidence does not establish physical
+GPU, monitor/hotplug, personal-desktop or release acceptance.
+
+Suggested commit message after verified closure remains:
+`Complete Arch Dock content systems`. The owner controls Git closure.

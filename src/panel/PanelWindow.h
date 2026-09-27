@@ -159,6 +159,7 @@ public slots:
     QVariantMap applyNativePanelVisibilityMode(const QString &panelId,
                                                const QString &visibilityMode);
     QVariantMap nativePanelVisibilityStatus(const QString &panelId) const;
+    QVariantMap nativePanelHostState(const QString &panelId, const QVariantMap &bounds) const;
     bool shouldConcealPanel(const QString &panelId) const;
     // The applet reports which interaction guards it is currently holding.
     // Without this the host visibility decision runs with every lock false and
@@ -349,6 +350,7 @@ private:
         QVariantMap persistValues = {});
     void recordNativePanelVisibilityResult(const QString &panelId,
                                            QVariantMap result);
+    void notifyNativeVisibilityRevision();
     bool adoptNativePanelOwnership(const QString &panelId, int containmentId);
     [[nodiscard]] ArchDock::NativePanelPlacementResult normalizedNativePanelPlacement(
         const QString &panelId,

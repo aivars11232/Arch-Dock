@@ -124,6 +124,26 @@ PlasmoidItem {
     onContentUpdatesVisibleChanged: {
         if (contentUpdatesVisible) refreshEntries();
     }
+    property var nativeHostState: ({})
+    readonly property var nativeHostWindow: activeDockRepresentation
+        ? activeDockRepresentation.Window.window : null
+    readonly property var nativeHostBounds: nativeHostWindow ? ({
+        x: nativeHostWindow.x, y: nativeHostWindow.y,
+        width: nativeHostWindow.width, height: nativeHostWindow.height
+    }) : ({})
+    onNativeHostBoundsChanged: refreshNativeHostState()
+
+    function refreshNativeHostState() {
+        if (freeSurface || panelId.length === 0 || !nativeHostWindow || !dockService.registered) {
+            nativeHostState = ({});
+            return;
+        }
+        const requestedPanel = panelId;
+        callDock("nativePanelHostState", [requestedPanel, nativeHostBounds], function(reply) {
+            if (root.panelId === requestedPanel)
+                root.nativeHostState = normalizeReply(reply) || ({});
+        }, function() { root.nativeHostState = ({}); });
+    }
 
     function invalidateContentFeedback() {
         entries = entries.map(function(source) {
@@ -340,6 +360,7 @@ PlasmoidItem {
     function refresh() {
         refreshConfiguration();
         refreshEntries();
+        refreshNativeHostState();
     }
 
     function bootstrapFreeDock() {
@@ -798,7 +819,12 @@ PlasmoidItem {
             // This is reported to the presentation controller rather than used
             // directly: host concealment and surface collapse are separate
             // layers, and only the controller may combine them.
+            // Wayland auto-hide can leave QWindow.visible true. The existing
+            // KWin watcher supplies actual hidden state for a unique matching
+            // native frame; ambiguous frames remain unavailable.
             readonly property bool hostConcealed: !visible || opacity <= 0
+                || (!root.freeSurface && root.nativeHostState.available === true
+                    && root.nativeHostState.hidden === true)
                 || (Window.window !== null
                     && (!Window.window.visible
                         || Window.visibility === Window.Hidden
@@ -1059,6 +1085,8 @@ PlasmoidItem {
                 root.refreshEntries();
             if (changedProperties.contentRevision !== undefined && root.contentUpdatesVisible)
                 root.refreshEntries();
+            if (changedProperties.nativeVisibilityRevision !== undefined)
+                root.refreshNativeHostState();
             if (changedProperties.presentationRequestRevision !== undefined)
                 root.consumePresentationRequest();
         }

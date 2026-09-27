@@ -135,6 +135,48 @@ bool WindowWatcher::available() const
     return m_available;
 }
 
+QVariantMap WindowWatcher::nativePanelState(const QRectF &bounds) const
+{
+    QVariantMap result{{QStringLiteral("available"), false}};
+    if (!bounds.isValid()) return result;
+    int matches = 0;
+    for (auto it = m_nativePanels.cbegin(); it != m_nativePanels.cend(); ++it) {
+        const QRectF frame = it->value(QStringLiteral("bounds")).toRectF();
+        // Qt's client position can differ by the floating panel's margins.
+        // Require matching dimensions and majority overlap, and never choose
+        // between overlapping candidates. This read-only observation grants
+        // no authority to mutate a containment or compositor window.
+        const QRectF overlap = frame.intersected(bounds);
+        if (qAbs(frame.width() - bounds.width()) >= 1
+            || qAbs(frame.height() - bounds.height()) >= 1
+            || overlap.width() * overlap.height() <= bounds.width() * bounds.height() / 2) continue;
+        ++matches;
+        result.insert(QStringLiteral("windowId"), it.key());
+        result.insert(QStringLiteral("hidden"), it->value(QStringLiteral("hidden")));
+    }
+    return matches == 1 ? QVariantMap{{QStringLiteral("available"), true},
+        {QStringLiteral("windowId"), result.value(QStringLiteral("windowId"))},
+        {QStringLiteral("hidden"), result.value(QStringLiteral("hidden"))}}
+        : QVariantMap{{QStringLiteral("available"), false}};
+}
+
+void WindowWatcher::observeNativePanel(const QString &internalId, const QJsonObject &state)
+{
+    if (!state.value(QStringLiteral("dock")).toBool()
+        || !state.value(QStringLiteral("hidden")).isBool()) {
+        if (m_nativePanels.remove(internalId)) emit nativePanelsChanged();
+        return;
+    }
+    const QRectF bounds(state.value(QStringLiteral("x")).toDouble(), state.value(QStringLiteral("y")).toDouble(),
+                        state.value(QStringLiteral("width")).toDouble(), state.value(QStringLiteral("height")).toDouble());
+    const QVariantMap observation{{QStringLiteral("bounds"), bounds},
+        {QStringLiteral("hidden"), state.value(QStringLiteral("hidden")).toBool()}};
+    if (m_nativePanels.value(internalId) == observation
+        || (!m_nativePanels.contains(internalId) && m_nativePanels.size() >= 128)) return;
+    m_nativePanels.insert(internalId, observation);
+    emit nativePanelsChanged();
+}
+
 void WindowWatcher::windowAdded(const QString &internalId,
                                 const QString &desktopFileName,
                                 const QString &resourceClass,
@@ -166,6 +208,7 @@ void WindowWatcher::windowAdded(const QString &internalId,
     if (resourceClass == QStringLiteral("org.kde.plasmashell") ||
         resourceClass == QStringLiteral("plasmashell"))
     {
+        observeNativePanel(internalId, windowState(stateJson));
         qDebug() << "Ignoring Plasma shell window:" << internalId;
         return;
     }
@@ -204,6 +247,7 @@ void WindowWatcher::windowAdded(const QString &internalId,
 
 void WindowWatcher::windowRemoved(const QString &internalId)
 {
+    if (m_nativePanels.remove(internalId)) emit nativePanelsChanged();
     m_windowModel.removeWindow(internalId);
 }
 
@@ -218,6 +262,11 @@ void WindowWatcher::windowUpdated(const QString &internalId,
 {
     WindowItem window;
     const QJsonObject state = windowState(stateJson);
+    if (resourceClass == QStringLiteral("org.kde.plasmashell")
+        || resourceClass == QStringLiteral("plasmashell")) {
+        observeNativePanel(internalId, state);
+        return;
+    }
     window.internalId = internalId;
     window.desktopFileName = desktopFileName;
     window.iconName = resolveIconName(desktopFileName, resourceClass);

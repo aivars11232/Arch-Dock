@@ -97,6 +97,7 @@ private slots:
     void editorSnapshotsExposeOnlyProjectedEditableState();
     void segmentsUseRevisionedTransactionsAndHostAuthority();
     void contentProvidersUseTransactionsAndVisibility();
+    void nativePanelObservationsRequireUniqueFrame();
     void managedVersionTwoCapabilitiesDriveFallbackAndEditorVisibility();
     void rendererProjectionPreservesConsumedValuesWithoutProtectedState();
     void editorDraftResolutionIsReadOnlyAndCannotAuthorizeHiddenState();
@@ -1336,6 +1337,37 @@ void PanelWindowCapabilityTest::rejectedCapabilityTransactionStopsBeforePersiste
     QCOMPARE(configurationAfter.value(QStringLiteral("settingsRevision")).toULongLong(),
              revisionBefore);
     QCOMPARE(settingsSnapshot(), settingsBefore);
+}
+
+void PanelWindowCapabilityTest::nativePanelObservationsRequireUniqueFrame()
+{
+    WindowModel model;
+    WindowWatcher watcher(model);
+    QSignalSpy changed(&watcher, &WindowWatcher::nativePanelsChanged);
+    const QRectF bounds(288, 628, 720, 92);
+    const auto update = [&](const QString &id, int x, bool hidden) {
+        watcher.windowUpdated(id, {}, QStringLiteral("plasmashell"), {}, {}, false, false,
+            QString::fromUtf8(QJsonDocument::fromVariant(
+                QVariantMap{{"dock", true}, {"hidden", hidden}, {"x", x}, {"y", 628},
+                            {"width", 720}, {"height", 92}}).toJson(QJsonDocument::Compact)));
+    };
+    update("native-1", 280, false);
+    QVERIFY(watcher.nativePanelState(bounds).value("available").toBool());
+    QVERIFY(!watcher.nativePanelState(bounds).value("hidden").toBool());
+    for (int i = 0; i < 10; ++i) update("native-1", 280, false);
+    QCOMPARE(changed.count(), 1);
+    update("native-1", 280, true);
+    QCOMPARE(changed.count(), 2);
+    QVERIFY(watcher.nativePanelState(bounds).value("hidden").toBool());
+    update("native-2", 288, false);
+    QVERIFY(!watcher.nativePanelState(bounds).value("available").toBool());
+    watcher.windowRemoved("native-2");
+    QVERIFY(watcher.nativePanelState(bounds).value("hidden").toBool());
+    update("native-1", 2000, false);
+    QVERIFY(!watcher.nativePanelState(bounds).value("available").toBool());
+    watcher.windowRemoved("native-1");
+    QVERIFY(!watcher.nativePanelState(QRectF(2000, 628, 720, 92)).value("available").toBool());
+    QVERIFY(!watcher.nativePanelState({}).value("available").toBool());
 }
 
 void PanelWindowCapabilityTest::contentProvidersUseTransactionsAndVisibility()

@@ -20,6 +20,8 @@ function windowState(window) {
     const resolvedOutputIndex = outputIndex(output);
     const maximizeMode = typeof window.maximizeMode === "number" ? window.maximizeMode : 0;
     return {
+        dock: window.dock === true,
+        hidden: window.hidden === true,
         x: geometry ? geometry.x : 0,
         y: geometry ? geometry.y : 0,
         width: geometry ? geometry.width : 0,
@@ -88,6 +90,8 @@ function watchWindow(window) {
     window.minimizedChanged.connect(function() { sendWindowUpdated(window); });
     window.desktopFileNameChanged.connect(function() { sendWindowUpdated(window); });
     window.captionChanged.connect(function() { sendWindowUpdated(window); });
+    if (window.hiddenChanged)
+        window.hiddenChanged.connect(function() { sendWindowUpdated(window); });
     if (window.frameGeometryChanged)
         window.frameGeometryChanged.connect(function() { sendWindowUpdated(window); });
     if (window.outputChanged)

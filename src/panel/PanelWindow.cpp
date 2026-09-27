@@ -348,6 +348,8 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
         if (m_contentPublishing && !m_contentTimer.isActive()) m_contentTimer.start();
     });
     connect(&m_panelRegistry, &PanelRegistry::revisionChanged, this, &PanelWindow::updateContentDemand);
+    connect(&m_windowWatcher, &WindowWatcher::nativePanelsChanged,
+            this, &PanelWindow::notifyNativeVisibilityRevision);
     updateContentDemand();
 
     connect(&m_settings, &DockSettings::desktopSuiteChanged, this, &PanelWindow::updateDesktopSuite);
@@ -637,6 +639,11 @@ void PanelWindow::recordNativePanelVisibilityResult(const QString &panelId,
 {
     result.insert(QStringLiteral("panelId"), panelId);
     m_nativePanelVisibilityResults.insert(panelId, std::move(result));
+    notifyNativeVisibilityRevision();
+}
+
+void PanelWindow::notifyNativeVisibilityRevision()
+{
     ++m_nativeVisibilityRevision;
     emit nativeVisibilityRevisionChanged();
 
@@ -691,6 +698,17 @@ QVariantMap PanelWindow::nativePanelVisibilityStatus(const QString &panelId) con
         {QStringLiteral("rollbackSucceeded"), false},
         {QStringLiteral("rollbackErrorCode"), QString{}},
     };
+}
+
+QVariantMap PanelWindow::nativePanelHostState(const QString &panelId, const QVariantMap &bounds) const
+{
+    const auto definition = m_panelRegistry.panelDefinition(panelId);
+    if (!definition || definition->host.kind != ArchDock::PanelHostKind::NativeEdge
+        || definition->host.nativePanelId < 0 || definition->host.nativeOwnershipToken.isEmpty())
+        return {{QStringLiteral("available"), false}};
+    return m_windowWatcher.nativePanelState(QRectF(bounds.value(QStringLiteral("x")).toDouble(),
+        bounds.value(QStringLiteral("y")).toDouble(), bounds.value(QStringLiteral("width")).toDouble(),
+        bounds.value(QStringLiteral("height")).toDouble()));
 }
 
 QVariantMap PanelWindow::dockConfiguration(const QString &panelId) const

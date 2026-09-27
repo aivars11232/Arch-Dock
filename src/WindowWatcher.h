@@ -2,6 +2,11 @@
 
 #include <QObject>
 #include <QString>
+#include <QHash>
+#include <QVariantMap>
+#include <QRectF>
+
+class QJsonObject;
 
 class WindowModel;
 
@@ -16,6 +21,7 @@ public:
     explicit WindowWatcher(WindowModel &windowModel,
                            QObject *parent = nullptr);
     [[nodiscard]] bool available() const;
+    [[nodiscard]] QVariantMap nativePanelState(const QRectF &bounds) const;
 
 public slots:
     void windowAdded(const QString &internalId,
@@ -40,10 +46,13 @@ public slots:
 
 signals:
     void availableChanged();
+    void nativePanelsChanged();
 
 private:
     bool loadKWinScript();
+    void observeNativePanel(const QString &internalId, const QJsonObject &state);
 
     WindowModel &m_windowModel;
     bool m_available = false;
+    QHash<QString, QVariantMap> m_nativePanels;
 };

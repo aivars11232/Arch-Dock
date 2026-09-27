@@ -1,0 +1,208 @@
+TASK-0039 CONTINUATION HANDOFF — 2026-09-27
+
+STATUS: BLOCKED at the final full CTest gate. Do not claim completion.
+The original native-concealment reporting blocker is resolved. The exact
+combined Phase-B scenario passed once. The latest full run failed afterward
+on a QML binding loop, despite passing all combined live assertions.
+
+AUTHORITY / SCOPE
+Repository: /mnt/F/Arch Dock
+Active pack: /mnt/F/Arch_Dock_Codex_Task_Pack_v3_Consolidated
+Read CODEX_EXECUTION_CONTRACT.md section 3 and tasks/TASK-0039.md.
+User continuation request:
+/home/aivars/.codex/attachments/9ba41ed6-213d-41a6-9ae2-141d86006bf6/Pasted text.txt
+The approved TASK-0039 scope remains unchanged. Preserve implementation,
+plans, audits, tests and evidence; no restart/general audit/replanning.
+One sequential session, no agents or Git writes, network, dependencies,
+personal-desktop changes, new features or successor tasks.
+Before each edit, read the file/caller and state the exact file and purpose.
+Do not increase timeouts, insert sleeps or weaken assertions.
+The failure contract permits a proved, current-task correction and one
+rerun; unclear/pre-existing/environment-dependent failures require BLOCKED.
+This continuation stopped at that boundary, without a speculative fix.
+
+GIT STATE TO VERIFY FIRST
+Entry and final HEAD: 45025655bbcd7369b44b07c26549e0be6657f76d
+Subject: Arch Dock - Complete Arch Dock content systems
+Branch: main. Entry worktree was clean.
+The owner committed the prior checkpoint's 30 files (+1392/-259) between
+983e5d7bb780775e798eed89609cf87267aec4e3 and 4502565. That subject is not
+evidence of final TASK-0039 acceptance. TASK-0038 closure is at 983e5d7.
+No Git writes were performed by this agent. Do not reset/restore/clean/stash.
+Continuation files, all unstaged:
+  kwin-script/contents/code/main.js
+  plasma-dock-widget/contents/ui/main.qml
+  src/WindowWatcher.cpp
+  src/WindowWatcher.h
+  src/panel/PanelWindow.cpp
+  src/panel/PanelWindow.h
+  tests/PanelWindowCapabilityTest.cpp
+  tests/visibility-window.py
+  docs/CURRENT_STATE.md
+  docs/TASK-0039_CONTINUATION_HANDOFF.txt (new)
+The eight code/test files total +221/-6. Documentation is additional.
+git diff --check passed; rerun after any subsequent edit.
+
+RETAINED BUILD / ENVIRONMENT
+/tmp/archdock-task0039.IZhTqK/build
+Debug/AUTO with QtQuick3D available, Qt 6.11.2, KWin/Plasma 6.7.5, KF6 6.30.
+All evidence names below are relative to /tmp/archdock-task0039.IZhTqK.
+The retained build represents the current code. Reuse it; build only as
+required by source changes. /tmp evidence is temporary, not permanent storage.
+Fresh Phase-A configure/build and 75/75, 283.47 s are historical evidence in
+phase-a-ctest.log; they are not the final current-tree result.
+
+RESOLVED ORIGINAL CAUSE — CASE A: LIFECYCLE REPORTING
+setPanelVisible("bottom", false) and the native adapter succeeded.
+Owned Plasma configuration confirmed temporaryHidden, and actual KWin
+window.hidden became true. QWindow.visible, Window.visibility and applet
+visible remained true. Therefore no concealment change reached the existing
+presentation controller, whose serialized report remained hostPhase=revealed.
+The eight-second test oracle was valid; hiding itself succeeded.
+The discriminator observes the full native API -> adapter/config/widgets ->
+KWin -> QML -> presentation publication -> D-Bus report -> content demand path.
+
+FINAL REPAIR / REUSE
+- Existing KWin watcher JSON adds dock/hidden and listens to hiddenChanged.
+- WindowWatcher caches up to 128 Plasma dock frames, deduplicates updates,
+  removes destroyed/non-dock observations and exposes nativePanelState(bounds).
+- Matching requires dimensions within one pixel, majority frame overlap,
+  and exactly one candidate. Missing/ambiguous matches return unavailable.
+  Floating Plasma client coordinates differed from compositor coordinates
+  by 8 x 40 pixels; exact x/y equality was not valid.
+- Existing PanelWindow nativeVisibilityRevision transports invalidation.
+  nativePanelHostState(panelId,bounds) is a read-only query restricted to an
+  existing native definition with native ID/ownership token. Native mutation
+  safeguards are unchanged. Geometry correlation grants no mutation authority.
+- The applet queries the observation using its authoritative host window,
+  then feeds observed hidden into the existing hostConcealed/controller path.
+  Free hosts bypass native observation. No second lifecycle machine exists.
+- Existing coalescing, providers, persistence, status collection and controls
+  were preserved, not reimplemented.
+- A title-based identity attempt failed: Qt title changed, but KWin caption
+  remained empty for the Plasma native surface. That attempt was removed.
+
+TEST ADDITIONS / SECOND CORRECTION
+- PanelWindowCapabilityTest::nativePanelObservationsRequireUniqueFrame:
+  unique match, repeated-update deduplication, hidden update, ambiguity,
+  removal, invalid and moved bounds. Three QtTest entries pass including
+  init/cleanup. The deliberately missing session-bus warning is expected in
+  this unit case and does not establish live behavior.
+- visibility-window.py: existing staged-only instrumentation records host
+  visibility, native observation, lifecycle changes/publications and widgets.
+  visibility_discriminator() verifies actual hidden KWin dock, one terminal
+  concealed report, unchanged widget IDs, and reports timing.
+- ARCHDOCK_VISIBILITY_DISCRIMINATOR=1 selects a small native hide/reveal path,
+  asserting the same compositor window returns. The normal combined matrix
+  also uses the discriminator, without skipping its content assertions.
+- The first final suite failed window-interaction-smoke while opening the
+  next native-edge context menu. click_entry() could accept an observation
+  collected before EIS movement acknowledgement because native_point()
+  pumps observations. The freshness baseline now follows sync_input().
+  Existing hovered/center assertions and the eight-second timeout remain.
+  The focused corrected window gate passed; the latest full run passed it too.
+
+VERIFICATION / EXITS
+Original diagnostic failures, exit 8:
+  visibility-red.log                 initial Qt-visible observation
+  visibility-compositor-red.log      actual KWin hidden proves Case A
+  visibility-green.log               unsuccessful title correlation attempt
+  visibility-identity.log            empty KWin caption proves title unsuitable
+Passing final-approach evidence:
+  frame-test.log                     3/3 QtTest entries, exit 0
+  visibility-frame-green.log         1/1, 63.82 s, exit 0
+  visibility-frame-green-details.log native conceal 0.377 s, one report,
+                                     unchanged widgets, same-window reveal
+  phase-b-resumed.log                exact combined gate 1/1, 64.40 s, exit 0
+  phase-b-resumed-details.log        native conceal 1.648 s;
+                                     100 source updates -> 1 content revision;
+                                     hidden overlay deferral, status demand,
+                                     reveal, disconnect and expiry pass
+First final full gate:
+  final-ctest.log                    61 passed, 1 failed, 13 not run;
+                                     219.26 s, exit 8 (window interaction)
+After the focused EIS synchronization correction:
+  window-input-corrected.log         1/1, 64.03 s, exit 0
+  window-input-corrected-details.log all native edges/free actions pass
+  final-build-verified.log           full incremental build, exit 0
+LATEST FINAL FULL GATE:
+  final-verified-ctest.log            62 passed, 1 failed, 12 not run;
+                                     283.49 s, exit 8
+  build/Testing/Temporary/LastTest.log also contains latest detailed output;
+                                     future CTest runs overwrite it
+  rendering-import-smoke             PASS, 88.92 s
+  window-interaction-smoke           PASS, 64.00 s
+  folder-interaction-smoke           FAIL, 64.00 s
+
+EXACT REMAINING FAILURE
+In final-verified-ctest.log, lines 497-515 show all combined assertions PASS:
+five folder layouts on both hosts; empty folder; both segment cases;
+persisted content controls; 100 updates -> 1 content revision;
+native hide -> KWin hidden -> exactly one concealed report in 1.397 s;
+unchanged widget IDs; hidden overlay deferral; no-consumer status pause;
+reveal; disconnect; temporary status expiry.
+Then lines 516-517 report:
+  PanelSegment.qml:41:5: QML PanelPresentationController:
+  Binding loop detected for property "surfaceState"
+The mandatory post-scenario QML error scan makes the CTest FAIL despite
+the live assertions passing. Do not bypass/suppress that check.
+The failed private root /tmp/archdock-rendering-import.Ugjc5c was removed
+by the harness. Failure output retains the matching error and log tail,
+not the entire original plasmashell log. Do not invent timing for the warning.
+
+FOCUSED DIAGNOSTIC ALREADY DONE
+Read:
+  qml/ArchDock/Rendering/PanelSegment.qml
+  qml/ArchDock/Rendering/PanelPresentationController.qml
+  qml/ArchDock/Rendering/PanelScene.qml (segment repeater/entry consumers)
+PanelSegment.expanded reads presentation.surfaceState; entry visibility and
+hover consume expanded, and segment hover/definition changes request/reset
+the same controller. This is an inspected dependency chain, NOT a proved
+cycle or cause. Those controller files are unchanged since TASK-0038's
+983e5d7 checkpoint. The current evidence cannot establish whether the warning
+is pre-existing or triggered by this continuation. No production fix or new
+test rerun was attempted after this diagnosis. Contract section 3 requires
+BLOCKED. Do not infer that another full-suite retry resolves it.
+
+NEXT EXACT ACTION IF THE OWNER AUTHORIZES CONTINUING THIS BLOCKER
+1. Verify HEAD/status and retained evidence; preserve all changes above.
+2. Read final-verified-ctest.log around lines 497-517 and the three identified
+   QML files. Trace the actual controller cycle with narrowly scoped staged
+   instrumentation in the existing harness. Establish the cause/trigger and
+   whether correction belongs to the approved task before editing production.
+3. If proved and authorized, make one focused correction, retain the strict
+   QML-error scan, and rerun the exact failed folder gate once. If still
+   unclear/pre-existing/outside scope, report BLOCKED rather than guessing.
+4. Only after that passes, build as needed and run the mandatory full75 gate.
+   Do not substitute the historical or targeted PASS for full acceptance.
+5. After complete success, finish docs/shared-renderer.md,
+   docs/RELEASE_CHECKLIST.md and docs/CURRENT_STATE.md; verify all inherited
+   criteria, cleanup, diff check and current HEAD/status. Do not start TASK40.
+
+EXACT COMMANDS (run from repository root, sequentially as applicable)
+Build:
+  cmake --build /tmp/archdock-task0039.IZhTqK/build --parallel 1
+Targeted native visibility:
+  env ARCHDOCK_VISIBILITY_DISCRIMINATOR=1 DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/archdock-task0039.IZhTqK/no-parent-bus ctest --test-dir /tmp/archdock-task0039.IZhTqK/build --parallel 1 --stop-on-failure --output-on-failure -R '^folder-interaction-smoke$'
+Exact combined gate:
+  env DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/archdock-task0039.IZhTqK/no-parent-bus ctest --test-dir /tmp/archdock-task0039.IZhTqK/build --parallel 1 --stop-on-failure --output-on-failure -R '^folder-interaction-smoke$'
+Window gate:
+  env DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/archdock-task0039.IZhTqK/no-parent-bus ctest --test-dir /tmp/archdock-task0039.IZhTqK/build --parallel 1 --stop-on-failure --output-on-failure -R '^window-interaction-smoke$'
+Mandatory full gate:
+  env DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/archdock-task0039.IZhTqK/no-parent-bus ctest --test-dir /tmp/archdock-task0039.IZhTqK/build --parallel 1 --stop-on-failure --output-on-failure
+Do not run these commands merely to retry the unresolved warning.
+
+DOCUMENTATION / CLEANUP / LIMITS
+docs/CURRENT_STATE.md now records current HEAD, repaired Case A, the honest
+Phase-A/Phase-B/final distinction, all failures, the unresolved boundary and
+remaining closure. Shared-renderer/release acceptance docs remain pending.
+All 11 private runtime roots referenced by retained logs are absent; no
+process retains task/runtime paths in its environment. Harness cleanup ran.
+The task build/log root intentionally remains for resumption. Completion's
+full artifact-removal criterion is therefore pending. No broad process kill
+or personal-desktop mutation occurred. Private virtual Wayland evidence is
+not physical GPU, monitor/hotplug, personal desktop or release acceptance.
+No Git writes, external network, new dependency, global installation or
+delegated/background/parallel agent work occurred.
+Suggested commit only after verified closure: Complete Arch Dock content systems
+The owner controls Git closure.

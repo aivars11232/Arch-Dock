@@ -25,12 +25,30 @@ def instrument_interaction_stage(stage):
 
     insert("main.qml", "id: windowPreview", "\n                observedPanelId: root.panelId\n                observedActive: representation.authoritativeHost")
     insert("main.qml", "id: folderExpansion", "\n                observedPanelId: root.panelId\n                observedActive: representation.authoritativeHost")
+    insert("main.qml", "function publishPresentationState() {", '''
+        console.warn("ArchDockInteraction " + JSON.stringify({kind: "presentation", panel: root.panelId,
+            at: Date.now(), state: root.reportedPresentation, hostConcealed: root.hostConcealed}));
+''')
+    insert("main.qml", "function publishHostConcealed() {", '''
+                console.warn("ArchDockInteraction " + JSON.stringify({kind: "host-change", panel: root.panelId,
+                    at: Date.now(), authoritative: authoritativeHost, concealed: hostConcealed,
+                    itemVisible: visible, itemOpacity: opacity, windowVisible: Window.window ? Window.window.visible : null,
+                    windowVisibility: Window.visibility, state: root.reportedPresentation}));
+''')
     insert("main.qml", "id: panelScene", '''
                 Timer {
                     interval: 100; running: true; repeat: true
                     property int sample: 0
                     onTriggered: {
-                        if (!representation.authoritativeHost || !panelScene.segmentedScene) return;
+                        if (!representation.authoritativeHost) return;
+                        const host = panelScene.Window.window;
+                        console.warn("ArchDockInteraction " + JSON.stringify({kind: "host", panel: root.panelId,
+                            at: Date.now(), itemVisible: representation.visible, itemOpacity: representation.opacity,
+                            windowVisible: host.visible, windowVisibility: panelScene.Window.visibility,
+                            nativeState: root.nativeHostState,
+                            rect: [host.x, host.y, host.width, host.height], concealed: representation.hostConcealed,
+                            state: root.reportedPresentation}));
+                        if (!panelScene.segmentedScene) return;
                         const segments = [];
                         for (let i = 0; i < panelScene.segmentSurfaces.count; ++i) {
                             const segment = panelScene.segmentSurfaces.itemAt(i);
@@ -221,6 +239,7 @@ def run_interaction_matrix(free_panel):
     devices = {}
     observations = {}
     events = []
+    host_trace = []
     log = (root / "logs/plasmashell.log").open()
     pongs = 0
 
@@ -249,6 +268,9 @@ def run_interaction_matrix(free_panel):
         for line in log:
             if "ArchDockInteraction " in line:
                 value = json.loads(line.split("ArchDockInteraction ", 1)[1])
+                if value["kind"] in ("host-change", "presentation"):
+                    host_trace.append(value)
+                    host_trace[:] = host_trace[-80:]
                 if value["kind"] == "event":
                     events.append(value)
                     events[:] = events[-24:]
@@ -319,7 +341,8 @@ def run_interaction_matrix(free_panel):
                 "/InteractionProbe", "org.archdock.InteractionProbe", "observe",
                 JSON.stringify({cursor: workspace.cursorPos, windows: workspace.windowList().map(function(w) {
                     return {id: w.internalId.toString(), caption: w.caption, app: w.resourceClass, layer: w.layer,
-                            popup: w.popupWindow, x:w.frameGeometry.x, y:w.frameGeometry.y,
+                            popup: w.popupWindow, hidden: w.hidden, dock: w.dock,
+                            x:w.frameGeometry.x, y:w.frameGeometry.y,
                             width:w.frameGeometry.width, height:w.frameGeometry.height,
                             buffer:[w.bufferGeometry.x,w.bufferGeometry.y,w.bufferGeometry.width,w.bufferGeometry.height]};
                 })}), function(closeId) {
@@ -400,6 +423,43 @@ def run_interaction_matrix(free_panel):
                             (panel, revision, values(changes), {}))
         assert result["success"], result
 
+    def visibility_discriminator():
+        def evidence():
+            configuration = panel_call("dockConfiguration", "(s)", ("bottom",))
+            native_id = int(configuration["nativePanelId"])
+            native = call("org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell", "evaluateScript", "(s)",
+                (f"var p = panelById({native_id}); p.currentConfigGroup = ['ArchDock']; print(JSON.stringify({{hiding:p.hiding, "
+                 "temporaryHidden:p.readConfig('temporaryHidden','0'), widgets:p.widgets().map(w => w.id).sort()}));",))
+            return {"time": time.monotonic(), "savedVisible": configuration["visible"],
+                    "native": native, "compositor": kwin_geometry(),
+                    "host": observations.get(("host", "bottom", "")),
+                    "report": panel_call("panelPresentationState", "(s)", ("bottom",)),
+                    "visibility": panel_call("nativePanelVisibilityStatus", "(s)", ("bottom",)),
+                    "content": panel_call("contentRuntimeSnapshot", "(s)", ("bottom",))}
+
+        before = evidence()
+        host_trace.clear()
+        succeeded = panel_call("setPanelVisible", "(sb)", ("bottom", False))
+        try:
+            assert succeeded
+            wait_for(lambda: not panel_call("contentRuntimeSnapshot", "(s)", ("bottom",))["visible"]
+                     and panel_call("panelPresentationState", "(s)", ("bottom",)).get("hostPhase") == "concealed",
+                     "last status consumer hidden by native host")
+        finally:
+            after = evidence()
+            print("Visibility discriminator: " + json.dumps({"before": before, "apiSucceeded": succeeded,
+                  "after": after, "trace": host_trace}), flush=True)
+        observed = after["host"]["nativeState"]
+        assert observed["available"]
+        actual = next(window for window in after["compositor"]["windows"] if window["id"] == observed["windowId"])
+        assert actual["dock"] and actual["hidden"], "lifecycle reported concealment before KWin actually hid the dock"
+        assert json.loads(before["native"])["widgets"] == json.loads(after["native"])["widgets"]
+        concealed_reports = [row for row in host_trace if row["kind"] == "presentation"
+                             and row["panel"] == "bottom" and row["state"]["hostPhase"] == "concealed"]
+        assert len(concealed_reports) == 1, concealed_reports
+        print(f"PASS: native hide -> KWin hidden -> one concealed report in {after['time'] - before['time']:.3f}s; widget IDs unchanged", flush=True)
+        return observed["windowId"]
+
     folder_app_ids = {}
 
     def entry(panel):
@@ -424,7 +484,11 @@ def run_interaction_matrix(free_panel):
             lib.ei_device_pointer_motion_absolute(devices[2], *point)
             lib.ei_device_frame(devices[2], lib.ei_now(context))
             sync_input()
-            observed = wait_for(lambda: entry(panel) if entry(panel).get("sample", 0) > current["sample"] else None,
+            # native_point() pumps compositor/QML observations before the
+            # movement. Only a sample after the EIS acknowledgement can prove
+            # this pointer target is hovered, particularly after an edge move.
+            acknowledged_sample = entry(panel).get("sample", 0)
+            observed = wait_for(lambda: entry(panel) if entry(panel).get("sample", 0) > acknowledged_sample else None,
                                 "fresh applet pointer observation")
             return point if observed.get("hovered") and observed["center"] == current["center"] else None
 
@@ -731,9 +795,7 @@ def run_interaction_matrix(free_panel):
             assert snapshot("bottom")["revision"] == current["revision"]
             free_segments = snapshot(free_panel)["panelValues"]["segments"]
             configure(free_panel, {"segments": free_segments[:2]})
-            assert panel_call("setPanelVisible", "(sb)", ("bottom", False))
-            wait_for(lambda: not runtime()["visible"] and panel_call("panelPresentationState", "(s)",
-                     ("bottom",)).get("hostPhase") == "concealed", "last status consumer hidden by native host")
+            visibility_discriminator()
             # Allow an already queued worker result to settle before measuring.
             time.sleep(0.25)
             concealed = runtime()["sampleCount"]
@@ -773,6 +835,17 @@ def run_interaction_matrix(free_panel):
         kwin_geometry(studio["id"])
         wait_for(lambda: not any(window["id"] == studio["id"] for window in kwin_geometry()["windows"]),
                  "private Studio closed before desktop input")
+        if os.environ.get("ARCHDOCK_VISIBILITY_DISCRIMINATOR") == "1":
+            configure("bottom", {"layout": "horizontal", "rendererTier": "procedural2d",
+                                 "panelThemeId": "", "completeThemeId": ""})
+            click([1200, 500])
+            wait_for(lambda: opened("bottom") and observations.get(("host", "bottom", "")), "native host ready")
+            window_id = visibility_discriminator()
+            assert panel_call("setPanelVisible", "(sb)", ("bottom", True))
+            wait_for(lambda: opened("bottom") and any(window["id"] == window_id and not window["hidden"]
+                     for window in kwin_geometry()["windows"]), "same native window revealed and reported")
+            print("PASS: native reveal restores the same compositor window and lifecycle", flush=True)
+            return
         if os.environ.get("ARCHDOCK_RENDERING_FOLDERS") == "1":
             run_folder_matrix()
             run_content_matrix()
