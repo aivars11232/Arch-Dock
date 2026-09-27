@@ -92,7 +92,8 @@ QVariantList PanelContentTransaction::segmentEntries(
     {
         const QVariantMap entry = value.toMap();
         const QString id = entry.value(QStringLiteral("appId")).toString();
-        if (id.isEmpty() || byId.contains(id))
+        if (id.isEmpty() || byId.contains(id)
+            || id.startsWith(QStringLiteral("status:")) != entry.value(QStringLiteral("isStatus")).toBool())
             return reject(QStringLiteral("segment entries require unique host identities"));
         byId.insert(id, entry);
         order.append(id);
@@ -106,7 +107,10 @@ QVariantList PanelContentTransaction::segmentEntries(
     QSet<QString> explicitClaims;
     for (const auto &segment : segments)
     {
-        if (segment.source == QStringLiteral("status"))
+        if (segment.source == QStringLiteral("status") && strict
+            && std::none_of(entries.cbegin(), entries.cend(), [](const QVariant &value) {
+                return value.toMap().value(QStringLiteral("isStatus")).toBool();
+            }))
             return reject(QStringLiteral("no segment status provider is available"));
         if (segment.source != QStringLiteral("custom") && segment.entryIds.isEmpty())
         {
@@ -125,7 +129,8 @@ QVariantList PanelContentTransaction::segmentEntries(
                 continue;
             }
             const auto entry = byId.value(id);
-            if ((segment.source == QStringLiteral("launcher") && !entry.value(QStringLiteral("pinned")).toBool()) ||
+            if ((entry.value(QStringLiteral("isStatus")).toBool() != (segment.source == QStringLiteral("status"))) ||
+                (segment.source == QStringLiteral("launcher") && !entry.value(QStringLiteral("pinned")).toBool()) ||
                 (segment.source == QStringLiteral("tasks") && !entry.value(QStringLiteral("running")).toBool()))
             {
                 if (strict)
@@ -141,6 +146,12 @@ QVariantList PanelContentTransaction::segmentEntries(
             continue;
         const auto entry = byId.value(id);
         QString owner;
+        if (entry.value(QStringLiteral("isStatus")).toBool())
+        {
+            owner = automatic.value(QStringLiteral("status"));
+            if (!owner.isEmpty()) owners.insert(id, owner);
+            continue;
+        }
         if (entry.value(QStringLiteral("pinned")).toBool())
             owner = automatic.value(QStringLiteral("launcher"));
         if (owner.isEmpty() && entry.value(QStringLiteral("running")).toBool())

@@ -249,6 +249,7 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     m_settings(this),
         m_panelRegistry(this),
     m_systemStatus(this),
+    m_overlayModel(this),
     m_actionBridge(this),
       m_windowWatcher(m_windowModel)
 {
@@ -336,6 +337,18 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
                     m_nativePanelVisibilityStateCache.clear();
                     scheduleNativePanelRecovery();
                 });
+
+    m_contentTimer.setSingleShot(true);
+    m_contentTimer.setInterval(100);
+    connect(&m_contentTimer, &QTimer::timeout, this, &PanelWindow::notifyContentRevision);
+    connect(&m_overlayModel, &ArchDock::OverlayModel::changed, this, [this] {
+        if (m_contentPublishing && !m_contentTimer.isActive()) m_contentTimer.start();
+    });
+    connect(&m_systemStatus, &SystemStatus::statusChanged, this, [this] {
+        if (m_contentPublishing && !m_contentTimer.isActive()) m_contentTimer.start();
+    });
+    connect(&m_panelRegistry, &PanelRegistry::revisionChanged, this, &PanelWindow::updateContentDemand);
+    updateContentDemand();
 
     connect(&m_settings, &DockSettings::desktopSuiteChanged, this, &PanelWindow::updateDesktopSuite);
     connect(&m_settings, &DockSettings::monitorIndexChanged, this, &PanelWindow::updateDesktopSuite);
@@ -489,6 +502,87 @@ void PanelWindow::notifyDockEntriesRevision()
                       << QVariantMap{{QStringLiteral("dockEntriesRevision"), m_dockEntriesRevision}}
                       << QStringList{};
     QDBusConnection::sessionBus().send(propertiesChanged);
+}
+
+bool PanelWindow::panelContentVisible(const QString &panelId) const
+{
+    if (!m_panelRegistry.panelValue(panelId, QStringLiteral("visible")).toBool()) return false;
+    const auto state = m_panelPresentationStates.value(panelId);
+    return state.value(QStringLiteral("hostPhase")).toString() != QStringLiteral("concealed")
+        && state.value(QStringLiteral("surfaceState")).toString() != QStringLiteral("collapsed");
+}
+
+void PanelWindow::updateContentDemand()
+{
+    bool visible = m_settingsWindow && m_settingsWindow->isVisible();
+    bool status = visible; // Studio needs current provider capabilities and preview data.
+    for (const auto &id : m_panelRegistry.panelIds())
+    {
+        if (!panelContentVisible(id)) continue;
+        visible = true;
+        const auto definition = m_panelRegistry.panelDefinition(id);
+        if (definition)
+            for (const auto &segment : definition->segments)
+                status = status || segment.source == QStringLiteral("status");
+    }
+    const bool revealed = !m_contentPublishing && visible;
+    m_contentPublishing = visible;
+    m_overlayModel.setPublishing(visible);
+    m_systemStatus.setEnabled(status);
+    if (!visible) m_contentTimer.stop();
+    else if (revealed) m_contentTimer.start();
+}
+
+void PanelWindow::notifyContentRevision()
+{
+    if (!m_contentPublishing) return;
+    ++m_contentRevision;
+    emit contentRevisionChanged();
+    auto signal = QDBusMessage::createSignal(QStringLiteral("/Control"),
+        QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("PropertiesChanged"));
+    signal << QStringLiteral("local.PanelWindow")
+           << QVariantMap{{QStringLiteral("contentRevision"), m_contentRevision}} << QStringList{};
+    QDBusConnection::sessionBus().send(signal);
+}
+
+QVariantMap PanelWindow::contentRuntimeSnapshot(const QString &panelId) const
+{
+    if (!m_panelRegistry.panelIds().contains(panelId)) return {};
+    return {{QStringLiteral("sampleCount"), m_systemStatus.sampleCount()},
+        {QStringLiteral("contentRevision"), m_contentRevision},
+        {QStringLiteral("visible"), panelContentVisible(panelId)},
+        {QStringLiteral("availableSources"), m_systemStatus.availableSources()},
+        {QStringLiteral("overlayAvailable"), m_overlayModel.available()}};
+}
+
+QVariantList PanelWindow::statusEntriesFor(const ArchDock::PanelDefinition &definition, bool availableOnly) const
+{
+    auto entries = m_systemStatus.entries();
+    const auto available = m_systemStatus.availableSources();
+    QStringList selected;
+    bool automatic = false;
+    for (const auto &segment : definition.segments) {
+        if (segment.source != QStringLiteral("status")) continue;
+        selected.append(segment.entryIds);
+        automatic = automatic || segment.entryIds.isEmpty();
+    }
+    entries.erase(std::remove_if(entries.begin(), entries.end(), [&](const QVariant &entry) {
+        const auto id = entry.toMap().value(QStringLiteral("appId")).toString();
+        return availableOnly ? !available.contains(id)
+            : !selected.contains(id) && !(automatic && available.contains(id));
+    }), entries.end());
+    return entries;
+}
+
+QVariantMap PanelWindow::entryOverlay(const QVariantMap &entry) const
+{
+    QString desktop = entry.value(QStringLiteral("desktopFileName")).toString();
+    const auto id = entry.value(QStringLiteral("appId")).toString();
+    if (ArchDock::PanelContent::isUrlEntryId(id))
+        desktop = QFileInfo(QUrl::fromEncoded(id.mid(9).toUtf8()).toLocalFile()).fileName();
+    if (desktop.isEmpty()) desktop = id;
+    if (!desktop.endsWith(QStringLiteral(".desktop"))) desktop += QStringLiteral(".desktop");
+    return m_overlayModel.snapshot(QFileInfo(desktop).fileName());
 }
 
 void PanelWindow::recordNativePanelPlacementResult(
@@ -649,7 +743,7 @@ QVariantMap PanelWindow::panelRendererConfiguration(const QString &panelId) cons
         m_panelRegistry.resolvePanelCapabilities(*definition).toVariantMap();
     configuration.insert(QStringLiteral("segmentCapabilities"),
         ArchDock::PanelCapabilityResolver::segmentCapabilities(*definition,
-            m_panelRegistry.resolvePanelCapabilities(*definition)));
+            m_panelRegistry.resolvePanelCapabilities(*definition), !m_systemStatus.availableSources().isEmpty()));
     configuration.insert(
         QStringLiteral("capabilityResolution"), capabilityResolution);
     configuration.insert(
@@ -1018,11 +1112,24 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         }
         else if (capability == QStringLiteral("segments"))
         {
-            const auto capabilities = ArchDock::PanelCapabilityResolver::segmentCapabilities(candidate, resolution);
+            const auto capabilities = ArchDock::PanelCapabilityResolver::segmentCapabilities(
+                candidate, resolution, !m_systemStatus.availableSources().isEmpty());
             available = capabilities.value(QStringLiteral("available")).toBool();
             field.insert(QStringLiteral("segmentCapabilities"), capabilities);
-            const auto entries = candidate.host.kind == ArchDock::PanelHostKind::FreeDesktop
+            auto entries = candidate.host.kind == ArchDock::PanelHostKind::FreeDesktop
                 ? freePanelEntries(candidate) : m_dockModel.panelEntries(candidate.content.type);
+            entries.append(statusEntriesFor(candidate, true));
+            for (auto &value : entries) {
+                auto entry = value.toMap();
+                if (!entry.value(QStringLiteral("isStatus")).toBool()) {
+                    const auto overlay = entryOverlay(entry);
+                    for (auto it = overlay.cbegin(); it != overlay.cend(); ++it) entry.insert(it.key(), it.value());
+                    if (!candidate.content.showBadges) entry[QStringLiteral("badgeText")] = QString{};
+                    if (!candidate.content.showProgress) entry[QStringLiteral("progress")] = -1.0;
+                    if (!candidate.content.showTemporaryStatus) entry[QStringLiteral("temporaryStatus")] = QString{};
+                }
+                value = entry;
+            }
             field.insert(QStringLiteral("availableEntries"), entries);
             field.insert(QStringLiteral("segmentEntries"),
                 ArchDock::PanelContentTransaction::segmentEntries(candidate, entries));
@@ -1031,6 +1138,10 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         {
             available = resolution.available &&
                 !candidate.surface.themeSource.trimmed().isEmpty();
+        }
+        else if (capability == QStringLiteral("application-overlays"))
+        {
+            available = m_overlayModel.available();
         }
         else if (capability == QStringLiteral("scene3d-quality"))
         {
@@ -1287,9 +1398,10 @@ PanelWindow::preparePanelSettingsDraft(
 
     if (draft->candidatePanel.segments != currentPanel->segments)
     {
-        const QVariantList entries = draft->candidatePanel.host.kind == ArchDock::PanelHostKind::FreeDesktop
+        QVariantList entries = draft->candidatePanel.host.kind == ArchDock::PanelHostKind::FreeDesktop
             ? freePanelEntries(draft->candidatePanel)
             : m_dockModel.panelEntries(draft->candidatePanel.content.type);
+        entries.append(statusEntriesFor(draft->candidatePanel, true));
         QString segmentError;
         const auto projected = ArchDock::PanelContentTransaction::segmentEntries(
             draft->candidatePanel, entries, &segmentError, true);
@@ -1331,7 +1443,7 @@ PanelWindow::preparePanelSettingsDraft(
     const ArchDock::CapabilityResolution resolution =
         m_panelRegistry.resolvePanelCapabilities(draft->candidatePanel);
     const auto segmentCapabilities = ArchDock::PanelCapabilityResolver::segmentCapabilities(
-        draft->candidatePanel, resolution);
+        draft->candidatePanel, resolution, !m_systemStatus.availableSources().isEmpty());
     const bool inheritedSegment = draft->candidatePanel.segments ==
         QList<ArchDock::PanelSegmentDefinition>{ArchDock::PanelSegmentDefinition{}};
     QString segmentError;
@@ -1341,7 +1453,10 @@ PanelWindow::preparePanelSettingsDraft(
     {
         for (const auto &segment : draft->candidatePanel.segments)
         {
-            if (!segmentCapabilities.value(QStringLiteral("sources")).toStringList().contains(segment.source) ||
+            const bool retainedStatus = segment.source == QStringLiteral("status")
+                && std::any_of(currentPanel->segments.cbegin(), currentPanel->segments.cend(),
+                    [&segment](const auto &old) { return old == segment; });
+            if ((!retainedStatus && !segmentCapabilities.value(QStringLiteral("sources")).toStringList().contains(segment.source)) ||
                 !segmentCapabilities.value(QStringLiteral("motionProfiles")).toStringList().contains(segment.motionProfile))
                 segmentError = QStringLiteral("the segment source or motion profile is unavailable");
             if (segment.background != QStringLiteral("solid") && segment.corners != QStringLiteral("inherited"))
@@ -1389,7 +1504,7 @@ PanelWindow::preparePanelSettingsDraft(
             // Studio submits its full snapshot when changing capabilities.
             // Retain inactive values only if they were previously available
             // and the normalized candidate leaves them unchanged.
-            if (previousFields.contains(it.key()) &&
+            if ((previousFields.contains(it.key()) || field->editor.capability == QStringLiteral("application-overlays")) &&
                 candidateValues.value(it.key(), field->defaultValue) ==
                     currentValues.value(it.key(), field->defaultValue))
             {
@@ -2115,6 +2230,11 @@ QVariantList PanelWindow::dockEntriesForPanel(const QString &panelId,
     for (QVariant &value : entries)
     {
         QVariantMap entry = value.toMap();
+        const auto overlay = entryOverlay(entry);
+        for (auto it = overlay.cbegin(); it != overlay.cend(); ++it) entry.insert(it.key(), it.value());
+        if (!definition->content.showBadges) entry[QStringLiteral("badgeText")] = QString{};
+        if (!definition->content.showProgress) entry[QStringLiteral("progress")] = -1.0;
+        if (!definition->content.showTemporaryStatus) entry[QStringLiteral("temporaryStatus")] = QString{};
         const QString identity = ArchDock::IconEntryIdentity::forEntry(entry);
         entry.insert(QStringLiteral("stableIdentity"), identity);
         entry.insert(
@@ -2153,6 +2273,7 @@ QVariantList PanelWindow::dockEntriesForPanel(const QString &panelId,
             resolution.value(QStringLiteral("resolvedLabel")));
         value = entry;
     }
+    entries.append(statusEntriesFor(*definition));
     return ArchDock::PanelContentTransaction::segmentEntries(*definition, entries);
 }
 
@@ -2432,6 +2553,7 @@ QVariantMap PanelWindow::commitIconOverrideTransaction(
 
 bool PanelWindow::activateDockEntry(const QString &appId)
 {
+    if (appId.startsWith(QStringLiteral("status:"))) return false;
     if (appId.startsWith(QStringLiteral("free-url:")))
     {
         return m_dockModel.openUrl(
@@ -2452,6 +2574,9 @@ QVariantMap PanelWindow::activateDockEntryOutcome(const QString &appId)
     QVariantMap result;
     result.insert(QStringLiteral("appId"), appId);
     result.insert(QStringLiteral("reason"), QString{});
+    if (appId.startsWith(QStringLiteral("status:")))
+        return {{QStringLiteral("outcome"), QStringLiteral("failed")},
+                {QStringLiteral("reason"), QStringLiteral("informational-entry")}};
 
     if (appId.startsWith(QStringLiteral("free-url:")))
     {
@@ -2465,6 +2590,9 @@ QVariantMap PanelWindow::activateDockEntryOutcome(const QString &appId)
             result.insert(QStringLiteral("reason"),
                           QStringLiteral("no-url-handler"));
         }
+        const auto desktop = QFileInfo(QUrl::fromEncoded(appId.mid(9).toUtf8()).toLocalFile()).fileName();
+        m_overlayModel.setTemporaryStatus(desktop,
+            opened ? tr("Launch request accepted") : tr("Launch request failed"));
         return result;
     }
 
@@ -2489,23 +2617,38 @@ QVariantMap PanelWindow::activateDockEntryOutcome(const QString &appId)
                       QStringLiteral("unknown-entry"));
         break;
     }
+    if (result.value(QStringLiteral("outcome")).toString() != QStringLiteral("requested"))
+    {
+        for (const auto &value : m_dockModel.panelEntries(QStringLiteral("hybrid"))) {
+            const auto entry = value.toMap();
+            if (entry.value(QStringLiteral("appId")).toString() != appId) continue;
+            QString desktop = entry.value(QStringLiteral("desktopFileName"), appId).toString();
+            if (!desktop.endsWith(QStringLiteral(".desktop"))) desktop += QStringLiteral(".desktop");
+            m_overlayModel.setTemporaryStatus(QFileInfo(desktop).fileName(),
+                result.value(QStringLiteral("outcome")).toString() == QStringLiteral("succeeded")
+                    ? tr("Application started") : tr("Launch failed"));
+        }
+    }
     return result;
 }
 
 bool PanelWindow::activateDockWindow(const QString &appId, const QString &windowId)
 {
+    if (appId.startsWith(QStringLiteral("status:"))) return false;
     return m_dockModel.activateApplicationWindow(appId, windowId);
 }
 
 bool PanelWindow::requestDockWindowAction(
     const QString &appId, const QString &windowId, const QString &action)
 {
+    if (appId.startsWith(QStringLiteral("status:"))) return false;
     return m_dockModel.requestApplicationWindowAction(appId, windowId, action);
 }
 
 bool PanelWindow::launchDockEntry(
     const QString &panelId, const QString &appId, const QString &desktopAction)
 {
+    if (appId.startsWith(QStringLiteral("status:"))) return false;
     const auto definition = m_panelRegistry.panelDefinition(panelId);
     if (!definition)
     {
@@ -2536,16 +2679,19 @@ bool PanelWindow::launchDockEntry(
 
 bool PanelWindow::minimizeDockEntry(const QString &appId)
 {
+    if (appId.startsWith(QStringLiteral("status:"))) return false;
     return m_dockModel.minimizeApplication(appId);
 }
 
 bool PanelWindow::closeDockEntry(const QString &appId)
 {
+    if (appId.startsWith(QStringLiteral("status:"))) return false;
     return m_dockModel.closeApplication(appId);
 }
 
 bool PanelWindow::closeAllDockEntry(const QString &appId)
 {
+    if (appId.startsWith(QStringLiteral("status:"))) return false;
     return m_dockModel.closeAllApplication(appId);
 }
 
@@ -3193,6 +3339,7 @@ bool PanelWindow::reportPanelPresentationState(const QString &panelId,
         return true;
     }
     m_panelPresentationStates.insert(panelId, normalized);
+    updateContentDemand();
     return true;
 }
 
@@ -3484,6 +3631,8 @@ void PanelWindow::showSettings()
     {
         m_settingsWindow = createUtilityWindow(
             QUrl(QStringLiteral("qrc:/qt/qml/ArchDock/qml/runtime/SettingsPopup.qml")));
+        if (m_settingsWindow) connect(m_settingsWindow, &QWindow::visibleChanged,
+                                     this, &PanelWindow::updateContentDemand);
     }
 
     presentUtilityWindow(m_settingsWindow);
@@ -3501,6 +3650,8 @@ void PanelWindow::showPanelSettings(const QString &panelId)
     {
         m_settingsWindow = createUtilityWindow(
             QUrl(QStringLiteral("qrc:/qt/qml/ArchDock/qml/runtime/SettingsPopup.qml")));
+        if (m_settingsWindow) connect(m_settingsWindow, &QWindow::visibleChanged,
+                                     this, &PanelWindow::updateContentDemand);
     }
     if (m_settingsWindow)
     {

@@ -41,6 +41,29 @@ class PanelContentTransactionTest final : public QObject
     Q_OBJECT
 
 private slots:
+    void statusEntriesRemainInTheirOwnSegment()
+    {
+        auto panel = freePanel();
+        auto status = panel.segments.first();
+        status.id = "system"; status.source = "status"; status.order = 1;
+        status.entryIds = {"status:cpu"};
+        panel.segments.append(status);
+        const QVariantList entries{QVariantMap{{"appId", kA}, {"pinned", true}},
+            QVariantMap{{"appId", "status:cpu"}, {"isStatus", true}},
+            QVariantMap{{"appId", "status:memory"}, {"isStatus", true}}};
+        QString error;
+        const auto rows = PanelContentTransaction::segmentEntries(panel, entries, &error, true);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        QCOMPARE(rows.size(), 2);
+        QCOMPARE(rows.first().toMap().value("segmentId").toString(), "main");
+        QCOMPARE(rows.last().toMap().value("segmentId").toString(), "system");
+        QCOMPARE(rows.last().toMap().value("appId").toString(), "status:cpu");
+        panel.segments.last().entryIds.clear();
+        QCOMPARE(PanelContentTransaction::segmentEntries(panel, entries, &error, true).size(), 3);
+        const QVariantList forged{QVariantMap{{"appId", "status:cpu"}, {"pinned", true}}};
+        QVERIFY(PanelContentTransaction::segmentEntries(panel, forged, &error).isEmpty());
+        QVERIFY(!error.isEmpty());
+    }
     void canonicalOrderCoversEveryEntryExactlyOnce();
     void nativePanelsRefuseEveryOperation();
     void addAppendsNewUrlsAndSkipsDuplicates();

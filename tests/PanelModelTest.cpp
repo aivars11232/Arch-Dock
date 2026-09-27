@@ -58,6 +58,26 @@ class PanelModelTest final : public QObject
     Q_OBJECT
 
 private slots:
+    void statusIdentitiesAreReservedAndPreferencesPersist()
+    {
+        auto panel = PanelDefinition::defaults("content-status", "Status", "free", false);
+        panel.content.showBadges = false;
+        panel.content.showProgress = false;
+        panel.content.showTemporaryStatus = false;
+        panel.segments.first().source = "status";
+        panel.segments.first().entryIds = {"status:cpu", "status:memory"};
+        const auto restored = PanelDefinition::fromLegacyMap(panel.toPersistedMap());
+        QVERIFY(restored.has_value());
+        QVERIFY(restored->content == panel.content);
+        QVERIFY(restored->segments == panel.segments);
+        panel.segments.first().entryIds = {"foreign.desktop"};
+        QVERIFY(!panel.isValid());
+        panel.segments.first().entryIds = {"status:unknown"};
+        QVERIFY(!panel.isValid());
+        panel.segments.first().source = "custom";
+        panel.segments.first().entryIds = {"status:cpu"};
+        QVERIFY(!panel.isValid());
+    }
     void defaultsExposeEveryVersionTwoSection();
     void legacyRecordConvertsWithDeterministicDefaults();
     void contentOrderIsCanonicalAndDerived();

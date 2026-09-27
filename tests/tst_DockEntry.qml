@@ -108,6 +108,17 @@ TestCase {
         return item
     }
 
+    function test_statusEntryCannotLaunchOrOpenApplicationMenu() {
+        let launches = 0;
+        const item = createHostedEntry({entry: entry({appId: "status:cpu", isStatus: true,
+            statusAvailable: true, statusText: "42%"}), invoke: function() { ++launches; }});
+        mouseClick(item, 30, 30);
+        mouseClick(item, 30, 30, Qt.RightButton);
+        compare(launches, 0);
+        verify(!item.contextMenuVisible);
+        verify(!item.contextInteractionAllowed);
+    }
+
     function test_folderExpansionNeverFallsThroughToLaunch() {
         let expansions = 0
         let launches = 0

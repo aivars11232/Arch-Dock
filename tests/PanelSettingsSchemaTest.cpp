@@ -17,6 +17,20 @@ class PanelSettingsSchemaTest final : public QObject
     Q_OBJECT
 
 private slots:
+    void overlayPreferencesUseTheSettingsContract()
+    {
+        auto panel = ArchDock::PanelDefinition::defaults("overlays", "Overlays", "free", false);
+        auto record = panel.toPersistedMap();
+        for (const auto &key : {"showBadges", "showProgress", "showTemporaryStatus"}) {
+            QVERIFY(ArchDock::PanelSettingsSchema::panelDescriptor(QString::fromLatin1(key)));
+            record.insert(QString::fromLatin1(key), false);
+        }
+        const auto restored = ArchDock::PanelDefinition::fromLegacyMap(record);
+        QVERIFY(restored);
+        QVERIFY(!restored->content.showBadges);
+        QVERIFY(!restored->content.showProgress);
+        QVERIFY(!restored->content.showTemporaryStatus);
+    }
     void descriptorsAreUniqueAndComplete();
     void descriptorMapsContainOnlyValidValues();
     void persistedPanelFieldsAreClassified();

@@ -145,6 +145,10 @@ Item {
     readonly property alias statusLayerItem: statusLayer
     readonly property alias badgeItem: badge
     readonly property alias progressItem: progressTrack
+    readonly property alias attentionItem: attentionMarker
+    readonly property alias temporaryStatusItem: temporaryNotice
+    readonly property alias statusTextItem: statusLabel
+
 
     function alphaColor(color, alpha) {
         return Qt.rgba(color.r, color.g, color.b, alpha)
@@ -629,6 +633,58 @@ Item {
 
             objectName: "icon-layer-status"
             anchors.fill: parent
+
+            Rectangle {
+                id: attentionMarker
+                objectName: "icon-attention-marker"
+                visible: root.urgent
+                anchors.left: parent.left
+                anchors.top: parent.top
+                width: Math.max(8, root.logicalSize * 0.17)
+                height: width
+                radius: width / 2
+                color: Kirigami.Theme.neutralTextColor
+            }
+
+            Rectangle {
+                id: temporaryNotice
+                objectName: "icon-temporary-status"
+                visible: String(root.entry.temporaryStatus || "").length > 0
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.max(14, root.logicalSize * 0.25)
+                height: width
+                radius: width / 2
+                color: Kirigami.Theme.backgroundColor
+                Text {
+                    anchors.centerIn: parent
+                    text: "!"
+                    font.bold: true
+                    color: Kirigami.Theme.textColor
+                }
+            }
+
+            Rectangle {
+                visible: root.entry.isStatus === true
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: statusLabel.implicitHeight + 4
+                radius: 3
+                color: Kirigami.Theme.backgroundColor
+                Text {
+                    id: statusLabel
+                    objectName: "icon-status-reading"
+                    anchors.fill: parent
+                    anchors.margins: 2
+                    text: String(root.entry.statusText || "")
+                    elide: Text.ElideRight
+                    horizontalAlignment: Text.AlignHCenter
+                    color: root.entry.statusAvailable === true
+                        ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    font.pixelSize: Math.max(9, root.logicalSize * 0.2)
+                }
+            }
 
             Rectangle {
                 id: badge

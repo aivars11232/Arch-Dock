@@ -394,3 +394,39 @@ function adoptResult(session, result, refreshedSnapshot) {
         });
     return refreshed;
 }
+
+// Refresh runtime feedback without turning changing source availability into a
+// user edit, or dropping an unsaved preference when its source disappears.
+function withContentFeedback(session, snapshot) {
+    if (!session || !session.loaded || !snapshot || snapshot.success !== true)
+        return session;
+    const result = copySession(session);
+    const liveFields = snapshot.panelFields || [];
+    const overlayKeys = ["showBadges", "showProgress"];
+    result.panelFields = result.panelFields.filter(function(field) {
+        return !overlayKeys.includes(field.key);
+    });
+    for (const field of liveFields) {
+        if (!overlayKeys.includes(field.key)) continue;
+        result.panelFields.push(copyValue(field));
+        if (result.panelBaseline[field.key] === undefined)
+            result.panelBaseline[field.key] = snapshot.panelValues[field.key];
+    }
+    const live = liveFields.find(function(field) { return field.key === "segments"; });
+    const target = result.panelFields.find(function(field) { return field.key === "segments"; });
+    if (live && target) {
+        target.segmentCapabilities = copyValue(live.segmentCapabilities || {});
+        target.availableEntries = copyValue(live.availableEntries || []);
+        target.segmentEntries = (target.segmentEntries || []).map(function(entry) {
+            const next = copyValue(entry);
+            const source = target.availableEntries.find(function(row) { return row.appId === entry.appId; }) || {};
+            for (const key of ["badgeText", "progress", "urgent", "temporaryStatus", "overlayAvailable",
+                               "statusAvailable", "statusText"])
+                next[key] = source[key] !== undefined ? source[key]
+                    : key === "progress" ? -1 : key.endsWith("Available") || key === "urgent" ? false : "";
+            return next;
+        });
+    }
+    result.panelPresentedKeys = fieldKeys(result.panelFields);
+    return result;
+}

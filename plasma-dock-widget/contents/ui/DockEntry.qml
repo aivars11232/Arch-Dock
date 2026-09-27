@@ -134,7 +134,7 @@ Item {
         entry && entry.iconPropertiesSupported === true
         && String(entry.stableIdentity || "").length > 0)
     readonly property bool contextInteractionAllowed: inputEnabled
-        && !editMode && !dragging
+        && !editMode && !dragging && entry.isStatus !== true
     readonly property bool contextMenuVisible: contextMenu.visible
     readonly property bool iconPropertiesActionVisible:
         iconPropertiesSupported
@@ -365,7 +365,7 @@ Item {
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         hoverEnabled: true
         enabled: root.inputEnabled
-        drag.target: root.acceptDrops ? dragProxy : null
+        drag.target: root.acceptDrops && root.entry.isStatus !== true ? dragProxy : null
         drag.threshold: Kirigami.Units.gridUnit / 2
 
         onEntered: {
@@ -383,7 +383,7 @@ Item {
         }
         onCanceled: root.clickPulse = false
         onClicked: mouse => {
-            if (root.dragging)
+            if (root.dragging || root.entry.isStatus === true)
                 return;
             root.dispatchMotionEvent("click");
             if (mouse.button === Qt.RightButton) {
@@ -428,7 +428,7 @@ Item {
         id: entryDropArea
 
         anchors.fill: parent
-        enabled: root.acceptDrops && root.inputEnabled
+        enabled: root.acceptDrops && root.inputEnabled && root.entry.isStatus !== true
         keys: ["application/x-archdock-app", "text/uri-list"]
         onEntered: drag => {
             root.dispatchMotionEvent("drop-entered");
@@ -454,9 +454,9 @@ Item {
     QQC2.ToolTip.visible: root.showTooltip && hoverArea.containsMouse && !root.dragging
         && !root.windowPreviewAvailable
     QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
-    QQC2.ToolTip.text: entry.windowCount > 1
+    QQC2.ToolTip.text: (entry.windowCount > 1
         ? qsTr("%1 (%2 windows)").arg(entry.displayName).arg(entry.windowCount)
-        : entry.displayName
+        : entry.displayName) + (entry.temporaryStatus ? "\n" + entry.temporaryStatus : "")
 
     QQC2.Menu {
         id: contextMenu

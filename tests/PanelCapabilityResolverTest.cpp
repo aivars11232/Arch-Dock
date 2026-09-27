@@ -182,6 +182,20 @@ class PanelCapabilityResolverTest final : public QObject
     Q_OBJECT
 
 private slots:
+    void statusSegmentsRequireProviderAndExistingSurfaceCapability()
+    {
+        auto panel = panelFor(PanelHostKind::FreeDesktop, "horizontal");
+        CapabilityResolution resolution;
+        resolution.available = true;
+        resolution.renderer.effectiveTier = RendererTier::Procedural2D;
+        QVERIFY(!PanelCapabilityResolver::segmentCapabilities(panel, resolution)
+                     .value("sources").toStringList().contains("status"));
+        QVERIFY(PanelCapabilityResolver::segmentCapabilities(panel, resolution, true)
+                    .value("sources").toStringList().contains("status"));
+        panel.layout.pathType = "ring";
+        QVERIFY(PanelCapabilityResolver::segmentCapabilities(panel, resolution, true)
+                    .value("sources").toStringList().isEmpty());
+    }
     void layoutVocabularyRoundTrips();
     void nativeEdgeUsesOnlyLinearProceduralCapabilities();
     void nativeEdgeRejectsRingTheme();

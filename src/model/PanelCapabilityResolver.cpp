@@ -709,13 +709,15 @@ QString capabilityReasonCodeName(CapabilityReasonCode reason)
 }
 
 QVariantMap PanelCapabilityResolver::segmentCapabilities(
-    const PanelDefinition &definition, const CapabilityResolution &resolution)
+    const PanelDefinition &definition, const CapabilityResolution &resolution,
+    bool statusAvailable)
 {
     const bool linear = QStringList{QStringLiteral("horizontal"),
         QStringLiteral("vertical"), QStringLiteral("adaptive")}.contains(definition.layout.pathType);
     const bool available = resolution.available && linear &&
         resolution.renderer.effectiveTier == RendererTier::Procedural2D;
     QStringList sources{QStringLiteral("inherited"), QStringLiteral("custom")};
+    if (statusAvailable) sources.append(QStringLiteral("status"));
     if (definition.content.type != QStringLiteral("empty"))
     {
         if (definition.host.kind == PanelHostKind::FreeDesktop || definition.content.type != QStringLiteral("tasks"))

@@ -18,6 +18,7 @@
 #include "../PanelRegistry.h"
 #include "../PanelVisibility.h"
 #include "../SystemStatus.h"
+#include "../content/OverlayModel.h"
 #include "../WindowModel.h"
 #include "../WindowWatcher.h"
 #include "../integration/PlasmaPanelAdapter.h"
@@ -35,6 +36,7 @@ class PanelWindow final : public QObject
     Q_PROPERTY(int screenRevision READ screenRevision NOTIFY screenRevisionChanged)
     Q_PROPERTY(int visibilityRevision READ visibilityRevision NOTIFY visibilityRevisionChanged)
     Q_PROPERTY(qulonglong dockRevision READ dockRevision NOTIFY dockRevisionChanged)
+    Q_PROPERTY(qulonglong contentRevision READ contentRevision NOTIFY contentRevisionChanged)
     Q_PROPERTY(qulonglong dockEntriesRevision READ dockEntriesRevision NOTIFY dockEntriesRevisionChanged)
     Q_PROPERTY(qulonglong nativePlacementRevision READ nativePlacementRevision NOTIFY nativePlacementRevisionChanged)
     Q_PROPERTY(qulonglong nativeVisibilityRevision READ nativeVisibilityRevision NOTIFY nativeVisibilityRevisionChanged)
@@ -48,6 +50,7 @@ public:
     [[nodiscard]] int visibilityRevision() const;
     [[nodiscard]] qulonglong dockRevision() const;
     [[nodiscard]] qulonglong dockEntriesRevision() const;
+    [[nodiscard]] qulonglong contentRevision() const { return m_contentRevision; }
     [[nodiscard]] qulonglong nativePlacementRevision() const;
     [[nodiscard]] qulonglong nativeVisibilityRevision() const;
     [[nodiscard]] qulonglong presentationRequestRevision() const;
@@ -64,6 +67,7 @@ public slots:
     bool setNativePanelType(const QString &panelId, const QString &type);
     QVariantMap dockConfiguration(const QString &panelId) const;
     QVariantMap panelRendererConfiguration(const QString &panelId) const;
+    QVariantMap contentRuntimeSnapshot(const QString &panelId) const;
     QVariantMap resolvePanelCapabilities(
         const QString &panelId,
         const QVariantMap &candidateValues = {}) const;
@@ -190,6 +194,7 @@ signals:
     void visibilityRevisionChanged();
     void dockRevisionChanged();
     void dockEntriesRevisionChanged();
+    void contentRevisionChanged();
     void nativePlacementRevisionChanged();
     void nativeVisibilityRevisionChanged();
     void presentationRequestRevisionChanged();
@@ -374,6 +379,11 @@ private:
     bool attachNativeDockApplet(const QString &panelId, int containmentId);
     void notifyDockRevision();
     void notifyDockEntriesRevision();
+    void updateContentDemand();
+    void notifyContentRevision();
+    bool panelContentVisible(const QString &panelId) const;
+    QVariantList statusEntriesFor(const ArchDock::PanelDefinition &definition, bool availableOnly = false) const;
+    QVariantMap entryOverlay(const QVariantMap &entry) const;
     int evaluatePlasmaScript(const QString &script) const;
     [[nodiscard]] std::optional<int> evaluatePlasmaScriptResultOptional(
         const QString &script) const;
@@ -387,6 +397,10 @@ private:
     DockSettings m_settings;
     PanelRegistry m_panelRegistry;
     SystemStatus m_systemStatus;
+    ArchDock::OverlayModel m_overlayModel;
+    QTimer m_contentTimer;
+    qulonglong m_contentRevision = 0;
+    bool m_contentPublishing = false;
     KWinActionBridge m_actionBridge;
     WindowWatcher m_windowWatcher;
     QPointer<QWindow> m_settingsWindow;

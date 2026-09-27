@@ -1,13 +1,14 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QObject>
-
-class QTimer;
+#include <QThread>
+#include <QTimer>
+#include <QVariantMap>
 
 class SystemStatus final : public QObject
 {
     Q_OBJECT
-
     Q_PROPERTY(bool batteryAvailable READ batteryAvailable NOTIFY statusChanged)
     Q_PROPERTY(int batteryPercent READ batteryPercent NOTIFY statusChanged)
     Q_PROPERTY(bool batteryCharging READ batteryCharging NOTIFY statusChanged)
@@ -17,42 +18,44 @@ class SystemStatus final : public QObject
     Q_PROPERTY(int memoryPercent READ memoryPercent NOTIFY statusChanged)
     Q_PROPERTY(int diskPercent READ diskPercent NOTIFY statusChanged)
     Q_PROPERTY(int gpuPercent READ gpuPercent NOTIFY statusChanged)
-
 public:
+    struct Sample {
+        QVariantMap metrics;
+        quint64 cpuTotal = 0;
+        quint64 cpuIdle = 0;
+        bool cpuPrimed = false;
+    };
     explicit SystemStatus(QObject *parent = nullptr);
-
-    [[nodiscard]] bool batteryAvailable() const;
-    [[nodiscard]] int batteryPercent() const;
-    [[nodiscard]] bool batteryCharging() const;
-    [[nodiscard]] bool networkConnected() const;
-    [[nodiscard]] const QString &networkName() const;
-    [[nodiscard]] int cpuPercent() const;
-    [[nodiscard]] int memoryPercent() const;
-    [[nodiscard]] int diskPercent() const;
-    [[nodiscard]] int gpuPercent() const;
+    ~SystemStatus() override;
+    bool batteryAvailable() const;
+    int batteryPercent() const;
+    bool batteryCharging() const;
+    bool networkConnected() const;
+    QString networkName() const;
+    int cpuPercent() const;
+    int memoryPercent() const;
+    int diskPercent() const;
+    int gpuPercent() const;
+    void setEnabled(bool enabled);
+    QStringList availableSources() const;
+    QVariantList entries() const;
+    quint64 sampleCount() const { return m_sampleCount; }
+    static Sample readSample(const QString &procRoot, const QString &sysRoot,
+                             const Sample &previous, bool systemDevices = true);
 
 signals:
     void statusChanged();
 
 private:
     void refresh();
-    void refreshBattery();
-    void refreshNetwork();
-    void refreshProcessor();
-    void refreshMemory();
-    void refreshStorage();
-    void refreshGraphics();
-
-    QTimer *m_refreshTimer = nullptr;
-    bool m_batteryAvailable = false;
-    int m_batteryPercent = 0;
-    bool m_batteryCharging = false;
-    bool m_networkConnected = false;
-    QString m_networkName;
-    int m_cpuPercent = 0;
-    int m_memoryPercent = 0;
-    int m_diskPercent = 0;
-    int m_gpuPercent = 0;
-    quint64 m_previousCpuTotal = 0;
-    quint64 m_previousCpuIdle = 0;
+    QVariantMap metric(const QString &name) const;
+    int percent(const QString &name) const;
+    QThread m_thread;
+    QObject *m_worker = nullptr;
+    QTimer m_timer;
+    QElapsedTimer m_age;
+    Sample m_sample;
+    bool m_enabled = false;
+    bool m_inFlight = false;
+    quint64 m_sampleCount = 0;
 };

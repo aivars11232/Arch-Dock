@@ -526,13 +526,20 @@ Window {
                 return { value: option.value, label: option.value ? option.label : qsTr("None") };
             });
             rows.push(motion);
-            if (segment.source === "custom") {
-                for (const entry of entries) {
+            if (segment.source === "custom" || segment.source === "status") {
+                const selectable = entries.filter(function(entry) {
+                    return (entry.isStatus === true) === (segment.source === "status");
+                });
+                if (segment.source === "status")
+                    rows.push(notice(qsTr("Choose readings for this segment. With no selection, all available readings are shown.")));
+                for (const entry of selectable) {
                     rows.push({ kind: "switch", scope: "panel", key: "segments", segmentIndex: index,
                         entryId: String(entry.appId), label: String(entry.displayName || entry.appId),
                         description: qsTr("Assign exclusively to this segment."), fallback: false });
                 }
-                if (!entries.length) rows.push(notice(qsTr("Add content to this panel before assigning entries.")));
+                if (!selectable.length) rows.push(notice(segment.source === "status"
+                    ? qsTr("No system readings are currently available.")
+                    : qsTr("Add content to this panel before assigning entries.")));
             }
             rows.push({ kind: "actions", label: qsTr("Order"), actions: [
                 { action: "segment-up", segmentIndex: index, label: qsTr("Move up"), available: index > 0 },
@@ -568,8 +575,12 @@ Window {
                 return schemaSectionRows("icons-behavior", qsTr("Behavior"), qsTr("Icon motion and magnification."));
             if (subTabIndex === 2)
                 return schemaSectionRows("icons-indicators", qsTr("Indicators"), qsTr("Running and attention markers."));
-            if (subTabIndex === 3)
-                return unavailablePage(qsTr("Notifications"), qsTr("Badges and transient icon notices."));
+            if (subTabIndex === 3) {
+                const rows = schemaSectionRows("icons-notifications", qsTr("Notifications"),
+                    qsTr("Application badges, task progress and temporary launch feedback."));
+                rows.push(notice(qsTr("Badges and progress appear when an application supplies them. Use Plasma widgets for desktop notifications, sound, Bluetooth and the clock.")));
+                return rows;
+            }
             return unavailablePage(qsTr("Icon Style"), qsTr("Reusable icon appearance sets."));
         }
         if (mainTabIndex === 3)
@@ -745,6 +756,17 @@ Window {
     }
 
     Component.onCompleted: loadEditor(selectedPanelId)
+
+    Connections {
+        target: panelController
+        function onContentRevisionChanged() {
+            if (root.visible && root.editorSession.loaded) {
+                const snapshot = panelController.panelSettingsEditorSnapshot(root.selectedPanelId, "studio");
+                if (!root.hasPendingChanges) root.editorSession = EditorModel.load(snapshot);
+                else root.editorSession = EditorModel.withContentFeedback(root.editorSession, snapshot);
+            }
+        }
+    }
 
     Connections {
         target: panelRegistry

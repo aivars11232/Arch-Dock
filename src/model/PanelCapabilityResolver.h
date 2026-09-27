@@ -228,7 +228,8 @@ public:
     [[nodiscard]] static QVector<RendererAvailability> productionRenderers();
     [[nodiscard]] static PlatformCapabilityProfile productionPlatform();
     [[nodiscard]] static QVariantMap segmentCapabilities(
-        const PanelDefinition &definition, const CapabilityResolution &resolution);
+        const PanelDefinition &definition, const CapabilityResolution &resolution,
+        bool statusAvailable = false);
     [[nodiscard]] static CapabilityResolution resolve(
         const PanelDefinition &definition,
         const HostCapabilityProfile &host,

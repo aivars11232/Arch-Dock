@@ -119,6 +119,25 @@ PlasmoidItem {
         })
 
     property var entries: []
+    readonly property bool contentUpdatesVisible: presentationController.hostPhase !== "concealed"
+        && presentationController.surfaceState !== "collapsed"
+    onContentUpdatesVisibleChanged: {
+        if (contentUpdatesVisible) refreshEntries();
+    }
+
+    function invalidateContentFeedback() {
+        entries = entries.map(function(source) {
+            const entry = Object.assign({}, source);
+            entry.badgeText = ""; entry.progress = -1; entry.urgent = false;
+            entry.temporaryStatus = ""; entry.overlayAvailable = false;
+            if (entry.isStatus) {
+                entry.statusAvailable = false;
+                entry.statusText = qsTr("Unavailable");
+            }
+            return entry;
+        });
+    }
+
     property var configuration: ({
         iconSize: 52,
         spacing: 8,
@@ -302,6 +321,7 @@ PlasmoidItem {
         if (!dockService.registered) {
             if (!freeSurface)
                 entries = [];
+            else invalidateContentFeedback();
             requestFailed = false;
             return;
         }
@@ -312,6 +332,7 @@ PlasmoidItem {
         }, function() {
             if (!FreeEntryPolicy.keepEntriesOnServiceFailure(root.freeSurface))
                 entries = [];
+            else invalidateContentFeedback();
             requestFailed = true;
         });
     }
@@ -1035,6 +1056,8 @@ PlasmoidItem {
             else if (changedProperties.dockEntriesRevision !== undefined
                      && (!root.freeSurface
                          || FreeEntryPolicy.followsTaskModel(root.configuration.type)))
+                root.refreshEntries();
+            if (changedProperties.contentRevision !== undefined && root.contentUpdatesVisible)
                 root.refreshEntries();
             if (changedProperties.presentationRequestRevision !== undefined)
                 root.consumePresentationRequest();

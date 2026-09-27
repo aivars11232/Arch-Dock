@@ -112,6 +112,9 @@ struct PanelContent
     int folderSpeed = 260;
     QString folderEasing = QStringLiteral("outBack");
     bool folderExpandOnClick = true;
+    bool showBadges = true;
+    bool showProgress = true;
+    bool showTemporaryStatus = true;
 
     [[nodiscard]] static QString urlEntryId(const QString &url);
     [[nodiscard]] static bool isUrlEntryId(const QString &entryId);

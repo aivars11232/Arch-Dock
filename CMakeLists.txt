@@ -198,6 +198,8 @@ qt_add_executable(
   src/ScreenIdentity.cpp
   src/SystemStatus.h
   src/SystemStatus.cpp
+  src/content/OverlayModel.h
+  src/content/OverlayModel.cpp
   src/KWinActionBridge.h
   src/KWinActionBridge.cpp
   src/panel/PanelManager.h
@@ -277,6 +279,28 @@ target_compile_definitions(
 include(CTest)
 if(BUILD_TESTING)
   find_package(Qt6 REQUIRED COMPONENTS Test QmlTools QuickTest)
+
+  qt_add_executable(overlay-model-test tests/OverlayModelTest.cpp
+    src/content/OverlayModel.h src/content/OverlayModel.cpp
+    src/model/IconEntryIdentity.cpp)
+  target_include_directories(overlay-model-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(overlay-model-test PRIVATE Qt6::Core Qt6::DBus Qt6::Test KF6::Service)
+  add_test(NAME overlay-model-test COMMAND overlay-model-test)
+  add_test(NAME overlay-source-smoke
+    COMMAND ${CMAKE_COMMAND} -E env ARCHDOCK_OVERLAY_SOURCE_TEST=1
+      dbus-run-session -- $<TARGET_FILE:overlay-model-test> supportedDbusSourceUpdatesAndDisconnects)
+
+  qt_add_executable(system-status-test tests/SystemStatusTest.cpp
+    src/SystemStatus.h src/SystemStatus.cpp)
+  target_include_directories(system-status-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(system-status-test PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+  add_test(NAME system-status-test COMMAND system-status-test)
+
+  add_test(NAME content-overlays-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+      -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+      -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_ContentOverlays.qml)
+  set_tests_properties(content-overlays-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   qt_add_executable(
     panel-model-test
@@ -790,6 +814,8 @@ if(BUILD_TESTING)
     src/ScreenIdentity.cpp
     src/SystemStatus.h
     src/SystemStatus.cpp
+    src/content/OverlayModel.h
+    src/content/OverlayModel.cpp
     src/KWinActionBridge.h
     src/KWinActionBridge.cpp
     src/panel/PanelManager.h

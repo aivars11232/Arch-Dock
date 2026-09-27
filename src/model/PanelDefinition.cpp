@@ -440,6 +440,9 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     definition.content.folderExpandOnClick = normalized(
         QStringLiteral("folderExpandOnClick"),
         definition.content.folderExpandOnClick).toBool();
+    definition.content.showBadges = normalized(QStringLiteral("showBadges"), definition.content.showBadges).toBool();
+    definition.content.showProgress = normalized(QStringLiteral("showProgress"), definition.content.showProgress).toBool();
+    definition.content.showTemporaryStatus = normalized(QStringLiteral("showTemporaryStatus"), definition.content.showTemporaryStatus).toBool();
 
     if (record.contains(QStringLiteral("segments")))
     {
@@ -872,8 +875,15 @@ std::optional<PanelSegmentDefinition> PanelSegmentDefinition::fromVariantMap(
             result.entryIds.append(id);
         }
     }
-    if (result.source == QStringLiteral("status") && !result.entryIds.isEmpty())
-        return fail(QStringLiteral("entryIds"));
+    const QStringList statusIds{QStringLiteral("status:battery"), QStringLiteral("status:network"),
+        QStringLiteral("status:cpu"), QStringLiteral("status:memory"),
+        QStringLiteral("status:disk"), QStringLiteral("status:gpu")};
+    for (const QString &id : result.entryIds)
+    {
+        if ((result.source == QStringLiteral("status") && !statusIds.contains(id))
+            || (result.source != QStringLiteral("status") && id.startsWith(QStringLiteral("status:"))))
+            return fail(QStringLiteral("entryIds"));
+    }
     setError(errorMessage, QString{});
     return result;
 }
@@ -1008,6 +1018,9 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("folderSpeed"), content.folderSpeed);
     record.insert(QStringLiteral("folderEasing"), content.folderEasing);
     record.insert(QStringLiteral("folderExpandOnClick"), content.folderExpandOnClick);
+    record.insert(QStringLiteral("showBadges"), content.showBadges);
+    record.insert(QStringLiteral("showProgress"), content.showProgress);
+    record.insert(QStringLiteral("showTemporaryStatus"), content.showTemporaryStatus);
     auto orderedSegments = segments;
     std::sort(orderedSegments.begin(), orderedSegments.end(),
               [](const auto &first, const auto &second) { return first.order < second.order; });

@@ -431,7 +431,12 @@ run_private_session() {
         "$ARCHDOCK_RENDERING_ICON_PROPERTIES_INTERACTION_TEST" \
         iconPropertiesPublicInteractionIsTransactional \
         meshSceneEditorIsGatedAndTransactional \
-        segmentsUseRevisionedTransactionsAndHostAuthority
+        segmentsUseRevisionedTransactionsAndHostAuthority \
+        contentProvidersUseTransactionsAndVisibility
+
+    "$ARCHDOCK_RENDERING_QMLTESTRUNNER" \
+        -import "$QML_IMPORT_PATH" \
+        -input "$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_ContentOverlays.qml"
 
     printf 'Running the staged PanelSkin2D energy pixel test under private KWin.\n'
     "$ARCHDOCK_RENDERING_QMLTESTRUNNER" \

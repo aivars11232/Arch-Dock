@@ -1,244 +1,210 @@
 #include "SystemStatus.h"
 
 #include <QDir>
-#include <QDirIterator>
 #include <QFile>
 #include <QNetworkInterface>
 #include <QStorageInfo>
-#include <QTextStream>
-#include <QTimer>
+#include <limits>
 
-SystemStatus::SystemStatus(QObject *parent)
-    : QObject(parent), m_refreshTimer(new QTimer(this))
+namespace
 {
-    m_refreshTimer->setInterval(2000);
-    connect(m_refreshTimer, &QTimer::timeout, this, &SystemStatus::refresh);
+QByteArray read(const QString &path)
+{
+    QFile file(path);
+    return file.open(QIODevice::ReadOnly) ? file.read(65536).trimmed() : QByteArray{};
+}
+QVariantMap reading(bool available, const QVariant &value = {})
+{
+    return {{QStringLiteral("available"), available}, {QStringLiteral("value"), value}};
+}
+QVariantMap percentage(const QByteArray &text)
+{
+    bool ok = false;
+    const int value = text.toInt(&ok);
+    return reading(ok && value >= 0 && value <= 100, value);
+}
+}
+
+SystemStatus::SystemStatus(QObject *parent) : QObject(parent), m_worker(new QObject)
+{
+    m_worker->moveToThread(&m_thread);
+    connect(&m_thread, &QThread::finished, m_worker, &QObject::deleteLater);
+    m_thread.start();
+    m_timer.setInterval(2000);
+    connect(&m_timer, &QTimer::timeout, this, &SystemStatus::refresh);
+    // One discovery sample makes capability filtering possible before opt-in.
     refresh();
-    m_refreshTimer->start();
 }
 
-bool SystemStatus::batteryAvailable() const
+SystemStatus::~SystemStatus()
 {
-    return m_batteryAvailable;
+    m_timer.stop();
+    m_thread.quit();
+    m_thread.wait();
 }
 
-int SystemStatus::batteryPercent() const
+void SystemStatus::setEnabled(bool enabled)
 {
-    return m_batteryPercent;
-}
-
-bool SystemStatus::batteryCharging() const
-{
-    return m_batteryCharging;
-}
-
-bool SystemStatus::networkConnected() const
-{
-    return m_networkConnected;
-}
-
-const QString &SystemStatus::networkName() const
-{
-    return m_networkName;
-}
-
-int SystemStatus::cpuPercent() const
-{
-    return m_cpuPercent;
-}
-
-int SystemStatus::memoryPercent() const
-{
-    return m_memoryPercent;
-}
-
-int SystemStatus::diskPercent() const
-{
-    return m_diskPercent;
-}
-
-int SystemStatus::gpuPercent() const
-{
-    return m_gpuPercent;
+    if (m_enabled == enabled) return;
+    m_enabled = enabled;
+    if (enabled) { m_timer.start(); refresh(); }
+    else m_timer.stop();
 }
 
 void SystemStatus::refresh()
 {
-    refreshBattery();
-    refreshNetwork();
-    refreshProcessor();
-    refreshMemory();
-    refreshStorage();
-    refreshGraphics();
-    emit statusChanged();
+    if (m_inFlight) return;
+    m_inFlight = true;
+    const Sample previous = m_sample;
+    QMetaObject::invokeMethod(m_worker, [this, previous] {
+        const Sample next = readSample(QStringLiteral("/proc"), QStringLiteral("/sys"), previous);
+        QMetaObject::invokeMethod(this, [this, next] {
+            m_inFlight = false;
+            ++m_sampleCount;
+            m_sample = next;
+            m_age.restart();
+            emit statusChanged();
+            // CPU needs a second sample; discovery remains bounded to two.
+            if (!m_enabled && m_sampleCount == 1 && next.cpuPrimed)
+                QTimer::singleShot(100, this, &SystemStatus::refresh);
+        }, Qt::QueuedConnection);
+    }, Qt::QueuedConnection);
 }
 
-void SystemStatus::refreshBattery()
+QVariantMap SystemStatus::metric(const QString &name) const
 {
-    const QDir powerSupplyDirectory(QStringLiteral("/sys/class/power_supply"));
-    const QStringList batteries = powerSupplyDirectory.entryList(
-        {QStringLiteral("BAT*")},
-        QDir::Dirs | QDir::NoDotAndDotDot);
-    if (batteries.isEmpty())
-    {
-        m_batteryAvailable = false;
-        m_batteryPercent = 0;
-        m_batteryCharging = false;
-        return;
-    }
+    auto result = m_sample.metrics.value(name).toMap();
+    if (m_enabled && (!m_age.isValid() || m_age.elapsed() > 6000))
+        result[QStringLiteral("available")] = false;
+    return result;
+}
+int SystemStatus::percent(const QString &name) const
+{
+    const auto value = metric(name);
+    return value.value(QStringLiteral("available")).toBool()
+        ? value.value(QStringLiteral("value")).toInt() : -1;
+}
+bool SystemStatus::batteryAvailable() const { return metric(QStringLiteral("battery")).value(QStringLiteral("available")).toBool(); }
+int SystemStatus::batteryPercent() const { return percent(QStringLiteral("battery")); }
+bool SystemStatus::batteryCharging() const { return batteryAvailable() && metric(QStringLiteral("battery")).value(QStringLiteral("charging")).toBool(); }
+bool SystemStatus::networkConnected() const { return metric(QStringLiteral("network")).value(QStringLiteral("connected")).toBool(); }
+QString SystemStatus::networkName() const { return metric(QStringLiteral("network")).value(QStringLiteral("value")).toString(); }
+int SystemStatus::cpuPercent() const { return percent(QStringLiteral("cpu")); }
+int SystemStatus::memoryPercent() const { return percent(QStringLiteral("memory")); }
+int SystemStatus::diskPercent() const { return percent(QStringLiteral("disk")); }
+int SystemStatus::gpuPercent() const { return percent(QStringLiteral("gpu")); }
 
-    const QString batteryPath = powerSupplyDirectory.filePath(batteries.constFirst());
-    QFile capacityFile(batteryPath + QStringLiteral("/capacity"));
-    QFile statusFile(batteryPath + QStringLiteral("/status"));
-    if (!capacityFile.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        m_batteryAvailable = false;
-        return;
-    }
-
-    m_batteryAvailable = true;
-    m_batteryPercent = QString::fromUtf8(capacityFile.readAll()).trimmed().toInt();
-    if (statusFile.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        m_batteryCharging = QString::fromUtf8(statusFile.readAll()).trimmed()
-                               .compare(QStringLiteral("Charging"), Qt::CaseInsensitive) == 0;
-    }
-    else
-    {
-        m_batteryCharging = false;
-    }
+QStringList SystemStatus::availableSources() const
+{
+    QStringList result;
+    for (const auto &name : {"battery", "network", "cpu", "memory", "disk", "gpu"})
+        if (metric(QLatin1String(name)).value(QStringLiteral("available")).toBool())
+            result.append(QStringLiteral("status:") + QLatin1String(name));
+    return result;
 }
 
-void SystemStatus::refreshNetwork()
+QVariantList SystemStatus::entries() const
 {
-    m_networkConnected = false;
-    m_networkName.clear();
-    for (const QNetworkInterface &interface : QNetworkInterface::allInterfaces())
+    QVariantList result;
+    const QStringList names{QStringLiteral("battery"), QStringLiteral("network"), QStringLiteral("cpu"),
+        QStringLiteral("memory"), QStringLiteral("disk"), QStringLiteral("gpu")};
+    const QStringList labels{tr("Battery"), tr("Network interface"), tr("CPU"), tr("Memory"), tr("Root disk"), tr("GPU")};
+    const QStringList icons{QStringLiteral("battery"), QStringLiteral("network-wired"), QStringLiteral("cpu"),
+        QStringLiteral("ram"), QStringLiteral("drive-harddisk"), QStringLiteral("video-display")};
+    for (int i = 0; i < names.size(); ++i)
     {
-        const auto flags = interface.flags();
-        if (!flags.testFlag(QNetworkInterface::IsUp) ||
-            !flags.testFlag(QNetworkInterface::IsRunning) ||
-            flags.testFlag(QNetworkInterface::IsLoopBack))
-        {
-            continue;
-        }
-
-        m_networkConnected = true;
-        m_networkName = interface.humanReadableName().trimmed();
-        if (m_networkName.isEmpty())
-        {
-            m_networkName = interface.name();
-        }
-        return;
+        const auto value = metric(names[i]);
+        const bool available = value.value(QStringLiteral("available")).toBool()
+            && m_age.isValid() && m_age.elapsed() <= 6000;
+        const QString text = !available ? tr("Unavailable") : names[i] == QStringLiteral("network")
+            ? value.value(QStringLiteral("value")).toString()
+            : QString::number(value.value(QStringLiteral("value")).toInt()) + QLatin1Char('%');
+        result.append(QVariantMap{{QStringLiteral("appId"), QStringLiteral("status:") + names[i]},
+            {QStringLiteral("isStatus"), true}, {QStringLiteral("statusAvailable"), available},
+            {QStringLiteral("statusText"), text}, {QStringLiteral("displayName"), labels[i] + QStringLiteral(": ") + text},
+            {QStringLiteral("iconName"), icons[i]}});
     }
+    return result;
 }
 
-void SystemStatus::refreshProcessor()
+SystemStatus::Sample SystemStatus::readSample(const QString &procRoot, const QString &sysRoot,
+                                             const Sample &previous, bool systemDevices)
 {
-    QFile statFile(QStringLiteral("/proc/stat"));
-    if (!statFile.open(QIODevice::ReadOnly | QIODevice::Text))
+    Sample result;
+    for (const auto &name : {"battery", "network", "cpu", "memory", "disk", "gpu"})
+        result.metrics.insert(QLatin1String(name), reading(false));
+    // Linux counts guest time inside user/nice already: only the first eight
+    // counters belong in the total. Missing, reset or malformed samples fail closed.
+    const auto cpu = read(procRoot + QStringLiteral("/stat")).split('\n').value(0).simplified().split(' ');
+    bool valid = cpu.size() >= 5 && cpu.first() == "cpu";
+    quint64 total = 0, idle = 0;
+    for (int i = 1; valid && i < qMin(cpu.size(), qsizetype(9)); ++i)
     {
-        return;
+        bool ok = false;
+        const auto value = cpu[i].toULongLong(&ok);
+        valid = ok && !cpu[i].startsWith('-') && total <= std::numeric_limits<quint64>::max() - value;
+        total += value;
+        if (i == 4 || i == 5) idle += value;
     }
-
-    const QStringList values = QString::fromUtf8(statFile.readLine()).simplified().split(QLatin1Char(' '));
-    if (values.size() < 5 || values.constFirst() != QStringLiteral("cpu"))
+    if (valid && idle <= total)
     {
-        return;
+        result.cpuPrimed = true; result.cpuTotal = total; result.cpuIdle = idle;
+        if (previous.cpuPrimed && total > previous.cpuTotal && idle >= previous.cpuIdle
+            && idle - previous.cpuIdle <= total - previous.cpuTotal)
+            result.metrics[QStringLiteral("cpu")] = reading(true,
+                qRound(100.0 * (1.0 - double(idle - previous.cpuIdle) / double(total - previous.cpuTotal))));
     }
-
-    quint64 total = 0;
-    for (qsizetype index = 1; index < values.size(); ++index)
+    QHash<QByteArray, quint64> memory;
+    for (const auto &line : read(procRoot + QStringLiteral("/meminfo")).split('\n'))
     {
-        total += values.at(index).toULongLong();
+        const auto fields = line.simplified().split(' ');
+        if (fields.size() < 2) continue;
+        bool ok = false;
+        const auto value = fields[1].toULongLong(&ok);
+        if (ok && !fields[1].startsWith('-')) memory.insert(fields[0], value);
     }
-    const quint64 idle = values.at(4).toULongLong() +
-                         (values.size() > 5 ? values.at(5).toULongLong() : 0);
-    if (m_previousCpuTotal > 0 && total > m_previousCpuTotal)
+    if (memory.value("MemTotal:") > 0 && memory.contains("MemAvailable:")
+        && memory.value("MemAvailable:") <= memory.value("MemTotal:"))
+        result.metrics[QStringLiteral("memory")] = reading(true,
+            qRound(100.0 * (1.0 - double(memory.value("MemAvailable:")) / double(memory.value("MemTotal:")))));
+    const QDir power(sysRoot + QStringLiteral("/class/power_supply"));
+    for (const auto &name : power.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name))
     {
-        const quint64 totalDelta = total - m_previousCpuTotal;
-        const quint64 idleDelta = idle - m_previousCpuIdle;
-        m_cpuPercent = qBound(0, qRound(
-            100.0 * static_cast<double>(totalDelta - qMin(totalDelta, idleDelta)) /
-            static_cast<double>(totalDelta)), 100);
+        const auto path = power.filePath(name);
+        if (read(path + QStringLiteral("/type")) != "Battery") continue;
+        auto battery = percentage(read(path + QStringLiteral("/capacity")));
+        battery[QStringLiteral("charging")] = read(path + QStringLiteral("/status")) == "Charging";
+        result.metrics[QStringLiteral("battery")] = battery;
+        break;
     }
-
-    m_previousCpuTotal = total;
-    m_previousCpuIdle = idle;
-}
-
-void SystemStatus::refreshMemory()
-{
-    QFile memoryFile(QStringLiteral("/proc/meminfo"));
-    if (!memoryFile.open(QIODevice::ReadOnly | QIODevice::Text))
+    const QDir cards(sysRoot + QStringLiteral("/class/drm"));
+    for (const auto &name : cards.entryList({QStringLiteral("card*")}, QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name))
     {
-        return;
+        const auto gpu = percentage(read(cards.filePath(name) + QStringLiteral("/device/gpu_busy_percent")));
+        if (gpu.value(QStringLiteral("available")).toBool()) { result.metrics[QStringLiteral("gpu")] = gpu; break; }
     }
-
-    quint64 total = 0;
-    quint64 available = 0;
-    while (!memoryFile.atEnd())
+    if (systemDevices)
     {
-        const QStringList fields = QString::fromUtf8(memoryFile.readLine()).simplified().split(QLatin1Char(' '));
-        if (fields.size() < 2)
+        const QStorageInfo storage = QStorageInfo::root();
+        if (storage.isValid() && storage.isReady() && storage.bytesTotal() > 0
+            && storage.bytesAvailable() >= 0 && storage.bytesAvailable() <= storage.bytesTotal())
+            result.metrics[QStringLiteral("disk")] = reading(true,
+                qRound(100.0 * (1.0 - double(storage.bytesAvailable()) / double(storage.bytesTotal()))));
+        const auto interfaces = QNetworkInterface::allInterfaces();
+        auto network = reading(!interfaces.isEmpty(), tr("No active interface"));
+        network[QStringLiteral("connected")] = false;
+        for (const auto &interface : interfaces)
         {
-            continue;
-        }
-
-        if (fields.constFirst() == QStringLiteral("MemTotal:"))
-        {
-            total = fields.at(1).toULongLong();
-        }
-        else if (fields.constFirst() == QStringLiteral("MemAvailable:"))
-        {
-            available = fields.at(1).toULongLong();
-        }
-    }
-
-    if (total > 0)
-    {
-        m_memoryPercent = qBound(0, qRound(
-            100.0 * static_cast<double>(total - qMin(total, available)) /
-            static_cast<double>(total)), 100);
-    }
-}
-
-void SystemStatus::refreshStorage()
-{
-    const QStorageInfo rootStorage = QStorageInfo::root();
-    const qint64 total = rootStorage.bytesTotal();
-    const qint64 available = rootStorage.bytesAvailable();
-    if (total <= 0 || available < 0)
-    {
-        m_diskPercent = 0;
-        return;
-    }
-
-    m_diskPercent = qBound(0, qRound(
-        100.0 * static_cast<double>(total - qMin(total, available)) /
-        static_cast<double>(total)), 100);
-}
-
-void SystemStatus::refreshGraphics()
-{
-    m_gpuPercent = 0;
-    QDirIterator cards(
-        QStringLiteral("/sys/class/drm"),
-        {QStringLiteral("card*")},
-        QDir::Dirs | QDir::NoDotAndDotDot);
-    while (cards.hasNext())
-    {
-        const QString cardPath = cards.next();
-        for (const QString &fileName : {QStringLiteral("gpu_busy_percent"), QStringLiteral("gt_busy_percent")})
-        {
-            QFile usageFile(cardPath + QStringLiteral("/device/") + fileName);
-            if (!usageFile.open(QIODevice::ReadOnly | QIODevice::Text))
+            const auto flags = interface.flags();
+            if (flags.testFlag(QNetworkInterface::IsUp) && flags.testFlag(QNetworkInterface::IsRunning)
+                && !flags.testFlag(QNetworkInterface::IsLoopBack))
             {
-                continue;
+                network[QStringLiteral("value")] = interface.humanReadableName();
+                network[QStringLiteral("connected")] = true;
+                break;
             }
-
-            m_gpuPercent = qBound(0, QString::fromUtf8(usageFile.readAll()).trimmed().toInt(), 100);
-            return;
         }
+        result.metrics[QStringLiteral("network")] = network;
     }
+    return result;
 }

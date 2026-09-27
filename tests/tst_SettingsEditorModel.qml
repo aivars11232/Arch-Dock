@@ -5,6 +5,28 @@ import "../qml/runtime/SettingsEditorModel.js" as EditorModel
 TestCase {
     name: "SettingsEditorModel"
 
+    function test_runtimeFeedbackPreservesDraftAndHidesUnavailableSource() {
+        const source = snapshot("free-1", 9);
+        source.panelValues.showBadges = true;
+        source.panelFields.push({key: "showBadges", scope: "panel", control: "switch"});
+        source.panelFields.push({key: "segments", segmentCapabilities: {available: true},
+            availableEntries: [{appId: "one", badgeText: "7"}],
+            segmentEntries: [{appId: "one", segmentId: "custom", badgeText: "7"}]});
+        const draft = EditorModel.setPanelValue(EditorModel.load(source), "showBadges", false);
+        const gone = EditorModel.copyValue(source);
+        gone.panelFields = gone.panelFields.filter(function(field) { return field.key !== "showBadges"; });
+        gone.panelFields.find(function(field) { return field.key === "segments"; }).availableEntries = [{appId: "one"}];
+        const refreshed = EditorModel.withContentFeedback(draft, gone);
+        verify(EditorModel.dirty(refreshed));
+        compare(EditorModel.panelCandidate(refreshed).showBadges, false);
+        verify(!refreshed.panelFields.some(function(field) { return field.key === "showBadges"; }));
+        const entry = EditorModel.rendererCandidate(refreshed).segmentEntries[0];
+        compare(entry.segmentId, "custom");
+        compare(entry.badgeText, "");
+        compare(entry.progress, -1);
+        compare(EditorModel.panelCandidate(EditorModel.cancel(refreshed)).showBadges, true);
+    }
+
     function test_segmentDraftsAreIndependentAndReversible() {
         const source = snapshot("free-1", 9)
         source.panelValues.segments = [{ id: "main", order: 0, source: "inherited", entryIds: [] }]

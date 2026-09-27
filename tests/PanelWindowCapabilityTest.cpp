@@ -96,6 +96,7 @@ private slots:
     void backendResolutionMatchesDirectResolverWithoutWrites();
     void editorSnapshotsExposeOnlyProjectedEditableState();
     void segmentsUseRevisionedTransactionsAndHostAuthority();
+    void contentProvidersUseTransactionsAndVisibility();
     void managedVersionTwoCapabilitiesDriveFallbackAndEditorVisibility();
     void rendererProjectionPreservesConsumedValuesWithoutProtectedState();
     void editorDraftResolutionIsReadOnlyAndCannotAuthorizeHiddenState();
@@ -1337,6 +1338,59 @@ void PanelWindowCapabilityTest::rejectedCapabilityTransactionStopsBeforePersiste
     QCOMPARE(settingsSnapshot(), settingsBefore);
 }
 
+void PanelWindowCapabilityTest::contentProvidersUseTransactionsAndVisibility()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("panelRegistry")).value<QObject *>());
+    auto *status = qobject_cast<SystemStatus *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("systemStatus")).value<QObject *>());
+    QVERIFY(registry && status);
+    for (const auto &id : registry->panelIds()) {
+        registry->updatePanel(id, {{"visible", false}});
+        QVERIFY(!registry->panelValue(id, QStringLiteral("visible")).toBool());
+    }
+    QTRY_VERIFY(status->availableSources().contains(QStringLiteral("status:cpu")));
+    const auto panelId = registry->addFreePanel();
+    auto panel = *registry->panelDefinition(panelId);
+    panel.segments.first().source = QStringLiteral("status");
+    panel.segments.first().entryIds = {QStringLiteral("status:cpu"), QStringLiteral("status:memory")};
+    const auto applied = window.applyPanelSettingsTransaction(panelId, panel.settingsRevision,
+        {{"layout", "horizontal"}, {"segments", QVariantList{panel.segments.first().toVariantMap()}},
+         {"showTemporaryStatus", false}});
+    QVERIFY2(applied.value("success").toBool(), qPrintable(applied.value("errorMessage").toString()));
+    const auto rows = window.dockEntriesForPanel(panelId, "launcher");
+    QCOMPARE(rows.size(), 2);
+    for (const auto &value : rows) {
+        const auto entry = value.toMap();
+        QVERIFY(entry.value("isStatus").toBool());
+        QVERIFY(entry.value("statusAvailable").toBool());
+        QVERIFY(!window.activateDockEntry(entry.value("appId").toString()));
+        QVERIFY(!window.launchDockEntry(panelId, entry.value("appId").toString(), {}));
+    }
+    PanelRegistry reloaded;
+    QCOMPARE(reloaded.panelDefinition(panelId)->segments, registry->panelDefinition(panelId)->segments);
+    QVERIFY(!reloaded.panelDefinition(panelId)->content.showTemporaryStatus);
+    registry->updatePanel(panelId, {{"visible", true}});
+    QVERIFY(registry->panelValue(panelId, QStringLiteral("visible")).toBool());
+    const auto before = status->sampleCount();
+    QVERIFY(window.reportPanelPresentationState(panelId,
+        {{"surfaceState", "open"}, {"hostPhase", "revealed"}}));
+    QTRY_VERIFY(status->sampleCount() > before);
+    QVERIFY(window.reportPanelPresentationState(panelId,
+        {{"surfaceState", "collapsed"}, {"hostPhase", "concealed"}}));
+    QTest::qWait(150);
+    const auto concealed = status->sampleCount();
+    const auto revision = window.contentRevision();
+    QTest::qWait(2150);
+    QCOMPARE(status->sampleCount(), concealed);
+    QCOMPARE(window.contentRevision(), revision);
+    QVERIFY(window.reportPanelPresentationState(panelId,
+        {{"surfaceState", "open"}, {"hostPhase", "revealed"}}));
+    QTRY_VERIFY(status->sampleCount() > concealed);
+}
+
 void PanelWindowCapabilityTest::segmentsUseRevisionedTransactionsAndHostAuthority()
 {
     QQmlApplicationEngine engine;
@@ -1378,7 +1432,7 @@ void PanelWindowCapabilityTest::segmentsUseRevisionedTransactionsAndHostAuthorit
     const auto revision = registry->panelDefinition(panelId)->settingsRevision;
     for (const auto &bad : {
         QVariantMap{{"entryIds", QStringList{QStringLiteral("foreign-entry")}}},
-        QVariantMap{{"source", QStringLiteral("status")}, {"entryIds", QStringList{}}},
+        QVariantMap{{"source", QStringLiteral("status")}, {"entryIds", QStringList{QStringLiteral("status:unknown")}}},
         QVariantMap{{"motionProfile", QStringLiteral("missing-profile")}}})
     {
         auto invalid = custom.toVariantMap();
@@ -1405,7 +1459,8 @@ void PanelWindowCapabilityTest::segmentsUseRevisionedTransactionsAndHostAuthorit
     const auto native = window.panelSettingsEditorSnapshot(QStringLiteral("bottom"), QStringLiteral("studio"));
     const auto descriptor = fieldByKey(native.value("panelFields").toList(), QStringLiteral("segments"));
     QVERIFY(descriptor.value("segmentCapabilities").toMap().value("available").toBool());
-    QVERIFY(!descriptor.value("segmentCapabilities").toMap().value("sources").toStringList().contains(QStringLiteral("status")));
+    QCOMPARE(descriptor.value("segmentCapabilities").toMap().value("sources").toStringList().contains(QStringLiteral("status")),
+        !window.contentRuntimeSnapshot(QStringLiteral("bottom")).value("availableSources").toStringList().isEmpty());
     first.order = 0;
     QVERIFY(window.applyPanelSettingsTransaction(panelId, revision + 1,
         {{QStringLiteral("segments"), QVariantList{first.toVariantMap()}}}).value("success").toBool());

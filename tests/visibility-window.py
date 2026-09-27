@@ -43,8 +43,17 @@ def instrument_interaction_stage(stage):
                         const entries = [];
                         for (let i = 0; i < panelScene.entryCount; ++i) {
                             const item = panelScene.entryItemAt(i);
+                            const visual = item.meshVisualItem;
                             entries.push({app: item.sceneEntry.appId, segment: item.sceneEntry.segmentId,
-                                input: item.sceneInputEnabled, visible: item.visible});
+                                input: item.sceneInputEnabled, visible: item.visible,
+                                badge: visual ? visual.badgeText : "",
+                                badgeVisible: visual && visual.badgeItem.visible,
+                                progress: visual ? visual.progress : -1,
+                                progressVisible: visual && visual.progressItem.visible,
+                                attention: visual && visual.attentionItem.visible,
+                                temporary: visual && visual.temporaryStatusItem.visible,
+                                status: visual ? visual.statusTextItem.text : "",
+                                statusVisible: visual && visual.statusTextItem.visible});
                         }
                         console.warn("ArchDockInteraction " + JSON.stringify({kind: "segments", panel: root.panelId,
                             sample: ++sample, segments: segments, entries: entries,
@@ -612,6 +621,148 @@ def run_interaction_matrix(free_panel):
             assert not marker.exists(), "segment changes launched a folder root"
             print(f"PASS: segments {panel}: independent surfaces, ownership, native hover, popup guard, reorder, rejection", flush=True)
 
+    def run_content_matrix():
+        import subprocess
+
+        panels = ("bottom", free_panel)
+        native_id = int(panel_call("dockConfiguration", "(s)", ("bottom",))["nativePanelId"])
+
+        def native_widgets():
+            return call("org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell", "evaluateScript", "(s)",
+                        (f"print(JSON.stringify(panelById({native_id}).widgets().map(w => w.id).sort()));",))
+
+        widgets_before = native_widgets()
+        desktop = root / "data/applications/org.archdock.overlayfixture.desktop"
+        desktop.write_text("[Desktop Entry]\nType=Application\nName=Private overlay fixture\n"
+                           "Exec=/usr/bin/true\nIcon=applications-system\n")
+        subprocess.run(["kbuildsycoca6", "--noincremental"], check=True, stdout=subprocess.DEVNULL)
+        assert panel_call("pinDockUrls", "(as)", ([desktop.as_uri()],))
+        assert panel_call("pinPanelUrls", "(sas)", (free_panel, [desktop.as_uri()]))
+        app_ids = {}
+
+        def snapshot(panel):
+            return panel_call("panelSettingsEditorSnapshot", "(ss)", (panel, "studio"))
+
+        def fields(panel):
+            return {row["key"]: row for row in snapshot(panel)["panelFields"]}
+
+        def runtime(panel="bottom"):
+            return panel_call("contentRuntimeSnapshot", "(s)", (panel,))
+
+        def rows(panel):
+            return observations.get(("segments", panel, ""), {}).get("entries", [])
+
+        def overlay(panel):
+            return next((row for row in rows(panel) if row["app"] == app_ids[panel]), {})
+
+        for panel in panels:
+            assert "showBadges" not in fields(panel), "unsupported source control advertised"
+            entries = panel_call("dockEntriesForPanel", "(ss)", (panel, "hybrid"))
+            assert not any(row.get("isStatus") for row in entries), "status must be explicitly selected"
+            app_ids[panel] = next(row["appId"] for row in entries if row["displayName"] == "Private overlay fixture")
+            supported = runtime(panel)["availableSources"]
+            assert {"status:cpu", "status:memory"} <= set(supported)
+            offered = {row["appId"] for row in fields(panel)["segments"]["availableEntries"] if row.get("isStatus")}
+            assert offered == set(supported), "unavailable hardware was advertised"
+            segments = snapshot(panel)["panelValues"]["segments"]
+            segments[0]["presentation"] = "open"
+            segments.append(dict(segments[1], id="readings", source="status", order=2,
+                                 entryIds=["status:cpu", "status:memory"]))
+            configure(panel, {"segments": segments})
+
+        sender = Gio.DBusConnection.new_for_address_sync(address,
+            Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION,
+            None, None)
+
+        def update(count, progress, urgent=True):
+            sender.emit_signal(None, "/Overlay", "com.canonical.Unity.LauncherEntry", "Update",
+                GLib.Variant("(sa{sv})", ("application://" + desktop.name, {
+                    "count": GLib.Variant("x", count), "count-visible": GLib.Variant("b", True),
+                    "progress": GLib.Variant("d", progress), "progress-visible": GLib.Variant("b", True),
+                    "urgent": GLib.Variant("b", urgent)})))
+
+        try:
+            update(7, 0.42)
+            sender.flush_sync(None)
+            for panel in panels:
+                wait_for(lambda: overlay(panel).get("badge") == "7" and overlay(panel).get("badgeVisible")
+                         and overlay(panel).get("progress") == 0.42 and overlay(panel).get("progressVisible")
+                         and overlay(panel).get("attention"), "native/free live overlay layers")
+                wait_for(lambda: len([row for row in rows(panel) if row["app"].startswith("status:")
+                         and row["statusVisible"] and row["status"].endswith("%")]) == 2, "real status readings rendered")
+                assert len({row["app"] for row in rows(panel)}) == len(rows(panel)), "duplicate segment ownership"
+                assert next(row for row in rows(panel) if row["app"] == folder_app_ids[panel])["segment"] == "files"
+                click_entry(panel, button=272)
+                wait_for(lambda: observations.get(("folder", panel, ""), {}).get("visible"),
+                         "folder opens alongside status and application overlays")
+                escape()
+                wait_for(lambda: not observations.get(("folder", panel, ""), {}).get("visible"), "combined folder dismissed")
+            assert native_widgets() == widgets_before, "status selection duplicated native applets"
+
+            outcome = panel_call("activateDockEntryOutcome", "(s)", (app_ids["bottom"],))
+            assert outcome["outcome"] == "succeeded", outcome
+            for panel in panels:
+                wait_for(lambda: overlay(panel).get("temporary"), "actual launch outcome rendered")
+                preferences = {"showBadges": False, "showProgress": False, "showTemporaryStatus": False}
+                configure(panel, preferences)
+                wait_for(lambda: overlay(panel) and not any(overlay(panel).get(key)
+                         for key in ("badgeVisible", "progressVisible", "temporary")), "overlay preferences applied")
+                assert all(snapshot(panel)["panelValues"][key] is False for key in preferences)
+                configure(panel, {key: True for key in preferences})
+
+            before, started = runtime()["contentRevision"], time.monotonic()
+            for index in range(100):
+                update(index, index / 100.0)
+            sender.flush_sync(None)
+            wait_for(lambda: all(overlay(panel).get("badge") == "99" and overlay(panel).get("progress") == 0.99
+                     for panel in panels), "burst coalesced to latest supported source values")
+            changes = runtime()["contentRevision"] - before
+            assert 0 < changes < 100 and changes <= (time.monotonic() - started) * 10 + 3, changes
+            print(f"PASS: native/free combined content, persisted overlay controls, no applet duplicates; 100 updates/{changes} revisions", flush=True)
+
+            click([1200, 500])
+            # Procedural segments deliberately offer no theme collapse. Keep
+            # that rejection, then exercise native host hiding. The visible
+            # free host remains an overlay consumer but opts out of status.
+            current = snapshot("bottom")
+            rejected = panel_call("applyPanelSettingsTransaction", "(sta{sv}a{sv})", ("bottom", current["revision"],
+                values({"presentationMode": "collapsed", "collapseMechanism": "collapse-horizontal"}), {}))
+            assert not rejected["success"] and rejected["errorCode"] == "capability-unavailable"
+            assert snapshot("bottom")["revision"] == current["revision"]
+            free_segments = snapshot(free_panel)["panelValues"]["segments"]
+            configure(free_panel, {"segments": free_segments[:2]})
+            assert panel_call("setPanelVisible", "(sb)", ("bottom", False))
+            wait_for(lambda: not runtime()["visible"] and panel_call("panelPresentationState", "(s)",
+                     ("bottom",)).get("hostPhase") == "concealed", "last status consumer hidden by native host")
+            # Allow an already queued worker result to settle before measuring.
+            time.sleep(0.25)
+            concealed = runtime()["sampleCount"]
+            update(155, 0.55, False)
+            sender.flush_sync(None)
+            until = time.monotonic() + 2.2
+            while time.monotonic() < until:
+                pump()
+                time.sleep(0.02)
+            assert runtime()["sampleCount"] == concealed, "concealed status polling continued"
+            assert overlay("bottom")["badge"] == "99", "concealed host consumed overlay refreshes"
+            assert overlay(free_panel)["badge"] == "155", "visible free host lost live updates"
+            assert panel_call("setPanelVisible", "(sb)", ("bottom", True))
+            configure(free_panel, {"segments": free_segments})
+            wait_for(lambda: all(opened(panel) and overlay(panel).get("badgeVisible")
+                     and overlay(panel).get("badge") == "155" and overlay(panel).get("progress") == 0.55
+                     and not overlay(panel).get("attention") for panel in panels), "reveal renders latest content")
+            wait_for(lambda: runtime()["sampleCount"] > concealed, "revealed status polling resumed")
+            print("PASS: hidden native host defers overlays while visible free host updates; no visible status consumer pauses sampling; reveal resumes", flush=True)
+        finally:
+            sender.close_sync(None)
+        for panel in panels:
+            wait_for(lambda: overlay(panel) and not overlay(panel).get("badgeVisible")
+                     and not overlay(panel).get("progressVisible") and not overlay(panel).get("attention"),
+                     "disconnected source clears real overlay layers")
+            assert not {"showBadges", "showProgress"} & fields(panel).keys(), "unavailable controls remain exposed"
+            wait_for(lambda: not overlay(panel).get("temporary"), "temporary backend outcome expires")
+        print("PASS: source disconnect removes native/free feedback and controls; temporary status expires", flush=True)
+
     first = Gtk.ApplicationWindow(application=app)
     second = Gtk.ApplicationWindow(application=app)
     try:
@@ -624,6 +775,7 @@ def run_interaction_matrix(free_panel):
                  "private Studio closed before desktop input")
         if os.environ.get("ARCHDOCK_RENDERING_FOLDERS") == "1":
             run_folder_matrix()
+            run_content_matrix()
             return
         marker = root / "logs/unexpected-icon-launch"
         desktop = root / "data/applications" / (app_id + ".desktop")
