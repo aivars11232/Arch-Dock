@@ -176,6 +176,8 @@ QString typeName(Type type)
         return QStringLiteral("string");
     case Type::StringList:
         return QStringLiteral("string-list");
+    case Type::List:
+        return QStringLiteral("list");
     case Type::Map:
         return QStringLiteral("map");
     case Type::Revision:
@@ -404,6 +406,10 @@ const QVector<Descriptor> &schemaFields()
               Normalization::StringList, QStringList{}, "content.entryOrder"),
         panel("kdeWidgets", Access::Internal, Type::StringList,
               Normalization::StringList, QStringList{}, "content.kdeWidgets"),
+        panel("segments", Access::Editor, Type::List, Normalization::None,
+              QVariantList{QVariantMap{{QStringLiteral("id"), QStringLiteral("main")}}},
+              "segments", {}, {}, {}, false, true,
+              editor("panels-segments", "Segments", "segments", {"studio"}, "segments")),
         exposedTo(panel("acceptDrops", Access::Editor, Type::Boolean, Normalization::Boolean, true,
               "content.acceptDrops", {}, {}, {}, false, true,
               editor("panels-behavior", "Accept drops", "switch",
@@ -908,14 +914,17 @@ QVariantMap PanelSettingsFieldDescriptor::toVariantMap() const
         {QStringLiteral("access"), accessName(access)},
         {QStringLiteral("type"), typeName(valueType)},
         {QStringLiteral("defaultValue"), defaultValue},
-        {QStringLiteral("minimumValue"), minimumValue},
-        {QStringLiteral("maximumValue"), maximumValue},
         {QStringLiteral("choices"), choices},
         {QStringLiteral("persistencePath"), persistencePath},
         {QStringLiteral("mutationInterfaces"), mutationInterfaces},
         {QStringLiteral("optional"), optional},
         {QStringLiteral("runtimeConsumer"), runtimeConsumer},
     };
+    // An absent optional bound cannot be encoded as an invalid D-Bus variant.
+    if (minimumValue.isValid())
+        result.insert(QStringLiteral("minimumValue"), minimumValue);
+    if (maximumValue.isValid())
+        result.insert(QStringLiteral("maximumValue"), maximumValue);
     if (editor.isPresented())
     {
         result.insert(QStringLiteral("section"), editor.section);

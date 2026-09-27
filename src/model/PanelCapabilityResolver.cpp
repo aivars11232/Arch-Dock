@@ -708,6 +708,32 @@ QString capabilityReasonCodeName(CapabilityReasonCode reason)
     return QStringLiteral("invalid-capability-input");
 }
 
+QVariantMap PanelCapabilityResolver::segmentCapabilities(
+    const PanelDefinition &definition, const CapabilityResolution &resolution)
+{
+    const bool linear = QStringList{QStringLiteral("horizontal"),
+        QStringLiteral("vertical"), QStringLiteral("adaptive")}.contains(definition.layout.pathType);
+    const bool available = resolution.available && linear &&
+        resolution.renderer.effectiveTier == RendererTier::Procedural2D;
+    QStringList sources{QStringLiteral("inherited"), QStringLiteral("custom")};
+    if (definition.content.type != QStringLiteral("empty"))
+    {
+        if (definition.host.kind == PanelHostKind::FreeDesktop || definition.content.type != QStringLiteral("tasks"))
+            sources.append(QStringLiteral("launcher"));
+        if (definition.host.kind == PanelHostKind::FreeDesktop || definition.content.type != QStringLiteral("launcher"))
+            sources.append(QStringLiteral("tasks"));
+    }
+    return {
+        {QStringLiteral("available"), available},
+        {QStringLiteral("reasonCode"), available ? QStringLiteral("none") : QStringLiteral("segments-require-linear-procedural-surface")},
+        {QStringLiteral("sources"), available ? sources : QStringList{}},
+        {QStringLiteral("backgrounds"), available ? QStringList{QStringLiteral("inherited"), QStringLiteral("solid"), QStringLiteral("none")} : QStringList{}},
+        {QStringLiteral("corners"), available ? QStringList{QStringLiteral("inherited"), QStringLiteral("square"), QStringLiteral("rounded"), QStringLiteral("capsule")} : QStringList{}},
+        {QStringLiteral("motionProfiles"), available ? QStringList{QString{}, QStringLiteral("none"), QStringLiteral("pulse"), QStringLiteral("breathe")} : QStringList{}},
+        {QStringLiteral("maximumCount"), PanelSegmentDefinition::MaximumSegments},
+    };
+}
+
 HostCapabilityProfile PanelCapabilityResolver::productionHostProfile(
     PanelHostKind kind)
 {

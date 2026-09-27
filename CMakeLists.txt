@@ -88,6 +88,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     PanelMotionController.qml
     SceneRotationController.qml
     PanelScene.qml
+    PanelSegment.qml
     PanelSurfaceLoader.qml
     RunningIndicator.qml
     inputs/AlphaHitMask.qml

@@ -9,6 +9,7 @@ Item {
     property var panelDefinition: ({})
     property var runtimeState: ({})
     property var orderedEntries: []
+    property bool useProvidedEntries: false
     property var hostCapabilities: ({})
     property var themeDefinition: ({})
     property var iconStyleDefinition: ({})
@@ -28,7 +29,7 @@ Item {
     readonly property var previewRuntimeState:
         runtimeForPreview(runtimeState)
     readonly property var effectiveEntries:
-        orderedEntries && orderedEntries.length > 0
+        useProvidedEntries || (orderedEntries && orderedEntries.length > 0)
         ? orderedEntries : defaultEntries
     readonly property string activeRendererTier:
         panelScene.effectiveRendererTier
@@ -149,7 +150,8 @@ Item {
         } else if (normalizedMode === "free") {
             const configuredLayout = String(definitionValue(
                 result, "layout", "pathType", "layout", "circular"))
-            layout = ["", "adaptive", "horizontal", "vertical"]
+            layout = root.useProvidedEntries ? configuredLayout
+                : ["", "adaptive", "horizontal", "vertical"]
                 .includes(configuredLayout) ? "circular" : configuredLayout
             edge = "free"
         }

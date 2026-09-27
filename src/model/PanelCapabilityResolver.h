@@ -227,6 +227,8 @@ public:
                                QString *errorCode = nullptr);
     [[nodiscard]] static QVector<RendererAvailability> productionRenderers();
     [[nodiscard]] static PlatformCapabilityProfile productionPlatform();
+    [[nodiscard]] static QVariantMap segmentCapabilities(
+        const PanelDefinition &definition, const CapabilityResolution &resolution);
     [[nodiscard]] static CapabilityResolution resolve(
         const PanelDefinition &definition,
         const HostCapabilityProfile &host,

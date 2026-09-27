@@ -48,6 +48,9 @@ private slots:
     void moveBeforeReordersDeterministically();
     void setOrderRequiresAPermutation();
     void everyChangeSpendsExactlyOneRevision();
+    void segmentsPartitionEntriesWithoutStealing();
+    void segmentClaimsFailClosed();
+    void contentOperationsPreserveSegmentOwnership();
 };
 
 void PanelContentTransactionTest::canonicalOrderCoversEveryEntryExactlyOnce()
@@ -250,6 +253,107 @@ void PanelContentTransactionTest::everyChangeSpendsExactlyOneRevision()
     QCOMPARE(candidate->host, current.host);
     QCOMPARE(outcome.entryOrder, candidate->content.entryOrder);
     QCOMPARE(outcome.toVariantMap().value(QStringLiteral("changed")).toBool(), true);
+}
+
+void PanelContentTransactionTest::segmentsPartitionEntriesWithoutStealing()
+{
+    auto panel = freePanel();
+    auto custom = panel.segments.first();
+    custom.id = QStringLiteral("files");
+    custom.source = QStringLiteral("custom");
+    custom.entryIds = {kFolder};
+    custom.order = 0;
+    auto launcher = panel.segments.first();
+    launcher.id = QStringLiteral("launchers");
+    launcher.source = QStringLiteral("launcher");
+    launcher.order = 1;
+    auto tasks = launcher;
+    tasks.id = QStringLiteral("tasks");
+    tasks.source = QStringLiteral("tasks");
+    tasks.order = 2;
+    panel.segments = {tasks, custom, launcher};
+    const QVariantList entries{
+        QVariantMap{{"appId", kA}, {"pinned", true}, {"running", true}},
+        QVariantMap{{"appId", kFolder}, {"pinned", true}},
+        QVariantMap{{"appId", kKate}, {"running", true}},
+    };
+    QString error;
+    const auto projected = PanelContentTransaction::segmentEntries(panel, entries, &error, true);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(projected.size(), 3);
+    QCOMPARE(projected.at(0).toMap().value("appId").toString(), kFolder);
+    QCOMPARE(projected.at(0).toMap().value("segmentId").toString(), QStringLiteral("files"));
+    QCOMPARE(projected.at(1).toMap().value("appId").toString(), kA);
+    QCOMPARE(projected.at(1).toMap().value("segmentId").toString(), QStringLiteral("launchers"));
+    QCOMPARE(projected.at(2).toMap().value("appId").toString(), kKate);
+    QCOMPARE(projected.at(2).toMap().value("segmentId").toString(), QStringLiteral("tasks"));
+}
+
+void PanelContentTransactionTest::segmentClaimsFailClosed()
+{
+    auto panel = freePanel();
+    panel.segments.first().source = QStringLiteral("custom");
+    panel.segments.first().entryIds = {kKate};
+    const QVariantList entries{QVariantMap{{"appId", kA}, {"pinned", true}}};
+    QString error;
+    QVERIFY(PanelContentTransaction::segmentEntries(panel, entries, &error, true).isEmpty());
+    QVERIFY(error.contains(QStringLiteral("foreign or unavailable")));
+    // A window disappearing between snapshots does not transfer its claim.
+    QVERIFY(PanelContentTransaction::segmentEntries(panel, entries, &error).isEmpty());
+    QVERIFY(error.isEmpty());
+    auto other = panel.segments.first();
+    other.id = QStringLiteral("other");
+    other.order = 1;
+    panel.segments.append(other);
+    QVERIFY(PanelContentTransaction::segmentEntries(panel, entries, &error, true).isEmpty());
+    QVERIFY(!error.isEmpty());
+    panel.segments = {ArchDock::PanelSegmentDefinition{}};
+    other.entryIds.clear();
+    other.source = QStringLiteral("inherited");
+    panel.segments.append(other);
+    QVERIFY(PanelContentTransaction::segmentEntries(panel, entries, &error, true).isEmpty());
+    QVERIFY(error.contains(QStringLiteral("one automatic")));
+    panel.segments = {ArchDock::PanelSegmentDefinition{}};
+    panel.segments.first().source = QStringLiteral("launcher");
+    panel.segments.first().entryIds = {kA};
+    other.source = QStringLiteral("tasks");
+    panel.segments.append(other);
+    const QVariantList unpinned{QVariantMap{{"appId", kA}, {"running", true}, {"pinned", false}}};
+    QVERIFY(PanelContentTransaction::segmentEntries(panel, unpinned, &error).isEmpty());
+    QVERIFY(error.isEmpty());
+    panel.segments = {ArchDock::PanelSegmentDefinition{}};
+    panel.segments.first().source = QStringLiteral("status");
+    QVERIFY(PanelContentTransaction::segmentEntries(panel, entries, &error, true).isEmpty());
+    QVERIFY(error.contains(QStringLiteral("no segment status provider")));
+}
+
+void PanelContentTransactionTest::contentOperationsPreserveSegmentOwnership()
+{
+    auto panel = freePanel();
+    auto custom = panel.segments.first();
+    custom.id = QStringLiteral("folder");
+    custom.source = QStringLiteral("custom");
+    custom.order = 1;
+    custom.entryIds = {kFolder};
+    panel.segments.append(custom);
+    const auto before = panel.toPersistedMap();
+    PanelContentRequest request;
+    request.operation = PanelContentOperation::MoveBefore;
+    request.entryId = kFolder;
+    request.beforeEntryId = kA;
+    PanelContentOutcome outcome;
+    QVERIFY(!PanelContentTransaction::prepare(panel, request, &outcome));
+    QCOMPARE(outcome.errorCode, QStringLiteral("cross-segment-move"));
+    request.operation = PanelContentOperation::SetOrder;
+    request.order = {kFolder, kA, kKate};
+    QVERIFY(!PanelContentTransaction::prepare(panel, request, &outcome));
+    QCOMPARE(outcome.errorCode, QStringLiteral("cross-segment-move"));
+    QCOMPARE(panel.toPersistedMap(), before);
+    request.operation = PanelContentOperation::Remove;
+    const auto removed = PanelContentTransaction::prepare(panel, request, &outcome);
+    QVERIFY(removed);
+    QVERIFY(removed->segments.last().entryIds.isEmpty());
+    QCOMPARE(removed->segments.first(), panel.segments.first());
 }
 
 QTEST_GUILESS_MAIN(PanelContentTransactionTest)

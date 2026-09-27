@@ -33,6 +33,7 @@ enum class PanelSettingsValueType
     Real,
     String,
     StringList,
+    List,
     Map,
     Revision
 };

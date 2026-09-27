@@ -441,6 +441,31 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         QStringLiteral("folderExpandOnClick"),
         definition.content.folderExpandOnClick).toBool();
 
+    if (record.contains(QStringLiteral("segments")))
+    {
+        const QVariant value = record.value(QStringLiteral("segments"));
+        if (value.metaType().id() != QMetaType::QVariantList || value.toList().isEmpty()
+            || value.toList().size() > PanelSegmentDefinition::MaximumSegments)
+        {
+            setError(errorMessage, QStringLiteral("segments must be a list of 1 to 16 records"));
+            return std::nullopt;
+        }
+        definition.segments.clear();
+        for (const QVariant &row : value.toList())
+        {
+            if (row.metaType().id() != QMetaType::QVariantMap)
+            {
+                setError(errorMessage, QStringLiteral("each segment must be a record"));
+                return std::nullopt;
+            }
+            const auto segment = PanelSegmentDefinition::fromVariantMap(row.toMap(), errorMessage);
+            if (!segment) return std::nullopt;
+            definition.segments.append(*segment);
+        }
+        std::sort(definition.segments.begin(), definition.segments.end(),
+                  [](const auto &first, const auto &second) { return first.order < second.order; });
+    }
+
     definition.placement.edge = edge;
     definition.placement.alignment = normalized(
         QStringLiteral("alignment"), definition.placement.alignment).toString();
@@ -983,6 +1008,13 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("folderSpeed"), content.folderSpeed);
     record.insert(QStringLiteral("folderEasing"), content.folderEasing);
     record.insert(QStringLiteral("folderExpandOnClick"), content.folderExpandOnClick);
+    auto orderedSegments = segments;
+    std::sort(orderedSegments.begin(), orderedSegments.end(),
+              [](const auto &first, const auto &second) { return first.order < second.order; });
+    QVariantList segmentRecords;
+    for (const auto &segment : orderedSegments)
+        segmentRecords.append(segment.toVariantMap());
+    record.insert(QStringLiteral("segments"), segmentRecords);
 
     record.insert(QStringLiteral("edge"), placement.edge);
     record.insert(QStringLiteral("alignment"), placement.alignment);

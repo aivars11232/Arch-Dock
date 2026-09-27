@@ -18,6 +18,7 @@ class PanelSettingsSchemaTest final : public QObject
 
 private slots:
     void descriptorsAreUniqueAndComplete();
+    void descriptorMapsContainOnlyValidValues();
     void persistedPanelFieldsAreClassified();
     void editorCandidatesExcludeProtectedAndHiddenState();
     void runtimeProjectionContainsOnlyDeclaredConsumerValues();
@@ -29,6 +30,18 @@ private slots:
     void sceneQualityIsBoundedAndReversible();
     void folderSettingsPreserveLegacyValues();
 };
+
+void PanelSettingsSchemaTest::descriptorMapsContainOnlyValidValues()
+{
+    for (const auto &field : PanelSettingsSchema::fields())
+    {
+        const auto map = field.toVariantMap();
+        for (auto it = map.cbegin(); it != map.cend(); ++it)
+            QVERIFY2(it.value().isValid(), qPrintable(field.key + QLatin1Char(':') + it.key()));
+        QCOMPARE(map.contains(QStringLiteral("minimumValue")), field.minimumValue.isValid());
+        QCOMPARE(map.contains(QStringLiteral("maximumValue")), field.maximumValue.isValid());
+    }
+}
 
 void PanelSettingsSchemaTest::folderSettingsPreserveLegacyValues()
 {

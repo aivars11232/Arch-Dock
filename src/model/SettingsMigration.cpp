@@ -105,12 +105,14 @@ PanelMigrationResult SettingsMigration::migratePanelRecords(const QByteArray &so
         }
         panelIds.insert(definition->identity.id);
         result.definitions.append(*definition);
+        result.rewriteRequired = result.rewriteRequired ||
+            !record.contains(QStringLiteral("segments"));
         result.sourceWasLegacy = result.sourceWasLegacy ||
             sourceVersion < PanelDefinition::CurrentSchemaVersion;
     }
 
     result.status = PanelMigrationStatus::Success;
-    result.rewriteRequired = result.sourceWasLegacy;
+    result.rewriteRequired = result.rewriteRequired || result.sourceWasLegacy;
     result.serializedVersionTwo = serializeVersionTwo(result.definitions);
     return result;
 }

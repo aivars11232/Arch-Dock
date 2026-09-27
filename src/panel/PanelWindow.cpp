@@ -16,6 +16,8 @@
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QDBusConnection>
+#include <QDBusArgument>
+#include <QDBusVariant>
 #include <QDBusInterface>
 #include <QDBusMessage>
 #include <QDBusReply>
@@ -48,6 +50,53 @@
 
 namespace
 {
+// D-Bus variants preserve compound values as QDBusArgument. Decode only the
+// bounded segment payload here; the model still validates every key and type.
+QVariant decodedSegmentValue(QVariant value, int depth = 0)
+{
+    if (depth > 8)
+        return {};
+    if (value.metaType() == QMetaType::fromType<QDBusVariant>())
+        return decodedSegmentValue(value.value<QDBusVariant>().variant(), depth + 1);
+    if (value.metaType() == QMetaType::fromType<QDBusArgument>())
+    {
+        const auto argument = value.value<QDBusArgument>();
+        const QString signature = argument.currentSignature();
+        if (signature == QStringLiteral("av"))
+            value = qdbus_cast<QVariantList>(argument);
+        else if (signature == QStringLiteral("a{sv}"))
+            value = qdbus_cast<QVariantMap>(argument);
+        else if (signature == QStringLiteral("aa{sv}"))
+        {
+            QVariantList records;
+            for (const auto &record : qdbus_cast<QList<QVariantMap>>(argument))
+                records.append(record);
+            value = records;
+        }
+        else
+            return {};
+    }
+    if (value.metaType().id() == QMetaType::QVariantList)
+    {
+        auto list = value.toList();
+        if (list.size() > 512)
+            return {};
+        for (auto &item : list)
+            item = decodedSegmentValue(item, depth + 1);
+        return list;
+    }
+    if (value.metaType().id() == QMetaType::QVariantMap)
+    {
+        auto map = value.toMap();
+        if (map.size() > 16)
+            return {};
+        for (auto it = map.begin(); it != map.end(); ++it)
+            it.value() = decodedSegmentValue(it.value(), depth + 1);
+        return map;
+    }
+    return value;
+}
+
 QString plasmaScriptStringLiteral(const QString &value)
 {
     QJsonArray values;
@@ -598,6 +647,9 @@ QVariantMap PanelWindow::panelRendererConfiguration(const QString &panelId) cons
 
     const QVariantMap capabilityResolution =
         m_panelRegistry.resolvePanelCapabilities(*definition).toVariantMap();
+    configuration.insert(QStringLiteral("segmentCapabilities"),
+        ArchDock::PanelCapabilityResolver::segmentCapabilities(*definition,
+            m_panelRegistry.resolvePanelCapabilities(*definition)));
     configuration.insert(
         QStringLiteral("capabilityResolution"), capabilityResolution);
     configuration.insert(
@@ -716,7 +768,8 @@ PanelWindow::capabilityCandidateDefinition(
          iterator != candidateValues.cend();
          ++iterator)
     {
-        candidateRecord.insert(iterator.key(), iterator.value());
+        candidateRecord.insert(iterator.key(), iterator.key() == QStringLiteral("segments")
+            ? decodedSegmentValue(iterator.value()) : iterator.value());
     }
     if (candidateValues.contains(QStringLiteral("screen")))
     {
@@ -963,6 +1016,17 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 *resolution.renderer.effectiveTier ==
                     ArchDock::RendererTier::Procedural2D;
         }
+        else if (capability == QStringLiteral("segments"))
+        {
+            const auto capabilities = ArchDock::PanelCapabilityResolver::segmentCapabilities(candidate, resolution);
+            available = capabilities.value(QStringLiteral("available")).toBool();
+            field.insert(QStringLiteral("segmentCapabilities"), capabilities);
+            const auto entries = candidate.host.kind == ArchDock::PanelHostKind::FreeDesktop
+                ? freePanelEntries(candidate) : m_dockModel.panelEntries(candidate.content.type);
+            field.insert(QStringLiteral("availableEntries"), entries);
+            field.insert(QStringLiteral("segmentEntries"),
+                ArchDock::PanelContentTransaction::segmentEntries(candidate, entries));
+        }
         else if (capability == QStringLiteral("artwork-fit"))
         {
             available = resolution.available &&
@@ -1201,6 +1265,9 @@ PanelWindow::preparePanelSettingsDraft(
     request.panelId = panelId;
     request.expectedRevision = expectedRevision;
     request.panelValues = panelValues;
+    if (request.panelValues.contains(QStringLiteral("segments")))
+        request.panelValues.insert(QStringLiteral("segments"),
+            decodedSegmentValue(request.panelValues.value(QStringLiteral("segments"))));
     request.globalValues = globalValues;
     std::optional<ArchDock::PanelSettingsTransactionDraft> draft =
         ArchDock::PanelSettingsTransaction::prepare(
@@ -1216,6 +1283,28 @@ PanelWindow::preparePanelSettingsDraft(
     if (!draft.has_value())
     {
         return std::nullopt;
+    }
+
+    if (draft->candidatePanel.segments != currentPanel->segments)
+    {
+        const QVariantList entries = draft->candidatePanel.host.kind == ArchDock::PanelHostKind::FreeDesktop
+            ? freePanelEntries(draft->candidatePanel)
+            : m_dockModel.panelEntries(draft->candidatePanel.content.type);
+        QString segmentError;
+        const auto projected = ArchDock::PanelContentTransaction::segmentEntries(
+            draft->candidatePanel, entries, &segmentError, true);
+        Q_UNUSED(projected);
+        if (!segmentError.isEmpty())
+        {
+            if (outcome)
+            {
+                outcome->status = ArchDock::PanelSettingsTransactionStatus::ValidationFailed;
+                outcome->revision = currentPanel->settingsRevision;
+                outcome->errorCode = QStringLiteral("invalid-segment-ownership");
+                outcome->errorMessage = segmentError;
+            }
+            return std::nullopt;
+        }
     }
 
     if (panelValues.contains(QStringLiteral("screen")))
@@ -1241,6 +1330,35 @@ PanelWindow::preparePanelSettingsDraft(
 
     const ArchDock::CapabilityResolution resolution =
         m_panelRegistry.resolvePanelCapabilities(draft->candidatePanel);
+    const auto segmentCapabilities = ArchDock::PanelCapabilityResolver::segmentCapabilities(
+        draft->candidatePanel, resolution);
+    const bool inheritedSegment = draft->candidatePanel.segments ==
+        QList<ArchDock::PanelSegmentDefinition>{ArchDock::PanelSegmentDefinition{}};
+    QString segmentError;
+    if (!inheritedSegment && !segmentCapabilities.value(QStringLiteral("available")).toBool())
+        segmentError = segmentCapabilities.value(QStringLiteral("reasonCode")).toString();
+    if (!inheritedSegment)
+    {
+        for (const auto &segment : draft->candidatePanel.segments)
+        {
+            if (!segmentCapabilities.value(QStringLiteral("sources")).toStringList().contains(segment.source) ||
+                !segmentCapabilities.value(QStringLiteral("motionProfiles")).toStringList().contains(segment.motionProfile))
+                segmentError = QStringLiteral("the segment source or motion profile is unavailable");
+            if (segment.background != QStringLiteral("solid") && segment.corners != QStringLiteral("inherited"))
+                segmentError = QStringLiteral("segment corner overrides require a solid background");
+        }
+    }
+    if (!segmentError.isEmpty())
+    {
+        if (outcome)
+        {
+            outcome->status = ArchDock::PanelSettingsTransactionStatus::ValidationFailed;
+            outcome->revision = currentPanel->settingsRevision;
+            outcome->errorCode = QStringLiteral("unavailable-segment-feature");
+            outcome->errorMessage = segmentError;
+        }
+        return std::nullopt;
+    }
     if (outcome)
     {
         outcome->capabilityResolution = resolution;
@@ -2035,7 +2153,7 @@ QVariantList PanelWindow::dockEntriesForPanel(const QString &panelId,
             resolution.value(QStringLiteral("resolvedLabel")));
         value = entry;
     }
-    return entries;
+    return ArchDock::PanelContentTransaction::segmentEntries(*definition, entries);
 }
 
 std::optional<QVariantMap> PanelWindow::iconEntryForIdentity(
@@ -2585,6 +2703,23 @@ bool PanelWindow::movePanelEntryBefore(const QString &panelId,
                                        const QString &entryId,
                                        const QString &beforeEntryId)
 {
+    const auto definition = m_panelRegistry.panelDefinition(panelId);
+    if (!definition)
+        return false;
+    if (definition->host.kind == ArchDock::PanelHostKind::NativeEdge)
+    {
+        QHash<QString, QString> owners;
+        for (const auto &value : dockEntriesForPanel(panelId, definition->content.type))
+        {
+            const auto entry = value.toMap();
+            owners.insert(entry.value(QStringLiteral("appId")).toString(),
+                entry.value(QStringLiteral("segmentId")).toString());
+        }
+        if (!owners.contains(entryId) || (!beforeEntryId.isEmpty() &&
+            (!owners.contains(beforeEntryId) || owners.value(entryId) != owners.value(beforeEntryId))))
+            return false;
+        return m_dockModel.moveApplicationBefore(entryId, beforeEntryId);
+    }
     ArchDock::PanelContentRequest request;
     request.operation = ArchDock::PanelContentOperation::MoveBefore;
     request.entryId = entryId;

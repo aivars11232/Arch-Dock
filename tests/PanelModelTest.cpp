@@ -71,8 +71,11 @@ private slots:
     void serializationExcludesTransientRuntimeState();
     void legacyFixturesMigrateWithoutDataLoss();
     void migrationIsIdempotent();
+    void existingPanelsAcquireOneInheritedSegment();
     void corruptAndUnsupportedSourcesFailSafely();
     void invalidRecordsAreRejected();
+    void segmentsRoundTripWithIndependentSettings();
+    void invalidSegmentsFailClosed();
 };
 
 void PanelModelTest::defaultsExposeEveryVersionTwoSection()
@@ -694,6 +697,31 @@ void PanelModelTest::migrationIsIdempotent()
     QCOMPARE(second.serializedVersionTwo, first.serializedVersionTwo);
 }
 
+void PanelModelTest::existingPanelsAcquireOneInheritedSegment()
+{
+    auto original = PanelDefinition::defaults(QStringLiteral("segment-migration"),
+        QStringLiteral("Existing"), QStringLiteral("free"), false);
+    original.settingsRevision = 17;
+    original.content.applicationIds = {QStringLiteral("org.kde.dolphin.desktop")};
+    QVariantMap record = original.toPersistedMap();
+    record.remove(QStringLiteral("segments"));
+    const QByteArray source = QJsonDocument(QJsonArray{
+        QJsonObject::fromVariantMap(record)}).toJson(QJsonDocument::Compact);
+    const auto first = SettingsMigration::migratePanelRecords(source);
+    QVERIFY2(first.ok(), qPrintable(first.diagnostic));
+    QVERIFY(!first.sourceWasLegacy);
+    QVERIFY(first.rewriteRequired);
+    QCOMPARE(first.definitions.size(), 1);
+    QCOMPARE(first.definitions.first(), original.normalized());
+    QCOMPARE(first.definitions.first().segments.size(), 1);
+    QCOMPARE(first.definitions.first().segments.first().source, QStringLiteral("inherited"));
+    const auto second = SettingsMigration::migratePanelRecords(first.serializedVersionTwo);
+    QVERIFY2(second.ok(), qPrintable(second.diagnostic));
+    QVERIFY(!second.rewriteRequired);
+    QCOMPARE(second.serializedVersionTwo, first.serializedVersionTwo);
+    QCOMPARE(second.definitions, first.definitions);
+}
+
 void PanelModelTest::corruptAndUnsupportedSourcesFailSafely()
 {
     const QByteArray corrupt = fixtureArray({QStringLiteral("corrupt-v1.json")});
@@ -745,6 +773,89 @@ void PanelModelTest::invalidRecordsAreRejected()
          {QStringLiteral("id"), QStringLiteral("future")}},
         &errorMessage).has_value());
     QCOMPARE(errorMessage, QStringLiteral("unsupported panel schema version: 99"));
+}
+
+void PanelModelTest::segmentsRoundTripWithIndependentSettings()
+{
+    auto panel = PanelDefinition::defaults(QStringLiteral("free-segments"),
+        QStringLiteral("Segments"), QStringLiteral("free"), false);
+    QCOMPARE(panel.segments.size(), 1);
+    QCOMPARE(panel.segments.first().source, QStringLiteral("inherited"));
+    QCOMPARE(panel.segments.first().padding, -1);
+    ArchDock::PanelSegmentDefinition files;
+    files.id = QStringLiteral("files");
+    files.source = QStringLiteral("custom");
+    files.order = 1;
+    files.entryIds = {QStringLiteral("free-url:file:///tmp/document.txt")};
+    files.background = QStringLiteral("solid");
+    files.color = QStringLiteral("#123456");
+    files.padding = 14;
+    files.spacing = 6;
+    files.corners = QStringLiteral("capsule");
+    files.presentation = QStringLiteral("closed");
+    files.motionProfile = QStringLiteral("panel-slide");
+    panel.segments.append(files);
+    QString error;
+    QVERIFY2(panel.isValid(&error), qPrintable(error));
+    const QVariantMap record = panel.toPersistedMap();
+    QCOMPARE(record.value(QStringLiteral("segments")).toList().size(), 2);
+    const auto restored = PanelDefinition::fromLegacyMap(record, &error);
+    QVERIFY2(restored.has_value(), qPrintable(error));
+    QVERIFY(restored->segments == panel.segments);
+    QVERIFY(!restored->extensions.contains(QStringLiteral("segments")));
+    auto reversedRecord = record;
+    auto rows = record.value(QStringLiteral("segments")).toList();
+    std::reverse(rows.begin(), rows.end());
+    reversedRecord.insert(QStringLiteral("segments"), rows);
+    const auto reordered = PanelDefinition::fromLegacyMap(reversedRecord, &error);
+    QVERIFY2(reordered.has_value(), qPrintable(error));
+    QVERIFY(reordered->segments == panel.segments);
+}
+
+void PanelModelTest::invalidSegmentsFailClosed()
+{
+    auto panel = PanelDefinition::defaults(QStringLiteral("invalid-segments"),
+        QStringLiteral("Segments"), QStringLiteral("bottom"), false);
+    const auto main = panel.segments.first().toVariantMap();
+    const auto rejects = [&panel](const QVariant &segments) {
+        auto record = panel.toPersistedMap();
+        record.insert(QStringLiteral("segments"), segments);
+        return !PanelDefinition::fromLegacyMap(record).has_value();
+    };
+    QVERIFY(rejects(QStringLiteral("not-a-list")));
+    QVERIFY(rejects(QVariantList{}));
+    QVERIFY(rejects(QVariantList{QStringLiteral("not-a-map")}));
+    QVERIFY(rejects(QVariantList{main, main}));
+    for (const auto &change : QList<QPair<QString, QVariant>>{
+        {QStringLiteral("id"), QStringLiteral("../invalid")},
+        {QStringLiteral("source"), QStringLiteral("plugin")},
+        {QStringLiteral("padding"), 65}, {QStringLiteral("spacing"), -2},
+        {QStringLiteral("order"), 0.5}, {QStringLiteral("order"), true},
+        {QStringLiteral("order"), 1}, {QStringLiteral("background"), QStringLiteral("url")},
+        {QStringLiteral("color"), QStringLiteral("invalid")},
+        {QStringLiteral("corners"), QStringLiteral("invalid")},
+        {QStringLiteral("presentation"), QStringLiteral("invalid")},
+        {QStringLiteral("entryIds"), QVariantList{12}},
+        {QStringLiteral("entryIds"), QStringList{QStringLiteral("same"), QStringLiteral("same")}}})
+    {
+        auto invalid = main;
+        invalid.insert(change.first, change.second);
+        QVERIFY2(rejects(QVariantList{invalid}), qPrintable(change.first));
+    }
+    auto first = main;
+    first.insert(QStringLiteral("entryIds"), QStringList{QStringLiteral("same-entry")});
+    auto second = first;
+    second.insert(QStringLiteral("id"), QStringLiteral("second"));
+    second.insert(QStringLiteral("order"), 1);
+    QVERIFY(rejects(QVariantList{first, second}));
+    QVariantList excessive;
+    for (int i = 0; i < 17; ++i) {
+        auto value = main;
+        value.insert(QStringLiteral("id"), QStringLiteral("segment-%1").arg(i));
+        value.insert(QStringLiteral("order"), i);
+        excessive.append(value);
+    }
+    QVERIFY(rejects(excessive));
 }
 
 QTEST_APPLESS_MAIN(PanelModelTest)

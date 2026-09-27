@@ -1,6 +1,9 @@
 #include "PanelContentTransaction.h"
 
 #include <QSet>
+#include <QHash>
+
+#include <algorithm>
 
 #include <limits>
 
@@ -68,6 +71,100 @@ QString PanelContentTransaction::operationName(PanelContentOperation operation)
     return QStringLiteral("add");
 }
 
+QVariantList PanelContentTransaction::segmentEntries(
+    const PanelDefinition &definition, const QVariantList &entries,
+    QString *error, bool strict)
+{
+    if (error)
+        error->clear();
+    auto reject = [error](const QString &message) -> QVariantList {
+        if (error)
+            *error = message;
+        return {};
+    };
+    QString validationError;
+    if (!definition.isValid(&validationError))
+        return reject(validationError);
+
+    QHash<QString, QVariantMap> byId;
+    QStringList order;
+    for (const QVariant &value : entries)
+    {
+        const QVariantMap entry = value.toMap();
+        const QString id = entry.value(QStringLiteral("appId")).toString();
+        if (id.isEmpty() || byId.contains(id))
+            return reject(QStringLiteral("segment entries require unique host identities"));
+        byId.insert(id, entry);
+        order.append(id);
+    }
+    auto segments = definition.segments;
+    std::sort(segments.begin(), segments.end(), [](const auto &a, const auto &b) {
+        return a.order < b.order;
+    });
+    QHash<QString, QString> owners;
+    QHash<QString, QString> automatic;
+    QSet<QString> explicitClaims;
+    for (const auto &segment : segments)
+    {
+        if (segment.source == QStringLiteral("status"))
+            return reject(QStringLiteral("no segment status provider is available"));
+        if (segment.source != QStringLiteral("custom") && segment.entryIds.isEmpty())
+        {
+            if (automatic.contains(segment.source))
+                return reject(QStringLiteral("a content source may have only one automatic segment"));
+            automatic.insert(segment.source, segment.id);
+        }
+        for (const QString &id : segment.entryIds)
+        {
+            explicitClaims.insert(id);
+            if (!byId.contains(id))
+            {
+                if (strict)
+                    return reject(QStringLiteral("segment '%1' references a foreign or unavailable entry '%2'")
+                        .arg(segment.id, id));
+                continue;
+            }
+            const auto entry = byId.value(id);
+            if ((segment.source == QStringLiteral("launcher") && !entry.value(QStringLiteral("pinned")).toBool()) ||
+                (segment.source == QStringLiteral("tasks") && !entry.value(QStringLiteral("running")).toBool()))
+            {
+                if (strict)
+                    return reject(QStringLiteral("segment entry does not match its content source"));
+                continue;
+            }
+            owners.insert(id, segment.id);
+        }
+    }
+    for (const QString &id : order)
+    {
+        if (explicitClaims.contains(id))
+            continue;
+        const auto entry = byId.value(id);
+        QString owner;
+        if (entry.value(QStringLiteral("pinned")).toBool())
+            owner = automatic.value(QStringLiteral("launcher"));
+        if (owner.isEmpty() && entry.value(QStringLiteral("running")).toBool())
+            owner = automatic.value(QStringLiteral("tasks"));
+        if (owner.isEmpty())
+            owner = automatic.value(QStringLiteral("inherited"));
+        if (!owner.isEmpty())
+            owners.insert(id, owner);
+    }
+    QVariantList result;
+    for (const auto &segment : segments)
+    {
+        for (const QString &id : order)
+        {
+            if (owners.value(id) != segment.id)
+                continue;
+            QVariantMap entry = byId.value(id);
+            entry.insert(QStringLiteral("segmentId"), segment.id);
+            result.append(entry);
+        }
+    }
+    return result;
+}
+
 std::optional<PanelDefinition> PanelContentTransaction::prepare(
     const PanelDefinition &current,
     const PanelContentRequest &request,
@@ -93,6 +190,19 @@ std::optional<PanelDefinition> PanelContentTransaction::prepare(
 
     PanelDefinition candidate = current;
     QStringList order = currentOrder;
+    // Free panel entries are pinned content. Derive owners through the same
+    // partition used by the live host, without introducing another pin store.
+    QVariantList sourceEntries;
+    for (const QString &id : currentOrder)
+        sourceEntries.append(QVariantMap{{QStringLiteral("appId"), id},
+            {QStringLiteral("pinned"), true}});
+    QHash<QString, QString> owners;
+    for (const QVariant &value : segmentEntries(current, sourceEntries))
+    {
+        const auto entry = value.toMap();
+        owners.insert(entry.value(QStringLiteral("appId")).toString(),
+            entry.value(QStringLiteral("segmentId")).toString());
+    }
 
     switch (request.operation)
     {
@@ -151,6 +261,8 @@ std::optional<PanelDefinition> PanelContentTransaction::prepare(
             candidate.content.applicationIds.removeAll(entryId);
         }
         order.removeAll(entryId);
+        for (auto &segment : candidate.segments)
+            segment.entryIds.removeAll(entryId);
         break;
     }
     case PanelContentOperation::MoveBefore:
@@ -169,6 +281,12 @@ std::optional<PanelDefinition> PanelContentTransaction::prepare(
         if (entryId == beforeEntryId)
         {
             unchanged(outcome, currentOrder);
+            return std::nullopt;
+        }
+        if (!beforeEntryId.isEmpty() && owners.value(entryId) != owners.value(beforeEntryId))
+        {
+            fail(outcome, currentOrder, QStringLiteral("cross-segment-move"),
+                 QStringLiteral("change segment assignments through a settings transaction"));
             return std::nullopt;
         }
         order.removeAll(entryId);
@@ -209,6 +327,15 @@ std::optional<PanelDefinition> PanelContentTransaction::prepare(
         {
             unchanged(outcome, currentOrder);
             return std::nullopt;
+        }
+        for (qsizetype index = 0; index < requested.size(); ++index)
+        {
+            if (owners.value(requested.at(index)) != owners.value(currentOrder.at(index)))
+            {
+                fail(outcome, currentOrder, QStringLiteral("cross-segment-move"),
+                     QStringLiteral("reorder segments through a settings transaction"));
+                return std::nullopt;
+            }
         }
         order = requested;
         break;

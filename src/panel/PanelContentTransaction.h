@@ -61,6 +61,14 @@ public:
         const PanelContentRequest &request,
         PanelContentOutcome *outcome);
     [[nodiscard]] static QString operationName(PanelContentOperation operation);
+    // Partition authoritative host entries once. Explicit claims take priority;
+    // automatic sources receive only unclaimed entries. Strict mode validates
+    // a settings draft; runtime mode tolerates entries that have disappeared.
+    [[nodiscard]] static QVariantList segmentEntries(
+        const PanelDefinition &definition,
+        const QVariantList &entries,
+        QString *error = nullptr,
+        bool strict = false);
 };
 
 }

@@ -330,3 +330,40 @@ in `CURRENT_STATE.md`. The task build/log root remains for active continuation;
 final consolidated cleanup is still pending. No staging, commit, push, global
 installation, personal-desktop mutation or delegated agent was used. These
 private virtual-session results do not constitute hardware or release acceptance.
+
+## TASK-0038 consolidated closure — 2026-09-27
+
+**COMPLETE in the working tree; owner-controlled Git closure pending.** This
+section supersedes the September 23 Phase B/final-gate pending status above.
+TASK-0039 has not been planned or implemented.
+
+| Gate | Final evidence |
+| --- | --- |
+| Phase A | Historical fresh ON build and 71/71 tests, 266.85 s; committed by owner in `032420af` |
+| Phase B | Fresh ON build and 71/71 tests, 269.13 s |
+| Separate fresh integrated ON configure/build | PASS |
+| Final full serial CTest | PASS, 71/71, 272.29 s |
+| Final staged rendering and Studio | PASS, 84.86 s; segment preview ownership, reorder, Cancel, Apply and removal included |
+| Final grouped-window regression | PASS, 63.95 s |
+| Final native/free folder and segment interaction | PASS, 64.05 s; five folder layouts, exact document selection, guards/dismissal, independent surfaces/order, closed-segment hover/input and ownership rejection |
+| Optional-3D OFF | Fresh configure and application/shared-module build PASS; folder expansion, segment scene and preview checks 3/3 PASS, 2.56 s; full OFF suite was not repeated |
+| Model, persistence, rollback and capability contracts | PASS in both full ON suites |
+| Reduced motion and visible segment motion | PASS in shared QML tests, including rendered-frame assertions |
+| Final whitespace/consistency | `git diff --check` PASS; current-state acceptance matrix records all eight inherited criteria PASS |
+| Cleanup | 12 recorded private runtime roots absent, no retained processes, no remaining rendering-session roots; task build/log root and one diagnostic crash dump removed |
+
+The final gate includes corrections for animated segment-to-icon hover handoff,
+nested D-Bus segment values, absent optional descriptor bounds, private KWin
+probe lifetime and a verified service-name disappearance during cleanup. The
+last correction accepts only the exact cleanup race after confirming the name
+is still absent; capture/check/restart and process-identity checks remain strict.
+All live assertions had already passed in the interrupted cleanup run, and the
+corrected complete suite passed afterward. No test was skipped or weakened.
+
+`CURRENT_STATE.md` contains the acceptance matrix, changed-file groups and exact
+verification commands. Historical temporary paths were removed after recording
+the results. Baseline/final HEAD is
+`032420afeee8ac2453f4896a57da7c2e60cf213e`; changes are unstaged. No agents, Git
+writes, global installation or personal-desktop mutation were used. These are
+private virtual KWin/Plasma Wayland results, not physical GPU, monitor/hotplug,
+personal-desktop or release acceptance. Status providers remain TASK-0039 scope.

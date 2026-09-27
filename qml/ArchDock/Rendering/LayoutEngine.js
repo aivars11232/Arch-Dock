@@ -439,6 +439,58 @@ function entryGeometry(layout, index, count, rawGeometry, angle, polygonSides,
     };
 }
 
+// Compose independently padded runs using the same metrics and entry outputs
+// as an ordinary panel. Entries already carry backend-validated segment IDs.
+function segmentGeometry(segments, entries, layout, size, spacing, scale,
+                         padding, vertical, angle, orientation, profile, edge) {
+    const records = (segments || []).slice(0, 16).sort(function(a, b) {
+        return Number(a.order || 0) - Number(b.order || 0);
+    });
+    const runs = [];
+    const outputs = [];
+    let length = 0;
+    let thickness = 0;
+    const gap = Math.max(0, finite(spacing, 8));
+    for (const segment of records) {
+        const indices = [];
+        for (let i = 0; i < entries.length; ++i)
+            if (String(entries[i].segmentId || "main") === String(segment.id))
+                indices.push(i);
+        const local = metrics(layout, indices.length, size,
+            Number(segment.spacing) >= 0 ? segment.spacing : spacing, scale,
+            0, 1, Number(segment.padding) >= 0 ? segment.padding : padding,
+            vertical, angle, 6);
+        runs.push({ id: String(segment.id), definition: segment, geometry: local,
+            indices: indices, x: vertical ? 0 : length, y: vertical ? length : 0,
+            width: local.width, height: local.height });
+        length += (vertical ? local.height : local.width) + gap;
+        thickness = Math.max(thickness, vertical ? local.width : local.height);
+    }
+    const combined = metrics(layout, entries.length, size, spacing, scale,
+        0, 1, padding, vertical, 0, 6);
+    combined.width = Math.max(1, vertical ? thickness : length - gap);
+    combined.height = Math.max(1, vertical ? length - gap : thickness);
+    for (const run of runs) {
+        if (vertical) run.x = (thickness - run.width) / 2;
+        else run.y = (thickness - run.height) / 2;
+        for (let i = 0; i < run.indices.length; ++i) {
+            const output = entryGeometry(layout, i, run.indices.length,
+                run.geometry, angle, 6, orientation, profile, edge);
+            output.x += run.x;
+            output.y += run.y;
+            output.position = { x: output.x, y: output.y };
+            output.entryBounds = { x: output.x, y: output.y,
+                width: run.geometry.iconSize, height: run.geometry.iconSize };
+            output.bounds = output.panelBounds = output.safeInputRegion = {
+                x: run.x, y: run.y, width: run.width, height: run.height };
+            output.depthOrder += run.y;
+            output.segmentId = run.id;
+            outputs[run.indices[i]] = output;
+        }
+    }
+    return { geometry: combined, segments: runs, entries: outputs };
+}
+
 function position(layout, index, count, geometry, angle, polygonSides,
                   pathOrientation, compatibilityProfile, edge) {
     const result = entryGeometry(

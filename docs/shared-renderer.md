@@ -565,5 +565,45 @@ controlled documents in all five layouts on native/free hosts, covered four
 native edges and free ring/arc hosts, checked stable service lifetime, popup
 guards, stack keyboard selection, outside/Escape dismissal and empty folders.
 Model/backend tests cover deleted/unavailable paths and stale/unsafe children;
-shared QML tests cover reduced motion and bounded dense layouts. Independent
-panel segments remain Phase B work.
+shared QML tests cover reduced motion and bounded dense layouts. Segment
+implementation is described below; current verification is in `CURRENT_STATE.md`.
+
+
+## Independent segments — TASK-0038 Phase B
+
+`PanelDefinition.segments` stores 1–16 typed records with stable IDs, contiguous
+order, content source, exclusive entry claims, background/color, padding/spacing,
+corners, open/closed resting state and optional motion profile. Existing records
+migrate idempotently to one inherited segment. That default keeps the original
+scene path, dimensions, input anchors and pixels.
+
+`PanelContentTransaction.segmentEntries` partitions the host's authoritative
+entries once. Explicit claims reserve identity even when their launcher/task
+source temporarily stops matching. Automatic sources receive only remaining
+entries; custom groups receive only explicitly assigned entries. Duplicate or
+foreign claims fail before persistence. Missing running windows stay absent.
+Native shared pins and free-panel content retain their existing authorities;
+entry reordering cannot cross segment ownership.
+
+`LayoutEngine.segmentGeometry` composes bounded runs using the existing metrics
+and entry geometry. `PanelScene` uses those same outputs for surfaces, delegates,
+input targets and popup anchors. `PanelSegment` reuses presentation, clipping
+and animation controllers. A closed segment hides/disables its entries and opens
+on hover; its background and owning entry share hover state so an animated
+handoff cannot close beneath the icon. Popup, drag and Edit Mode guards keep it
+open. Pulse/breathe affect surface pixels while logical targets stay fixed;
+reduced motion suppresses continuous movement.
+
+Segment customization is available for horizontal/vertical/adaptive procedural
+surfaces. Sources are filtered by actual host/content capabilities. Status is
+hidden until a real provider exists; no status data is fabricated. Artwork,
+true-3D and nonlinear segment surfaces are unavailable. Solid backgrounds offer
+square/rounded/capsule corners; inherited backgrounds use the panel renderer.
+Unsupported requests are also rejected by the backend.
+
+Studio edits nested segment drafts through the existing revisioned transaction.
+Add/remove/reorder, appearance and exclusive entry assignment update the embedded
+preview; Apply persists atomically and Cancel restores the prior record. Optional
+schema bounds are omitted from exported descriptors when absent, allowing the
+same snapshots to be serialized over D-Bus. Nested segment variants are decoded
+at the existing backend boundary and then checked by the typed model.

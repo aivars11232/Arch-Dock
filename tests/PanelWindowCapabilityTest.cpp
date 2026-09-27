@@ -95,6 +95,7 @@ private slots:
     void cleanup();
     void backendResolutionMatchesDirectResolverWithoutWrites();
     void editorSnapshotsExposeOnlyProjectedEditableState();
+    void segmentsUseRevisionedTransactionsAndHostAuthority();
     void managedVersionTwoCapabilitiesDriveFallbackAndEditorVisibility();
     void rendererProjectionPreservesConsumedValuesWithoutProtectedState();
     void editorDraftResolutionIsReadOnlyAndCannotAuthorizeHiddenState();
@@ -1334,6 +1335,128 @@ void PanelWindowCapabilityTest::rejectedCapabilityTransactionStopsBeforePersiste
     QCOMPARE(configurationAfter.value(QStringLiteral("settingsRevision")).toULongLong(),
              revisionBefore);
     QCOMPARE(settingsSnapshot(), settingsBefore);
+}
+
+void PanelWindowCapabilityTest::segmentsUseRevisionedTransactionsAndHostAuthority()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(qEnvironmentVariable("QML_IMPORT_PATH",
+        QCoreApplication::applicationDirPath() + QStringLiteral("/qml-imports")));
+    PanelWindow window(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("panelRegistry")).value<QObject *>());
+    QVERIFY(registry);
+    const QString panelId = registry->addFreePanel();
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    const QString url = QUrl::fromLocalFile(folder.path()).toString();
+    QVERIFY(window.addPanelEntries(panelId, {url}));
+    const QString entryId = ArchDock::PanelContent::urlEntryId(url);
+    auto base = *registry->panelDefinition(panelId);
+    ArchDock::PanelSegmentDefinition custom;
+    custom.id = QStringLiteral("files");
+    custom.source = QStringLiteral("custom");
+    custom.order = 1;
+    custom.entryIds = {entryId};
+    custom.background = QStringLiteral("solid");
+    custom.padding = 12;
+    const QVariantList segments{base.segments.first().toVariantMap(), custom.toVariantMap()};
+    const auto applied = window.applyPanelSettingsTransaction(panelId, base.settingsRevision,
+        {{QStringLiteral("layout"), QStringLiteral("horizontal")},
+         {QStringLiteral("type"), QStringLiteral("launcher")},
+         {QStringLiteral("segments"), segments}});
+    QVERIFY2(applied.value("success").toBool(), qPrintable(QString::fromUtf8(canonicalBytes(applied))));
+    QCOMPARE(registry->panelDefinition(panelId)->settingsRevision, base.settingsRevision + 1);
+    QCOMPARE(registry->panelDefinition(panelId)->segments.size(), 2);
+    QCOMPARE(window.dockEntriesForPanel(panelId, QStringLiteral("launcher")).first()
+        .toMap().value("segmentId").toString(), QStringLiteral("files"));
+    const auto persisted = registry->panelDefinition(panelId)->toPersistedMap();
+    const auto stale = window.applyPanelSettingsTransaction(panelId, base.settingsRevision,
+        {{QStringLiteral("segments"), segments}});
+    QCOMPARE(stale.value("errorCode").toString(), QStringLiteral("stale-revision"));
+    QCOMPARE(registry->panelDefinition(panelId)->toPersistedMap(), persisted);
+    const auto revision = registry->panelDefinition(panelId)->settingsRevision;
+    for (const auto &bad : {
+        QVariantMap{{"entryIds", QStringList{QStringLiteral("foreign-entry")}}},
+        QVariantMap{{"source", QStringLiteral("status")}, {"entryIds", QStringList{}}},
+        QVariantMap{{"motionProfile", QStringLiteral("missing-profile")}}})
+    {
+        auto invalid = custom.toVariantMap();
+        for (auto it = bad.cbegin(); it != bad.cend(); ++it)
+            invalid.insert(it.key(), it.value());
+        const auto rejected = window.applyPanelSettingsTransaction(panelId, revision,
+            {{QStringLiteral("segments"), QVariantList{base.segments.first().toVariantMap(), invalid}}});
+        QVERIFY(!rejected.value("success").toBool());
+        QCOMPARE(registry->panelDefinition(panelId)->toPersistedMap(), persisted);
+    }
+    const auto radial = window.applyPanelSettingsTransaction(panelId, revision,
+        {{QStringLiteral("layout"), QStringLiteral("ring")}});
+    QCOMPARE(radial.value("errorCode").toString(), QStringLiteral("unavailable-segment-feature"));
+    QCOMPARE(registry->panelDefinition(panelId)->toPersistedMap(), persisted);
+    auto first = base.segments.first();
+    first.order = 1;
+    custom.order = 0;
+    QVERIFY(window.applyPanelSettingsTransaction(panelId, revision,
+        {{QStringLiteral("segments"), QVariantList{first.toVariantMap(), custom.toVariantMap()}}})
+        .value("success").toBool());
+    QCOMPARE(registry->panelDefinition(panelId)->segments.first().id, QStringLiteral("files"));
+    PanelRegistry reloaded;
+    QCOMPARE(reloaded.panelDefinition(panelId)->segments, registry->panelDefinition(panelId)->segments);
+    const auto native = window.panelSettingsEditorSnapshot(QStringLiteral("bottom"), QStringLiteral("studio"));
+    const auto descriptor = fieldByKey(native.value("panelFields").toList(), QStringLiteral("segments"));
+    QVERIFY(descriptor.value("segmentCapabilities").toMap().value("available").toBool());
+    QVERIFY(!descriptor.value("segmentCapabilities").toMap().value("sources").toStringList().contains(QStringLiteral("status")));
+    first.order = 0;
+    QVERIFY(window.applyPanelSettingsTransaction(panelId, revision + 1,
+        {{QStringLiteral("segments"), QVariantList{first.toVariantMap()}}}).value("success").toBool());
+    QCOMPARE(window.dockEntriesForPanel(panelId, QStringLiteral("launcher")).first()
+        .toMap().value("segmentId").toString(), QStringLiteral("main"));
+    if (qEnvironmentVariableIsEmpty("ARCHDOCK_PRIVATE_INTERACTION_TEST"))
+        return;
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> popup(component.createWithInitialProperties({
+        {QStringLiteral("selectedPanelId"), panelId}, {QStringLiteral("mainTabIndex"), 1},
+        {QStringLiteral("subTabIndex"), 5}}));
+    QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
+    auto *studio = qobject_cast<QQuickWindow *>(popup.get());
+    QVERIFY(studio);
+    studio->show();
+    QVERIFY(QTest::qWaitForWindowExposed(studio));
+    QVERIFY(QQuickTest::qWaitForPolish(studio));
+    const auto candidate = [&]() {
+        return popup->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap();
+    };
+    const auto action = [&](const QString &name, int index = 0) {
+        return QMetaObject::invokeMethod(popup.get(), "performStudioAction",
+            Q_ARG(QVariant, name), Q_ARG(QVariant, (QVariantMap{{QStringLiteral("segmentIndex"), index}})));
+    };
+    const auto beforeStudio = registry->panelDefinition(panelId)->toPersistedMap();
+    QVERIFY(action(QStringLiteral("segment-add")));
+    QTRY_COMPARE(candidate().value("segments").toList().size(), 2);
+    QVERIFY(popup->property("studioError").toString().isEmpty());
+    QCOMPARE(registry->panelDefinition(panelId)->toPersistedMap(), beforeStudio);
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue",
+        Q_ARG(QVariant, (QVariantMap{{"segmentIndex", 1}, {"entryId", entryId}})), Q_ARG(QVariant, true)));
+    QTRY_COMPARE(candidate().value("segmentEntries").toList().first().toMap()
+        .value("segmentId").toString(), QStringLiteral("segment-1"));
+    QVERIFY(action(QStringLiteral("segment-up"), 1));
+    QCOMPARE(candidate().value("segments").toList().first().toMap().value("id").toString(),
+        QStringLiteral("segment-1"));
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "cancelStudioChanges"));
+    QCOMPARE(registry->panelDefinition(panelId)->toPersistedMap(), beforeStudio);
+    studio->show();
+    QVERIFY(QTest::qWaitForWindowExposed(studio));
+    QTRY_COMPARE(candidate().value("segments").toList().size(), 1);
+    QVERIFY(action(QStringLiteral("segment-add")));
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "applyStudioChanges"));
+    QTRY_COMPARE(registry->panelDefinition(panelId)->segments.size(), 2);
+    QVERIFY(!popup->property("hasPendingChanges").toBool());
+    QVERIFY(action(QStringLiteral("segment-remove"), 1));
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "applyStudioChanges"));
+    QTRY_COMPARE(registry->panelDefinition(panelId)->segments.size(), 1);
+    studio->close();
+    qInfo() << "Private Studio segment draft, preview ownership, reorder, Cancel, Apply and removal passed";
 }
 
 void PanelWindowCapabilityTest::iconOverridesCommitResolveAndResetOneEntryOnly()

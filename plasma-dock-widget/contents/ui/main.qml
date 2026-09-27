@@ -89,6 +89,7 @@ PlasmoidItem {
         hoveredEntry: hoveredIndex,
         editMode: plasmaEditMode,
         dragInProgress: entryDragActive || panelDropActive,
+        popupOpen: presentationController.popupOpen || presentationController.windowPreviewOpen,
         rendererFallback: "",
         presentationState: presentationController.surfaceState,
         transitionState: presentationController.transitionState,
@@ -443,7 +444,7 @@ PlasmoidItem {
             callDock("movePanelEntryBefore", [panelId, movedId, beforeId], refresh);
             return;
         }
-        callDock("moveDockEntryBefore", [appId, beforeAppId], refresh);
+        callDock("movePanelEntryBefore", [panelId, appId, beforeAppId], refresh);
     }
 
     function pinDroppedUrls(urls) {

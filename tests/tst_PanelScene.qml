@@ -1,4 +1,5 @@
 import QtQuick 2.15
+import QtQuick.Window
 import QtTest 1.3
 import ArchDock.Rendering 1.0
 
@@ -14,6 +15,140 @@ TestCase {
         id: sceneComponent
 
         PanelScene {}
+    }
+
+    function test_inheritedSegmentPreservesScene() {
+        const ordinary = createTemporaryObject(sceneComponent, testCase, {
+            panelDefinition: definition(), orderedEntries: entries()
+        })
+        const inherited = createTemporaryObject(sceneComponent, testCase, {
+            panelDefinition: definition({ segments: [{ id: "main", source: "inherited",
+                padding: -1, spacing: -1, background: "inherited", corners: "inherited",
+                presentation: "open", motionProfile: "" }] }), orderedEntries: entries()
+        })
+        verify(ordinary && inherited)
+        verify(!inherited.segmentedScene)
+        compare(inherited.width, ordinary.width)
+        compare(inherited.height, ordinary.height)
+        compare(JSON.stringify(inherited.entryRects), JSON.stringify(ordinary.entryRects))
+        compare(JSON.stringify(inherited.popupAnchors), JSON.stringify(ordinary.popupAnchors))
+        wait(50)
+        verify(grabImage(inherited).equals(grabImage(ordinary)))
+    }
+
+    function test_segmentMotionChangesPixelsAndHonorsReducedMotion() {
+        const items = entries().slice(0, 1)
+        items[0].segmentId = "main"
+        const config = definition({ segments: [{ id: "main", order: 0,
+            background: "solid", color: "#226688", padding: 20,
+            spacing: -1, corners: "rounded", presentation: "open", motionProfile: "pulse" }] })
+        const window = createTemporaryObject(motionWindowComponent, testCase)
+        verify(waitForRendering(window.contentItem))
+        const scene = createTemporaryObject(sceneComponent, window.contentItem, {
+            x: 70, y: 80, panelDefinition: config, orderedEntries: items,
+            animationProfiles: { animationProfiles: [{ id: "pulse", target: "icon", trigger: "hover-hold",
+                reducedMotion: { mode: "none" }, tracks: [{ id: "scale", property: "scale",
+                    from: 1, to: 1.16, duration: 250, easing: "linear" }] }] }
+        })
+        verify(scene)
+        mouseMove(window.contentItem, 350, 300)
+        wait(30)
+        const before = grabImage(scene)
+        const segment = scene.segmentSurfaces.itemAt(0)
+        mouseMove(segment, segment.width / 2, segment.height / 2)
+        tryVerify(function() { return segment.visualMotion.scale > 1.05 })
+        wait(30)
+        verify(!grabImage(scene).equals(before), "segment motion must change the rendered frame")
+        scene.panelDefinition = Object.assign({}, config, { reducedMotion: true })
+        tryCompare(scene.segmentSurfaces.itemAt(0), "reducedMotion", true)
+        tryVerify(function() { return scene.segmentSurfaces.itemAt(0).visualMotion.scale === 1 })
+        wait(30)
+        const still = grabImage(scene)
+        wait(150)
+        verify(grabImage(scene).equals(still))
+    }
+
+    Component {
+        id: motionWindowComponent
+        Window { width: 360; height: 320; visible: true }
+    }
+
+    Component {
+        id: pointerEntryComponent
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            enabled: parent.sceneInputEnabled
+            onEntered: parent.sceneContext.scene.runtimeState = ({ hoveredEntry: parent.sceneIndex })
+            onExited: parent.sceneContext.scene.runtimeState = ({ hoveredEntry: -1 })
+        }
+    }
+
+    function test_closedSegmentKeepsEntryHover() {
+        const window = createTemporaryObject(motionWindowComponent, testCase)
+        verify(waitForRendering(window.contentItem))
+        const items = entries().slice(0, 1)
+        items[0].segmentId = "main"
+        const scene = createTemporaryObject(sceneComponent, window.contentItem, {
+            x: 70, y: 80, orderedEntries: items, entryDelegate: pointerEntryComponent,
+            panelDefinition: definition({ reducedMotion: false, segments: [{ id: "main", order: 0,
+                background: "solid", color: "#226688", padding: 20, spacing: -1,
+                corners: "rounded", presentation: "closed", motionProfile: "" }] })
+        })
+        scene.entryDelegateContext = { scene: scene }
+        const segment = scene.segmentSurfaces.itemAt(0)
+        mouseMove(window.contentItem, 350, 300)
+        tryCompare(segment, "expanded", false)
+        mouseMove(segment, segment.width / 2, segment.height / 2)
+        tryVerify(function() { return scene.runtimeState.hoveredEntry === 0 })
+        wait(200)
+        compare(segment.expanded, true)
+        compare(scene.entryItemAt(0).sceneInputEnabled, true)
+        mouseMove(window.contentItem, 350, 300)
+        tryCompare(segment, "expanded", false)
+    }
+
+    function test_independentSegmentsOwnSurfacesAndInput() {
+        const items = entries()
+        items[0].segmentId = "launchers"
+        items[1].segmentId = "tasks"
+        items[2].segmentId = "tasks"
+        const scene = createTemporaryObject(sceneComponent, testCase, {
+            panelDefinition: definition({ reducedMotion: true, segments: [
+                { id: "launchers", order: 0, padding: 8, spacing: 2,
+                  background: "solid", color: "#226688", corners: "square", presentation: "open" },
+                { id: "tasks", order: 1, padding: 20, spacing: 14,
+                  background: "solid", color: "#883322", corners: "capsule", presentation: "closed" }
+            ] }), orderedEntries: items, entryDelegate: hostEntryComponent
+        })
+        verify(scene !== null)
+        verify(scene.segmentedScene)
+        compare(scene.segmentSurfaces.count, 2)
+        const first = scene.segmentSurfaces.itemAt(0)
+        const second = scene.segmentSurfaces.itemAt(1)
+        compare(first.cornerRadius, 0)
+        compare(second.cornerRadius, second.height / 2)
+        verify(second.x >= first.x + first.width)
+        tryVerify(function() { return !second.expanded })
+        verify(scene.entryItemAt(0).sceneInputEnabled)
+        verify(!scene.entryItemAt(1).sceneInputEnabled)
+        verify(!scene.entryItemAt(2).visible)
+        second.forceOpen = true
+        tryVerify(function() { return second.expanded })
+        tryVerify(function() { return scene.entryItemAt(1).sceneInputEnabled })
+        const owner = scene.entryItemAt(1)
+        const updated = JSON.parse(JSON.stringify(items))
+        updated[1].active = false
+        scene.orderedEntries = updated
+        compare(scene.entryItemAt(1), owner)
+        compare(scene.segmentSurfaces.itemAt(1), second)
+        scene.runtimeState = { popupOpen: true }
+        second.forceOpen = false
+        verify(second.expanded)
+        scene.runtimeState = {}
+        tryVerify(function() { return !second.expanded })
+        compare(scene.entryGeometryAt(1).segmentId, "tasks")
+        compare(scene.entryGeometryAt(0).segmentId, "launchers")
     }
 
     Component {

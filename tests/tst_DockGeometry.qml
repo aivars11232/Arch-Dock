@@ -5,6 +5,36 @@ import ArchDock.Rendering 1.0
 TestCase {
     name: "DockGeometry"
 
+    function test_segmentGeometryKeepsIndependentBounds() {
+        const definitions = [
+            { id: "second", order: 1, padding: 20, spacing: 14 },
+            { id: "first", order: 0, padding: 4, spacing: 2 }
+        ]
+        const entries = [{ segmentId: "first" }, { segmentId: "second" }, { segmentId: "second" }]
+        for (const vertical of [false, true]) {
+            const layout = vertical ? "vertical" : "horizontal"
+            const result = LayoutEngine.segmentGeometry(definitions, entries,
+                layout, 40, 8, 1, 12, vertical, 0, "upright", "canonical", "bottom")
+            compare(result.segments[0].id, "first")
+            compare(result.segments[1].id, "second")
+            compare(result.entries[0].segmentId, "first")
+            compare(result.entries[1].segmentId, "second")
+            const axis = vertical ? "y" : "x"
+            const extent = vertical ? "height" : "width"
+            compare(result.segments[0][extent], 48)
+            compare(result.segments[1][extent], 134)
+            compare(result.segments[1][axis], 56)
+            compare(result.geometry[extent], 190)
+            compare(result.entries[2].position[axis] - result.entries[1].position[axis], 54)
+            for (const entry of result.entries) {
+                verify(entry.x >= entry.panelBounds.x)
+                verify(entry.y >= entry.panelBounds.y)
+                verify(entry.x + 40 <= entry.panelBounds.x + entry.panelBounds.width)
+                verify(entry.y + 40 <= entry.panelBounds.y + entry.panelBounds.height)
+            }
+        }
+    }
+
     function test_folderExpansionBoundsAndFallback() {
         for (const layout of ["fan", "grid", "stack", "arc", "ring"]) {
             for (const count of [0, 1, 8, 48]) {

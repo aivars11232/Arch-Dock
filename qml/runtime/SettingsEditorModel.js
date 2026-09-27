@@ -50,6 +50,18 @@ function equivalent(left, right) {
         return true;
     if (typeof left === "number" && typeof right === "number")
         return Math.abs(left - right) < 0.000001;
+    if (left !== null && right !== null && typeof left === "object" && typeof right === "object") {
+        const leftKeys = Object.keys(left).sort();
+        const rightKeys = Object.keys(right).sort();
+        if (leftKeys.length !== rightKeys.length)
+            return false;
+        for (let index = 0; index < leftKeys.length; ++index) {
+            const key = leftKeys[index];
+            if (key !== rightKeys[index] || !equivalent(left[key], right[key]))
+                return false;
+        }
+        return true;
+    }
     return false;
 }
 
@@ -263,6 +275,11 @@ function rendererCandidate(session) {
     result.iconStyleDefinition = copyValue(
         session.iconStyleDefinition || {});
     result.animationProfiles = copyValue(session.animationProfiles || []);
+    const segments = (session.panelFields || []).find(function(field) { return field.key === "segments"; });
+    if (segments) {
+        result.segmentCapabilities = copyValue(segments.segmentCapabilities || {});
+        result.segmentEntries = copyValue(segments.segmentEntries || []);
+    }
     return result;
 }
 

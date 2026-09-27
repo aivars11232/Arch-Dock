@@ -25,6 +25,33 @@ def instrument_interaction_stage(stage):
 
     insert("main.qml", "id: windowPreview", "\n                observedPanelId: root.panelId\n                observedActive: representation.authoritativeHost")
     insert("main.qml", "id: folderExpansion", "\n                observedPanelId: root.panelId\n                observedActive: representation.authoritativeHost")
+    insert("main.qml", "id: panelScene", '''
+                Timer {
+                    interval: 100; running: true; repeat: true
+                    property int sample: 0
+                    onTriggered: {
+                        if (!representation.authoritativeHost || !panelScene.segmentedScene) return;
+                        const segments = [];
+                        for (let i = 0; i < panelScene.segmentSurfaces.count; ++i) {
+                            const segment = panelScene.segmentSurfaces.itemAt(i);
+                            const center = segment.mapToItem(null, segment.width / 2, segment.height / 2);
+                            segments.push({id: segment.definition.id, expanded: segment.expanded,
+                                color: segment.definition.color, corners: segment.definition.corners,
+                                center: [center.x, center.y], width: segment.width, height: segment.height,
+                                motion: segment.visualMotion, reducedMotion: segment.reducedMotion});
+                        }
+                        const entries = [];
+                        for (let i = 0; i < panelScene.entryCount; ++i) {
+                            const item = panelScene.entryItemAt(i);
+                            entries.push({app: item.sceneEntry.appId, segment: item.sceneEntry.segmentId,
+                                input: item.sceneInputEnabled, visible: item.visible});
+                        }
+                        console.warn("ArchDockInteraction " + JSON.stringify({kind: "segments", panel: root.panelId,
+                            sample: ++sample, segments: segments, entries: entries,
+                            hostSize: [panelScene.Window.window.width, panelScene.Window.window.height]}));
+                    }
+                }
+''')
     insert("FolderExpansionHost.qml", "id: root", '\n    property string observedPanelId: ""\n    property bool observedActive: false')
     insert("FolderExpansionHost.qml", "id: content", '''
         Timer {
@@ -61,7 +88,6 @@ def instrument_interaction_stage(stage):
     }
     Timer {
         interval: 100; running: true; repeat: true
-        property int sample: 0
         onTriggered: {
             if (!root.visible || !root.inputEnabled) return;
             const center = root.mapToItem(null, root.width / 2, root.height / 2);
@@ -74,7 +100,7 @@ def instrument_interaction_stage(stage):
                     actions[item.objectName] = [point.x, point.y];
                 }
             }
-            const value = JSON.stringify({kind: "entry", panel: root.observedPanelId, sample: ++sample,
+            const value = JSON.stringify({kind: "entry", panel: root.observedPanelId, sample: Date.now(),
                 app: root.entry.appId, center: [center.x, center.y],
                 hostSize: [root.Window.window.width, root.Window.window.height],
                 menuSize: [contextMenu.width, contextMenu.height],
@@ -260,50 +286,64 @@ def run_interaction_matrix(free_panel):
     def panel_call(method, signature="()", args=()):
         return call("org.archdock.ArchDock", "/Control", "local.PanelWindow", method, signature, args)
 
+    geometry = {"sample": 0, "value": {}, "close": "", "registration": 0}
+    geometry_plugin = "org.archdock.interaction-geometry"
+    geometry_script = root / "geometry-probe.js"
+
     def kwin_geometry(close_studio_id=""):
-        result = []
-        interface = Gio.DBusNodeInfo.new_for_xml('''<node><interface name="org.archdock.InteractionProbe">
-            <method name="observe"><arg type="s" direction="in"/></method>
-            </interface></node>''').interfaces[0]
+        if not geometry["registration"]:
+            interface = Gio.DBusNodeInfo.new_for_xml('''<node><interface name="org.archdock.InteractionProbe">
+                <method name="observe"><arg type="s" direction="in"/><arg type="s" direction="out"/></method>
+                </interface></node>''').interfaces[0]
 
-        def observed(_connection, _sender, _path, _interface, _method, parameters, invocation):
-            result.append(json.loads(parameters.unpack()[0]))
-            invocation.return_value(None)
+            def observed(_connection, _sender, _path, _interface, _method, parameters, invocation):
+                geometry["value"] = json.loads(parameters.unpack()[0])
+                geometry["sample"] += 1
+                invocation.return_value(GLib.Variant("(s)", (geometry["close"],)))
+                geometry["close"] = ""
 
-        registration = bus.register_object("/InteractionProbe", interface, observed, None, None)
-        script = root / "geometry-probe.js"
-        script.write_text("const closeId = " + json.dumps(close_studio_id) + ''';
-            if (closeId) {
-                const studio = workspace.windowList().find(function(w) {
-                    return w.internalId.toString() === closeId && w.resourceClass === "arch-dock"
-                        && w.caption === "Arch Dock Panel Studio";
+            geometry["registration"] = bus.register_object("/InteractionProbe", interface, observed, None, None)
+            # KWin allocates script IDs from its live count. Keep one observer
+            # throughout the matrix rather than repeatedly recycling IDs.
+            geometry_script.write_text('''function observe() {
+                callDBus(''' + json.dumps(bus.get_unique_name()) + ''',
+                "/InteractionProbe", "org.archdock.InteractionProbe", "observe",
+                JSON.stringify({cursor: workspace.cursorPos, windows: workspace.windowList().map(function(w) {
+                    return {id: w.internalId.toString(), caption: w.caption, app: w.resourceClass, layer: w.layer,
+                            popup: w.popupWindow, x:w.frameGeometry.x, y:w.frameGeometry.y,
+                            width:w.frameGeometry.width, height:w.frameGeometry.height,
+                            buffer:[w.bufferGeometry.x,w.bufferGeometry.y,w.bufferGeometry.width,w.bufferGeometry.height]};
+                })}), function(closeId) {
+                    if (!closeId) return;
+                    const studio = workspace.windowList().find(function(w) {
+                        return w.internalId.toString() === closeId && w.resourceClass === "arch-dock"
+                            && w.caption === "Arch Dock Panel Studio";
+                    });
+                    if (studio) studio.closeWindow();
                 });
-                if (studio) studio.closeWindow();
             }
-            callDBus(''' + json.dumps(bus.get_unique_name()) + ''',
-            "/InteractionProbe", "org.archdock.InteractionProbe", "observe",
-            JSON.stringify({cursor: workspace.cursorPos, windows: workspace.windowList().map(function(w) {
-                return {id: w.internalId.toString(), caption: w.caption, app: w.resourceClass, layer: w.layer,
-                        popup: w.popupWindow, x:w.frameGeometry.x, y:w.frameGeometry.y,
-                        width:w.frameGeometry.width, height:w.frameGeometry.height,
-                        buffer:[w.bufferGeometry.x,w.bufferGeometry.y,w.bufferGeometry.width,w.bufferGeometry.height]};
-            })}));''')
-        plugin = "org.archdock.interaction-geometry"
-        try:
+            const timer = new QTimer();
+            timer.interval = 50;
+            timer.timeout.connect(observe);
+            timer.start();
+            observe();''')
             script_id = call("org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting",
-                             "loadScript", "(ss)", (str(script), plugin))
+                             "loadScript", "(ss)", (str(geometry_script), geometry_plugin))
             assert script_id >= 0
             call("org.kde.KWin", "/Scripting/Script" + str(script_id), "org.kde.kwin.Script", "run")
-            wait_for(lambda: result, "native geometry observation")
-            return result[0]
-        finally:
-            call("org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting", "unloadScript", "(s)", (plugin,))
-            bus.unregister_object(registration)
-            script.unlink()
+        geometry["close"] = close_studio_id
+        previous = geometry["sample"]
+        wait_for(lambda: geometry["sample"] > previous, "native geometry observation")
+        return geometry["value"]
 
     def values(mapping):
-        return {key: GLib.Variant("b" if isinstance(value, bool) else "i" if isinstance(value, int) else "s", value)
-                for key, value in mapping.items()}
+        def variant(value):
+            if isinstance(value, dict):
+                return GLib.Variant("a{sv}", values(value))
+            if isinstance(value, list):
+                return GLib.Variant("av", [variant(item) for item in value])
+            return GLib.Variant("b" if isinstance(value, bool) else "i" if isinstance(value, int) else "s", value)
+        return {key: variant(value) for key, value in mapping.items()}
 
     def native_point(size, point, is_menu=False, edge=None, current_target=None):
         def mapped_window():
@@ -502,6 +542,76 @@ def run_interaction_matrix(free_panel):
         assert not marker.exists()
         print("PASS: empty folder remains a dismissible popup without launching its root", flush=True)
 
+        other = root / "Other segment folder"
+        other.mkdir()
+        assert panel_call("pinDockUrls", "(as)", ([other.as_uri()],))
+        assert panel_call("pinPanelUrls", "(sas)", (free_panel, [other.as_uri()]))
+        for panel in ("bottom", free_panel):
+            baseline = {"id": "main", "source": "inherited", "order": 0, "entryIds": [],
+                        "background": "solid", "color": "#226688", "corners": "square",
+                        "padding": 8, "spacing": 4, "presentation": "open", "motionProfile": ""}
+            files = {"id": "files", "source": "custom", "order": 1,
+                     "entryIds": [folder_app_ids[panel]], "background": "solid", "color": "#883322",
+                     "corners": "capsule", "padding": 20, "spacing": 12,
+                     "presentation": "closed", "motionProfile": "pulse"}
+            configure(panel, {"layout": "horizontal", "rendererTier": "procedural2d",
+                              "panelThemeId": "", "completeThemeId": "", "presentationMode": "open",
+                              "collapseMechanism": "open", "segments": [baseline, files]})
+            assert panel_call("requestPanelPresentation", "(ss)", (panel, "open"))
+
+            def segmented():
+                return observations.get(("segments", panel, ""), {})
+
+            state = wait_for(lambda: segmented() if len(segmented().get("segments", [])) == 2 else None,
+                             "native/free independent segment surfaces")
+            assert [item["id"] for item in state["segments"]] == ["main", "files"]
+            assert [item["color"] for item in state["segments"]] == ["#226688", "#883322"]
+            assert len({item["app"] for item in state["entries"]}) == len(state["entries"])
+            assert next(item for item in state["entries"] if item["app"] == folder_app_ids[panel])["segment"] == "files"
+            click([1200, 500])
+            wait_for(lambda: not segmented()["segments"][1]["expanded"], "closed segment rests independently")
+            assert not next(item for item in segmented()["entries"] if item["app"] == folder_app_ids[panel])["input"]
+
+            def segment_target():
+                state = segmented()
+                return state["hostSize"], state["segments"][1]["center"]
+
+            point = native_point(*segment_target(), current_target=segment_target)
+            previous_entry_sample = entry(panel).get("sample", 0)
+            lib.ei_device_pointer_motion_absolute(devices[2], *point)
+            lib.ei_device_frame(devices[2], lib.ei_now(context))
+            sync_input()
+            wait_for(lambda: segmented()["segments"][1]["expanded"], "native pointer opens the closed segment")
+            wait_for(lambda: next(item for item in segmented()["entries"]
+                if item["app"] == folder_app_ids[panel])["input"], "opened segment enables its entry")
+            wait_for(lambda: entry(panel).get("sample", 0) > previous_entry_sample,
+                     "fresh entry geometry after segment opened")
+            click_entry(panel, button=272)
+            wait_for(lambda: folder_popup(panel).get("visible"), "segmented folder opens through real input")
+            lib.ei_device_pointer_motion_absolute(devices[2], 1200, 500)
+            lib.ei_device_frame(devices[2], lib.ei_now(context))
+            sync_input()
+            pump()
+            assert segmented()["segments"][1]["expanded"], "popup must hold its segment open"
+            escape()
+            wait_for(lambda: not folder_popup(panel).get("visible"), "segmented folder dismissed")
+            wait_for(lambda: not segmented()["segments"][1]["expanded"], "segment guard releases after dismissal")
+            files["order"], baseline["order"] = 0, 1
+            files["color"] = "#447722"
+            configure(panel, {"segments": [files, baseline]})
+            wait_for(lambda: segmented()["segments"][0]["id"] == "files"
+                     and segmented()["segments"][0]["color"] == "#447722", "segment reorder and style applied")
+            snapshot = panel_call("panelSettingsEditorSnapshot", "(ss)", (panel, "studio"))
+            assert snapshot["panelValues"]["segments"][0]["id"] == "files"
+            before = snapshot["revision"]
+            invalid = dict(files, entryIds=["foreign-entry"])
+            rejected = panel_call("applyPanelSettingsTransaction", "(sta{sv}a{sv})",
+                                  (panel, before, values({"segments": [invalid, baseline]}), {}))
+            assert not rejected["success"], rejected
+            assert panel_call("panelSettingsEditorSnapshot", "(ss)", (panel, "studio"))["revision"] == before
+            assert not marker.exists(), "segment changes launched a folder root"
+            print(f"PASS: segments {panel}: independent surfaces, ownership, native hover, popup guard, reorder, rejection", flush=True)
+
     first = Gtk.ApplicationWindow(application=app)
     second = Gtk.ApplicationWindow(application=app)
     try:
@@ -638,6 +748,13 @@ def run_interaction_matrix(free_panel):
         assert not marker.exists(), "window controls launched underlying icon"
         print("PASS: real applet activation, exact close, one/zero windows, stale-ID rejection and guard release", flush=True)
     finally:
+        if geometry["registration"]:
+            call("org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting", "unloadScript",
+                 "(s)", (geometry_plugin,))
+            wait_for(lambda: not call("org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting",
+                                     "isScriptLoaded", "(s)", (geometry_plugin,)), "geometry probe unloaded")
+            bus.unregister_object(geometry["registration"])
+            geometry_script.unlink()
         first.close()
         second.close()
         for device in devices.values():

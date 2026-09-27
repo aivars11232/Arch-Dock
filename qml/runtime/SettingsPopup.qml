@@ -204,6 +204,11 @@ Window {
     }
 
     function fieldValue(field) {
+        if (field.segmentIndex !== undefined) {
+            const segment = (panelValue("segments", []) || [])[field.segmentIndex] || {};
+            return field.entryId !== undefined ? (segment.entryIds || []).includes(field.entryId)
+                : segment[field.segmentKey] === undefined ? field.fallback : segment[field.segmentKey];
+        }
         if (field.rendererToggle === true)
             return String(panelValue("rendererTier", "")
                 || (selectedCapabilityResolution.renderer || {}).requestedTier) === "true3d";
@@ -211,6 +216,23 @@ Window {
     }
 
     function setFieldValue(field, value) {
+        if (field.segmentIndex !== undefined) {
+            const segments = EditorModel.copyValue(panelValue("segments", []));
+            const segment = segments[field.segmentIndex];
+            if (!segment) return;
+            if (field.entryId !== undefined) {
+                for (const item of segments)
+                    item.entryIds = (item.entryIds || []).filter(function(id) { return id !== field.entryId; });
+                if (value) segment.entryIds.push(field.entryId);
+            } else {
+                segment[field.segmentKey] = value;
+                if (field.segmentKey === "source") segment.entryIds = [];
+                if (field.segmentKey === "background" && value !== "solid") segment.corners = "inherited";
+            }
+            editorSession = EditorModel.setPanelValue(editorSession, "segments", segments);
+            refreshProjection();
+            return;
+        }
         if (field.rendererToggle === true) {
             value = value ? "true3d" : scene3DOffTier;
             if (value.length === 0)
@@ -462,6 +484,67 @@ Window {
         return [section(label, description, true), notice(qsTr("This page remains unavailable until its renderer and persistence path are implemented."))];
     }
 
+    function panelSegmentRows() {
+        const descriptor = fieldDescriptor("segments", "panel");
+        const rows = [section(qsTr("Segments"), qsTr("Independent content groups. Changes apply together when you press Apply."), true)];
+        if (!descriptor) {
+            rows.push(notice(qsTr("Segments require a horizontal or vertical panel with a procedural surface.")));
+            return rows;
+        }
+        const capabilities = descriptor.segmentCapabilities || {};
+        const segments = panelValue("segments", []);
+        const entries = descriptor.availableEntries || [];
+        for (let index = 0; index < segments.length; ++index) {
+            const segment = segments[index];
+            rows.push(section(qsTr("%1. %2").arg(index + 1).arg(segment.id), "", false));
+            function row(key, label, kind, fallback, choices) {
+                const result = { segmentIndex: index, segmentKey: key, key: "segments",
+                    scope: "panel", label: label, kind: kind, fallback: fallback };
+                if (choices) result.options = root.choicesToOptions(choices);
+                return result;
+            }
+            const sources = (capabilities.sources || []).filter(function(source) {
+                return source === "custom" || source === segment.source || !segments.some(function(other, at) {
+                    return at !== index && other.source === source && !(other.entryIds || []).length;
+                });
+            });
+            rows.push(row("source", qsTr("Content source"), "combo", "inherited", sources));
+            rows.push(row("background", qsTr("Background"), "combo", "inherited", capabilities.backgrounds));
+            if (segment.background === "solid") {
+                rows.push(row("color", qsTr("Color"), "color", "#202b36"));
+                rows.push(row("corners", qsTr("Corners"), "combo", "inherited", capabilities.corners));
+            }
+            for (const key of ["padding", "spacing"]) {
+                const item = row(key, key === "padding" ? qsTr("Padding") : qsTr("Spacing"), "spin", -1);
+                item.from = -1; item.to = 64;
+                item.description = qsTr("Use -1 to inherit the panel setting.");
+                rows.push(item);
+            }
+            rows.push(row("presentation", qsTr("Resting state"), "combo", "open", ["open", "closed"]));
+            const motion = row("motionProfile", qsTr("Surface motion on hover"), "combo", "", capabilities.motionProfiles);
+            motion.options = motion.options.map(function(option) {
+                return { value: option.value, label: option.value ? option.label : qsTr("None") };
+            });
+            rows.push(motion);
+            if (segment.source === "custom") {
+                for (const entry of entries) {
+                    rows.push({ kind: "switch", scope: "panel", key: "segments", segmentIndex: index,
+                        entryId: String(entry.appId), label: String(entry.displayName || entry.appId),
+                        description: qsTr("Assign exclusively to this segment."), fallback: false });
+                }
+                if (!entries.length) rows.push(notice(qsTr("Add content to this panel before assigning entries.")));
+            }
+            rows.push({ kind: "actions", label: qsTr("Order"), actions: [
+                { action: "segment-up", segmentIndex: index, label: qsTr("Move up"), available: index > 0 },
+                { action: "segment-down", segmentIndex: index, label: qsTr("Move down"), available: index + 1 < segments.length },
+                { action: "segment-remove", segmentIndex: index, label: qsTr("Remove"), available: segments.length > 1 }
+            ] });
+        }
+        rows.push({ kind: "action", action: "segment-add", label: qsTr("Add segment"),
+            available: segments.length < Number(capabilities.maximumCount || 16) });
+        return rows;
+    }
+
     function rowsForCurrentPage() {
         if (mainTabIndex === 0)
             return subTabIndex === 0 ? overviewPanelRows() : overviewIconRows();
@@ -476,7 +559,7 @@ Window {
                 return panelBehaviorRows();
             if (subTabIndex === 4)
                 return schemaSectionRows("panels-layout", qsTr("Layout"), qsTr("Shape geometry and content placement."));
-            return unavailablePage(qsTr("Segments"), qsTr("Independent panel surface sections."));
+            return panelSegmentRows();
         }
         if (mainTabIndex === 2) {
             if (subTabIndex === 0)
@@ -580,6 +663,29 @@ Window {
     }
 
     function performStudioAction(action, data) {
+        if (String(action).indexOf("segment-") === 0) {
+            if (!fieldDescriptor("segments", "panel")) return;
+            const segments = EditorModel.copyValue(panelValue("segments", []));
+            const index = Number(data.segmentIndex);
+            if (action === "segment-add" && segments.length < 16) {
+                let number = 1;
+                while (segments.some(function(segment) { return segment.id === "segment-" + number; })) ++number;
+                segments.push({ id: "segment-" + number, source: "custom", order: segments.length,
+                    entryIds: [], background: "solid", color: "#202b36", padding: -1,
+                    spacing: -1, corners: "rounded", presentation: "open", motionProfile: "" });
+            } else if (action === "segment-remove" && segments.length > 1 && index >= 0 && index < segments.length) {
+                segments.splice(index, 1);
+            } else if (["segment-up", "segment-down"].includes(action)) {
+                const target = index + (action === "segment-up" ? -1 : 1);
+                if (index < 0 || index >= segments.length || target < 0 || target >= segments.length) return;
+                const moved = segments.splice(index, 1)[0];
+                segments.splice(target, 0, moved);
+            } else return;
+            segments.forEach(function(segment, at) { segment.order = at; });
+            editorSession = EditorModel.setPanelValue(editorSession, "segments", segments);
+            refreshProjection();
+            return;
+        }
         if (action === "create-free") {
             if (hasPendingChanges)
                 return;
@@ -1008,6 +1114,8 @@ Window {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         panelDefinition: root.selectedRendererCandidate
+                        orderedEntries: root.selectedRendererCandidate.segmentEntries || []
+                        useProvidedEntries: root.selectedRendererCandidate.segmentEntries !== undefined
                         hostCapabilities:
                             root.selectedCapabilityResolution
                         themeDefinition: root.selectedPreviewTheme

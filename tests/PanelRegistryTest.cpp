@@ -323,6 +323,7 @@ private slots:
     void batchesNormalizedPanelUpdates();
     void checksBatchPersistenceBeforeRevision();
     void persistsAndRollsBackSettingsTransactionsAtomically();
+    void segmentPersistenceIsAtomicAndReversible();
     void rejectsPreparedTransactionAfterInterveningUpdate();
     void persistsAndResolvesIconOverridesAtomically();
     void persistsNativePanelRecoveryOutcomes();
@@ -964,6 +965,48 @@ void PanelRegistryTest::persistsAndRollsBackSettingsTransactionsAtomically()
     registry.notifyPanelSettingsTransactionAdopted(true);
     QCOMPARE(revisionSpy.count(), 1);
     QCOMPARE(panelsSpy.count(), 1);
+}
+
+void PanelRegistryTest::segmentPersistenceIsAtomicAndReversible()
+{
+    PanelRegistry registry;
+    DockSettings settings;
+    const auto original = *registry.panelDefinition(QStringLiteral("bottom"));
+    auto custom = original.segments.first();
+    custom.id = QStringLiteral("custom");
+    custom.source = QStringLiteral("custom");
+    custom.order = 1;
+    custom.background = QStringLiteral("solid");
+    const QVariantList segments{original.segments.first().toVariantMap(), custom.toVariantMap()};
+    const auto globals = settings.transactionSnapshot();
+    ArchDock::PanelSettingsTransactionOutcome outcome;
+    const auto draft = ArchDock::PanelSettingsTransaction::prepare(original, globals, globals,
+        {original.identity.id, original.settingsRevision, {{QStringLiteral("segments"), segments}}, {}}, &outcome);
+    QVERIFY(draft);
+    const QString blockedSettingsPath = m_settingsDirectory.filePath(QStringLiteral("segments-blocked"));
+    QFile blocker(blockedSettingsPath);
+    QVERIFY(blocker.open(QIODevice::WriteOnly));
+    blocker.close();
+    QString error;
+    {
+        const ScopedNativeSettingsPath blockedPath(blockedSettingsPath, m_settingsDirectory.path());
+        QVERIFY(!registry.persistPanelSettingsTransaction(*draft, &error));
+    }
+    QCOMPARE(*registry.panelDefinition(original.identity.id), original);
+    QVERIFY2(registry.persistPanelSettingsTransaction(*draft, &error), qPrintable(error));
+    QCOMPARE(registry.panelDefinition(original.identity.id)->segments.size(), 2);
+    PanelRegistry reloaded;
+    QCOMPARE(reloaded.panelDefinition(original.identity.id)->segments, draft->candidatePanel.segments);
+    QCOMPARE(reloaded.panelDefinition(original.identity.id)->host, original.host);
+    QVERIFY(!registry.persistPanelSettingsTransaction(*draft, &error));
+    quint64 rollbackRevision = 0;
+    QVERIFY2(registry.rollbackPanelSettingsTransaction(*draft,
+        draft->candidatePanel.settingsRevision, &rollbackRevision, &error), qPrintable(error));
+    QCOMPARE(registry.panelDefinition(original.identity.id)->segments, original.segments);
+    QCOMPARE(registry.panelDefinition(original.identity.id)->host, original.host);
+    QCOMPARE(rollbackRevision, original.settingsRevision + 2);
+    PanelRegistry rolledBack;
+    QCOMPARE(rolledBack.panelDefinition(original.identity.id)->segments, original.segments);
 }
 
 void PanelRegistryTest::rejectsPreparedTransactionAfterInterveningUpdate()

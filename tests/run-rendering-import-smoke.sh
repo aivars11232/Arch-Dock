@@ -69,15 +69,24 @@ def bus(method, *args):
         'gdbus', 'call', '--address', address, '--timeout=5',
         '--dest', 'org.freedesktop.DBus', '--object-path', '/org/freedesktop/DBus',
         '--method', 'org.freedesktop.DBus.' + method, *args
-    ], text=True, timeout=6).strip()
+    ], text=True, timeout=6, stderr=subprocess.PIPE).strip()
 
 def owner():
     if bus('NameHasOwner', 'org.archdock.ArchDock') == '(false,)':
         return None
-    unique = re.fullmatch(r"\('(:[0-9]+\.[0-9]+)',\)",
-                         bus('GetNameOwner', 'org.archdock.ArchDock')).group(1)
-    pid = int(re.fullmatch(r'\(uint32 ([0-9]+),\)',
-                          bus('GetConnectionUnixProcessID', unique)).group(1))
+    try:
+        unique = re.fullmatch(r"\('(:[0-9]+\.[0-9]+)',\)",
+                             bus('GetNameOwner', 'org.archdock.ArchDock')).group(1)
+        pid = int(re.fullmatch(r'\(uint32 ([0-9]+),\)',
+                              bus('GetConnectionUnixProcessID', unique)).group(1))
+    except subprocess.CalledProcessError as error:
+        # Shutdown may remove the name between the two bus queries. Accept
+        # only that exact race during cleanup, and confirm no replacement.
+        if (mode == 'cleanup'
+                and 'org.freedesktop.DBus.Error.NameHasNoOwner:' in (error.stderr or '')
+                and bus('NameHasOwner', 'org.archdock.ArchDock') == '(false,)'):
+            return None
+        raise
     return {'unique': unique, 'pid': pid}
 
 def identify(record):
@@ -333,7 +342,7 @@ require_no_import_errors() {
     for log_file in "$ARCHDOCK_RENDERING_LOG_DIR/service.log" \
                     "$ARCHDOCK_RENDERING_LOG_DIR/plasmashell.log"; do
         if rg -n -i \
-            'error when loading applet "org\.archdock\.dock"|module "ArchDock\.Rendering" is not installed|RenderingModuleProbe[^[:cntrl:]]*(not a type|unavailable)|Panel(Scene|SurfaceLoader|Procedural2D|Skin2D|SkinLayer2D|Baked25D)[^[:cntrl:]]*(not a type|unavailable|not installed)|AlphaHitMask[^[:cntrl:]]*(not a type|unavailable|not installed)|(IconScene|RunningIndicator|LivePanelPreview)[^[:cntrl:]]*(not a type|unavailable|not installed)|(SettingsPopup|StudioForm|IconProperties|IconPropertiesWindow)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|org\.archdock\.dock/contents/ui/(main|DockEntry|WindowPreviewHost|FolderExpansionHost|IconVisual|RunningIndicator)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|ArchDock/Rendering/(optional3d/PanelScene3D|optional3d/IconStyle3D|PanelScene|PanelSurfaceLoader|renderers/PanelSkin2D|renderers/PanelSkinLayer2D|renderers/PanelBaked25D|inputs/AlphaHitMask|inputs/GeometryHitRegion|FolderExpansion|IconScene|RunningIndicator|previews/LivePanelPreview|previews/WindowPreviewPopup)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(typeerror|referenceerror|cannot assign|unable to assign|binding loop)|Error loading QML file[^[:cntrl:]]*org\.archdock\.dock' \
+            'error when loading applet "org\.archdock\.dock"|module "ArchDock\.Rendering" is not installed|RenderingModuleProbe[^[:cntrl:]]*(not a type|unavailable)|Panel(Scene|SurfaceLoader|Procedural2D|Skin2D|SkinLayer2D|Baked25D)[^[:cntrl:]]*(not a type|unavailable|not installed)|AlphaHitMask[^[:cntrl:]]*(not a type|unavailable|not installed)|(IconScene|RunningIndicator|LivePanelPreview)[^[:cntrl:]]*(not a type|unavailable|not installed)|(SettingsPopup|StudioForm|IconProperties|IconPropertiesWindow)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|org\.archdock\.dock/contents/ui/(main|DockEntry|WindowPreviewHost|FolderExpansionHost|IconVisual|RunningIndicator)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(error|unavailable|not installed|not a type|typeerror|referenceerror|cannot assign|unable to assign|binding loop)|ArchDock/Rendering/(optional3d/PanelScene3D|optional3d/IconStyle3D|PanelScene|PanelSegment|PanelSurfaceLoader|renderers/PanelSkin2D|renderers/PanelSkinLayer2D|renderers/PanelBaked25D|inputs/AlphaHitMask|inputs/GeometryHitRegion|FolderExpansion|IconScene|RunningIndicator|previews/LivePanelPreview|previews/WindowPreviewPopup)\.qml:[0-9]+:[0-9]+:[^[:cntrl:]]*(typeerror|referenceerror|cannot assign|unable to assign|binding loop)|Error loading QML file[^[:cntrl:]]*org\.archdock\.dock' \
             "$log_file"; then
             printf 'Staged rendering import failed; relevant QML errors were logged in %s.\n' \
                 "$log_file" >&2
@@ -421,7 +430,8 @@ run_private_session() {
     ARCHDOCK_PRIVATE_INTERACTION_TEST=1 \
         "$ARCHDOCK_RENDERING_ICON_PROPERTIES_INTERACTION_TEST" \
         iconPropertiesPublicInteractionIsTransactional \
-        meshSceneEditorIsGatedAndTransactional
+        meshSceneEditorIsGatedAndTransactional \
+        segmentsUseRevisionedTransactionsAndHostAuthority
 
     printf 'Running the staged PanelSkin2D energy pixel test under private KWin.\n'
     "$ARCHDOCK_RENDERING_QMLTESTRUNNER" \

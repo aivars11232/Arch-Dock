@@ -5,6 +5,31 @@ import "../qml/runtime/SettingsEditorModel.js" as EditorModel
 TestCase {
     name: "SettingsEditorModel"
 
+    function test_segmentDraftsAreIndependentAndReversible() {
+        const source = snapshot("free-1", 9)
+        source.panelValues.segments = [{ id: "main", order: 0, source: "inherited", entryIds: [] }]
+        source.panelFields.push({ key: "segments", segmentCapabilities: { available: true },
+            segmentEntries: [{ appId: "one", segmentId: "main" }] })
+        const baseline = EditorModel.load(source)
+        const segments = EditorModel.copyValue(baseline.panelBaseline.segments)
+        segments.push({ id: "files", order: 1, source: "custom", entryIds: ["one"] })
+        const changed = EditorModel.setPanelValue(baseline, "segments", segments)
+        verify(EditorModel.dirty(changed))
+        compare(baseline.panelBaseline.segments.length, 1)
+        compare(EditorModel.panelCandidate(changed).segments.length, 2)
+        const cancelled = EditorModel.cancel(changed)
+        verify(!EditorModel.dirty(cancelled))
+        compare(EditorModel.panelCandidate(cancelled).segments.length, 1)
+        const reverted = EditorModel.setPanelValue(changed, "segments",
+            EditorModel.copyValue(baseline.panelBaseline.segments))
+        verify(!EditorModel.dirty(reverted))
+        const preview = EditorModel.rendererCandidate(changed)
+        compare(preview.segmentEntries[0].segmentId, "main")
+        verify(EditorModel.panelCandidate(changed).segmentEntries === undefined)
+        preview.segmentEntries[0].segmentId = "tampered"
+        compare(EditorModel.rendererCandidate(changed).segmentEntries[0].segmentId, "main")
+    }
+
     QtObject {
         id: nativeSequences
         property list<string> tiers: ["true3d", "procedural2d"]

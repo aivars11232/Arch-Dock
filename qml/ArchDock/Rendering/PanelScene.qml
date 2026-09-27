@@ -189,7 +189,23 @@ Item {
         Boolean(runtimeState ? runtimeState.dragInProgress : false)
     readonly property bool editModeActive:
         Boolean(runtimeState ? runtimeState.editMode : false)
-    readonly property var configuredLayoutGeometry: LayoutEngine.metrics(
+    readonly property var segmentDefinitions: panelDefinition.segments || []
+    readonly property bool segmentedScene:
+        resolvedRendererTier === "procedural2d"
+        && ["horizontal", "vertical", "adaptive"].includes(layoutPath)
+        && (segmentDefinitions.length > 1 || segmentDefinitions.some(function(segment) {
+            return ![undefined, "inherited"].includes(segment.background)
+                || ![undefined, "inherited"].includes(segment.corners)
+                || Number(segment.padding) >= 0 || Number(segment.spacing) >= 0
+                || segment.presentation === "closed" || Boolean(segment.motionProfile)
+        }))
+    readonly property var segmentLayout: segmentedScene ? LayoutEngine.segmentGeometry(
+        segmentDefinitions, orderedEntries, layoutPath, iconSize, iconSpacing,
+        layoutScale, layoutPadding, verticalLayout, layoutAngle,
+        pathOrientation, geometryCompatibilityProfile, placementEdge) : null
+    readonly property var segmentSurfaces: segmentRepeater
+    readonly property var configuredLayoutGeometry: segmentedScene
+        ? segmentLayout.geometry : LayoutEngine.metrics(
         layoutPath, entryCount, iconSize, iconSpacing, layoutScale,
         layoutRadius, layoutRows, layoutPadding, verticalLayout,
         layoutAngle, polygonSides)
@@ -394,6 +410,12 @@ Item {
         : surfaceLoader.inputMaskItem ? surfaceLoader.inputMaskItem : null
 
     function containsInputPoint(point) {
+        if (segmentedScene) {
+            return segmentLayout.segments.some(function(run) {
+                return point.x >= run.x && point.y >= run.y
+                    && point.x <= run.x + run.width && point.y <= run.y + run.height
+            })
+        }
         if (geometryHitRegionActive)
             return geometryHitRegion.contains(point)
         if (surfaceLoader.inputMaskItem)
@@ -635,6 +657,12 @@ Item {
     }
 
     function entryGeometryAt(index) {
+        if (segmentedScene && segmentLayout.entries[index]) {
+            const result = Object.assign({}, segmentLayout.entries[index])
+            result.effectBounds = effectBounds
+            result.effectAllowance = entryEffectAllowance(result.entryBounds)
+            return result
+        }
         if (bakedMetadataUsable && bakedTrackMetrics) {
             // Track output is already in scene coordinates, so it needs no
             // content offset. Depth order stays the normalized 0..1 depth,
@@ -838,6 +866,7 @@ Item {
         id: surfaceLoader
 
         anchors.fill: parent
+        visible: !root.segmentedScene
         requestedRendererTier: root.resolvedRendererTier
         themeId: root.themeId
         themeSource: root.themeSource
@@ -871,6 +900,41 @@ Item {
                      rotation: root.entryGeometryAt(index).rotation }
         })
         sceneConcealed: !root.entriesAnimatable
+    }
+
+    Repeater {
+        id: segmentRepeater
+        model: root.segmentedScene ? root.segmentLayout.segments.map(function(run) { return run.id }) : []
+        delegate: PanelSegment {
+            required property int index
+            readonly property var run: root.segmentLayout.segments[index]
+            x: run.x
+            y: run.y
+            definition: run.definition
+            geometry: run.geometry
+            layout: root.verticalLayout ? "vertical" : "horizontal"
+            layoutAngle: root.layoutAngle
+            runtimeState: root.runtimeState
+            entryHovered: run.indices.includes(Number(root.runtimeState.hoveredEntry ?? -1))
+            motionCatalog: root.motionCatalog
+            appearance: root.appearance
+            customColor: root.customColor
+            panelOpacity: root.panelOpacity
+            reducedMotion: root.reducedMotion
+            concealed: !root.entriesAnimatable
+            visible: root.collapseProgress < 1
+            opacity: 1 - root.collapseProgress
+        }
+    }
+
+    function segmentItemForEntry(index) {
+        if (!segmentedScene) return null
+        const owner = String((orderedEntries[index] || {}).segmentId || "main")
+        for (let i = 0; i < segmentRepeater.count; ++i) {
+            const item = segmentRepeater.itemAt(i)
+            if (item && item.definition.id === owner) return item
+        }
+        return null
     }
 
     // Entries are clipped by the same track that closes the shell, so an icon
@@ -921,9 +985,12 @@ Item {
             readonly property var geometryOutput: root.entryGeometryAt(index)
             readonly property var sceneEntry: root.orderedEntries[index] || ({})
             readonly property int sceneIndex: index
+            readonly property var segmentItem: root.segmentItemForEntry(index)
+            readonly property bool segmentOpen: !root.segmentedScene
+                || Boolean(segmentItem && segmentItem.expanded)
             readonly property bool sceneInputEnabled:
-                root.entryInteractionEnabled
-            readonly property bool sceneVisible: root.entriesAnimatable
+                root.entryInteractionEnabled && segmentOpen
+            readonly property bool sceneVisible: root.entriesAnimatable && segmentOpen
             readonly property var sceneGeometry: geometryOutput
             readonly property var sceneRuntimeState: root.runtimeState
             readonly property var scenePanelDefinition: root.panelDefinition
@@ -947,6 +1014,8 @@ Item {
                 ? delegateItem.hoverScale : 1
 
             objectName: "panel-entry-" + index
+            visible: segmentOpen
+            enabled: sceneInputEnabled
             x: geometryOutput.position.x
             y: geometryOutput.position.y
             z: geometryOutput.depthOrder

@@ -6,7 +6,7 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Evidence snapshot:** 2026-09-23 (Europe/Amsterdam). TASK-0036 Phase B has
+**Evidence snapshot:** 2026-09-27 (Europe/Amsterdam). TASK-0036 Phase B has
 been implemented under its retained approval and original plan. Both internal
 phase gates now pass. Fresh ON, OFF and AUTO builds each passed **67/67 CTests**
 after the final corrections, including private runtime fallback, Studio
@@ -21,10 +21,13 @@ TASK-0037 is **COMPLETE**: all three resumed phase gates pass, with a final
 **68/68 CTests** including both private runtime gates. TASK-0038 Phase A is
 **COMPLETE**: the bounded provider, panel-aware opening, five shared layouts,
 native popup adapter and editor controls pass a fresh build and **71/71 CTests**,
-including real native/free folder interaction. Phase B segments have not
-started. TASK-0038's approval and predecessor-closure gate are retained; no
-replacement plan or repeated approval is needed. The remaining segment phase
-and consolidated final gate still block TASK-0038 completion and TASK-0039.
+including real native/free folder interaction. Phase B implementation is complete
+and its fresh ON build/full **71/71 CTest gate passed (269.13 s)**. The separate
+fresh final ON build and full suite passed **71/71 (272.29 s)**. The OFF
+application/module build and three focused shared-QML checks passed. Cleanup
+is verified. **TASK-0038 is COMPLETE in the working tree**, awaiting the owner's
+Git closure. TASK-0039 has not been planned or implemented; its previously
+reported TASK-0038 implementation gap is now closed.
 
 Earlier context, retained because it explains two mislabelled commits: the
 session that produced `f61c9ab` began from a tree whose subject `Task33` is
@@ -48,11 +51,13 @@ Earlier task sections retain their historical evidence and boundaries.
 - TASK-0036 implementation baseline:
   `a7f366506315e4009db2332ea8ddc6edc9cdf5ba`, subject `Arch Dock task 38`.
   That subject labels the prerequisite repair, not TASK-0038 implementation.
-- Current `HEAD`: `80d0820b76f9c816be75f19fb7450aab1b5a1f0e`, subject
+- Previous continuation `HEAD`: `80d0820b76f9c816be75f19fb7450aab1b5a1f0e`, subject
   `Arch Dock task 36 repair`, committed by the owner. The working tree was
   clean at the cleanup continuation, matching the preceding passing TASK-0036
-  matrix. The working tree now contains closure documentation and the approved
-  TASK-0037 closure and the approved TASK-0038 Phase A continuation.
+  matrix. The owner subsequently committed TASK-0037 closure, TASK-0038 Phase A and the
+  initial segment parser as `032420afeee8ac2453f4896a57da7c2e60cf213e`.
+  That is the September 27 continuation baseline and current unchanged HEAD.
+  The working tree contains the approved TASK-0038 Phase B implementation.
 - `build-codex-task-0014/` is still tracked at `HEAD`. It is a build
   directory committed by mistake in `75232e5` and must be removed with
   `git rm -r build-codex-task-0014`; `.gitignore` now excludes every
@@ -2195,3 +2200,159 @@ controls, persistence/native/free runtime acceptance and a fresh full gate.
 Phase B and TASK-0039 have not started; **TASK-0038 remains incomplete** until
 segments and the consolidated final gate pass. No replacement plan or approval
 is needed. The task build/log root is retained for this active continuation.
+
+
+## TASK-0038 Phase B continuation — 2026-09-27
+
+The owner saved the preceding work as `032420afeee8ac2453f4896a57da7c2e60cf213e`
+(`Arch Dock  task 36-38  repairs part 1`). `main` and local `origin/main` match;
+the tree was clean on resume. No fetch was performed. The retained approval
+and Phase B plan are reused. The pack's SHA256 manifest passes again.
+
+The September 23 Phase A gate above is historical, verified evidence. The
+old `/tmp/archdock-task0038-resume.lR1Az5` directory no longer exists.
+The fresh ON Debug Phase B build is
+`/tmp/archdock-task0038-phase-b-mczyks7j/build`; configuration passed.
+KWin/Plasma remain 6.7.5, Qt is 6.11.2-3, and KF6/KIO are 6.30.0.
+
+The preceding quota interruption occurred after adding `PanelSegmentDefinition`
+and its parser/validation to `PanelDefinition.h/.cpp`. Those files are saved
+in the new commit. This continuation implemented list persistence and an
+idempotent migration of existing version-2 records to one inherited segment.
+The revisioned backend now partitions authoritative entries, rejects foreign
+and duplicate claims, persists/reorders/removes segments, and rejects unsupported
+sources and renderer combinations. Native shared pins and free panel content
+remain their existing separate authorities.
+
+Independent linear procedural surfaces now compose through `LayoutEngine`,
+`PanelScene` and `PanelSegment`, reusing existing presentation and motion
+controllers. Default inherited segments retain the original rendering path.
+Studio has nested draft controls and real entry projections; Cancel/Apply use
+the existing editor transaction. Nonlinear/artwork surfaces and status providers
+remain unavailable for segment customization; corner overrides require solid
+backgrounds. No TASK-0039 status implementation was added.
+
+Fresh narrow checks pass: model, content transaction, settings schema/settings
+transaction, backend capability, registry persistence/rollback, geometry,
+scene, preview, editor drafts, entry input and presentation guards. The new
+scene tests prove unchanged inherited pixels, independent input ownership,
+actual motion pixels in a visible window, and still reduced-motion frames.
+The Phase B build and full serial gate passed: **71/71 CTests, 269.13 s**.
+Staged rendering/Studio passed in 84.33 s; grouped-window interaction in 63.97 s.
+The folder matrix also verifies native/free independent surfaces, exact entry
+ownership, closed/open pointer behavior, popup guards, reorder, persistence and
+foreign-claim rejection. The real Studio component verifies nested drafts,
+preview ownership, reorder, Cancel, Apply and removal through its existing
+handlers in private Wayland. Physical clicks are used for applet interaction;
+Studio transaction handlers are invoked by the existing Qt test harness.
+
+Corrections proven during this phase:
+
+- Explicit claims reserve ownership when an entry temporarily stops matching
+  its launcher/task source; the focused regression passes.
+- Nested D-Bus segment payloads are decoded before strict model validation.
+- Animated hover transfers from the segment surface to its owning icon without
+  collapsing the segment; a visible-window regression reproduced and fixed it.
+- Optional schema bounds are omitted when absent, preventing invalid QVariant
+  values from aborting a D-Bus Studio snapshot reply. Descriptor regression and
+  the native/free snapshot calls now pass. The single resulting OS crash dump
+  (PID 23777) was removed and its absence verified.
+- The private geometry probe stays loaded for the matrix and unloads during
+  cleanup, avoiding KWin's script-ID reuse during repeated probe creation.
+  Native reference: https://raw.githubusercontent.com/KDE/kwin/v6.7.5/src/scripting/scripting.cpp
+- A final-run cleanup race occurred after every live assertion passed: the
+  service name disappeared between NameHasOwner and GetNameOwner. Cleanup now
+  accepts only NameHasNoOwner plus a second confirmed absence; capture/check/
+  restart and process-identity assertions remain strict. Shell/Python syntax
+  checks pass. No assertion was weakened or test skipped.
+
+The separate fresh `final-on` configure/build passed. Its initial full run
+stopped at test 59 solely on the cleanup race above (58 passed, 12 not run).
+The corrected final full run passed **71/71, 272.29 s**; staged rendering/Studio
+84.86 s, window interaction 63.95 s, folder/segment interaction 64.05 s. The log
+was `final-on-ctest-corrected.log`. The separate fresh OFF configure and
+`arch-dock`/`archdock-rendering-module` build passed, followed by **3/3** focused
+checks: panel scene, folder expansion and live panel preview (2.56 s). This was
+an OFF dependency/resource check, not another full OFF suite.
+
+Final cleanup: all **12** private runtime roots identified in retained logs are
+absent; no process retained their environment roots or the task build root.
+No `/tmp/archdock-rendering-import.*` directory remains. The single diagnostic
+core is absent. After recording the results, the task-owned
+`/tmp/archdock-task0038-phase-b-mczyks7j` root (Phase B/final ON/final OFF builds,
+logs and probes) was removed and its absence verified. Historical paths above
+identify verification runs; they are not retained artifacts.
+
+### TASK-0038 consolidated acceptance — COMPLETE, 2026-09-27
+
+| Inherited criterion | Result and proof |
+| --- | --- |
+| A: Every visible folder layout works live | PASS: fan/grid/stack/arc/ring on native/free applets through real EIS pointer/keyboard interaction and controlled KIO document opening |
+| A: Unavailable/deleted folders fail safely | PASS: model/backend rejection; empty popup is safely dismissible in the live matrix |
+| A: Expansion shares geometry | PASS: LayoutEngine expansion outputs and QML geometry/input tests |
+| A: Panel stays open during expansion | PASS: real popup guards on both hosts, dismissal releases the guard |
+| B: One inherited segment matches prior behavior | PASS: idempotent migration, scene dimensions/anchors and equal rendered frames |
+| B: Multiple segments render/order/persist independently | PASS: typed model, atomic persistence/reload/rollback, shared surfaces, Studio draft/Apply/Cancel and native/free runtime matrix |
+| B: Unsupported features are hidden by capabilities | PASS: editor/backend capability tests; nonlinear/artwork/true-3D custom segments and status without a real provider are unavailable; corner overrides require solid backgrounds |
+| B: Segments cannot consume each other's entries | PASS: duplicate/foreign claims and cross-segment reorder rejected; explicit reservations survive temporary source mismatch; runtime ownership remains exclusive |
+
+Both internal phases are complete. The fresh final configure/build/full CTest,
+staged install/private Plasma gates, bounded OFF check, whitespace validation
+and artifact cleanup pass. All earlier failures described above are superseded
+by the final passing gates; no build, test or runtime failure remains open.
+The environment is Arch Linux, Plasma/KWin 6.7.5, Qt 6.11.2-3 and KF6/KIO 6.30.0.
+Private virtual Wayland evidence does not claim personal-desktop, physical GPU,
+monitor/hotplug or release acceptance. No manual personal-desktop checks ran.
+
+Implementation placement follows the retained approved plan: existing content,
+transaction, geometry, presentation, animation and Studio machinery is reused.
+The bounded serialization and test-lifecycle corrections were needed to pass
+this task's native verification; no feature scope or successor work was added.
+Status providers belong to TASK-0039; no fabricated status or plugin API exists.
+
+Changed files, in implementation groups/order, relative to the September 27
+baseline:
+
+1. `src/model/PanelDefinition.cpp`, `PanelSettingsSchema.h/.cpp`,
+   `SettingsMigration.cpp`, `tests/PanelModelTest.cpp`: typed persistence,
+   schema/list projection and equivalent migration.
+2. `src/panel/PanelContentTransaction.h/.cpp`,
+   `tests/PanelContentTransactionTest.cpp`: authoritative partition, exclusive
+   identity claims and safe reorder/removal.
+3. `src/model/PanelCapabilityResolver.h/.cpp`, `src/panel/PanelWindow.cpp`,
+   `tests/PanelWindowCapabilityTest.cpp`: host capabilities, revisioned validation,
+   D-Bus segment decoding and Studio/backend checks.
+4. `qml/ArchDock/Rendering/LayoutEngine.js`, new `PanelSegment.qml`,
+   `PanelScene.qml`, `tests/tst_DockGeometry.qml`, `tests/tst_PanelScene.qml`:
+   shared runs/surfaces/input geometry, hover handoff and rendered motion proof.
+5. `qml/ArchDock/Rendering/qmldir`, `CMakeLists.txt`: module/install registration.
+6. `qml/runtime/SettingsEditorModel.js`, `SettingsPopup.qml`,
+   `qml/ArchDock/Rendering/previews/LivePanelPreview.qml`,
+   `plasma-dock-widget/contents/ui/main.qml`, `tests/tst_SettingsEditorModel.qml`:
+   nested drafts, real entry preview, transaction controls and host integration.
+7. `tests/PanelRegistryTest.cpp`, `tests/PanelSettingsSchemaTest.cpp`,
+   `tests/visibility-window.py`, `tests/run-rendering-import-smoke.sh`:
+   persistence/rollback, serializable descriptors and existing private runtime
+   harness extensions/corrections.
+8. `docs/shared-renderer.md`, this file, `docs/RELEASE_CHECKLIST.md`: behavior,
+   acceptance, verification and cleanup evidence.
+
+Verification commands used (the now-removed run root was
+`/tmp/archdock-task0038-phase-b-mczyks7j`):
+
+```bash
+cmake -S . -B "$task38_root/final-on" -G 'Unix Makefiles' -DCMAKE_BUILD_TYPE=Debug -DARCHDOCK_ENABLE_QUICK3D=ON
+cmake --build "$task38_root/final-on" --parallel 1
+env DBUS_SESSION_BUS_ADDRESS="unix:path=$task38_root/no-parent-bus" ctest --test-dir "$task38_root/final-on" --parallel 1 --stop-on-failure --output-on-failure
+cmake -S . -B "$task38_root/final-off" -G 'Unix Makefiles' -DCMAKE_BUILD_TYPE=Debug -DARCHDOCK_ENABLE_QUICK3D=OFF
+cmake --build "$task38_root/final-off" --target arch-dock archdock-rendering-module --parallel 1
+env DBUS_SESSION_BUS_ADDRESS="unix:path=$task38_root/no-parent-bus" ctest --test-dir "$task38_root/final-off" -R '^(folder-expansion|panel-scene|live-panel-preview)-test$' --parallel 1 --stop-on-failure --output-on-failure
+git diff --check
+```
+
+A future rerun must create a new task root. Baseline and final HEAD are both
+`032420afeee8ac2453f4896a57da7c2e60cf213e`; all continuation changes remain
+unstaged. No agent, staging, commit, push, global installation or personal-
+desktop operation was used. The suggested commit contains TASK-0038 Phase B
+and its required verification corrections only. The owner controls Git closure.
+Suggested commit: `Complete TASK-0038 independent panel segments`.
