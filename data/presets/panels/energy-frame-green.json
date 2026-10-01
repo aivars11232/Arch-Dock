@@ -1,0 +1,61 @@
+{
+  "format": "org.archdock.panel-preset",
+  "schemaVersion": 1,
+  "identity": {
+    "id": "energy-frame-green",
+    "name": "Green Energy Frame",
+    "description": "A glowing green energy frame skin for a screen edge with neon green icon tiles.",
+    "builtIn": true,
+    "revision": 1
+  },
+  "preview": {
+    "previewMode": "horizontal",
+    "rendererTier": "skinned2d",
+    "fallbackTier": "procedural2d",
+    "deterministicPreviewSeed": "energy-frame-green-v1"
+  },
+  "compatibility": {
+    "hostKinds": ["native-edge", "free-desktop"],
+    "orientations": ["horizontal"],
+    "layouts": ["horizontal"],
+    "requiredCapabilities": [],
+    "optionalCapabilities": ["skinned2d", "dynamic-tint", "dynamic-glow"]
+  },
+  "panel": {
+    "host": {"edge": "bottom"},
+    "content": {"type": "hybrid"},
+    "placement": {"alignment": "center", "dynamic": false, "width": 720, "height": 76},
+    "visibility": {"visibilityMode": "always"},
+    "presentation": {
+      "presentationMode": "open",
+      "presentationTrigger": "hover",
+      "collapseMechanism": "open",
+      "collapseAxis": "horizontal",
+      "revealHandle": "edge-strip"
+    },
+    "layout": {
+      "layout": "horizontal",
+      "layoutScale": 1.0,
+      "layoutPadding": 18,
+      "iconShape": "rounded",
+      "iconSize": 52,
+      "spacing": 8
+    },
+    "theme": {"completeThemeId": "energy-frame-green", "rendererTier": "skinned2d"},
+    "surface": {"appearance": "glass", "shape": "pill", "opacity": 0.9, "color": "#4ee68a", "glowIntensity": 1.15},
+    "motion": {
+      "iconAnimation": "glow",
+      "animationTrigger": "hover",
+      "animationSpeed": 0.85,
+      "animationIntensity": 0.9,
+      "magnificationRadius": 2.4,
+      "magnificationFalloff": "linear"
+    },
+    "recommendedIconPresetId": "neon-green"
+  },
+  "fallback": {
+    "themeId": "",
+    "iconPresetId": "original-clean",
+    "unsupportedFieldPolicy": "reject"
+  }
+}

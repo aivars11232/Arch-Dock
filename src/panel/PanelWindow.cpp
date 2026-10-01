@@ -248,6 +248,7 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
             m_dockModel(m_windowModel, this),
     m_settings(this),
         m_panelRegistry(this),
+    m_presetLibrary(m_panelRegistry, this),
     m_systemStatus(this),
     m_overlayModel(this),
     m_actionBridge(this),
@@ -300,6 +301,9 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
         m_engine.rootContext()->setContextProperty(
             QStringLiteral("panelRegistry"),
             &m_panelRegistry);
+        m_engine.rootContext()->setContextProperty(
+            QStringLiteral("presetLibrary"),
+            &m_presetLibrary);
         m_engine.rootContext()->setContextProperty(
             QStringLiteral("systemStatus"),
             &m_systemStatus);

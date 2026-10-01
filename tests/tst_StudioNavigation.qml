@@ -27,14 +27,19 @@ TestCase {
             "Appearance",
             "Behavior",
             "Layout",
-            "Segments"
+            "Segments",
+            "Panel Themes / Skins",
+            "Built-in Panel Presets",
+            "My Panel Presets"
         ])
         compareList(StudioNavigation.subtabsFor(2), [
             "Appearance",
             "Behavior",
             "Indicators",
             "Notifications",
-            "Icon Style"
+            "Icon Styles",
+            "Built-in Icon Presets",
+            "My Icon Presets"
         ])
         compareList(StudioNavigation.subtabsFor(3), [])
         compareList(StudioNavigation.subtabsFor(4), [
@@ -53,10 +58,55 @@ TestCase {
 
     function test_clampsSubtabIndices() {
         compare(StudioNavigation.clampSubtabIndex(0, -1), 0)
-        compare(StudioNavigation.clampSubtabIndex(1, 99), 5)
+        compare(StudioNavigation.clampSubtabIndex(1, 99), 8)
         compare(StudioNavigation.clampSubtabIndex(2, 3), 3)
+        compare(StudioNavigation.clampSubtabIndex(2, 99), 6)
         compare(StudioNavigation.clampSubtabIndex(3, 99), 0)
         compare(StudioNavigation.clampSubtabIndex(4, 2.9), 2)
+    }
+
+    // The settings pages that existed before the preset pages keep their
+    // positions, so a remembered tab still opens the page it named.
+    function test_newPagesAreAppendedAfterTheExistingOnes() {
+        compare(StudioNavigation.subtabsFor(1)[2], "Appearance")
+        compare(StudioNavigation.subtabsFor(1)[5], "Segments")
+        compare(StudioNavigation.subtabsFor(2)[3], "Notifications")
+        compare(StudioNavigation.subtabsFor(2)[4], "Icon Styles")
+    }
+
+    function test_presetPagesNameSeparateCatalogs() {
+        compareList(StudioNavigation.presetPage(1, 7), { kind: "panel", scope: "builtin" })
+        compareList(StudioNavigation.presetPage(1, 8), { kind: "panel", scope: "user" })
+        compareList(StudioNavigation.presetPage(2, 5), { kind: "icon", scope: "builtin" })
+        compareList(StudioNavigation.presetPage(2, 6), { kind: "icon", scope: "user" })
+        compare(StudioNavigation.subtabsFor(1)[7], "Built-in Panel Presets")
+        compare(StudioNavigation.subtabsFor(1)[8], "My Panel Presets")
+        compare(StudioNavigation.subtabsFor(2)[5], "Built-in Icon Presets")
+        compare(StudioNavigation.subtabsFor(2)[6], "My Icon Presets")
+    }
+
+    // Themes, icon styles and profiles are not presets.
+    function test_onlyTheFourPresetPagesArePresetPages() {
+        let presetPages = 0;
+        for (let section = 0; section < StudioNavigation.mainLabels().length; ++section) {
+            const count = Math.max(1, StudioNavigation.subtabsFor(section).length);
+            for (let subtab = 0; subtab < count; ++subtab) {
+                if (StudioNavigation.presetPage(section, subtab) !== null)
+                    ++presetPages
+            }
+        }
+        compare(presetPages, 4)
+        compare(StudioNavigation.subtabsFor(1)[6], "Panel Themes / Skins")
+        compare(StudioNavigation.presetPage(1, 6), null)
+        compare(StudioNavigation.presetPage(2, 4), null)
+        compare(StudioNavigation.presetPage(4, 0), null)
+        compare(StudioNavigation.presetPage(3, 0), null)
+        // An out-of-range index clamps to the last page of its section.
+        compareList(StudioNavigation.presetPage(1, 99), { kind: "panel", scope: "user" })
+        // The lookup hands out copies, never its own table.
+        const page = StudioNavigation.presetPage(1, 7);
+        page.kind = "icon"
+        compare(StudioNavigation.presetPage(1, 7).kind, "panel")
     }
 
     function test_genericClampHandlesEmptyAndInvalidRanges() {

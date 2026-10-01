@@ -163,6 +163,11 @@ public:
     // runtime projection, falling back safely when neither matches.
     Q_INVOKABLE QVariantMap animationProfileResolution(
         const QString &requestedProfileId) const;
+    // The validated built-in stores, or nullptr when one was rejected at
+    // start-up. Presets resolve their references against these instances.
+    [[nodiscard]] const ArchDock::IconStyleStore *iconStyleStore() const;
+    [[nodiscard]] const ArchDock::AnimationProfileCatalog *
+    animationProfileCatalog() const;
     [[nodiscard]] QVariantMap resolveIconEntryOverride(
         const ArchDock::PanelDefinition &definition,
         const QVariantMap &entry) const;

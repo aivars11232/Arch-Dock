@@ -1,0 +1,21 @@
+{
+  "format": "org.archdock.panel-preset-catalog",
+  "version": 1,
+  "presets": [
+    "obsidian-glass-dock",
+    "metallic-shelf-dock",
+    "sci-fi-chassis-blue",
+    "sci-fi-chassis-red",
+    "sci-fi-chassis-dark",
+    "energy-frame-cyan",
+    "energy-frame-green",
+    "energy-frame-orange",
+    "energy-frame-purple",
+    "minimal-neon-rail",
+    "mechanical-collapsible-rail",
+    "circular-blue-ring",
+    "octagonal-platform",
+    "orange-arc-dock",
+    "holographic-semicircle"
+  ]
+}

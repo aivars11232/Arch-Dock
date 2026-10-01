@@ -1,0 +1,32 @@
+{
+  "format": "org.archdock.icon-preset",
+  "schemaVersion": 1,
+  "identity": {
+    "id": "metallic-blue-slow-turn",
+    "name": "Metallic Blue — Slow Turn",
+    "description": "The Metallic Blue tile with the icon turning slowly about its vertical axis.",
+    "builtIn": true,
+    "revision": 1
+  },
+  "compatibility": {
+    "rendererTiers": ["procedural2d"],
+    "requiredStyleCapabilities": ["tile", "reflection", "shadow", "glow"],
+    "reducedMotionSupport": true
+  },
+  "icon": {
+    "iconStyleId": "metallic-blue",
+    "visualOverrides": {},
+    "stateOverrides": {},
+    "glyphPolicy": {"mode": "original", "compatibleOnly": true},
+    "motion": {
+      "profileId": "slow-y-turn",
+      "animationTrigger": "idle",
+      "animationSpeed": 1.0,
+      "animationIntensity": 1.0,
+      "magnificationRadius": 2.4,
+      "magnificationFalloff": "linear"
+    },
+    "perStateAnimationOverrides": {}
+  },
+  "fallback": {"iconStyleId": "plain-original", "motionProfileId": "none"}
+}

@@ -1,0 +1,61 @@
+{
+  "format": "org.archdock.panel-preset",
+  "schemaVersion": 1,
+  "identity": {
+    "id": "minimal-neon-rail",
+    "name": "Minimal Neon Rail",
+    "description": "A compact neon rail for a screen edge with plain icons and a restrained glow.",
+    "builtIn": true,
+    "revision": 1
+  },
+  "preview": {
+    "previewMode": "horizontal",
+    "rendererTier": "procedural2d",
+    "fallbackTier": "procedural2d",
+    "deterministicPreviewSeed": "minimal-neon-rail-v1"
+  },
+  "compatibility": {
+    "hostKinds": ["native-edge", "free-desktop"],
+    "orientations": ["horizontal", "vertical"],
+    "layouts": ["adaptive", "horizontal", "vertical"],
+    "requiredCapabilities": [],
+    "optionalCapabilities": ["dynamic-tint"]
+  },
+  "panel": {
+    "host": {"edge": "bottom"},
+    "content": {"type": "hybrid"},
+    "placement": {"alignment": "center", "dynamic": false, "width": 640, "height": 56},
+    "visibility": {"visibilityMode": "always"},
+    "presentation": {
+      "presentationMode": "open",
+      "presentationTrigger": "hover",
+      "collapseMechanism": "open",
+      "collapseAxis": "horizontal",
+      "revealHandle": "edge-strip"
+    },
+    "layout": {
+      "layout": "horizontal",
+      "layoutScale": 1.0,
+      "layoutPadding": 10,
+      "iconShape": "squircle",
+      "iconSize": 40,
+      "spacing": 6
+    },
+    "theme": {"completeThemeId": "neon-segments"},
+    "surface": {"appearance": "neon", "shape": "rounded", "opacity": 0.94, "color": "#101126", "glowIntensity": 1.0},
+    "motion": {
+      "iconAnimation": "glow",
+      "animationTrigger": "hover",
+      "animationSpeed": 1.0,
+      "animationIntensity": 0.5,
+      "magnificationRadius": 2.4,
+      "magnificationFalloff": "linear"
+    },
+    "recommendedIconPresetId": "minimal-glow"
+  },
+  "fallback": {
+    "themeId": "neon-segments",
+    "iconPresetId": "original-clean",
+    "unsupportedFieldPolicy": "reject"
+  }
+}

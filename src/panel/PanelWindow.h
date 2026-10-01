@@ -22,6 +22,7 @@
 #include "../WindowModel.h"
 #include "../WindowWatcher.h"
 #include "../integration/PlasmaPanelAdapter.h"
+#include "../presets/PresetLibrary.h"
 #include "FreePanelController.h"
 #include "PanelContentTransaction.h"
 
@@ -398,6 +399,7 @@ private:
     DockModel m_dockModel;
     DockSettings m_settings;
     PanelRegistry m_panelRegistry;
+    ArchDock::PresetLibrary m_presetLibrary;
     SystemStatus m_systemStatus;
     ArchDock::OverlayModel m_overlayModel;
     QTimer m_contentTimer;

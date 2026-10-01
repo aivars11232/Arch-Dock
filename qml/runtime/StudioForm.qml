@@ -27,6 +27,8 @@ ScrollView {
 
                 required property var modelData
                 readonly property string kind: modelData.kind || "value"
+                readonly property bool sampleCards:
+                    kind === "themeSamples" || kind === "iconStyleSamples"
 
                 visible: modelData.available === undefined || modelData.available
                 Layout.fillWidth: true
@@ -69,8 +71,15 @@ ScrollView {
                     type: rowDelegate.modelData.warning ? Kirigami.MessageType.Warning : Kirigami.MessageType.Information
                 }
 
+                // Sample cards: the built-in themes, or on the Icon Styles page
+                // the built-in icon styles drawn on the panel's current theme.
                 ColumnLayout {
-                    visible: rowDelegate.kind === "themeSamples"
+                    id: sampleRow
+
+                    readonly property bool iconStyles:
+                        rowDelegate.kind === "iconStyleSamples"
+
+                    visible: rowDelegate.sampleCards
                     Layout.fillWidth: true
                     spacing: 8
 
@@ -88,7 +97,9 @@ ScrollView {
                         wrapMode: Text.Wrap
                     }
                     Repeater {
-                        model: rowDelegate.modelData.themes || []
+                        model: sampleRow.iconStyles
+                            ? rowDelegate.modelData.styles || []
+                            : rowDelegate.modelData.themes || []
                         delegate: Rectangle {
                             id: themeSample
 
@@ -100,7 +111,13 @@ ScrollView {
                             border.width: 1
                             border.color: "#3a5868"
                             readonly property var rendererCandidate:
-                                root.studio.themeRendererCandidate(modelData)
+                                sampleRow.iconStyles
+                                ? root.studio.iconStyleRendererCandidate(modelData)
+                                : root.studio.themeRendererCandidate(modelData)
+                            // The theme the card is drawn on.
+                            readonly property var sampleTheme:
+                                sampleRow.iconStyles
+                                ? root.studio.selectedPreviewTheme : modelData
                             readonly property var previewConfiguration:
                                 modelData.previewConfiguration || ({})
 
@@ -116,7 +133,8 @@ ScrollView {
                                         font.weight: Font.DemiBold
                                     }
                                     Label {
-                                        text: qsTr("Built-in · %1").arg(themeSample.modelData.category || "theme")
+                                        text: qsTr("Built-in · %1").arg(themeSample.modelData.category
+                                            || (sampleRow.iconStyles ? "icon style" : "theme"))
                                         color: "#90a7b4"
                                         font.pixelSize: 11
                                     }
@@ -124,7 +142,9 @@ ScrollView {
                                     LivePanelPreview {
                                         id: themePreview
 
-                                        objectName: "theme-live-preview-"
+                                        objectName: (sampleRow.iconStyles
+                                            ? "icon-style-live-preview-"
+                                            : "theme-live-preview-")
                                             + themeSample.modelData.id
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 76
@@ -134,12 +154,12 @@ ScrollView {
                                             themeSample.rendererCandidate
                                                 .capabilityResolution || ({})
                                         themeDefinition:
-                                            themeSample.modelData
+                                            themeSample.sampleTheme
                                         iconStyleDefinition:
                                             themeSample.rendererCandidate
                                                 .iconStyleDefinition || ({})
                                         indicatorStyleDefinition:
-                                            themeSample.modelData
+                                            themeSample.sampleTheme
                                                 .indicatorStyle || ({})
                                         animationProfiles:
                                             themeSample.rendererCandidate
@@ -176,9 +196,17 @@ ScrollView {
                                 Button {
                                     text: qsTr("Load")
                                     icon.name: "dialog-ok-apply"
-                                    onClicked: root.studio.performStudioAction("load-built-in-theme", {
-                                        themeId: themeSample.modelData.id
-                                    })
+                                    onClicked: {
+                                        if (sampleRow.iconStyles) {
+                                            root.studio.performStudioAction("load-icon-style", {
+                                                styleId: themeSample.modelData.id
+                                            });
+                                        } else {
+                                            root.studio.performStudioAction("load-built-in-theme", {
+                                                themeId: themeSample.modelData.id
+                                            });
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -186,7 +214,7 @@ ScrollView {
                 }
 
                 Rectangle {
-                    visible: rowDelegate.kind !== "section" && rowDelegate.kind !== "notice" && rowDelegate.kind !== "themeSamples"
+                    visible: rowDelegate.kind !== "section" && rowDelegate.kind !== "notice" && !rowDelegate.sampleCards
                     Layout.fillWidth: true
                     implicitHeight: fieldRow.implicitHeight + 22
                     radius: 7

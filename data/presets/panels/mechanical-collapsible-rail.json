@@ -1,0 +1,61 @@
+{
+  "format": "org.archdock.panel-preset",
+  "schemaVersion": 1,
+  "identity": {
+    "id": "mechanical-collapsible-rail",
+    "name": "Collapsible Mechanical Rail",
+    "description": "A closed mechanical shell on a screen edge that splits open when the pointer rests on it.",
+    "builtIn": true,
+    "revision": 1
+  },
+  "preview": {
+    "previewMode": "horizontal",
+    "rendererTier": "skinned2d",
+    "fallbackTier": "procedural2d",
+    "deterministicPreviewSeed": "mechanical-collapsible-rail-v1"
+  },
+  "compatibility": {
+    "hostKinds": ["native-edge", "free-desktop"],
+    "orientations": ["horizontal"],
+    "layouts": ["horizontal"],
+    "requiredCapabilities": ["split"],
+    "optionalCapabilities": ["skinned2d"]
+  },
+  "panel": {
+    "host": {"edge": "bottom"},
+    "content": {"type": "hybrid"},
+    "placement": {"alignment": "center", "dynamic": false, "width": 720, "height": 76},
+    "visibility": {"visibilityMode": "always"},
+    "presentation": {
+      "presentationMode": "collapsed",
+      "presentationTrigger": "hover",
+      "collapseMechanism": "split",
+      "collapseAxis": "horizontal",
+      "revealHandle": "bar"
+    },
+    "layout": {
+      "layout": "horizontal",
+      "layoutScale": 1.0,
+      "layoutPadding": 18,
+      "iconShape": "rounded",
+      "iconSize": 52,
+      "spacing": 8
+    },
+    "theme": {"completeThemeId": "sci-fi-chassis-dark", "rendererTier": "skinned2d"},
+    "surface": {"appearance": "glass", "shape": "pill", "opacity": 0.9, "color": "", "glowIntensity": 1.0},
+    "motion": {
+      "iconAnimation": "pulse",
+      "animationTrigger": "hover",
+      "animationSpeed": 1.0,
+      "animationIntensity": 1.0,
+      "magnificationRadius": 2.4,
+      "magnificationFalloff": "linear"
+    },
+    "recommendedIconPresetId": "beveled-sci-fi"
+  },
+  "fallback": {
+    "themeId": "sci-fi-chassis-dark",
+    "iconPresetId": "original-clean",
+    "unsupportedFieldPolicy": "reject"
+  }
+}

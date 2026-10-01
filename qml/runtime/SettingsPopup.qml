@@ -33,6 +33,43 @@ Window {
     property string previewPresentationState: "open"
     property int previewStateEntry: 1
     property string previewIconState: "normal"
+    // Preset pages only browse and preview. Nothing here reaches a panel.
+    property string selectedPresetId: ""
+    property string presetNoticeText: ""
+    property bool presetNoticeIsError: false
+
+    // The catalog the current page lists, or null on every other page.
+    readonly property var currentPresetPage:
+        StudioNavigation.presetPage(mainTabIndex, subTabIndex)
+    readonly property var presetCards: {
+        const revision = presetLibrary.revision;
+        const page = currentPresetPage;
+        if (!page)
+            return [];
+        return page.kind === "panel" ? presetLibrary.panelPresets(page.scope)
+                                     : presetLibrary.iconPresets(page.scope);
+    }
+    readonly property var selectedPresetCard: {
+        const cards = presetCards;
+        for (let index = 0; index < cards.length; ++index) {
+            if (String(cards[index].id || "") === selectedPresetId)
+                return cards[index];
+        }
+        return null;
+    }
+    // The selected preset plays its motion here unless reduced motion is on.
+    readonly property var selectedPresetCandidate:
+        EditorModel.presetRendererCandidate(selectedPresetCard,
+            Boolean(globalValue("reducedMotion", false)))
+    readonly property var selectedPresetTheme:
+        EditorModel.presetPreviewTheme(selectedPresetCard)
+    readonly property string selectedPresetPreviewMode:
+        String(selectedPresetCard && selectedPresetCard.preview
+            && selectedPresetCard.preview.previewMode || "horizontal")
+    readonly property bool presetPreviewActive:
+        EditorModel.presetState(selectedPresetCard) !== "incompatible"
+    readonly property LivePanelPreview activeRendererPreview:
+        (presetPreviewLoader.item as LivePanelPreview) || embeddedRendererPreview
 
     readonly property int panelRevision: panelRegistry.revision
     readonly property int placementRevision: panelController.nativePlacementRevision
@@ -111,6 +148,15 @@ Window {
 
     function themeRendererCandidate(theme) {
         return EditorModel.rendererThemeCandidate(editorSession, theme);
+    }
+
+    // The current draft drawn with one icon style, for the Icon Styles page.
+    function iconStyleRendererCandidate(style) {
+        // Copied so the native lists in the draft reach the preview as arrays.
+        const candidate = EditorModel.copyValue(EditorModel.rendererCandidate(editorSession));
+        candidate.iconStyle = String(style && style.id || "");
+        candidate.iconStyleDefinition = panelRegistry.iconStyleDefinition(candidate.iconStyle);
+        return candidate;
     }
 
     function resetRendererPreview(candidate) {
@@ -438,35 +484,57 @@ Window {
                 rendererToggle: true, label: qsTr("3D rendering"),
                 description: qsTr("Turn off to use this theme's available 2D surface.") });
         }
-        rows.splice(scene3DControlsAvailable ? 2 : 1, 0, {
-            kind: "themeSamples",
-            label: qsTr("Built-in themes"),
-            description: qsTr("Available themes are resolved by the backend for this panel."),
-            themes: CapabilityModel.availableItems(selectedResolvedThemes)
-        });
-        rows.push({
-            kind: "actions",
-            label: qsTr("Artwork"),
-            description: artifactDescription(),
-            actions: [
-                {
-                    label: qsTr("Import"),
-                    icon: "document-import",
-                    action: "import-theme"
-                },
-                {
-                    label: qsTr("Re-render"),
-                    icon: "view-refresh",
-                    action: "render-theme"
-                },
-                {
-                    label: qsTr("Clear"),
-                    icon: "edit-clear",
-                    action: "clear-theme"
-                }
-            ]
-        });
+        rows.push(notice(qsTr("Built-in themes and imported artwork are on the Panel Themes / Skins page.")));
         return rows;
+    }
+
+    // Panel themes and skins are their own resource type, separate from
+    // Panel Presets: a theme restyles this panel, it is not a whole panel.
+    function panelThemeRows() {
+        return [
+            {
+                kind: "themeSamples",
+                label: qsTr("Panel Themes / Skins"),
+                description: qsTr("Available themes are resolved by the backend for this panel. Load stages a theme in the draft; Apply saves it."),
+                themes: CapabilityModel.availableItems(selectedResolvedThemes)
+            },
+            {
+                kind: "actions",
+                label: qsTr("Artwork"),
+                description: artifactDescription(),
+                actions: [
+                    {
+                        label: qsTr("Import"),
+                        icon: "document-import",
+                        action: "import-theme"
+                    },
+                    {
+                        label: qsTr("Re-render"),
+                        icon: "view-refresh",
+                        action: "render-theme"
+                    },
+                    {
+                        label: qsTr("Clear"),
+                        icon: "edit-clear",
+                        action: "clear-theme"
+                    }
+                ]
+            }
+        ];
+    }
+
+    // Icon styles are their own resource type, separate from Icon Presets.
+    function iconStyleRows() {
+        if (!fieldDescriptor("iconStyle", "panel")) {
+            return [section(qsTr("Icon Styles"), qsTr("Reusable icon appearance sets."), true),
+                notice(qsTr("Icon styles are not available for the resolved panel capabilities."))];
+        }
+        return [{
+            kind: "iconStyleSamples",
+            label: qsTr("Icon Styles"),
+            description: qsTr("The installed icon styles, drawn on this panel. Load stages a style in the draft; Apply saves it."),
+            styles: editorSession.iconStyles || []
+        }];
     }
 
     function panelBehaviorRows() {
@@ -553,6 +621,9 @@ Window {
     }
 
     function rowsForCurrentPage() {
+        // A preset page is a browser, not a settings form.
+        if (currentPresetPage)
+            return [];
         if (mainTabIndex === 0)
             return subTabIndex === 0 ? overviewPanelRows() : overviewIconRows();
         if (mainTabIndex === 1) {
@@ -566,7 +637,9 @@ Window {
                 return panelBehaviorRows();
             if (subTabIndex === 4)
                 return schemaSectionRows("panels-layout", qsTr("Layout"), qsTr("Shape geometry and content placement."));
-            return panelSegmentRows();
+            if (subTabIndex === 5)
+                return panelSegmentRows();
+            return panelThemeRows();
         }
         if (mainTabIndex === 2) {
             if (subTabIndex === 0)
@@ -581,7 +654,7 @@ Window {
                 rows.push(notice(qsTr("Badges and progress appear when an application supplies them. Use Plasma widgets for desktop notifications, sound, Bluetooth and the clock.")));
                 return rows;
             }
-            return unavailablePage(qsTr("Icon Style"), qsTr("Reusable icon appearance sets."));
+            return iconStyleRows();
         }
         if (mainTabIndex === 3)
             return unavailablePage(qsTr("Icon Tiles"), qsTr("Independent icon tile rendering."));
@@ -725,6 +798,8 @@ Window {
             }
             editorSession = EditorModel.stagePanelValues(editorSession, candidate.values || {});
             refreshProjection();
+        } else if (action === "load-icon-style") {
+            setFieldValue({ key: "iconStyle", scope: "panel" }, String(data.styleId || ""));
         } else if (action === "import-theme") {
             themeTargetPanelId = selectedPanelId;
             themeDialog.open();
@@ -733,6 +808,42 @@ Window {
         } else if (action === "clear-theme") {
             stageArtifact("clear", "");
         }
+    }
+
+    // Duplicate, rename and delete act on the user's preset store only. They
+    // never touch an installed preset, a panel or the desktop.
+    function performPresetAction(action, presetId, name) {
+        const page = currentPresetPage;
+        if (!page)
+            return;
+        let result = null;
+        if (action === "duplicate")
+            result = presetLibrary.duplicatePreset(page.kind, presetId, name);
+        else if (action === "rename")
+            result = presetLibrary.renamePreset(page.kind, presetId, name);
+        else if (action === "remove")
+            result = presetLibrary.removePreset(page.kind, presetId);
+        else
+            return;
+
+        presetNoticeIsError = !(result && result.success === true);
+        if (presetNoticeIsError) {
+            presetNoticeText = qsTr("The preset store was not changed (%1).").arg(String(result && result.errorCode ? result.errorCode : "unknown-error"));
+        } else if (action === "duplicate") {
+            presetNoticeText = qsTr("Saved to %1 as “%2”.").arg(page.kind === "panel" ? qsTr("My Panel Presets") : qsTr("My Icon Presets")).arg(name);
+        } else if (action === "rename") {
+            presetNoticeText = qsTr("Renamed to “%1”.").arg(name);
+        } else {
+            presetNoticeText = qsTr("The preset was deleted.");
+            if (selectedPresetId === presetId)
+                selectedPresetId = "";
+        }
+    }
+
+    onCurrentPresetPageChanged: {
+        selectedPresetId = "";
+        presetNoticeText = "";
+        presetNoticeIsError = false;
     }
 
     onSelectedPanelIdChanged: {
@@ -1062,9 +1173,14 @@ Window {
                         spacing: 8
 
                         Label {
-                            text: qsTr("Live renderer preview")
+                            objectName: "panel-studio-preview-title"
+                            text: root.presetPreviewActive
+                                ? qsTr("Preset preview — %1").arg(String(root.selectedPresetCard.name || ""))
+                                : qsTr("Live renderer preview")
                             color: "#e9f5fa"
                             font.weight: Font.DemiBold
+                            elide: Text.ElideRight
+                            Layout.maximumWidth: 320
                         }
 
                         Item {
@@ -1091,8 +1207,12 @@ Window {
                             ]
                             textRole: "label"
                             valueRole: "value"
+                            // A preset is previewed in the mode it declares.
+                            enabled: !root.presetPreviewActive
                             currentIndex: root.optionIndex(
-                                model, root.previewMode)
+                                model, root.presetPreviewActive
+                                    ? root.selectedPresetPreviewMode
+                                    : root.previewMode)
                             onActivated: root.previewMode = currentValue
                         }
 
@@ -1133,6 +1253,7 @@ Window {
                         id: embeddedRendererPreview
 
                         objectName: "panel-studio-live-renderer-preview"
+                        visible: !root.presetPreviewActive
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         panelDefinition: root.selectedRendererCandidate
@@ -1156,20 +1277,51 @@ Window {
                         contentMargin: 6
                     }
 
+                    // The selected preset, drawn from its own record. It takes
+                    // the place of the panel's preview and is never applied.
+                    Loader {
+                        id: presetPreviewLoader
+
+                        visible: active
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        active: root.presetPreviewActive
+                        sourceComponent: LivePanelPreview {
+                            objectName: "panel-studio-preset-preview"
+                            panelDefinition: root.selectedPresetCandidate
+                            hostCapabilities:
+                                root.selectedPresetCandidate
+                                    .capabilityResolution || ({})
+                            themeDefinition: root.selectedPresetTheme
+                            iconStyleDefinition:
+                                root.selectedPresetCandidate
+                                    .iconStyleDefinition || ({})
+                            indicatorStyleDefinition:
+                                root.selectedPresetTheme.indicatorStyle || ({})
+                            animationProfiles: root.selectedPresetCandidate
+                            previewMode: root.selectedPresetPreviewMode
+                            presentationState:
+                                root.previewPresentationState
+                            stateEntry: root.previewStateEntry
+                            iconState: root.previewIconState
+                            contentMargin: 6
+                        }
+                    }
+
                     RowLayout {
                         Layout.fillWidth: true
 
                         Label {
                             text: qsTr("Renderer: %1").arg(
-                                embeddedRendererPreview.activeRendererTier)
+                                root.activeRendererPreview.activeRendererTier)
                             color: "#86dff2"
                             font.pixelSize: 10
                         }
 
                         Label {
-                            visible: embeddedRendererPreview.fallbackApplied
+                            visible: root.activeRendererPreview.fallbackApplied
                             text: qsTr("Fallback: %1").arg(
-                                embeddedRendererPreview.fallbackReason
+                                root.activeRendererPreview.fallbackReason
                                 || qsTr("unspecified"))
                             color: "#ffc66d"
                             font.pixelSize: 10
@@ -1180,10 +1332,14 @@ Window {
                         }
 
                         Label {
-                            text: root.hasSettingsChanges
-                                ? qsTr("Draft only — desktop unchanged")
-                                : qsTr("Saved settings")
+                            objectName: "panel-studio-preview-status"
+                            text: root.presetPreviewActive
+                                ? qsTr("Preset preview only — no panel is changed")
+                                : root.hasSettingsChanges
+                                    ? qsTr("Draft only — desktop unchanged")
+                                    : qsTr("Saved settings")
                             color: root.hasSettingsChanges
+                                    || root.presetPreviewActive
                                 ? "#80de70" : "#728995"
                             font.pixelSize: 10
                         }
@@ -1211,10 +1367,38 @@ Window {
             }
 
             StudioForm {
+                visible: root.currentPresetPage === null
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 studio: root
                 rows: root.rowsForCurrentPage()
+            }
+
+            PresetBrowser {
+                objectName: "panel-studio-preset-browser"
+                visible: root.currentPresetPage !== null
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                kind: root.currentPresetPage ? root.currentPresetPage.kind : "panel"
+                scope: root.currentPresetPage ? root.currentPresetPage.scope : "builtin"
+                presets: root.presetCards
+                catalogStatus: root.currentPresetPage
+                    ? presetLibrary.catalogStatus() : ({ valid: true })
+                selectedPresetId: root.selectedPresetId
+                noticeText: root.presetNoticeText
+                noticeIsError: root.presetNoticeIsError
+                onPresetSelected: function(presetId) {
+                    root.selectedPresetId = presetId;
+                }
+                onDuplicateRequested: function(presetId, name) {
+                    root.performPresetAction("duplicate", presetId, name);
+                }
+                onRenameRequested: function(presetId, name) {
+                    root.performPresetAction("rename", presetId, name);
+                }
+                onRemoveRequested: function(presetId) {
+                    root.performPresetAction("remove", presetId, "");
+                }
             }
         }
     }

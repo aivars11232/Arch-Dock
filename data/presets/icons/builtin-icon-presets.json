@@ -1,0 +1,21 @@
+{
+  "format": "org.archdock.icon-preset-catalog",
+  "version": 1,
+  "presets": [
+    "original-clean",
+    "glass-tile",
+    "metallic-blue",
+    "metallic-red",
+    "neon-green",
+    "neon-orange",
+    "dark-orb",
+    "blue-pedestal",
+    "red-pedestal",
+    "holographic-tile",
+    "minimal-glow",
+    "beveled-sci-fi",
+    "metallic-blue-slow-turn",
+    "neon-green-enlarge",
+    "dark-orb-spiral"
+  ]
+}

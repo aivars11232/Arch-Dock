@@ -35,7 +35,15 @@ resolved. Documentation and task-owned artifact/session cleanup are complete.
 The earlier blocked reports remain historical evidence; see
 [TASK-0039 final closure](#task-0039-final-closure--2026-09-27).
 The [old handoff](TASK-0039_CONTINUATION_HANDOFF.txt) is explicitly retired.
-The owner controls Git closure; no successor task has started.
+The owner committed the TASK-0039 closure as `3ab470c`.
+
+**TASK-0040 is COMPLETE** (2026-10-01): Panel Preset and
+Icon Preset definitions, catalogs, user store, Studio pages and the exact
+15 + 15 built-in libraries. A fresh build and the full **80/80 CTest gate pass
+(321.17 s)**. See
+[TASK-0040 implementation](#task-0040-implementation--2026-10-01). On the
+owner's instruction the agent committed and pushed it; TASK-0041 has not
+started.
 
 Earlier context, retained because it explains two mislabelled commits: the
 session that produced `f61c9ab` began from a tree whose subject `Task33` is
@@ -2493,7 +2501,7 @@ Suggested commit message after verified closure remains:
 
 ## TASK-0039 final closure — 2026-09-27
 
-**COMPLETE in the working tree; owner-controlled Git closure pending.** This section supersedes
+**COMPLETE; the owner committed this closure as `3ab470c`.** This section supersedes
 the blocked checkpoint above without rewriting its historical evidence. The
 owner explicitly authorized bounded diagnosis/repair cycles for mandatory
 TASK-0039 gate failures, overriding execution-contract section 3 for this task.
@@ -2651,3 +2659,120 @@ Private virtual Wayland evidence does not claim physical GPU, monitor/hotplug,
 personal-desktop or release acceptance. General release boxes remain unchecked.
 The suggested owner-controlled commit remains `Complete Arch Dock content systems`;
 it contains TASK-0039 closure only, with no Git writes performed by the agent.
+
+## TASK-0040 implementation — 2026-10-01
+
+**COMPLETE.** The work was implemented and verified on baseline `3ab470c` with
+nothing staged. On 2026-10-01 the owner instructed "commit and sync now"; the
+agent then made one commit, `Add Arch Dock built-in preset catalogs`, on `main`
+and pushed it to `origin/main`. One primary session did the work; no
+background, delegated or parallel agent was used.
+
+### Delivered
+
+- **Models** (`src/model/`): `PresetIdentity`, `IconPresetDefinition`,
+  `PanelPresetDefinition`. Strict parsers: unknown fields and any value the
+  settings schema would change are errors with a JSON pointer.
+- **Catalogs and store** (`src/presets/`): `PresetCatalog` (two immutable,
+  all-or-nothing installed catalogs), `UserPresetStore` (versioned, user ids
+  only, `QSaveFile`), `PresetCapabilityResolver`, `PresetLibrary`.
+- **Lineage on the active panel** was already present as `PanelPresetOrigin`
+  and is unchanged.
+- **Data**: `data/presets/panels/` and `data/presets/icons/`, each an index plus
+  15 definitions, installed to `share/arch-dock/presets/`.
+- **Studio**: six pages. Panels gains Panel Themes / Skins, Built-in Panel
+  Presets and My Panel Presets; Icons gains Icon Styles (real cards), Built-in
+  Icon Presets and My Icon Presets. Existing tab indices are unchanged.
+  `PresetBrowser.qml` and `PresetCard.qml` draw every card through
+  `LivePanelPreview`.
+- **Backend surface**: `PanelWindow` gained one member and one context
+  property, `presetLibrary`. No slot was added, so the D-Bus surface is
+  unchanged.
+- **Docs**: [PRESET_PACKAGE.md](PRESET_PACKAGE.md) and a preset-card section in
+  [shared-renderer.md](shared-renderer.md).
+
+### Approved adaptations
+
+- Five icon presets are a shipped style plus declared overrides: `glass-tile`,
+  `blue-pedestal`, `red-pedestal`, `holographic-tile`, `beveled-sci-fi`.
+- `holographic-semicircle` is a procedural 2D free semicircle with no theme. No
+  built-in preset uses `true3d`.
+- `octagonal-platform` and `orange-arc-dock` fall back to their theme's own
+  procedural tier, then the procedural surface. `builtin-themes.json` is
+  unchanged; its `fallbackThemeId: holographic-ring` for those two themes cannot
+  draw their layouts.
+- Studio QML stays in `qml/runtime/`. Card actions are select, Duplicate, and
+  for user presets Rename and Delete. There is no Apply, Preview on Desktop or
+  Set as Default; those belong to TASK-0041.
+
+### Deviations from the approved plan
+
+- `tests/PresetTestSupport.h` was added to share fixtures between the three
+  preset test programs.
+- `tests/PanelWindowCapabilityTest.cpp` gained one slot,
+  `studioPresetPagesBrowseWithoutChangingAnyPanel`, and its target gained the
+  animation-profile catalog path. This is the only test that drives the real
+  Studio popup's new pages.
+- `PresetCatalog.cpp` was edited again in the resolver step to call the
+  resolver.
+- New source and test files number 22, as planned, but the set differs by the
+  support header.
+
+### Verification
+
+| Gate | Result |
+|---|---|
+| Baseline at `3ab470c` | 74/75, then `rendering-import-smoke` passed on its single permitted re-run (the documented environmental flake) |
+| Phase A gate, incremental build | **80/80**, 317.25 s |
+| Consolidated gate, fresh configure and build | 0 compiler warnings; **80/80**, 321.17 s |
+| `git diff --check` | clean |
+
+New tests: `preset-definition-test` (89 passed), `preset-catalog-test` (73),
+`preset-library-test` (12), `preset-browser-test` (14),
+`preset-staged-preview-smoke`. Extended: `studio-navigation-test` (10),
+`settings-editor-model-test` (21), `studio-preview-contract-test`,
+`panel-window-capability-test`.
+
+Three failures occurred during implementation. Each was diagnosed before one
+correction and one re-run:
+
+1. A browser test clicked a button in the frame it became visible, before the
+   layout pass. The test now waits for that frame.
+2. Preset records reached `LivePanelPreview` with Qt sequences, which its copy
+   turns into keyed objects. `presetRendererCandidate()` now copies with
+   `copyValue`, as `rendererCandidate()` does for its nested data.
+3. The capability test target had no animation-profile catalog, so the preset
+   library correctly reported its resources unavailable there.
+
+### Acceptance
+
+| Criterion | Result | Proof |
+|---|---|---|
+| Exactly 15 + 15 valid built-ins installed | PASS | `preset-catalog-test` exact id and name lists; staged smoke counts 15 + 15 |
+| Catalogs and resource types separate | PASS | Two catalog classes, formats and directories; cross-type files rejected |
+| Every card renders real shared-renderer output | PASS | `preset-library-test`: 30 real cards, non-empty, repeatable, at the reported tier, no QML warning |
+| Built-ins cannot be overwritten; derivative gets a new id and round-trips | PASS | Store and library tests; installed tree digest unchanged |
+| Missing capability selects the fallback or marks incompatible, no fake Apply | PASS | Resolver and library tests; contract test forbids an Apply action |
+| Selecting cards mutates no panel | PASS | Registry revision, panel records and settings unchanged, in the library test and in the real Studio popup |
+
+### Limitations and observations
+
+- A user preset's fields cannot be edited in Studio yet. The store API
+  supports it; the editing UI arrives with TASK-0041's draft.
+- Free-layout presets are small in a card because the whole scene is scaled to
+  fit. Selecting one shows it in the larger Studio preview.
+- **Pre-existing defect, not changed:** the Studio's own panel preview and its
+  theme cards log `PanelScene.qml:196 TypeError` for a procedural linear panel
+  whose segments have not been edited, because `rendererCandidate()` passes the
+  `segments` list as a Qt sequence. Details are in
+  [shared-renderer.md](shared-renderer.md).
+- During the consolidated gate a fresh build was started without a job limit
+  and the owner's machine crashed. The gate was repeated one step at a time
+  with four build jobs. No repository file was lost.
+- Private virtual Wayland results do not establish physical GPU,
+  monitor/hotplug, personal-desktop or release acceptance. Release boxes stay
+  unchecked.
+
+Cleanup PASS: the task build directory and every temporary staged prefix were
+removed, and no `/tmp/archdock-*` root or task process remains. The commit is
+`Add Arch Dock built-in preset catalogs`; the next task records its hash.

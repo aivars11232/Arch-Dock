@@ -120,6 +120,7 @@ private slots:
     void groupedWindowsFollowLiveKWinUpdates();
     void desktopLaunchIsBoundToTheSelectedPanelEntry();
     void folderRequestsValidatePanelAndChild();
+    void studioPresetPagesBrowseWithoutChangingAnyPanel();
 
 private:
     QTemporaryDir m_settingsDirectory;
@@ -2414,6 +2415,228 @@ void PanelWindowCapabilityTest::presentationProfileIsPublishedForLaterPresets()
         QStringLiteral("availableMechanisms")).toStringList();
     QVERIFY(available.contains(QStringLiteral("open")));
     QVERIFY(!available.contains(QStringLiteral("split")));
+}
+
+void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(qEnvironmentVariable("QML_IMPORT_PATH",
+        QCoreApplication::applicationDirPath() + QStringLiteral("/qml-imports")));
+    // Warnings raised by Panel Studio's own files. The shared renderer module
+    // is held to zero warnings for every preset by preset-library-test.
+    QStringList studioWarnings;
+    connect(&engine, &QQmlEngine::warnings, &engine, [&](const QList<QQmlError> &warnings) {
+        for (const QQmlError &warning : warnings)
+        {
+            if (warning.url().path().contains(QStringLiteral("/qml/runtime/")))
+                studioWarnings.append(warning.toString());
+        }
+    });
+    PanelWindow window(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("panelRegistry")).value<QObject *>());
+    QObject *library = engine.rootContext()
+        ->contextProperty(QStringLiteral("presetLibrary")).value<QObject *>();
+    QVERIFY(registry);
+    QVERIFY(library);
+
+    // The user preset store lives in this test's own data directory, and it
+    // is removed again whatever happens below.
+    const QString presetStore = QDir(QStandardPaths::writableLocation(
+        QStandardPaths::AppDataLocation)).filePath(QStringLiteral("presets"));
+    const QString dataHome = qEnvironmentVariable("XDG_DATA_HOME");
+    QVERIFY2(!dataHome.isEmpty() &&
+                 presetStore.startsWith(QDir(dataHome).absolutePath() + QLatin1Char('/')),
+             "refusing to use a preset store outside the CTest-provided XDG_DATA_HOME");
+    const auto removeStore = qScopeGuard([&presetStore] { QDir(presetStore).removeRecursively(); });
+    QVERIFY(!QFileInfo::exists(presetStore));
+
+    const QString panelId = QStringLiteral("bottom");
+    QVariantMap panelsBefore;
+    for (const QString &id : registry->panelIds())
+        panelsBefore.insert(id, registry->panelDefinition(id)->toPersistedMap());
+    const int revisionBefore = registry->revision();
+    const QVariantMap settingsBefore = settingsSnapshot();
+    const auto nothingChanged = [&]() {
+        QVariantMap panels;
+        for (const QString &id : registry->panelIds())
+            panels.insert(id, registry->panelDefinition(id)->toPersistedMap());
+        return panels == panelsBefore && registry->revision() == revisionBefore &&
+            settingsSnapshot() == settingsBefore;
+    };
+
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> popup(component.createWithInitialProperties({
+        {QStringLiteral("selectedPanelId"), panelId}, {QStringLiteral("mainTabIndex"), 1},
+        {QStringLiteral("subTabIndex"), 7}}));
+    QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
+    auto *studio = qobject_cast<QQuickWindow *>(popup.get());
+    QVERIFY(studio);
+    studio->show();
+    QVERIFY(QTest::qWaitForWindowExposed(studio));
+    QVERIFY(QQuickTest::qWaitForPolish(studio));
+
+    const auto plain = [](const QVariant &value) {
+        return value.metaType() == QMetaType::fromType<QJSValue>()
+            ? value.value<QJSValue>().toVariant() : value;
+    };
+    const auto findVisible = [&](const QString &name) -> QQuickItem * {
+        QList<QQuickItem *> pending{studio->contentItem()};
+        while (!pending.isEmpty())
+        {
+            QQuickItem *item = pending.takeLast();
+            if (item->objectName() == name && item->isVisible())
+                return item;
+            pending.append(item->childItems());
+        }
+        return nullptr;
+    };
+    const auto openPage = [&](int section, int subtab) {
+        popup->setProperty("mainTabIndex", section);
+        popup->setProperty("subTabIndex", subtab);
+        return QQuickTest::qWaitForPolish(studio);
+    };
+    const auto cards = [&]() { return plain(popup->property("presetCards")).toList(); };
+    const auto browser = QStringLiteral("panel-studio-preset-browser");
+    const auto presetPreview = QStringLiteral("panel-studio-preset-preview");
+
+    // The four preset pages list two separate catalogs, and selecting a card
+    // replaces the panel's preview with the preset's without applying it.
+    struct Page { int section; int subtab; QString kind; QString scope; int count; };
+    for (const Page &page : {Page{1, 7, QStringLiteral("panel"), QStringLiteral("builtin"), 15},
+                             Page{1, 8, QStringLiteral("panel"), QStringLiteral("user"), 0},
+                             Page{2, 5, QStringLiteral("icon"), QStringLiteral("builtin"), 15},
+                             Page{2, 6, QStringLiteral("icon"), QStringLiteral("user"), 0}})
+    {
+        QVERIFY(openPage(page.section, page.subtab));
+        const QVariantMap current = plain(popup->property("currentPresetPage")).toMap();
+        QCOMPARE(current.value(QStringLiteral("kind")).toString(), page.kind);
+        QCOMPARE(current.value(QStringLiteral("scope")).toString(), page.scope);
+        QQuickItem *list = findVisible(browser);
+        QVERIFY(list);
+        QCOMPARE(list->property("kind").toString(), page.kind);
+        QCOMPARE(list->property("scope").toString(), page.scope);
+        QVERIFY(list->property("catalogValid").toBool());
+        QCOMPARE(cards().size(), page.count);
+        // Opening a page selects nothing: the preview is still the panel's.
+        QCOMPARE(popup->property("selectedPresetId").toString(), QString{});
+        QVERIFY(!popup->property("presetPreviewActive").toBool());
+        QVERIFY(!findVisible(presetPreview));
+        QVERIFY(findVisible(QStringLiteral("panel-studio-live-renderer-preview")));
+
+        const QVariantList listed = cards();
+        for (int index = 0; index < listed.size(); ++index)
+        {
+            const QVariantMap card = listed.at(index).toMap();
+            const QString id = card.value(QStringLiteral("id")).toString();
+            QCOMPARE(card.value(QStringLiteral("kind")).toString(), page.kind);
+            if (index == 0)
+            {
+                // The first card is selected the way a person does it.
+                QQuickItem *item = findVisible(QStringLiteral("preset-card-") + id);
+                QVERIFY2(item, qPrintable(id));
+                QTest::mouseClick(studio, Qt::LeftButton, Qt::NoModifier,
+                    item->mapToScene(QPointF(40, 20)).toPoint());
+            }
+            else
+            {
+                popup->setProperty("selectedPresetId", id);
+            }
+            QTRY_COMPARE(popup->property("selectedPresetId").toString(), id);
+            QTRY_VERIFY2(popup->property("presetPreviewActive").toBool(), qPrintable(id));
+            QQuickItem *preview = nullptr;
+            QTRY_VERIFY2((preview = findVisible(presetPreview)) != nullptr, qPrintable(id));
+            QVERIFY(!findVisible(QStringLiteral("panel-studio-live-renderer-preview")));
+            QTRY_COMPARE(preview->property("activeRendererTier").toString(),
+                card.value(QStringLiteral("compatibility")).toMap()
+                    .value(QStringLiteral("effectiveRendererTier")).toString());
+            QVERIFY2(!preview->property("fallbackApplied").toBool(), qPrintable(id));
+            QCOMPARE(findVisible(QStringLiteral("panel-studio-preview-title"))->property("text").toString(),
+                     QStringLiteral("Preset preview — ") + card.value(QStringLiteral("name")).toString());
+            QCOMPARE(findVisible(QStringLiteral("panel-studio-preview-status"))->property("text").toString(),
+                     QStringLiteral("Preset preview only — no panel is changed"));
+            // A selected preset is not a draft: there is nothing to apply.
+            QVERIFY(!popup->property("hasPendingChanges").toBool());
+        }
+    }
+    QVERIFY(nothingChanged());
+    QVERIFY(!QFileInfo::exists(presetStore));
+
+    // Leaving a preset page drops the selection and returns the panel's own
+    // preview.
+    QVERIFY(openPage(1, 0));
+    QCOMPARE(popup->property("selectedPresetId").toString(), QString{});
+    QVERIFY(!findVisible(browser));
+    QVERIFY(!findVisible(presetPreview));
+    QVERIFY(findVisible(QStringLiteral("panel-studio-live-renderer-preview")));
+
+    // Themes and icon styles have pages of their own and are not presets.
+    QVERIFY(openPage(1, 2));
+    QVERIFY(!findVisible(QStringLiteral("theme-live-preview-obsidian-glass")));
+    QVERIFY(openPage(1, 6));
+    QVERIFY(plain(popup->property("currentPresetPage")).isNull());
+    QTRY_VERIFY(findVisible(QStringLiteral("theme-live-preview-obsidian-glass")));
+    QVERIFY(!findVisible(browser));
+    QVERIFY(openPage(2, 4));
+    QTRY_VERIFY(findVisible(QStringLiteral("icon-style-live-preview-metallic-blue")));
+    QVERIFY(findVisible(QStringLiteral("icon-style-live-preview-dark-orb")));
+    QVERIFY(!findVisible(QStringLiteral("theme-live-preview-obsidian-glass")));
+    // Loading an icon style stages it in the draft; the panel keeps its own.
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "performStudioAction",
+        Q_ARG(QVariant, QStringLiteral("load-icon-style")),
+        Q_ARG(QVariant, (QVariantMap{{QStringLiteral("styleId"), QStringLiteral("metallic-blue")}}))));
+    QTRY_VERIFY(popup->property("hasPendingChanges").toBool());
+    QCOMPARE(plain(popup->property("selectedRendererCandidate")).toMap()
+        .value(QStringLiteral("iconStyle")).toString(), QStringLiteral("metallic-blue"));
+    QVERIFY(popup->property("studioError").toString().isEmpty());
+    QVERIFY(nothingChanged());
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "discardStudioChanges"));
+    QVERIFY(!popup->property("hasPendingChanges").toBool());
+
+    // Duplicate, rename and delete reach only the user's preset store.
+    const auto presetAction = [&](const QString &action, const QString &id, const QString &name) {
+        return QMetaObject::invokeMethod(popup.get(), "performPresetAction",
+            Q_ARG(QVariant, action), Q_ARG(QVariant, id), Q_ARG(QVariant, name));
+    };
+    QVERIFY(openPage(1, 7));
+    QVERIFY(presetAction(QStringLiteral("duplicate"), QStringLiteral("circular-blue-ring"),
+                         QStringLiteral("My Ring")));
+    QVERIFY(!popup->property("presetNoticeIsError").toBool());
+    QVERIFY(popup->property("presetNoticeText").toString().contains(QStringLiteral("My Panel Presets")));
+    QCOMPARE(library->property("revision").toInt(), 1);
+    QCOMPARE(cards().size(), 15);
+    QVERIFY(QFileInfo(presetStore).isDir());
+    QVERIFY(openPage(1, 8));
+    QTRY_COMPARE(cards().size(), 1);
+    const QString userId = cards().first().toMap().value(QStringLiteral("id")).toString();
+    QVERIFY(userId.startsWith(QStringLiteral("user-")));
+    QVERIFY(!cards().first().toMap().value(QStringLiteral("builtIn")).toBool());
+    QCOMPARE(popup->property("presetNoticeText").toString(), QString{});
+    popup->setProperty("selectedPresetId", userId);
+    QTRY_VERIFY(findVisible(presetPreview));
+    QVERIFY(presetAction(QStringLiteral("rename"), userId, QStringLiteral("Desk Ring")));
+    QVERIFY(!popup->property("presetNoticeIsError").toBool());
+    QTRY_COMPARE(cards().first().toMap().value(QStringLiteral("name")).toString(),
+                 QStringLiteral("Desk Ring"));
+    QCOMPARE(popup->property("selectedPresetId").toString(), userId);
+    // A built-in cannot be renamed or deleted, and the refusal is reported.
+    QVERIFY(presetAction(QStringLiteral("rename"), QStringLiteral("circular-blue-ring"),
+                         QStringLiteral("Mine")));
+    QVERIFY(popup->property("presetNoticeIsError").toBool());
+    QVERIFY(popup->property("presetNoticeText").toString().contains(QStringLiteral("not-user-preset")));
+    QCOMPARE(library->property("revision").toInt(), 2);
+    QVERIFY(presetAction(QStringLiteral("remove"), userId, QString{}));
+    QVERIFY(!popup->property("presetNoticeIsError").toBool());
+    QTRY_COMPARE(cards().size(), 0);
+    QCOMPARE(popup->property("selectedPresetId").toString(), QString{});
+    QVERIFY(!findVisible(presetPreview));
+    QVERIFY(openPage(1, 7));
+    QCOMPARE(cards().size(), 15);
+
+    QVERIFY(nothingChanged());
+    QVERIFY2(studioWarnings.isEmpty(), qPrintable(studioWarnings.join(QLatin1Char('\n'))));
+    studio->close();
 }
 
 int main(int argc, char **argv)

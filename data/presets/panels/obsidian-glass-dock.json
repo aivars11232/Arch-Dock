@@ -1,0 +1,61 @@
+{
+  "format": "org.archdock.panel-preset",
+  "schemaVersion": 1,
+  "identity": {
+    "id": "obsidian-glass-dock",
+    "name": "Obsidian Glass Dock",
+    "description": "A dark glass pill dock for a screen edge, drawn procedurally with glass icon tiles.",
+    "builtIn": true,
+    "revision": 1
+  },
+  "preview": {
+    "previewMode": "horizontal",
+    "rendererTier": "procedural2d",
+    "fallbackTier": "procedural2d",
+    "deterministicPreviewSeed": "obsidian-glass-dock-v1"
+  },
+  "compatibility": {
+    "hostKinds": ["native-edge", "free-desktop"],
+    "orientations": ["horizontal", "vertical"],
+    "layouts": ["adaptive", "horizontal", "vertical"],
+    "requiredCapabilities": [],
+    "optionalCapabilities": ["dynamic-tint"]
+  },
+  "panel": {
+    "host": {"edge": "bottom"},
+    "content": {"type": "hybrid"},
+    "placement": {"alignment": "center", "dynamic": false, "width": 720, "height": 76},
+    "visibility": {"visibilityMode": "always"},
+    "presentation": {
+      "presentationMode": "open",
+      "presentationTrigger": "hover",
+      "collapseMechanism": "open",
+      "collapseAxis": "horizontal",
+      "revealHandle": "edge-strip"
+    },
+    "layout": {
+      "layout": "adaptive",
+      "layoutScale": 1.0,
+      "layoutPadding": 18,
+      "iconShape": "rounded",
+      "iconSize": 52,
+      "spacing": 8
+    },
+    "theme": {"completeThemeId": "obsidian-glass"},
+    "surface": {"appearance": "glass", "shape": "pill", "opacity": 0.88, "color": "#161b26", "glowIntensity": 1.0},
+    "motion": {
+      "iconAnimation": "pulse",
+      "animationTrigger": "hover",
+      "animationSpeed": 1.0,
+      "animationIntensity": 1.0,
+      "magnificationRadius": 2.4,
+      "magnificationFalloff": "linear"
+    },
+    "recommendedIconPresetId": "glass-tile"
+  },
+  "fallback": {
+    "themeId": "obsidian-glass",
+    "iconPresetId": "original-clean",
+    "unsupportedFieldPolicy": "reject"
+  }
+}

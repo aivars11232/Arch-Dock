@@ -1,0 +1,32 @@
+{
+  "format": "org.archdock.icon-preset",
+  "schemaVersion": 1,
+  "identity": {
+    "id": "neon-green-enlarge",
+    "name": "Neon Green — Enlarge",
+    "description": "The Neon Green tile with the hovered icon enlarging and its neighbours following.",
+    "builtIn": true,
+    "revision": 1
+  },
+  "compatibility": {
+    "rendererTiers": ["procedural2d"],
+    "requiredStyleCapabilities": ["tile", "shadow", "glow"],
+    "reducedMotionSupport": true
+  },
+  "icon": {
+    "iconStyleId": "neon-green",
+    "visualOverrides": {},
+    "stateOverrides": {},
+    "glyphPolicy": {"mode": "original", "compatibleOnly": true},
+    "motion": {
+      "profileId": "enlarge",
+      "animationTrigger": "hover",
+      "animationSpeed": 1.0,
+      "animationIntensity": 1.0,
+      "magnificationRadius": 3.2,
+      "magnificationFalloff": "cosine"
+    },
+    "perStateAnimationOverrides": {}
+  },
+  "fallback": {"iconStyleId": "plain-original", "motionProfileId": "none"}
+}

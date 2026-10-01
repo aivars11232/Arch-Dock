@@ -1,0 +1,48 @@
+{
+  "format": "org.archdock.icon-preset",
+  "schemaVersion": 1,
+  "identity": {
+    "id": "red-pedestal",
+    "name": "Red Pedestal",
+    "description": "A red glass orb standing on a lit red pedestal around the application's own icon.",
+    "builtIn": true,
+    "revision": 1
+  },
+  "compatibility": {
+    "rendererTiers": ["procedural2d"],
+    "requiredStyleCapabilities": ["tile", "reflection", "shadow", "glow"],
+    "reducedMotionSupport": true
+  },
+  "icon": {
+    "iconStyleId": "dark-orb",
+    "visualOverrides": {
+      "orb-shadow": {"borderColor": "#4f2429"},
+      "orb-pedestal": {"color": "#1d070a", "secondaryColor": "#6b2730", "borderColor": "#ff4d5e", "opacity": 1, "borderWidth": 0.03},
+      "orb-glass": {"color": "#1c0609", "secondaryColor": "#501b23", "borderColor": "#ff7482"},
+      "orb-energy-ring": {"secondaryColor": "#ffd6da", "borderColor": "#ff8f9a"},
+      "orb-reflection": {"color": "#ffd6da"},
+      "orb-glow": {"color": "#ff4d5e", "borderColor": "#ff4d5e"}
+    },
+    "stateOverrides": {
+      "normal": {"borderColor": "#ff7482", "glowColor": "#ff4d5e", "indicatorColor": "#ff8f9a"},
+      "hover": {"borderColor": "#ffd6da", "glowColor": "#ff8f9a", "indicatorColor": "#ffb3bb"},
+      "pressed": {"borderColor": "#ff7482", "glowColor": "#d63a4a", "indicatorColor": "#ff8f9a"},
+      "active": {"borderColor": "#ffd6da", "glowColor": "#ff8f9a", "indicatorColor": "#ffd6da"},
+      "running": {"borderColor": "#ff8f9a", "glowColor": "#ff4d5e", "indicatorColor": "#ff8f9a"},
+      "minimized": {"borderColor": "#723a40", "glowColor": "#723a40", "indicatorColor": "#965c63"},
+      "launching": {"borderColor": "#ffb3bb", "glowColor": "#ff8f9a", "indicatorColor": "#ffb3bb"},
+      "urgent": {"borderColor": "#ffe08a", "glowColor": "#ffc21f", "indicatorColor": "#ffe08a"}
+    },
+    "glyphPolicy": {"mode": "original", "compatibleOnly": true},
+    "motion": {
+      "profileId": "glow",
+      "animationTrigger": "hover",
+      "animationSpeed": 1.0,
+      "animationIntensity": 1.0,
+      "magnificationRadius": 2.4,
+      "magnificationFalloff": "linear"
+    },
+    "perStateAnimationOverrides": {}
+  },
+  "fallback": {"iconStyleId": "plain-original", "motionProfileId": "none"}
+}

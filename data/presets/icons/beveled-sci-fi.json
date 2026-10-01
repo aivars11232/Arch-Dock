@@ -1,0 +1,47 @@
+{
+  "format": "org.archdock.icon-preset",
+  "schemaVersion": 1,
+  "identity": {
+    "id": "beveled-sci-fi",
+    "name": "Beveled Sci-Fi",
+    "description": "An angular steel tile with a heavy bevel and amber light around the application's own icon.",
+    "builtIn": true,
+    "revision": 1
+  },
+  "compatibility": {
+    "rendererTiers": ["procedural2d"],
+    "requiredStyleCapabilities": ["tile", "reflection", "shadow", "glow"],
+    "reducedMotionSupport": true
+  },
+  "icon": {
+    "iconStyleId": "metallic-red",
+    "visualOverrides": {
+      "red-aura": {"color": "#5a6878", "secondaryColor": "#c9d4de", "borderColor": "#8fa0b0", "opacity": 0.4, "radius": 0.1},
+      "red-metal": {"color": "#141a21", "secondaryColor": "#3b4753", "borderColor": "#9fb0be", "borderWidth": 0.04, "radius": 0.1, "inset": 0.05},
+      "red-bevel": {"secondaryColor": "#f2f6f9", "borderColor": "#c9d4de", "borderWidth": 0.05, "radius": 0.1, "opacity": 0.9, "inset": 0.085},
+      "red-reflection": {"color": "#f2f6f9", "opacity": 0.16, "radius": 0.08},
+      "red-shadow": {"color": "#05070a", "radius": 0.12},
+      "red-glow": {"color": "#ffb347", "borderColor": "#ffb347", "radius": 0.12, "opacity": 0.7}
+    },
+    "stateOverrides": {
+      "normal": {"borderColor": "#9fb0be", "glowColor": "#ffb347", "indicatorColor": "#ffb347"},
+      "hover": {"borderColor": "#f2f6f9", "glowColor": "#ffc670", "indicatorColor": "#ffd699"},
+      "pressed": {"borderColor": "#9fb0be", "glowColor": "#d68f2e", "indicatorColor": "#ffb347"},
+      "active": {"borderColor": "#f2f6f9", "glowColor": "#ffc670", "indicatorColor": "#ffd699"},
+      "running": {"borderColor": "#c9d4de", "glowColor": "#ffb347", "indicatorColor": "#ffb347"},
+      "minimized": {"borderColor": "#55616c", "glowColor": "#55616c", "indicatorColor": "#7b8894"},
+      "launching": {"borderColor": "#e0e8ee", "glowColor": "#ffc670", "indicatorColor": "#ffd699"}
+    },
+    "glyphPolicy": {"mode": "original", "compatibleOnly": true},
+    "motion": {
+      "profileId": "pulse",
+      "animationTrigger": "hover",
+      "animationSpeed": 1.0,
+      "animationIntensity": 1.0,
+      "magnificationRadius": 2.4,
+      "magnificationFalloff": "linear"
+    },
+    "perStateAnimationOverrides": {}
+  },
+  "fallback": {"iconStyleId": "plain-original", "motionProfileId": "none"}
+}

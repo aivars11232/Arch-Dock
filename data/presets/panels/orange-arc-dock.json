@@ -1,0 +1,63 @@
+{
+  "format": "org.archdock.panel-preset",
+  "schemaVersion": 1,
+  "identity": {
+    "id": "orange-arc-dock",
+    "name": "Orange Arc Dock",
+    "description": "A free-standing orange arc platform on the desktop with neon orange icon tiles along its curve.",
+    "builtIn": true,
+    "revision": 1
+  },
+  "preview": {
+    "previewMode": "free",
+    "rendererTier": "baked2.5d",
+    "fallbackTier": "procedural2d",
+    "deterministicPreviewSeed": "orange-arc-dock-v1"
+  },
+  "compatibility": {
+    "hostKinds": ["free-desktop"],
+    "orientations": ["free"],
+    "layouts": ["arc", "semicircle"],
+    "requiredCapabilities": [],
+    "optionalCapabilities": ["baked2.5d", "dynamic-tint", "dynamic-glow"]
+  },
+  "panel": {
+    "host": {"edge": "free"},
+    "content": {"type": "launcher"},
+    "placement": {"alignment": "center", "dynamic": false, "width": 420, "height": 420},
+    "visibility": {"visibilityMode": "always"},
+    "presentation": {
+      "presentationMode": "open",
+      "presentationTrigger": "hover",
+      "collapseMechanism": "open",
+      "collapseAxis": "horizontal",
+      "revealHandle": "edge-strip"
+    },
+    "layout": {
+      "layout": "arc",
+      "layoutScale": 1.0,
+      "layoutRadius": 300,
+      "layoutPadding": 18,
+      "pathOrientation": "upright",
+      "iconShape": "circle",
+      "iconSize": 52,
+      "spacing": 10
+    },
+    "theme": {"completeThemeId": "arc-platform-orange", "rendererTier": "baked2.5d"},
+    "surface": {"appearance": "glass", "shape": "pill", "opacity": 0.9, "color": "#ff8f47", "glowIntensity": 1.1},
+    "motion": {
+      "iconAnimation": "glow",
+      "animationTrigger": "hover",
+      "animationSpeed": 0.9,
+      "animationIntensity": 0.9,
+      "magnificationRadius": 2.4,
+      "magnificationFalloff": "linear"
+    },
+    "recommendedIconPresetId": "neon-orange"
+  },
+  "fallback": {
+    "themeId": "",
+    "iconPresetId": "original-clean",
+    "unsupportedFieldPolicy": "reject"
+  }
+}

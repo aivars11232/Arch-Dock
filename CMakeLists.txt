@@ -70,6 +70,8 @@ set(ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/data/icon-styles/builtin-icon-styles.json")
 set(ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/data/animation-profiles/builtin-animation-profiles.json")
+set(ARCHDOCK_SOURCE_PRESET_ROOT
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/presets")
 set(ARCHDOCK_RENDERING_MODULE_FILES
     qmldir
     RendererCapabilityProbe.qml
@@ -162,6 +164,20 @@ qt_add_executable(
   src/model/IconStyleDefinition.cpp
   src/model/AnimationProfile.h
   src/model/AnimationProfile.cpp
+  src/model/PresetIdentity.h
+  src/model/PresetIdentity.cpp
+  src/model/IconPresetDefinition.h
+  src/model/IconPresetDefinition.cpp
+  src/model/PanelPresetDefinition.h
+  src/model/PanelPresetDefinition.cpp
+  src/presets/PresetCatalog.h
+  src/presets/PresetCatalog.cpp
+  src/presets/PresetCapabilityResolver.h
+  src/presets/PresetCapabilityResolver.cpp
+  src/presets/PresetLibrary.h
+  src/presets/PresetLibrary.cpp
+  src/presets/UserPresetStore.h
+  src/presets/UserPresetStore.cpp
   src/iconstyles/IconStylePackage.h
   src/iconstyles/IconStylePackage.cpp
   src/iconstyles/IconStyleStore.h
@@ -234,6 +250,8 @@ qt_add_qml_module(
   qml/runtime/IconProperties.qml
   qml/runtime/IconPropertiesWindow.qml
   qml/runtime/PlacementStatus.js
+  qml/runtime/PresetBrowser.qml
+  qml/runtime/PresetCard.qml
   qml/runtime/SettingsEditorModel.js
   qml/runtime/VisibilityStatus.js
   qml/runtime/StudioDraft.js
@@ -274,7 +292,8 @@ target_compile_definitions(
   PRIVATE ARCHDOCK_SOURCE_KWIN_SCRIPT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/kwin-script/contents/code/main.js"
           ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH="${ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH}"
           ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT="${ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT}"
-          ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH="${ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH}")
+          ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH="${ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH}"
+          ARCHDOCK_SOURCE_PRESET_ROOT="${ARCHDOCK_SOURCE_PRESET_ROOT}")
 
 include(CTest)
 if(BUILD_TESTING)
@@ -321,6 +340,164 @@ if(BUILD_TESTING)
     PRIVATE Qt6::Core
             Qt6::Test)
   add_test(NAME panel-model-test COMMAND panel-model-test)
+
+  qt_add_executable(
+    preset-definition-test
+    tests/PresetDefinitionTest.cpp
+    src/model/PresetIdentity.h
+    src/model/PresetIdentity.cpp
+    src/model/IconPresetDefinition.h
+    src/model/IconPresetDefinition.cpp
+    src/model/PanelPresetDefinition.h
+    src/model/PanelPresetDefinition.cpp
+    src/model/IconStyleDefinition.h
+    src/model/IconStyleDefinition.cpp
+    src/model/PanelDefinition.h
+    src/model/PanelDefinition.cpp
+    src/model/PanelSettingsSchema.h
+    src/model/PanelSettingsSchema.cpp
+    src/model/PanelCapabilityResolver.h
+    src/model/PanelCapabilityResolver.cpp
+    src/model/PanelRuntimeState.h
+    src/model/PanelRuntimeState.cpp)
+  target_include_directories(
+    preset-definition-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    preset-definition-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(NAME preset-definition-test COMMAND preset-definition-test)
+
+  qt_add_executable(
+    preset-catalog-test
+    tests/PresetCatalogTest.cpp
+    src/presets/PresetCatalog.h
+    src/presets/PresetCatalog.cpp
+    src/presets/PresetCapabilityResolver.h
+    src/presets/PresetCapabilityResolver.cpp
+    src/presets/UserPresetStore.h
+    src/presets/UserPresetStore.cpp
+    src/model/PresetIdentity.h
+    src/model/PresetIdentity.cpp
+    src/model/IconPresetDefinition.h
+    src/model/IconPresetDefinition.cpp
+    src/model/PanelPresetDefinition.h
+    src/model/PanelPresetDefinition.cpp
+    src/model/IconStyleDefinition.h
+    src/model/IconStyleDefinition.cpp
+    src/iconstyles/IconStylePackage.h
+    src/iconstyles/IconStylePackage.cpp
+    src/iconstyles/IconStyleStore.h
+    src/iconstyles/IconStyleStore.cpp
+    src/model/AnimationProfile.h
+    src/model/AnimationProfile.cpp
+    src/animation/AnimationProfileCatalog.h
+    src/animation/AnimationProfileCatalog.cpp
+    src/model/PanelDefinition.h
+    src/model/PanelDefinition.cpp
+    src/model/PanelSettingsSchema.h
+    src/model/PanelSettingsSchema.cpp
+    src/model/PanelCapabilityResolver.h
+    src/model/PanelCapabilityResolver.cpp
+    src/model/PanelRuntimeState.h
+    src/model/PanelRuntimeState.cpp)
+  target_include_directories(
+    preset-catalog-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_compile_definitions(
+    preset-catalog-test
+    PRIVATE ARCHDOCK_SOURCE_THEME_CATALOG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/themes/builtin-themes.json"
+            ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH="${ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH}"
+            ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT="${ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT}"
+            ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH="${ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH}"
+            ARCHDOCK_SOURCE_PRESET_ROOT="${ARCHDOCK_SOURCE_PRESET_ROOT}")
+  target_link_libraries(
+    preset-catalog-test
+    PRIVATE Qt6::Core
+            Qt6::Gui
+            Qt6::Test)
+  add_test(NAME preset-catalog-test COMMAND preset-catalog-test)
+
+  qt_add_executable(
+    preset-library-test
+    tests/PresetLibraryTest.cpp
+    src/presets/PresetLibrary.h
+    src/presets/PresetLibrary.cpp
+    src/presets/PresetCatalog.h
+    src/presets/PresetCatalog.cpp
+    src/presets/PresetCapabilityResolver.h
+    src/presets/PresetCapabilityResolver.cpp
+    src/presets/UserPresetStore.h
+    src/presets/UserPresetStore.cpp
+    src/model/PresetIdentity.h
+    src/model/PresetIdentity.cpp
+    src/model/IconPresetDefinition.h
+    src/model/IconPresetDefinition.cpp
+    src/model/PanelPresetDefinition.h
+    src/model/PanelPresetDefinition.cpp
+    src/PanelRegistry.h
+    src/PanelRegistry.cpp
+    src/DockSettings.h
+    src/DockSettings.cpp
+    src/model/ThemeDefinition.h
+    src/model/ThemeDefinition.cpp
+    src/model/IconStyleDefinition.h
+    src/model/IconStyleDefinition.cpp
+    src/iconstyles/IconStylePackage.h
+    src/iconstyles/IconStylePackage.cpp
+    src/iconstyles/IconStyleStore.h
+    src/iconstyles/IconStyleStore.cpp
+    src/model/AnimationProfile.h
+    src/model/AnimationProfile.cpp
+    src/animation/AnimationProfileCatalog.h
+    src/animation/AnimationProfileCatalog.cpp
+    src/themes/ThemeAssetProcessor.h
+    src/themes/ThemeAssetProcessor.cpp
+    src/themes/ThemePackage.h
+    src/themes/ThemePackage.cpp
+    src/model/PanelDefinition.h
+    src/model/PanelDefinition.cpp
+    src/model/PanelSettingsSchema.h
+    src/model/PanelSettingsSchema.cpp
+    src/model/PanelCapabilityResolver.h
+    src/model/PanelCapabilityResolver.cpp
+    src/model/PanelRuntimeState.h
+    src/model/PanelRuntimeState.cpp
+    src/model/SettingsMigration.h
+    src/model/SettingsMigration.cpp
+    src/panel/PanelSettingsTransaction.h
+    src/panel/PanelSettingsTransaction.cpp
+    src/panel/IconOverrideTransaction.h
+    src/panel/IconOverrideTransaction.cpp
+    src/model/IconEntryIdentity.h
+    src/model/IconEntryIdentity.cpp)
+  target_include_directories(
+    preset-library-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_compile_definitions(
+    preset-library-test
+    PRIVATE ARCHDOCK_SOURCE_THEME_CATALOG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/themes/builtin-themes.json"
+            ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT="${ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT}"
+            ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH="${ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH}"
+            ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT="${ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT}"
+            ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH="${ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH}"
+            ARCHDOCK_SOURCE_PRESET_ROOT="${ARCHDOCK_SOURCE_PRESET_ROOT}"
+            ARCHDOCK_RENDERING_IMPORT_ROOT="${ARCHDOCK_RENDERING_IMPORT_ROOT}"
+            ARCHDOCK_SOURCE_RUNTIME_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml/runtime")
+  target_link_libraries(
+    preset-library-test
+    PRIVATE Qt6::Core
+            Qt6::Gui
+            Qt6::Qml
+            Qt6::Quick
+            Qt6::Test)
+  add_dependencies(preset-library-test archdock-rendering-module)
+  add_test(NAME preset-library-test COMMAND preset-library-test)
+  set_tests_properties(
+    preset-library-test
+    PROPERTIES ENVIRONMENT
+               "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-data/preset-library-config;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-data/preset-library-data;XDG_CACHE_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-data/preset-library-cache")
 
   qt_add_executable(
     icon-entry-identity-test
@@ -830,6 +1007,20 @@ if(BUILD_TESTING)
     src/panel/IconOverrideTransaction.cpp
     src/panel/PanelWindow.h
     src/panel/PanelWindow.cpp
+    src/model/PresetIdentity.h
+    src/model/PresetIdentity.cpp
+    src/model/IconPresetDefinition.h
+    src/model/IconPresetDefinition.cpp
+    src/model/PanelPresetDefinition.h
+    src/model/PanelPresetDefinition.cpp
+    src/presets/PresetCatalog.h
+    src/presets/PresetCatalog.cpp
+    src/presets/PresetCapabilityResolver.h
+    src/presets/PresetCapabilityResolver.cpp
+    src/presets/PresetLibrary.h
+    src/presets/PresetLibrary.cpp
+    src/presets/UserPresetStore.h
+    src/presets/UserPresetStore.cpp
     src/WindowItem.h
     src/WindowModel.h
     src/WindowModel.cpp
@@ -872,7 +1063,9 @@ if(BUILD_TESTING)
     PRIVATE ARCHDOCK_SOURCE_KWIN_SCRIPT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/kwin-script/contents/code/main.js"
             ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT="${ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT}"
             ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH="${ARCHDOCK_SOURCE_ICON_STYLE_CATALOG_PATH}"
-            ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT="${ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT}")
+            ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT="${ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT}"
+            ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH="${ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH}"
+            ARCHDOCK_SOURCE_PRESET_ROOT="${ARCHDOCK_SOURCE_PRESET_ROOT}")
   add_test(
     NAME panel-window-capability-test
     COMMAND panel-window-capability-test)
@@ -1262,6 +1455,25 @@ if(BUILD_TESTING)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ValidateStudioPreview.cmake)
 
   add_test(
+    NAME preset-staged-preview-smoke
+    COMMAND ${CMAKE_COMMAND} -E env
+            ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
+            bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-preset-staged-smoke.sh)
+  set_tests_properties(
+    preset-staged-preview-smoke
+    PROPERTIES DEPENDS preset-library-test TIMEOUT 180)
+
+  add_test(
+    NAME preset-browser-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PresetBrowser.qml)
+  set_tests_properties(
+    preset-browser-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
     NAME studio-navigation-test
     COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_StudioNavigation.qml)
@@ -1335,6 +1547,11 @@ install(
 install(
   FILES data/animation-profiles/builtin-animation-profiles.json
   DESTINATION share/arch-dock/animation-profiles)
+install(
+  DIRECTORY data/presets/panels data/presets/icons
+  DESTINATION share/arch-dock/presets
+  FILES_MATCHING
+  PATTERN "*.json")
 foreach(packaged_icon_style
         plain-original
         metallic-blue

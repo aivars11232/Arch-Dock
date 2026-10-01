@@ -405,3 +405,29 @@ external network, global installation or personal-desktop mutation were used.
 These private virtual Wayland results do not establish physical GPU,
 monitor/hotplug, personal-desktop or general release acceptance; the broader
 release checkboxes remain unchanged.
+
+## TASK-0040 verification record — 2026-10-01
+
+Panel Preset and Icon Preset definitions, catalogs, user store, Studio pages
+and the exact 15 + 15 built-in libraries are implemented in the working tree on
+`3ab470c`. A fresh configure and build has no compiler warning and the full
+suite passes **80/80 (321.17 s)** with the parent session bus unreachable. The
+earlier incremental Phase A gate also passed 80/80 (317.25 s).
+
+- `preset-catalog-test` proves the exact id and name lists, every reference,
+  and that each preset resolves as declared.
+- `preset-staged-preview-smoke` installs into a temporary prefix, counts
+  15 + 15 definitions and runs the library test against the staged data and the
+  staged `ArchDock.Rendering` module.
+- `preset-library-test` draws all 30 real cards through the shared renderer and
+  proves that browsing and selecting change no panel.
+- `panel-window-capability-test` drives the real Studio popup's six new pages.
+
+`CURRENT_STATE.md` holds the acceptance table, the three diagnosed failures,
+the deviations from the approved plan and one pre-existing renderer warning
+that this task did not change. No agents, dependencies, external network,
+global installation or personal-desktop mutation were used. The implementation
+made no Git writes; the single commit and push were made afterwards on the
+owner's explicit instruction. These
+results do not establish physical GPU, monitor/hotplug, personal-desktop or
+general release acceptance; the broader release checkboxes remain unchanged.

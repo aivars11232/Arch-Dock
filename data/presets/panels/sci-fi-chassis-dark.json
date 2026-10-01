@@ -1,0 +1,61 @@
+{
+  "format": "org.archdock.panel-preset",
+  "schemaVersion": 1,
+  "identity": {
+    "id": "sci-fi-chassis-dark",
+    "name": "Dark Sci-Fi Chassis",
+    "description": "A dark science-fiction chassis skin for a screen edge with dark orb icons.",
+    "builtIn": true,
+    "revision": 1
+  },
+  "preview": {
+    "previewMode": "horizontal",
+    "rendererTier": "skinned2d",
+    "fallbackTier": "procedural2d",
+    "deterministicPreviewSeed": "sci-fi-chassis-dark-v1"
+  },
+  "compatibility": {
+    "hostKinds": ["native-edge", "free-desktop"],
+    "orientations": ["horizontal"],
+    "layouts": ["horizontal"],
+    "requiredCapabilities": [],
+    "optionalCapabilities": ["skinned2d"]
+  },
+  "panel": {
+    "host": {"edge": "bottom"},
+    "content": {"type": "hybrid"},
+    "placement": {"alignment": "center", "dynamic": false, "width": 720, "height": 76},
+    "visibility": {"visibilityMode": "always"},
+    "presentation": {
+      "presentationMode": "open",
+      "presentationTrigger": "hover",
+      "collapseMechanism": "open",
+      "collapseAxis": "horizontal",
+      "revealHandle": "edge-strip"
+    },
+    "layout": {
+      "layout": "horizontal",
+      "layoutScale": 1.0,
+      "layoutPadding": 18,
+      "iconShape": "rounded",
+      "iconSize": 52,
+      "spacing": 8
+    },
+    "theme": {"completeThemeId": "sci-fi-chassis-dark", "rendererTier": "skinned2d"},
+    "surface": {"appearance": "glass", "shape": "pill", "opacity": 0.9, "color": "", "glowIntensity": 1.0},
+    "motion": {
+      "iconAnimation": "glow",
+      "animationTrigger": "hover",
+      "animationSpeed": 1.0,
+      "animationIntensity": 1.0,
+      "magnificationRadius": 2.4,
+      "magnificationFalloff": "linear"
+    },
+    "recommendedIconPresetId": "dark-orb"
+  },
+  "fallback": {
+    "themeId": "",
+    "iconPresetId": "original-clean",
+    "unsupportedFieldPolicy": "reject"
+  }
+}

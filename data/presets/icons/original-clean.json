@@ -1,0 +1,32 @@
+{
+  "format": "org.archdock.icon-preset",
+  "schemaVersion": 1,
+  "identity": {
+    "id": "original-clean",
+    "name": "Original Clean",
+    "description": "The application's own icon with no tile and no motion.",
+    "builtIn": true,
+    "revision": 1
+  },
+  "compatibility": {
+    "rendererTiers": ["procedural2d"],
+    "requiredStyleCapabilities": ["state-styling"],
+    "reducedMotionSupport": true
+  },
+  "icon": {
+    "iconStyleId": "plain-original",
+    "visualOverrides": {},
+    "stateOverrides": {},
+    "glyphPolicy": {"mode": "original", "compatibleOnly": true},
+    "motion": {
+      "profileId": "none",
+      "animationTrigger": "hover",
+      "animationSpeed": 1.0,
+      "animationIntensity": 1.0,
+      "magnificationRadius": 2.4,
+      "magnificationFalloff": "linear"
+    },
+    "perStateAnimationOverrides": {}
+  },
+  "fallback": {"iconStyleId": "plain-original", "motionProfileId": "none"}
+}

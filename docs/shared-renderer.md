@@ -666,3 +666,39 @@ staged rendering/Studio, window actions and combined folder/segment/content
 integration. The historical blocked checkpoints and final evidence are recorded
 in `CURRENT_STATE.md`; private virtual Wayland results are not physical hardware
 or release acceptance.
+
+## Preset cards — TASK-0040
+
+Panel Preset and Icon Preset cards are drawn by the same `LivePanelPreview`
+that draws theme cards and the Studio preview. There is no preset renderer.
+
+- `PresetLibrary` builds one record per preset in the shape
+  `PanelWindow::panelRendererConfiguration()` gives a live panel: the panel's
+  runtime values, `capabilityResolution`, `effectiveRendererTier`,
+  `iconStyleDefinition` and `animationProfiles`. Global settings are the schema
+  defaults, so a preset previews the same on every machine. Host association
+  and content fields are not runtime values and are absent from the record.
+- A Panel Preset is drawn with the Icon Preset it recommends. An Icon Preset is
+  drawn on a plain default dock that takes only its icon-layer settings.
+- `SettingsEditorModel.presetRendererCandidate()` hands the record to the
+  preview. It copies the record with `copyValue`, because a list that arrives
+  from C++ is a Qt sequence and `LivePanelPreview` copies only real arrays as
+  lists.
+- A card is a still picture (`reducedMotion: true`). The selected preset plays
+  its motion in the Studio preview unless reduced motion is enabled.
+- An incompatible preset creates no scene. Its card states the reason and
+  shows no stand-in picture.
+
+`tests/ValidateStudioPreview.cmake` forbids `PanelScene`, `IconScene`,
+`LayoutEngine`, `Canvas`, `Image` and `ShaderEffect` in `PresetCard.qml` and
+`PresetBrowser.qml`, and forbids them any reference to `panelController`,
+`panelRegistry`, `presetLibrary` or an Apply action. `preset-library-test`
+instantiates the real card for all 30 built-ins and requires a non-empty,
+repeatable picture at the tier the library reported, with no QML warning.
+
+Known limitation recorded by TASK-0040, not changed by it: the Studio's own
+panel preview and its theme cards pass the draft's `segments` list to
+`LivePanelPreview` as a Qt sequence. `PanelScene.qml:196` then logs
+`TypeError: Property 'some' of object [object Object] is not a function` for a
+procedural linear panel whose segments have not been edited in that session.
+The preset cards and the Icon Styles cards are not affected.

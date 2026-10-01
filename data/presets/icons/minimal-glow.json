@@ -1,0 +1,32 @@
+{
+  "format": "org.archdock.icon-preset",
+  "schemaVersion": 1,
+  "identity": {
+    "id": "minimal-glow",
+    "name": "Minimal Glow",
+    "description": "The application's own icon with no tile and a restrained glow on hover.",
+    "builtIn": true,
+    "revision": 1
+  },
+  "compatibility": {
+    "rendererTiers": ["procedural2d"],
+    "requiredStyleCapabilities": ["state-styling"],
+    "reducedMotionSupport": true
+  },
+  "icon": {
+    "iconStyleId": "plain-original",
+    "visualOverrides": {},
+    "stateOverrides": {},
+    "glyphPolicy": {"mode": "original", "compatibleOnly": true},
+    "motion": {
+      "profileId": "glow",
+      "animationTrigger": "hover",
+      "animationSpeed": 1.0,
+      "animationIntensity": 0.5,
+      "magnificationRadius": 2.4,
+      "magnificationFalloff": "linear"
+    },
+    "perStateAnimationOverrides": {}
+  },
+  "fallback": {"iconStyleId": "plain-original", "motionProfileId": "none"}
+}

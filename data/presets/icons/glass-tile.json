@@ -1,0 +1,47 @@
+{
+  "format": "org.archdock.icon-preset",
+  "schemaVersion": 1,
+  "identity": {
+    "id": "glass-tile",
+    "name": "Glass Tile",
+    "description": "A transparent glass tile with a soft white rim around the application's own icon.",
+    "builtIn": true,
+    "revision": 1
+  },
+  "compatibility": {
+    "rendererTiers": ["procedural2d"],
+    "requiredStyleCapabilities": ["tile", "reflection", "shadow", "glow"],
+    "reducedMotionSupport": true
+  },
+  "icon": {
+    "iconStyleId": "metallic-blue",
+    "visualOverrides": {
+      "blue-aura": {"opacity": 0},
+      "blue-metal": {"color": "#1affffff", "secondaryColor": "#3dffffff", "borderColor": "#66ffffff", "borderWidth": 0.02},
+      "blue-bevel": {"secondaryColor": "#ffffff", "borderColor": "#80ffffff", "opacity": 0.6, "borderWidth": 0.016},
+      "blue-reflection": {"color": "#ffffff", "opacity": 0.28},
+      "blue-shadow": {"color": "#000000", "opacity": 0.32},
+      "blue-glow": {"color": "#bfe6ff", "borderColor": "#bfe6ff", "opacity": 0.5}
+    },
+    "stateOverrides": {
+      "normal": {"borderColor": "#99ffffff", "glowColor": "#bfe6ff", "indicatorColor": "#e6f4ff"},
+      "hover": {"borderColor": "#e6ffffff", "glowColor": "#d9f0ff", "indicatorColor": "#ffffff"},
+      "pressed": {"borderColor": "#99ffffff", "glowColor": "#a6d4f2", "indicatorColor": "#e6f4ff"},
+      "active": {"borderColor": "#ffffff", "glowColor": "#d9f0ff", "indicatorColor": "#ffffff"},
+      "running": {"borderColor": "#ccffffff", "glowColor": "#bfe6ff", "indicatorColor": "#e6f4ff"},
+      "minimized": {"borderColor": "#66ffffff", "glowColor": "#8fa9b8", "indicatorColor": "#b8c7d1"},
+      "launching": {"borderColor": "#e6ffffff", "glowColor": "#d9f0ff", "indicatorColor": "#ffffff"}
+    },
+    "glyphPolicy": {"mode": "original", "compatibleOnly": true},
+    "motion": {
+      "profileId": "pulse",
+      "animationTrigger": "hover",
+      "animationSpeed": 1.0,
+      "animationIntensity": 1.0,
+      "magnificationRadius": 2.4,
+      "magnificationFalloff": "linear"
+    },
+    "perStateAnimationOverrides": {}
+  },
+  "fallback": {"iconStyleId": "plain-original", "motionProfileId": "none"}
+}

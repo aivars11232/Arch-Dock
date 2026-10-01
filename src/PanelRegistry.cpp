@@ -1858,6 +1858,18 @@ QVariantMap PanelRegistry::animationProfileResolution(
     return m_animationProfileCatalog->resolve(requestedProfileId);
 }
 
+const ArchDock::IconStyleStore *PanelRegistry::iconStyleStore() const
+{
+    return m_iconStyleStore.has_value() ? &*m_iconStyleStore : nullptr;
+}
+
+const ArchDock::AnimationProfileCatalog *
+PanelRegistry::animationProfileCatalog() const
+{
+    return m_animationProfileCatalog.has_value()
+        ? &*m_animationProfileCatalog : nullptr;
+}
+
 QVariantMap PanelRegistry::iconStyleDefinition(const QString &styleId) const
 {
     if (!m_iconStyleStore.has_value())

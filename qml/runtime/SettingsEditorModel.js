@@ -314,6 +314,40 @@ function rendererThemeCandidate(session, theme) {
     return result;
 }
 
+// The record a preset card hands the shared renderer, in the shape
+// rendererCandidate() produces, or {} when the preset cannot be drawn here.
+// A still candidate keeps the preset's look and stops its motion.
+function presetRendererCandidate(card, still) {
+    const preview = card ? card.preview : null;
+    const definition = preview ? preview.panelDefinition : null;
+    if (definition === null || definition === undefined || typeof definition !== "object")
+        return {};
+    // A record from the backend carries native lists. The renderer is handed
+    // plain arrays, as it is by rendererCandidate().
+    const result = copyValue(definition);
+    if (still === true)
+        result.reducedMotion = true;
+    return result;
+}
+
+// The theme a preset card is drawn on, or {} for the procedural surface.
+function presetPreviewTheme(card) {
+    const preview = card ? card.preview : null;
+    const theme = preview ? preview.themeDefinition : null;
+    return theme !== null && theme !== undefined && typeof theme === "object"
+        ? copyValue(theme) : {};
+}
+
+// How a preset card presents itself: "ready", "fallback" when it is usable
+// through the safe fallback it declares, or "incompatible" when there is
+// nothing to draw or apply.
+function presetState(card) {
+    const compatibility = card && card.compatibility ? card.compatibility : {};
+    if (compatibility.available !== true || keyCount(presetRendererCandidate(card, false)) === 0)
+        return "incompatible";
+    return compatibility.fallbackApplied === true ? "fallback" : "ready";
+}
+
 function cancel(session) {
     if (!session || !session.loaded)
         return session;

@@ -502,4 +502,107 @@ TestCase {
         verify(!Object.prototype.hasOwnProperty.call(
             EditorModel.panelCandidate(projected), "glowIntensity"))
     }
+
+    function presetCard(compatibility, definition) {
+        const card = { id: "fixture", compatibility: compatibility };
+        if (definition !== undefined)
+            card.preview = { panelDefinition: definition, previewMode: "horizontal" };
+        return card;
+    }
+
+    function test_presetCardStateSeparatesReadyFallbackAndIncompatible() {
+        const definition = { layout: "ring", iconAnimation: "glow" };
+        compare(EditorModel.presetState(presetCard(
+            { available: true, fallbackApplied: false }, definition)), "ready");
+        compare(EditorModel.presetState(presetCard(
+            { available: true, fallbackApplied: true }, definition)), "fallback");
+        compare(EditorModel.presetState(presetCard(
+            { available: false, fallbackApplied: false }, definition)), "incompatible");
+        // A preset that is declared usable but has nothing to draw is never
+        // offered as usable.
+        compare(EditorModel.presetState(presetCard(
+            { available: true, fallbackApplied: false })), "incompatible");
+        compare(EditorModel.presetState(presetCard(
+            { available: true, fallbackApplied: false }, {})), "incompatible");
+        // Only an explicit true counts; a missing or malformed answer is not
+        // read as compatible.
+        compare(EditorModel.presetState(presetCard({ available: "yes" }, definition)),
+            "incompatible");
+        compare(EditorModel.presetState(presetCard(undefined, definition)), "incompatible");
+        compare(EditorModel.presetState(null), "incompatible");
+        compare(EditorModel.presetState({}), "incompatible");
+    }
+
+    function test_presetRendererCandidateKeepsTheLookAndCanStopMotion() {
+        const definition = {
+            layout: "ring",
+            iconAnimation: "slow-y-turn",
+            animationTrigger: "idle",
+            reducedMotion: false,
+            iconStyleDefinition: { resolvedStyleId: "dark-orb" },
+            animationProfiles: [{ id: "slow-y-turn" }]
+        };
+        const card = presetCard({ available: true }, definition);
+
+        // The live record is the preset's own, untouched.
+        const live = EditorModel.presetRendererCandidate(card, false);
+        compare(JSON.stringify(live), JSON.stringify(definition));
+
+        // A still record changes one thing only, and never the card's data.
+        const still = EditorModel.presetRendererCandidate(card, true);
+        compare(still.reducedMotion, true);
+        compare(still.layout, "ring");
+        compare(still.iconAnimation, "slow-y-turn");
+        compare(still.animationTrigger, "idle");
+        compare(still.iconStyleDefinition.resolvedStyleId, "dark-orb");
+        compare(still.animationProfiles.length, 1);
+        compare(Object.keys(still).length, Object.keys(definition).length);
+        compare(card.preview.panelDefinition.reducedMotion, false);
+        compare(definition.reducedMotion, false);
+
+        // Nothing to draw is an empty record, not an error.
+        compare(JSON.stringify(EditorModel.presetRendererCandidate(
+            presetCard({ available: false }), true)), "{}");
+        compare(JSON.stringify(EditorModel.presetRendererCandidate(null, false)), "{}");
+        compare(JSON.stringify(EditorModel.presetRendererCandidate(
+            { preview: { panelDefinition: "not-a-record" } }, false)), "{}");
+    }
+
+    // A preset record from the backend carries native lists, which are not
+    // JavaScript arrays. The shared preview copies only real arrays as lists,
+    // so the model must hand it arrays or a list becomes a keyed object.
+    function test_presetRecordsReachTheRendererAsPlainArrays() {
+        verify(!Array.isArray(nativeSequences.tiers));
+        const card = presetCard({ available: true }, {
+            layout: "horizontal",
+            segments: nativeSequences.tiers,
+            capabilityResolution: { renderer: { tiers: nativeSequences.tiers } }
+        });
+        card.preview.themeDefinition = {
+            id: "fixture-theme",
+            capabilities: { rendererTiers: nativeSequences.tiers },
+            scene3DResources: { mesh: { positions: [nativeSequences.position] } }
+        };
+
+        const still = EditorModel.presetRendererCandidate(card, true);
+        verify(Array.isArray(still.segments));
+        compare(still.segments, ["true3d", "procedural2d"]);
+        verify(Array.isArray(still.capabilityResolution.renderer.tiers));
+        const live = EditorModel.presetRendererCandidate(card, false);
+        verify(Array.isArray(live.segments));
+        compare(live.segments.some(function(tier) { return tier === "true3d"; }), true);
+
+        const theme = EditorModel.presetPreviewTheme(card);
+        compare(theme.id, "fixture-theme");
+        verify(Array.isArray(theme.capabilities.rendererTiers));
+        verify(Array.isArray(theme.scene3DResources.mesh.positions[0]));
+        compare(theme.scene3DResources.mesh.positions[0], [1, 2, 3]);
+
+        // A preset with no theme is drawn on the procedural surface.
+        compare(JSON.stringify(EditorModel.presetPreviewTheme(
+            presetCard({ available: true }, {}))), "{}");
+        compare(JSON.stringify(EditorModel.presetPreviewTheme(null)), "{}");
+        compare(JSON.stringify(EditorModel.presetPreviewTheme(
+            { preview: { themeDefinition: "not-a-record" } })), "{}");
+    }
 }
