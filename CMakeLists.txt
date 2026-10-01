@@ -178,6 +178,14 @@ qt_add_executable(
   src/presets/PresetLibrary.cpp
   src/presets/UserPresetStore.h
   src/presets/UserPresetStore.cpp
+  src/presets/PresetApplication.h
+  src/presets/PresetApplication.cpp
+  src/presets/PresetDefaultStore.h
+  src/presets/PresetDefaultStore.cpp
+  src/presets/PresetPreviewRecovery.h
+  src/presets/PresetPreviewRecovery.cpp
+  src/presets/PresetPreviewSession.h
+  src/presets/PresetPreviewSession.cpp
   src/iconstyles/IconStylePackage.h
   src/iconstyles/IconStylePackage.cpp
   src/iconstyles/IconStyleStore.h
@@ -251,6 +259,7 @@ qt_add_qml_module(
   qml/runtime/IconPropertiesWindow.qml
   qml/runtime/PlacementStatus.js
   qml/runtime/PresetBrowser.qml
+  qml/runtime/PresetAuditionBar.qml
   qml/runtime/PresetCard.qml
   qml/runtime/SettingsEditorModel.js
   qml/runtime/VisibilityStatus.js
@@ -418,6 +427,28 @@ if(BUILD_TESTING)
             Qt6::Gui
             Qt6::Test)
   add_test(NAME preset-catalog-test COMMAND preset-catalog-test)
+
+  get_target_property(archdock_preset_preview_test_sources preset-catalog-test SOURCES)
+  list(REMOVE_ITEM archdock_preset_preview_test_sources tests/PresetCatalogTest.cpp)
+  qt_add_executable(
+    preset-preview-session-test
+    tests/PresetPreviewSessionTest.cpp
+    ${archdock_preset_preview_test_sources}
+    src/presets/PresetApplication.h
+    src/presets/PresetApplication.cpp
+    src/presets/PresetDefaultStore.h
+    src/presets/PresetDefaultStore.cpp
+    src/presets/PresetPreviewRecovery.h
+    src/presets/PresetPreviewRecovery.cpp
+    src/presets/PresetPreviewSession.h
+    src/presets/PresetPreviewSession.cpp
+    src/panel/PanelSettingsTransaction.h
+    src/panel/PanelSettingsTransaction.cpp)
+  target_include_directories(preset-preview-session-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(preset-preview-session-test PRIVATE Qt6::Core Qt6::Gui Qt6::Test)
+  target_compile_definitions(preset-preview-session-test PRIVATE
+    ARCHDOCK_SOURCE_PRESET_ROOT="${ARCHDOCK_SOURCE_PRESET_ROOT}")
+  add_test(NAME preset-preview-session-test COMMAND preset-preview-session-test)
 
   qt_add_executable(
     preset-library-test
@@ -821,6 +852,16 @@ if(BUILD_TESTING)
   qt_add_executable(
     panel-registry-test
     tests/PanelRegistryTest.cpp
+    src/model/PresetIdentity.h
+    src/model/PresetIdentity.cpp
+    src/model/IconPresetDefinition.h
+    src/model/IconPresetDefinition.cpp
+    src/model/PanelPresetDefinition.h
+    src/model/PanelPresetDefinition.cpp
+    src/presets/PresetCatalog.h
+    src/presets/PresetCatalog.cpp
+    src/presets/PresetCapabilityResolver.h
+    src/presets/PresetCapabilityResolver.cpp
     src/DockSettings.h
     src/DockSettings.cpp
     src/PanelRegistry.h
@@ -1021,6 +1062,14 @@ if(BUILD_TESTING)
     src/presets/PresetLibrary.cpp
     src/presets/UserPresetStore.h
     src/presets/UserPresetStore.cpp
+    src/presets/PresetApplication.h
+    src/presets/PresetApplication.cpp
+    src/presets/PresetDefaultStore.h
+    src/presets/PresetDefaultStore.cpp
+    src/presets/PresetPreviewRecovery.h
+    src/presets/PresetPreviewRecovery.cpp
+    src/presets/PresetPreviewSession.h
+    src/presets/PresetPreviewSession.cpp
     src/WindowItem.h
     src/WindowModel.h
     src/WindowModel.cpp
@@ -1472,6 +1521,13 @@ if(BUILD_TESTING)
   set_tests_properties(
     preset-browser-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME preset-audition-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PresetAudition.qml)
+  set_tests_properties(preset-audition-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(
     NAME studio-navigation-test

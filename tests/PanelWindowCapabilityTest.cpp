@@ -121,6 +121,8 @@ private slots:
     void desktopLaunchIsBoundToTheSelectedPanelEntry();
     void folderRequestsValidatePanelAndChild();
     void studioPresetPagesBrowseWithoutChangingAnyPanel();
+    void presetAuditionGuardsAndInvalidRequestsLeaveNoWrites();
+    void presetDefaultsDoNotRewriteExistingInstances();
 
 private:
     QTemporaryDir m_settingsDirectory;
@@ -2637,6 +2639,78 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
     QVERIFY(nothingChanged());
     QVERIFY2(studioWarnings.isEmpty(), qPrintable(studioWarnings.join(QLatin1Char('\n'))));
     studio->close();
+}
+
+void PanelWindowCapabilityTest::presetAuditionGuardsAndInvalidRequestsLeaveNoWrites()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    auto *session = qobject_cast<ArchDock::PresetPreviewSession *>(
+        engine.rootContext()->contextProperty(QStringLiteral("presetAudition")).value<QObject *>());
+    QVERIFY(session);
+    const auto before = settingsSnapshot();
+    const QVariantMap request{{QStringLiteral("kind"), QStringLiteral("panel")},
+        {QStringLiteral("presetId"), QStringLiteral("obsidian-glass-dock")},
+        {QStringLiteral("panelId"), QStringLiteral("bottom")}};
+    const QList<QPair<QString, QString>> guards{{QStringLiteral("editMode"), QStringLiteral("edit-mode-active")},
+        {QStringLiteral("popupOpen"), QStringLiteral("popup-open")}, {QStringLiteral("dragActive"), QStringLiteral("drag-active")}};
+    for (const auto &guard : guards)
+    {
+        QVERIFY(window.reportPanelInteractionGuards(QStringLiteral("bottom"), {{guard.first, true}}));
+        const auto result = session->beginPreview(request);
+        QVERIFY(!result.value(QStringLiteral("success")).toBool());
+        QCOMPARE(result.value(QStringLiteral("errorCode")).toString(), guard.second);
+        QCOMPARE(session->state(), QStringLiteral("IDLE"));
+        QCOMPARE(settingsSnapshot(), before);
+    }
+    QVERIFY(window.reportPanelInteractionGuards(QStringLiteral("bottom"), {}));
+    auto invalid = request;
+    invalid.insert(QStringLiteral("ownerToken"), QStringLiteral("forged"));
+    QCOMPARE(session->beginPreview(invalid).value(QStringLiteral("errorCode")).toString(),
+        QStringLiteral("invalid-preview-request"));
+    invalid = request;
+    invalid.insert(QStringLiteral("presetId"), QStringLiteral("../outside"));
+    QCOMPARE(session->beginPreview(invalid).value(QStringLiteral("errorCode")).toString(), QStringLiteral("preset-not-found"));
+    QCOMPARE(session->state(), QStringLiteral("IDLE"));
+    QVERIFY(!session->saveAsCustomPreset(QStringLiteral("No draft")).value(QStringLiteral("success")).toBool());
+    QCOMPARE(settingsSnapshot(), before);
+    QVERIFY(session->cancel().value(QStringLiteral("success")).toBool());
+}
+
+void PanelWindowCapabilityTest::presetDefaultsDoNotRewriteExistingInstances()
+{
+    QTemporaryDir data;
+    QVERIFY(data.isValid());
+    const QByteArray previousDataHome = qgetenv("XDG_DATA_HOME");
+    const bool hadDataHome = qEnvironmentVariableIsSet("XDG_DATA_HOME");
+    const auto restoreDataHome = qScopeGuard([&] {
+        if (hadDataHome) qputenv("XDG_DATA_HOME", previousDataHome);
+        else qunsetenv("XDG_DATA_HOME");
+    });
+    qputenv("XDG_DATA_HOME", data.path().toUtf8());
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    auto *session = qobject_cast<ArchDock::PresetPreviewSession *>(
+        engine.rootContext()->contextProperty(QStringLiteral("presetAudition")).value<QObject *>());
+    QVERIFY(session);
+    const auto before = settingsSnapshot();
+    const auto bottom = window.panelRendererConfiguration(QStringLiteral("bottom"));
+    QVERIFY(session->setAsDefault(QStringLiteral("panel"), QStringLiteral("obsidian-glass-dock"), false)
+        .value(QStringLiteral("success")).toBool());
+    QVERIFY(session->setAsDefault(QStringLiteral("icon"), QStringLiteral("glass-tile"), false)
+        .value(QStringLiteral("success")).toBool());
+    const auto defaults = session->defaultSelection();
+    QCOMPARE(defaults.value(QStringLiteral("panelPresetId")).toString(), QStringLiteral("obsidian-glass-dock"));
+    QCOMPARE(defaults.value(QStringLiteral("iconPresetId")).toString(), QStringLiteral("glass-tile"));
+    QCOMPARE(settingsSnapshot(), before);
+    QCOMPARE(window.panelRendererConfiguration(QStringLiteral("bottom")), bottom);
+    QVERIFY(session->cancel().value(QStringLiteral("success")).toBool());
+    QCOMPARE(session->defaultSelection(), defaults);
+    QVERIFY(session->setAsDefault(QStringLiteral("panel"), QStringLiteral("obsidian-glass-dock"), true)
+        .value(QStringLiteral("success")).toBool());
+    QCOMPARE(session->defaultSelection().value(QStringLiteral("panelPresetId")).toString(), QString{});
+    QCOMPARE(session->defaultSelection().value(QStringLiteral("iconPresetId")).toString(), QStringLiteral("glass-tile"));
+    QCOMPARE(settingsSnapshot(), before);
 }
 
 int main(int argc, char **argv)

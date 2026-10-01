@@ -23,6 +23,7 @@
 #include "../WindowWatcher.h"
 #include "../integration/PlasmaPanelAdapter.h"
 #include "../presets/PresetLibrary.h"
+#include "../presets/PresetPreviewSession.h"
 #include "FreePanelController.h"
 #include "PanelContentTransaction.h"
 
@@ -239,6 +240,24 @@ private:
         const QVariantMap &panelValues,
         const QVariantMap &globalValues,
         ArchDock::PanelSettingsTransactionOutcome *outcome) const;
+    [[nodiscard]] QVariantMap commitPanelSettingsDraft(
+        ArchDock::PanelSettingsTransactionDraft draft,
+        ArchDock::PanelSettingsTransactionOutcome outcome);
+    [[nodiscard]] std::optional<ArchDock::PanelDefinition> runtimePanelDefinition(
+        const QString &panelId) const;
+    bool convertPresetPreviewHost(const ArchDock::PresetPreviewRecord &record,
+        ArchDock::PanelDefinition &candidate, QString *errorCode) const;
+    [[nodiscard]] ArchDock::PresetPreviewSession::Operations presetAuditionOperations();
+    [[nodiscard]] std::optional<ArchDock::PresetPreviewSession::Prepared> preparePresetPreview(
+        const QVariantMap &request, QString *errorCode) const;
+    [[nodiscard]] QVariantMap presetResource(const QString &kind, const QString &presetId,
+        bool builtInOnly = false) const;
+    [[nodiscard]] QVariantMap presetEditorProjection(const ArchDock::PanelDefinition &candidate) const;
+    bool capturePresetPreviewHost(ArchDock::PresetPreviewRecord &record, QString *errorCode) const;
+    bool restorePresetPreviewHost(const ArchDock::PresetPreviewRecord &record, QString *errorCode) const;
+    bool removePresetPreviewHost(const ArchDock::PresetPreviewRecord &record, QString *errorCode) const;
+    bool recoverPresetPreviewHost(const ArchDock::PresetPreviewRecord &record, QString *errorCode);
+    bool applyPresetDefaultsToNewPanel(const QString &panelId, QString *errorCode);
     [[nodiscard]] QVariantMap commitIconOverrideTransaction(
         const QString &panelId,
         qulonglong expectedRevision,
@@ -318,6 +337,9 @@ private:
     int createNativePanelCandidate(const QString &panelId,
                                    const QString &ownershipToken,
                                    QString *errorCode) const;
+    int createNativePanelCandidate(const ArchDock::PanelDefinition &definition,
+                                   const QString &ownershipToken,
+                                   QString *errorCode) const;
     [[nodiscard]] std::optional<int> verifiedNativeDockAppletId(
         const QString &panelId,
         int containmentId,
@@ -356,6 +378,9 @@ private:
     [[nodiscard]] ArchDock::NativePanelPlacementResult normalizedNativePanelPlacement(
         const QString &panelId,
         const QVariantMap &overrides = {}) const;
+    [[nodiscard]] ArchDock::NativePanelPlacementResult normalizedNativePanelPlacement(
+        const ArchDock::PanelDefinition &definition,
+        const QVariantMap &overrides = {}) const;
     [[nodiscard]] QVariantMap nativePanelPlacementIntent(const QString &panelId) const;
     [[nodiscard]] ArchDock::PlasmaPanelPlacementApplyResult applyNativePanelPlacementTransaction(
         const QString &panelId,
@@ -372,9 +397,11 @@ private:
         const QString &panelId,
         ArchDock::PlasmaPanelPlacementApplyResult result);
     [[nodiscard]] QList<ArchDock::PanelSettingsHostResult> applyPanelSettingsHosts(
-        const ArchDock::PanelSettingsTransactionDraft &draft);
+        const ArchDock::PanelSettingsTransactionDraft &draft,
+        bool includeVisibility = true);
     [[nodiscard]] QList<ArchDock::PanelSettingsHostResult> rollbackPanelSettingsHosts(
-        const ArchDock::PanelSettingsTransactionDraft &draft);
+        const ArchDock::PanelSettingsTransactionDraft &draft,
+        bool includeVisibility = true);
     [[nodiscard]] static bool panelSettingsTopologyChanged(
         const ArchDock::PanelDefinition &before,
         const ArchDock::PanelDefinition &after);
@@ -400,6 +427,7 @@ private:
     DockSettings m_settings;
     PanelRegistry m_panelRegistry;
     ArchDock::PresetLibrary m_presetLibrary;
+    ArchDock::PresetPreviewSession *m_presetAudition = nullptr;
     SystemStatus m_systemStatus;
     ArchDock::OverlayModel m_overlayModel;
     QTimer m_contentTimer;

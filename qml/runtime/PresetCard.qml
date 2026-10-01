@@ -17,6 +17,7 @@ Rectangle {
     // A card is a still picture of its preset. The selected preset's motion
     // plays in Panel Studio's large preview.
     property bool motionEnabled: false
+    property bool actionsEnabled: true
 
     readonly property string presetId: String(preset.id || "")
     readonly property bool panelPreset: String(preset.kind || "") === "panel"
@@ -35,6 +36,8 @@ Rectangle {
     signal duplicateRequested()
     signal renameRequested()
     signal removeRequested()
+    signal previewRequested()
+    signal applyRequested()
 
     function hostLabel(hostKind) {
         return String(hostKind) === "free-desktop" ? qsTr("Free panel") : qsTr("Screen edge");
@@ -343,6 +346,26 @@ Rectangle {
                     ? "#ffc66d" : "#72909f"
                 font.pixelSize: 9
                 elide: Text.ElideRight
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 6
+
+                Button {
+                    objectName: "preset-preview-" + root.presetId
+                    text: qsTr("Preview on Desktop")
+                    enabled: root.actionsEnabled && root.presetState !== "incompatible"
+                    Accessible.name: qsTr("Preview %1 on desktop").arg(String(root.preset.name || ""))
+                    onClicked: root.previewRequested()
+                }
+                Button {
+                    objectName: "preset-apply-" + root.presetId
+                    text: qsTr("Apply as Active")
+                    enabled: root.actionsEnabled && root.presetState !== "incompatible"
+                    Accessible.name: qsTr("Apply %1 as active").arg(String(root.preset.name || ""))
+                    onClicked: root.applyRequested()
+                }
             }
 
             RowLayout {

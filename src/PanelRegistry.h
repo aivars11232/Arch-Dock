@@ -87,6 +87,11 @@ public:
         const ArchDock::PanelDefinition &candidatePanel,
         const QVariantMap &globalSettings,
         QString *errorMessage = nullptr);
+    // The caller verifies and converts the preview host before this single
+    // durable insertion. No provisional registry record is needed.
+    [[nodiscard]] bool adoptPreviewPanel(
+        const ArchDock::PanelDefinition &definition,
+        QString *errorMessage = nullptr);
     [[nodiscard]] bool rollbackPanelSettingsTransaction(
         const ArchDock::PanelSettingsTransactionDraft &draft,
         quint64 committedRevision,

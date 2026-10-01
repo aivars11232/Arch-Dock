@@ -33,16 +33,48 @@ Window {
     property string previewPresentationState: "open"
     property int previewStateEntry: 1
     property string previewIconState: "normal"
-    // Preset pages only browse and preview. Nothing here reaches a panel.
+    // Selection drives the embedded preview; explicit actions start desktop audition.
     property string selectedPresetId: ""
     property string presetNoticeText: ""
     property bool presetNoticeIsError: false
+
+    readonly property var auditionService: typeof presetAudition === "undefined" ? null : presetAudition
+    readonly property var auditionStatus: {
+        const revision = auditionService ? auditionService.revision : 0;
+        return auditionService ? auditionService.status : ({ state: "IDLE" });
+    }
+    readonly property bool auditionActive: auditionStatus.state === "ACTIVE"
+    readonly property bool auditionBusy: auditionStatus.state !== "IDLE"
+    property var auditionCustomizations: ({})
+    property string auditionOriginalPanelId: ""
+    property bool auditionNewPanel: false
+    property bool auditionRecommendIcons: !String((panelRegistry.panelValue(selectedPanelId, "presetOrigin") || {}).iconPresetId || "").length
+    readonly property var auditionDefaults: {
+        const revision = auditionService ? auditionService.revision : 0;
+        return auditionService ? auditionService.defaultSelection() : ({});
+    }
+    readonly property string auditionPresetId: auditionBusy
+        ? String(auditionStatus.presetId || "") : selectedPresetId
+    readonly property string auditionKind: auditionBusy
+        ? String(auditionStatus.kind || "panel") : String(currentPresetPage && currentPresetPage.kind || "panel")
+    readonly property bool auditionSelectedDefault: auditionPresetId.length > 0
+        && String(auditionDefaults[auditionKind === "panel" ? "panelPresetId" : "iconPresetId"] || "") === auditionPresetId
+    readonly property string auditionGuardError: {
+        const revision = panelController.visibilityRevision;
+        const guards = panelController.panelInteractionGuards(auditionBusy
+            ? String(auditionStatus.panelId || selectedPanelId) : selectedPanelId);
+        return guards.editMode ? "edit-mode-active" : guards.popupOpen ? "popup-open"
+            : guards.dragActive ? "drag-active" : "";
+    }
+    readonly property bool showingAuditionDraft: auditionActive && currentPresetPage !== null
+        && currentPresetPage.kind === auditionKind && selectedPresetId === auditionPresetId
 
     // The catalog the current page lists, or null on every other page.
     readonly property var currentPresetPage:
         StudioNavigation.presetPage(mainTabIndex, subTabIndex)
     readonly property var presetCards: {
         const revision = presetLibrary.revision;
+        const auditionRevision = auditionService ? auditionService.revision : 0;
         const page = currentPresetPage;
         if (!page)
             return [];
@@ -59,12 +91,12 @@ Window {
     }
     // The selected preset plays its motion here unless reduced motion is on.
     readonly property var selectedPresetCandidate:
-        EditorModel.presetRendererCandidate(selectedPresetCard,
+        showingAuditionDraft ? selectedRendererCandidate : EditorModel.presetRendererCandidate(selectedPresetCard,
             Boolean(globalValue("reducedMotion", false)))
     readonly property var selectedPresetTheme:
-        EditorModel.presetPreviewTheme(selectedPresetCard)
+        showingAuditionDraft ? selectedPreviewTheme : EditorModel.presetPreviewTheme(selectedPresetCard)
     readonly property string selectedPresetPreviewMode:
-        String(selectedPresetCard && selectedPresetCard.preview
+        showingAuditionDraft ? rendererPreviewMode(selectedRendererCandidate) : String(selectedPresetCard && selectedPresetCard.preview
             && selectedPresetCard.preview.previewMode || "horizontal")
     readonly property bool presetPreviewActive:
         EditorModel.presetState(selectedPresetCard) !== "incompatible"
@@ -189,7 +221,7 @@ Window {
         const normalizedPanelId = String(panelId || "");
         if (normalizedPanelId.length === 0 || normalizedPanelId === selectedPanelId)
             return true;
-        if (hasPendingChanges) {
+        if (auditionBusy || hasPendingChanges) {
             studioError = qsTr("Apply or cancel the current draft before switching panels.");
             return false;
         }
@@ -231,13 +263,26 @@ Window {
     }
 
     function isNativePanel() {
-        return String(panelRegistry.panelValue(selectedPanelId, "edge")
+        return String(auditionActive ? panelValue("edge", "bottom") : panelRegistry.panelValue(selectedPanelId, "edge")
             || panelValue("edge", "bottom")) !== "free";
     }
 
     function refreshProjection() {
         if (!editorSession.loaded)
             return false;
+        if (auditionBusy) {
+            if (!auditionActive || Object.keys(editorSession.globalChanges || {}).length > 0) {
+                studioError = qsTr("Global settings are unavailable during desktop audition.");
+                return false;
+            }
+            const changes = EditorModel.copyValue(auditionCustomizations);
+            const edits = EditorModel.copyValue(editorSession.panelChanges || {});
+            for (const key of Object.keys(edits)) changes[key] = edits[key];
+            const result = auditionService.updateDraft(changes);
+            if (!auditionSucceeded(result)) return false;
+            auditionCustomizations = changes;
+            return loadAuditionEditor();
+        }
         const projected = panelController.resolvePanelSettingsEditorDraft(editorSession.panelId, editorSession.revision, EditorModel.panelCandidate(editorSession), EditorModel.globalCandidate(editorSession), "studio");
         if (!projected || projected.success !== true) {
             editorSession = EditorModel.retainFailure(editorSession, projected);
@@ -662,6 +707,10 @@ Window {
     }
 
     function stageArtifact(action, sourceUrl) {
+        if (auditionBusy) {
+            studioError = qsTr("Apply or cancel desktop audition before changing artwork.");
+            return;
+        }
         artifactDraft = {
             action: String(action || ""),
             sourceUrl: sourceUrl || ""
@@ -707,6 +756,10 @@ Window {
     }
 
     function applyStudioChanges() {
+        if (auditionBusy) {
+            studioError = qsTr("Use Apply as Active or Cancel for the desktop preview.");
+            return false;
+        }
         studioError = "";
         studioWarning = "";
         if (!editorSession.loaded)
@@ -737,16 +790,21 @@ Window {
     }
 
     function acceptStudioChanges() {
-        if (!hasPendingChanges || applyStudioChanges())
+        if (!auditionBusy && (!hasPendingChanges || applyStudioChanges()))
             close();
     }
 
     function cancelStudioChanges() {
+        if (auditionBusy && !performAuditionAction("cancel", "")) return;
         discardStudioChanges();
         close();
     }
 
     function performStudioAction(action, data) {
+        if (auditionBusy && ["create-free", "remove-panel", "import-theme", "render-theme", "clear-theme"].includes(action)) {
+            studioError = qsTr("Apply or cancel desktop audition before changing panels or artwork.");
+            return;
+        }
         if (String(action).indexOf("segment-") === 0) {
             if (!fieldDescriptor("segments", "panel")) return;
             const segments = EditorModel.copyValue(panelValue("segments", []));
@@ -810,6 +868,80 @@ Window {
         }
     }
 
+    function auditionSucceeded(result) {
+        if (result && result.success === true) {
+            studioError = "";
+            return true;
+        }
+        studioError = qsTr("Desktop preview action refused (%1).")
+            .arg(String(result && result.errorCode || "unavailable"));
+        return false;
+    }
+
+    function loadAuditionEditor() {
+        if (!auditionActive) return false;
+        const loaded = EditorModel.load(EditorModel.copyValue(auditionStatus.editorProjection || {}));
+        if (!loaded.loaded) {
+            studioError = qsTr("The desktop preview draft could not be loaded.");
+            return false;
+        }
+        editorSession = loaded;
+        resetRendererPreview(EditorModel.rendererCandidate(loaded));
+        return true;
+    }
+
+    function startPresetAudition(presetId, applyImmediately) {
+        if (!auditionService || !currentPresetPage) return false;
+        if (auditionActive && auditionKind === currentPresetPage.kind && auditionPresetId === presetId)
+            return applyImmediately ? performAuditionAction("apply", "") : true;
+        if ((!auditionBusy && hasPendingChanges) || hasArtifactChanges) {
+            studioError = qsTr("Apply or cancel the current draft before previewing a preset.");
+            return false;
+        }
+        const originalPanelId = auditionOriginalPanelId || selectedPanelId;
+        const result = auditionService.beginPreview({ kind: currentPresetPage.kind,
+            presetId: presetId, panelId: originalPanelId,
+            newPanel: currentPresetPage.kind === "panel" && auditionNewPanel,
+            useRecommendedIcons: auditionNewPanel || auditionRecommendIcons });
+        if (!auditionSucceeded(result)) return false;
+        auditionOriginalPanelId = originalPanelId;
+        auditionCustomizations = {};
+        selectedPresetId = presetId;
+        if (!loadAuditionEditor()) return false;
+        return applyImmediately ? performAuditionAction("apply", "") : true;
+    }
+
+    function performAuditionAction(action, name) {
+        if (!auditionService) return false;
+        const originalPanelId = auditionOriginalPanelId || selectedPanelId;
+        let result = null;
+        if (action === "apply") result = auditionService.applyAsActive();
+        else if (action === "save-custom") result = auditionService.saveAsCustomPreset(name);
+        else if (action === "set-default" || action === "remove-default")
+            result = auditionService.setAsDefault(auditionKind, auditionPresetId, action === "remove-default");
+        else if (action === "cancel") result = auditionService.cancel();
+        else if (action === "revert") result = auditionService.revert();
+        else if (action === "restore-built-in") result = auditionService.restoreBuiltInDefaults();
+        else return false;
+        if (!auditionSucceeded(result)) return false;
+        if (action === "apply" || action === "cancel" || action === "revert") {
+            auditionCustomizations = {};
+            auditionOriginalPanelId = "";
+            internalPanelSelection = true;
+            selectedPanelId = action === "apply" ? String(result.panelId || originalPanelId) : originalPanelId;
+            internalPanelSelection = false;
+            loadEditor(selectedPanelId);
+        } else if (action === "restore-built-in") {
+            auditionCustomizations = {};
+            selectedPresetId = auditionPresetId;
+            loadAuditionEditor();
+        } else if (action === "save-custom") {
+            presetNoticeText = qsTr("Saved a reusable custom preset. The desktop preview is still active.");
+            presetNoticeIsError = false;
+        }
+        return true;
+    }
+
     // Duplicate, rename and delete act on the user's preset store only. They
     // never touch an installed preset, a panel or the desktop.
     function performPresetAction(action, presetId, name) {
@@ -849,8 +981,8 @@ Window {
     onSelectedPanelIdChanged: {
         if (internalPanelSelection)
             return;
-        if (editorSession.loaded && editorSession.panelId !== selectedPanelId && hasPendingChanges) {
-            const previousPanelId = editorSession.panelId;
+        if (auditionBusy || (editorSession.loaded && editorSession.panelId !== selectedPanelId && hasPendingChanges)) {
+            const previousPanelId = auditionOriginalPanelId || editorSession.panelId;
             studioError = qsTr("Apply or cancel the current draft before switching panels.");
             internalPanelSelection = true;
             selectedPanelId = previousPanelId;
@@ -869,9 +1001,16 @@ Window {
     Component.onCompleted: loadEditor(selectedPanelId)
 
     Connections {
+        target: root.auditionService
+        function onChanged() {
+            if (root.auditionActive) root.loadAuditionEditor();
+        }
+    }
+
+    Connections {
         target: panelController
         function onContentRevisionChanged() {
-            if (root.visible && root.editorSession.loaded) {
+            if (!root.auditionBusy && root.visible && root.editorSession.loaded) {
                 const snapshot = panelController.panelSettingsEditorSnapshot(root.selectedPanelId, "studio");
                 if (!root.hasPendingChanges) root.editorSession = EditorModel.load(snapshot);
                 else root.editorSession = EditorModel.withContentFeedback(root.editorSession, snapshot);
@@ -883,7 +1022,7 @@ Window {
         target: panelRegistry
 
         function onRevisionChanged() {
-            if (!root.hasPendingChanges)
+            if (!root.auditionBusy && !root.hasPendingChanges)
                 root.loadEditor(root.selectedPanelId);
         }
     }
@@ -901,12 +1040,18 @@ Window {
 
     onVisibleChanged: {
         if (visible) {
-            if (!hasPendingChanges)
+            if (!auditionBusy && !hasPendingChanges)
                 loadEditor(selectedPanelId);
             requestActivate();
         }
     }
-    onClosing: discardStudioChanges()
+    onClosing: function(event) {
+        if (auditionBusy && !performAuditionAction("cancel", "")) {
+            event.accepted = false;
+            return;
+        }
+        discardStudioChanges();
+    }
 
     Shortcut {
         sequences: [StandardKey.Cancel]
@@ -1174,7 +1319,7 @@ Window {
 
                         Label {
                             objectName: "panel-studio-preview-title"
-                            text: root.presetPreviewActive
+                            text: root.auditionActive ? qsTr("Desktop preview active — saved settings unchanged") : root.presetPreviewActive
                                 ? qsTr("Preset preview — %1").arg(String(root.selectedPresetCard.name || ""))
                                 : qsTr("Live renderer preview")
                             color: "#e9f5fa"
@@ -1366,6 +1511,37 @@ Window {
                 }
             }
 
+            PresetAuditionBar {
+                objectName: "panel-studio-audition-bar"
+                visible: root.auditionBusy
+                Layout.fillWidth: true
+                auditionStatus: root.auditionStatus
+                presetId: root.auditionPresetId
+                resourceAvailable: root.auditionActive
+                selectedDefault: root.auditionSelectedDefault
+                guardError: root.auditionGuardError
+                onActionRequested: function(action, name) { root.performAuditionAction(action, name); }
+            }
+
+            RowLayout {
+                visible: root.currentPresetPage !== null && root.currentPresetPage.kind === "panel"
+                Layout.fillWidth: true
+                CheckBox {
+                    objectName: "preset-audition-new-panel"
+                    text: qsTr("Preview on a new panel")
+                    checked: root.auditionNewPanel
+                    enabled: !root.auditionBusy
+                    onToggled: root.auditionNewPanel = checked
+                }
+                CheckBox {
+                    objectName: "preset-audition-recommended-icons"
+                    text: qsTr("Use recommended icons")
+                    checked: root.auditionNewPanel || root.auditionRecommendIcons
+                    enabled: !root.auditionBusy && !root.auditionNewPanel
+                    onToggled: root.auditionRecommendIcons = checked
+                }
+            }
+
             StudioForm {
                 visible: root.currentPresetPage === null
                 Layout.fillWidth: true
@@ -1387,6 +1563,14 @@ Window {
                 selectedPresetId: root.selectedPresetId
                 noticeText: root.presetNoticeText
                 noticeIsError: root.presetNoticeIsError
+                auditionStatus: root.auditionStatus
+                actionsEnabled: (!root.auditionBusy || root.auditionActive) && root.auditionGuardError.length === 0
+                showAuditionBar: !root.auditionBusy
+                selectedDefault: root.auditionSelectedDefault
+                auditionGuardError: root.auditionGuardError
+                onPreviewRequested: function(presetId) { root.startPresetAudition(presetId, false); }
+                onApplyRequested: function(presetId) { root.startPresetAudition(presetId, true); }
+                onAuditionActionRequested: function(action, name) { root.performAuditionAction(action, name); }
                 onPresetSelected: function(presetId) {
                     root.selectedPresetId = presetId;
                 }
@@ -1451,6 +1635,7 @@ Window {
 
         Button {
             text: qsTr("OK")
+            enabled: !root.auditionBusy
             icon.name: "dialog-ok"
             onClicked: root.acceptStudioChanges()
         }
@@ -1458,7 +1643,7 @@ Window {
         Button {
             text: qsTr("Apply")
             icon.name: "dialog-ok-apply"
-            enabled: root.hasPendingChanges
+            enabled: !root.auditionBusy && root.hasPendingChanges
             onClicked: root.applyStudioChanges()
         }
 

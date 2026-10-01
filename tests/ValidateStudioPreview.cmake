@@ -7,6 +7,7 @@ file(READ "${SOURCE_DIR}/qml/runtime/SettingsPopup.qml" settings_popup)
 file(READ "${SOURCE_DIR}/qml/runtime/StudioForm.qml" studio_form)
 file(READ "${SOURCE_DIR}/qml/runtime/PresetCard.qml" preset_card)
 file(READ "${SOURCE_DIR}/qml/runtime/PresetBrowser.qml" preset_browser)
+file(READ "${SOURCE_DIR}/qml/runtime/PresetAuditionBar.qml" preset_audition_bar)
 
 foreach(required_editor_contract
         "function rendererCandidate(session)"
@@ -131,7 +132,7 @@ foreach(forbidden_preset_preview
 endforeach()
 
 # The preset components receive data and emit requests. They hold no route to
-# a panel, to the preset store or to an Apply action.
+# a panel or to the preset store. TASK-0041 adds explicit action requests.
 foreach(forbidden_preset_access
         "panelController"
         "panelRegistry"
@@ -139,14 +140,39 @@ foreach(forbidden_preset_access
         "dockSettings"
         "applyPanelSettingsTransaction"
         "performStudioAction"
-        "Set as Default"
-        "Preview on Desktop"
-        "qsTr(\"Apply")
-  string(FIND "${preset_card}${preset_browser}"
+        "presetAudition")
+  string(FIND "${preset_card}${preset_browser}${preset_audition_bar}"
          "${forbidden_preset_access}" preset_access_position)
   if(NOT preset_access_position EQUAL -1)
     message(FATAL_ERROR
-            "Preset browsing must stay read-only: ${forbidden_preset_access}")
+            "Preset components must only emit requests: ${forbidden_preset_access}")
+  endif()
+endforeach()
+
+foreach(required_audition_contract
+        "auditionService.beginPreview("
+        "auditionService.updateDraft("
+        "auditionService.applyAsActive("
+        "auditionService.saveAsCustomPreset("
+        "auditionService.setAsDefault("
+        "auditionService.cancel("
+        "auditionService.revert("
+        "auditionService.restoreBuiltInDefaults("
+        "enabled: !root.auditionBusy"
+        "onClosing: function(event)"
+        "event.accepted = false"
+        "performAuditionAction(\"cancel\", \"\")")
+  string(FIND "${settings_popup}" "${required_audition_contract}" audition_position)
+  if(audition_position EQUAL -1)
+    message(FATAL_ERROR "Missing audition Studio boundary: ${required_audition_contract}")
+  endif()
+endforeach()
+foreach(required_audition_action
+        "Apply as Active" "Save as Custom Preset" "Set as Default"
+        "Cancel" "Revert" "Restore Built-in Defaults")
+  string(FIND "${preset_audition_bar}" "${required_audition_action}" action_position)
+  if(action_position EQUAL -1)
+    message(FATAL_ERROR "Missing audition action: ${required_audition_action}")
   endif()
 endforeach()
 

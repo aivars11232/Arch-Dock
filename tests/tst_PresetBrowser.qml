@@ -318,7 +318,7 @@ TestCase {
         verify(first.activeFocus);
     }
 
-    function test_builtInCardsAreReadOnlyAndOnlyOfferDuplicate() {
+    function test_builtInCardsKeepStoreActionsReadOnly() {
         const browser = createBrowser({
             presets: [panelCard("panel-a")]
         });
@@ -327,7 +327,7 @@ TestCase {
         const removed = spyOn(browser, "removeRequested");
         verify(!findChild(browser, "preset-rename-panel-a").visible);
         verify(!findChild(browser, "preset-delete-panel-a").visible);
-        compare(buttonTexts(card(browser, "panel-a")).join("|"), "Duplicate to My Presets");
+        compare(buttonTexts(card(browser, "panel-a")).join("|"), "Preview on Desktop|Apply as Active|Duplicate to My Presets");
 
         mouseClick(findChild(browser, "preset-duplicate-panel-a"));
         compare(duplicated.count, 1);
@@ -339,27 +339,31 @@ TestCase {
         compare(spyOn(browser, "presetSelected").count, 0);
     }
 
-    function test_noCardOffersToApplyOrAuditionAPreset() {
-        const browser = createBrowser({
-            scope: "user",
-            presets: [
-                userCard("user-000000000001"),
-                panelCard("panel-b", {
-                    compatibility: { available: false, reasonCode: "theme-package-unavailable" },
-                    preview: undefined
-                })
-            ]
-        });
-        browser.beginRename(userCard("user-000000000001"));
-        const texts = buttonTexts(browser);
-        verify(texts.length >= 6, texts.join("|"));
-        for (let index = 0; index < texts.length; ++index) {
-            verify(!/apply|preview on desktop|set as default|audition|use preset/i.test(texts[index]),
-                "unexpected action: " + texts[index]);
-        }
-        compare(texts.filter(function(text) {
-            return ["Rename", "Duplicate", "Duplicate to My Presets", "Delete", "Cancel"].indexOf(text) < 0;
-        }).length, 0, texts.join("|"));
+    function test_onlyExplicitActionsRequestDesktopAudition() {
+        const browser = createBrowser({ presets: [panelCard("panel-a"), panelCard("panel-b", {
+            compatibility: { available: false, reasonCode: "theme-package-unavailable" },
+            preview: undefined
+        })] });
+        const preview = spyOn(browser, "previewRequested");
+        const apply = spyOn(browser, "applyRequested");
+        const first = card(browser, "panel-a");
+        mouseMove(first, 20, 20);
+        first.forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        compare(preview.count, 0);
+        compare(apply.count, 0);
+        mouseClick(findChild(browser, "preset-preview-panel-a"));
+        compare(preview.count, 1);
+        compare(preview.signalArguments[0][0], "panel-a");
+        compare(apply.count, 0);
+        mouseClick(findChild(browser, "preset-apply-panel-a"));
+        compare(apply.count, 1);
+        compare(apply.signalArguments[0][0], "panel-a");
+        verify(!findChild(browser, "preset-preview-panel-b").enabled);
+        verify(!findChild(browser, "preset-apply-panel-b").enabled);
+        browser.actionsEnabled = false;
+        verify(!findChild(browser, "preset-preview-panel-a").enabled);
+        verify(!findChild(browser, "preset-apply-panel-a").enabled);
     }
 
     function test_userCardsCanBeRenamedDuplicatedAndDeleted() {
@@ -372,7 +376,7 @@ TestCase {
         const removed = spyOn(browser, "removeRequested");
         const id = "user-000000000001";
         compare(card(browser, id).subtitle(), "My Panel Preset · derived from panel-a, revision 1");
-        compare(buttonTexts(card(browser, id)).join("|"), "Rename|Duplicate|Delete");
+        compare(buttonTexts(card(browser, id)).join("|"), "Preview on Desktop|Apply as Active|Rename|Duplicate|Delete");
         const pending = findChild(browser, "preset-pending-action");
         const field = findChild(browser, "preset-rename-field");
         const confirm = findChild(browser, "preset-confirm-action");

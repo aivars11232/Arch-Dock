@@ -8,6 +8,9 @@
 #include "DockModel.h"
 #include "WindowModel.h"
 #include "panel/IconOverrideTransaction.h"
+#include "model/IconEntryIdentity.h"
+#include "presets/PresetCapabilityResolver.h"
+#include "PresetTestSupport.h"
 
 #include <QDir>
 #include <QFile>
@@ -349,6 +352,8 @@ private slots:
     void supportsPinnedFolderSnapshotsAndReordering();
     void validatesBuiltInCapabilityCatalog();
     void resolvesIconStylesIndependentlyFromPanelThemes();
+    void persistsPresetIconOverridesForPanelAndEntries();
+    void adoptsExactlyOneVerifiedPreviewPanel();
     void resolvesBuiltInChassisPackagesAndImportPrecedence();
     void resolvesThemeCandidatesWithoutMutation();
     void rejectsIncompatibleThemeWithoutRecordMutation();
@@ -2998,6 +3003,126 @@ void PanelRegistryTest::resolvesBuiltInChassisPackagesAndImportPrecedence()
     QVERIFY2(selectedProjection.has_value(), qPrintable(projectionError));
     QCOMPARE(selectedProjection->value(QStringLiteral("id")).toString(),
              QStringLiteral("sci-fi-chassis-blue"));
+}
+
+void PanelRegistryTest::persistsPresetIconOverridesForPanelAndEntries()
+{
+    PanelRegistry registry(taskThemeDefinitions());
+    const auto source = ArchDock::IconPresetDefinition::fromVariantMap(
+        PresetTestSupport::iconPresetMap());
+    QVERIFY(source.has_value());
+    const auto previous = registry.panelDefinition(QStringLiteral("bottom"));
+    QVERIFY(previous.has_value());
+    auto candidate = *previous;
+    candidate.settingsRevision++;
+    candidate.iconStyle.styleReference = source->icon.iconStyleId;
+    candidate.iconStyle.globalDefaults.insert(
+        QStringLiteral("presetOverrides"), source->icon.toVariantMap());
+    QString error;
+    QVERIFY2(registry.persistPanelDefinitionTransaction(
+        *previous, candidate, {}, &error), qPrintable(error));
+
+    PanelRegistry reloaded(taskThemeDefinitions());
+    const auto stored = reloaded.panelDefinition(QStringLiteral("bottom"));
+    QVERIFY(stored.has_value());
+    QCOMPARE(stored->iconStyle.globalDefaults, candidate.iconStyle.globalDefaults);
+    const auto expected = ArchDock::PresetCapabilityResolver::resolveIconStyle(
+        *reloaded.iconStyleStore(), *source);
+    QVERIFY(expected.valid);
+    const auto projection = reloaded.iconStyleRuntimeProjection(*stored);
+    QVERIFY(projection.has_value());
+    QVERIFY(projection->value(QStringLiteral("presetOverridesApplied")).toBool());
+    QCOMPARE(projection->value(QStringLiteral("layers")),
+             expected.projection.value(QStringLiteral("layers")));
+    QCOMPARE(projection->value(QStringLiteral("states")),
+             expected.projection.value(QStringLiteral("states")));
+
+    const QVariantMap entry{{QStringLiteral("type"), QStringLiteral("application")},
+        {QStringLiteral("appId"), QStringLiteral("org.kde.konsole.desktop")},
+        {QStringLiteral("iconName"), QStringLiteral("utilities-terminal")}};
+    const auto resolved = reloaded.resolveIconEntryOverride(*stored, entry);
+    QCOMPARE(resolved.value(QStringLiteral("iconStyleDefinition")).toMap()
+                 .value(QStringLiteral("layers")),
+             expected.projection.value(QStringLiteral("layers")));
+
+    auto explicitStyle = *stored;
+    const QString identity = ArchDock::IconEntryIdentity::forEntry(entry);
+    QVERIFY(!identity.isEmpty());
+    explicitStyle.iconStyle.perEntryOverrides[identity].styleReference =
+        QStringLiteral("metallic-red");
+    QCOMPARE(reloaded.resolveIconEntryOverride(explicitStyle, entry)
+                 .value(QStringLiteral("iconStyleDefinition")).toMap()
+                 .value(QStringLiteral("id")).toString(),
+             QStringLiteral("metallic-red"));
+
+    auto invalid = *stored;
+    auto block = source->icon.toVariantMap();
+    block.insert(QStringLiteral("visualOverrides"), QVariantMap{
+        {QStringLiteral("not-a-layer"), QVariantMap{
+            {QStringLiteral("color"), QStringLiteral("#ffffff")}}}});
+    invalid.iconStyle.globalDefaults.insert(QStringLiteral("presetOverrides"), block);
+    const auto fallback = reloaded.iconStyleRuntimeProjection(invalid);
+    QVERIFY(fallback.has_value());
+    QVERIFY(!fallback->value(QStringLiteral("presetOverridesApplied")).toBool());
+    QCOMPARE(fallback->value(QStringLiteral("presetOverrideError")).toString(),
+             QStringLiteral("invalid-preset-overrides"));
+    QCOMPARE(fallback->value(QStringLiteral("layers")),
+             reloaded.iconStyleDefinition(source->icon.iconStyleId)
+                 .value(QStringLiteral("layers")));
+}
+
+void PanelRegistryTest::adoptsExactlyOneVerifiedPreviewPanel()
+{
+    PanelRegistry registry;
+    const auto bottom = registry.panelDefinition(QStringLiteral("bottom"));
+    const int initialCount = registry.panelIds().size();
+    const int initialRevision = registry.revision();
+    QSettings settings;
+    settings.setValue(QStringLiteral("dock/magnification"), 1.8);
+    settings.sync();
+    for (const bool free : {false, true})
+    {
+        auto candidate = ArchDock::PanelDefinition::defaults(
+            free ? QStringLiteral("free-x12345678") : QStringLiteral("panel-x12345678"),
+            QStringLiteral("Adopted preset"),
+            free ? QStringLiteral("free") : QStringLiteral("bottom"), false);
+        candidate.settingsRevision = 1;
+        candidate.visibility.visible = true;
+        if (free)
+        {
+            candidate.host.freeDesktopContainmentId = 42;
+            candidate.host.freeDockAppletId = 73;
+            candidate.host.freeOwnershipToken = QStringLiteral("archdock-free-adopted");
+            candidate.host.freeHostState = QStringLiteral("hosted-owned");
+        }
+        else
+        {
+            candidate.host.nativePanelId = 43;
+            candidate.host.nativeDockAppletId = 74;
+            candidate.host.nativeOwnershipToken = QStringLiteral("archdock-native-adopted");
+            candidate.host.nativeRecoveryState = QStringLiteral("ready");
+        }
+        candidate = candidate.normalized();
+        QString error;
+        auto previewToken = candidate;
+        if (free) previewToken.host.freeOwnershipToken = QStringLiteral("archdock-preview-test");
+        else previewToken.host.nativeOwnershipToken = QStringLiteral("archdock-preview-test");
+        QVERIFY(!registry.adoptPreviewPanel(previewToken, &error));
+        QVERIFY2(registry.adoptPreviewPanel(candidate, &error), qPrintable(error));
+        const auto adopted = registry.panelDefinition(candidate.identity.id);
+        QVERIFY(adopted.has_value());
+        QVERIFY(*adopted == candidate);
+        const int revision = registry.revision();
+        QVERIFY(!registry.adoptPreviewPanel(candidate, &error));
+        QCOMPARE(registry.revision(), revision);
+        PanelRegistry reloaded;
+        QVERIFY(reloaded.panelDefinition(candidate.identity.id).has_value());
+        QVERIFY(reloaded.panelDefinition(QStringLiteral("bottom")) == bottom);
+    }
+    QCOMPARE(registry.panelIds().size(), initialCount + 2);
+    QCOMPARE(registry.revision(), initialRevision + 2);
+    QSettings verify;
+    QCOMPARE(verify.value(QStringLiteral("dock/magnification")).toReal(), 1.8);
 }
 
 void PanelRegistryTest::resolvesIconStylesIndependentlyFromPanelThemes()

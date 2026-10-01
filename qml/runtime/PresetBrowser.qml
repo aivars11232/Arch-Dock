@@ -23,6 +23,11 @@ Item {
     property bool noticeIsError: false
     // The rename or delete the user has started but not yet confirmed.
     property var pendingAction: null
+    property var auditionStatus: ({ state: "IDLE" })
+    property bool actionsEnabled: true
+    property bool showAuditionBar: true
+    property bool selectedDefault: false
+    property string auditionGuardError: ""
 
     readonly property bool panelKind: kind === "panel"
     readonly property bool builtInScope: scope === "builtin"
@@ -43,6 +48,18 @@ Item {
     signal duplicateRequested(string presetId, string name)
     signal renameRequested(string presetId, string name)
     signal removeRequested(string presetId)
+    signal previewRequested(string presetId)
+    signal applyRequested(string presetId)
+    signal auditionActionRequested(string action, string name)
+
+    function selectedResourceAvailable() {
+        for (let index = 0; index < presets.length; ++index) {
+            const preset = presets[index];
+            if (String(preset.id || "") === selectedPresetId)
+                return (preset.compatibility || {}).available === true;
+        }
+        return false;
+    }
 
     function beginRename(preset) {
         pendingAction = {
@@ -150,6 +167,18 @@ Item {
             text: root.noticeText
         }
 
+        PresetAuditionBar {
+            visible: root.showAuditionBar && (root.selectedPresetId.length > 0
+                || String(root.auditionStatus.state || "IDLE") !== "IDLE")
+            Layout.fillWidth: true
+            auditionStatus: root.auditionStatus
+            presetId: root.selectedPresetId
+            resourceAvailable: root.selectedResourceAvailable()
+            selectedDefault: root.selectedDefault
+            guardError: root.auditionGuardError
+            onActionRequested: function(action, name) { root.auditionActionRequested(action, name); }
+        }
+
         Rectangle {
             objectName: "preset-pending-action"
             visible: root.pendingAction !== null
@@ -254,6 +283,7 @@ Item {
 
                 width: ListView.view.width - 12
                 preset: modelData
+                actionsEnabled: root.actionsEnabled
                 selected: presetId.length > 0 && presetId === root.selectedPresetId
                 onSelectRequested: {
                     list.currentIndex = index;
@@ -263,6 +293,8 @@ Item {
                     presetId, qsTr("%1 copy").arg(String(modelData.name || "")))
                 onRenameRequested: root.beginRename(modelData)
                 onRemoveRequested: root.beginRemove(modelData)
+                onPreviewRequested: root.previewRequested(presetId)
+                onApplyRequested: root.applyRequested(presetId)
                 Keys.onDownPressed: root.focusCard(index + 1)
                 Keys.onUpPressed: root.focusCard(index - 1)
             }

@@ -5,6 +5,7 @@
 #include "model/PanelSettingsSchema.h"
 #include "model/SettingsMigration.h"
 #include "panel/IconOverrideTransaction.h"
+#include "presets/PresetCapabilityResolver.h"
 #include "themes/ThemeAssetProcessor.h"
 #include "themes/ThemePackage.h"
 
@@ -1246,6 +1247,43 @@ bool PanelRegistry::persistPanelDefinitionTransaction(
     return true;
 }
 
+bool PanelRegistry::adoptPreviewPanel(
+    const ArchDock::PanelDefinition &definition,
+    QString *errorMessage)
+{
+    const bool free = definition.host.kind == ArchDock::PanelHostKind::FreeDesktop;
+    const QString token = free ? definition.host.freeOwnershipToken
+                               : definition.host.nativeOwnershipToken;
+    const bool associated = free
+        ? definition.host.freeDesktopContainmentId >= 0 &&
+          definition.host.freeDockAppletId >= 0 &&
+          definition.host.freeHostState == QStringLiteral("hosted-owned") &&
+          definition.host.freeCreationState == QStringLiteral("idle")
+        : definition.host.nativePanelId >= 0 &&
+          definition.host.nativeDockAppletId >= 0 &&
+          definition.host.nativeRecoveryState == QStringLiteral("ready");
+    if (record(definition.identity.id) || definition.identity.builtIn ||
+        definition.settingsRevision != 1 || !associated || token.isEmpty() ||
+        token.startsWith(QStringLiteral("archdock-preview-")) ||
+        definition.normalized() != definition || !definition.isValid(errorMessage))
+    {
+        if (errorMessage && errorMessage->isEmpty())
+        {
+            *errorMessage = QStringLiteral("invalid-preview-adoption");
+        }
+        return false;
+    }
+    QList<QVariantMap> stagedPanels = m_panels;
+    stagedPanels.append(definition.toLegacyMap());
+    if (!persistPanelState(stagedPanels, {}, errorMessage))
+    {
+        return false;
+    }
+    m_panels = std::move(stagedPanels);
+    changed(!free);
+    return true;
+}
+
 bool PanelRegistry::rollbackPanelSettingsTransaction(
     const ArchDock::PanelSettingsTransactionDraft &draft,
     quint64 committedRevision,
@@ -1899,8 +1937,16 @@ QVariantMap PanelRegistry::resolveIconEntryOverride(
         entry.value(
             QStringLiteral("baseDisplayName"),
             entry.value(QStringLiteral("displayName"))).toString(),
-        [this](const QString &styleReference)
+        [this, &definition](const QString &styleReference)
         {
+            if (styleReference == definition.iconStyle.styleReference)
+            {
+                const auto projection = iconStyleRuntimeProjection(definition);
+                if (projection.has_value())
+                {
+                    return *projection;
+                }
+            }
             return m_iconStyleStore.has_value()
                 ? m_iconStyleStore->resolve(styleReference)
                 : QVariantMap{
@@ -1927,6 +1973,31 @@ std::optional<QVariantMap> PanelRegistry::iconStyleRuntimeProjection(
     }
     QVariantMap projection = m_iconStyleStore->resolve(
         definition.iconStyle.styleReference);
+    const QVariantMap overrides = definition.iconStyle.globalDefaults.value(
+        QStringLiteral("presetOverrides")).toMap();
+    if (!overrides.isEmpty())
+    {
+        ArchDock::IconPresetDefinition carrier;
+        carrier.identity.id = QStringLiteral("runtime-overrides");
+        carrier.identity.name = QStringLiteral("Runtime icon overrides");
+        carrier.identity.builtIn = true;
+        carrier.compatibility.rendererTiers = {QStringLiteral("procedural2d")};
+        QVariantMap object = carrier.toVariantMap();
+        object.insert(QStringLiteral("icon"), overrides);
+        const auto preset = ArchDock::IconPresetDefinition::fromVariantMap(object);
+        const auto resolved = preset.has_value() &&
+                preset->icon.iconStyleId == definition.iconStyle.styleReference
+            ? ArchDock::PresetCapabilityResolver::resolveIconStyle(
+                  *m_iconStyleStore, *preset)
+            : ArchDock::IconStyleResolution{};
+        if (resolved.valid)
+        {
+            projection = resolved.projection;
+        }
+        projection.insert(QStringLiteral("presetOverridesApplied"), resolved.valid);
+        projection.insert(QStringLiteral("presetOverrideError"), resolved.valid
+            ? QString{} : QStringLiteral("invalid-preset-overrides"));
+    }
     if (!projection.value(QStringLiteral("valid")).toBool())
     {
         if (errorCode)
