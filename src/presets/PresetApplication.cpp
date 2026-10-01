@@ -142,7 +142,8 @@ PanelPresetDefinition PresetApplication::panelSnapshot(
         : draft.placement.edge == QStringLiteral("left") ||
           draft.placement.edge == QStringLiteral("right")
             ? QStringLiteral("vertical") : QStringLiteral("horizontal");
-    result.preview.rendererTier = draft.surface.rendererTier;
+    result.preview.rendererTier = draft.surface.rendererTier.isEmpty()
+        ? source.preview.rendererTier : draft.surface.rendererTier;
     result.compatibility.hostKinds = {PanelDefinition::hostKindName(draft.host.kind)};
     result.compatibility.layouts = {draft.layout.pathType};
     result.compatibility.orientations = {result.preview.previewMode};

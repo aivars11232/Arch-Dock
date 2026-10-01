@@ -42,8 +42,16 @@ Icon Preset definitions, catalogs, user store, Studio pages and the exact
 15 + 15 built-in libraries. A fresh build and the full **80/80 CTest gate pass
 (321.17 s)**. See
 [TASK-0040 implementation](#task-0040-implementation--2026-10-01). On the
-owner's instruction the agent committed and pushed it; TASK-0041 has not
-started.
+owner's instruction the agent committed and pushed it.
+
+**TASK-0041 is PAUSED and incomplete** (2026-10-01), at the owner's explicit
+request to commit and sync the current changes and freeze further work.
+The implementation baseline is `2905761`; this continuation adds audition
+repairs and five isolated Plasma matrix groups. Focused QML, registry and
+private runtime checks passed, but the complete phase gate and fresh
+consolidated build/full CTest gate have not been completed. Resume only on
+the owner's instruction. See the
+[TASK-0041 checkpoint and remaining work](TASK-0041_CONTINUATION_HANDOFF.md).
 
 Earlier context, retained because it explains two mislabelled commits: the
 session that produced `f61c9ab` began from a tree whose subject `Task33` is
@@ -62,8 +70,9 @@ Earlier task sections retain their historical evidence and boundaries.
 ## Repository state
 
 - Repository root: `/mnt/F/Arch Dock`
-- Branch: `main`, matching the local `origin/main` reference. No fetch, push,
-  or sync was performed by Codex.
+- Branch: `main`. The owner authorized committing and syncing the TASK-0041
+  paused checkpoint on 2026-10-01. Earlier Git-state entries below are
+  historical evidence.
 - TASK-0036 implementation baseline:
   `a7f366506315e4009db2332ea8ddc6edc9cdf5ba`, subject `Arch Dock task 38`.
   That subject labels the prerequisite repair, not TASK-0038 implementation.

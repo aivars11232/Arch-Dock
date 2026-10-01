@@ -24,6 +24,7 @@
 #include <QDBusReply>
 #include <QDBusServiceWatcher>
 #include <QDebug>
+#include <QEventLoop>
 #include <QFileInfo>
 #include <QHash>
 #include <QDir>
@@ -46,6 +47,7 @@
 #include <QWindow>
 
 #include <array>
+#include <cmath>
 #include <limits>
 #include <utility>
 
@@ -920,6 +922,35 @@ QVariantMap PanelWindow::presetEditorProjection(const ArchDock::PanelDefinition 
     QString themeError, iconError;
     const auto theme = m_panelRegistry.themeRuntimeProjection(candidate, &themeError);
     const auto icons = m_panelRegistry.iconStyleRuntimeProjection(candidate, &iconError);
+    QVariantMap themeCandidates;
+    for (const auto &entry : m_panelRegistry.themeDefinitions())
+    {
+        const QString id = entry.toMap().value(QStringLiteral("id")).toString();
+        const auto prepared = m_panelRegistry.themeCandidateForDefinition(candidate, id, QStringLiteral("complete"));
+        auto values = prepared.value(QStringLiteral("values")).toMap();
+        if (prepared.value(QStringLiteral("success")).toBool())
+        {
+            auto record = candidate.toLegacyMap();
+            record.insert(values);
+            const auto themed = ArchDock::PanelDefinition::fromLegacyMap(record);
+            QSet<QString> available;
+            if (themed)
+                for (const auto &field : panelSettingsEditorFields(*themed,
+                         m_panelRegistry.resolvePanelCapabilities(*themed), QStringLiteral("studio")))
+                    available.insert(field.toMap().value(QStringLiteral("key")).toString());
+            for (auto it = values.begin(); it != values.end();)
+            {
+                const auto *field = ArchDock::PanelSettingsSchema::panelDescriptor(it.key());
+                if (field && field->editor.isPresented() && !available.contains(it.key()))
+                    it = values.erase(it);
+                else ++it;
+            }
+        }
+        themeCandidates.insert(id, QVariantMap{{QStringLiteral("success"), prepared.value(QStringLiteral("success")).toBool()},
+            {QStringLiteral("errorCode"), prepared.value(QStringLiteral("errorCode")).toString()},
+            {QStringLiteral("errorMessage"), prepared.value(QStringLiteral("errorMessage")).toString()},
+            {QStringLiteral("values"), values}});
+    }
     return {{QStringLiteral("success"), true}, {QStringLiteral("status"), QStringLiteral("loaded")},
         {QStringLiteral("panelId"), candidate.identity.id}, {QStringLiteral("revision"), candidate.settingsRevision},
         {QStringLiteral("consumer"), QStringLiteral("studio")},
@@ -928,6 +959,7 @@ QVariantMap PanelWindow::presetEditorProjection(const ArchDock::PanelDefinition 
         {QStringLiteral("globalValues"), m_settings.transactionSnapshot()},
         {QStringLiteral("capabilityResolution"), resolution.toVariantMap()},
         {QStringLiteral("themes"), m_panelRegistry.themeDefinitions()},
+        {QStringLiteral("themeCandidates"), themeCandidates},
         {QStringLiteral("iconStyles"), m_panelRegistry.iconStyleDefinitions()},
         {QStringLiteral("animationProfiles"), m_panelRegistry.animationProfileDefinitions()},
         {QStringLiteral("themeDefinition"), theme.value_or(QVariantMap{})},
@@ -1060,7 +1092,11 @@ ArchDock::PresetPreviewSession::Operations PanelWindow::presetAuditionOperations
         QString error, id;
         if (prepared.panelPreset)
         {
-            const auto saved = store.save(PresetApplication::panelSnapshot(*prepared.panelPreset,
+            auto source = *prepared.panelPreset;
+            const auto tier = m_panelRegistry.resolvePanelCapabilities(prepared.draft.candidatePanel).renderer.effectiveTier;
+            if (prepared.draft.candidatePanel.surface.rendererTier.isEmpty() && tier)
+                source.preview.rendererTier = rendererTierName(*tier);
+            const auto saved = store.save(PresetApplication::panelSnapshot(source,
                 prepared.draft.candidatePanel, name), &error);
             if (saved) id = saved->identity.id;
         }
@@ -1139,7 +1175,9 @@ ArchDock::PresetPreviewSession::Operations PanelWindow::presetAuditionOperations
         const auto screens = QGuiApplication::screens();
         if (candidate.host.screenIndex < 0 || candidate.host.screenIndex >= screens.size())
             return fail(QStringLiteral("screen-unavailable"));
-        if (prepared.record.temporary || candidate.host.screenIndex != prepared.draft.previousPanel.host.screenIndex)
+        if (prepared.record.temporary ||
+            (prepared.record.kind == QStringLiteral("panel") && candidate.host.screenId.isEmpty()) ||
+            candidate.host.screenIndex != prepared.draft.previousPanel.host.screenIndex)
             candidate.host.screenId = persistentScreenId(screens.at(candidate.host.screenIndex));
         if (!candidate.isValid(error)) return false;
         if (prepared.record.kind == QStringLiteral("icon") && !PresetApplication::iconOnlyChange(prepared.draft.previousPanel, candidate))
@@ -1162,18 +1200,44 @@ ArchDock::PresetPreviewSession::Operations PanelWindow::presetAuditionOperations
             QVariantMap changes;
             const auto before = stored->toLegacyMap();
             const auto after = candidate.toLegacyMap();
+            const auto frozen = prepared.panelPreset
+                ? PresetApplication::preparePanel(*stored, prepared.draft.previousGlobals,
+                    *prepared.panelPreset, {}, prepared.recommendedIcons, error)
+                : PresetApplication::prepareIcon(*stored, prepared.draft.previousGlobals,
+                    *prepared.iconPreset, {}, error);
+            if (!frozen) return false;
+            const auto frozenValues = frozen->candidatePanel.toLegacyMap();
+            const auto effectiveTier = m_panelRegistry.resolvePanelCapabilities(candidate).renderer.effectiveTier;
             for (auto it = after.cbegin(); it != after.cend(); ++it)
-                if (PanelSettingsSchema::isTransactionPanelField(it.key()) && before.value(it.key()) != it.value())
+            {
+                const auto *field = PanelSettingsSchema::panelDescriptor(it.key());
+                // A full preset carries normalized values for inactive layouts.
+                // Only the frozen source may supply those dormant values;
+                // unavailable custom edits still pass through the editor gate.
+                const bool inactiveLayout = field && !field->editor.layouts.isEmpty() &&
+                    !field->editor.layouts.contains(candidate.layout.pathType);
+                const bool inactiveRenderer = field &&
+                    ((field->editor.capability == QStringLiteral("procedural-surface") &&
+                      effectiveTier != RendererTier::Procedural2D) ||
+                     (field->editor.capability == QStringLiteral("scene3d-quality") &&
+                      effectiveTier != RendererTier::True3D));
+                const bool dormantPresetValue = (inactiveLayout || inactiveRenderer) &&
+                    it.value() == frozenValues.value(it.key());
+                if (PanelSettingsSchema::isTransactionPanelField(it.key()) && before.value(it.key()) != it.value() &&
+                    !dormantPresetValue)
                     changes.insert(it.key(), it.value());
+            }
             PanelSettingsTransactionOutcome outcome;
             const auto validated = preparePanelSettingsDraft(prepared.record.panelId, stored->settingsRevision,
                 changes, {}, &outcome);
-            if (!validated) return fail(outcome.errorCode);
-            const auto origin = candidate.presetOrigin;
-            const auto iconDefaults = candidate.iconStyle.globalDefaults;
-            candidate = validated->candidatePanel;
-            candidate.presetOrigin = origin;
-            candidate.iconStyle.globalDefaults = iconDefaults;
+            if (!validated)
+            {
+                qWarning() << "Preset draft field validation failed:" << outcome.errorCode << outcome.errorMessage;
+                return fail(outcome.errorCode);
+            }
+            // The full candidate already passed the shared pure transaction,
+            // model, renderer and icon validation above. Retain its normalized
+            // dormant values and preset metadata after checking active edits.
         }
         else if (candidate.segments != QList<PanelSegmentDefinition>{PanelSegmentDefinition{}})
         {
@@ -1199,6 +1263,120 @@ ArchDock::PresetPreviewSession::Operations PanelWindow::presetAuditionOperations
     return operations;
 }
 
+std::optional<QVariantMap> PanelWindow::presetFreeHostGeometry(
+    const ArchDock::PanelDefinition &definition, QString *errorCode) const
+{
+    const auto fail = [errorCode]() -> std::optional<QVariantMap> {
+        if (errorCode) *errorCode = QStringLiteral("preview-free-geometry-unverified");
+        return std::nullopt;
+    };
+    const auto &host = definition.host;
+    if (host.kind != ArchDock::PanelHostKind::FreeDesktop || host.freeDesktopContainmentId < 0 ||
+        host.freeDockAppletId < 0 || host.freeOwnershipToken.isEmpty()) return fail();
+    QDBusInterface shell(QStringLiteral("org.kde.plasmashell"), QStringLiteral("/PlasmaShell"),
+        QStringLiteral("org.kde.PlasmaShell"), QDBusConnection::sessionBus());
+    const QDBusReply<QString> reply = shell.call(QStringLiteral("evaluateScript"), QStringLiteral(R"JS(
+var value = (function() {
+    var desktop = desktopById(%1);
+    var widget = desktop ? desktop.widgetById(%2) : null;
+    if (!widget || widget.type !== 'org.archdock.dock') return {};
+    widget.currentConfigGroup = ['General'];
+    if (String(widget.readConfig('panelId', '')) !== %3 ||
+        String(widget.readConfig('ownerToken', '')) !== %4 ||
+        String(widget.readConfig('panelType', '')) !== 'empty' ||
+        !['false', '0'].includes(String(widget.readConfig('bootstrapFreeDock', true)).toLowerCase())) return {};
+    var g = widget.geometry;
+    return {x: Number(g.x), y: Number(g.y), width: Number(g.width), height: Number(g.height)};
+})(); print('ARCHDOCK_PREVIEW_GEOMETRY:' + JSON.stringify(value));
+)JS").arg(host.freeDesktopContainmentId).arg(host.freeDockAppletId)
+        .arg(plasmaScriptStringLiteral(definition.identity.id)).arg(plasmaScriptStringLiteral(host.freeOwnershipToken)));
+    const QString prefix = QStringLiteral("ARCHDOCK_PREVIEW_GEOMETRY:");
+    if (!reply.isValid() || reply.value().size() > 4096 || !reply.value().trimmed().startsWith(prefix)) return fail();
+    const auto document = QJsonDocument::fromJson(reply.value().trimmed().mid(prefix.size()).toUtf8());
+    if (!document.isObject()) return fail();
+    const auto geometry = document.object().toVariantMap();
+    if (geometry.keys() != QStringList{QStringLiteral("height"), QStringLiteral("width"), QStringLiteral("x"), QStringLiteral("y")}) return fail();
+    for (auto it = geometry.cbegin(); it != geometry.cend(); ++it)
+    {
+        bool ok = false;
+        const double value = it.value().toDouble(&ok);
+        if (!ok || !std::isfinite(value) || std::abs(value) > 1000000 ||
+            ((it.key() == QStringLiteral("width") || it.key() == QStringLiteral("height")) && value <= 0)) return fail();
+    }
+    return geometry;
+}
+
+bool PanelWindow::setPresetFreeHostGeometry(const ArchDock::PanelDefinition &definition,
+    const QVariantMap &geometry, QString *errorCode) const
+{
+    const auto current = presetFreeHostGeometry(definition, errorCode);
+    if (!current || geometry.keys() != current->keys()) return false;
+    for (auto it = geometry.cbegin(); it != geometry.cend(); ++it)
+    {
+        bool ok = false;
+        const double value = it.value().toDouble(&ok);
+        if (!ok || !std::isfinite(value) || std::abs(value) > 1000000 ||
+            ((it.key() == QStringLiteral("width") || it.key() == QStringLiteral("height")) && value <= 0))
+        { if (errorCode) *errorCode = QStringLiteral("invalid-preview-free-geometry"); return false; }
+    }
+    const auto &host = definition.host;
+    auto command = geometry;
+    command.insert(QStringLiteral("panelId"), definition.identity.id);
+    command.insert(QStringLiteral("ownerToken"), host.freeOwnershipToken);
+    const QString payload = QString::fromUtf8(QJsonDocument::fromVariant(command).toJson(QJsonDocument::Compact));
+    const int applied = evaluatePlasmaScriptResult(QStringLiteral(R"JS(
+var result = (function() {
+    var desktop = desktopById(%1);
+    var widget = desktop ? desktop.widgetById(%2) : null;
+    if (!widget || widget.type !== 'org.archdock.dock') return 0;
+    widget.currentConfigGroup = ['General'];
+    if (String(widget.readConfig('panelId', '')) !== %3 ||
+        String(widget.readConfig('ownerToken', '')) !== %4 ||
+        String(widget.readConfig('panelType', '')) !== 'empty' ||
+        !['false', '0'].includes(String(widget.readConfig('bootstrapFreeDock', true)).toLowerCase())) return 0;
+    // Plasma 6's Widget.setGeometry is a no-op. The owned applet handles
+    // this bounded command through its own desktop layout container.
+    widget.writeConfig('auditionRestoreGeometry', %5);
+    return 1;
+})(); print('ARCHDOCK_RESULT:' + String(result));
+)JS").arg(host.freeDesktopContainmentId).arg(host.freeDockAppletId)
+        .arg(plasmaScriptStringLiteral(definition.identity.id)).arg(plasmaScriptStringLiteral(host.freeOwnershipToken))
+        .arg(plasmaScriptStringLiteral(payload)));
+    std::optional<QVariantMap> observed;
+    for (int attempt = 0; applied == 1 && attempt < 80; ++attempt)
+    {
+        QEventLoop wait;
+        QTimer::singleShot(25, &wait, &QEventLoop::quit);
+        wait.exec(QEventLoop::ExcludeUserInputEvents);
+        observed = presetFreeHostGeometry(definition, errorCode);
+        if (observed && *observed == geometry) break;
+    }
+    // A command is not retained as active configuration. The recovery
+    // journal remains authoritative if restoration cannot be verified.
+    const int cleared = evaluatePlasmaScriptResult(QStringLiteral(R"JS(
+var result = (function() {
+    var desktop = desktopById(%1);
+    var widget = desktop ? desktop.widgetById(%2) : null;
+    if (!widget || widget.type !== 'org.archdock.dock') return 0;
+    widget.currentConfigGroup = ['General'];
+    if (String(widget.readConfig('panelId', '')) !== %3 ||
+        String(widget.readConfig('ownerToken', '')) !== %4) return 0;
+    widget.writeConfig('auditionRestoreGeometry', '');
+    return String(widget.readConfig('auditionRestoreGeometry', '')) === '' ? 1 : 0;
+})(); print('ARCHDOCK_RESULT:' + String(result));
+)JS").arg(host.freeDesktopContainmentId).arg(host.freeDockAppletId)
+        .arg(plasmaScriptStringLiteral(definition.identity.id)).arg(plasmaScriptStringLiteral(host.freeOwnershipToken)));
+    if (cleared != 1 || !observed || *observed != geometry)
+    {
+        qWarning() << "Preset free geometry read-back failed:" << definition.identity.id
+            << "script-result" << applied << "requested" << geometry
+            << "observed" << observed.value_or(QVariantMap{});
+        if (errorCode) *errorCode = QStringLiteral("preview-free-geometry-readback-failed");
+        return false;
+    }
+    return true;
+}
+
 bool PanelWindow::capturePresetPreviewHost(ArchDock::PresetPreviewRecord &record,
     QString *errorCode) const
 {
@@ -1208,9 +1386,9 @@ bool PanelWindow::capturePresetPreviewHost(ArchDock::PresetPreviewRecord &record
     {
         if (freePanelHostVerification(record.containmentId, record.appletId, record.panelId,
             record.previewToken) != ArchDock::FreePanelHostVerificationOutcome::Owned) return fail();
-        record.hostState = {{QStringLiteral("containmentId"), record.containmentId},
-            {QStringLiteral("appletId"), record.appletId}, {QStringLiteral("ownerToken"), record.previewToken},
-            {QStringLiteral("panelId"), record.panelId}, {QStringLiteral("verified"), true}};
+        const auto geometry = presetFreeHostGeometry(record.snapshot, errorCode);
+        if (!geometry) return false;
+        record.hostState = {{QStringLiteral("geometry"), *geometry}};
         return true;
     }
     QDBusInterface shell(QStringLiteral("org.kde.plasmashell"), QStringLiteral("/PlasmaShell"),
@@ -1273,8 +1451,11 @@ bool PanelWindow::restorePresetPreviewHost(const ArchDock::PresetPreviewRecord &
     comparable.settingsRevision = record.snapshot.settingsRevision;
     if (comparable != record.snapshot) return fail(QStringLiteral("preview-revision-conflict"));
     if (record.hostKind == QStringLiteral("free-desktop"))
-        return freePanelHostVerification(record.containmentId, record.appletId, record.panelId,
-            record.previewToken) == ArchDock::FreePanelHostVerificationOutcome::Owned || fail(QStringLiteral("preview-host-not-verified"));
+    {
+        if (record.hostState.keys() != QStringList{QStringLiteral("geometry")})
+            return fail(QStringLiteral("invalid-preview-host-snapshot"));
+        return setPresetFreeHostGeometry(record.snapshot, record.hostState.value(QStringLiteral("geometry")).toMap(), errorCode);
+    }
     // Revalidate the journal's bounded property shape before generating any
     // mutation. Property names and write order are fixed in this function.
     ArchDock::PresetPreviewRecord current = record;
@@ -1329,8 +1510,28 @@ bool PanelWindow::removePresetPreviewHost(const ArchDock::PresetPreviewRecord &r
         if (record.hostKind == QStringLiteral("free-desktop"))
         {
             const auto outcome = removeOwnedFreePanelHostByIdentity(record.panelId, token);
-            if (outcome != ArchDock::FreePanelRemovalOutcome::Removed &&
-                outcome != ArchDock::FreePanelRemovalOutcome::AlreadyAbsent) return fail();
+            if (outcome == ArchDock::FreePanelRemovalOutcome::QueryFailed) return fail();
+            // Plasma can defer applet destruction until evaluateScript returns.
+            // Observe disappearance in a separate call, without retrying removal.
+            // Count every matching token, including malformed host markers.
+            const auto remaining = evaluatePlasmaScriptResultOptional(QStringLiteral(R"JS(
+var count = 0;
+var all = desktops();
+for (var i = 0; i < all.length; ++i) {
+    var desktop = desktopById(Number(all[i].id));
+    if (!desktop) continue;
+    var widgets = desktop.widgets('org.archdock.dock');
+    for (var j = 0; j < widgets.length; ++j) {
+        var widget = desktop.widgetById(Number(widgets[j].id));
+        if (!widget || widget.type !== 'org.archdock.dock') continue;
+        widget.currentConfigGroup = ['General'];
+        if (String(widget.readConfig('panelId', '')) === %1 &&
+            String(widget.readConfig('ownerToken', '')) === %2) ++count;
+    }
+}
+print('ARCHDOCK_RESULT:' + String(count));
+)JS").arg(plasmaScriptStringLiteral(record.panelId)).arg(plasmaScriptStringLiteral(token)));
+            if (!remaining || *remaining != 0) return fail();
         }
         else
         {
@@ -2695,15 +2896,22 @@ QList<ArchDock::PanelSettingsHostResult> PanelWindow::applyPanelSettingsHosts(
         {
             const int applied = evaluatePlasmaScriptResult(
                 QStringLiteral(
-                    "var panel = panelById(%1);"
+                    "var result = (function() { var panel = panelById(%1);"
+                    "if (!panel) return 0; panel.currentConfigGroup = ['ArchDock'];"
+                    "if (String(panel.readConfig('panelId', '')) !== %4 || "
+                    "String(panel.readConfig('ownerToken', '')) !== %5) return 0;"
                     "var dock = panel ? panel.widgetById(%2) : null;"
-                    "if (!dock || dock.type !== 'org.archdock.dock') { print(0); }"
-                    "else { dock.currentConfigGroup = ['General'];"
+                    "if (!dock || dock.type !== 'org.archdock.dock') return 0;"
+                    "dock.currentConfigGroup = ['General'];"
+                    "if (String(dock.readConfig('panelId', '')) !== %4) return 0;"
                     "dock.writeConfig('panelType', %3); dock.reloadConfig();"
-                    "print(String(dock.readConfig('panelType', '')) === %3 ? 1 : 0); }")
+                    "return String(dock.readConfig('panelType', '')) === %3 ? 1 : 0; })();"
+                    "print('ARCHDOCK_RESULT:' + String(result));")
                     .arg(draft.candidatePanel.host.nativePanelId)
                     .arg(draft.candidatePanel.host.nativeDockAppletId)
-                    .arg(plasmaScriptStringLiteral(newType)));
+                    .arg(plasmaScriptStringLiteral(newType))
+                    .arg(plasmaScriptStringLiteral(panelId))
+                    .arg(plasmaScriptStringLiteral(draft.candidatePanel.host.nativeOwnershipToken)));
             rendererHost.success = applied == 1;
             rendererHost.status = rendererHost.success
                 ? QStringLiteral("applied")

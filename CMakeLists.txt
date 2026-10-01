@@ -1529,6 +1529,19 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PresetAudition.qml)
   set_tests_properties(preset-audition-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+  set(preset_matrix_previous preset-audition-test)
+  foreach(preset_matrix_group existing temporary icons recovery defaults)
+    set(preset_matrix_name "preset-audition-matrix-${preset_matrix_group}")
+    add_test(NAME ${preset_matrix_name}
+      COMMAND ${CMAKE_COMMAND} -E env
+        ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+        ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
+        bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-preset-audition-matrix.sh ${preset_matrix_group})
+    set_tests_properties(${preset_matrix_name} PROPERTIES
+      RUN_SERIAL TRUE TIMEOUT 420 DEPENDS ${preset_matrix_previous})
+    set(preset_matrix_previous ${preset_matrix_name})
+  endforeach()
+
   add_test(
     NAME studio-navigation-test
     COMMAND $<TARGET_FILE:Qt6::qmltestrunner>

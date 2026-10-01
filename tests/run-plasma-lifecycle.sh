@@ -27,7 +27,17 @@ require_command() {
 }
 
 validate_lifecycle_stop_after() {
+    local matrix_group="${ARCHDOCK_PRESET_MATRIX_GROUP:-}"
+    case "$matrix_group" in
+        ''|existing|temporary|icons|recovery|defaults) ;;
+        *) printf 'Unsupported preset matrix group: %s\n' "$matrix_group" >&2; return 2 ;;
+    esac
+    local session_timeout="${ARCHDOCK_SESSION_TIMEOUT:-300}"
+    [[ "$session_timeout" =~ ^[0-9]+$ ]] && ((session_timeout >= 30 && session_timeout <= 360)) || {
+        printf 'Session timeout must be between 30 and 360 seconds.\n' >&2; return 2;
+    }
     local selector="${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}"
+    [[ -z "$matrix_group" || -z "$selector" ]] || return 2
     case "$selector" in
     ''|transaction)
         ;;
@@ -145,8 +155,11 @@ cleanup_session() {
         kill -0 "$ARCHDOCK_SESSION_KWIN_PID" 2>/dev/null; then
         unload_kwin_script org.archdock.visibilityprobe || true
     fi
-    stop_arch_dock || true
+    # Applets can D-Bus-activate Arch Dock after its owner exits. Stop the
+    # private shell first so teardown cannot start another service instance.
     stop_process "$ARCHDOCK_SESSION_PLASMASHELL_PID"
+    ARCHDOCK_SESSION_PLASMASHELL_PID=''
+    stop_arch_dock || true
     stop_process "$ARCHDOCK_SESSION_KWIN_PID"
     restore_settings_fixture_permissions
 }
@@ -3262,6 +3275,10 @@ run_outer() {
     set +e
     env \
         ARCHDOCK_LIFECYCLE_STOP_AFTER="${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}" \
+        ARCHDOCK_PRESET_MATRIX_GROUP="${ARCHDOCK_PRESET_MATRIX_GROUP:-}" \
+        ARCHDOCK_PRESET_MATRIX_SCRIPT="$project_root/tests/run-preset-audition-matrix.sh" \
+        ARCHDOCK_PRESET_BUILTIN_ROOT="$stage_root/share/arch-dock/presets" \
+        ARCHDOCK_SESSION_TIMEOUT="${ARCHDOCK_SESSION_TIMEOUT:-300}" \
         ARCHDOCK_PLASMA_LIFECYCLE_SESSION=1 \
         ARCHDOCK_SESSION_RESULT_FILE="$session_result_file" \
         ARCHDOCK_TEST_BINARY="$binary_path" \
@@ -3274,6 +3291,7 @@ run_outer() {
         KDE_FULL_SESSION=true \
         PATH="$stage_root/bin:$PATH" \
         QT_QPA_PLATFORM=wayland \
+        QML_IMPORT_PATH="$stage_root/${ARCHDOCK_QML_INSTALL_DIR:-lib/qt6/qml}${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
         XDG_CACHE_HOME="$ARCHDOCK_LIFECYCLE_STATE_ROOT/cache" \
         XDG_CONFIG_HOME="$ARCHDOCK_LIFECYCLE_STATE_ROOT/config" \
         XDG_CONFIG_DIRS="$ARCHDOCK_LIFECYCLE_STATE_ROOT/config-dirs" \
@@ -3285,10 +3303,15 @@ run_outer() {
         XDG_SESSION_TYPE=wayland \
         XDG_STATE_HOME="$ARCHDOCK_LIFECYCLE_STATE_ROOT/state" \
         dbus-run-session -- \
-        timeout --kill-after=10s 300s "$session_script" >"$log_dir/session.log" 2>&1
+        timeout --kill-after=10s "${ARCHDOCK_SESSION_TIMEOUT:-300}s" "$session_script" >"$log_dir/session.log" 2>&1
     session_runner_status=$?
     set -e
 
+    if [[ -n "${ARCHDOCK_PRESET_MATRIX_GROUP:-}" ]]; then
+        local matrix_logs="$build_dir/preset-matrix-${ARCHDOCK_PRESET_MATRIX_GROUP}"
+        mkdir -p "$matrix_logs"
+        cp "$log_dir"/*.log "$matrix_logs/"
+    fi
     local session_status=''
     if [[ -f "$session_result_file" ]]; then
         session_status="$(<"$session_result_file")"
@@ -3303,7 +3326,11 @@ run_outer() {
         exit 1
     }
 
-    if [[ "${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}" == 'transaction' ]]; then
+    if [[ -n "${ARCHDOCK_PRESET_MATRIX_GROUP:-}" ]]; then
+        cleanup_outer
+        ARCHDOCK_LIFECYCLE_STATE_ROOT=''
+        printf 'Isolated Plasma TASK-0041 preset group %s succeeded.\n' "$ARCHDOCK_PRESET_MATRIX_GROUP"
+    elif [[ "${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}" == 'transaction' ]]; then
         cleanup_outer
         ARCHDOCK_LIFECYCLE_STATE_ROOT=''
         printf 'Isolated Plasma TASK-0023 Phase A transaction lifecycle succeeded.\n'
@@ -3315,7 +3342,12 @@ run_outer() {
 if [[ "${ARCHDOCK_TRANSACTION_PARSER_FIXTURE:-}" == '1' ]]; then
     run_transaction_parser_fixture
 elif [[ "${ARCHDOCK_PLASMA_LIFECYCLE_SESSION:-}" == '1' ]]; then
-    run_session
+    if [[ -n "${ARCHDOCK_PRESET_MATRIX_GROUP:-}" ]]; then
+        source "$ARCHDOCK_PRESET_MATRIX_SCRIPT"
+        run_preset_audition_matrix
+    else
+        run_session
+    fi
 else
     run_outer
 fi

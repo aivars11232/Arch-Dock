@@ -315,7 +315,7 @@ PlasmoidItem {
         return definition;
     }
 
-    function refreshConfiguration() {
+    function refreshConfiguration(onUpdated) {
         if (panelId.length === 0) {
             requestFailed = false;
             bootstrapFreeDock();
@@ -327,9 +327,49 @@ PlasmoidItem {
         }
         callDock("panelRendererConfiguration", [panelId], function(reply) {
             const value = normalizeReply(reply);
-            if (value && typeof value === "object")
+            if (value && typeof value === "object") {
                 configuration = value;
+                if (typeof onUpdated === "function") onUpdated();
+            }
         });
+    }
+
+    // Plasma 6's scripting geometry setter is a no-op. Restore only our own
+    // desktop container, after the backend has removed its preview projection.
+    function restoreAuditionGeometry() {
+        const raw = String(Plasmoid.configuration.auditionRestoreGeometry || "");
+        if (!freeSurface || !panelId || !raw || raw.length > 4096) return;
+        let requested;
+        try { requested = JSON.parse(raw); } catch (error) { return; }
+        if (requested.panelId !== panelId ||
+            requested.ownerToken !== Plasmoid.configuration.ownerToken ||
+            !requested.ownerToken || configuredPanelType !== "empty" ||
+            Plasmoid.configuration.bootstrapFreeDock) return;
+        for (const key of ["x", "y", "width", "height"])
+            if (typeof requested[key] !== "number" || !isFinite(requested[key]) ||
+                Math.abs(requested[key]) > 1000000 ||
+                ((key === "width" || key === "height") && requested[key] <= 0)) return;
+        refreshConfiguration(function() {
+            Qt.callLater(function() {
+                if (String(Plasmoid.configuration.auditionRestoreGeometry || "") !== raw) return;
+                let container = root.parent;
+                while (container && !(container.applet && container.layout &&
+                       container.applet.plasmoid && container.applet.plasmoid.id === Plasmoid.id))
+                    container = container.parent;
+                if (!container || typeof container.layout.save !== "function") return;
+                const position = container.applet.mapToItem(container.layout, 0, 0);
+                container.x += requested.x - position.x;
+                container.y += requested.y - position.y;
+                container.width = requested.width + container.leftPadding + container.rightPadding;
+                container.height = requested.height + container.topPadding + container.bottomPadding;
+                container.layout.save();
+            });
+        });
+    }
+
+    Connections {
+        target: Plasmoid.configuration
+        function onAuditionRestoreGeometryChanged() { root.restoreAuditionGeometry(); }
     }
 
     function refreshEntries() {

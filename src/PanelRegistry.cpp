@@ -2017,17 +2017,27 @@ QVariantMap PanelRegistry::themeCandidate(const QString &panelId,
                                           const QString &themeId,
                                           const QString &layer) const
 {
+    const auto definition = panelDefinition(panelId);
+    if (definition) return themeCandidateForDefinition(*definition, themeId, layer);
+    return {{QStringLiteral("success"), false}, {QStringLiteral("status"), QStringLiteral("validation-failed")},
+        {QStringLiteral("errorCode"), QStringLiteral("panel-not-found")}, {QStringLiteral("panelId"), panelId},
+        {QStringLiteral("themeId"), themeId}, {QStringLiteral("layer"), layer.trimmed().toLower()},
+        {QStringLiteral("values"), QVariantMap{}}};
+}
+
+QVariantMap PanelRegistry::themeCandidateForDefinition(const ArchDock::PanelDefinition &snapshot,
+    const QString &themeId, const QString &layer) const
+{
+    const QString panelId = snapshot.identity.id;
     const QString normalizedLayer = layer.trimmed().toLower();
-    if (!record(panelId) || (normalizedLayer != QStringLiteral("panel") &&
+    if (normalizedLayer != QStringLiteral("panel") &&
                              normalizedLayer != QStringLiteral("icon") &&
-                             normalizedLayer != QStringLiteral("complete")))
+                             normalizedLayer != QStringLiteral("complete"))
     {
         return {
             {QStringLiteral("success"), false},
             {QStringLiteral("status"), QStringLiteral("validation-failed")},
-            {QStringLiteral("errorCode"), record(panelId)
-                 ? QStringLiteral("invalid-theme-layer")
-                 : QStringLiteral("panel-not-found")},
+            {QStringLiteral("errorCode"), QStringLiteral("invalid-theme-layer")},
             {QStringLiteral("panelId"), panelId},
             {QStringLiteral("themeId"), themeId},
             {QStringLiteral("layer"), normalizedLayer},
@@ -2109,7 +2119,7 @@ QVariantMap PanelRegistry::themeCandidate(const QString &panelId,
                     iterator.key(), iterator.value()));
         }
 
-        QVariantMap candidateRecord = *record(panelId);
+        QVariantMap candidateRecord = snapshot.toLegacyMap();
         for (auto iterator = normalizedChanges.cbegin();
              iterator != normalizedChanges.cend(); ++iterator)
         {

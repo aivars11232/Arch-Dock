@@ -253,6 +253,10 @@ private:
     [[nodiscard]] QVariantMap presetResource(const QString &kind, const QString &presetId,
         bool builtInOnly = false) const;
     [[nodiscard]] QVariantMap presetEditorProjection(const ArchDock::PanelDefinition &candidate) const;
+    [[nodiscard]] std::optional<QVariantMap> presetFreeHostGeometry(
+        const ArchDock::PanelDefinition &definition, QString *errorCode) const;
+    bool setPresetFreeHostGeometry(const ArchDock::PanelDefinition &definition,
+        const QVariantMap &geometry, QString *errorCode) const;
     bool capturePresetPreviewHost(ArchDock::PresetPreviewRecord &record, QString *errorCode) const;
     bool restorePresetPreviewHost(const ArchDock::PresetPreviewRecord &record, QString *errorCode) const;
     bool removePresetPreviewHost(const ArchDock::PresetPreviewRecord &record, QString *errorCode) const;

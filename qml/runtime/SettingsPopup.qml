@@ -849,7 +849,9 @@ Window {
             editorSession = EditorModel.setPanelValue(editorSession, "visible", !Boolean(panelValue("visible", true)));
             refreshProjection();
         } else if (action === "load-built-in-theme") {
-            const candidate = panelRegistry.themeCandidate(selectedPanelId, String(data.themeId || ""), "complete");
+            const candidate = auditionActive
+                ? (auditionStatus.editorProjection.themeCandidates || {})[String(data.themeId || "")]
+                : panelRegistry.themeCandidate(selectedPanelId, String(data.themeId || ""), "complete");
             if (!candidate || candidate.success !== true) {
                 studioError = qsTr("Theme is unavailable: %1").arg(String(candidate && (candidate.errorMessage || candidate.errorCode) ? (candidate.errorMessage || candidate.errorCode) : qsTr("No details were returned.")));
                 return;

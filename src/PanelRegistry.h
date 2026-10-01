@@ -182,6 +182,9 @@ public:
     Q_INVOKABLE QVariantMap themeCandidate(const QString &panelId,
                                            const QString &themeId,
                                            const QString &layer) const;
+    [[nodiscard]] QVariantMap themeCandidateForDefinition(
+        const ArchDock::PanelDefinition &definition, const QString &themeId,
+        const QString &layer) const;
     bool applyTheme(const QString &panelId,
                     const QString &themeId,
                     const QString &layer);

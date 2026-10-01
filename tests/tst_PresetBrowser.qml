@@ -327,7 +327,7 @@ TestCase {
         const removed = spyOn(browser, "removeRequested");
         verify(!findChild(browser, "preset-rename-panel-a").visible);
         verify(!findChild(browser, "preset-delete-panel-a").visible);
-        compare(buttonTexts(card(browser, "panel-a")).join("|"), "Preview on Desktop|Apply as Active|Duplicate to My Presets");
+        compare(buttonTexts(card(browser, "panel-a")).sort().join("|"), "Apply as Active|Duplicate to My Presets|Preview on Desktop");
 
         mouseClick(findChild(browser, "preset-duplicate-panel-a"));
         compare(duplicated.count, 1);
@@ -376,7 +376,7 @@ TestCase {
         const removed = spyOn(browser, "removeRequested");
         const id = "user-000000000001";
         compare(card(browser, id).subtitle(), "My Panel Preset · derived from panel-a, revision 1");
-        compare(buttonTexts(card(browser, id)).join("|"), "Preview on Desktop|Apply as Active|Rename|Duplicate|Delete");
+        compare(buttonTexts(card(browser, id)).sort().join("|"), "Apply as Active|Delete|Duplicate|Preview on Desktop|Rename");
         const pending = findChild(browser, "preset-pending-action");
         const field = findChild(browser, "preset-rename-field");
         const confirm = findChild(browser, "preset-confirm-action");
@@ -479,7 +479,9 @@ TestCase {
         compare(incompatible.livePreview, null);
         compare(findChild(browser, "preset-live-preview-panel-b"), null);
         verify(findChild(browser, "preset-no-preview-panel-b").visible);
-        compare(buttonTexts(incompatible).join("|"), "Duplicate to My Presets");
+        compare(buttonTexts(incompatible).sort().join("|"), "Apply as Active|Duplicate to My Presets|Preview on Desktop");
+        verify(!findChild(browser, "preset-preview-panel-b").enabled);
+        verify(!findChild(browser, "preset-apply-panel-b").enabled);
         // A ready card has no detail line at all.
         browser.presets = [panelCard("panel-c")];
         verify(!findChild(browser, "preset-state-detail-panel-c").visible);

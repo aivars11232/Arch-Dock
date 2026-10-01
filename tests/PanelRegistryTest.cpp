@@ -3231,6 +3231,20 @@ void PanelRegistryTest::resolvesThemeCandidatesWithoutMutation()
     QVERIFY(unavailable.value(QStringLiteral("values")).toMap().isEmpty());
     QCOMPARE(registry.panelSnapshot(QStringLiteral("bottom")), before);
     QCOMPARE(registry.revision(), revisionBefore);
+
+    auto preview = ArchDock::PanelDefinition::defaults(QStringLiteral("free-xpreview"),
+        QStringLiteral("Free preview"), QStringLiteral("free"), false).normalized();
+    preview.layout.pathType = QStringLiteral("ring");
+    QVERIFY(!registry.panelIds().contains(preview.identity.id));
+    const auto previewTheme = registry.themeCandidateForDefinition(preview,
+        QStringLiteral("holographic-ring"), QStringLiteral("complete"));
+    QVERIFY2(previewTheme.value(QStringLiteral("success")).toBool(),
+        qPrintable(previewTheme.value(QStringLiteral("errorCode")).toString()));
+    QCOMPARE(previewTheme.value(QStringLiteral("values")).toMap()
+        .value(QStringLiteral("completeThemeId")).toString(), QStringLiteral("holographic-ring"));
+    QCOMPARE(registry.panelSnapshot(QStringLiteral("bottom")), before);
+    QCOMPARE(registry.revision(), revisionBefore);
+    QVERIFY(!registry.panelIds().contains(preview.identity.id));
 }
 
 void PanelRegistryTest::rejectsIncompatibleThemeWithoutRecordMutation()
