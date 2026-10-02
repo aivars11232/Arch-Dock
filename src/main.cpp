@@ -2,7 +2,10 @@
 #include <QCommandLineOption>
 #include <QCommandLineParser>
 #include <QDBusConnection>
+#include <QDBusConnectionInterface>
+#include <QDBusError>
 #include <QDBusInterface>
+#include <QDBusReply>
 #include <QQmlApplicationEngine>
 #include <QUrl>
 #include <QDebug>
@@ -34,20 +37,38 @@ int main(int argc, char *argv[])
     parser.process(app);
 
     QDBusConnection sessionBus = QDBusConnection::sessionBus();
+    if (!sessionBus.isConnected())
+    {
+        qCritical() << "Arch Dock session D-Bus connection failed:"
+                    << sessionBus.lastError().message();
+        return EXIT_FAILURE;
+    }
     if (!sessionBus.registerService(QStringLiteral("org.archdock.ArchDock")))
     {
+        const QDBusError registrationError = sessionBus.lastError();
+        const QDBusReply<bool> existingOwner = sessionBus.interface()->isServiceRegistered(
+            QStringLiteral("org.archdock.ArchDock"));
+        if (!existingOwner.isValid() || !existingOwner.value())
+        {
+            qCritical() << "Arch Dock D-Bus service registration failed:"
+                        << registrationError.name() << registrationError.message();
+            return EXIT_FAILURE;
+        }
         QDBusInterface control(
             QStringLiteral("org.archdock.ArchDock"),
             QStringLiteral("/Control"),
             QStringLiteral("local.PanelWindow"),
             sessionBus);
-        if (parser.isSet(settingsOption))
+        if (parser.isSet(settingsOption) || parser.isSet(autoHideOption))
         {
-            control.call(QStringLiteral("showSettings"));
-        }
-        else if (parser.isSet(autoHideOption))
-        {
-            control.call(QStringLiteral("toggleAutoHide"));
+            const QDBusMessage result = control.call(parser.isSet(settingsOption)
+                ? QStringLiteral("showSettings") : QStringLiteral("toggleAutoHide"));
+            if (result.type() == QDBusMessage::ErrorMessage)
+            {
+                qCritical() << "Arch Dock could not forward the command to its existing instance:"
+                            << result.errorName() << result.errorMessage();
+                return EXIT_FAILURE;
+            }
         }
         else
         {

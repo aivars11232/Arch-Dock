@@ -27,6 +27,11 @@ require_command() {
 }
 
 validate_lifecycle_stop_after() {
+    local startup="${ARCHDOCK_STARTUP_SMOKE:-0}"
+    [[ "$startup" == 0 || "$startup" == 1 ]] || return 2
+    local without_3d="${ARCHDOCK_STARTUP_WITHOUT_QUICK3D:-0}"
+    [[ "$without_3d" == 0 || "$without_3d" == 1 ]] || return 2
+    [[ "$startup" == 1 || ( -z "${ARCHDOCK_STARTUP_INSTALL_ROOT:-}" && "$without_3d" == 0 ) ]] || return 2
     local matrix_group="${ARCHDOCK_PRESET_MATRIX_GROUP:-}"
     case "$matrix_group" in
         ''|existing|temporary|icons|recovery|defaults) ;;
@@ -38,6 +43,7 @@ validate_lifecycle_stop_after() {
     }
     local selector="${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}"
     [[ -z "$matrix_group" || -z "$selector" ]] || return 2
+    [[ "$startup" == 0 || ( -z "$matrix_group" && -z "$selector" && -z "${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" ) ]] || return 2
     case "$selector" in
     ''|transaction)
         ;;
@@ -3261,6 +3267,14 @@ run_outer() {
     trap cleanup_outer EXIT
 
     local stage_root="$ARCHDOCK_LIFECYCLE_STATE_ROOT/stage"
+    local installed_root="${ARCHDOCK_STARTUP_INSTALL_ROOT:-}"
+    local runtime_prefix="$stage_root"
+    if [[ -n "$installed_root" ]]; then
+        stage_root="$(realpath -e -- "$installed_root")"
+        runtime_prefix=/usr
+        binary_path="$stage_root/bin/arch-dock"
+        [[ -x "$binary_path" ]] || return 1
+    fi
     local log_dir="$ARCHDOCK_LIFECYCLE_STATE_ROOT/logs"
     local session_result_file="$ARCHDOCK_LIFECYCLE_STATE_ROOT/session-result"
     local session_script="$ARCHDOCK_LIFECYCLE_STATE_ROOT/run-plasma-lifecycle.sh"
@@ -3293,7 +3307,9 @@ run_outer() {
     cp "$0" "$session_script"
     chmod +x "$session_script"
 
-    cmake --install "$build_dir" --prefix "$stage_root"
+    if [[ -z "$installed_root" ]]; then
+        cmake --install "$build_dir" --prefix "$stage_root"
+    fi
     [[ -r "$free_template_script" ]] || {
         printf 'Staged free-panel template is unavailable: %s\n' "$free_template_script" >&2
         exit 1
@@ -3304,40 +3320,71 @@ run_outer() {
         exit 1
     }
 
+    local startup_script="$project_root/tests/run-session-startup-smoke.sh"
+    local preset_script="$project_root/tests/run-preset-audition-matrix.sh"
+    local -a startup_namespace=()
+    if [[ "${ARCHDOCK_STARTUP_SMOKE:-0}" == 1 ]]; then
+        require_command bwrap
+        # The test helpers are disposable fixtures. Only the installed
+        # runtime and these helpers remain visible inside the source mask.
+        cp "$startup_script" "$ARCHDOCK_LIFECYCLE_STATE_ROOT/startup-smoke.sh"
+        cp "$preset_script" "$ARCHDOCK_LIFECYCLE_STATE_ROOT/preset-helpers.sh"
+        startup_script="$ARCHDOCK_LIFECYCLE_STATE_ROOT/startup-smoke.sh"
+        preset_script="$ARCHDOCK_LIFECYCLE_STATE_ROOT/preset-helpers.sh"
+        startup_namespace=(bwrap --die-with-parent --ro-bind / / --dev-bind /dev /dev
+            --tmpfs /tmp)
+        if [[ -n "$installed_root" ]]; then
+            startup_namespace+=(--overlay-src /usr --overlay-src "$stage_root" --ro-overlay /usr)
+        fi
+        if [[ "${ARCHDOCK_STARTUP_WITHOUT_QUICK3D:-0}" == 1 ]]; then
+            startup_namespace+=(--tmpfs /usr/lib/qt6/qml/QtQuick3D)
+        fi
+        startup_namespace+=(--tmpfs "$project_root"
+            --bind "$ARCHDOCK_LIFECYCLE_STATE_ROOT" "$ARCHDOCK_LIFECYCLE_STATE_ROOT"
+            --chdir "$ARCHDOCK_LIFECYCLE_STATE_ROOT")
+    fi
+
     local session_runner_status
     set +e
     env \
         ARCHDOCK_LIFECYCLE_STOP_AFTER="${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}" \
         ARCHDOCK_PRESET_MATRIX_GROUP="${ARCHDOCK_PRESET_MATRIX_GROUP:-}" \
-        ARCHDOCK_PRESET_MATRIX_SCRIPT="$project_root/tests/run-preset-audition-matrix.sh" \
+        ARCHDOCK_PRESET_MATRIX_SCRIPT="$preset_script" \
         ARCHDOCK_PROFILE_MATRIX_GROUP="${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" \
         ARCHDOCK_PROFILE_MATRIX_SCRIPT="$project_root/tests/run-profile-matrix.sh" \
-        ARCHDOCK_PRESET_BUILTIN_ROOT="$stage_root/share/arch-dock/presets" \
+        ARCHDOCK_STARTUP_SMOKE="${ARCHDOCK_STARTUP_SMOKE:-0}" \
+        ARCHDOCK_STARTUP_SCRIPT="$startup_script" \
+        ARCHDOCK_STARTUP_SOURCE_ROOT="$project_root" \
+        ARCHDOCK_STARTUP_STAGED_BINARY="$runtime_prefix/bin/arch-dock" \
+        ARCHDOCK_STARTUP_EXPECTED_SHA256="$(sha256sum "$stage_root/bin/arch-dock" | cut -d ' ' -f 1)" \
+        ARCHDOCK_STARTUP_WITHOUT_QUICK3D="${ARCHDOCK_STARTUP_WITHOUT_QUICK3D:-0}" \
+        ARCHDOCK_STARTUP_ORIGINAL_PATH="$PATH" \
+        ARCHDOCK_PRESET_BUILTIN_ROOT="$runtime_prefix/share/arch-dock/presets" \
         ARCHDOCK_SESSION_TIMEOUT="${ARCHDOCK_SESSION_TIMEOUT:-300}" \
         ARCHDOCK_PLASMA_LIFECYCLE_SESSION=1 \
         ARCHDOCK_SESSION_RESULT_FILE="$session_result_file" \
         ARCHDOCK_TEST_BINARY="$binary_path" \
         ARCHDOCK_TEST_LOG_DIR="$log_dir" \
-        ARCHDOCK_FREE_TEMPLATE_SCRIPT="$free_template_script" \
+        ARCHDOCK_FREE_TEMPLATE_SCRIPT="$runtime_prefix/share/plasma/layout-templates/org.archdock.plasma.desktop.circularFreeDock/contents/layout.js" \
         ARCHDOCK_VISIBILITY_WINDOW_SCRIPT="$visibility_window_script" \
         ARCHDOCK_VISIBILITY_PROBE_SCRIPT="$visibility_probe_script" \
         DESKTOP_SESSION=archdock-test \
         HOME="$ARCHDOCK_LIFECYCLE_STATE_ROOT/home" \
         KDE_FULL_SESSION=true \
-        PATH="$stage_root/bin:$PATH" \
+        PATH="$runtime_prefix/bin:$PATH" \
         QT_QPA_PLATFORM=wayland \
-        QML_IMPORT_PATH="$stage_root/${ARCHDOCK_QML_INSTALL_DIR:-lib/qt6/qml}${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+        QML_IMPORT_PATH="$runtime_prefix/${ARCHDOCK_QML_INSTALL_DIR:-lib/qt6/qml}${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
         XDG_CACHE_HOME="$ARCHDOCK_LIFECYCLE_STATE_ROOT/cache" \
         XDG_CONFIG_HOME="$ARCHDOCK_LIFECYCLE_STATE_ROOT/config" \
         XDG_CONFIG_DIRS="$ARCHDOCK_LIFECYCLE_STATE_ROOT/config-dirs" \
         XDG_CURRENT_DESKTOP=archdock-test \
         XDG_DATA_HOME="$ARCHDOCK_LIFECYCLE_STATE_ROOT/data" \
-        XDG_DATA_DIRS="$stage_root/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" \
+        XDG_DATA_DIRS="$runtime_prefix/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" \
         XDG_RUNTIME_DIR="$ARCHDOCK_LIFECYCLE_STATE_ROOT/runtime" \
         XDG_SESSION_DESKTOP=archdock-test \
         XDG_SESSION_TYPE=wayland \
         XDG_STATE_HOME="$ARCHDOCK_LIFECYCLE_STATE_ROOT/state" \
-        dbus-run-session -- \
+        "${startup_namespace[@]}" dbus-run-session -- \
         timeout --kill-after=10s "${ARCHDOCK_SESSION_TIMEOUT:-300}s" "$session_script" >"$log_dir/session.log" 2>&1
     session_runner_status=$?
     set -e
@@ -3353,6 +3400,10 @@ run_outer() {
         cp "$log_dir"/*.log "$profile_logs/"
     fi
     local session_status=''
+    if [[ "${ARCHDOCK_STARTUP_SMOKE:-0}" == 1 ]]; then
+        mkdir -p "$build_dir/session-startup-smoke"
+        cp "$log_dir"/*.log "$build_dir/session-startup-smoke/"
+    fi
     if [[ -f "$session_result_file" ]]; then
         session_status="$(<"$session_result_file")"
     fi
@@ -3366,7 +3417,11 @@ run_outer() {
         exit 1
     }
 
-    if [[ -n "${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" ]]; then
+    if [[ "${ARCHDOCK_STARTUP_SMOKE:-0}" == 1 ]]; then
+        cleanup_outer
+        ARCHDOCK_LIFECYCLE_STATE_ROOT=''
+        printf 'Isolated Plasma TASK-0043 installed startup succeeded.\n'
+    elif [[ -n "${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" ]]; then
         cleanup_outer
         ARCHDOCK_LIFECYCLE_STATE_ROOT=''
         printf 'Isolated Plasma TASK-0042 profile group %s succeeded.\n' "$ARCHDOCK_PROFILE_MATRIX_GROUP"
@@ -3386,7 +3441,10 @@ run_outer() {
 if [[ "${ARCHDOCK_TRANSACTION_PARSER_FIXTURE:-}" == '1' ]]; then
     run_transaction_parser_fixture
 elif [[ "${ARCHDOCK_PLASMA_LIFECYCLE_SESSION:-}" == '1' ]]; then
-    if [[ -n "${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" ]]; then
+    if [[ "${ARCHDOCK_STARTUP_SMOKE:-0}" == 1 ]]; then
+        source "$ARCHDOCK_STARTUP_SCRIPT"
+        run_session_startup_smoke
+    elif [[ -n "${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" ]]; then
         source "$ARCHDOCK_PROFILE_MATRIX_SCRIPT"
         run_profile_matrix
     elif [[ -n "${ARCHDOCK_PRESET_MATRIX_GROUP:-}" ]]; then

@@ -95,6 +95,31 @@ TestCase {
         return slot.delegateItem
     }
 
+    // Native Qt sequences are array-like, but Array.isArray() returns false.
+    property list<QtObject> nativeSegments: [QtObject {
+        property string source: "inherited"
+        property string background: "solid"
+        property string corners: "inherited"
+        property string color: "#226688"
+        property int padding: 20
+        property int spacing: -1
+        property string presentation: "open"
+        property string motionProfile: ""
+    }]
+
+    function test_nativeSegmentSequenceSurvivesPreviewCopy() {
+        failOnWarning(/TypeError:/)
+        verify(!Array.isArray(nativeSegments))
+        const draft = definition({ segments: nativeSegments })
+        const preview = createPreview({ panelDefinition: draft })
+        verify(Array.isArray(preview.resolvedPanelDefinition.segments))
+        compare(preview.resolvedPanelDefinition.segments.length, 1)
+        compare(preview.resolvedPanelDefinition.segments[0].background, "solid")
+        verify(preview.panelSceneItem.segmentedScene)
+        preview.resolvedPanelDefinition.segments[0].background = "none"
+        compare(nativeSegments[0].background, "solid")
+    }
+
     function test_modesUseOneResolvedPanelSceneWithoutMutatingTheDraft() {
         const draft = definition()
         const preview = createPreview({ panelDefinition: draft })

@@ -87,7 +87,9 @@ Item {
     ]
 
     function copied(value) {
-        if (Array.isArray(value)) {
+        if (Array.isArray(value) || (value !== null && typeof value === "object"
+                && Number.isInteger(value.length) && value.length >= 0
+                && typeof value.slice === "function")) {
             const result = []
             for (let index = 0; index < value.length; ++index)
                 result.push(copied(value[index]))

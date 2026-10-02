@@ -6,6 +6,15 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
+**Latest boundary — 2026-10-02:** TASK-0042 is committed and complete at
+`2816be6d0d0a631829c4249327c73fbc7c473a94`. TASK-0043 **Phases A and B are
+COMPLETE**: startup, the renderer prerequisite, Arch packaging and disposable
+install/render/uninstall verification pass; both full gates pass **97/97**.
+Consolidated closure awaits removal of one system-owned KWin crash dump;
+all workspace temporary output and private processes have been cleaned up.
+See the [Phase B and cleanup record](#task-0043--phase-b-package-verification-and-final-cleanup-boundary--2026-10-02).
+Earlier snapshots below retain their historical dates and results.
+
 **Evidence snapshot:** 2026-09-27 (Europe/Amsterdam). TASK-0036 Phase B has
 been implemented under its retained approval and original plan. Both internal
 phase gates now pass. Fresh ON, OFF and AUTO builds each passed **67/67 CTests**
@@ -3151,3 +3160,327 @@ above are the retained evidence. Only the 28 approved task source/test/document
 paths changed. Document links and `git diff --check` pass. No personal Plasma
 session was restarted or modified. Owner-authorized Git closure uses
 `Complete Arch Dock profile management`; this record does not claim a release.
+
+## TASK-0043 — partial startup implementation and runtime blocker — 2026-10-02
+
+Historical stopped run; superseded by the resumed verification below.
+
+**Status: BLOCKED in Phase A.** The owner approved exact implementation of
+the consolidated plan. Entry and final HEAD are both
+`2816be6d0d0a631829c4249327c73fbc7c473a94`, on `main`; the entry tree was clean.
+The changes below remain unstaged. No phase is complete, and Phase B remains
+unstarted. No package build, package-manager installation or uninstall has run.
+
+### Partial implementation, in change order
+
+1. The systemd, D-Bus and desktop `.in` templates in `data/` define one bus
+   identity and generated executable paths. Direct session D-Bus activation
+   is the planned authority; the optional manual systemd unit uses `Type=dbus`
+   and the same `BusName`, with no automatic enablement.
+2. `cmake/InstallStartupMetadata.cmake.in` generates metadata at install time
+   using the effective prefix, preserving logical paths under `DESTDIR`.
+   `CMakeLists.txt` installs the executable through `CMAKE_INSTALL_BINDIR`
+   and installs those generated descriptors. The three obsolete static
+   descriptors were removed after switching the install rules.
+3. `src/main.cpp` retains the existing atomic bus-name guard and forwarding,
+   while reporting connection, registration and forwarding failures with a
+   failing exit status rather than treating every failure as an existing owner.
+4. `tests/ValidateSessionStartup.cmake` checks prefix-with-spaces and
+   `DESTDIR=/...`, logical `/usr` installations, metadata, executable paths
+   and install-manifest membership. `tests/run-session-startup-smoke.sh` adds
+   focused diagnostics and installed activation checks; the existing
+   `tests/run-plasma-lifecycle.sh` supplies private KWin/Plasma lifecycle and
+   ownership safeguards through a bounded startup dispatch.
+5. This current-state record and `RELEASE_CHECKLIST.md` record the failure
+   boundary. Successful-startup installation documentation and CTest
+   registration of the new checks remain unfinished.
+
+### Verification and first unresolved boundary
+
+All executable gates ran serially. Compilation used one job in the fresh,
+disk-backed `build-codex-task-0043/phase-a` directory; neither the old bundled
+build nor a predecessor build supplied verification.
+
+| Check | Result |
+| --- | --- |
+| Consolidated pack integrity | PASS, 174/174 entries; inspection reused the approved planning evidence |
+| Fresh Quick3D-ON configure; application/module/backend target build | PASS; complete all-target build remains NOT EXECUTED |
+| Incremental startup-diagnostic C++ build | PASS |
+| Prefix-with-spaces installation and `DESTDIR` installation | PASS |
+| Desktop and manual systemd-unit validation; manifest membership | PASS |
+| Disconnected-bus and missing-installed-executable diagnostics | PASS after one proved correction of the new diagnostic fixture |
+| Private installed startup smoke | FAIL; its one permitted corrected rerun reached the pre-existing QML error below |
+| Full available CTest suite | NOT EXECUTED; stopped at the mandatory runtime failure |
+| Phase B and consolidated completion gates | NOT EXECUTED |
+
+The first startup invocation expected the explicit request to activate a new
+owner. Its private D-Bus log instead proved that Plasma's native watcher had
+already activated that installed owner. One focused fixture correction now
+accepts either initial activation or reuse, checks `/proc/<pid>/exe` against
+the installed binary, and still requires exactly one successful activation.
+The single rerun passed those assertions, repeated manual launch and
+`--settings` forwarding, identical owner/panel identities, and unrelated
+native/free sentinel comparisons. It then failed its runtime-error assertion:
+
+```text
+PanelScene.qml:196: TypeError: Property 'some' of object [object Object] is not a function
+Installed startup produced a runtime resource error.
+```
+
+`segmentDefinitions.some(...)` is the failing expression. The renderer file
+is byte-identical to entry HEAD (SHA256
+`c27276eadf80e839ed2db3c952d4dba02ec2fc11bc1ba8322f2aad78d12c7100`), and
+the preceding TASK-0042 record already documents this sequence warning.
+This is a pre-existing renderer failure, not a proved regression introduced
+by the startup changes. Execution-contract section 3 therefore requires
+stopping; neither patching the renderer nor suppressing the assertion is
+authorized by the exact TASK-0043 plan. A separately scoped predecessor
+repair is the next boundary before resuming Phase A. No further runtime
+attempt or later implementation followed this failure.
+
+Exact failed rerun, from the repository root (exit status 1):
+
+```bash
+env PATH="$PWD/build-codex-task-0043/test-python/bin:$PATH" \
+    ARCHDOCK_BUILD_DIR="$PWD/build-codex-task-0043/phase-a" \
+    ARCHDOCK_QML_INSTALL_DIR=lib/qt6/qml \
+    TMPDIR="$PWD/build-codex-task-0043/tmp" \
+    DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/archdock-task0043-parent-bus \
+    QT_FORCE_STDERR_LOGGING=1 \
+    bash tests/run-session-startup-smoke.sh runtime \
+    >build-codex-task-0043/evidence/phase-a-startup-runtime-rerun.log 2>&1
+```
+
+Other executed gate commands:
+
+```bash
+cmake -S . -B build-codex-task-0043/phase-a \
+    -DCMAKE_INSTALL_PREFIX=/usr -DARCHDOCK_ENABLE_QUICK3D=ON
+cmake --build build-codex-task-0043/phase-a --parallel 1 --target arch-dock
+cmake -DBUILD_DIR="$PWD/build-codex-task-0043/phase-a" \
+    -DINSTALL_BINDIR=bin -DINSTALL_LIBDIR=lib \
+    -P tests/ValidateSessionStartup.cmake
+env ARCHDOCK_BUILD_DIR="$PWD/build-codex-task-0043/phase-a" \
+    TMPDIR="$PWD/build-codex-task-0043/tmp" \
+    bash tests/run-session-startup-smoke.sh diagnostics
+bash -n tests/run-session-startup-smoke.sh tests/run-plasma-lifecycle.sh
+git diff --check
+```
+
+### Inherited acceptance and retained evidence
+
+| Phase / criterion | Status | Evidence or missing gate |
+| --- | --- | --- |
+| A: executable matches startup metadata | PASS | Both install modes; installed runtime PID executable comparison |
+| A: one activation starts one owner | PASS | Exactly one successful native activation; repeated launch/settings preserve PID and panels |
+| A: missing dependency/path diagnostics | PASS | Missing installed executable identifies service/failure; generated descriptor identifies path; disconnected bus fails explicitly |
+| A: no source-tree path required | NOT EXECUTED | Metadata paths pass; complete source-independent installed rendering remains unproved |
+| B: clean-source package build | NOT EXECUTED | Phase B not started |
+| B: installed package starts and renders | NOT EXECUTED | Phase B not started |
+| B: uninstall removes files and preserves user configuration | NOT EXECUTED | Phase B not started |
+| B: optional 3D remains optional | NOT EXECUTED | Package declarations and verification not implemented |
+| B: installed exact 15+15 catalogs and valid references/fallbacks | NOT EXECUTED | Package file-list/catalog audit not executed |
+
+The copied private logs are retained in the ignored
+`build-codex-task-0043/phase-a/session-startup-smoke/`, including the QML
+failure in `session.log` at lines 86–87. The complete rerun transcript is
+`build-codex-task-0043/evidence/phase-a-startup-runtime-rerun.log`.
+The ignored build, local Python dependency environment and evidence remain
+available for reuse after the blocker is resolved. They are not a completed
+cleanup gate. Disposable installed prefixes, metadata probes and private
+session temporary directories have been removed; no task-owned private
+process remains. No global package installation or personal Plasma change
+was performed. No agent was spawned, no concurrent gate ran, and nothing
+was staged, committed or pushed. TASK-0044 and TASK-0045 remain unstarted;
+this renderer failure is not silently deferred to either task.
+
+## TASK-0043 — resumed startup and Arch packaging — 2026-10-02
+
+The owner authorized resolving the blockers and finding workarounds before
+finishing TASK-0043. This permits the bounded prerequisite repair without
+replacing the existing consolidated plan or reopening unrelated features.
+Baseline and current HEAD remain `2816be6d0d0a631829c4249327c73fbc7c473a94`.
+
+**Phase A COMPLETE.** A native Qt probe and the real private D-Bus reply
+confirmed that Qt sequences retain their array methods. The failure was
+introduced by `LivePanelPreview.copied()`: its `Array.isArray()` test did not
+recognize a native sequence, and its object-copy branch discarded length and
+array semantics. A new native-sequence case in `tst_LivePanelPreview.qml`
+reproduced the exact `PanelScene.qml:196` error before repair. The preview
+copier now reuses the native-sequence recognition condition already present
+in `SettingsEditorModel.js`. The renderer expression is unchanged. All seven
+preview cases pass, including copy isolation. Qt documents this distinction
+in [its sequence conversion reference](https://doc.qt.io/qt-6/qtqml-cppintegration-data.html#qvariantlist-and-qvariantmap-to-javascript-array-like-and-object).
+
+The startup runtime additionally masks the entire source checkout in a
+private mount namespace, retaining only the installed prefix and copied test
+helpers. The executable is absent from PATH; native D-Bus activation chooses
+the installed owner, and the backend reports installed icon-style resources.
+Repeated launch/settings forwarding preserves owner and panel identity;
+unrelated native/free sentinels are unchanged. No runtime TypeError remains.
+The namespace's initial read-only `/tmp` setup error was proved and corrected
+with a private writable temporary mount, after which the check passed.
+
+`docs/INSTALL.md` documents direct D-Bus authority, the manual unit and prefix
+semantics. Three serial CTests now cover metadata, diagnostics and private
+startup. All ten bounded one-job build groups and the all-target build passed.
+The complete available suite ran in 27 serial batches: **97/97 PASS**, zero
+failures/errors/CTest skips, **501.15 s** summed test time. No predecessor build
+was reused. The existing task build supplied fresh verification and remains
+available for Phase B's required gate.
+
+All four inherited Phase A acceptance criteria are **PASS**: executable/path
+agreement, one owner, explicit missing-path/bus diagnostics and installed
+runtime operation with the source checkout hidden. Phase B remains unstarted
+at this record's initial write; its package and install/uninstall gates follow
+sequentially. No new project-wide license has been selected.
+
+## TASK-0043 — Phase B package verification and final cleanup boundary — 2026-10-02
+
+Both internal phases and all nine inherited acceptance criteria are **PASS**.
+The consolidated cleanup gate remains pending only for the system-owned crash
+dump identified below. Baseline/final HEAD is unchanged at
+`2816be6d0d0a631829c4249327c73fbc7c473a94`, branch `main`; all changes remain
+unstaged. No TASK-0044/0045 implementation, agent, concurrent gate, personal
+Plasma mutation or global package installation was performed.
+
+### Phase B behavior and file order
+
+1. `PKGBUILD` defines the native Arch route, `/usr` destinations, required Qt/KDE
+   dependencies and optional Qt Quick 3D/KPipeWire runtime dependencies. Quick
+   3D is required at build time to include its optional renderer, while the
+   executable has no Quick 3D linkage. Compilation/autogen use one job; LTO
+   and debug splitting are disabled.
+2. `packaging/LICENSING.md` preserves the existing component/asset declarations
+   and records the unspecified project-wide license. It assigns no new license.
+3. `tools/prepare-arch-source.py` exports the current tracked and unignored
+   source, with per-file bytes/modes and baseline HEAD recorded in
+   `SOURCE_CHECKPOINT.json`. Normalized archive timestamps/ownership make the
+   archive stable for that checkpoint. The outer recipe and operational
+   current-state/release records are excluded to avoid circular hashes.
+4. `tests/PresetLibraryTest.cpp` accepts a copied QML fixture directory. Its
+   existing catalog/reference and real-pixel tests are reused against the
+   installed shared renderer; production resource lookup is unchanged.
+5. `tests/run-plasma-lifecycle.sh` and `run-session-startup-smoke.sh` extend the
+   existing startup mode to a pacman-owned `/usr` tree, read-only native
+   overlays, executable-byte identity and optional Quick 3D masking. Ordinary
+   lifecycle modes remain covered by the full CTest suite.
+6. `tests/run-arch-package-smoke.sh` uses native pacman dependency checks in a
+   disposable user namespace/root, audits all installed file bytes/modes and
+   CMake manifest coverage, reuses the preset and private Wayland harnesses,
+   then removes the package and checks user configuration bytes.
+7. `docs/INSTALL.md` documents startup authority, prefix/DESTDIR semantics,
+   source export/makepkg, owner-controlled installation/removal, dependencies
+   and private verification. `PKGBUILD` is pinned to the final source digest.
+   This record and `RELEASE_CHECKLIST.md` report the final evidence separately
+   from historical blocked records and later production/release acceptance.
+
+### Native verification and proved workarounds
+
+The fresh one-job all-target build passed. The full pre-package suite ran in
+the same 27 bounded serial batches: **97/97 PASS**, zero failures/errors/CTest
+skips, **498.64 s** summed test time. Phase A's full gate was **97/97 PASS**,
+501.15 s. Internal QtTest deferrals to private-session fixtures are distinct
+from CTest skips. No passing broad gate was repeated without a phase requirement
+or changed executable/test inputs.
+
+Native user/mount namespaces and Bubblewrap read-only overlays were available.
+The clean source archive contained **508 source files** plus its internal
+checkpoint manifest; every source byte/mode and archive exclusion was audited.
+Native `makepkg --verifysource` and `makepkg --cleanbuild --noconfirm` passed,
+producing `arch-dock-0.1.0-1-x86_64.pkg.tar.zst`.
+
+The initial disposable install passed dependency resolution and the complete
+209-file audit. Native systemd verification then needed a writable temporary
+directory inside the read-only namespace. A focused native probe passed with
+private `/tmp`; the package test wrapper now supplies that. Installed catalog
+and real-pixel checks subsequently passed 8/8, but KWin rejected the nested
+runtime socket path because `sockaddr_un.sun_path` is 108 bytes. Reusing the
+Phase A disk-backed temporary base shortened the socket path to **94 bytes**;
+both subsequent private KWin startup runs passed. These are test-environment
+workarounds; no KDE API, native ownership check or runtime assertion was waived.
+
+Only `tests/run-arch-package-smoke.sh` changed between the first clean source
+archive and the final archive. Every production and CTest input remained
+byte-identical. Native makepkg refreshed its extracted source and reran the
+one-job CMake build/package stages, reusing verified unchanged compilation.
+All **209 final runtime payload hashes equal the first clean-source package**.
+The final checkpoint and its pinned recipe were independently verified again.
+
+The final native install/render/uninstall gate passed:
+
+- Pacman installed into its own root, using copied native dependency records
+  and dependency checks enabled. No `--nodeps` or global package operation.
+- **209/209** package files match CMake coverage plus the two documented
+  license/install notices; all installed bytes and modes match the package.
+  Coverage includes executable/startup metadata, both applets, five layout
+  templates, KWin watcher, shared QML, themes, icon styles and animation data.
+- Installed catalogs contain exactly **15 Panel Presets + 15 Icon Presets**.
+  Existing tests validate every reference and compatibility/fallback record;
+  all 30 cards render deterministic, non-flat pixels through installed QML.
+  The ordinary installed checks passed **8/8 QtTests**; catalog/pixel checks
+  with the native Qt Quick 3D QML module hidden passed **4/4 QtTests**.
+- Both private virtual KWin/Plasma startup runs passed, including missing
+  Quick 3D. The original checkout and clean-export source were hidden. Native
+  D-Bus activation selected the package's executable bytes, one owner and one
+  successful activation; repeated launch/settings forwarding preserved the
+  owner, panel IDs and unrelated native/free sentinels. No resource/TypeError
+  assertion was weakened. Desktop/systemd metadata and dynamic linkage pass.
+- Native `pacman -R arch-dock` removed **all 209 files** and its database
+  record. Plasma and Arch Dock user configuration sentinel hashes remained
+  identical. No cache rebuild, restart or automatic service enablement was
+  needed in the verified flow.
+
+| Inherited acceptance criterion | Result |
+| --- | --- |
+| A: staged/installed executable agrees with startup metadata | PASS |
+| A: one activation path starts one service owner | PASS |
+| A: missing path/dependency or bus failures produce diagnostics | PASS |
+| A: installed runtime needs no source-tree path | PASS |
+| B: package builds from a clean source checkpoint | PASS |
+| B: installed package starts and renders through the documented route | PASS |
+| B: uninstall removes package files and preserves user configuration | PASS |
+| B: optional 3D remains optional | PASS |
+| B: exactly 15+15 valid built-ins and resolved/declared-fallback references | PASS |
+
+Commands used include the fresh `cmake --build ... --parallel 1`, serial
+`ctest --parallel 1 --stop-on-failure --output-on-failure --no-tests=error -I
+first,last` batches, `python tools/prepare-arch-source.py output`, native
+`makepkg --verifysource`, the initial clean build and subsequent bounded
+`makepkg --force --config ../makepkg-task.conf --noconfirm` refreshes.
+The complete installed test invocation is documented in `INSTALL.md`, using
+`ARCHDOCK_BUILD_DIR`, `ARCHDOCK_PACKAGE_INSTALL_MANIFEST`,
+`ARCHDOCK_PACKAGE_EVIDENCE_DIR`, disk-backed `TMPDIR`, and
+`bash tests/run-arch-package-smoke.sh package-file`.
+
+### Deliverables and final cleanup boundary
+
+Only six deliberate deliverables remain under
+`build-codex-task-0043/package-output/`: the package, source archive, pinned
+PKGBUILD, `SOURCE_CHECKPOINT.json`, `SHA256SUMS` and `VERIFICATION.json`.
+The verification receipt retains acceptance counts and all 209 payload hashes;
+raw diagnostics are removed. Source SHA256 is
+`566a0ad7fbaa489764f5299dd88d215b6a572d0352c696ceae35b236867b589c`;
+package SHA256 is
+`29a9038ce40a0c8b581af61cf0a2acfa49bb61e16b9c8e49c14e24d1e69dcfad`.
+
+Task builds, local Python dependency environment, extracted build/source,
+temporary pacman installations, namespace probes and raw logs were removed.
+The `/proc` environment audit found **zero** remaining task runtime processes;
+pre-existing builds and unrelated panels/files were preserved. One diagnostic
+artifact remains outside the workspace: the system-owned **3.9 MB** KWin core
+from the proved socket-path failure:
+
+`/var/lib/systemd/coredump/core.kwin_wayland.1000.dd07aa413ed141a3960ee681d1112c26.1368188.1790966006000000.zst`
+
+An exact-file cleanup using `sudo -n rm -- path` was refused because sudo
+requires the owner's password. The agent cannot supply that authentication.
+TASK-0043's consolidated completion checkbox explicitly requires no diagnostic
+artifact to remain; final closure is pending the owner's removal of this exact
+file and subsequent read-only verification. No other core dump should be removed.
+
+This evidence uses native virtual KWin/Wayland with the installed host Arch/KDE
+dependency versions. Physical GPU/monitor/hotplug and broader platform evidence
+belong to TASK-0044; release/tag acceptance belongs to TASK-0045. Existing
+license declarations remain unchanged and project-wide licensing is unspecified.
+Suggested owner-controlled commit: `Package Arch Dock for Arch Linux`.

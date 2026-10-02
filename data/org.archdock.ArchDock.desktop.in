@@ -2,7 +2,7 @@
 Type=Application
 Name=Arch Dock
 Comment=Glass application dock for KDE Plasma
-Exec=arch-dock
+Exec=@ARCHDOCK_DESKTOP_EXEC@
 Icon=plasma
 Terminal=false
 Categories=Utility;System;

@@ -1,0 +1,40 @@
+# CMAKE_INSTALL_PREFIX is evaluated here, after cmake --install --prefix.
+# DESTDIR changes where files are written, never their runtime Exec paths.
+set(_archdock_bindir "@CMAKE_INSTALL_BINDIR@")
+if(IS_ABSOLUTE "${_archdock_bindir}")
+  set(_archdock_executable "${_archdock_bindir}/arch-dock")
+else()
+  set(_archdock_executable "${CMAKE_INSTALL_PREFIX}/${_archdock_bindir}/arch-dock")
+endif()
+if(_archdock_executable MATCHES "[\r\n\t=]")
+  message(FATAL_ERROR "Arch Dock startup executable path contains an unsupported control character or '='")
+endif()
+
+set(_archdock_quoted "${_archdock_executable}")
+string(REPLACE "\\" "\\\\" _archdock_quoted "${_archdock_quoted}")
+string(REPLACE "\"" "\\\"" _archdock_quoted "${_archdock_quoted}")
+set(ARCHDOCK_DBUS_EXEC "\"${_archdock_quoted}\"")
+string(REPLACE "%" "%%" _archdock_systemd "${_archdock_quoted}")
+string(REPLACE "$" "$$" _archdock_systemd "${_archdock_systemd}")
+set(ARCHDOCK_SYSTEMD_EXEC "\"${_archdock_systemd}\"")
+
+# Desktop entries have both command-line quoting and string-value escaping.
+set(_archdock_desktop "${_archdock_quoted}")
+string(REPLACE "`" "\\`" _archdock_desktop "${_archdock_desktop}")
+string(REPLACE "$" "\\$" _archdock_desktop "${_archdock_desktop}")
+string(REPLACE "%" "%%" _archdock_desktop "${_archdock_desktop}")
+string(REPLACE "\\" "\\\\" _archdock_desktop "${_archdock_desktop}")
+set(ARCHDOCK_DESKTOP_EXEC "\"${_archdock_desktop}\"")
+
+set(_archdock_generated "@CMAKE_CURRENT_BINARY_DIR@/startup-metadata")
+file(MAKE_DIRECTORY "${_archdock_generated}")
+foreach(_archdock_descriptor IN ITEMS arch-dock.service org.archdock.ArchDock.service org.archdock.ArchDock.desktop)
+  configure_file("@CMAKE_CURRENT_BINARY_DIR@/startup-templates/${_archdock_descriptor}.in"
+                 "${_archdock_generated}/${_archdock_descriptor}" @ONLY)
+endforeach()
+file(INSTALL "${_archdock_generated}/arch-dock.service"
+     DESTINATION "${CMAKE_INSTALL_PREFIX}/@CMAKE_INSTALL_LIBDIR@/systemd/user")
+file(INSTALL "${_archdock_generated}/org.archdock.ArchDock.service"
+     DESTINATION "${CMAKE_INSTALL_PREFIX}/share/dbus-1/services")
+file(INSTALL "${_archdock_generated}/org.archdock.ArchDock.desktop"
+     DESTINATION "${CMAKE_INSTALL_PREFIX}/share/applications")

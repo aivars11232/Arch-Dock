@@ -116,7 +116,8 @@ QString renderingImportRoot()
 QUrl runtimeComponent(const QString &fileName)
 {
     return QUrl::fromLocalFile(
-        QDir(QStringLiteral(ARCHDOCK_SOURCE_RUNTIME_QML_DIR)).filePath(fileName));
+        QDir(qEnvironmentVariable("ARCHDOCK_TEST_RUNTIME_QML_DIR",
+             QStringLiteral(ARCHDOCK_SOURCE_RUNTIME_QML_DIR))).filePath(fileName));
 }
 
 // Visual-tree lookup: list delegates are visual children, not QObject ones.

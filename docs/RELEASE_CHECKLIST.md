@@ -507,3 +507,66 @@ See [the TASK-0042 current-state record](CURRENT_STATE.md#task-0042--complete-pr
 [PROFILE_PACKAGE.md](PROFILE_PACKAGE.md) and
 [the private runtime contract](plasma-lifecycle.md#complete-managed-profile-arrangements)
 for criteria, exact observations, corrections, commands and scope limits.
+
+## TASK-0043 partial startup verification — 2026-10-02
+
+Historical boundary, superseded by the resumed verification record below.
+
+**BLOCKED in Phase A; Phase B has not started.** Baseline and final HEAD
+are `2816be6d0d0a631829c4249327c73fbc7c473a94`; partial changes remain
+unstaged. A fresh one-job application/module/backend build, prefix and
+`DESTDIR` metadata checks, desktop/systemd validation, and focused
+disconnected-bus/missing-executable diagnostics passed.
+
+The new installed startup smoke observed exactly one native D-Bus activation,
+the staged executable as owner, repeated manual launch/settings forwarding
+without a new owner or panel set, and unchanged unrelated sentinels. Its
+single corrected rerun then failed on the pre-existing
+`PanelScene.qml:196` `some` TypeError. The renderer is byte-identical to HEAD.
+Execution-contract section 3 stops further work at this out-of-scope failure;
+the runtime assertion remains enforced.
+
+The complete all-target build, full CTest gate, source-independent rendering,
+Arch package build/file-list audit and disposable package installation/removal
+remain **NOT EXECUTED**. No release checkbox is closed. Private sessions and
+disposable installations were cleaned up; ignored build/dependency output and
+failure logs remain for reuse, so consolidated artifact cleanup is incomplete.
+No global installation, personal Plasma mutation, Git closure, agent or
+concurrent gate was used. See
+[the TASK-0043 blocker record](CURRENT_STATE.md#task-0043--partial-startup-implementation-and-runtime-blocker--2026-10-02)
+for the exact failed command, all inherited criteria and retained evidence.
+
+## TASK-0043 startup and Arch packaging verification — 2026-10-02
+
+**Phases A and B COMPLETE; consolidated cleanup closure pending one system-owned
+crash dump.** Baseline/final HEAD remains
+`2816be6d0d0a631829c4249327c73fbc7c473a94`; changes are unstaged.
+
+The preview-copy prerequisite is repaired, direct D-Bus startup is authoritative,
+and install-time metadata agrees with the effective executable prefix. Both full
+fresh-build CTest gates passed **97/97** (501.15 s and 498.64 s summed test time).
+Prefix/DESTDIR checks, native metadata validation and failure diagnostics pass.
+
+Native makepkg built the clean 508-file source checkpoint. Native pacman installed
+it into a disposable root with dependency checks enabled. **209/209** installed
+files match package bytes/modes and CMake coverage. Installed tests validate
+exactly **15+15** catalogs and render all 30 cards: **8/8 QtTests PASS**, plus
+**4/4 PASS** with optional Qt Quick 3D hidden. Both private native Wayland startup
+runs pass with the source hidden, installed executable-byte identity, one service
+owner and unchanged unrelated sentinels. Native removal deleted every package
+file and preserved user configuration hashes. All nine inherited criteria pass.
+
+Only deliberate source/package/checkpoint/verification deliverables remain in
+`build-codex-task-0043/package-output/`; task builds, dependencies, installations,
+probes and raw logs were removed. No task runtime process remains. The proved
+Unix-socket path failure generated one root-owned KWin core; `sudo -n` cannot
+remove it without the owner's password. Its exact path and final cleanup action
+are recorded in [the Phase B cleanup record](CURRENT_STATE.md#task-0043--phase-b-package-verification-and-final-cleanup-boundary--2026-10-02).
+The consolidated no-diagnostic-artifact gate remains open until it is removed.
+
+No global package operation, personal Plasma mutation, service enablement, Git
+closure, agent or concurrent gate was used. Physical GPU/monitor/hotplug evidence
+remains TASK-0044; release/tag acceptance remains TASK-0045. The project-wide
+license remains unspecified; existing component/asset declarations are preserved.
+Broader release checkboxes remain open. See [INSTALL.md](INSTALL.md) for the
+supported owner-controlled package route.

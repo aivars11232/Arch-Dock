@@ -1634,9 +1634,35 @@ if(BUILD_TESTING)
   set_tests_properties(
     visibility-status-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(NAME session-startup-metadata-test
+    COMMAND ${CMAKE_COMMAND}
+      -DBUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+      -DINSTALL_BINDIR=${CMAKE_INSTALL_BINDIR}
+      -DINSTALL_LIBDIR=${CMAKE_INSTALL_LIBDIR}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ValidateSessionStartup.cmake)
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test-tmp")
+  foreach(startup_mode IN ITEMS diagnostics runtime)
+    add_test(NAME session-startup-${startup_mode}-test
+      COMMAND ${CMAKE_COMMAND} -E env
+        ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+        ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
+        TMPDIR=${CMAKE_CURRENT_BINARY_DIR}/test-tmp
+        bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-session-startup-smoke.sh ${startup_mode})
+    set_tests_properties(session-startup-${startup_mode}-test PROPERTIES
+      RUN_SERIAL TRUE DEPENDS session-startup-metadata-test TIMEOUT 180)
+  endforeach()
+  set_tests_properties(session-startup-metadata-test PROPERTIES RUN_SERIAL TRUE)
 endif()
 
-install(TARGETS arch-dock RUNTIME DESTINATION bin)
+install(TARGETS arch-dock RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+foreach(startup_descriptor IN ITEMS arch-dock.service org.archdock.ArchDock.service org.archdock.ArchDock.desktop)
+  configure_file("data/${startup_descriptor}.in"
+                 "startup-templates/${startup_descriptor}.in" COPYONLY)
+endforeach()
+configure_file(cmake/InstallStartupMetadata.cmake.in
+               InstallStartupMetadata.cmake @ONLY)
+install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/InstallStartupMetadata.cmake")
 install(FILES "${ARCHDOCK_RENDERING_BUILD_DIR}/RendererBuildConfig.qml"
         DESTINATION "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Rendering")
 foreach(rendering_file IN LISTS ARCHDOCK_RENDERING_MODULE_FILES)
@@ -1689,9 +1715,6 @@ install(
   DIRECTORY kwin-script/
   DESTINATION share/kwin/scripts/org.archdock.windowwatcher)
 install(
-  FILES data/org.archdock.ArchDock.desktop
-  DESTINATION share/applications)
-install(
   DIRECTORY plasma-widget/
   DESTINATION share/plasma/plasmoids/org.archdock.control)
 install(CODE [[
@@ -1716,9 +1739,3 @@ install(
 install(
   DIRECTORY plasma-layout-template-free/
   DESTINATION share/plasma/layout-templates/org.archdock.plasma.desktop.circularFreeDock)
-install(
-  FILES data/org.archdock.ArchDock.service
-  DESTINATION share/dbus-1/services)
-install(
-  FILES data/arch-dock.service
-  DESTINATION share/systemd/user)
