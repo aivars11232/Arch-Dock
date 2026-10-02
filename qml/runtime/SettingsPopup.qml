@@ -37,6 +37,14 @@ Window {
     property string selectedPresetId: ""
     property string presetNoticeText: ""
     property bool presetNoticeIsError: false
+    property string profileNotice: ""
+    property bool profileNoticeIsError: false
+    readonly property var profilesService: typeof profileManager === "undefined" ? null : profileManager
+    readonly property var profiles: {
+        const revision = profilesService ? profilesService.revision : 0;
+        return profilesService ? profilesService.listProfiles() : [];
+    }
+    readonly property bool currentProfilePage: mainTabIndex === 4 && subTabIndex < 3
 
     readonly property var auditionService: typeof presetAudition === "undefined" ? null : presetAudition
     readonly property var auditionStatus: {
@@ -946,6 +954,36 @@ Window {
 
     // Duplicate, rename and delete act on the user's preset store only. They
     // never touch an installed preset, a panel or the desktop.
+    function performProfileAction(action, profileId, revision, value) {
+        if (!profilesService || hasPendingChanges || auditionBusy) return;
+        let result;
+        if (action === "create") result = profilesService.createProfile(value);
+        else if (action === "save") result = profilesService.saveProfile(profileId, revision);
+        else if (action === "rename") result = profilesService.renameProfile(profileId, revision, value);
+        else if (action === "duplicate") result = profilesService.duplicateProfile(profileId, revision, value);
+        else if (action === "delete") result = profilesService.deleteProfile(profileId, revision);
+        else if (action === "import") result = profilesService.importProfile(value);
+        else if (action === "export") result = profilesService.exportProfile(profileId, revision, value);
+        else if (action === "apply") result = profilesService.applyProfile(profileId, revision);
+        else if (action === "recover") result = profilesService.recoverInterruptedApply();
+        else if (action === "shortcuts-enabled") result = profilesService.setShortcutsEnabled(value === "true");
+        else if (action === "shortcut-set") result = profilesService.setProfileShortcut(profileId, value);
+        else if (action === "shortcut-clear") result = profilesService.clearProfileShortcut(profileId);
+        else return;
+        profileNoticeIsError = !(result && result.success === true);
+        profileNotice = profileNoticeIsError
+            ? qsTr("Profile action failed (%1).%2").arg(String(result && result.errorCode || "unknown-error"))
+                .arg(result && result.rollbackStatus === "complete" ? qsTr(" The previous arrangement was restored.") : "")
+            : action === "apply" ? qsTr("The profile arrangement was applied.")
+                : action === "recover" ? qsTr("Profile recovery completed.") : qsTr("Profile action completed.");
+        if (!profileNoticeIsError && (action === "apply" || action === "recover")) {
+            internalPanelSelection = true;
+            selectedPanelId = panelRegistry.activePanelId;
+            internalPanelSelection = false;
+            loadEditor(selectedPanelId);
+        }
+    }
+
     function performPresetAction(action, presetId, name) {
         const page = currentPresetPage;
         if (!page)
@@ -1545,11 +1583,29 @@ Window {
             }
 
             StudioForm {
-                visible: root.currentPresetPage === null
+                visible: root.currentPresetPage === null && !root.currentProfilePage
+                enabled: !root.profilesService || !root.profilesService.active
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 studio: root
                 rows: root.rowsForCurrentPage()
+            }
+
+            ProfilePage {
+                objectName: "panel-studio-profile-page"
+                visible: root.currentProfilePage
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                profiles: root.profiles
+                shortcutsOnly: root.subTabIndex === 2
+                shortcutStatus: root.profilesService ? root.profilesService.shortcutStatus : ({enabled: false, bindings: []})
+                applyStatus: root.profilesService ? root.profilesService.status : ({state: "IDLE"})
+                actionsBlocked: !root.profilesService || root.hasPendingChanges || root.auditionBusy
+                notice: root.profileNotice
+                noticeIsError: root.profileNoticeIsError
+                onActionRequested: function(action, profileId, revision, value) {
+                    root.performProfileAction(action, profileId, revision, value);
+                }
             }
 
             PresetBrowser {

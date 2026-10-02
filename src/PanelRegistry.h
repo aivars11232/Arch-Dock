@@ -67,6 +67,16 @@ public:
     [[nodiscard]] std::optional<ArchDock::PanelDefinition> panelDefinition(
         const QString &panelId,
         QString *errorMessage = nullptr) const;
+    [[nodiscard]] QList<ArchDock::PanelDefinition> panelDefinitions(
+        QString *errorMessage = nullptr) const;
+    [[nodiscard]] bool panelSetMatches(const QList<ArchDock::PanelDefinition> &expected,
+        QString *errorMessage = nullptr) const;
+    // One durable full-set write after the caller verifies every host. The
+    // caller publishes adoption through notifyPanelSettingsTransactionAdopted.
+    [[nodiscard]] bool persistPanelSetTransaction(
+        const QList<ArchDock::PanelDefinition> &expected,
+        const QList<ArchDock::PanelDefinition> &candidate,
+        QString *errorMessage = nullptr);
     [[nodiscard]] std::optional<ArchDock::ThemeCapabilityProfile>
     themeCapabilityProfile(const ArchDock::PanelDefinition &definition,
                            QString *errorCode = nullptr) const;

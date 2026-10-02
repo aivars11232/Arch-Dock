@@ -812,6 +812,91 @@ std::optional<ArchDock::PanelDefinition> PanelRegistry::panelDefinition(
     return ArchDock::PanelDefinition::fromLegacyMap(*panel, errorMessage);
 }
 
+QList<ArchDock::PanelDefinition> PanelRegistry::panelDefinitions(QString *errorMessage) const
+{
+    QList<ArchDock::PanelDefinition> result;
+    for (const QString &id : panelIds())
+    {
+        const auto definition = panelDefinition(id, errorMessage);
+        if (!definition) return {};
+        result.append(*definition);
+    }
+    if (errorMessage) errorMessage->clear();
+    return result;
+}
+
+bool PanelRegistry::panelSetMatches(const QList<ArchDock::PanelDefinition> &expected,
+    QString *errorMessage) const
+{
+    const auto fail = [errorMessage](const QString &code) {
+        if (errorMessage) *errorMessage = code;
+        return false;
+    };
+    if (m_persistenceBlocked || expected.isEmpty() || panelDefinitions() != expected)
+        return fail(QStringLiteral("profile-registry-revision-conflict"));
+    QSettings settings;
+    settings.sync();
+    if (settings.status() != QSettings::NoError)
+        return fail(QStringLiteral("profile-registry-unreadable"));
+    const auto saved = ArchDock::SettingsMigration::migratePanelRecords(
+        settings.value(QString::fromLatin1(kPanelRecordsKey)).toByteArray());
+    if (saved.status != ArchDock::PanelMigrationStatus::Success || saved.definitions != expected)
+        return fail(QStringLiteral("profile-registry-disk-conflict"));
+    if (errorMessage) errorMessage->clear();
+    return true;
+}
+
+bool PanelRegistry::persistPanelSetTransaction(
+    const QList<ArchDock::PanelDefinition> &expected,
+    const QList<ArchDock::PanelDefinition> &candidate, QString *errorMessage)
+{
+    const auto fail = [errorMessage](const QString &code) {
+        if (errorMessage) *errorMessage = code;
+        return false;
+    };
+    if (!panelSetMatches(expected, errorMessage)) return false;
+    if (candidate.isEmpty() || candidate.size() > 64)
+        return fail(QStringLiteral("invalid-profile-panel-count"));
+    QMap<QString, ArchDock::PanelDefinition> previous;
+    for (const auto &panel : expected) previous.insert(panel.identity.id, panel);
+    QSet<QString> ids;
+    QList<QVariantMap> records;
+    for (const auto &panel : candidate)
+    {
+        const auto parsed = ArchDock::PanelDefinition::fromLegacyMap(panel.toLegacyMap());
+        if (!parsed || *parsed != panel || ids.contains(panel.identity.id))
+            return fail(QStringLiteral("invalid-profile-panel-set"));
+        const auto found = previous.constFind(panel.identity.id);
+        if (found != previous.cend())
+        {
+            if (found->settingsRevision == std::numeric_limits<quint64>::max() ||
+                panel.settingsRevision != found->settingsRevision + 1 ||
+                panel.identity.builtIn != found->identity.builtIn)
+                return fail(QStringLiteral("invalid-profile-panel-revision"));
+        }
+        else if (panel.settingsRevision != 1 || panel.identity.builtIn)
+            return fail(QStringLiteral("invalid-profile-new-panel"));
+        ids.insert(panel.identity.id);
+        records.append(panel.toLegacyMap());
+    }
+    const QString active = ids.contains(m_activePanelId) ? m_activePanelId : candidate.first().identity.id;
+    // Check the file and its atomic-replacement directory before putting a
+    // candidate into QSettings' shared pending-write cache. A refused write
+    // must leave the previous set available to the host rollback coordinator.
+    const QSettings destination;
+    const QFileInfo file(destination.fileName());
+    if (!file.isWritable() || !QFileInfo(file.absolutePath()).isWritable())
+        return fail(QStringLiteral("profile-registry-unwritable"));
+    if (!persistPanelState(records, {{QStringLiteral("activePanel"), active}}, errorMessage)) return false;
+    m_panels = std::move(records);
+    if (active != m_activePanelId)
+    {
+        m_activePanelId = active;
+        emit activePanelIdChanged();
+    }
+    return true;
+}
+
 std::optional<ArchDock::ThemeCapabilityProfile>
 PanelRegistry::themeCapabilityProfile(
     const ArchDock::PanelDefinition &definition,

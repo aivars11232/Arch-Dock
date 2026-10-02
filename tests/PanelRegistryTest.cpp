@@ -9,6 +9,7 @@
 #include "WindowModel.h"
 #include "panel/IconOverrideTransaction.h"
 #include "model/IconEntryIdentity.h"
+#include "model/SettingsMigration.h"
 #include "presets/PresetCapabilityResolver.h"
 #include "PresetTestSupport.h"
 
@@ -22,6 +23,7 @@
 #include <QJsonObject>
 #include <QPainter>
 #include <QSettings>
+#include <QScopeGuard>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -326,6 +328,10 @@ private slots:
     void batchesNormalizedPanelUpdates();
     void checksBatchPersistenceBeforeRevision();
     void persistsAndRollsBackSettingsTransactionsAtomically();
+    void persistsCompleteProfilePanelSet();
+    void profileSetRefusesUnwritableDestinationWithoutPendingChanges();
+    void rejectsProfileSetRevisionAndDiskConflicts();
+    void rejectsInvalidProfileSetsWithoutPublication();
     void segmentPersistenceIsAtomicAndReversible();
     void rejectsPreparedTransactionAfterInterveningUpdate();
     void persistsAndResolvesIconOverridesAtomically();
@@ -429,6 +435,98 @@ void PanelRegistryTest::provisionsPanelFamiliesAndNativeBridgeState()
              QStringLiteral("top"));
     QCOMPARE(registry.panelValue(QStringLiteral("side"), QStringLiteral("edge")).toString(),
              QStringLiteral("right"));
+}
+
+void PanelRegistryTest::profileSetRefusesUnwritableDestinationWithoutPendingChanges()
+{
+    PanelRegistry registry;
+    const auto before = registry.panelDefinitions();
+    auto candidate = before;
+    for (auto &panel : candidate) ++panel.settingsRevision;
+    candidate.first().iconStyle.size = 68;
+    const QString path = QSettings().fileName();
+    const QFileDevice::Permissions permissions = QFile::permissions(path);
+    const auto restore = qScopeGuard([&] { QFile::setPermissions(path, permissions); });
+    QVERIFY(QFile::setPermissions(path, QFileDevice::ReadOwner));
+    QVERIFY(!QFileInfo(path).isWritable());
+    QString error;
+    QVERIFY(!registry.persistPanelSetTransaction(before, candidate, &error));
+    QCOMPARE(error, QStringLiteral("profile-registry-unwritable"));
+    QCOMPARE(registry.panelDefinitions(), before);
+    QVERIFY(QFile::setPermissions(path, permissions));
+    QVERIFY(registry.panelSetMatches(before, &error));
+    QCOMPARE(PanelRegistry().panelDefinitions(), before);
+}
+
+void PanelRegistryTest::persistsCompleteProfilePanelSet()
+{
+    PanelRegistry registry(taskThemeDefinitions());
+    const auto previous = registry.panelDefinitions();
+    QCOMPARE(previous.size(), 3);
+    QString error;
+    QVERIFY2(registry.panelSetMatches(previous, &error), qPrintable(error));
+    auto bottom = previous.first();
+    bottom.settingsRevision++;
+    bottom.iconStyle.size = 64;
+    auto free = ArchDock::PanelDefinition::defaults("free-profile", "Profile free", "free", false);
+    free.settingsRevision = 1;
+    const QList<ArchDock::PanelDefinition> candidate{bottom.normalized(), free.normalized()};
+    QSignalSpy published(&registry, &PanelRegistry::panelsChanged);
+    QVERIFY2(registry.persistPanelSetTransaction(previous, candidate, &error), qPrintable(error));
+    QCOMPARE(published.size(), 0);
+    QVERIFY(registry.panelDefinitions() == candidate);
+    QVERIFY(!registry.panelDefinition("top"));
+    PanelRegistry reloaded(taskThemeDefinitions());
+    QVERIFY(reloaded.panelDefinitions() == candidate);
+    registry.notifyPanelSettingsTransactionAdopted(true);
+    QCOMPARE(published.size(), 1);
+}
+
+void PanelRegistryTest::rejectsProfileSetRevisionAndDiskConflicts()
+{
+    PanelRegistry registry(taskThemeDefinitions());
+    auto previous = registry.panelDefinitions();
+    auto candidate = previous;
+    for (auto &panel : candidate) panel.settingsRevision++;
+    QVERIFY(registry.updatePanelChecked("bottom", {{"iconSize", 68}}));
+    QString error;
+    QVERIFY(!registry.persistPanelSetTransaction(previous, candidate, &error));
+    QCOMPARE(error, QString("profile-registry-revision-conflict"));
+    previous = registry.panelDefinitions();
+    auto foreign = previous;
+    foreign.first().settingsRevision++;
+    foreign.first().iconStyle.size = 72;
+    QSettings settings;
+    settings.setValue("dock/panels", ArchDock::SettingsMigration::serializeVersionTwo(foreign));
+    settings.sync();
+    QVERIFY(!registry.panelSetMatches(previous, &error));
+    QCOMPARE(error, QString("profile-registry-disk-conflict"));
+    QVERIFY(registry.panelDefinitions() == previous);
+    PanelRegistry observer(taskThemeDefinitions());
+    QVERIFY(observer.panelDefinitions() == foreign);
+}
+
+void PanelRegistryTest::rejectsInvalidProfileSetsWithoutPublication()
+{
+    PanelRegistry registry(taskThemeDefinitions());
+    const auto previous = registry.panelDefinitions();
+    QSignalSpy published(&registry, &PanelRegistry::panelsChanged);
+    QString error;
+    QVERIFY(!registry.persistPanelSetTransaction(previous, {}, &error));
+    auto candidate = previous;
+    QVERIFY(!registry.persistPanelSetTransaction(previous, candidate, &error));
+    for (auto &panel : candidate) panel.settingsRevision++;
+    candidate.append(candidate.first());
+    QVERIFY(!registry.persistPanelSetTransaction(previous, candidate, &error));
+    auto invented = ArchDock::PanelDefinition::defaults("invented", "Invented", "bottom", true);
+    invented.settingsRevision = 1;
+    QVERIFY(!registry.persistPanelSetTransaction(previous, {invented.normalized()}, &error));
+    auto free = ArchDock::PanelDefinition::defaults("free-new", "New", "free", false);
+    QVERIFY(!registry.persistPanelSetTransaction(previous, {free.normalized()}, &error));
+    QVERIFY(registry.panelDefinitions() == previous);
+    QCOMPARE(published.size(), 0);
+    PanelRegistry reloaded(taskThemeDefinitions());
+    QVERIFY(reloaded.panelDefinitions() == previous);
 }
 
 void PanelRegistryTest::migratesLegacyBottomPanelSettings()

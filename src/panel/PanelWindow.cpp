@@ -257,7 +257,11 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     m_actionBridge(this),
       m_windowWatcher(m_windowModel)
 {
-    for (const QString &panelId : m_panelRegistry.panelIds())
+    // Read recovery state before any legacy startup rewrite. Loading the
+    // journal never mutates a host; recovery remains an explicit action.
+    m_profileManager = new ArchDock::ProfileManager(profileOperations(),
+        ArchDock::ProfileStore::defaultRoot(), ArchDock::ProfileApplyTransaction::defaultJournalPath(), this);
+    for (const QString &panelId : profileBusy() ? QStringList{} : m_panelRegistry.panelIds())
     {
         if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() !=
             QStringLiteral("free"))
@@ -315,6 +319,11 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
             notifyDockRevision();
             notifyDockEntriesRevision();
         });
+        m_engine.rootContext()->setContextProperty(QStringLiteral("profileManager"), m_profileManager);
+        connect(m_profileManager, &ArchDock::ProfileManager::changed, this, [this] {
+            notifyDockRevision();
+            notifyDockEntriesRevision();
+        });
         m_engine.rootContext()->setContextProperty(
             QStringLiteral("systemStatus"),
             &m_systemStatus);
@@ -323,6 +332,8 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
             this);
 
         QDBusConnection sessionBus = QDBusConnection::sessionBus();
+        sessionBus.registerObject(QStringLiteral("/Profiles"), m_profileManager,
+            QDBusConnection::ExportAllSlots | QDBusConnection::ExportAllSignals | QDBusConnection::ExportAllProperties);
         sessionBus.registerObject(QStringLiteral("/PresetAudition"), m_presetAudition,
             QDBusConnection::ExportAllSlots | QDBusConnection::ExportAllSignals | QDBusConnection::ExportAllProperties);
         sessionBus.registerObject(
@@ -405,6 +416,7 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
             });
     const auto updateVisibility = [this]
     {
+        if (profileBusy()) return;
         ++m_visibilityRevision;
         emit visibilityRevisionChanged();
         for (const QString &panelId : m_panelRegistry.panelIds())
@@ -759,6 +771,11 @@ QVariantMap PanelWindow::dockConfiguration(const QString &panelId) const
 std::optional<ArchDock::PanelDefinition> PanelWindow::runtimePanelDefinition(
     const QString &panelId) const
 {
+    if (m_profileManager)
+    {
+        const auto preview = m_profileManager->previewDefinition(panelId);
+        if (preview) return preview;
+    }
     if (m_presetAudition)
     {
         const auto preview = m_presetAudition->previewDefinition(panelId);
@@ -970,12 +987,232 @@ QVariantMap PanelWindow::presetEditorProjection(const ArchDock::PanelDefinition 
         {QStringLiteral("iconStyleProjectionError"), iconError}};
 }
 
+bool PanelWindow::profileBusy() const
+{
+    return m_profileManager && m_profileManager->active();
+}
+
+ArchDock::PresetPreviewRecord PanelWindow::profileHostRecord(
+    const ArchDock::PanelDefinition &definition) const
+{
+    ArchDock::PresetPreviewRecord record;
+    record.panelId = definition.identity.id;
+    record.snapshot = definition;
+    record.hostKind = ArchDock::PanelDefinition::hostKindName(definition.host.kind);
+    record.previewToken = ArchDock::ProfileApplyTransaction::hostToken(definition);
+    const bool free = definition.host.kind == ArchDock::PanelHostKind::FreeDesktop;
+    record.containmentId = free ? definition.host.freeDesktopContainmentId : definition.host.nativePanelId;
+    record.appletId = free ? definition.host.freeDockAppletId : definition.host.nativeDockAppletId;
+    return record;
+}
+
+ArchDock::ProfileApplyTransaction::Operations PanelWindow::profileOperations()
+{
+    using namespace ArchDock;
+    ProfileApplyTransaction::Operations operations;
+    operations.guard = [this] {
+        if (m_nativePanelRecoveryActive || m_settingsTransactionAdoptionActive)
+            return QStringLiteral("panel-lifecycle-active");
+        if (m_presetAudition && m_presetAudition->active()) return QStringLiteral("preset-audition-active");
+        for (const auto &locks : std::as_const(m_panelInteractionGuards))
+        {
+            if (locks.editMode) return QStringLiteral("edit-mode-active");
+            if (locks.popupOpen) return QStringLiteral("popup-open");
+            if (locks.dragActive) return QStringLiteral("drag-active");
+        }
+        return QString{};
+    };
+    operations.snapshot = [this](QString *error) { return m_panelRegistry.panelDefinitions(error); };
+    operations.matches = [this](const QList<PanelDefinition> &before, QString *error) {
+        return m_panelRegistry.panelSetMatches(before, error);
+    };
+    operations.prepare = [this](const QList<PanelDefinition> &before, QList<PanelDefinition> &panels,
+        QStringList *diagnostics, QString *error) {
+        const auto fail = [error](const QString &code) { if (error) *error = code; return false; };
+        QDBusInterface shell(QStringLiteral("org.kde.plasmashell"), QStringLiteral("/PlasmaShell"),
+            QStringLiteral("org.kde.PlasmaShell"), QDBusConnection::sessionBus());
+        if (!shell.isValid()) return fail(QStringLiteral("plasmashell-unavailable"));
+        QStringList screenIds;
+        for (const auto *screen : QGuiApplication::screens()) screenIds.append(persistentScreenId(screen));
+        if (screenIds.isEmpty()) return fail(QStringLiteral("profile-no-screens"));
+        ProfileReferences references;
+        for (const auto &theme : m_panelRegistry.themeDefinitions())
+            references.themes.insert(theme.toMap().value(QStringLiteral("id")).toString());
+        for (const auto &icons : m_panelRegistry.iconStyleDefinitions())
+            references.iconStyles.insert(icons.toMap().value(QStringLiteral("id")).toString());
+        if (const auto *catalog = m_panelRegistry.animationProfileCatalog())
+        {
+            for (const auto &id : catalog->profileIds()) references.motions.insert(id);
+            for (const auto &id : catalog->legacyNameMap().keys()) references.motions.insert(id);
+        }
+        auto effective = ProfileDefinition::capture(QStringLiteral("Effective profile"), panels);
+        panels = effective.resolved(references, diagnostics);
+        for (auto &panel : panels)
+        {
+            const auto screen = resolveScreen(screenIds, panel.host.screenId, panel.host.screenIndex);
+            if (screen.usedFallback && diagnostics) diagnostics->append(panel.identity.id + QStringLiteral(":screen-fallback"));
+            panel.host.screenIndex = screen.index;
+            if (panel.host.screenId.isEmpty()) panel.host.screenId = screenIds.at(screen.index);
+            if (panel.host.kind == PanelHostKind::FreeDesktop)
+            {
+                if (!panel.identity.id.startsWith(QStringLiteral("free-"))) return fail(QStringLiteral("profile-free-id-required"));
+            }
+            else
+            {
+                const auto placement = normalizedNativePanelPlacement(panel);
+                if (!placement.isValid() || !placement.isSupported() || !placement.placement)
+                    return fail(QStringLiteral("profile-native-placement-unsupported"));
+                if (!supportedNativeVisibilityModes({true, true, m_windowWatcher.available()}).contains(panel.visibility.hostMode))
+                    return fail(QStringLiteral("profile-visibility-unsupported"));
+            }
+            // Refuse a foreign physical host using this logical ID. Only the
+            // exact previous ownership token may be present before mutation.
+            QString previousToken;
+            for (const auto &old : before)
+                if (old.identity.id == panel.identity.id) previousToken = ProfileApplyTransaction::hostToken(old);
+            const auto foreign = evaluatePlasmaScriptResultOptional(QStringLiteral(R"JS(
+var count = 0;
+var all = panels();
+for (var i = 0; i < all.length; ++i) {
+    var host = panelById(Number(all[i].id)); if (!host) continue;
+    host.currentConfigGroup = ['ArchDock'];
+    if (String(host.readConfig('panelId', '')) === %1 &&
+        (%2 === '' || String(host.readConfig('ownerToken', '')) !== %2)) ++count;
+}
+var spaces = desktops();
+for (var i = 0; i < spaces.length; ++i) {
+    var desktop = desktopById(Number(spaces[i].id)); if (!desktop) continue;
+    var docks = desktop.widgets('org.archdock.dock');
+    for (var j = 0; j < docks.length; ++j) {
+        var dock = desktop.widgetById(Number(docks[j].id)); if (!dock) continue;
+        dock.currentConfigGroup = ['General'];
+        if (String(dock.readConfig('panelId', '')) === %1 &&
+            (%2 === '' || String(dock.readConfig('ownerToken', '')) !== %2)) ++count;
+    }
+}
+print('ARCHDOCK_RESULT:' + String(count));
+)JS").arg(plasmaScriptStringLiteral(panel.identity.id)).arg(plasmaScriptStringLiteral(previousToken)));
+            if (!foreign || *foreign != 0) return fail(QStringLiteral("profile-foreign-host-conflict"));
+        }
+        return true;
+    };
+    operations.capture = [this](ProfileHostSnapshot &snapshot, QString *error) {
+        auto record = profileHostRecord(snapshot.definition);
+        if (!presetAuditionOperations().captureHost(record, error)) return false;
+        snapshot.hostState = record.hostState;
+        if (snapshot.definition.host.kind == PanelHostKind::NativeEdge)
+        {
+            const auto visibility = evaluatePlasmaScriptResultOptional(QStringLiteral(R"JS(
+var result = (function() {
+    var p = panelById(%1); if (!p) return -1;
+    p.currentConfigGroup = ['ArchDock'];
+    if (String(p.readConfig('panelId', '')) !== %2 || String(p.readConfig('ownerToken', '')) !== %3) return -1;
+    var mode = ['none', 'autohide', 'dodgewindows'].indexOf(String(p.hiding));
+    if (mode < 0) return -1;
+    return mode * 2 + (String(p.readConfig('temporaryHidden', '0')) === '1' ? 1 : 0);
+})(); print('ARCHDOCK_RESULT:' + String(result));
+)JS").arg(record.containmentId).arg(plasmaScriptStringLiteral(record.panelId)).arg(plasmaScriptStringLiteral(record.previewToken)));
+            if (!visibility || *visibility < 0 || *visibility > 5)
+            { if (error) *error = QStringLiteral("profile-visibility-snapshot-unavailable"); return false; }
+            snapshot.hostState.insert(QStringLiteral("nativeVisibility"), *visibility);
+        }
+        return true;
+    };
+    operations.create = [this](PanelDefinition &panel, const QString &token, QString *error) {
+        auto record = profileHostRecord(panel);
+        record.previewToken = token;
+        return presetAuditionOperations().createHost(record, panel, error);
+    };
+    operations.apply = [this](const PanelDefinition &, const PanelDefinition &panel, QString *error) {
+        if (panel.host.kind == PanelHostKind::FreeDesktop)
+        {
+            auto geometry = presetFreeHostGeometry(panel, error);
+            if (!geometry) return false;
+            geometry->insert(QStringLiteral("x"), panel.placement.x);
+            geometry->insert(QStringLiteral("y"), panel.placement.y);
+            return setPresetFreeHostGeometry(panel, *geometry, error);
+        }
+        const auto placement = normalizedNativePanelPlacement(panel);
+        const PlasmaPanelAdapter adapter([this](const QString &script) { return evaluatePlasmaScriptResultOptional(script); });
+        if (!placement.placement || !adapter.applyPlacement(panel.host.nativePanelId, panel.identity.id,
+            panel.host.nativeOwnershipToken, *placement.placement).success())
+        { if (error) *error = QStringLiteral("profile-placement-readback-failed"); return false; }
+        const auto mode = panelVisibilityModeFromString(panel.visibility.hostMode);
+        const auto visibility = resolveNativeVisibility(mode, nativePanelVisibilityDecision(panel, mode, panel.visibility.visible),
+            !panel.visibility.visible, {true, true, m_windowWatcher.available()});
+        m_nativePanelVisibilityStateCache.remove(panel.identity.id);
+        if (visibility.fallbackApplied || !adapter.applyVisibility(panel.host.nativePanelId, panel.identity.id,
+            panel.host.nativeOwnershipToken, visibility.hostMode, !panel.visibility.visible).success())
+        { if (error) *error = QStringLiteral("profile-visibility-readback-failed"); return false; }
+        return true;
+    };
+    operations.verify = [this](const PanelDefinition &panel, QString *error) {
+        auto record = profileHostRecord(panel);
+        return presetAuditionOperations().captureHost(record, error);
+    };
+    operations.restore = [this](ProfileHostSnapshot &snapshot, QString *error) {
+        auto &panel = snapshot.definition;
+        const auto visibility = snapshot.hostState.value(QStringLiteral("nativeVisibility"));
+        if (panel.host.kind == PanelHostKind::NativeEdge && (!PresetParsing::isInteger(visibility) ||
+            visibility.toInt() < 0 || visibility.toInt() > 5))
+        { if (error) *error = QStringLiteral("invalid-profile-visibility-snapshot"); return false; }
+        const QString token = ProfileApplyTransaction::hostToken(panel);
+        bool missing = false;
+        if (panel.host.kind == PanelHostKind::FreeDesktop)
+        {
+            const auto found = discoverOwnedFreePanelHost(panel.identity.id, token);
+            missing = found.outcome == FreePanelHostDiscoveryOutcome::Missing;
+            if (!missing && found.outcome != FreePanelHostDiscoveryOutcome::Unique)
+            { if (error) *error = QStringLiteral("profile-restore-host-conflict"); return false; }
+            if (!missing) { panel.host.freeDesktopContainmentId = found.host.desktopContainmentId; panel.host.freeDockAppletId = found.host.dockAppletId; }
+        }
+        else
+        {
+            const auto found = discoverNativePanel(panel.identity.id, token, panel.content.type);
+            missing = found.status == NativePanelDiscoveryStatus::Missing;
+            if (!missing && found.status != NativePanelDiscoveryStatus::Unique)
+            { if (error) *error = QStringLiteral("profile-restore-host-conflict"); return false; }
+            if (!missing) { panel.host.nativePanelId = found.containmentId; panel.host.nativeDockAppletId = found.dockAppletId; }
+        }
+        if (missing)
+        {
+            auto record = profileHostRecord(panel);
+            if (!presetAuditionOperations().createHost(record, panel, error)) return false;
+        }
+        auto record = profileHostRecord(panel);
+        record.hostState = snapshot.hostState;
+        record.hostState.remove(QStringLiteral("nativeVisibility"));
+        if (!restorePresetPreviewHost(record, error, true)) return false;
+        if (panel.host.kind == PanelHostKind::NativeEdge)
+        {
+            constexpr PlasmaPanelHidingMode modes[]{PlasmaPanelHidingMode::None, PlasmaPanelHidingMode::AutoHide,
+                PlasmaPanelHidingMode::DodgeWindows};
+            const PlasmaPanelAdapter adapter([this](const QString &script) { return evaluatePlasmaScriptResultOptional(script); });
+            m_nativePanelVisibilityStateCache.remove(panel.identity.id);
+            if (!adapter.applyVisibility(panel.host.nativePanelId, panel.identity.id, token,
+                modes[visibility.toInt() / 2], visibility.toInt() % 2 != 0).success())
+            { if (error) *error = QStringLiteral("profile-restore-visibility-failed"); return false; }
+        }
+        return true;
+    };
+    operations.remove = [this](const PanelDefinition &panel, QString *error) {
+        auto record = profileHostRecord(panel); record.temporary = true;
+        return removePresetPreviewHost(record, error, true);
+    };
+    operations.commit = [this](const QList<PanelDefinition> &before, const QList<PanelDefinition> &panels, QString *error) {
+        return m_panelRegistry.persistPanelSetTransaction(before, panels, error);
+    };
+    operations.publish = [this] { m_panelRegistry.notifyPanelSettingsTransactionAdopted(true); };
+    return operations;
+}
+
 ArchDock::PresetPreviewSession::Operations PanelWindow::presetAuditionOperations()
 {
     using namespace ArchDock;
     PresetPreviewSession::Operations operations;
     operations.prepare = [this](const QVariantMap &request, QString *error) { return preparePresetPreview(request, error); };
     operations.guard = [this](const QString &panelId) {
+        if (profileBusy()) return QStringLiteral("profile-recovery-or-apply-active");
         QStringList targets{panelId};
         if (m_presetAudition && m_presetAudition->active())
             targets.append(m_presetAudition->status().value(QStringLiteral("panelId")).toString());
@@ -1442,14 +1679,17 @@ print('ARCHDOCK_PREVIEW_HOST:' + JSON.stringify(state));
 }
 
 bool PanelWindow::restorePresetPreviewHost(const ArchDock::PresetPreviewRecord &record,
-    QString *errorCode) const
+    QString *errorCode, bool profileTransaction) const
 {
     const auto fail = [errorCode](const QString &code) { if (errorCode) *errorCode = code; return false; };
     const auto stored = m_panelRegistry.panelDefinition(record.panelId);
-    if (!stored) return fail(QStringLiteral("preview-panel-missing"));
-    auto comparable = *stored;
-    comparable.settingsRevision = record.snapshot.settingsRevision;
-    if (comparable != record.snapshot) return fail(QStringLiteral("preview-revision-conflict"));
+    if (!profileTransaction)
+    {
+        if (!stored) return fail(QStringLiteral("preview-panel-missing"));
+        auto comparable = *stored;
+        comparable.settingsRevision = record.snapshot.settingsRevision;
+        if (comparable != record.snapshot) return fail(QStringLiteral("preview-revision-conflict"));
+    }
     if (record.hostKind == QStringLiteral("free-desktop"))
     {
         if (record.hostState.keys() != QStringList{QStringLiteral("geometry")})
@@ -1500,10 +1740,10 @@ var result = (function() {
 }
 
 bool PanelWindow::removePresetPreviewHost(const ArchDock::PresetPreviewRecord &record,
-    QString *errorCode) const
+    QString *errorCode, bool profileTransaction) const
 {
     const auto fail = [errorCode] { if (errorCode) *errorCode = QStringLiteral("preview-host-cleanup-blocked"); return false; };
-    if (!record.temporary || m_panelRegistry.panelDefinition(record.panelId)) return fail();
+    if (!record.temporary || (!profileTransaction && m_panelRegistry.panelDefinition(record.panelId))) return fail();
     for (const QString &token : {record.previewToken, record.managedToken})
     {
         if (token.isEmpty()) continue;
@@ -2668,6 +2908,8 @@ QVariantMap PanelWindow::commitPanelSettingsDraft(
     ArchDock::PanelSettingsTransactionDraft draft,
     ArchDock::PanelSettingsTransactionOutcome outcome)
 {
+    if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
+
     ArchDock::PresetApplication::markCustomized(draft.previousPanel, &draft.candidatePanel);
     QString persistenceError;
     if (!m_panelRegistry.persistPanelSettingsTransaction(draft, &persistenceError))
@@ -3382,6 +3624,8 @@ QVariantMap PanelWindow::commitIconOverrideTransaction(
     const QVariantMap &overrideValues,
     bool reset)
 {
+    if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
+
     ArchDock::IconOverrideTransactionOutcome outcome;
     const std::optional<ArchDock::PanelDefinition> current =
         m_panelRegistry.panelDefinition(panelId);
@@ -3707,6 +3951,8 @@ bool PanelWindow::commitPanelContentTransaction(
     const QString &panelId,
     const ArchDock::PanelContentRequest &request)
 {
+    if (profileBusy()) return false;
+
     const std::optional<ArchDock::PanelDefinition> current =
         m_panelRegistry.panelDefinition(panelId);
     if (!current.has_value())
@@ -3996,6 +4242,8 @@ int PanelWindow::screenIndexForPanel(const QString &panelId) const
 
 void PanelWindow::setPanelScreen(const QString &panelId, int screenIndex)
 {
+    if (profileBusy()) return;
+
     if (!m_panelRegistry.panelIds().contains(panelId))
     {
         return;
@@ -4032,6 +4280,8 @@ void PanelWindow::setPanelScreen(const QString &panelId, int screenIndex)
 
 bool PanelWindow::setPanelVisible(const QString &panelId, bool visible)
 {
+    if (profileBusy()) return false;
+
     if (!m_panelRegistry.panelIds().contains(panelId) ||
         m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() ==
             QStringLiteral("free"))
@@ -4069,6 +4319,8 @@ QVariantMap PanelWindow::applyNativePanelVisibilityMode(
     const QString &panelId,
     const QString &visibilityMode)
 {
+    if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
+
     const bool nativePanel = m_panelRegistry.panelIds().contains(panelId) &&
         isNativeDockPanelEdge(
             m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString());
@@ -4161,17 +4413,26 @@ ArchDock::PanelVisibilityDecision PanelWindow::nativePanelVisibilityDecision(
     ArchDock::PanelVisibilityMode mode,
     bool visible) const
 {
-    if (!m_panelRegistry.panelIds().contains(panelId) ||
-        !isNativeDockPanelEdge(
-            m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString()))
+    const auto definition = m_panelRegistry.panelDefinition(panelId);
+    if (!definition || definition->host.kind != ArchDock::PanelHostKind::NativeEdge)
     {
         return ArchDock::PanelVisibilityDecision::Reveal;
     }
 
-    QScreen *screen = screenForPanel(panelId);
-    const int screenIndex = screenIndexForPanel(panelId);
+    return nativePanelVisibilityDecision(*definition, mode, visible);
+}
+
+ArchDock::PanelVisibilityDecision PanelWindow::nativePanelVisibilityDecision(
+    const ArchDock::PanelDefinition &definition,
+    ArchDock::PanelVisibilityMode mode, bool visible) const
+{
+    const auto screens = QGuiApplication::screens();
+    QStringList ids;
+    for (const auto *screen : screens) ids.append(ArchDock::persistentScreenId(screen));
+    const int screenIndex = ArchDock::resolvedScreenIndex(ids, definition.host.screenId, definition.host.screenIndex);
+    const QScreen *screen = screenIndex >= 0 && screenIndex < screens.size() ? screens.at(screenIndex) : nullptr;
     const ArchDock::NativePanelPlacementResult placementResult =
-        normalizedNativePanelPlacement(panelId);
+        normalizedNativePanelPlacement(definition);
     if (!screen || screenIndex < 0 || !placementResult.isValid() ||
         !placementResult.placement.has_value())
     {
@@ -4187,7 +4448,7 @@ ArchDock::PanelVisibilityDecision PanelWindow::nativePanelVisibilityDecision(
     // A panel the user is actively using may not be concealed. The applet is
     // the only thing that knows a menu is open or a drag is in flight, so its
     // last reported guards are the input here.
-    input.locks = m_panelInteractionGuards.value(panelId);
+    input.locks = m_panelInteractionGuards.value(definition.identity.id);
     input.windows.reserve(m_windowModel.windows().size());
     for (const WindowItem &window : m_windowModel.windows())
     {
@@ -4368,6 +4629,8 @@ bool PanelWindow::shouldConcealPanel(const QString &panelId) const
 
 void PanelWindow::synchronizeScreenAssignments()
 {
+    if (profileBusy()) return;
+
     const QList<QScreen *> screens = QGuiApplication::screens();
     if (screens.isEmpty())
     {
@@ -4415,6 +4678,8 @@ void PanelWindow::synchronizeScreenAssignments()
 
 void PanelWindow::handleScreensChanged()
 {
+    if (profileBusy()) return;
+
     synchronizeScreenAssignments();
     for (const QString &panelId : m_panelRegistry.panelIds())
     {
@@ -4455,6 +4720,8 @@ void PanelWindow::scheduleNativePanelRecovery()
 
 void PanelWindow::recoverNativePanels(bool allowMissingHostRecovery)
 {
+    if (profileBusy()) return;
+
     QDBusInterface plasmaShell(
         QStringLiteral("org.kde.plasmashell"),
         QStringLiteral("/PlasmaShell"),
@@ -4506,6 +4773,8 @@ void PanelWindow::updateDesktopSuite()
 
 void PanelWindow::synchronizeFreePanels()
 {
+    if (profileBusy()) return;
+
     ArchDock::FreePanelController controller(
         m_panelRegistry, freePanelHostOperations());
     for (const QString &panelId : m_panelRegistry.panelIds())
@@ -4527,6 +4796,8 @@ void PanelWindow::synchronizeFreePanels()
 
 void PanelWindow::syncRegistryFromLegacySettings()
 {
+    if (profileBusy()) return;
+
     const QVariantMap sharedValues{
         {QStringLiteral("screen"), m_settings.monitorIndex()},
         {QStringLiteral("screenId"), screenIdForIndex(m_settings.monitorIndex())},
@@ -4623,6 +4894,8 @@ void PanelWindow::showPanelSettings(const QString &panelId)
 
 QString PanelWindow::createNativePanel(const QString &edge, const QString &type)
 {
+    if (profileBusy()) return {};
+
     const QString normalizedEdge = edge.trimmed().toLower();
     const QString normalizedType = type.trimmed().toLower();
     if (!isNativeDockPanelEdge(normalizedEdge) || !isNativeDockPanelType(normalizedType))
@@ -4650,6 +4923,8 @@ QString PanelWindow::createNativePanel(const QString &edge, const QString &type)
 
 QVariantMap PanelWindow::createFreePanel()
 {
+    if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
+
     const QList<QScreen *> screens = QGuiApplication::screens();
     ArchDock::FreePanelCreationRequest request;
     request.origin = ArchDock::FreePanelCreationOrigin::Studio;
@@ -4675,6 +4950,8 @@ QVariantMap PanelWindow::createFreePanelFromTemplate(
     int containmentId,
     const QString &ownershipToken)
 {
+    if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
+
     ArchDock::FreePanelCreationRequest request;
     request.origin = ArchDock::FreePanelCreationOrigin::TemplateBridge;
     request.bridgeContainmentId = containmentId;
@@ -4698,6 +4975,8 @@ QVariantMap PanelWindow::adoptFreePanelApplet(
     int desktopContainmentId,
     int dockAppletId)
 {
+    if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
+
     ArchDock::FreePanelCreationRequest request;
     request.origin = ArchDock::FreePanelCreationOrigin::ExistingApplet;
     request.existingDesktopContainmentId = desktopContainmentId;
@@ -5516,6 +5795,8 @@ print("ARCHDOCK_RESULT:" + String(outcome));
 
 void PanelWindow::saveFreePanelPosition(const QString &panelId, int x, int y)
 {
+    if (profileBusy()) return;
+
     if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() != QStringLiteral("free"))
         return;
     m_panelRegistry.updatePanel(panelId, {
@@ -5525,6 +5806,8 @@ void PanelWindow::saveFreePanelPosition(const QString &panelId, int x, int y)
 
 bool PanelWindow::setNativePanelType(const QString &panelId, const QString &type)
 {
+    if (profileBusy()) return false;
+
     const QString normalizedType = type.trimmed().toLower();
     if (!m_panelRegistry.panelIds().contains(panelId) ||
         !isNativeDockPanelEdge(m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString()) ||
@@ -6539,6 +6822,8 @@ bool PanelWindow::synchronizeNativePanelVisibility(const QString &panelId,
 
 bool PanelWindow::adoptNativePanelOwnership(const QString &panelId, int containmentId)
 {
+    if (profileBusy()) return false;
+
     if (nativePanelIsOwned(panelId, containmentId))
     {
         return true;
@@ -6827,6 +7112,8 @@ ArchDock::PlasmaPanelPlacementApplyResult PanelWindow::applyNativePanelPlacement
 QVariantMap PanelWindow::applyNativePanelPlacementDraft(const QString &panelId,
                                                         const QVariantMap &values)
 {
+    if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
+
     QVariantMap candidate = values;
     for (auto iterator = candidate.cbegin(); iterator != candidate.cend(); ++iterator)
     {
@@ -7062,6 +7349,8 @@ bool PanelWindow::attachNativeDockApplet(const QString &panelId, int containment
 
 bool PanelWindow::createNativeKdePanel(const QString &panelId)
 {
+    if (profileBusy()) return false;
+
     if (!m_panelRegistry.panelIds().contains(panelId))
     {
         return false;
@@ -7236,6 +7525,8 @@ bool PanelWindow::createNativeKdePanel(const QString &panelId)
 
 bool PanelWindow::addKdeWidget(const QString &panelId, const QString &appletId)
 {
+    if (profileBusy()) return false;
+
     const QString pluginId = appletId.trimmed();
     if (!m_panelRegistry.panelIds().contains(panelId) || pluginId.isEmpty())
     {
@@ -7280,6 +7571,8 @@ bool PanelWindow::addKdeWidget(const QString &panelId, const QString &appletId)
 
 bool PanelWindow::removeNativeKdePanel(const QString &panelId)
 {
+    if (profileBusy()) return false;
+
     if (!m_panelRegistry.panelIds().contains(panelId))
     {
         return false;
@@ -7416,6 +7709,8 @@ bool PanelWindow::removeNativeKdePanel(const QString &panelId)
 
 void PanelWindow::removePanel(const QString &panelId)
 {
+    if (profileBusy()) return;
+
     if (!m_panelRegistry.panelIds().contains(panelId))
     {
         return;
@@ -7601,12 +7896,16 @@ void PanelWindow::presentUtilityWindow(QWindow *window)
 
 void PanelWindow::resetSettings()
 {
+    if (profileBusy()) return;
+
     m_settings.reset();
     syncRegistryFromLegacySettings();
 }
 
 void PanelWindow::toggleAutoHide()
 {
+    if (profileBusy()) return;
+
     const bool autoHide = m_panelRegistry.panelValue(
         QStringLiteral("bottom"),
         QStringLiteral("visibilityMode")).toString() == QStringLiteral("auto-hide");
@@ -7617,12 +7916,16 @@ void PanelWindow::toggleAutoHide()
 
 void PanelWindow::toggleDesktopSuite()
 {
+    if (profileBusy()) return;
+
     m_settings.setDesktopSuite(!m_settings.desktopSuite());
     syncRegistryFromLegacySettings();
 }
 
 void PanelWindow::toggleTopLauncher()
 {
+    if (profileBusy()) return;
+
     const bool launcherVisible = !m_settings.topLauncherVisible();
     if (!setPanelVisible(
             QStringLiteral("top"),
@@ -7635,6 +7938,8 @@ void PanelWindow::toggleTopLauncher()
 
 void PanelWindow::toggleSideRail()
 {
+    if (profileBusy()) return;
+
     const bool railVisible = !m_settings.sideRailVisible();
     if (!setPanelVisible(
             QStringLiteral("side"),
@@ -7647,6 +7952,8 @@ void PanelWindow::toggleSideRail()
 
 void PanelWindow::toggleBottomPanel()
 {
+    if (profileBusy()) return;
+
     const bool visible = !m_panelRegistry.panelValue(
         QStringLiteral("bottom"), QStringLiteral("visible")).toBool();
     if (!setPanelVisible(QStringLiteral("bottom"), visible))
@@ -7661,6 +7968,8 @@ void PanelWindow::toggleBottomPanel()
 
 void PanelWindow::applyProfile(const QString &profileName)
 {
+    if (profileBusy()) return;
+
     m_settings.applyProfile(profileName);
     syncRegistryFromLegacySettings();
 }

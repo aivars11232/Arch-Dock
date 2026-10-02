@@ -394,3 +394,57 @@ its verified token association. Do not delete a desktop applet by a saved
 numeric id alone. If Arch Dock reports a conflict or query failure, preserve the
 record and inspect the token matches in a disposable session before attempting
 manual cleanup.
+
+## Complete managed profile arrangements
+
+TASK-0042 adds an explicit full-set transaction alongside the existing
+single-panel settings and preset audition paths. Every previous owned native
+or free host is backed up before mutation. New hosts are verified before old
+hosts are removed, and the registry publishes one complete checked set only
+after host readback succeeds. Native visibility uses the existing adapter
+without an independent settings callback; rollback restores its captured
+physical hiding mode and temporary visibility marker.
+
+Ownership still requires the logical ID, exact token and verified native
+renderer/free applet association. A numeric ID is never sufficient. Rollback
+removes provisional hosts by their recorded tokens, and recreates a missing
+previous host only under its original token. Changed physical associations
+are committed together. Concurrent registry changes and uncertain ownership
+retain a BLOCKED recovery record rather than overwriting another operation.
+
+An interrupted profile transaction blocks automatic lifecycle synchronization
+at startup. Opening the store or Studio does not apply a profile. The explicit
+Recover Interrupted Apply action retries the authoritative record after
+interaction guards clear. The backup and diagnostics are described in
+[PROFILE_PACKAGE.md](PROFILE_PACKAGE.md).
+
+The private Wayland check reuses this document's existing staged launcher,
+unrelated panel and desktop applet sentinels and teardown. Run it alone:
+
+```bash
+ctest --test-dir build-codex-task-0042 --parallel 1 --stop-on-failure \
+  --output-on-failure -R '^profile-matrix-apply$'
+```
+
+The harness requires the existing PySide6/GTK observer dependencies and starts
+its own D-Bus/KWin/Plasma session. It covers data-only capture/import,
+native/free set replacement, native auto-hide, write-refusal rollback, and
+explicit recovery of a durable interrupted-apply fixture. It does not constitute
+physical GPU, monitor hotplug or personal-desktop release acceptance.
+
+The separate shortcut group uses the same private launcher and sentinels:
+
+```bash
+ctest --test-dir build-codex-task-0042 --parallel 1 --stop-on-failure \
+  --output-on-failure -R '^profile-matrix-shortcuts$'
+```
+
+It verifies explicit opt-in, real GlobalAccel key readback, a conflict with
+another profile and an occupied KDE key, and unchanged native key owners after
+both refusals. Native component `invokeShortcut` activates the renamed stable
+profile ID, and the test waits for the authoritative completed full-set
+transaction and restored panel settings. Invalid targets create no native
+action; disable and deletion are checked against native key readback. This is
+real native D-Bus activation evidence, without a claim of physical keyboard
+delivery. Run the groups sequentially. Neither harness connects to the
+personal session or installs globally.

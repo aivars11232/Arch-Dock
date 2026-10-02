@@ -14,6 +14,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core DBus Gui Network Qml Quick)
 find_package(KF6Kirigami REQUIRED)
 find_package(KF6Service REQUIRED)
 find_package(KF6KIO REQUIRED)
+find_package(KF6GlobalAccel REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -147,6 +148,17 @@ add_custom_target(
   DEPENDS ${ARCHDOCK_RENDERING_MODULE_SOURCES}
   COMMENT "Preparing the ArchDock.Rendering QML module")
 
+qt_add_library(archdock-profile-backend STATIC
+  src/persistence/ProfileStore.h src/persistence/ProfileStore.cpp
+  src/panel/ProfileApplyTransaction.h src/panel/ProfileApplyTransaction.cpp
+  src/panel/ProfileManager.h src/panel/ProfileManager.cpp
+  src/integration/ProfileShortcutManager.h src/integration/ProfileShortcutManager.cpp
+  src/model/PanelDefinition.cpp src/model/PanelSettingsSchema.cpp
+  src/model/PanelRuntimeState.cpp src/model/SettingsMigration.cpp
+  src/model/ThemeDefinition.cpp src/themes/ThemePackage.cpp)
+target_include_directories(archdock-profile-backend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(archdock-profile-backend PUBLIC Qt6::Core PRIVATE Qt6::Gui Qt6::DBus KF6::GlobalAccel)
+
 qt_add_executable(
   arch-dock
   src/main.cpp
@@ -261,6 +273,7 @@ qt_add_qml_module(
   qml/runtime/PresetBrowser.qml
   qml/runtime/PresetAuditionBar.qml
   qml/runtime/PresetCard.qml
+  qml/runtime/ProfilePage.qml
   qml/runtime/SettingsEditorModel.js
   qml/runtime/VisibilityStatus.js
   qml/runtime/StudioDraft.js
@@ -286,7 +299,8 @@ qt_add_resources(
 
 target_link_libraries(
   arch-dock
-  PRIVATE Qt6::Core
+  PRIVATE archdock-profile-backend
+          Qt6::Core
           Qt6::DBus
           Qt6::Gui
           Qt6::Network
@@ -349,6 +363,15 @@ if(BUILD_TESTING)
     PRIVATE Qt6::Core
             Qt6::Test)
   add_test(NAME panel-model-test COMMAND panel-model-test)
+
+  qt_add_executable(profile-store-test tests/ProfileStoreTest.cpp)
+  qt_add_executable(profile-apply-transaction-test tests/ProfileApplyTransactionTest.cpp)
+  qt_add_executable(profile-manager-test tests/ProfileManagerTest.cpp)
+  qt_add_executable(profile-shortcut-manager-test tests/ProfileShortcutManagerTest.cpp)
+  foreach(profile_test profile-store-test profile-apply-transaction-test profile-manager-test profile-shortcut-manager-test)
+    target_link_libraries(${profile_test} PRIVATE archdock-profile-backend Qt6::Test)
+    add_test(NAME ${profile_test} COMMAND ${profile_test})
+  endforeach()
 
   qt_add_executable(
     preset-definition-test
@@ -1096,7 +1119,7 @@ if(BUILD_TESTING)
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
   target_link_libraries(
     panel-window-capability-test
-    PRIVATE Qt6::Core
+    PRIVATE archdock-profile-backend Qt6::Core
             Qt6::DBus
             Qt6::Gui
             Qt6::Network
@@ -1528,6 +1551,20 @@ if(BUILD_TESTING)
             -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PresetAudition.qml)
   set_tests_properties(preset-audition-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(NAME profile-page-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+      -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_ProfilePage.qml)
+  set_tests_properties(profile-page-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+  foreach(profile_matrix_group apply shortcuts)
+    add_test(NAME profile-matrix-${profile_matrix_group}
+      COMMAND ${CMAKE_COMMAND} -E env
+        ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+        ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
+        bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-profile-matrix.sh ${profile_matrix_group})
+    set_tests_properties(profile-matrix-${profile_matrix_group} PROPERTIES
+      RUN_SERIAL TRUE TIMEOUT 420 DEPENDS "profile-apply-transaction-test;profile-shortcut-manager-test")
+  endforeach()
 
   set(preset_matrix_previous preset-audition-test)
   foreach(preset_matrix_group existing temporary icons recovery defaults)

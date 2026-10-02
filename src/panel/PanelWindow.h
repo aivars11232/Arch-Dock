@@ -26,6 +26,7 @@
 #include "../presets/PresetPreviewSession.h"
 #include "FreePanelController.h"
 #include "PanelContentTransaction.h"
+#include "ProfileManager.h"
 
 class QQmlApplicationEngine;
 class QScreen;
@@ -204,6 +205,10 @@ signals:
     void nativePanelRecoveryFinished();
 
 private:
+    [[nodiscard]] ArchDock::ProfileApplyTransaction::Operations profileOperations();
+    [[nodiscard]] bool profileBusy() const;
+    [[nodiscard]] ArchDock::PresetPreviewRecord profileHostRecord(
+        const ArchDock::PanelDefinition &definition) const;
     [[nodiscard]] QUrl panelFolderUrl(const QString &panelId, const QString &appId) const;
 
     enum class NativePanelDiscoveryStatus
@@ -258,8 +263,10 @@ private:
     bool setPresetFreeHostGeometry(const ArchDock::PanelDefinition &definition,
         const QVariantMap &geometry, QString *errorCode) const;
     bool capturePresetPreviewHost(ArchDock::PresetPreviewRecord &record, QString *errorCode) const;
-    bool restorePresetPreviewHost(const ArchDock::PresetPreviewRecord &record, QString *errorCode) const;
-    bool removePresetPreviewHost(const ArchDock::PresetPreviewRecord &record, QString *errorCode) const;
+    bool restorePresetPreviewHost(const ArchDock::PresetPreviewRecord &record, QString *errorCode,
+        bool profileTransaction = false) const;
+    bool removePresetPreviewHost(const ArchDock::PresetPreviewRecord &record, QString *errorCode,
+        bool profileTransaction = false) const;
     bool recoverPresetPreviewHost(const ArchDock::PresetPreviewRecord &record, QString *errorCode);
     bool applyPresetDefaultsToNewPanel(const QString &panelId, QString *errorCode);
     [[nodiscard]] QVariantMap commitIconOverrideTransaction(
@@ -368,6 +375,10 @@ private:
         const QString &panelId,
         ArchDock::PanelVisibilityMode mode,
         bool visible) const;
+    [[nodiscard]] ArchDock::PanelVisibilityDecision nativePanelVisibilityDecision(
+        const ArchDock::PanelDefinition &definition,
+        ArchDock::PanelVisibilityMode mode,
+        bool visible) const;
     bool reconcileNativePanelVisibility(
         const QString &panelId,
         int containmentId,
@@ -432,6 +443,7 @@ private:
     PanelRegistry m_panelRegistry;
     ArchDock::PresetLibrary m_presetLibrary;
     ArchDock::PresetPreviewSession *m_presetAudition = nullptr;
+    ArchDock::ProfileManager *m_profileManager = nullptr;
     SystemStatus m_systemStatus;
     ArchDock::OverlayModel m_overlayModel;
     QTimer m_contentTimer;

@@ -3310,6 +3310,8 @@ run_outer() {
         ARCHDOCK_LIFECYCLE_STOP_AFTER="${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}" \
         ARCHDOCK_PRESET_MATRIX_GROUP="${ARCHDOCK_PRESET_MATRIX_GROUP:-}" \
         ARCHDOCK_PRESET_MATRIX_SCRIPT="$project_root/tests/run-preset-audition-matrix.sh" \
+        ARCHDOCK_PROFILE_MATRIX_GROUP="${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" \
+        ARCHDOCK_PROFILE_MATRIX_SCRIPT="$project_root/tests/run-profile-matrix.sh" \
         ARCHDOCK_PRESET_BUILTIN_ROOT="$stage_root/share/arch-dock/presets" \
         ARCHDOCK_SESSION_TIMEOUT="${ARCHDOCK_SESSION_TIMEOUT:-300}" \
         ARCHDOCK_PLASMA_LIFECYCLE_SESSION=1 \
@@ -3345,6 +3347,11 @@ run_outer() {
         mkdir -p "$matrix_logs"
         cp "$log_dir"/*.log "$matrix_logs/"
     fi
+    if [[ -n "${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" ]]; then
+        local profile_logs="$build_dir/profile-matrix-${ARCHDOCK_PROFILE_MATRIX_GROUP}"
+        mkdir -p "$profile_logs"
+        cp "$log_dir"/*.log "$profile_logs/"
+    fi
     local session_status=''
     if [[ -f "$session_result_file" ]]; then
         session_status="$(<"$session_result_file")"
@@ -3359,7 +3366,11 @@ run_outer() {
         exit 1
     }
 
-    if [[ -n "${ARCHDOCK_PRESET_MATRIX_GROUP:-}" ]]; then
+    if [[ -n "${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" ]]; then
+        cleanup_outer
+        ARCHDOCK_LIFECYCLE_STATE_ROOT=''
+        printf 'Isolated Plasma TASK-0042 profile group %s succeeded.\n' "$ARCHDOCK_PROFILE_MATRIX_GROUP"
+    elif [[ -n "${ARCHDOCK_PRESET_MATRIX_GROUP:-}" ]]; then
         cleanup_outer
         ARCHDOCK_LIFECYCLE_STATE_ROOT=''
         printf 'Isolated Plasma TASK-0041 preset group %s succeeded.\n' "$ARCHDOCK_PRESET_MATRIX_GROUP"
@@ -3375,7 +3386,10 @@ run_outer() {
 if [[ "${ARCHDOCK_TRANSACTION_PARSER_FIXTURE:-}" == '1' ]]; then
     run_transaction_parser_fixture
 elif [[ "${ARCHDOCK_PLASMA_LIFECYCLE_SESSION:-}" == '1' ]]; then
-    if [[ -n "${ARCHDOCK_PRESET_MATRIX_GROUP:-}" ]]; then
+    if [[ -n "${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" ]]; then
+        source "$ARCHDOCK_PROFILE_MATRIX_SCRIPT"
+        run_profile_matrix
+    elif [[ -n "${ARCHDOCK_PRESET_MATRIX_GROUP:-}" ]]; then
         source "$ARCHDOCK_PRESET_MATRIX_SCRIPT"
         run_preset_audition_matrix
     else

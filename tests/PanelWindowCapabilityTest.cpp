@@ -121,6 +121,7 @@ private slots:
     void desktopLaunchIsBoundToTheSelectedPanelEntry();
     void folderRequestsValidatePanelAndChild();
     void studioPresetPagesBrowseWithoutChangingAnyPanel();
+    void profileServicePersistsAndHonorsPanelGuards();
     void presetAuditionGuardsAndInvalidRequestsLeaveNoWrites();
     void presetDefaultsDoNotRewriteExistingInstances();
 
@@ -2417,6 +2418,39 @@ void PanelWindowCapabilityTest::presentationProfileIsPublishedForLaterPresets()
         QStringLiteral("availableMechanisms")).toStringList();
     QVERIFY(available.contains(QStringLiteral("open")));
     QVERIFY(!available.contains(QStringLiteral("split")));
+}
+
+void PanelWindowCapabilityTest::profileServicePersistsAndHonorsPanelGuards()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    auto *profiles = qobject_cast<ArchDock::ProfileManager *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("profileManager")).value<QObject *>());
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("panelRegistry")).value<QObject *>());
+    QVERIFY(profiles);
+    QVERIFY(registry);
+    const auto before = registry->panelDefinitions();
+    QVERIFY(profiles->listProfiles().isEmpty());
+    const auto created = profiles->createProfile(QStringLiteral("Current arrangement"));
+    QVERIFY2(created.value(QStringLiteral("success")).toBool(), qPrintable(created.value(QStringLiteral("errorCode")).toString()));
+    const QString id = created.value(QStringLiteral("profileId")).toString();
+    const auto saved = ArchDock::ProfileStore().load(id);
+    QVERIFY(saved);
+    QCOMPARE(saved->panels, ArchDock::ProfileDefinition::capture(saved->name, before).panels);
+    QVERIFY(window.reportPanelInteractionGuards(QStringLiteral("bottom"),
+        {{QStringLiteral("editMode"), true}, {QStringLiteral("popupOpen"), false}, {QStringLiteral("dragActive"), false}}));
+    const auto refused = profiles->applyProfile(id, 1);
+    QVERIFY(!refused.value(QStringLiteral("success")).toBool());
+    QCOMPARE(refused.value(QStringLiteral("errorCode")).toString(), QStringLiteral("edit-mode-active"));
+    QCOMPARE(registry->panelDefinitions(), before);
+    QVERIFY(!QFileInfo::exists(ArchDock::ProfileApplyTransaction::defaultJournalPath()));
+    QVERIFY(window.reportPanelInteractionGuards(QStringLiteral("bottom"),
+        {{QStringLiteral("editMode"), false}, {QStringLiteral("popupOpen"), false}, {QStringLiteral("dragActive"), false}}));
+    QVERIFY(profiles->renameProfile(id, 1, QStringLiteral("Renamed arrangement")).value(QStringLiteral("success")).toBool());
+    QCOMPARE(ArchDock::ProfileStore().load(id)->name, QStringLiteral("Renamed arrangement"));
+    QVERIFY(profiles->deleteProfile(id, 2).value(QStringLiteral("success")).toBool());
+    QVERIFY(profiles->listProfiles().isEmpty());
 }
 
 void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()

@@ -2972,3 +2972,182 @@ push was performed in this resumed continuation. Suggested closure commit:
 `Complete TASK-0041 audition verification and documentation`.
 The owner-requested checkpoint commit/push on 2026-10-01 remains intact.
 No agents, global installation or personal-desktop mutation were used.
+
+## TASK-0042 — complete profile management and KDE shortcuts — 2026-10-02
+
+**COMPLETE: Phases A, B, C and the separate fresh consolidated gate PASS.**
+Entry was clean `main` at `96ea9e070a9805026b01ded008dfbf11c85c0b4a`, with
+TASK-0041 closed by current source and its 87/87 verification record. The
+consolidated reference pack was inventoried (175 files); all 174 entries in
+`SHA256SUMS.txt` passed. Contracts, tied specifications and legacy tasks
+0079–0081 governed one approved plan. The owner approved exact implementation
+and subsequently requested commit and sync after completion.
+
+This record supersedes earlier statements that profiles and shortcuts are
+future work. TASK-0043 packaging/startup, TASK-0044 platform hardening and
+TASK-0045 release regression remain outside this task.
+
+### Implemented behavior and reuse
+
+- **A — store/schema:** `ProfileStore.*` stores version-1 named complete panel
+  sets, revisions, screen policy, metadata and optional preset lineage.
+  Existing panel serialization/migration retains durable settings and strips
+  live associations and transient state. Missing references resolve safely on
+  an effective copy. Listing/loading never applies a profile. Explicit capture
+  supplies the current arrangement rather than inventing a default panel set.
+- **B — management/transaction:** `ProfileManager.*`, `ProfileApplyTransaction.*`
+  and full-set `PanelRegistry` operations provide CRUD, data-only import/export,
+  one checked registry publication, a write-ahead owned-host backup, rollback
+  and explicit interrupted recovery. Import generates new local identities.
+  Assets reuse `ThemePackage` validation/materialization with managed-path,
+  bounded-transfer and strict non-executable SVG checks. Import/export share
+  portable path validation, including literal Unicode and spaces.
+- `PanelWindow` reuses existing owned native/free capture, creation, geometry,
+  readback and cleanup helpers. Native visibility uses the existing Plasma
+  adapter without an independent settings write during a transaction.
+  Restoration checks exact tokens and full-set revisions. Uncertain ownership,
+  concurrent changes or partial restoration retain a precise BLOCKED record.
+  A moved free panel receives a verified replacement before old-host removal.
+- **C — shortcuts:** `ProfileShortcutManager.*` uses KDE GlobalAccel, stable
+  profile-ID QActions and `NoAutoloading`. Exact/prefix conflict checks and
+  native readback prevent stealing keys. Explicit opt-in and assignments live
+  separately from portable profiles. Activation resolves the latest saved
+  revision and uses the same apply transaction. Delete/off/shutdown remove
+  owned registrations; failed cleanup exposes actual remaining action IDs and
+  keys and allows a retry. Invalid profiles cannot register or activate.
+- `ProfilePage.qml` and `SettingsPopup.qml` provide explicit profile and shortcut
+  controls, revision-aware requests, conflicts, transaction/recovery status and
+  draft/audition guards. No selection or import implicitly applies a profile.
+  The legacy `/Control.applyProfile` appearance selector keeps its contract;
+  complete arrangements and shortcuts use `/Profiles`, `org.archdock.Profiles`.
+- CMake shares the profile backend across application/tests, packages the page
+  and links `KF6::GlobalAccel`. New tests reuse the existing disposable Plasma
+  launcher and unrelated-object sentinels. No second compositor harness,
+  privileged key hook, preset/audition implementation or successor feature
+  was introduced. See [PROFILE_PACKAGE.md](PROFILE_PACKAGE.md) and
+  [plasma-lifecycle.md](plasma-lifecycle.md#complete-managed-profile-arrangements).
+
+### Gates and fresh evidence
+
+All builds used **one compile job**. CTests ran serially in bounded name batches;
+each private runtime check ran alone. No agents or concurrent gates were used.
+
+| Gate | Result | Summed successful test seconds |
+| --- | --- | --- |
+| Phase A, legacy TASK-0079 | 88/88 PASS; fresh build green | 443.36 |
+| Phase B, legacy TASK-0080 | 92/92 PASS; boundary build and final four profile checks green | 444.89 |
+| Phase C, legacy TASK-0081 | 94/94 PASS; full build green | 461.12 |
+| Separate fresh consolidated build/suite | 94/94 PASS | 478.24 |
+
+The fresh final configure used a separate empty `build-codex-task-0042-final`,
+default AUTO Quick3D and the installed Qt module. Seven bounded target groups
+(36 test executables plus application/rendering module) passed in **1053.41 s**
+of summed build-command time; the subsequent all-target build also passed.
+No compiled project output or CMake cache was reused. Only the local test
+Python environment was reused. Final JUnit was matched against the configured
+94 unique names: every CTest ran, with zero failures/errors/CTest skips. Some
+older offscreen QtTest cases deliberately defer private-only behavior to their
+separate runtime companions; the CTest count does not assert zero internal
+QtTest skips across the entire project.
+
+Final new-backend QtTest totals (including initialization/cleanup): store 16,
+transaction 10, manager 7, shortcut adapter 10, all PASS. The profile page has
+explicit management, guard and shortcut-control coverage. Real private runtime
+observations include:
+
+| Final runtime check | Result | Seconds |
+| --- | --- | --- |
+| Staged rendering/Studio | PASS | 82.56 |
+| Native/free window interaction | PASS | 64.16 |
+| Folder/segment interaction | PASS | 64.00 |
+| Staged preset resources | PASS | 18.14 |
+| Existing/temporary/icon/recovery/default preset scenarios | All five PASS | 116.85 |
+| Profile matrix apply | PASS | 22.28 |
+| Profile matrix shortcuts | PASS | 15.59 |
+
+Profile P1 imported a native/free arrangement without applying it, then applied
+the declared logical set with verified native auto-hide and owned free geometry.
+P2 refused a read-only registry destination and restored exact previous native
+placement/visibility, free geometry and registry. P3 restarted with a durable
+interrupted record: no automatic restoration occurred, and explicit recovery
+restored the verified backup. Unrelated panel and desktop-applet sentinels
+remained unchanged through every scenario.
+
+Shortcut S1 checked explicit opt-in and actual native key registration. S2
+refused another profile's key and an occupied KDE key without changing either
+native owner. S3 invoked the real native component action for a renamed stable
+ID and waited for its authoritative completed full-set transaction. S4 proved
+invalid IDs create no action, disable removes keys, re-enable restores the
+saved assignment and deletion removes it. Unit adapters also prove stale
+revision/interaction rejection, failed readback, configuration-write rollback
+and visible, retryable incomplete native cleanup.
+
+### Inherited criteria
+
+| Phase / inherited criterion | Status | Evidence |
+| --- | --- | --- |
+| A: round-trip complete panel data | PASS | Store parser/round-trip tests |
+| A: safe missing-reference fallback | PASS | Effective reference tests and preparation |
+| A: exclude runtime hover/transition state | PASS | Portable serializer and runtime-claim rejection |
+| A: load does not apply | PASS | Store/manager tests; private capture/import |
+| B: persistent CRUD/import/export controls | PASS | Manager, store and QML controls |
+| B: declared managed panel set | PASS | Transaction tests and private P1 |
+| B: usable previous state or precise recovery | PASS | Failure/partial-record tests and P2/P3 |
+| B: preserve unrelated Plasma objects | PASS | Exact-token guards and all private sentinels |
+| C: correct profile transaction on activation | PASS | Manager adapter and native S3 |
+| C: visible non-destructive conflicts | PASS | Adapter/UI tests and native S2 |
+| C: deletion removes shortcut | PASS | Manager tests and native S4 readback |
+| C: invalid profile has no registration | PASS | Adapter/store tests and native S4 action list |
+
+### Corrections, reproducibility and cleanup
+
+Focused failures were resolved before continuing: the Phase A ID parser needed
+absolute anchors to reject a trailing newline; Phase B's artwork fixture needed
+the existing stable desktop-entry identity and its import/export path needed
+strict SVG rejection beyond the reused legacy validator. A Phase B compile
+call needed the existing publication boolean. The initial private fixture read
+the registry association before readiness; it now waits for both the owned host
+and authoritative association. Each proved cause received one focused
+correction and a passing rerun. Filename symmetry and native failure reporting
+were then checked before the full Phase C and final gates. No unresolved
+failure, waived assertion or successor-task workaround remains.
+
+Commands used: `cmake -S . -B build-codex-task-0042-final`; per-group
+`cmake --build build-codex-task-0042-final --parallel 1 --target <targets>`;
+then `cmake --build build-codex-task-0042-final --parallel 1`. CTests used
+`--parallel 1 --stop-on-failure --output-on-failure`, exact name-regex batches
+and one JUnit file per batch. The task-local dependency setup was
+`uv venv --system-site-packages --python /usr/bin/python build-codex-task-0042/test-python`
+and bounded `uv pip install --no-cache --python build-codex-task-0042/test-python/bin/python PySide6==6.11.2`.
+No package was installed globally.
+
+Equivalent bounded full-suite reproduction for the current 94-test ordering:
+
+```bash
+export PATH="$PWD/build-codex-task-0042/test-python/bin:$PATH"
+export QT_FORCE_STDERR_LOGGING=1 CMAKE_BUILD_PARALLEL_LEVEL=1
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/archdock-task0042-parent-bus
+for range in 1,8 10,11 12,21 22,31 9,9 32,34 35,35 36,45 46,55 56,65 \
+             66,68 69,69 70,70 71,71 72,76 77,77 78,80 83,83 84,84 \
+             85,85 86,86 87,87 88,94 81,81 82,82; do
+    ctest --test-dir build-codex-task-0042-final --parallel 1 \
+        --stop-on-failure --output-on-failure -I "$range" || break
+done
+```
+
+Platform: Qt base 6.11.2-3, declarative 6.11.2-2, Quick3D 6.11.2-1;
+KWin/Plasma 6.7.5-1; GlobalAccel 6.30.0-1 and daemon 6.7.5-1. Disposable
+D-Bus/KWin Wayland/PlasmaShell and native component activation establish task
+acceptance. Physical keyboard/GPU/monitor, hardware hotplug, personal-desktop
+and release acceptance are not established. The pre-existing
+`PanelScene.qml:196` sequence warning remains outside the approved task.
+
+Cleanup PASS: all 15 recorded private runtime roots are absent and no
+task-owned process remains. Both task build directories, local Python environment,
+staged installations, raw diagnostics and temporary runners were removed after
+recording the results. Pre-existing `build-codex-task-0014` was preserved.
+Raw logs are historical observations now; reproducible commands and results
+above are the retained evidence. Only the 28 approved task source/test/document
+paths changed. Document links and `git diff --check` pass. No personal Plasma
+session was restarted or modified. Owner-authorized Git closure uses
+`Complete Arch Dock profile management`; this record does not claim a release.

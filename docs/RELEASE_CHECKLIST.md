@@ -476,3 +476,34 @@ mutation were used in this resumed continuation.
 These private virtual Wayland checks do not close personal-desktop, physical
 GPU/monitor, hardware hotplug or general release acceptance. Broader release
 checkboxes above remain unchanged.
+
+## TASK-0042 profile management and shortcuts verification — 2026-10-02
+
+**COMPLETE.** All inherited criteria for legacy TASK-0079, TASK-0080 and
+TASK-0081 passed in order. Phase A passed 88/88 CTests, Phase B 92/92 and
+Phase C 94/94, with green builds. A separate empty final configure and seven
+bounded one-job build groups passed, followed by the all-target build and
+94/94 fresh CTests in 23 serial batches (478.24 s summed test time).
+
+Profiles retain complete durable panel sets while excluding live/runtime
+state. Persistent CRUD, safe data-only import/export, declared-set apply,
+verified native/free rollback and explicit interrupted recovery passed.
+Real private GlobalAccel registration/readback, stable-ID activation through
+the same transaction, visible local/KDE conflicts, invalid-target rejection,
+disable and deletion cleanup passed. Unrelated native panel and desktop-applet
+sentinels remained unchanged. The profile and shortcut controls have QML and
+backend coverage.
+
+All 15 recorded private runtime roots are absent, no task-owned process
+remains, and both task builds/local dependency environment were removed.
+Pre-existing build directories were preserved. No agents, concurrent gates,
+global installation or personal Plasma mutation were used. The owner requested
+commit and sync after completion. This task does not establish physical key,
+GPU/monitor, hotplug, clean-clone packaging or release acceptance; the broader
+checkboxes remain open. The pre-existing PanelScene sequence warning remains
+outside this task.
+
+See [the TASK-0042 current-state record](CURRENT_STATE.md#task-0042--complete-profile-management-and-kde-shortcuts--2026-10-02),
+[PROFILE_PACKAGE.md](PROFILE_PACKAGE.md) and
+[the private runtime contract](plasma-lifecycle.md#complete-managed-profile-arrangements)
+for criteria, exact observations, corrections, commands and scope limits.
