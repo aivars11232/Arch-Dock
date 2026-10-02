@@ -273,6 +273,29 @@ TestCase {
         compare(skin.errorReason, "")
     }
 
+    function test_replacedAlphaMasksReleaseCanvasImages() {
+        const skin = createSkin("sci-fi-chassis-dark")
+        waitForRenderer(skin)
+        const canvas = findChild(skin, "alphaHitMaskCanvas")
+        verify(canvas !== null)
+        const mask = canvas.parent
+        const original = mask.source
+        verify(canvas.isImageLoaded(original))
+        const replacement = Qt.resolvedUrl(
+            "../assets/themes/sci-fi-chassis-blue/masks/input.svg")
+        mask.source = replacement
+        tryVerify(function() { return mask.ready }, 3000)
+        verify(canvas.isImageLoaded(replacement))
+        verify(!canvas.isImageLoaded(original))
+        verify(mask.contains(Qt.point(300, 40)))
+        verify(!mask.contains(Qt.point(0, 0)))
+        mask.source = ""
+        compare(mask.ready, false)
+        compare(mask.alphaBytes, null)
+        verify(!canvas.isImageLoaded(replacement))
+        verify(!mask.contains(Qt.point(300, 40)))
+    }
+
     function test_originalPackagesRenderWithStableCaps_data() {
         return [
             { tag: "dark", themeId: "sci-fi-chassis-dark" },

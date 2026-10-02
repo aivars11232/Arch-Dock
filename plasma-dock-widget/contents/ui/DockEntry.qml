@@ -60,6 +60,44 @@ Item {
         entry && entry.iconOverrideResolution
         ? entry.iconOverrideResolution : ({})
 
+    activeFocusOnTab: false
+    Accessible.role: Accessible.Button
+    Accessible.name: String(entry.displayName || entry.label || entry.appId || "")
+    Accessible.focusable: activeFocusOnTab
+    Accessible.onPressAction: activateEntry()
+    Keys.onReturnPressed: activateEntry()
+    Keys.onEnterPressed: activateEntry()
+    Keys.onSpacePressed: activateEntry()
+    Keys.onMenuPressed: { if (inputEnabled && entry.isStatus !== true) openEntryContextMenu() }
+    Keys.onPressed: event => {
+        if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)
+                && inputEnabled && entry.isStatus !== true) {
+            openEntryContextMenu()
+            event.accepted = true
+        }
+    }
+
+    function activateEntry() {
+        if (!inputEnabled || dragging || entry.isStatus === true) return false
+        dispatchMotionEvent("click")
+        if (entry.isFolder === true && folderExpandOnClick) {
+            requestFolderExpansion()
+            return true
+        }
+        dispatchMotionEvent("launch-requested")
+        invoke("activateDockEntry", entry.appId, reportLaunchOutcome)
+        return true
+    }
+
+    function updateTabFocus() {
+        const available = inputEnabled && entry && entry.isStatus !== true
+        // Qt refuses to withdraw an item that still owns active focus.
+        if (!available) focus = false
+        activeFocusOnTab = available
+    }
+    onEntryChanged: updateTabFocus()
+    Component.onCompleted: updateTabFocus()
+
     // How far magnification reaches and how it decays. Defaults are the
     // historical curve, so a panel that configures neither behaves as before.
     property real magnificationRadius: 2.4
@@ -236,6 +274,7 @@ Item {
     onContextMenuVisibleChanged:
         setEntryGuard(entryIndex, "menu", contextMenuVisible)
     onInputEnabledChanged: {
+        updateTabFocus();
         if (!inputEnabled) {
             contextMenu.close();
             closeWindowPreview();
@@ -385,20 +424,13 @@ Item {
         onClicked: mouse => {
             if (root.dragging || root.entry.isStatus === true)
                 return;
-            root.dispatchMotionEvent("click");
+            root.forceActiveFocus(Qt.MouseFocusReason);
             if (mouse.button === Qt.RightButton) {
+                root.dispatchMotionEvent("click");
                 root.openEntryContextMenu();
                 return;
             }
-            if (root.entry.isFolder === true && root.folderExpandOnClick) {
-                root.requestFolderExpansion();
-                return; // An unavailable expansion never falls through to launching the folder.
-            }
-            // A launch was asked for. Whether it succeeded is a separate,
-            // verified outcome, reported back through reportLaunchOutcome.
-            root.dispatchMotionEvent("launch-requested");
-            root.invoke("activateDockEntry", root.entry.appId,
-                        root.reportLaunchOutcome);
+            root.activateEntry();
         }
         onPositionChanged: {
             if (drag.active)

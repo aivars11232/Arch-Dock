@@ -78,6 +78,14 @@ Profiles are inert configuration; import does not run a script or install code.
 revisions, resolves effective resources/screens, and captures every owned host
 before mutation. Native snapshots include actual placement, renderer and
 visibility; free snapshots include actual applet geometry. The coordinator
+requires a versioned configuration snapshot after preflight and before its
+first journal or host mutation. If capture/retention fails, apply remains idle
+and no host or registry change occurs. The shared snapshot covers user profiles,
+presets/defaults, managed themes, settings and shortcut data; installed built-ins
+are excluded. The commands and limits are documented in
+[INSTALL.md](INSTALL.md#configuration-recovery-and-upgrades).
+
+The coordinator
 writes an owner-only `profile-apply-journal.json.backup.json` and a recovery
 journal under AppDataLocation before its first host mutation.
 
@@ -107,6 +115,12 @@ profile or changing a host. Recover Interrupted Apply explicitly retries the
 checked restoration or finalizes an already committed, verified set. The
 backup is retained after success; the active recovery journal is removed.
 Inspect `getStatus()` for errors, rollback errors, diagnostics and record paths.
+
+Saving an existing profile whose nested legacy panels require a destructive
+rewrite captures its original bytes first. Current-schema saves do not create
+an unnecessary migration snapshot. Pure loads and future-version rejection
+leave the original file unchanged. Configuration restore refuses pending
+profile recovery so the two journal owners cannot race.
 
 ## KDE profile shortcuts
 

@@ -1,4 +1,5 @@
 #include "panel/ProfileApplyTransaction.h"
+#include "persistence/ConfigurationBackup.h"
 #include <QFile>
 #include <QJsonDocument>
 #include <QTemporaryDir>
@@ -36,6 +37,7 @@ struct Hosts
     {
         ProfileApplyTransaction::Operations op;
         op.guard = [this] { return guard; };
+        op.backupConfiguration = [this](QString *) { events.append("configuration-backup"); return true; };
         op.snapshot = [this](QString *) { return registry; };
         op.matches = [this](const auto &expected, QString *error) {
             if (registry == expected) return true;
@@ -107,6 +109,44 @@ class ProfileApplyTransactionTest final : public QObject
 {
     Q_OBJECT
 private slots:
+    void configurationBackupIsRequiredAndDurableBeforeHostMutation()
+    {
+        QTemporaryDir directory; Hosts hosts;
+        const auto previous = hosts.registry, physical = hosts.physical.values();
+        const QString path = directory.filePath("settings.conf");
+        QFile config(path); QVERIFY(config.open(QIODevice::WriteOnly));
+        QCOMPARE(config.write("original configuration"), qint64(22)); config.close();
+        ConfigurationBackup backup(directory.filePath("backups"), {{"settings", {path, false}}});
+        auto op = hosts.operations();
+        op.backupConfiguration = [&](QString *error) { return !backup.capture("profile-apply", error).isEmpty(); };
+        const auto apply = op.apply;
+        op.apply = [&](const auto &before, const auto &after, QString *error) {
+            if (backup.backups().size() != 1) { if (error) *error = "missing-configuration-backup"; return false; }
+            return apply(before, after, error);
+        };
+        ProfileApplyTransaction transaction(op, directory.filePath("journal.json"));
+        QVERIFY(success(transaction.apply(hosts.profile())));
+        const auto ids = backup.backups(); QCOMPARE(ids.size(), 1);
+        QFile snapshot(directory.filePath("backups/" + ids.first() + "/files/settings/settings.conf"));
+        QVERIFY(snapshot.open(QIODevice::ReadOnly)); QCOMPARE(snapshot.readAll(), QByteArray("original configuration"));
+
+        Hosts refused;
+        const auto registryBefore = refused.registry, physicalBefore = refused.physical.values();
+        auto failure = refused.operations();
+        backup.setCheckpoint([](const QString &point) { return point != "capture-manifest"; });
+        failure.backupConfiguration = [&](QString *error) { return !backup.capture("refused", error).isEmpty(); };
+        const QString failedJournal = directory.filePath("failed-journal.json");
+        ProfileApplyTransaction failed(failure, failedJournal);
+        const auto result = failed.apply(refused.profile());
+        QVERIFY(!success(result)); QCOMPARE(result.value("errorCode").toString(), QString("backup-manifest-failed"));
+        QCOMPARE(refused.registry, registryBefore); QCOMPARE(refused.physical.values(), physicalBefore);
+        QVERIFY(!QFileInfo::exists(failedJournal));
+        QVERIFY(!QFileInfo::exists(failedJournal + ".backup.json"));
+        QVERIFY(!refused.events.contains("apply:bottom"));
+        auto missing = refused.operations(); missing.backupConfiguration = {};
+        ProfileApplyTransaction absent(missing, directory.filePath("absent.json"));
+        QCOMPARE(absent.apply(refused.profile()).value("errorCode").toString(), QString("profile-host-operations-unavailable"));
+    }
     void freeDisplayMoveVerifiesReplacementBeforeRemoval()
     {
         QTemporaryDir directory; Hosts hosts;

@@ -73,6 +73,12 @@ function reportWindow(window) {
 }
 
 print(probeTag + "_BEGIN");
+for (let index = 0; index < workspace.screens.length; ++index) {
+    const output = workspace.screens[index];
+    const geometry = output.geometry;
+    print([probeTag + "_SCREEN", index, printable(output.name),
+        geometry.x, geometry.y, geometry.width, geometry.height].join("|"));
+}
 const windows = workspace.windowList();
 for (let index = 0; index < windows.length; ++index) {
     applyRequestedFixtureGeometry(windows[index]);

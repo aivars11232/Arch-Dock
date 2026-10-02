@@ -37,6 +37,13 @@ validate_lifecycle_stop_after() {
         ''|existing|temporary|icons|recovery|defaults) ;;
         *) printf 'Unsupported preset matrix group: %s\n' "$matrix_group" >&2; return 2 ;;
     esac
+    local hardening_group="${ARCHDOCK_HARDENING_MATRIX_GROUP:-}"
+    case "$hardening_group" in
+        ''|scale100|scale125|scale150|scale200|hotplug-recovery|resources) ;;
+        *) printf 'Unsupported hardening group: %s\n' "$hardening_group" >&2; return 2 ;;
+    esac
+    [[ -z "$hardening_group" || ( "$startup" == 0 && -z "$matrix_group" &&
+        -z "${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" && -z "${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}" ) ]] || return 2
     local session_timeout="${ARCHDOCK_SESSION_TIMEOUT:-300}"
     [[ "$session_timeout" =~ ^[0-9]+$ ]] && ((session_timeout >= 30 && session_timeout <= 360)) || {
         printf 'Session timeout must be between 30 and 360 seconds.\n' >&2; return 2;
@@ -3352,6 +3359,11 @@ run_outer() {
         ARCHDOCK_PRESET_MATRIX_SCRIPT="$preset_script" \
         ARCHDOCK_PROFILE_MATRIX_GROUP="${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" \
         ARCHDOCK_PROFILE_MATRIX_SCRIPT="$project_root/tests/run-profile-matrix.sh" \
+        ARCHDOCK_HARDENING_MATRIX_GROUP="${ARCHDOCK_HARDENING_MATRIX_GROUP:-}" \
+        ARCHDOCK_HARDENING_MATRIX_SCRIPT="$project_root/tests/run-wayland-hardening-matrix.sh" \
+        ARCHDOCK_HARDENING_BUILD_DIR="$build_dir" \
+        ARCHDOCK_HARDENING_SOURCE_ROOT="$project_root" \
+        ARCHDOCK_HARDENING_STAGE_PREFIX="$runtime_prefix" \
         ARCHDOCK_STARTUP_SMOKE="${ARCHDOCK_STARTUP_SMOKE:-0}" \
         ARCHDOCK_STARTUP_SCRIPT="$startup_script" \
         ARCHDOCK_STARTUP_SOURCE_ROOT="$project_root" \
@@ -3373,6 +3385,7 @@ run_outer() {
         KDE_FULL_SESSION=true \
         PATH="$runtime_prefix/bin:$PATH" \
         QT_QPA_PLATFORM=wayland \
+        QT_FORCE_STDERR_LOGGING=1 \
         QML_IMPORT_PATH="$runtime_prefix/${ARCHDOCK_QML_INSTALL_DIR:-lib/qt6/qml}${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
         XDG_CACHE_HOME="$ARCHDOCK_LIFECYCLE_STATE_ROOT/cache" \
         XDG_CONFIG_HOME="$ARCHDOCK_LIFECYCLE_STATE_ROOT/config" \
@@ -3400,6 +3413,10 @@ run_outer() {
         cp "$log_dir"/*.log "$profile_logs/"
     fi
     local session_status=''
+    if [[ -n "${ARCHDOCK_HARDENING_MATRIX_GROUP:-}" ]]; then
+        mkdir -p "$build_dir/hardening-${ARCHDOCK_HARDENING_MATRIX_GROUP}"
+        cp "$log_dir"/*.log "$build_dir/hardening-${ARCHDOCK_HARDENING_MATRIX_GROUP}/"
+    fi
     if [[ "${ARCHDOCK_STARTUP_SMOKE:-0}" == 1 ]]; then
         mkdir -p "$build_dir/session-startup-smoke"
         cp "$log_dir"/*.log "$build_dir/session-startup-smoke/"
@@ -3421,6 +3438,10 @@ run_outer() {
         cleanup_outer
         ARCHDOCK_LIFECYCLE_STATE_ROOT=''
         printf 'Isolated Plasma TASK-0043 installed startup succeeded.\n'
+    elif [[ -n "${ARCHDOCK_HARDENING_MATRIX_GROUP:-}" ]]; then
+        cleanup_outer
+        ARCHDOCK_LIFECYCLE_STATE_ROOT=''
+        printf 'Isolated Plasma TASK-0044 hardening group %s succeeded.\n' "$ARCHDOCK_HARDENING_MATRIX_GROUP"
     elif [[ -n "${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" ]]; then
         cleanup_outer
         ARCHDOCK_LIFECYCLE_STATE_ROOT=''
@@ -3444,6 +3465,9 @@ elif [[ "${ARCHDOCK_PLASMA_LIFECYCLE_SESSION:-}" == '1' ]]; then
     if [[ "${ARCHDOCK_STARTUP_SMOKE:-0}" == 1 ]]; then
         source "$ARCHDOCK_STARTUP_SCRIPT"
         run_session_startup_smoke
+    elif [[ -n "${ARCHDOCK_HARDENING_MATRIX_GROUP:-}" ]]; then
+        source "$ARCHDOCK_HARDENING_MATRIX_SCRIPT"
+        run_wayland_hardening_matrix
     elif [[ -n "${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" ]]; then
         source "$ARCHDOCK_PROFILE_MATRIX_SCRIPT"
         run_profile_matrix

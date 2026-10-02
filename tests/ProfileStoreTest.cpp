@@ -1,4 +1,5 @@
 #include "persistence/ProfileStore.h"
+#include "persistence/ConfigurationBackup.h"
 
 #include <QDir>
 #include <QFile>
@@ -159,6 +160,35 @@ private slots:
         QCOMPARE(profile->panels.first().schemaVersion, 2);
         QCOMPARE(profile->panels.first().iconStyle.size, 48);
         QCOMPARE(profile->panels.first().segments.size(), 1);
+    }
+    void legacyRewriteBacksUpAndCanRestoreExactSource()
+    {
+        QTemporaryDir directory;
+        auto value = example().toVariantMap();
+        value["panels"] = QVariantList{QVariantMap{{"id", "legacy"}, {"name", "Legacy"},
+            {"edge", "bottom"}, {"iconSize", 48}}};
+        const auto bytes = QJsonDocument::fromVariant(value).toJson();
+        const auto path = directory.filePath(value["id"].toString() + ".json");
+        QVERIFY(writeBytes(path, bytes));
+        ProfileStore store(directory.path()); QString error;
+        const auto loaded = store.load(value["id"].toString(), &error);
+        QVERIFY2(loaded.has_value(), qPrintable(error));
+        ConfigurationBackup backup(directory.filePath(".config-backups"),
+            {{"profiles", {directory.path(), true}}});
+        QVERIFY(backup.backups().isEmpty());
+        QFile original(path); QVERIFY(original.open(QIODevice::ReadOnly));
+        QCOMPARE(original.readAll(), bytes); original.close();
+        const auto saved = store.save(*loaded, &error);
+        QVERIFY2(saved.has_value(), qPrintable(error));
+        QCOMPARE(saved->revision, loaded->revision + 1);
+        QCOMPARE(backup.backups().size(), 1);
+        QVERIFY2(backup.restore(backup.backups().first(), &error), qPrintable(error));
+        QVERIFY(original.open(QIODevice::ReadOnly)); QCOMPARE(original.readAll(), bytes); original.close();
+        QCOMPARE(store.load(loaded->id)->panels.first().iconStyle.size, 48);
+        QVERIFY(QDir(directory.filePath(".config-backups")).removeRecursively());
+        QVERIFY(writeBytes(directory.filePath(".config-backups"), "blocked"));
+        QVERIFY(!store.save(*loaded, &error)); QCOMPARE(error, QString("backup-root-unwritable"));
+        QVERIFY(original.open(QIODevice::ReadOnly)); QCOMPARE(original.readAll(), bytes);
     }
     void corruptFilesRemainAndDoNotHideValidProfiles()
     {

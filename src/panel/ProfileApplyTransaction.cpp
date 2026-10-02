@@ -219,7 +219,7 @@ QVariantMap ProfileApplyTransaction::apply(const ProfileDefinition &profile)
 {
     if (active()) return outcome(false, QStringLiteral("profile-recovery-or-apply-active"));
     const auto &op = m_operations;
-    if (!op.snapshot || !op.matches || !op.prepare || !op.capture || !op.create || !op.apply ||
+    if (!op.backupConfiguration || !op.snapshot || !op.matches || !op.prepare || !op.capture || !op.create || !op.apply ||
         !op.verify || !op.restore || !op.remove || !op.commit || !op.publish)
         return outcome(false, QStringLiteral("profile-host-operations-unavailable"));
     if (op.guard) { const auto code = op.guard(); if (!code.isEmpty()) return outcome(false, code); }
@@ -261,6 +261,8 @@ QVariantMap ProfileApplyTransaction::apply(const ProfileDefinition &profile)
     for (auto &snapshot : m_backup)
         snapshot.touched = hosted(snapshot.definition) && std::any_of(m_candidates.cbegin(), m_candidates.cend(),
             [&](const auto &panel) { return panel.identity.id == snapshot.definition.identity.id; });
+    if (!op.backupConfiguration(&code))
+    { m_running = false; transition(QStringLiteral("IDLE")); return outcome(false, code.isEmpty() ? QStringLiteral("configuration-backup-failed") : code); }
     if (!writeRecord(m_path + QStringLiteral(".backup.json"), &code) || !journal(QStringLiteral("PREPARING"), &code))
     { m_running = false; transition(QStringLiteral("IDLE")); return outcome(false, code); }
     m_pending = true; m_preview = m_candidates;

@@ -1,4 +1,5 @@
 #include "ProfileStore.h"
+#include "ConfigurationBackup.h"
 #include "../model/PanelRuntimeState.h"
 #include "../model/SettingsMigration.h"
 #include "../themes/ThemePackage.h"
@@ -11,6 +12,7 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QUuid>
 #include <QUrl>
@@ -489,6 +491,22 @@ std::optional<ProfileDefinition> ProfileStore::save(
         if (!previous) return {};
         if (previous->revision != profile.revision || profile.revision == std::numeric_limits<int>::max())
         { error(errorCode, QStringLiteral("stale-profile-revision")); return {}; }
+        QFile source(path);
+        if (!source.open(QIODevice::ReadOnly))
+        { error(errorCode, QStringLiteral("profile-unreadable")); return {}; }
+        const auto stored = QJsonDocument::fromJson(source.read(MaximumBytes + 1)).object();
+        const auto migration = SettingsMigration::migratePanelRecords(
+            QJsonDocument(stored.value(QStringLiteral("panels")).toArray()).toJson(QJsonDocument::Compact));
+        if (migration.status != PanelMigrationStatus::Success)
+        { error(errorCode, QStringLiteral("profile-source-changed")); return {}; }
+        if (migration.rewriteRequired)
+        {
+            ConfigurationBackup backup = m_root == QFileInfo(defaultRoot()).absoluteFilePath()
+                ? ConfigurationBackup{} : ConfigurationBackup(QDir(m_root).filePath(QStringLiteral(".config-backups")),
+                    {{QStringLiteral("profiles"), {m_root, true}}});
+            if (backup.capture(QStringLiteral("legacy-profile-rewrite"), errorCode).isEmpty() ||
+                !backup.prune(QSettings().value(QStringLiteral("backup/retentionCount"), 5).toInt(), errorCode)) return {};
+        }
         checked->revision++;
     }
     else if (QDir(m_root).entryList({QStringLiteral("*.json")}, QDir::Files).size() >= MaximumProfiles)

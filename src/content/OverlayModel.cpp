@@ -30,8 +30,9 @@ OverlayModel::OverlayModel(QObject *parent) : QObject(parent)
         if (m_dirty && m_publishing) { m_dirty = false; emit changed(); }
     });
     m_expiry.setInterval(1000);
+    m_expiry.setParent(this);
+    m_expiry.setObjectName(QStringLiteral("overlay-expiry"));
     connect(&m_expiry, &QTimer::timeout, this, [this] { expire(m_clock.elapsed()); });
-    m_expiry.start();
     auto bus = QDBusConnection::sessionBus();
     bus.connect({}, {}, QStringLiteral("com.canonical.Unity.LauncherEntry"),
                 QStringLiteral("Update"), this, SLOT(update(QString,QVariantMap)));
@@ -103,6 +104,7 @@ bool OverlayModel::ingest(const QString &sender, const QString &desktopId,
     for (auto it = accepted.cbegin(); it != accepted.cend(); ++it)
         entry.values.insert(it.key(), it.value());
     entry.updated = now;
+    if (!m_expiry.isActive()) m_expiry.start();
     scheduleChange();
     // Ownership tracking must stay active even while rendering is concealed.
     const auto watchers = findChildren<QDBusServiceWatcher *>();
@@ -126,6 +128,7 @@ void OverlayModel::setPublishing(bool enabled)
 void OverlayModel::removeSource(const QString &sender)
 {
     if (m_sources.remove(sender)) scheduleChange();
+    if (m_sources.isEmpty() && m_temporary.isEmpty()) m_expiry.stop();
 }
 
 void OverlayModel::expire(qint64 now)
@@ -148,6 +151,7 @@ void OverlayModel::expire(qint64 now)
         else ++it;
     }
     if (changed) scheduleChange();
+    if (m_sources.isEmpty() && m_temporary.isEmpty()) m_expiry.stop();
 }
 
 void OverlayModel::setTemporaryStatus(const QString &desktopId, const QString &text)
@@ -155,6 +159,7 @@ void OverlayModel::setTemporaryStatus(const QString &desktopId, const QString &t
     const QString id = applicationKey(desktopId);
     if (id.isEmpty() || text.isEmpty() || text.size() > 160 || m_temporary.size() >= 128) return;
     m_temporary.insert(id, {text, m_clock.elapsed() + 5000});
+    if (!m_expiry.isActive()) m_expiry.start();
     scheduleChange();
 }
 

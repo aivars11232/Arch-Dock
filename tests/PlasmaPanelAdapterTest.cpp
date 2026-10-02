@@ -74,6 +74,16 @@ public:
                 return -1003;
             }
         }
+        // Plasma's QML layout may overwrite content length while custom bounds
+        // continue to determine the actual fixed panel surface.
+        if (property == QStringLiteral("length") &&
+            script.contains(QStringLiteral("actual = Number(panel.minimumLength)")) &&
+            values.value(QStringLiteral("lengthMode")) == 1 &&
+            values.value(QStringLiteral("minimumLength")) ==
+                values.value(QStringLiteral("maximumLength")))
+        {
+            return values.value(QStringLiteral("minimumLength"));
+        }
         return values.value(property);
     }
 
@@ -146,6 +156,10 @@ private:
 
     static QString propertyForScript(const QString &script)
     {
+        if (script.contains(QStringLiteral("var actual = Number(panel.length);")))
+        {
+            return QStringLiteral("length");
+        }
         if (script.contains(QStringLiteral("panel.maximumLength")))
         {
             return QStringLiteral("maximumLength");
@@ -264,6 +278,7 @@ private slots:
     void mapsVerticalAlignment();
     void mapsGeometryModes_data();
     void mapsGeometryModes();
+    void fixedLengthUsesCustomBoundsDespiteContentLayout();
     void reportsUnsupportedAndRollsBack();
     void reportsReadbackMismatchAndRollsBack();
     void rollsBackWhenPersistenceFails();
@@ -441,6 +456,31 @@ void PlasmaPanelAdapterTest::mapsGeometryModes()
                 QStringLiteral("panel.lengthMode = '%1';").arg(plasmaMode));
         }));
     QCOMPARE(result.hostState.value(QStringLiteral("height")).toString(), QStringLiteral("88"));
+}
+
+void PlasmaPanelAdapterTest::fixedLengthUsesCustomBoundsDespiteContentLayout()
+{
+    using namespace ArchDock;
+    NativePanelPlacement placement;
+    placement.lengthMode = NativePanelLengthMode::Fixed;
+    placement.fixedLength = 320;
+    FakePlasmaHost host;
+    host.coerceFirstMutationProperty = QStringLiteral("length");
+    host.coercedValue = 174;
+    const auto result = fixtureAdapter(&host).applyPlacement(
+        42, QStringLiteral("panel-1"), QStringLiteral("owner-1"), placement);
+    QVERIFY(result.success());
+    QCOMPARE(host.values.value(QStringLiteral("length")), 174);
+    QCOMPARE(result.hostState.value(QStringLiteral("fixedLength")).toString(),
+             QStringLiteral("320"));
+
+    FakePlasmaHost constrained;
+    constrained.coerceFirstMutationProperty = QStringLiteral("minimumLength");
+    constrained.coercedValue = 160;
+    const auto mismatch = fixtureAdapter(&constrained).applyPlacement(
+        42, QStringLiteral("panel-1"), QStringLiteral("owner-1"), placement);
+    QVERIFY(!mismatch.success());
+    QVERIFY(mismatch.rollbackSucceeded);
 }
 
 void PlasmaPanelAdapterTest::reportsUnsupportedAndRollsBack()

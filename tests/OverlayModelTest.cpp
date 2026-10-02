@@ -16,6 +16,33 @@ class OverlayModelTest final : public QObject
 {
     Q_OBJECT
 private slots:
+    void idleExpiryStopsWithoutLosingSourceRecovery()
+    {
+        OverlayModel model;
+        auto *expiry = model.findChild<QTimer *>(QStringLiteral("overlay-expiry"));
+        QVERIFY(expiry);
+        QVERIFY(!expiry->isActive());
+        model.setPublishing(false);
+        QVERIFY(model.ingest(":1.42", "sample.desktop", {{"urgent", true}}, 0));
+        QVERIFY(expiry->isActive());
+        model.removeSource(":1.42");
+        QVERIFY(!expiry->isActive());
+        model.setTemporaryStatus("sample.desktop", "Launch request failed");
+        QVERIFY(expiry->isActive());
+        model.expire(OverlayModel::MaximumAgeMs);
+        QVERIFY(!expiry->isActive());
+        QVERIFY(model.snapshot("sample.desktop").value("temporaryStatus").toString().isEmpty());
+        QVERIFY(model.ingest(":1.43", "sample.desktop", {{"urgent", true}}, 10));
+        QVERIFY(expiry->isActive());
+        model.expire(OverlayModel::MaximumAgeMs + 10);
+        QVERIFY(!expiry->isActive());
+        QVERIFY(!model.available());
+        model.setPublishing(true);
+        QVERIFY(model.ingest(":1.44", "sample.desktop", {{"urgent", true}}, 20));
+        QVERIFY(expiry->isActive());
+        QVERIFY(model.snapshot("sample.desktop").value("urgent").toBool());
+    }
+
     void supportedDbusSourceUpdatesAndDisconnects()
     {
         if (!qEnvironmentVariableIsSet("ARCHDOCK_OVERLAY_SOURCE_TEST"))

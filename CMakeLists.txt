@@ -149,6 +149,7 @@ add_custom_target(
   COMMENT "Preparing the ArchDock.Rendering QML module")
 
 qt_add_library(archdock-profile-backend STATIC
+  src/persistence/ConfigurationBackup.h src/persistence/ConfigurationBackup.cpp
   src/persistence/ProfileStore.h src/persistence/ProfileStore.cpp
   src/panel/ProfileApplyTransaction.h src/panel/ProfileApplyTransaction.cpp
   src/panel/ProfileManager.h src/panel/ProfileManager.cpp
@@ -255,16 +256,7 @@ qt_add_executable(
   src/WindowModel.cpp
   src/WindowWatcher.h
   src/WindowWatcher.cpp)
-qt_add_qml_module(
-  arch-dock
-  URI
-  ArchDock
-  VERSION
-  1.0
-  NO_IMPORT_SCAN
-  IMPORT_PATH
-  ${ARCHDOCK_RENDERING_IMPORT_ROOT}
-  QML_FILES
+set(ARCHDOCK_APPLICATION_QML_FILES
   qml/runtime/CapabilityModel.js
   qml/runtime/IconPropertiesDraft.js
   qml/runtime/IconProperties.qml
@@ -280,6 +272,13 @@ qt_add_qml_module(
   qml/runtime/StudioForm.qml
   qml/runtime/StudioNavigation.js
   qml/runtime/SettingsPopup.qml)
+qt_add_qml_module(
+  arch-dock
+  URI ArchDock
+  VERSION 1.0
+  NO_IMPORT_SCAN
+  IMPORT_PATH ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+  QML_FILES ${ARCHDOCK_APPLICATION_QML_FILES})
 add_dependencies(arch-dock archdock-rendering-module)
 qt_add_resources(
   arch-dock
@@ -365,10 +364,11 @@ if(BUILD_TESTING)
   add_test(NAME panel-model-test COMMAND panel-model-test)
 
   qt_add_executable(profile-store-test tests/ProfileStoreTest.cpp)
+  qt_add_executable(configuration-backup-test tests/ConfigurationBackupTest.cpp)
   qt_add_executable(profile-apply-transaction-test tests/ProfileApplyTransactionTest.cpp)
   qt_add_executable(profile-manager-test tests/ProfileManagerTest.cpp)
   qt_add_executable(profile-shortcut-manager-test tests/ProfileShortcutManagerTest.cpp)
-  foreach(profile_test profile-store-test profile-apply-transaction-test profile-manager-test profile-shortcut-manager-test)
+  foreach(profile_test configuration-backup-test profile-store-test profile-apply-transaction-test profile-manager-test profile-shortcut-manager-test)
     target_link_libraries(${profile_test} PRIVATE archdock-profile-backend Qt6::Test)
     add_test(NAME ${profile_test} COMMAND ${profile_test})
   endforeach()
@@ -1138,6 +1138,9 @@ if(BUILD_TESTING)
             ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT="${ARCHDOCK_SOURCE_ICON_STYLE_PACKAGE_ROOT}"
             ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH="${ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH}"
             ARCHDOCK_SOURCE_PRESET_ROOT="${ARCHDOCK_SOURCE_PRESET_ROOT}")
+  qt_add_resources(panel-window-capability-test utility-runtime
+    PREFIX "/qt/qml/ArchDock" FILES ${ARCHDOCK_APPLICATION_QML_FILES})
+  add_dependencies(panel-window-capability-test archdock-rendering-module)
   add_test(
     NAME panel-window-capability-test
     COMMAND panel-window-capability-test)
@@ -1641,18 +1644,52 @@ if(BUILD_TESTING)
       -DINSTALL_BINDIR=${CMAKE_INSTALL_BINDIR}
       -DINSTALL_LIBDIR=${CMAKE_INSTALL_LIBDIR}
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ValidateSessionStartup.cmake)
-  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test-tmp")
+  set(ARCHDOCK_TEST_TMPDIR "${CMAKE_CURRENT_BINARY_DIR}/test-tmp" CACHE PATH
+      "Disk-backed temporary root for disposable runtime fixtures")
+  file(MAKE_DIRECTORY "${ARCHDOCK_TEST_TMPDIR}")
+  add_test(NAME configuration-upgrade-test
+    COMMAND ${CMAKE_COMMAND} -E env
+      ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+      TMPDIR=${ARCHDOCK_TEST_TMPDIR}
+      bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-configuration-upgrade-smoke.sh)
+  set_tests_properties(configuration-upgrade-test PROPERTIES RUN_SERIAL TRUE TIMEOUT 90)
+  add_test(NAME core-accessibility-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+      -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+      -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_CoreAccessibility.qml)
+  set_tests_properties(core-accessibility-test PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" RUN_SERIAL TRUE TIMEOUT 60)
+  foreach(hardening_group IN ITEMS scale100 scale125 scale150 scale200 hotplug-recovery resources)
+    add_test(NAME wayland-hardening-${hardening_group}-test
+      COMMAND ${CMAKE_COMMAND} -E env
+        ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+        ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
+        ARCHDOCK_HARDENING_QMLTESTRUNNER=$<TARGET_FILE:Qt6::qmltestrunner>
+        TMPDIR=${ARCHDOCK_TEST_TMPDIR}
+        bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-wayland-hardening-matrix.sh ${hardening_group})
+    set_tests_properties(wayland-hardening-${hardening_group}-test PROPERTIES
+      RUN_SERIAL TRUE TIMEOUT 420)
+  endforeach()
   foreach(startup_mode IN ITEMS diagnostics runtime)
     add_test(NAME session-startup-${startup_mode}-test
       COMMAND ${CMAKE_COMMAND} -E env
         ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
         ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
-        TMPDIR=${CMAKE_CURRENT_BINARY_DIR}/test-tmp
+        TMPDIR=${ARCHDOCK_TEST_TMPDIR}
         bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-session-startup-smoke.sh ${startup_mode})
     set_tests_properties(session-startup-${startup_mode}-test PROPERTIES
       RUN_SERIAL TRUE DEPENDS session-startup-metadata-test TIMEOUT 180)
   endforeach()
   set_tests_properties(session-startup-metadata-test PROPERTIES RUN_SERIAL TRUE)
+  # These fixtures compile selected production sources directly. Share the
+  # persistence service rather than maintaining another backup implementation.
+  get_property(archdock_fixture_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+  foreach(fixture_target IN LISTS archdock_fixture_targets)
+    get_target_property(fixture_sources ${fixture_target} SOURCES)
+    if(fixture_sources MATCHES "src/(PanelRegistry|presets/UserPresetStore)\\.cpp")
+      target_link_libraries(${fixture_target} PRIVATE archdock-profile-backend)
+    endif()
+  endforeach()
 endif()
 
 install(TARGETS arch-dock RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

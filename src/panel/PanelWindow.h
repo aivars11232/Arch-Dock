@@ -288,6 +288,7 @@ private:
     void syncRegistryFromLegacySettings();
     void synchronizeScreenAssignments();
     void handleScreensChanged();
+    void watchScreen(QScreen *screen);
     void scheduleNativePanelRecovery();
     void recoverNativePanels(bool allowMissingHostRecovery);
     void synchronizeFreePanels();
@@ -454,6 +455,8 @@ private:
     QPointer<QWindow> m_settingsWindow;
     QPointer<QWindow> m_iconPropertiesWindow;
     int m_screenRevision = 0;
+    QTimer m_screenChangeTimer;
+    bool m_screenChangePending = false;
     int m_visibilityRevision = 0;
     QHash<QString, ArchDock::PanelVisibilityLocks> m_panelInteractionGuards;
     QHash<QString, QVariantMap> m_panelPresentationStates;

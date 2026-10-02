@@ -22,6 +22,7 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSettings>
+#include <QScreen>
 #include <QScopeGuard>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -124,10 +125,38 @@ private slots:
     void profileServicePersistsAndHonorsPanelGuards();
     void presetAuditionGuardsAndInvalidRequestsLeaveNoWrites();
     void presetDefaultsDoNotRewriteExistingInstances();
+    void screenSignalsCoalesceAndUtilityWindowFitsWorkArea();
 
 private:
     QTemporaryDir m_settingsDirectory;
 };
+
+void PanelWindowCapabilityTest::screenSignalsCoalesceAndUtilityWindowFitsWorkArea()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(qEnvironmentVariable("QML_IMPORT_PATH",
+        QCoreApplication::applicationDirPath() + QStringLiteral("/qml-imports")));
+    QVERIFY(QFileInfo::exists(QStringLiteral(":/qt/qml/ArchDock/qml/runtime/SettingsPopup.qml")));
+    QVERIFY(QFileInfo::exists(QStringLiteral(":/qt/qml/ArchDock/qml/runtime/StudioForm.qml")));
+    PanelWindow backend(engine);
+    QScreen *screen = QGuiApplication::primaryScreen();
+    QVERIFY(screen);
+    QSignalSpy changes(&backend, &PanelWindow::screenRevisionChanged);
+    screen->geometryChanged(screen->geometry());
+    screen->availableGeometryChanged(screen->availableGeometry());
+    screen->logicalDotsPerInchChanged(screen->logicalDotsPerInch());
+    QTRY_COMPARE(changes.count(), 1);
+    QTest::qWait(150);
+    QCOMPARE(changes.count(), 1);
+    backend.showSettings();
+    QWindow *studio = nullptr;
+    for (QWindow *window : QGuiApplication::allWindows())
+        if (window->title() == QStringLiteral("Arch Dock Panel Studio")) studio = window;
+    QVERIFY(studio);
+    QVERIFY(studio->width() <= studio->screen()->availableGeometry().width());
+    QVERIFY(studio->height() <= studio->screen()->availableGeometry().height());
+    QVERIFY(studio->width() > 0 && studio->height() > 0);
+}
 
 void PanelWindowCapabilityTest::groupedWindowsFollowLiveKWinUpdates()
 {

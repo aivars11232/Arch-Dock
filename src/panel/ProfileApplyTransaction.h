@@ -21,6 +21,7 @@ public:
     struct Operations
     {
         std::function<QString()> guard;
+        std::function<bool(QString *)> backupConfiguration;
         std::function<QList<PanelDefinition>(QString *)> snapshot;
         std::function<bool(const QList<PanelDefinition> &, QString *)> matches;
         std::function<bool(const QList<PanelDefinition> &, QList<PanelDefinition> &,

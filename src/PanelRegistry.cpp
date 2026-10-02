@@ -8,20 +8,26 @@
 #include "presets/PresetCapabilityResolver.h"
 #include "themes/ThemeAssetProcessor.h"
 #include "themes/ThemePackage.h"
+#include "persistence/ConfigurationBackup.h"
 
 #include <QCryptographicHash>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QScreen>
 #include <QSet>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QScopeGuard>
+#include <QTemporaryDir>
+#include <QUuid>
 #include <QtGlobal>
 
 #include <algorithm>
@@ -447,7 +453,8 @@ QVariantMap analyzeThemeSource(const QString &sourcePath,
     return analysis;
 }
 
-bool migrateLegacyThemePackage(QVariantMap *panel)
+bool migrateLegacyThemePackage(QVariantMap *panel, QStringList *createdDirectories = nullptr,
+    QString *migrationError = nullptr)
 {
     const QUrl currentManifest(panel->value(QStringLiteral("themePackageManifest")).toString());
     const bool declaresPackage =
@@ -496,6 +503,7 @@ bool migrateLegacyThemePackage(QVariantMap *panel)
     LegacyThemePackage package;
     if (sourceUrl.isLocalFile() && source.isFile())
     {
+        if (!createdDirectories) return true; // Read-only migration preflight.
         const QString fingerprint = QString::fromLatin1(
             QCryptographicHash::hash(source.absoluteFilePath().toUtf8(), QCryptographicHash::Sha256).toHex().left(12));
         package.id = QStringLiteral("legacy-") + fingerprint;
@@ -506,14 +514,22 @@ bool migrateLegacyThemePackage(QVariantMap *panel)
         {
             package.fit = QStringLiteral("cover");
         }
-        package.manifestPath = source.absolutePath() + QLatin1Char('/') + package.id +
-            QStringLiteral(".archdock-theme.json");
+        const QString managed = QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
+            .filePath(QStringLiteral("themes/migration-") + QUuid::createUuid().toString(QUuid::Id128));
+        if (!QDir().mkpath(managed))
+        { if (migrationError) *migrationError = QStringLiteral("theme-migration-directory-failed"); return false; }
+        createdDirectories->append(managed);
+        package.sourcePath = QDir(managed).filePath(source.fileName());
+        if (!QFile::copy(source.absoluteFilePath(), package.sourcePath))
+        { if (migrationError) *migrationError = QStringLiteral("theme-migration-copy-failed"); return false; }
+        package.manifestPath = QDir(managed).filePath(package.id + QStringLiteral(".archdock-theme.json"));
 
         QString errorMessage;
         if (writeLegacyThemePackageManifest(
                 package.manifestPath, package, source.fileName(), &errorMessage))
         {
             panel->insert(QStringLiteral("themePackageFormat"), themePackageFormat);
+            panel->insert(QStringLiteral("themeSource"), QUrl::fromLocalFile(package.sourcePath).toString());
             panel->insert(QStringLiteral("themePackageVersion"), legacyThemePackageVersion);
             panel->insert(QStringLiteral("themePackageId"), package.id);
             panel->insert(QStringLiteral("themePackageName"), package.name);
@@ -530,6 +546,8 @@ bool migrateLegacyThemePackage(QVariantMap *panel)
             }
             return true;
         }
+        if (migrationError) *migrationError = QStringLiteral("theme-migration-manifest-failed: ") + errorMessage;
+        return false;
     }
 
     bool changed = false;
@@ -3011,6 +3029,7 @@ void PanelRegistry::finishRender(const RenderRequest &request, bool success, con
         }
     }
 
+    pruneGeneratedRenders(success ? request.outputPath : QString{});
     const auto pending = m_pendingRenders.take(request.panelId);
     if (!pending.panelId.isEmpty() && pending.sourcePath != currentSource)
     {
@@ -3023,9 +3042,131 @@ void PanelRegistry::finishRender(const RenderRequest &request, bool success, con
     }
 }
 
+void PanelRegistry::pruneGeneratedRenders(const QString &currentPath)
+{
+    // Generated history is disposable; persisted and in-flight references are
+    // not. Failure to inspect references must never turn into permission to
+    // remove an asset needed by recovery.
+    const QDir data(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
+    QSet<QString> references;
+    const auto protectPath = [&references](const QString &value) {
+        const QUrl url(value);
+        const QString path = url.isLocalFile() ? url.toLocalFile() : value;
+        if (QDir::isAbsolutePath(path)) references.insert(QDir::cleanPath(path));
+    };
+    const auto protect = [&](const auto &self, const QJsonValue &value) -> void {
+        if (value.isString()) protectPath(value.toString());
+        else if (value.isArray()) for (const auto &entry : value.toArray()) self(self, entry);
+        else if (value.isObject()) for (const auto &entry : value.toObject()) self(self, entry);
+    };
+    const auto protectSettings = [&](QSettings &settings) {
+        for (const QString &key : settings.allKeys()) {
+            const QVariant value = settings.value(key);
+            protect(protect, QJsonValue::fromVariant(value));
+            const QJsonDocument document = QJsonDocument::fromJson(value.toByteArray());
+            if (document.isArray()) protect(protect, document.array());
+            if (document.isObject()) protect(protect, document.object());
+        }
+        return settings.status() == QSettings::NoError;
+    };
+    protectPath(currentPath);
+    for (const auto &panel : std::as_const(m_panels)) protect(protect, QJsonObject::fromVariantMap(panel));
+    for (const auto &request : std::as_const(m_activeRenders)) {
+        protectPath(request.sourcePath); protectPath(request.outputPath);
+    }
+    for (const auto &request : std::as_const(m_pendingRenders)) {
+        protectPath(request.sourcePath); protectPath(request.outputPath);
+    }
+    QSettings settings;
+    if (!protectSettings(settings)) return;
+    QStringList pending{data.absolutePath()};
+    for (const QString &name : {QStringLiteral("profiles"), QStringLiteral("presets"),
+                               QStringLiteral("config-backups")}) {
+        const QString path = data.filePath(name);
+        if (QFileInfo::exists(path)) pending.append(path);
+    }
+    int inspected = 0;
+    while (!pending.isEmpty()) {
+        const QString directory = pending.takeLast();
+        const QFileInfo info(directory);
+        if (info.isSymLink() || !info.isReadable()) return;
+        for (const auto &entry : QDir(directory).entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot)) {
+            if (++inspected > 4096 || entry.isSymLink()) return;
+            if (entry.isDir()) {
+                // At the application root only configuration trees are read.
+                if (directory != data.absolutePath()) pending.append(entry.absoluteFilePath());
+                continue;
+            }
+            if (entry.suffix() != QStringLiteral("json") && entry.suffix() != QStringLiteral("conf")) continue;
+            if (!entry.isReadable() || entry.size() > 4 * 1024 * 1024) return;
+            if (entry.suffix() == QStringLiteral("conf")) {
+                QSettings stored(entry.absoluteFilePath(), QSettings::IniFormat);
+                if (!protectSettings(stored)) return;
+            } else {
+                QFile file(entry.absoluteFilePath());
+                if (!file.open(QIODevice::ReadOnly)) return;
+                QJsonParseError error;
+                const auto document = QJsonDocument::fromJson(file.readAll(), &error);
+                if (error.error != QJsonParseError::NoError) return;
+                if (document.isArray()) protect(protect, document.array());
+                if (document.isObject()) protect(protect, document.object());
+            }
+        }
+    }
+    struct Candidate { QString path; QString panel; qint64 bytes; QDateTime modified; };
+    QList<Candidate> candidates;
+    static const QRegularExpression name(QStringLiteral("^render-[A-Za-z0-9_-]+-[a-f0-9]{16}$"));
+    for (const auto &panel : QDir(data.filePath("themes")).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+        if (panel.isSymLink()) continue;
+        const QString root = QDir(panel.absoluteFilePath()).filePath("processed-renders");
+        if (QFileInfo(root).isSymLink()) continue;
+        for (const auto &entry : QDir(root).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+            if (entry.isSymLink() || !name.match(entry.fileName()).hasMatch()) continue;
+            bool protectedAsset = false;
+            for (const QString &reference : std::as_const(references)) {
+                if (reference == entry.absoluteFilePath() || reference.startsWith(entry.absoluteFilePath() + '/')) {
+                    protectedAsset = true; break;
+                }
+            }
+            if (protectedAsset) continue;
+            QFile metadata(QDir(entry.absoluteFilePath()).filePath("processing.json"));
+            if (QFileInfo(metadata).isSymLink() || metadata.size() > 4 * 1024 * 1024 || !metadata.open(QIODevice::ReadOnly)) continue;
+            const auto object = QJsonDocument::fromJson(metadata.readAll()).object();
+            if (object.value("format") != "org.archdock.processed-theme-asset" || object.value("version").toInt() != 1 ||
+                object.value("assetId").toString() + '-' + object.value("contentKey").toString().left(16) != entry.fileName()) continue;
+            qint64 bytes = 0;
+            bool safe = true;
+            QDirIterator files(entry.absoluteFilePath(), QDir::AllEntries | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+            while (files.hasNext()) {
+                files.next();
+                const QFileInfo file = files.fileInfo();
+                if (file.isSymLink() || !file.isReadable()) { safe = false; break; }
+                if (file.isFile()) bytes += file.size();
+            }
+            if (safe) candidates.append({entry.absoluteFilePath(), panel.fileName(), bytes, entry.lastModified()});
+        }
+    }
+    std::sort(candidates.begin(), candidates.end(), [](const Candidate &a, const Candidate &b) {
+        return a.modified == b.modified ? a.path > b.path : a.modified > b.modified;
+    });
+    QHash<QString, int> retained;
+    qint64 bytes = 0;
+    for (const auto &candidate : std::as_const(candidates)) {
+        if (retained.value(candidate.panel) < 4 && bytes + candidate.bytes <= 64 * 1024 * 1024) {
+            ++retained[candidate.panel]; bytes += candidate.bytes;
+        } else QDir(candidate.path).removeRecursively();
+    }
+}
+
 void PanelRegistry::load()
 {
     QSettings settings;
+    QStringList migrationDirectories;
+    bool migrationCommitted = false;
+    const auto cleanupMigration = qScopeGuard([&] {
+        if (!migrationCommitted)
+            for (const QString &directory : std::as_const(migrationDirectories)) QDir(directory).removeRecursively();
+    });
     const int legacyScreen = qMax(0, settings.value(QStringLiteral("dock/monitorIndex"), 0).toInt());
     const bool legacyAutoHide = settings.value(QStringLiteral("dock/autoHide"), false).toBool();
     const QString panelRecordsKey = QString::fromLatin1(kPanelRecordsKey);
@@ -3060,6 +3201,25 @@ void PanelRegistry::load()
         m_legacySource = storedPanels;
         m_legacyRewritePending = migration.rewriteRequired;
         const QJsonArray sourceRecords = QJsonDocument::fromJson(storedPanels).array();
+        bool needsBackup = m_legacyRewritePending;
+        for (qsizetype index = 0; index < migration.definitions.size(); ++index)
+        {
+            auto probe = migration.definitions.at(index).toLegacyMap();
+            const auto source = sourceRecords.at(index).toObject();
+            needsBackup = normalizeFreeHostRecord(&probe) || needsBackup;
+            needsBackup = migrateLegacyThemePackage(&probe) || needsBackup;
+            needsBackup = !source.contains(QStringLiteral("screen")) ||
+                !source.contains(QStringLiteral("visibilityMode")) || needsBackup;
+        }
+        if (needsBackup)
+        {
+            ArchDock::ConfigurationBackup backup;
+            QString error;
+            if (backup.capture(QStringLiteral("panel-migration"), &error).isEmpty())
+            { m_persistenceBlocked = true; setMigrationDiagnostic(error); return; }
+            if (!backup.prune(settings.value(QStringLiteral("backup/retentionCount"), 5).toInt(), &error))
+            { m_persistenceBlocked = true; setMigrationDiagnostic(error); return; }
+        }
         for (qsizetype index = 0; index < migration.definitions.size(); ++index)
         {
             QVariantMap panel = migration.definitions.at(index).toLegacyMap();
@@ -3080,8 +3240,15 @@ void PanelRegistry::load()
             }
             compatibilityRewriteRequired = normalizeFreeHostRecord(&panel) ||
                 compatibilityRewriteRequired;
-            compatibilityRewriteRequired = migrateLegacyThemePackage(&panel) ||
+            QString migrationError;
+            compatibilityRewriteRequired = migrateLegacyThemePackage(&panel, &migrationDirectories, &migrationError) ||
                 compatibilityRewriteRequired;
+            if (!migrationError.isEmpty())
+            {
+                m_panels.clear(); m_persistenceBlocked = true;
+                setMigrationDiagnostic(migrationError);
+                return;
+            }
 
             QString definitionError;
             const std::optional<ArchDock::PanelDefinition> normalized =
@@ -3153,8 +3320,10 @@ void PanelRegistry::load()
 
     if (m_legacyRewritePending || compatibilityRewriteRequired)
     {
-        (void)saveChecked();
+        migrationCommitted = saveChecked(true);
+        if (!migrationCommitted) { m_panels.clear(); m_persistenceBlocked = true; }
     }
+    else migrationCommitted = true;
 }
 
 void PanelRegistry::save()
@@ -3162,7 +3331,7 @@ void PanelRegistry::save()
     (void)saveChecked();
 }
 
-bool PanelRegistry::saveChecked()
+bool PanelRegistry::saveChecked(bool migration)
 {
     if (m_persistenceBlocked)
     {
@@ -3184,10 +3353,43 @@ bool PanelRegistry::saveChecked()
     }
 
     QSettings settings;
-    if (m_legacyRewritePending && !ensureLegacyBackupChecked(settings))
+    if (migration)
     {
-        return false;
+        const QString backupKey = QString::fromLatin1(kPanelLegacyBackupKey);
+        if (m_legacyRewritePending && settings.contains(backupKey) &&
+            settings.value(backupKey).toByteArray() != m_legacySource)
+        {
+            setMigrationDiagnostic(QStringLiteral("backup-conflict: existing legacy panel backup does not match the source"));
+            return false;
+        }
+        QTemporaryDir staging;
+        if (!staging.isValid()) { setMigrationDiagnostic(QStringLiteral("migration-stage-failed")); return false; }
+        const QString path = staging.filePath(QStringLiteral("settings.conf"));
+        {
+            QSettings candidate(path, QSettings::NativeFormat);
+            for (const QString &key : settings.allKeys()) candidate.setValue(key, settings.value(key));
+            if (m_legacyRewritePending) candidate.setValue(backupKey, m_legacySource);
+            candidate.setValue(QString::fromLatin1(kPanelRecordsKey), serialized);
+            candidate.sync();
+            if (candidate.status() != QSettings::NoError)
+            { setMigrationDiagnostic(QStringLiteral("migration-stage-failed")); return false; }
+        }
+        QFile input(path);
+        QSaveFile output(settings.fileName());
+        const QFileInfo original(settings.fileName());
+        if (!QDir().mkpath(original.absolutePath()) ||
+            !input.open(QIODevice::ReadOnly) || !output.open(QIODevice::WriteOnly) ||
+            !output.setPermissions(original.exists() ? original.permissions() : QFile::ReadOwner | QFile::WriteOwner))
+        { setMigrationDiagnostic(QStringLiteral("migration-write-failed")); return false; }
+        const QByteArray bytes = input.readAll();
+        if (output.write(bytes) != bytes.size() || !output.commit())
+        { setMigrationDiagnostic(QStringLiteral("migration-write-failed")); return false; }
+        settings.sync();
+        m_legacySource.clear(); m_legacyRewritePending = false;
+        setMigrationDiagnostic(QString{});
+        return true;
     }
+    if (m_legacyRewritePending && !ensureLegacyBackupChecked(settings)) return false;
 
     settings.setValue(QString::fromLatin1(kPanelRecordsKey), serialized);
     settings.sync();

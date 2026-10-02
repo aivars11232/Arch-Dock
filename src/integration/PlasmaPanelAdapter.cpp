@@ -377,16 +377,27 @@ QString integerScript(int containmentId,
     {
         mutation = QStringLiteral("panel.%1 = %2;").arg(propertyName).arg(*value);
     }
+    // Plasma binds length to the applet's preferred content size. In custom
+    // mode equal bounds, rather than that changing content size, fix the native
+    // surface length (PanelView::preferredSize).
+    const QString fixedLengthReadback = propertyName == QLatin1String("length")
+        ? QStringLiteral(
+              "if (String(panel.lengthMode).toLowerCase() === 'custom' && "
+              "Number(panel.minimumLength) === Number(panel.maximumLength)) {"
+              "actual = Number(panel.minimumLength); }")
+        : QString();
     const QString body = QStringLiteral(
         "if (typeof panel.%1 === 'undefined') { return %2; }"
         "%3"
         "var actual = Number(panel.%1);"
+        "%5"
         "if (!isFinite(actual) || Math.floor(actual) !== actual) { return %4; }"
         "return actual;")
         .arg(propertyName)
         .arg(kPropertyUnsupported)
         .arg(mutation)
-        .arg(kUnrecognizedReadback);
+        .arg(kUnrecognizedReadback)
+        .arg(fixedLengthReadback);
     return placementScript(containmentId, panelId, ownershipToken, body);
 }
 

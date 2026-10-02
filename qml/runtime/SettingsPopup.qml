@@ -33,6 +33,21 @@ Window {
     property string previewPresentationState: "open"
     property int previewStateEntry: 1
     property string previewIconState: "normal"
+    readonly property bool compactStudio: width < 820 || height < 600
+    property bool expandedCompactPreview: false
+
+    function revealFocus(item) {
+        let ancestor = item
+        while (ancestor && ancestor !== studioScroll) ancestor = ancestor.parent
+        const flick = studioScroll.contentItem
+        if (ancestor !== studioScroll || !flick || !flick.contentItem) return
+        const position = item.mapToItem(flick.contentItem, 0, 0)
+        if (position.y < flick.contentY) flick.contentY = Math.max(0, position.y)
+        else if (position.y + item.height > flick.contentY + flick.height)
+            flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height,
+                position.y + item.height - flick.height))
+    }
+    onActiveFocusItemChanged: revealFocus(activeFocusItem)
     // Selection drives the embedded preview; explicit actions start desktop audition.
     property string selectedPresetId: ""
     property string presetNoticeText: ""
@@ -1215,7 +1230,7 @@ Window {
 
         Rectangle {
             Layout.fillHeight: true
-            Layout.preferredWidth: 164
+            Layout.preferredWidth: root.compactStudio ? 112 : 164
             radius: 8
             color: "#4a101a23"
             border.width: 1
@@ -1248,7 +1263,7 @@ Window {
                         required property int index
 
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 48
+                        Layout.preferredHeight: root.height < 600 ? 32 : 48
                         text: modelData
                         icon.name: root.mainTabIcons[index]
                         checkable: true
@@ -1270,6 +1285,7 @@ Window {
                                 text: mainTabDelegate.text
                                 color: mainTabDelegate.checked ? "#f4fbff" : "#b2c1c8"
                                 font.weight: mainTabDelegate.checked ? Font.DemiBold : Font.Normal
+                                elide: Text.ElideRight
                             }
                         }
 
@@ -1290,6 +1306,7 @@ Window {
                     Layout.fillWidth: true
                     Layout.margins: 7
                     text: qsTr("Changes are held until Apply or OK")
+                    visible: !root.compactStudio
                     color: "#617985"
                     font.pixelSize: 9
                     wrapMode: Text.Wrap
@@ -1297,9 +1314,16 @@ Window {
             }
         }
 
-        ColumnLayout {
+        ScrollView {
+            id: studioScroll
             Layout.fillWidth: true
             Layout.fillHeight: true
+            clip: true
+            contentWidth: availableWidth
+
+        ColumnLayout {
+            width: studioScroll.availableWidth
+            height: Math.max(implicitHeight, studioScroll.availableHeight)
             spacing: 8
 
             RowLayout {
@@ -1313,6 +1337,7 @@ Window {
 
                 ComboBox {
                     id: panelSelector
+                    Accessible.name: qsTr("Panel")
 
                     Layout.fillWidth: true
                     model: panelRegistry.panelIds
@@ -1336,9 +1361,18 @@ Window {
                     enabled: !root.hasPendingChanges
                     onClicked: root.performStudioAction("create-free", {})
                 }
+
+                ToolButton {
+                    visible: root.compactStudio
+                    text: qsTr("Preview")
+                    checkable: true
+                    checked: root.expandedCompactPreview
+                    onToggled: root.expandedCompactPreview = checked
+                }
             }
 
             Rectangle {
+                visible: !root.compactStudio || root.expandedCompactPreview
                 id: rendererPreviewCard
 
                 Layout.fillWidth: true
@@ -1353,9 +1387,11 @@ Window {
                     anchors.margins: 8
                     spacing: 6
 
-                    RowLayout {
+                    GridLayout {
+                        columns: root.compactStudio ? 1 : 5
                         Layout.fillWidth: true
-                        spacing: 8
+                        rowSpacing: 8
+                        columnSpacing: 8
 
                         Label {
                             objectName: "panel-studio-preview-title"
@@ -1374,6 +1410,7 @@ Window {
 
                         ComboBox {
                             id: previewModeSelector
+                            Accessible.name: qsTr("Preview orientation")
 
                             Layout.preferredWidth: 154
                             model: [
@@ -1403,6 +1440,7 @@ Window {
 
                         ComboBox {
                             id: previewIconStateSelector
+                            Accessible.name: qsTr("Preview icon state")
 
                             Layout.preferredWidth: 118
                             model: [
@@ -1587,6 +1625,7 @@ Window {
                 enabled: !root.profilesService || !root.profilesService.active
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.minimumHeight: 240
                 studio: root
                 rows: root.rowsForCurrentPage()
             }
@@ -1596,6 +1635,7 @@ Window {
                 visible: root.currentProfilePage
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.minimumHeight: 320
                 profiles: root.profiles
                 shortcutsOnly: root.subTabIndex === 2
                 shortcutStatus: root.profilesService ? root.profilesService.shortcutStatus : ({enabled: false, bindings: []})
@@ -1613,6 +1653,7 @@ Window {
                 visible: root.currentPresetPage !== null
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.minimumHeight: 360
                 kind: root.currentPresetPage ? root.currentPresetPage.kind : "panel"
                 scope: root.currentPresetPage ? root.currentPresetPage.scope : "builtin"
                 presets: root.presetCards
@@ -1643,6 +1684,7 @@ Window {
                 }
             }
         }
+        }
     }
 
     RowLayout {
@@ -1658,6 +1700,7 @@ Window {
 
         Label {
             text: root.mainTabLabels[root.mainTabIndex] + (root.currentSubtabs.length > 0 ? "  /  " + root.currentSubtabs[root.subTabIndex] : "")
+            visible: !root.compactStudio
             color: "#69808d"
             font.pixelSize: 10
         }

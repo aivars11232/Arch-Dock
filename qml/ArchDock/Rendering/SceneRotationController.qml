@@ -43,7 +43,7 @@ Item {
         return isFinite(value) ? Math.max(1, Math.min(180, value)) : 12
     }
     // Rotation is configured and permitted for this panel.
-    readonly property bool enabled: available && normalizedMode !== "none"
+    enabled: available && normalizedMode !== "none"
     readonly property bool triggerSatisfied:
         normalizedTrigger === "hover" ? hovered : true
     // Rotation is actually advancing right now.

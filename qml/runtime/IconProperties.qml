@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
@@ -202,8 +203,32 @@ Item {
     onEditorSnapshotChanged: acceptSnapshot(editorSnapshot)
     Component.onCompleted: acceptSnapshot(editorSnapshot)
 
-    ColumnLayout {
+    function revealFocus(item) {
+        let ancestor = item
+        while (ancestor && ancestor !== root) ancestor = ancestor.parent
+        const flick = editorScroll.contentItem
+        if (ancestor !== root || !flick || !flick.contentItem) return
+        const position = item.mapToItem(flick.contentItem, 0, 0)
+        if (position.y < flick.contentY) flick.contentY = Math.max(0, position.y)
+        else if (position.y + item.height > flick.contentY + flick.height)
+            flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height,
+                position.y + item.height - flick.height))
+    }
+
+    Connections {
+        target: root.Window.window
+        function onActiveFocusItemChanged() { root.revealFocus(root.Window.window.activeFocusItem) }
+    }
+
+    ScrollView {
+        id: editorScroll
         anchors.fill: parent
+        clip: true
+        contentWidth: availableWidth
+
+    ColumnLayout {
+        width: editorScroll.availableWidth
+        height: Math.max(implicitHeight, editorScroll.availableHeight)
         spacing: Kirigami.Units.largeSpacing
 
         Label {
@@ -262,6 +287,7 @@ Item {
             TextField {
                 id: glyphField
                 objectName: "customGlyphField"
+                Accessible.name: qsTr("Custom glyph")
 
                 Layout.fillWidth: true
                 text: root.customGlyph
@@ -289,6 +315,7 @@ Item {
         TextField {
             id: labelField
             objectName: "customLabelField"
+            Accessible.name: qsTr("Custom label")
 
             Layout.fillWidth: true
             text: root.customLabel
@@ -314,6 +341,7 @@ Item {
                 ComboBox {
                     id: tileModeCombo
                     objectName: "tileModeCombo"
+                    Accessible.name: qsTr("Icon tile")
 
                     Layout.fillWidth: true
                     enabled: root.snapshotLoaded && !root.applyInFlight
@@ -341,6 +369,7 @@ Item {
                 ComboBox {
                     id: styleCombo
                     objectName: "styleCombo"
+                    Accessible.name: qsTr("Icon style")
 
                     Layout.fillWidth: true
                     enabled: root.snapshotLoaded && !root.applyInFlight
@@ -394,6 +423,7 @@ Item {
                 onClicked: root.applyDraft()
             }
         }
+    }
     }
 
     FileDialog {

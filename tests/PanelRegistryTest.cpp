@@ -10,6 +10,7 @@
 #include "panel/IconOverrideTransaction.h"
 #include "model/IconEntryIdentity.h"
 #include "model/SettingsMigration.h"
+#include "persistence/ConfigurationBackup.h"
 #include "presets/PresetCapabilityResolver.h"
 #include "PresetTestSupport.h"
 
@@ -370,6 +371,7 @@ private slots:
     void analyzesAdaptive2DThemeArtwork();
     void retainsSceneSourcesWithoutExternalConversion();
     void rendersResponsivePanelSkins();
+    void generatedRenderHistoryIsBoundedAndProtectsReferences();
     void doesNotExecuteExternalRenderers();
 
 private:
@@ -757,6 +759,13 @@ void PanelRegistryTest::backsUpFlatRecordsBeforeStableMigration()
     settings.setValue(QStringLiteral("dock/panels"), legacySource);
     settings.sync();
 
+    QFile originalFile(settings.fileName());
+    QVERIFY(originalFile.open(QIODevice::ReadOnly));
+    const QByteArray originalBytes = originalFile.readAll();
+    originalFile.close();
+    ArchDock::ConfigurationBackup backup;
+    const auto beforeBackups = backup.backups();
+
     PanelRegistry registry;
     QCOMPARE(registry.migrationDiagnostic(), QString{});
     QCOMPARE(registry.panelValue(
@@ -776,6 +785,12 @@ void PanelRegistryTest::backsUpFlatRecordsBeforeStableMigration()
     const QJsonObject migratedRecord = QJsonDocument::fromJson(migratedSource)
         .array().at(0).toObject();
     QCOMPARE(migratedRecord.value(QStringLiteral("schemaVersion")).toInt(), 2);
+    const auto afterBackups = backup.backups();
+    QCOMPARE(afterBackups.size(), beforeBackups.size() + 1);
+    QFile snapshot(QDir(ArchDock::ConfigurationBackup::defaultRoot()).filePath(
+        afterBackups.last() + QStringLiteral("/files/settings/settings.conf")));
+    QVERIFY(snapshot.open(QIODevice::ReadOnly));
+    QCOMPARE(snapshot.readAll(), originalBytes);
     QVERIFY(!migratedRecord.contains(QStringLiteral("legacyExtensionData")));
     QVERIFY(!migratedRecord.contains(QStringLiteral("hovered")));
     QCOMPARE(
@@ -785,6 +800,7 @@ void PanelRegistryTest::backsUpFlatRecordsBeforeStableMigration()
 
     PanelRegistry reloaded;
     QCOMPARE(reloaded.migrationDiagnostic(), QString{});
+    QCOMPARE(backup.backups(), afterBackups);
     settings.sync();
     QCOMPARE(settings.value(QStringLiteral("dock/panels")).toByteArray(), migratedSource);
     QCOMPARE(
@@ -892,6 +908,10 @@ void PanelRegistryTest::migratesLegacyThemeSource()
     QImage image(12, 12, QImage::Format_ARGB32_Premultiplied);
     image.fill(Qt::magenta);
     QVERIFY(image.save(legacySource));
+    QFile legacyFile(legacySource);
+    QVERIFY(legacyFile.open(QIODevice::ReadOnly));
+    const QByteArray legacyBytes = legacyFile.readAll();
+    legacyFile.close();
 
     QJsonArray panels;
     panels.append(QJsonObject::fromVariantMap(
@@ -904,8 +924,10 @@ void PanelRegistryTest::migratesLegacyThemeSource()
 
     PanelRegistry registry;
 
-    QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themeSource")).toString(),
-             QUrl::fromLocalFile(legacySource).toString());
+    const QUrl managedSource(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themeSource")).toString());
+    QVERIFY(managedSource.isLocalFile());
+    QVERIFY(managedSource.toLocalFile() != legacySource);
+    QCOMPARE(QImage(managedSource.toLocalFile()), QImage(legacySource));
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themePackageFormat")).toString(),
              QStringLiteral("org.archdock.theme"));
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themePackageVersion")).toInt(), 1);
@@ -919,6 +941,48 @@ void PanelRegistryTest::migratesLegacyThemeSource()
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themeSourceHeight")).toInt(), 12);
     const QUrl preview(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themePreview")).toString());
     QVERIFY(QFileInfo::exists(preview.toLocalFile()));
+    QVERIFY(manifest.toLocalFile().startsWith(QStandardPaths::writableLocation(
+        QStandardPaths::AppDataLocation) + QStringLiteral("/themes/migration-")));
+    QVERIFY(QDir(legacyDirectory).entryList({QStringLiteral("*.json")}, QDir::Files).isEmpty());
+
+    // A refused commit cannot leave generated migration assets or alter input.
+    const QStringList managedBefore = QDir(QStandardPaths::writableLocation(
+        QStandardPaths::AppDataLocation) + QStringLiteral("/themes")).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    settings.setValue(QStringLiteral("dock/panels"), QJsonDocument(panels).toJson(QJsonDocument::Compact));
+    settings.setValue(QStringLiteral("dock/panelsLegacyV1Backup"), QByteArray("conflict"));
+    settings.sync();
+    QFile sourceSettings(settings.fileName());
+    QVERIFY(sourceSettings.open(QIODevice::ReadOnly));
+    const auto refusedBytes = sourceSettings.readAll(); sourceSettings.close();
+    PanelRegistry refused;
+    QVERIFY(refused.migrationDiagnostic().startsWith(QStringLiteral("backup-conflict:")));
+    QVERIFY(sourceSettings.open(QIODevice::ReadOnly));
+    QCOMPARE(sourceSettings.readAll(), refusedBytes);
+    QCOMPARE(QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+        QStringLiteral("/themes")).entryList(QDir::Dirs | QDir::NoDotAndDotDot), managedBefore);
+    QVERIFY(legacyFile.open(QIODevice::ReadOnly));
+    QCOMPARE(legacyFile.readAll(), legacyBytes);
+    legacyFile.close();
+    QTemporaryDir external;
+    const QString unreadable = external.filePath(QStringLiteral("unreadable.png"));
+    QVERIFY(image.save(unreadable));
+    QVERIFY(QFile::setPermissions(unreadable, {}));
+    QVERIFY(!QFileInfo(unreadable).isReadable());
+    panels[0] = QJsonObject{{QStringLiteral("id"), QStringLiteral("bottom")},
+        {QStringLiteral("themeSource"), QUrl::fromLocalFile(unreadable).toString()}};
+    settings.remove(QStringLiteral("dock/panelsLegacyV1Backup"));
+    settings.setValue(QStringLiteral("dock/panels"), QJsonDocument(panels).toJson(QJsonDocument::Compact));
+    settings.sync(); sourceSettings.close();
+    QVERIFY(sourceSettings.open(QIODevice::ReadOnly));
+    const auto beforeCopyFailure = sourceSettings.readAll(); sourceSettings.close();
+    PanelRegistry copyFailure;
+    QCOMPARE(copyFailure.migrationDiagnostic(), QStringLiteral("theme-migration-copy-failed"));
+    QVERIFY(sourceSettings.open(QIODevice::ReadOnly));
+    QCOMPARE(sourceSettings.readAll(), beforeCopyFailure);
+    QCOMPARE(QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+        QStringLiteral("/themes")).entryList(QDir::Dirs | QDir::NoDotAndDotDot), managedBefore);
+    QVERIFY(QDir(external.path()).entryList({QStringLiteral("*.json")}, QDir::Files).isEmpty());
+    QVERIFY(QFile::setPermissions(unreadable, QFile::ReadOwner | QFile::WriteOwner));
 }
 
 void PanelRegistryTest::batchesNormalizedPanelUpdates()
@@ -3788,6 +3852,67 @@ void PanelRegistryTest::rendersResponsivePanelSkins()
     QCOMPARE(tileImage.size(), QSize(320, 80));
     QVERIFY(tileImage.pixelColor(3, 3).red() > tileImage.pixelColor(3, 3).blue());
     QVERIFY(tileImage.pixelColor(43, 3).red() > tileImage.pixelColor(43, 3).blue());
+}
+
+void PanelRegistryTest::generatedRenderHistoryIsBoundedAndProtectsReferences()
+{
+    QTemporaryDir sourceDirectory;
+    QVERIFY(sourceDirectory.isValid());
+    const QString sourcePath = sourceDirectory.filePath("design.png");
+    QImage source(20, 20, QImage::Format_ARGB32_Premultiplied);
+    source.fill(Qt::blue);
+    QVERIFY(source.save(sourcePath));
+    PanelRegistry registry;
+    QVERIFY(registry.importTheme("bottom", QUrl::fromLocalFile(sourcePath)));
+    const auto render = [&](int width) {
+        QVERIFY(registry.renderTheme("bottom", width, 80, 1, true));
+        QTRY_COMPARE_WITH_TIMEOUT(registry.panelValue("bottom", "themeRenderWidth").toInt(), width, 10000);
+        QTRY_COMPARE_WITH_TIMEOUT(registry.panelValue("bottom", "themeRenderOutcome").toString(), QString("ready"), 10000);
+    };
+    const auto asset = [&] { return QUrl(registry.panelValue("bottom", "themeAsset").toString()).toLocalFile(); };
+    render(320);
+    const QString backedUp = asset();
+    ArchDock::ConfigurationBackup backup;
+    QString error;
+    QVERIFY2(!backup.capture("render-reference-test", &error).isEmpty(), qPrintable(error));
+    render(321);
+    const QString otherPanel = asset();
+    registry.setPanelValue("top", "themeAsset", QUrl::fromLocalFile(otherPanel).toString());
+    QCOMPARE(registry.panelValue("top", "themeAsset").toString(), QUrl::fromLocalFile(otherPanel).toString());
+    const QDir data(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
+    QStringList protectedFiles{backedUp, otherPanel};
+    for (const QString &directory : {QString("profiles"), QString("presets/panel")}) {
+        render(directory == "profiles" ? 322 : 323);
+        protectedFiles.append(asset());
+        QVERIFY(QDir().mkpath(data.filePath(directory)));
+        QFile stored(data.filePath(directory + "/retained-reference.json"));
+        QVERIFY(stored.open(QIODevice::WriteOnly));
+        const auto contents = QJsonDocument(QJsonObject{{"themeAsset", QUrl::fromLocalFile(asset()).toString()}}).toJson();
+        QCOMPARE(stored.write(contents), contents.size());
+    }
+    for (int width = 330; width < 342; ++width) render(width);
+    protectedFiles.append(asset());
+    for (const QString &path : std::as_const(protectedFiles)) QVERIFY2(QFileInfo::exists(path), qPrintable(path));
+    const QDir history(QFileInfo(asset()).dir().absolutePath() + "/..");
+    const auto directories = history.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+    QVERIFY(directories.size() <= protectedFiles.size() + 4);
+    QString disposable;
+    for (const auto &directory : directories) {
+        bool required = false;
+        for (const QString &path : std::as_const(protectedFiles))
+            required = required || path.startsWith(directory.absoluteFilePath() + '/');
+        if (!required) { disposable = directory.absoluteFilePath(); break; }
+    }
+    QVERIFY(!disposable.isEmpty());
+    QFile oversized(QDir(disposable).filePath("history-extra.bin"));
+    QVERIFY(oversized.open(QIODevice::WriteOnly));
+    QVERIFY(oversized.resize(65 * 1024 * 1024));
+    oversized.close();
+    render(350);
+    QVERIFY(!QFileInfo::exists(disposable));
+    for (const QString &path : std::as_const(protectedFiles)) QVERIFY2(QFileInfo::exists(path), qPrintable(path));
+    QVERIFY(QFileInfo::exists(sourcePath));
+    QVERIFY(QFileInfo::exists(QUrl(registry.panelValue("bottom", "themeSource").toString()).toLocalFile()));
 }
 
 void PanelRegistryTest::doesNotExecuteExternalRenderers()

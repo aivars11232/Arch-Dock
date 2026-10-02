@@ -21,12 +21,17 @@ Item {
     property string loadError: "mask-source-missing"
     property var alphaBytes: null
     property int loadPolls: 0
+    property url cachedSource: ""
 
     function resetCache() {
         cacheReady = false
         alphaBytes = null
         loadPolls = 0
         const value = String(source || "")
+        if (String(cachedSource) !== value) {
+            if (String(cachedSource).length > 0) cache.unloadImage(cachedSource)
+            cachedSource = source
+        }
         if (value.length === 0) {
             loadError = "mask-source-missing"
             return
@@ -90,6 +95,9 @@ Item {
     onRasterWidthChanged: resetCache()
     onRasterHeightChanged: resetCache()
     Component.onCompleted: resetCache()
+    Component.onDestruction: {
+        if (String(cachedSource).length > 0) cache.unloadImage(cachedSource)
+    }
 
     Timer {
         interval: 20
@@ -114,6 +122,7 @@ Item {
 
     Canvas {
         id: cache
+        objectName: "alphaHitMaskCanvas"
 
         width: Math.max(1, root.rasterWidth)
         height: Math.max(1, root.rasterHeight)

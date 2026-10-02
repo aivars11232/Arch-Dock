@@ -14,6 +14,8 @@ struct Registry
     QList<PanelDefinition> panels;
     int commits = 0;
     int creates = 0;
+    int backups = 0;
+    bool failBackup = false;
     QString guard;
     Registry()
     {
@@ -25,6 +27,10 @@ struct Registry
     {
         ProfileApplyTransaction::Operations op;
         op.guard = [this] { return guard; };
+        op.backupConfiguration = [this](QString *error) {
+            if (failBackup) { if (error) *error = "backup-storage-unavailable"; return false; }
+            ++backups; return true;
+        };
         op.snapshot = [this](QString *) { return panels; };
         op.matches = [this](const auto &expected, QString *) { return panels == expected; };
         op.prepare = [](const auto &, auto &, QStringList *, QString *) { return true; };
@@ -48,6 +54,20 @@ class ProfileManagerTest final : public QObject
 {
     Q_OBJECT
 private slots:
+    void backupFailureRefusesPublicApplyBeforeMutation()
+    {
+        QTemporaryDir directory; Registry registry;
+        ProfileManager manager(registry.operations(), directory.filePath("profiles"), directory.filePath("journal.json"));
+        const auto created = manager.createProfile("Recoverable");
+        QVERIFY(success(created)); QCOMPARE(registry.backups, 0);
+        registry.failBackup = true;
+        const auto result = manager.applyProfile(created.value("profileId").toString(), 1);
+        QVERIFY(!success(result)); QCOMPARE(result.value("errorCode").toString(), QString("backup-storage-unavailable"));
+        QCOMPARE(registry.commits, 0); QCOMPARE(registry.creates, 0); QVERIFY(!manager.active());
+        registry.failBackup = false;
+        QVERIFY(success(manager.applyProfile(created.value("profileId").toString(), 1)));
+        QCOMPARE(registry.backups, 1); QCOMPARE(registry.commits, 1);
+    }
     void nativeShortcutUsesTheTransactionAndDeletionIsVerified()
     {
         QTemporaryDir directory; Registry registry;

@@ -448,3 +448,51 @@ action; disable and deletion are checked against native key readback. This is
 real native D-Bus activation evidence, without a claim of physical keyboard
 delivery. Run the groups sequentially. Neither harness connects to the
 personal session or installs globally.
+
+## TASK-0044 display and resource hardening
+
+The six hardening groups reuse this lifecycle launcher, staged installation,
+private bus, KWin/Plasma process ownership and unrelated-panel/applet sentinels.
+They run separately: `scale100`, `scale125`, `scale150`, `scale200`,
+`hotplug-recovery` and `resources`. Each is registered with CTest as
+`wayland-hardening-GROUP-test`, with `RUN_SERIAL` and a 420-second limit.
+Use a task-specific build, one build job, one test worker and a short
+disk-backed test TMPDIR. Run one group at a time, for example:
+
+```bash
+ctest --test-dir build-codex-task-0044/phase-a \
+  -R '^wayland-hardening-scale125-test$' --parallel 1 \
+  --stop-on-failure --output-on-failure --no-tests=error
+```
+
+The scale groups resolve native output names from stable Qt identities,
+explicitly separate both output positions, verify scale/topology readback, and
+exercise all four native edges on both outputs. The existing KWin probe also
+checks presented panel dimensions and output, rather than accepting only
+stored containment intent. Each group renders all 15 Panel and 15 Icon Preset
+cards, selects every populated library page, delivers real core keyboard
+events, checks replaced Canvas mask release and cancels a temporary audition.
+Browser fixtures use the actual client size and a queued GUI-thread
+`frameSwapped` notification before inspecting the polished click viewport.
+
+The hotplug group verifies that the audition and managed panel request the
+output it actually removes. A connected scale change preserves the active
+audition; removal of its stable requested output reuses the existing journaled
+cancel/rollback path. The group checks deterministic fallback, retained stable
+identity, re-enable, service crash/recovery, exact temporary-host removal and
+unchanged unrelated sentinels. The resources group performs eight create/cancel
+cycles with a bounded RSS-growth discriminator and tests reference-protected
+generated history plus idle/recovering overlay expiry.
+
+Every group scans retained runtime logs for genuine QML failures. Private
+processes and temporary roots are torn down between groups; build-local logs
+remain available during diagnosis. Focused `--energy-regression` and
+`--browser-regression` modes run one C++ fixture in the same private compositor
+without starting the full Plasma matrix. Set `ARCHDOCK_BUILD_DIR` to the
+retained build when using those modes.
+
+The original image measurements, native readback repairs, observed matrix and
+physical environment limits are recorded in [PLATFORM_MATRIX.md](PLATFORM_MATRIX.md).
+The private virtual matrix uses the host GPU; physical connector/scanout and
+other hardware observations are reported separately. It neither restarts the
+owner's Plasma session nor installs globally.

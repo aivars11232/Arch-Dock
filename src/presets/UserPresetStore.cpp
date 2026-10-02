@@ -1,6 +1,7 @@
 #include "UserPresetStore.h"
 
 #include "PresetCatalog.h"
+#include "../persistence/ConfigurationBackup.h"
 
 #include <QDir>
 #include <QFile>
@@ -8,6 +9,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
+#include <QSettings>
+#include <QStandardPaths>
 #include <QUuid>
 
 #include <algorithm>
@@ -218,13 +221,34 @@ std::optional<Definition> savePreset(const QString &root,
         return std::nullopt;
     }
 
-    if (!QDir().mkpath(QDir(root).filePath(kind)) ||
-        !writeJson(QDir(root).filePath(markerFileName),
-                   {{QStringLiteral("format"), UserPresetStore::storeFormat()},
-                    {QStringLiteral("version"), UserPresetStore::CurrentStoreVersion}}) ||
-        !writeJson(definitionPath(root, kind, canonical->identity.id),
-                   canonical->toVariantMap()))
+    const QString marker = QDir(root).filePath(markerFileName);
+    const bool adopting = !QFileInfo::exists(marker);
+    const bool existingData = QFileInfo::exists(QDir(root).filePath(QStringLiteral("defaults.json"))) ||
+        !QDir(QDir(root).filePath(panelDirectoryName)).entryList({QStringLiteral("*.json")}, QDir::Files).isEmpty() ||
+        !QDir(QDir(root).filePath(iconDirectoryName)).entryList({QStringLiteral("*.json")}, QDir::Files).isEmpty();
+    const QString standardRoot = QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
+        .filePath(QStringLiteral("presets"));
+    ConfigurationBackup backup = QFileInfo(root).absoluteFilePath() == QFileInfo(standardRoot).absoluteFilePath()
+        ? ConfigurationBackup{} : ConfigurationBackup(QDir(root).filePath(QStringLiteral(".config-backups")),
+            {{QStringLiteral("presets"), {root, true}}});
+    QString backupId;
+    if (adopting && existingData)
     {
+        backupId = backup.capture(QStringLiteral("user-preset-store-adoption"), errorCode);
+        if (backupId.isEmpty() || !backup.prune(QSettings().value(
+            QStringLiteral("backup/retentionCount"), 5).toInt(), errorCode)) return std::nullopt;
+    }
+    if (backup.recoveryPending())
+    { setError(errorCode, QStringLiteral("preset-store-recovery-pending")); return std::nullopt; }
+    const QString destination = definitionPath(root, kind, canonical->identity.id);
+    const bool definitionWritten = QDir().mkpath(QDir(root).filePath(kind)) &&
+        writeJson(destination, canonical->toVariantMap());
+    if (!definitionWritten || (adopting && !writeJson(marker,
+        {{QStringLiteral("format"), UserPresetStore::storeFormat()},
+         {QStringLiteral("version"), UserPresetStore::CurrentStoreVersion}})))
+    {
+        if (!backupId.isEmpty() && !backup.restore(backupId, errorCode)) return std::nullopt;
+        if (backupId.isEmpty() && adopting && definitionWritten) (void)QFile::remove(destination);
         setError(errorCode, QStringLiteral("store-unwritable"));
         return std::nullopt;
     }

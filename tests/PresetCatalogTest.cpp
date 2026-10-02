@@ -2,6 +2,7 @@
 #include "presets/PresetCapabilityResolver.h"
 #include "presets/PresetCatalog.h"
 #include "presets/UserPresetStore.h"
+#include "persistence/ConfigurationBackup.h"
 
 #include "PresetTestSupport.h"
 
@@ -173,6 +174,7 @@ private slots:
     void panelReferencesMustResolve();
     void panelAndIconCatalogsAreSeparate();
     void userStoreStartsEmptyAndReadingWritesNothing();
+    void unmarkedStoreAdoptionIsRecoverable();
     void derivedPresetGetsANewUserIdAndRoundTrips();
     void savingAgainKeepsTheIdAndAdvancesTheRevision();
     void builtInDefinitionsAreNeverWritten();
@@ -626,6 +628,46 @@ void PresetCatalogTest::userStoreStartsEmptyAndReadingWritesNothing()
     QVERIFY(diagnostics.isEmpty());
     // Browsing an empty library must not even create its directory.
     QVERIFY(!QFileInfo::exists(root));
+}
+
+void PresetCatalogTest::unmarkedStoreAdoptionIsRecoverable()
+{
+    QTemporaryDir directory;
+    const QString root = directory.filePath(QStringLiteral("presets"));
+    UserPresetStore store(root);
+    QString error;
+    const auto first = store.save(UserPresetStore::derivedFrom(panelFixture(), QStringLiteral("First")), &error);
+    QVERIFY2(first.has_value(), qPrintable(error));
+    const QString marker = QDir(root).filePath(QStringLiteral("user-presets.json"));
+    QVERIFY(QFile::remove(marker));
+    const QString original = QDir(root).filePath(QStringLiteral("panels/") + first->identity.id + QStringLiteral(".json"));
+    const auto originalBytes = readBytes(original);
+    const QString defaults = QDir(root).filePath(QStringLiteral("defaults.json"));
+    const auto defaultsBytes = toJson({{QStringLiteral("panelPresetId"), first->identity.id}});
+    QVERIFY(writeBytes(defaults, defaultsBytes));
+    ArchDock::ConfigurationBackup backup(QDir(root).filePath(QStringLiteral(".config-backups")),
+        {{QStringLiteral("presets"), {root, true}}});
+    QVERIFY(backup.backups().isEmpty());
+    const auto second = store.save(UserPresetStore::derivedFrom(iconFixture(), QStringLiteral("Second")), &error);
+    QVERIFY2(second.has_value(), qPrintable(error));
+    QCOMPARE(backup.backups().size(), 1);
+    QCOMPARE(readBytes(original), originalBytes);
+    QCOMPARE(readBytes(defaults), defaultsBytes);
+    QVERIFY2(backup.restore(backup.backups().first(), &error), qPrintable(error));
+    QVERIFY(!QFileInfo::exists(marker));
+    QCOMPARE(store.panelPresets().size(), 1);
+    QVERIFY(store.iconPresets().isEmpty());
+    QCOMPARE(readBytes(original), originalBytes);
+    QCOMPARE(readBytes(defaults), defaultsBytes);
+
+    QVERIFY(QDir(QDir(root).filePath(QStringLiteral(".config-backups"))).removeRecursively());
+    QVERIFY(writeBytes(QDir(root).filePath(QStringLiteral(".config-backups")), QByteArray("blocked")));
+    QVERIFY(!store.save(UserPresetStore::derivedFrom(iconFixture(), QStringLiteral("Refused")), &error));
+    QCOMPARE(error, QStringLiteral("backup-root-unwritable"));
+    QVERIFY(!QFileInfo::exists(marker));
+    QCOMPARE(readBytes(original), originalBytes);
+    QCOMPARE(readBytes(defaults), defaultsBytes);
+    QVERIFY(store.iconPresets().isEmpty());
 }
 
 void PresetCatalogTest::derivedPresetGetsANewUserIdAndRoundTrips()

@@ -254,7 +254,7 @@ PlasmoidItem {
         message.arguments = parameters || [];
         const reply = PlasmaDBus.SessionBus.asyncCall(message)
             as PlasmaDBus.DBusPendingReply;
-        reply.finished.connect(function() {
+        reply.finished.connect(root, function() {
             try {
                 if (reply.isError) {
                     const error = {
@@ -1015,7 +1015,7 @@ PlasmoidItem {
                 id: panelDropArea
 
                 anchors.fill: parent
-                enabled: root.configuration.acceptDrops && !root.plasmaEditMode
+                enabled: Boolean(root.configuration.acceptDrops) && !root.plasmaEditMode
                 keys: ["text/uri-list"]
                 onContainsDragChanged: root.panelDropActive = containsDrag
                 onDropped: drop => {

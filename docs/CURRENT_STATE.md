@@ -6,14 +6,114 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Latest boundary — 2026-10-02:** TASK-0042 is committed and complete at
-`2816be6d0d0a631829c4249327c73fbc7c473a94`. TASK-0043 **Phases A and B are
-COMPLETE**: startup, the renderer prerequisite, Arch packaging and disposable
-install/render/uninstall verification pass; both full gates pass **97/97**.
-Consolidated closure awaits removal of one system-owned KWin crash dump;
-all workspace temporary output and private processes have been cleaned up.
-See the [Phase B and cleanup record](#task-0043--phase-b-package-verification-and-final-cleanup-boundary--2026-10-02).
+**Latest boundary — 2026-10-03: TASK-0044 PAUSED — OWNER REQUESTED.**
+TASK-0043 is committed at
+`a5bdd7933591bf75bf030cd144f7c9cea5e7fbae` and COMPLETE. Its exact system-owned
+KWin crash dump was removed using the owner's authorized authenticated cleanup;
+absence was verified before TASK-0044 planning. Its retained package deliverables
+and historical **97/97** gates are unchanged. TASK-0044 Phase A is COMPLETE
+with a fresh all-target build and **99/99** CTests. Phase B is COMPLETE with
+a green all-target build and **106/106** CTests. The consolidated task is
+**not complete**: the owner requested pause/freeze during the fresh final build.
+The original approval and plan remain in force. Mandatory-gate causes are proved
+and repaired; the complete Phase B build and **106/106 CTests passed**.
+The active build and its descendants were stopped; no process retains task
+paths. The owner explicitly requested checkpoint commit/sync before final
+acceptance. Builds and evidence are retained for resumption. See the
+[TASK-0044 recovery record](#task-0044--configuration-recovery-phase-a--2026-10-02).
 Earlier snapshots below retain their historical dates and results.
+
+### TASK-0044 frozen checkpoint — 2026-10-03
+
+The disposable upgrade logging blocker is resolved by the native Qt
+`QT_FORCE_STDERR_LOGGING=1` fixture environment. Phase A's complete fresh build
+and **99/99 CTests** passed in bounded serial batches (512.56 seconds summed).
+
+Phase B changes in this checkpoint include screen geometry/work-area/DPI
+coalescing with profile-transaction deferral, utility-window work-area fitting,
+compact scrollable Studio and icon editing, schema field accessibility, real
+DockEntry keyboard actions, Canvas mask-image release, bounded generated render
+history, idle overlay expiry shutdown, and the duplicate native Item `enabled`
+property correction. Narrow checks passed for PanelWindow (including real
+resource-backed Studio loading), Studio navigation/contracts, IconProperties,
+DockEntry/motion, core accessibility, PanelSkin2D (including image release),
+PanelRegistry (including protected references and the 64 MiB history limit),
+OverlayModel (including idle/recovery), scene rotation and panel scenes.
+The complete Phase B result is recorded below separately from these narrow checks.
+
+`CMakeLists.txt` registers **106 CTests**: the previous 99, one core
+accessibility test, and six private Wayland hardening groups. The owner explicitly
+overrode the one-correction/one-rerun stopping rule for mandatory TASK-0044 gates:
+unclear or pre-existing failures require bounded diagnosis and repair. Builds
+and gates remain serial with one build job and one test at a time.
+
+The energy-frame-cyan discrepancy is **Case B: unequal native scene-graph atlas
+state**. The original 300x110 RGBA8888-premultiplied captures differed at exactly
+one pixel (251,66), red 37 versus 36; green, blue and alpha were identical.
+The differing fraction was 0.0030303%, maximum channel delta 1 and mean absolute
+channel delta 0.000007575757575757576. Matching item geometry, renderer data,
+DPR and frozen animation state and repeated stable captures ruled out timing
+and translation. Replaying preceding cards produced A,B,A,A. A native Qt atlas
+allocation control removed the difference. Reusing the engine/component while
+creating a fresh QQuickWindow per card equalizes atlas construction state and
+preserves exact equality and all energy effects. Four separate cyan and green
+cards, expected active energy surfaces and cyan-versus-green positive controls
+passed in three focused private Wayland runs with the normal atlas.
+
+The original 100% matrix subsequently passed with all 30 cards, browser,
+keyboard, Canvas release, native placement and audition checks. Genuine applet
+callback errors found by its QML scan were repaired using Qt's explicit QObject
+receiver context; the optional acceptDrops boolean is now normalized. The
+resources group passed eight audition/cancel cycles with no orphan hosts and
+8.37 MiB RSS growth, plus generated-history and idle-overlay regressions.
+
+The 125% native discriminator proved that equal custom bounds of 320 produce
+a 320x80 presented panel even when Plasma's raw content-length getter is 174.
+The adapter reads fixed length from those native equal bounds; unequal-bound
+readback still fails and rolls back. Browser selection failures came from a
+pre-layout 121x0 ListView inside an oversized fixture. Actual client sizing,
+queued GUI-thread frame notifications and verified click bounds repair that
+fixture without relaxing selection or non-mutation assertions.
+
+The matrix now resolves KScreen names from Qt stable identities and explicitly
+separates both outputs. It verifies presented native dimensions and output on
+all edges, rather than accepting overlapping-output or stored-intent evidence.
+Removing the actual audition output exposed a surviving temporary host;
+screen reconciliation now reuses the existing journaled cancel/rollback path.
+A connected scale change remains ACTIVE as its positive control.
+
+On 2026-10-03 the complete one-job Phase B build and **106/106 CTests passed**
+in bounded serial batches (778.28 seconds summed individual test times).
+The four scale groups passed at 100/125/150/200%, followed by hotplug/restart,
+resources, diagnostics and installed startup. No mandatory failure remains.
+
+Required evidence remains under ignored `build-codex-task-0044`: energy pixel
+statistics, original/control captures, focused regressions, the original 100%
+pass (`phase-a/browser-combined-diagnostic.log`), resources and current 125%
+logs. Private sessions and temporary roots are cleaned by the lifecycle harness
+between runs; builds and the local PySide6/system-site environment are retained
+for diagnosis. No global installation occurred.
+
+The separate fresh consolidated configure passed in
+`build-codex-task-0044/final`, with Debug, Quick 3D ON, one autogen worker and
+the existing short task TMPDIR. Build groups 1–4 passed. Group 5 was stopped
+at the owner's request (exit 143), while building `panel-registry-test`;
+`icon-override-transaction-test` had completed. This interruption is not a
+compiler/test failure. Group 6, the final all-target build, the fresh final
+106-test suite, optional-3D installed runtime and final artifact cleanup have
+not run. Task builds, local Python environment and all diagnostic evidence
+remain frozen for reuse. Resume group 5 from this build, then the remaining
+approved gates; do not restart implementation or rerun the completed phase gates.
+
+Baseline HEAD is `a5bdd7933591bf75bf030cd144f7c9cea5e7fbae`. The owner's latest
+instruction explicitly authorizes committing and syncing this paused checkpoint,
+superseding the earlier Git-only completion precondition. Use the recorded
+message `Harden Arch Dock recovery and Wayland behavior`. TASK-0044 remains
+PAUSED after that checkpoint; committing does not establish consolidated
+acceptance. Physical multi-monitor/manual acceptance remains distinct from
+private virtual evidence, as documented in [PLATFORM_MATRIX.md](PLATFORM_MATRIX.md).
+No agent or overlapping gate was used, and the personal Plasma session remains
+untouched. TASK-0045 has not started.
 
 **Evidence snapshot:** 2026-09-27 (Europe/Amsterdam). TASK-0036 Phase B has
 been implemented under its retained approval and original plan. Both internal
@@ -3484,3 +3584,45 @@ dependency versions. Physical GPU/monitor/hotplug and broader platform evidence
 belong to TASK-0044; release/tag acceptance belongs to TASK-0045. Existing
 license declarations remain unchanged and project-wide licensing is unspecified.
 Suggested owner-controlled commit: `Package Arch Dock for Arch Linux`.
+
+## TASK-0044 — Configuration recovery Phase A — 2026-10-02
+
+Baseline HEAD: `a5bdd7933591bf75bf030cd144f7c9cea5e7fbae`. The consolidated
+pack and all checksums were inspected; the existing approved plan covers both
+phases without reopening predecessor work. TASK-0043's exact pending core at
+the path recorded above was removed and its absence verified. The owner has
+authorized TASK-0044 commit/sync after verification, followed by task cleanup.
+
+The shared version-1 data-only backup service uses QSaveFile, SHA256, private
+permissions, trusted application roots and bounded copies. It snapshots settings,
+profiles/assets, user presets/defaults, themes and profile-shortcut data before
+destructive registry migration, unmarked preset-store adoption, actual legacy
+profile rewrite, or profile apply. Installed built-ins and generated/temporary
+or executable content are excluded. Retention is configurable 1–20 (default 5),
+preserves the newest valid copy despite clock changes, removes corrupt/incomplete
+copies and pins interrupted-restore copies. Offline Core-only capture/list/restore
+commands use the existing D-Bus ownership lock and refuse conflicting profile
+recovery. Migration stages managed assets/settings and leaves original bytes
+unchanged on failure; native-host rollback retains its existing ownership rules.
+
+Fresh focused checks pass: configuration-backup, panel-registry, preset-catalog,
+profile-store, profile-apply-transaction, profile-manager, and the disposable
+configuration-upgrade test (**7/7** distinct CTests). The fixture initially wrote
+a Python object rather than native QByteArray; corrected encoding passed that
+boundary. Its next failure was a logging-capture error: Qt sent the expected
+live-owner refusal to journald. A focused trace and exact journal entry proved
+the cause; forcing stderr inside the disposable fixture fixed capture, and the
+single rerun passed. Assertions and live-owner refusal remain intact.
+
+The fresh Phase A configure, eight bounded one-job build groups, final all-target
+build and all **99/99 CTests PASS**, with no failed, skipped, disabled or not-run
+tests. The suite ran in small serial batches; rendering, window/folder interaction,
+staged presets, profile apply/shortcuts, all five audition groups and installed
+startup each ran alone. This closes all four Phase A acceptance criteria and
+allows the approved Phase B work to begin.
+
+The task-local system-site Python environment supplies pinned PySide6 6.11.2
+alongside existing system GI; no global dependency was installed. Builds use
+one job and tests one worker, short disk-backed TMPDIR, bounded batches and
+individual private runtime gates. Commands and recovery limits are in
+[INSTALL.md](INSTALL.md#configuration-recovery-and-upgrades).

@@ -50,6 +50,49 @@ when it is the initial launcher. Installed applets may reactivate a needed
 backend after it stops, so stopping a manual unit is not an applet-disable
 mechanism. Installation never starts or enables this unit.
 
+## Configuration recovery and upgrades
+
+Before upgrading, stop the Arch Dock backend and ensure installed applets will
+not immediately reactivate it. Recovery commands acquire the same session
+D-Bus name as the running service and refuse a live owner. They use Qt Core
+and do not require a display:
+
+```bash
+arch-dock --backup-config
+arch-dock --list-config-backups
+arch-dock --restore-config-backup BACKUP_ID
+```
+
+Capture prints an ID; listing prints valid IDs in creation order. Restore
+validates the whole snapshot and saves the current configuration before any
+replacement. A failed write rolls back; an interrupted restore leaves a
+private journal that is recovered before normal startup. An unresolved profile
+apply journal must be recovered through Profiles before configuration recovery.
+Never remove a recovery journal to force a restore.
+
+Version-1 snapshots live in `AppDataLocation/config-backups` (normally
+`~/.local/share/Arch Dock/Arch Dock/config-backups`). They include registry
+settings, user profiles and managed assets, user panel/icon presets and defaults,
+managed theme sources, and profile shortcuts. Installed immutable built-ins,
+generated render caches, hidden temporary data and executable files are excluded.
+Symbolic links are refused. Copies are bounded to 256 MiB and 4096 files,
+owner-only, and verified with SHA256 before publishing the manifest. External
+source artwork is preserved in place during legacy migration; migration writes
+its managed copy only after a pre-migration snapshot succeeds.
+
+The `backup/retentionCount` QSettings key defaults to 5 and is clamped to 1–20.
+Cleanup preserves the newest valid snapshots and any copies pinned by pending
+restore recovery. Invalid/incomplete snapshot directories are removed by the
+same cleanup. Restore is data-only and does not restore native Plasma host
+ownership; the existing profile transaction owns host rollback. Package removal
+continues to preserve all user configuration and backups.
+
+Automatic snapshots precede destructive registry migration, unmarked user-preset
+store adoption, actual legacy-profile rewrites, and every profile apply. Loading
+a profile remains read-only. Future schema versions remain untouched and
+rejected; use a compatible application version or an explicitly selected older
+backup for downgrade recovery.
+
 ## Build and disposable installation
 
 For a local production build, use a fresh directory and one compile job:

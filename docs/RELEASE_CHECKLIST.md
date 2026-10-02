@@ -570,3 +570,51 @@ remains TASK-0044; release/tag acceptance remains TASK-0045. The project-wide
 license remains unspecified; existing component/asset declarations are preserved.
 Broader release checkboxes remain open. See [INSTALL.md](INSTALL.md) for the
 supported owner-controlled package route.
+
+## TASK-0044 recovery implementation boundary — 2026-10-02
+
+TASK-0043's exact pending system-owned KWin dump was removed under owner
+authorization and its absence verified. This closes that predecessor's cleanup
+boundary; its package evidence remains historical and retained.
+
+TASK-0044 Phase A is implemented, with **7/7** distinct focused CTests passing,
+including disposable legacy upgrade, future-schema refusal, blocked-backup
+preservation, offline restore, and refusal while a live D-Bus owner exists.
+Versioned snapshots precede destructive migrations and profile apply, cover
+user resources/defaults/shortcuts, exclude installed built-ins and temporary or
+executable content, and preserve the newest valid copy under bounded retention.
+Interrupted restore rolls back through its own journal; pending native profile
+recovery remains authoritative and cannot be bypassed by configuration restore.
+
+The fresh one-job all-target build and all **99/99 Phase A CTests PASS** in
+22 serial batches (512.56 s summed test time), with no skips or failed tests.
+All four Phase A criteria pass. Phase B display/accessibility/resource work
+follows the same approved plan. No TASK-0045 release box is
+closed. The owner authorized commit/sync only after TASK-0044 verification,
+then cleanup. No global install, personal Plasma mutation, delegated agent or
+concurrent gate was used. See the
+[recovery record](CURRENT_STATE.md#task-0044--configuration-recovery-phase-a--2026-10-02).
+
+## TASK-0044 frozen checkpoint — 2026-10-03
+
+**PAUSED at the owner's explicit request; consolidated completion is pending.**
+Phase A's fresh build and **99/99 CTests** passed. Phase B's all-target build
+and **106/106 CTests** passed, including the four native Wayland scale groups,
+hotplug/audition/restart recovery, resources, accessibility, upgrade and installed
+startup. The energy-card, native fixed-length readback, browser presentation,
+output-topology and lost-audition-output defects are resolved without weakening
+their acceptance assertions. [PLATFORM_MATRIX.md](PLATFORM_MATRIX.md) records
+measured results and the physical environment cells not executed.
+
+The separate fresh final configure and build groups 1–4 passed. Group 5 was
+stopped on request (exit 143); group 6, the final all-target build, fresh final
+106-test suite, optional-3D installed runtime and final artifact cleanup remain
+pending. No active task process remains. Task builds, local dependency
+environment, logs and diagnostic evidence are retained for reuse.
+
+The latest owner instruction explicitly authorizes checkpoint commit/sync now,
+superseding the earlier Git-only completion precondition. The recorded commit
+message remains `Harden Arch Dock recovery and Wayland behavior`. This does not
+close the consolidated TASK-0044 completion gate or any TASK-0045 release box.
+The approved plan is unchanged, no successor task started, and no global install,
+personal Plasma mutation, delegated agent or overlapping gate occurred.

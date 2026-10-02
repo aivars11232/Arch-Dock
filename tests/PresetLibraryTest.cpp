@@ -185,9 +185,11 @@ private slots:
     void listingAndPreviewingChangeNothing();
     void rejectedCatalogIsReportedAndOffersNothing();
     void everyBuiltInCardRendersThroughTheSharedRenderer();
+    void energyFrameCardsAreDeterministic();
     void browsingEveryPresetPageChangesNoPanel();
 
 private:
+    void verifyRenderedCards(bool energyOnly);
     QTemporaryDir m_settingsDirectory;
 };
 
@@ -887,6 +889,16 @@ void PresetLibraryTest::rejectedCatalogIsReportedAndOffersNothing()
 
 void PresetLibraryTest::everyBuiltInCardRendersThroughTheSharedRenderer()
 {
+    verifyRenderedCards(false);
+}
+
+void PresetLibraryTest::energyFrameCardsAreDeterministic()
+{
+    verifyRenderedCards(true);
+}
+
+void PresetLibraryTest::verifyRenderedCards(bool energyOnly)
+{
     QTemporaryDir userDirectory;
     QVERIFY(userDirectory.isValid());
     const PanelRegistry registry(themeCatalog());
@@ -895,6 +907,14 @@ void PresetLibraryTest::everyBuiltInCardRendersThroughTheSharedRenderer()
     QVariantList cards = library.panelPresets(QStringLiteral("builtin"));
     cards.append(library.iconPresets(QStringLiteral("builtin")));
     QCOMPARE(cards.size(), 30);
+    QVariantList warmupCards;
+    if (energyOnly) {
+        for (const auto &card : std::as_const(cards)) {
+            if (card.toMap().value("id") == "energy-frame-cyan") break;
+            warmupCards.append(card);
+        }
+    }
+    if (energyOnly) cards = {cardById(cards, "energy-frame-cyan"), cardById(cards, "energy-frame-green")};
 
     QQmlEngine engine;
     QmlWarnings warnings(&engine);
@@ -902,23 +922,27 @@ void PresetLibraryTest::everyBuiltInCardRendersThroughTheSharedRenderer()
     QQmlComponent component(&engine,
                             runtimeComponent(QStringLiteral("PresetCard.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
-    QQuickWindow window;
-    window.resize(800, 280);
-    window.show();
-    QVERIFY(QTest::qWaitForWindowExposed(&window));
-
     struct Rendered
     {
         QImage picture;
         QString tier;
         bool fallbackApplied = true;
         QString previewName;
+        bool energySurfaceReady = false;
     };
     // Instantiates the real card for one preset and returns what its preview
-    // shows once two frames in a row are the same.
+    // shows once the promised renderer and its presented frames have settled.
     const auto render = [&](const QVariantMap &card) -> Rendered
     {
         Rendered result;
+        // Texture-atlas allocation belongs to the window's scene graph. A
+        // reused window carries previous cards' texture placements into the
+        // comparison, changing fractional sampling by a channel unit. Compare
+        // separate cards with the same native rendering-context initial state.
+        QQuickWindow window;
+        window.resize(800, 280);
+        window.show();
+        if (!QTest::qWaitForWindowExposed(&window)) return result;
         const std::unique_ptr<QObject> object(component.createWithInitialProperties(
             {{QStringLiteral("preset"), card}}));
         auto *item = qobject_cast<QQuickItem *>(object.get());
@@ -934,24 +958,44 @@ void PresetLibraryTest::everyBuiltInCardRendersThroughTheSharedRenderer()
             return result;
         }
         QImage previous;
+        int stableFrames = 0;
+        const QString expectedTier = compatibilityOf(card)
+            .value(QStringLiteral("effectiveRendererTier")).toString();
         for (int attempt = 0; attempt < 100; ++attempt)
         {
             QTest::qWait(20);
-            const QImage frame = window.grabWindow().copy(
-                preview->mapRectToScene(preview->boundingRect()).toAlignedRect());
+            if (preview->property("activeRendererTier").toString() != expectedTier) continue;
+            const QImage windowImage = window.grabWindow();
+            const qreal scale = windowImage.devicePixelRatio();
+            const QRectF logical = preview->mapRectToScene(preview->boundingRect());
+            const QImage frame = windowImage.copy(QRectF(logical.topLeft() * scale,
+                logical.size() * scale).toAlignedRect());
             if (!frame.isNull() && frame == previous)
             {
-                result.picture = frame;
-                break;
+                if (++stableFrames >= 4) { result.picture = frame; break; }
             }
+            else stableFrames = 0;
             previous = frame;
         }
         result.tier = preview->property("activeRendererTier").toString();
         result.fallbackApplied = preview->property("fallbackApplied").toBool();
         result.previewName = preview->objectName();
+        if (auto *scene = preview->property("panelSceneItem").value<QObject *>()) {
+            if (auto *surface = scene->property("activeSurfaceRenderer").value<QObject *>()) {
+                result.energySurfaceReady = surface->property("rendererReady").toBool()
+                    && surface->property("hasAnimatedOverlay").toBool()
+                    && surface->property("reducedMotion").toBool()
+                    && !surface->property("overlayAnimationRunning").toBool()
+                    && surface->property("visible").toBool() && surface->property("opacity").toDouble() > 0;
+            }
+        }
         return result;
     };
 
+    for (const auto &card : std::as_const(warmupCards)) {
+        QVERIFY(!render(card.toMap()).picture.isNull());
+        QVERIFY(!render(card.toMap()).picture.isNull());
+    }
     QHash<QString, QImage> pictures;
     for (const QVariant &value : std::as_const(cards))
     {
@@ -976,12 +1020,18 @@ void PresetLibraryTest::everyBuiltInCardRendersThroughTheSharedRenderer()
                             QString::number(distinctColors(first.picture))));
         // Deterministic: a second, separate card draws the same picture.
         const Rendered second = render(card);
+        if (energyOnly) {
+            QVERIFY2(first.energySurfaceReady && second.energySurfaceReady, label);
+            const Rendered third = render(card);
+            const Rendered fourth = render(card);
+            QVERIFY2(third.picture == first.picture && fourth.picture == first.picture, label);
+        }
         QVERIFY2(second.picture == first.picture, label);
         pictures.insert(card.value(QStringLiteral("kind")).toString() +
                             QLatin1Char('/') + id,
                         first.picture);
     }
-    QCOMPARE(pictures.size(), 30);
+    QCOMPARE(pictures.size(), energyOnly ? 2 : 30);
 
     // Different presets are different pictures, including the presets that
     // differ from their base style only by overrides.
@@ -990,15 +1040,19 @@ void PresetLibraryTest::everyBuiltInCardRendersThroughTheSharedRenderer()
         return pictures.value(QString::fromLatin1(left)) !=
             pictures.value(QString::fromLatin1(right));
     };
-    QVERIFY(differ("panel/obsidian-glass-dock", "panel/minimal-neon-rail"));
-    QVERIFY(differ("panel/obsidian-glass-dock", "panel/sci-fi-chassis-dark"));
-    QVERIFY(differ("panel/circular-blue-ring", "panel/octagonal-platform"));
-    QVERIFY(differ("panel/orange-arc-dock", "panel/holographic-semicircle"));
-    QVERIFY(differ("icon/original-clean", "icon/metallic-blue"));
-    QVERIFY(differ("icon/metallic-blue", "icon/metallic-red"));
-    QVERIFY(differ("icon/dark-orb", "icon/blue-pedestal"));
-    QVERIFY(differ("icon/blue-pedestal", "icon/red-pedestal"));
-    QVERIFY(differ("icon/metallic-blue", "icon/glass-tile"));
+    if (energyOnly) {
+        QVERIFY(differ("panel/energy-frame-cyan", "panel/energy-frame-green"));
+    } else {
+        QVERIFY(differ("panel/obsidian-glass-dock", "panel/minimal-neon-rail"));
+        QVERIFY(differ("panel/obsidian-glass-dock", "panel/sci-fi-chassis-dark"));
+        QVERIFY(differ("panel/circular-blue-ring", "panel/octagonal-platform"));
+        QVERIFY(differ("panel/orange-arc-dock", "panel/holographic-semicircle"));
+        QVERIFY(differ("icon/original-clean", "icon/metallic-blue"));
+        QVERIFY(differ("icon/metallic-blue", "icon/metallic-red"));
+        QVERIFY(differ("icon/dark-orb", "icon/blue-pedestal"));
+        QVERIFY(differ("icon/blue-pedestal", "icon/red-pedestal"));
+        QVERIFY(differ("icon/metallic-blue", "icon/glass-tile"));
+    }
 
     QVERIFY2(warnings.messages.isEmpty(),
              qPrintable(warnings.messages.join(QLatin1Char('\n'))));
@@ -1045,8 +1099,17 @@ void PresetLibraryTest::browsingEveryPresetPageChangesNoPanel()
         {
             return -1;
         }
+        const auto presented = std::make_shared<int>(0);
+        QObject::connect(&window, &QQuickWindow::frameSwapped, browser,
+            [presented] { ++*presented; }, Qt::QueuedConnection);
         browser->setParentItem(window.contentItem());
-        browser->setSize(QSizeF(860, 720));
+        browser->setSize(QSizeF(window.size()));
+        window.update();
+        if (!QTest::qWaitFor([&] { return *presented > 0; }))
+        {
+            qWarning() << "preset browser did not present its initial layout";
+            return -1;
+        }
         QSignalSpy selected(browser, SIGNAL(presetSelected(QString)));
         for (int index = 0; index < cards.size(); ++index)
         {
@@ -1057,9 +1120,19 @@ void PresetLibraryTest::browsingEveryPresetPageChangesNoPanel()
             {
                 QMetaObject::invokeMethod(browser, "focusCard",
                                           Q_ARG(QVariant, QVariant(index)));
-                QTest::qWait(10);
+                const int previousFrame = *presented;
+                window.update();
+                if (!QTest::qWaitFor([&] { return *presented > previousFrame; }))
+                {
+                    return -1;
+                }
                 card = findItem(browser, QStringLiteral("preset-card-") + id);
-                if (card && card->width() <= 0)
+                auto *list = findItem(browser, QStringLiteral("preset-list"));
+                const QPointF click = card ? card->mapToScene(QPointF(40, 20))
+                                           : QPointF(-1, -1);
+                if (card && (!list || card->width() <= 40 || card->height() <= 20 ||
+                    !QRectF(list->mapToScene(QPointF()), list->size()).contains(click) ||
+                    !QRectF(QPointF(), QSizeF(window.size())).contains(click)))
                 {
                     card = nullptr;
                 }

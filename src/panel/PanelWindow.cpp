@@ -11,6 +11,7 @@
 #include "../model/PanelSettingsSchema.h"
 #include "IconOverrideTransaction.h"
 #include "../presets/PresetApplication.h"
+#include "../persistence/ConfigurationBackup.h"
 
 #include <KIO/OpenUrlJob>
 #include <QQmlApplicationEngine>
@@ -124,6 +125,15 @@ bool isNativeDockPanelType(const QString &type)
         edge == QStringLiteral("left") ||
         edge == QStringLiteral("right");
     }
+
+void fitUtilityWindow(QWindow *window)
+{
+    if (!window || !window->screen()) return;
+    const QSize available = window->screen()->availableGeometry().size();
+    if (available.isEmpty()) return;
+    window->setMinimumSize(window->minimumSize().boundedTo(available));
+    window->resize(window->size().boundedTo(available));
+}
 
 QRect panelGeometryForVisibility(const QRect &screenGeometry,
                                  const ArchDock::NativePanelPlacement &placement)
@@ -323,6 +333,7 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
         connect(m_profileManager, &ArchDock::ProfileManager::changed, this, [this] {
             notifyDockRevision();
             notifyDockEntriesRevision();
+            if (m_screenChangePending && !profileBusy()) m_screenChangeTimer.start();
         });
         m_engine.rootContext()->setContextProperty(
             QStringLiteral("systemStatus"),
@@ -450,15 +461,22 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     connect(&m_windowModel, &QAbstractItemModel::rowsRemoved, this, updateVisibility);
     connect(&m_windowModel, &QAbstractItemModel::modelReset, this, updateVisibility);
 
+    m_screenChangeTimer.setSingleShot(true);
+    m_screenChangeTimer.setInterval(100);
+    connect(&m_screenChangeTimer, &QTimer::timeout, this, &PanelWindow::handleScreensChanged);
     if (auto *application = qobject_cast<QGuiApplication *>(QCoreApplication::instance()))
     {
-        connect(application, &QGuiApplication::screenAdded, this, [this]
+        for (QScreen *screen : QGuiApplication::screens()) watchScreen(screen);
+        connect(application, &QGuiApplication::screenAdded, this, [this](QScreen *screen)
                 {
-                    handleScreensChanged();
+                    watchScreen(screen);
+                    m_screenChangePending = true;
+                    m_screenChangeTimer.start();
                 });
         connect(application, &QGuiApplication::screenRemoved, this, [this]
                 {
-                    handleScreensChanged();
+                    m_screenChangePending = true;
+                    m_screenChangeTimer.start();
                 });
     }
 
@@ -1023,6 +1041,15 @@ ArchDock::ProfileApplyTransaction::Operations PanelWindow::profileOperations()
         return QString{};
     };
     operations.snapshot = [this](QString *error) { return m_panelRegistry.panelDefinitions(error); };
+    operations.backupConfiguration = [](QString *error) {
+        QSettings settings;
+        settings.sync();
+        if (settings.status() != QSettings::NoError)
+        { if (error) *error = QStringLiteral("configuration-unreadable"); return false; }
+        ConfigurationBackup backup;
+        return !backup.capture(QStringLiteral("profile-apply"), error).isEmpty() &&
+            backup.prune(settings.value(QStringLiteral("backup/retentionCount"), 5).toInt(), error);
+    };
     operations.matches = [this](const QList<PanelDefinition> &before, QString *error) {
         return m_panelRegistry.panelSetMatches(before, error);
     };
@@ -4676,9 +4703,39 @@ void PanelWindow::synchronizeScreenAssignments()
     }
 }
 
+void PanelWindow::watchScreen(QScreen *screen)
+{
+    if (!screen) return;
+    const auto schedule = [this] {
+        m_screenChangePending = true;
+        m_screenChangeTimer.start();
+    };
+    connect(screen, &QScreen::geometryChanged, this, schedule);
+    connect(screen, &QScreen::availableGeometryChanged, this, schedule);
+    connect(screen, &QScreen::logicalDotsPerInchChanged, this, schedule);
+    connect(screen, &QScreen::physicalDotsPerInchChanged, this, schedule);
+}
+
 void PanelWindow::handleScreensChanged()
 {
+    if (m_presetAudition && m_presetAudition->active())
+    {
+        const auto preview = m_presetAudition->previewDefinition(
+            m_presetAudition->status().value(QStringLiteral("panelId")).toString());
+        const auto screens = QGuiApplication::screens();
+        if (preview && !preview->host.screenId.isEmpty() &&
+            std::none_of(screens.cbegin(), screens.cend(), [&preview](const QScreen *screen) {
+                return ArchDock::persistentScreenId(screen) == preview->host.screenId;
+            }))
+        {
+            const auto cancelled = m_presetAudition->cancel();
+            if (!cancelled.value(QStringLiteral("success")).toBool())
+                qWarning() << "Could not recover preset audition after output removal:"
+                           << cancelled.value(QStringLiteral("errorCode")).toString();
+        }
+    }
     if (profileBusy()) return;
+    m_screenChangePending = false;
 
     synchronizeScreenAssignments();
     for (const QString &panelId : m_panelRegistry.panelIds())
@@ -4690,6 +4747,8 @@ void PanelWindow::handleScreensChanged()
     }
     ++m_screenRevision;
     emit screenRevisionChanged();
+    fitUtilityWindow(m_settingsWindow);
+    fitUtilityWindow(m_iconPropertiesWindow);
     updateDesktopSuite();
 }
 
@@ -7874,6 +7933,7 @@ void PanelWindow::presentUtilityWindow(QWindow *window)
     if (screen)
     {
         window->setScreen(screen);
+        fitUtilityWindow(window);
         const QRect geometry = screen->availableGeometry();
         window->setPosition(
             geometry.x() + (geometry.width() - window->width()) / 2,

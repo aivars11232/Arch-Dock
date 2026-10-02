@@ -240,9 +240,10 @@ private:
     [[nodiscard]] bool setPanelValuesChecked(const QString &panelId, const QVariantMap &values);
     void startRender(const RenderRequest &request);
     void finishRender(const RenderRequest &request, bool success, const QString &message);
+    void pruneGeneratedRenders(const QString &currentPath);
     void load();
     void save();
-    [[nodiscard]] bool saveChecked();
+    [[nodiscard]] bool saveChecked(bool migration = false);
     [[nodiscard]] bool ensureLegacyBackupChecked(QSettings &settings);
     [[nodiscard]] QByteArray serializePanels(QString *errorMessage) const;
     [[nodiscard]] QByteArray serializePanels(

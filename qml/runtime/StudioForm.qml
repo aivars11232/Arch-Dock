@@ -226,15 +226,17 @@ ScrollView {
                         id: fieldMouse
                     }
 
-                    RowLayout {
+                    GridLayout {
                         id: fieldRow
+                        columns: root.availableWidth < 560 ? 1 : 2
 
                         anchors.fill: parent
                         anchors.leftMargin: 12
                         anchors.rightMargin: 12
                         anchors.topMargin: 11
                         anchors.bottomMargin: 11
-                        spacing: 14
+                        rowSpacing: 8
+                        columnSpacing: 14
 
                         ColumnLayout {
                             Layout.fillWidth: true
@@ -269,12 +271,16 @@ ScrollView {
                         }
 
                         Switch {
+                            objectName: "studio-switch-" + String(rowDelegate.modelData.key || "")
+                            Accessible.name: rowDelegate.modelData.label || ""
                             visible: rowDelegate.kind === "switch"
                             checked: Boolean(root.studio.fieldValue(rowDelegate.modelData))
                             onToggled: root.studio.setFieldValue(rowDelegate.modelData, checked)
                         }
 
                         ComboBox {
+                            objectName: "studio-combo-" + String(rowDelegate.modelData.key || "")
+                            Accessible.name: rowDelegate.modelData.label || ""
                             visible: rowDelegate.kind === "combo"
                             Layout.preferredWidth: 270
                             model: rowDelegate.modelData.options || []
@@ -285,6 +291,8 @@ ScrollView {
                         }
 
                         SpinBox {
+                            objectName: "studio-spin-" + String(rowDelegate.modelData.key || "")
+                            Accessible.name: rowDelegate.modelData.label || ""
                             visible: rowDelegate.kind === "spin"
                             Layout.preferredWidth: 180
                             from: rowDelegate.modelData.from === undefined ? 0 : rowDelegate.modelData.from
@@ -301,6 +309,8 @@ ScrollView {
                             spacing: 8
 
                             Slider {
+                                objectName: "studio-slider-" + String(rowDelegate.modelData.key || "")
+                                Accessible.name: rowDelegate.modelData.label || ""
                                 Layout.fillWidth: true
                                 from: rowDelegate.modelData.from === undefined ? 0 : rowDelegate.modelData.from
                                 to: rowDelegate.modelData.to === undefined ? 1 : rowDelegate.modelData.to
@@ -318,6 +328,8 @@ ScrollView {
                         }
 
                         TextField {
+                            objectName: "studio-text-" + String(rowDelegate.modelData.key || "")
+                            Accessible.name: rowDelegate.modelData.label || ""
                             visible: rowDelegate.kind === "text"
                             Layout.preferredWidth: 270
                             placeholderText: rowDelegate.modelData.placeholder || ""
@@ -349,6 +361,7 @@ ScrollView {
                             }
 
                             Button {
+                                Accessible.name: qsTr("Choose %1").arg(rowDelegate.modelData.label || qsTr("color"))
                                 Layout.fillWidth: true
                                 text: root.studio.colorDisplayValue(rowDelegate.modelData)
                                 icon.name: "color-picker"
@@ -356,6 +369,7 @@ ScrollView {
                             }
 
                             ToolButton {
+                                Accessible.name: qsTr("Use theme default for %1").arg(rowDelegate.modelData.label || qsTr("color"))
                                 enabled: String(root.studio.fieldValue(rowDelegate.modelData)).trim().length > 0
                                 icon.name: "edit-clear"
                                 onClicked: root.studio.setFieldValue(rowDelegate.modelData, "")
