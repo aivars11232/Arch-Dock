@@ -44,14 +44,13 @@ Icon Preset definitions, catalogs, user store, Studio pages and the exact
 [TASK-0040 implementation](#task-0040-implementation--2026-10-01). On the
 owner's instruction the agent committed and pushed it.
 
-**TASK-0041 is PAUSED and incomplete** (2026-10-01), at the owner's explicit
-request to commit and sync the current changes and freeze further work.
-The implementation baseline is `2905761`; this continuation adds audition
-repairs and five isolated Plasma matrix groups. Focused QML, registry and
-private runtime checks passed, but the complete phase gate and fresh
-consolidated build/full CTest gate have not been completed. Resume only on
-the owner's instruction. See the
-[TASK-0041 checkpoint and remaining work](TASK-0041_CONTINUATION_HANDOFF.md).
+**TASK-0041 is COMPLETE in the working tree** (2026-10-02), resumed from the
+committed pause checkpoint `a3a522b`. The phase gate passes **87/87 CTests
+(431.70 s)** and the separate fresh consolidated build/full suite passes
+**87/87 (427.05 s)**, including all five private native/free audition matrix
+groups. Cleanup is verified. Git closure remains owner-controlled. See
+[TASK-0041 implementation](#task-0041-implementation--2026-10-02).
+The [paused handoff](TASK-0041_CONTINUATION_HANDOFF.md) is historical.
 
 Earlier context, retained because it explains two mislabelled commits: the
 session that produced `f61c9ab` began from a tree whose subject `Task33` is
@@ -2785,3 +2784,191 @@ correction and one re-run:
 Cleanup PASS: the task build directory and every temporary staged prefix were
 removed, and no `/tmp/archdock-*` root or task process remains. The commit is
 `Add Arch Dock built-in preset catalogs`; the next task records its hash.
+
+## TASK-0041 implementation — 2026-10-02
+
+**COMPLETE in the working tree. Phase A and fresh consolidated gate: PASS.**
+The owner approved the exact TASK-0041 plan, subsequently required completion
+of all remaining gates with workarounds where needed, paused work after the
+2026-10-01 checkpoint, and explicitly resumed it on 2026-10-02. No replanning
+or new scope replaced that approval.
+
+TASK-0040 predecessor closure is `a7552054d79e80795282746d38da049ebe158d6b`.
+The initial TASK-0041 implementation is `2905761e3dd7fe935d91187e51b1d276e78ece9e`;
+the committed/synced repair checkpoint and this continuation's entry HEAD are
+`a3a522b46cca63e81176611d563f06047acdc73b`. Entry was clean on `main`.
+The active consolidated task pack's `SHA256SUMS.txt` passed verification.
+Earlier TASK-0040 statements that desktop actions/editing were future work
+describe its historical boundary and are superseded by this section.
+
+### Implemented behavior and file order
+
+The approved file placements were adapted to the existing shared models,
+transactions, renderer bridge, Studio and disposable Plasma harness:
+
+1. `PresetApplication.*`, `PanelRegistry.*`: shared pure preparation, independent
+   icon isolation, full normalized custom snapshots, lineage and atomic preset
+   commit/adoption through the existing transaction/revision boundary.
+2. `PresetDefaultStore.*`, `PresetPreviewRecovery.*`: independent future-creation
+   defaults and a bounded write-ahead recovery journal, with atomic writes,
+   strict validation and retained unsafe/unrecoverable records.
+3. `PresetPreviewSession.*`: one active session, all seven normative states,
+   streamed ephemeral drafts, explicit apply/custom/default actions, exact
+   rollback, temporary-host conversion and recoverable `BLOCKED` failures.
+4. `PanelWindow.*`: ownership-checked native/free preparation, snapshots,
+   renderer overrides, host restoration, one-revision commit, verified token
+   conversion/adoption, interruption recovery and defaults on new creation.
+   `/PresetAudition` is a separate interface; `/Control` remains unchanged.
+5. `PresetCard.qml`, `PresetBrowser.qml`, `PresetAuditionBar.qml`,
+   `SettingsPopup.qml`: explicit desktop actions, active draft customization,
+   status/errors, default selection, keyboard/accessibility and interaction
+   guards. Hover/selection continue to affect only embedded previews.
+6. The dock applet's `main.xml`/`main.qml`: a bounded, ownership-checked command
+   restoring only its own free desktop container, with independent backend
+   readback and command clearing.
+7. Unit/QML/Studio contracts, CMake and `run-preset-audition-matrix.sh` plus the
+   shared lifecycle harness: five isolated runtime groups, real staged renderer
+   loading, exact host rollback, custom reuse, crash cleanup and unrelated
+   native/free fixture preservation.
+8. This continuation repairs one proved readiness race in
+   `run-plasma-lifecycle.sh` and updates the preset/lifecycle/state/release
+   documentation. It reuses the checkpoint's production implementation.
+
+### Native constraints and corrections
+
+Plasma 6.7's native scripting geometry setter is a no-op, as confirmed against
+the [KDE source](https://github.com/KDE/plasma-workspace/blob/Plasma/6.7/shell/scripting/widget.cpp#L158).
+Free rollback therefore restores the owned applet's actual layout container
+after refreshing the original renderer and verifies the exact native readback.
+Failed restoration retains the recovery journal. Free scene bounds follow
+their layout; native width/height placement hints do not resize a free host.
+
+The checkpoint already corrected deferred applet removal/readback, structured
+native renderer replies, immutable inactive preset values, renderer-tier
+inference for saved custom panels, stable screen identity for new native
+defaults and live theme candidates for temporary drafts. Browser assertions
+check action sets independently of QML child traversal order and verify that
+incompatible Apply/Preview buttons remain disabled.
+
+Two failures occurred during this resumed phase gate; both stopped later
+batches and were diagnosed before correction:
+
+- `window-interaction-smoke` failed in its preflight because the isolated
+  PySide6 environment hid the installed system `gi` binding. The system GTK 4,
+  PyGObject and libei probe passed. Enabling standard system-site access in
+  that disposable venv fixed the combined dependency probe; the unchanged
+  runtime test then passed in 63.73 s. No global package was installed.
+- The defaults matrix failed after its deliberate service crash because
+  `gdbus wait` returned before a subsequent PID lookup saw an owner. Private
+  applet activation can race broker disconnection. The harness now pins a
+  unique name, resolves and confirms its live PID/owner inside the original
+  20-second startup bound. Only observed disappearance/change races retry;
+  permanent errors and malformed replies fail. A deterministic fixture
+  reproduced the old failure, passed transient and owner-switch cases with
+  the correction, and retained immediate permanent/malformed-error failures.
+  Defaults passed in 38.06 s; all four other affected matrix groups were
+  rerun and passed. No ownership, geometry, revision or orphan assertion was
+  weakened, and no timeout was increased.
+
+### Verification
+
+Actual platform: Arch Linux kernel `7.2.7-arch1-1`, Plasma/KWin `6.7.5-1`,
+Qt base `6.11.2-3`, declarative `6.11.2-2`, Quick3D `6.11.2-1`,
+KF6 KConfig/KCoreAddons `6.30.0-1`, Python `3.14.7`, PySide6 `6.11.2`,
+GTK `4.22.5`, PyGObject `3.56.3` and libei `1.6.0`.
+Fresh configuration uses the repository default `ARCHDOCK_ENABLE_QUICK3D=AUTO`,
+which discovers Quick3D on this machine. No optional renderer requirement is
+made mandatory in production.
+
+The fresh phase build passed nine separate target groups at **two jobs**.
+CTest ran at **one job**, in these ranges, with heavy/private checks alone:
+`1–10`, `11–20`, `21–30`, `31`, `32–40`, `41–50`, `51–60`, `61–64`, `65`,
+`66`, `67`, `68–72`, `73`, `74–75`, `76`, `77`, `78`, `79`, `80`, `81–87`.
+JUnit coverage confirms all 87 available names executed, with no outstanding
+failures, errors, skips, disabled or not-run tests. The sum of successful batch
+elapsed times is **431.70 s**; it excludes the recorded failed attempts and
+superseded matrix runs, rather than claiming one uninterrupted CTest command.
+
+```bash
+cmake -S . -B build-codex-task-0041
+cmake --build build-codex-task-0041 --parallel 2 --target <target-group>
+env PATH="$PWD/build-codex-task-0041/test-python/bin:$PATH" \
+  QT_FORCE_STDERR_LOGGING=1 CMAKE_BUILD_PARALLEL_LEVEL=2 \
+  DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/archdock-task0041-parent-bus \
+  ctest --test-dir build-codex-task-0041 --parallel 1 --stop-on-failure \
+    --output-on-failure --output-junit <batch.xml> -I <first,last>
+```
+
+Build groups: application alone; overlay/system/panel/preset definition;
+preset catalog/session/library/icon identity; theme/icon/chassis/energy assets;
+baked/source/processed assets/settings schema/animation; renderer/capability
+and settings/content/icon transactions; registry/folder/window-preview/dock
+models; panel-window capability alone; placement/visibility/Plasma adapter/
+script result. No gates overlapped and no agents were used.
+
+### Acceptance evidence
+
+| Required criterion | Result | Fresh proof |
+| --- | --- | --- |
+| Existing owned panel preview and exact Cancel/Revert | PASS | Session unit tests; existing matrix and defaults group's existing-free renderer/geometry rollback |
+| Temporary new/free/incompatible host; Cancel leaves no applet/record/token/default change | PASS | Temporary matrix, native/free ownership counts, unchanged registry/defaults and no journal |
+| Exactly one revision or exactly one converted managed host on Apply | PASS | Existing/icon revision assertions, temporary token conversion and one-record/one-host audit |
+| Reusable custom normalized copy; built-in bytes unchanged | PASS | Session/store tests, real panel and icon custom save/reopen, staged built-in SHA256 checks |
+| Defaults affect future creation only | PASS | Unit/Studio tests and combined/independent icon defaults on new native/free instances; earlier records unchanged |
+| Icon-only isolation | PASS | Pure preparation rejection tests and complete renderer/registry/host comparison in icons matrix |
+| Interruption restores or retains recoverable BLOCKED; never silently commits | PASS | Session/journal tests, temporary/placement/existing-free service crashes, conversion-before-adoption and PlasmaShell restart |
+| Unrelated panels/widgets preserved | PASS | Unrelated native and free fixtures checked after every matrix scenario |
+
+Private D-Bus, real KWin Wayland/PlasmaShell and virtual outputs establish the
+task's disposable-session acceptance. They do not establish personal-desktop,
+physical GPU/monitor, hardware hotplug or release acceptance. The known
+pre-existing `PanelScene.qml:196` Qt-sequence warning remains outside this
+task, as specified in the approved plan. Profiles/import/export/shortcuts
+remain TASK-0042; startup/Arch packaging TASK-0043; platform/performance
+hardening TASK-0044; release regression TASK-0045. No later task is started.
+
+### Fresh consolidated closure and cleanup
+
+After the phase gate and documentation updates, all project build output was
+removed. A separate fresh configure and all nine two-job target groups passed
+(summed build-command elapsed time **560.97 s**). The disposable Python
+dependency environment was parked without executing it elsewhere, then
+restored to its original absolute path; no compiled project output or CMake
+cache was reused. The fresh phase build had passed the same groups in 586.27 s.
+
+The final suite ran the same 20 sequential ranges once, with no failed or
+retried consolidated batch. Successful test-command times sum to **427.05 s**.
+JUnit independently confirms exactly the 87 configured names, each executed
+once with status `run`, and zero failure/error/skip/disabled/not-run result.
+
+| Final check | Result | Batch elapsed time |
+| --- | --- | --- |
+| Full available consolidated CTest suite | **87/87 PASS** | **427.05 s** |
+| Rendering/Studio staged runtime | PASS | 83.05 s |
+| Native/free window interaction | PASS | 64.00 s |
+| Folder/segment interaction | PASS | 63.99 s |
+| Staged preset library, 15 + 15 installed definitions | PASS | 16.98 s |
+| Browser and audition QML | 2/2 PASS | 1.12 s |
+| Existing native audition/custom copy/Apply | PASS | 13.09 s |
+| Temporary free/native audition and live theme draft | PASS | 24.73 s |
+| Icon-only audition/custom copy/Apply | PASS | 13.96 s |
+| Service/conversion/PlasmaShell interruption | PASS | 19.57 s |
+| Defaults and exact existing-free Cancel/crash recovery | PASS | 36.03 s |
+
+Cleanup PASS: all **21 recorded private runtime roots** are absent and no
+task-owned process remains. `build-codex-task-0041`, its PySide6 environment
+and the small `build-codex-task-0041-evidence` archive were removed after
+recording results. Pre-existing build directories, including tracked
+`build-codex-task-0014`, were preserved. Raw disposable logs are historical
+observations now; the commands, versions, counts and failure accounting above
+are the retained evidence. Internal document file links and new task anchors
+were checked; `git diff --check` passes.
+
+Entry/final HEAD remains `a3a522b46cca63e81176611d563f06047acdc73b` on `main`.
+This continuation changes six files: the shared lifecycle harness, followed
+by PRESET_PACKAGE.md, plasma-lifecycle.md, CURRENT_STATE.md,
+RELEASE_CHECKLIST.md and the historical handoff marker. No staging, commit or
+push was performed in this resumed continuation. Suggested closure commit:
+`Complete TASK-0041 audition verification and documentation`.
+The owner-requested checkpoint commit/push on 2026-10-01 remains intact.
+No agents, global installation or personal-desktop mutation were used.

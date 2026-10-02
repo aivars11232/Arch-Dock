@@ -431,3 +431,48 @@ made no Git writes; the single commit and push were made afterwards on the
 owner's explicit instruction. These
 results do not establish physical GPU, monitor/hotplug, personal-desktop or
 general release acceptance; the broader release checkboxes remain unchanged.
+
+## TASK-0041 verification record — 2026-10-02
+
+**TASK-0041 is COMPLETE in the working tree**, resumed from `a3a522b`.
+The phase and separate fresh consolidated builds each used nine bounded target
+groups at two jobs. Both suites pass **87/87 CTests**: successful batch times
+sum to **431.70 s** for the phase and **427.05 s** for the consolidated gate.
+One CTest worker, batches of at most ten and private/heavy checks separately
+were used throughout. The fresh consolidated run has no failed/retried batch;
+JUnit verifies all 87 names with no failure/error/skip/disabled/not-run result.
+All five private audition matrix groups pass on the final source.
+
+- The browser and audition QML tests verify explicit actions, incompatible
+  disabled controls, state/interaction guards, keyboard and accessibility.
+- The session, store, registry and Studio tests verify normalized preparation,
+  atomic revisions, independent icon data, reusable custom resources, bounded
+  journal/default files and recoverable failure states.
+- Five real private Plasma matrix groups verify existing native preview,
+  exact Cancel/Revert, temporary native/free cleanup and one-host conversion,
+  icon-only isolation, immutable built-in bytes, customized panel/icon reuse,
+  combined and independent defaults on future native/free creation, service and
+  PlasmaShell interruption, exact existing-free geometry recovery and unrelated
+  native/free fixture preservation.
+- Staged renderer, window/folder interaction and preset installation checks
+  pass against the current executable/resources and all 30 built-in definitions.
+
+The initial GTK fixture preflight failed because an isolated venv hid the
+system `gi` module; system-site access repaired the disposable environment.
+The defaults crash scenario exposed a harness name/PID readiness race; pinning
+and confirming a live unique D-Bus owner repaired it within the existing startup
+bound. The failed checks and all affected matrix groups were rerun successfully;
+assertions and native ownership boundaries remain enforced.
+
+[CURRENT_STATE.md](CURRENT_STATE.md#task-0041-implementation--2026-10-02)
+records the full acceptance mapping, commands, failure accounting and final
+closure. [plasma-lifecycle.md](plasma-lifecycle.md#preset-audition-matrix) documents
+the isolated reproduction and the native free-widget geometry workaround.
+Cleanup is verified: all 21 recorded private runtime roots are absent, no
+task-owned process remains, and task build/dependency/evidence output is
+removed. Pre-existing build directories remain intact. Git closure is
+owner-controlled; no agents, global package installation or personal Plasma
+mutation were used in this resumed continuation.
+These private virtual Wayland checks do not close personal-desktop, physical
+GPU/monitor, hardware hotplug or general release acceptance. Broader release
+checkboxes above remain unchanged.

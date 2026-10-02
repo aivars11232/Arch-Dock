@@ -1596,13 +1596,34 @@ start_plasmashell() {
 }
 
 arch_dock_service_pid() {
-    gdbus call \
-        --session \
-        --dest org.freedesktop.DBus \
-        --object-path /org/freedesktop/DBus \
-        --method org.freedesktop.DBus.GetConnectionUnixProcessID \
-        org.archdock.ArchDock |
-        sed -n 's/^(uint32 \([0-9]\+\),)$/\1/p'
+    local owner_reply owner pid_reply service_pid confirmed_owner
+    if ! owner_reply="$(gdbus call --session --timeout=1 \
+        --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+        --method org.freedesktop.DBus.GetNameOwner org.archdock.ArchDock 2>&1)"; then
+        [[ "$owner_reply" == *org.freedesktop.DBus.Error.NameHasNoOwner:* ]] && return 1
+        printf 'Could not query the private Arch Dock owner: %s\n' "$owner_reply" >&2
+        return 2
+    fi
+    owner="$(sed -n "s/^(':\([0-9]\+\.[0-9]\+\)',)$/:\1/p" <<<"$owner_reply")"
+    [[ "$owner" =~ ^:[0-9]+\.[0-9]+$ ]] || return 2
+    if ! pid_reply="$(gdbus call --session --timeout=1 \
+        --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+        --method org.freedesktop.DBus.GetConnectionUnixProcessID "$owner" 2>&1)"; then
+        [[ "$pid_reply" == *org.freedesktop.DBus.Error.NameHasNoOwner:* ]] && return 1
+        printf 'Could not query the private Arch Dock PID: %s\n' "$pid_reply" >&2
+        return 2
+    fi
+    service_pid="$(sed -n 's/^(uint32 \([0-9]\+\),)$/\1/p' <<<"$pid_reply")"
+    [[ "$service_pid" =~ ^[0-9]+$ && "$service_pid" -gt 0 ]] || return 2
+    if ! confirmed_owner="$(gdbus call --session --timeout=1 \
+        --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+        --method org.freedesktop.DBus.GetNameOwner org.archdock.ArchDock 2>&1)"; then
+        [[ "$confirmed_owner" == *org.freedesktop.DBus.Error.NameHasNoOwner:* ]] && return 1
+        printf 'Could not confirm the private Arch Dock owner: %s\n' "$confirmed_owner" >&2
+        return 2
+    fi
+    [[ "$confirmed_owner" == "$owner_reply" ]] && kill -0 "$service_pid" 2>/dev/null || return 1
+    printf '%s\n' "$service_pid"
 }
 
 start_arch_dock() {
@@ -1610,8 +1631,20 @@ start_arch_dock() {
     QT_FORCE_STDERR_LOGGING=1 "$ARCHDOCK_TEST_BINARY" \
         >"$ARCHDOCK_TEST_LOG_DIR/$log_name" 2>&1 &
     local launched_pid=$!
-    gdbus wait --session --timeout=20 org.archdock.ArchDock
-    ARCHDOCK_SESSION_ARCH_DOCK_PID="$(arch_dock_service_pid)"
+    local owner_deadline=$((SECONDS + 20)) service_pid status
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    # Applets may activate the service while the killed owner is disconnecting.
+    # A name appearing alone is not proof of a live, stable replacement owner.
+    while ((SECONDS < owner_deadline)); do
+        if service_pid="$(arch_dock_service_pid)"; then
+            ARCHDOCK_SESSION_ARCH_DOCK_PID="$service_pid"
+            break
+        else
+            status=$?
+            [[ "$status" == 1 ]] || break
+        fi
+        sleep 0.1
+    done
     [[ "$ARCHDOCK_SESSION_ARCH_DOCK_PID" =~ ^[0-9]+$ ]] || {
         printf 'Could not resolve the Arch Dock D-Bus service process.\n' >&2
         stop_process "$launched_pid"

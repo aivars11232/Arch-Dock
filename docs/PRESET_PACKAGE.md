@@ -1,10 +1,8 @@
 # Arch Dock preset definitions
 
 This document describes the Panel Preset and Icon Preset formats introduced by
-TASK-0040, where they live, and the rules the loaders enforce. The normative
+TASK-0040 and the transactional desktop workflows added by TASK-0041. The normative
 product requirements are in [PRESET_SYSTEM_SPEC.md](PRESET_SYSTEM_SPEC.md).
-Live desktop audition, Apply and defaults belong to TASK-0041 and are not
-described here.
 
 ## Terminology
 
@@ -29,6 +27,8 @@ selectable.
 | `share/arch-dock/presets/panels/` | `builtin-panel-presets.json` and 15 definitions | No |
 | `share/arch-dock/presets/icons/` | `builtin-icon-presets.json` and 15 definitions | No |
 | `<AppDataLocation>/presets/` | `user-presets.json`, `panels/`, `icons/` | Yes |
+| `<AppDataLocation>/presets/defaults.json` | Independent panel and icon defaults | Yes |
+| `<AppDataLocation>/preset-preview-journal.json` | Bounded interruption-recovery record | Yes, while recovery is needed |
 
 The installed catalog is located through `GenericDataLocation`
 (`arch-dock/presets/panels/builtin-panel-presets.json`). An uninstalled build
@@ -181,9 +181,62 @@ Recorded adaptations:
 ## Backend and Studio
 
 `PresetLibrary` is exposed to QML as `presetLibrary`. It lists cards, reports
-catalog status and performs the three user-store actions. It adds no D-Bus
-method and no panel mutation. Card previews are described in
+catalog status and performs the three user-store actions. Library browsing
+does not mutate a panel. `PresetPreviewSession`, exposed as `presetAudition`,
+owns desktop actions through the separate `/PresetAudition` D-Bus object and
+`org.archdock.PresetAudition` interface. The existing `/Control` interface is
+preserved. Card previews are described in
 [shared-renderer.md](shared-renderer.md).
+
+## Transactional desktop audition
+
+Selecting or hovering over a card changes only the embedded shared-renderer
+preview. **Preview on Desktop** explicitly starts one audition. A compatible
+owned panel keeps its durable definition while an ephemeral normalized draft
+drives its live renderer. Native placement and existing free-widget geometry
+are captured through verified host readback before mutation.
+
+A new panel or incompatible host/layout uses a temporary native or free host
+with a unique `archdock-preview-` token. It is absent from ordinary durable
+panel records. Customizations stream through the shared schema, resource and
+capability validation; controls unavailable for the current draft are absent.
+Theme choices are prepared from that draft, including temporary free hosts.
+Edit Mode, an open panel popup or dragging prevents conflicting mutations.
+An existing audition must be rolled back before a replacement begins.
+
+| Action | Result |
+| --- | --- |
+| Apply as Active | Commit one valid settings revision, or verify token conversion and adopt exactly one temporary host |
+| Save as Custom Preset | Save a complete normalized panel/icon snapshot with a new user ID and lineage; keep audition active without applying |
+| Set as Default | Change only future creation, with independent panel and icon selections |
+| Cancel / Revert | Restore the original normalized configuration and verified host state, or remove the temporary host; Revert leaves the browser open |
+| Restore Built-in Defaults | Reload the immutable built-in into the current draft; commit still requires Apply |
+
+Panel Presets preserve independently chosen icon data unless recommended icons
+are explicitly requested. Icon Preset audition changes only icon style,
+overrides and motion, preserving panel theme, layout, placement, visibility,
+presentation and content. Built-in package bytes are never overwritten.
+
+## Defaults and recovery
+
+Defaults are applied through the same preset preparation before a new native
+or free panel is adopted. Selecting or removing a default never rewrites
+existing panels. The defaults file is version 1, limited to 4096 bytes, and
+written atomically; invalid or newer stores are rejected rather than replaced.
+
+The session states are `IDLE`, `PREPARING`, `ACTIVE`, `COMMITTING`,
+`ROLLING_BACK`, `COMMITTED` and `BLOCKED`. A recovery journal, limited to
+65536 bytes, records the original normalized definition, verified host state,
+ownership identity and mutation/conversion progress. It is a cleanup record,
+not active configuration. Startup recovery verifies ownership and either
+restores the original host or removes an unadopted preview host. It never
+silently commits an interrupted draft.
+
+Failed or unverifiable restoration retains the journal and reports `BLOCKED`.
+Cancel in that state requests recovery; successful rollback or commit clears
+the journal. Corrupt or unsafe recovery records are retained and reported.
+See [private Plasma verification](plasma-lifecycle.md#preset-audition-matrix)
+for the runtime commands and the native geometry workaround.
 
 ## Tests
 
@@ -194,3 +247,8 @@ method and no panel mutation. Card previews are described in
 | `preset-library-test` | Backend cards, fallback, store actions, all 30 cards rendered |
 | `preset-browser-test` | Browser and card behaviour, keyboard, accessibility |
 | `preset-staged-preview-smoke` | The same library test against a staged install |
+| `preset-preview-session-test` | Preparation, independent icons, normalized custom copies, defaults, journal, all session states and failure paths |
+| `panel-registry-test` | Atomic preset adoption/commit, preview separation, lineage and unregistered draft theme candidates |
+| `panel-window-capability-test` | Real Studio integration, Edit Mode/popup/drag refusal and defaults preserving existing instances |
+| `preset-audition-test` | Action routing, state/guard availability, Escape, labels and accessibility |
+| `preset-audition-matrix-{existing,temporary,icons,recovery,defaults}` | Real owned native/free hosts, revision counts, immutable custom copies, exact rollback/crash cleanup and unrelated fixtures |

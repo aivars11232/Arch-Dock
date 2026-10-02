@@ -254,6 +254,82 @@ XDG and D-Bus environment, and starts two virtual KWin outputs:
 ARCHDOCK_BUILD_DIR=/path/to/fresh-build bash tests/run-plasma-lifecycle.sh
 ```
 
+## Preset audition matrix
+
+TASK-0041 uses the existing disposable lifecycle harness with five separately
+selected groups. Each group stages the current executable, applets, presets
+and `ArchDock.Rendering` module, then starts private D-Bus, KWin Wayland and
+PlasmaShell with two virtual outputs. The matrix cannot dispatch outside the
+private session. It creates unrelated native-panel and free-widget fixtures
+and checks them after every scenario.
+
+| Group | Runtime proof |
+| --- | --- |
+| `existing` | Existing native preview, streamed placement, exact Cancel/Revert, custom snapshot save/reuse, built-in digest and one Apply revision |
+| `temporary` | Incompatible/free preview, live draft theme change, exact Cancel cleanup, one managed-host conversion and temporary native Cancel |
+| `icons` | Icon-only renderer/registry isolation, exact Cancel, reusable customized copy, built-in restoration and one Apply revision |
+| `recovery` | Service crash during temporary preview and placement preview, conversion-before-adoption interruption, PlasmaShell restart and journal recovery |
+| `defaults` | Combined and independent icon defaults for new native/free instances; unchanged existing records; inactive-edit refusal; exact existing-free geometry restoration after Cancel and service crash |
+
+The native widget scripting `geometry` property is readable, but Plasma 6.7's
+[`Widget::setGeometry`](https://github.com/KDE/plasma-workspace/blob/Plasma/6.7/shell/scripting/widget.cpp#L158)
+does nothing. Existing free-widget rollback therefore sends a bounded command
+to that owned applet's configuration. The applet verifies its ID/token, finds
+its own desktop layout container, restores its bounds and saves the layout
+after refreshing the original renderer configuration. The backend independently
+reads back the exact geometry, clears and verifies the command, and retains a
+`BLOCKED` recovery record if restoration cannot be proved. Native panel
+placement continues through the existing verified Plasma adapter.
+
+After deliberately killing the service, private applets can activate a
+replacement through D-Bus. Readiness queries pin the unique name, resolve its
+PID, confirm that the owner is unchanged and check that the process is alive.
+Only name-disappearance, owner-change or process-exit races retry inside the existing
+20-second startup bound; malformed replies and permanent D-Bus errors fail.
+This follows the native
+[D-Bus ownership APIs](https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-get-name-owner).
+All geometry, ownership, revision, isolation and orphan assertions remain
+strict. Teardown stops private Plasma before the service to prevent applet
+calls from activating another instance during shutdown.
+
+Runtime fixtures need PySide6 as well as the system GTK 4/PyGObject/libei
+bindings used by interaction checks. When global PySide6 is absent, use a
+disposable environment inside the task build. System-site access lets that
+environment read the already-installed native bindings; it installs nothing
+globally. The verified October 2026 environment used Qt/PySide6 6.11.2:
+
+```bash
+uv venv --system-site-packages --python /usr/bin/python build-codex-task-0041/test-python
+UV_CONCURRENT_DOWNLOADS=1 UV_CONCURRENT_INSTALLS=1 UV_CONCURRENT_BUILDS=1 \
+  uv pip install --no-cache --python build-codex-task-0041/test-python/bin/python PySide6==6.11.2
+```
+
+Build in small target groups with `cmake --build build-codex-task-0041
+--parallel 2 --target <targets>`. Run each matrix group individually, replacing
+`existing` with the selected group, and stop on a failure:
+
+```bash
+env PATH="$PWD/build-codex-task-0041/test-python/bin:$PATH" \
+  QT_FORCE_STDERR_LOGGING=1 CMAKE_BUILD_PARALLEL_LEVEL=2 \
+  DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/archdock-task0041-parent-bus \
+  ctest --test-dir build-codex-task-0041 --parallel 1 --stop-on-failure \
+    --output-on-failure -R '^preset-audition-matrix-existing$'
+```
+
+The matrix groups are also marked `RUN_SERIAL` in CTest. For a full gate use
+batches of at most ten tests, with `panel-window-capability-test`, staged
+runtime smoke checks and each matrix group separately. Never overlap gates.
+The private runner is bounded to 300 seconds by default (allowed range
+30–360); each matrix CTest has a 420-second timeout. The harness copies each
+group's runtime logs into `build-codex-task-0041/preset-matrix-<group>/` before
+removing its private root. Remove task-owned processes and artifacts after
+recording results, preserving pre-existing build directories.
+
+These are real Plasma/Wayland integration checks using virtual outputs.
+They do not establish personal-desktop, physical GPU/monitor, hardware hotplug
+or release acceptance. Completion evidence is recorded in
+[CURRENT_STATE.md](CURRENT_STATE.md#task-0041-implementation--2026-10-02).
+
 It creates an explicitly tracked unrelated Plasma panel with a standard digital
 clock before Arch Dock starts. After every managed lifecycle phase it compares
 that containment's id, location, hiding mode, screen, complete widget id/type

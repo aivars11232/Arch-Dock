@@ -1,4 +1,11 @@
-# TASK-0041 paused checkpoint — 2026-10-01
+# TASK-0041 historical paused checkpoint — 2026-10-01
+
+> **Resumed by the owner on 2026-10-02.** This file preserves the earlier
+> paused snapshot, not current status or execution instructions. The current
+> implementation and verification authority is
+> [CURRENT_STATE.md](CURRENT_STATE.md#task-0041-implementation--2026-10-02).
+> The corrected disposable Python recipe, including native system-package
+> access, is in [plasma-lifecycle.md](plasma-lifecycle.md#preset-audition-matrix).
 
 The owner explicitly requested: "Commit and sync current changes, pause and
 freeze everything else" so the PC can be switched off. TASK-0041 remains
