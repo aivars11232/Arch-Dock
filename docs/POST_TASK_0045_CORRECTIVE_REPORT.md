@@ -2,8 +2,8 @@
 
 ## RC-01 and RC-02 release-provenance closure — 2026-10-04
 
-**Local correction and all affected source/package gates PASS. Existing
-prerelease assets remain unchanged pending explicit replacement authorization.**
+**Release-provenance correction and affected source/package gates PASS.
+Owner-approved asset replacement and final remote provenance verification PASS.**
 Starting clean `main`: `29e9f22e32d8381d95b0d7ca81c4e7fde1c57281`.
 The latest supplied independent audit reports zero confirmed new runtime bugs,
 closes AD-04-R1, and supplies RC-01/RC-02. These fresh fixing-agent checks are
@@ -14,8 +14,8 @@ remains tag object `50812852c4dc2726411a1c73452296955852c50a`, targeting
 `c3b3a0b7771b313c45f843f49a503b45b0d1ada0` locally and remotely. Two exports
 from a disposable clean checkout of that exact commit are byte-identical.
 Their checkpoint HEAD equals the tag target and their checkpoint, gzip and
-archive epochs equal the tagged commit epoch **1791062435**. The published
-source instead records `5a183b0` and epoch **1791058948**; its digest differs.
+archive epochs equal the tagged commit epoch **1791062435**. The original
+published source recorded `5a183b0` and epoch **1791058948**; its digest differed.
 All 519 source-file byte hashes match the earlier candidate. One catalog's
 canonical checkout mode is `0644`, rather than the earlier owner's `0600`;
 the owner file is unchanged. Both Git provenance and canonical modes matter.
@@ -59,14 +59,25 @@ are **reused results**, not fresh invocations. No production C++/QML/CMake or
 lifecycle harness changed, and no new private session ran. The external
 artwork-sample subcase remains unexecuted without its supplied archive.
 
-The unchanged live prerelease is release ID **402697537**, published at
-**2026-10-03 21:23:54 UTC**, `draft=false`, `prerelease=true`. All six original
-asset downloads matched GitHub's recorded digests/sizes before diagnosis.
-The corrected six-asset set and reviewed proposed body are retained under
-`build-codex-final-release-provenance/`; its `STATE.json` and local log ZIP
-record old remote metadata, final verification, safe cleanup and Git closure.
+The preserved release identity is ID **402697537**, originally published at
+**2026-10-03 21:23:54 UTC**, `draft=false`, `prerelease=true`, with the existing
+title and fixed tag. All six original downloads matched GitHub's digests/sizes
+before diagnosis. The owner's subsequent **“Approved”** authorized replacing
+all six assets and applying the reviewed release body. Both actions completed;
+the body was updated at **2026-10-04 00:21:58 CEST**.
 
-| Asset | Current published SHA-256 | Prepared replacement SHA-256 |
+Final remote verification at **2026-10-04 00:23:09 CEST** downloaded all six
+replacement assets. Their bytes, sizes and SHA-256 values match the reviewed
+files and GitHub digests; all five checksum entries pass. The downloaded
+source equals both fresh clean-tag exports byte-for-byte. Its checkpoint HEAD
+and epoch match the unchanged tag, and real extraction verifies all 519 source
+files/520 unique members, hashes, modes and normalized metadata. The published
+verification receipt's source/package identity and the exact reviewed body
+also pass. The six published files and applied body are retained under
+`build-codex-final-release-provenance/`; its `STATE.json` and local log ZIP
+record before/after remote metadata, verification, cleanup and Git closure.
+
+| Asset | Original published SHA-256 | Published replacement SHA-256 |
 | --- | --- | --- |
 | Source archive | `367c3314260bd31ddf268a49ef861472f25b800966f361681f375bf5f8f5b077` | `34abdc7fca9efcc1989a02abb47e774330c6f490c61715a2c82c63ce04295e9c` |
 | Arch package | `7ef5cd2131bdedd63765c711f8148dd6ea4c7ba42510f8c30ed7970786333bcc` | `91db462260602e539beb6e21f18eff0456ae97e70121826491df1b453cd388ea` |
@@ -76,12 +87,12 @@ record old remote metadata, final verification, safe cleanup and Git closure.
 | SHA256SUMS | `d08ce467287cfa65dc55023620f88f84932ea3559091d45a3225536d06cdb667` | `a97b613f0623a01e98bb1680ae887449869be3043f96532298d69522bc122578` |
 
 RC-02 corrects current README, changelog, limitations and platform prose;
-current state/checklist distinguish the existing publication from the verified
-local replacement. The installation guide makes tagged verification mandatory
+current state/checklist record the verified published replacement. The
+installation guide makes tagged verification mandatory
 for the official path. Later main documentation/tooling changes do not rewrite
 the fixed tag's historical source documents. R-01 remains **NOT EXECUTED**;
 R-02 records completed tag/publication but unselected project-wide licensing
-and pending asset-replacement authorization; R-03 retains the two historical
+and completed owner-approved asset replacement; R-03 retains the two historical
 TASK-0044 Mesa-worker disposal faults and unproved mechanism, with mitigation
 wording; R-04 preserves independent finding provenance and self-run check labels.
 

@@ -7,8 +7,8 @@
 > implementation claims.
 
 **Latest boundary — 2026-10-04: RC-01 tag-matched source/package verification
-PASS; RC-02 current public prose corrected. READY FOR OWNER AUTHORIZATION TO
-REPLACE PRERELEASE ASSETS.**
+PASS; RC-02 current public prose corrected. OWNER-APPROVED ASSET REPLACEMENT
+AND FINAL REMOTE PROVENANCE VERIFICATION PASS.**
 
 The pass started on clean `main` at
 `29e9f22e32d8381d95b0d7ca81c4e7fde1c57281`. The supplied separate independent
@@ -22,24 +22,34 @@ exist. The tag is preserved at
 `c3b3a0b7771b313c45f843f49a503b45b0d1ada0`, tag object
 `50812852c4dc2726411a1c73452296955852c50a`. Release ID `402697537` was published
 at **2026-10-03 21:23:54 UTC**, `draft=false`, `prerelease=true`; it is not a
-final/stable/latest release. The six existing assets remain unchanged.
+final/stable/latest release. The owner approved replacing its six assets and
+applying the prepared notes. Replacement and final downloads are verified at
+**2026-10-04 00:23:09 CEST**; the release was updated at 00:21:58 CEST.
+The original publication timestamp, release ID, title and annotated tag remain
+unchanged; explicit `latest=false` and prerelease status are preserved.
 
-RC-01 is freshly reproduced: two clean exports of that exact tag are identical
-but differ from the published source. The new checkpoint HEAD equals the tag
-and its normalized epoch equals **1791062435**. The published checkpoint uses
-precommit HEAD `5a183b0` and epoch **1791058948**. All 519 source-file byte hashes
+RC-01 was reproduced: two clean exports of that exact tag were identical
+but differed from the original published source. The replacement checkpoint
+HEAD equals the tag and its normalized epoch equals **1791062435**. The original
+checkpoint used precommit HEAD `5a183b0` and epoch **1791058948**. All 519 source-file byte hashes
 match; the catalog has canonical Git checkout mode `0644` rather than the
 earlier owner's `0600`. Similar source bytes did not establish tag provenance.
 The official path now uses a small release verifier with clean source, exact
 annotated tag/HEAD, checkpoint, inventory and digest assertions. The general
 developer exporter still accepts approved working-tree changes.
 
-Verified local replacement source SHA-256:
+Verified published replacement source SHA-256:
 `34abdc7fca9efcc1989a02abb47e774330c6f490c61715a2c82c63ce04295e9c`.
-Verified local replacement package SHA-256:
+Verified published replacement package SHA-256:
 `91db462260602e539beb6e21f18eff0456ae97e70121826491df1b453cd388ea`.
 The root recipe pins the replacement source. Do not mix it with the original
-published archive; each asset set has its own matching recipe/checksums.
+archive retained as historical evidence; each asset set has its own matching
+recipe/checksums. All six final downloads match reviewed local sizes/SHA-256
+and GitHub digests; all five downloaded checksum entries pass. Two new clean
+tag exports exactly match the downloaded source. Its checkpoint HEAD/epoch,
+real extraction, 519 source hashes/modes, 520 unique members and verification
+receipt source/package identities all pass. The remote body exactly matches
+the approved notes.
 Main's later public-documentation/tooling correction does not change the fixed
 tag's historical source documents or the exact reconstructed candidate.
 
@@ -59,15 +69,16 @@ No production runtime/CMake/harness semantics changed or new private session ran
 RC-02 updates README, changelog, known limitations and platform current prose;
 [the official generation route](INSTALL.md#tagged-release-source) and
 [corrective report](POST_TASK_0045_CORRECTIVE_REPORT.md#rc-01-and-rc-02-release-provenance-closure--2026-10-04)
-record the provenance guard and exact old/new hashes. Compact assets, proposed
-release notes, cleanup, Git closure and unchanged remote proofs belong to
+record the provenance guard and exact old/new hashes. Compact published assets,
+approved release notes, cleanup, Git closure and before/after remote proofs belong to
 `build-codex-final-release-provenance/STATE.json` and its local log ZIP.
-Existing commit/sync authorization applies; replacing assets/body requires the
-specific authorization in this assignment's section 14.
+Existing commit/sync authorization applies to the final closure documents.
+The owner's subsequent “Approved” supplies section 14's specific authorization
+for replacing all six assets and applying the reviewed notes.
 
 R-01 physical acceptance remains **NOT EXECUTED**. R-02 records completed
-tag/publication but unselected project-wide licensing and pending replacement
-authorization. R-03 retains the two historical TASK-0044 Mesa-worker faults,
+tag/publication and verified authorized asset replacement, with project-wide
+licensing still unselected. R-03 retains the two historical TASK-0044 Mesa-worker faults,
 unproved mechanism and teardown mitigation. R-04 preserves the independent
 audit's provenance and labels fixing-agent checks corrective verification.
 The external artwork-sample subcase remains unexecuted without its archive.

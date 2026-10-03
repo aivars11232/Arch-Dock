@@ -20,34 +20,35 @@ corrective sections, build/runtime entries retain historical candidate evidence.
 
 ## RC-01 and RC-02 acceptance — 2026-10-04
 
-**READY FOR OWNER AUTHORIZATION TO REPLACE PRERELEASE ASSETS.**
+**OWNER-APPROVED ASSET REPLACEMENT AND FINAL REMOTE PROVENANCE PASS.**
 The latest supplied independent audit found zero new runtime bugs and closed
 AD-04-R1. Local release-provenance correction and all affected candidate gates
-pass. The existing release's six original assets/body are unchanged.
+pass. All six replacement assets and the reviewed release body are published
+and verified; the original tag and prerelease status are preserved.
 
 - [x] Starting clean `main` `29e9f22e32d8381d95b0d7ca81c4e7fde1c57281` recorded; actual local/remote annotated `v0.1.0` object `50812852c4dc2726411a1c73452296955852c50a` and fixed target `c3b3a0b7771b313c45f843f49a503b45b0d1ada0` verified.
 - [x] Actual prerelease ID `402697537`, publication timestamp 2026-10-03 21:23:54 UTC, draft/prerelease state, original asset IDs/sizes/digests and downloaded bytes recorded.
-- [x] RC-01 reproduced: two clean tag exports identical but different from the published source; checkpoint/tag HEAD and epoch mismatch confirmed, with canonical catalog-mode difference recorded and owner file untouched.
+- [x] RC-01 reproduced: two clean tag exports identical but different from the original published source; checkpoint/tag HEAD and epoch mismatch confirmed, with canonical catalog-mode difference recorded and owner file untouched.
 - [x] Corrected normalized source comes from the exact clean tagged commit: HEAD/epoch match, 519 files/520 unique members, one regular checkpoint, successful extraction, full hashes/modes/normalization, recipe and checksum pins.
 - [x] Small official-path verifier and existing synthetic fixtures cover clean exact annotated tag, wrong HEAD, lightweight tag, tracked/untracked dirt, precommit identity, external relabelling and a dirty export after restoration; all eight unittest groups and registered exporter CTest pass.
 - [x] Fresh source verification, one-job Release/Quick3D-ON package build and existing installed-test target build pass; root recipe matches the generated tag-matched recipe.
 - [x] Fresh existing scoped native package checks pass: 209 installed payload files/bytes/modes, 15+15 actual catalogs/cards, QtTest 8/8 and Quick3D-hidden 4/4, install/upgrade/obsolete files/removal and configuration preservation.
 - [x] Runtime reuse justified by 349 unchanged inputs, identical toolchain/dependencies and 208 resource payloads plus fresh installed checks. Executable bytes differ; 107 configured names have one refreshed and 106 reused results, including reused 18 native CTests/37 lifecycle phases/private startup-recovery. No new full-suite/private invocation or binary identity claim.
 - [x] Current README/changelog/limitations/platform/state/checklist prose reflects the existing prerelease and fixed tag; historical checkpoint records and all R-01–R-04 qualifiers preserved.
-- [x] Exact old/new hashes/sizes for all six replacement assets and the proposed release body prepared for review; compact candidate/evidence retained under `build-codex-final-release-provenance/`.
-- [x] Safe task-owned cleanup passes: tagged worktree removed with native Git, scratch/build/extraction/fixtures/downloads removed, 50 earlier files byte-unchanged, all 135 baseline core records preserved, no task-owned process/core, eleven deliberate files retained.
-- [ ] Explicit authorization received for replacing the six existing prerelease assets and updating the release body; original tag and prerelease status preserved.
-- [ ] Replacement executed and all final remote downloads, sizes/SHA-256/checksums, checkpoint HEAD/tag identity and equality to the clean export verified.
+- [x] Exact old/new hashes/sizes for all six replacement assets and the reviewed release body retained under `build-codex-final-release-provenance/`; before/after remote evidence preserved in the local log ZIP.
+- [x] Safe task-owned cleanup passes for both corrective and publication-only scratch: tagged worktrees removed with native Git, scratch/build/extraction/fixtures/downloads removed, 50 earlier files byte-unchanged, all 135 baseline core records preserved, no task-owned process/core, eleven deliberate files retained.
+- [x] Owner's subsequent “Approved” explicitly authorizes replacing the six existing prerelease assets and applying the reviewed body; original tag, release identity and prerelease status preserved.
+- [x] Replacement executed; all six final downloads match reviewed bytes/sizes/SHA-256 and GitHub digests, all five checksum entries pass, checkpoint HEAD/epoch match the tag, and published source equals both fresh clean-tag exports. Real extraction, 519-file/520-member inventory, hashes/modes/normalization, published verification receipt and exact release body pass at 2026-10-04 00:23:09 CEST.
 - [ ] Physical acceptance performed; R-01 remains NOT EXECUTED.
 - [ ] Project-wide license selected; R-02 retains existing unspecified/component/asset declarations.
 - [ ] External artwork-sample subcase executed; required archive remains unavailable.
 
-Prepared source SHA-256:
+Published replacement source SHA-256:
 `34abdc7fca9efcc1989a02abb47e774330c6f490c61715a2c82c63ce04295e9c`.
-Prepared package SHA-256:
+Published replacement package SHA-256:
 `91db462260602e539beb6e21f18eff0456ae97e70121826491df1b453cd388ea`.
-These are verified local replacements, not the current uploaded hashes. Use a
-source archive with its own matching recipe/checksums. The
+These current uploaded hashes also match every retained reviewed file and final
+remote download. Use the source with its matching recipe/checksums. The
 [corrective report](POST_TASK_0045_CORRECTIVE_REPORT.md#rc-01-and-rc-02-release-provenance-closure--2026-10-04)
 records all six old/new digests. R-03 keeps the historical Mesa-worker mechanism
 unproved and teardown as mitigation; R-04 preserves separate independent audit
