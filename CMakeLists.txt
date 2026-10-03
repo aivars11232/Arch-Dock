@@ -1647,6 +1647,11 @@ if(BUILD_TESTING)
   set(ARCHDOCK_TEST_TMPDIR "${CMAKE_CURRENT_BINARY_DIR}/test-tmp" CACHE PATH
       "Disk-backed temporary root for disposable runtime fixtures")
   file(MAKE_DIRECTORY "${ARCHDOCK_TEST_TMPDIR}")
+  find_program(ARCHDOCK_TEST_PYTHON NAMES python3 python REQUIRED)
+  add_test(NAME source-exporter-test
+    COMMAND ${ARCHDOCK_TEST_PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_prepare_arch_source.py)
+  set_tests_properties(source-exporter-test PROPERTIES RUN_SERIAL TRUE
+    ENVIRONMENT "TMPDIR=${ARCHDOCK_TEST_TMPDIR};PYTHONDONTWRITEBYTECODE=1")
   add_test(NAME configuration-upgrade-test
     COMMAND ${CMAKE_COMMAND} -E env
       ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}

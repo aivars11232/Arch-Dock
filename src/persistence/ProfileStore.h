@@ -5,6 +5,8 @@
 #include <QSet>
 #include <QStringList>
 #include <optional>
+#include <functional>
+#include <utility>
 
 namespace ArchDock
 {
@@ -71,8 +73,11 @@ public:
         const QString &name = {}, QString *errorCode = nullptr) const;
     [[nodiscard]] bool exportProfile(const QString &id, int expectedRevision,
         const QString &path, QString *errorCode = nullptr) const;
+    // Controlled environment changes at the asset-prepared/adoption boundary.
+    void setImportCheckpoint(std::function<void()> checkpoint) { m_importCheckpoint = std::move(checkpoint); }
 
 private:
     QString m_root;
+    std::function<void()> m_importCheckpoint;
 };
 }

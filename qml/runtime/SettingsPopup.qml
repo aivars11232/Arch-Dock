@@ -757,8 +757,7 @@ Window {
         if (action.length === 0)
             return true;
         if (action === "clear") {
-            panelRegistry.clearTheme(selectedPanelId);
-            return true;
+            return panelRegistry.clearTheme(selectedPanelId);
         }
         if (action === "import")
             return panelRegistry.importTheme(selectedPanelId, artifactDraft.sourceUrl);
@@ -785,6 +784,7 @@ Window {
         }
         studioError = "";
         studioWarning = "";
+        let settingsCommitted = false;
         if (!editorSession.loaded)
             return false;
 
@@ -802,10 +802,14 @@ Window {
                 studioError = qsTr("The transaction succeeded, but its saved revision could not be reloaded.");
                 return false;
             }
+            settingsCommitted = true;
         }
 
         if (!applyArtifact()) {
-            studioError = qsTr("The settings transaction completed, but the separate artwork operation failed.");
+            const detail = String(panelRegistry.panelValue(selectedPanelId, "themeStatus") || qsTr("No details were returned."));
+            studioError = settingsCommitted
+                ? qsTr("The settings transaction completed, but the separate artwork operation failed: %1").arg(detail)
+                : qsTr("Artwork operation failed: %1").arg(detail);
             return false;
         }
         artifactDraft = {};

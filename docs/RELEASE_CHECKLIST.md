@@ -10,13 +10,33 @@ See [CURRENT_STATE.md](CURRENT_STATE.md) for the current implementation boundary
 [PRESET_SYSTEM_SPEC.md](PRESET_SYSTEM_SPEC.md) for preset and audition gates, and
 [TARGET_STRUCTURE_TREE_V2.md](TARGET_STRUCTURE_TREE_V2.md) for the logical target.
 
+The specified post-TASK-0045 AD corrective work, native verification and full
+installed-package checks pass as recorded in the
+[corrective report](POST_TASK_0045_CORRECTIVE_REPORT.md). The truncated assignment's
+exact R-01 through R-04 definitions remain unavailable. Outside the explicit
+corrective section, build/runtime entries retain the preceding TASK-0045
+candidate's historical evidence. Physical acceptance and release decisions
+remain separate from private runtime results.
+
+## Corrective acceptance
+
+- [x] AD-01 through AD-05 accounted for with executed focused evidence.
+- [x] Fresh one-job Debug application/affected-test and exported-source Release builds.
+- [x] 107/107 configured CTest names have applicable passing evidence: 65 refreshed, 42 unchanged initial checks reused; no claim of one new full-suite invocation.
+- [x] All 18 native CTests pass for their relevant final source.
+- [x] Repeat normalized exports identical: 519 source files, 520 unique members, matching bytes/modes/identities/timestamps; root recipe pins the verified checksum.
+- [x] Complete installed-package gate passes: 209 payload files, 15+15 rendered catalogs, QtTest 8/8 and Quick3D-hidden 4/4, private startup in both modes, native install/upgrade/recovery/removal and preserved disposable configuration.
+- [x] Original standalone lifecycle passes 37/37 phases with unchanged 900-second bound and assertions.
+- [x] Task-owned cleanup complete; twenty deliberate corrective files retained, including ten preliminary files unchanged; all 20 older protected artifacts byte-unchanged.
+- [ ] Exact R-01 through R-04 closure and any remaining requirements in missing sections 10–11.
+- [ ] External source-sample QtTest row; its archive was not supplied (CTest itself passes).
+
 ## Repository
 
-- [x] Clean Git state after owner-approved commit/sync; final receipt verifies closure.
-- [x] All required resources tracked in the owner-approved fourteen-path commit.
-- [x] Current documentation accurate.
-- [x] No stale source-of-truth file.
-- [x] Versioned release-evidence commit under owner control.
+- [x] Corrective source/resources included in the owner-authorized evidence commit.
+- [x] Current documentation distinguishes final corrective results from historical receipts.
+- [x] No stale current-state source of truth.
+- [x] Owner-authorized commit/sync closure recorded by this commit; exact HEAD, clean tree and remote parity verified after push in retained `FINAL_STATE.json`.
 - [ ] Proposed release tag created under separate owner instruction.
 
 ## Build and installation

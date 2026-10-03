@@ -172,7 +172,7 @@ bool safeSvg(const QString &path)
 }
 
 bool transferAssets(ProfileDefinition &profile, const QString &sourceRoot,
-    const QString &destinationRoot, bool importing, QString *code)
+    const QString &destinationRoot, bool importing, QString *code, QStringList *created = nullptr)
 {
     constexpr qint64 maximumTransferBytes = 32 * 1024 * 1024;
     qint64 totalBytes = 0;
@@ -242,6 +242,8 @@ bool transferAssets(ProfileDefinition &profile, const QString &sourceRoot,
         }
         const auto copied = loaded.package->materialize(destinationRoot);
         if (!copied.isValid()) return fail(QStringLiteral("profile-asset-copy-failed"));
+        if (created && !copied.reusedExisting && !created->contains(copied.package->sourceRoot()))
+            created->append(copied.package->sourceRoot());
         const QString path = manifest ? copied.package->manifestPath() : copied.package->primarySurfacePath();
         const QString relative = QDir(destinationRoot).relativeFilePath(path);
         if (!importing && !safeAssetRelativePath(relative))
@@ -569,8 +571,10 @@ std::optional<ProfileDefinition> ProfileStore::importProfile(const QString &path
     { error(code, QStringLiteral("unsafe-profile-import-path")); return {}; }
     auto profile = readProfile(path, code);
     if (!profile) return {};
-    if (!transferAssets(*profile, path + QStringLiteral(".assets"),
-            QDir(m_root).filePath(QStringLiteral("assets")), true, code)) return {};
+    if (!safeRoot(m_root))
+    { error(code, QStringLiteral("unsafe-profile-root")); return {}; }
+    if (QDir(m_root).entryList({QStringLiteral("*.json")}, QDir::Files).size() >= MaximumProfiles)
+    { error(code, QStringLiteral("profile-store-limit")); return {}; }
     profile->id = ProfileDefinition::capture({}, {}).id;
     profile->revision = 1;
     if (!name.trimmed().isEmpty()) profile->name = name.trimmed();
@@ -580,7 +584,46 @@ std::optional<ProfileDefinition> ProfileStore::importProfile(const QString &path
             ? QStringLiteral("free-p") : QStringLiteral("panel-p")) + QUuid::createUuid().toString(QUuid::Id128);
         panel.identity.builtIn = false;
     }
-    return save(*profile, code);
+    if (!ProfileDefinition::fromVariantMap(profile->toVariantMap(), code)) return {};
+    const QString managed = QDir(m_root).filePath(QStringLiteral("assets"));
+    QStringList created;
+    QString failure;
+    const auto reject = [&]() -> std::optional<ProfileDefinition> {
+        QStringList diagnostics, retained;
+        const auto owners = created.isEmpty() ? QList<ProfileDefinition>{} : profiles(&diagnostics);
+        for (auto it = created.crbegin(); it != created.crend(); ++it)
+        {
+            const QString root = *it;
+            const auto references = [&root](const QString &reference) {
+                const QUrl url(reference);
+                if (!url.isLocalFile()) return false;
+                const QString path = QFileInfo(url.toLocalFile()).absoluteFilePath();
+                return path == root || path.startsWith(root + QLatin1Char('/'));
+            };
+            bool adopted = false;
+            for (const auto &owner : owners)
+                for (const auto &panel : owner.panels)
+                {
+                    const auto &surface = panel.surface;
+                    adopted = adopted || references(surface.themePackageManifest) || references(surface.themeAsset) ||
+                        references(surface.themeSource) || references(surface.themePreview);
+                    for (const auto &entry : panel.iconStyle.perEntryOverrides)
+                        adopted = adopted || references(entry.customGlyph);
+                }
+            if (!diagnostics.isEmpty() || adopted || !safeRoot(root) ||
+                QFileInfo(root).absolutePath() != QFileInfo(managed).absoluteFilePath() ||
+                (QFileInfo::exists(root) && !QDir(root).removeRecursively())) retained.append(root);
+        }
+        error(code, retained.isEmpty() ? failure : QStringLiteral("profile-import-cleanup-failed:") +
+            failure + QLatin1Char(':') + retained.join(QLatin1Char(',')));
+        return {};
+    };
+    if (!transferAssets(*profile, path + QStringLiteral(".assets"), managed, true, &failure, &created)) return reject();
+    if (m_importCheckpoint) m_importCheckpoint();
+    const auto saved = save(*profile, &failure);
+    if (!saved) return reject();
+    error(code, {});
+    return saved;
 }
 
 bool ProfileStore::exportProfile(const QString &id, int revision,

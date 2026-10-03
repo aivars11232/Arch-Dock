@@ -155,7 +155,8 @@ bool ProfileApplyTransaction::readJournal(QString *code)
     for (const QString &key : {QStringLiteral("state"), QStringLiteral("sessionId"), QStringLiteral("profileId"), QStringLiteral("errorCode")})
         if (map.value(key).metaType().id() != QMetaType::QString || map.value(key).toString().size() > 1024) return fail();
     const QString state = map.value(QStringLiteral("state")).toString();
-    if (!QStringList{"PREPARING", "APPLYING", "REMOVING", "COMMITTING", "COMMITTED", "ROLLING_BACK", "BLOCKED"}.contains(state) ||
+    if (!QStringList{"PREPARING", "APPLYING", "REMOVING", "COMMITTING", "COMMITTED", "ROLLING_BACK",
+            "ROLLBACK_COMMITTING", "ROLLED_BACK", "BLOCKED"}.contains(state) ||
         QUuid(map.value(QStringLiteral("sessionId")).toString()).isNull() ||
         !ProfileDefinition::validId(map.value(QStringLiteral("profileId")).toString())) return fail();
     if (map.value(QStringLiteral("backup")).metaType().id() != QMetaType::QVariantList ||
@@ -334,8 +335,19 @@ bool ProfileApplyTransaction::rollback(QString *code)
     if (m_rollbackErrors.isEmpty() && restored != before)
     {
         for (auto &panel : restored) panel.settingsRevision++;
-        if (!m_operations.commit || !m_operations.commit(before, restored, &failure)) m_rollbackErrors.append(failure);
-        else if (m_operations.publish) m_operations.publish();
+        // Provisional hosts have been removed. Journal the exact restored set
+        // before its separate durable registry commit, just as forward apply
+        // journals its candidates before COMMITTING.
+        m_candidates = restored;
+        m_created.clear();
+        if (!journal(QStringLiteral("ROLLBACK_COMMITTING"), &failure) ||
+            !m_operations.commit || !m_operations.commit(before, restored, &failure))
+            m_rollbackErrors.append(failure);
+        else
+        {
+            if (m_operations.publish) m_operations.publish();
+            transition(QStringLiteral("ROLLED_BACK"));
+        }
     }
     if (m_rollbackErrors.isEmpty() && !clearJournal(&failure)) m_rollbackErrors.append(failure);
     if (!m_rollbackErrors.isEmpty())
@@ -352,7 +364,11 @@ QVariantMap ProfileApplyTransaction::abort(const QString &code)
     {
         if (!rollbackCode.isEmpty() && !m_rollbackErrors.contains(rollbackCode)) m_rollbackErrors.append(rollbackCode);
         QString journalError;
-        if (!journal(QStringLiteral("BLOCKED"), &journalError)) m_rollbackErrors.append(journalError);
+        // Do not erase the durable restored-set phase on a commit/clear failure.
+        const QString phase = m_state == QStringLiteral("ROLLBACK_COMMITTING") || m_state == QStringLiteral("ROLLED_BACK")
+            ? m_state : QStringLiteral("BLOCKED");
+        if (!journal(phase, &journalError)) m_rollbackErrors.append(journalError);
+        transition(QStringLiteral("BLOCKED"));
         return outcome(false);
     }
     transition(QStringLiteral("IDLE"));
@@ -368,6 +384,24 @@ QVariantMap ProfileApplyTransaction::recover()
     if (!m_pending) { transition(QStringLiteral("IDLE")); return outcome(true); }
     if (m_operations.guard) { const auto guard = m_operations.guard(); if (!guard.isEmpty()) return outcome(false, guard); }
     m_running = true;
+    if (m_state == QStringLiteral("ROLLBACK_COMMITTING") || m_state == QStringLiteral("ROLLED_BACK"))
+    {
+        const bool committed = m_operations.matches && m_operations.matches(m_candidates, &code);
+        const auto before = definitions(m_backup);
+        if (!committed && (m_state != QStringLiteral("ROLLBACK_COMMITTING") ||
+                !m_operations.matches || !m_operations.matches(before, &code)))
+        { m_running = false; transition(QStringLiteral("BLOCKED")); return outcome(false, code); }
+        for (const auto &panel : m_candidates)
+            if (hosted(panel) && (!m_operations.verify || !m_operations.verify(panel, &code)))
+            { m_running = false; transition(QStringLiteral("BLOCKED")); return outcome(false, code); }
+        if (!committed && (!m_operations.commit || !m_operations.commit(before, m_candidates, &code)))
+        { m_running = false; transition(QStringLiteral("BLOCKED")); return outcome(false, code); }
+        if (m_operations.publish) m_operations.publish();
+        if (!clearJournal(&code))
+        { m_running = false; transition(QStringLiteral("BLOCKED")); return outcome(false, code); }
+        m_running = false; m_error.clear(); m_rollbackErrors.clear(); m_preview.clear();
+        transition(QStringLiteral("IDLE")); return outcome(true);
+    }
     if ((m_state == QStringLiteral("COMMITTING") || m_state == QStringLiteral("COMMITTED")) &&
         m_operations.matches && m_operations.matches(m_candidates, &code))
     {

@@ -1629,12 +1629,28 @@ log_session_phase() {
 
 start_plasmashell() {
     local log_name="$1"
+    local startup_deadline=$((SECONDS + 20)) readiness=''
     # Qt routes messages to journald when stderr is not a console; forcing
     # stderr keeps the private shell's diagnostics in the session log tail.
     QT_FORCE_STDERR_LOGGING=1 plasmashell --no-respawn \
         >"$ARCHDOCK_TEST_LOG_DIR/$log_name" 2>&1 &
     ARCHDOCK_SESSION_PLASMASHELL_PID=$!
     gdbus wait --session --timeout=20 org.kde.plasmashell
+    # Registration precedes desktop/activity initialization. Query readiness
+    # before creating fixtures; retry only this read, never a host mutation.
+    while ((SECONDS < startup_deadline)); do
+        if readiness="$(plasma_script "var activity = currentActivity(); var ready = activity && activity !== '00000000-0000-0000-0000-000000000000' && desktops().some(function(d) { return Number(d.screen) === 0 && String(d.type).length > 0 && String(d.type) !== 'null'; }); print(ready ? 'ready' : 'pending');" 2>&1)"; then
+            [[ "$readiness" == "('ready',)" ]] && return 0
+            [[ "$readiness" == "('pending',)" ]] || break
+        elif [[ "$readiness" != *'Timeout was reached'* &&
+                "$readiness" != *'org.freedesktop.DBus.Error.NoReply'* ]]; then
+            break
+        fi
+        kill -0 "$ARCHDOCK_SESSION_PLASMASHELL_PID" || break
+        sleep 0.1
+    done
+    printf 'Private Plasma desktop was not ready within its startup deadline: %s\n' "$readiness" >&2
+    return 1
 }
 
 arch_dock_service_pid() {
@@ -3396,7 +3412,10 @@ run_outer() {
 
     local session_runner_status
     set +e
+    # This synthetic desktop has no portal backend. Keep Qt on its native
+    # desktop-service route inside the disposable session only.
     env \
+        QT_NO_XDG_DESKTOP_PORTAL=1 \
         ARCHDOCK_LIFECYCLE_STOP_AFTER="${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}" \
         ARCHDOCK_PRESET_MATRIX_GROUP="${ARCHDOCK_PRESET_MATRIX_GROUP:-}" \
         ARCHDOCK_PRESET_MATRIX_SCRIPT="$preset_script" \

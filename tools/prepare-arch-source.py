@@ -29,7 +29,8 @@ def main():
     version = re.search(r"^pkgver=([0-9.]+)$", recipe, re.M).group(1)
     head = git("rev-parse", "HEAD").decode().strip()
     epoch = int(git("show", "-s", "--format=%ct", "HEAD"))
-    excluded = {"PKGBUILD", "docs/CURRENT_STATE.md", "docs/RELEASE_CHECKLIST.md"}
+    excluded = {"PKGBUILD", "docs/CURRENT_STATE.md", "docs/RELEASE_CHECKLIST.md",
+                "docs/POST_TASK_0045_CORRECTIVE_REPORT.md"}
     paths = sorted(set(git("ls-files", "--cached", "--others", "--exclude-standard", "-z")
                        .decode().rstrip("\0").split("\0")))
     records = []
@@ -38,9 +39,13 @@ def main():
         first = Path(relative).parts[0]
         if relative in excluded or first == "build" or first.startswith("build-"):
             continue
+        if path.is_symlink():
+            parser.error(f"unsupported source entry: {relative}")
         if not path.exists():  # Files removed in the approved working tree.
             continue
-        if path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(root):
+        if relative == "SOURCE_CHECKPOINT.json":
+            parser.error("reserved generated metadata path collides with source input: SOURCE_CHECKPOINT.json")
+        if not path.is_file() or not path.resolve().is_relative_to(root):
             parser.error(f"unsupported source entry: {relative}")
         records.append({"path": relative,
                         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),

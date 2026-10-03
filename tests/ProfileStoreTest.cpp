@@ -1,9 +1,11 @@
 #include "persistence/ProfileStore.h"
 #include "persistence/ConfigurationBackup.h"
+#include "themes/ThemePackage.h"
 
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
+#include <QScopeGuard>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QUrl>
@@ -361,6 +363,136 @@ private slots:
         QVERIFY(writeBytes(path, QJsonDocument::fromVariant(profile.toVariantMap()).toJson()));
         QVERIFY(!store.importProfile(path, {}, &error));
         QVERIFY(store.profiles().isEmpty());
+    }
+    void rejectedImportsCleanOnlyNewArtwork_data()
+    {
+        QTest::addColumn<QString>("failure");
+        QTest::newRow("full-store") << QString("limit");
+        QTest::newRow("later-invalid-asset") << QString("asset");
+        QTest::newRow("real-final-save-failure") << QString("save");
+        QTest::newRow("shared-artwork-and-new-asset") << QString("shared");
+    }
+    void rejectedImportsCleanOnlyNewArtwork()
+    {
+        QFETCH(QString, failure);
+        QTemporaryDir directory;
+        const QString path = directory.filePath("import.json"), assets = path + ".assets";
+        QVERIFY(QDir().mkpath(assets));
+        QVERIFY(writeBytes(assets + "/first.svg", "<svg xmlns='http://www.w3.org/2000/svg' width='2' height='2'/>") );
+        QVERIFY(writeBytes(assets + "/second.svg", "<svg xmlns='http://www.w3.org/2000/svg' width='3' height='3'/>") );
+        ProfileStore store(directory.filePath("profiles"));
+        const QString managed = store.rootDirectory() + "/assets";
+        QVERIFY(QDir().mkpath(managed));
+        auto profile = example();
+        profile.panels.first().surface.themeAsset = "profile-asset:first.svg";
+        std::optional<ProfileDefinition> shared;
+        QByteArray sharedBytes;
+        QString sharedAsset;
+        if (failure == "shared")
+        {
+            QVERIFY(writeBytes(path, QJsonDocument::fromVariant(profile.toVariantMap()).toJson()));
+            shared = store.importProfile(path); QVERIFY(shared);
+            sharedAsset = QUrl(shared->panels.first().surface.themeAsset).toLocalFile();
+            QFile file(sharedAsset); QVERIFY(file.open(QIODevice::ReadOnly)); sharedBytes = file.readAll();
+            profile.panels.first().surface.themeSource = "profile-asset:second.svg";
+            profile.panels.first().surface.themePreview = "file:///untrusted.svg";
+        }
+        else if (failure == "asset") profile.panels.first().surface.themeSource = "file:///untrusted.svg";
+        if (failure == "limit")
+        {
+            for (int index = 0; index < ProfileStore::MaximumProfiles; ++index)
+            {
+                auto existing = example(); existing.id = "profile-fixture-" + QString::number(index);
+                QVERIFY(writeBytes(store.rootDirectory() + '/' + existing.id + ".json",
+                    QJsonDocument::fromVariant(existing.toVariantMap()).toJson()));
+            }
+        }
+        QVERIFY(writeBytes(path, QJsonDocument::fromVariant(profile.toVariantMap()).toJson()));
+        const auto before = QDir(managed).entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot);
+        const auto permissions = QFile::permissions(store.rootDirectory());
+        const auto restore = qScopeGuard([&] { QFile::setPermissions(store.rootDirectory(), permissions); });
+        if (failure == "save")
+            QVERIFY(QFile::setPermissions(store.rootDirectory(), QFileDevice::ReadOwner | QFileDevice::ExeOwner));
+        QString code;
+        QVERIFY(!store.importProfile(path, {}, &code));
+        QVERIFY(!code.isEmpty());
+        QCOMPARE(QDir(managed).entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot), before);
+        if (failure == "limit") QCOMPARE(code, QString("profile-store-limit"));
+        if (failure == "save") QCOMPARE(code, QString("profile-store-unwritable"));
+        if (shared)
+        {
+            QCOMPARE(store.load(shared->id), shared);
+            QFile file(sharedAsset); QVERIFY(file.open(QIODevice::ReadOnly)); QCOMPARE(file.readAll(), sharedBytes);
+            const auto package = ThemePackage::load(QFileInfo(sharedAsset).absolutePath() + "/archdock-theme.json");
+            QVERIFY(package.isValid()); QCOMPARE(package.package->primarySurfacePath(), sharedAsset);
+        }
+        QVERIFY(QFile::setPermissions(store.rootDirectory(), permissions));
+        if (failure != "limit")
+        {
+            profile.panels.first().surface.themeSource.clear(); profile.panels.first().surface.themePreview.clear();
+            QVERIFY(writeBytes(path, QJsonDocument::fromVariant(profile.toVariantMap()).toJson()));
+            const auto imported = store.importProfile(path, {}, &code);
+            QVERIFY2(imported.has_value(), qPrintable(code));
+            QCOMPARE(store.load(imported->id), imported);
+            QVERIFY(QFileInfo(QUrl(imported->panels.first().surface.themeAsset).toLocalFile()).isFile());
+        }
+    }
+    void importCleanupFailureAndAdoptedResourcesAreExplicit_data()
+    {
+        QTest::addColumn<QString>("boundary");
+        QTest::newRow("cleanup-permission-failure") << QString("remove");
+        QTest::newRow("another-durable-owner") << QString("adopt");
+        QTest::newRow("uncertain-durable-owner") << QString("uncertain");
+    }
+    void importCleanupFailureAndAdoptedResourcesAreExplicit()
+    {
+        QFETCH(QString, boundary);
+        QTemporaryDir directory;
+        const QString path = directory.filePath("import.json");
+        QVERIFY(QDir().mkpath(path + ".assets"));
+        QVERIFY(writeBytes(path + ".assets/asset.svg", "<svg xmlns='http://www.w3.org/2000/svg' width='2' height='2'/>") );
+        auto profile = example(); profile.panels.first().surface.themeAsset = "profile-asset:asset.svg";
+        QVERIFY(writeBytes(path, QJsonDocument::fromVariant(profile.toVariantMap()).toJson()));
+        ProfileStore store(directory.filePath("profiles"));
+        const QString assets = store.rootDirectory() + "/assets";
+        QVERIFY(QDir().mkpath(assets));
+        const auto rootPermissions = QFile::permissions(store.rootDirectory()), assetPermissions = QFile::permissions(assets);
+        const auto restore = qScopeGuard([&] {
+            QFile::setPermissions(store.rootDirectory(), rootPermissions); QFile::setPermissions(assets, assetPermissions);
+        });
+        bool controlled = false;
+        QString published, ownerId;
+        store.setImportCheckpoint([&] {
+            const auto entries = QDir(assets).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+            if (entries.size() != 1) return;
+            published = assets + '/' + entries.first();
+            if (boundary == "adopt")
+            {
+                auto owner = example(); ownerId = owner.id;
+                owner.panels.first().surface.themeAsset = QUrl::fromLocalFile(published + "/asset.svg").toString();
+                if (!store.save(owner)) return;
+            }
+            if (boundary == "uncertain" && !writeBytes(store.rootDirectory() + "/broken.json", "{")) return;
+            if (boundary == "remove" && !QFile::setPermissions(assets, QFileDevice::ReadOwner | QFileDevice::ExeOwner)) return;
+            controlled = QFile::setPermissions(store.rootDirectory(), QFileDevice::ReadOwner | QFileDevice::ExeOwner);
+        });
+        QString code;
+        QVERIFY(!store.importProfile(path, {}, &code)); QVERIFY(controlled);
+        QVERIFY2(code.startsWith("profile-import-cleanup-failed:profile-store-unwritable:"), qPrintable(code));
+        QVERIFY(code.contains(published)); QVERIFY(QFileInfo::exists(published));
+        if (boundary == "adopt")
+        {
+            const auto owner = store.load(ownerId); QVERIFY(owner);
+            QVERIFY(QFileInfo(QUrl(owner->panels.first().surface.themeAsset).toLocalFile()).isFile());
+            QVERIFY(ThemePackage::load(published + "/archdock-theme.json").isValid());
+            QCOMPARE(store.profiles().size(), 1);
+        }
+        if (boundary == "uncertain")
+        {
+            QFile file(store.rootDirectory() + "/broken.json");
+            QVERIFY(file.open(QIODevice::ReadOnly)); QCOMPARE(file.readAll(), QByteArray("{"));
+            QVERIFY(ThemePackage::load(published + "/archdock-theme.json").isValid());
+        }
     }
     void executableArtworkIsRejectedWithoutPartialExport()
     {

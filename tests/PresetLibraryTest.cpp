@@ -929,6 +929,7 @@ void PresetLibraryTest::verifyRenderedCards(bool energyOnly)
         bool fallbackApplied = true;
         QString previewName;
         bool energySurfaceReady = false;
+        int canvasPaints = -1;
     };
     // Instantiates the real card for one preset and returns what its preview
     // shows once the promised renderer and its presented frames have settled.
@@ -957,14 +958,29 @@ void PresetLibraryTest::verifyRenderedCards(bool energyOnly)
         {
             return result;
         }
-        QImage previous;
-        int stableFrames = 0;
         const QString expectedTier = compatibilityOf(card)
             .value(QStringLiteral("effectiveRendererTier")).toString();
+        std::unique_ptr<QSignalSpy> canvasPaints;
+        if (auto *scene = preview->property("panelSceneItem").value<QObject *>()) {
+            if (auto *surface = scene->property("visualPanel").value<QObject *>()) {
+                for (auto *child : surface->findChildren<QObject *>()) {
+                    if (child->inherits("QQuickCanvasItem")) {
+                        canvasPaints = std::make_unique<QSignalSpy>(child, SIGNAL(painted()));
+                        break;
+                    }
+                }
+            }
+        }
+        QImage previous;
+        int stableFrames = 0;
         for (int attempt = 0; attempt < 100; ++attempt)
         {
             QTest::qWait(20);
             if (preview->property("activeRendererTier").toString() != expectedTier) continue;
+            // Stable icons do not prove the asynchronous procedural surface
+            // has painted. Start frame settlement after its real completion.
+            if (expectedTier == QStringLiteral("procedural2d")
+                && (!canvasPaints || canvasPaints->isEmpty())) continue;
             const QImage windowImage = window.grabWindow();
             const qreal scale = windowImage.devicePixelRatio();
             const QRectF logical = preview->mapRectToScene(preview->boundingRect());
@@ -980,6 +996,15 @@ void PresetLibraryTest::verifyRenderedCards(bool energyOnly)
         result.tier = preview->property("activeRendererTier").toString();
         result.fallbackApplied = preview->property("fallbackApplied").toBool();
         result.previewName = preview->objectName();
+        if (canvasPaints) result.canvasPaints = canvasPaints->count();
+        if (result.picture.isNull()) {
+            qWarning() << "Unsettled preview" << card.value(QStringLiteral("id"))
+                       << result.canvasPaints << (canvasPaints && canvasPaints->isValid());
+            const QString evidence = qEnvironmentVariable("ARCHDOCK_RENDER_EVIDENCE_DIR");
+            if (!evidence.isEmpty() && QDir().mkpath(evidence))
+                window.grabWindow().save(QDir(evidence).filePath(
+                    card.value(QStringLiteral("id")).toString() + QStringLiteral("-unsettled.png")));
+        }
         if (auto *scene = preview->property("panelSceneItem").value<QObject *>()) {
             if (auto *surface = scene->property("activeSurfaceRenderer").value<QObject *>()) {
                 result.energySurfaceReady = surface->property("rendererReady").toBool()
@@ -1020,11 +1045,23 @@ void PresetLibraryTest::verifyRenderedCards(bool energyOnly)
                             QString::number(distinctColors(first.picture))));
         // Deterministic: a second, separate card draws the same picture.
         const Rendered second = render(card);
+        if (first.tier == QStringLiteral("procedural2d")) {
+            QVERIFY2(first.canvasPaints > 0 && second.canvasPaints > 0, label);
+        }
         if (energyOnly) {
             QVERIFY2(first.energySurfaceReady && second.energySurfaceReady, label);
             const Rendered third = render(card);
             const Rendered fourth = render(card);
             QVERIFY2(third.picture == first.picture && fourth.picture == first.picture, label);
+        }
+        if (second.picture != first.picture) {
+            qWarning() << "Canvas completion counts at capture" << label
+                       << first.canvasPaints << second.canvasPaints;
+            const QString evidence = qEnvironmentVariable("ARCHDOCK_RENDER_EVIDENCE_DIR");
+            if (!evidence.isEmpty() && QDir().mkpath(evidence)) {
+                first.picture.save(QDir(evidence).filePath(id + QStringLiteral("-first.png")));
+                second.picture.save(QDir(evidence).filePath(id + QStringLiteral("-second.png")));
+            }
         }
         QVERIFY2(second.picture == first.picture, label);
         pictures.insert(card.value(QStringLiteral("kind")).toString() +

@@ -6,7 +6,63 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Latest boundary — 2026-10-03: TASK-0045 COMPLETE; verification and cleanup PASS, Git closure owner-authorized.**
+**Latest specified corrective boundary — 2026-10-03: AD-01 through AD-05
+COMPLETE; native, full package and cleanup PASS; Git closure owner-authorized.**
+
+The standalone pass preserves the completed 45-task implementation on baseline
+`2889cae61deb4ab4ff255319e64098cc80d9a684`. Recovery journals the verified
+restored host IDs/revisions before committing; artwork import/Clear and Studio
+propagate persistence outcomes; rejected profile imports clean newly owned
+resources while protecting shared/uncertain ownership; the exporter reserves
+generated metadata; theme guidance matches implemented optional 3D/presentation.
+The complete issue register and executed evidence are in
+[the corrective report](POST_TASK_0045_CORRECTIVE_REPORT.md).
+
+The owner approved task-local PySide6 and instructed commit/sync after completion.
+Native verification diagnosed and repaired a Canvas GUI-thread stall, asynchronous
+preset capture and a throttled 3D frame observation. Existing private harnesses
+also clean exact activation waiters and require desktop readiness, using Qt's
+direct desktop-service route only in their synthetic session. Production startup
+metadata and all mandatory assertions/timeouts remain intact.
+
+Fresh one-job Debug application/test builds and a clean exported-source
+Release/Quick3D-ON package build pass. **107/107 configured CTest names** have
+applicable passing evidence: **65 refreshed checks and 42 unchanged initial
+checks reused** against source/dependency identity. This is not a new single
+full-suite invocation. All **18 native CTests** pass for the relevant final
+source; the original standalone lifecycle passes **37/37 phases**, 113.08 s.
+The offscreen private-KWin row's live counterpart passes in native testing; the
+existing external artwork-sample row remains unexecuted without its archive.
+
+Two normalized exports are byte-identical: **519 source files + one generated
+checkpoint = 520 unique members**, exact current bytes/modes and normalized
+identities/timestamps. Verified source SHA-256:
+`539f46e318bba0f6fc6993235cf1fb350176fac9e077c5efb9582ceefa03fc36`;
+root `PKGBUILD` pins it. Final package SHA-256:
+`172a780e95f5bc17ac9c10c69ffbf0c416e1b4cb94068f8895adaa308ae1dfe0`.
+The complete original package gate passes: **209/209 installed files**,
+**15+15** rendered catalogs, QtTest **8/8** and Quick3D-hidden **4/4**, private
+installed startup in both modes, native install/upgrade/recovery/removal and
+byte-preserved disposable user configuration. Extracted source was verified and
+removed, and the checkout masked, before installed-resource checks.
+
+The current receipt is `build-codex-post-task-0045-corrective/FINAL_STATE.json`,
+with final package files in `verified-package-output/` and continuation evidence
+in `native-verification-output/`. Twenty deliberate corrective files remain;
+ten preliminary files and all 20 older protected artifacts are byte-unchanged.
+Task-owned builds, source extractions, Python/cache, diagnostics, private
+sessions and fixtures are removed. The owner-authorized source/evidence commit
+records closure; its exact HEAD, clean tree and remote parity are verified in
+the final receipt after push. No host dependency installation or personal
+desktop mutation occurred.
+
+The supplied assignment ends mid-sentence in section 9. Exact R-01 through R-04
+definitions and any additional sections 10–11 requirements remain unavailable.
+Physical hardware acceptance, license selection, tagging and publication remain
+open owner boundaries; private runtime/package results do not resolve them. The
+older blocked `STATE.json` and preliminary subset receipts are historical.
+
+**Previous boundary — 2026-10-03: TASK-0045 COMPLETE; verification and cleanup PASS, Git closure owner-authorized.**
 
 TASK-0044 is COMPLETE. Its owner-authorized cleanup documentation was committed
 and synced as `9584d204ecfcbf503ccd7e4322ac945424b5d610`

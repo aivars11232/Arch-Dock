@@ -72,6 +72,18 @@ types and SVG scripts, event handlers, external links, entities, DTDs and
 external CSS resources. Transfers are bounded to 32 MiB and 256 unique files.
 Profiles are inert configuration; import does not run a script or install code.
 
+Import checks the store path, 512-profile capacity and final local definition
+before publishing assets. It tracks only packages newly published by this
+transfer; reused immutable packages remain shared. Later validation or final
+save failure removes those new packages after checking durable profile
+references. A package adopted by another saved definition, or ownership made
+uncertain by an unreadable/malformed store record, is retained and reported.
+Filesystem cleanup failure is also reported as
+`profile-import-cleanup-failed:<original-error>:<retained-paths>`; it is not a
+claim of clean rollback. Import still returns failure and never applies panels.
+Successful imports retain their validated managed artwork; ordinary profile
+deletion continues to preserve shared assets.
+
 ## Complete panel-set apply and recovery
 
 `ProfileApplyTransaction` preflights the entire current set and its durable
@@ -115,6 +127,19 @@ profile or changing a host. Recover Interrupted Apply explicitly retries the
 checked restoration or finalizes an already committed, verified set. The
 backup is retained after success; the active recovery journal is removed.
 Inspect `getStatus()` for errors, rollback errors, diagnostics and record paths.
+
+Rollback records its exact verified restored definitions in the existing
+version-1 journal's `candidates` before committing new physical associations
+and revisions (`ROLLBACK_COMMITTING`). Provisional hosts have already been
+removed at this boundary. Recovery checks either that exact committed set or
+the original unchanged registry plus the verified restored hosts before
+finishing the pending commit. It then removes the journal without recreating
+hosts. A failed journal cleanup retains this recoverable phase, including when
+the subsequent BLOCKED status cannot be persisted. `ROLLED_BACK` identifies a
+restored commit whose cleanup is pending. Earlier supported version-1 phases
+continue through their existing guarded recovery path; malformed/future records
+are refused. Older binaries that do not recognize the added phases refuse
+them rather than perform destructive recovery.
 
 Saving an existing profile whose nested legacy panels require a destructive
 rewrite captures its original bytes first. Current-schema saves do not create

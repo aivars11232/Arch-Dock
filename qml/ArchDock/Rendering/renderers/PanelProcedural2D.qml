@@ -85,7 +85,9 @@ Item {
         height: root.height
         opacity: Math.max(0, Math.min(1, root.panelOpacity))
             * root.motionOpacity
-        renderStrategy: Canvas.Cooperative
+        // Cooperative can replay costly shadow painting on Plasma's GUI
+        // thread. Keep the same image commands on Canvas's private worker.
+        renderStrategy: Canvas.Threaded
 
         onPaint: {
             const context = getContext("2d")

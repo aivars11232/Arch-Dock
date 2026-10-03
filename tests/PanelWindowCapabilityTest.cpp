@@ -126,10 +126,77 @@ private slots:
     void presetAuditionGuardsAndInvalidRequestsLeaveNoWrites();
     void presetDefaultsDoNotRewriteExistingInstances();
     void screenSignalsCoalesceAndUtilityWindowFitsWorkArea();
+    void studioArtworkPersistenceFailure_data();
+    void studioArtworkPersistenceFailure();
 
 private:
     QTemporaryDir m_settingsDirectory;
 };
+
+void PanelWindowCapabilityTest::studioArtworkPersistenceFailure_data()
+{
+    QTest::addColumn<QString>("action");
+    QTest::addColumn<bool>("partial");
+    QTest::newRow("import") << QString("import") << false;
+    QTest::newRow("clear") << QString("clear") << false;
+    QTest::newRow("committed-settings-failed-artwork") << QString("import") << true;
+}
+
+void PanelWindowCapabilityTest::studioArtworkPersistenceFailure()
+{
+    QFETCH(QString, action); QFETCH(bool, partial);
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const auto source = QUrl::fromLocalFile(QFINDTESTDATA("fixtures/theme-v2/valid-procedural.json"));
+    QVERIFY(registry->importTheme("bottom", source));
+    registry->setPanelValue("bottom", "themeStatus", "Previously adopted artwork");
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> popup(component.createWithInitialProperties({{"selectedPanelId", "bottom"}}));
+    QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
+    auto *studio = qobject_cast<QQuickWindow *>(popup.get()); QVERIFY(studio);
+    studio->show(); QVERIFY(QTest::qWaitForWindowExposed(studio));
+    QVERIFY(QQuickTest::qWaitForPolish(studio));
+    const auto before = registry->panelSnapshot("bottom");
+    const QString path = QSettings().fileName();
+    const auto permissions = QFile::permissions(path);
+    const auto restore = qScopeGuard([&] { QFile::setPermissions(path, permissions); });
+    bool blocked = false;
+    const auto block = [&] { blocked = QFile::setPermissions(path, QFileDevice::ReadOwner); };
+    QMetaObject::Connection afterCommit;
+    if (partial)
+    {
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue",
+            Q_ARG(QVariant, (QVariantMap{{"key", "opacity"}, {"scope", "panel"}})), Q_ARG(QVariant, 0.61)));
+        QVERIFY(popup->property("hasSettingsChanges").toBool());
+        afterCommit = connect(registry, &PanelRegistry::revisionChanged, popup.get(), block);
+    }
+    else block();
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "stageArtifact",
+        Q_ARG(QVariant, action), Q_ARG(QVariant, source)));
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "acceptStudioChanges"));
+    if (partial) disconnect(afterCommit);
+    QVERIFY(blocked);
+    QVERIFY(studio->isVisible());
+    QCOMPARE(popup->property("artifactDraft").value<QJSValue>().toVariant().toMap().value("action").toString(), action);
+    const QString error = popup->property("studioError").toString();
+    QVERIFY2(error.contains("sav", Qt::CaseInsensitive), qPrintable(error));
+    QCOMPARE(error.contains("settings transaction completed", Qt::CaseInsensitive), partial);
+    QCOMPARE(registry->panelValue("bottom", "themePackageManifest"), before.value("themePackageManifest"));
+    if (partial) QCOMPARE(registry->panelValue("bottom", "opacity").toDouble(), 0.61);
+    else QCOMPARE(registry->panelValue("bottom", "settingsRevision"), before.value("settingsRevision"));
+    QVERIFY(QFile::setPermissions(path, permissions));
+    PanelRegistry reloaded;
+    QCOMPARE(reloaded.panelValue("bottom", "themePackageManifest"), before.value("themePackageManifest"));
+    if (partial) QCOMPARE(reloaded.panelValue("bottom", "opacity").toDouble(), 0.61);
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "acceptStudioChanges"));
+    QVERIFY(!studio->isVisible());
+    QVERIFY(!popup->property("hasPendingChanges").toBool());
+    if (action == "clear") QVERIFY(registry->panelValue("bottom", "themePackageManifest").toString().isEmpty());
+}
 
 void PanelWindowCapabilityTest::screenSignalsCoalesceAndUtilityWindowFitsWorkArea()
 {

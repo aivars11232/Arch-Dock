@@ -367,6 +367,9 @@ private slots:
     void mapsVersionOneArtworkToProceduralFallback();
     void importsVersionedThemePackage();
     void importsVersionTwoThemePackageWithSafeFallback();
+    void artworkImportPersistenceFailure_data();
+    void artworkImportPersistenceFailure();
+    void artworkClearPersistenceFailure();
     void usesManagedVersionTwoCapabilitiesAndRendererFallback();
     void analyzesAdaptive2DThemeArtwork();
     void retainsSceneSourcesWithoutExternalConversion();
@@ -3564,6 +3567,72 @@ void PanelRegistryTest::importsVersionedThemePackage()
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themeSource")).toString(), activeSource);
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themeAsset")).toString(), activeAsset);
     QCOMPARE(registry.panelValue(QStringLiteral("bottom"), QStringLiteral("themePackageId")).toString(), activePackageId);
+}
+
+void PanelRegistryTest::artworkImportPersistenceFailure_data()
+{
+    QTest::addColumn<bool>("reused");
+    QTest::newRow("new-package") << false;
+    QTest::newRow("existing-shared-package") << true;
+}
+
+void PanelRegistryTest::artworkImportPersistenceFailure()
+{
+    QFETCH(bool, reused);
+    const QString previousManifest = QFINDTESTDATA("fixtures/theme-v2/valid-procedural.json");
+    const QString newManifest = QFINDTESTDATA("fixtures/theme-v2/valid-skinned2d-states.json");
+    PanelRegistry registry;
+    QVERIFY(registry.importTheme("bottom", QUrl::fromLocalFile(previousManifest)));
+    registry.setPanelValue("bottom", "themeStatus", "Previously adopted artwork");
+    const auto previous = registry.panelSnapshot("bottom");
+    const QString managed = QFileInfo(QUrl(previous.value("themePackageManifest").toString()).toLocalFile()).absolutePath();
+    const QString packages = QFileInfo(managed).absolutePath();
+    const auto entries = QDir(packages).entryList(QDir::AllEntries | QDir::NoDotAndDotDot);
+    const QString path = QSettings().fileName();
+    QFile settings(path); QVERIFY(settings.open(QIODevice::ReadOnly));
+    const auto bytes = settings.readAll(); settings.close();
+    const auto permissions = QFile::permissions(path);
+    const auto restore = qScopeGuard([&] { QFile::setPermissions(path, permissions); });
+    QVERIFY(QFile::setPermissions(path, QFileDevice::ReadOwner));
+    QVERIFY(!registry.importTheme("bottom", QUrl::fromLocalFile(reused ? previousManifest : newManifest)));
+    for (const QString &key : {QString("themePackageManifest"), QString("themePackageId"),
+        QString("themeSource"), QString("themeAsset"), QString("settingsRevision")})
+        QCOMPARE(registry.panelValue("bottom", key), previous.value(key));
+    QVERIFY(registry.panelValue("bottom", "themeStatus").toString().contains("sav", Qt::CaseInsensitive));
+    QCOMPARE(QDir(packages).entryList(QDir::AllEntries | QDir::NoDotAndDotDot), entries);
+    QVERIFY(settings.open(QIODevice::ReadOnly)); QCOMPARE(settings.readAll(), bytes); settings.close();
+    QVERIFY(QFileInfo(QUrl(previous.value("themePackageManifest").toString()).toLocalFile()).isFile());
+    QVERIFY(QFile::setPermissions(path, permissions));
+    PanelRegistry reloaded;
+    QCOMPARE(reloaded.panelValue("bottom", "themePackageManifest"), previous.value("themePackageManifest"));
+    QVERIFY(reloaded.importTheme("bottom", QUrl::fromLocalFile(newManifest)));
+    QVERIFY(QFileInfo(QUrl(reloaded.panelValue("bottom", "themeSource").toString()).toLocalFile()).isFile());
+}
+
+void PanelRegistryTest::artworkClearPersistenceFailure()
+{
+    PanelRegistry registry;
+    QVERIFY(registry.importTheme("bottom", QUrl::fromLocalFile(QFINDTESTDATA("fixtures/theme-v2/valid-procedural.json"))));
+    const auto previous = registry.panelSnapshot("bottom");
+    const QString path = QSettings().fileName();
+    QFile settings(path); QVERIFY(settings.open(QIODevice::ReadOnly)); const auto bytes = settings.readAll(); settings.close();
+    const auto permissions = QFile::permissions(path);
+    const auto restore = qScopeGuard([&] { QFile::setPermissions(path, permissions); });
+    QVERIFY(QFile::setPermissions(path, QFileDevice::ReadOwner));
+    bool cleared = true;
+    QVERIFY(QMetaObject::invokeMethod(&registry, "clearTheme", Q_RETURN_ARG(bool, cleared), Q_ARG(QString, QString("bottom"))));
+    QVERIFY(!cleared);
+    QCOMPARE(registry.panelValue("bottom", "themePackageManifest"), previous.value("themePackageManifest"));
+    QCOMPARE(registry.panelValue("bottom", "settingsRevision"), previous.value("settingsRevision"));
+    QVERIFY(registry.panelValue("bottom", "themeStatus").toString().contains("sav", Qt::CaseInsensitive));
+    QVERIFY(settings.open(QIODevice::ReadOnly)); QCOMPARE(settings.readAll(), bytes); settings.close();
+    QVERIFY(QFile::setPermissions(path, permissions));
+    PanelRegistry reloaded;
+    QCOMPARE(reloaded.panelValue("bottom", "themePackageManifest"), previous.value("themePackageManifest"));
+    QVERIFY(QMetaObject::invokeMethod(&reloaded, "clearTheme", Q_RETURN_ARG(bool, cleared), Q_ARG(QString, QString("bottom"))));
+    QVERIFY(cleared);
+    QVERIFY(reloaded.panelValue("bottom", "themePackageManifest").toString().isEmpty());
+    QVERIFY(PanelRegistry().panelValue("bottom", "themePackageManifest").toString().isEmpty());
 }
 
 void PanelRegistryTest::importsVersionTwoThemePackageWithSafeFallback()

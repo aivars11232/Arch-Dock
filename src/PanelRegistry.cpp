@@ -2589,9 +2589,19 @@ bool PanelRegistry::importTheme(const QString &panelId, const QUrl &sourceUrl)
         values.insert(iterator.key(), iterator.value());
     }
 
-    setPanelValues(
-        panelId,
-        values);
+    if (!setPanelValuesChecked(panelId, values))
+    {
+        const bool cleaned = materialized.reusedExisting || QDir(managed.sourceRoot()).removeRecursively();
+        if (auto *previous = record(panelId))
+        {
+            previous->insert(QStringLiteral("themeStatus"),
+                cleaned ? tr("Theme package could not be saved [%1]; the active theme was kept.").arg(migrationDiagnostic())
+                    : tr("Theme package could not be saved [%1]; new artwork cleanup failed at %2.")
+                          .arg(migrationDiagnostic(), managed.sourceRoot()));
+            emit panelsChanged();
+        }
+        return false;
+    }
 
     const QVariantMap *panel = record(panelId);
     if (!panel)
@@ -2661,16 +2671,14 @@ bool PanelRegistry::renderTheme(const QString &panelId,
     return true;
 }
 
-void PanelRegistry::clearTheme(const QString &panelId)
+bool PanelRegistry::clearTheme(const QString &panelId)
 {
     if (!record(panelId))
     {
-        return;
+        return false;
     }
 
-    m_pendingRenders.remove(panelId);
-    m_activeRenders.remove(panelId);
-    setPanelValues(
+    const bool saved = setPanelValuesChecked(
         panelId,
         {{QStringLiteral("themeSource"), QString{}},
          {QStringLiteral("themeAsset"), QString{}},
@@ -2695,6 +2703,16 @@ void PanelRegistry::clearTheme(const QString &panelId)
          {QStringLiteral("themeRenderHeight"), 0},
          {QStringLiteral("themeRenderFit"), QString{}},
          {QStringLiteral("themeRenderOutcome"), QString{}}});
+    if (!saved)
+    {
+        record(panelId)->insert(QStringLiteral("themeStatus"),
+            tr("Artwork removal could not be saved [%1]; the active theme was kept.").arg(migrationDiagnostic()));
+        emit panelsChanged();
+        return false;
+    }
+    m_pendingRenders.remove(panelId);
+    m_activeRenders.remove(panelId);
+    return true;
 }
 
 void PanelRegistry::setActivePanelId(const QString &panelId)
@@ -3391,10 +3409,17 @@ bool PanelRegistry::saveChecked(bool migration)
     }
     if (m_legacyRewritePending && !ensureLegacyBackupChecked(settings)) return false;
 
-    settings.setValue(QString::fromLatin1(kPanelRecordsKey), serialized);
+    const QString recordsKey = QString::fromLatin1(kPanelRecordsKey);
+    const bool hadRecords = settings.contains(recordsKey);
+    const QVariant previousRecords = settings.value(recordsKey);
+    settings.setValue(recordsKey, serialized);
     settings.sync();
     if (settings.status() != QSettings::NoError)
     {
+        // QSettings retains failed writes for a later sync/destructor. Restore
+        // its pending value as well as the caller's in-memory panel records.
+        if (hadRecords) settings.setValue(recordsKey, previousRecords);
+        else settings.remove(recordsKey);
         setMigrationDiagnostic(QStringLiteral(
             "write-failed: QSettings could not persist panel registry schema v2"));
         qWarning().noquote() << "Panel registry save failed:" << m_migrationDiagnostic;

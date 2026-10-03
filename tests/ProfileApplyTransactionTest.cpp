@@ -2,6 +2,7 @@
 #include "persistence/ConfigurationBackup.h"
 #include <QFile>
 #include <QJsonDocument>
+#include <QSaveFile>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -74,7 +75,10 @@ struct Hosts
         };
         op.verify = [this](const PanelDefinition &panel, QString *error) {
             events.append("verify:" + panel.identity.id);
-            if (physical.value(key(panel)) == panel) return true;
+            auto actual = physical.value(key(panel));
+            // Native capture checks the host, not a registry-only revision.
+            actual.settingsRevision = panel.settingsRevision;
+            if (actual == panel) return true;
             if (error) *error = "host-readback-failed";
             return false;
         };
@@ -257,6 +261,95 @@ private slots:
         QVERIFY(!restarted.active());
         QVERIFY(!QFileInfo::exists(path));
     }
+    void restoredCommitRecovery_data()
+    {
+        QTest::addColumn<bool>("interrupt");
+        QTest::addColumn<QString>("conflict");
+        QTest::newRow("interruption") << true << QString();
+        QTest::newRow("journal-cleanup-failure") << false << QString();
+        QTest::newRow("external-revision") << true << QString("revision");
+        QTest::newRow("uncertain-ownership") << true << QString("ownership");
+    }
+    void restoredCommitRecovery()
+    {
+        QFETCH(bool, interrupt); QFETCH(QString, conflict);
+        QTemporaryDir directory; Hosts hosts;
+        const auto before = hosts.registry;
+        const QString path = directory.filePath("journal.json");
+        const QString registryPath = directory.filePath("registry.json");
+        auto profile = hosts.profile(); profile.panels.removeLast();
+        profile.panels.append(PanelDefinition::defaults("panel-new", "New", "top", false).normalized());
+        auto op = hosts.operations(); const auto commit = op.commit;
+        int commits = 0;
+        bool durable = false;
+        struct Interrupted {};
+        op.commit = [&](const auto &expected, const auto &candidate, QString *error) {
+            if (++commits == 1) { if (error) *error = "injected-apply-commit-failure"; return false; }
+            if (!commit(expected, candidate, error)) return false;
+            QVariantList values;
+            for (const auto &panel : hosts.registry) values.append(panel.toPersistedMap());
+            const auto bytes = QJsonDocument::fromVariant(values).toJson();
+            QSaveFile file(registryPath);
+            durable = file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit();
+            if (interrupt) throw Interrupted{}; // Exact post-commit, pre-clear boundary.
+            return durable;
+        };
+        op.publish = [&] {
+            hosts.events.append("publish");
+            QFile::setPermissions(directory.path(), QFileDevice::ReadOwner | QFileDevice::ExeOwner);
+        };
+        ProfileApplyTransaction transaction(op, path);
+        if (interrupt)
+        {
+            bool interrupted = false;
+            try { (void)transaction.apply(profile); } catch (const Interrupted &) { interrupted = true; }
+            QVERIFY(interrupted);
+        }
+        else
+        {
+            const auto result = transaction.apply(profile);
+            QVERIFY(!success(result));
+            QCOMPARE(result.value("state").toString(), QString("BLOCKED"));
+            QVERIFY(result.value("rollbackErrors").toStringList().contains("profile-journal-clear-failed"));
+            QVERIFY(QFile::setPermissions(directory.path(), QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner));
+        }
+        QVERIFY(durable); QVERIFY(QFileInfo::exists(path));
+        QFile saved(registryPath); QVERIFY(saved.open(QIODevice::ReadOnly));
+        hosts.registry.clear();
+        for (const auto &value : QJsonDocument::fromJson(saved.readAll()).toVariant().toList())
+        {
+            const auto panel = PanelDefinition::fromLegacyMap(value.toMap());
+            QVERIFY(panel); hosts.registry.append(*panel);
+        }
+        QCOMPARE(hosts.registry.last().identity.id, QString("free-old"));
+        QVERIFY(hosts.registry.last().host.freeDockAppletId != before.last().host.freeDockAppletId);
+        QCOMPARE(hosts.physical.size(), 2);
+        const auto restored = hosts.registry;
+        if (conflict == "revision") hosts.registry.first().settingsRevision++;
+        if (conflict == "ownership") hosts.physical.remove(key(hosts.registry.last()));
+        const auto protectedRegistry = hosts.registry, protectedHosts = hosts.physical.values();
+        const int eventCount = hosts.events.size();
+        ProfileApplyTransaction restarted(hosts.operations(), path);
+        QCOMPARE(hosts.events.size(), eventCount);
+        const auto result = restarted.recover();
+        if (!conflict.isEmpty())
+        {
+            QVERIFY(!success(result)); QVERIFY(QFileInfo::exists(path));
+            QCOMPARE(hosts.registry, protectedRegistry); QCOMPARE(hosts.physical.values(), protectedHosts);
+        }
+        else
+        {
+            QVERIFY2(success(result), qPrintable(result.value("errorCode").toString()));
+            QCOMPARE(hosts.registry, restored); QCOMPARE(hosts.physical.size(), 2);
+            QVERIFY(!QFileInfo::exists(path)); QVERIFY(!restarted.active());
+            const auto events = hosts.events;
+            QVERIFY(success(restarted.recover())); QCOMPARE(hosts.events, events);
+            ProfileApplyTransaction again(hosts.operations(), path);
+            QVERIFY(success(again.recover())); QCOMPARE(hosts.events, events);
+        }
+        QCOMPARE(hosts.events.count("restore:free-old"), 1);
+        QCOMPARE(commits, 2);
+    }
     void concurrentChangesAreNeverOverwrittenByRollback()
     {
         QTemporaryDir directory; Hosts hosts; hosts.concurrentEdit = true;
@@ -270,6 +363,46 @@ private slots:
         QCOMPARE(hosts.events.count("commit"), 0);
         QVERIFY(!hosts.events.contains("restore:bottom"));
         QVERIFY(QFileInfo::exists(path));
+    }
+    void restoredCommitFailureRecoversWithoutRestoringHostsAgain()
+    {
+        QTemporaryDir directory; Hosts hosts;
+        auto profile = hosts.profile(); profile.panels.removeLast();
+        auto op = hosts.operations();
+        op.commit = [](const auto &, const auto &, QString *error) {
+            if (error) *error = "injected-commit-failure"; return false;
+        };
+        const QString path = directory.filePath("journal.json");
+        ProfileApplyTransaction transaction(op, path);
+        QVERIFY(!success(transaction.apply(profile)));
+        QFile journal(path); QVERIFY(journal.open(QIODevice::ReadOnly));
+        QCOMPARE(QJsonDocument::fromJson(journal.readAll()).toVariant().toMap().value("state").toString(),
+            QString("ROLLBACK_COMMITTING")); journal.close();
+        const auto physical = hosts.physical;
+        const int restorations = hosts.events.count("restore:free-old");
+        ProfileApplyTransaction restarted(hosts.operations(), path);
+        const auto result = restarted.recover();
+        QVERIFY2(success(result), qPrintable(result.value("errorCode").toString()));
+        QCOMPARE(hosts.physical, physical);
+        QCOMPARE(hosts.events.count("restore:free-old"), restorations);
+        QCOMPARE(hosts.registry.last().host.freeDockAppletId, physical.value(key(hosts.registry.last())).host.freeDockAppletId);
+        QVERIFY(!QFileInfo::exists(path));
+    }
+    void futureRecoveryRecordIsRetainedWithoutHostOperations()
+    {
+        QTemporaryDir directory; Hosts hosts; hosts.failApply = "free-old"; hosts.failRestore = "bottom";
+        const QString path = directory.filePath("journal.json");
+        ProfileApplyTransaction transaction(hosts.operations(), path);
+        QVERIFY(!success(transaction.apply(hosts.profile())));
+        QFile journal(path); QVERIFY(journal.open(QIODevice::ReadOnly));
+        auto record = QJsonDocument::fromJson(journal.readAll()).toVariant().toMap(); journal.close();
+        record["version"] = 99;
+        const auto bytes = QJsonDocument::fromVariant(record).toJson();
+        QVERIFY(journal.open(QIODevice::WriteOnly)); QCOMPARE(journal.write(bytes), bytes.size()); journal.close();
+        const auto events = hosts.events;
+        ProfileApplyTransaction restarted(hosts.operations(), path);
+        QVERIFY(!success(restarted.recover())); QCOMPARE(hosts.events, events);
+        QVERIFY(journal.open(QIODevice::ReadOnly)); QCOMPARE(journal.readAll(), bytes);
     }
     void guardsAndUnownedHostsFailBeforeMutation()
     {

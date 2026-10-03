@@ -84,9 +84,17 @@ and fallback-tier declarations. The package is rejected before it replaces the
 active theme when those declarations are invalid or incompatible with the
 panel host and no safe renderer result exists.
 
-The production renderer inventory contains procedural 2D, Theme v2 skinned 2D
-and, on the free desktop host only, Theme v2 baked 2.5D. True 3D remains
-declared vocabulary but is reported as not installed. A baked package must
+The production renderer inventory contains procedural 2D and Theme v2 skinned
+2D on native edge and free desktop hosts. Supported free desktop panels also
+have Theme v2 baked 2.5D and optional true 3D. The `AUTO`, `OFF` and `ON` build
+modes control inclusion of the optional renderer; the Arch recipe includes it
+at build time and declares Qt Quick 3D as an optional runtime dependency.
+Actual consumer module/graphics capability and validated scene resources still
+control availability, detailed editor fields and declared safe fallback.
+Native edge panels retain their 2D host restrictions. See
+[build and runtime options](INSTALL.md#build-and-disposable-installation) and
+[the shared true-3D renderer](shared-renderer.md#base-true-3d-renderer).
+A baked package must
 declare at least one icon track; artwork alone is a flat picture and is
 rejected. A valid package can prefer `skinned2d` and declare `procedural2d` as
 its safe fallback. The live applet and Panel Studio receive the same
@@ -96,8 +104,14 @@ managed package.
 The current skinned renderer supports declared horizontal slices only. Each
 slice provides fixed start/end cap widths, a stretched or tiled center, a safe
 content rectangle, effect margins, and an alpha input mask. `normal`, `open`,
-and `collapsed` parts may share assets or declare distinct parts; selection is
-deterministic and non-interactive until the presentation engine is implemented.
+and `collapsed` parts may share assets or declare distinct parts. Their selection
+follows the implemented shared presentation state and lifecycle controller;
+opening/collapse transitions, interaction guards and reduced motion use the
+same state contract in the live applet and Studio preview. Surface collapse
+and Plasma host concealment remain separate operations. Radial presentation
+and mesh-part mechanisms require supported free hosts, the appropriate active
+renderer and validated package capabilities; native hosts retain their own
+presentation restrictions and Plasma visibility integration.
 The ordinary Qt Quick image path supports only source-over composition, so any
 other declared blend mode fails safely instead of being approximated.
 

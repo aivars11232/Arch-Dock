@@ -131,10 +131,18 @@ The exporter records the Git HEAD and every included file's bytes and mode
 in `SOURCE_CHECKPOINT.json`. It includes approved working-tree changes and
 produces a normalized source archive plus a PKGBUILD pinned to its SHA256;
 it does not create a commit. Build output, the outer recipe and the operational
-`CURRENT_STATE.md`/`RELEASE_CHECKLIST.md` records are excluded from the archive
+`CURRENT_STATE.md`/`RELEASE_CHECKLIST.md` and
+`POST_TASK_0045_CORRECTIVE_REPORT.md` records are excluded from the archive
 to avoid circular hashes. The recipe never uses `SKIP`. The checkout recipe's
 checksum identifies the verified task checkpoint; export again after source
 changes instead of mixing that checksum with a different archive.
+
+The root `SOURCE_CHECKPOINT.json` archive path is reserved for generated
+metadata. A tracked or nonignored untracked source file at that path is refused
+before archive publication; move or explicitly resolve the input collision
+before retrying. The exporter never silently discards that file. Ordinary
+nested files with the same name and legitimate compressed fixtures remain
+supported. Source symbolic links, including dangling links, are refused.
 
 The recipe uses one compile job, disables LTO/debug splitting, and installs
 under `/usr`. Required dependencies cover Qt Quick/Wayland, SVG, KDE service

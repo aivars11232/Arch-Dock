@@ -63,7 +63,24 @@ Item {
         targetWidth: targetWidth, targetHeight: targetHeight,
         samples: effectiveQuality === "low" ? 1 : effectiveQuality === "high" ? 4 : 2 })
     readonly property var viewport: view
-    readonly property bool frameRendered: view.renderStats.frameTime > 0
+    readonly property bool frameRendered: completedFrameObserved
+        || view.renderStats.frameTime > 0
+    property bool completedFrameObserved: false
+
+    // RenderStats throttles change notifications. A static scene can stop
+    // before that interval, so also inspect it after an actual window frame.
+    function observeCompletedFrame() {
+        if (view.visible && view.renderStats.frameTime > 0)
+            completedFrameObserved = true
+    }
+
+    Connections {
+        target: root.Window.window
+        function onFrameSwapped() {
+            if (!root.completedFrameObserved)
+                Qt.callLater(root.observeCompletedFrame)
+        }
+    }
 
     function bounded(key, fallback, minimum, maximum) {
         const value = Number((sceneDefinition || ({}))[key])

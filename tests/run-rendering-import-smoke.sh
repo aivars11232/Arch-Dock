@@ -64,6 +64,37 @@ binary = (root / 'stage/bin/arch-dock').resolve(strict=True)
 assert Path(os.environ['ARCHDOCK_RENDERING_STAGED_BINARY']).resolve(strict=True) == binary
 record_path = root / 'logs/service-owner.json'
 
+if mode == 'auxiliary-cleanup':
+    # KDE's activation waiters may survive the private bus and retain CTest's
+    # output pipe. Signal only waiters belonging to this exact fixture.
+    for proc in Path('/proc').iterdir():
+        if not proc.name.isdecimal():
+            continue
+        fd = None
+        try:
+            fd = os.pidfd_open(int(proc.name))
+            if proc.stat().st_uid != os.getuid():
+                continue
+            if (proc / 'exe').resolve(strict=True) != Path('/usr/bin/plasma_waitforname'):
+                continue
+            env = dict(item.split(b'=', 1) for item in (proc / 'environ').read_bytes().split(b'\0')
+                       if b'=' in item)
+            if env.get(b'DBUS_SESSION_BUS_ADDRESS') != address.encode():
+                continue
+            if any(env.get(key.encode()) != os.environ[key].encode() for key in private_dirs):
+                continue
+            signal.pidfd_send_signal(fd, signal.SIGTERM)
+            if not select.select([fd], [], [], 1)[0]:
+                signal.pidfd_send_signal(fd, signal.SIGKILL)
+                assert select.select([fd], [], [], 5)[0], 'private waiter survived cleanup'
+            print('Private activation waiter cleaned:', proc.name)
+        except (FileNotFoundError, PermissionError, ProcessLookupError):
+            continue
+        finally:
+            if fd is not None:
+                os.close(fd)
+    sys.exit(0)
+
 def bus(method, *args):
     return subprocess.check_output([
         'gdbus', 'call', '--address', address, '--timeout=5',
@@ -179,6 +210,7 @@ cleanup_session() {
     stop_process "$ARCHDOCK_RENDERING_KWIN_PID"
     local cleanup_status=0
     private_service_owner cleanup || cleanup_status=$?
+    private_service_owner auxiliary-cleanup || cleanup_status=$?
     if ((exit_status == 0)); then
         return "$cleanup_status"
     fi

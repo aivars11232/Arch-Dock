@@ -207,7 +207,7 @@ public:
                                  int height,
                                  qreal devicePixelRatio = 0,
                                  bool force = false);
-    Q_INVOKABLE void clearTheme(const QString &panelId);
+    Q_INVOKABLE bool clearTheme(const QString &panelId);
 
 public slots:
     void setActivePanelId(const QString &panelId);
