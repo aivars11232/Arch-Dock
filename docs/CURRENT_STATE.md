@@ -6,7 +6,7 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Latest boundary — 2026-10-03: TASK-0044 REPAIRS_IN_PROGRESS — verification PASS; privileged cleanup pending.**
+**Latest boundary — 2026-10-03: TASK-0044 COMPLETE — verification and cleanup PASS.**
 TASK-0043 is committed at
 `a5bdd7933591bf75bf030cd144f7c9cea5e7fbae` and COMPLETE. Its exact system-owned
 KWin crash dump was removed using the owner's authorized authenticated cleanup;
@@ -14,16 +14,18 @@ absence was verified before TASK-0044 planning. Its retained package deliverable
 and historical **97/97** gates are unchanged. TASK-0044 Phase A is COMPLETE
 with a fresh all-target build and **99/99** CTests. Phase B is COMPLETE with
 a green all-target build and **106/106** CTests. The consolidated task is
-**not complete**: two task-owned, root-owned native crash dumps still require
-administrator-authenticated removal. The fresh final build and **106/106 CTests
+**COMPLETE**: the owner authorized removal of the two recorded root-owned native
+crash dumps, KDE authentication completed, and both files are verified absent.
+The fresh final build and **106/106 CTests
 passed**, followed by **14/14 affected private runtime checks** after a bounded
 disposal-helper correction and a passing optional-3D-absent installed check.
-The original approval and plan remain in force. The owner-requested checkpoint
-is committed and synced as `c225dc6ae0abbeff21425d517546e67831ebc74b`.
-The owner's latest explicit `commit and sync` instruction authorizes committing
-and syncing this verified checkpoint now, while privileged cleanup remains
-pending. This Git checkpoint does not establish consolidated completion.
-Ordinary task cleanup is complete and required evidence is retained in four
+The verified checkpoint is committed and synced as
+`96d608a8440ddcb7bb8f886523fc7131b2b53e59`. The earlier
+`c225dc6ae0abbeff21425d517546e67831ebc74b` checkpoint remains historical.
+This final cleanup changes only closure documentation and the retained receipt;
+the passing builds and runtime gates are reused without repetition. The owner
+explicitly authorized committing and syncing these three closure documents.
+Task cleanup is complete and required evidence is retained in four
 deliberate verification files. See the
 [TASK-0044 recovery record](#task-0044--configuration-recovery-phase-a--2026-10-02).
 Earlier snapshots below retain their historical dates and results.
@@ -132,26 +134,22 @@ hashes and preserved. Required evidence remains only under
 - `SHA256SUMS`: hashes of these three deliberate verification deliverables.
 
 Both archives passed CRC checks and all retained file hashes verified. The
-first unresolved completion boundary is administrator cleanup: `sudo -n true`
-reports that a password is required, and `/var/lib/systemd/coredump` is root-owned
-and not writable by this session. The owner was asked to remove only these two
-proved task-owned files:
+earlier administrator-cleanup boundary is now closed. After the owner explicitly
+requested cleanup, `sudo -n rm` required authentication. The existing KDE
+authentication agent completed the exact removal through
+`pkexec --disable-internal-agent /usr/bin/rm -- <the two recorded paths>`
+(exit 0). Both recorded files are verified absent:
 
-```sh
-sudo rm -- \
-  /var/lib/systemd/coredump/core.plasmashell.1000.c4278a150c7e49efa5be334cee8f3140.12862.1791019615000000.zst \
-  /var/lib/systemd/coredump/core.plasmashell.1000.dd07aa413ed141a3960ee681d1112c26.1478932.1790972240000000.zst
-```
+- `/var/lib/systemd/coredump/core.plasmashell.1000.c4278a150c7e49efa5be334cee8f3140.12862.1791019615000000.zst`
+- `/var/lib/systemd/coredump/core.plasmashell.1000.dd07aa413ed141a3960ee681d1112c26.1478932.1790972240000000.zst`
 
-The owner's subsequent explicit `commit and sync` instruction authorizes
-reviewed staging of the five TASK-0044 paths and normal Git sync now, using
-`Harden Arch Dock recovery and Wayland behavior`. This overrides the earlier
-cleanup-before-Git ordering for this checkpoint only; the no-diagnostic-artifact
-completion gate remains pending. Verify clean Git/remote parity and perform the
-post-sync task cleanup audit. Record the resulting checkpoint hash and remote
-parity in the retained verification receipt. After the two dump files are absent,
-close the remaining documentation/receipt status without repeating passing
-builds, phase gates or runtime checks for this authentication boundary.
+The verified Git checkpoint is
+`96d608a8440ddcb7bb8f886523fc7131b2b53e59`; it matched the local upstream
+tracking reference before this documentation-only closure update. The retained
+receipt records the completed cleanup separately from the historical post-sync
+audit. The original build/runtime receipts and diagnostic archives are preserved;
+no passing build, phase gate or runtime check was repeated for this
+authentication boundary. The no-diagnostic-artifact completion gate is PASS.
 Physical multi-monitor/manual cells remain
 **NOT EXECUTED** for the proved environment reasons and exact target commands
 in [PLATFORM_MATRIX.md](PLATFORM_MATRIX.md). No global install, personal Plasma

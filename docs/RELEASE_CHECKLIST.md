@@ -621,7 +621,7 @@ personal Plasma mutation, delegated agent or overlapping gate occurred.
 
 ## TASK-0044 resumed verification — 2026-10-03
 
-**Executable verification PASS; final completion waits for privileged cleanup.**
+**TASK-0044 COMPLETE; executable verification and final cleanup PASS.**
 The owner resumed the same approved task from synced checkpoint
 `c225dc6ae0abbeff21425d517546e67831ebc74b`. The retained fresh final configure,
 remaining one-job build groups and all-target build passed. Its complete fresh
@@ -662,18 +662,15 @@ with matching pre/post hashes. Required original/control images, renderer states
 native journal evidence and phase/final gate receipts remain in the four verified
 files under `build-codex-task-0044/verification-output`.
 
-The consolidated no-diagnostic-artifact gate remains **PENDING** for exactly
-two task-owned, root-owned native PlasmaShell dumps. `sudo -n true` requires a
-password and the dump directory is not writable by this session. The owner was
-asked for authenticated removal; the exact command and ownership evidence are
-in [CURRENT_STATE.md](CURRENT_STATE.md#task-0044-verification-and-cleanup-checkpoint--2026-10-03).
-The owner's subsequent explicit `commit and sync` instruction authorizes this
-verified checkpoint's Git closure now, overriding the earlier cleanup-before-Git
-ordering for the checkpoint. Review and stage only the five TASK-0044 paths,
-use `Harden Arch Dock recovery and Wayland behavior`, push normally, and verify
-remote parity, a clean working tree and the post-sync task cleanup audit. Record
-the resulting checkpoint hash in the retained verification receipt. The
-consolidated task remains incomplete until both dump files are absent. No build
-or runtime gate needs repeating solely for this authentication boundary. No
+The consolidated no-diagnostic-artifact gate is **PASS**. The owner explicitly
+requested cleanup; KDE's native authentication agent completed removal of only
+the two recorded task-owned PlasmaShell dumps, and both paths are verified
+absent. The command, ownership evidence and closure are recorded in
+[CURRENT_STATE.md](CURRENT_STATE.md#task-0044-verification-and-cleanup-checkpoint--2026-10-03).
+The verified checkpoint is `96d608a8440ddcb7bb8f886523fc7131b2b53e59`.
+The retained receipt now records completed cleanup while preserving the
+historical post-sync audit and all original gate/diagnostic evidence. The final
+closure documentation changes are authorized for owner-controlled commit/sync.
+No build or runtime gate was repeated for this authentication boundary. No
 TASK-0045 release box is closed, and no personal Plasma mutation, global install,
 delegated agent or overlapping gate occurred.

@@ -14,11 +14,12 @@ remaining one-job build groups and all-target build passed. The fresh final
 private-disposal helper change, its all-target build and **14/14 affected runtime
 checks passed** (392.85 seconds); the other 92 fresh results are unaffected.
 Installed startup with optional Quick 3D unavailable passed before and after
-that change. All executable verification is green. Ordinary task cleanup is
-complete; two task-owned root-owned dump files still require administrator
-authentication before consolidated completion. The owner's latest explicit
-`commit and sync` instruction authorizes syncing this verified Git checkpoint
-now with that cleanup gate still pending; it does not mark the task complete.
+that change. All executable verification is green. TASK-0044 is COMPLETE:
+ordinary task cleanup and the owner-authorized authenticated removal of both
+recorded root-owned dumps are verified. The passing build/runtime receipts are
+reused; cleanup required no executable change or gate rerun. The verified
+checkpoint is `96d608a8440ddcb7bb8f886523fc7131b2b53e59`; the owner explicitly
+authorized committing and syncing this final closure documentation update.
 
 The installed runtime is Qt 6.11.2, Plasma/KWin 6.7.5 and KF 6.30.0. The
 private compositor uses native Wayland and virtual outputs; rendering uses
@@ -178,8 +179,8 @@ deliverables remain in `build-codex-task-0044/verification-output`:
 `VERIFICATION.json`, `gate-logs.zip`, `energy-evidence.zip` and `SHA256SUMS`.
 Archive CRC checks and retained file hashes pass. These preserve the original
 images/state, native controls, complete phase/final receipts and teardown journal
-evidence. The exact administrator cleanup command and remaining completion
-boundary are in [CURRENT_STATE.md](CURRENT_STATE.md#task-0044-verification-and-cleanup-checkpoint--2026-10-03).
+evidence. The authenticated dump removal and completed cleanup boundary are
+recorded in [CURRENT_STATE.md](CURRENT_STATE.md#task-0044-verification-and-cleanup-checkpoint--2026-10-03).
 
 ## Physical cells not executed
 
