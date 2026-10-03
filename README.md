@@ -6,9 +6,14 @@ desktop-hosted Plasma applets. The service and both hosts share the same
 renderer and settings schema.
 
 The current release candidate is application **0.1.0**, Arch package
-**0.1.0-2**. Release acceptance and the proposed tag are recorded in the
-[release checklist](docs/RELEASE_CHECKLIST.md). A candidate version does not
-mean a release has been published.
+**0.1.0-2**. Annotated **v0.1.0** points to
+`c3b3a0b7771b313c45f843f49a503b45b0d1ada0`, and the
+[GitHub prerelease candidate](https://github.com/aivars11232/Arch-Dock/releases/tag/v0.1.0)
+is published. It is a prerelease, not a final/stable/latest release.
+Physical acceptance remains incomplete and a project-wide license remains
+unselected. [Current state](docs/CURRENT_STATE.md) and the
+[release checklist](docs/RELEASE_CHECKLIST.md) record acceptance and the
+tag-matched artifact correction; publication alone does not close those limits.
 
 ## Features
 

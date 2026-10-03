@@ -118,7 +118,8 @@ checks runtime capability and falls back safely when the module is missing.
 
 ## Arch package
 
-Export the current source into a new directory, then use native makepkg:
+For a developer package, export the approved current source into a new
+directory, then use native makepkg:
 
 ```bash
 python tools/prepare-arch-source.py build-codex-arch-package
@@ -136,6 +137,51 @@ it does not create a commit. Build output, the outer recipe and the operational
 to avoid circular hashes. The recipe never uses `SKIP`. The checkout recipe's
 checksum identifies the verified task checkpoint; export again after source
 changes instead of mixing that checksum with a different archive.
+
+### Tagged release source
+
+Official release assets must come from the exact finalized annotated tag,
+using a clean checkout with no untracked source inputs. A later commit with
+similar source bytes cannot substitute for the recorded checkpoint HEAD or
+epoch. Keep the published `v0.1.0` tag fixed at
+`c3b3a0b7771b313c45f843f49a503b45b0d1ada0`.
+
+From the current tooling checkout, use new external work/export directories:
+
+```bash
+release_checkout="../arch-dock-v0.1.0-source"
+release_export="../arch-dock-v0.1.0-export"
+git worktree add --detach "$release_checkout" 'refs/tags/v0.1.0^{commit}'
+python "$release_checkout/tools/prepare-arch-source.py" "$release_export"
+python tools/verify-tagged-arch-source.py "$release_export" \
+    --source-root "$release_checkout" --tag v0.1.0 \
+    --expected-head c3b3a0b7771b313c45f843f49a503b45b0d1ada0
+```
+
+The release verifier must pass before the output is eligible for publication.
+It checks clean source, exact HEAD/tag target, checkpoint identity/epoch in
+both receipts, source inventory bytes/modes, archive timestamps and the recipe
+and checksum digest pin. Repeat the clean export into another new directory
+and require identical archive bytes. Complete extraction/inventory and fresh
+package/install verification before publication; run the verifier again against
+the final asset directory. Replacing existing published assets needs explicit
+owner authorization and does not move the tag or change prerelease status.
+
+The existing `v0.1.0` release is a published prerelease candidate; its initial
+precommit-source discrepancy and corrected candidate status are recorded in
+[CURRENT_STATE.md](CURRENT_STATE.md). Build the tag-matched generated recipe:
+
+```bash
+cd "$release_export"
+makepkg --verifysource
+makepkg --cleanbuild --noconfirm
+```
+
+After retaining the verified artifacts, remove the owned checkout with
+`git worktree remove "$release_checkout"` from the tooling checkout and remove
+only the positively identified temporary export/build directories. Main's
+later public-documentation corrections do not rewrite the fixed tag's
+historical source documents.
 
 The root `SOURCE_CHECKPOINT.json` archive path is reserved for generated
 metadata. A tracked or nonignored untracked source file at that path is refused

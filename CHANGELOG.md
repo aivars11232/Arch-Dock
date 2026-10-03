@@ -2,9 +2,12 @@
 
 ## 0.1.0 candidate — 2026-10-03
 
-Proposed application/tag version: `0.1.0` / `v0.1.0`.
-Current Arch package candidate: `0.1.0-2`.
-Publication and final acceptance are tracked in
+Application version: `0.1.0`; Arch package candidate: `0.1.0-2`.
+Annotated `v0.1.0` exists at `c3b3a0b7771b313c45f843f49a503b45b0d1ada0`.
+The [GitHub prerelease candidate](https://github.com/aivars11232/Arch-Dock/releases/tag/v0.1.0)
+was published on 2026-10-03; it is not a final/stable/latest release.
+Physical acceptance remains incomplete and project-wide licensing is unselected.
+The tag-matched artifact correction and acceptance are tracked in
 [the release checklist](docs/RELEASE_CHECKLIST.md).
 
 - Managed native Plasma and desktop-hosted free panels with ownership-checked

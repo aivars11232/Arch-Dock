@@ -74,12 +74,21 @@ removal actions before uninstalling the applet package. Follow
 
 ## Versioning and licensing
 
-Application `0.1.0`, package `0.1.0-2` and proposed tag `v0.1.0` identify the
-candidate. The release commit/tag and publication remain owner-controlled.
-A working tree with approved release changes is not a clean published release.
-Under **R-02**, a project-wide license, tag creation, GitHub Release and package
-publication each require separate owner instruction. Commit/sync authorization
-does not grant publication authorization.
+Application `0.1.0`, package `0.1.0-2` and annotated tag `v0.1.0` identify the
+candidate. The tag exists at `c3b3a0b7771b313c45f843f49a503b45b0d1ada0`, and the
+[GitHub prerelease](https://github.com/aivars11232/Arch-Dock/releases/tag/v0.1.0)
+was published under separate owner authorization. It is not a final/stable/latest
+release. Under **R-02**, tagging/publication have occurred; project-wide license
+selection remains an owner decision. Replacing published assets requires its
+own explicit authorization; commit/sync alone does not grant that authority.
+
+The original published source archive recorded a precommit HEAD rather than
+the tag target. [Current state](CURRENT_STATE.md) records the RC-01 correction.
+Official normalized release source must reproduce from the exact clean tag
+checkout, including checkpoint HEAD, epoch and modes. The
+[tagged release verification route](INSTALL.md#tagged-release-source) enforces
+that boundary. Approved working-tree exports remain valid developer inputs,
+but cannot substitute for a verified tagged release archive.
 
 The repository has no selected project-wide license. The package records
 `LicenseRef-Arch-Dock-Unspecified`; existing component and asset declarations

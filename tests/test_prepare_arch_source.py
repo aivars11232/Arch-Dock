@@ -218,6 +218,73 @@ class PrepareArchSourceTest(unittest.TestCase):
                     self.assertFalse(list(output.glob("*.tar.gz")))
                     link.unlink()
 
+    def verify_release(self, output, head, tag="fixture-release"):
+        return subprocess.run([
+            sys.executable, str(PROJECT / "tools/verify-tagged-arch-source.py"),
+            str(output), "--source-root", str(self.root), "--tag", tag,
+            "--expected-head", head], capture_output=True, text=True,
+            env=self.environment)
+
+    def test_release_guard_requires_clean_exact_annotated_tag(self):
+        head = self.git("rev-parse", "HEAD").decode().strip()
+        self.git("tag", "-a", "fixture-release", "-m", "Release fixture")
+        result, output = self.export("tagged")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        verified = self.verify_release(output, head)
+        self.assertEqual(verified.returncode, 0, verified.stderr)
+        wrong_head = self.verify_release(output, "0" * 40)
+        self.assertNotEqual(wrong_head.returncode, 0)
+        self.assertIn("expected HEAD", wrong_head.stderr)
+        self.git("tag", "fixture-lightweight")
+        lightweight = self.verify_release(output, head, "fixture-lightweight")
+        self.assertNotEqual(lightweight.returncode, 0)
+        self.assertIn("annotated", lightweight.stderr)
+        for relative in ("plain.txt", "untracked-source.txt"):
+            with self.subTest(relative=relative):
+                path = self.root / relative
+                old = path.read_bytes() if path.exists() else None
+                path.write_bytes(b"dirty release input\n")
+                refused = self.verify_release(output, head)
+                self.assertNotEqual(refused.returncode, 0)
+                self.assertIn("must be clean", refused.stderr)
+                self.assertEqual(path.read_bytes(), b"dirty release input\n")
+                if old is None:
+                    path.unlink()
+                else:
+                    path.write_bytes(old)
+
+    def test_release_guard_rejects_precommit_checkpoint(self):
+        self.write("plain.txt", b"approved release input\n")
+        result, old_output = self.export("precommit")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.git("add", "plain.txt")
+        self.git("commit", "--quiet", "-m", "Finalize release source")
+        self.git("tag", "-a", "fixture-release", "-m", "Release fixture")
+        head = self.git("rev-parse", "HEAD").decode().strip()
+        refused = self.verify_release(old_output, head)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("checkpoint HEAD/epoch", refused.stderr)
+        result, corrected = self.export("committed")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        verified = self.verify_release(corrected, head)
+        self.assertEqual(verified.returncode, 0, verified.stderr)
+        self.assertNotEqual(next(old_output.glob("*.tar.gz")).read_bytes(),
+                            next(corrected.glob("*.tar.gz")).read_bytes())
+        # An external receipt alone must not relabel an older archive.
+        (old_output / "SOURCE_CHECKPOINT.json").write_bytes(
+            (corrected / "SOURCE_CHECKPOINT.json").read_bytes())
+        relabelled = self.verify_release(old_output, head)
+        self.assertNotEqual(relabelled.returncode, 0)
+        self.assertIn("archived and external checkpoints", relabelled.stderr)
+        original = (self.root / "plain.txt").read_bytes()
+        self.write("plain.txt", b"uncommitted input under the tagged HEAD\n")
+        result, dirty_export = self.export("dirty-tagged-head")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.write("plain.txt", original)
+        dirty_payload = self.verify_release(dirty_export, head)
+        self.assertNotEqual(dirty_payload.returncode, 0)
+        self.assertIn("source inventory bytes/modes differ from tag", dirty_payload.stderr)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -8,12 +8,22 @@ defects. Current corrective results belong to
 [the corrective report](POST_TASK_0045_CORRECTIVE_REPORT.md); the runtime
 checkpoints below retain their original provenance.
 
+Current public candidate: application **0.1.0**, Arch package **0.1.0-2**.
+Annotated `v0.1.0` exists at
+`c3b3a0b7771b313c45f843f49a503b45b0d1ada0`. The
+[GitHub prerelease](https://github.com/aivars11232/Arch-Dock/releases/tag/v0.1.0)
+was published on 2026-10-03 and is not a final/stable/latest release.
+[CURRENT_STATE.md](CURRENT_STATE.md) records the RC-01 tag-matched asset
+correction and its separate replacement-authorization boundary. The latest
+supplied independent audit reports zero confirmed new runtime bugs and closes
+AD-04-R1; its RC-01/RC-02 findings concern release provenance and public prose.
+
 | Boundary | Recorded status |
 | --- | --- |
 | R-01 — physical acceptance | Physical second-monitor connection/removal, connector/scanout, another GPU and owner-desktop observations remain **NOT EXECUTED**. Private virtual-output verification cannot close these cells; [target observations](#physical-cells-not-executed) remain required. |
-| R-02 — license/tag/publication | Project-wide license selection, `v0.1.0`, GitHub Release and package publication remain separate owner decisions. Commit/sync authorization does not authorize publication. |
+| R-02 — license/tag/publication | Annotated `v0.1.0` and prerelease publication have occurred under separate owner authorization. The fixed tag target is recorded above. Project-wide licensing remains unselected; existing LicenseRef/component/asset declarations are preserved. Replacing existing release assets needs explicit authorization for that correction. |
 | R-03 — native fixture disposal | The two TASK-0044 private PlasmaShell Mesa-worker faults remain historical observations with an unproved underlying mechanism. The verified teardown change is a harness mitigation; later passing behavior does not prove the native fault eliminated. |
-| R-04 — independent review | This agent's tests and candidate checks are implementation/corrective verification. Independent review requires a separately performed review; the supplied independent findings retain that provenance. |
+| R-04 — independent review | The supplied RC-01/RC-02 audit is a separate independent review. This fixing agent's tests and candidate checks are corrective/regression verification, not independent review of its own changes. Prior independent findings retain their original provenance. |
 
 ## TASK-0045 release regression checkpoint — historical, 2026-10-03
 

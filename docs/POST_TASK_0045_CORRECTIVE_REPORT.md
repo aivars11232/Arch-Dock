@@ -1,6 +1,93 @@
 # Post-TASK-0045 corrective pass
 
-**Latest release-closure correction, 2026-10-03: AD-04-R1 software correction
+## RC-01 and RC-02 release-provenance closure — 2026-10-04
+
+**Local correction and all affected source/package gates PASS. Existing
+prerelease assets remain unchanged pending explicit replacement authorization.**
+Starting clean `main`: `29e9f22e32d8381d95b0d7ca81c4e7fde1c57281`.
+The latest supplied independent audit reports zero confirmed new runtime bugs,
+closes AD-04-R1, and supplies RC-01/RC-02. These fresh fixing-agent checks are
+corrective/candidate verification, not a separate independent review.
+
+RC-01 is confirmed by actual clean-tag reconstruction. Annotated `v0.1.0`
+remains tag object `50812852c4dc2726411a1c73452296955852c50a`, targeting
+`c3b3a0b7771b313c45f843f49a503b45b0d1ada0` locally and remotely. Two exports
+from a disposable clean checkout of that exact commit are byte-identical.
+Their checkpoint HEAD equals the tag target and their checkpoint, gzip and
+archive epochs equal the tagged commit epoch **1791062435**. The published
+source instead records `5a183b0` and epoch **1791058948**; its digest differs.
+All 519 source-file byte hashes match the earlier candidate. One catalog's
+canonical checkout mode is `0644`, rather than the earlier owner's `0600`;
+the owner file is unchanged. Both Git provenance and canonical modes matter.
+
+The root cause is the release generation boundary: source was exported before
+the finalized correction commit and published afterward. Earlier uploaded-byte
+checks did not establish reconstruction from the tag. Keeping similar source
+bytes does not preserve checkpoint identity or normalized epoch. The fix keeps
+the tag fixed and rebuilds source/package from its clean checkout; it does not
+delete or falsify Git identity or alter the developer exporter.
+
+[The small release verifier](../tools/verify-tagged-arch-source.py) checks clean
+source, exact annotated tag/expected HEAD, checkpoint identity/epoch in both
+copies, unique inventory, source bytes/modes, archive timestamps and recipe/sum
+pins. Existing synthetic exporter fixtures now cover valid release source,
+wrong HEAD, lightweight tag, tracked/untracked dirt, precommit checkpoint,
+external checkpoint relabelling, and a dirty export after source restoration.
+All **8 exporter unittest groups PASS**, and the registered exporter CTest is
+**1/1 PASS**, 2.52 s. The guard accepts the corrected candidate and refuses
+the downloaded original asset's checkpoint. Namespace, symlink, positive
+nested-name, extraction and reproducibility controls remain enforced.
+
+Fresh candidate gates: **519 source files, 520 unique members**, one regular
+checkpoint without descendants, successful real extraction, full hashes/modes,
+normalized metadata, two identical exports and matching recipe digest.
+`makepkg --verifysource` passes. Fresh one-job Release/Quick3D-ON package build
+passes in **385.65 s**; existing installed-test target build in **147.38 s**.
+The unchanged scoped package helper passes in **27.29 s**: native install,
+**209/209** bytes/modes against the 207-path manifest plus two package documents,
+15+15 catalogs/actual cards, QtTest **8/8**, Quick3D-hidden **4/4**, zero
+failures/skips, revision-1 upgrade, obsolete-file checks, both removals and
+configuration preservation. Compiled package source/build fallbacks were
+removed first; the owner checkout is masked during installed checks.
+
+All **349 production/runtime/harness inputs**, toolchain/dependencies and
+**208 resource payloads** match the prior verified candidate. Executable bytes
+differ; no binary identity/equivalence claim is made. Effective configured
+CTest coverage remains **107/107 names: one refreshed, 106 reused**. The prior
+18 native CTests, 37 lifecycle phases and private installed startup/recovery
+are **reused results**, not fresh invocations. No production C++/QML/CMake or
+lifecycle harness changed, and no new private session ran. The external
+artwork-sample subcase remains unexecuted without its supplied archive.
+
+The unchanged live prerelease is release ID **402697537**, published at
+**2026-10-03 21:23:54 UTC**, `draft=false`, `prerelease=true`. All six original
+asset downloads matched GitHub's recorded digests/sizes before diagnosis.
+The corrected six-asset set and reviewed proposed body are retained under
+`build-codex-final-release-provenance/`; its `STATE.json` and local log ZIP
+record old remote metadata, final verification, safe cleanup and Git closure.
+
+| Asset | Current published SHA-256 | Prepared replacement SHA-256 |
+| --- | --- | --- |
+| Source archive | `367c3314260bd31ddf268a49ef861472f25b800966f361681f375bf5f8f5b077` | `34abdc7fca9efcc1989a02abb47e774330c6f490c61715a2c82c63ce04295e9c` |
+| Arch package | `7ef5cd2131bdedd63765c711f8148dd6ea4c7ba42510f8c30ed7970786333bcc` | `91db462260602e539beb6e21f18eff0456ae97e70121826491df1b453cd388ea` |
+| PKGBUILD | `c99f79d3c90b276c37a2c884cce81a379aefdf2a143e2ebce152bffd37a20ac8` | `e24f6273cc8b71c44ca3366a37b5770d95c1391d455397a494a3aaeff1908b3e` |
+| SOURCE_CHECKPOINT.json | `badbcc0c4771eb3cdb51d8fa380553471cbb8f3d80b956bc54f63673331f64a8` | `3db424ece8254c7cb6dc2a5ef6194baeb719a62562199034ca49ec48684de48d` |
+| VERIFICATION.json | `4e22d5dbef634340d8ccff22857d1e9b0c618d7181471bd4e6162558e3b0947b` | `bb15f782b1f07f60b4e6d136654c0e164fef37d58ea5117baee99a6244732ca9` |
+| SHA256SUMS | `d08ce467287cfa65dc55023620f88f84932ea3559091d45a3225536d06cdb667` | `a97b613f0623a01e98bb1680ae887449869be3043f96532298d69522bc122578` |
+
+RC-02 corrects current README, changelog, limitations and platform prose;
+current state/checklist distinguish the existing publication from the verified
+local replacement. The installation guide makes tagged verification mandatory
+for the official path. Later main documentation/tooling changes do not rewrite
+the fixed tag's historical source documents. R-01 remains **NOT EXECUTED**;
+R-02 records completed tag/publication but unselected project-wide licensing
+and pending asset-replacement authorization; R-03 retains the two historical
+TASK-0044 Mesa-worker disposal faults and unproved mechanism, with mitigation
+wording; R-04 preserves independent finding provenance and self-run check labels.
+
+## Earlier corrective and publication records
+
+**Historical release-closure correction, 2026-10-03: AD-04-R1 software correction
 and affected source/package verification PASS; R-01 through R-04 recorded.**
 The owner subsequently authorized cleanup followed by commit/sync, then tagging
 and publication. The correction is committed/synced as `c3b3a0b`, and annotated
