@@ -32,7 +32,7 @@ gates PASS. Next candidate prepared; no new real tag/publication authorized.**
 - [x] Owner selected GPL-3.0-or-later; complete official GNU text added byte-for-byte, verified against GNU web/FTP copies. Source header conventions preserved.
 - [x] License matrix audits original C++/QML, eight preserved MIT Plasma/KWin components, 15+15 presets, all 17 original asset packages, system dependencies and excluded unknown-rights references. Each asset declaration change has its own provenance reason.
 - [x] Application/package identity is 0.1.1/0.1.1-1; native `vercmp` confirms upgrade ordering. CMake installs GPL text and complete MIT/matrix notice; package declares GPL-3.0-or-later and separately bundled MIT.
-- [x] Finalized candidate source commit `96f0e4f60d024b5cb1a44af1402401656ded1372` recorded; annotated verification tag exists only in a disposable repository, with expected HEAD exactly that commit.
+- [x] Finalized candidate source commit `96f0e4f60d024b5cb1a44af1402401656ded1372` recorded; annotated verification tag was created only in a disposable repository, with expected HEAD exactly that commit, and removed during owned cleanup.
 - [x] Two complete exports match byte-for-byte; verifier, real extraction, complete inventory/canonical modes, normalized ownership/tar/gzip epochs, exact recipe/sums and included LICENSE pass. Reference images remain absent.
 - [x] `makepkg --verifysource` and fresh one-job Release/Quick3D-ON package build pass; exact source/package hashes, metadata and license recorded.
 - [x] All 5/5 affected asset/export CTests (11 exporter groups) and fresh installed-test target pass, preserving reference rights and asset output hash controls.
