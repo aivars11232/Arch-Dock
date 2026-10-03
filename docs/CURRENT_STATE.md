@@ -6,8 +6,68 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Latest specified corrective boundary — 2026-10-03: AD-01 through AD-05
-COMPLETE; native, full package and cleanup PASS; Git closure owner-authorized.**
+**Latest release-closure boundary — 2026-10-03: AD-04-R1 software correction
+COMPLETE; affected source/package verification PASS; R-01 through R-04 recorded.**
+
+The release-closure pass started on clean `main` at
+`5a183b0f77bfa35d0ac2a3358951a90b07654697`. The remaining exporter defect
+admitted tracked/untracked descendants of its generated root checkpoint,
+creating a directory/file extraction conflict. Direct/deep cases were reproduced
+with export exit 0 and real extraction errno 21; the original exact-file guard
+still rejected both controls. The exporter now reserves the first-component
+namespace through a small explicit set, preserving valid nested same-name
+files/directories, layout, input bytes and path/symlink safeguards.
+
+Fresh targeted tests and all **6 exporter unittest groups** pass. The registered
+checkout exporter CTest passes **1/1**. Two normalized exports are identical:
+**519 source files + one regular generated checkpoint = 520 unique members**,
+successful real extraction, matching inventory bytes/modes, normalized ownership
+and timestamps, digest and recipe pin. Source SHA-256:
+`367c3314260bd31ddf268a49ef861472f25b800966f361681f375bf5f8f5b077`.
+Root `PKGBUILD` matches the generated recipe and pins this archive.
+
+`makepkg --verifysource`, a fresh one-job Release/Quick3D-ON package build
+(428.76 s) and the existing installed-test target build (169.19 s) pass.
+Package SHA-256:
+`7ef5cd2131bdedd63765c711f8148dd6ea4c7ba42510f8c30ed7970786333bcc`.
+Fresh scoped installation checks pass in 27.19 s: **209/209** payload bytes/modes,
+native install/upgrade/removal, obsolete-file checks and byte-preserved disposable
+configuration; actual **15+15** installed catalogs/cards, QtTest **8/8** and
+Quick3D-hidden **4/4**, zero failures/skips. Source extractions and the Release
+build were removed first; installed checks also mask the checkout.
+
+Production C++/QML, CMake and runtime harness sources are unchanged. **515 source
+records and 349 runtime/harness inputs** match the previous candidate, as do
+toolchain/dependency build records and **208 resource payloads**. The executable
+digest differs, including its five build-specific development fallback paths;
+no binary byte-identity or independent equivalence claim is made. Runtime reuse
+rests on source/toolchain/resource identity and refreshed installed checks with
+source fallbacks absent. Effective coverage remains **107/107 configured names**:
+one refreshed exporter CTest and 106 unaffected results reused. The previous
+18 native CTests, 37-phase lifecycle and private installed startup/recovery
+are reused; no new full-suite/private runtime invocation is claimed. The
+external artwork-sample subcase remains unexecuted without its archive.
+
+R-01 physical second-monitor/connector/scanout, another GPU and owner-desktop
+observations remain **NOT EXECUTED**. R-02 tagging and publication are now
+separately owner-authorized, in addition to cleanup followed by commit/sync.
+The intended publication is prerelease candidate `v0.1.0`; a project-wide
+license remains unselected, with `LicenseRef-Arch-Dock-Unspecified` and existing
+component/asset declarations preserved. R-03 retains the two historical
+TASK-0044 Mesa-worker disposal faults and their unproved mechanism; verified
+teardown is a harness mitigation. R-04 labels these self-run checks corrective
+verification, not independent review. Physical acceptance is not inferred
+from publication.
+
+The [corrective report](POST_TASK_0045_CORRECTIVE_REPORT.md#ad-04-r1-release-closure-verification--2026-10-03)
+records cause, red/green, setup/discrimination and reuse. Fresh compact artifacts
+belong to `build-codex-post-task-0045-release-closure/`; its `STATE.json` records
+task-owned cleanup and actual authorized Git/tag/publication proof after each
+operation. All 40 preceding protected artifact files are preserved. No dependency
+download/install, live-desktop mutation or delegated agent/review occurred.
+
+**Previous specified corrective boundary — 2026-10-03: AD-01 through AD-05
+COMPLETE; native, full package and cleanup PASS; committed/synced as `5a183b0`.**
 
 The standalone pass preserves the completed 45-task implementation on baseline
 `2889cae61deb4ab4ff255319e64098cc80d9a684`. Recovery journals the verified
@@ -38,7 +98,7 @@ Two normalized exports are byte-identical: **519 source files + one generated
 checkpoint = 520 unique members**, exact current bytes/modes and normalized
 identities/timestamps. Verified source SHA-256:
 `539f46e318bba0f6fc6993235cf1fb350176fac9e077c5efb9582ceefa03fc36`;
-root `PKGBUILD` pins it. Final package SHA-256:
+root `PKGBUILD` pinned it at that checkpoint. Final package SHA-256:
 `172a780e95f5bc17ac9c10c69ffbf0c416e1b4cb94068f8895adaa308ae1dfe0`.
 The complete original package gate passes: **209/209 installed files**,
 **15+15** rendered catalogs, QtTest **8/8** and Quick3D-hidden **4/4**, private
@@ -56,11 +116,10 @@ records closure; its exact HEAD, clean tree and remote parity are verified in
 the final receipt after push. No host dependency installation or personal
 desktop mutation occurred.
 
-The supplied assignment ends mid-sentence in section 9. Exact R-01 through R-04
-definitions and any additional sections 10–11 requirements remain unavailable.
-Physical hardware acceptance, license selection, tagging and publication remain
-open owner boundaries; private runtime/package results do not resolve them. The
-older blocked `STATE.json` and preliminary subset receipts are historical.
+That assignment ended mid-sentence in section 9, so R-01 through R-04 definitions
+were unavailable during the preceding pass. The later release-closure assignment
+supplies them explicitly, as recorded above. The older blocked `STATE.json` and
+preliminary subset receipts remain historical.
 
 **Previous boundary — 2026-10-03: TASK-0045 COMPLETE; verification and cleanup PASS, Git closure owner-authorized.**
 
@@ -169,7 +228,7 @@ checks provide the executable evidence. Documentation file/link/anchor checks,
 shell syntax and `git diff --check` pass. The full acceptance mapping, exact
 fourteen-path commit contents and version/tag plan are in
 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md#task-0045-release-verification--2026-10-03).
-[PLATFORM_MATRIX.md](PLATFORM_MATRIX.md#task-0045-release-regression-checkpoint--2026-10-03)
+[PLATFORM_MATRIX.md](PLATFORM_MATRIX.md#task-0045-release-regression-checkpoint--historical-2026-10-03)
 records runtime observations and exact commands for physical cells marked
 NOT EXECUTED because a second monitor/other GPU is absent or the owner desktop
 cannot be mutated under this approval. Licensing/publication remains an

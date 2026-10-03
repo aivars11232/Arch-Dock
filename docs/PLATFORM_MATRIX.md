@@ -1,6 +1,21 @@
 # Arch Dock platform verification
 
-## TASK-0045 release regression checkpoint — 2026-10-03
+## Release boundaries R-01 through R-04 — 2026-10-03
+
+The release-closure assignment supplies the previously missing boundary
+definitions. They are recorded decisions and evidence limits, not new software
+defects. Current corrective results belong to
+[the corrective report](POST_TASK_0045_CORRECTIVE_REPORT.md); the runtime
+checkpoints below retain their original provenance.
+
+| Boundary | Recorded status |
+| --- | --- |
+| R-01 — physical acceptance | Physical second-monitor connection/removal, connector/scanout, another GPU and owner-desktop observations remain **NOT EXECUTED**. Private virtual-output verification cannot close these cells; [target observations](#physical-cells-not-executed) remain required. |
+| R-02 — license/tag/publication | Project-wide license selection, `v0.1.0`, GitHub Release and package publication remain separate owner decisions. Commit/sync authorization does not authorize publication. |
+| R-03 — native fixture disposal | The two TASK-0044 private PlasmaShell Mesa-worker faults remain historical observations with an unproved underlying mechanism. The verified teardown change is a harness mitigation; later passing behavior does not prove the native fault eliminated. |
+| R-04 — independent review | This agent's tests and candidate checks are implementation/corrective verification. Independent review requires a separately performed review; the supplied independent findings retain that provenance. |
+
+## TASK-0045 release regression checkpoint — historical, 2026-10-03
 
 **All executable runtime regression gates PASS.** The baseline is synced
 commit `9584d204ecfcbf503ccd7e4322ac945424b5d610`, plus the approved TASK-0045
@@ -238,7 +253,9 @@ helper with SIGKILL only for the private PlasmaShell; normal in-session restarts
 Arch Dock and KWin retain SIGTERM. All live assertions, QML scans and crash
 reporting remain active. The focused shortcut regression passed, followed by
 the affected 14-test refresh and optional-3D-absent installed runtime; no new
-task-owned dump was recorded. See [the lifecycle boundary](plasma-lifecycle.md#task-0044-display-and-resource-hardening)
+task-owned dump was recorded. This is a verified test-harness mitigation;
+later passing fixtures do not prove that the underlying native fault was fixed.
+See [the lifecycle boundary](plasma-lifecycle.md#task-0044-display-and-resource-hardening)
 and native [signal(7)](https://man7.org/linux/man-pages/man7/signal.7.html).
 
 Task builds, staged installations, temporary roots, local Python environment

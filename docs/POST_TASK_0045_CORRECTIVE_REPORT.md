@@ -1,7 +1,15 @@
 # Post-TASK-0045 corrective pass
 
+**Latest release-closure correction, 2026-10-03: AD-04-R1 software correction
+and affected source/package verification PASS; R-01 through R-04 recorded.**
+The owner subsequently authorized cleanup followed by commit/sync, then tagging
+and publication. The candidate is planned as prerelease `v0.1.0`; physical
+acceptance and a project-wide license remain separate. Actual Git/tag/release
+proof is recorded after execution in
+`build-codex-post-task-0045-release-closure/STATE.json`.
+
 Assignment date: 2026-10-03. Initial clean `main` checkout:
-`2889cae61deb4ab4ff255319e64098cc80d9a684` (audit baseline).
+`2889cae61deb4ab4ff255319e64098cc80d9a684` (initial corrective baseline).
 The standalone assignment authorizes implementation and local verification;
 the task-pack planning approval and one-correction stopping rules do not apply
 to this pass. All other ownership, serial execution and preservation rules apply.
@@ -10,21 +18,24 @@ finished”, authorizing the task-local PySide6 prerequisite and Git closure.
 One primary agent; one file/change at a time;
 one build job and test worker; disposable native runtime only.
 
-The supplied attachment ends mid-sentence in section 9 after
+The original supplied attachment ended mid-sentence in section 9 after
 `capability-driven fallback, and .bl`. Sections 10–11 (including the exact
 R-01–R-04 definitions and final gates/cleanup) were requested from the owner.
-Their absence does not prevent the fully specified issue work below.
+Their absence did not prevent the fully specified issue work below. The subsequent
+release-closure assignment now supplies R-01 through R-04 explicitly.
 
-Final specified corrective boundary: **AD-01 through AD-05 fixed; native and
+Previous specified corrective boundary: **AD-01 through AD-05 fixed; native and
 full installed-package checks PASS**. All 107 configured CTest names have
 applicable passing evidence, combining 65 refreshed names and 42 unchanged
 checks from the initial source-matched pass. The full 37-phase lifecycle passes.
-The missing assignment tail still prevents exact disposition of R-01 through
-R-04 and any additional requirements it contains. Physical acceptance, license
-selection, tagging and publication remain open owner boundaries.
+The release-closure assignment resolves the boundary definitions recorded below.
+Physical acceptance, license selection, tagging and publication remain open
+owner boundaries. AD-04-R1 addresses the independently supplied descendant
+namespace finding without reopening the other repairs.
 
-This commit records the owner-authorized corrective source/documentation
-closure. Exact commit, clean-tree and remote parity are verified after push in
+The preceding corrective source/documentation closure was committed and synced
+as `5a183b0f77bfa35d0ac2a3358951a90b07654697`. Its exact commit, clean-tree
+and remote parity were verified after push in
 `build-codex-post-task-0045-corrective/FINAL_STATE.json`. The older `STATE.json`
 and preliminary receipts retain the initial blocked checkpoint.
 
@@ -35,7 +46,7 @@ and preliminary receipts retain the initial blocked checkpoint.
 | AD-02 | Rollback committed restored physical IDs/revisions without journaling that set. Recovery must finalize its own verified durable set and refuse external edits. | Fixed at coordinator boundary; 17/17 QtTest cases and integrated coordinator test pass. Private native matrices and the full lifecycle pass. |
 | AD-01 | Import discarded checked-save failure; Clear had no outcome. Artwork and Studio must report persistence failure and retain the draft. | Fixed; real settings-write/SettingsPopup regressions and complete registry/backend tests pass. Private native matrices and the full lifecycle pass. |
 | AD-03 | Profile transfer published assets before later validation/final save. Rejected imports must clean only newly owned, unadopted resources and report cleanup failure. | Fixed; 24/24 profile-store QtTest cases and integrated store/manager tests pass. Private native matrices and the full lifecycle pass. |
-| AD-04 | Generated root metadata was also eligible input. Export must refuse collisions before publication and preserve normalized valid inputs. | Fixed; four exporter tests and registered CTest pass. Old candidate independently checked consistent. |
+| AD-04 | An exact root metadata file was also eligible input. Export must refuse exact-file collisions before publication and preserve normalized valid inputs. | Original file case fixed; four exporter tests and registered CTest passed. Old candidate locally checked consistent. The subsequent AD-04-R1 correction reserves descendants too. |
 | AD-05 | Theme documentation made obsolete current-tense renderer/presentation claims. Guidance must match capabilities, build/runtime options and source. | Fixed; source/contract comparison, links/anchors and whitespace checks pass. |
 
 Each completed entry below records requirement, cause, files, red/green
@@ -44,20 +55,117 @@ and control commands/results, and remaining boundaries. Historical 106-test,
 
 ## Release boundaries
 
-R-01 through R-04 are retained as release boundaries, not additional proven
-bugs; exact definitions await the missing assignment section. Physical release
-acceptance, license selection, tagging and publication remain owner-controlled.
-The later explicit approval authorizes corrective commit/sync; it does not
-resolve the missing R definitions or grant release publication.
+R-01 through R-04 are explicit release boundaries, not additional software
+defects. The release-closure assignment supplies their definitions. The prior
+approval authorized its corrective commit/sync, not publication. This run began
+with project Git read-only. The owner then instructed “Also when u're done,
+before report, do cleanup and commit and sync” and “U have my approval on tagging
+and publication too”, authorizing those operations for the current candidate.
 
 | Boundary | Current disposition |
 | --- | --- |
-| R-01 | Exact definition unavailable: assignment section 10 missing. |
-| R-02 | Exact definition unavailable: assignment section 10 missing. |
-| R-03 | Exact definition unavailable: assignment section 10 missing. |
-| R-04 | Exact definition unavailable: assignment section 10 missing. |
+| R-01 — physical acceptance | **NOT EXECUTED:** physical second-monitor connection/removal, connector/scanout, another GPU and owner-desktop observations. Private virtual-output checks do not close these cells. |
+| R-02 — license/tag/publication | **OWNER AUTHORIZATION RECORDED:** tagging and candidate publication are now expressly authorized, in addition to commit/sync. The project-wide license remains unselected; `LicenseRef-Arch-Dock-Unspecified` and existing component/asset declarations are preserved. Actual publication is verified in the current receipt; commit/sync alone did not grant it. |
+| R-03 — native fixture disposal | **HISTORICAL UNCERTAINTY RETAINED:** two TASK-0044 private PlasmaShell processes faulted in native Mesa workers during disposal. The underlying mechanism remains unproved. The verified teardown change is a harness mitigation; later passing fixtures do not prove the fault eliminated. |
+| R-04 — independent review | **PROVENANCE RECORDED:** self-run tests are implementation/corrective/candidate verification. Independent review requires a separate review. The supplied independent findings retain their original provenance; this correction is not its own independent audit. |
+
+See [physical observations and disposal history](PLATFORM_MATRIX.md) and
+[known release limitations](KNOWN_LIMITATIONS.md).
+
+## AD-04-R1 release-closure verification — 2026-10-03
+
+Starting HEAD: `5a183b0f77bfa35d0ac2a3358951a90b07654697`, clean `main`.
+The supplied independent finding concerned root descendants, not a regression
+of the already repaired exact-file case. Git lists child source paths rather
+than their parent directory. The exact-string guard admitted
+`SOURCE_CHECKPOINT.json/notes.txt`, then generated the root checkpoint as a
+regular file, requiring that archive path to be both a directory and a file.
+
+Before editing production code, disposable repositories using the exact current
+exporter reproduced both tracked and untracked direct/deep descendants: export
+exit 0, followed by real `tarfile.extractall(..., filter="data")` failure with
+`IsADirectoryError`, errno 21. Both exact-file controls remained rejected with
+exit 2. All conflicting input bytes were preserved. Four new descendant subcases
+then failed against the unrepaired exporter for its incorrect successful exit.
+
+`tools/prepare-arch-source.py` adds a small `reserved_root_members` set and
+checks the existing normalized first path component. It explicitly refuses the
+root file and descendants before archive publication. Same-name paths below
+other roots remain valid. The layout, generated filename, deleted-input handling
+and symlink/path checks remain intact; there is no global basename ban.
+Native Python path and extraction APIs were inspected before the change:
+[path components](https://docs.python.org/3.14/library/pathlib.html#pathlib.PurePath.parts),
+[tar extraction](https://docs.python.org/3.14/library/tarfile.html#tarfile.TarFile.extractall).
+
+`tests/test_prepare_arch_source.py` preserves its existing controls and adds
+tracked/untracked direct and deep descendants, positive
+`test-data/SOURCE_CHECKPOINT.json` and nested same-name directories, including
+`docs/SOURCE_CHECKPOINT.json/notes.txt`. The normal archive is actually extracted;
+its single regular checkpoint matches external metadata, has no child members,
+and the complete extracted inventory matches hashes/modes. Unique names,
+deterministic ownership/epoch, repeated bytes, digest/recipe pin and existing
+symlink/nonempty-output/source-change controls remain enforced.
+
+- Targeted exact-file/descendant regression: **2/2 groups PASS**.
+- Complete exporter Python suite: **6/6 groups PASS**, 1.36 s.
+- Registered checkout `source-exporter-test`: **1/1 PASS**, 1.43 s.
+- An initial optional CTest configure pointed at the extracted tree, which
+  intentionally excludes `PKGBUILD`; fixture setup failed before exporter
+  execution. Correcting the invocation to the actual checkout passed. Both
+  setup failure and corrected result are retained; no production workaround.
+- Two independent export operations produce identical bytes: **519 source
+  files + one generated checkpoint = 520 unique members**. Real extraction,
+  current bytes/modes, normalized ownership/epoch, inventory, digest and recipe
+  pin all pass. This is local corrective verification, not independent review.
+- Source SHA-256:
+  `367c3314260bd31ddf268a49ef861472f25b800966f361681f375bf5f8f5b077`.
+- `makepkg --verifysource`: **PASS**. Fresh one-job Release/Quick3D-ON package
+  build: **PASS**, 428.76 s. Fresh existing installed-test target: **PASS**,
+  169.19 s, one job.
+- Package SHA-256:
+  `7ef5cd2131bdedd63765c711f8148dd6ea4c7ba42510f8c30ed7970786333bcc`.
+- Fresh scoped package checks reuse the unchanged full harness's blocks:
+  **PASS**, 27.19 s; **209/209** payload bytes/modes, native install,
+  `0.1.0-1 -> 0.1.0-2` upgrade, obsolete-file checks, both removals and exact
+  configuration preservation. Installed **15+15** catalogs/actual cards pass:
+  QtTest **8/8**, Quick3D-hidden **4/4**, zero failures/skips. Extracted source
+  and Release build roots were verified then removed before those checks;
+  the namespace also hides the checkout.
+
+Only the exporter/test and two source-included boundary documents changed among
+the 519 records; **515 source records and 349 runtime/harness inputs match**
+the preceding verified candidate. Toolchain/dependency `.BUILDINFO` entries
+match. All **208 resource payloads** match bytes/modes; executable bytes differ
+and are not claimed identical. Its five compiled development fallback paths
+name the new build root, with associated ELF layout variation. Simple raw
+constant normalization was insufficient; no independent binary equivalence
+claim is made. Reuse rests on actual production source/toolchain identity,
+unchanged resources and fresh installed-resource checks after removing source
+fallbacks. Private installed startup/recovery and native matrices remain
+explicitly reused, including **18 native CTests and 37 lifecycle phases**.
+Effective configured coverage is **107/107 names: one refreshed exporter CTest
+and 106 unaffected results reused**, not a new full-suite/private invocation.
+The external artwork-sample subcase remains unexecuted without its archive.
+
+The actual historical TASK-0045 and preceding corrective archives were locally
+revalidated: respectively 519 and 520 unique members, one regular checkpoint,
+no reserved descendants, and matching manifest bytes/modes. They are not
+claimed corrupt. Prior failure logs/receipts remain unchanged. Source and
+package versions remain `0.1.0` / `0.1.0-2`; no dependency download/install,
+personal-desktop mutation or delegated review occurred. Source-directory and
+desktop-category warnings remain visible.
+
+Fresh deliverables are deliberately retained under
+`build-codex-post-task-0045-release-closure/package-output/` and
+`verification-output/`; `STATE.json` records cleanup and subsequent authorized
+Git/tag/publication closure. The earlier 40 protected artifact files retain
+their original hashes. Raw reproduction, red/green, setup/discrimination,
+source/package, scope/reuse and cleanup receipts remain in the local log ZIP.
 
 ## Approved native and package continuation
+
+Historical checkpoint from the preceding corrective pass; the hashes and full
+runtime/package results below identify that candidate.
 
 The approved disposable Python environment used existing `uv`, system Python
 3.14.7 and GI, and binary-only PySide6/shiboken6 6.11.2 matching host Qt 6.11.2.
@@ -144,7 +252,7 @@ and timestamps. Source SHA-256:
 `539f46e318bba0f6fc6993235cf1fb350176fac9e077c5efb9582ceefa03fc36`.
 The checkpoint explicitly records approved working-tree inputs at baseline HEAD;
 operational report/checklist/current-state/PKGBUILD exclusions avoid circular
-receipt hashes. Root `PKGBUILD` now pins this verified checksum.
+receipt hashes. At that checkpoint, root `PKGBUILD` pinned this verified checksum.
 
 `makepkg --verifysource` and a fresh one-job Release/Quick3D-ON package build pass.
 All 519 extracted source hashes/modes were verified, then the owned extracted
@@ -306,7 +414,7 @@ tests still execute production transfer, materialization, save and cleanup.
 
 Cause: root `SOURCE_CHECKPOINT.json` could be input and generated output at the
 same archive path. The current exporter refuses admitted tracked/untracked
-collisions before publication, preserving the original file. Required symlink
+exact-file collisions before publication, preserving the original file. Required symlink
 controls also proved dangling links were treated as removed files; symlink
 refusal now precedes the missing-file check. Existing exclusions and approved
 working-tree/deletion inputs remain supported. The new corrective report uses
@@ -358,7 +466,7 @@ controller. Offline `.blend` retention/non-execution remains unchanged.
 Compared with `KNOWN_LIMITATIONS.md`, `INSTALL.md`, `THEME_PACKAGE_V2.md`,
 `shared-renderer.md`, `PKGBUILD`, `PanelCapabilityResolver::productionRenderers`,
 the optional scene and shared presentation state contract. The current
-Quick3D-ON configure also independently confirms build inclusion; that is not
+Quick3D-ON configure also separately confirms build inclusion; that is not
 claimed as new runtime/physical acceptance.
 
 The initial documentation patch failed to match an exact line and made no

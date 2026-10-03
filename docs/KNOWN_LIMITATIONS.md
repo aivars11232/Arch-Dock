@@ -45,6 +45,7 @@ Virtual output removal and fractional-scale checks do not close those physical
 cells. Their exact target commands and observation requirements are retained
 in [PLATFORM_MATRIX.md](PLATFORM_MATRIX.md#physical-cells-not-executed).
 Mandatory unverified release cells remain open.
+These unexecuted physical observations are release boundary **R-01**.
 
 Two TASK-0044 private PlasmaShell processes faulted in native Mesa workers
 during final disposal after live assertions. The precise internal fault
@@ -53,6 +54,9 @@ helper with SIGKILL for final disposable PlasmaShell teardown; ordinary
 in-session restart checks retain SIGTERM. Its affected regressions passed,
 and both task-owned dumps were removed under owner authorization. This is a
 fixture-disposal observation, not physical-desktop acceptance.
+Under **R-03**, the teardown change is a verified test-harness mitigation;
+later passing fixture behavior does not prove the underlying native fault
+eliminated. The historical failures remain part of the evidence.
 
 ## Recovery and removal
 
@@ -73,8 +77,18 @@ removal actions before uninstalling the applet package. Follow
 Application `0.1.0`, package `0.1.0-2` and proposed tag `v0.1.0` identify the
 candidate. The release commit/tag and publication remain owner-controlled.
 A working tree with approved release changes is not a clean published release.
+Under **R-02**, a project-wide license, tag creation, GitHub Release and package
+publication each require separate owner instruction. Commit/sync authorization
+does not grant publication authorization.
 
 The repository has no selected project-wide license. The package records
 `LicenseRef-Arch-Dock-Unspecified`; existing component and asset declarations
 remain unchanged. [The licensing notice](../packaging/LICENSING.md) describes
 their scope. Release preparation does not select a license for the owner.
+
+## Verification provenance
+
+Under **R-04**, checks run by the implementation/correction agent are local
+regression or candidate verification, not an independent audit of its own
+changes. The supplied independent findings retain their original provenance;
+independent closure review requires a separately performed review.

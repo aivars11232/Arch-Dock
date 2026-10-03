@@ -31,6 +31,7 @@ def main():
     epoch = int(git("show", "-s", "--format=%ct", "HEAD"))
     excluded = {"PKGBUILD", "docs/CURRENT_STATE.md", "docs/RELEASE_CHECKLIST.md",
                 "docs/POST_TASK_0045_CORRECTIVE_REPORT.md"}
+    reserved_root_members = {"SOURCE_CHECKPOINT.json"}
     paths = sorted(set(git("ls-files", "--cached", "--others", "--exclude-standard", "-z")
                        .decode().rstrip("\0").split("\0")))
     records = []
@@ -43,8 +44,8 @@ def main():
             parser.error(f"unsupported source entry: {relative}")
         if not path.exists():  # Files removed in the approved working tree.
             continue
-        if relative == "SOURCE_CHECKPOINT.json":
-            parser.error("reserved generated metadata path collides with source input: SOURCE_CHECKPOINT.json")
+        if first in reserved_root_members:
+            parser.error(f"reserved generated root namespace collides with source input: {relative}")
         if not path.is_file() or not path.resolve().is_relative_to(root):
             parser.error(f"unsupported source entry: {relative}")
         records.append({"path": relative,

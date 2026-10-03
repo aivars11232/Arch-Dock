@@ -10,15 +10,44 @@ See [CURRENT_STATE.md](CURRENT_STATE.md) for the current implementation boundary
 [PRESET_SYSTEM_SPEC.md](PRESET_SYSTEM_SPEC.md) for preset and audition gates, and
 [TARGET_STRUCTURE_TREE_V2.md](TARGET_STRUCTURE_TREE_V2.md) for the logical target.
 
-The specified post-TASK-0045 AD corrective work, native verification and full
-installed-package checks pass as recorded in the
-[corrective report](POST_TASK_0045_CORRECTIVE_REPORT.md). The truncated assignment's
-exact R-01 through R-04 definitions remain unavailable. Outside the explicit
-corrective section, build/runtime entries retain the preceding TASK-0045
-candidate's historical evidence. Physical acceptance and release decisions
-remain separate from private runtime results.
+The original post-TASK-0045 corrections and subsequent AD-04-R1 namespace repair
+have passing corrective evidence in the
+[corrective report](POST_TASK_0045_CORRECTIVE_REPORT.md). The release-closure
+assignment supplies all four boundary definitions. The owner subsequently
+authorized cleanup/commit/sync and separately tagging/publication. Physical
+acceptance and license selection remain separate. Outside the explicit
+corrective sections, build/runtime entries retain historical candidate evidence.
 
-## Corrective acceptance
+## AD-04-R1 release-closure acceptance
+
+- [x] Clean starting HEAD `5a183b0f77bfa35d0ac2a3358951a90b07654697` recorded.
+- [x] Tracked/untracked direct and deep descendants reproduced before production repair; real extraction failed with errno 21, while exact-file controls remained rejected.
+- [x] Generated root namespace reserved by first path component; conflicting input preserved, valid nested names and symlink/path checks retained.
+- [x] Targeted regressions, six complete exporter unittest groups and registered checkout exporter CTest pass.
+- [x] Two byte-identical normalized exports; 519 source files/520 unique members, one regular generated checkpoint, successful extraction, inventory bytes/modes, identities/timestamps, digest and recipe pin verified.
+- [x] Fresh source verification, one-job Release package and existing installed-test target builds pass.
+- [x] Fresh native install/upgrade/payload/removal and preserved configuration pass; 209 installed files, 15+15 actual catalogs/cards, installed QtTest 8/8 and Quick3D-hidden 4/4.
+- [x] Source/toolchain/resource identity supports explicit runtime reuse: 107 configured names with one exporter CTest refreshed and 106 unchanged checks reused; no new full-suite/private invocation or executable byte-identity claim.
+- [x] Historical actual candidates locally checked consistent; earlier failures and native-disposal uncertainty preserved.
+- [x] R-01–R-04 defined; physical cells remain NOT EXECUTED, licensing stays unselected, teardown is a harness mitigation, self-run verification is not independent review.
+- [x] Safe task-owned cleanup complete, with 40 protected earlier files byte-unchanged and ten compact deliberate artifacts retained; no task-owned process/core remains and all 135 baseline core records are preserved.
+
+| Boundary | Current disposition |
+| --- | --- |
+| R-01 | Physical second-monitor/connector/scanout, another GPU and owner-desktop observations remain NOT EXECUTED. |
+| R-02 | Commit/sync, tagging and prerelease publication are separately owner-authorized; execution proof is pending below. Project-wide licensing remains unselected. |
+| R-03 | Two historical TASK-0044 private PlasmaShell Mesa-worker disposal faults retain their unproved mechanism. Teardown is a harness mitigation, not a proved native fault fix. |
+| R-04 | Self-run results are corrective/candidate verification. Separate independent review has not been performed by this correction agent. |
+
+Fresh source SHA-256:
+`367c3314260bd31ddf268a49ef861472f25b800966f361681f375bf5f8f5b077`.
+Fresh package SHA-256:
+`7ef5cd2131bdedd63765c711f8148dd6ea4c7ba42510f8c30ed7970786333bcc`.
+Raw scope/reuse evidence and actual closure proof belong to
+`build-codex-post-task-0045-release-closure/`. The external artwork-sample
+subcase remains unexecuted without its archive.
+
+## Preceding corrective acceptance — historical `5a183b0` checkpoint
 
 - [x] AD-01 through AD-05 accounted for with executed focused evidence.
 - [x] Fresh one-job Debug application/affected-test and exported-source Release builds.
@@ -28,16 +57,19 @@ remain separate from private runtime results.
 - [x] Complete installed-package gate passes: 209 payload files, 15+15 rendered catalogs, QtTest 8/8 and Quick3D-hidden 4/4, private startup in both modes, native install/upgrade/recovery/removal and preserved disposable configuration.
 - [x] Original standalone lifecycle passes 37/37 phases with unchanged 900-second bound and assertions.
 - [x] Task-owned cleanup complete; twenty deliberate corrective files retained, including ten preliminary files unchanged; all 20 older protected artifacts byte-unchanged.
-- [ ] Exact R-01 through R-04 closure and any remaining requirements in missing sections 10–11.
+- [x] Previously unavailable R-01 through R-04 definitions supplied and reconciled in the later release-closure pass; this does not mark physical cells or license selection complete.
 - [ ] External source-sample QtTest row; its archive was not supplied (CTest itself passes).
 
 ## Repository
 
-- [x] Corrective source/resources included in the owner-authorized evidence commit.
+- [x] Preceding corrective source/resources included in owner-authorized commit `5a183b0`.
 - [x] Current documentation distinguishes final corrective results from historical receipts.
 - [x] No stale current-state source of truth.
-- [x] Owner-authorized commit/sync closure recorded by this commit; exact HEAD, clean tree and remote parity verified after push in retained `FINAL_STATE.json`.
-- [ ] Proposed release tag created under separate owner instruction.
+- [x] Previous `5a183b0` commit/sync verified in its retained `FINAL_STATE.json`.
+- [ ] Current correction committed/synced under the new owner instruction, with exact paths, clean tree and remote parity verified in current `STATE.json`.
+- [ ] Annotated `v0.1.0` created at the reviewed correction commit and remote target verified under the separate tagging approval.
+- [ ] Prerelease candidate published with verified source/package assets under the separate publication approval; actual URL and uploaded-byte checks recorded.
+- [ ] Project-wide license selected by the owner; existing unspecified/component/asset declarations remain preserved.
 
 ## Build and installation
 
@@ -763,7 +795,7 @@ Prepared documents are [README](../README.md), [installation and uninstall](INST
 Authority/master body, preset sequence and logical target structure reflect V3.
 The final documentation file/link/anchor audit, shell syntax checks and
 `git diff --check` pass. [CURRENT_STATE.md](CURRENT_STATE.md#task-0045-release-verification--2026-10-03)
-and [PLATFORM_MATRIX.md](PLATFORM_MATRIX.md#task-0045-release-regression-checkpoint--2026-10-03)
+and [PLATFORM_MATRIX.md](PLATFORM_MATRIX.md#task-0045-release-regression-checkpoint--historical-2026-10-03)
 record exact scope, observations and reuse. Physical cells retain proved reasons
 and [exact target commands](PLATFORM_MATRIX.md#physical-cells-not-executed).
 The licensing decision remains documented in [packaging/LICENSING.md](../packaging/LICENSING.md).

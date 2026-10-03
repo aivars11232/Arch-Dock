@@ -79,6 +79,24 @@ class PrepareArchSourceTest(unittest.TestCase):
                 self.assertEqual((self.root / "SOURCE_CHECKPOINT.json").read_bytes(),
                                  b'{"owner":"ordinary user input"}\n')
 
+    def test_reserved_metadata_descendants(self):
+        for relative in ("SOURCE_CHECKPOINT.json/notes.txt", "SOURCE_CHECKPOINT.json/a/b.txt"):
+            for tracked in (False, True):
+                with self.subTest(relative=relative, tracked=tracked):
+                    payload = b"conflicting source must remain untouched\n"
+                    source = self.write(relative, payload)
+                    try:
+                        if tracked:
+                            self.git("add", relative)
+                            self.git("commit", "--quiet", "-m", "Reserved descendant control")
+                        result, output = self.export(f"descendant-{tracked}-{source.name}")
+                        self.assertNotEqual(result.returncode, 0, result.stdout)
+                        self.assertIn("SOURCE_CHECKPOINT.json", result.stderr)
+                        self.assertFalse(list(output.glob("*.tar.gz")), "collision published an archive")
+                        self.assertEqual(source.read_bytes(), payload)
+                    finally:
+                        source.unlink()
+
     def test_inventory_unique_normalized_and_reproducible(self):
         self.write("plain.txt", b"approved working-tree change\n")
         self.write("approved new ē.txt", b"approved untracked input\n")
@@ -88,6 +106,8 @@ class PrepareArchSourceTest(unittest.TestCase):
             archive.writestr("fixture.txt", "legitimate compressed fixture")
         self.write("fixture.zip", compressed.getvalue())
         self.write("ignored.log", b"ignored operational output\n")
+        self.write("test-data/SOURCE_CHECKPOINT.json", b'{"nested":"test data"}\n')
+        self.write("nested/SOURCE_CHECKPOINT.json/notes.txt", b"legitimate nested directory\n")
         (self.root / "removed.txt").unlink()
         first, output = self.export("valid-first")
         second, repeated = self.export("valid-second")
@@ -101,6 +121,10 @@ class PrepareArchSourceTest(unittest.TestCase):
             self.assertEqual(len(names), len(set(names)))
             prefix = archive.name.removesuffix(".tar.gz") + "/"
             self.assertTrue(all(name.startswith(prefix) for name in names))
+            generated = [member for member in members if member.name == prefix + "SOURCE_CHECKPOINT.json"]
+            self.assertEqual(len(generated), 1)
+            self.assertTrue(generated[0].isreg())
+            self.assertFalse(any(name.startswith(prefix + "SOURCE_CHECKPOINT.json/") for name in names))
             payloads = {member.name.removeprefix(prefix): exported.extractfile(member).read()
                         for member in members}
             metadata = payloads["SOURCE_CHECKPOINT.json"]
@@ -127,11 +151,45 @@ class PrepareArchSourceTest(unittest.TestCase):
                              "build/generated.cpp", "build-old/generated.cpp", "removed.txt", "ignored.log"):
                 self.assertNotIn(excluded, records)
             for included in ("plain.txt", "approved new ē.txt", "run.sh", "fixture.gz", "fixture.zip",
-                             "docs/SOURCE_CHECKPOINT.json"):
+                             "docs/SOURCE_CHECKPOINT.json", "test-data/SOURCE_CHECKPOINT.json",
+                             "nested/SOURCE_CHECKPOINT.json/notes.txt"):
                 self.assertIn(included, records)
+            extraction = self.base / "extracted"
+            extraction.mkdir()
+            exported.extractall(extraction, filter="data")
+            extracted_root = extraction / prefix.removesuffix("/")
+            generated_path = extracted_root / "SOURCE_CHECKPOINT.json"
+            self.assertTrue(generated_path.is_file())
+            self.assertEqual(generated_path.read_bytes(), metadata)
+            self.assertEqual({path.relative_to(extracted_root).as_posix()
+                              for path in extracted_root.rglob("*") if path.is_file()}, set(payloads))
+            for relative, record in records.items():
+                extracted = extracted_root / relative
+                self.assertEqual(extracted.read_bytes(), payloads[relative])
+                self.assertEqual(hashlib.sha256(extracted.read_bytes()).hexdigest(), record["sha256"])
+                self.assertEqual(stat.S_IMODE(extracted.stat().st_mode), record["mode"])
         digest = hashlib.sha256(archive.read_bytes()).hexdigest()
         self.assertIn(f"sha256sums=('{digest}')", (output / "PKGBUILD").read_text())
         self.assertEqual((output / "SHA256SUMS").read_text(), f"{digest}  {archive.name}\n")
+
+    def test_nested_checkpoint_directory_is_valid(self):
+        self.git("rm", "--", "docs/SOURCE_CHECKPOINT.json")
+        relative = "docs/SOURCE_CHECKPOINT.json/notes.txt"
+        payload = b"ordinary nested same-name directory\n"
+        self.write(relative, payload)
+        self.git("add", relative)
+        self.git("commit", "--quiet", "-m", "Legitimate nested directory control")
+        result, output = self.export("nested-directory")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        extraction = self.base / "extracted"
+        extraction.mkdir()
+        archive = next(output.glob("*.tar.gz"))
+        with tarfile.open(archive) as exported:
+            exported.extractall(extraction, filter="data")
+        extracted_root = extraction / archive.name.removesuffix(".tar.gz")
+        self.assertEqual((extracted_root / relative).read_bytes(), payload)
+        self.assertEqual((extracted_root / "SOURCE_CHECKPOINT.json").read_bytes(),
+                         (output / "SOURCE_CHECKPOINT.json").read_bytes())
 
     def test_existing_output_is_preserved(self):
         existing = self.base / "existing"
