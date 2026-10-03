@@ -35,7 +35,7 @@ corrective sections, build/runtime entries retain historical candidate evidence.
 | Boundary | Current disposition |
 | --- | --- |
 | R-01 | Physical second-monitor/connector/scanout, another GPU and owner-desktop observations remain NOT EXECUTED. |
-| R-02 | Commit/sync, tagging and prerelease publication are separately owner-authorized; execution proof is pending below. Project-wide licensing remains unselected. |
+| R-02 | Owner-authorized correction commit/sync, annotated `v0.1.0` and prerelease publication are executed and verified below. All six downloaded assets match. Project-wide licensing remains unselected. |
 | R-03 | Two historical TASK-0044 private PlasmaShell Mesa-worker disposal faults retain their unproved mechanism. Teardown is a harness mitigation, not a proved native fault fix. |
 | R-04 | Self-run results are corrective/candidate verification. Separate independent review has not been performed by this correction agent. |
 
@@ -66,9 +66,9 @@ subcase remains unexecuted without its archive.
 - [x] Current documentation distinguishes final corrective results from historical receipts.
 - [x] No stale current-state source of truth.
 - [x] Previous `5a183b0` commit/sync verified in its retained `FINAL_STATE.json`.
-- [ ] Current correction committed/synced under the new owner instruction, with exact paths, clean tree and remote parity verified in current `STATE.json`.
-- [ ] Annotated `v0.1.0` created at the reviewed correction commit and remote target verified under the separate tagging approval.
-- [ ] Prerelease candidate published with verified source/package assets under the separate publication approval; actual URL and uploaded-byte checks recorded.
+- [x] Current eight-path correction committed/synced as `c3b3a0b7771b313c45f843f49a503b45b0d1ada0` under the new owner instruction, with exact paths, clean tree and remote parity verified; final documentation closure is recorded in current `STATE.json`.
+- [x] Annotated `v0.1.0` created at that correction commit; local/remote tag object `50812852c4dc2726411a1c73452296955852c50a` and peeled target verified under the separate tagging approval.
+- [x] [Prerelease candidate published](https://github.com/aivars11232/Arch-Dock/releases/tag/v0.1.0) at 2026-10-03 21:23:54 UTC under the separate publication approval; six uploaded assets match downloaded SHA-256/size, downloaded checksum entries pass, and explicit `latest=false` is recorded.
 - [ ] Project-wide license selected by the owner; existing unspecified/component/asset declarations remain preserved.
 
 ## Build and installation
@@ -800,11 +800,13 @@ record exact scope, observations and reuse. Physical cells retain proved reasons
 and [exact target commands](PLATFORM_MATRIX.md#physical-cells-not-executed).
 The licensing decision remains documented in [packaging/LICENSING.md](../packaging/LICENSING.md).
 
-The version plan is application **0.1.0**, Arch package **0.1.0-2**, proposed
-annotated tag **v0.1.0** with message `Arch Dock 0.1.0`. That tag is absent locally
-and on origin. The proposed tag target is this reviewed release-evidence commit,
-whose exact hash is recorded in the final receipt. Commit/sync approval does
-not authorize tag creation or publication.
+The historical TASK-0045 version plan was application **0.1.0**, Arch package
+**0.1.0-2**, proposed annotated tag **v0.1.0** with message `Arch Dock 0.1.0`.
+That tag was absent locally and on origin at this checkpoint. The proposed
+release-evidence commit target was recorded in its final receipt; commit/sync
+approval did not authorize tag creation or publication. The actual later
+owner-authorized correction tag and prerelease supersede this proposal, as
+recorded in the Repository section above.
 
 The existing normalized exporter produced two byte-identical copies, each with
 518 source files and a SOURCE_CHECKPOINT manifest (519 archive members).
@@ -846,11 +848,11 @@ tests/run-plasma-lifecycle.sh
 plasma-widget/contents/ui/main.qml
 ```
 
-This commit contains only TASK-0045. The owner authorized staging, commit and
-sync after reviewing the implementation result. The suggested tag must name
-the reviewed release commit; tag creation and publication still require
-separate owner instruction. The contract's owner-controlled Git review is
-fulfilled by `Commit and sync`.
+That historical commit contains only TASK-0045. The owner authorized staging,
+commit and sync after reviewing its implementation result. Tag creation and
+publication required separate owner instruction at that checkpoint; the latest
+release-closure section records the subsequent approval and execution. The
+contract's owner-controlled Git review was fulfilled by `Commit and sync`.
 
 Cleanup passes. No task-owned process, private session, receiver, applet, panel,
 staged installation, probe or generated style cache remains. The exact workarea

@@ -51,8 +51,13 @@ external artwork-sample subcase remains unexecuted without its archive.
 R-01 physical second-monitor/connector/scanout, another GPU and owner-desktop
 observations remain **NOT EXECUTED**. R-02 tagging and publication are now
 separately owner-authorized, in addition to cleanup followed by commit/sync.
-The intended publication is prerelease candidate `v0.1.0`; a project-wide
-license remains unselected, with `LicenseRef-Arch-Dock-Unspecified` and existing
+Correction commit `c3b3a0b7771b313c45f843f49a503b45b0d1ada0` is synced, with
+its clean-tree/remote parity verified. Annotated `v0.1.0` points to that commit
+locally and remotely. The
+[GitHub prerelease candidate](https://github.com/aivars11232/Arch-Dock/releases/tag/v0.1.0)
+was published at **2026-10-03 21:23:54 UTC** with six assets, explicit
+`latest=false`, and all downloaded sizes/SHA-256/checksums verified. A
+project-wide license remains unselected, with `LicenseRef-Arch-Dock-Unspecified` and existing
 component/asset declarations preserved. R-03 retains the two historical
 TASK-0044 Mesa-worker disposal faults and their unproved mechanism; verified
 teardown is a harness mitigation. R-04 labels these self-run checks corrective
@@ -62,8 +67,12 @@ from publication.
 The [corrective report](POST_TASK_0045_CORRECTIVE_REPORT.md#ad-04-r1-release-closure-verification--2026-10-03)
 records cause, red/green, setup/discrimination and reuse. Fresh compact artifacts
 belong to `build-codex-post-task-0045-release-closure/`; its `STATE.json` records
-task-owned cleanup and actual authorized Git/tag/publication proof after each
-operation. All 40 preceding protected artifact files are preserved. No dependency
+task-owned cleanup and actual authorized Git/tag/publication proof, including
+the subsequent documentation closure commit/sync. That closure leaves the tag
+on the reviewed correction commit and the verified asset bytes unchanged.
+The source checkpoint records starting HEAD `5a183b0` and all 519 approved
+precommit inputs; existing exclusions for operational documents/recipe prevent
+circular hashes. All 40 preceding protected artifact files are preserved. No dependency
 download/install, live-desktop mutation or delegated agent/review occurred.
 
 **Previous specified corrective boundary — 2026-10-03: AD-01 through AD-05
@@ -252,8 +261,10 @@ The verified raw-log archive preserves initial failures and the final successful
 receipts; the two diagnostic heaps were removed. All six TASK-0043 package and
 four TASK-0044 verification deliverables are byte-for-byte preserved.
 
-The proposed tag is `v0.1.0`, verified absent locally and on origin. Its proposed
-target is this reviewed release commit; no tag is created by commit/sync approval.
+At the historical TASK-0045 checkpoint, proposed `v0.1.0` was verified absent
+locally and on origin, and commit/sync approval did not create a tag. The later
+separate tagging/publication approval and actual correction target are recorded
+in the latest release-closure boundary above.
 The source-verification baseline remains `9584d204ecfcbf503ccd7e4322ac945424b5d610`.
 The final release-evidence commit and remote parity are recorded in the retained
 verification receipt rather than embedding this document's own commit hash.

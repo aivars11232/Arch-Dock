@@ -3,9 +3,12 @@
 **Latest release-closure correction, 2026-10-03: AD-04-R1 software correction
 and affected source/package verification PASS; R-01 through R-04 recorded.**
 The owner subsequently authorized cleanup followed by commit/sync, then tagging
-and publication. The candidate is planned as prerelease `v0.1.0`; physical
-acceptance and a project-wide license remain separate. Actual Git/tag/release
-proof is recorded after execution in
+and publication. The correction is committed/synced as `c3b3a0b`, and annotated
+`v0.1.0` points to that commit locally and remotely. The
+[prerelease candidate](https://github.com/aivars11232/Arch-Dock/releases/tag/v0.1.0)
+was published with six assets; downloaded bytes and checksums all match.
+Physical acceptance and a project-wide license remain separate. Actual
+Git/tag/release proof is recorded in
 `build-codex-post-task-0045-release-closure/STATE.json`.
 
 Assignment date: 2026-10-03. Initial clean `main` checkout:
@@ -29,8 +32,8 @@ full installed-package checks PASS**. All 107 configured CTest names have
 applicable passing evidence, combining 65 refreshed names and 42 unchanged
 checks from the initial source-matched pass. The full 37-phase lifecycle passes.
 The release-closure assignment resolves the boundary definitions recorded below.
-Physical acceptance, license selection, tagging and publication remain open
-owner boundaries. AD-04-R1 addresses the independently supplied descendant
+At that checkpoint, physical acceptance, license selection, tagging and
+publication remained open owner boundaries. AD-04-R1 addresses the independently supplied descendant
 namespace finding without reopening the other repairs.
 
 The preceding corrective source/documentation closure was committed and synced
@@ -65,7 +68,7 @@ and publication too”, authorizing those operations for the current candidate.
 | Boundary | Current disposition |
 | --- | --- |
 | R-01 — physical acceptance | **NOT EXECUTED:** physical second-monitor connection/removal, connector/scanout, another GPU and owner-desktop observations. Private virtual-output checks do not close these cells. |
-| R-02 — license/tag/publication | **OWNER AUTHORIZATION RECORDED:** tagging and candidate publication are now expressly authorized, in addition to commit/sync. The project-wide license remains unselected; `LicenseRef-Arch-Dock-Unspecified` and existing component/asset declarations are preserved. Actual publication is verified in the current receipt; commit/sync alone did not grant it. |
+| R-02 — license/tag/publication | **AUTHORIZED TAG/PUBLICATION EXECUTED:** correction commit `c3b3a0b` is synced; annotated `v0.1.0` targets it locally/remotely, and the prerelease is published with all six asset downloads byte-verified. The project-wide license remains unselected; `LicenseRef-Arch-Dock-Unspecified` and existing component/asset declarations are preserved. The separate publication approval, not commit/sync alone, authorized publication. |
 | R-03 — native fixture disposal | **HISTORICAL UNCERTAINTY RETAINED:** two TASK-0044 private PlasmaShell processes faulted in native Mesa workers during disposal. The underlying mechanism remains unproved. The verified teardown change is a harness mitigation; later passing fixtures do not prove the fault eliminated. |
 | R-04 — independent review | **PROVENANCE RECORDED:** self-run tests are implementation/corrective/candidate verification. Independent review requires a separate review. The supplied independent findings retain their original provenance; this correction is not its own independent audit. |
 
@@ -161,6 +164,33 @@ Fresh deliverables are deliberately retained under
 Git/tag/publication closure. The earlier 40 protected artifact files retain
 their original hashes. Raw reproduction, red/green, setup/discrimination,
 source/package, scope/reuse and cleanup receipts remain in the local log ZIP.
+
+### Authorized candidate publication and closure
+
+The reviewed eight-path correction was committed and synced as
+`c3b3a0b7771b313c45f843f49a503b45b0d1ada0`, with a clean worktree and matching
+`origin/main` and remote `main`. Annotated `v0.1.0` has tag object
+`50812852c4dc2726411a1c73452296955852c50a` and peels to that correction commit
+both locally and on origin. Subsequent documentation closure does not move it.
+
+The owner-authorized
+[GitHub prerelease](https://github.com/aivars11232/Arch-Dock/releases/tag/v0.1.0)
+was published at **2026-10-03 21:23:54 UTC**, release ID `402697537`, with
+`draft=false`, `prerelease=true` and explicit `latest=false`. Its six assets
+are the normalized source, checkpoint, pinned recipe, Arch package,
+`VERIFICATION.json` and `SHA256SUMS`. Every downloaded asset matches local
+SHA-256 and size; the downloaded checksum file verifies its five entries.
+The public release notes exactly match the reviewed notes. Raw local gate
+logs are deliberately retained locally rather than published as release assets.
+
+The normalized source checkpoint intentionally records starting HEAD `5a183b0`
+and hashes all 519 approved precommit source inputs. Operational closure
+documents and the root recipe are excluded by existing exporter rules to avoid
+circular hashes. Publication does not alter the verified source/package bytes
+or establish physical acceptance, select a license, prove the historical
+native fault eliminated, or constitute independent review. The current
+`STATE.json` and archived closing receipts record the final documentation
+commit/sync, remote parity and removal of the publication-only scratch root.
 
 ## Approved native and package continuation
 
