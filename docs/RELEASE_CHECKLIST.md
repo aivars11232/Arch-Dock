@@ -595,9 +595,9 @@ then cleanup. No global install, personal Plasma mutation, delegated agent or
 concurrent gate was used. See the
 [recovery record](CURRENT_STATE.md#task-0044--configuration-recovery-phase-a--2026-10-02).
 
-## TASK-0044 frozen checkpoint — 2026-10-03
+## TASK-0044 historical frozen checkpoint — 2026-10-03
 
-**PAUSED at the owner's explicit request; consolidated completion is pending.**
+**Historical owner-requested pause; superseded by the resumed verification record below.**
 Phase A's fresh build and **99/99 CTests** passed. Phase B's all-target build
 and **106/106 CTests** passed, including the four native Wayland scale groups,
 hotplug/audition/restart recovery, resources, accessibility, upgrade and installed
@@ -618,3 +618,62 @@ message remains `Harden Arch Dock recovery and Wayland behavior`. This does not
 close the consolidated TASK-0044 completion gate or any TASK-0045 release box.
 The approved plan is unchanged, no successor task started, and no global install,
 personal Plasma mutation, delegated agent or overlapping gate occurred.
+
+## TASK-0044 resumed verification — 2026-10-03
+
+**Executable verification PASS; final completion waits for privileged cleanup.**
+The owner resumed the same approved task from synced checkpoint
+`c225dc6ae0abbeff21425d517546e67831ebc74b`. The retained fresh final configure,
+remaining one-job build groups and all-target build passed. Its complete fresh
+suite passed **106/106 CTests** in bounded serial batches (778.26 seconds summed
+individual times), following Phase A **99/99** and Phase B **106/106**.
+
+The private-disposal correction described in
+[plasma-lifecycle.md](plasma-lifecycle.md#task-0044-display-and-resource-hardening)
+passed its focused shortcut regression, one-job all-target build, **14/14 affected
+runtime checks** (392.85 seconds) and optional-3D-absent installed startup.
+The 92 unaffected fresh results are reused with their original receipts.
+No additional task-owned native crash was recorded. Eight audition/cancel cycles
+grew RSS by **8.43 MiB**, below the 64 MiB limit, with zero stale hosts.
+
+| Inherited acceptance criterion | Result and evidence |
+| --- | --- |
+| A: Failed migration restores previous working configuration | PASS; configuration-backup, registry/store migration, transaction and disposable upgrade/restore checks |
+| A: Backups exclude executable and untrusted temporary data | PASS; data-only snapshot validation, executable/symlink/temp/builtin exclusions and bounded-copy tests |
+| A: Bounded cleanup preserves latest valid copy | PASS; configurable 1–20 retention, clock-change/latest-valid and interrupted-recovery pin regressions |
+| A: Upgrade tests pass | PASS; legacy upgrade, future-schema refusal, blocked-backup preservation, offline restore and live-owner refusal |
+| B: Deterministic screen recovery after hotplug | PASS in private Wayland; stable output identity, actual audition-output removal, fallback/return and service-restart checks |
+| B: UI usable at tested scales | PASS at 100/125/150/200%; separated outputs, presented native dimensions on all four edges, browser selection and compact editing |
+| B: Core keyboard/focus/accessibility tests pass | PASS; resource-backed Studio/icon controls, core accessibility and native Wayland keyboard delivery |
+| B: No known unbounded cache or hidden continuous workload | PASS; protected generated-history budget, Canvas mask release, idle overlay expiry, rendering/resource gates and eight-cycle RSS check |
+| B: No runtime QML errors in matrix | PASS; real private runtime diagnostic scans with lifetime-safe callbacks and native property corrections |
+| B: All 15+15 cards usable; audition leaves no stale host | PASS; all 30 cards at each scale, exact energy controls, hotplug/restart rollback and zero stale hosts |
+
+Physical connector/scanout, another GPU and owner-desktop interaction cells are
+**NOT EXECUTED** for proved environment reasons: only one physical output is
+connected, no alternate GPU host is available, and the owner's active desktop
+must remain untouched. Exact native target commands and observed private
+results are in [PLATFORM_MATRIX.md](PLATFORM_MATRIX.md).
+
+Ordinary task cleanup removed both build trees, staged/private roots, task-local
+Python and raw diagnostic workareas. Process/path inspection found no task-owned
+process retaining them. All six TASK-0043 package deliverables were preserved
+with matching pre/post hashes. Required original/control images, renderer states,
+native journal evidence and phase/final gate receipts remain in the four verified
+files under `build-codex-task-0044/verification-output`.
+
+The consolidated no-diagnostic-artifact gate remains **PENDING** for exactly
+two task-owned, root-owned native PlasmaShell dumps. `sudo -n true` requires a
+password and the dump directory is not writable by this session. The owner was
+asked for authenticated removal; the exact command and ownership evidence are
+in [CURRENT_STATE.md](CURRENT_STATE.md#task-0044-verification-and-cleanup-checkpoint--2026-10-03).
+The owner's subsequent explicit `commit and sync` instruction authorizes this
+verified checkpoint's Git closure now, overriding the earlier cleanup-before-Git
+ordering for the checkpoint. Review and stage only the five TASK-0044 paths,
+use `Harden Arch Dock recovery and Wayland behavior`, push normally, and verify
+remote parity, a clean working tree and the post-sync task cleanup audit. Record
+the resulting checkpoint hash in the retained verification receipt. The
+consolidated task remains incomplete until both dump files are absent. No build
+or runtime gate needs repeating solely for this authentication boundary. No
+TASK-0045 release box is closed, and no personal Plasma mutation, global install,
+delegated agent or overlapping gate occurred.

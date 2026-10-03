@@ -496,3 +496,22 @@ physical environment limits are recorded in [PLATFORM_MATRIX.md](PLATFORM_MATRIX
 The private virtual matrix uses the host GPU; physical connector/scanout and
 other hardware observations are reported separately. It neither restarts the
 owner's Plasma session nor installs globally.
+
+On this Qt 6.11.2 / Plasma 6.7.5 / Mesa 26.2.4 host, two private PlasmaShell
+processes faulted in native Mesa worker threads after their live checks had
+completed, during final SIGTERM disposal. Journal working directories prove
+that both dumps belong to TASK-0044. The native stack and shutdown boundary
+are recorded; the precise internal Mesa memory-fault mechanism is not proved.
+
+Final disposal now uses the existing stop/reap helper with SIGKILL for the
+private PlasmaShell alone. This occurs after live assertions and avoids GUI
+destruction in a session whose state is disposable. Arch Dock, KWin and
+ordinary in-session Plasma restart checks retain SIGTERM. Runtime assertions,
+QML diagnostic scans, ownership checks and process reaping remain enforced;
+crash reporting is not disabled. Linux defines SIGKILL as an uncatchable
+termination signal in [signal(7)](https://man7.org/linux/man-pages/man7/signal.7.html).
+
+The final full-suite receipts and the affected private-session refresh are
+retained separately in `build-codex-task-0044/verification-output/gate-logs.zip`
+at closure. This preserves the distinction between live behavior and disposal
+without repeating unaffected unit, rendering-import or staged-preview checks.

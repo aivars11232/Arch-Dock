@@ -6,7 +6,7 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Latest boundary — 2026-10-03: TASK-0044 PAUSED — OWNER REQUESTED.**
+**Latest boundary — 2026-10-03: TASK-0044 REPAIRS_IN_PROGRESS — verification PASS; privileged cleanup pending.**
 TASK-0043 is committed at
 `a5bdd7933591bf75bf030cd144f7c9cea5e7fbae` and COMPLETE. Its exact system-owned
 KWin crash dump was removed using the owner's authorized authenticated cleanup;
@@ -14,20 +14,26 @@ absence was verified before TASK-0044 planning. Its retained package deliverable
 and historical **97/97** gates are unchanged. TASK-0044 Phase A is COMPLETE
 with a fresh all-target build and **99/99** CTests. Phase B is COMPLETE with
 a green all-target build and **106/106** CTests. The consolidated task is
-**not complete**: the owner requested pause/freeze during the fresh final build.
-The original approval and plan remain in force. Mandatory-gate causes are proved
-and repaired; the complete Phase B build and **106/106 CTests passed**.
-The active build and its descendants were stopped; no process retains task
-paths. The owner explicitly requested checkpoint commit/sync before final
-acceptance. Builds and evidence are retained for resumption. See the
+**not complete**: two task-owned, root-owned native crash dumps still require
+administrator-authenticated removal. The fresh final build and **106/106 CTests
+passed**, followed by **14/14 affected private runtime checks** after a bounded
+disposal-helper correction and a passing optional-3D-absent installed check.
+The original approval and plan remain in force. The owner-requested checkpoint
+is committed and synced as `c225dc6ae0abbeff21425d517546e67831ebc74b`.
+The owner's latest explicit `commit and sync` instruction authorizes committing
+and syncing this verified checkpoint now, while privileged cleanup remains
+pending. This Git checkpoint does not establish consolidated completion.
+Ordinary task cleanup is complete and required evidence is retained in four
+deliberate verification files. See the
 [TASK-0044 recovery record](#task-0044--configuration-recovery-phase-a--2026-10-02).
 Earlier snapshots below retain their historical dates and results.
 
-### TASK-0044 frozen checkpoint — 2026-10-03
+### TASK-0044 verification and cleanup checkpoint — 2026-10-03
 
 The disposable upgrade logging blocker is resolved by the native Qt
 `QT_FORCE_STDERR_LOGGING=1` fixture environment. Phase A's complete fresh build
-and **99/99 CTests** passed in bounded serial batches (512.56 seconds summed).
+and **99/99 CTests** passed in bounded serial batches (512.56 seconds summed
+batch elapsed times; 512.52 seconds summed individual test times).
 
 Phase B changes in this checkpoint include screen geometry/work-area/DPI
 coalescing with profile-transaction deferral, utility-window work-area fitting,
@@ -85,35 +91,71 @@ A connected scale change remains ACTIVE as its positive control.
 On 2026-10-03 the complete one-job Phase B build and **106/106 CTests passed**
 in bounded serial batches (778.28 seconds summed individual test times).
 The four scale groups passed at 100/125/150/200%, followed by hotplug/restart,
-resources, diagnostics and installed startup. No mandatory failure remains.
+resources, diagnostics and installed startup. No mandatory test failure remains.
 
-Required evidence remains under ignored `build-codex-task-0044`: energy pixel
-statistics, original/control captures, focused regressions, the original 100%
-pass (`phase-a/browser-combined-diagnostic.log`), resources and current 125%
-logs. Private sessions and temporary roots are cleaned by the lifecycle harness
-between runs; builds and the local PySide6/system-site environment are retained
-for diagnosis. No global installation occurred.
+The owner resumed the same approved task from checkpoint
+`c225dc6ae0abbeff21425d517546e67831ebc74b`. The fresh final configure used
+Debug, Quick 3D ON, one autogen worker and the short task TMPDIR. The earlier
+group-5 interruption (exit 143) was an owner-requested pause, not a compiler
+failure. Its remaining objects, group 6 and the final all-target build passed.
+The complete fresh final **106/106 CTests passed** in bounded serial batches
+(778.26 seconds summed individual test times). Installed startup also passed
+with the native Quick 3D module deliberately unavailable.
 
-The separate fresh consolidated configure passed in
-`build-codex-task-0044/final`, with Debug, Quick 3D ON, one autogen worker and
-the existing short task TMPDIR. Build groups 1–4 passed. Group 5 was stopped
-at the owner's request (exit 143), while building `panel-registry-test`;
-`icon-override-transaction-test` had completed. This interruption is not a
-compiler/test failure. Group 6, the final all-target build, the fresh final
-106-test suite, optional-3D installed runtime and final artifact cleanup have
-not run. Task builds, local Python environment and all diagnostic evidence
-remain frozen for reuse. Resume group 5 from this build, then the remaining
-approved gates; do not restart implementation or rerun the completed phase gates.
+Cleanup inspection then found two native PlasmaShell dumps. Journal CWDs prove
+TASK-0044 ownership, and native Mesa worker stacks place the faults after live
+assertions completed, during final private-session disposal. The precise Mesa
+memory-fault mechanism is not proved. The existing stop/reap helper now uses
+SIGKILL only for final private PlasmaShell disposal; in-session restart,
+Arch Dock and KWin retain SIGTERM. No live assertion, QML diagnostic scan or
+crash reporting was weakened. The focused shortcuts regression passed, then
+the all-target build and **14/14 affected private-session CTests passed**
+(392.85 seconds summed). The other **92** fresh final results remain valid
+because their executable inputs and helpers did not change. Optional-3D-absent
+installed startup passed again. No additional task-owned crash was recorded.
+The refreshed resource group measured 63,112 to 71,740 KiB RSS across eight
+create/cancel cycles: **8.43 MiB growth**, below 64 MiB, and zero stale hosts.
 
-Baseline HEAD is `a5bdd7933591bf75bf030cd144f7c9cea5e7fbae`. The owner's latest
-instruction explicitly authorizes committing and syncing this paused checkpoint,
-superseding the earlier Git-only completion precondition. Use the recorded
-message `Harden Arch Dock recovery and Wayland behavior`. TASK-0044 remains
-PAUSED after that checkpoint; committing does not establish consolidated
-acceptance. Physical multi-monitor/manual acceptance remains distinct from
-private virtual evidence, as documented in [PLATFORM_MATRIX.md](PLATFORM_MATRIX.md).
-No agent or overlapping gate was used, and the personal Plasma session remains
-untouched. TASK-0045 has not started.
+Ordinary cleanup removed `phase-a`, `final`, `energy-evidence`, `test-python`,
+`t`, `final-configure.log` and the raw teardown journal export. Process/path
+inspection found no task-owned process retaining these paths. All six retained
+TASK-0043 package files were checked byte-for-byte against their pre-cleanup
+hashes and preserved. Required evidence remains only under
+`build-codex-task-0044/verification-output`:
+
+- `VERIFICATION.json`: source/build identity, complete test receipts, environment
+  limits, native teardown evidence and cleanup status.
+- `gate-logs.zip`: phase/final build and CTest logs, affected refresh, focused
+  regressions and private runtime logs.
+- `energy-evidence.zip`: original/control PNGs, renderer-state records and
+  measured comparisons.
+- `SHA256SUMS`: hashes of these three deliberate verification deliverables.
+
+Both archives passed CRC checks and all retained file hashes verified. The
+first unresolved completion boundary is administrator cleanup: `sudo -n true`
+reports that a password is required, and `/var/lib/systemd/coredump` is root-owned
+and not writable by this session. The owner was asked to remove only these two
+proved task-owned files:
+
+```sh
+sudo rm -- \
+  /var/lib/systemd/coredump/core.plasmashell.1000.c4278a150c7e49efa5be334cee8f3140.12862.1791019615000000.zst \
+  /var/lib/systemd/coredump/core.plasmashell.1000.dd07aa413ed141a3960ee681d1112c26.1478932.1790972240000000.zst
+```
+
+The owner's subsequent explicit `commit and sync` instruction authorizes
+reviewed staging of the five TASK-0044 paths and normal Git sync now, using
+`Harden Arch Dock recovery and Wayland behavior`. This overrides the earlier
+cleanup-before-Git ordering for this checkpoint only; the no-diagnostic-artifact
+completion gate remains pending. Verify clean Git/remote parity and perform the
+post-sync task cleanup audit. Record the resulting checkpoint hash and remote
+parity in the retained verification receipt. After the two dump files are absent,
+close the remaining documentation/receipt status without repeating passing
+builds, phase gates or runtime checks for this authentication boundary.
+Physical multi-monitor/manual cells remain
+**NOT EXECUTED** for the proved environment reasons and exact target commands
+in [PLATFORM_MATRIX.md](PLATFORM_MATRIX.md). No global install, personal Plasma
+mutation, delegated agent or overlapping gate occurred. TASK-0045 has not started.
 
 **Evidence snapshot:** 2026-09-27 (Europe/Amsterdam). TASK-0036 Phase B has
 been implemented under its retained approval and original plan. Both internal

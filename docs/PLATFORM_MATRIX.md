@@ -1,18 +1,24 @@
 # Arch Dock platform verification
 
-TASK-0044 paused checkpoint, 2026-10-03. Source baseline:
+TASK-0044 verification checkpoint, 2026-10-03. Source baseline:
 `a5bdd7933591bf75bf030cd144f7c9cea5e7fbae` plus the approved TASK-0044 changes.
 This record describes observed private runtime behavior. It does not claim
 physical connector, scanout, other GPU, or release acceptance.
 
 Phase A passed its fresh all-target build and **99/99 CTests**. Phase B passed
 its all-target build and complete **106/106 CTests** (778.28 seconds summed
-individual test times). The owner requested pause/freeze and checkpoint
-commit/sync during the separate fresh consolidated build. Its configure and
-groups 1–4 passed; group 5 was deliberately interrupted (exit 143). The
-remaining build, final suite, optional-3D installed check and final cleanup
-are pending. TASK-0044 is PAUSED, not consolidated-complete; retained builds,
-logs and image evidence are available for resumption.
+individual test times). The owner resumed from synced checkpoint
+`c225dc6ae0abbeff21425d517546e67831ebc74b`; the retained fresh final configure,
+remaining one-job build groups and all-target build passed. The fresh final
+**106/106 CTests passed** (778.26 seconds summed individual times). After a
+private-disposal helper change, its all-target build and **14/14 affected runtime
+checks passed** (392.85 seconds); the other 92 fresh results are unaffected.
+Installed startup with optional Quick 3D unavailable passed before and after
+that change. All executable verification is green. Ordinary task cleanup is
+complete; two task-owned root-owned dump files still require administrator
+authentication before consolidated completion. The owner's latest explicit
+`commit and sync` instruction authorizes syncing this verified Git checkpoint
+now with that cleanup gate still pending; it does not mark the task complete.
 
 The installed runtime is Qt 6.11.2, Plasma/KWin 6.7.5 and KF 6.30.0. The
 private compositor uses native Wayland and virtual outputs; rendering uses
@@ -29,19 +35,25 @@ configuration, installation and short disk-backed runtime root.
 | 150%, two separated outputs, presented native surfaces on all four edges | PASS, 46.99 s; all 30 cards, browser, keyboard, mask release and audition cleanup |
 | 200%, same presented-surface and UI coverage | PASS, 52.96 s |
 | One/two outputs, removal of the actual audition output, re-enable and service restart | PASS, 20.81 s; stable identity retained, temporary host removed, no orphan; connected scale change preserves ACTIVE audition |
-| Completed Phase B scale groups on current source | PASS: 100% 44.17 s, 125% 49.03 s, 150% 46.21 s, 200% 50.25 s; preceding rows retain earlier focused receipts |
+| Completed Phase B scale groups | PASS: 100% 44.17 s, 125% 49.03 s, 150% 46.21 s, 200% 50.25 s; preceding rows retain earlier focused receipts |
 | Completed Phase B hotplug/restart and resource groups | PASS: 21.65 s and 23.24 s respectively |
-| Eight audition create/cancel cycles | PASS; complete Phase B run measured 60,008 to 68,488 KiB RSS, 8.28 MiB growth, below the 64 MiB growth discriminator; no stale hosts |
+| Fresh final scale groups before disposal-helper change | PASS: 100% 47.26 s, 125% 47.29 s, 150% 52.72 s, 200% 55.50 s |
+| Affected scale refresh with current disposal helper | PASS: 100% 42.91 s, 125% 44.80 s, 150% 44.52 s, 200% 45.38 s |
+| Affected hotplug/restart and resource refresh | PASS: 22.41 s and 21.42 s respectively |
+| Eight audition create/cancel cycles | PASS; refreshed final run measured 63,112 to 71,740 KiB RSS, 8.43 MiB growth, below the 64 MiB growth discriminator; zero stale hosts |
 | Generated render history | PASS; four unreferenced versions per panel and a shared 64 MiB history budget; live/profile/preset/backup/recovery references remain protected outside that budget |
 | Canvas image lifetime and overlay demand | PASS; replaced masks unload, empty sources stop hit testing, idle expiry stops, accepted hidden sources retain their required recovery/expiry behavior |
 | Studio, icon editing, core keyboard/focus/accessibility | PASS in focused resource-backed and QML tests; native scale groups deliver keyboard events through Wayland |
 | Complete Phase B suite | PASS, 106/106; no missing tests or unresolved failures |
-| Fresh consolidated suite and optional-3D installed runtime | NOT RUN before owner-requested pause |
+| Fresh consolidated suite | PASS, 106/106; complete numbered coverage, no missing, skipped or failed tests |
+| Affected private runtime refresh | PASS, 14/14; profile apply/shortcuts, five audition groups, four scales, hotplug, resources and installed startup |
+| Optional-3D-absent installed runtime | PASS before and after disposal-helper change; live single-owner startup and hidden unavailable controls |
 
 The completed phase suites also cover the existing free ring/arc geometry, effect
 bounds, Plasma Edit Mode, visibility/fullscreen behavior, profile transactions,
-reduced motion, 3D quality/resource limits, and fallback contracts. Their final
-consolidated counts must be recorded before this task is closed.
+reduced motion, 3D quality/resource limits, and fallback contracts. Current
+receipts combine the 92 unchanged fresh results with the 14 affected refresh
+results; this records reuse explicitly rather than claiming another full run.
 
 ## Energy-frame-cyan: proved construction-state difference
 
@@ -143,6 +155,31 @@ Native references:
   uses Qt's native QObject receiver lifetime, preserving reply cleanup and
   error handling. The optional `acceptDrops` value is normalized to a boolean.
   The matrix scans real QML errors; none are silenced.
+
+## Private-session disposal and retained evidence
+
+Two native PlasmaShell crash dumps were found during final cleanup inspection.
+Their journal CWDs are the TASK-0044 final build and its private runtime root;
+their stacks fault in native Mesa worker threads after completed live assertions,
+during final SIGTERM disposal. The exact internal Mesa memory-fault mechanism
+is not established by those stacks. Final disposal now reuses the stop/reap
+helper with SIGKILL only for the private PlasmaShell; normal in-session restarts,
+Arch Dock and KWin retain SIGTERM. All live assertions, QML scans and crash
+reporting remain active. The focused shortcut regression passed, followed by
+the affected 14-test refresh and optional-3D-absent installed runtime; no new
+task-owned dump was recorded. See [the lifecycle boundary](plasma-lifecycle.md#task-0044-display-and-resource-hardening)
+and native [signal(7)](https://man7.org/linux/man-pages/man7/signal.7.html).
+
+Task builds, staged installations, temporary roots, local Python environment
+and raw diagnostic workareas were removed after verification. Process/path
+inspection found no task-owned process retaining them. All six TASK-0043 package
+deliverables were preserved with matching pre/post-cleanup hashes. Four compact
+deliverables remain in `build-codex-task-0044/verification-output`:
+`VERIFICATION.json`, `gate-logs.zip`, `energy-evidence.zip` and `SHA256SUMS`.
+Archive CRC checks and retained file hashes pass. These preserve the original
+images/state, native controls, complete phase/final receipts and teardown journal
+evidence. The exact administrator cleanup command and remaining completion
+boundary are in [CURRENT_STATE.md](CURRENT_STATE.md#task-0044-verification-and-cleanup-checkpoint--2026-10-03).
 
 ## Physical cells not executed
 

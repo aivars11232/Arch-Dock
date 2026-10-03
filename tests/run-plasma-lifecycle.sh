@@ -64,8 +64,9 @@ validate_lifecycle_stop_after() {
 
 stop_process() {
     local process_id="${1:-}"
+    local initial_signal="${2:-TERM}"
     if [[ -n "$process_id" ]] && kill -0 "$process_id" 2>/dev/null; then
-        kill "$process_id" 2>/dev/null || true
+        kill -"$initial_signal" "$process_id" 2>/dev/null || true
         local attempt
         for ((attempt = 0; attempt < 50; ++attempt)); do
             if ! kill -0 "$process_id" 2>/dev/null; then
@@ -170,7 +171,10 @@ cleanup_session() {
     fi
     # Applets can D-Bus-activate Arch Dock after its owner exits. Stop the
     # private shell first so teardown cannot start another service instance.
-    stop_process "$ARCHDOCK_SESSION_PLASMASHELL_PID"
+    # Mesa workers can fault while Plasma destroys its GUI during SIGTERM.
+    # Final disposal needs no shell state saved; bypass that native teardown
+    # after the live assertions, without changing normal restart semantics.
+    stop_process "$ARCHDOCK_SESSION_PLASMASHELL_PID" KILL
     ARCHDOCK_SESSION_PLASMASHELL_PID=''
     stop_arch_dock || true
     stop_process "$ARCHDOCK_SESSION_KWIN_PID"
