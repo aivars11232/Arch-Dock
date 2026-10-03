@@ -10,21 +10,24 @@
 > **Normative supplements:** See [PRESET_SYSTEM_SPEC.md](PRESET_SYSTEM_SPEC.md)
 > for Panel/Icon presets and transactional audition, and
 > [TARGET_STRUCTURE_TREE_V2.md](TARGET_STRUCTURE_TREE_V2.md) for the logical
-> version-2 source tree. Release gates are tracked in
+> consolidated source tree (the existing filename is retained for compatibility). Release gates are tracked in
 > [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 >
 > **Preservation:** Everything beginning with the source-plan heading below is
-> retained verbatim from `SOURCE_MASTER_PLAN_V2.md` in the version-2 task pack.
+> retained from `SOURCE_MASTER_PLAN_V3.md` in the consolidated version-3 task pack.
+> Only the three changed revision/decomposition metadata lines have Markdown
+> hard-break trailing spaces removed for Git whitespace checks.
 
 ---
 
-# Arch Dock Master Architecture and Implementation Plan — Version 2
+# Arch Dock Master Architecture and Implementation Plan — Version 3
 
 **Project:** Arch Dock  
 **Plan basis:** `Arch Dock(10).zip`, `Arch Dock Icon⁄panel samples.zip`, verified Arch Dock continuation summaries, and the latest animation and behavior requirements supplied by the user.  
 **Plan status:** Architecture and implementation roadmap. No source files are modified by this document.  
-**Revision 2:** Adds separate built-in Panel Presets and Icon Presets, exact initial 15+15 catalogs, shared-renderer preset cards, transactional live-desktop audition, active/custom/default actions, and Arch Linux/KDE Plasma 6/Wayland acceptance rules.  
-**Codex decomposition:** 86 dependency-ordered tasks across the existing 18 work packages.  
+**Revision 2:** Added separate built-in Panel Presets and Icon Presets, exact initial 15+15 catalogs, shared-renderer preset cards, transactional live-desktop audition, active/custom/default actions, and Arch Linux/KDE Plasma 6/Wayland acceptance rules.
+**Revision 3:** Freezes user-confirmed TASK-0001 through TASK-0021 and consolidates the former 65 remaining tasks into 24 dependency-coherent tasks without removing scope.
+**Codex decomposition:** 45 total tasks across the existing 18 work packages: 21 user-confirmed complete and 24 active consolidated tasks.
 **Canonical project location for later implementation:** `/mnt/F/Arch Dock`  
 
 ---
@@ -789,7 +792,7 @@ Source screenshots should not be installed with the product unless they are deli
 
 # 9. Target logical architecture
 
-This is the dependency-aware logical target for the 86-task plan. It is not authorization for a one-step repository rewrite. Codex introduces each branch only in the task that owns it and keeps the application buildable after every meaningful change.
+This is the dependency-aware logical target for the consolidated 45-task plan. It is not authorization for a one-step repository rewrite. Codex introduces each branch only in the task that owns it and keeps the application buildable after every meaningful change.
 
 The complete version-2 tree is installed as `docs/TARGET_STRUCTURE_TREE_V2.md`. The principal integrated target is:
 
@@ -2437,19 +2440,17 @@ Arch Dock is release-ready only when all of the following are true:
 
 # 23. Recommended immediate next step
 
-The next implementation activity should **not** be skin rendering or new animation code. It should be:
+The original implementation sequence correctly began with AD-0001 through AD-0004. In this consolidated continuation pack, TASK-0001 through TASK-0021 are treated as user-confirmed complete.
 
-## Start with AD-0001, then AD-0002 and AD-0003
+## Continue with TASK-0022 in AD-0005
 
 Reason:
 
-- the source has an unclean and partly untracked state;
-- build artifacts are stale;
-- native hide/restore can lose a panel association;
-- free-panel creation/removal can create record-only or orphan states;
-- any visual implementation added before those fixes would be tested on an unreliable lifecycle foundation.
+- AD-0005 is the next unresolved work package after the user-confirmed lifecycle and placement/visibility foundation;
+- the versioned settings contract must still precede shared rendering and visual expansion;
+- task consolidation does not change the dependency order.
 
-After AD-0001 through AD-0005 are complete, the first visible milestone should be AD-0006 through AD-0009: one shared renderer, one real science-fiction chassis skin family, and one real energy/glow family.
+After AD-0005 is complete, the first visible milestone remains AD-0006 through AD-0009: one shared renderer, one real science-fiction chassis skin family, and one real energy/glow family.
 
 That produces visible progress without prematurely committing the project to a fragile 3D implementation.
 
@@ -2478,24 +2479,25 @@ This structure supports the current product and the larger visual direction with
 
 ---
 
-# Appendix A — Version-2 task decomposition
+# Appendix A — Version-3 consolidated task decomposition
 
-The implementation is decomposed into **86 tasks**. TASK-0001 through TASK-0076 retain the previous dependency order, with wording strengthened where needed. Two new tasks are inserted before profiles:
+The implementation sequence now contains **45 total tasks**:
 
-- `TASK-0077` — Panel/Icon preset definitions, catalogs, browsers and exact 15+15 built-in libraries.
-- `TASK-0078` — Transactional live-desktop audition and active/custom/default workflows.
+- TASK-0001 through TASK-0021: frozen as user-confirmed complete.
+- TASK-0022 through TASK-0045: 24 active consolidated tasks.
 
-The previous profile/release tail shifts by two task numbers:
+The former 65 remaining tasks, TASK-0022 through TASK-0086 in the 86-task pack, are mapped exactly once into the active consolidated tasks. The mapping is authoritative in:
 
-```text
-old TASK-0077 → new TASK-0079
-old TASK-0078 → new TASK-0080
-old TASK-0079 → new TASK-0081
-old TASK-0080 → new TASK-0082
-old TASK-0081 → new TASK-0083
-old TASK-0082 → new TASK-0084
-old TASK-0083 → new TASK-0085
-old TASK-0084 → new TASK-0086
-```
+- `TASK_ID_MIGRATION_FROM_86_TASK_PACK.md`
+- `REQUIREMENT_COVERAGE_MATRIX.md`
+- `task_manifest.json`
 
-The revised Codex pack is the authoritative task-number source. Do not combine the 84-task and 86-task packs in one execution sequence.
+Consolidation rules:
+
+1. No required implementation bullet, acceptance criterion, verification item or exclusion is removed.
+2. Each old task becomes a mandatory internal phase of exactly one consolidated task.
+3. One approval covers all phases of a consolidated task, but each phase must pass its own gate.
+4. The project remains dependency-ordered.
+5. Archived legacy task files are audit references only and must not be executed.
+6. Use only one primary sequential Codex session; no background, delegated or parallel agents unless explicitly authorized by the user.
+7. Codex stops after its result and does not stage, commit or push.

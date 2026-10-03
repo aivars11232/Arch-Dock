@@ -1,6 +1,6 @@
 pkgname=arch-dock
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc='Native Plasma Wayland dock panels with shared rendering and presets'
 arch=('x86_64')
 url='https://github.com/aivars11232/Arch-Dock'
@@ -16,7 +16,7 @@ optdepends=('qt6-quick3d: optional true 3D rendering; ordinary renderers work wi
 options=('!lto' '!debug')
 source=("arch-dock-${pkgver}.tar.gz")
 # tools/prepare-arch-source.py writes a checksummed source and pinned recipe.
-sha256sums=('566a0ad7fbaa489764f5299dd88d215b6a572d0352c696ceae35b236867b589c')
+sha256sums=('bc462317d2e43103e2260df50f8e20e93d87944c978a9677452a6b864149dcb5')
 
 build() {
     cmake -S "$srcdir/arch-dock-$pkgver" -B "$srcdir/build" \

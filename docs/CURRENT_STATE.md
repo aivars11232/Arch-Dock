@@ -6,7 +6,147 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Latest boundary — 2026-10-03: TASK-0044 COMPLETE — verification and cleanup PASS.**
+**Latest boundary — 2026-10-03: TASK-0045 COMPLETE; verification and cleanup PASS, Git closure owner-authorized.**
+
+TASK-0044 is COMPLETE. Its owner-authorized cleanup documentation was committed
+and synced as `9584d204ecfcbf503ccd7e4322ac945424b5d610`
+(`Close TASK-0044 cleanup evidence`); HEAD and origin/main matched, with a clean
+tree before TASK-0045. The exact approval
+`APPROVED: IMPLEMENT TASK-0045 EXACTLY AS PLANNED.` authorized Phase A.
+All executable Phase A checks and cleanup pass. After reviewing the result,
+the owner instructed `Commit and sync`, authorizing Git closure of the fourteen
+approved paths, including three new documents. This commit records that closure;
+its exact HEAD, clean/tracked tree and remote parity are verified in the retained
+TASK-0045 receipt. Source/package hashes and passing runtime gates are reused.
+Physical release observations, tag creation and licensing/publication remain
+explicit owner release decisions; task completion does not publish a release.
+
+### TASK-0045 release verification — 2026-10-03
+
+The V3 architecture authority/body, consolidated preset sequence and logical
+target structure were refreshed first. README, installation/recovery/uninstall,
+changelog, known limitations, platform matrix and release checklist now describe
+the verified candidate. The existing native package harness adds an optional
+previous-package argument and reuses disposable pacman operations, complete
+payload checks and installed migration/backup/restore fixtures. Application
+version remains `0.1.0`; package revision is `0.1.0-2`.
+
+The original startup failure was traced to Qt temporary-directory creation
+inheriting a read-only task TMPDIR inside the installed sandbox. Supplying the
+sandbox's native writable `/tmp` restored configuration migration and startup;
+no production configuration workaround was added. The shared lifecycle harness
+also resolves proved offline-writer races by pausing only its tracked private
+Plasma PID before offline edits, isolates the compositor's native KDESYCOCA
+cache, and waits for exact native completion signals within bounded timeouts.
+The complete 37-phase run has a 900-second bound; selected matrices retain
+their existing shorter bounds. A single sentinel-creation helper takes native
+grid geometry appropriate to each existing fixture context. Exact snapshots,
+ownership tokens, unrelated-host size/state and completion assertions remain
+enforced. These changes reuse the existing harness rather than duplicate it.
+
+One production QML line attaches the legacy control applet's asynchronous reply
+callback to `root`, following the existing dock applet's native QObject-lifetime
+pattern. This prevents the observed callback from accessing a deleted applet.
+No C++, CMake, exporter or project dependency changed. Earlier failures and
+focused native Qt/KDE investigations remain archived; passing receipts do not
+conceal them or claim that compositor CPU load was eliminated.
+
+A fresh local clone was audited at the baseline, then its inputs were updated
+with the approved source bytes. The final audit covers 635 tracked/input files;
+117 historical tracked build entries are excluded by the existing exporter.
+The source catalog's existing private `0600` mode versus canonical Git/clone
+`100644`/`0644` is explicitly recorded, with identical bytes and the original
+mode untouched. Task-local PySide6 6.11.2 matches system Qt and reuses system GI.
+Fresh Debug/Quick3D-ON configure, six one-job target groups and the final
+all-target build passed. After the QML repair, fresh configure and all-target
+build also passed (1.60 and 6.36 seconds). Existing configure warnings remain
+recorded separately from successful runtime import/rendering evidence.
+
+The full available CTest coverage is **106 PASS, 0 FAIL, 0 skipped**, with one
+worker and at most ten light tests per batch; every heavy/private test ran alone.
+The final receipt selects 694.78 seconds of passing individual results. All
+106 ran after the production QML repair. After the sentinel fixture correction,
+the 81 unaffected results were reused and all 25 shared-lifecycle consumers
+were refreshed. Three affected checks were refreshed again after parameterizing
+the helper; the native commands used by the other passing matrices were proved
+byte-identical. This is recorded reuse, not a claim of an additional single
+full-suite invocation. Coverage includes all five audition groups, profiles,
+100/125/150/200% scales, virtual-output recovery, resources, 2D/2.5D/optional 3D,
+windows, folders, segments, overlays, status and UI accessibility.
+
+A separate final **37/37-phase** native/free lifecycle run passed in **659.44
+seconds**, using the default Qt render loop and unchanged assertions. It proves
+creation/removal/recovery, ownership, exact unrelated native/free host
+preservation, placement, visibility, fallback/restoration, conflict handling,
+recreation, identities, real private shell/service restarts, content rotation
+and idempotent detach. Its final logs contain no callback TypeError,
+ReferenceError or binding loop. These are isolated KWin/Plasma Wayland checks
+on Radeon 610M hardware with Mesa 26.2.4, Plasma/KWin 6.7.5 and Qt 6.11.2.
+They do not claim personal-desktop or physical monitor/hotplug acceptance.
+
+Two independent normalized exports are byte-identical: **518 source files,
+519 archive members including SOURCE_CHECKPOINT.json**. Member bytes, modes,
+UID/GID and baseline epoch match the manifest. The PKGBUILD is pinned to source
+SHA-256 `bc462317d2e43103e2260df50f8e20e93d87944c978a9677452a6b864149dcb5`.
+Native `makepkg --verifysource` and one-job Release `makepkg --cleanbuild
+--noconfirm` passed; the latter took 368.28 seconds. Package SHA-256 is
+`448a854b860b69fc2b35df66a45d0085c64e918baaabf238bd0fa9ebb621d07a`.
+The final operational state/checklist documents are excluded from the source
+export by its existing rules; all included source bytes remain frozen.
+
+The disposable native package gate passed in **56.77 seconds**. All **209
+installed files** match the CMake install manifest, bytes, modes and required
+resource coverage on fresh install and upgrade. Installed actual-renderer tests
+pass with **8/8** QtTest cases and **4/4** cases with Quick3D masked, including
+initialization/cleanup. Exactly **15 Panel Presets and 15 Icon Presets** load
+independently and remain immutable. Three installed private Wayland startups
+(normal, Quick3D absent and upgraded) prove the installed executable bytes/PID
+and unrelated-host preservation. Native pacman `0.1.0-1` to `0.1.0-2` upgrade,
+obsolete-payload removal, configuration preservation, migration, future-version
+refusal, backup/restore, offline recovery and uninstall all pass. Source trees
+were hidden during installed checks; no host-global installation occurred.
+
+The 57 visible schema editor fields, capability gates, runtime consumers and
+non-schema actions retain their inspected references and passing UI/runtime
+coverage. Those references are review aids; the passing tests and installed
+checks provide the executable evidence. Documentation file/link/anchor checks,
+shell syntax and `git diff --check` pass. The full acceptance mapping, exact
+fourteen-path commit contents and version/tag plan are in
+[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md#task-0045-release-verification--2026-10-03).
+[PLATFORM_MATRIX.md](PLATFORM_MATRIX.md#task-0045-release-regression-checkpoint--2026-10-03)
+records runtime observations and exact commands for physical cells marked
+NOT EXECUTED because a second monitor/other GPU is absent or the owner desktop
+cannot be mutated under this approval. Licensing/publication remains an
+explicit owner decision; no executable failure is deferred to another task.
+
+The earlier failed diagnostic setup/teardown produced two attributed native
+SIGABRT dumps: private Plasma PID 159706 (QtDBus/libdbus assertion during
+profiling teardown) and private Arch Dock PID 171652 (QGuiApplication startup
+fatal in the invalid setup run). Their journals, stacks, process attribution
+and surrounding logs are retained; the precise internal assertion mechanism
+is not presented as established. Both exact root-owned files were removed
+through KDE authentication. All 127 pre-existing dump files remain present and untouched by this task,
+and no other new dump remains. Final passing gates produced no additional dump.
+
+Final inspection found no task-owned private process. The exact temporary
+workarea `/mnt/F/a45.jclt575i`, including clone, Debug/Release builds, task Python,
+exports, probes and generated style caches, was removed after verified evidence
+retention. Only six package deliverables, three compact verification deliverables
+and the final STATE.json remain under ignored `build-codex-task-0045/`.
+The verified raw-log archive preserves initial failures and the final successful
+receipts; the two diagnostic heaps were removed. All six TASK-0043 package and
+four TASK-0044 verification deliverables are byte-for-byte preserved.
+
+The proposed tag is `v0.1.0`, verified absent locally and on origin. Its proposed
+target is this reviewed release commit; no tag is created by commit/sync approval.
+The source-verification baseline remains `9584d204ecfcbf503ccd7e4322ac945424b5d610`.
+The final release-evidence commit and remote parity are recorded in the retained
+verification receipt rather than embedding this document's own commit hash.
+All gates were serial with one build job and one test worker. No sub-agent,
+parallel gate, owner-desktop mutation or unrelated cleanup was used.
+
+### Previous completed boundary — TASK-0044
+
 TASK-0043 is committed at
 `a5bdd7933591bf75bf030cd144f7c9cea5e7fbae` and COMPLETE. Its exact system-owned
 KWin crash dump was removed using the owner's authorized authenticated cleanup;

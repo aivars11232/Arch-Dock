@@ -1,5 +1,75 @@
 # Arch Dock platform verification
 
+## TASK-0045 release regression checkpoint — 2026-10-03
+
+**All executable runtime regression gates PASS.** The baseline is synced
+commit `9584d204ecfcbf503ccd7e4322ac945424b5d610`, plus the approved TASK-0045
+repairs. Fresh local-clone Debug/Quick3D-ON configure, six one-job target
+groups and the final all-target build passed. The complete available suite
+has **106 PASS, 0 FAIL, 0 skipped**, 694.78 seconds summed selected final
+test times. Every test executed after the installed QML callback repair.
+The fixture-only corrections reuse 81 unaffected fresh results and refresh
+all 25 shared-lifecycle consumers. Three targeted parameter checks also pass;
+the native default-fixture script is byte-identical to its passing version.
+This reuse is explicit in the numbered receipt and command-equivalence audit.
+
+| Fresh check | Observed result |
+| --- | --- |
+| Model/schema/capability/transaction, assets, rendering and UI regressions | PASS, including all 57 presented schema fields' metadata, capability/runtime mapping and existing action regressions |
+| Staged rendering, window/folder interaction and all 15+15 preset cards | PASS; existing shared-renderer, independent catalog and immutable built-in assertions remain enforced |
+| Profile apply/recovery and KDE shortcuts | PASS, both isolated matrices, 16.52 s and 13.80 s |
+| Desktop audition | PASS, all five existing/temporary/icon/recovery/default matrices; exact rollback, custom copies, defaults and resource-cycle assertions |
+| Wayland scale groups | PASS: 100% 39.38 s, 125% 40.87 s, 150% 39.77 s, 200% 40.39 s |
+| Virtual-output removal/return and service recovery | PASS, including the final fixture-parameter refresh |
+| Resource bounds and owned-host cleanup | PASS, 17.34 s |
+| Startup metadata and disconnected/missing-executable diagnostics | PASS |
+| Installed activation with checkout hidden | PASS, including the final fixture-parameter refresh; real D-Bus owner/PID, installed bytes and optional-3D absence checks |
+| Full standalone native/free lifecycle | PASS, all 37 phases, 659.44 s, normal Qt render loop, unchanged assertions |
+| Candidate source/package/install/upgrade/uninstall | Candidate-specific receipts and Git closure are recorded in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) |
+
+The original 105/106 checkpoint and all intervening failures remain archived.
+Their proved corrections are confined to the existing harness and one installed
+QML callback:
+
+- Installed startup inherited a read-only outer `TMPDIR`. Qt migration staging
+  could not create its temporary directory. The disposable namespace now uses
+  its writable `/tmp`; installed-preset checks use the same native workaround.
+- Offline settings fixtures now pause only the tracked private PlasmaShell
+  while stopping/editing the backend, then resume it on launch. This prevents
+  applet-triggered activation from overwriting the fixture between writers.
+- KWin uses a separate native `KDESYCOCA` cache because its KDE MIME-association
+  inputs differ from the guarded shell. The observed repeated invalidation is
+  removed; this does not claim that all rendering CPU usage is eliminated.
+- Completion monitoring requires the exact D-Bus signal, permits 60 seconds
+  and stops/reaps its tracked process on receipt. Full lifecycle alone permits
+  900 seconds; selected matrices retain their 300-second default/360-second
+  maximum. No concurrency, resource budget or assertion was relaxed.
+- Plasma's grid layout can resize overlapping or clipped fixtures. Matrices
+  add the unrelated sentinel before managed hosts; full lifecycle adds it
+  afterward. One existing fixture helper accepts each context's proved geometry
+  hint, and the unchanged snapshot comparisons enforce identity, tokens and size.
+- The legacy control applet binds its asynchronous reply callback to `root`,
+  using the same QObject-lifetime mechanism as the existing dock applet.
+  The final full-session logs contain no TypeError, ReferenceError or binding
+  loop. No exception is suppressed.
+
+The host has Plasma/KWin 6.7.5, Qt 6.11.2, KF 6.30.0, Mesa 26.2.4 and a
+Radeon 610M. Native private Wayland sessions use the host GPU and virtual
+outputs. Every heavy group runs alone, with one CTest worker; builds use one
+job. Task-local PySide6 6.11.2 matches system Qt and reuses system GI.
+Raw failures, positive/negative controls, final logs and numbered results are
+retained under `build-codex-task-0045/verification-output/`.
+
+Native references: [KDE cache selection and validation](https://github.com/KDE/kservice/blob/master/src/sycoca/ksycoca.cpp),
+[Plasma grid placement](https://github.com/KDE/plasma-workspace/blob/v6.7.5/components/containmentlayoutmanager/gridlayoutmanager.cpp),
+[native desktop work-area layout](https://github.com/KDE/plasma-desktop/blob/v6.7.5/containments/desktop/package/contents/ui/main.qml).
+
+Physical cells remain separately [not executed](#physical-cells-not-executed).
+This runtime record does not claim physical scanout, owner-desktop acceptance,
+clean release Git state, a published tag or release readiness.
+
+## TASK-0044 completed verification — historical checkpoint
+
 TASK-0044 verification checkpoint, 2026-10-03. Source baseline:
 `a5bdd7933591bf75bf030cd144f7c9cea5e7fbae` plus the approved TASK-0044 changes.
 This record describes observed private runtime behavior. It does not claim

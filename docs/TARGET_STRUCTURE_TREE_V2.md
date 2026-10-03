@@ -1,6 +1,6 @@
 # Arch Dock target structure tree — version 2
 
-This is the dependency-aware logical target for the 86-task plan. It is not authorization for a one-step repository rewrite. Codex introduces each branch only in the task that owns it and keeps the application buildable after every meaningful change.
+This is the dependency-aware logical target for the consolidated 45-task plan. It is not authorization for a one-step repository rewrite. Codex introduces each branch only in the task that owns it and keeps the application buildable after every meaningful change.
 
 ```text
 Arch Dock/

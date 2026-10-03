@@ -17,6 +17,7 @@ ARCHDOCK_SETTINGS_FIXTURE_FILE=''
 ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY=''
 ARCHDOCK_SETTINGS_FIXTURE_FILE_MODE=''
 ARCHDOCK_SETTINGS_FIXTURE_DIRECTORY_MODE=''
+ARCHDOCK_SETTINGS_FIXTURE_SHELL_PAUSED=0
 ARCHDOCK_SESSION_RESULT_FILE="${ARCHDOCK_SESSION_RESULT_FILE:-}"
 
 require_command() {
@@ -44,11 +45,21 @@ validate_lifecycle_stop_after() {
     esac
     [[ -z "$hardening_group" || ( "$startup" == 0 && -z "$matrix_group" &&
         -z "${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" && -z "${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}" ) ]] || return 2
-    local session_timeout="${ARCHDOCK_SESSION_TIMEOUT:-300}"
-    [[ "$session_timeout" =~ ^[0-9]+$ ]] && ((session_timeout >= 30 && session_timeout <= 360)) || {
-        printf 'Session timeout must be between 30 and 360 seconds.\n' >&2; return 2;
-    }
     local selector="${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}"
+    local timeout_limit=360 default_timeout=300
+    # The complete lifecycle includes every native/free phase. Smaller
+    # selected matrices keep their existing timeout and one-session bound.
+    if [[ "$startup" == 0 && -z "$matrix_group" && -z "$hardening_group" &&
+          -z "${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" && -z "$selector" ]]; then
+        timeout_limit=900
+        default_timeout=900
+    fi
+    ARCHDOCK_SESSION_TIMEOUT="${ARCHDOCK_SESSION_TIMEOUT:-$default_timeout}"
+    [[ "$ARCHDOCK_SESSION_TIMEOUT" =~ ^[0-9]+$ ]] &&
+        ((ARCHDOCK_SESSION_TIMEOUT >= 30 && ARCHDOCK_SESSION_TIMEOUT <= timeout_limit)) || {
+        printf 'Session timeout must be between 30 and %s seconds.\n' "$timeout_limit" >&2
+        return 2
+    }
     [[ -z "$matrix_group" || -z "$selector" ]] || return 2
     [[ "$startup" == 0 || ( -z "$matrix_group" && -z "$selector" && -z "${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" ) ]] || return 2
     case "$selector" in
@@ -141,6 +152,17 @@ stop_arch_dock() {
     printf 'Timed out stopping the private Arch Dock service: owner=%s\n' \
         "${owner_reply:-unavailable}" >&2
     return 1
+}
+
+stop_arch_dock_for_settings_fixture() {
+    # Keep live applets from reactivating the service while an offline
+    # fixture changes settings. Resume this exact private shell on launch.
+    if [[ -n "$ARCHDOCK_SESSION_PLASMASHELL_PID" ]] &&
+        kill -0 "$ARCHDOCK_SESSION_PLASMASHELL_PID" 2>/dev/null; then
+        kill -STOP "$ARCHDOCK_SESSION_PLASMASHELL_PID"
+        ARCHDOCK_SETTINGS_FIXTURE_SHELL_PAUSED=1
+    fi
+    stop_arch_dock
 }
 
 restore_settings_fixture_permissions() {
@@ -802,8 +824,11 @@ remove_owned_free_host_fixture() {
 }
 
 create_unrelated_free_host_sentinel() {
+    local grid_column="${1:-2}" grid_span="${2:-5}"
+    # Matrices create this before managed hosts; the full lifecycle supplies
+    # clear space beside existing hosts. Plasma settles its minimum size.
     plasma_script \
-        "var desktop = desktopForScreen(0); if (!desktop) { print('missing'); } else { var dock = desktop.addWidget('org.archdock.dock', Math.round(gridUnit * 2), Math.round(gridUnit * 2), Math.round(gridUnit * 12), Math.round(gridUnit * 12)); if (!dock || Number(dock.id) < 0) { print('missing'); } else { dock.currentConfigGroup = ['General']; dock.writeConfig('panelId', 'archdock-unrelated-sentinel'); dock.writeConfig('panelType', 'empty'); dock.writeConfig('ownerToken', 'archdock-unrelated-sentinel-token'); dock.writeConfig('bootstrapFreeDock', false); dock.reloadConfig(); print(String(desktop.id) + '|' + String(dock.id)); } }" |
+        "var desktop = desktopForScreen(0); if (!desktop) { print('missing'); } else { var dock = desktop.addWidget('org.archdock.dock', Math.round(gridUnit * $grid_column), Math.round(gridUnit * 2), Math.round(gridUnit * $grid_span), Math.round(gridUnit * $grid_span)); if (!dock || Number(dock.id) < 0) { print('missing'); } else { dock.currentConfigGroup = ['General']; dock.writeConfig('panelId', 'archdock-unrelated-sentinel'); dock.writeConfig('panelType', 'empty'); dock.writeConfig('ownerToken', 'archdock-unrelated-sentinel-token'); dock.writeConfig('bootstrapFreeDock', false); dock.reloadConfig(); print(String(desktop.id) + '|' + String(dock.id)); } }" |
         gvariant_string
 }
 
@@ -1648,6 +1673,10 @@ start_arch_dock() {
     QT_FORCE_STDERR_LOGGING=1 "$ARCHDOCK_TEST_BINARY" \
         >"$ARCHDOCK_TEST_LOG_DIR/$log_name" 2>&1 &
     local launched_pid=$!
+    if [[ "$ARCHDOCK_SETTINGS_FIXTURE_SHELL_PAUSED" == 1 ]]; then
+        kill -CONT "$ARCHDOCK_SESSION_PLASMASHELL_PID"
+        ARCHDOCK_SETTINGS_FIXTURE_SHELL_PAUSED=0
+    fi
     local owner_deadline=$((SECONDS + 20)) service_pid status
     ARCHDOCK_SESSION_ARCH_DOCK_PID=''
     # Applets may activate the service while the killed owner is disconnecting.
@@ -1672,10 +1701,13 @@ start_arch_dock() {
 }
 
 start_compositor() {
+    # KWin's KDE MIME associations differ from the guarded test session.
+    # A separate native cache avoids rebuilding each other's database.
     env \
         QT_FORCE_STDERR_LOGGING=1 \
         QT_LOGGING_RULES='js.debug=true' \
         XDG_CURRENT_DESKTOP=KDE \
+        KDESYCOCA="$XDG_CACHE_HOME/ksycoca6-kwin" \
         kwin_wayland \
         --virtual \
         --width 1280 \
@@ -1708,26 +1740,30 @@ restart_plasmashell() {
 
 start_signal_monitor() {
     local signal_name="$1"
-    set +o pipefail
-    timeout 15s stdbuf -oL gdbus monitor \
+    # Recovery after a checked persistence failure can exceed 30 seconds
+    # with several owned hosts. Require completion and stop on receipt.
+    timeout 60s stdbuf -oL gdbus monitor \
         --session \
         --dest org.archdock.ArchDock \
-        --object-path /Control |
-        awk -v signal_name="$signal_name" \
-            '$0 ~ signal_name { found = 1; exit } END { exit found ? 0 : 1 }' &
+        --object-path /Control >"$ARCHDOCK_TEST_LOG_DIR/signal-monitor.log" 2>&1 &
     ARCHDOCK_SIGNAL_MONITOR_PID=$!
-    set -o pipefail
 }
 
 wait_for_signal_monitor() {
     local signal_name="$1"
-    local monitor_status
-    set +e
-    wait "$ARCHDOCK_SIGNAL_MONITOR_PID"
-    monitor_status=$?
-    set -e
+    local attempt received=false
+    for ((attempt = 0; attempt < 600; ++attempt)); do
+        if rg -Fq "/Control: local.PanelWindow.$signal_name " \
+            "$ARCHDOCK_TEST_LOG_DIR/signal-monitor.log"; then
+            received=true
+            break
+        fi
+        kill -0 "$ARCHDOCK_SIGNAL_MONITOR_PID" 2>/dev/null || break
+        sleep 0.1
+    done
+    stop_process "$ARCHDOCK_SIGNAL_MONITOR_PID"
     ARCHDOCK_SIGNAL_MONITOR_PID=''
-    [[ "$monitor_status" == '0' ]] || {
+    [[ "$received" == true ]] || {
         printf 'Timed out waiting for Arch Dock signal: %s\n' "$signal_name" >&2
         exit 1
     }
@@ -1961,7 +1997,7 @@ run_session() {
     log_session_phase 'applied free content semantics, panel-specific order, and rotation'
 
     local sentinel_host
-    sentinel_host="$(create_unrelated_free_host_sentinel)"
+    sentinel_host="$(create_unrelated_free_host_sentinel 40 10)"
     local sentinel_desktop_id=''
     local sentinel_applet_id=''
     IFS='|' read -r sentinel_desktop_id sentinel_applet_id <<<"$sentinel_host"
@@ -2014,7 +2050,7 @@ run_session() {
         "$template_containment_id" "$template_applet_id")"
     local free_count_before_recovery_matrix
     free_count_before_recovery_matrix="$(free_panel_count)"
-    stop_arch_dock
+    stop_arch_dock_for_settings_fixture
     set_stale_free_ids "$studio_panel_id" 999999997 999999996
     [[ "$(panel_registry_value "$studio_panel_id" freeOwnershipToken)" == "$studio_token" &&
         "$(panel_registry_value "$studio_panel_id" freeDesktopContainmentId)" == '999999997' &&
@@ -2535,7 +2571,7 @@ run_session() {
             "$unrelated_containment_id" "$unrelated_snapshot" "$typed_type panel permanent removal"
     done
 
-    stop_arch_dock
+    stop_arch_dock_for_settings_fixture
     set_panel_registry_placement "$panel_id" left start
     set_panel_registry_geometry "$panel_id" false 92 640
     [[ "$(panel_registry_value "$panel_id" edge)" == 'left' &&
@@ -2560,7 +2596,7 @@ run_session() {
         "$unrelated_containment_id" "$unrelated_snapshot" 'vertical-start recovery'
     log_session_phase 'recovered vertical start and fixed geometry through the adapter'
 
-    stop_arch_dock
+    stop_arch_dock_for_settings_fixture
     set_panel_registry_geometry "$panel_id" false 104 680 8
     start_arch_dock arch-dock-unsupported-floating.log
     require_false_reply "$(panel_call createNativeKdePanel "$panel_id")"
@@ -2575,7 +2611,7 @@ run_session() {
         "$unrelated_containment_id" "$unrelated_snapshot" 'unsupported floating refusal'
     log_session_phase 'rejected unsupported numeric floating margin without host mutation'
 
-    stop_arch_dock
+    stop_arch_dock_for_settings_fixture
     set_panel_registry_geometry "$panel_id" false 104 680
     start_arch_dock arch-dock-supported-geometry.log
     wait_for_native_panel_geometry \
@@ -2917,7 +2953,7 @@ run_session() {
     panel_count_before_stale_rebind="$(panel_count)"
     stop_process "$ARCHDOCK_SESSION_PLASMASHELL_PID"
     ARCHDOCK_SESSION_PLASMASHELL_PID=''
-    stop_arch_dock
+    stop_arch_dock_for_settings_fixture
     set_stale_native_ids "$panel_id" 999999999 999999998
     [[ "$(panel_registry_value "$panel_id" nativeOwnershipToken)" == "$replacement_token" ]] || {
         printf 'Stale-id fixture changed the ownership token.\n' >&2
@@ -3352,7 +3388,10 @@ run_outer() {
         fi
         startup_namespace+=(--tmpfs "$project_root"
             --bind "$ARCHDOCK_LIFECYCLE_STATE_ROOT" "$ARCHDOCK_LIFECYCLE_STATE_ROOT"
-            --chdir "$ARCHDOCK_LIFECYCLE_STATE_ROOT")
+            --chdir "$ARCHDOCK_LIFECYCLE_STATE_ROOT"
+            # The inherited outer TMPDIR is read-only here. Qt's migration
+            # staging and activated services need this namespace's writable /tmp.
+            env TMPDIR=/tmp)
     fi
 
     local session_runner_status

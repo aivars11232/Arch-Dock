@@ -148,8 +148,7 @@ declared build dependencies before running makepkg; it does not install them.
 After reviewing the resulting package, the owner can install or remove it:
 
 ```bash
-sudo pacman -U arch-dock-0.1.0-1-x86_64.pkg.tar.zst
-sudo pacman -R arch-dock
+sudo pacman -U arch-dock-0.1.0-2-x86_64.pkg.tar.zst
 ```
 
 Installation places the executable, direct D-Bus descriptor, manual systemd
@@ -162,6 +161,43 @@ and user presets. It does not remove panel records from the user's Plasma
 configuration. No cache rebuild or Plasma restart was needed in the verified
 private install/startup flow; there are no package hooks to perform either.
 
+## Upgrade
+
+The current candidate is application `0.1.0`, package release `2`. The retained
+previous package is `0.1.0-1`; native pacman performs the version upgrade:
+
+```bash
+sudo pacman -U arch-dock-0.1.0-2-x86_64.pkg.tar.zst
+```
+
+Cancel an active audition and stop the backend before replacing its executable;
+installed applets must not reactivate it during offline configuration recovery.
+Use the backup commands above before an owner-controlled upgrade. Start the
+installed service normally after upgrading. Destructive schema migration saves
+a validated configuration snapshot first; future schemas remain untouched.
+
+Package upgrade preserves user configuration, presets, profiles and backups.
+The package gate checks native version readback and payload bytes/modes, then
+uses the existing migration/restore fixture with the upgraded `/usr/bin/arch-dock`.
+
+## Uninstall
+
+1. Cancel or revert any active desktop audition.
+2. Remove managed native/free panels through Arch Dock's ownership-checked
+   removal actions while the service and applets are still installed.
+3. Stop the backend, then remove the package:
+
+```bash
+sudo pacman -R arch-dock
+```
+
+Package removal preserves user configuration, user presets, profiles and
+backups. It does not rewrite personal Plasma configuration or remove unrelated
+panels/widgets. Removing managed panels before the package prevents a retained
+Plasma record from referring to an uninstalled Arch Dock applet. Reinstallation
+can reuse the preserved user data. No global cache rebuild, Plasma restart or
+automatic service enablement is part of the package route.
+
 Existing component and asset license declarations are preserved. A
 project-wide license has not been selected; the package's
 `LicenseRef-Arch-Dock-Unspecified` and installed licensing notice record that
@@ -170,12 +206,26 @@ fact. See `packaging/LICENSING.md` in the checkout, installed as
 
 ## Private verification
 
-With the project's test dependencies available, run the focused checks
-serially from the repository root:
+With the project's test dependencies available, use a fresh test build and a
+short disk-backed temporary root. The native fixtures use PySide6 plus the
+system GI/GTK bindings; this checkpoint uses PySide6 `6.11.2`. Keep that
+dependency environment local to the verification task:
 
 ```bash
-ctest --test-dir build-codex-task-0043/phase-a --parallel 1 \
-    --stop-on-failure --output-on-failure -R '^session-startup-'
+task_build="$PWD/build-codex-verification"
+task_python="$PWD/build-codex-verification-python"
+task_tmp="$(mktemp -d /var/tmp/ad.XXXXXX)"
+uv venv --system-site-packages --python /usr/bin/python "$task_python"
+uv pip install --no-cache --python "$task_python/bin/python" PySide6==6.11.2
+export PATH="$task_python/bin:$PATH"
+export TMPDIR="$task_tmp"
+cmake -S . -B "$task_build" -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib \
+    -DCMAKE_AUTOGEN_PARALLEL=1 -DARCHDOCK_ENABLE_QUICK3D=ON \
+    -DARCHDOCK_TEST_TMPDIR="$task_tmp"
+cmake --build "$task_build" --parallel 1
+ctest --test-dir "$task_build" --parallel 1 --stop-on-failure \
+    --output-on-failure --no-tests=error -R '^session-startup-'
 ```
 
 The runtime check uses a disposable D-Bus session, virtual KWin Wayland and
@@ -185,20 +235,28 @@ requires `bwrap`, `gdbus`, the existing lifecycle harness dependencies and
 Python with PySide6; these are test dependencies. It verifies the installed
 owner, single activation, repeated launch/settings forwarding and unrelated
 native/free sentinels, then removes its private session and installation.
-Run the complete available CTest suite serially before packaging. The source
-checkout's `docs/CURRENT_STATE.md` records the current acceptance evidence.
+Run the complete available CTest suite serially before packaging. Enumerate
+the configured tests with `ctest --test-dir "$task_build" -N`, use small
+`-I first,last` batches, and run each private/heavy runtime check alone. Reconcile
+all configured names with the final results so no test is skipped. The source
+checkout's [current state](CURRENT_STATE.md) and [release checklist](RELEASE_CHECKLIST.md)
+record acceptance evidence.
 
 After building the package, test it without installing into the host system:
 
 ```bash
-ARCHDOCK_BUILD_DIR="$PWD/build-codex-task-0043/phase-a" \
+mkdir -p "$PWD/build-codex-package-evidence"
+ARCHDOCK_BUILD_DIR="$task_build" \
 ARCHDOCK_PACKAGE_INSTALL_MANIFEST="$PWD/build-codex-arch-package/src/build/install_manifest.txt" \
-ARCHDOCK_PACKAGE_EVIDENCE_DIR="$PWD/build-codex-task-0043/evidence" \
-TMPDIR="$PWD/build-codex-task-0043/tmp" \
+ARCHDOCK_PACKAGE_EVIDENCE_DIR="$PWD/build-codex-package-evidence" \
+TMPDIR="$task_tmp" \
 bash tests/run-arch-package-smoke.sh \
-    build-codex-arch-package/arch-dock-0.1.0-1-x86_64.pkg.tar.zst
+    build-codex-arch-package/arch-dock-0.1.0-2-x86_64.pkg.tar.zst \
+    /absolute/path/to/arch-dock-0.1.0-1-x86_64.pkg.tar.zst
 ```
 
+The second package argument is optional for install/uninstall verification;
+release upgrade evidence requires it and a strictly older package version.
 Create the evidence and temporary directories first. The test also requires
 native pacman/bsdtar, desktop-file validation and systemd metadata validation.
 It copies the host's native dependency records into its disposable root and
@@ -207,7 +265,12 @@ provide host KDE dependencies and package-owned `/usr` resources while hiding
 the checkout. Existing preset tests validate references and render all 30 cards;
 the private Wayland session activates the installed executable. Both checks
 also run with Qt Quick 3D hidden. Native removal is followed by byte checks of
-user configuration and an audit that every package file is gone. The test
-removes its root and private sessions on exit. This verifies the package
+user configuration and an audit that every package file is gone. With the
+previous package supplied, the same native namespace installs it, upgrades to
+the candidate, audits obsolete/new payload files and configuration preservation,
+executes installed migration/recovery and startup, then uninstalls again.
+The test removes its root and private sessions on exit. Remove only the
+verification-owned build, Python and temporary roots after preserving its
+deliberate evidence. This verifies the package
 against the installed Arch/KDE dependency versions, rather than claiming
 an independent distribution-image or physical GPU acceptance test.

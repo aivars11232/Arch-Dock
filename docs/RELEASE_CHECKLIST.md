@@ -12,57 +12,58 @@ See [CURRENT_STATE.md](CURRENT_STATE.md) for the current implementation boundary
 
 ## Repository
 
-- [ ] Clean Git state.
-- [ ] All required resources tracked.
-- [ ] Current documentation accurate.
-- [ ] No stale source-of-truth file.
-- [ ] Versioned release commit/tag.
+- [x] Clean Git state after owner-approved commit/sync; final receipt verifies closure.
+- [x] All required resources tracked in the owner-approved fourteen-path commit.
+- [x] Current documentation accurate.
+- [x] No stale source-of-truth file.
+- [x] Versioned release-evidence commit under owner control.
+- [ ] Proposed release tag created under separate owner instruction.
 
 ## Build and installation
 
-- [ ] Clean build from clone.
-- [ ] All tests pass.
-- [ ] Staged install verified.
-- [ ] Service starts through the documented mechanism.
-- [ ] Uninstall leaves no broken Plasma configuration.
+- [x] Clean build from clone.
+- [x] All tests pass.
+- [x] Staged install verified.
+- [x] Service starts through the documented mechanism.
+- [x] Uninstall leaves no broken Plasma configuration.
 
 ## Panel lifecycle
 
-- [ ] Native and free panels create, recover, hide/show, and remove safely.
-- [ ] Unrelated Plasma panels remain untouched.
-- [ ] No orphan free host.
-- [ ] Multi-monitor recovery works.
+- [x] Native and free panels create, recover, hide/show, and remove safely.
+- [x] Unrelated Plasma panels remain untouched.
+- [x] No orphan free host.
+- [ ] Physical multi-monitor recovery observed; private virtual-output recovery passes.
 
 ## Interface
 
-- [ ] Every visible control works or is explicitly experimental.
-- [ ] No UI-only 3D setting.
-- [ ] Native configuration and Panel Studio use the same schema.
-- [ ] Preview matches live renderer.
-- [ ] Built-in Panel and Icon preset browsers are separate and use actual renderer output.
-- [ ] Exactly 15 valid built-in Panel Presets and 15 valid built-in Icon Presets are installed.
-- [ ] Built-ins are immutable and customized derivatives are reusable.
+- [x] Every visible control works or is explicitly experimental.
+- [x] No UI-only 3D setting.
+- [x] Native configuration and Panel Studio use the same schema.
+- [x] Preview matches live renderer.
+- [x] Built-in Panel and Icon preset browsers are separate and use actual renderer output.
+- [x] Exactly 15 valid built-in Panel Presets and 15 valid built-in Icon Presets are installed.
+- [x] Built-ins are immutable and customized derivatives are reusable.
 
 ## Rendering
 
-- [ ] Procedural 2D works independently.
-- [ ] At least one production skinned-2D family works.
-- [ ] Icon styles and per-icon overrides work.
-- [ ] Requested icon animations work.
-- [ ] Regular panel collapsed/open behavior works.
-- [ ] Free-panel rotation and glow work.
-- [ ] 2.5D ring/arc works.
-- [ ] True 3D, when included, has a safe fallback.
+- [x] Procedural 2D works independently.
+- [x] At least one production skinned-2D family works.
+- [x] Icon styles and per-icon overrides work.
+- [x] Requested icon animations work.
+- [x] Regular panel collapsed/open behavior works.
+- [x] Free-panel rotation and glow work.
+- [x] 2.5D ring/arc works.
+- [x] True 3D, when included, has a safe fallback.
 
 ## Interaction
 
-- [ ] Grouped windows can be individually controlled.
-- [ ] Context menus expose implemented actions only.
-- [ ] Edit mode and drag/drop do not conflict with normal launching.
-- [ ] Reduced motion works.
-- [ ] Desktop audition changes only the selected/temporary owned host and rolls back exactly on Cancel.
-- [ ] Icon Preset audition does not change panel theme/layout/placement.
-- [ ] No canceled preview leaves an applet, record, default, or ownership token.
+- [x] Grouped windows can be individually controlled.
+- [x] Context menus expose implemented actions only.
+- [x] Edit mode and drag/drop do not conflict with normal launching.
+- [x] Reduced motion works.
+- [x] Desktop audition changes only the selected/temporary owned host and rolls back exactly on Cancel.
+- [x] Icon Preset audition does not change panel theme/layout/placement.
+- [x] No canceled preview leaves an applet, record, default, or ownership token.
 
 ## TASK-0035 verification record — 2026-09-09
 
@@ -674,3 +675,145 @@ closure documentation changes are authorized for owner-controlled commit/sync.
 No build or runtime gate was repeated for this authentication boundary. No
 TASK-0045 release box is closed, and no personal Plasma mutation, global install,
 delegated agent or overlapping gate occurred.
+
+## TASK-0045 release verification — 2026-10-03
+
+**TASK-0045 COMPLETE; Phase A verification and cleanup PASS, Git closure
+owner-authorized after review.** TASK-0044 is complete at the synced baseline
+`9584d204ecfcbf503ccd7e4322ac945424b5d610`. All previously failed executable
+checks are resolved with focused, proved native Qt/KDE corrections. There is
+no unresolved build, CTest, installed-startup, package or lifecycle failure.
+The owner reviewed the fourteen-path result and instructed `Commit and sync`.
+This release-evidence commit tracks all approved resources; its exact HEAD,
+clean tree and remote parity are verified in the retained TASK-0045 receipt.
+This checklist does not declare a published or fully accepted release.
+
+| TASK-0086 / TASK-0045 acceptance | Final evidence and remaining boundary |
+| --- | --- |
+| Clean repository and tracked release resources | PASS at owner-authorized Git closure: all fourteen approved paths, including three new documents, tracked; clean tree and remote parity verified in the final receipt |
+| All mandatory tests and environment observations | PASS: fresh configure/build and 106/106 available CTests; physical second-monitor/scanout/other-GPU observations are NOT EXECUTED for the proved environment/owner-desktop reasons, with exact commands in the platform matrix |
+| Unrelated Plasma panels remain untouched | PASS: ownership tests, all affected private matrices, installed startup and final 37/37-phase full native/free lifecycle, with exact native/free sentinel state/token/size preservation |
+| No visible UI-only setting | PASS: 57 presented schema fields, capability gates/runtime consumers and non-schema actions reviewed; schema/UI/rendering regressions and installed checks pass; physical visual signoff remains separately unexecuted |
+| Exactly 15+15 independent immutable built-ins | PASS: installed Panel/Icon catalogs and actual shared renderer, independent loading, immutability and customized derivative regressions; 8/8 installed QtTest cases and 4/4 with Quick3D masked, including init/cleanup |
+| Audition commits/restores exactly and Cancel leaves no residue | PASS: all five audition matrices plus resource-cycle checks; exact restoration, defaults, tokens and temporary host removal assertions remain enforced |
+| Reproducible package install/upgrade/uninstall | PASS: two byte-identical normalized exports, native one-job Release package build, 209/209 installed payload files, disposable fresh install, 0.1.0-1 to 0.1.0-2 upgrade, migration/future-version refusal/backup/restore/offline recovery and both removals |
+| Release blockers listed explicitly | PASS: commit/sync authorized after review; remaining tag creation, physical observations and licensing/publication decisions are explicit; no executable failure is waived or deferred |
+
+The fresh Debug build uses the audited clone and Quick3D ON. A fresh configure
+and all-target build after the production repair passed (1.60 and 6.36 seconds).
+The final full available CTest coverage is **106 PASS, 0 FAIL, 0 skipped**,
+694.78 seconds summed selected individual times, one worker. All 106 executed
+after the production QML repair. The final fixture correction refreshes all
+25 shared-lifecycle consumers while reusing 81 unaffected results. Three
+checks were refreshed after the final helper parameterization; native command
+bytes for the remaining passing matrices are proved unchanged. This provenance
+is explicit in the receipt; no extra all-suite rerun is claimed.
+
+The separate final full native/free lifecycle passed **37/37 phases in 659.44
+seconds**, using the default Qt render loop and a 900-second bound. Assertions
+were retained. Passing native observations include unrelated host preservation,
+placement/visibility, virtual-output recovery, real private Plasma and backend
+restarts, free-host content rotation and final removal. Runtime uses private
+KWin/Plasma Wayland on Radeon 610M/Mesa 26.2.4, Plasma/KWin 6.7.5 and Qt 6.11.2.
+The final full logs have no callback TypeError, ReferenceError or binding loop.
+Personal-desktop/physical display behavior is not established by these checks.
+
+The package gate passed in **56.77 seconds**, with owner/clone/package source
+roots hidden from installed runtime checks. Three installed startup contexts
+(normal, Quick3D absent and upgraded) verified the native installed executable
+bytes/PID and unrelated hosts. All 209 package members match required resources,
+CMake install-manifest bytes and modes. Both native pacman uninstall scenarios
+preserve user configuration and remove package-owned content. The existing
+migration/backup/restore harness supplies configuration recovery; no parallel
+recovery implementation was introduced. No host-global installation occurred.
+
+The original startup problem was Qt QTemporaryDir inheriting a read-only TMPDIR;
+the installed fixture now supplies native writable `/tmp`. The lifecycle fixture
+pauses only its tracked private Plasma writer during offline edits, isolates
+native KDESYCOCA cache use, monitors exact completion signals with bounded waits,
+and parameterizes its single unrelated free-host geometry helper for the two
+existing native grid contexts. One legacy-control QML callback now uses the
+native `connect(root, callback)` lifetime pattern already used by the dock applet.
+No C++, CMake, exporter or project dependency changed. Earlier failures and
+native Qt/KDE source investigations are preserved in the archive; no assertion
+was weakened and compositor CPU load is not claimed eliminated.
+
+Prepared documents are [README](../README.md), [installation and uninstall](INSTALL.md),
+[changelog](../CHANGELOG.md) and [known limitations](KNOWN_LIMITATIONS.md).
+Authority/master body, preset sequence and logical target structure reflect V3.
+The final documentation file/link/anchor audit, shell syntax checks and
+`git diff --check` pass. [CURRENT_STATE.md](CURRENT_STATE.md#task-0045-release-verification--2026-10-03)
+and [PLATFORM_MATRIX.md](PLATFORM_MATRIX.md#task-0045-release-regression-checkpoint--2026-10-03)
+record exact scope, observations and reuse. Physical cells retain proved reasons
+and [exact target commands](PLATFORM_MATRIX.md#physical-cells-not-executed).
+The licensing decision remains documented in [packaging/LICENSING.md](../packaging/LICENSING.md).
+
+The version plan is application **0.1.0**, Arch package **0.1.0-2**, proposed
+annotated tag **v0.1.0** with message `Arch Dock 0.1.0`. That tag is absent locally
+and on origin. The proposed tag target is this reviewed release-evidence commit,
+whose exact hash is recorded in the final receipt. Commit/sync approval does
+not authorize tag creation or publication.
+
+The existing normalized exporter produced two byte-identical copies, each with
+518 source files and a SOURCE_CHECKPOINT manifest (519 archive members).
+Manifest bytes, modes, UID/GID and baseline epoch match every member. The source
+catalog's existing original `0600` versus canonical Git/clone `0644` mode is
+recorded, with matching bytes and no original mode change. Historical tracked
+build entries (117) are excluded by the existing exporter. Final operational
+state/checklist documents and PKGBUILD are excluded by its existing rules;
+all source-included paths remain frozen after the successful export/build.
+
+| Final artifact | SHA-256 |
+| --- | --- |
+| `arch-dock-0.1.0.tar.gz` | `bc462317d2e43103e2260df50f8e20e93d87944c978a9677452a6b864149dcb5` |
+| `arch-dock-0.1.0-2-x86_64.pkg.tar.zst` | `448a854b860b69fc2b35df66a45d0085c64e918baaabf238bd0fa9ebb621d07a` |
+
+PKGBUILD pins the final source digest. Native `makepkg --verifysource` passed;
+`makepkg --cleanbuild --noconfirm` passed in 368.28 seconds with one compile job.
+Compact package and verification deliverables remain under ignored
+`build-codex-task-0045/package-output/` and `verification-output/`; their JSON
+receipts, checkpoint, SHA256SUMS and verified raw-log archive retain the evidence.
+
+The owner-approved commit message is `Prepare Arch Dock release evidence`. Its exact
+fourteen-path contents, in first-touch order, are:
+
+```text
+docs/MASTER_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md
+docs/PRESET_SYSTEM_SPEC.md
+docs/TARGET_STRUCTURE_TREE_V2.md
+tests/run-arch-package-smoke.sh
+PKGBUILD
+README.md
+docs/INSTALL.md
+CHANGELOG.md
+docs/KNOWN_LIMITATIONS.md
+docs/PLATFORM_MATRIX.md
+docs/RELEASE_CHECKLIST.md
+docs/CURRENT_STATE.md
+tests/run-plasma-lifecycle.sh
+plasma-widget/contents/ui/main.qml
+```
+
+This commit contains only TASK-0045. The owner authorized staging, commit and
+sync after reviewing the implementation result. The suggested tag must name
+the reviewed release commit; tag creation and publication still require
+separate owner instruction. The contract's owner-controlled Git review is
+fulfilled by `Commit and sync`.
+
+Cleanup passes. No task-owned process, private session, receiver, applet, panel,
+staged installation, probe or generated style cache remains. The exact workarea
+`/mnt/F/a45.jclt575i` was removed after raw evidence and final artifacts were
+verified. Only six package deliverables, three verification deliverables and
+STATE.json remain for TASK-0045. All six TASK-0043 package and four TASK-0044
+verification deliverables remain byte-for-byte unchanged.
+
+Two dumps from failed diagnostic setup/teardown were attributed to private
+Plasma PID 159706 (QtDBus/libdbus assertion) and Arch Dock PID 171652
+(QGuiApplication startup fatal in the invalid setup). Their journal records,
+stacks, origin logs and attribution are archived, without claiming the precise
+internal assertion mechanism is proved. KDE authentication removed only those
+exact root-owned files. All 127 baseline dump files remain present and untouched by this task; no other
+new dump remains, and final successful gates produced no additional dump.
+No owner-desktop mutation, unrelated cleanup, delegated agent or concurrent gate
+was used. Every build/test/runtime gate was serial, with one compile job and
+one CTest worker on the 16 GB machine.

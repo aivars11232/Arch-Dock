@@ -1,6 +1,6 @@
 # Arch Dock preset catalog and live desktop audition specification
 
-**Status:** Mandatory architecture supplement for the 86-task Codex plan.  
+**Status:** Mandatory architecture supplement for the consolidated 45-task Codex plan.
 **Target platform:** Arch Linux, KDE Plasma 6, Wayland, Qt 6/KF6/Kirigami.  
 **Relationship to the master plan:** This document adds the built-in panel/icon preset system and live-desktop audition workflow. It does not replace the theme, icon-style, profile, renderer, lifecycle, or ownership architecture.
 
