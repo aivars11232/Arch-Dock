@@ -1,6 +1,6 @@
 # Arch Dock known limitations
 
-This document records the `0.1.0` candidate's supported boundaries. Fresh
+This document records the `0.1.1` candidate's supported boundaries. Fresh
 acceptance belongs to [the release checklist](RELEASE_CHECKLIST.md), current
 implementation evidence to [CURRENT_STATE.md](CURRENT_STATE.md), and display
 observations to [the platform matrix](PLATFORM_MATRIX.md).
