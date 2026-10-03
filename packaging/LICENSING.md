@@ -54,8 +54,9 @@ Each row is justified by existing original-production evidence, not by the
 license of a visual reference. For all 17 packages, creation/redistribution was
 already authorized and no separate public SPDX license had been selected.
 The new owner decision selects GPL-3.0-or-later for that original work.
-Manifest/production-record license fields change; icon manifest output hashes
-are refreshed when the declaration changes that recorded file. Geometry, SVG,
+Manifest/production-record license fields change; six icon manifest output
+hashes and ten theme production-record asset hashes are refreshed when the
+declaration changes the recorded file. Geometry, SVG,
 texture, QML, visual-review evidence and excluded-reference records are retained.
 
 | Production package path | Existing provenance reason |

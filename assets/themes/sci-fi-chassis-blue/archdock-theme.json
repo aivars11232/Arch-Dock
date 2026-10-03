@@ -60,7 +60,7 @@
       "path": "metadata/production-record.json",
       "kind": "material",
       "mimeType": "application/json",
-      "sha256": "695e985cef4d2de1647bb340347c143d1600d7707361438d1f700cad1f90edd0"
+      "sha256": "e9f7634e65fe800fdd4728c95f20727d33f6b22af52f749dee41d10fccbed544"
     },
     {
       "id": "visual-review",

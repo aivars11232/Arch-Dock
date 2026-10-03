@@ -26,7 +26,7 @@
     {"id": "highlight-mask", "path": "assets/highlight-mask.svg", "kind": "mask", "mimeType": "image/svg+xml", "sha256": "540b99de3591ffe7636e8398132a30f8aa90bfce017accbf821506d52cdbec95", "naturalSize": {"width": 1200, "height": 160}},
     {"id": "input-mask", "path": "masks/input.svg", "kind": "mask", "mimeType": "image/svg+xml", "sha256": "9366bcf93d8e837900aebea727e40c1905a246f48ecd1e20c88af3eecbf2b7d3", "naturalSize": {"width": 1200, "height": 160}},
     {"id": "preview", "path": "assets/surface.svg", "kind": "vector", "mimeType": "image/svg+xml", "sha256": "70cf8444e308f1297388e62e8adf2649350cd2a68aa5668c7a28837ef750b326", "naturalSize": {"width": 1200, "height": 160}},
-    {"id": "production-record", "path": "metadata/production-record.json", "kind": "material", "mimeType": "application/json", "sha256": "02b7ff8ecc054152805b961e6f600f26df6f806e133890dc981f03298986cbfb"},
+    {"id": "production-record", "path": "metadata/production-record.json", "kind": "material", "mimeType": "application/json", "sha256": "4eedb17f815faed4f9e2beaeb093e07730b0b3b014f5e8d8bcf558c32e406fc6"},
     {"id": "visual-review", "path": "metadata/visual-review.json", "kind": "material", "mimeType": "application/json", "sha256": "2a29dc16213b33acd8048e23bcf2d3924c90f325406d347601f404bef126b148"}
   ],
   "states": [

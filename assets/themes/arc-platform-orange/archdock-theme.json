@@ -114,7 +114,7 @@
       "path": "metadata/production-record.json",
       "kind": "material",
       "mimeType": "application/json",
-      "sha256": "ee64102bc9cb2ef78062c812e2e41aae1be93a9893fb142ccbbf478d861c4aae"
+      "sha256": "7ce4a805c474f562a5829e5d276540eebc46dedb29f56859737560c7ddbfacad"
     },
     {
       "id": "visual-review",
