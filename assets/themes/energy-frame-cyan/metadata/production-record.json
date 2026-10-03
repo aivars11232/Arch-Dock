@@ -18,5 +18,5 @@
     {"path": "masks/input.svg", "sha256": "c21cf2b3cd832e51e801dd5b40b818ad1ba1a3d4514b3201471ca44f0cf2fbae"}
   ],
   "parameters": {"canvas": {"width": 1200, "height": 160}, "fixedStart": 152, "fixedEnd": 152, "centerMode": "stretch", "contentRegion": {"x": 168, "y": 38, "width": 864, "height": 84}, "effectMargins": {"left": 18, "top": 16, "right": 18, "bottom": 16}, "animationSafeBounds": {"x": 20, "y": 17, "width": 1160, "height": 126}, "minimumSize": {"width": 352, "height": 64}, "orientation": "horizontal", "tintableMasks": ["frame-mask", "glow-mask", "energy-overlay-mask", "highlight-mask"]},
-  "license": {"spdx": "NOASSERTION", "redistribution": "allowed", "evidence": "User approved creation and redistribution of newly created original TASK-0028 artwork as part of Arch Dock; no public license was selected"}
+  "license": {"spdx": "GPL-3.0-or-later", "redistribution": "allowed", "evidence": "User approved creation and redistribution of newly created original TASK-0028 artwork as part of Arch Dock; the owner selected GPL-3.0-or-later on 2026-10-04 for this independently authored original Arch Dock work"}
 }

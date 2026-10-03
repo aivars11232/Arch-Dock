@@ -10,7 +10,7 @@
   "recipe": "assets/source-samples/icon-styles/original-artwork-recipe.json",
   "authorizationEvidence": "APPROVED: IMPLEMENT TASK-0029 EXACTLY AS PLANNED.",
   "outputs": [
-    {"path": "archdock-icon-style.json", "sha256": "c1c004d0cfb4e6a229010e8db180f38207c550a87d4b8495a6576e00f889035a"}
+    {"path": "archdock-icon-style.json", "sha256": "c0c1abc55070baa9c858ae2453f10330d14de1fa3bd771b4b42cbdc35a11eaae"}
   ],
   "parameters": {
     "family": "metallic",
@@ -21,8 +21,8 @@
     "rendererTiers": ["procedural2d"]
   },
   "license": {
-    "spdx": "NOASSERTION",
+    "spdx": "GPL-3.0-or-later",
     "redistribution": "allowed",
-    "evidence": "User approved creation and redistribution of original TASK-0029 resources as part of Arch Dock; no public license was selected"
+    "evidence": "User approved creation and redistribution of original TASK-0029 resources as part of Arch Dock; the owner selected GPL-3.0-or-later on 2026-10-04 for this independently authored original Arch Dock work"
   }
 }

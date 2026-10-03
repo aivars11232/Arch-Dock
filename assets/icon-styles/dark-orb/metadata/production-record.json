@@ -10,7 +10,7 @@
   "recipe": "assets/source-samples/icon-styles/original-artwork-recipe.json",
   "authorizationEvidence": "APPROVED: IMPLEMENT TASK-0029 EXACTLY AS PLANNED.",
   "outputs": [
-    {"path": "archdock-icon-style.json", "sha256": "c2c3f5367ec099e5c13c83e7177872d8cb51daef239a2ef02e6f862a70204f6b"}
+    {"path": "archdock-icon-style.json", "sha256": "ad56726ef79cf0e2743c952d83cc412e1d38f1d19dbb5b3e9caff2ccf56927fc"}
   ],
   "parameters": {
     "family": "orb",
@@ -21,8 +21,8 @@
     "rendererTiers": ["procedural2d"]
   },
   "license": {
-    "spdx": "NOASSERTION",
+    "spdx": "GPL-3.0-or-later",
     "redistribution": "allowed",
-    "evidence": "User approved creation and redistribution of original TASK-0029 resources as part of Arch Dock; no public license was selected"
+    "evidence": "User approved creation and redistribution of original TASK-0029 resources as part of Arch Dock; the owner selected GPL-3.0-or-later on 2026-10-04 for this independently authored original Arch Dock work"
   }
 }

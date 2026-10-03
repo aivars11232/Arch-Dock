@@ -7,9 +7,9 @@
   "author": "Arch Dock project",
   "description": "Original indexed octagonal ring with bevels, side walls, underside and mesh icon bases; created numerically for TASK-0035.",
   "license": {
-    "spdx": "NOASSERTION",
+    "spdx": "GPL-3.0-or-later",
     "redistribution": "allowed",
-    "evidence": "User approved creation and redistribution of newly created original TASK-0035 theme assets as part of Arch Dock; no public license was selected. Geometry, material and texture were authored from scratch without external source assets."
+    "evidence": "User approved creation and redistribution of newly created original TASK-0035 theme assets as part of Arch Dock; the owner selected GPL-3.0-or-later on 2026-10-04 for this independently authored original Arch Dock work. Geometry, material and texture were authored from scratch without external source assets."
   },
   "capabilities": {
     "hosts": [

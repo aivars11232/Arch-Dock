@@ -228,7 +228,7 @@ void ChassisAssetTest::productionPackagesValidateAndShareGeometry()
         const auto &package = *loaded.package;
         const auto &definition = package.definition();
         QCOMPARE(definition.id, spec.id);
-        QCOMPARE(definition.license.spdx, QStringLiteral("NOASSERTION"));
+        QCOMPARE(definition.license.spdx, QStringLiteral("GPL-3.0-or-later"));
         QCOMPARE(definition.license.redistribution, QStringLiteral("allowed"));
         QCOMPARE(definition.capabilities.hosts,
                  QStringList({QStringLiteral("native-edge"),
@@ -266,6 +266,9 @@ void ChassisAssetTest::productionPackagesValidateAndShareGeometry()
 
         const QJsonObject production = jsonObject(repositoryFile(
             packageRoot + QStringLiteral("/metadata/production-record.json")));
+        QCOMPARE(production.value(QStringLiteral("license")).toObject()
+                     .value(QStringLiteral("spdx")).toString(),
+                 QStringLiteral("GPL-3.0-or-later"));
         QVERIFY(!production.value(QStringLiteral("pixelInput")).toBool(true));
         QVERIFY(!production.value(QStringLiteral("sourceDerivative")).toBool(true));
         const QJsonArray excluded = production.value(

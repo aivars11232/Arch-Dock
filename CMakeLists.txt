@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
   ArchDock
-  VERSION 0.1.0
+  VERSION 0.1.1
   LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -1698,6 +1698,7 @@ if(BUILD_TESTING)
 endif()
 
 install(TARGETS arch-dock RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES LICENSE packaging/LICENSING.md DESTINATION share/licenses/arch-dock)
 foreach(startup_descriptor IN ITEMS arch-dock.service org.archdock.ArchDock.service org.archdock.ArchDock.desktop)
   configure_file("data/${startup_descriptor}.in"
                  "startup-templates/${startup_descriptor}.in" COPYONLY)

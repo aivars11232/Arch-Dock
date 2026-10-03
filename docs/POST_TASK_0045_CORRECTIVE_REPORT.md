@@ -1,6 +1,77 @@
 # Post-TASK-0045 corrective pass
 
+## RC-03, RC-04 and GPL licensing — 0.1.1 candidate, 2026-10-04
+
+**Exporter/release regressions PASS. Finalized source/package and installed
+licensing gates IN PROGRESS. No runtime implementation is reopened.**
+
+The supplied independent audit covers `b6fb0b472d9ea7428494239102a0877b591755eb`,
+reports zero new runtime defects and closes AD-04-R1 and RC-02. Actual clean
+starting main is `4d65678d53dd5d0e9f388bbda6bf43117427b1ea`; its sole newer
+commit records approved publication closure and is preserved. This fixing
+agent's reproductions/tests are corrective verification, not independent review.
+
+Before repair, five synthetic clean-source controls were accepted: a changed
+PKGBUILD build command retaining a valid digest, regular-member ownership,
+generated root-checkpoint mode 0600, wrong gzip epoch and tracked ordinary
+checkout mode 0666. No candidate recipe was executed. One reproduction helper
+initially matched a legitimate nested checkpoint too; it was corrected to the
+exact generated root member. The provenance-audit helper's origin predicate
+was made case-insensitive for existing “Original” wording. Product assertions
+were not weakened, and both diagnostic corrections are retained in evidence.
+
+RC-03 now independently regenerates the four exporter outputs from clean
+finalized source in an owned temporary directory and compares exact bytes.
+The semantic inventory/tag checks remain, with canonical Git modes, normalized
+ownership, checkpoint mode and gzip epoch checks. RC-04 maps tracked index
+100644/100755 to 0644/0755 and normalizes developer-only executable intent.
+All **11 unittest groups PASS** in 5.95 s: valid candidate, **17 generated
+artifact tampering subcases**, manually updated pins, all tag/dirty/precommit
+controls, all eight required tracked checkout permission variants with identical
+four-artifact exports, extracted modes and namespace/symlink regressions.
+
+The owner selected **GPL-3.0-or-later** for original project work. Root LICENSE
+is the complete official 35,149-byte GNU GPLv3 text, identical from GNU web and
+FTP primary sources, SHA-256
+`3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`.
+The [license matrix and notices](../packaging/LICENSING.md) cover original
+C++/QML, 15+15 built-in presets, all installed themes/styles and external system
+dependencies. Eight MIT integration components retain MIT. Unknown-rights
+references retain NOASSERTION/unknown redistribution and remain non-installable,
+excluded from project relicensing and image distribution.
+
+Each of the **11 theme and six icon-style packages** has explicit independent
+creation/redistribution evidence. Their 17 manifests and 16 production records
+now record the owner's GPL selection; six icon manifest output hashes are
+updated because those declarations change the recorded files. All other
+record fields, artwork/QML/geometry bytes, excluded-reference/visual evidence,
+source catalog and reference-rights records are preserved. Four existing asset
+tests now require the new original-asset license while keeping unknown-reference
+NOASSERTION and all source-pixel, hash and renderer assertions intact.
+
+Application **0.1.1**, package **0.1.1-1**, is the next patch candidate;
+native vercmp reports it newer than 0.1.0-2. PKGBUILD declares GPL-3.0-or-later
+and separately bundled MIT, and native CMake installs both LICENSE and LICENSING.md.
+Expected package payload is **210 files**, the preceding 209 plus complete GPL
+text. Moving the existing licensing notice into CMake does not add a second copy.
+The native package harness retains exact manifest/bytes/modes/upgrade/removal
+checks and adds complete GPL/MIT notice and all installed declaration checks.
+Fresh source commit/export, package build, affected CTests and installed gates
+remain pending; raw evidence belongs to `build-codex-release-integrity-0.1.1/`.
+
+Historical `v0.1.0` remains object `50812852c4dc2726411a1c73452296955852c50a`,
+target `c3b3a0b7771b313c45f843f49a503b45b0d1ada0`; its six current assets/body
+are unchanged. Only a disposable repository may hold the annotated verification
+tag for this pass. A real v0.1.1 tag/publication needs later separate authorization.
+R-01 physical observations and the unavailable external artwork sample remain
+NOT EXECUTED; R-02 now records the selected license and next candidate; R-03
+retains unproved Mesa-worker mechanism/teardown mitigation; R-04 retains
+independent finding provenance and fixing-agent verification labels.
+
 ## RC-01 and RC-02 release-provenance closure — 2026-10-04
+
+Historical preceding correction/publication record; the license was still
+unselected at this checkpoint, before the owner's 0.1.1 GPL decision above.
 
 **Release-provenance correction and affected source/package gates PASS.
 Owner-approved asset replacement and final remote provenance verification PASS.**

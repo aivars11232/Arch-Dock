@@ -7,9 +7,9 @@
   "author": "Arch Dock contributors",
   "description": "A cool metallic tile with a cyan rim around the original application glyph.",
   "license": {
-    "spdx": "NOASSERTION",
+    "spdx": "GPL-3.0-or-later",
     "redistribution": "allowed",
-    "evidence": "Original procedural TASK-0029 resource authorized for redistribution as part of Arch Dock"
+    "evidence": "Original procedural TASK-0029 resource authorized for redistribution as part of Arch Dock; the owner selected GPL-3.0-or-later on 2026-10-04 for this independently authored original Arch Dock work."
   },
   "glyphPolicy": {"mode": "original", "compatibleOnly": true},
   "safeGlyphInset": {"left": 0.16, "top": 0.16, "right": 0.16, "bottom": 0.16},

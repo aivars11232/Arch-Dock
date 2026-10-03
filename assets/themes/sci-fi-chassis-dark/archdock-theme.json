@@ -7,9 +7,9 @@
   "author": "Arch Dock project",
   "description": "Original horizontal dark chassis artwork created from a blank canvas for Arch Dock",
   "license": {
-    "spdx": "NOASSERTION",
+    "spdx": "GPL-3.0-or-later",
     "redistribution": "allowed",
-    "evidence": "User explicitly authorized newly created original TASK-0027 artwork for redistribution as part of Arch Dock; no public license was selected"
+    "evidence": "User explicitly authorized newly created original TASK-0027 artwork for redistribution as part of Arch Dock; the owner selected GPL-3.0-or-later on 2026-10-04 for this independently authored original Arch Dock work"
   },
   "capabilities": {
     "hosts": ["native-edge", "free-desktop"],

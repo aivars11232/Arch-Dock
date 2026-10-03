@@ -239,7 +239,7 @@ void EnergyAssetTest::productionPackagesValidateAndShareGeometry()
             loaded.primaryCode() + QStringLiteral(": ") + loaded.primaryMessage()));
         const auto &definition = loaded.package->definition();
         QCOMPARE(definition.id, spec.id);
-        QCOMPARE(definition.license.spdx, QStringLiteral("NOASSERTION"));
+        QCOMPARE(definition.license.spdx, QStringLiteral("GPL-3.0-or-later"));
         QCOMPARE(definition.license.redistribution, QStringLiteral("allowed"));
         QCOMPARE(definition.capabilities.hosts,
                  QStringList({QStringLiteral("native-edge"),
@@ -395,6 +395,9 @@ void EnergyAssetTest::visualApprovalAndOutputHashesAreRecorded()
         const QString root = QStringLiteral("assets/themes/") + spec.id;
         const QJsonObject production = jsonObject(repositoryFile(
             root + QStringLiteral("/metadata/production-record.json")));
+        QCOMPARE(production.value(QStringLiteral("license")).toObject()
+                     .value(QStringLiteral("spdx")).toString(),
+                 QStringLiteral("GPL-3.0-or-later"));
         QVERIFY(!production.value(QStringLiteral("pixelInput")).toBool(true));
         QVERIFY(!production.value(QStringLiteral("sourceDerivative")).toBool(true));
         QCOMPARE(production.value(QStringLiteral("outputs")).toArray().size(),

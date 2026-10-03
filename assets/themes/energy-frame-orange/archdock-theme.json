@@ -6,7 +6,7 @@
   "packageRevision": 1,
   "author": "Arch Dock project",
   "description": "Original layered orange energy-frame artwork created from a blank canvas for Arch Dock",
-  "license": {"spdx": "NOASSERTION", "redistribution": "allowed", "evidence": "User approved creation and redistribution of newly created original TASK-0028 artwork as part of Arch Dock; no public license was selected"},
+  "license": {"spdx": "GPL-3.0-or-later", "redistribution": "allowed", "evidence": "User approved creation and redistribution of newly created original TASK-0028 artwork as part of Arch Dock; the owner selected GPL-3.0-or-later on 2026-10-04 for this independently authored original Arch Dock work"},
   "capabilities": {
     "hosts": ["native-edge", "free-desktop"],
     "rendererTiers": ["skinned2d", "procedural2d"],

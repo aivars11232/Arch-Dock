@@ -74,26 +74,31 @@ removal actions before uninstalling the applet package. Follow
 
 ## Versioning and licensing
 
-Application `0.1.0`, package `0.1.0-2` and annotated tag `v0.1.0` identify the
-candidate. The tag exists at `c3b3a0b7771b313c45f843f49a503b45b0d1ada0`, and the
+The next candidate is application `0.1.1`, package `0.1.1-1`; its proposed
+`v0.1.1` tag/publication require separate authorization. Historical `v0.1.0`
+remains at `c3b3a0b7771b313c45f843f49a503b45b0d1ada0`, and its
 [GitHub prerelease](https://github.com/aivars11232/Arch-Dock/releases/tag/v0.1.0)
 was published under separate owner authorization. It is not a final/stable/latest
-release. Under **R-02**, tagging/publication have occurred; project-wide license
-selection remains an owner decision. Replacing published assets requires its
-own explicit authorization; commit/sync alone does not grant that authority.
+release. Under **R-02**, the earlier tag/publication occurred and the owner has
+now selected GPL-3.0-or-later for original project work. The historical tag and
+six current assets remain unchanged; the next candidate carries the selection.
 
 The original published source archive recorded a precommit HEAD rather than
 the tag target. [Current state](CURRENT_STATE.md) records the RC-01 correction.
 Official normalized release source must reproduce from the exact clean tag
-checkout, including checkpoint HEAD, epoch and modes. The
+checkout, including canonical Git modes, normalized ownership and tar/gzip
+metadata. All four generated artifacts must match regeneration byte-for-byte,
+including recipe commands/dependencies and checksum receipts. The
 [tagged release verification route](INSTALL.md#tagged-release-source) enforces
 that boundary. Approved working-tree exports remain valid developer inputs,
 but cannot substitute for a verified tagged release archive.
 
-The repository has no selected project-wide license. The package records
-`LicenseRef-Arch-Dock-Unspecified`; existing component and asset declarations
-remain unchanged. [The licensing notice](../packaging/LICENSING.md) describes
-their scope. Release preparation does not select a license for the owner.
+Original Arch Dock work is GPL-3.0-or-later unless a component states a separate
+license; [LICENSE](../LICENSE) contains the official GPL text. The package also
+records MIT for its separately declared components and ships their notice.
+Unknown-rights references remain NOASSERTION/non-installable and outside
+relicensing. [The licensing matrix](../packaging/LICENSING.md) records the scope
+and each original asset's provenance reason.
 
 ## Verification provenance
 

@@ -7,9 +7,9 @@
   "author": "Arch Dock contributors",
   "description": "Fail-closed fallback that preserves the application's original glyph.",
   "license": {
-    "spdx": "NOASSERTION",
+    "spdx": "GPL-3.0-or-later",
     "redistribution": "allowed",
-    "evidence": "User approved creation and redistribution of original TASK-0029 package resources as part of Arch Dock; no public license was selected"
+    "evidence": "User approved creation and redistribution of original TASK-0029 package resources as part of Arch Dock; the owner selected GPL-3.0-or-later on 2026-10-04 for this independently authored original Arch Dock work"
   },
   "glyphPolicy": {
     "mode": "original",

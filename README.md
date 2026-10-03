@@ -5,15 +5,19 @@ Wayland**. Native edge panels use Plasma containments; free panels use
 desktop-hosted Plasma applets. The service and both hosts share the same
 renderer and settings schema.
 
-The current release candidate is application **0.1.0**, Arch package
-**0.1.0-2**. Annotated **v0.1.0** points to
-`c3b3a0b7771b313c45f843f49a503b45b0d1ada0`, and the
-[GitHub prerelease candidate](https://github.com/aivars11232/Arch-Dock/releases/tag/v0.1.0)
-is published. It is a prerelease, not a final/stable/latest release.
-Physical acceptance remains incomplete and a project-wide license remains
-unselected. [Current state](docs/CURRENT_STATE.md) and the
-[release checklist](docs/RELEASE_CHECKLIST.md) record acceptance and the
-tag-matched artifact correction; publication alone does not close those limits.
+The next release candidate is application **0.1.1**, Arch package **0.1.1-1**,
+under release-integrity and packaging verification. Its proposed **v0.1.1** tag
+and publication require separate authorization. The
+[historical v0.1.0 prerelease](https://github.com/aivars11232/Arch-Dock/releases/tag/v0.1.0)
+and its six assets remain unchanged, with the tag fixed at
+`c3b3a0b7771b313c45f843f49a503b45b0d1ada0`.
+
+Original Arch Dock work is licensed **GPL-3.0-or-later** under [LICENSE](LICENSE),
+unless a component states a separate license. Existing MIT components retain
+MIT; unknown-rights references remain non-installable and outside relicensing.
+Physical acceptance remains incomplete. [Current state](docs/CURRENT_STATE.md)
+and the [release checklist](docs/RELEASE_CHECKLIST.md) record candidate checks
+and the remaining publication and physical boundaries.
 
 ## Features
 
@@ -80,5 +84,5 @@ use their disposable sessions rather than the owner's active desktop.
   audition semantics; [profile documentation](docs/PROFILE_PACKAGE.md)
   describes durable arrangements and transactions.
 - [Changelog](CHANGELOG.md) records the release candidate's implemented scope.
-- [Package licensing declarations](packaging/LICENSING.md) preserve component
-  and asset declarations. A project-wide license has not been selected.
+- [Package licensing matrix and notices](packaging/LICENSING.md) define the
+  GPL-3.0-or-later default, preserved MIT components and excluded references.

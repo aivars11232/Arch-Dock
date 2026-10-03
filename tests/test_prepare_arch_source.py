@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Exercise the current exporter only in owned synthetic Git fixtures."""
+import copy
 import gzip
 import hashlib
 import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
 import subprocess
@@ -145,7 +147,7 @@ class PrepareArchSourceTest(unittest.TestCase):
                 self.assertEqual(payloads[relative], source.read_bytes())
                 self.assertEqual(records[relative]["sha256"], hashlib.sha256(payloads[relative]).hexdigest())
                 self.assertEqual(member.mode, records[relative]["mode"])
-                self.assertEqual(member.mode, stat.S_IMODE(source.stat().st_mode))
+                self.assertEqual(member.mode, 0o755 if relative == "run.sh" else 0o644)
             for excluded in ("PKGBUILD", "docs/CURRENT_STATE.md", "docs/RELEASE_CHECKLIST.md",
                              "docs/POST_TASK_0045_CORRECTIVE_REPORT.md",
                              "build/generated.cpp", "build-old/generated.cpp", "removed.txt", "ignored.log"):
@@ -239,6 +241,12 @@ class PrepareArchSourceTest(unittest.TestCase):
         lightweight = self.verify_release(output, head, "fixture-lightweight")
         self.assertNotEqual(lightweight.returncode, 0)
         self.assertIn("annotated", lightweight.stderr)
+        other = self.git("commit-tree", "HEAD^{tree}", "-p", head,
+                         "-m", "Wrong release target fixture").decode().strip()
+        self.git("tag", "-a", "fixture-wrong-target", other, "-m", "Wrong target")
+        wrong_target = self.verify_release(output, head, "fixture-wrong-target")
+        self.assertNotEqual(wrong_target.returncode, 0)
+        self.assertIn("expected HEAD", wrong_target.stderr)
         for relative in ("plain.txt", "untracked-source.txt"):
             with self.subTest(relative=relative):
                 path = self.root / relative
@@ -284,6 +292,145 @@ class PrepareArchSourceTest(unittest.TestCase):
         dirty_payload = self.verify_release(dirty_export, head)
         self.assertNotEqual(dirty_payload.returncode, 0)
         self.assertIn("source inventory bytes/modes differ from tag", dirty_payload.stderr)
+
+    def test_tracked_modes_are_canonical_and_release_bytes_are_identical(self):
+        self.git("tag", "-a", "fixture-release", "-m", "Release fixture")
+        head = self.git("rev-parse", "HEAD").decode().strip()
+        first = None
+        for ordinary, executable in ((0o600, 0o700), (0o644, 0o755),
+                                     (0o664, 0o775), (0o666, 0o777)):
+            with self.subTest(ordinary=oct(ordinary), executable=oct(executable)):
+                (self.root / "plain.txt").chmod(ordinary)
+                (self.root / "run.sh").chmod(executable)
+                self.assertEqual(self.git("status", "--porcelain=v1"), b"")
+                result, output = self.export(f"modes-{ordinary}-{executable}")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                actual = {p.name: p.read_bytes() for p in output.iterdir()}
+                if first is None:
+                    first = actual
+                self.assertEqual(actual, first)
+                checkpoint = json.loads(actual["SOURCE_CHECKPOINT.json"])
+                records = {record["path"]: record for record in checkpoint["files"]}
+                self.assertEqual(records["plain.txt"]["mode"], 0o644)
+                self.assertEqual(records["run.sh"]["mode"], 0o755)
+                archive = next(output.glob("*.tar.gz"))
+                extraction = self.base / f"extracted-{ordinary}-{executable}"
+                with tarfile.open(archive) as exported:
+                    exported.extractall(extraction, filter="data")
+                extracted = extraction / archive.name.removesuffix(".tar.gz")
+                for relative, record in records.items():
+                    self.assertEqual(stat.S_IMODE((extracted / relative).stat().st_mode),
+                                     record["mode"])
+                verified = self.verify_release(output, head)
+                self.assertEqual(verified.returncode, 0, verified.stderr)
+
+    def test_untracked_developer_modes_are_deterministic(self):
+        plain = self.write("developer.txt", b"approved developer input\n")
+        script = self.write("developer.sh", b"#!/bin/sh\nexit 0\n")
+        first = None
+        for ordinary, executable in ((0o600, 0o700), (0o644, 0o755),
+                                     (0o664, 0o775), (0o666, 0o777)):
+            with self.subTest(ordinary=oct(ordinary), executable=oct(executable)):
+                plain.chmod(ordinary)
+                script.chmod(executable)
+                result, output = self.export(f"developer-modes-{ordinary}-{executable}")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                actual = {p.name: p.read_bytes() for p in output.iterdir()}
+                if first is None:
+                    first = actual
+                self.assertEqual(actual, first)
+                records = {record["path"]: record for record in
+                           json.loads(actual["SOURCE_CHECKPOINT.json"])["files"]}
+                self.assertEqual(records["developer.txt"]["mode"], 0o644)
+                self.assertEqual(records["developer.sh"]["mode"], 0o755)
+
+    def test_release_guard_rejects_modified_generated_artifacts(self):
+        self.git("tag", "-a", "fixture-release", "-m", "Release fixture")
+        head = self.git("rev-parse", "HEAD").decode().strip()
+        result, canonical = self.export("canonical")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        valid = self.verify_release(canonical, head)
+        self.assertEqual(valid.returncode, 0, valid.stderr)
+        cases = ("build-command", "package-command", "dependency", "package-metadata",
+                 "external-checkpoint", "archived-checkpoint", "source-uid-gid",
+                 "source-uname-gname", "source-mode", "checkpoint-mode", "tar-epoch",
+                 "gzip-epoch", "member-order", "extra-member", "missing-member",
+                 "checksum-receipt", "archive-with-updated-receipts")
+        for case in cases:
+            with self.subTest(case=case):
+                output = self.base / case
+                shutil.copytree(canonical, output)
+                archive = next(output.glob("*.tar.gz"))
+                prefix = archive.name.removesuffix(".tar.gz") + "/"
+                recipe = output / "PKGBUILD"
+                if case in ("build-command", "package-command", "dependency", "package-metadata"):
+                    old, new = {
+                        "build-command": ("build() {", "build() {\n    echo MALICIOUS_SIDE_EFFECT"),
+                        "package-command": ("package() {", "package() {\n    echo MODIFIED_PACKAGE"),
+                        "dependency": ("'glibc'", "'glibc' 'unreviewed-dependency'"),
+                        "package-metadata": ("pkgrel=", "pkgrel=9"),
+                    }[case]
+                    self.assertIn(old, recipe.read_text())
+                    recipe.write_text(recipe.read_text().replace(old, new, 1))
+                elif case == "external-checkpoint":
+                    checkpoint = output / "SOURCE_CHECKPOINT.json"
+                    checkpoint.write_bytes(checkpoint.read_bytes() + b"\n")
+                elif case == "checksum-receipt":
+                    sums = output / "SHA256SUMS"
+                    sums.write_text(sums.read_text() + "# unauthorized receipt change\n")
+                elif case == "gzip-epoch":
+                    data = bytearray(archive.read_bytes())
+                    data[4:8] = (int.from_bytes(data[4:8], "little") + 1).to_bytes(4, "little")
+                    archive.write_bytes(data)
+                elif case == "archive-with-updated-receipts":
+                    archive.write_bytes(archive.read_bytes() + b"\0")
+                else:
+                    with tarfile.open(archive) as exported:
+                        entries = [(copy.copy(member), exported.extractfile(member).read())
+                                   for member in exported.getmembers()]
+                    for index, (member, payload) in enumerate(entries):
+                        if member.name == prefix + "plain.txt":
+                            if case == "source-uid-gid":
+                                member.uid, member.gid = 123, 456
+                            elif case == "source-uname-gname":
+                                member.uname = member.gname = "evil"
+                            elif case == "source-mode":
+                                member.mode = 0o666
+                            elif case == "tar-epoch":
+                                member.mtime += 1
+                        if member.name == prefix + "SOURCE_CHECKPOINT.json":
+                            if case == "checkpoint-mode":
+                                member.mode = 0o600
+                            elif case == "archived-checkpoint":
+                                payload += b"\n"
+                                member.size = len(payload)
+                                entries[index] = (member, payload)
+                    if case == "member-order":
+                        entries.reverse()
+                    elif case == "missing-member":
+                        entries = [(member, payload) for member, payload in entries
+                                   if member.name != prefix + "plain.txt"]
+                    elif case == "extra-member":
+                        extra = copy.copy(entries[0][0])
+                        extra.name = prefix + "unauthorized.txt"
+                        extra.size = 5
+                        entries.append((extra, b"extra"))
+                    epoch = json.loads((output / "SOURCE_CHECKPOINT.json").read_text())["source_date_epoch"]
+                    with archive.open("wb") as raw:
+                        with gzip.GzipFile(filename="", fileobj=raw, mode="wb", mtime=epoch) as gz:
+                            with tarfile.open(fileobj=gz, mode="w", format=tarfile.PAX_FORMAT) as tar:
+                                for member, payload in entries:
+                                    tar.addfile(member, io.BytesIO(payload))
+                # Repair every archive digest pin so changed-byte failures cannot
+                # rely only on stale receipts. Never execute candidate recipes.
+                if case not in ("external-checkpoint", "checksum-receipt"):
+                    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+                    recipe.write_text(re.sub(r"^sha256sums=\('[0-9a-f]{64}'\)$",
+                                             f"sha256sums=('{digest}')", recipe.read_text(), flags=re.M))
+                    (output / "SHA256SUMS").write_text(f"{digest}  {archive.name}\n")
+                refused = self.verify_release(output, head)
+                self.assertNotEqual(refused.returncode, 0, refused.stdout)
+                self.assertEqual(self.git("status", "--porcelain=v1"), b"")
 
 
 if __name__ == "__main__":

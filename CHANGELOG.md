@@ -1,6 +1,29 @@
 # Changelog
 
+## 0.1.1 candidate — unreleased, 2026-10-04
+
+Application version: `0.1.1`; Arch package candidate: `0.1.1-1`.
+The owner selected GPL-3.0-or-later for original Arch Dock project work.
+The proposed `v0.1.1` tag and publication need separate authorization.
+
+- The official source verifier regenerates all four canonical export artifacts
+  and rejects any byte difference, including recipe commands/metadata, archive
+  metadata/member ordering and manually repaired checksum receipts.
+- Tracked source modes follow Git's `100644`/`100755` executable intent,
+  producing `0644`/`0755` independently of checkout permission bits.
+- The complete official GPLv3 text and GPL-3.0-or-later declaration are added.
+  The package ships the GPL text, preserved MIT component notices and a license
+  matrix; audited original asset declarations carry the owner's new selection.
+- Existing MIT components retain their license. Unknown-rights reference
+  material remains NOASSERTION, non-installable and excluded from distribution.
+- Runtime behavior is unchanged. Candidate gates and evidence belong to
+  [the release checklist](docs/RELEASE_CHECKLIST.md) and
+  [corrective report](docs/POST_TASK_0045_CORRECTIVE_REPORT.md).
+
 ## 0.1.0 candidate — 2026-10-03
+
+Historical record: the source/license state below predates the 0.1.1 selection.
+The existing tag and six current prerelease assets remain unchanged.
 
 Application version: `0.1.0`; Arch package candidate: `0.1.0-2`.
 Annotated `v0.1.0` exists at `c3b3a0b7771b313c45f843f49a503b45b0d1ada0`.

@@ -1,6 +1,6 @@
 # Arch Dock platform verification
 
-## Release boundaries R-01 through R-04 — 2026-10-03
+## Release boundaries R-01 through R-04 — 2026-10-04
 
 The release-closure assignment supplies the previously missing boundary
 definitions. They are recorded decisions and evidence limits, not new software
@@ -8,22 +8,23 @@ defects. Current corrective results belong to
 [the corrective report](POST_TASK_0045_CORRECTIVE_REPORT.md); the runtime
 checkpoints below retain their original provenance.
 
-Current public candidate: application **0.1.0**, Arch package **0.1.0-2**.
-Annotated `v0.1.0` exists at
+Next candidate: application **0.1.1**, Arch package **0.1.1-1**, under bounded
+release/export/package verification. Its proposed `v0.1.1` tag/publication
+require separate authorization. Historical annotated `v0.1.0` remains at
 `c3b3a0b7771b313c45f843f49a503b45b0d1ada0`. The
 [GitHub prerelease](https://github.com/aivars11232/Arch-Dock/releases/tag/v0.1.0)
 was published on 2026-10-03 and is not a final/stable/latest release.
-[CURRENT_STATE.md](CURRENT_STATE.md) records the RC-01 tag-matched asset
-correction and its separate replacement-authorization boundary. The latest
-supplied independent audit reports zero confirmed new runtime bugs and closes
-AD-04-R1; its RC-01/RC-02 findings concern release provenance and public prose.
+[CURRENT_STATE.md](CURRENT_STATE.md) records the earlier asset correction and
+current RC-03/RC-04 exact artifact/mode corrections. The latest supplied
+independent audit reports zero confirmed new runtime bugs and closes AD-04-R1
+and RC-02. The historical tag and six current assets are unchanged.
 
 | Boundary | Recorded status |
 | --- | --- |
 | R-01 — physical acceptance | Physical second-monitor connection/removal, connector/scanout, another GPU and owner-desktop observations remain **NOT EXECUTED**. Private virtual-output verification cannot close these cells; [target observations](#physical-cells-not-executed) remain required. |
-| R-02 — license/tag/publication | Annotated `v0.1.0` and prerelease publication have occurred under separate owner authorization. The fixed tag target is recorded above. Project-wide licensing remains unselected; existing LicenseRef/component/asset declarations are preserved. Replacing existing release assets needs explicit authorization for that correction. |
+| R-02 — license/tag/publication | Earlier `v0.1.0` tag/publication occurred and remain unchanged. Owner selected GPL-3.0-or-later for original project work, with MIT components preserved and unknown-rights references excluded. The next `0.1.1-1` candidate carries that selection; its tag/publication need separate authorization. |
 | R-03 — native fixture disposal | The two TASK-0044 private PlasmaShell Mesa-worker faults remain historical observations with an unproved underlying mechanism. The verified teardown change is a harness mitigation; later passing behavior does not prove the native fault eliminated. |
-| R-04 — independent review | The supplied RC-01/RC-02 audit is a separate independent review. This fixing agent's tests and candidate checks are corrective/regression verification, not independent review of its own changes. Prior independent findings retain their original provenance. |
+| R-04 — independent review | The supplied RC-03/RC-04 findings have separate independent provenance. This fixing agent's tests and candidate checks are corrective/regression verification, not independent review of its own changes. Prior independent findings retain their original provenance. |
 
 ## TASK-0045 release regression checkpoint — historical, 2026-10-03
 

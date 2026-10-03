@@ -15,10 +15,45 @@ have passing corrective evidence in the
 [corrective report](POST_TASK_0045_CORRECTIVE_REPORT.md). The release-closure
 assignment supplies all four boundary definitions. The owner subsequently
 authorized cleanup/commit/sync and separately tagging/publication. Physical
-acceptance and license selection remain separate. Outside the explicit
+acceptance remains separate; the owner now selected GPL-3.0-or-later. Outside the explicit
 corrective sections, build/runtime entries retain historical candidate evidence.
 
+## RC-03, RC-04 and licensing acceptance — 0.1.1 candidate, 2026-10-04
+
+**Code/export regressions PASS; finalized source/package/installed license
+verification and cleanup IN PROGRESS. No new release tag/publication authorized.**
+
+- [x] Actual clean starting main `4d65678d53dd5d0e9f388bbda6bf43117427b1ea` reconciled with audited `b6fb0b4`; newer publication-closure documents preserved.
+- [x] Historical annotated `v0.1.0` object/target and current six assets/body recorded for preservation; no move or replacement permitted in this pass.
+- [x] RC-03/RC-04 before-repair reproductions confirm accepted recipe/tar/gzip tampering and checkout `0666` mode from clean source.
+- [x] Verifier regenerates and requires exact archive, external checkpoint, PKGBUILD and SHA256SUMS bytes; semantic checks retained.
+- [x] All 11 exporter/release unittest groups pass, including valid source, 17 artifact-tampering subcases, repaired receipts, wrong HEAD/tag, lightweight tag and dirty source.
+- [x] Git canonical mode matrix covers ordinary 0600/0644/0664/0666 and executable 0700/0755/0775/0777; all four artifacts remain identical, checkpoint/extracted modes are canonical. Developer-only policy and namespace/symlink controls pass.
+- [x] Owner selected GPL-3.0-or-later; complete official GNU text added byte-for-byte, verified against GNU web/FTP copies. Source header conventions preserved.
+- [x] License matrix audits original C++/QML, eight preserved MIT Plasma/KWin components, 15+15 presets, all 17 original asset packages, system dependencies and excluded unknown-rights references. Each asset declaration change has its own provenance reason.
+- [x] Application/package identity is 0.1.1/0.1.1-1; native `vercmp` confirms upgrade ordering. CMake installs GPL text and complete MIT/matrix notice; package declares GPL-3.0-or-later and separately bundled MIT.
+- [ ] Finalized candidate source commit recorded; annotated verification tag exists only in a disposable repository, with expected HEAD exactly that commit.
+- [ ] Two complete exports match byte-for-byte; verifier, real extraction, complete inventory/canonical modes, normalized ownership/tar/gzip epochs, exact recipe/sums and included LICENSE pass. Reference images remain absent.
+- [ ] `makepkg --verifysource` and fresh one-job Release/Quick3D-ON package build pass; exact source/package hashes, metadata and license recorded.
+- [ ] Affected asset/export CTests and fresh installed-test target pass, preserving reference rights and asset output hash controls.
+- [ ] Existing scoped native package gate passes: complete 210-file payload/bytes/modes, GPL/MIT metadata/notices, 17 original asset declarations, eight MIT components, 15+15 actual catalogs/cards, installed QtTest 8/8 and Quick3D-hidden 4/4, upgrade/obsolete files/removal and preserved configuration.
+- [ ] Current public links/licensing/version references and historical section boundaries verified.
+- [ ] Owned scratch/build/fixtures/extractions removed, prior evidence/core records preserved, no task-owned process/core; compact candidate and receipts retained before final Git closure.
+- [ ] New `v0.1.1` tag separately authorized and created; remains unexecuted.
+- [ ] New candidate publication separately authorized and performed; remains unexecuted.
+- [ ] Physical acceptance performed; R-01 remains NOT EXECUTED.
+- [ ] External artwork sample executed; required archive remains unavailable.
+
+R-02's project-wide license decision is complete; historical `v0.1.0` remains
+unchanged and the next corrected candidate carries GPL-3.0-or-later. R-03's
+native fault mechanism remains unproved; R-04 labels these checks corrective
+verification rather than independent review. Exact tested candidate identity,
+gates and cleanup belong to `build-codex-release-integrity-0.1.1/STATE.json`.
+
 ## RC-01 and RC-02 acceptance — 2026-10-04
+
+Historical preceding correction/publication record. Its then-unselected
+project-wide license is superseded by the owner's 0.1.1 GPL decision above.
 
 **OWNER-APPROVED ASSET REPLACEMENT AND FINAL REMOTE PROVENANCE PASS.**
 The latest supplied independent audit found zero new runtime bugs and closed

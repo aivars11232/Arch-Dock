@@ -166,7 +166,7 @@ void IconStyleAssetTest::productionPackagesValidateAndPreserveGlyphs()
         QVERIFY(definition.mappedReplacements.isEmpty());
         QCOMPARE(definition.states.size(), 11);
         QVERIFY(layerCount(definition) >= spec.minimumLayers);
-        QCOMPARE(definition.license.spdx, QStringLiteral("NOASSERTION"));
+        QCOMPARE(definition.license.spdx, QStringLiteral("GPL-3.0-or-later"));
         QCOMPARE(definition.license.redistribution, QStringLiteral("allowed"));
         QCOMPARE(definition.capabilities.rendererTiers,
                  QStringList{QStringLiteral("procedural2d")});
@@ -207,6 +207,9 @@ void IconStyleAssetTest::productionRecordsMatchExactOutputs()
 
         const QJsonObject production = jsonObject(repositoryFile(
             root + QStringLiteral("/metadata/production-record.json")));
+        QCOMPARE(production.value(QStringLiteral("license")).toObject()
+                     .value(QStringLiteral("spdx")).toString(),
+                 QStringLiteral("GPL-3.0-or-later"));
         QCOMPARE(production.value(QStringLiteral("iconStyleId")).toString(), spec.id);
         QVERIFY(!production.value(QStringLiteral("pixelInput")).toBool(true));
         QVERIFY(!production.value(QStringLiteral("sourceDerivative")).toBool(true));

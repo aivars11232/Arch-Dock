@@ -10,7 +10,7 @@
   "recipe": "assets/source-samples/icon-styles/original-artwork-recipe.json",
   "authorizationEvidence": "APPROVED: IMPLEMENT TASK-0029 EXACTLY AS PLANNED.",
   "outputs": [
-    {"path": "archdock-icon-style.json", "sha256": "f3cd6328dde2cae109489a055069a7ecc5ff967b3de59dc506a72e697a892f3b"}
+    {"path": "archdock-icon-style.json", "sha256": "6833ffc31a655f2c75e2a13bd9d330f452027739315b34400acb08794da2a914"}
   ],
   "parameters": {
     "family": "neon",
@@ -21,8 +21,8 @@
     "rendererTiers": ["procedural2d"]
   },
   "license": {
-    "spdx": "NOASSERTION",
+    "spdx": "GPL-3.0-or-later",
     "redistribution": "allowed",
-    "evidence": "User approved creation and redistribution of original TASK-0029 resources as part of Arch Dock; no public license was selected"
+    "evidence": "User approved creation and redistribution of original TASK-0029 resources as part of Arch Dock; the owner selected GPL-3.0-or-later on 2026-10-04 for this independently authored original Arch Dock work"
   }
 }

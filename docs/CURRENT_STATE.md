@@ -6,7 +6,57 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Latest boundary — 2026-10-04: RC-01 tag-matched source/package verification
+**Latest boundary — 2026-10-04: RC-03 exact artifact and RC-04 canonical mode
+regressions PASS; GPL-3.0-or-later selected; next 0.1.1-1 candidate source,
+package and installed licensing gates IN PROGRESS.**
+
+The latest supplied independent audit covers `b6fb0b472d9ea7428494239102a0877b591755eb`,
+reports zero new runtime defects and closes AD-04-R1 and RC-02. Actual clean
+starting main is `4d65678d53dd5d0e9f388bbda6bf43117427b1ea`; its only newer
+commit records the approved preceding publication closure. Those legitimate
+changes are preserved. This bounded pass does not reopen runtime implementation.
+
+The old verifier accepted synthetic build-command tampering, tar ownership,
+generated-checkpoint mode and gzip timestamp changes after digest repair.
+It also accepted a clean tracked ordinary file exported with checkout mode
+`0666`. Fixing-agent reproductions confirm RC-03/RC-04; they are not independent
+review. The verifier now regenerates archive, external checkpoint, PKGBUILD
+and SHA256SUMS in owned temporary storage and requires exact bytes, keeping
+semantic checks as defense in depth. Tracked `100644`/`100755` modes become
+`0644`/`0755`; developer-only inputs use a deterministic executable policy.
+All 11 synthetic exporter/release groups pass, including 17 artifact tampering
+subcases, clean/tag/dirty controls, namespace/symlink tests and all eight
+required tracked permission variants with identical four-artifact exports.
+
+Application **0.1.1**, Arch package **0.1.1-1**, is the next candidate. The
+owner selected **GPL-3.0-or-later** for original project work, with the complete
+official GNU text in [LICENSE](../LICENSE). All 11 original theme and six icon
+packages have audited provenance and updated declarations; eight existing
+MIT components retain MIT and their complete notice. Unknown-rights references
+remain NOASSERTION/redistribution-unknown, non-installable and outside relicensing.
+The [licensing matrix](../packaging/LICENSING.md) records each asset reason,
+separate components and system dependencies. Artwork/QML/geometry and all
+excluded-reference/visual-review evidence are unchanged. CMake ships both
+licensing files; expected native package payload is 210 files, adding LICENSE
+to the preceding 209-file set. Fresh installed licensing verification is pending.
+
+Historical annotated `v0.1.0` remains object
+`50812852c4dc2726411a1c73452296955852c50a`, targeting
+`c3b3a0b7771b313c45f843f49a503b45b0d1ada0`. Its six current prerelease assets
+and release body remain unchanged. A finalized candidate commit and annotated
+verification tag in a disposable repository will establish the next export;
+no real `v0.1.1` tag/publication is authorized by this assignment.
+
+R-01 physical observations remain **NOT EXECUTED**. R-02 records the completed
+owner license decision, unchanged historical tag/publication and next licensed
+candidate; new tagging/publication need separate authorization. R-03 retains
+the historical Mesa-worker mechanism as unproved and teardown as mitigation.
+R-04 retains independent finding provenance and corrective check labels.
+The external artwork-sample subcase remains unexecuted without its archive.
+Fresh gates, exact candidate identity, cleanup and Git closure will be recorded
+in `build-codex-release-integrity-0.1.1/STATE.json` and its local evidence ZIP.
+
+**Historical previous boundary — 2026-10-04: RC-01 tag-matched source/package verification
 PASS; RC-02 current public prose corrected. OWNER-APPROVED ASSET REPLACEMENT
 AND FINAL REMOTE PROVENANCE VERIFICATION PASS.**
 

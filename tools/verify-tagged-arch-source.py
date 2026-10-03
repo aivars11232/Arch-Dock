@@ -5,9 +5,10 @@ import hashlib
 import json
 from pathlib import Path
 import re
-import stat
 import subprocess
+import sys
 import tarfile
+import tempfile
 
 
 def main():
@@ -36,6 +37,12 @@ def main():
         parser.error("checkout HEAD, tag target and expected HEAD must match")
     if git("status", "--porcelain=v1", "--untracked-files=all"):
         parser.error("release source checkout must be clean, including untracked inputs")
+    source_modes = {}
+    for entry in git("ls-tree", "-r", "-z", head).split("\0"):
+        if entry:
+            metadata, relative = entry.split("\t", 1)
+            mode, _, _ = metadata.split()
+            source_modes[relative] = {"100644": 0o644, "100755": 0o755}.get(mode)
 
     checkpoint_bytes = (args.output / "SOURCE_CHECKPOINT.json").read_bytes()
     checkpoint = json.loads(checkpoint_bytes)
@@ -45,6 +52,10 @@ def main():
     recipe = (args.output / "PKGBUILD").read_text()
     version = re.search(r"^pkgver=([0-9.]+)$", recipe, re.M).group(1)
     archive = args.output / f"arch-dock-{version}.tar.gz"
+    archive_bytes = archive.read_bytes()
+    if (archive_bytes[:2] != b"\x1f\x8b"
+            or int.from_bytes(archive_bytes[4:8], "little") != epoch):
+        parser.error("gzip timestamp must match the release tag commit epoch")
     with tarfile.open(archive) as exported:
         name = f"arch-dock-{version}/SOURCE_CHECKPOINT.json"
         members = exported.getmembers()
@@ -59,6 +70,11 @@ def main():
             parser.error("archived and external checkpoints must match")
         if any(member.mtime != epoch for member in members):
             parser.error("archive timestamps must match the release tag commit epoch")
+        if any((member.uid, member.gid, member.uname, member.gname) != (0, 0, "", "")
+               for member in members):
+            parser.error("archive ownership must be normalized")
+        if checkpoints[0].mode != 0o644:
+            parser.error("generated checkpoint mode must be 0644")
         records = {record["path"]: record for record in checkpoint["files"]}
         prefix = f"arch-dock-{version}/"
         if (len(records) != len(checkpoint["files"])
@@ -77,7 +93,7 @@ def main():
             if (hashlib.sha256(payload).hexdigest() != record["sha256"]
                     or payload != source.read_bytes()
                     or member.mode != record["mode"]
-                    or member.mode != stat.S_IMODE(source.stat().st_mode)):
+                    or member.mode != source_modes.get(relative)):
                 parser.error(f"source inventory bytes/modes differ from tag: {relative}")
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     if not re.search(rf"^sha256sums=\('{digest}'\)$", recipe, re.M):
@@ -85,6 +101,19 @@ def main():
     sums = (args.output / "SHA256SUMS").read_text().splitlines()
     if f"{digest}  {archive.name}" not in sums:
         parser.error("SHA256SUMS must contain the verified source archive digest")
+    with tempfile.TemporaryDirectory(prefix="archdock-release-verify-") as temporary:
+        canonical = Path(temporary) / "canonical"
+        generated = subprocess.run(
+            [sys.executable, str(root / "tools/prepare-arch-source.py"), str(canonical)],
+            capture_output=True, text=True)
+        if generated.returncode:
+            parser.error("canonical source regeneration failed: " + generated.stderr.strip())
+        for name in (archive.name, "SOURCE_CHECKPOINT.json", "PKGBUILD", "SHA256SUMS"):
+            expected = canonical / name
+            if not expected.is_file() or (args.output / name).read_bytes() != expected.read_bytes():
+                parser.error(f"artifact differs from canonical regeneration: {name}")
+    if git("status", "--porcelain=v1", "--untracked-files=all"):
+        parser.error("release source changed during verification")
     print(f"Tagged source PASS: {args.tag} at {head}; SHA256 {digest}")
 
 

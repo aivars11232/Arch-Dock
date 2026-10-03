@@ -11,7 +11,7 @@
   "outputs": [
     {
       "path": "archdock-icon-style.json",
-      "sha256": "1651b68b6afef88140698d5aa51f10db7bfcffd1fbab115650309af31c7dfb59"
+      "sha256": "a53f4415cf8357308ceb27960c2f32f969d7ce0895d4802ced7d37fc977fb5c3"
     }
   ],
   "parameters": {
@@ -22,8 +22,8 @@
     "fallback": true
   },
   "license": {
-    "spdx": "NOASSERTION",
+    "spdx": "GPL-3.0-or-later",
     "redistribution": "allowed",
-    "evidence": "User approved creation and redistribution of original TASK-0029 package resources as part of Arch Dock; no public license was selected"
+    "evidence": "User approved creation and redistribution of original TASK-0029 package resources as part of Arch Dock; the owner selected GPL-3.0-or-later on 2026-10-04 for this independently authored original Arch Dock work"
   }
 }

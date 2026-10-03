@@ -219,7 +219,7 @@ void Baked25DAssetTest::productionPackagesValidateAndShareGeometry()
 
         const ArchDock::ThemeDefinition &definition = loaded.package->definition();
         QCOMPARE(definition.id, spec.id);
-        QCOMPARE(definition.license.spdx, QStringLiteral("NOASSERTION"));
+        QCOMPARE(definition.license.spdx, QStringLiteral("GPL-3.0-or-later"));
         QCOMPARE(definition.license.redistribution, QStringLiteral("allowed"));
         QCOMPARE(definition.capabilities.hosts,
                  QStringList{QStringLiteral("free-desktop")});
@@ -425,6 +425,9 @@ void Baked25DAssetTest::visualApprovalAndOutputHashesAreRecorded()
     {
         const QJsonObject production = readObject(packagePath(
             spec.id, QStringLiteral("metadata/production-record.json")));
+        QCOMPARE(production.value(QStringLiteral("license")).toObject()
+                     .value(QStringLiteral("spdx")).toString(),
+                 QStringLiteral("GPL-3.0-or-later"));
         QCOMPARE(production.value(QStringLiteral("themeId")).toString(), spec.id);
         QCOMPARE(production.value(QStringLiteral("task")).toString(),
                  QStringLiteral("TASK-0034"));

@@ -34,6 +34,15 @@ def main():
     reserved_root_members = {"SOURCE_CHECKPOINT.json"}
     paths = sorted(set(git("ls-files", "--cached", "--others", "--exclude-standard", "-z")
                        .decode().rstrip("\0").split("\0")))
+    tracked_modes = {}
+    for entry in git("ls-files", "--stage", "-z").decode().split("\0"):
+        if not entry:
+            continue
+        metadata, relative = entry.split("\t", 1)
+        mode, _, stage = metadata.split()
+        if stage != "0":
+            parser.error(f"unmerged source entry: {relative}")
+        tracked_modes[relative] = mode
     records = []
     for relative in paths:
         path = root / relative
@@ -48,9 +57,17 @@ def main():
             parser.error(f"reserved generated root namespace collides with source input: {relative}")
         if not path.is_file() or not path.resolve().is_relative_to(root):
             parser.error(f"unsupported source entry: {relative}")
+        if relative in tracked_modes:
+            mode = {"100644": 0o644, "100755": 0o755}.get(tracked_modes[relative])
+            if mode is None:
+                parser.error(f"unsupported Git source mode: {relative}")
+        else:
+            # Developer-only inputs keep executable intent, never arbitrary
+            # checkout read/write bits. Official release inputs must be tracked.
+            mode = 0o755 if stat.S_IMODE(path.stat().st_mode) & 0o111 else 0o644
         records.append({"path": relative,
                         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-                        "mode": stat.S_IMODE(path.stat().st_mode)})
+                        "mode": mode})
     checkpoint = {"head": head, "source_date_epoch": epoch,
                   "excluded_operational_files": sorted(excluded), "files": records}
     manifest = (json.dumps(checkpoint, indent=2, sort_keys=True) + "\n").encode()

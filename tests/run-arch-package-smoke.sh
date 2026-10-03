@@ -52,6 +52,9 @@ fi
 bsdtar -xf "$package" -C "$root/expected"
 [[ ! -e "$root/expected/.INSTALL" ]] || exit 1
 rg -q '^pkgname = arch-dock$' "$root/expected/.PKGINFO"
+rg -q '^license = GPL-3.0-or-later$' "$root/expected/.PKGINFO"
+rg -q '^license = MIT$' "$root/expected/.PKGINFO"
+! rg -q '^license = LicenseRef-Arch-Dock-Unspecified$' "$root/expected/.PKGINFO"
 ! rg -q '^depend = qt6-quick3d([<>=]|$)' "$root/expected/.PKGINFO"
 rg -q '^optdepend = qt6-quick3d:' "$root/expected/.PKGINFO"
 pacman_private -U "$package" >"$evidence/pacman-install.log" 2>&1
@@ -71,7 +74,9 @@ required = {'usr/bin/arch-dock', 'usr/lib/systemd/user/arch-dock.service',
     'usr/lib/qt6/qml/ArchDock/Rendering/qmldir',
     'usr/share/kwin/scripts/org.archdock.windowwatcher/metadata.json',
     'usr/share/plasma/plasmoids/org.archdock.control/metadata.json',
-    'usr/share/plasma/plasmoids/org.archdock.dock/metadata.json'}
+    'usr/share/plasma/plasmoids/org.archdock.dock/metadata.json',
+    'usr/share/licenses/arch-dock/LICENSE',
+    'usr/share/licenses/arch-dock/LICENSING.md'}
 assert required <= set(files), 'required runtime resources are absent'
 assert sum('/layout-templates/' in p and p.endswith('/metadata.json') for p in files) == 5
 for kind in ('panels', 'icons'):
@@ -82,6 +87,25 @@ for relative in files:
     assert actual.is_file() and actual.read_bytes() == original.read_bytes(), relative
     assert actual.stat().st_mode & 0o777 == original.stat().st_mode & 0o777, relative
     hashes[relative] = hashlib.sha256(actual.read_bytes()).hexdigest()
+assert hashes['usr/share/licenses/arch-dock/LICENSE'] == '3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986'
+notice = (installed / 'usr/share/licenses/arch-dock/LICENSING.md').read_text()
+assert 'GPL-3.0-or-later' in notice and 'Permission is hereby granted, free of charge' in notice
+assert not any('/source-samples/' in relative for relative in files), 'reference-only material installed'
+production = [relative for relative in files if relative.endswith(('/archdock-theme.json', '/archdock-icon-style.json'))]
+assert len(production) == 17
+for relative in production:
+    license = json.loads((installed / relative).read_text())['license']
+    assert license['spdx'] == 'GPL-3.0-or-later' and license['redistribution'] == 'allowed', relative
+components = [relative for relative in files if relative.endswith('/metadata.json') and
+              ('/kwin/scripts/' in relative or '/plasma/plasmoids/' in relative or '/layout-templates/' in relative)]
+assert len(components) == 8
+for relative in components:
+    assert json.loads((installed / relative).read_text())['KPlugin']['License'] == 'MIT', relative
+(evidence / 'installed-licensing.json').write_text(json.dumps({
+    'project_license': 'GPL-3.0-or-later', 'separate_component_license': 'MIT',
+    'original_asset_packages': production, 'mit_components': components,
+    'complete_official_gpl_text': True, 'mit_notice_shipped': True,
+    'reference_material_excluded': True}, indent=2, sort_keys=True) + '\n')
 if previous.exists():
     for old in previous.rglob('*'):
         if old.is_file() and not old.name.startswith('.'):

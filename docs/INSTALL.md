@@ -131,7 +131,10 @@ makepkg --cleanbuild --noconfirm
 The exporter records the Git HEAD and every included file's bytes and mode
 in `SOURCE_CHECKPOINT.json`. It includes approved working-tree changes and
 produces a normalized source archive plus a PKGBUILD pinned to its SHA256;
-it does not create a commit. Build output, the outer recipe and the operational
+tracked modes use Git's `100644`/`100755` intent as `0644`/`0755`. Developer-only
+untracked files use `0755` when executable and `0644` otherwise. Arbitrary
+read/write permission bits do not affect export. It does not create a commit.
+Build output, the outer recipe and the operational
 `CURRENT_STATE.md`/`RELEASE_CHECKLIST.md` and
 `POST_TASK_0045_CORRECTIVE_REPORT.md` records are excluded from the archive
 to avoid circular hashes. The recipe never uses `SKIP`. The checkout recipe's
@@ -144,31 +147,40 @@ Official release assets must come from the exact finalized annotated tag,
 using a clean checkout with no untracked source inputs. A later commit with
 similar source bytes cannot substitute for the recorded checkpoint HEAD or
 epoch. Keep the published `v0.1.0` tag fixed at
-`c3b3a0b7771b313c45f843f49a503b45b0d1ada0`.
+`c3b3a0b7771b313c45f843f49a503b45b0d1ada0` and its six current assets unchanged.
+The next candidate is `0.1.1-1`; its `v0.1.1` tag/publication require separate
+authorization. Before tagging, local gates may use an annotated verification
+tag only in a disposable repository at the exact finalized candidate commit.
 
-From the current tooling checkout, use new external work/export directories:
+After the intended release tag has been separately authorized and created,
+set `release_head` to the independently verified full candidate commit recorded
+in its receipt. From the tooling checkout, use new external directories:
 
 ```bash
-release_checkout="../arch-dock-v0.1.0-source"
-release_export="../arch-dock-v0.1.0-export"
-git worktree add --detach "$release_checkout" 'refs/tags/v0.1.0^{commit}'
+: "${release_head:?set the independently verified full candidate commit first}"
+release_tag=v0.1.1
+release_checkout="../arch-dock-v0.1.1-source"
+release_export="../arch-dock-v0.1.1-export"
+git worktree add --detach "$release_checkout" "$release_head"
 python "$release_checkout/tools/prepare-arch-source.py" "$release_export"
 python tools/verify-tagged-arch-source.py "$release_export" \
-    --source-root "$release_checkout" --tag v0.1.0 \
-    --expected-head c3b3a0b7771b313c45f843f49a503b45b0d1ada0
+    --source-root "$release_checkout" --tag "$release_tag" \
+    --expected-head "$release_head"
 ```
 
 The release verifier must pass before the output is eligible for publication.
 It checks clean source, exact HEAD/tag target, checkpoint identity/epoch in
-both receipts, source inventory bytes/modes, archive timestamps and the recipe
-and checksum digest pin. Repeat the clean export into another new directory
-and require identical archive bytes. Complete extraction/inventory and fresh
+both receipts, source inventory bytes/canonical modes, normalized ownership,
+tar/gzip timestamps and digest pins. It independently regenerates the exporter
+outputs and requires exact bytes for the archive, external checkpoint, generated
+PKGBUILD and SHA256SUMS. Candidate recipes are never executed by verification.
+Repeat the clean export into another new directory and require all four outputs
+to be byte-identical. Complete extraction/inventory and fresh
 package/install verification before publication; run the verifier again against
-the final asset directory. Replacing existing published assets needs explicit
-owner authorization and does not move the tag or change prerelease status.
+the final asset directory. Publication needs its own explicit owner authorization.
 
-The existing `v0.1.0` release is a published prerelease candidate; its initial
-precommit-source discrepancy and corrected candidate status are recorded in
+The existing `v0.1.0` release is a historical prerelease candidate; its initial
+precommit-source discrepancy and later corrected publication are recorded in
 [CURRENT_STATE.md](CURRENT_STATE.md). Build the tag-matched generated recipe:
 
 ```bash
@@ -202,7 +214,7 @@ declared build dependencies before running makepkg; it does not install them.
 After reviewing the resulting package, the owner can install or remove it:
 
 ```bash
-sudo pacman -U arch-dock-0.1.0-2-x86_64.pkg.tar.zst
+sudo pacman -U arch-dock-0.1.1-1-x86_64.pkg.tar.zst
 ```
 
 Installation places the executable, direct D-Bus descriptor, manual systemd
@@ -217,11 +229,12 @@ private install/startup flow; there are no package hooks to perform either.
 
 ## Upgrade
 
-The current candidate is application `0.1.0`, package release `2`. The retained
-previous package is `0.1.0-1`; native pacman performs the version upgrade:
+The next candidate is application `0.1.1`, package release `1`. The historical
+`0.1.0-2` package, and earlier `0.1.0-1`, are strictly older versions; native
+pacman performs the patch upgrade:
 
 ```bash
-sudo pacman -U arch-dock-0.1.0-2-x86_64.pkg.tar.zst
+sudo pacman -U arch-dock-0.1.1-1-x86_64.pkg.tar.zst
 ```
 
 Cancel an active audition and stop the backend before replacing its executable;
@@ -252,11 +265,13 @@ Plasma record from referring to an uninstalled Arch Dock applet. Reinstallation
 can reuse the preserved user data. No global cache rebuild, Plasma restart or
 automatic service enablement is part of the package route.
 
-Existing component and asset license declarations are preserved. A
-project-wide license has not been selected; the package's
-`LicenseRef-Arch-Dock-Unspecified` and installed licensing notice record that
-fact. See `packaging/LICENSING.md` in the checkout, installed as
-`/usr/share/licenses/arch-dock/LICENSING.md`.
+Original Arch Dock work is GPL-3.0-or-later unless separately declared. The
+package records GPL-3.0-or-later plus MIT for its preserved MIT components.
+The complete GPL text is installed as `/usr/share/licenses/arch-dock/LICENSE`;
+the component/resource matrix and MIT notice ship in
+`/usr/share/licenses/arch-dock/LICENSING.md`. Unknown-rights references remain
+NOASSERTION/non-installable and outside relicensing. See
+[packaging/LICENSING.md](../packaging/LICENSING.md) for each declaration's scope.
 
 ## Private verification
 
@@ -305,8 +320,8 @@ ARCHDOCK_PACKAGE_INSTALL_MANIFEST="$PWD/build-codex-arch-package/src/build/insta
 ARCHDOCK_PACKAGE_EVIDENCE_DIR="$PWD/build-codex-package-evidence" \
 TMPDIR="$task_tmp" \
 bash tests/run-arch-package-smoke.sh \
-    build-codex-arch-package/arch-dock-0.1.0-2-x86_64.pkg.tar.zst \
-    /absolute/path/to/arch-dock-0.1.0-1-x86_64.pkg.tar.zst
+    build-codex-arch-package/arch-dock-0.1.1-1-x86_64.pkg.tar.zst \
+    /absolute/path/to/arch-dock-0.1.0-2-x86_64.pkg.tar.zst
 ```
 
 The second package argument is optional for install/uninstall verification;

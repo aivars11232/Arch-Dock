@@ -1,10 +1,10 @@
 pkgname=arch-dock
-pkgver=0.1.0
-pkgrel=2
+pkgver=0.1.1
+pkgrel=1
 pkgdesc='Native Plasma Wayland dock panels with shared rendering and presets'
 arch=('x86_64')
 url='https://github.com/aivars11232/Arch-Dock'
-license=('LicenseRef-Arch-Dock-Unspecified')
+license=('GPL-3.0-or-later' 'MIT')
 depends=('glibc' 'gcc-libs' 'qt6-base>=6.8' 'qt6-declarative>=6.8'
          'qt6-svg' 'qt6-wayland' 'kirigami' 'kservice' 'kio'
          'kglobalaccel' 'kglobalacceld' 'libplasma' 'plasma-workspace'
@@ -31,6 +31,4 @@ package() {
     DESTDIR="$pkgdir" cmake --install "$srcdir/build"
     install -Dm644 "$srcdir/arch-dock-$pkgver/docs/INSTALL.md" \
         "$pkgdir/usr/share/doc/arch-dock/INSTALL.md"
-    install -Dm644 "$srcdir/arch-dock-$pkgver/packaging/LICENSING.md" \
-        "$pkgdir/usr/share/licenses/arch-dock/LICENSING.md"
 }

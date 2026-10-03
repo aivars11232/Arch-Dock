@@ -42,8 +42,8 @@
     "stateAccentOpacity": {"normal": 0.72, "open": 1.0, "collapsed": 0.38}
   },
   "license": {
-    "spdx": "NOASSERTION",
+    "spdx": "GPL-3.0-or-later",
     "redistribution": "allowed",
-    "evidence": "User explicitly authorized newly created original TASK-0027 artwork for redistribution as part of Arch Dock; no public license was selected"
+    "evidence": "User explicitly authorized newly created original TASK-0027 artwork for redistribution as part of Arch Dock; the owner selected GPL-3.0-or-later on 2026-10-04 for this independently authored original Arch Dock work"
   }
 }
