@@ -20,8 +20,8 @@ corrective sections, build/runtime entries retain historical candidate evidence.
 
 ## RC-03, RC-04 and licensing acceptance — 0.1.1 candidate, 2026-10-04
 
-**Code/export regressions PASS; finalized source/package/installed license
-verification and cleanup IN PROGRESS. No new release tag/publication authorized.**
+**All supplied code/export/source/package/installed licensing and owned cleanup
+gates PASS. Next candidate prepared; no new real tag/publication authorized.**
 
 - [x] Actual clean starting main `4d65678d53dd5d0e9f388bbda6bf43117427b1ea` reconciled with audited `b6fb0b4`; newer publication-closure documents preserved.
 - [x] Historical annotated `v0.1.0` object/target and current six assets/body recorded for preservation; no move or replacement permitted in this pass.
@@ -32,13 +32,13 @@ verification and cleanup IN PROGRESS. No new release tag/publication authorized.
 - [x] Owner selected GPL-3.0-or-later; complete official GNU text added byte-for-byte, verified against GNU web/FTP copies. Source header conventions preserved.
 - [x] License matrix audits original C++/QML, eight preserved MIT Plasma/KWin components, 15+15 presets, all 17 original asset packages, system dependencies and excluded unknown-rights references. Each asset declaration change has its own provenance reason.
 - [x] Application/package identity is 0.1.1/0.1.1-1; native `vercmp` confirms upgrade ordering. CMake installs GPL text and complete MIT/matrix notice; package declares GPL-3.0-or-later and separately bundled MIT.
-- [ ] Finalized candidate source commit recorded; annotated verification tag exists only in a disposable repository, with expected HEAD exactly that commit.
-- [ ] Two complete exports match byte-for-byte; verifier, real extraction, complete inventory/canonical modes, normalized ownership/tar/gzip epochs, exact recipe/sums and included LICENSE pass. Reference images remain absent.
-- [ ] `makepkg --verifysource` and fresh one-job Release/Quick3D-ON package build pass; exact source/package hashes, metadata and license recorded.
-- [ ] Affected asset/export CTests and fresh installed-test target pass, preserving reference rights and asset output hash controls.
-- [ ] Existing scoped native package gate passes: complete 210-file payload/bytes/modes, GPL/MIT metadata/notices, 17 original asset declarations, eight MIT components, 15+15 actual catalogs/cards, installed QtTest 8/8 and Quick3D-hidden 4/4, upgrade/obsolete files/removal and preserved configuration.
-- [ ] Current public links/licensing/version references and historical section boundaries verified.
-- [ ] Owned scratch/build/fixtures/extractions removed, prior evidence/core records preserved, no task-owned process/core; compact candidate and receipts retained before final Git closure.
+- [x] Finalized candidate source commit `96f0e4f60d024b5cb1a44af1402401656ded1372` recorded; annotated verification tag exists only in a disposable repository, with expected HEAD exactly that commit.
+- [x] Two complete exports match byte-for-byte; verifier, real extraction, complete inventory/canonical modes, normalized ownership/tar/gzip epochs, exact recipe/sums and included LICENSE pass. Reference images remain absent.
+- [x] `makepkg --verifysource` and fresh one-job Release/Quick3D-ON package build pass; exact source/package hashes, metadata and license recorded.
+- [x] All 5/5 affected asset/export CTests (11 exporter groups) and fresh installed-test target pass, preserving reference rights and asset output hash controls.
+- [x] Existing scoped native package gate passes: complete 210-file payload/bytes/modes, GPL/MIT metadata/notices, 17 original asset declarations, eight MIT components, 15+15 actual catalogs/cards, installed QtTest 8/8 and Quick3D-hidden 4/4, native 0.1.0-2 → 0.1.1-1 upgrade/removals and preserved configuration. No obsolete paths expected; absence assertion retained.
+- [x] Current public links/licensing/version references and historical section boundaries verified.
+- [x] Owned scratch/build/fixtures/extractions removed, 61 prior evidence files and 135 core records preserved, no task-owned process/core; 12 compact candidate/evidence files retained before final Git closure. Separate RELEASE_SHA256SUMS preserves the canonical one-entry exporter receipt.
 - [ ] New `v0.1.1` tag separately authorized and created; remains unexecuted.
 - [ ] New candidate publication separately authorized and performed; remains unexecuted.
 - [ ] Physical acceptance performed; R-01 remains NOT EXECUTED.
@@ -48,7 +48,16 @@ R-02's project-wide license decision is complete; historical `v0.1.0` remains
 unchanged and the next corrected candidate carries GPL-3.0-or-later. R-03's
 native fault mechanism remains unproved; R-04 labels these checks corrective
 verification rather than independent review. Exact tested candidate identity,
-gates and cleanup belong to `build-codex-release-integrity-0.1.1/STATE.json`.
+source hash `d76c9e45b30123f9064fca3837207b77e9f82f83d21304c9bae1069ba7fff525`,
+package hash `22b44078a8e9b9cbe95e81a51da590d3dcbcc43df25a0c80bc17d63f2ec2cb7d`,
+gates, cleanup and final Git closure belong to `build-codex-release-integrity-0.1.1/STATE.json`.
+
+The tested source commit remains the eventual tag target even after main
+advances for excluded operational documents and the source digest pin. Runtime
+evidence includes five fresh CTest names and 102 reused names, not a new full
+suite/private session. Initial asset-hash failures and their ten-pin repair
+remain recorded. The supplied assignment ends mid-section 24; its missing
+remainder was requested and not supplied.
 
 ## RC-01 and RC-02 acceptance — 2026-10-04
 

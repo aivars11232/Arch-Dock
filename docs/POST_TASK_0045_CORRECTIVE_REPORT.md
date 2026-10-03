@@ -2,71 +2,161 @@
 
 ## RC-03, RC-04 and GPL licensing — 0.1.1 candidate, 2026-10-04
 
-**Exporter/release regressions PASS. Finalized source/package and installed
-licensing gates IN PROGRESS. No runtime implementation is reopened.**
+**All supplied source/export/package/licensing/installed corrective gates and
+owned cleanup PASS. Corrected next candidate prepared; new real tag/publication
+NOT EXECUTED. No runtime implementation is reopened.**
 
 The supplied independent audit covers `b6fb0b472d9ea7428494239102a0877b591755eb`,
 reports zero new runtime defects and closes AD-04-R1 and RC-02. Actual clean
-starting main is `4d65678d53dd5d0e9f388bbda6bf43117427b1ea`; its sole newer
-commit records approved publication closure and is preserved. This fixing
-agent's reproductions/tests are corrective verification, not independent review.
+starting main was `4d65678d53dd5d0e9f388bbda6bf43117427b1ea`; its newer approved
+publication-closure documents are preserved. These fixing-agent checks are
+corrective/candidate verification, not independent closure review.
 
-Before repair, five synthetic clean-source controls were accepted: a changed
-PKGBUILD build command retaining a valid digest, regular-member ownership,
-generated root-checkpoint mode 0600, wrong gzip epoch and tracked ordinary
-checkout mode 0666. No candidate recipe was executed. One reproduction helper
-initially matched a legitimate nested checkpoint too; it was corrected to the
-exact generated root member. The provenance-audit helper's origin predicate
-was made case-insensitive for existing “Original” wording. Product assertions
-were not weakened, and both diagnostic corrections are retained in evidence.
+Before repair, five synthetic controls passed incorrectly: modified PKGBUILD
+build command retaining a digest, regular-member ownership, root checkpoint
+mode 0600, wrong gzip epoch and clean tracked ordinary checkout mode 0666.
+No candidate recipe was executed. One reproduction helper initially matched a
+legitimate nested checkpoint; it was corrected to the exact generated root
+member. The provenance helper's existing “Original” predicate was made
+case-insensitive. Both diagnostics and the unchanged product assertions remain
+in the evidence.
 
-RC-03 now independently regenerates the four exporter outputs from clean
-finalized source in an owned temporary directory and compares exact bytes.
-The semantic inventory/tag checks remain, with canonical Git modes, normalized
-ownership, checkpoint mode and gzip epoch checks. RC-04 maps tracked index
-100644/100755 to 0644/0755 and normalizes developer-only executable intent.
-All **11 unittest groups PASS** in 5.95 s: valid candidate, **17 generated
-artifact tampering subcases**, manually updated pins, all tag/dirty/precommit
-controls, all eight required tracked checkout permission variants with identical
-four-artifact exports, extracted modes and namespace/symlink regressions.
+RC-03 now independently regenerates all four exporter outputs in owned
+temporary storage and requires exact bytes for archive, external checkpoint,
+PKGBUILD and SHA256SUMS. Existing semantic checks remain; ownership, generated
+checkpoint mode and gzip epoch are explicitly checked. RC-04 maps tracked
+Git index 100644/100755 to archive 0644/0755. Developer-only inputs retain
+executable intent with canonical permissions; official inputs must be clean
+and tracked. All **11 unittest groups PASS**: valid candidate, 17 artifact
+mutations, manually repaired receipts, wrong HEAD/tag target, lightweight tag,
+tracked/untracked dirty source, precommit identity, all eight required tracked
+permission variants, developer policy and unchanged namespace/symlink controls.
 
 The owner selected **GPL-3.0-or-later** for original project work. Root LICENSE
-is the complete official 35,149-byte GNU GPLv3 text, identical from GNU web and
-FTP primary sources, SHA-256
+is the complete official **35,149-byte** GNU GPLv3 text, byte-identical from GNU
+web and FTP primary sources, SHA-256
 `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`.
 The [license matrix and notices](../packaging/LICENSING.md) cover original
-C++/QML, 15+15 built-in presets, all installed themes/styles and external system
-dependencies. Eight MIT integration components retain MIT. Unknown-rights
-references retain NOASSERTION/unknown redistribution and remain non-installable,
-excluded from project relicensing and image distribution.
+C++/QML, Plasma/KWin, 15+15 presets, all production artwork, separate components
+and system dependencies. Eight MIT components retain MIT and their complete
+notice. Unknown-rights material remains NOASSERTION/redistribution-unknown,
+reference-only/non-installable/outside relicensing; images are absent from the
+normalized source and package. No incompatible distributed component was found.
 
-Each of the **11 theme and six icon-style packages** has explicit independent
+Each of **11 theme and six icon packages** has recorded independent original
 creation/redistribution evidence. Their 17 manifests and 16 production records
-now record the owner's GPL selection; six icon manifest output hashes are
-updated because those declarations change the recorded files. All other
-record fields, artwork/QML/geometry bytes, excluded-reference/visual evidence,
-source catalog and reference-rights records are preserved. Four existing asset
-tests now require the new original-asset license while keeping unknown-reference
-NOASSERTION and all source-pixel, hash and renderer assertions intact.
+now carry the owner-selected GPL declaration. Six icon manifest output hashes
+and ten theme production-record asset hashes were refreshed because the license
+edits change those recorded files. Every other JSON field and all artwork,
+geometry, SVG, texture, QML and reference/visual-review evidence are unchanged.
+The final audit checks **81 declared theme asset hashes** and **57 production
+output hashes**, and package comparison independently checks all 33 changed
+asset JSON projections. Existing source-pixel, reference-rights, asset-hash and
+renderer assertions are preserved.
 
-Application **0.1.1**, package **0.1.1-1**, is the next patch candidate;
-native vercmp reports it newer than 0.1.0-2. PKGBUILD declares GPL-3.0-or-later
-and separately bundled MIT, and native CMake installs both LICENSE and LICENSING.md.
-Expected package payload is **210 files**, the preceding 209 plus complete GPL
-text. Moving the existing licensing notice into CMake does not add a second copy.
-The native package harness retains exact manifest/bytes/modes/upgrade/removal
-checks and adds complete GPL/MIT notice and all installed declaration checks.
-Fresh source commit/export, package build, affected CTests and installed gates
-remain pending; raw evidence belongs to `build-codex-release-integrity-0.1.1/`.
+The first affected CTest run caught the omitted ten theme digest updates:
+ChassisAssetTest, EnergyAssetTest and Baked25DAssetTest refused packages with
+`asset-hash-mismatch`. The narrow correction refreshed their record hashes;
+no loader, artwork or assertion was changed. The first finalization also exposed
+one stale limitations opening sentence naming 0.1.0. It was corrected before
+refinalizing. An earlier passing package from source `278542a14ffc1cf959ad3f9d95a9e656cad40324`
+is superseded, with its raw build/verification and failed-test evidence retained.
+The final source/export/package gates were repeated, not relabelled.
 
-Historical `v0.1.0` remains object `50812852c4dc2726411a1c73452296955852c50a`,
-target `c3b3a0b7771b313c45f843f49a503b45b0d1ada0`; its six current assets/body
-are unchanged. Only a disposable repository may hold the annotated verification
-tag for this pass. A real v0.1.1 tag/publication needs later separate authorization.
+Application **0.1.1**, package **0.1.1-1**, uses finalized source commit
+**`96f0e4f60d024b5cb1a44af1402401656ded1372`**, epoch **1791069742**.
+Native vercmp confirms it is newer than 0.1.0-2. Annotated verification tags
+existed only in a normal disposable repository. Final exports from checkout
+catalog modes 0600 and 0666 are byte-identical across all four outputs; exact
+verifier, successful extraction and full inventory pass: **521 source files,
+522 unique regular members**, canonical Git modes, one root checkpoint without
+descendants, deterministic order/JSON, normalized ownership and tar/gzip epochs,
+exact recipe/sums, included GPL text/declaration and absent reference images.
+The retained candidate also passes the exact verifier before clone cleanup.
+
+Final source SHA-256:
+`d76c9e45b30123f9064fca3837207b77e9f82f83d21304c9bae1069ba7fff525`.
+Package `arch-dock-0.1.1-1-x86_64.pkg.tar.zst`, **2,252,307 bytes**, SHA-256:
+`22b44078a8e9b9cbe95e81a51da590d3dcbcc43df25a0c80bc17d63f2ec2cb7d`.
+PKGBUILD SHA-256:
+`3485f555e5f2ebddafa23261189500417cb0eec141b79e8a77345db65a2b489f`.
+External checkpoint SHA-256:
+`b8a818e1cd81ab0afd947db08ec0a45a8f1cc8fa01174456549ad6b2286ab97e`.
+Canonical exporter SHA256SUMS SHA-256:
+`de742a471431285776f705446ae15101a712312082e613f7a5dd515eb6b2e77f`.
+The root recipe pins this exact archive. An eventual annotated v0.1.1 tag must
+target the tested source commit above; main's later operational-documentation
+and recipe-pin closure commit is recorded separately in STATE.json.
+
+Fresh `makepkg --verifysource` passes in **1.10 s**. Fresh one-job,
+one-compression-worker, no-LTO Release/Quick3D-ON build passes in **380.51 s**.
+Makepkg initially refused to enter source verification while the owned
+superseded package still occupied its output filename; that package was moved
+within owned scratch before rerunning unchanged required flags. The actual
+build retains `libfakeroot internal error: payload not recognized!` and the
+source-directory-reference warning (the latter also existed in the preceding
+build). Built archive ownership is root:root and unique; metadata, exact payload
+and all native operations pass. The unchanged desktop categories produce a
+validator hint with exit zero. These diagnostics are retained, not hidden.
+
+Fresh focused target build passes in **212.52 s**. All **5/5 affected CTests
+PASS**, **6.97 s**, including the 11 exporter groups. All 307 source/test/CMake
+files are unchanged between the focused binary build and final source commit;
+changed asset data is freshly loaded by the successful tests. The existing
+scoped native helper retains install/upgrade/removal/configuration/catalog/card
+assertions; only current license intake/audit assertions were copied from the
+repository harness. Private startup/recovery blocks stay explicitly reused.
+
+Fresh scoped installed gate passes in **27.07 s**: **210/210** payload
+bytes/modes on fresh install and upgrade, against 209 CMake install paths plus
+INSTALL.md; GPL/MIT metadata, complete official GPL and MIT notices, 17 original
+asset declarations and eight preserved MIT components; **15 Panel + 15 Icon
+Presets and actual cards**, QtTest **8/8**, Quick3D-hidden **4/4**, zero
+failures/skips. Native **0.1.0-2 → 0.1.1-1** upgrade and both removals pass;
+configuration bytes are preserved. No obsolete paths are expected between
+these payload sets; their absence assertion remains enforced. Compiled package
+source/build and full extractions were removed first, and the owner checkout
+is masked during installed checks. Disposable install roots are removed by the
+existing harness trap. Host package state and owner desktop are not modified.
+
+Runtime reuse is explicit: of **349** earlier recorded inputs, **342** are
+unchanged; the seven changed inputs are CMake version/license installation,
+licensing notice, four asset-license expectations and native package license
+assertions. Production C++ and QML are byte-unchanged. Toolchain/dependencies
+match BUILDINFO excluding pkgver/date/recipe-hash/build-path metadata.
+**173** previous package payloads remain byte/mode-identical; 33 asset JSON
+files change only licenses/digest pins, executable/two documents differ and
+LICENSE is added. No binary identity/equivalence is claimed. Configured names
+remain **107: five fresh, 102 explicitly reused**. Prior 18 native CTests,
+37 lifecycle phases and private installed startup/recovery are reused results;
+no fresh full suite or private runtime matrix ran.
+
+Historical v0.1.0 remains object `50812852c4dc2726411a1c73452296955852c50a`,
+target `c3b3a0b7771b313c45f843f49a503b45b0d1ada0`, locally and remotely.
+Fresh API checks preserve release ID/body/title/timestamps/prerelease status
+and all six asset IDs/names/sizes/digests/metadata. No new real v0.1.1 or fixture
+tag exists on main/remote. Real tagging/publication requires separate later
+authorization and is not performed in this pass.
+
+Cleanup removed owned `/mnt/F/ri.poxzomwj`: builds, normal disposable clone and
+test tags, extractions, inspections, superseded candidate files and fixtures.
+Measured removal is **310,685,696 allocated bytes / 292,351,197 apparent bytes**;
+61 protected earlier files and all 135 baseline core metadata records remain
+unchanged. No task-owned process/core remains; owner catalog mode stays 0600.
+Twelve deliberate artifacts remain in `build-codex-release-integrity-0.1.1/`:
+canonical four exporter files, native package, public receipt, separate complete
+RELEASE_SHA256SUMS; proposed notes, local receipt, unique/CRC-checked log ZIP and
+local checksum receipt; STATE.json. The separate full receipt avoids mutating
+the exporter's exact one-entry SHA256SUMS. Final cleanup and Git commit/sync
+proofs belong to STATE.json and the local ZIP.
+
 R-01 physical observations and the unavailable external artwork sample remain
-NOT EXECUTED; R-02 now records the selected license and next candidate; R-03
-retains unproved Mesa-worker mechanism/teardown mitigation; R-04 retains
-independent finding provenance and fixing-agent verification labels.
+NOT EXECUTED. R-02's owner license decision is complete; historical release
+stays fixed and next candidate is prepared. R-03 retains unproved Mesa-worker
+mechanism/teardown mitigation; R-04 retains independent finding provenance and
+corrective verification labels. The supplied assignment stops mid-section 24
+at “If expected payload”; the missing remainder was requested once and not
+provided. These results cover the supplied requirements only.
 
 ## RC-01 and RC-02 release-provenance closure — 2026-10-04
 
