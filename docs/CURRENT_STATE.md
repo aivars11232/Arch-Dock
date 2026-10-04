@@ -1,5 +1,67 @@
 # Arch Dock current state
 
+<!-- FOLDER_CONTENTS_CURRENT_BEGIN -->
+**Current verified owner correction — 2026-10-04: application 0.1.1; Arch package 0.1.1-6.**
+
+Folder contents now unfold from the clicked rendered icon in KDE's native
+anchored popup, with no themed Dialog background or opaque Pane. The existing
+AppletPopup role, focus/deactivation, guards, selection revalidation and
+five layouts remain. Dense Fan fits one vertical scroll axis; wheel up/down
+and held pointer dragging scroll without opening a child. Arrow navigation
+keeps the selected child in view. Labels are on by default; **Panel Studio ->
+Panels -> Behavior -> Always show folder item names** saves through the existing
+Apply/Cancel transaction, model/schema, renderer projection and persisted record.
+Names off retains hover labels. The 48-item cap, original glyph/style/tile path,
+scrollbars, horizontal overflow for applicable layouts, empty/unavailable notices
+and reduced motion remain. Hidden close resets the explicit opening animation
+immediately, so rapid reopening unfolds from the icon again.
+
+Fresh one-job Debug/Quick3D build PASS (1508.93 s),
+with the final incremental rebuild PASS. Six focused model/schema/transaction,
+Studio, geometry and folder checks PASS. Complete final-source CTest
+**111/111 PASS**, 53 serial bounded batches,
+601.97 s summed batch wall time; zero failed/skipped/missing
+names and all 644 tracked input bytes unchanged.
+Four native Wayland gates PASS (170.47 s): actual
+rendering, windows, folder/segment/status interactions and Studio/panel controls.
+QML scan: zero unexpected errors; existing deliberate negative diagnostics
+are classified in the retained receipt. All checks are self-run corrective
+verification; owner visual/physical acceptance remains separate.
+
+Source freeze `332037ba9839e48a858735366bb0000cf0cd1c95`. Two canonical exports, independent
+regeneration of all four artifacts, extracted bytes/Git modes, unique checkpoint,
+normalized ownership/epochs, GPL and reference-image exclusion PASS:
+527 source files/528
+regular archive members. Exact root recipe pin PASS.
+Source SHA-256: `dff87e9a8145834c5800bf867526be39bfbfc1b445e7af1e071b25013fa96ee3`.
+Package SHA-256: `e230ca026631845b387d911199ff690afc8bed7ca21954c6e81ccf7e10396be2`.
+Fresh one-job Release/makepkg build PASS (395.16 s).
+Installed package gate PASS (154.75 s):
+216 payload bytes/modes, 17 asset declarations/eight MIT components,
+15+15 preset catalogs/cards, startup with/without optional 3D, actual installed
+UI and folder interaction matrices, native **0.1.1-5 -> 0.1.1-6** upgrade,
+recovery and removals with configuration preserved. Compiled/extracted source
+and the disposable verification clone were removed before installed verification;
+the original checkout/debug paths were masked.
+
+The first installed gate stopped when an existing Dolphin drop exceeded the 1000 ms synchronous D-Bus deadline although the backend persisted it. The identical package and unchanged assertions passed on a fresh isolated rerun. The failed attempt is retained; no drop-path production change or acceptance shortcut was introduced. Cold owner-desktop behavior remains part of manual acceptance.
+
+Owned cleanup PASS: removed 1,899,859,968 allocated/
+1,854,447,115 apparent bytes of disposable work.
+All 972 protected historical files retain identical bytes/modes;
+all 478 baseline core identities remain, zero new cores, zero
+task dump payloads and zero task processes. 450 compact
+evidence ZIP entries and exact source/package artifacts remain in
+`build-codex-folder-contents-0.1.1-6/`. One primary session, no subagents,
+one build job and one test worker throughout.
+
+Owner still runs 0.1.1-5; the authorized 0.1.1-6 update follows verified cleanup and candidate commit/sync, with a fresh private configuration backup.
+
+The historical v0.1.0 tag and its published assets are untouched. No real new tag/publication occurred. Final clean Git/live remote/owner receipts are in local STATE.json.
+
+**Preserved historical checkpoints follow. Their bodies and original version-specific outcomes remain unchanged; the 0.1.1-6 record above is current.**
+<!-- FOLDER_CONTENTS_CURRENT_END -->
+
 > **Status authority:** This file is the sole current-state source of truth for
 > the repository. The architecture requirements are authoritative in
 > [MASTER_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md](MASTER_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md).

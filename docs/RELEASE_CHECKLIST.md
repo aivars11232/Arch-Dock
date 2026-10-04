@@ -1,5 +1,26 @@
 # Arch Dock release checklist
 
+<!-- FOLDER_CONTENTS_CHECKLIST_BEGIN -->
+## Folder contents correction — 0.1.1-6, 2026-10-04
+
+- [x] Native transparent anchored expansion; explicit rapid-reopen/reset and reduced motion.
+- [x] Persistent names default on; actual native/free Studio edit, Cancel, Apply and reload.
+- [x] Real EIS vertical wheel in both directions and held drag on 48 children; no child launch.
+- [x] Five layouts/two hosts, private handler, keyboard/outside dismissal, guard and segment/status assertions.
+- [x] Final complete configured CTest 111/111; all inputs unchanged; four native gates.
+- [x] Two canonical exports and independent four-artifact regeneration; exact source/package pins.
+- [x] Fresh one-job Release package; installed UI/folder matrices, upgrade/recovery/removal and payload/licensing audits.
+- [x] Owned cleanup; retained historical evidence/configurations and zero task processes/dumps.
+
+Owner still runs 0.1.1-5; the authorized 0.1.1-6 update follows verified cleanup and candidate commit/sync, with a fresh private configuration backup.
+
+- [ ] Owner visual/physical acceptance and any future v0.1.1 publication remain separate.
+
+The historical v0.1.0 tag and its published assets are untouched. No real new tag/publication occurred. Final clean Git/live remote/owner receipts are in local STATE.json.
+
+**Preserved historical checkpoints follow. Their bodies and original version-specific outcomes remain unchanged; the 0.1.1-6 record above is current.**
+<!-- FOLDER_CONTENTS_CHECKLIST_END -->
+
 <!-- AUD_01_02_CHECKLIST_BEGIN -->
 ## AUD-01 + AUD-02 correction — 0.1.1-5, 2026-10-04
 
