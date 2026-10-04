@@ -360,8 +360,8 @@ void PanelCapabilityResolverTest::hostsDeclareTheMechanismsTheySurfaceCanActuall
 
 void PanelCapabilityResolverTest::aMechanismNeedsBothHostAndThemeDeclaration()
 {
-    // The shipped procedural themes declare no mechanism. A host that can run
-    // one must not make it appear anyway: the theme has no parts to move.
+    // The procedural surface can reveal along either axis, but it declares
+    // no mechanical split. Host support alone cannot invent theme parts.
     const CapabilityResolution undeclared = PanelCapabilityResolver::resolve(
         panelFor(PanelHostKind::FreeDesktop),
         PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop),
@@ -377,6 +377,8 @@ void PanelCapabilityResolverTest::aMechanismNeedsBothHostAndThemeDeclaration()
              CapabilityReasonCode::PresentationMechanismUnavailable);
     QCOMPARE(blocked->blockedBy,
              PanelCapabilityResolver::proceduralThemeProfile().id);
+    QVERIFY(decisionById(undeclared.presentationMechanisms, QStringLiteral("collapse-horizontal"))->available);
+    QVERIFY(decisionById(undeclared.presentationMechanisms, QStringLiteral("collapse-vertical"))->available);
 }
 
 void PanelCapabilityResolverTest::radialIsFreeHostOnly()
@@ -422,6 +424,7 @@ void PanelCapabilityResolverTest::openIsNotADeclarableMechanism()
         PanelHostKind::NativeEdge);
     host.presentationMechanisms.clear();
     ThemeCapabilityProfile theme = PanelCapabilityResolver::proceduralThemeProfile();
+    theme.presentationMechanisms.clear();
     QVERIFY(theme.presentationMechanisms.isEmpty());
 
     const CapabilityResolution result = PanelCapabilityResolver::resolve(

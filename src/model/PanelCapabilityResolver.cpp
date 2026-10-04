@@ -826,6 +826,12 @@ ThemeCapabilityProfile PanelCapabilityResolver::proceduralThemeProfile(
         PanelCapability::IconStateStyling,
     };
     profile.layouts = allLayouts();
+    // The procedural renderer clips and reveals the surface and its content
+    // along either axis through PanelMotionController.
+    profile.presentationMechanisms = {
+        PanelPresentationMechanism::CollapseHorizontal,
+        PanelPresentationMechanism::CollapseVertical,
+    };
     profile.rendererTiers = {RendererTier::Procedural2D};
     profile.preferredRendererTier = RendererTier::Procedural2D;
     profile.rotation = {RotationSupport::Bounded, -180.0, 180.0};

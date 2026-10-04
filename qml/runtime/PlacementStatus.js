@@ -55,6 +55,8 @@ function diagnostics(result, key) {
 
 function statusLabel(status) {
     switch (String(status || "")) {
+    case "not-attempted":
+        return "Not checked yet"
     case "applied":
         return "Applied and verified"
     case "unsupported":
@@ -72,7 +74,7 @@ function statusLabel(status) {
 
 function problemText(result) {
     if (result === null || result === undefined)
-        return "not-attempted"
+        return ""
 
     const parts = []
     if (hasValue(result, "errorCode") && String(result.errorCode).length > 0)
@@ -90,9 +92,9 @@ function problemText(result) {
 }
 
 function isProblem(result) {
-    return result === null
-        || result === undefined
-        || !Boolean(result.success)
+    return result !== null && result !== undefined
+        && result.status !== "not-attempted"
+        && !Boolean(result.success)
 }
 
 function savedIntentText(result) {

@@ -216,7 +216,8 @@ Window {
 
     function resetRendererPreview(candidate) {
         previewMode = rendererPreviewMode(candidate);
-        previewPresentationState = "open";
+        previewPresentationState = String(candidate.presentationMode
+            || (candidate.presentation || {}).mode || "open");
         previewStateEntry = 1;
         previewIconState = "normal";
     }
@@ -356,6 +357,28 @@ Window {
             editorSession = EditorModel.setGlobalValue(editorSession, field.key, value);
         } else {
             editorSession = EditorModel.setPanelValue(editorSession, field.key, value);
+            if (field.key === "presentationMode") {
+                if (value === "collapsed" && panelValue("collapseMechanism", "open") === "open") {
+                    const preferred = previewMode === "vertical" ? "collapse-vertical" : "collapse-horizontal";
+                    const mechanism = scenePresentationMechanisms.includes(preferred) ? preferred
+                        : scenePresentationMechanisms.find(function(id) { return id !== "open"; });
+                    if (mechanism) {
+                        editorSession = EditorModel.setPanelValue(editorSession, "collapseMechanism", mechanism);
+                        if (["collapse-horizontal", "collapse-vertical"].includes(mechanism))
+                            editorSession = EditorModel.setPanelValue(editorSession, "collapseAxis",
+                                mechanism === "collapse-vertical" ? "vertical" : "horizontal");
+                    }
+                }
+                previewPresentationState = value;
+            } else if (field.key === "collapseMechanism") {
+                if (value === "open") {
+                    editorSession = EditorModel.setPanelValue(editorSession, "presentationMode", "open");
+                    previewPresentationState = "open";
+                } else if (["collapse-horizontal", "collapse-vertical"].includes(value)) {
+                    editorSession = EditorModel.setPanelValue(editorSession, "collapseAxis",
+                        value === "collapse-vertical" ? "vertical" : "horizontal");
+                }
+            }
         }
         refreshProjection();
     }
@@ -478,7 +501,11 @@ Window {
             for (let index = 0; index < source.length; ++index) {
                 if (String(source[index].section) !== sectionId)
                     continue;
-                if (String(source[index].key) === "scene3DQuality" && !scene3DQualityVisible)
+                if (["scene3DQuality", "scene3DCameraPitch"].includes(String(source[index].key))
+                        && !scene3DQualityVisible)
+                    continue;
+                if (String(source[index].key) === "bakedTilt"
+                        && embeddedRendererPreview.panelSceneItem.effectiveRendererTier !== "baked2.5d")
                     continue;
                 const row = editorRow(source[index]);
                 if (source[index].capability === "presentation-mechanism") {
@@ -620,6 +647,39 @@ Window {
         return [section(label, description, true), notice(qsTr("This page remains unavailable until its renderer and persistence path are implemented."))];
     }
 
+    function panelAnimationRows() {
+        const presentationKeys = ["presentationMode", "presentationTrigger", "collapseMechanism",
+            "collapseAxis", "revealHandle", "openDelay", "closeDelay"];
+        const opening = fieldsForSection("panels-behavior").filter(function(row) {
+            return presentationKeys.includes(row.key);
+        });
+        const rows = [section(qsTr("Opening and closing"),
+            qsTr("Choose the resting state, reveal trigger and motion. Preview is a draft until Apply."), true)];
+        rows.push.apply(rows, opening);
+        if (opening.length && !hasPendingChanges && !auditionBusy
+                && Boolean(panelValue("visible", false)) && panelValue("presentationMode", "open") === "collapsed") {
+            rows.push({kind: "actions", label: qsTr("Saved panel"), actions: [
+                {action: "open-panel", label: qsTr("Open panel")},
+                {action: "close-panel", label: qsTr("Close panel")}
+            ]});
+        }
+        if (!opening.length)
+            rows.push(notice(qsTr("This theme does not declare an opening or closing mechanism.")));
+        rows.push.apply(rows, fieldsForSection("icons-behavior").filter(function(row) {
+            return row.key === "animationDuration";
+        }));
+        rows.push(section(qsTr("Free panel rotation"),
+            qsTr("Choose continuous clockwise or counterclockwise rotation, its speed, and when it runs.")));
+        const rotation = fieldsForSection("panels-layout").filter(function(row) {
+            return ["panelRotationMode", "panelRotationSpeed", "panelRotationTrigger"].includes(row.key);
+        });
+        rows.push.apply(rows, rotation);
+        rows.push(notice(rotation.length
+            ? qsTr("Hover the free panel and scroll up to turn clockwise, or down to turn counterclockwise. Wheel rotation works with continuous rotation off. Hover the preview to try hover-triggered continuous motion.")
+            : qsTr("Rotation requires a free panel with a supported radial layout or closed theme track.")));
+        return rows;
+    }
+
     function iconTileRows() {
         const rows = schemaSectionRows("icon-tiles", qsTr("Icon Tiles"),
             qsTr("Tile backgrounds for this panel. Preview changes here, then Apply to save."));
@@ -730,6 +790,8 @@ Window {
                 return schemaSectionRows("panels-layout", qsTr("Layout"), qsTr("Shape geometry and content placement."));
             if (subTabIndex === 5)
                 return panelSegmentRows();
+            if (subTabIndex === 9)
+                return panelAnimationRows();
             return panelThemeRows();
         }
         if (mainTabIndex === 2) {
@@ -851,6 +913,14 @@ Window {
     }
 
     function performStudioAction(action, data) {
+        if (action === "open-panel" || action === "close-panel") {
+            if (hasPendingChanges || auditionBusy || !Boolean(panelValue("visible", false))
+                || panelValue("presentationMode", "open") !== "collapsed"
+                || !scenePresentationMechanisms.some(function(id) {return id !== "open";})) return;
+            if (!panelController.requestPanelPresentation(selectedPanelId, action === "open-panel" ? "open" : "collapse"))
+                studioError = qsTr("The panel could not accept the presentation request.");
+            return;
+        }
         if (auditionBusy && ["create-free", "remove-panel", "import-theme", "render-theme", "clear-theme"].includes(action)) {
             studioError = qsTr("Apply or cancel desktop audition before changing panels or artwork.");
             return;
@@ -1527,6 +1597,7 @@ Window {
                         previewMode: root.previewMode
                         presentationState:
                             root.previewPresentationState
+                        animateRotation: root.mainTabIndex === 1 && root.subTabIndex === 9
                         stateEntry: root.previewStateEntry
                         iconState: root.previewIconState
                         contentMargin: 6
@@ -1602,33 +1673,85 @@ Window {
                 }
             }
 
-            TabBar {
-                id: studioTabs
-                objectName: "studio-page-tabs"
+            RowLayout {
+                id: studioTabNavigation
+                objectName: "studio-tabs-navigation"
                 visible: root.currentSubtabs.length > 0
                 Layout.fillWidth: true
-                currentIndex: root.subTabIndex
-                contentItem.implicitHeight: count > 0 && itemAt(0) ? itemAt(0).height : 0
+                Layout.minimumWidth: 0
+                // KDE reserves this space in its padding; overlay styles
+                // otherwise put the scrollbar over the navigation button.
+                Layout.leftMargin: studioScroll.mirrored
+                    ? Math.max(0, studioScroll.effectiveScrollBarWidth - studioScroll.leftPadding) : 0
+                Layout.rightMargin: !studioScroll.mirrored
+                    ? Math.max(0, studioScroll.effectiveScrollBarWidth - studioScroll.rightPadding) : 0
+                spacing: 0
+                readonly property bool overflowing: studioTabs.contentWidth
+                    > width - studioTabs.leftPadding - studioTabs.rightPadding + 1
 
-                ScrollInput {
-                    parent: studioTabs
-                    flickables: [studioTabs.contentItem,
-                        studioForm.visible ? studioForm.contentItem
-                            : presetBrowser.visible ? presetBrowser.scrollFlickable : null,
-                        studioScroll.contentItem]
+                function scrollTabs(direction) {
+                    const view = studioTabs.contentItem
+                    view.cancelFlick()
+                    const start = view.originX
+                    const end = start + Math.max(0, view.contentWidth - view.width)
+                    view.contentX = Math.max(start, Math.min(end,
+                        view.contentX + direction * Math.max(104, view.width * 0.8)))
                 }
 
-                Repeater {
-                    model: root.currentSubtabs
+                ToolButton {
+                    objectName: "studio-tabs-previous"
+                    visible: studioTabNavigation.overflowing
+                    enabled: studioTabs.contentItem.contentX > studioTabs.contentItem.originX + 0.5
+                    text: qsTr("Scroll tabs left")
+                    display: AbstractButton.IconOnly
+                    icon.name: "go-previous"
+                    ToolTip.text: text
+                    ToolTip.visible: hovered
+                    onClicked: studioTabNavigation.scrollTabs(-1)
+                }
 
-                    delegate: TabButton {
-                        required property string modelData
-                        required property int index
+                TabBar {
+                    id: studioTabs
+                    objectName: "studio-page-tabs"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    currentIndex: root.subTabIndex
+                    contentItem.clip: true
+                    contentItem.implicitHeight: count > 0 && itemAt(0) ? itemAt(0).height : 0
 
-                        text: modelData
-                        width: Math.max(104, implicitWidth)
-                        onClicked: root.setSubTab(index)
+                    ScrollInput {
+                        parent: studioTabs
+                        flickables: [studioTabs.contentItem,
+                            studioForm.visible ? studioForm.contentItem
+                                : presetBrowser.visible ? presetBrowser.scrollFlickable : null,
+                            studioScroll.contentItem]
                     }
+
+                    Repeater {
+                        model: root.currentSubtabs
+
+                        delegate: TabButton {
+                            required property string modelData
+                            required property int index
+
+                            text: modelData
+                            width: Math.max(104, implicitWidth)
+                            onClicked: root.setSubTab(index)
+                        }
+                    }
+                }
+
+                ToolButton {
+                    objectName: "studio-tabs-next"
+                    visible: studioTabNavigation.overflowing
+                    enabled: studioTabs.contentItem.contentX + studioTabs.contentItem.width
+                        < studioTabs.contentItem.originX + studioTabs.contentItem.contentWidth - 0.5
+                    text: qsTr("Scroll tabs right")
+                    display: AbstractButton.IconOnly
+                    icon.name: "go-next"
+                    ToolTip.text: text
+                    ToolTip.visible: hovered
+                    onClicked: studioTabNavigation.scrollTabs(1)
                 }
             }
 

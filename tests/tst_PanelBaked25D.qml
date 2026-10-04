@@ -425,7 +425,7 @@ TestCase {
         const level = createScene()
         waitForTier(level, "baked2.5d")
         const tilted = createScene({
-            definition: { surface2_5D: { tilt: 12 } }
+            definition: { bakedTilt: 12 }
         })
         waitForTier(tilted, "baked2.5d")
         const clamped = createScene({

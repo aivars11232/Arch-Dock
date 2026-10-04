@@ -23,6 +23,8 @@ Item {
     property int stateEntry: 1
     property string iconState: "normal"
     property real contentMargin: 12
+    // Studio can play motion explicitly; catalog cards remain deterministic.
+    property bool animateRotation: false
 
     readonly property var resolvedPanelDefinition:
         definitionForMode(panelDefinition, previewMode)
@@ -166,6 +168,7 @@ Item {
         const result = copied(state || {})
         result.hoveredEntry = hoveredEntry
         result.hovered = hoveredEntry >= 0 || iconState === "hover"
+            || (animateRotation && previewHover.hovered)
         result.presentationState = presentationState
         result.transitionState = transitionState
         result.presentationProgress = presentationProgress
@@ -196,6 +199,8 @@ Item {
     implicitHeight: 180
     clip: true
 
+    HoverHandler { id: previewHover }
+
     Item {
         id: sceneLayer
 
@@ -217,9 +222,7 @@ Item {
             entryDelegate: previewIconDelegate
             entryInteractionEnabled: false
             geometryCompatibilityProfile: "canonical"
-            // A preview shows the configured angle and reports whether the
-            // scene would rotate; it never animates the turn itself.
-            rotationAnimationEnabled: false
+            rotationAnimationEnabled: root.animateRotation
             entryDelegateContext: ({
                 preview: true,
                 hostKind: root.previewMode === "free" ? "free" : "native"

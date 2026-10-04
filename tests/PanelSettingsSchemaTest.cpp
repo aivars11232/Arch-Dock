@@ -42,6 +42,7 @@ private slots:
     void globalNormalizationIsSchemaDrivenAndStrictForChoices();
     void consumerProjectionCannotBroadenTransactionAuthority();
     void sceneQualityIsBoundedAndReversible();
+    void tiltScalarsPreserveParameterMaps();
     void folderSettingsPreserveLegacyValues();
 };
 
@@ -101,6 +102,31 @@ void PanelSettingsSchemaTest::sceneQualityIsBoundedAndReversible()
     QVERIFY(normalized.has_value());
     QCOMPARE(normalized->surface.parameters3D
                  .value(QStringLiteral("quality")).toString(), QStringLiteral("medium"));
+}
+
+void PanelSettingsSchemaTest::tiltScalarsPreserveParameterMaps()
+{
+    auto definition = PanelDefinition::fromLegacyMap({
+        {"id", "tilt-test"}, {"scene3DCameraPitch", 900.0}, {"bakedTilt", -900.0},
+        {"surface3D", QVariantMap{{"futureData", 7}}},
+        {"surface2_5D", QVariantMap{{"futureData", 9}}}});
+    QVERIFY(definition);
+    QCOMPARE(definition->surface.parameters3D.value("cameraPitch").toDouble(), 60.0);
+    QCOMPARE(definition->surface.parameters2_5D.value("tilt").toDouble(), -60.0);
+    auto values = definition->toPersistedMap();
+    values.insert("scene3DCameraPitch", -35.0);
+    values.insert("bakedTilt", 8.0);
+    definition = PanelDefinition::fromLegacyMap(values);
+    QVERIFY(definition);
+    const auto restored = PanelDefinition::fromLegacyMap(definition->toPersistedMap());
+    QVERIFY(restored);
+    QCOMPARE(restored->surface.parameters3D.value("cameraPitch").toDouble(), -35.0);
+    QCOMPARE(restored->surface.parameters2_5D.value("tilt").toDouble(), 8.0);
+    QCOMPARE(restored->surface.parameters3D.value("futureData").toInt(), 7);
+    QCOMPARE(restored->surface.parameters2_5D.value("futureData").toInt(), 9);
+    for (const QString &key : {QStringLiteral("x"), QStringLiteral("y"),
+         QStringLiteral("openDelay"), QStringLiteral("closeDelay")})
+        QVERIFY(PanelSettingsSchema::isEditorField(PanelSettingsFieldScope::Panel, key));
 }
 
 void PanelSettingsSchemaTest::descriptorsAreUniqueAndComplete()

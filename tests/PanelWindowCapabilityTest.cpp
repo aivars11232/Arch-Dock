@@ -121,6 +121,8 @@ private slots:
     void freePanelContentFollowsItsRecordAndOrdersItsOwnEntries();
     void freeFolderIconsUseNativeMetadata();
     void studioPageWheelInput();
+    void studioPanelMotionControls();
+    void tiltEditorsFollowTheSelectedRenderer();
     void studioIconTiles_data();
     void studioIconTiles();
     void wholePanelRotationFieldsAreGatedByTheResolver();
@@ -268,6 +270,162 @@ void PanelWindowCapabilityTest::studioIconTiles()
     QCOMPARE(saved->settingsRevision, before.value("settingsRevision").toULongLong() + 1);
 }
 
+void PanelWindowCapabilityTest::studioPanelMotionControls()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    QVERIFY(backend.applyPanelSettingsTransaction(panel,
+        registry->panelDefinition(panel)->settingsRevision,
+        {{"type", "launcher"}, {"layout", "ring"}, {"x", 340}, {"y", 220}}).value("success").toBool());
+    const auto before = registry->panelDefinition(panel)->toPersistedMap();
+    const auto freeFields = fieldKeys(backend.panelSettingsEditorSnapshot(panel, "studio").value("panelFields").toList());
+    for (const QString &key : {QStringLiteral("x"), QStringLiteral("y"),
+         QStringLiteral("presentationMode"), QStringLiteral("openDelay"),
+         QStringLiteral("closeDelay"), QStringLiteral("panelRotationMode")})
+        QVERIFY2(freeFields.contains(key), qPrintable(key));
+    const auto nativeFields = fieldKeys(backend.panelSettingsEditorSnapshot("bottom", "studio").value("panelFields").toList());
+    QVERIFY(nativeFields.contains("presentationMode"));
+    QVERIFY(!nativeFields.contains("x") && !nativeFields.contains("y"));
+    const auto nativeBefore = registry->panelDefinition("bottom")->toPersistedMap();
+    const auto refused = backend.applyPanelSettingsTransaction("bottom",
+        registry->panelDefinition("bottom")->settingsRevision, {{"x", 340}});
+    QCOMPARE(refused.value("errorCode").toString(), QStringLiteral("unavailable-panel-field"));
+    QCOMPARE(registry->panelDefinition("bottom")->toPersistedMap(), nativeBefore);
+    for (const auto &status : {backend.nativePanelPlacementStatus("bottom"), backend.nativePanelVisibilityStatus("bottom")}) {
+        QCOMPARE(status.value("status").toString(), QStringLiteral("not-attempted"));
+        QCOMPARE(status.value("errorCode").toString(), QString{});
+        QVERIFY(!status.value("success").toBool());
+    }
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    const auto open = [&] {
+        return std::unique_ptr<QObject>(component.createWithInitialProperties({
+            {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 9},
+            {"width", 980}, {"height", 720}}));
+    };
+    const auto item = [](QObject *popup, const QString &name) -> QQuickItem * {
+        QList<QQuickItem *> pending{qobject_cast<QQuickWindow *>(popup)->contentItem()};
+        while (!pending.isEmpty()) {
+            auto *candidate = pending.takeLast();
+            if (candidate->isVisible() && candidate->objectName() == name) return candidate;
+            pending.append(candidate->childItems());
+        }
+        return nullptr;
+    };
+    for (const bool apply : {false, true}) {
+        auto popup = open(); QVERIFY(popup);
+        auto *window = qobject_cast<QQuickWindow *>(popup.get());
+        QVERIFY(window);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QVERIFY(QQuickTest::qWaitForPolish(window));
+        popup->setProperty("subTabIndex", 0);
+        QVERIFY(QQuickTest::qWaitForPolish(window));
+        for (const QString &key : {QStringLiteral("x"), QStringLiteral("y")}) {
+            auto *position = item(popup.get(), "studio-spin-" + key);
+            QVERIFY(position);
+            position->forceActiveFocus();
+            QTest::keyClick(window, Qt::Key_Up);
+            QVERIFY(QQuickTest::qWaitForPolish(window));
+        }
+        popup->setProperty("subTabIndex", 9);
+        QVERIFY(QQuickTest::qWaitForPolish(window));
+        auto *resting = item(popup.get(), "studio-combo-presentationMode");
+        QVERIFY(resting);
+        resting->forceActiveFocus();
+        QTest::keyClick(window, Qt::Key_Down);
+        QVERIFY(QQuickTest::qWaitForPolish(window));
+        QCOMPARE(popup->property("studioError").toString(), QString{});
+        const auto candidate = popup->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap();
+        QCOMPARE(candidate.value("presentationMode").toString(), QStringLiteral("collapsed"));
+        QCOMPARE(candidate.value("collapseMechanism").toString(), QStringLiteral("collapse-horizontal"));
+        auto *preview = item(popup.get(), "panel-studio-live-renderer-preview");
+        QVERIFY(preview);
+        QTRY_COMPARE(preview->property("collapseProgress").toDouble(), 1.0);
+        auto *rotation = item(popup.get(), "studio-combo-panelRotationMode");
+        QVERIFY(rotation);
+        rotation->forceActiveFocus();
+        QTest::keyClick(window, Qt::Key_Down);
+        QVERIFY(QQuickTest::qWaitForPolish(window));
+        QCOMPARE(popup->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap()
+            .value("panelRotationMode").toString(), QStringLiteral("clockwise"));
+        QVERIFY(popup->property("hasSettingsChanges").toBool());
+        QCOMPARE(registry->panelDefinition(panel)->toPersistedMap(), before);
+        auto *button = item(popup.get(), apply ? "studio-apply" : "studio-cancel");
+        QVERIFY(button && button->isEnabled());
+        QTest::mouseClick(window, Qt::LeftButton, {},
+            button->mapToScene({button->width()/2, button->height()/2}).toPoint());
+        if (apply) QVERIFY(QQuickTest::qWaitForPolish(window));
+        else QTRY_VERIFY(!window->isVisible());
+        QCOMPARE(popup->property("studioError").toString(), QString{});
+        if (!apply) QCOMPARE(registry->panelDefinition(panel)->toPersistedMap(), before);
+    }
+    PanelRegistry reloaded;
+    const auto saved = reloaded.panelDefinition(panel);
+    QVERIFY(saved);
+    QCOMPARE(saved->placement.x, 341);
+    QCOMPARE(saved->placement.y, 221);
+    QCOMPARE(saved->presentation.mode, QStringLiteral("collapsed"));
+    QCOMPARE(saved->presentation.collapseMechanism, QStringLiteral("collapse-horizontal"));
+    QCOMPARE(saved->layout.rotationMode, QStringLiteral("clockwise"));
+    auto popup = open(); QVERIFY(popup);
+    QCOMPARE(popup->property("previewPresentationState").toString(), QStringLiteral("collapsed"));
+}
+
+void PanelWindowCapabilityTest::tiltEditorsFollowTheSelectedRenderer()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const auto panel = registry->addFreePanel();
+    auto fields = backend.panelSettingsEditorSnapshot(panel, "studio").value("panelFields").toList();
+    QVERIFY(!fieldKeys(fields).contains("bakedTilt"));
+    QVERIFY(!fieldKeys(fields).contains("scene3DCameraPitch"));
+    const auto baked = registry->themeCandidate(panel, "ring-platform-blue", "complete");
+    QVERIFY(baked.value("success").toBool());
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        baked.value("values").toMap()).value("success").toBool());
+    fields = backend.panelSettingsEditorSnapshot(panel, "studio").value("panelFields").toList();
+    const auto tilt = fieldByKey(fields, "bakedTilt");
+    QVERIFY(!tilt.isEmpty());
+    QCOMPARE(tilt.value("minimumValue").toDouble(), -10.0);
+    QCOMPARE(tilt.value("maximumValue").toDouble(), 10.0);
+    QVERIFY(!fieldKeys(fields).contains("scene3DCameraPitch"));
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"bakedTilt", 8.0}}).value("success").toBool());
+    QCOMPARE(registry->panelDefinition(panel)->surface.parameters2_5D.value("tilt").toDouble(), 8.0);
+    const auto before = registry->panelDefinition(panel)->toPersistedMap();
+    QCOMPARE(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"bakedTilt", 11.0}}).value("errorCode").toString(), QStringLiteral("tilt-out-of-range"));
+    QCOMPARE(registry->panelDefinition(panel)->toPersistedMap(), before);
+    const auto mesh = registry->themeCandidate(panel, "mesh-platform-cyan", "complete");
+    QVERIFY(mesh.value("success").toBool());
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        mesh.value("values").toMap()).value("success").toBool());
+    fields = backend.panelSettingsEditorSnapshot(panel, "studio").value("panelFields").toList();
+    const bool available = ARCHDOCK_QUICK3D_BUILT && ARCHDOCK_SCENE3D_BUILT;
+    QCOMPARE(fieldKeys(fields).contains("scene3DCameraPitch"), available);
+    QVERIFY(!fieldKeys(fields).contains("bakedTilt"));
+    if (available) {
+        QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+            {{"scene3DCameraPitch", -35.0}}).value("success").toBool());
+        QCOMPARE(backend.panelRendererConfiguration(panel).value("scene3DCameraPitch").toDouble(), -35.0);
+    }
+    const auto nativeBefore = registry->panelDefinition("bottom")->toPersistedMap();
+    QVERIFY(!backend.applyPanelSettingsTransaction("bottom", registry->panelDefinition("bottom")->settingsRevision,
+        {{"scene3DCameraPitch", 30.0}}).value("success").toBool());
+    QCOMPARE(registry->panelDefinition("bottom")->toPersistedMap(), nativeBefore);
+    PanelRegistry reloaded;
+    QCOMPARE(reloaded.panelDefinition(panel)->surface.parameters2_5D.value("tilt").toDouble(), 8.0);
+}
+
 void PanelWindowCapabilityTest::studioPageWheelInput()
 {
     QQmlApplicationEngine engine;
@@ -308,7 +466,61 @@ void PanelWindowCapabilityTest::studioPageWheelInput()
     auto *outer = page->property("contentItem").value<QQuickItem *>();
     auto *tabView = tabs->property("contentItem").value<QQuickItem *>();
     QVERIFY(inner && outer && tabView);
+    auto *previousTabs = item("studio-tabs-previous");
+    auto *nextTabs = item("studio-tabs-next");
+    QVERIFY2(previousTabs && nextTabs, "Overflowing Studio tabs need visible navigation controls");
+    // Keep simulated input separate from the compositor-driven probe.
+    if (!native) {
+        const auto click = [&](QQuickItem *button) {
+            QTest::mouseClick(window, Qt::LeftButton, {},
+                button->mapToScene({button->width() / 2, button->height() / 2}).toPoint());
+            return QQuickTest::qWaitForPolish(window);
+        };
+        popup->setProperty("mainTabIndex", 0);
+        popup->setProperty("subTabIndex", 0);
+        QVERIFY(QQuickTest::qWaitForPolish(window));
+        QVERIFY(!previousTabs->isVisible() && !nextTabs->isVisible());
+        popup->setProperty("mainTabIndex", 1);
+        popup->setProperty("subTabIndex", 0);
+        QVERIFY(QQuickTest::qWaitForPolish(window));
+        QVERIFY(previousTabs->isVisible() && nextTabs->isVisible());
+        QVERIFY(!previousTabs->isEnabled() && nextTabs->isEnabled());
+        nextTabs->forceActiveFocus();
+        QTest::keyClick(window, Qt::Key_Space);
+        QVERIFY(QQuickTest::qWaitForPolish(window));
+        QVERIFY(tabView->property("contentX").toDouble() > 0);
+        QCOMPARE(popup->property("subTabIndex").toInt(), 0);
+        for (int step = 0; nextTabs->isEnabled() && step < 20; ++step) {
+            const double position = tabView->property("contentX").toDouble();
+            QVERIFY(click(nextTabs));
+            QVERIFY2(tabView->property("contentX").toDouble() > position,
+                qPrintable(QStringLiteral("step=%1 before=%2 after=%3 button=(%4,%5) enabled=%6 view-width=%7 content-width=%8")
+                    .arg(step).arg(position).arg(tabView->property("contentX").toDouble())
+                    .arg(nextTabs->mapToScene({0, 0}).x()).arg(nextTabs->mapToScene({0, 0}).y())
+                    .arg(nextTabs->isEnabled()).arg(tabView->width())
+                    .arg(tabView->property("contentWidth").toDouble())));
+        }
+        QVERIFY(!nextTabs->isEnabled());
+        QQuickItem *lastTab = nullptr;
+        QVERIFY(QMetaObject::invokeMethod(tabs, "itemAt", Q_RETURN_ARG(QQuickItem *, lastTab), Q_ARG(int, 9)));
+        QVERIFY(lastTab);
+        const auto lastPosition = lastTab->mapToItem(tabView, {0, 0});
+        QVERIFY(lastPosition.x() >= -1);
+        QVERIFY(lastPosition.x() + lastTab->width() <= tabView->width() + 1);
+        QVERIFY(click(lastTab));
+        QCOMPARE(popup->property("subTabIndex").toInt(), 9);
+        for (int step = 0; previousTabs->isEnabled() && step < 20; ++step)
+            QVERIFY(click(previousTabs));
+        QVERIFY(!previousTabs->isEnabled());
+        QCOMPARE(popup->property("subTabIndex").toInt(), 9);
+        popup->setProperty("mainTabIndex", native ? 2 : 1);
+        popup->setProperty("subTabIndex", native ? 0 : 2);
+        QVERIFY(QQuickTest::qWaitForPolish(window));
+        tabView->setProperty("contentX", 0);
+    }
     if (native) {
+        QVERIFY(inner->property("contentHeight").toDouble() > inner->height()
+            || outer->property("contentHeight").toDouble() > outer->height());
         const QString root = qEnvironmentVariable("ARCHDOCK_RENDERING_SESSION_ROOT");
         const QFileInfo directory(root);
         QVERIFY(directory.isDir() && directory.ownerId() == getuid());
@@ -346,6 +558,10 @@ void PanelWindowCapabilityTest::studioPageWheelInput()
                 {"viewport", QVariantList{top.x(), top.y(), page->width(), page->height()}},
                 {"innerY", inner->property("contentY")}, {"outerY", outer->property("contentY")},
                 {"tabX", tabView->property("contentX")}, {"selection", popup->property("subTabIndex")},
+                {"previousTabs", QVariantMap{{"point", point(previousTabs, {previousTabs->width()/2, previousTabs->height()/2})},
+                    {"enabled", previousTabs->isEnabled()}}},
+                {"nextTabs", QVariantMap{{"point", point(nextTabs, {nextTabs->width()/2, nextTabs->height()/2})},
+                    {"enabled", nextTabs->isEnabled()}}},
                 {"controls", controls}};
             QSaveFile output(root + "/ui-probe.json");
             QVERIFY(output.open(QIODevice::WriteOnly));

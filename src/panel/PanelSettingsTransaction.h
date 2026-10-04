@@ -38,6 +38,10 @@ struct PanelSettingsTransactionDraft
     PanelDefinition candidatePanel;
     QVariantMap previousGlobals;
     QVariantMap candidateGlobals;
+    // Observed live geometry is kept only for host apply and rollback. A
+    // desktop drag may have moved the widget away from its saved intent.
+    QVariantMap previousFreeHostGeometry;
+    QVariantMap candidateFreeHostGeometry;
 };
 
 struct PanelSettingsHostResult

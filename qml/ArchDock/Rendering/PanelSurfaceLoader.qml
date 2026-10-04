@@ -33,6 +33,7 @@ Item {
     property real collapseProgress: 0
     property string mechanism: "open"
     property string sceneQuality: "medium"
+    property real cameraPitch: NaN
 
     readonly property string normalizedRequestedTier:
         String(requestedRendererTier || "procedural2d").toLowerCase()
@@ -184,7 +185,10 @@ Item {
         }
         true3DRenderer.setSource(Qt.resolvedUrl("optional3d/PanelScene3D.qml"), {
             sceneDefinition: Qt.binding(function() {
-                return root.themeDefinition && root.themeDefinition.scene3D || ({})
+                const scene = root.themeDefinition && root.themeDefinition.scene3D || ({})
+                return isFinite(root.cameraPitch)
+                    ? Object.assign({}, scene, {cameraPitch: Math.max(-60, Math.min(60, root.cameraPitch))})
+                    : scene
             }),
             resources: Qt.binding(function() {
                 return root.themeDefinition && root.themeDefinition.scene3DResources || null

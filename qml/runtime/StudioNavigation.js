@@ -8,7 +8,7 @@ var sections = [
     {
         label: "Panels",
         subtabs: ["General", "Size", "Appearance", "Behavior", "Layout", "Segments",
-            "Panel Themes / Skins", "Built-in Panel Presets", "My Panel Presets"]
+            "Panel Themes / Skins", "Built-in Panel Presets", "My Panel Presets", "Animations"]
     },
     {
         label: "Icons",

@@ -182,9 +182,20 @@ Item {
         : LayoutEngine.supportsWholeSceneRotation(layoutPath)
     readonly property bool sceneRotationEnabled: rotationController.enabled
     readonly property bool sceneRotationActive: rotationController.running
-    readonly property real sceneRotationAngle: rotationController.angleOffset
+    property real wheelRotationAngle: 0
+    readonly property bool rotationGeometryAvailable:
+        freeHost && rotationCapabilityAvailable && rotationLayoutSupported
+    readonly property bool wheelRotationAvailable:
+        rotationGeometryAvailable && entryInteractionEnabled && entriesAnimatable
+        && !dragInProgress && !editModeActive && !Boolean(runtimeState.popupOpen)
+        && presentationState !== "collapsed"
+    readonly property real sceneRotationAngle:
+        rotationController.angleOffset + wheelRotationAngle
     readonly property real effectiveLayoutAngle:
-        layoutAngle + rotationController.angleOffset
+        layoutAngle + sceneRotationAngle
+    onRotationGeometryAvailableChanged: {
+        if (!rotationGeometryAvailable) wheelRotationAngle = 0
+    }
     readonly property bool dragInProgress:
         Boolean(runtimeState ? runtimeState.dragInProgress : false)
     readonly property bool editModeActive:
@@ -211,7 +222,7 @@ Item {
         layoutAngle, polygonSides)
     // While rotation is enabled the scene keeps the square every angle fits
     // in, so the host is not asked to resize on every frame.
-    readonly property var layoutGeometry: sceneRotationEnabled
+    readonly property var layoutGeometry: sceneRotationEnabled || rotationGeometryAvailable
         ? LayoutEngine.rotationEnvelope(configuredLayoutGeometry)
         : configuredLayoutGeometry
     readonly property var activeThemeSlice: themeRecord(
@@ -234,14 +245,14 @@ Item {
         ThemeStateSelection.trackFor(themeDefinition, presentationState)
     readonly property var bakedArtworkSize: buildBakedArtworkSize()
     readonly property bool bakedMetadataUsable: usableBakedMetadata()
-    // Limited tilt, declared and clamped by the theme. It lives in the
-    // internal 2.5D parameter map rather than as a visible control, because no
-    // editor exposes it yet and a control that nothing reads would be untrue.
+    // Limited perspective tilt, declared and clamped by the theme.
     readonly property real bakedTiltDegrees: {
         // definitionValue() deliberately refuses object values on the flat
         // form, because every flat key is a scalar. The 2.5D parameter map is
         // the exception, so it is read directly from both shapes.
         const definition = panelDefinition || ({})
+        if (definition.bakedTilt !== undefined)
+            return Number(definition.bakedTilt)
         const section = definition.surface
         const nested = section && typeof section === "object"
             ? section.parameters2_5D : null
@@ -259,7 +270,7 @@ Item {
             activeThemeTrack, bakedArtworkSize.width, bakedArtworkSize.height,
             entryCount, configuredLayoutGeometry.iconSize,
             configuredLayoutGeometry.padding, configuredLayoutGeometry.radius,
-            bakedTiltDegrees, rotationController.enabled)
+            bakedTiltDegrees, sceneRotationEnabled || rotationGeometryAvailable)
         : null
 
     readonly property var surfaceMetrics: buildSurfaceMetrics()
@@ -817,13 +828,32 @@ Item {
         mode: root.rotationLayoutSupported ? root.rotationMode : "none"
         speedDegreesPerSecond: root.rotationSpeed
         trigger: root.rotationTrigger
-        available: root.rotationCapabilityAvailable
+        available: root.freeHost && root.rotationCapabilityAvailable
         hovered: root.panelHovered
         dragActive: root.dragInProgress
         editMode: root.editModeActive
-        sceneConcealed: !root.entriesAnimatable
+        configuring: Boolean(root.runtimeState.popupOpen)
+        sceneConcealed: !root.entriesAnimatable || root.presentationState === "collapsed"
         reducedMotion: root.reducedMotion
         animationEnabled: root.rotationAnimationEnabled
+    }
+
+    WheelHandler {
+        target: null
+        enabled: root.wheelRotationAvailable
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        acceptedModifiers: Qt.NoModifier
+        onWheel: function(event) {
+            const delta = event.pixelDelta.y !== 0 ? event.pixelDelta.y : event.angleDelta.y
+            if (delta === 0) {
+                event.accepted = false
+                return
+            }
+            // One normal wheel notch turns 15 degrees; touchpad deltas turn
+            // proportionally. This is transient geometry, not a saved edit.
+            root.wheelRotationAngle = ((root.wheelRotationAngle + delta / 8) % 360 + 360) % 360
+            event.accepted = true
+        }
     }
 
     GeometryHitRegion {
@@ -893,6 +923,13 @@ Item {
         sceneQuality: String(root.definitionValue("surface", "parameters3D", "surface3D", ({})).quality
             || root.panelDefinition.scene3DQuality
             || (root.themeDefinition.scene3D || ({})).defaultQuality || "medium")
+        cameraPitch: {
+            const definition = root.panelDefinition || ({})
+            const parameters = (definition.surface || {}).parameters3D || definition.surface3D || ({})
+            return Number(definition.scene3DCameraPitch !== undefined
+                ? definition.scene3DCameraPitch : parameters.cameraPitch !== undefined
+                    ? parameters.cameraPitch : NaN)
+        }
         entryVisuals: root.entryVisuals
         entryGeometry: root.entryRects.map(function(rect, index) {
             return { centerX: rect.x + rect.width / 2, centerY: rect.y + rect.height / 2,

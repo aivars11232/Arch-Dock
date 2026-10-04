@@ -31,7 +31,7 @@ def instrument_interaction_stage(stage):
 ''')
     insert("main.qml", "const accepted = dropBackend.addUrls(panelId, freeSurface, values);", '''
         console.warn("ArchDockInteraction " + JSON.stringify({kind: "drop-result", panel: root.panelId,
-            accepted: accepted, urls: values, at: Date.now()}));
+            accepted: accepted, error: dropBackend.lastError, urls: values, at: Date.now()}));
 ''')
     insert("main.qml", "function publishHostConcealed() {", '''
                 console.warn("ArchDockInteraction " + JSON.stringify({kind: "host-change", panel: root.panelId,
@@ -55,6 +55,12 @@ def instrument_interaction_stage(stage):
                             dropPoint: (() => { const p = panelDropArea.mapToItem(null,
                                 panelDropArea.width / 2, panelDropArea.height / 2); return [p.x, p.y]; })(),
                             dropEnabled: panelDropArea.enabled && panelDropArea.visible,
+                            rotation: {angle: panelScene.sceneRotationAngle, active: panelScene.sceneRotationActive,
+                                wheelAvailable: panelScene.wheelRotationAvailable},
+                            collapseProgress: panelScene.collapseProgress,
+                            revealPoint: (() => { const r = panelScene.revealHandle;
+                                const p = panelScene.mapToItem(null, r.x + r.width / 2, r.y + r.height / 2);
+                                return [p.x, p.y]; })(),
                             state: root.reportedPresentation}));
                         if (!panelScene.segmentedScene) return;
                         const segments = [];
@@ -825,13 +831,13 @@ def run_interaction_matrix(free_panel):
             print(f"PASS: native/free combined content, persisted overlay controls, no applet duplicates; 100 updates/{changes} revisions", flush=True)
 
             click([1200, 500])
-            # Procedural segments deliberately offer no theme collapse. Keep
-            # that rejection, then exercise native host hiding. The visible
+            # Procedural panels support linear collapse, but not split/shutter
+            # mechanisms. Keep that rejection, then exercise native host hiding. The visible
             # free host remains an overlay consumer but opts out of status.
             current = snapshot("bottom")
             rejected = panel_call("applyPanelSettingsTransaction", "(sta{sv}a{sv})", ("bottom", current["revision"],
-                values({"presentationMode": "collapsed", "collapseMechanism": "collapse-horizontal"}), {}))
-            assert not rejected["success"] and rejected["errorCode"] == "capability-unavailable"
+                values({"presentationMode": "collapsed", "collapseMechanism": "split"}), {}))
+            assert not rejected["success"] and rejected["errorCode"] == "capability-unavailable", rejected
             assert snapshot("bottom")["revision"] == current["revision"]
             free_segments = snapshot(free_panel)["panelValues"]["segments"]
             configure(free_panel, {"segments": free_segments[:2]})
@@ -916,8 +922,8 @@ def run_interaction_matrix(free_panel):
                            QT_NO_XDG_DESKTOP_PORTAL="1", XDG_DATA_HOME=str(root / "ui-data"))
         with (root / "logs/icon-tiles-native.log").open("w") as tile_log:
             tiles = subprocess.run([str(pathlib.Path(os.environ["ARCHDOCK_BUILD_DIR"]) / "panel-window-capability-test"),
-                                    "studioIconTiles"], env=environment, stdout=tile_log,
-                                   stderr=subprocess.STDOUT, timeout=45)
+                                    "studioIconTiles", "studioPanelMotionControls", "tiltEditorsFollowTheSelectedRenderer"],
+                                   env=environment, stdout=tile_log, stderr=subprocess.STDOUT, timeout=60)
             assert tiles.returncode == 0, ("native Icon Tiles edit/Cancel/Apply/persistence failed\n"
                 + (root / "logs/icon-tiles-native.log").read_text())
         probe = subprocess.Popen([str(pathlib.Path(os.environ["ARCHDOCK_BUILD_DIR"]) / "panel-window-capability-test"),
@@ -944,6 +950,19 @@ def run_interaction_matrix(free_panel):
                     break
             wait_for(lambda: ui()["outerY"] == page_start["outerY"] and ui()["innerY"] == page_start["innerY"],
                      "reverse Wayland page wheel restores the visible tab strip")
+            for name, direction in (("nextTabs", 1), ("previousTabs", -1)):
+                before = ui()
+                assert before[name]["enabled"], before
+                motion(ui_point(before[name]["point"]))
+                lib.ei_device_button_button(devices[2], 272, True)
+                lib.ei_device_frame(devices[2], lib.ei_now(context))
+                sync_input()
+                lib.ei_device_button_button(devices[2], 272, False)
+                lib.ei_device_frame(devices[2], lib.ei_now(context))
+                sync_input()
+                wait_for(lambda: direction * (ui()["tabX"] - before["tabX"]) > 0,
+                         "Wayland tab navigation arrow " + name)
+                assert ui()["selection"] == 0, ui()
             before = ui()
             wheel(ui_point(before["tabs"]), 120, 0, discrete=True)
             wait_for(lambda: ui()["tabX"] > before["tabX"], "Wayland horizontal tab wheel")
@@ -969,7 +988,7 @@ def run_interaction_matrix(free_panel):
                 assert next(row for row in ui()["controls"] if row["name"] == control["name"])["value"] == control["value"]
             (root / "ui-probe.done").touch()
             assert probe.wait(timeout=5) == 0, (root / "logs/ui-input-probe.log").read_text()
-            print("PASS: real Wayland vertical, horizontal, Shift-wheel and SpinBox/ComboBox input preserve settings", flush=True)
+            print("PASS: real Wayland tab arrows, vertical, horizontal, Shift-wheel and SpinBox/ComboBox input preserve settings", flush=True)
         finally:
             print("Native Studio final state:", json.dumps(ui()), flush=True)
             if probe.poll() is None:
@@ -1051,7 +1070,7 @@ def run_interaction_matrix(free_panel):
             if panel_call("dockConfiguration", "(s)", (free_panel,))["acceptDrops"]:
                 receipt = wait_for(lambda: observations.get(("drop-result", free_panel, ""), {}).get("at", 0) > previous_result
                     and observations[("drop-result", free_panel, "")], "Arch Dock drop result observed")
-                assert receipt["accepted"] == accepted and [unquote(value) for value in receipt["urls"]] == [unquote(uri)], receipt
+                assert receipt["accepted"] == accepted and [unquote(value) for value in receipt["urls"]] == [unquote(uri)], (receipt, rows())
             if not accepted:
                 print("Private desktop fallback after refused drop:", json.dumps(kwin_geometry()), flush=True)
                 escape()
@@ -1097,6 +1116,77 @@ def run_interaction_matrix(free_panel):
                     and all(v > 0 for v in observed(row["appId"])["glyphSize"])
                     and observed(row["appId"]).get("meshActive") == (tier == "true3d"),
                     "native application/folder glyph in " + tier + ": " + row["appId"])
+            def host_state(): return observations.get(("host", free_panel, ""), {})
+            before = wait_for(lambda: host_state().get("rotation", {}).get("wheelAvailable")
+                and host_state(), "live wheel rotation ready in " + tier)
+            angle = before["rotation"]["angle"]
+            wheel(entry_point(app), 0, -120, discrete=True)
+            wait_for(lambda: abs(host_state()["rotation"]["angle"] - (angle + 15) % 360) < 0.01,
+                "Wayland wheel turns free panel clockwise in " + tier)
+            wheel(entry_point(app), 0, 120, discrete=True)
+            wait_for(lambda: abs(host_state()["rotation"]["angle"] - angle) < 0.01,
+                "Wayland wheel reverses free panel in " + tier)
+            for mode, direction in (("clockwise", 1), ("counter-clockwise", -1)):
+                configure(free_panel, {"panelRotationMode": mode, "panelRotationSpeed": 90,
+                    "panelRotationTrigger": "idle"})
+                before = wait_for(lambda: host_state()["rotation"]["active"] and host_state(), "continuous motion active")
+                angle = before["rotation"]["angle"]
+                wait_for(lambda: 0.1 < (direction * (host_state()["rotation"]["angle"] - angle)) % 360 < 90,
+                    "continuous " + mode + " motion in " + tier)
+            configure(free_panel, {"panelRotationMode": "none"})
+            wait_for(lambda: not host_state()["rotation"]["active"], "continuous rotation disabled")
+        configuration = panel_call("dockConfiguration", "(s)", (free_panel,))
+        record = configuration["panel"]
+        def free_geometry(command=None, clear=False):
+            write = ""
+            if command is not None:
+                payload = dict(command, panelId=free_panel, ownerToken=record["freeOwnershipToken"])
+                write = "widget.writeConfig(\"auditionRestoreGeometry\", " + json.dumps(json.dumps(payload)) + ");"
+            elif clear:
+                write = "widget.writeConfig(\"auditionRestoreGeometry\", \"\");"
+            script = f'''const desktop = desktopById({record["freeDesktopContainmentId"]});
+                const widget = desktop ? desktop.widgetById({record["freeDockAppletId"]}) : null;
+                if (!widget || widget.type !== "org.archdock.dock") throw new Error("missing owned widget");
+                widget.currentConfigGroup = ["General"];
+                if (String(widget.readConfig("panelId", "")) !== {json.dumps(free_panel)} ||
+                    String(widget.readConfig("ownerToken", "")) !== {json.dumps(record["freeOwnershipToken"])})
+                    throw new Error("ownership mismatch");
+                {write}
+                const g = widget.geometry;
+                print("ARCHDOCK_GEOMETRY:" + JSON.stringify({{x:g.x, y:g.y, width:g.width, height:g.height}}));'''
+            reply = call("org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell", "evaluateScript", "(s)", (script,))
+            assert reply.strip().startswith("ARCHDOCK_GEOMETRY:"), reply
+            return json.loads(reply.strip().split(":", 1)[1])
+        actual = free_geometry()
+        configure(free_panel, {"x": round(actual["x"]) + 40, "y": round(actual["y"]) + 30})
+        moved = free_geometry()
+        assert moved == dict(actual, x=round(actual["x"]) + 40, y=round(actual["y"]) + 30), (actual, moved)
+        drifted = dict(moved, x=moved["x"] + 5, y=moved["y"] + 4)
+        free_geometry(command=drifted)
+        wait_for(lambda: free_geometry() == drifted, "owned widget moved independently of saved intent")
+        free_geometry(clear=True)
+        # A bounded invalid command must restore the actual moved widget,
+        # not the older saved intent or a different desktop applet.
+        before = panel_call("dockConfiguration", "(s)", (free_panel,))
+        rejected = panel_call("applyPanelSettingsTransaction", "(sta{sv}a{sv})",
+            (free_panel, int(before["settingsRevision"]), values({"x": 1000001}), {}))
+        assert not rejected["success"] and rejected["rolledBack"], rejected
+        assert free_geometry() == drifted
+        after = panel_call("dockConfiguration", "(s)", (free_panel,))
+        assert (after["x"], after["y"]) == (before["x"], before["y"])
+        motion([1200, 500])
+        configure(free_panel, {"rendererTier": "procedural2d", "panelThemeId": "", "completeThemeId": "",
+            "presentationMode": "collapsed", "collapseMechanism": "collapse-horizontal", "presentationTrigger": "hover"})
+        wait_for(lambda: host_state().get("collapseProgress") == 1, "procedural panel rests closed")
+        host = host_state()
+        motion(native_point(host["rect"][2:], host["revealPoint"]))
+        wait_for(lambda: opened(free_panel) and host_state().get("collapseProgress") == 0,
+            "native hover opens the procedural panel")
+        motion([1200, 500])
+        wait_for(lambda: host_state().get("collapseProgress") == 1,
+            "native pointer leave closes the procedural panel")
+        configure(free_panel, {"presentationMode": "open", "collapseMechanism": "open"})
+        print("PASS: real Wayland wheel and optional continuous rotation in 2D/3D; owned free position read-back/rollback; procedural hover open/close", flush=True)
         print("PASS: actual Wayland URI/application/folder drops, deduplication, refusals, pointer reorder, native ownership and 2D/3D glyphs", flush=True)
 
     first = Gtk.ApplicationWindow(application=app)

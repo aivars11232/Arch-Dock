@@ -56,6 +56,8 @@ function containsMode(status, nativeHost, mode) {
 
 function statusLabel(status) {
     switch (String(status || "")) {
+    case "not-attempted":
+        return "Not checked yet"
     case "applied":
         return "Applied and verified"
     case "fallback-applied":
@@ -78,15 +80,14 @@ function statusLabel(status) {
 }
 
 function isProblem(result) {
-    return result === null
-        || result === undefined
-        || !Boolean(result.success)
-        || Boolean(result.fallbackApplied)
+    return result !== null && result !== undefined
+        && result.status !== "not-attempted"
+        && (!Boolean(result.success) || Boolean(result.fallbackApplied))
 }
 
 function problemText(result) {
     if (result === null || result === undefined)
-        return "not-attempted"
+        return ""
 
     if (Boolean(result.fallbackApplied)) {
         return "Requested " + String(result.requestedMode || "mode")

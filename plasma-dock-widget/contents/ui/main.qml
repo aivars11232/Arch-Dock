@@ -360,11 +360,14 @@ PlasmoidItem {
                        container.applet.plasmoid && container.applet.plasmoid.id === Plasmoid.id))
                     container = container.parent;
                 if (!container || typeof container.layout.save !== "function") return;
+                // Plasma can reposition a managed container when its size
+                // hints grow. Finish resizing before setting the requested
+                // position, so that relayout cannot replace the move.
+                container.width = requested.width + container.leftPadding + container.rightPadding;
+                container.height = requested.height + container.topPadding + container.bottomPadding;
                 const position = container.applet.mapToItem(container.layout, 0, 0);
                 container.x += requested.x - position.x;
                 container.y += requested.y - position.y;
-                container.width = requested.width + container.leftPadding + container.rightPadding;
-                container.height = requested.height + container.topPadding + container.bottomPadding;
                 container.layout.save();
             });
         });

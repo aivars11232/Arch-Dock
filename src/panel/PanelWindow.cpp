@@ -669,8 +669,8 @@ QVariantMap PanelWindow::nativePanelPlacementStatus(const QString &panelId) cons
     return {
         {QStringLiteral("panelId"), panelId},
         {QStringLiteral("success"), false},
-        {QStringLiteral("status"), QStringLiteral("failed")},
-        {QStringLiteral("errorCode"), QStringLiteral("not-attempted")},
+        {QStringLiteral("status"), QStringLiteral("not-attempted")},
+        {QStringLiteral("errorCode"), QString{}},
         {QStringLiteral("requested"), QVariantMap{}},
         {QStringLiteral("applied"), QVariantMap{}},
         {QStringLiteral("unsupported"), QVariantList{}},
@@ -726,7 +726,7 @@ QVariantMap PanelWindow::nativePanelVisibilityStatus(const QString &panelId) con
         {QStringLiteral("success"), false},
         {QStringLiteral("verified"), false},
         {QStringLiteral("status"), QStringLiteral("not-attempted")},
-        {QStringLiteral("errorCode"), QStringLiteral("not-attempted")},
+        {QStringLiteral("errorCode"), QString{}},
         {QStringLiteral("requestedMode"),
          nativePanel
              ? m_panelRegistry.panelValue(
@@ -2359,6 +2359,36 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 available = theme && theme->value(QStringLiteral("valid")).toBool()
                     && !theme->value(QStringLiteral("scene3D")).toMap().isEmpty()
                     && !theme->value(QStringLiteral("scene3DResources")).toMap().isEmpty();
+                if (available && key == QStringLiteral("scene3DCameraPitch"))
+                    field.insert(QStringLiteral("defaultValue"), theme->value(QStringLiteral("scene3D"))
+                        .toMap().value(QStringLiteral("cameraPitch"), 25.0));
+            }
+        }
+        else if (capability == QStringLiteral("baked-tilt"))
+        {
+            available = false;
+            const auto theme = m_panelRegistry.themeRuntimeProjection(candidate);
+            if (freeHost && resolution.available
+                && resolution.renderer.effectiveTier == ArchDock::RendererTier::Baked2_5D && theme)
+            {
+                const auto tracks = theme->value(QStringLiteral("tracks")).toList();
+                for (const auto &trackValue : tracks)
+                {
+                    const auto track = trackValue.toMap();
+                    const auto state = track.value(QStringLiteral("state")).toString();
+                    if (!state.isEmpty() && state != candidate.presentation.mode) continue;
+                    const auto tilt = track.value(QStringLiteral("tilt")).toMap();
+                    if (tilt.isEmpty()) continue;
+                    const double minimum = qMax(-60.0, tilt.value(QStringLiteral("minimumDegrees")).toDouble());
+                    const double maximum = qMin(60.0, tilt.value(QStringLiteral("maximumDegrees")).toDouble());
+                    if (maximum <= minimum) continue;
+                    field.insert(QStringLiteral("minimumValue"), minimum);
+                    field.insert(QStringLiteral("maximumValue"), maximum);
+                    field.insert(QStringLiteral("defaultValue"), qBound(minimum,
+                        tilt.value(QStringLiteral("defaultDegrees"), 0.0).toDouble(), maximum));
+                    available = true;
+                    break;
+                }
             }
         }
         else if (const std::optional<ArchDock::PanelCapability> parsed =
@@ -2496,9 +2526,13 @@ QVariantMap PanelWindow::panelSettingsEditorValues(
     const QVariantList &fields) const
 {
     QSet<QString> includedKeys;
+    QVariantMap projectedDefaults;
     for (const QVariant &value : fields)
     {
-        includedKeys.insert(value.toMap().value(QStringLiteral("key")).toString());
+        const auto field = value.toMap();
+        const auto key = field.value(QStringLiteral("key")).toString();
+        includedKeys.insert(key);
+        projectedDefaults.insert(key, field.value(QStringLiteral("defaultValue")));
     }
     for (const ArchDock::PanelSettingsFieldDescriptor &field :
          ArchDock::PanelSettingsSchema::fields())
@@ -2519,7 +2553,7 @@ QVariantMap PanelWindow::panelSettingsEditorValues(
             ArchDock::PanelSettingsSchema::panelDescriptor(key);
         if (field)
         {
-            result.insert(key, record.value(key, field->defaultValue));
+            result.insert(key, record.value(key, projectedDefaults.value(key, field->defaultValue)));
         }
     }
     return result;
@@ -2682,10 +2716,13 @@ PanelWindow::preparePanelSettingsDraft(
     const QVariantList broadFields = panelSettingsEditorFields(
         draft->candidatePanel, resolution, QStringLiteral("studio"));
     QSet<QString> availableFields;
+    QVariantMap tiltEditor;
     for (const QVariant &value : broadFields)
     {
         availableFields.insert(
             value.toMap().value(QStringLiteral("key")).toString());
+        if (value.toMap().value(QStringLiteral("key")).toString() == QStringLiteral("bakedTilt"))
+            tiltEditor = value.toMap();
     }
     QSet<QString> previousFields;
     for (const QVariant &value : panelSettingsEditorFields(*currentPanel,
@@ -2695,6 +2732,22 @@ PanelWindow::preparePanelSettingsDraft(
     }
     const QVariantMap currentValues = currentPanel->toLegacyMap();
     const QVariantMap candidateValues = draft->candidatePanel.toLegacyMap();
+    if (!tiltEditor.isEmpty() && panelValues.contains(QStringLiteral("bakedTilt"))
+        && candidateValues.value(QStringLiteral("bakedTilt")) != currentValues.value(QStringLiteral("bakedTilt")))
+    {
+        const double tilt = candidateValues.value(QStringLiteral("bakedTilt")).toDouble();
+        if (tilt < tiltEditor.value(QStringLiteral("minimumValue")).toDouble()
+            || tilt > tiltEditor.value(QStringLiteral("maximumValue")).toDouble())
+        {
+            if (outcome)
+            {
+                outcome->status = ArchDock::PanelSettingsTransactionStatus::ValidationFailed;
+                outcome->errorCode = QStringLiteral("tilt-out-of-range");
+                outcome->errorMessage = QStringLiteral("the requested tilt exceeds this theme's declared range");
+            }
+            return std::nullopt;
+        }
+    }
     for (auto it = panelValues.cbegin(); it != panelValues.cend(); ++it)
     {
         const ArchDock::PanelSettingsFieldDescriptor *field =
@@ -2939,6 +2992,27 @@ QVariantMap PanelWindow::commitPanelSettingsDraft(
     if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
 
     ArchDock::PresetApplication::markCustomized(draft.previousPanel, &draft.candidatePanel);
+    const auto &freeHost = draft.candidatePanel.host;
+    const bool freePositionChanged = freeHost.kind == ArchDock::PanelHostKind::FreeDesktop
+        && (draft.previousPanel.placement.x != draft.candidatePanel.placement.x
+            || draft.previousPanel.placement.y != draft.candidatePanel.placement.y);
+    if (freePositionChanged && freeHost.freeDesktopContainmentId >= 0
+        && freeHost.freeDockAppletId >= 0 && !freeHost.freeOwnershipToken.isEmpty())
+    {
+        QString error;
+        const auto geometry = presetFreeHostGeometry(draft.previousPanel, &error);
+        if (!geometry)
+        {
+            outcome.status = ArchDock::PanelSettingsTransactionStatus::ValidationFailed;
+            outcome.errorCode = error;
+            outcome.errorMessage = QStringLiteral("the owned free-panel position could not be verified");
+            return outcome.toVariantMap();
+        }
+        draft.previousFreeHostGeometry = *geometry;
+        draft.candidateFreeHostGeometry = *geometry;
+        draft.candidateFreeHostGeometry.insert(QStringLiteral("x"), draft.candidatePanel.placement.x);
+        draft.candidateFreeHostGeometry.insert(QStringLiteral("y"), draft.candidatePanel.placement.y);
+    }
     QString persistenceError;
     if (!m_panelRegistry.persistPanelSettingsTransaction(draft, &persistenceError))
     {
@@ -3112,6 +3186,18 @@ QList<ArchDock::PanelSettingsHostResult> PanelWindow::applyPanelSettingsHosts(
     }
     results.append(placement);
 
+    ArchDock::PanelSettingsHostResult freePlacement;
+    freePlacement.component = QStringLiteral("free-placement");
+    freePlacement.required = !draft.candidateFreeHostGeometry.isEmpty();
+    if (freePlacement.required)
+    {
+        freePlacement.success = setPresetFreeHostGeometry(draft.candidatePanel,
+            draft.candidateFreeHostGeometry, &freePlacement.errorCode);
+        freePlacement.status = freePlacement.success ? QStringLiteral("applied") : QStringLiteral("failed");
+        freePlacement.details = {{QStringLiteral("requested"), draft.candidateFreeHostGeometry}};
+    }
+    results.append(freePlacement);
+
     const bool visibilityChanged = anyChanged({
         QStringLiteral("visible"),
         QStringLiteral("visibilityMode"),
@@ -3211,6 +3297,8 @@ QList<ArchDock::PanelSettingsHostResult> PanelWindow::rollbackPanelSettingsHosts
         draft.previousPanel,
         draft.candidateGlobals,
         draft.previousGlobals,
+        draft.candidateFreeHostGeometry,
+        draft.previousFreeHostGeometry,
     };
     QList<ArchDock::PanelSettingsHostResult> results =
         applyPanelSettingsHosts(reverseDraft, includeVisibility);

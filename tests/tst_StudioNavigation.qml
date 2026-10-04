@@ -30,7 +30,8 @@ TestCase {
             "Segments",
             "Panel Themes / Skins",
             "Built-in Panel Presets",
-            "My Panel Presets"
+            "My Panel Presets",
+            "Animations"
         ])
         compareList(StudioNavigation.subtabsFor(2), [
             "Appearance",
@@ -58,7 +59,7 @@ TestCase {
 
     function test_clampsSubtabIndices() {
         compare(StudioNavigation.clampSubtabIndex(0, -1), 0)
-        compare(StudioNavigation.clampSubtabIndex(1, 99), 8)
+        compare(StudioNavigation.clampSubtabIndex(1, 99), 9)
         compare(StudioNavigation.clampSubtabIndex(2, 3), 3)
         compare(StudioNavigation.clampSubtabIndex(2, 99), 6)
         compare(StudioNavigation.clampSubtabIndex(3, 99), 0)
@@ -102,7 +103,7 @@ TestCase {
         compare(StudioNavigation.presetPage(4, 0), null)
         compare(StudioNavigation.presetPage(3, 0), null)
         // An out-of-range index clamps to the last page of its section.
-        compareList(StudioNavigation.presetPage(1, 99), { kind: "panel", scope: "user" })
+        compare(StudioNavigation.presetPage(1, 99), null)
         // The lookup hands out copies, never its own table.
         const page = StudioNavigation.presetPage(1, 7);
         page.kind = "icon"

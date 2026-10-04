@@ -5,6 +5,16 @@ import "../qml/runtime/PlacementStatus.js" as PlacementStatus
 TestCase {
     name: "PlacementStatus"
 
+    function test_unattemptedStatusIsNeutral() {
+        const result = {success: false, ownershipVerified: false,
+            status: "not-attempted", errorCode: ""}
+        verify(!PlacementStatus.isProblem(result))
+        verify(!PlacementStatus.isProblem(null))
+        compare(PlacementStatus.statusLabel(result.status), "Not checked yet")
+        compare(PlacementStatus.problemText(result), "")
+        verify(PlacementStatus.isProblem({success: false, status: "failed", errorCode: "ownership-denied"}))
+    }
+
     function test_mapTextIsStableAndPreservesFalsyValues() {
         compare(
             PlacementStatus.mapText({

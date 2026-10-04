@@ -595,6 +595,12 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     if (record.contains(QStringLiteral("scene3DQuality")))
         definition.surface.parameters3D.insert(QStringLiteral("quality"),
             normalized(QStringLiteral("scene3DQuality"), QStringLiteral("medium")));
+    if (record.contains(QStringLiteral("scene3DCameraPitch")))
+        definition.surface.parameters3D.insert(QStringLiteral("cameraPitch"),
+            normalized(QStringLiteral("scene3DCameraPitch"), 25.0));
+    if (record.contains(QStringLiteral("bakedTilt")))
+        definition.surface.parameters2_5D.insert(QStringLiteral("tilt"),
+            normalized(QStringLiteral("bakedTilt"), 0.0));
     setString(QStringLiteral("themeAsset"), &definition.surface.themeAsset);
     setString(QStringLiteral("themeSource"), &definition.surface.themeSource);
     definition.surface.themeFit = normalized(
@@ -1102,6 +1108,12 @@ QVariantMap PanelDefinition::toLegacyMap() const
     if (surface.parameters3D.contains(QStringLiteral("quality")))
         record.insert(QStringLiteral("scene3DQuality"),
             surface.parameters3D.value(QStringLiteral("quality")));
+    if (surface.parameters3D.contains(QStringLiteral("cameraPitch")))
+        record.insert(QStringLiteral("scene3DCameraPitch"),
+            surface.parameters3D.value(QStringLiteral("cameraPitch")));
+    if (surface.parameters2_5D.contains(QStringLiteral("tilt")))
+        record.insert(QStringLiteral("bakedTilt"),
+            surface.parameters2_5D.value(QStringLiteral("tilt")));
     record.insert(QStringLiteral("themeAsset"), surface.themeAsset);
     record.insert(QStringLiteral("themeSource"), surface.themeSource);
     record.insert(QStringLiteral("themeFit"), surface.themeFit);

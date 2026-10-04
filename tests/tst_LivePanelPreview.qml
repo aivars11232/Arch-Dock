@@ -9,6 +9,7 @@ TestCase {
     width: 720
     height: 420
     when: windowShown
+    visible: true
 
     readonly property var previewEntries: [
         {
@@ -93,6 +94,21 @@ TestCase {
         verify(slot !== null)
         verify(slot.delegateItem !== null)
         return slot.delegateItem
+    }
+
+    function test_continuousRotationIsExplicitlyPlayable() {
+        const preview = createPreview({visible: true,
+            panelDefinition: definition({edge: "free", layout: "ring", panelRotationMode: "clockwise",
+                panelRotationSpeed: 90, panelRotationTrigger: "idle"}),
+            hostCapabilities: {available: true, rotation: {available: true}},
+            animationProfiles: {reducedMotion: false}})
+        compare(preview.panelSceneItem.sceneRotationActive, false, "cards start frozen")
+        preview.animateRotation = true
+        tryVerify(function() {return preview.panelSceneItem.sceneRotationAngle > 5}, 3000)
+        preview.animateRotation = false
+        const held = preview.panelSceneItem.sceneRotationAngle
+        wait(120)
+        compare(preview.panelSceneItem.sceneRotationAngle, held, "stopping preview preserves its angle")
     }
 
     // Native Qt sequences are array-like, but Array.isArray() returns false.

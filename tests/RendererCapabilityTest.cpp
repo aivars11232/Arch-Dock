@@ -191,6 +191,32 @@ private slots:
         const QString evidence = qEnvironmentVariable("ARCHDOCK_SCENE_EVIDENCE_DIR");
         if (!evidence.isEmpty())
             QVERIFY(first.save(QDir(evidence).filePath(QStringLiteral("mesh-scene.png"))));
+        auto tiltedDefinition = plainValue(scene->property("panelDefinition")).toMap();
+        for (const double pitch : {10.0, -35.0}) {
+            tiltedDefinition.insert(QStringLiteral("scene3DCameraPitch"), pitch);
+            scene->setProperty("panelDefinition", tiltedDefinition);
+            QTRY_COMPARE(plainValue(renderer->property("sceneDefinition")).toMap()
+                .value(QStringLiteral("cameraPitch")).toDouble(), pitch);
+            QTest::qWait(100);
+            const auto tilted = pixels();
+            QVERIFY(!tilted.isNull());
+            QVERIFY(tilted != first);
+            QCOMPARE(plainValue(scene->property("entryRects")), geometry);
+            for (QObject *model : renderer->findChildren<QObject *>()) {
+                if (!model->objectName().startsWith(QStringLiteral("mesh-entry-"))
+                    || model->objectName().startsWith(QStringLiteral("mesh-entry-part-"))) continue;
+                const auto expected = plainValue(model->property("rect")).toMap();
+                QVector3D projected;
+                QVERIFY(QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, projected),
+                    Q_ARG(QVector3D, model->property("scenePosition").value<QVector3D>())));
+                QVERIFY(qAbs(projected.x() - expected.value("centerX").toDouble()) < 1);
+                QVERIFY(qAbs(projected.y() - expected.value("centerY").toDouble()) < 1);
+            }
+            if (!evidence.isEmpty())
+                QVERIFY(tilted.save(QDir(evidence).filePath(QStringLiteral("mesh-tilt-%1.png").arg(pitch))));
+        }
+        tiltedDefinition.remove(QStringLiteral("scene3DCameraPitch"));
+        scene->setProperty("panelDefinition", tiltedDefinition);
         QVariantMap tiles = plainValue(scene->property("panelDefinition")).toMap();
         tiles.insert(QStringLiteral("iconTileMode"), QStringLiteral("custom"));
         tiles.insert(QStringLiteral("iconTileColor"), QStringLiteral("#ff22cc"));

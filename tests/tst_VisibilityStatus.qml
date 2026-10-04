@@ -5,6 +5,16 @@ import "../qml/runtime/VisibilityStatus.js" as VisibilityStatus
 TestCase {
     name: "VisibilityStatus"
 
+    function test_unattemptedStatusIsNeutral() {
+        const result = {success: false, verified: false,
+            status: "not-attempted", errorCode: ""}
+        verify(!VisibilityStatus.isProblem(result))
+        verify(!VisibilityStatus.isProblem(null))
+        compare(VisibilityStatus.statusLabel(result.status), "Not checked yet")
+        compare(VisibilityStatus.problemText(result), "")
+        verify(VisibilityStatus.isProblem({success: false, status: "failed", errorCode: "ownership-denied"}))
+    }
+
     readonly property var labels: ({
         "always": "Always visible",
         "auto-hide": "Auto-hide",

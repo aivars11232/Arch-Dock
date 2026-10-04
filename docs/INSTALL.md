@@ -27,6 +27,35 @@ preview shows the draft in both 2D and 3D. Apply saves it, while Cancel discards
 changes made since the last Apply. Tiles keep the application's real icon glyph
 and its interaction area.
 
+In **Panels**, use the arrows beside the tab strip when all tabs do not fit.
+Horizontal wheel input or Shift-wheel also pans the tabs. Ordinary vertical
+wheel input scrolls the page, including over spin boxes and combo boxes,
+without changing their values.
+
+For a free panel, **General** exposes its X and Y position in desktop pixels.
+Apply moves the owned widget and checks the actual geometry; a refused move
+restores the widget's previous position and saved settings. **Layout** keeps
+the layout angle separate from **Perspective tilt**. Tilt appears for a
+compatible baked theme within that theme's declared range, or for an active
+3D theme as camera pitch. Controls follow the renderer actually available.
+
+**Animations** groups opening/closing behavior, trigger, reveal handle,
+delays and duration. The default procedural renderer supports horizontal and
+vertical collapse. Select **Collapsed** for the resting state, then use its
+reveal handle with the chosen trigger to open it. Compatible themes expose
+their own supported mechanisms. After Apply, **Open panel** and **Close panel**
+operate the saved collapsible panel. Cancel discards the draft. Reduced motion
+keeps the state changes while suppressing animated transitions and continuous rotation.
+
+On an interactive free circular/radial panel, hover the panel and scroll up
+to turn the icons clockwise or down to turn them counterclockwise. Each wheel
+notch turns 15 degrees. This manual angle is temporary and requires no Apply.
+On **Animations**, choose **Clockwise** or **Counterclockwise**, speed and
+trigger for optional continuous rotation; **None** stops it. The live
+preview plays rotation on that page. Rotation pauses during dragging, editing,
+popups and collapsed/concealed states, so the icons and their click/drop areas
+stay together.
+
 An explicit activation request in the user's Plasma Wayland session is:
 
 ```bash
@@ -157,8 +186,8 @@ using a clean checkout with no untracked source inputs. A later commit with
 similar source bytes cannot substitute for the recorded checkpoint HEAD or
 epoch. Keep the published `v0.1.0` tag fixed at
 `c3b3a0b7771b313c45f843f49a503b45b0d1ada0` and its six current assets unchanged.
-The next candidate is `0.1.1-3`; its `v0.1.1` tag/publication require separate
-authorization. Before tagging, local gates may use an annotated verification
+The current correction candidate is `0.1.1-4`; it does not create or replace a
+published release tag. Before tagging, local gates may use an annotated verification
 tag only in a disposable repository at the exact finalized candidate commit.
 
 After the intended release tag has been separately authorized and created,

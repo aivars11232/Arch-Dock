@@ -295,4 +295,55 @@ TestCase {
         wait(120)
         compare(scene.sceneRotationAngle, 0)
     }
+
+    function test_wheelTurnsEntriesAndAnchorsInBothDirections() {
+        const scene = makeScene({rotationAnimationEnabled: false})
+        scene.panelDefinition = Object.assign({}, scene.panelDefinition, {panelRotationMode: "none"})
+        const before = scene.entryGeometryAt(0)
+        const anchor = scene.popupAnchors.entries[0]
+        const width = scene.width
+        const height = scene.height
+        mouseWheel(scene, before.position.x + before.entryBounds.width / 2,
+            before.position.y + before.entryBounds.height / 2, 0, 120)
+        compare(scene.effectiveLayoutAngle, 15, "scroll up turns clockwise with automatic motion off")
+        compare(scene.width, width)
+        compare(scene.height, height)
+        const after = scene.entryGeometryAt(0)
+        verify(after.position.y > before.position.y, "the right-hand entry moves clockwise")
+        verify(scene.popupAnchors.entries[0].y > anchor.y, "popup anchors move with the glyph")
+        fuzzyCompare(scene.entryItemAt(0).x, after.position.x, 0.001)
+        fuzzyCompare(scene.entryItemAt(0).y, after.position.y, 0.001)
+        const point = Qt.point(after.position.x + after.entryBounds.width / 2,
+            after.position.y + after.entryBounds.height / 2)
+        verify(scene.containsInputPoint(point))
+        mouseWheel(scene, point.x, point.y, 0, -120)
+        compare(scene.effectiveLayoutAngle, 0, "scroll down reverses the turn")
+        mouseWheel(scene, point.x, point.y, 120, 0)
+        mouseWheel(scene, point.x, point.y, 0, 120, Qt.NoButton, Qt.ShiftModifier)
+        compare(scene.effectiveLayoutAngle, 0, "horizontal and modified scrolling remain available")
+    }
+
+    function test_wheelDoesNotTurnDuringInteractionGuards_data() {
+        return [
+            {tag: "drag", runtime: {dragInProgress: true}},
+            {tag: "edit", runtime: {editMode: true}},
+            {tag: "popup", runtime: {popupOpen: true}},
+            {tag: "preview", input: false},
+            {tag: "native", native: true},
+            {tag: "concealed", concealed: true}
+        ]
+    }
+
+    function test_wheelDoesNotTurnDuringInteractionGuards(data) {
+        const scene = makeScene({rotationAnimationEnabled: false})
+        scene.panelDefinition = Object.assign({}, scene.panelDefinition, {panelRotationMode: "none"})
+        if (data.runtime) scene.runtimeState = data.runtime
+        if (data.input === false) scene.entryInteractionEnabled = false
+        if (data.native) scene.entryDelegateContext = {hostKind: "native"}
+        if (data.concealed) scene.sceneConcealed = true
+        const entry = scene.entryGeometryAt(0)
+        mouseWheel(scene, entry.position.x + entry.entryBounds.width / 2,
+            entry.position.y + entry.entryBounds.height / 2, 0, 120)
+        compare(scene.effectiveLayoutAngle, 0, data.tag + " preserves the angle")
+    }
 }
