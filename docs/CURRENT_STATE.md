@@ -55,7 +55,7 @@ evidence ZIP entries and exact source/package artifacts remain in
 `build-codex-folder-contents-0.1.1-6/`. One primary session, no subagents,
 one build job and one test worker throughout.
 
-Owner still runs 0.1.1-5; the authorized 0.1.1-6 update follows verified cleanup and candidate commit/sync, with a fresh private configuration backup.
+Owner PC now runs verified **arch-dock 0.1.1-6**. Actual 216/216 payload bytes/modes, native pacman Qkk, stable D-Bus owner/live installed executable hash, new folder names projection and Panel Studio startup PASS. Owner file modes and all saved panel user settings, entries, appearance and position are preserved. Configuration bytes changed: free-4 had no actual desktop applet before the update and its stale host association is now correctly marked detached; unrelated Panel Colorizer cached inventory and slideshow current-image keys changed during desktop refresh. No other keys or panel user values changed. The fresh private ZIP/manifest remain mode 0600. Plasma was refreshed to reload cached Arch Dock widget code.
 
 The historical v0.1.0 tag and its published assets are untouched. No real new tag/publication occurred. Final clean Git/live remote/owner receipts are in local STATE.json.
 

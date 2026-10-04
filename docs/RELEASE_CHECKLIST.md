@@ -12,7 +12,7 @@
 - [x] Fresh one-job Release package; installed UI/folder matrices, upgrade/recovery/removal and payload/licensing audits.
 - [x] Owned cleanup; retained historical evidence/configurations and zero task processes/dumps.
 
-Owner still runs 0.1.1-5; the authorized 0.1.1-6 update follows verified cleanup and candidate commit/sync, with a fresh private configuration backup.
+Owner PC now runs verified **arch-dock 0.1.1-6**. Actual 216/216 payload bytes/modes, native pacman Qkk, stable D-Bus owner/live installed executable hash, new folder names projection and Panel Studio startup PASS. Owner file modes and all saved panel user settings, entries, appearance and position are preserved. Configuration bytes changed: free-4 had no actual desktop applet before the update and its stale host association is now correctly marked detached; unrelated Panel Colorizer cached inventory and slideshow current-image keys changed during desktop refresh. No other keys or panel user values changed. The fresh private ZIP/manifest remain mode 0600. Plasma was refreshed to reload cached Arch Dock widget code.
 
 - [ ] Owner visual/physical acceptance and any future v0.1.1 publication remain separate.
 
