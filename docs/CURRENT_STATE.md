@@ -10,7 +10,7 @@
 RESUMED / RUNTIME VERIFICATION PASS / PACKAGE CLOSURE IN PROGRESS. Starting main:
 `f7b72859b5410f57669c5c56dbda1dfd2861706b`. Complete one-job build PASS;
 affected CTests **22/22**, fresh full configured CTests **110/110** in **533.02 s**,
-and affected native Wayland CTests **4/4** in **133.37 s**, with no failed or
+and final affected native Wayland CTests **4/4** in **131.60 s**, with no failed or
 skipped CTest names. Corrected Release package/install verification, final
 cleanup, Git sync and owner-PC update remain pending.**
 
@@ -38,6 +38,16 @@ sandbox cannot start inside the read-only installed-payload overlay. These are
 harness setup corrections; production runtime assertions remain unchanged.
 The installed-prefix preflight used staged Debug output, so it does not replace
 the pending real Release-package install/upgrade/removal gate.
+
+Final cleanup auditing found one private PlasmaShell Mesa worker core after
+passed interaction assertions. The renderer harness now reuses the existing
+lifecycle harness's SIGKILL-only final private shell disposal. All four affected
+native gates passed again in 131.60 s with no new dump. Diagnostics were retained
+and only the exact identified 31,394,377-byte task dump was removed. All 458
+baseline journal identities remain; one older payload became missing outside
+agent cleanup, consistent with the configured two-week retention. The first
+Release build was stopped before completion to avoid packaging the superseded
+harness checkpoint; a new canonical source freeze/build follows these gates.
 
 Production C++/QML and installed applet source have changed. The previous
 `0.1.1-1` hashes below are historical and **STALE for the corrected candidate**.

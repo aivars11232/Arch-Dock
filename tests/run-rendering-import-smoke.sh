@@ -20,8 +20,9 @@ require_command() {
 
 stop_process() {
     local process_id="${1:-}"
+    local initial_signal="${2:-TERM}"
     if [[ -n "$process_id" ]] && kill -0 "$process_id" 2>/dev/null; then
-        kill "$process_id" 2>/dev/null || true
+        kill -"$initial_signal" "$process_id" 2>/dev/null || true
         local attempt
         for ((attempt = 0; attempt < 50; ++attempt)); do
             if ! kill -0 "$process_id" 2>/dev/null; then
@@ -206,7 +207,9 @@ cleanup_session() {
             fi
         done
     fi
-    stop_process "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
+    # Final disposal saves no private shell state. Reuse the lifecycle
+    # harness's shutdown path to avoid Mesa worker faults during GUI teardown.
+    stop_process "$ARCHDOCK_RENDERING_PLASMASHELL_PID" KILL
     stop_process "$ARCHDOCK_RENDERING_KWIN_PID"
     local cleanup_status=0
     private_service_owner cleanup || cleanup_status=$?
