@@ -18,6 +18,22 @@ authorized cleanup/commit/sync and separately tagging/publication. Physical
 acceptance remains separate; the owner now selected GPL-3.0-or-later. Outside the explicit
 corrective sections, build/runtime entries retain historical candidate evidence.
 
+## Icon Tiles closure — 0.1.1-3, 2026-10-04
+
+- [x] Unavailable placeholder replaced with selected-panel controls for visibility, style/custom mode, five shapes, fill/opacity and border.
+- [x] Existing typed schema, revision-checked transaction, runtime configuration and profile persistence reused; per-entry visibility and original glyphs preserved.
+- [x] Actual draft preview, Cancel, Apply and fresh persisted reload verified through native/free Studio controls.
+- [x] Native 2D shape pixels and real RHI 3D tile color/shape/visibility checked without changing logical entry geometry.
+- [x] One-job complete Debug/Quick3D-ON build and fresh 111/111 configured CTests across 37 serial batches; all four native Wayland gates PASS.
+- [x] Earlier control/scroll/drag fixture failures diagnosed and corrected without weakening acceptance assertions; failed evidence retained.
+- [x] Source freeze f51f239c83fd7667f71ce0351887f80f2921c844; two canonical exports identical; disposable annotated verification only; 527 source files / 528 members; extraction/bytes/modes/GPL/reference-image exclusions pass.
+- [x] Source SHA-256 71dfcb9ea8cd43a9d9c7aa74fb75d950730db785e7a40518c63a1db7c0186d66; canonical pinned root recipe and fresh one-job Release/Quick3D-ON 0.1.1-3 package.
+- [x] Package SHA-256 0f632369f5f0a8131b62d7fd60a3f22226e79b87537453532a34305520ab0f31; 216/216 installed payload bytes/modes; licensing/resources, 15+15 cards, startup with/without 3D and real installed UI pass after source removal/masking.
+- [x] Native 0.1.1-2 -> 0.1.1-3 upgrade, recovery, both removals and configuration preservation PASS.
+- [x] Final owned build/venv/fixtures removed; 162 compact evidence entries retained; all 928 protected historical files unchanged; no task processes/new dump records or payloads.
+- [ ] Owner PC 0.1.1-3 update and running-backend/new tile field verification; pending operational Git sync.
+- [ ] Owner manual visual/physical acceptance; separate from private runtime evidence.
+
 ## First owner-observed runtime/UI correction — 0.1.1-2, 2026-10-04
 
 **FIRST OWNER-OBSERVED RUNTIME/UI ISSUES CORRECTED AND VERIFIED.** This section

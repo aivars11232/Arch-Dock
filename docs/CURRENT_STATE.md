@@ -6,7 +6,54 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Latest boundary — 2026-10-04: FIRST OWNER-OBSERVED RUNTIME/UI ISSUES
+**Latest boundary — 2026-10-04: ICON TILES IMPLEMENTED AND VERIFIED.**
+The previously unavailable Icon Tiles page now edits the selected panel's tile
+visibility default, style/custom appearance, five shapes, fill/opacity and border.
+Draft preview, Apply, Cancel and persisted reload use the existing settings
+transaction. Explicit per-entry visibility takes precedence; original application
+and folder glyphs, logical hit regions and panel geometry are preserved.
+
+Six validated panel fields travel through the typed model, persisted settings,
+profiles, runtime configuration and preview. Custom tiles use native Qt Quick
+shapes in 2D and the same alpha texture behind the original glyph in true 3D.
+Default style rendering is preserved. Tile edits mark preset lineage customized.
+
+Fresh one-job Debug/Quick3D-ON build and all **111/111 configured CTests PASS**
+in 588.98 s across 37 serial batches, with no CTest skips or missing
+names. All four native Wayland gates PASS in 138.65 s, including real
+Studio controls for native/free records, Cancel/Apply/reload and custom 3D tile
+color/shape/visibility pixels. Earlier fixture failures and their corrections
+remain in the evidence: visual-tree delegate lookup, actual ComboBox keyboard
+activation, waiting for a completed Kirigami scroll step, and waiting for the live
+drop area after re-enabling drops. Acceptance assertions remain in place.
+
+Verified source freeze: `f51f239c83fd7667f71ce0351887f80f2921c844`. Two canonical exports
+are byte-identical; disposable annotated-tag verification, actual extraction,
+527 source files / 528 regular members, bytes/modes, GPL and reference-image
+exclusion checks PASS. Only the eight reference-rights documents/original recipes
+are included from source-samples. Real v0.1.0 was not changed by this pass.
+Source SHA-256: `71dfcb9ea8cd43a9d9c7aa74fb75d950730db785e7a40518c63a1db7c0186d66`.
+Package SHA-256: `0f632369f5f0a8131b62d7fd60a3f22226e79b87537453532a34305520ab0f31`.
+
+Fresh one-job Release/Quick3D-ON package **0.1.1-3** and actual installed gates
+PASS: **216/216 payload files**, bytes/modes, complete licensing/resources,
+15+15 catalogs/cards, installed startup with/without 3D, real installed UI,
+0.1.1-2 -> 0.1.1-3 upgrade, configuration recovery and both removals with saved
+configuration preserved. Compiled/extracted source was removed before these gates;
+five embedded development fallback paths are recorded, and installed behavior
+passes without those paths. Installed-package gate wall time: 83.47 s.
+
+Owned cleanup PASS: final disposable tree removed (1,730,564,096 allocated bytes,
+1,700,625,523 apparent bytes); 162 compact evidence entries plus canonical source,
+package and payload/closure receipts retained locally under
+`build-codex-icon-tiles-0.1.1-3/`. All **928 protected historical files** are
+byte/mode identical. All 460 baseline coredump journal identities remain, with
+zero new dump records, task dump payloads or task processes. One primary serial
+session was used; no subagents. Operational Git closure and owner PC update are
+recorded separately from the source freeze. Owner PC update is pending Git sync.
+Physical owner acceptance remains separate from the private Wayland evidence.
+
+**Previous verified boundary — 2026-10-04: FIRST OWNER-OBSERVED RUNTIME/UI ISSUES
 CORRECTED AND VERIFIED. Starting main `f7b72859b5410f57669c5c56dbda1dfd2861706b`;
 finalized source `85614f7f6ffed1bdba73528483b5e1089ba53f2f`. One-job complete build,
 22/22 affected CTests, fresh full 110/110 configured CTests, final 4/4 native
