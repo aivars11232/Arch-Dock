@@ -266,6 +266,12 @@ struct PanelIconStyleDefinition
     QString shape = QStringLiteral("rounded");
     int size = 52;
     qreal spacing = 8.0;
+    bool tilesEnabled = true;
+    QString tileMode = QStringLiteral("style");
+    QString tileColor = QStringLiteral("#334155");
+    qreal tileOpacity = 0.8;
+    QString tileBorderColor = QStringLiteral("#94a3b8");
+    qreal tileBorderWidth = 1.0;
     QVariantMap globalDefaults;
     struct EntryOverride
     {

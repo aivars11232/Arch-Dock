@@ -191,6 +191,45 @@ private slots:
         const QString evidence = qEnvironmentVariable("ARCHDOCK_SCENE_EVIDENCE_DIR");
         if (!evidence.isEmpty())
             QVERIFY(first.save(QDir(evidence).filePath(QStringLiteral("mesh-scene.png"))));
+        QVariantMap tiles = plainValue(scene->property("panelDefinition")).toMap();
+        tiles.insert(QStringLiteral("iconTileMode"), QStringLiteral("custom"));
+        tiles.insert(QStringLiteral("iconTileColor"), QStringLiteral("#ff22cc"));
+        tiles.insert(QStringLiteral("iconTileOpacity"), 1.0);
+        tiles.insert(QStringLiteral("iconTileBorderWidth"), 0.0);
+        scene->setProperty("panelDefinition", tiles);
+        QTest::qWait(100);
+        const auto magentaPixels = [](const QImage &image) {
+            int count = 0;
+            for (int y = 0; y < image.height(); ++y)
+                for (int x = 0; x < image.width(); ++x) {
+                    const auto color = image.pixelColor(x, y);
+                    count += color.red() > 200 && color.green() < 80 && color.blue() > 140;
+                }
+            return count;
+        };
+        const auto customTiles = pixels();
+        QVERIFY(magentaPixels(customTiles) > 20);
+        QCOMPARE(plainValue(scene->property("entryRects")), geometry);
+        if (!evidence.isEmpty()) QVERIFY(customTiles.save(QDir(evidence).filePath("mesh-custom-tiles.png")));
+        tiles.insert(QStringLiteral("iconShape"), QStringLiteral("circle"));
+        scene->setProperty("panelDefinition", tiles);
+        QTest::qWait(100);
+        const auto circleTiles = pixels();
+        QVERIFY(magentaPixels(circleTiles) > 20);
+        QVERIFY(circleTiles != customTiles);
+        QCOMPARE(plainValue(scene->property("entryRects")), geometry);
+        tiles.insert(QStringLiteral("iconTilesEnabled"), false);
+        scene->setProperty("panelDefinition", tiles);
+        QTest::qWait(100);
+        QCOMPARE(magentaPixels(pixels()), 0);
+        // Restore the default appearance before the existing motion matrix.
+        tiles.remove(QStringLiteral("iconTileMode"));
+        tiles.remove(QStringLiteral("iconTileColor"));
+        tiles.remove(QStringLiteral("iconTileOpacity"));
+        tiles.remove(QStringLiteral("iconTileBorderWidth"));
+        tiles.remove(QStringLiteral("iconTilesEnabled"));
+        tiles.remove(QStringLiteral("iconShape"));
+        scene->setProperty("panelDefinition", tiles);
         QVariantMap sceneSettings = theme.value(QStringLiteral("scene3D")).toMap();
         sceneSettings.insert(QStringLiteral("cameraYaw"), 60);
         theme.insert(QStringLiteral("scene3D"), sceneSettings);

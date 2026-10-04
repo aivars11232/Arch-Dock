@@ -100,6 +100,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     previews/LivePanelPreview.qml
     previews/WindowPreviewPopup.qml
     renderers/IconStyle2D.qml
+    renderers/IconTile.qml
     renderers/PanelProcedural2D.qml
     renderers/PanelSkin2D.qml
     renderers/PanelSkinLayer2D.qml
@@ -1252,6 +1253,12 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_StudioScroll.qml)
   set_tests_properties(studio-scroll-test PROPERTIES ENVIRONMENT
     "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=org.kde.desktop;QT_NO_XDG_DESKTOP_PORTAL=1")
+
+  add_test(NAME icon-tiles-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_IconTiles.qml)
+  set_tests_properties(icon-tiles-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(
     NAME layout-engine-visual-test

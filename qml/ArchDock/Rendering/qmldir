@@ -18,6 +18,7 @@ SceneRotationController 1.0 SceneRotationController.qml
 GeometryHitRegion 1.0 inputs/GeometryHitRegion.qml
 ScrollInput 1.0 inputs/ScrollInput.qml
 IconStyle2D 1.0 renderers/IconStyle2D.qml
+IconTile 1.0 renderers/IconTile.qml
 PanelScene 1.0 PanelScene.qml
 PanelSegment 1.0 PanelSegment.qml
 PanelSurfaceLoader 1.0 PanelSurfaceLoader.qml

@@ -14,6 +14,7 @@ Item {
     required property bool magnificationEnabled
     required property int hoveredIndex
     required property string tileShape
+    property var tileSettings: ({})
     required property string appearance
     required property bool showReflection
     required property bool showIndicator
@@ -365,6 +366,7 @@ Item {
                 iconStyleDefinition: root.iconStyleDefinition
                 logicalSize: root.baseSize
                 tileShape: root.tileShape
+                tileSettings: root.tileSettings
                 appearance: root.appearance
                 vertical: root.vertical
                 hovered: hoverArea.containsMouse

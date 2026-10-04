@@ -44,6 +44,7 @@ private slots:
     void unavailableStyleIsRejectedBeforePersistence();
     void missingCustomAssetFallsBackToTheBaseGlyph();
     void resolutionUsesOverrideThenPanelThenSafeStyleFallback();
+    void tileDefaultYieldsToAnExplicitEntryOverride();
     void unavailableStoredOverrideFallsBackThroughPanelStyle();
 };
 
@@ -221,6 +222,25 @@ void IconOverrideTransactionTest::missingCustomAssetFallsBackToTheBaseGlyph()
     QVERIFY(resolved.value(QStringLiteral("glyphFallbackApplied")).toBool());
     QCOMPARE(resolved.value(QStringLiteral("glyphFallbackReason")).toString(),
              QStringLiteral("custom-glyph-unavailable"));
+}
+
+void IconOverrideTransactionTest::tileDefaultYieldsToAnExplicitEntryOverride()
+{
+    auto panel = PanelDefinition::defaults("tiles", "Tiles", "free", false);
+    panel.iconStyle.tilesEnabled = false;
+    const auto resolve = [&] {
+        return IconOverrideTransaction::resolve(panel, "application.entry", "folder", "Folder", {});
+    };
+    QVERIFY(!resolve().value("tileEnabled").toBool());
+    PanelIconStyleDefinition::EntryOverride entryOverride;
+    entryOverride.customLabel = "Folder label";
+    panel.iconStyle.perEntryOverrides.insert("application.entry", entryOverride);
+    QVERIFY(!resolve().value("tileEnabled").toBool());
+    entryOverride.tileEnabled = true;
+    panel.iconStyle.perEntryOverrides.insert("application.entry", entryOverride);
+    QVERIFY(resolve().value("tileEnabled").toBool());
+    panel.iconStyle.perEntryOverrides.clear();
+    QVERIFY(!resolve().value("tileEnabled").toBool());
 }
 
 void IconOverrideTransactionTest::resolutionUsesOverrideThenPanelThenSafeStyleFallback()

@@ -18,6 +18,15 @@ executable and atomic D-Bus name guard. Repeating the command keeps the
 existing owner; `arch-dock --settings` opens Panel Studio through that owner.
 The process remains resident when its settings window closes.
 
+In Panel Studio, select the panel and open **Icon Tiles**. **From icon style**
+uses the selected style's frame or pedestal. **Custom tile** exposes shape,
+fill color, opacity, border color and border width independently of the panel
+surface. **Show tiles by default** controls the panel default; an explicit
+Icon Properties visibility override takes precedence for that entry. The live
+preview shows the draft in both 2D and 3D. Apply saves it, while Cancel discards
+changes made since the last Apply. Tiles keep the application's real icon glyph
+and its interaction area.
+
 An explicit activation request in the user's Plasma Wayland session is:
 
 ```bash
@@ -148,7 +157,7 @@ using a clean checkout with no untracked source inputs. A later commit with
 similar source bytes cannot substitute for the recorded checkpoint HEAD or
 epoch. Keep the published `v0.1.0` tag fixed at
 `c3b3a0b7771b313c45f843f49a503b45b0d1ada0` and its six current assets unchanged.
-The next candidate is `0.1.1-2`; its `v0.1.1` tag/publication require separate
+The next candidate is `0.1.1-3`; its `v0.1.1` tag/publication require separate
 authorization. Before tagging, local gates may use an annotated verification
 tag only in a disposable repository at the exact finalized candidate commit.
 
@@ -214,7 +223,7 @@ declared build dependencies before running makepkg; it does not install them.
 After reviewing the resulting package, the owner can install or remove it:
 
 ```bash
-sudo pacman -U arch-dock-0.1.1-2-x86_64.pkg.tar.zst
+sudo pacman -U arch-dock-0.1.1-3-x86_64.pkg.tar.zst
 ```
 
 Installation places the executable, direct D-Bus descriptor, manual systemd
@@ -234,7 +243,7 @@ The next candidate is application `0.1.1`, package release `2`. The installed
 native pacman performs the upgrade:
 
 ```bash
-sudo pacman -U arch-dock-0.1.1-2-x86_64.pkg.tar.zst
+sudo pacman -U arch-dock-0.1.1-3-x86_64.pkg.tar.zst
 ```
 
 Cancel an active audition and stop the backend before replacing its executable;
@@ -320,8 +329,8 @@ ARCHDOCK_PACKAGE_INSTALL_MANIFEST="$PWD/build-codex-arch-package/src/build/insta
 ARCHDOCK_PACKAGE_EVIDENCE_DIR="$PWD/build-codex-package-evidence" \
 TMPDIR="$task_tmp" \
 bash tests/run-arch-package-smoke.sh \
-    build-codex-arch-package/arch-dock-0.1.1-2-x86_64.pkg.tar.zst \
-    /absolute/path/to/arch-dock-0.1.1-1-x86_64.pkg.tar.zst
+    build-codex-arch-package/arch-dock-0.1.1-3-x86_64.pkg.tar.zst \
+    /absolute/path/to/arch-dock-0.1.1-2-x86_64.pkg.tar.zst
 ```
 
 The second package argument is optional for install/uninstall verification;

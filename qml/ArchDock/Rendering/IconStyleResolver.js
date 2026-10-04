@@ -164,15 +164,21 @@ function entryStyleDefinition(entry) {
         objectValue(source.iconOverrideResolution).iconStyleDefinition);
 }
 
-function entryTileEnabled(entry) {
+function entryTileEnabled(entry, fallback) {
     const source = objectValue(entry);
+    const resolution = objectValue(source.iconOverrideResolution);
+    // A resolved entry carries its explicit override separately. Use the
+    // draft panel default when it is absent, rather than a stale saved value.
+    if (resolution.override !== undefined) {
+        const override = objectValue(resolution.override);
+        return override.tileEnabled === undefined ? fallback : Boolean(override.tileEnabled);
+    }
     if (source.tileEnabled !== undefined && source.tileEnabled !== null)
         return Boolean(source.tileEnabled);
-    const resolution = objectValue(source.iconOverrideResolution);
     if (resolution.tileEnabled !== undefined
             && resolution.tileEnabled !== null)
         return Boolean(resolution.tileEnabled);
-    return true;
+    return fallback;
 }
 
 // A colorful application glyph must never be recolored just because a style
@@ -302,7 +308,7 @@ function hasRenderableLayers(styleDefinition) {
     return false;
 }
 
-function resolve(styleDefinition, flags, entry) {
+function resolve(styleDefinition, flags, entry, tileSettings) {
     const entryStyle = entryStyleDefinition(entry);
     const hasEntryStyle = Object.keys(entryStyle).length > 0;
     const entryStyleUsable = usableDefinition(entryStyle);
@@ -313,7 +319,9 @@ function resolve(styleDefinition, flags, entry) {
     const requestedState = stateId(flags);
     const glyph = resolvedGlyph(style, entry);
     const styleId = usable ? String(style.id) : "plain-original";
-    const tileEnabled = entryTileEnabled(entry);
+    const tiles = objectValue(tileSettings);
+    const tileEnabled = entryTileEnabled(entry, tiles.iconTilesEnabled === undefined
+        ? true : Boolean(tiles.iconTilesEnabled));
     return {
         valid: usable,
         styleId: styleId,
@@ -336,7 +344,7 @@ function resolve(styleDefinition, flags, entry) {
         assetPaths: usable ? objectValue(style.assetPaths) : {},
         tileEnabled: tileEnabled,
         renderStyledLayers: usable && styleId !== "plain-original"
-            && tileEnabled && hasRenderableLayers(style),
+            && tileEnabled && tiles.iconTileMode !== "custom" && hasRenderableLayers(style),
         fallbackApplied: !usable || (hasEntryStyle && !entryStyleUsable),
         fallbackReason: !usable ? "style-unavailable"
             : hasEntryStyle && !entryStyleUsable

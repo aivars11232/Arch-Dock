@@ -195,6 +195,9 @@ void PresetApplication::markCustomized(
     keys.append(IconPresetDefinition::panelValueKeys());
     keys.append(QStringLiteral("iconGlobalDefaults"));
     keys.append(QStringLiteral("iconOverrides"));
+    keys.append({QStringLiteral("iconTilesEnabled"), QStringLiteral("iconTileMode"),
+        QStringLiteral("iconTileColor"), QStringLiteral("iconTileOpacity"),
+        QStringLiteral("iconTileBorderColor"), QStringLiteral("iconTileBorderWidth")});
     for (const QString &key : keys)
     {
         if (before.value(key) != after.value(key))

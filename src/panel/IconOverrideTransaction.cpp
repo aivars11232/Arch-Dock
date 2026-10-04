@@ -302,7 +302,7 @@ QVariantMap IconOverrideTransaction::resolve(
         {QStringLiteral("resolvedLabel"),
          override.customLabel.isEmpty() ? baseLabel : override.customLabel},
         {QStringLiteral("tileEnabled"),
-         override.tileEnabled.value_or(true)},
+         override.tileEnabled.value_or(panel.iconStyle.tilesEnabled)},
         {QStringLiteral("requestedStyleReference"), requestedStyle},
         {QStringLiteral("panelStyleReference"), panelStyle},
         {QStringLiteral("styleReference"),

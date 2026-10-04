@@ -56,9 +56,19 @@ Item {
         : textureRequired && textureImage.status === Image.Error ? "scene3d-texture-unavailable"
         : !geometryWithinBudget ? "scene3d-resource-limit"
         : !textureReady ? "renderer-loading" : ""
+    readonly property int entryTriangleCount: {
+        let count = 0
+        for (let index = 0; index < entryGeometry.length; ++index) {
+            const visual = entryVisuals[index] ? entryVisuals[index].meshVisualItem : null
+            count += 12 // Glyph card.
+            if (visual && !visual.tileRenderingEnabled) continue
+            count += visual && visual.customTileActive ? 12
+                : iconResource.triangleCount + partTriangles(entryParts)
+        }
+        return count
+    }
     readonly property int triangleCount: platform.triangleCount
-        + (iconResource.triangleCount + 12) * entryGeometry.length
-        + partTriangles(panelParts) + partTriangles(entryParts) * entryGeometry.length
+        + partTriangles(panelParts) + entryTriangleCount
     readonly property var qualityState: ({ quality: effectiveQuality,
         targetWidth: targetWidth, targetHeight: targetHeight,
         samples: effectiveQuality === "low" ? 1 : effectiveQuality === "high" ? 4 : 2 })
@@ -200,6 +210,9 @@ Item {
                                 && entryNode.visual.meshVisualActive ? candidateSource : null
                         }
                         IconStyle3D {
+                            objectName: "mesh-style-tile-" + entryNode.index
+                            visible: meshReady && (!entryNode.visual
+                                || (entryNode.visual.tileRenderingEnabled && !entryNode.visual.customTileActive))
                             meshData: iconResource.meshData
                             materialData: iconResource.materialData
                             surfaceTexture: entryNode.visual ? tileTexture
@@ -214,6 +227,27 @@ Item {
                                     * root.number(entryNode.tileMotion, "scaleY", 1), entryNode.size * 0.55)
                             opacity: root.number(entryNode.tileMotion, "opacity", 1)
                             emissionScale: root.emissionScale * (1 + entryNode.glow)
+                        }
+                        Model {
+                            objectName: "mesh-custom-tile-" + entryNode.index
+                            source: "#Cube"
+                            pickable: false
+                            visible: entryNode.visual !== null && entryNode.visual.customTileActive
+                                && entryNode.visual.tileRenderingEnabled && root.collapseProgress < 1
+                            position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
+                                -root.number(entryNode.tileMotion, "y", 0), -entryNode.size * 0.05)
+                            eulerRotation: Qt.vector3d(0, root.number(entryNode.tileMotion, "rotateY", 0),
+                                -root.number(entryNode.tileMotion, "rotateZ", 0))
+                            scale: Qt.vector3d(entryNode.size / 100 * root.number(entryNode.tileMotion, "scale", 1)
+                                    * root.number(entryNode.tileMotion, "scaleX", 1),
+                                entryNode.size / 100 * root.number(entryNode.tileMotion, "scale", 1)
+                                    * root.number(entryNode.tileMotion, "scaleY", 1), entryNode.size / 5000)
+                            opacity: root.number(entryNode.tileMotion, "opacity", 1) * (1 - root.collapseProgress)
+                            materials: PrincipledMaterial {
+                                lighting: PrincipledMaterial.NoLighting
+                                alphaMode: PrincipledMaterial.Blend
+                                baseColorMap: tileTexture
+                            }
                         }
                         Model {
                             objectName: "mesh-glyph-" + entryNode.index
@@ -236,6 +270,9 @@ Item {
                             }
                         }
                         Node {
+                            objectName: "mesh-tile-parts-" + entryNode.index
+                            visible: !entryNode.visual || (entryNode.visual.tileRenderingEnabled
+                                && !entryNode.visual.customTileActive)
                             scale: Qt.vector3d(entryNode.size * 0.55, entryNode.size * 0.55, entryNode.size * 0.55)
                             Repeater3D {
                                 model: root.entryParts.length

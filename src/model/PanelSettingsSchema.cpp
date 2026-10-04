@@ -1,6 +1,7 @@
 #include "PanelSettingsSchema.h"
 
 #include <QMetaType>
+#include <QRegularExpression>
 #include <QUrl>
 #include <QtGlobal>
 
@@ -246,6 +247,13 @@ bool normalizeValue(const Descriptor &descriptor,
     case Normalization::LowerString:
         normalized = value.toString().trimmed().toLower();
         break;
+    case Normalization::HexColor:
+    {
+        static const QRegularExpression pattern(QStringLiteral("^#(?:[0-9a-f]{6}|[0-9a-f]{8})$"));
+        const QString candidate = value.toString().trimmed().toLower();
+        normalized = pattern.match(candidate).hasMatch() ? candidate : descriptor.defaultValue;
+        break;
+    }
     case Normalization::ChoiceLower:
     case Normalization::ChoiceExact:
     {
@@ -764,6 +772,26 @@ const QVector<Descriptor> &schemaFields()
                      "icon-state-styling", {}, {{QStringLiteral("step"), 1},
                                                 {QStringLiteral("decimals"), 0}})),
                   {"dock-configuration"}),
+        panel("iconTilesEnabled", Access::Editor, Type::Boolean, Normalization::Boolean,
+              true, "iconStyle.tilesEnabled", {}, {}, {}, false, true,
+              editor("icon-tiles", "Show tiles by default", "switch", {"studio"}, "icon-state-styling")),
+        panel("iconTileMode", Access::Editor, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("style"), "iconStyle.tileMode", {}, {}, {"style", "custom"}, false, true,
+              editor("icon-tiles", "Tile appearance", "combo", {"studio"}, "icon-state-styling")),
+        panel("iconTileColor", Access::Editor, Type::String, Normalization::HexColor,
+              QStringLiteral("#334155"), "iconStyle.tileColor", {}, {}, {}, false, true,
+              editor("icon-tiles", "Fill color", "color", {"studio"}, "icon-state-styling")),
+        panel("iconTileOpacity", Access::Editor, Type::Real, Normalization::RealRange,
+              0.8, "iconStyle.tileOpacity", 0.0, 1.0, {}, false, true,
+              editor("icon-tiles", "Tile opacity", "slider", {"studio"}, "icon-state-styling", {},
+                     {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
+        panel("iconTileBorderColor", Access::Editor, Type::String, Normalization::HexColor,
+              QStringLiteral("#94a3b8"), "iconStyle.tileBorderColor", {}, {}, {}, false, true,
+              editor("icon-tiles", "Border color", "color", {"studio"}, "icon-state-styling")),
+        panel("iconTileBorderWidth", Access::Editor, Type::Real, Normalization::RealRange,
+              1.0, "iconStyle.tileBorderWidth", 0.0, 8.0, {}, false, true,
+              editor("icon-tiles", "Border width", "slider", {"studio"}, "icon-state-styling", {},
+                     {{QStringLiteral("step"), 0.5}, {QStringLiteral("decimals"), 1}})),
         panel("iconGlobalDefaults", Access::Internal, Type::Map, Normalization::Map,
               QVariantMap{}, "iconStyle.globalDefaults", {}, {}, {}, true),
         panel("iconOverrides", Access::Internal, Type::Map, Normalization::Map,

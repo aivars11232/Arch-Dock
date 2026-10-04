@@ -914,6 +914,12 @@ def run_interaction_matrix(free_panel):
         probe_log = (root / "logs/ui-input-probe.log").open("w")
         environment = dict(os.environ, ARCHDOCK_NATIVE_UI_PROBE="1", QT_QUICK_CONTROLS_STYLE="org.kde.desktop",
                            QT_NO_XDG_DESKTOP_PORTAL="1", XDG_DATA_HOME=str(root / "ui-data"))
+        with (root / "logs/icon-tiles-native.log").open("w") as tile_log:
+            tiles = subprocess.run([str(pathlib.Path(os.environ["ARCHDOCK_BUILD_DIR"]) / "panel-window-capability-test"),
+                                    "studioIconTiles"], env=environment, stdout=tile_log,
+                                   stderr=subprocess.STDOUT, timeout=45)
+            assert tiles.returncode == 0, ("native Icon Tiles edit/Cancel/Apply/persistence failed\n"
+                + (root / "logs/icon-tiles-native.log").read_text())
         probe = subprocess.Popen([str(pathlib.Path(os.environ["ARCHDOCK_BUILD_DIR"]) / "panel-window-capability-test"),
                                   "studioPageWheelInput"], env=environment, stdout=probe_log, stderr=subprocess.STDOUT)
         def ui():
@@ -1068,6 +1074,8 @@ def run_interaction_matrix(free_panel):
         drop(desktop.as_uri(), entry_point(app), False)
         assert len(rows()) == 2, rows()
         configure(free_panel, {"acceptDrops": True})
+        wait_for(lambda: observations.get(("host", free_panel, ""), {}).get("dropEnabled"),
+                 "live free launcher re-enabled its drop area")
         for desktop_name in ("org.kde.dolphin.desktop", "org.kde.konsole.desktop"):
             path = pathlib.Path("/usr/share/applications") / desktop_name
             assert path.is_file(), path

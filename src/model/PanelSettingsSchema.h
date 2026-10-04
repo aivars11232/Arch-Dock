@@ -44,6 +44,7 @@ enum class PanelSettingsNormalization
     Boolean,
     TrimmedString,
     LowerString,
+    HexColor,
     ChoiceLower,
     ChoiceExact,
     IntegerRange,

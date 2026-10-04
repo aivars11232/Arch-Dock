@@ -15,6 +15,7 @@ class PanelSettingsTransactionTest final : public QObject
 
 private slots:
     void completeCandidateIsNormalizedAndRevisioned();
+    void tileDraftPersistsWithoutChangingTheBaseline();
     void invalidCandidateIsRejectedWithoutChangingSnapshot();
     void unknownAndHiddenCandidatesAreRejectedWithoutChangingSnapshot();
     void staleRevisionIsAConflict();
@@ -57,6 +58,33 @@ void PanelSettingsTransactionTest::completeCandidateIsNormalizedAndRevisioned()
     QCOMPARE(draft->candidatePanel.settingsRevision, quint64{8});
     QCOMPARE(draft->previousGlobals, globals);
     QCOMPARE(draft->candidateGlobals, candidateGlobals);
+}
+
+void PanelSettingsTransactionTest::tileDraftPersistsWithoutChangingTheBaseline()
+{
+    const auto current = PanelDefinition::defaults("tiles", "Tiles", "free", false);
+    PanelSettingsTransactionRequest request{"tiles", 0, {
+        {"iconTilesEnabled", false}, {"iconTileMode", "custom"},
+        {"iconShape", "hexagon"}, {"iconTileColor", "#FF22CC"},
+        {"iconTileOpacity", 0.35}, {"iconTileBorderColor", "#80224466"},
+        {"iconTileBorderWidth", 99.0}}, {}};
+    PanelSettingsTransactionOutcome outcome;
+    const auto draft = PanelSettingsTransaction::prepare(current, {}, {}, request, &outcome);
+    QVERIFY(draft);
+    QCOMPARE(current.iconStyle.tileMode, QStringLiteral("style"));
+    QVERIFY(current.iconStyle.tilesEnabled);
+    const auto restored = PanelDefinition::fromLegacyMap(draft->candidatePanel.toPersistedMap());
+    QVERIFY(restored);
+    QCOMPARE(restored->iconStyle, draft->candidatePanel.iconStyle);
+    QVERIFY(!restored->iconStyle.tilesEnabled);
+    QCOMPARE(restored->iconStyle.tileColor, QStringLiteral("#ff22cc"));
+    QCOMPARE(restored->iconStyle.tileOpacity, 0.35);
+    QCOMPARE(restored->iconStyle.tileBorderWidth, 8.0);
+    QCOMPARE(restored->settingsRevision, quint64{1});
+    request.panelValues.insert("iconTileColor", "invalid-color");
+    const auto safe = PanelSettingsTransaction::prepare(current, {}, {}, request, &outcome);
+    QVERIFY(safe);
+    QCOMPARE(safe->candidatePanel.iconStyle.tileColor, QStringLiteral("#334155"));
 }
 
 void PanelSettingsTransactionTest::invalidCandidateIsRejectedWithoutChangingSnapshot()

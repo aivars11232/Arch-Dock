@@ -1067,6 +1067,7 @@ PlasmoidItem {
                 root.configuration.magnificationFalloff || "linear")
             hoveredIndex: root.hoveredIndex
             tileShape: root.configuration.iconShape
+            tileSettings: root.configuration
             appearance: root.configuration.appearance
             showReflection: root.configuration.showReflections
             showIndicator: root.configuration.showIndicators

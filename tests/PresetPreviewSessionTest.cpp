@@ -190,6 +190,10 @@ void PresetPreviewSessionTest::lineageChangesOnlyForGovernedSettings()
     changed.placement.width++;
     PresetApplication::markCustomized(before, &changed);
     QVERIFY(changed.presetOrigin->customizedAfterApply);
+    changed = before;
+    changed.iconStyle.tileMode = QStringLiteral("custom");
+    PresetApplication::markCustomized(before, &changed);
+    QVERIFY(changed.presetOrigin->customizedAfterApply);
 }
 
 void PresetPreviewSessionTest::defaultsAreSeparateAndVersioned()

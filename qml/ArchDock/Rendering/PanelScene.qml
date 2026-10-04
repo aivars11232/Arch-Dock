@@ -1094,6 +1094,7 @@ Item {
             anchors.fill: parent
             entry: parent.sceneEntry
             iconStyleDefinition: parent.sceneIconStyleDefinition
+            tileSettings: root.panelDefinition
             logicalSize: Number(parent.sceneGeometry.iconSize || width)
             tileShape: root.iconShape
             appearance: root.appearance

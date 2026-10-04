@@ -8,6 +8,8 @@ Item {
 
     property var entry: ({})
     property var iconStyleDefinition: ({})
+    property var tileSettings: ({})
+    readonly property bool customTileActive: tileSettings.iconTileMode === "custom"
     property real logicalSize: 52
     property real visualScale: 1
     property string tileShape: "rounded"
@@ -74,7 +76,7 @@ Item {
             minimized: minimized,
             running: running
         },
-        resolverEntry())
+        resolverEntry(), tileSettings)
     readonly property string visualState: resolvedIconStyle.stateId
     readonly property var styleState: resolvedIconStyle.state || ({})
     readonly property var styleInset:
@@ -370,11 +372,25 @@ Item {
                 visible: root.styledLayersActive
             }
 
+            IconTile {
+                objectName: "icon-custom-tile"
+                anchors.fill: parent
+                anchors.margins: Math.max(1, root.logicalSize * 0.04)
+                visible: root.tileRenderingEnabled && root.customTileActive
+                shape: root.tileShape
+                fillColor: String(root.tileSettings.iconTileColor || "#334155")
+                borderColor: String(root.tileSettings.iconTileBorderColor || "#94a3b8")
+                borderWidth: root.tileSettings.iconTileBorderWidth === undefined ? 1
+                    : Math.max(0, Math.min(8, Number(root.tileSettings.iconTileBorderWidth)))
+                opacity: root.tileSettings.iconTileOpacity === undefined ? 0.8
+                    : Math.max(0, Math.min(1, Number(root.tileSettings.iconTileOpacity)))
+            }
+
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: Math.max(1, root.logicalSize * 0.04)
                 radius: root.tileRadius()
-                visible: root.tileRenderingEnabled && !root.styledLayersActive
+                visible: root.tileRenderingEnabled && !root.customTileActive && !root.styledLayersActive
                     && (root.appearance === "plate"
                         || root.appearance === "platform"
                         || root.appearance === "floating-glass"
@@ -398,7 +414,7 @@ Item {
                 anchors.bottom: parent.bottom
                 width: parent.width * 0.92
                 height: parent.height * 0.32
-                visible: root.tileRenderingEnabled && !root.styledLayersActive
+                visible: root.tileRenderingEnabled && !root.customTileActive && !root.styledLayersActive
                     && root.appearance === "pedestal"
 
                 Rectangle {

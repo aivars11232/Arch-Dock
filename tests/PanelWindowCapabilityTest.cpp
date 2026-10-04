@@ -121,6 +121,8 @@ private slots:
     void freePanelContentFollowsItsRecordAndOrdersItsOwnEntries();
     void freeFolderIconsUseNativeMetadata();
     void studioPageWheelInput();
+    void studioIconTiles_data();
+    void studioIconTiles();
     void wholePanelRotationFieldsAreGatedByTheResolver();
     void meshSceneEditorIsGatedAndTransactional();
     void rendererSwitchRetainsOnlyUnchangedInactiveFields();
@@ -176,6 +178,94 @@ void PanelWindowCapabilityTest::freeFolderIconsUseNativeMetadata()
     }
     PanelRegistry reloaded;
     QCOMPARE(reloaded.panelDefinition(panel)->content.urls.size(), icons.size());
+}
+
+void PanelWindowCapabilityTest::studioIconTiles_data()
+{
+    QTest::addColumn<bool>("native");
+    QTest::newRow("native") << true;
+    QTest::newRow("free") << false;
+}
+
+void PanelWindowCapabilityTest::studioIconTiles()
+{
+    QFETCH(bool, native);
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = native ? QStringLiteral("bottom") : registry->addFreePanel();
+    const auto before = registry->panelDefinition(panel)->toPersistedMap();
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    const auto open = [&] {
+        return std::unique_ptr<QObject>(component.createWithInitialProperties({
+            {"selectedPanelId", panel}, {"mainTabIndex", 3}, {"width", 980}, {"height", 720}}));
+    };
+    const auto item = [](QObject *popup, const QString &name) -> QQuickItem * {
+        // Repeater delegates belong to the visual tree, which can differ from
+        // QObject ownership. Walk the displayed controls like the wheel probe.
+        QList<QQuickItem *> pending{qobject_cast<QQuickWindow *>(popup)->contentItem()};
+        while (!pending.isEmpty()) {
+            auto *candidate = pending.takeLast();
+            if (candidate->isVisible() && candidate->objectName() == name) return candidate;
+            pending.append(candidate->childItems());
+        }
+        return nullptr;
+    };
+    const auto edit = [&](QObject *popup) {
+        auto *window = qobject_cast<QQuickWindow *>(popup);
+        window->show();
+        if (!QTest::qWaitForWindowExposed(window) || !QQuickTest::qWaitForPolish(window)) return false;
+        auto *toggle = item(popup, QStringLiteral("studio-switch-iconTilesEnabled"));
+        if (!toggle || !toggle->isVisible()) {
+            qWarning() << "Tile toggle missing or hidden:" << toggle
+                << "section:" << popup->property("mainTabIndex")
+                << "editor error:" << popup->property("studioError");
+            return false;
+        }
+        QTest::mouseClick(window, Qt::LeftButton, {}, toggle->mapToScene(QPointF(toggle->width()/2, toggle->height()/2)).toPoint());
+        if (!QQuickTest::qWaitForPolish(window)) return false;
+        // Editing rebuilds the form delegates; reacquire the next control.
+        auto *mode = item(popup, QStringLiteral("studio-combo-iconTileMode"));
+        if (!mode || !mode->isVisible()) {
+            qWarning() << "Tile mode missing or hidden:" << mode;
+            return false;
+        }
+        mode->forceActiveFocus();
+        QTest::keyClick(window, Qt::Key_Down);
+        return QQuickTest::qWaitForPolish(window);
+    };
+    const auto click = [&](QObject *popup, const char *name) {
+        auto *button = item(popup, QLatin1String(name));
+        if (!button || !button->isVisible() || !button->isEnabled()) return false;
+        QTest::mouseClick(qobject_cast<QQuickWindow *>(popup), Qt::LeftButton, {},
+            button->mapToScene(QPointF(button->width()/2, button->height()/2)).toPoint());
+        return true;
+    };
+    auto popup = open(); QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
+    QVERIFY(edit(popup.get()));
+    QVERIFY(popup->property("hasSettingsChanges").toBool());
+    const auto candidate = popup->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap();
+    QCOMPARE(candidate.value("iconTileMode").toString(), QStringLiteral("custom"));
+    QVERIFY(!candidate.value("iconTilesEnabled").toBool());
+    QCOMPARE(registry->panelDefinition(panel)->toPersistedMap(), before);
+    QVERIFY(click(popup.get(), "studio-cancel"));
+    QCOMPARE(registry->panelDefinition(panel)->toPersistedMap(), before);
+    popup.reset();
+    popup = open(); QVERIFY(popup);
+    QVERIFY(edit(popup.get()));
+    QVERIFY(click(popup.get(), "studio-apply"));
+    QCOMPARE(popup->property("studioError").toString(), QString{});
+    QVERIFY(!popup->property("hasSettingsChanges").toBool());
+    PanelRegistry reloaded;
+    const auto saved = reloaded.panelDefinition(panel);
+    QVERIFY(saved);
+    QCOMPARE(saved->iconStyle.tileMode, QStringLiteral("custom"));
+    QVERIFY(!saved->iconStyle.tilesEnabled);
+    QCOMPARE(saved->settingsRevision, before.value("settingsRevision").toULongLong() + 1);
 }
 
 void PanelWindowCapabilityTest::studioPageWheelInput()

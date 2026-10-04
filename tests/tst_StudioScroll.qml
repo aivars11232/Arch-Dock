@@ -52,8 +52,9 @@ TestCase {
     function test_wheelOverLabelRespectsBoundsAndNoHorizontalOverflow() {
         const item = form()
         mouseWheel(item, 100, 100, 0, -120)
-        wait(100)
-        verify(item.contentItem.contentY > 0)
+        // KDE's ScrollView uses an animated Kirigami wheel handler. Finish
+        // that native step before relocating the view for the bounds check.
+        tryCompare(item.contentItem, "contentY", 20 * Qt.styleHints.wheelScrollLines)
         mouseWheel(item, 100, 100, -120, 0)
         compare(item.contentItem.contentX, 0)
         item.contentItem.contentY = item.contentItem.contentHeight - item.contentItem.height

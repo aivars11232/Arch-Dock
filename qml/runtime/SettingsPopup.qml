@@ -620,6 +620,29 @@ Window {
         return [section(label, description, true), notice(qsTr("This page remains unavailable until its renderer and persistence path are implemented."))];
     }
 
+    function iconTileRows() {
+        const rows = schemaSectionRows("icon-tiles", qsTr("Icon Tiles"),
+            qsTr("Tile backgrounds for this panel. Preview changes here, then Apply to save."));
+        const custom = String(panelValue("iconTileMode", "style")) === "custom";
+        const filtered = rows.filter(function(row) {
+            return !row.key || row.key === "iconTilesEnabled" || row.key === "iconTileMode" || custom;
+        });
+        for (const row of filtered) {
+            if (row.key === "iconTileMode") {
+                row.options = [{value: "style", label: qsTr("From icon style")},
+                    {value: "custom", label: qsTr("Custom tile")}];
+            }
+        }
+        const descriptor = fieldDescriptor(custom ? "iconShape" : "iconStyle", "panel");
+        if (descriptor) {
+            const row = editorRow(descriptor);
+            row.label = custom ? qsTr("Tile shape") : qsTr("Icon style");
+            filtered.push(row);
+        }
+        filtered.push(notice(qsTr("Individual icons can override the tile default in Icon Properties. Custom tiles preserve the icon glyph and use the same tile in 2D and 3D.")));
+        return filtered;
+    }
+
     function panelSegmentRows() {
         const descriptor = fieldDescriptor("segments", "panel");
         const rows = [section(qsTr("Segments"), qsTr("Independent content groups. Changes apply together when you press Apply."), true)];
@@ -725,7 +748,7 @@ Window {
             return iconStyleRows();
         }
         if (mainTabIndex === 3)
-            return unavailablePage(qsTr("Icon Tiles"), qsTr("Independent icon tile rendering."));
+            return iconTileRows();
         return unavailablePage(currentSubtabs.length > 0 ? currentSubtabs[subTabIndex] : qsTr("Profiles"), qsTr("Reusable profiles are outside the current settings contract."));
     }
 
@@ -1773,6 +1796,7 @@ Window {
 
         Button {
             text: qsTr("Apply")
+            objectName: "studio-apply"
             icon.name: "dialog-ok-apply"
             enabled: !root.auditionBusy && root.hasPendingChanges
             onClicked: root.applyStudioChanges()
@@ -1780,6 +1804,7 @@ Window {
 
         Button {
             text: qsTr("Cancel")
+            objectName: "studio-cancel"
             icon.name: "dialog-cancel"
             onClicked: root.cancelStudioChanges()
         }

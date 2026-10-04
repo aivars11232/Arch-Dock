@@ -676,6 +676,12 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         QStringLiteral("iconSize"), definition.iconStyle.size).toInt();
     definition.iconStyle.spacing = normalized(
         QStringLiteral("spacing"), definition.iconStyle.spacing).toReal();
+    definition.iconStyle.tilesEnabled = normalized(QStringLiteral("iconTilesEnabled"), definition.iconStyle.tilesEnabled).toBool();
+    definition.iconStyle.tileMode = normalized(QStringLiteral("iconTileMode"), definition.iconStyle.tileMode).toString();
+    definition.iconStyle.tileColor = normalized(QStringLiteral("iconTileColor"), definition.iconStyle.tileColor).toString();
+    definition.iconStyle.tileOpacity = normalized(QStringLiteral("iconTileOpacity"), definition.iconStyle.tileOpacity).toReal();
+    definition.iconStyle.tileBorderColor = normalized(QStringLiteral("iconTileBorderColor"), definition.iconStyle.tileBorderColor).toString();
+    definition.iconStyle.tileBorderWidth = normalized(QStringLiteral("iconTileBorderWidth"), definition.iconStyle.tileBorderWidth).toReal();
     definition.iconStyle.globalDefaults = record.value(
         QStringLiteral("iconGlobalDefaults")).toMap();
     const QVariant overridesValue = record.value(QStringLiteral("iconOverrides"));
@@ -1128,6 +1134,12 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("iconShape"), iconStyle.shape);
     record.insert(QStringLiteral("iconSize"), iconStyle.size);
     record.insert(QStringLiteral("spacing"), iconStyle.spacing);
+    record.insert(QStringLiteral("iconTilesEnabled"), iconStyle.tilesEnabled);
+    record.insert(QStringLiteral("iconTileMode"), iconStyle.tileMode);
+    record.insert(QStringLiteral("iconTileColor"), iconStyle.tileColor);
+    record.insert(QStringLiteral("iconTileOpacity"), iconStyle.tileOpacity);
+    record.insert(QStringLiteral("iconTileBorderColor"), iconStyle.tileBorderColor);
+    record.insert(QStringLiteral("iconTileBorderWidth"), iconStyle.tileBorderWidth);
     insertIfNotEmpty(
         &record,
         QStringLiteral("iconGlobalDefaults"),
