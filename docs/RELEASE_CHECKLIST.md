@@ -12,7 +12,7 @@
 - [x] Fresh 0.1.1-5 Release/package, actual 216 payload files, 17 asset declarations/eight MIT components, 15+15 catalogs, startup with/without 3D and installed native mask/UI checks PASS.
 - [x] Native 0.1.1-4 -> 0.1.1-5 upgrade/recovery/both removals and configuration preservation PASS.
 - [x] Owned cleanup complete; 956 historical files/478 baseline core identities preserved; zero new records and no task dump/test process remaining; compact evidence retained.
-- [ ] Authorized candidate Git sync, private owner backup, verified PC update/backend restart and final operational receipt.
+- [x] Authorized candidate Git sync, private owner backup, verified PC update/backend restart and final operational receipt.
 - [ ] Owner manual visual/physical acceptance and future v0.1.1 publication remain separate; historical v0.1.0 untouched.
 <!-- AUD_01_02_CHECKLIST_END -->
 

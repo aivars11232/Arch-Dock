@@ -51,9 +51,9 @@
 
 24. **LICENSING RESULT:** GPL-3.0-or-later complete official text, eight MIT components/notices and all 17 original asset declarations PASS; unknown-rights reference material remains excluded/non-installable.
 
-25. **CONFIGURATION PRESERVATION:** Isolated fresh/upgrade/recovery/removal configuration preservation PASS; owner update remains pending.
+25. **CONFIGURATION PRESERVATION:** Both actual owner Arch Dock and Plasma configuration files remain byte-identical to the private backup; zero changed logical keys.
 
-26. **OWNER PC UPDATE STATUS:** Owner still runs verified 0.1.1-4. All isolated gates pass; the authorized 0.1.1-5 update follows candidate cleanup/commit/sync and a fresh private configuration backup.
+26. **OWNER PC UPDATE STATUS:** Owner PC now runs verified **0.1.1-5** after a fresh private configuration backup. Actual 216/216 payload bytes/modes, native pacman Qkk, stable D-Bus owner/live executable hash and Panel Studio startup PASS. Both configuration files are byte-identical and changed logical keys are empty. No active Arch Dock applet/integration module required a Plasma-wide refresh; only the backend was restarted. The previous binary reactivated during package installation; its exact UID, D-Bus owner, PID/start identity and old executable hash were verified before stopping only that process. D-Bus activation then loaded the new installed hash and remained stable through Panel Studio startup.
 
 27. **CLEANUP RESULT:** Owned root removed: 1,667,784,704 allocated/1,639,671,345 apparent bytes at final disposal, plus earlier compiled/export disposal. 263 compact ZIP entries retained. 956 protected file bytes/modes and 478 core identities preserved; zero new records, zero task dump payloads/processes. Wrong-interpreter disposable environment was recreated with explicit system Python/system-site access; no product or acceptance assertion was weakened.
 

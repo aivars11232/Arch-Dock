@@ -51,7 +51,7 @@ artifacts remain in `build-codex-aud01-aud02-0.1.1-5/`. All 956 historical files
 are byte/mode identical; all 478 core identities remain, zero new core records,
 zero task dump payloads and zero task processes. One primary session; no subagents.
 
-Owner still runs verified 0.1.1-4. All isolated gates pass; the authorized 0.1.1-5 update follows candidate cleanup/commit/sync and a fresh private configuration backup.
+Owner PC now runs verified **0.1.1-5** after a fresh private configuration backup. Actual 216/216 payload bytes/modes, native pacman Qkk, stable D-Bus owner/live executable hash and Panel Studio startup PASS. Both configuration files are byte-identical and changed logical keys are empty. No active Arch Dock applet/integration module required a Plasma-wide refresh; only the backend was restarted. The previous binary reactivated during package installation; its exact UID, D-Bus owner, PID/start identity and old executable hash were verified before stopping only that process. D-Bus activation then loaded the new installed hash and remained stable through Panel Studio startup.
 Final clean Git/remote/owner receipts belong to local STATE.json. Owner visual
 and physical acceptance and proposed v0.1.1 publication remain separate;
 historical v0.1.0 and its six assets are untouched.
