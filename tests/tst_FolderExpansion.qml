@@ -237,13 +237,18 @@ TestCase {
         })
         verify(host.openFolder())
         const screen = window.screen
-        host.x = screen.virtualX - 80
-        host.y = screen.virtualY - 80
-        tryVerify(function() { return host.x >= screen.virtualX && host.y >= screen.virtualY })
-        host.x = screen.virtualX + screen.width - 4
-        host.y = screen.virtualY + screen.height - 4
-        tryVerify(function() { return host.x + host.width <= screen.virtualX + screen.width
-            && host.y + host.height <= screen.virtualY + screen.height })
+        const anchor = findChild(window, "anchor")
+        host.closeFolder()
+        host.panelEdge = "free"
+        window.x = screen.virtualX
+        window.y = screen.virtualY
+        for (const y of [10, screen.height - 70]) {
+            anchor.y = y
+            verify(host.openFolder())
+            tryVerify(function() { return host.y >= screen.virtualY
+                && host.y + host.height <= screen.virtualY + screen.height })
+            host.closeFolder()
+        }
     }
     function test_nativeHostLifecycle() {
         const window = createTemporaryObject(anchorComponent, null)

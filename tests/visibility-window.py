@@ -142,6 +142,8 @@ def instrument_interaction_stage(stage):
                     origin: [content.expansionOrigin.x, content.expansionOrigin.y],
                     capture: captureStatus,
                     background: root.backgroundHints, colorAlpha: root.color.a,
+                    placement: {anchorY: root.anchorScreenY,
+                        screenHeight: root.anchorScreenHeight, maximumHeight: content.maximumHeight},
                     showNames: root.showNames, names: names,
                     viewport: viewport ? {x: viewport.x, y: viewport.y,
                         width: viewport.width, height: viewport.height,

@@ -223,6 +223,10 @@ cleanup_session() {
 cleanup_outer() {
     if [[ -n "$ARCHDOCK_RENDERING_STATE_ROOT" &&
           "$ARCHDOCK_RENDERING_STATE_ROOT" == /tmp/archdock-rendering-import.* ]]; then
+        if [[ -n "${ARCHDOCK_SCENE_EVIDENCE_DIR:-}" ]]; then
+            mkdir -p "$ARCHDOCK_SCENE_EVIDENCE_DIR/native-logs"
+            cp -a "$ARCHDOCK_RENDERING_STATE_ROOT/logs/." "$ARCHDOCK_SCENE_EVIDENCE_DIR/native-logs/"
+        fi
         cmake -E remove_directory "$ARCHDOCK_RENDERING_STATE_ROOT"
     fi
 }
