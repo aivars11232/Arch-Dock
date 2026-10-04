@@ -12,13 +12,23 @@ QQC2.Pane {
     property string easing: "outBack"
     property bool reducedMotion: false
     property bool opened: true
+    property bool showNames: true
+    property point expansionOrigin: Qt.point(width / 2, height)
+    property real openingProgress: opened ? 1 : 0
+    readonly property bool openingInProgress: openingAnimation.running
     property var iconStyleDefinition: ({})
     property int maximumWidth: 640
     property int maximumHeight: 420
     property string selectedChildId: ""
+    property bool keyboardSelection: false
+    property point lastPointerPosition: Qt.point(-1, -1)
     readonly property var entries: (snapshot.entries || []).slice(0, 48)
     readonly property var geometry: LayoutEngine.expansionGeometry(
-        layout, entries.length, 56, 12, 140, Math.ceil(Math.sqrt(entries.length)))
+        layout, entries.length, 56, 12, 140, Math.ceil(Math.sqrt(entries.length)), {
+            maximumWidth: Math.max(56, maximumWidth - padding * 2),
+            labelWidth: showNames ? 112 : 0,
+            labelHeight: showNames ? nameMetrics.height * 2 + 4 : 0
+        })
     readonly property var openingProfiles: [{
         id: "folder-open", target: "icon", trigger: "panel-reveal",
         reducedMotion: { mode: "none" },
@@ -31,10 +41,59 @@ QQC2.Pane {
     signal dismissRequested()
     objectName: "folderExpansion"
     padding: 10
+    background: null
     focus: true
     activeFocusOnTab: true
+    Accessible.name: folderTitle
     implicitWidth: Math.min(Math.max(280, geometry.width + 20), Math.max(160, maximumWidth))
     implicitHeight: column.implicitHeight + 20
+
+    FontMetrics { id: nameMetrics; font: root.font }
+    HoverHandler {
+        id: positionObserver
+        target: null
+        onPointChanged: {
+            const position = point.position
+            if (Math.abs(position.x - root.lastPointerPosition.x) > 0.5
+                    || Math.abs(position.y - root.lastPointerPosition.y) > 0.5)
+                root.keyboardSelection = false
+            root.lastPointerPosition = position
+        }
+    }
+    opacity: openingProgress
+    transform: Scale {
+        origin.x: root.expansionOrigin.x
+        origin.y: root.expansionOrigin.y
+        xScale: root.openingProgress
+        yScale: root.openingProgress
+    }
+    NumberAnimation {
+        id: openingAnimation
+        target: root
+        property: "openingProgress"
+        from: 0
+        to: 1
+        duration: Math.max(80, Math.min(1200, root.duration))
+        easing.type: root.easing === "outCubic" ? Easing.OutCubic
+            : root.easing === "outElastic" || root.easing === "spring" ? Easing.OutElastic
+            : Easing.OutBack
+    }
+    onReducedMotionChanged: if (reducedMotion) {
+        openingAnimation.stop()
+        openingProgress = opened ? 1 : 0
+    }
+    onOpenedChanged: {
+        openingAnimation.stop()
+        openingProgress = opened && reducedMotion ? 1 : 0
+        if (opened) {
+            if (!reducedMotion) openingAnimation.start()
+            viewport.cancelFlick()
+            viewport.contentX = 0
+            viewport.contentY = 0
+            selectedChildId = entries.length ? String(entries[0].id) : ""
+            keyboardSelection = false
+        }
+    }
 
     function indexForId(id) {
         for (let i = 0; i < entries.length; ++i)
@@ -43,18 +102,25 @@ QQC2.Pane {
     }
     function selectChild(id) {
         const index = indexForId(id)
-        if (!opened || index < 0 || entries[index].selectable !== true) return false
+        if (!opened || openingInProgress || index < 0 || entries[index].selectable !== true) return false
         selectedChildId = id
         childSelected(id)
         return true
     }
     function moveSelection(delta) {
         if (!entries.length) return
+        keyboardSelection = true
+        lastPointerPosition = positionObserver.point.position
         const index = Math.max(0, Math.min(entries.length - 1, indexForId(selectedChildId) + delta))
         selectedChildId = String(entries[index].id)
         const point = geometry.entries[index]
-        viewport.contentX = Math.max(0, Math.min(point.x, viewport.contentWidth - viewport.width))
-        viewport.contentY = Math.max(0, Math.min(point.y, viewport.contentHeight - viewport.height))
+        viewport.cancelFlick()
+        const x = point.x < viewport.contentX ? point.x
+            : Math.max(viewport.contentX, point.x + geometry.cellWidth - viewport.width)
+        const y = point.y < viewport.contentY ? point.y
+            : Math.max(viewport.contentY, point.y + geometry.cellHeight - viewport.height)
+        viewport.contentX = Math.max(0, Math.min(x, viewport.contentWidth - viewport.width))
+        viewport.contentY = Math.max(0, Math.min(y, viewport.contentHeight - viewport.height))
     }
     onEntriesChanged: if (indexForId(selectedChildId) < 0)
         selectedChildId = entries.length ? String(entries[0].id) : ""
@@ -76,6 +142,9 @@ QQC2.Pane {
             textFormat: Text.PlainText
             font.bold: true
             elide: Text.ElideRight
+            visible: root.entries.length === 0
+            style: Text.Outline
+            styleColor: root.palette.base
         }
         QQC2.Label {
             id: layoutNotice
@@ -83,6 +152,8 @@ QQC2.Pane {
             visible: root.geometry.fallbackApplied
             text: qsTr("This saved layout uses Fan.")
             wrapMode: Text.Wrap
+            style: Text.Outline
+            styleColor: root.palette.base
         }
         QQC2.Label {
             id: emptyNotice
@@ -91,6 +162,8 @@ QQC2.Pane {
             text: root.snapshot.status === "empty" ? qsTr("This folder is empty.")
                 : qsTr("This folder is unavailable.")
             wrapMode: Text.Wrap
+            style: Text.Outline
+            styleColor: root.palette.base
         }
         Flickable {
             id: viewport
@@ -106,6 +179,7 @@ QQC2.Pane {
             contentHeight: root.geometry.height
             clip: true
             boundsBehavior: Flickable.StopAtBounds
+            flickableDirection: Flickable.AutoFlickIfNeeded
             QQC2.ScrollBar.horizontal: QQC2.ScrollBar {}
             QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
             ScrollInput {
@@ -122,13 +196,15 @@ QQC2.Pane {
                     objectName: "folder-child-" + index
                     x: point.x
                     y: point.y
-                    width: root.geometry.iconSize
-                    height: width
+                    width: root.geometry.cellWidth
+                    height: root.geometry.cellHeight
                     Accessible.role: Accessible.Button
                     Accessible.name: String(modelData.displayName || modelData.name || "")
                     Accessible.onPressAction: root.selectChild(String(modelData.id))
                     Rectangle {
-                        anchors.fill: parent
+                        x: (parent.width - width) / 2
+                        width: root.geometry.iconSize
+                        height: width
                         radius: 6
                         color: root.selectedChildId === String(child.modelData.id) ? "#406ca5dd" : "transparent"
                         border.color: root.selectedChildId === String(child.modelData.id) ? "#8fbaff" : "transparent"
@@ -142,24 +218,50 @@ QQC2.Pane {
                         entryIndex: child.index
                     }
                     IconScene {
-                        anchors.fill: parent
+                        x: (parent.width - width) / 2
+                        width: root.geometry.iconSize
+                        height: width
                         entry: child.modelData
-                        logicalSize: child.width
+                        logicalSize: root.geometry.iconSize
                         iconStyleDefinition: root.iconStyleDefinition
                         showIndicator: false
                         disabled: child.modelData.selectable !== true
                         hovered: pointer.containsMouse
                         reducedMotion: root.reducedMotion
-                        glyphMotion: MotionChannels.motionFor(motion.channels, "icon", { size: child.width })
+                        glyphMotion: MotionChannels.motionFor(motion.channels, "icon", { size: root.geometry.iconSize })
+                    }
+                    QQC2.Label {
+                        objectName: "folder-name-" + child.index
+                        x: 0
+                        y: root.geometry.iconSize + 4
+                        width: parent.width
+                        height: Math.max(0, root.geometry.cellHeight - y)
+                        visible: root.showNames
+                        text: String(child.modelData.displayName || child.modelData.name || "")
+                        textFormat: Text.PlainText
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                        style: Text.Outline
+                        styleColor: root.palette.base
                     }
                     MouseArea {
                         id: pointer
                         anchors.fill: parent
+                        enabled: root.opened && !root.openingInProgress
+                        preventStealing: false
                         hoverEnabled: true
-                        onEntered: root.selectedChildId = String(child.modelData.id)
-                        onClicked: root.selectChild(String(child.modelData.id))
+                        onEntered: if (!root.keyboardSelection)
+                            root.selectedChildId = String(child.modelData.id)
+                        onPositionChanged: if (!root.keyboardSelection)
+                            root.selectedChildId = String(child.modelData.id)
+                        onClicked: {
+                            root.keyboardSelection = false
+                            root.selectChild(String(child.modelData.id))
+                        }
                     }
-                    QQC2.ToolTip.visible: pointer.containsMouse
+                    QQC2.ToolTip.visible: pointer.containsMouse && !root.showNames
                     QQC2.ToolTip.text: String(modelData.displayName || modelData.name || "")
                 }
             }
@@ -173,7 +275,9 @@ QQC2.Pane {
             }
             textFormat: Text.PlainText
             elide: Text.ElideMiddle
-            visible: root.entries.length > 0
+            visible: root.entries.length > 0 && !root.showNames
+            style: Text.Outline
+            styleColor: root.palette.base
         }
         QQC2.Label {
             id: pageNotice
@@ -181,6 +285,8 @@ QQC2.Pane {
             visible: root.snapshot.truncated === true
             text: qsTr("Showing the first 48 items.")
             wrapMode: Text.Wrap
+            style: Text.Outline
+            styleColor: root.palette.base
         }
     }
 }

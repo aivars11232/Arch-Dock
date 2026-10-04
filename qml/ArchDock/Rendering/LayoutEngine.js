@@ -1035,18 +1035,27 @@ function expansionOffset(layout, index, count, iconSize, spacing, radius, rows) 
 
 // Folder expansion shares the canonical positions and their measured bounds.
 // Large pages may scroll; they never shrink icons into unreadable hit targets.
-function expansionGeometry(layout, count, iconSize, spacing, radius, rows) {
+function expansionGeometry(layout, count, iconSize, spacing, radius, rows, options) {
     const requested = String(layout || "fan");
     const resolved = ["fan", "grid", "stack", "arc", "ring"].includes(requested)
         ? requested : "fan";
     const safeCount = clamp(Math.floor(finite(count, 0)), 0, 48);
     const size = clamp(finite(iconSize, 48), 16, 128);
     const gap = clamp(finite(spacing, 8), 0, 32);
+    const presentation = options || {};
+    const cellWidth = Math.max(size, clamp(finite(presentation.labelWidth, 0), 0, 256));
+    const cellHeight = size + clamp(finite(presentation.labelHeight, 0), 0, 128);
+    const availableWidth = Math.max(cellWidth, finite(presentation.maximumWidth, 0));
+    const bounded = finite(presentation.maximumWidth, 0) > 0;
+    const columns = Math.max(1, Math.min(safeCount,
+        Math.floor((availableWidth + gap) / (cellWidth + gap))));
     let distance = clamp(finite(radius, 120), size * 1.2, 4096);
     if (safeCount > 1) {
         const step = resolved === "ring" ? 2 * Math.PI / safeCount
             : 144 * Math.PI / 180 / (safeCount - 1);
-        const needed = (size + gap) / (2 * Math.sin(step / 2));
+        const extent = cellWidth === size && cellHeight === size
+            ? size : Math.sqrt(cellWidth * cellWidth + cellHeight * cellHeight);
+        const needed = (extent + gap) / (2 * Math.sin(step / 2));
         if (resolved === "ring" || resolved === "arc" || resolved === "fan")
             distance = Math.max(distance, needed / (resolved === "fan" ? 0.82 : 1));
     }
@@ -1054,7 +1063,21 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows) {
     let minimumX = Infinity, minimumY = Infinity;
     let maximumX = -Infinity, maximumY = -Infinity;
     for (let index = 0; index < safeCount; ++index) {
-        const point = expansionOffset(resolved, index, safeCount, size, gap, distance, rows);
+        let point;
+        if (bounded && resolved === "fan") {
+            // A long fan bends within the view and grows vertically. Every
+            // child remains reachable without a second scrolling axis.
+            const progress = safeCount <= 1 ? 0 : index / (safeCount - 1);
+            const bend = Math.min(finite(radius, 140), availableWidth - cellWidth);
+            point = { x: Math.sin(progress * Math.PI / 2) * Math.max(0, bend),
+                      y: index * (cellHeight + gap) };
+        } else if (bounded && resolved === "grid") {
+            point = { x: (index % columns) * (cellWidth + gap),
+                      y: Math.floor(index / columns) * (cellHeight + gap) };
+        } else {
+            point = expansionOffset(resolved, index, safeCount, size, gap, distance, rows);
+            point = { x: point.x * cellWidth / size, y: point.y * cellHeight / size };
+        }
         points.push(point);
         minimumX = Math.min(minimumX, point.x);
         minimumY = Math.min(minimumY, point.y);
@@ -1071,8 +1094,10 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows) {
         fallbackReason: resolved !== requested ? "unsupported-folder-layout" : "",
         count: safeCount,
         iconSize: size,
-        width: Math.ceil(maximumX - minimumX + size),
-        height: Math.ceil(maximumY - minimumY + size),
+        cellWidth: cellWidth,
+        cellHeight: cellHeight,
+        width: Math.ceil(maximumX - minimumX + cellWidth),
+        height: Math.ceil(maximumY - minimumY + cellHeight),
         origin: { x: size / 2 - minimumX, y: size / 2 - minimumY },
         entries: points.map(function(point, index) {
             return { index: index, x: point.x - minimumX, y: point.y - minimumY };

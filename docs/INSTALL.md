@@ -253,7 +253,7 @@ declared build dependencies before running makepkg; it does not install them.
 After reviewing the resulting package, the owner can install or remove it:
 
 ```bash
-sudo pacman -U arch-dock-0.1.1-5-x86_64.pkg.tar.zst
+sudo pacman -U arch-dock-0.1.1-6-x86_64.pkg.tar.zst
 ```
 
 Installation places the executable, direct D-Bus descriptor, manual systemd
@@ -268,13 +268,13 @@ private install/startup flow; there are no package hooks to perform either.
 
 ## Upgrade
 
-The current correction uses application `0.1.1`, package `0.1.1-5`; its
+The current correction uses application `0.1.1`, package `0.1.1-6`; its
 verification status is recorded in [CURRENT_STATE.md](CURRENT_STATE.md).
-The previous verified owner installation is `0.1.1-4`; native pacman performs
+The previous verified owner installation is `0.1.1-5`; native pacman performs
 the upgrade after candidate verification:
 
 ```bash
-sudo pacman -U arch-dock-0.1.1-5-x86_64.pkg.tar.zst
+sudo pacman -U arch-dock-0.1.1-6-x86_64.pkg.tar.zst
 ```
 
 Cancel an active audition and stop the backend before replacing its executable;
@@ -360,8 +360,8 @@ ARCHDOCK_PACKAGE_INSTALL_MANIFEST="$PWD/build-codex-arch-package/src/build/insta
 ARCHDOCK_PACKAGE_EVIDENCE_DIR="$PWD/build-codex-package-evidence" \
 TMPDIR="$task_tmp" \
 bash tests/run-arch-package-smoke.sh \
-    build-codex-arch-package/arch-dock-0.1.1-5-x86_64.pkg.tar.zst \
-    /absolute/path/to/arch-dock-0.1.1-4-x86_64.pkg.tar.zst
+    build-codex-arch-package/arch-dock-0.1.1-6-x86_64.pkg.tar.zst \
+    /absolute/path/to/arch-dock-0.1.1-5-x86_64.pkg.tar.zst
 ```
 
 The second package argument is optional for install/uninstall verification;
@@ -389,3 +389,19 @@ verification-owned build, Python and temporary roots after preserving its
 deliberate evidence. This verifies the package
 against the installed Arch/KDE dependency versions, rather than claiming
 an independent distribution-image or physical GPU acceptance test.
+
+## Folder contents
+
+Click a dock folder icon to unfold its children from that icon on a transparent
+surface. Use the mouse wheel to scroll up or down, or hold the left mouse button
+over an item and drag the contents. Releasing a scrolling drag does not open the
+pressed item; an ordinary click opens the selected child. Escape and clicking
+outside dismiss the contents. Arrow keys and Enter remain available.
+
+In **Panel Studio > Panels > Behavior**, **Always show folder item names**
+controls the labels beneath the children. It is enabled by default. Apply saves
+it for that panel; Cancel preserves the previous value. Turning it off retains
+hover names and tooltips. Fan and grid layouts fit horizontally and scroll
+vertically; the other saved layouts retain their layout and horizontal scrolling.
+The existing bounded snapshot shows up to 48 children. Reduced motion opens the
+contents immediately.

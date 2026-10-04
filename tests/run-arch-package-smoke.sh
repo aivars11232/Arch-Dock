@@ -168,7 +168,15 @@ done
 presets_installed 1 listsExactlyTheBuiltInCatalogs everyBuiltInCardRendersThroughTheSharedRenderer \
     >"$evidence/installed-presets-without-3d.log" 2>&1
 installed_ui_interactions() {
-    local fixture="$root/runtime-ui"
+    local mode="${1:-ui}"
+    local runtime_ui=1 folder_interactions=0
+    if [[ "$mode" == folders ]]; then
+        runtime_ui=0
+        folder_interactions=1
+    fi
+    local fixture="$root/runtime-$mode"
+    local captures="$root/captures-$mode"
+    mkdir -p "$captures"
     mkdir -p "$fixture/tests" "$fixture/qml" "$fixture/assets"
     cp "$build_dir/renderer-capability-test" "$build_dir/panel-window-capability-test" \
         "$fixture/tests/"
@@ -198,11 +206,15 @@ installed_ui_interactions() {
         --bind "$root" "$root" --chdir "$root" \
         env ARCHDOCK_BUILD_DIR="$fixture/tests" ARCHDOCK_QML_INSTALL_DIR=lib/qt6/qml \
         ARCHDOCK_RENDERING_INSTALL_ROOT="$sysroot/usr" \
-        ARCHDOCK_RENDERING_INTERACTIONS=1 ARCHDOCK_RUNTIME_UI=1 \
+        ARCHDOCK_RENDERING_INTERACTIONS=1 ARCHDOCK_RUNTIME_UI="$runtime_ui" \
+        ARCHDOCK_RENDERING_FOLDERS="$folder_interactions" \
+        ARCHDOCK_SCENE_EVIDENCE_DIR="$captures" \
         TMPDIR=/tmp PYTHONDONTWRITEBYTECODE=1 \
         bash "$fixture/tests/run-rendering-import-smoke.sh"
+    cp -a "$captures" "$evidence/installed-captures-$mode"
 }
 installed_ui_interactions >"$evidence/installed-runtime-ui.log" 2>&1
+installed_ui_interactions folders >"$evidence/installed-folder-ui.log" 2>&1
 mkdir -p "$sysroot/home/owner/.config/ArchDock"
 printf 'user-owned Plasma configuration\n' >"$sysroot/home/owner/.config/plasma-org.kde.plasma.desktop-appletsrc"
 printf 'user-owned Arch Dock configuration\n' >"$sysroot/home/owner/.config/ArchDock/arch-dock.conf"

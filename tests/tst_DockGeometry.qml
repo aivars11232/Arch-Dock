@@ -66,6 +66,26 @@ TestCase {
                 JSON.stringify(LayoutEngine.expansionOffset("circular", 2, 8, 48, 8, 120, 3)))
     }
 
+    function test_folderNamesAndDensePagesFitOneScrollingAxis() {
+        for (const layout of ["fan", "grid"]) {
+            for (const maximumWidth of [160, 620]) {
+                const value = LayoutEngine.expansionGeometry(layout, 48, 56, 12, 140, 7,
+                    { maximumWidth: maximumWidth, labelWidth: 112, labelHeight: 36 })
+                verify(value.width <= maximumWidth)
+                compare(value.iconSize, 56, "glyphs retain their full size")
+                verify(value.height > 420)
+                for (const point of value.entries) {
+                    verify(point.x >= 0 && point.x + value.cellWidth <= value.width)
+                    verify(point.y >= 0 && point.y + value.cellHeight <= value.height)
+                }
+                if (layout === "fan") {
+                    for (let i = 1; i < value.entries.length; ++i)
+                        verify(value.entries[i].y - value.entries[i - 1].y >= value.cellHeight)
+                }
+            }
+        }
+    }
+
     function geometry(layout, count, angle) {
         return LayoutEngine.metrics(
             layout, count, 40, 8, 1, 120, 2, 12, false,

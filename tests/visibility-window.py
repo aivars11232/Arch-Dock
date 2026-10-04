@@ -93,26 +93,61 @@ def instrument_interaction_stage(stage):
                     }
                 }
 ''')
-    insert("FolderExpansionHost.qml", "id: root", '\n    property string observedPanelId: ""\n    property bool observedActive: false')
+    import json
+    insert("FolderExpansionHost.qml", "id: root", '\n    property string observedPanelId: ""\n    property bool observedActive: false\n    property string observedCaptureDirectory: '
+           + json.dumps(str(stage.parent / 'logs')))
     insert("FolderExpansionHost.qml", "id: content", '''
         Timer {
             interval: 100; running: true; repeat: true
+            property string captured: ""
+            property var captureStatus: ({})
             onTriggered: {
                 if (!root.observedActive) return;
                 const items = {};
+                const names = {};
                 function visit(item) {
                     if (!item.visible) return;
                     if (item.objectName.startsWith("folder-child-")) {
-                        const point = item.mapToItem(null, 8, 8);
+                        const point = item.mapToItem(null, item.width / 2, 28);
                         items[item.objectName] = [point.x, point.y];
                     }
+                    if (item.objectName.startsWith("folder-name-"))
+                        names[item.objectName] = item.text;
                     for (const child of item.children) visit(child);
                 }
                 if (root.visible) visit(content);
+                const viewport = content.contentItem.children.find(item => item.objectName === "folderViewport");
+                const captureKey = root.observedPanelId + "-" + content.geometry.layout
+                    + "-" + content.entries.length + "-" + root.showNames;
+                if (!root.visible) { captured = ""; captureStatus = {}; }
+                if (root.visible && !content.openingInProgress && captured !== captureKey) {
+                    captured = captureKey;
+                    const path = root.observedCaptureDirectory + "/folder-" + captureKey + ".png";
+                    // Qt's QML overload requires a QML-owned item; the
+                    // window's C++ contentItem has no QML engine. Capture
+                    // the actual mainItem and check native background/color
+                    // independently below, without changing its rendering.
+                    const started = content.grabToImage(result => {
+                        const saved = result.saveToFile(path);
+                        captureStatus = {path: path, saved: saved};
+                    });
+                    captureStatus = {path: path, started: started,
+                        width: content.width, height: content.height};
+                }
                 console.warn("ArchDockInteraction " + JSON.stringify({kind: "folder", panel: root.observedPanelId,
                     active: root.active, focused: content.activeFocus,
                     visible: root.visible, snapshot: root.snapshot, layout: content.geometry.layout,
                     selected: content.selectedChildId, reducedMotion: content.reducedMotion,
+                    opening: content.openingInProgress, progress: content.openingProgress,
+                    origin: [content.expansionOrigin.x, content.expansionOrigin.y],
+                    capture: captureStatus,
+                    background: root.backgroundHints, colorAlpha: root.color.a,
+                    showNames: root.showNames, names: names,
+                    viewport: viewport ? {x: viewport.x, y: viewport.y,
+                        width: viewport.width, height: viewport.height,
+                        contentX: viewport.contentX, contentY: viewport.contentY,
+                        contentWidth: viewport.contentWidth, contentHeight: viewport.contentHeight,
+                        dragging: viewport.dragging, moving: viewport.moving} : {},
                     rect: [root.x, root.y, root.width, root.height], items: items}));
             }
         }
@@ -350,6 +385,44 @@ def run_interaction_matrix(free_panel):
     def panel_call(method, signature="()", args=()):
         return call("org.archdock.ArchDock", "/Control", "local.PanelWindow", method, signature, args)
 
+    def motion(point):
+        assert 0 <= point[0] < 1280 and 0 <= point[1] < 720, point
+        lib.ei_device_pointer_motion_absolute(devices[2], *point)
+        lib.ei_device_frame(devices[2], lib.ei_now(context))
+        sync_input()
+
+    def wheel(point, x, y, discrete=False, shift=False):
+        motion(point)
+        if shift:
+            lib.ei_device_keyboard_key(devices[4], 42, True)
+            lib.ei_device_frame(devices[4], lib.ei_now(context))
+            sync_input()
+        try:
+            function = lib.ei_device_scroll_discrete if discrete else lib.ei_device_scroll_delta
+            function(devices[16], x, y)
+            lib.ei_device_frame(devices[16], lib.ei_now(context))
+            sync_input()
+        finally:
+            if shift:
+                lib.ei_device_keyboard_key(devices[4], 42, False)
+                lib.ei_device_frame(devices[4], lib.ei_now(context))
+                sync_input()
+
+    def drag(start, end):
+        motion(start)
+        lib.ei_device_button_button(devices[2], 272, True)
+        lib.ei_device_frame(devices[2], lib.ei_now(context))
+        sync_input()
+        try:
+            for step in range(1, 21):
+                motion([start[axis] + (end[axis] - start[axis]) * step / 20 for axis in (0, 1)])
+                pump()
+                time.sleep(0.015)
+        finally:
+            lib.ei_device_button_button(devices[2], 272, False)
+            lib.ei_device_frame(devices[2], lib.ei_now(context))
+            sync_input()
+
     geometry = {"sample": 0, "value": {}, "close": "", "registration": 0}
     geometry_plugin = "org.archdock.interaction-geometry"
     geometry_script = root / "geometry-probe.js"
@@ -547,6 +620,8 @@ def run_interaction_matrix(free_panel):
 
     def run_folder_matrix():
         import subprocess
+        import shutil
+        from PySide6.QtGui import QImage
         backend_owner = call("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
                              "GetNameOwner", "(s)", ("org.archdock.ArchDock",))
         folder = root / "Folder fixture"
@@ -586,6 +661,27 @@ def run_interaction_matrix(free_panel):
                 return current["rect"][2:], current["items"][child_name] if child_name else [0, 0]
             return native_point([], [], current_target=target)
 
+        def verify_capture(panel, count, names):
+            layout = folder_popup(panel)["layout"]
+            path = root / "logs" / f"folder-{panel}-{layout}-{count}-{str(names).lower()}.png"
+            wait_for(lambda: path.exists()
+                and folder_popup(panel).get("capture", {}).get("path") == str(path)
+                and folder_popup(panel).get("capture", {}).get("saved") is True,
+                "native folder pixels captured and saved")
+            image = QImage(str(path))
+            assert not image.isNull() and image.hasAlphaChannel(), path
+            transparent = sum(image.pixelColor(x, y).alpha() == 0
+                for y in range(image.height()) for x in range(image.width()))
+            painted = sum(image.pixelColor(x, y).alpha() > 0
+                for y in range(image.height()) for x in range(image.width()))
+            assert transparent > image.width() * image.height() / 3 and painted > 100, (path, transparent, painted)
+            evidence = os.environ.get("ARCHDOCK_SCENE_EVIDENCE_DIR")
+            if evidence:
+                target = pathlib.Path(evidence)
+                target.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, target / path.name)
+            return path
+
         layouts = ["fan", "grid", "stack", "arc", "ring"]
         for panel in ("bottom", free_panel):
             for index, layout in enumerate(layouts):
@@ -608,9 +704,13 @@ def run_interaction_matrix(free_panel):
                 wait_for(lambda: entry(panel) and opened(panel), "folder entry and owning panel ready")
                 click_entry(panel, edge, 272)
                 current = wait_for(lambda: folder_popup(panel) if folder_popup(panel).get("visible")
+                    and not folder_popup(panel).get("opening")
                     and folder_popup(panel).get("layout") == layout
                     and len(folder_popup(panel).get("items", {})) == 5 else None, "five real folder children")
                 assert current["reducedMotion"] == panel_call("panelRendererConfiguration", "(s)", (panel,))["reducedMotion"]
+                assert current["background"] == 0 and current["colorAlpha"] == 0, current
+                assert current["showNames"] and len(current["names"]) == 5, current
+                verify_capture(panel, 5, True)
                 assert not marker.exists(), "expanding a folder launched its root"
                 wait_for(lambda: panel_call("panelInteractionGuards", "(s)", (panel,)).get("popupOpen"),
                          "folder popup holds the presentation guard")
@@ -649,6 +749,46 @@ def run_interaction_matrix(free_panel):
                 wait_for(lambda: not folder_popup(panel).get("visible"), "folder keyboard/outside dismissal")
                 assert not marker.exists(), "dismissal launched a document or folder"
                 print(f"PASS: folder {panel}/{layout}/{edge}: native selection, private handler, guards, dismissal", flush=True)
+        for index in range(5, 48):
+            (folder / f"Document {index}.txt").write_text("Private folder scroll document.\n")
+        wait_for(lambda: 16 in devices, "native folder scroll capability ready")
+        for panel in ("bottom", free_panel):
+            configure(panel, {"folderLayout": "fan", "folderShowNames": True})
+            assert panel_call("requestPanelPresentation", "(ss)", (panel, "open"))
+            wait_for(lambda: opened(panel), "dense folder owner open")
+            click_entry(panel, button=272)
+            current = wait_for(lambda: folder_popup(panel) if folder_popup(panel).get("visible")
+                and not folder_popup(panel).get("opening") and len(folder_popup(panel).get("items", {})) == 48
+                else None, "48 real folder children open")
+            assert current["viewport"]["contentWidth"] <= current["viewport"]["width"], current
+            assert current["viewport"]["contentHeight"] > current["viewport"]["height"], current
+            verify_capture(panel, 48, True)
+            point = folder_point(panel, "folder-child-0")
+            # EIS positive Y scrolls down, like the existing Studio probe;
+            # QtTest's synthetic angleDelta uses the opposite sign.
+            wheel(point, 0, 120, discrete=True)
+            wait_for(lambda: folder_popup(panel)["viewport"]["contentY"] > 0, "real downward folder wheel")
+            wheel(point, 0, -120, discrete=True)
+            wait_for(lambda: folder_popup(panel)["viewport"]["contentY"] == 0, "real upward folder wheel")
+            start = folder_point(panel, "folder-child-0")
+            drag(start, [start[0], start[1] - 100])
+            wait_for(lambda: folder_popup(panel)["viewport"]["contentY"] > 0, "real held-pointer folder drag")
+            assert not marker.exists() and folder_popup(panel)["visible"], "scroll drag opened a child"
+            escape()
+            wait_for(lambda: not folder_popup(panel).get("visible"), "dense folder dismissed")
+            configure(panel, {"folderShowNames": False})
+            click_entry(panel, button=272)
+            current = wait_for(lambda: folder_popup(panel) if folder_popup(panel).get("visible")
+                and not folder_popup(panel).get("opening") and not folder_popup(panel).get("showNames") else None,
+                "persisted names off reaches the real folder host")
+            assert not current["names"], current
+            verify_capture(panel, 48, False)
+            assert panel_call("dockConfiguration", "(s)", (panel,))["folderShowNames"] is False
+            escape()
+            wait_for(lambda: not folder_popup(panel).get("visible"), "names-off folder dismissed")
+            configure(panel, {"folderShowNames": True})
+            assert not marker.exists()
+            print(f"PASS: {panel}: transparent native folder pixels, 48-item vertical wheel/held drag, no launch, names on/off", flush=True)
         for child in folder.iterdir():
             child.unlink()
         assert panel_call("requestPanelPresentation", "(ss)", (free_panel, "open"))
@@ -878,51 +1018,13 @@ def run_interaction_matrix(free_panel):
         from gi.repository import Gdk
         from PySide6.QtGui import QColor, QImage
 
-        def motion(point):
-            assert 0 <= point[0] < 1280 and 0 <= point[1] < 720, point
-            lib.ei_device_pointer_motion_absolute(devices[2], *point)
-            lib.ei_device_frame(devices[2], lib.ei_now(context))
-            sync_input()
-
-        def wheel(point, x, y, discrete=False, shift=False):
-            motion(point)
-            if shift:
-                lib.ei_device_keyboard_key(devices[4], 42, True)
-                lib.ei_device_frame(devices[4], lib.ei_now(context))
-                sync_input()
-            try:
-                function = lib.ei_device_scroll_discrete if discrete else lib.ei_device_scroll_delta
-                function(devices[16], x, y)
-                lib.ei_device_frame(devices[16], lib.ei_now(context))
-                sync_input()
-            finally:
-                if shift:
-                    lib.ei_device_keyboard_key(devices[4], 42, False)
-                    lib.ei_device_frame(devices[4], lib.ei_now(context))
-                    sync_input()
-
-        def drag(start, end):
-            motion(start)
-            lib.ei_device_button_button(devices[2], 272, True)
-            lib.ei_device_frame(devices[2], lib.ei_now(context))
-            sync_input()
-            try:
-                for step in range(1, 21):
-                    motion([start[axis] + (end[axis] - start[axis]) * step / 20 for axis in (0, 1)])
-                    pump()
-                    time.sleep(0.015)
-            finally:
-                lib.ei_device_button_button(devices[2], 272, False)
-                lib.ei_device_frame(devices[2], lib.ei_now(context))
-                sync_input()
-
         wait_for(lambda: 16 in devices, "native scroll capability ready")
         probe_log = (root / "logs/ui-input-probe.log").open("w")
         environment = dict(os.environ, ARCHDOCK_NATIVE_UI_PROBE="1", QT_QUICK_CONTROLS_STYLE="org.kde.desktop",
                            QT_NO_XDG_DESKTOP_PORTAL="1", XDG_DATA_HOME=str(root / "ui-data"))
         with (root / "logs/icon-tiles-native.log").open("w") as tile_log:
             tiles = subprocess.run([str(pathlib.Path(os.environ["ARCHDOCK_BUILD_DIR"]) / "panel-window-capability-test"),
-                                    "studioIconTiles", "studioPanelMotionControls", "tiltEditorsFollowTheSelectedRenderer"],
+                                    "studioIconTiles", "studioFolderItemNames", "studioPanelMotionControls", "tiltEditorsFollowTheSelectedRenderer"],
                                    env=environment, stdout=tile_log, stderr=subprocess.STDOUT, timeout=60)
             assert tiles.returncode == 0, ("native Icon Tiles edit/Cancel/Apply/persistence failed\n"
                 + (root / "logs/icon-tiles-native.log").read_text())

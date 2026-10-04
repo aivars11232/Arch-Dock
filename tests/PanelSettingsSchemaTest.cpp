@@ -60,6 +60,10 @@ void PanelSettingsSchemaTest::descriptorMapsContainOnlyValidValues()
 
 void PanelSettingsSchemaTest::folderSettingsPreserveLegacyValues()
 {
+    const auto legacy = PanelDefinition::fromLegacyMap({
+        {QStringLiteral("id"), QStringLiteral("legacy-folder")}});
+    QVERIFY(legacy.has_value());
+    QVERIFY(legacy->content.folderShowNames);
     for (const QString &layout : {QStringLiteral("fan"), QStringLiteral("grid"),
          QStringLiteral("stack"), QStringLiteral("arc"), QStringLiteral("ring"),
          QStringLiteral("spiral"), QStringLiteral("physics")})
@@ -69,7 +73,8 @@ void PanelSettingsSchemaTest::folderSettingsPreserveLegacyValues()
             {QStringLiteral("folderLayout"), layout},
             {QStringLiteral("folderSpeed"), 9999},
             {QStringLiteral("folderEasing"), QStringLiteral("spring")},
-            {QStringLiteral("folderExpandOnClick"), false}});
+            {QStringLiteral("folderExpandOnClick"), false},
+            {QStringLiteral("folderShowNames"), false}});
         QVERIFY(definition.has_value());
         const auto roundTrip = PanelDefinition::fromLegacyMap(definition->toPersistedMap());
         QVERIFY(roundTrip.has_value());
@@ -77,9 +82,11 @@ void PanelSettingsSchemaTest::folderSettingsPreserveLegacyValues()
         QCOMPARE(roundTrip->content.folderSpeed, 1200);
         QCOMPARE(roundTrip->content.folderEasing, QStringLiteral("spring"));
         QVERIFY(!roundTrip->content.folderExpandOnClick);
+        QVERIFY(!roundTrip->content.folderShowNames);
     }
     for (const QString &key : {QStringLiteral("folderLayout"), QStringLiteral("folderSpeed"),
-         QStringLiteral("folderEasing"), QStringLiteral("folderExpandOnClick")})
+         QStringLiteral("folderEasing"), QStringLiteral("folderExpandOnClick"),
+         QStringLiteral("folderShowNames")})
         QVERIFY(PanelSettingsSchema::isTransactionPanelField(key));
 }
 

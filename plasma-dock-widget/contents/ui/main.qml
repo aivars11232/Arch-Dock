@@ -783,8 +783,10 @@ PlasmoidItem {
             Item {
                 id: folderAnchor
                 parent: panelScene
-                x: representation.folderAnchorData ? representation.folderAnchorData.x : 0
-                y: representation.folderAnchorData ? representation.folderAnchorData.y : 0
+                x: representation.folderAnchorData ? representation.folderAnchorData.x
+                    - representation.folderAnchorData.outwardNormal.x * panelScene.layoutGeometry.iconSize / 2 : 0
+                y: representation.folderAnchorData ? representation.folderAnchorData.y
+                    - representation.folderAnchorData.outwardNormal.y * panelScene.layoutGeometry.iconSize / 2 : 0
                 width: 1; height: 1
             }
             FolderExpansionHost {
@@ -795,6 +797,7 @@ PlasmoidItem {
                 folderSpeed: Number(root.configuration.folderSpeed || 260)
                 folderEasing: String(root.configuration.folderEasing || "outBack")
                 reducedMotion: Boolean(root.configuration.reducedMotion)
+                showNames: root.configuration.folderShowNames !== false
                 iconStyleDefinition: root.configuration.iconStyleDefinition || ({})
                 panelEdge: root.freeSurface ? "free" : String(root.configuration.edge || "bottom")
                 outwardNormal: representation.folderAnchorData

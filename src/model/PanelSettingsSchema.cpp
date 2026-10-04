@@ -447,6 +447,9 @@ const QVector<Descriptor> &schemaFields()
         panel("folderExpandOnClick", Access::Editor, Type::Boolean,
               Normalization::Boolean, true, "content.folderExpandOnClick", {}, {}, {}, false, true,
               editor("panels-behavior", "Expand folders on click", "switch", {"studio", "native"})),
+        panel("folderShowNames", Access::Editor, Type::Boolean,
+              Normalization::Boolean, true, "content.folderShowNames", {}, {}, {}, false, true,
+              editor("panels-behavior", "Always show folder item names", "switch", {"studio", "native"})),
 
         exposedTo(panel("edge", Access::Editor, Type::String, Normalization::ChoiceLower,
               QStringLiteral("bottom"), "placement.edge", {}, {},

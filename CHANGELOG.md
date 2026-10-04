@@ -20,6 +20,11 @@ The proposed `v0.1.1` tag and publication need separate authorization.
 - Icon mask load failures follow their asset URL. Switching the same icon scene
   from a broken mask to a valid mask or a plain style recovers; a currently
   broken mask still uses the original glyph fallback.
+- Folder contents unfold from the clicked dock icon on a transparent native
+  Plasma surface. Dense fan and grid layouts fit horizontally and scroll with
+  the wheel or a held-pointer drag; dragging does not open a child.
+- Panels > Behavior can keep folder item names visible without hovering.
+  This preference uses the existing draft, Apply/Cancel and persistence path.
 - Current-facing installation/version wording follows the corrected candidate;
   historical package checkpoints and release assets retain their identities.
 - Runtime corrections and candidate gates are recorded in

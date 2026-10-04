@@ -89,6 +89,17 @@ QVariantMap fieldByKey(const QVariantList &fields, const QString &key)
     return {};
 }
 
+QQuickItem *visibleItem(QQuickWindow *window, const QString &name)
+{
+    QList<QQuickItem *> pending{window->contentItem()};
+    while (!pending.isEmpty()) {
+        auto *item = pending.takeLast();
+        if (item->isVisible() && item->objectName() == name) return item;
+        pending.append(item->childItems());
+    }
+    return nullptr;
+}
+
 }
 
 class PanelWindowCapabilityTest final : public QObject
@@ -125,6 +136,8 @@ private slots:
     void tiltEditorsFollowTheSelectedRenderer();
     void studioIconTiles_data();
     void studioIconTiles();
+    void studioFolderItemNames_data();
+    void studioFolderItemNames();
     void wholePanelRotationFieldsAreGatedByTheResolver();
     void meshSceneEditorIsGatedAndTransactional();
     void rendererSwitchRetainsOnlyUnchangedInactiveFields();
@@ -189,6 +202,66 @@ void PanelWindowCapabilityTest::studioIconTiles_data()
     QTest::newRow("free") << false;
 }
 
+void PanelWindowCapabilityTest::studioFolderItemNames_data()
+{
+    QTest::addColumn<bool>("native");
+    QTest::newRow("native") << true;
+    QTest::newRow("free") << false;
+}
+
+void PanelWindowCapabilityTest::studioFolderItemNames()
+{
+    QFETCH(bool, native);
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = native ? QStringLiteral("bottom") : registry->addFreePanel();
+    const auto before = registry->panelDefinition(panel)->toPersistedMap();
+    QVERIFY(before.value("folderShowNames").toBool());
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    for (const bool apply : {false, true}) {
+        std::unique_ptr<QObject> popup(component.createWithInitialProperties({
+            {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 3},
+            {"width", 980}, {"height", 720}}));
+        QVERIFY(popup);
+        auto *window = qobject_cast<QQuickWindow *>(popup.get());
+        QVERIFY(window);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QVERIFY(QQuickTest::qWaitForPolish(window));
+        auto *toggle = visibleItem(window, "studio-switch-folderShowNames");
+        QVERIFY(toggle && toggle->isEnabled());
+        toggle->forceActiveFocus();
+        QTest::keyClick(window, Qt::Key_Space);
+        QVERIFY(QQuickTest::qWaitForPolish(window));
+        QVERIFY(popup->property("hasSettingsChanges").toBool());
+        const auto candidate = popup->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap();
+        QVERIFY(!candidate.value("folderShowNames").toBool());
+        QCOMPARE(registry->panelDefinition(panel)->toPersistedMap(), before);
+        auto *button = visibleItem(window, apply ? "studio-apply" : "studio-cancel");
+        QVERIFY(button && button->isEnabled());
+        button->forceActiveFocus();
+        QTest::keyClick(window, Qt::Key_Space);
+        if (!apply) {
+            QTRY_VERIFY(!window->isVisible());
+            QCOMPARE(registry->panelDefinition(panel)->toPersistedMap(), before);
+        }
+        else {
+            QVERIFY(QQuickTest::qWaitForPolish(window));
+            QCOMPARE(popup->property("studioError").toString(), QString{});
+            QVERIFY(!popup->property("hasSettingsChanges").toBool());
+            PanelRegistry reloaded;
+            QVERIFY(reloaded.panelDefinition(panel));
+            QVERIFY(!reloaded.panelDefinition(panel)->content.folderShowNames);
+            QVERIFY(!backend.panelRendererConfiguration(panel).value("folderShowNames").toBool());
+        }
+    }
+}
+
 void PanelWindowCapabilityTest::studioIconTiles()
 {
     QFETCH(bool, native);
@@ -209,13 +282,7 @@ void PanelWindowCapabilityTest::studioIconTiles()
     const auto item = [](QObject *popup, const QString &name) -> QQuickItem * {
         // Repeater delegates belong to the visual tree, which can differ from
         // QObject ownership. Walk the displayed controls like the wheel probe.
-        QList<QQuickItem *> pending{qobject_cast<QQuickWindow *>(popup)->contentItem()};
-        while (!pending.isEmpty()) {
-            auto *candidate = pending.takeLast();
-            if (candidate->isVisible() && candidate->objectName() == name) return candidate;
-            pending.append(candidate->childItems());
-        }
-        return nullptr;
+        return visibleItem(qobject_cast<QQuickWindow *>(popup), name);
     };
     const auto edit = [&](QObject *popup) {
         auto *window = qobject_cast<QQuickWindow *>(popup);
@@ -1220,13 +1287,14 @@ void PanelWindowCapabilityTest::editorSnapshotsExposeOnlyProjectedEditableState(
     const QVariantList nativeFields = nativeSnapshot.value(
         QStringLiteral("panelFields")).toList();
     const QSet<QString> nativeKeys = fieldKeys(nativeFields);
-    QCOMPARE(nativeKeys.size(), 8);
+    QCOMPARE(nativeKeys.size(), 9);
     QVERIFY(nativeKeys.contains(QStringLiteral("visible")));
     QVERIFY(nativeKeys.contains(QStringLiteral("visibilityMode")));
     QVERIFY(nativeKeys.contains(QStringLiteral("acceptDrops")));
     QVERIFY(nativeKeys.contains(QStringLiteral("iconStyle")));
     for (const QString &key : {QStringLiteral("folderLayout"), QStringLiteral("folderSpeed"),
-         QStringLiteral("folderEasing"), QStringLiteral("folderExpandOnClick")})
+         QStringLiteral("folderEasing"), QStringLiteral("folderExpandOnClick"),
+         QStringLiteral("folderShowNames")})
         QVERIFY(nativeKeys.contains(key));
     QCOMPARE(fieldByKey(nativeFields, QStringLiteral("folderLayout"))
                  .value(QStringLiteral("choices")).toStringList(),

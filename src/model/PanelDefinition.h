@@ -112,6 +112,7 @@ struct PanelContent
     int folderSpeed = 260;
     QString folderEasing = QStringLiteral("outBack");
     bool folderExpandOnClick = true;
+    bool folderShowNames = true;
     bool showBadges = true;
     bool showProgress = true;
     bool showTemporaryStatus = true;

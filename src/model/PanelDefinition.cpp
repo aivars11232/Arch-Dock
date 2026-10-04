@@ -440,6 +440,8 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     definition.content.folderExpandOnClick = normalized(
         QStringLiteral("folderExpandOnClick"),
         definition.content.folderExpandOnClick).toBool();
+    definition.content.folderShowNames = normalized(
+        QStringLiteral("folderShowNames"), definition.content.folderShowNames).toBool();
     definition.content.showBadges = normalized(QStringLiteral("showBadges"), definition.content.showBadges).toBool();
     definition.content.showProgress = normalized(QStringLiteral("showProgress"), definition.content.showProgress).toBool();
     definition.content.showTemporaryStatus = normalized(QStringLiteral("showTemporaryStatus"), definition.content.showTemporaryStatus).toBool();
@@ -1030,6 +1032,7 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("folderSpeed"), content.folderSpeed);
     record.insert(QStringLiteral("folderEasing"), content.folderEasing);
     record.insert(QStringLiteral("folderExpandOnClick"), content.folderExpandOnClick);
+    record.insert(QStringLiteral("folderShowNames"), content.folderShowNames);
     record.insert(QStringLiteral("showBadges"), content.showBadges);
     record.insert(QStringLiteral("showProgress"), content.showProgress);
     record.insert(QStringLiteral("showTemporaryStatus"), content.showTemporaryStatus);

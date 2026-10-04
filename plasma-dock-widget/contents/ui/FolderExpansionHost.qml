@@ -11,6 +11,7 @@ PlasmaCore.Dialog {
     property int folderSpeed: 260
     property string folderEasing: "outBack"
     property bool reducedMotion: false
+    property bool showNames: true
     property var iconStyleDefinition: ({})
     property string panelEdge: "bottom"
     property var outwardNormal: ({ x: 0, y: -1 })
@@ -20,6 +21,8 @@ PlasmaCore.Dialog {
     objectName: "folderExpansionHost"
     type: PlasmaCore.Dialog.AppletPopup
     flags: Qt.Tool | Qt.FramelessWindowHint
+    backgroundHints: PlasmaCore.Dialog.NoBackground
+    color: "transparent"
     hideOnWindowDeactivate: true
     visible: requested && interactionAllowed && visualParent !== null
     location: {
@@ -51,8 +54,19 @@ PlasmaCore.Dialog {
         duration: root.folderSpeed
         easing: root.folderEasing
         reducedMotion: root.reducedMotion
+        showNames: root.showNames
         iconStyleDefinition: root.iconStyleDefinition
         opened: root.visible
+        expansionOrigin: {
+            const anchor = root.visualParent
+                ? root.visualParent.mapToGlobal(root.visualParent.width / 2,
+                                                root.visualParent.height / 2)
+                : Qt.point(root.x + content.width / 2, root.y + content.height)
+            // Window coordinates avoid feeding the animated item's inverse
+            // scale back into the origin while it unfolds.
+            return Qt.point(anchor.x - root.x - content.x,
+                            anchor.y - root.y - content.y)
+        }
         maximumWidth: Math.min(640, Math.max(160, Screen.width - 40))
         maximumHeight: Math.min(420, Math.max(160, Screen.height - 40))
         onChildSelected: childId => {

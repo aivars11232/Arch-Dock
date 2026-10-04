@@ -45,6 +45,50 @@ TestCase {
         return item
     }
     function cleanup() { selection.target = null; dismissal.target = null }
+    function test_transparentContents() {
+        const item = popup("fan", 5)
+        compare(item.background, null, "folder contents have no opaque Pane background")
+    }
+    function test_namesRemainVisibleWithoutHoverAndCanBeHidden() {
+        const item = popup("fan", 5)
+        const name = findChild(item, "folder-name-0")
+        verify(name !== null)
+        compare(name.text, "Document 0")
+        verify(name.visible)
+        item.showNames = false
+        tryCompare(name, "visible", false)
+        item.showNames = true
+        tryCompare(name, "visible", true)
+    }
+    function test_verticalFanWheelAndDragDoNotLaunchChildren() {
+        const item = popup("fan", 48)
+        const viewport = findChild(item, "folderViewport")
+        verify(viewport.contentWidth <= viewport.width,
+               "a dense fan is reachable with vertical scrolling alone")
+        verify(viewport.contentHeight > viewport.height)
+        mouseWheel(viewport, viewport.width / 2, 30, 0, -120)
+        tryVerify(function() { return viewport.contentY > 0 })
+        mouseWheel(viewport, viewport.width / 2, 30, 0, 120)
+        tryCompare(viewport, "contentY", 0)
+        const first = findChild(item, "folder-child-0")
+        const start = first.mapToItem(viewport, first.width / 2, first.height / 2)
+        mousePress(viewport, start.x, start.y, Qt.LeftButton)
+        mouseMove(viewport, start.x, start.y - 16, 20, Qt.LeftButton)
+        mouseMove(viewport, start.x, start.y - 32, 20, Qt.LeftButton)
+        tryCompare(viewport, "dragging", true)
+        mouseMove(viewport, start.x, start.y - 140, 20, Qt.LeftButton)
+        mouseRelease(viewport, start.x, start.y - 140, Qt.LeftButton)
+        tryVerify(function() { return viewport.contentY > 0 })
+        compare(selection.count, 0, "scroll dragging never opens the pressed child")
+        tryCompare(viewport, "moving", false)
+        item.forceActiveFocus()
+        for (let i = 0; i < 47; ++i) keyClick(Qt.Key_Right)
+        compare(item.selectedChildId, "child-47")
+        const last = findChild(item, "folder-child-47")
+        const point = last.mapToItem(viewport, last.width / 2, 20)
+        verify(point.x >= 0 && point.x < viewport.width)
+        verify(point.y >= 0 && point.y < viewport.height)
+    }
     function test_layoutSelection_data() {
         return ["fan", "grid", "stack", "arc", "ring"].map(function(layout) {
             return { tag: layout, layout: layout }
@@ -80,7 +124,7 @@ TestCase {
         verify(item.width <= 640 && item.height <= 420)
         for (let i = 0; i < 47; ++i) item.moveSelection(1)
         compare(item.selectedChildId, "child-47")
-        verify(findChild(item, "folderViewport").contentX > 0)
+        verify(findChild(item, "folderViewport").contentY > 0)
         const child = findChild(item, "folder-child-47")
         verify(child !== null)
         verify(item.selectChild("child-47"))
@@ -99,7 +143,7 @@ TestCase {
         tryCompare(controller, "activeTracks", [])
     }
     function test_horizontalWheelAndShiftRespectBounds() {
-        const item = popup("fan", 48)
+        const item = popup("arc", 48)
         const viewport = findChild(item, "folderViewport")
         verify(viewport.contentWidth > viewport.width)
         mouseWheel(viewport, 100, 20, -120, 0)
@@ -120,7 +164,7 @@ TestCase {
         compare(fitted.contentX, 0)
     }
     function test_horizontalScrollbarAndKeyboardStillMoveContent() {
-        const item = popup("fan", 48)
+        const item = popup("arc", 48)
         const viewport = findChild(item, "folderViewport")
         const bar = viewport.ScrollBar.horizontal
         verify(bar !== null)
@@ -133,6 +177,46 @@ TestCase {
         compare(item.selectedChildId, "child-47")
         verify(viewport.contentX > 0)
     }
+    function test_contentsUnfoldFromOriginAndReducedMotionIsImmediate() {
+        const item = createTemporaryObject(component, testCase, {
+            opened: false, reducedMotion: false, duration: 500,
+            expansionOrigin: Qt.point(30, 300),
+            snapshot: { status: "ready", entries: rows(5) }
+        })
+        verify(item !== null)
+        item.width = item.implicitWidth
+        item.height = item.implicitHeight
+        const first = findChild(item, "folder-child-0")
+        const last = findChild(item, "folder-child-4")
+        const origin = item.mapToItem(testCase, 30, 300)
+        const firstStart = first.mapToItem(testCase, first.width / 2, 28)
+        const lastStart = last.mapToItem(testCase, last.width / 2, 28)
+        fuzzyCompare(firstStart.x, origin.x, 0.01)
+        fuzzyCompare(firstStart.y, origin.y, 0.01)
+        fuzzyCompare(lastStart.x, origin.x, 0.01)
+        fuzzyCompare(lastStart.y, origin.y, 0.01)
+        item.opened = true
+        tryVerify(function() { return item.openingProgress > 0 && item.openingProgress < 1 })
+        verify(!item.selectChild("child-0"), "moving contents cannot accidentally launch")
+        tryCompare(item, "openingInProgress", false)
+        compare(item.openingProgress, 1)
+        const firstEnd = first.mapToItem(testCase, first.width / 2, 28)
+        const lastEnd = last.mapToItem(testCase, last.width / 2, 28)
+        verify(Math.abs(lastEnd.y - firstEnd.y) > 200)
+        verify(item.selectChild("child-0"))
+        item.opened = false
+        compare(item.openingProgress, 0, "a hidden popup resets to the clicked origin immediately")
+        item.opened = true
+        tryVerify(function() { return item.openingProgress > 0 && item.openingProgress < 1 })
+        tryCompare(item, "openingInProgress", false)
+        compare(item.openingProgress, 1)
+        item.opened = false
+        item.reducedMotion = true
+        item.opened = true
+        compare(item.openingProgress, 1)
+        verify(!item.openingInProgress)
+        verify(item.selectChild("child-0"))
+    }
     function test_nativeHostLifecycle() {
         const window = createTemporaryObject(anchorComponent, null)
         verify(window !== null)
@@ -142,6 +226,8 @@ TestCase {
         })
         verify(host !== null)
         compare(host.type, PlasmaCore.Dialog.AppletPopup)
+        compare(host.backgroundHints, PlasmaCore.Dialog.NoBackground)
+        compare(host.color.a, 0)
         verify(host.openFolder())
         tryCompare(host, "visible", true)
         host.mainItem.dismissRequested()
