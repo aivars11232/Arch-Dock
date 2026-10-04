@@ -12,7 +12,8 @@ finalized source `85614f7f6ffed1bdba73528483b5e1089ba53f2f`. One-job complete bu
 22/22 affected CTests, fresh full 110/110 configured CTests, final 4/4 native
 Wayland CTests and actual Release-package installation gates PASS. Application
 0.1.1, package 0.1.1-2. Owned cleanup PASS; final operational Git closure and
-owner installation receipts are recorded separately from the source freeze.**
+owner installation receipts are recorded separately from the source freeze.
+Owner PC now runs verified 0.1.1-2; Panel Studio is open.**
 
 The owner resumed the synced pause checkpoint `cd05eb39ff3027e8c4ed8074fadb8a1b9c5c9b46`.
 The requested interruption at 79%, exit 130, was followed by successful completion
@@ -71,8 +72,27 @@ private dump. 243 compact evidence entries and the canonical candidate remain
 in `build-codex-first-runtime-ui-0.1.1-2/`; private evidence ZIP is mode 0600.
 912 protected older files retain bytes/modes. No task process or dump payload
 remains. STATE.json records final Git parity, cleanup and subsequent owner
-installation status; the owner update is performed after commit/sync, with a
-new private configuration backup. Owner desktop acceptance remains manual.
+installation status. The owner upgrade was performed after commit/sync and a
+new verified private two-file backup: native pacman 0.1.1-1 -> 0.1.1-2, actual
+215/215 installed bytes/modes and pacman Qkk PASS, new running backend executable
+hash matches the package, normal D-Bus activation and Panel Studio launch PASS.
+
+The owner explicitly approved the broader Plasma refresh. KDE's detached
+refreshCurrentShell replacement aborted in a libtaskmanager icon-read thread
+(QPixmap without live QGuiApplication). Starting the installed managed
+plasma-plasmashell.service restored the desktop; the backend was reactivated
+afterward. Exact native cause is unproved; the trace and successful workaround
+are recorded. Only the resulting identified system dump, crash dialog/debugger
+and matching DrKonqi cache were cleaned; diagnostic evidence remains.
+
+Arch Dock configuration stayed byte-identical. Native Plasma refresh changed
+only panelWidgets cache and slideshow current-image state; all other logical
+Plasma configuration keys match the backup. Current free-1/free-2 records are
+detached, and free-2 remains Empty. No hosted Arch Dock widget currently exists
+on the owner desktops. Installed widget bytes are available to a newly hosted
+panel; no live-widget glyph acceptance is claimed. For actual drop testing use
+Panel Studio's existing free-panel creation path and choose Launcher/Hybrid.
+Owner desktop/Dolphin/physical input acceptance remains manual.
 No new real tag/publication was performed in this runtime pass.
 
 **Historical previous boundary — 2026-10-04: RC-03 exact artifact verification, RC-04 canonical

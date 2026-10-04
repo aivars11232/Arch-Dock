@@ -38,6 +38,9 @@ supersedes the older candidate identity and runtime reuse boundaries below.
 - [x] Owned workspace/build/venv/fixtures removed; 243 compact evidence entries retained; all 912 protected historical files byte/mode identical; no task processes/dump payloads.
 - [x] Exact private Mesa teardown dump removed with diagnostic evidence retained; 458 baseline journal identities remain; one older payload externally became missing, consistent with native retention.
 - [x] Full 28-field corrective report, exact changed paths and short owner manual checks recorded. Final operational Git and owner update receipts are in build-codex-first-runtime-ui-0.1.1-2/STATE.json.
+- [x] Owner PC upgraded after cleanup/commit/sync and fresh private configuration backup; 0.1.1-2, actual 215 payload bytes/modes, pacman Qkk, new executable owner, D-Bus startup and Panel Studio launch PASS.
+- [x] Owner-approved desktop refresh completed through managed Plasma service recovery after native detached replacement aborted; exact incident diagnostics retained and its system/DrKonqi dump payloads removed.
+- [x] Owner Arch Dock configuration byte-identical; other Plasma logical keys unchanged except native panelWidgets cache and slideshow current-image state. Detached saved free records and Empty free-2 preserved; no hosted-widget acceptance claimed.
 - [ ] Owner Dolphin gesture, physical touchpad/GPU and manual restart/persistence acceptance; remains distinct from private Wayland verification.
 - [ ] New real v0.1.1 tag/publication; not performed during this runtime pass. Historical v0.1.0 is unchanged.
 
