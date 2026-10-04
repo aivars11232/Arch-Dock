@@ -6,62 +6,74 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Latest boundary — 2026-10-04: first owner-observed runtime/UI correction
-RESUMED / RUNTIME VERIFICATION PASS / PACKAGE CLOSURE IN PROGRESS. Starting main:
-`f7b72859b5410f57669c5c56dbda1dfd2861706b`. Complete one-job build PASS;
-affected CTests **22/22**, fresh full configured CTests **110/110** in **533.02 s**,
-and final affected native Wayland CTests **4/4** in **131.60 s**, with no failed or
-skipped CTest names. Corrected Release package/install verification, final
-cleanup, Git sync and owner-PC update remain pending.**
+**Latest boundary — 2026-10-04: FIRST OWNER-OBSERVED RUNTIME/UI ISSUES
+CORRECTED AND VERIFIED. Starting main `f7b72859b5410f57669c5c56dbda1dfd2861706b`;
+finalized source `85614f7f6ffed1bdba73528483b5e1089ba53f2f`. One-job complete build,
+22/22 affected CTests, fresh full 110/110 configured CTests, final 4/4 native
+Wayland CTests and actual Release-package installation gates PASS. Application
+0.1.1, package 0.1.1-2. Owned cleanup PASS; final operational Git closure and
+owner installation receipts are recorded separately from the source freeze.**
 
-The owner-requested pause checkpoint was committed and synced as
-`cd05eb39ff3027e8c4ed8074fadb8a1b9c5c9b46`. The build stopped at 79% with exit
-130 at that requested pause; resume completed all targets successfully using
-the retained one-job build. Fresh results and all earlier failure/correction
-logs remain in `/mnt/F/ui-runtime-pass/`. `full-results-final.json` records all
-110 configured test names; `logs/final-native.log` records the native matrix.
+The owner resumed the synced pause checkpoint `cd05eb39ff3027e8c4ed8074fadb8a1b9c5c9b46`.
+The requested interruption at 79%, exit 130, was followed by successful completion
+of every target. Fresh full CTest command wall time is 533.02 s (532.89 s summed
+CTest-reported durations), zero failures/skips/missing names. Package-only harness
+extensions came afterward; final affected native rerun is 4/4 in 131.60 s.
+The source exporter was rerun after the recipe bump: 1/1, 6.58 s, all 11 groups.
 
-The first full-suite attempt exposed a fixture focus/readiness race after a
-refused GTK drag fell through to the private desktop. The fixture now verifies
-its own source focus through native KWin scripting, one actual drag start/end,
-and release of the prior drag; original receipt/commit/persistence assertions
-remain intact. A fresh full suite then passed from its first test.
+Native checks exercise real GTK Wayland URI/application/folder drops, drop
+receipts and backend commits, deduplication/refusals, internal pointer reorder,
+native/free ownership, original folder glyphs and every launcher row in 2D/3D.
+Production Qt events cover raw pixel/angle deltas; KWin EIS covers real vertical,
+horizontal and Shift-wheel delivery without changing SpinBox/ComboBox values.
+This does not establish owner Dolphin gestures or physical touchpad/GPU acceptance.
+The owner's initially Empty free-2 panel is preserved; Empty deliberately shows
+no launchers and now truthfully directs the owner to Launcher/Hybrid.
 
-Installed-prefix preflight passes real Wayland URI transfer, internal reorder,
-duplicate/refusal guards, native custom-folder PNG resolution, every launcher
-glyph in 2D/3D, vertical/horizontal/Shift wheel input and unchanged control values.
-The package harness hides both source checkout and original test build, uses
-installed runtime bytes and themes, and explicitly copies its test probes/UI
-fixtures. It removes only a cloned installed-package database record before
-fresh installation. Qt writes the trusted PNG fixture because Glycin's nested
-sandbox cannot start inside the read-only installed-payload overlay. These are
-harness setup corrections; production runtime assertions remain unchanged.
-The installed-prefix preflight used staged Debug output, so it does not replace
-the pending real Release-package install/upgrade/removal gate.
+The first full-suite attempt caught source focus/readiness after a refused drag
+fell through to the private desktop. Native KWin activation of the fixture,
+exactly one drag start/end and released source fix the fixture without retrying
+or weakening drop assertions. Isolated installed checks also required copied
+installed theme assets and a Qt-written trusted PNG: native Glycin's nested
+sandbox cannot start inside the read-only installed-payload overlay.
 
-Final cleanup auditing found one private PlasmaShell Mesa worker core after
-passed interaction assertions. The renderer harness now reuses the existing
-lifecycle harness's SIGKILL-only final private shell disposal. All four affected
-native gates passed again in 131.60 s with no new dump. Diagnostics were retained
-and only the exact identified 31,394,377-byte task dump was removed. All 458
-baseline journal identities remain; one older payload became missing outside
-agent cleanup, consistent with the configured two-week retention. The first
-Release build was stopped before completion to avoid packaging the superseded
-harness checkpoint; a new canonical source freeze/build follows these gates.
+Final cleanup found one private PlasmaShell Mesa worker dump after passing
+interaction assertions. Final private shell disposal now reuses the existing
+lifecycle harness's SIGKILL path; ordinary restart semantics are unchanged.
+All four native checks passed again with no new dump. Diagnostics are retained;
+only the exact 31,394,377-byte task dump was removed. All 458 baseline journal
+identities remain. One older payload independently became missing, consistent
+with native two-week retention; the deletion actor was not established.
 
-Production C++/QML and installed applet source have changed. The previous
-`0.1.1-1` hashes below are historical and **STALE for the corrected candidate**.
-Application version remains `0.1.1`; package release is now `2` so native pacman
-can upgrade the existing owner installation. No corrected Release artifact has
-yet been generated, published or installed. Historical `v0.1.0` tag/assets are
-preserved. The owner authorized final verification, cleanup, commit/sync and
-then updating the PC. The installed package is still `0.1.1-1`.
+Two exports from the clean finalized source are byte-identical. Exact annotated
+tag verification used only an owned disposable clone; real v0.1.0 is preserved.
+Source audit: 525 source files / 526 regular members, canonical modes, normalized
+ownership/order, matching commit/tar/gzip epochs, complete GPL and excluded
+reference images. Source SHA-256:
+`daab73ef0dcd0f5fb940762a3e89f6ce7d346c0c95ff55ee8a8556a7e4c03607`.
+Release package SHA-256:
+`a5020f57699660f5f1e2e5caf1179412cd93047d73f0b244263db1c147726d0e`.
+Root PKGBUILD matches the exact canonical recipe. Prior 0.1.1-1 hashes below
+are historical and STALE for this corrected candidate; a future v0.1.1 source
+tag must use the new finalized source checkpoint above.
 
-Native input evidence uses an isolated GTK Wayland URI source and KWin EIS;
-it is not an actual owner Dolphin gesture or physical touchpad/GPU acceptance.
-Production raw pixel-delta input has focused Qt event coverage; the compositor
-normalizes continuous EIS scrolling into angle deltas. Owner Dolphin drag,
-physical touchpad, restart and persistence checks remain explicit manual tests.
+Fresh one-job Release/Quick3D-ON/BUILD_TESTING-OFF package build passes. Compiled
+and extracted source were removed before native installed checks. Those checks
+pass 215/215 payload bytes/modes, full GPL/MIT notices, all 17 asset declarations,
+eight MIT components, 15+15 catalogs/cards, installed startup with/without 3D,
+real installed UI matrix, 0.1.1-1 -> 0.1.1-2 upgrade, configuration recovery,
+both removals and byte-preserved user configuration. The UI matrix masks source
+and original build and explicitly copies test probes/UI fixtures; executable,
+applet, shared modules and themes are installed payload bytes.
+
+Owned cleanup removes 2,349,432,832 allocated workspace bytes plus the exact
+private dump. 243 compact evidence entries and the canonical candidate remain
+in `build-codex-first-runtime-ui-0.1.1-2/`; private evidence ZIP is mode 0600.
+912 protected older files retain bytes/modes. No task process or dump payload
+remains. STATE.json records final Git parity, cleanup and subsequent owner
+installation status; the owner update is performed after commit/sync, with a
+new private configuration backup. Owner desktop acceptance remains manual.
+No new real tag/publication was performed in this runtime pass.
 
 **Historical previous boundary — 2026-10-04: RC-03 exact artifact verification, RC-04 canonical
 modes and GPL-3.0-or-later licensing correction PASS. Finalized 0.1.1-1 source,

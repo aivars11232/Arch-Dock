@@ -1,6 +1,89 @@
 # Post-TASK-0045 corrective pass
 
-## RC-03, RC-04 and GPL licensing — 0.1.1 candidate, 2026-10-04
+## First real-PC runtime/UI correction — 0.1.1-2, 2026-10-04
+
+**FIRST OWNER-OBSERVED RUNTIME/UI ISSUES CORRECTED AND VERIFIED.** These are
+corrective checks by the implementing agent. This pass follows the owner's
+Dolphin folder/free-circular-panel and Panel-page observations; it is not
+TASK-0046 and does not claim all UI is bug-free. Older sections below are
+historical candidate evidence.
+
+1. **Starting HEAD:** clean main/origin f7b72859b5410f57669c5c56dbda1dfd2861706b. Owner-requested pause was committed/synced at cd05eb39ff3027e8c4ed8074fadb8a1b9c5c9b46, then explicitly resumed.
+2. **Final HEAD / worktree:** source freeze 85614f7f6ffed1bdba73528483b5e1089ba53f2f; later closure changes only the excluded recipe pin and operational documents. Exact final main/remote SHA, clean tree and parity are recorded after commit/sync in `build-codex-first-runtime-ui-0.1.1-2/STATE.json`.
+3. **Installed build tested:** owner started with `/usr/bin/arch-dock`, package 0.1.1-1 (210 verified payload files). Fresh native isolated gates test the actual Release 0.1.1-2 package (215 files), built from the exact source freeze. Owner upgrade is ordered after cleanup/commit/sync; its version, payload and running-owner receipt is recorded separately in STATE.json and the private installation receipt.
+4. **OBS-01 reproduction:** event regressions fail real internal drag/reorder completion and backend refusal; Qt drop delivery exposes acceptance before asynchronous mutation results. Owner free-2 was Empty, which intentionally displays no launcher records even if older drop handling stored them.
+5. **OBS-01 cause:** proxy hotspot/smoothing and absent terminal Drag.drop prevented actual target drops; mutation ran during drag-enter. Asynchronous Plasma QML D-Bus results arrived after the drop event's lifetime, while unconditional acceptance claimed success. Empty/non-launcher invitation was misleading.
+6. **OBS-01 fix:** pressed-position hotspot, unsmoothed proxy, MIME keys, terminal drop/reset/cancel; commit only on actual drop with edit/disabled/input/ownership guards. Native Qt D-Bus bridge addresses the existing unique owner, uses bounded calls, and returns the actual bool before acceptance/success animation. Launcher/Hybrid accept supported URLs; Empty gives truthful instructions and remains Empty. No native/free content restriction is relaxed.
+7. **Drag/drop results:** DockEntry focused QtTest 21/21; native Qt drag/drop delivery 7/7; registered policy/transaction tests pass. Real private GTK Wayland URI transfers cover application/folder drops on entry/surface/empty Launcher, duplication, refusal, edit/disabled behavior, pointer reorder, persisted order and native ownership. This is a real Wayland source, not an actual owner Dolphin gesture.
+8. **OBS-02 reproduction:** native custom-folder metadata test returns generic `folder` instead of the fixture's actual artwork; real RHI mesh entry has zero visible glyph pixels because the platform occludes it. Owner's existing folder metadata resolves an absolute PNG path containing spaces/Unicode; that private artwork is not included in source/package.
+9. **OBS-02 cause:** three folder entry paths hard-code `folder`, losing native .directory/special-folder icons. Camera-local glyph geometry was at world-platform depth and covered by the mesh.
+10. **OBS-02 fix:** KDE KFileItem resolves folder metadata for native dock, free entries and nested folders. Scale glyph position and dimensions together at depth ratio 0.25, placing artwork in front while retaining its projected input position/size, original source, style and motion.
+11. **Icon results:** DockModel 12/12, FolderContentModel 6/6 and focused panel/input 5/5; SVG/theme/custom PNG/space paths and launcher/running merge source identity pass. Real RHI per-entry glyph-pixel assertions, motion/camera/fallback checks and all-row native 2D/3D glyph validity/size pass. Private owner-artwork captures are retained; physical GPU/display acceptance remains manual.
+12. **OBS-03 cause:** nested Flickable accepted wheel only over its narrow viewport; KDE SpinBox/ComboBox/Slider wheel handling stole page input and changed values. KDE implicit-width bindings also looped in the Studio controls.
+13. **Vertical fix:** shared wheel-only overlay routes natural header/content input through nested-to-outer scroll priority, clamps origins/bounds and disables wheel value changes on settings controls. Exclude the tab strip before pointer acceptance. Studio controls use a finite implicit-width baseline; clicks, touch, keys and direct editing continue through their original controls.
+14. **OBS-04 cause:** overflowing tab/folder content had no applicable horizontal wheel route; vertical handling could block tab delivery or process Shift twice. Genuine horizontal overflow needed its own routing.
+15. **Horizontal fix:** pixel delta first, angle fallback, Shift + vertical conversion once, horizontal-only tab handler and existing folder viewport routing; no movement or invented content width without real overflow. Existing scrollbar dragging and keyboard navigation remain available.
+16. **UI input results:** StudioScroll 6/6 and FolderExpansion 12/12; production Qt QWheelEvent pixel/angle cases verify precise content offsets and unchanged values; existing bars/keys/bounds pass. Real KWin EIS vertical/horizontal/Shift gestures over natural content and SpinBox/ComboBox pass. EIS continuous scrolling reaches Qt as angle delta on this compositor; physical touchpad pixels remain manual acceptance.
+17. **Affected CTests:** fresh 22/22 registered names in three serial bounded batches, zero failures/skips. After package release/recipe changes, final exporter CTest 1/1 in 6.58 s, all 11 unittest groups.
+18. **Full CTest:** fresh 110/110 configured names, eleven serial batches; 533.02 s command wall time / 532.89 s summed CTest-reported durations; no failed/skipped/missing names. Initial source-readiness failure is retained. Native KWin source focus, one drag start/end and released prior source fix the fixture; the full suite then passed again from test one. Package-only fixture extensions and final disposal correction occurred afterward and have their own targeted native/install gates; this is not a second full suite after those harness edits.
+19. **Native Wayland:** final affected four CTests 4/4 in 131.60 s after final teardown fix, zero new dump. Earlier native 4/4 in 133.37 s also passed runtime assertions but later cleanup exposed a Mesa worker teardown dump. Existing lifecycle SIGKILL-only final private shell disposal is reused; normal restart semantics are unchanged.
+20. **Installed package:** one-job Release, Quick3D ON, BUILD_TESTING OFF, makepkg verification/build PASS. Compiled/extracted source removed before native gates. All 215 payload bytes/modes/resources, full GPL/MIT notices, 17 original asset declarations and eight MIT components pass. Native fresh install, 15+15 catalogs/cards, optional-3D-hidden checks, installed startup, real installed UI matrix, 0.1.1-1 -> 0.1.1-2 upgrade, configuration recovery and both removals preserve configuration. Package matrix masks checkout/original build; copied test probes/UI fixtures are explicit, while executable/applet/modules/themes come from installed payload. Database-only removal affects only the cloned existing Arch Dock record. Installed theme copies fix relative fixture URLs; Qt writes the trusted PNG because native Glycin nested sandboxing cannot start in the overlay. Assertions remain intact.
+21. **New source SHA-256:** `daab73ef0dcd0f5fb940762a3e89f6ce7d346c0c95ff55ee8a8556a7e4c03607`. Two exact canonical exports and annotated disposable-tag verifier pass; 525 source files / 526 regular members, unique root checkpoint, canonical modes/ownership/order/epochs, GPL and reference-image exclusions. Old source hashes are stale for this corrected candidate.
+22. **New package SHA-256:** `a5020f57699660f5f1e2e5caf1179412cd93047d73f0b244263db1c147726d0e`. Root recipe exactly matches canonical generated bytes; separate RELEASE_SHA256SUMS preserves the exporter's one-entry SHA256SUMS.
+23. **Cleanup:** disposable root/build/venv/clones/fixtures/partial Release outputs removed: 2,349,432,832 allocated bytes (2.349 GB / 2.188 GiB), 2,304,012,939 apparent bytes. Exact identified 31,394,377-byte private Mesa dump removed after diagnostics; 243 compact evidence entries retained in mode-0600 ZIP. All 912 protected older files retain bytes/modes; zero task processes or dump payloads. All 458 baseline journal identities remain; one older payload independently became missing, consistent with configured two-week retention, but its deletion actor was not independently established. No unrelated dump was deleted by the agent. Interrupted owned pkg directory permission was restored only for disposal.
+24. **git diff --check:** PASS before staging; staged exact-path check is required again at final commit.
+25. **Exact changed files:** listed below relative to starting HEAD; source freeze and excluded closure paths are kept explicit.
+26. **Remaining observed issues:** no failing automated cell in these four groups. Owner Dolphin, physical touchpad/GPU, live widget-code reload and manual restart/persistence acceptance remain distinct. Preserve Empty semantics: choose Launcher/Hybrid explicitly if dropped entries should appear. A live PlasmaShell may cache installed applet QML; refreshing that broader desktop requires respecting section 15's owner-desktop scope.
+27. **Short owner manual list:** below. The owner configuration is backed up before upgrade; no automatic panel conversion or unrelated Plasma change is part of the correction.
+28. **Git/publication still required:** final normal commit/push and remote/tree parity are recorded in STATE.json before owner update. No new real tag or release publication was performed during this runtime pass; preserved v0.1.0 is unchanged. Candidate artifacts are local. Manual owner acceptance remains required.
+
+Exact changed paths:
+
+```
+CMakeLists.txt
+PKGBUILD
+docs/CURRENT_STATE.md
+docs/INSTALL.md
+docs/POST_TASK_0045_CORRECTIVE_REPORT.md
+docs/RELEASE_CHECKLIST.md
+packaging/LICENSING.md
+plasma-dock-widget/contents/ui/DockEntry.qml
+plasma-dock-widget/contents/ui/main.qml
+qml/ArchDock/Rendering/FolderExpansion.qml
+qml/ArchDock/Rendering/inputs/ScrollInput.qml
+qml/ArchDock/Rendering/optional3d/PanelScene3D.qml
+qml/ArchDock/Rendering/qmldir
+qml/runtime/PresetBrowser.qml
+qml/runtime/SettingsPopup.qml
+qml/runtime/StudioForm.qml
+src/DockModel.cpp
+src/integration/DropBackend.h
+src/model/FolderContentModel.cpp
+src/panel/PanelWindow.cpp
+tests/DockModelTest.cpp
+tests/DropDeliveryTest.cpp
+tests/FolderContentModelTest.cpp
+tests/PanelWindowCapabilityTest.cpp
+tests/RendererCapabilityTest.cpp
+tests/run-arch-package-smoke.sh
+tests/run-rendering-import-smoke.sh
+tests/tst_DockEntry.qml
+tests/tst_FolderExpansion.qml
+tests/tst_StudioScroll.qml
+tests/visibility-window.py
+```
+
+Owner acceptance after installation and widget reload:
+
+1. Choose Launcher/Hybrid where entries are intended, then drop an app and the original Dolphin folder onto panel space and an entry.
+2. Reorder two entries; confirm one move, cancellation/refusal and no accidental click launch.
+3. Compare application and custom folder glyphs with Dolphin in 2D and true 3D; confirm original artwork remains recognizable.
+4. On Panel page, wheel over normal content, labels and controls; the page should scroll without changing control values.
+5. On real horizontal overflow, check touchpad/wheel sideways, Shift-wheel, the existing scrollbar and keys; ordinary fitted content should stay fitted.
+6. Restart Arch Dock normally.
+7. Confirm dropped entries, order, icons and settings persist.
+
+## Historical RC-03, RC-04 and GPL licensing — 0.1.1 candidate, 2026-10-04
 
 **All supplied source/export/package/licensing/installed corrective gates and
 owned cleanup PASS. Corrected next candidate prepared; new real tag/publication

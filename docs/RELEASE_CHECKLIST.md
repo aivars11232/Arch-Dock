@@ -18,7 +18,30 @@ authorized cleanup/commit/sync and separately tagging/publication. Physical
 acceptance remains separate; the owner now selected GPL-3.0-or-later. Outside the explicit
 corrective sections, build/runtime entries retain historical candidate evidence.
 
-## RC-03, RC-04 and licensing acceptance — 0.1.1 candidate, 2026-10-04
+## First owner-observed runtime/UI correction — 0.1.1-2, 2026-10-04
+
+**FIRST OWNER-OBSERVED RUNTIME/UI ISSUES CORRECTED AND VERIFIED.** This section
+supersedes the older candidate identity and runtime reuse boundaries below.
+
+- [x] Actual starting main f7b72859b5410f57669c5c56dbda1dfd2861706b and installed 0.1.1-1 reconciled; owner folder/circular-panel/Panel-page observations reproduced.
+- [x] Drag delivery/receipt, internal drag completion, guards and backend rejection corrected without changing native/free ownership or Empty panel semantics.
+- [x] KFileItem resolves native folder artwork; real RHI glyph-pixel regression corrects platform occlusion without replacing original icons/styles.
+- [x] Natural page wheel routing preserves control values; real horizontal overflow supports pixels/angles/Shift, existing bars/keys and bounds without artificial overflow.
+- [x] Complete one-job build; 22/22 affected CTests; fresh full 110/110 configured CTests; no failures/skips/missing names.
+- [x] Final 4/4 native Wayland checks, 131.60 s, after fixture source-readiness and final private teardown repairs; no new crash.
+- [x] Final source-exporter CTest 1/1, 6.58 s, all 11 unittest groups after recipe release bump.
+- [x] Exact source freeze 85614f7f6ffed1bdba73528483b5e1089ba53f2f; annotated verification tag only in disposable clone; two canonical exports identical; 525 source files / 526 regular members; GPL/modes/epochs/reference exclusions pass.
+- [x] Source SHA-256 daab73ef0dcd0f5fb940762a3e89f6ce7d346c0c95ff55ee8a8556a7e4c03607; exact root canonical recipe; fresh one-job Release/Quick3D-ON 0.1.1-2 package.
+- [x] Package SHA-256 a5020f57699660f5f1e2e5caf1179412cd93047d73f0b244263db1c147726d0e; 215/215 payload bytes/modes and all license/resource coverage.
+- [x] Real installed drag/icon/scroll matrix hides checkout/build; copied probes/UI fixtures are explicit; installed applet/modules/themes/executable used.
+- [x] Native fresh install, installed cards/startup with/without 3D, 0.1.1-1 -> 0.1.1-2 upgrade, configuration recovery, both removals and byte-preserved configuration pass after removing compiled/extracted source.
+- [x] Owned workspace/build/venv/fixtures removed; 243 compact evidence entries retained; all 912 protected historical files byte/mode identical; no task processes/dump payloads.
+- [x] Exact private Mesa teardown dump removed with diagnostic evidence retained; 458 baseline journal identities remain; one older payload externally became missing, consistent with native retention.
+- [x] Full 28-field corrective report, exact changed paths and short owner manual checks recorded. Final operational Git and owner update receipts are in build-codex-first-runtime-ui-0.1.1-2/STATE.json.
+- [ ] Owner Dolphin gesture, physical touchpad/GPU and manual restart/persistence acceptance; remains distinct from private Wayland verification.
+- [ ] New real v0.1.1 tag/publication; not performed during this runtime pass. Historical v0.1.0 is unchanged.
+
+## Historical RC-03, RC-04 and licensing acceptance — 0.1.1 candidate, 2026-10-04
 
 **All supplied code/export/source/package/installed licensing and owned cleanup
 gates PASS. Next candidate prepared; no new real tag/publication authorized.**
