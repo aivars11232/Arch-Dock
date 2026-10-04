@@ -1,5 +1,101 @@
 # Post-TASK-0045 corrective pass
 
+<!-- PANEL_MOTION_REPORT_BEGIN -->
+## Panel controls and motion correction — 0.1.1-4, 2026-10-04
+
+1. **Task boundary:** Owner-requested Panels overflow/status, opening/closing, optional free rotation, wheel turning, position and tilt; prior Icon Tiles behavior is retained.
+
+2. **Starting state:** main 08e24ce7b32bcc057dc62c7d41d2697f563ef724 and installed 0.1.1-3 were verified; task pack integrity 174/174 PASS.
+
+3. **Authority/resources:** Owner authorized verification, cleanup, commit/sync and PC update. One primary session, one build/test worker and no subagents; old evidence is protected.
+
+4. **Native research:** Qt TabBar is a horizontal flickable and overlay styles can cover the last arrow. KDE Plasma 6.7 Widget.setGeometry is a no-op; the existing owned container route is reused. Resizing before moving is supported by native container/grid code and actual read-back failures/pass.
+
+5. **Tab navigation:** Native arrows bound/clamp the existing tab flickable. Effective scrollbar space not already reserved by the style is excluded from the row.
+
+6. **Status truthfulness:** Unattempted is neutral Not checked yet, success/verified remain false; failed/unsupported/fallback diagnostics are preserved.
+
+7. **Missing animation cause:** The procedural capability profile omitted implemented linear collapse and Studio previews froze rotation. Their existing runtime paths are now reachable from the editor.
+
+8. **Opening/closing:** Animations groups resting state, mechanism/axis, trigger, reveal handle, delays and duration. Draft coherence, Cancel/Apply/reload and saved Open/Close actions reuse the transaction/presentation request.
+
+9. **Manual wheel turn:** Interactive free radial panels turn 15 degrees per notch, up clockwise/down counterclockwise; touchpad pixels are proportional. Angle is transient and uses the actual shared entry/hit/drop/popup geometry.
+
+10. **Continuous rotation:** Optional None/Clockwise/Counterclockwise, speed and idle/hover trigger use SceneRotationController. Animations preview plays it; other cards remain deterministic.
+
+11. **Free position:** General X/Y goes through exact ownership/type/token checks, live geometry read-back and required host-apply/rollback. Rollback restores actual prior geometry, including independent desktop drift.
+
+12. **Resize/move correction:** Profile apply reproduced a resized free widget at the wrong position. Existing main.qml callback now resizes before positioning; targeted and final profile/native move tests pass.
+
+13. **True 3D tilt:** Layout camera pitch uses parameters3D.cameraPitch, bounded to -60..60, and the existing camera. Actual RHI captures at 10/-35 differ while logical rectangles and glyph centers remain aligned.
+
+14. **Baked tilt:** Layout tilt follows the selected theme/state declared range through parameters2_5D.tilt; an out-of-theme-range edit is refused before persistence.
+
+15. **Data compatibility:** Typed scalar aliases preserve opaque renderer map fields and profile/runtime persistence; no parallel settings store or owner host adoption is introduced.
+
+16. **Interaction guards:** Native arbitrary XY/rotation is unavailable. Drag/edit/popup/collapsed/concealed states pause rotation; reduced motion suppresses animated transitions/continuous motion while retaining state changes.
+
+17. **Focused controls:** Actual Studio SpinBox/ComboBox and keyboard/click controls verify draft preview, Cancel, Apply, persistent reload, native refusal and both control styles.
+
+18. **Complete configured verification:** Final 111/111 configured CTests PASS in 37 serial batches, 590.96 s summed passing batch wall time. Zero final skips/missing names; final source inputs were unchanged.
+
+19. **Native/RHI verification:** Four native Wayland gates PASS, 146.34 s, with real EIS arrows/wheels, 2D/3D rotation, live move/rollback, hover open/close, original glyphs and URI/app/folder drops. Actual 3D captures are retained.
+
+20. **Diagnostic limits:** One early bounded drop NoReply and one final three-second private Plasma startup scripting timeout were not reproduced by the acceptance reruns. Tracing exposed its own readiness/log contamination; all uninstrumented final gates pass with original timeouts/assertions. No speculative transport repair was made.
+
+21. **Other gate corrections:** Fusion arrow/scrollbar coverage was fixed in production. Folder fixture now tests unsupported split instead of newly supported linear collapse; rejection/revision assertions remain. A missing task screenshot directory was created without changing tests. Installed verification needed a pre-existing systemd runtime subdirectory; the early renderer probe HOME/XDG paths were then placed inside the same writable package fixture, with its outer session bus disconnected. Native mktemp is delegated for all other fixtures. Source masks, package bytes and assertions are unchanged.
+
+22. **Canonical source:** Freeze d1cb20a6f533e044e37c37170a3275b51cc17eae; two canonical tracked-checkout exports identical; annotated verification only in disposable clone. Initial isolated-HOME export was refused for local tool settings and those owned export bytes removed. Final extraction/inventory/modes/GPL/reference exclusions PASS: 527 source files/528 members, SHA256 c53bd92345d29ba3325c48cac5894853650523acc737bacc3623bce524c42642.
+
+23. **Package identity:** Pinned root recipe is byte-identical to canonical PKGBUILD; one-job Release/Quick3D-ON 0.1.1-4 build PASS. Package SHA256 fb31f07927691614b9199e33c9f550ae0e79d3ee7de94c1b6d368cb0241c13f9; 216 payload files.
+
+24. **Installed gate:** Actual native package root, installed executable/applet/renderers/themes, complete payload bytes/modes/licenses/resources and 15+15 cards pass. Compiled/extracted source was removed; checkout/build masked. Copied UI probes are explicit; actual backend is the package executable. Wall 94.26 s.
+
+25. **Upgrade/recovery/removal:** Native 0.1.1-3 -> 0.1.1-4 upgrade, data-only recovery and both removals pass while saved configuration remains byte-identical.
+
+26. **Cleanup/preservation:** Owned disposable root removed (1,775,763,456 allocated/1,742,262,560 apparent bytes at final disposal), 483 compact ZIP entries retained. All 941 protected historical files and 460 core journal identities preserved; one owned probe abort journal retained with raw payload/metadata removed; 17 new unrelated Nexees records preserved; zero remaining task dump payloads/processes.
+
+27. **Owner installation:** Owner PC still runs 0.1.1-3. The verified new package is ready; the authorized PC update follows candidate cleanup/commit/sync. Final Git and installation receipts belong to local STATE.json.
+
+28. **Git/publication boundary:** Source freeze and canonical pin/operational closure are separate. Candidate cleanup/commit/sync precedes PC update; final owner receipt is committed/synced afterward and exact clean main/remote parity is recorded in STATE.json. Real v0.1.0 is unchanged; no new real tag/publication or physical acceptance is claimed.
+
+Exact changed paths in this correction:
+
+- `PKGBUILD`
+- `docs/CURRENT_STATE.md`
+- `docs/INSTALL.md`
+- `docs/POST_TASK_0045_CORRECTIVE_REPORT.md`
+- `docs/RELEASE_CHECKLIST.md`
+- `plasma-dock-widget/contents/ui/main.qml`
+- `qml/ArchDock/Rendering/PanelScene.qml`
+- `qml/ArchDock/Rendering/PanelSurfaceLoader.qml`
+- `qml/ArchDock/Rendering/previews/LivePanelPreview.qml`
+- `qml/runtime/PlacementStatus.js`
+- `qml/runtime/SettingsPopup.qml`
+- `qml/runtime/StudioNavigation.js`
+- `qml/runtime/VisibilityStatus.js`
+- `src/model/PanelCapabilityResolver.cpp`
+- `src/model/PanelDefinition.cpp`
+- `src/model/PanelSettingsSchema.cpp`
+- `src/panel/PanelSettingsTransaction.h`
+- `src/panel/PanelWindow.cpp`
+- `tests/PanelCapabilityResolverTest.cpp`
+- `tests/PanelSettingsSchemaTest.cpp`
+- `tests/PanelWindowCapabilityTest.cpp`
+- `tests/RendererCapabilityTest.cpp`
+- `tests/tst_LivePanelPreview.qml`
+- `tests/tst_PanelBaked25D.qml`
+- `tests/tst_PlacementStatus.qml`
+- `tests/tst_SceneRotation.qml`
+- `tests/tst_StudioNavigation.qml`
+- `tests/tst_VisibilityStatus.qml`
+- `tests/visibility-window.py`
+
+Primary native references: [Qt TabBar](https://doc.qt.io/qt-6/qml-qtquick-controls-tabbar.html), [Qt ScrollView](https://doc.qt.io/qt-6/qml-qtquick-controls-scrollview.html), [Qt WheelHandler](https://doc.qt.io/qt-6/qml-qtquick-wheelhandler.html), [Plasma scripting](https://develop.kde.org/docs/plasma/scripting/), [KConfig writable checks](https://api.kde.org/kconfig.html), [Plasma 6.7 Widget implementation](https://raw.githubusercontent.com/KDE/plasma-workspace/Plasma/6.7/shell/scripting/widget.cpp). Container/grid relayout ordering is an inference supported by the inspected primary KDE source, installed container code and the failing/passing actual-geometry gates.
+
+Owner quick checks: use a populated free circular panel and scroll up/down; choose optional continuous rotation on Animations; select Collapsed with a supported mechanism and hover/click its reveal handle; Apply X/Y on General; adjust Perspective tilt on Layout with a compatible theme; narrow Studio and use the tab arrows. Cancel should discard unapplied settings. Owner physical visual acceptance remains pending.
+<!-- PANEL_MOTION_REPORT_END -->
+
 ## First real-PC runtime/UI correction — 0.1.1-2, 2026-10-04
 
 **FIRST OWNER-OBSERVED RUNTIME/UI ISSUES CORRECTED AND VERIFIED.** These are

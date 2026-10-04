@@ -6,7 +6,73 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Latest boundary — 2026-10-04: ICON TILES IMPLEMENTED AND VERIFIED.**
+<!-- PANEL_MOTION_CURRENT_BEGIN -->
+**Latest verified boundary — 2026-10-04: PANEL CONTROLS AND MOTION VERIFIED; OWNER UPDATE PENDING.**
+Starting main was `08e24ce7b32bcc057dc62c7d41d2697f563ef724`.
+
+Panels tabs now have bounded navigation arrows alongside natural wheel scrolling.
+Unattempted placement/visibility observations are neutral and remain unverified;
+actual failures/fallbacks still produce diagnostics. Animations exposes the
+existing collapse/reveal mechanisms, triggers, delays, duration and saved
+Open/Close actions. Default procedural panels now declare their implemented
+horizontal/vertical collapse. Free radial panels turn clockwise/counterclockwise
+with vertical wheel input; optional continuous rotation and its Studio preview
+use the existing controller. Input/glyph geometry follows the same angle.
+
+General exposes free X/Y, using the existing ownership-checked desktop-container
+command, live geometry read-back and rollback to the actual previous pose.
+Resizing precedes positioning to avoid a Plasma relayout replacing the move.
+Layout exposes perspective tilt for compatible baked or actual 3D themes,
+through the existing parameter maps and renderer. Theme tilt bounds, native/free
+authority, original glyphs, future opaque map values and reduced-motion guards
+are preserved. Public operation steps are in [INSTALL.md](INSTALL.md).
+
+Complete one-job Debug/Quick3D-ON build and final **111/111
+configured CTests PASS**, 590.96 s for the passing batches across
+37 serial batches; zero final skips/missing names. All four native Wayland gates
+PASS in 146.34 s: actual tab/wheel controls, 2D/3D rotation,
+owned free move/read-back/rollback, hover open/close, drops and glyphs. Real RHI
+captures prove changed 3D tilt pixels with unchanged logical input geometry.
+
+Earlier failures and diagnostics remain in the evidence: Fusion scrollbar
+coverage of an arrow, the obsolete procedural-collapse rejection fixture,
+profile resize/move ordering, a missing task capture directory, an early bounded
+drop NoReply and one final private startup scripting timeout. Diagnostic tracing
+also polluted captured readiness/log scans; uninstrumented final gates pass.
+No drop/startup timeout or acceptance assertion was weakened. The initial source
+verifier refused local tool settings from an isolated-HOME developer export;
+canonical exports were regenerated from the clean frozen tracked checkout.
+
+Source freeze `d1cb20a6f533e044e37c37170a3275b51cc17eae`; two canonical exports are byte-identical. Disposable
+annotated verification, actual extraction, 527 source files/528 members,
+bytes/modes, GPL and reference-image exclusion checks PASS. Real v0.1.0 is
+unchanged. Source SHA-256: `c53bd92345d29ba3325c48cac5894853650523acc737bacc3623bce524c42642`.
+Package SHA-256: `fb31f07927691614b9199e33c9f550ae0e79d3ee7de94c1b6d368cb0241c13f9`. Fresh one-job Release/Quick3D-ON **0.1.1-4** and native
+installed gates PASS: **216/216 payload files**, licensing/resources,
+15+15 catalogs/cards, startup with/without 3D, real installed UI, 0.1.1-3 ->
+0.1.1-4 upgrade, recovery and removals with saved configuration preserved.
+Compiled/extracted source was removed before installed gates; checkout/build
+paths were masked. Gate wall time: 94.26 s.
+
+Owned cleanup PASS: disposable build/venv/fixtures removed
+(1,775,763,456 allocated bytes,
+1,742,262,560 apparent bytes at final disposal).
+483 compact evidence entries and canonical source/package
+receipts remain under `build-codex-panel-motion-0.1.1-4/`. All **941 protected
+historical files** remain byte/mode identical, including prior Icon Tiles STATE.
+All 460 baseline coredump journal identities remain. The one blocked test-probe
+abort is retained as a journal record; its exact system dump and DrKonqi metadata
+were removed with diagnostics retained. Seventeen new records from concurrent
+Nexees work were identified by cwd/environment and preserved. No task dump
+payloads or task processes remain; corrected installed gates added no task crash. One primary serial session; no subagents.
+
+Owner PC still runs 0.1.1-3. The verified new package is ready; the authorized PC update follows candidate cleanup/commit/sync. Final Git and installation receipts belong to local STATE.json.
+
+Owner visual/physical acceptance remains separate from private Plasma evidence.
+No new real tag/publication was performed in this correction.
+<!-- PANEL_MOTION_CURRENT_END -->
+
+**Previous verified boundary — 2026-10-04: ICON TILES IMPLEMENTED AND VERIFIED.**
 The previously unavailable Icon Tiles page now edits the selected panel's tile
 visibility default, style/custom appearance, five shapes, fill/opacity and border.
 Draft preview, Apply, Cancel and persisted reload use the existing settings

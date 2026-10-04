@@ -1,5 +1,24 @@
 # Arch Dock release checklist
 
+<!-- PANEL_MOTION_CHECKLIST_BEGIN -->
+## Panel controls and motion closure — 0.1.1-4, 2026-10-04
+
+- [x] Overflow arrows work with KDE and overlay control styles; vertical/horizontal/Shift wheel routes preserve editor values and selection.
+- [x] Not-attempted status is neutral and unverified; real placement/visibility failures remain visible.
+- [x] Animations exposes procedural linear collapse, triggers/delays/duration, resting state, saved Open/Close actions and actual preview motion.
+- [x] Free radial wheel turns and optional clockwise/counterclockwise continuous rotation share visual/input geometry; drag/edit/popup/concealment/reduced-motion guards preserved.
+- [x] Free X/Y uses owned container geometry, resize-before-move, read-back and rollback to actual prior pose; native X/Y is refused.
+- [x] Compatible baked/true-3D tilt persists through existing maps, respects theme bounds and changes actual RHI pixels without distorting original glyph/input geometry.
+- [x] Complete one-job build; final 111/111 configured CTests, 37 serial batches (590.96 s passing batches), four native gates (146.34 s), no final missing/skipped tests.
+- [x] Failed attempts and discriminating diagnostics retained; no weakened acceptance assertions or expanded drop/startup timeouts.
+- [x] Frozen source d1cb20a6f533e044e37c37170a3275b51cc17eae; clean-checkout canonical exports identical; disposable annotated verification/extraction/527 files/528 members/GPL/modes/reference exclusions PASS.
+- [x] Source SHA-256 c53bd92345d29ba3325c48cac5894853650523acc737bacc3623bce524c42642; exact pinned recipe; fresh one-job Release/Quick3D-ON 0.1.1-4 package SHA-256 fb31f07927691614b9199e33c9f550ae0e79d3ee7de94c1b6d368cb0241c13f9.
+- [x] Native installed gates after compiled/extracted source removal and source masking: 216/216 payload bytes/modes, catalogs/cards, startup with/without 3D, real new UI, upgrade/recovery/removals and configuration preservation PASS.
+- [x] Owned cleanup complete; 941 protected files/460 baseline core identities preserved; one exact task probe dump/metadata cleaned, 17 unrelated new records preserved, and no task dump payload/process remains; compact evidence retained.
+- [ ] Candidate cleanup/commit/sync followed by private owner backup, verified PC update/backend restart, configuration preservation and final operational Git receipt.
+- [ ] Owner manual visual/physical acceptance; separate from private runtime evidence.
+<!-- PANEL_MOTION_CHECKLIST_END -->
+
 This checklist is derived from section 22 of the
 [master architecture and implementation plan](MASTER_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md).
 An item remains unchecked until its owning task records fresh, reproducible
