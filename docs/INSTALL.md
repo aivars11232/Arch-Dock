@@ -148,7 +148,7 @@ using a clean checkout with no untracked source inputs. A later commit with
 similar source bytes cannot substitute for the recorded checkpoint HEAD or
 epoch. Keep the published `v0.1.0` tag fixed at
 `c3b3a0b7771b313c45f843f49a503b45b0d1ada0` and its six current assets unchanged.
-The next candidate is `0.1.1-1`; its `v0.1.1` tag/publication require separate
+The next candidate is `0.1.1-2`; its `v0.1.1` tag/publication require separate
 authorization. Before tagging, local gates may use an annotated verification
 tag only in a disposable repository at the exact finalized candidate commit.
 
@@ -214,7 +214,7 @@ declared build dependencies before running makepkg; it does not install them.
 After reviewing the resulting package, the owner can install or remove it:
 
 ```bash
-sudo pacman -U arch-dock-0.1.1-1-x86_64.pkg.tar.zst
+sudo pacman -U arch-dock-0.1.1-2-x86_64.pkg.tar.zst
 ```
 
 Installation places the executable, direct D-Bus descriptor, manual systemd
@@ -229,12 +229,12 @@ private install/startup flow; there are no package hooks to perform either.
 
 ## Upgrade
 
-The next candidate is application `0.1.1`, package release `1`. The historical
-`0.1.0-2` package, and earlier `0.1.0-1`, are strictly older versions; native
-pacman performs the patch upgrade:
+The next candidate is application `0.1.1`, package release `2`. The installed
+`0.1.1-1` package and historical `0.1.0` packages are strictly older versions;
+native pacman performs the upgrade:
 
 ```bash
-sudo pacman -U arch-dock-0.1.1-1-x86_64.pkg.tar.zst
+sudo pacman -U arch-dock-0.1.1-2-x86_64.pkg.tar.zst
 ```
 
 Cancel an active audition and stop the backend before replacing its executable;
@@ -320,8 +320,8 @@ ARCHDOCK_PACKAGE_INSTALL_MANIFEST="$PWD/build-codex-arch-package/src/build/insta
 ARCHDOCK_PACKAGE_EVIDENCE_DIR="$PWD/build-codex-package-evidence" \
 TMPDIR="$task_tmp" \
 bash tests/run-arch-package-smoke.sh \
-    build-codex-arch-package/arch-dock-0.1.1-1-x86_64.pkg.tar.zst \
-    /absolute/path/to/arch-dock-0.1.0-2-x86_64.pkg.tar.zst
+    build-codex-arch-package/arch-dock-0.1.1-2-x86_64.pkg.tar.zst \
+    /absolute/path/to/arch-dock-0.1.1-1-x86_64.pkg.tar.zst
 ```
 
 The second package argument is optional for install/uninstall verification;
@@ -329,12 +329,18 @@ release upgrade evidence requires it and a strictly older package version.
 Create the evidence and temporary directories first. The test also requires
 native pacman/bsdtar, desktop-file validation and systemd metadata validation.
 It copies the host's native dependency records into its disposable root and
-uses pacman there with dependency checks enabled. Read-only Bubblewrap overlays
-provide host KDE dependencies and package-owned `/usr` resources while hiding
+uses pacman there with dependency checks enabled. If Arch Dock is already
+installed on the host, native database-only removal clears its cloned record
+before the fresh-install check; host files and records are untouched. Read-only
+Bubblewrap overlays provide host KDE dependencies and package-owned `/usr` resources while hiding
 the checkout. Existing preset tests validate references and render all 30 cards;
 the private Wayland session activates the installed executable. Both checks
-also run with Qt Quick 3D hidden. Native removal is followed by byte checks of
-user configuration and an audit that every package file is gone. With the
+also run with Qt Quick 3D hidden. An additional private Wayland matrix uses
+the installed executable, applet, shared modules and theme assets to check real
+URI drops, internal reorder, custom folder glyphs, 2D/3D visibility and page
+wheel input. Copied test probes and runtime UI fixtures are explicit test
+inputs; the original source checkout and build are hidden. Native removal is
+followed by byte checks of user configuration and an audit that every package file is gone. With the
 previous package supplied, the same native namespace installs it, upgrades to
 the candidate, audits obsolete/new payload files and configuration preservation,
 executes installed migration/recovery and startup, then uninstalls again.

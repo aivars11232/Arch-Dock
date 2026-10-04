@@ -1430,7 +1430,20 @@ run_outer() {
         "$ARCHDOCK_RENDERING_STATE_ROOT/state"
     chmod 700 "$ARCHDOCK_RENDERING_STATE_ROOT/runtime"
 
-    cmake --install "$build_dir" --prefix "$stage_root"
+    if [[ -n "${ARCHDOCK_RENDERING_INSTALL_ROOT:-}" ]]; then
+        local installed_root
+        installed_root="$(realpath -e -- "$ARCHDOCK_RENDERING_INSTALL_ROOT")"
+        [[ -x "$installed_root/bin/arch-dock" &&
+           -r "$installed_root/$qml_install_dir/ArchDock/Rendering/qmldir" ]] || {
+            printf 'The supplied installed Arch Dock prefix is incomplete.\n' >&2
+            return 1
+        }
+        mkdir -p "$stage_root"
+        cp -a "$installed_root/." "$stage_root/"
+        printf 'Checking supplied installed payload from %s.\n' "$installed_root"
+    else
+        cmake --install "$build_dir" --prefix "$stage_root"
+    fi
     if [[ "${ARCHDOCK_RENDERING_INTERACTIONS:-}" == '1' ]]; then
         python3 "$ARCHDOCK_RENDERING_SCRIPT_DIR/visibility-window.py" \
             --instrument-interaction-stage "$stage_root"

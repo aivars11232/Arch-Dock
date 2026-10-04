@@ -348,7 +348,7 @@ def run_interaction_matrix(free_panel):
     geometry_plugin = "org.archdock.interaction-geometry"
     geometry_script = root / "geometry-probe.js"
 
-    def kwin_geometry(close_studio_id=""):
+    def kwin_geometry(close_studio_id="", activate_drag_source=False):
         if not geometry["registration"]:
             interface = Gio.DBusNodeInfo.new_for_xml('''<node><interface name="org.archdock.InteractionProbe">
                 <method name="observe"><arg type="s" direction="in"/><arg type="s" direction="out"/></method>
@@ -368,12 +368,20 @@ def run_interaction_matrix(free_panel):
                 "/InteractionProbe", "org.archdock.InteractionProbe", "observe",
                 JSON.stringify({cursor: workspace.cursorPos, windows: workspace.windowList().map(function(w) {
                     return {id: w.internalId.toString(), caption: w.caption, app: w.resourceClass, layer: w.layer,
-                            popup: w.popupWindow, hidden: w.hidden, dock: w.dock,
+                            popup: w.popupWindow, hidden: w.hidden, dock: w.dock, active: w.active,
                             x:w.frameGeometry.x, y:w.frameGeometry.y,
                             width:w.frameGeometry.width, height:w.frameGeometry.height,
                             buffer:[w.bufferGeometry.x,w.bufferGeometry.y,w.bufferGeometry.width,w.bufferGeometry.height]};
                 })}), function(closeId) {
                     if (!closeId) return;
+                    if (closeId === "focus-owned-drag-source") {
+                        const source = workspace.windowList().find(function(w) {
+                            return w.resourceClass === "org.archdock.visibilityfixture"
+                                && w.caption === "Runtime drag source";
+                        });
+                        if (source) workspace.activeWindow = source;
+                        return;
+                    }
                     const studio = workspace.windowList().find(function(w) {
                         return w.internalId.toString() === closeId && w.resourceClass === "arch-dock"
                             && w.caption === "Arch Dock Panel Studio";
@@ -390,7 +398,7 @@ def run_interaction_matrix(free_panel):
                              "loadScript", "(ss)", (str(geometry_script), geometry_plugin))
             assert script_id >= 0
             call("org.kde.KWin", "/Scripting/Script" + str(script_id), "org.kde.kwin.Script", "run")
-        geometry["close"] = close_studio_id
+        geometry["close"] = "focus-owned-drag-source" if activate_drag_source else close_studio_id
         previous = geometry["sample"]
         wait_for(lambda: geometry["sample"] > previous, "native geometry observation")
         return geometry["value"]
@@ -861,8 +869,8 @@ def run_interaction_matrix(free_panel):
         import subprocess
         from urllib.parse import unquote
         gi.require_version("Gdk", "4.0")
-        gi.require_version("GdkPixbuf", "2.0")
-        from gi.repository import Gdk, GdkPixbuf
+        from gi.repository import Gdk
+        from PySide6.QtGui import QColor, QImage
 
         def motion(point):
             assert 0 <= point[0] < 1280 and 0 <= point[1] < 720, point
@@ -970,12 +978,15 @@ def run_interaction_matrix(free_panel):
         folder = root / "Custom folder"
         folder.mkdir()
         icon = root / "custom icon.png"
-        image = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 64, 64)
-        image.fill(0xff22ccff)
-        image.savev(str(icon), "png", [], [])
+        # Qt writes this trusted fixture without a nested Glycin sandbox,
+        # which cannot start inside the installed-payload overlay namespace.
+        image = QImage(64, 64, QImage.Format.Format_RGBA8888)
+        image.fill(QColor("#ff22cc"))
+        assert image.save(str(icon), "PNG"), "custom folder icon fixture written"
         (folder / ".directory").write_text("[Desktop Entry]\nIcon=" + str(icon) + "\n")
         offered, outcomes = [desktop.as_uri()], []
         failed_drags = set()
+        drag_starts = []
         source = Gtk.DragSource.new()
         source.set_actions(Gdk.DragAction.COPY)
         source.connect("prepare", lambda *_: Gdk.ContentProvider.new_for_bytes(
@@ -983,6 +994,7 @@ def run_interaction_matrix(free_panel):
         source.connect("drag-cancel", lambda _, transfer, reason: failed_drags.add(transfer) or False)
         source.connect("drag-end", lambda _, transfer, delete: outcomes.append(
             transfer not in failed_drags and bool(transfer.get_selected_action())))
+        source.connect("drag-begin", lambda *_: drag_starts.append(offered[0]))
         label = Gtk.Label(label="Native URI drag source")
         label.add_controller(source)
         first.set_child(label)
@@ -1012,11 +1024,22 @@ def run_interaction_matrix(free_panel):
             data = wait_for(lambda: observed(app), "real dropped entry")
             return native_point(data["hostSize"], data["center"])
         def drop(uri, target, accepted=True):
+            # A refused drop can leave the private Plasma desktop focused.
+            # Restore the owned source through KWin before the next real drag;
+            # a popup dismissal must not consume that drag's first press.
+            wait_for(lambda: source.get_drag() is None, "previous native drag fully released")
+            kwin_geometry(activate_drag_source=True)
+            wait_for(lambda: any(w["app"] == app_id and w["caption"] == "Runtime drag source"
+                and w["active"] for w in geometry["value"]["windows"]), "native drag source activated")
             offered[0] = uri
             previous = len(outcomes)
+            previous_starts = len(drag_starts)
             previous_result = observations.get(("drop-result", free_panel, ""), {}).get("at", 0)
             drag(source_point(), target)
-            wait_for(lambda: len(outcomes) > previous, "Wayland drop completed")
+            wait_for(lambda: len(drag_starts) == previous_starts + 1 and drag_starts[-1] == uri,
+                     "owned source began exactly one native URI drag")
+            wait_for(lambda: len(outcomes) == previous + 1 and source.get_drag() is None,
+                     "Wayland drop completed and source drag cleared")
             if accepted:
                 assert outcomes[-1], (uri, outcomes)
             if panel_call("dockConfiguration", "(s)", (free_panel,))["acceptDrops"]:

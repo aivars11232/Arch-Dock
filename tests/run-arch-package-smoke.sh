@@ -47,6 +47,12 @@ pacman_private() {
         --noconfirm "$@"
 }
 if pacman_private -Q arch-dock >/dev/null 2>&1; then
+    # The host may already be testing Arch Dock. Only its cloned database
+    # record is removed; no host or disposable payload has been copied here.
+    pacman_private -R --dbonly --noscriptlet arch-dock \
+        >"$evidence/dependency-record-removal.log" 2>&1
+fi
+if pacman_private -Q arch-dock >/dev/null 2>&1; then
     printf 'The dependency database already contains arch-dock.\n' >&2; exit 1
 fi
 bsdtar -xf "$package" -C "$root/expected"
@@ -72,6 +78,11 @@ required = {'usr/bin/arch-dock', 'usr/lib/systemd/user/arch-dock.service',
     'usr/share/dbus-1/services/org.archdock.ArchDock.service',
     'usr/share/applications/org.archdock.ArchDock.desktop',
     'usr/lib/qt6/qml/ArchDock/Rendering/qmldir',
+    'usr/lib/qt6/qml/ArchDock/Rendering/inputs/ScrollInput.qml',
+    'usr/lib/qt6/qml/ArchDock/Integration/qmldir',
+    'usr/lib/qt6/qml/ArchDock/Integration/archdock-integration.qmltypes',
+    'usr/lib/qt6/qml/ArchDock/Integration/libarchdock-integration.so',
+    'usr/lib/qt6/qml/ArchDock/Integration/libarchdock-integrationplugin.so',
     'usr/share/kwin/scripts/org.archdock.windowwatcher/metadata.json',
     'usr/share/plasma/plasmoids/org.archdock.control/metadata.json',
     'usr/share/plasma/plasmoids/org.archdock.dock/metadata.json',
@@ -156,6 +167,37 @@ for without_3d in 0 1; do
 done
 presets_installed 1 listsExactlyTheBuiltInCatalogs everyBuiltInCardRendersThroughTheSharedRenderer \
     >"$evidence/installed-presets-without-3d.log" 2>&1
+installed_ui_interactions() {
+    local fixture="$root/runtime-ui"
+    mkdir -p "$fixture/tests" "$fixture/qml" "$fixture/assets"
+    cp "$build_dir/renderer-capability-test" "$build_dir/panel-window-capability-test" \
+        "$fixture/tests/"
+    cp "$sysroot/usr/bin/arch-dock" "$fixture/tests/"
+    # The wheel probe is an explicit production-UI fixture. Application,
+    # applet and shared-module runtime bytes come from the installed package.
+    cp -a "$project_root/qml/runtime" "$fixture/qml/"
+    cp -a "$sysroot/usr/share/plasma/plasmoids/org.archdock.dock" \
+        "$fixture/plasma-dock-widget"
+    # Relative theme URLs in the renderer fixtures must resolve to installed
+    # assets while the source checkout is hidden by the namespace.
+    cp -a "$sysroot/usr/share/arch-dock/themes" "$fixture/assets/"
+    for file in run-rendering-import-smoke.sh visibility-window.py \
+        tst_ContentOverlays.qml tst_RenderingModuleImport.qml \
+        tst_LivePanelPreview.qml tst_RendererParity.qml \
+        tst_PanelSkin2D.qml tst_PanelSurfaceIntegration.qml tst_WindowPreviewPopup.qml; do
+        cp "$project_root/tests/$file" "$fixture/tests/"
+    done
+    bwrap --die-with-parent --ro-bind / / --dev-bind /dev /dev --tmpfs /tmp \
+        --overlay-src /usr --overlay-src "$sysroot/usr" --ro-overlay /usr \
+        --tmpfs "$project_root" --tmpfs "$build_dir" \
+        --bind "$root" "$root" --chdir "$root" \
+        env ARCHDOCK_BUILD_DIR="$fixture/tests" ARCHDOCK_QML_INSTALL_DIR=lib/qt6/qml \
+        ARCHDOCK_RENDERING_INSTALL_ROOT="$sysroot/usr" \
+        ARCHDOCK_RENDERING_INTERACTIONS=1 ARCHDOCK_RUNTIME_UI=1 \
+        TMPDIR=/tmp PYTHONDONTWRITEBYTECODE=1 \
+        bash "$fixture/tests/run-rendering-import-smoke.sh"
+}
+installed_ui_interactions >"$evidence/installed-runtime-ui.log" 2>&1
 mkdir -p "$sysroot/home/owner/.config/ArchDock"
 printf 'user-owned Plasma configuration\n' >"$sysroot/home/owner/.config/plasma-org.kde.plasma.desktop-appletsrc"
 printf 'user-owned Arch Dock configuration\n' >"$sysroot/home/owner/.config/ArchDock/arch-dock.conf"

@@ -20,7 +20,7 @@ and package install rules; catalog records, reference-rights notices and
 original-artwork recipes may accompany source as provenance documentation.
 
 Historical `v0.1.0` and its six published assets are unchanged. This selection
-is carried by the next candidate, application `0.1.1`, Arch package `0.1.1-1`.
+is carried by the next candidate, application `0.1.1`, Arch package `0.1.1-2`.
 
 ## Distributed components
 

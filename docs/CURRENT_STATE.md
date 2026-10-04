@@ -7,48 +7,51 @@
 > implementation claims.
 
 **Latest boundary — 2026-10-04: first owner-observed runtime/UI correction
-PAUSED AT OWNER REQUEST. Starting main:
-`f7b72859b5410f57669c5c56dbda1dfd2861706b`. Focused drag/drop, native folder-icon
-resolution, 3D glyph visibility and page-wheel regressions PASS. The private
-Wayland input/drop matrix passed before the two latest harness changes.
-Complete one-job build, affected/full serial CTests, final native matrices,
-refreshed package/install verification, cleanup and owner update are pending.**
+RESUMED / RUNTIME VERIFICATION PASS / PACKAGE CLOSURE IN PROGRESS. Starting main:
+`f7b72859b5410f57669c5c56dbda1dfd2861706b`. Complete one-job build PASS;
+affected CTests **22/22**, fresh full configured CTests **110/110** in **533.02 s**,
+and affected native Wayland CTests **4/4** in **133.37 s**, with no failed or
+skipped CTest names. Corrected Release package/install verification, final
+cleanup, Git sync and owner-PC update remain pending.**
 
-The owner requested that the current changes be committed and synced, then all
-task work paused until tomorrow. The one-job all-target build was interrupted
-at **79%**, while compiling `panel-registry-test`, with exit status **130**;
-this records the requested stop, not a compiler failure. No build or test is
-left running. The completed build outputs and private evidence are retained
-under `/mnt/F/ui-runtime-pass/`, including `logs/build-all.log`. The application
-target and focused test targets were built successfully. The affected suite
-and fresh full **110-test** configured CTest suite have not been run.
+The owner-requested pause checkpoint was committed and synced as
+`cd05eb39ff3027e8c4ed8074fadb8a1b9c5c9b46`. The build stopped at 79% with exit
+130 at that requested pause; resume completed all targets successfully using
+the retained one-job build. Fresh results and all earlier failure/correction
+logs remain in `/mnt/F/ui-runtime-pass/`. `full-results-final.json` records all
+110 configured test names; `logs/final-native.log` records the native matrix.
 
-The last private native interaction gate passed **1/1 in 21.64 seconds**
-(`logs/native-runtime-ui-fallback-dismissed.log`). Subsequent changes to give
-the private session its own HOME and assert glyph rendering for every launcher
-row have only been syntax-checked; their native execution remains pending.
-The final focused icon/input run passed **5/5**
-(`logs/final-icon-input-focused.log`). Native input evidence uses an isolated
-Wayland fixture; owner Dolphin gestures and physical touchpad behavior still
-require owner testing after the corrected installation.
+The first full-suite attempt exposed a fixture focus/readiness race after a
+refused GTK drag fell through to the private desktop. The fixture now verifies
+its own source focus through native KWin scripting, one actual drag start/end,
+and release of the prior drag; original receipt/commit/persistence assertions
+remain intact. A fresh full suite then passed from its first test.
 
-Resume by reusing the retained build with
-`cmake --build /mnt/F/ui-runtime-pass/build --parallel 1`, then run the required
-affected and full CTests sequentially with
-`PATH=/mnt/F/ui-runtime-pass/venv/bin:$PATH CTEST_PARALLEL_LEVEL=1`. Continue the
-final native and installed-package gates before producing corrected release
-artifacts or updating the PC. Preserve the protected prior evidence, private
-configuration snapshot and core-dump baseline in the retained workspace.
+Installed-prefix preflight passes real Wayland URI transfer, internal reorder,
+duplicate/refusal guards, native custom-folder PNG resolution, every launcher
+glyph in 2D/3D, vertical/horizontal/Shift wheel input and unchanged control values.
+The package harness hides both source checkout and original test build, uses
+installed runtime bytes and themes, and explicitly copies its test probes/UI
+fixtures. It removes only a cloned installed-package database record before
+fresh installation. Qt writes the trusted PNG fixture because Glycin's nested
+sandbox cannot start inside the read-only installed-payload overlay. These are
+harness setup corrections; production runtime assertions remain unchanged.
+The installed-prefix preflight used staged Debug output, so it does not replace
+the pending real Release-package install/upgrade/removal gate.
 
 Production C++/QML and installed applet source have changed. The previous
-`0.1.1-1` source/package hashes below are historical evidence and **STALE for
-the corrected candidate**. Application version remains `0.1.1`; package release
-`2` is planned so the owner can upgrade the existing `0.1.1-1` installation.
-No corrected release artifact has yet been generated, published or installed.
-The owner authorized committing and syncing this paused work in progress now.
-Updating the PC remains deferred until the remaining verification gates pass;
-the installed package is still `0.1.1-1`. No release publication accompanies
-this checkpoint. The historical `v0.1.0` tag/assets remain preserved.
+`0.1.1-1` hashes below are historical and **STALE for the corrected candidate**.
+Application version remains `0.1.1`; package release is now `2` so native pacman
+can upgrade the existing owner installation. No corrected Release artifact has
+yet been generated, published or installed. Historical `v0.1.0` tag/assets are
+preserved. The owner authorized final verification, cleanup, commit/sync and
+then updating the PC. The installed package is still `0.1.1-1`.
+
+Native input evidence uses an isolated GTK Wayland URI source and KWin EIS;
+it is not an actual owner Dolphin gesture or physical touchpad/GPU acceptance.
+Production raw pixel-delta input has focused Qt event coverage; the compositor
+normalizes continuous EIS scrolling into angle deltas. Owner Dolphin drag,
+physical touchpad, restart and persistence checks remain explicit manual tests.
 
 **Historical previous boundary — 2026-10-04: RC-03 exact artifact verification, RC-04 canonical
 modes and GPL-3.0-or-later licensing correction PASS. Finalized 0.1.1-1 source,
