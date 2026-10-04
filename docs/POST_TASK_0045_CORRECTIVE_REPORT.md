@@ -49,7 +49,7 @@ and zero task processes. Compact evidence and exact source/package artifacts rem
 in `build-codex-path-motion-0.1.1-7/`. One session, no subagents, one build job and
 one test worker throughout.
 
-Owner still runs 0.1.1-6; the authorized update follows cleanup and candidate Git sync.
+Owner PC runs verified **arch-dock 0.1.1-7**: 216/216 payload bytes/modes, native pacman Qkk (325 files, zero altered), stable D-Bus owner/live installed executable and Panel Studio startup PASS. Saved panel user settings are preserved. Free panel 5 had no live desktop applet or backed-up desktop host before the update; recovery corrected only its stale ownership IDs/token/state/error and incremented the settings revision. Icons, appearance, position and all other panel values remain unchanged. Configuration differences are recorded in the private installation receipt; the fresh configuration ZIP/manifest remain mode 0600. Plasma was refreshed to reload the corrected widget code.
 
 Historical version-specific checkpoints follow. The 0.1.1-7 record above is current. The existing v0.1.0 tag/publication are untouched; no new release was published.
 <!-- FOLDER_PATH_REPORT_END -->
