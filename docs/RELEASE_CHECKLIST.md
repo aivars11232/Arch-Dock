@@ -1,5 +1,23 @@
 # Arch Dock release checklist
 
+<!-- AUD_01_02_CHECKLIST_BEGIN -->
+## AUD-01 + AUD-02 correction — 0.1.1-5, 2026-10-04
+
+- [x] Starting audited HEAD and 0.1.1-4 owner identity verified; application 0.1.1/pkgrel 5 remain authoritative.
+- [x] Nine current-facing documents reconciled; exact install/upgrade filenames correct; historical checkpoint bodies preserved.
+- [x] Old mask latch/binding cycle reproduced; current URL failure map and independent Image source fix same-scene missing/corrupt -> valid/plain recovery while preserving failure of the current bad mask.
+- [x] Original glyph, tiles, overrides, 2D/3D and existing panel interactions preserved; 11 focused checks PASS.
+- [x] Fresh one-job build; 111/111 serial CTests, 53 bounded batches; zero skips/missing names and unchanged inputs; all four native Wayland gates and strict QML error scan PASS.
+- [x] Two canonical exports/all four independent regenerated artifacts identical; exact pin/extraction/Git modes/epochs/GPL/reference exclusion PASS.
+- [x] Fresh 0.1.1-5 Release/package, actual 216 payload files, 17 asset declarations/eight MIT components, 15+15 catalogs, startup with/without 3D and installed native mask/UI checks PASS.
+- [x] Native 0.1.1-4 -> 0.1.1-5 upgrade/recovery/both removals and configuration preservation PASS.
+- [x] Owned cleanup complete; 956 historical files/478 baseline core identities preserved; zero new records and no task dump/test process remaining; compact evidence retained.
+- [ ] Authorized candidate Git sync, private owner backup, verified PC update/backend restart and final operational receipt.
+- [ ] Owner manual visual/physical acceptance and future v0.1.1 publication remain separate; historical v0.1.0 untouched.
+<!-- AUD_01_02_CHECKLIST_END -->
+
+## Historical correction checkpoints
+
 <!-- PANEL_MOTION_CHECKLIST_BEGIN -->
 ## Panel controls and motion closure — 0.1.1-4, 2026-10-04
 

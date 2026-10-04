@@ -1,5 +1,71 @@
 # Post-TASK-0045 corrective pass
 
+<!-- AUD_01_02_REPORT_BEGIN -->
+## AUD-01 + AUD-02 correction — 0.1.1-5, 2026-10-04
+
+1. **STARTING HEAD:** `333fbc2aa8c906523a14a5cf1d168fbe45a91013`, clean main
+
+2. **FINAL HEAD / WORKTREE:** Source freeze `fd23810f156b7303e634c2533d421dd414e13d12`. Operational closure follows as separate commits; final exact clean main/live remote parity is recorded in local STATE.json after final sync.
+
+3. **STARTING INSTALLED PACKAGE:** arch-dock 0.1.1-4, verified
+
+4. **AUD-01 ROOT CAUSE:** Manually repeated package identities/current command filenames were not advanced with the authoritative pkgrel.
+
+5. **CURRENT-FACING FILES CORRECTED:** README, CHANGELOG, KNOWN_LIMITATIONS, PLATFORM_MATRIX, INSTALL, LICENSING, CURRENT_STATE, RELEASE_CHECKLIST and this report. Shared prose points to CURRENT_STATE; runnable filenames use 0.1.1-5.
+
+6. **HISTORICAL REFERENCES PRESERVED:** Prior checkpoint bodies and explicit old versions/upgrade provenance remain unchanged; the previous owner package is explicitly 0.1.1-4.
+
+7. **AUD-02 REPRODUCTION:** Missing/corrupt mask -> valid mask in one persistent scene failed on old code: valid Image stayed Null, fallback stayed latched and the source/failure cycle logged a binding loop. Owned test setup corrected the mask object schema and enabled the visible TestCase.
+
+8. **AUD-02 ROOT CAUSE:** styleMaskFailed was an unconditional lifetime bool; fallback also cleared the Image source responsible for its own error.
+
+9. **AUD-02 EXACT FIX:** One authoritative current URL from raw resolved mask, local failed-URL map and computed current failure; Image uses that source independently of fallback. No global error manager/reset or suppression of other asset errors.
+
+10. **INVALID -> VALID SAME SCENE:** Both missing/corrupt rows PASS: same scene/Image, Error observed, valid source Ready, styled layers active, mask effect enabled and original glyph/source retained.
+
+11. **INVALID -> NO MASK:** PASS: current Image becomes Null/empty, old mask error no longer applies and plain/original glyph renders; subsequent valid source recovers again.
+
+12. **CURRENT INVALID MASK:** PASS: valid -> broken returns Image.Error and complete safe original-glyph fallback, with mask effect disabled.
+
+13. **FOCUSED TEST RESULTS:** 11/11 style/package/asset/tile/override/renderer/native checks PASS; initial five QML checks PASS. Final pin/exporter check PASS (6.63 s).
+
+14. **COMPLETE CTEST RESULT:** 111/111 PASS, 53 serial bounded batches, 571.02 s, zero CTest skips/missing names; 644 tracked input bytes unchanged.
+
+15. **NATIVE WAYLAND RESULT:** Four affected gates PASS (151.85 s): staged/current glyphs, actual 2D/3D textures/tiles, same-scene masks, current UI, drops, scrolling/arrows and panel controls. Actual RHI images retained.
+
+16. **QML ERROR SCAN:** Zero unexpected TypeError/ReferenceError/binding/shader/texture/import errors. Six expected prior non-mask negative-fixture diagnostics classified; new mask negatives are confined to their dedicated native regression log.
+
+17. **FINAL PACKAGE VERSION:** Application 0.1.1; Arch package 0.1.1-5; proposed future v0.1.1 uncreated/unpublished.
+
+18. **SOURCE SHA-256:** `22124187d0014e50064fb838e4782aaf9280e3c518f4b6fc9146ef640c3c57d8`
+
+19. **PACKAGE SHA-256:** `59708bab963c43eaa667019029ee83a97f2f3ddb8431692bf8eb99a11e1eee55`
+
+20. **CANONICAL EXPORT RESULT:** PASS: two independent tracked exports, 527 source files/528 regular members; bytes/modes/extraction/GPL/reference exclusion/unique checkpoint/normalized UID/GID/names/tar+gzip epochs.
+
+21. **RELEASE VERIFIER RESULT:** PASS: independently regenerates/archive/checkpoint/PKGBUILD/SHA256SUMS and byte-compares all four. Annotated verification tag/repository owned/disposable only; historical v0.1.0 unchanged.
+
+22. **INSTALLED PACKAGE RESULT:** PASS (99.43 s): 216 actual payload bytes/modes, fresh install, licensing/resources, 15+15 presets/cards, startup with/without 3D, real installed glyph/UI/mask recovery. Filename count remains 216; no payload files added/removed. Source/compiled export removed and original checkout/debug masked; copied test probes/runtime UI/negative SVG fixtures are explicit.
+
+23. **UPGRADE RESULT:** Native 0.1.1-4 -> 0.1.1-5, recovery and both removals PASS; configuration preserved.
+
+24. **LICENSING RESULT:** GPL-3.0-or-later complete official text, eight MIT components/notices and all 17 original asset declarations PASS; unknown-rights reference material remains excluded/non-installable.
+
+25. **CONFIGURATION PRESERVATION:** Isolated fresh/upgrade/recovery/removal configuration preservation PASS; owner update remains pending.
+
+26. **OWNER PC UPDATE STATUS:** Owner still runs verified 0.1.1-4. All isolated gates pass; the authorized 0.1.1-5 update follows candidate cleanup/commit/sync and a fresh private configuration backup.
+
+27. **CLEANUP RESULT:** Owned root removed: 1,667,784,704 allocated/1,639,671,345 apparent bytes at final disposal, plus earlier compiled/export disposal. 263 compact ZIP entries retained. 956 protected file bytes/modes and 478 core identities preserved; zero new records, zero task dump payloads/processes. Wrong-interpreter disposable environment was recreated with explicit system Python/system-site access; no product or acceptance assertion was weakened.
+
+28. **GIT DIFF --CHECK:** PASS; exact staged paths reviewed for each logical source/pin/operational commit. Final owner/Git receipts are recorded after sync.
+
+29. **EXACT CHANGED FILES:** `CHANGELOG.md`, `PKGBUILD`, `README.md`, `docs/CURRENT_STATE.md`, `docs/INSTALL.md`, `docs/KNOWN_LIMITATIONS.md`, `docs/PLATFORM_MATRIX.md`, `docs/POST_TASK_0045_CORRECTIVE_REPORT.md`, `docs/RELEASE_CHECKLIST.md`, `packaging/LICENSING.md`, `qml/ArchDock/Rendering/IconScene.qml`, `tests/run-arch-package-smoke.sh`, `tests/run-rendering-import-smoke.sh`, `tests/tst_IconScene.qml`
+
+30. **OWNER MANUAL ACCEPTANCE:** Still required: switch valid styles and reproducible unavailable-mask fallback without restart; launcher/folder glyphs, true 3D, tiles, drops, vertical scrolling, horizontal tabs/arrows and rotation/panel controls. No physical/owner visual acceptance or all-bugs-fixed claim. One primary session; no subagents.
+
+Primary native references: [Qt Image status/source](https://doc.qt.io/qt-6/qml-qtquick-image.html), [Qt MultiEffect masks](https://doc.qt.io/qt-6/qml-qtquick-effects-multieffect.html). Source-sensitive semantics reuse the existing IconStyle2D URL failure pattern; no KWin/window-rule workaround is required for this local QML state cycle.
+<!-- AUD_01_02_REPORT_END -->
+
 <!-- PANEL_MOTION_REPORT_BEGIN -->
 ## Panel controls and motion correction — 0.1.1-4, 2026-10-04
 

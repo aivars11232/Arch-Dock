@@ -6,6 +6,59 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
+<!-- AUD_01_02_CURRENT_BEGIN -->
+**Current verified candidate — 2026-10-04: application 0.1.1, Arch package
+0.1.1-5; AUD-01 AND AUD-02 CORRECTED.**
+Starting audited clean main: `333fbc2aa8c906523a14a5cf1d168fbe45a91013`; starting owner package 0.1.1-4.
+
+Current-facing package prose now follows this record; exact install/upgrade
+commands use 0.1.1-5. Historical checkpoint bodies below remain unchanged.
+IconScene computes mask failure against the current resolved URL and remembers
+failed URLs locally. Its Image source remains independent of fallback state,
+removing the self-clearing binding loop. Missing/corrupt -> valid -> broken ->
+plain -> valid transitions recover in the same scene/Image; current broken
+masks still fail closed without losing the original glyph. Other asset errors,
+resolver behavior, Icon Tiles, overrides and existing panel controls are retained.
+
+One-job Debug/Quick3D-ON build PASS (1315.76 s).
+Focused style/renderer/native gate **11/11 PASS**. Complete configured CTest
+**111/111 PASS**, 53 serial bounded batches,
+571.02 s summed batch wall time, zero CTest skips or
+missing names; all 644 tracked input bytes unchanged.
+Four native Wayland gates PASS (151.85 s), including mask recovery,
+real 2D/3D glyphs/tiles, drops, scrolling/arrows, rotation, position and collapse.
+QML scan: zero unexpected errors; six known non-mask negative-fixture diagnostics.
+Mask negative cases stay in their dedicated native log with strict shader,
+texture, binding and import guards.
+
+Source freeze `fd23810f156b7303e634c2533d421dd414e13d12`. Two independent canonical exports and all
+four regenerated artifacts match byte-for-byte; extracted 527
+source files/528 regular members, normalized epochs/ownership,
+Git modes, GPL and reference-image exclusion PASS. Root recipe is the exact pin.
+Source SHA-256: `22124187d0014e50064fb838e4782aaf9280e3c518f4b6fc9146ef640c3c57d8`.
+Package SHA-256: `59708bab963c43eaa667019029ee83a97f2f3ddb8431692bf8eb99a11e1eee55`.
+Fresh one-job Release/package build PASS (393.70 s).
+Installed gate PASS (99.43 s): 216 payload files,
+17 asset declarations/eight MIT components, 15+15 catalogs/cards, startup with
+and without 3D, installed mask/UI/glyph tests, 0.1.1-4 -> 0.1.1-5 upgrade,
+recovery and removals with configuration preserved. Compiled/extracted source
+was removed before verification; original checkout/debug paths were masked.
+
+Owned cleanup complete: final root removal freed 1,667,784,704
+allocated/1,639,671,345 apparent bytes, in addition to earlier
+compiled/export disposal. 263 compact ZIP entries and exact source/package
+artifacts remain in `build-codex-aud01-aud02-0.1.1-5/`. All 956 historical files
+are byte/mode identical; all 478 core identities remain, zero new core records,
+zero task dump payloads and zero task processes. One primary session; no subagents.
+
+Owner still runs verified 0.1.1-4. All isolated gates pass; the authorized 0.1.1-5 update follows candidate cleanup/commit/sync and a fresh private configuration backup.
+Final clean Git/remote/owner receipts belong to local STATE.json. Owner visual
+and physical acceptance and proposed v0.1.1 publication remain separate;
+historical v0.1.0 and its six assets are untouched.
+<!-- AUD_01_02_CURRENT_END -->
+
+## Historical verified checkpoints
+
 <!-- PANEL_MOTION_CURRENT_BEGIN -->
 **Latest verified boundary — 2026-10-04: PANEL CONTROLS AND MOTION VERIFIED; OWNER PC UPDATED.**
 Starting main was `08e24ce7b32bcc057dc62c7d41d2697f563ef724`.
