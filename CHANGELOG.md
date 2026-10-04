@@ -2,7 +2,8 @@
 
 ## 0.1.1 candidate — unreleased, 2026-10-04
 
-Application version: `0.1.1`; Arch package candidate: `0.1.1-1`.
+Application version: `0.1.1`; the current Arch package candidate and verification
+status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
@@ -16,7 +17,12 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   matrix; audited original asset declarations carry the owner's new selection.
 - Existing MIT components retain their license. Unknown-rights reference
   material remains NOASSERTION, non-installable and excluded from distribution.
-- Runtime behavior is unchanged. Candidate gates and evidence belong to
+- Icon mask load failures follow their asset URL. Switching the same icon scene
+  from a broken mask to a valid mask or a plain style recovers; a currently
+  broken mask still uses the original glyph fallback.
+- Current-facing installation/version wording follows the corrected candidate;
+  historical package checkpoints and release assets retain their identities.
+- Runtime corrections and candidate gates are recorded in
   [the release checklist](docs/RELEASE_CHECKLIST.md) and
   [corrective report](docs/POST_TASK_0045_CORRECTIVE_REPORT.md).
 

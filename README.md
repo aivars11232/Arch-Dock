@@ -5,8 +5,9 @@ Wayland**. Native edge panels use Plasma containments; free panels use
 desktop-hosted Plasma applets. The service and both hosts share the same
 renderer and settings schema.
 
-The next release candidate is application **0.1.1**, Arch package **0.1.1-1**,
-under release-integrity and packaging verification. Its proposed **v0.1.1** tag
+The application version is **0.1.1**. The current Arch package candidate and
+its verification status are recorded in [current state](docs/CURRENT_STATE.md).
+Its proposed **v0.1.1** tag
 and publication require separate authorization. The
 [historical v0.1.0 prerelease](https://github.com/aivars11232/Arch-Dock/releases/tag/v0.1.0)
 and its six assets remain unchanged, with the tag fixed at

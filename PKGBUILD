@@ -1,6 +1,6 @@
 pkgname=arch-dock
 pkgver=0.1.1
-pkgrel=4
+pkgrel=5
 pkgdesc='Native Plasma Wayland dock panels with shared rendering and presets'
 arch=('x86_64')
 url='https://github.com/aivars11232/Arch-Dock'

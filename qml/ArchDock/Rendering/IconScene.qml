@@ -90,7 +90,15 @@ Item {
         || styleRear.assetFailed || styleBase.assetFailed
         || styleReflection.assetFailed || styleFront.assetFailed
         || styleMaskFailed
-    property bool styleMaskFailed: false
+    // Resolve identity independently of fallback: clearing the Image source
+    // on its own Error both creates a binding loop and loses that identity.
+    readonly property string currentStyleMaskSource:
+        resolvedIconStyle.maskLayer
+        ? String(resolvedIconStyle.maskLayer.source) : ""
+    property var failedStyleMaskSources: ({})
+    readonly property bool styleMaskFailed:
+        currentStyleMaskSource.length > 0
+        && failedStyleMaskSources[currentStyleMaskSource] === true
 
     readonly property bool styledLayersActive:
         Boolean(resolvedIconStyle.renderStyledLayers) && !styleAssetsFailed
@@ -151,6 +159,17 @@ Item {
     readonly property alias temporaryStatusItem: temporaryNotice
     readonly property alias statusTextItem: statusLabel
 
+
+    function recordStyleMaskFailure(source) {
+        if (source.length === 0)
+            return
+        const next = ({})
+        const keys = Object.keys(failedStyleMaskSources)
+        for (let index = 0; index < keys.length; ++index)
+            next[keys[index]] = true
+        next[source] = true
+        failedStyleMaskSources = next
+    }
 
     function alphaColor(color, alpha) {
         return Qt.rgba(color.r, color.g, color.b, alpha)
@@ -316,11 +335,10 @@ Item {
             asynchronous: false
             cache: true
             fillMode: Image.PreserveAspectFit
-            source: root.styleMaskLayer
-                ? String(root.styleMaskLayer.source) : ""
+            source: root.currentStyleMaskSource
             onStatusChanged: {
                 if (status === Image.Error)
-                    root.styleMaskFailed = true
+                    root.recordStyleMaskFailure(source.toString())
             }
         }
 

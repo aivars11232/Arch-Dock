@@ -9,11 +9,25 @@ TestCase {
     when: windowShown
     width: 240
     height: 240
+    visible: true
 
     Component {
         id: iconSceneComponent
 
         IconScene {}
+    }
+
+    Component {
+        id: maskStatusObserverComponent
+
+        Connections {
+            property int errors: 0
+
+            function onStatusChanged() {
+                if (target.status === Image.Error)
+                    ++errors
+            }
+        }
     }
 
     function createScene(properties) {
@@ -270,6 +284,90 @@ TestCase {
         compare(scene.glyphIsMask, false)
         compare(scene.glyphItem.isMask, false)
         compare(scene.resolvedIconSource, "application-x-executable")
+    }
+
+    function maskedStyle(source) {
+        return styleWith({
+            layers: {
+                base: [{
+                    id: "mask-test-base", kind: "procedural",
+                    shape: "rounded-rect", color: "#334155"
+                }],
+                mask: { id: "mask-test", kind: "asset", asset: "mask.svg" }
+            },
+            assetPaths: ({ "mask.svg": source })
+        })
+    }
+
+    function verifyMaskFallback(scene) {
+        compare(scene.styleAssetsFailed, true)
+        compare(scene.styledLayersActive, false)
+        compare(scene.styleGlyphTreatmentActive, false)
+        compare(scene.glyphTreatment, "original")
+        compare(scene.glyphIsMask, false)
+        compare(scene.glyphItem.isMask, false)
+        compare(scene.resolvedIconSource, "application-x-executable")
+        compare(scene.glyphItem.source.toString(), "application-x-executable")
+        verify(scene.glyphItem.visible)
+        compare(scene.baseLayerItem.layer.enabled, false)
+    }
+
+    function test_maskFailureFollowsCurrentSource_data() {
+        return [
+            { tag: "missing-mask", source: Qt.resolvedUrl(
+                "fixtures/icon-style-v1/assets/missing-mask.svg").toString() },
+            { tag: "invalid-mask", source: Qt.resolvedUrl(
+                "fixtures/icon-style-v1/assets/corrupt.svg").toString() }
+        ]
+    }
+
+    function test_maskFailureFollowsCurrentSource(data) {
+        // Keep this exact scene and Image alive through every style change.
+        const scene = createScene()
+        const mask = findChild(scene, "icon-style-mask-source")
+        verify(mask !== null)
+        const observer = createTemporaryObject(maskStatusObserverComponent,
+                                               testCase, { target: mask })
+        verify(observer !== null)
+        const broken = maskedStyle(data.source)
+        const validSource = Qt.resolvedUrl(
+            "fixtures/icon-style-v1/assets/base.svg").toString()
+
+        scene.iconStyleDefinition = broken
+        tryCompare(observer, "errors", 1)
+        tryCompare(mask, "status", Image.Error)
+        tryCompare(scene, "styleAssetsFailed", true)
+        verifyMaskFallback(scene)
+
+        scene.iconStyleDefinition = maskedStyle(validSource)
+        tryCompare(mask, "status", Image.Ready)
+        compare(mask.source.toString(), validSource)
+        compare(scene.styleAssetsFailed, false)
+        compare(scene.styledLayersActive, true)
+        compare(scene.baseLayerItem.layer.enabled, true)
+        compare(scene.resolvedIconSource, "application-x-executable")
+        compare(scene.glyphItem.source.toString(), "application-x-executable")
+
+        scene.iconStyleDefinition = broken
+        tryCompare(observer, "errors", 2)
+        tryCompare(mask, "status", Image.Error)
+        verifyMaskFallback(scene)
+
+        scene.iconStyleDefinition = styleWith({ id: "plain-original" })
+        tryCompare(mask, "status", Image.Null)
+        compare(mask.source.toString(), "")
+        compare(scene.styleAssetsFailed, false)
+        compare(scene.styledLayersActive, false)
+        compare(scene.glyphTreatment, "original")
+        compare(scene.glyphItem.source.toString(), "application-x-executable")
+        verify(scene.glyphItem.visible)
+        compare(scene.baseLayerItem.layer.enabled, false)
+
+        scene.iconStyleDefinition = maskedStyle(validSource)
+        tryCompare(mask, "status", Image.Ready)
+        compare(scene.styleAssetsFailed, false)
+        compare(scene.styledLayersActive, true)
+        compare(scene.baseLayerItem.layer.enabled, true)
     }
 
     function test_indicatorStyleAndStateAreSharedInputs() {

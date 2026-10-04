@@ -445,6 +445,24 @@ run_private_session() {
     ARCHDOCK_RENDERING_KWIN_PID=$!
     wait_for_wayland_socket
 
+    # Negative mask fixtures stay in their own log. Exercise recovery in the
+    # same scene against this staged/installed module and the real RHI backend.
+    if ! "$ARCHDOCK_RENDERING_QMLTESTRUNNER" \
+        -import "$QML_IMPORT_PATH" \
+        -input "$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_IconScene.qml" \
+        IconScene::test_maskFailureFollowsCurrentSource \
+        >"$ARCHDOCK_RENDERING_LOG_DIR/mask-recovery.log" 2>&1; then
+        cat "$ARCHDOCK_RENDERING_LOG_DIR/mask-recovery.log" >&2
+        return 1
+    fi
+    if rg -n -i 'TypeError|ReferenceError|binding loop|texture.*(fail|error)|MultiEffect.*(fail|error)|ShaderEffect.*(fail|error)|shader.*(compilation|preparation).*fail|module .*not installed|not a type' \
+            "$ARCHDOCK_RENDERING_LOG_DIR/mask-recovery.log"; then
+        printf 'Unexpected QML error in native mask recovery regression.\n' >&2
+        return 1
+    fi
+    printf 'Native same-scene missing/corrupt-mask recovery PASS.\n'
+    sed -n '/^Totals:/p' "$ARCHDOCK_RENDERING_LOG_DIR/mask-recovery.log"
+
     if [[ "${ARCHDOCK_RENDERING_INTERACTIONS:-}" != '1' ]]; then
     printf 'Checking staged renderer capability against the private Wayland graphics backend.\n'
     ARCHDOCK_TEST_RHI=1 \

@@ -74,7 +74,8 @@ removal actions before uninstalling the applet package. Follow
 
 ## Versioning and licensing
 
-The next candidate is application `0.1.1`, package `0.1.1-1`; its proposed
+The application version is `0.1.1`; [current state](CURRENT_STATE.md) records
+the current Arch package candidate and verification status. Its proposed
 `v0.1.1` tag/publication require separate authorization. Historical `v0.1.0`
 remains at `c3b3a0b7771b313c45f843f49a503b45b0d1ada0`, and its
 [GitHub prerelease](https://github.com/aivars11232/Arch-Dock/releases/tag/v0.1.0)

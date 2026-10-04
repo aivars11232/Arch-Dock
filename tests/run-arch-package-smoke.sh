@@ -183,10 +183,15 @@ installed_ui_interactions() {
     cp -a "$sysroot/usr/share/arch-dock/themes" "$fixture/assets/"
     for file in run-rendering-import-smoke.sh visibility-window.py \
         tst_ContentOverlays.qml tst_RenderingModuleImport.qml \
+        tst_IconScene.qml \
         tst_LivePanelPreview.qml tst_RendererParity.qml \
         tst_PanelSkin2D.qml tst_PanelSurfaceIntegration.qml tst_WindowPreviewPopup.qml; do
         cp "$project_root/tests/$file" "$fixture/tests/"
     done
+    mkdir -p "$fixture/tests/fixtures/icon-style-v1/assets"
+    cp "$project_root/tests/fixtures/icon-style-v1/assets/base.svg" \
+        "$project_root/tests/fixtures/icon-style-v1/assets/corrupt.svg" \
+        "$fixture/tests/fixtures/icon-style-v1/assets/"
     bwrap --die-with-parent --ro-bind / / --dev-bind /dev /dev --tmpfs /tmp \
         --overlay-src /usr --overlay-src "$sysroot/usr" --ro-overlay /usr \
         --tmpfs "$project_root" --tmpfs "$build_dir" \
