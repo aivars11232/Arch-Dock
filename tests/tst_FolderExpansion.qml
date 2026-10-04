@@ -229,6 +229,22 @@ TestCase {
         verify(!item.openingInProgress)
         verify(item.selectChild("child-0"))
     }
+    function test_nativeHostStaysInsideAnchorScreen() {
+        const window = createTemporaryObject(anchorComponent, null)
+        const host = createTemporaryObject(hostComponent, testCase, {
+            visualParent: findChild(window, "anchor"), reducedMotion: true,
+            folderLayout: "arc", snapshot: { status: "ready", entries: rows(48) }
+        })
+        verify(host.openFolder())
+        const screen = window.screen
+        host.x = screen.virtualX - 80
+        host.y = screen.virtualY - 80
+        tryVerify(function() { return host.x >= screen.virtualX && host.y >= screen.virtualY })
+        host.x = screen.virtualX + screen.width - 4
+        host.y = screen.virtualY + screen.height - 4
+        tryVerify(function() { return host.x + host.width <= screen.virtualX + screen.width
+            && host.y + host.height <= screen.virtualY + screen.height })
+    }
     function test_nativeHostLifecycle() {
         const window = createTemporaryObject(anchorComponent, null)
         verify(window !== null)

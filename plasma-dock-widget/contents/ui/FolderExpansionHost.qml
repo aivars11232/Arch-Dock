@@ -42,7 +42,28 @@ PlasmaCore.Dialog {
         return true
     }
     function closeFolder() { requested = false }
-    onVisibleChanged: if (!visible) requested = false
+    // AppletPopup has native Plasma Wayland position support. Constrain its
+    // final geometry too: a late content resize can retain an off-screen
+    // position chosen for the previous folder layout.
+    function keepOnScreen() {
+        if (!visible || !visualParent) return
+        const ownerWindow = visualParent.Window.window
+        const screen = ownerWindow ? ownerWindow.screen : root.screen
+        if (!screen || screen.width <= 0 || screen.height <= 0) return
+        const left = screen.virtualX, top = screen.virtualY
+        const nextX = Math.max(left, Math.min(x, left + screen.width - width))
+        const nextY = Math.max(top, Math.min(y, top + screen.height - height))
+        if (x !== nextX) x = nextX
+        if (y !== nextY) y = nextY
+    }
+    onXChanged: Qt.callLater(keepOnScreen)
+    onYChanged: Qt.callLater(keepOnScreen)
+    onWidthChanged: Qt.callLater(keepOnScreen)
+    onHeightChanged: Qt.callLater(keepOnScreen)
+    onVisibleChanged: {
+        if (!visible) requested = false
+        else Qt.callLater(keepOnScreen)
+    }
     onInteractionAllowedChanged: if (!interactionAllowed) closeFolder()
     mainItem: FolderExpansion {
         id: content

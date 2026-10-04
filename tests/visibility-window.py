@@ -709,6 +709,9 @@ def run_interaction_matrix(free_panel):
                     and len(folder_popup(panel).get("items", {})) == 5 else None, "five real folder children")
                 assert current["reducedMotion"] == panel_call("panelRendererConfiguration", "(s)", (panel,))["reducedMotion"]
                 assert current["background"] == 0 and current["colorAlpha"] == 0, current
+                origin = folder_point(panel)
+                assert 0 <= origin[0] <= 1280 - current["rect"][2], (origin, current["rect"])
+                assert 0 <= origin[1] <= 720 - current["rect"][3], (origin, current["rect"])
                 assert current["showNames"] and len(current["names"]) == 5, current
                 verify_capture(panel, 5, True)
                 assert not marker.exists(), "expanding a folder launched its root"

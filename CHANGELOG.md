@@ -25,7 +25,8 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   the wheel or a held-pointer drag; dragging does not open a child.
 - Fan and Arc folder contents move along a compact curve with wheel or held
   dragging, without visible scrollbars or selection boxes. Reduced motion
-  remains immediate.
+  remains immediate. Late native popup resizing is constrained to the
+  anchor screen so compact contents remain reachable.
 - Appearance explains the current 2D surface and offers a route to 3D themes;
   compatible themes retain the existing 3D switch, quality and tilt controls.
 - Panels > Behavior can keep folder item names visible without hovering.
