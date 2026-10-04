@@ -510,11 +510,19 @@ void PanelWindowCapabilityTest::tiltEditorsFollowTheSelectedRenderer()
     fields = backend.panelSettingsEditorSnapshot(panel, "studio").value("panelFields").toList();
     const bool available = ARCHDOCK_QUICK3D_BUILT && ARCHDOCK_SCENE3D_BUILT;
     QCOMPARE(fieldKeys(fields).contains("scene3DCameraPitch"), available);
+    QCOMPARE(fieldKeys(fields).contains("scene3DCameraYaw"), available);
+    QCOMPARE(fieldKeys(fields).contains("scene3DThickness"), available);
+    QCOMPARE(fieldKeys(fields).contains("scene3DIconElevation"), available);
     QVERIFY(!fieldKeys(fields).contains("bakedTilt"));
     if (available) {
         QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
-            {{"scene3DCameraPitch", -35.0}}).value("success").toBool());
+            {{"scene3DCameraPitch", -35.0}, {"scene3DCameraYaw", -20.0},
+             {"scene3DThickness", 1.6}, {"scene3DIconElevation", 0.5}}).value("success").toBool());
         QCOMPARE(backend.panelRendererConfiguration(panel).value("scene3DCameraPitch").toDouble(), -35.0);
+        const auto parameters = registry->panelDefinition(panel)->surface.parameters3D;
+        QCOMPARE(parameters.value("cameraYaw").toDouble(), -20.0);
+        QCOMPARE(parameters.value("thickness").toDouble(), 1.6);
+        QCOMPARE(parameters.value("iconElevation").toDouble(), 0.5);
     }
     const auto nativeBefore = registry->panelDefinition("bottom")->toPersistedMap();
     QVERIFY(!backend.applyPanelSettingsTransaction("bottom", registry->panelDefinition("bottom")->settingsRevision,

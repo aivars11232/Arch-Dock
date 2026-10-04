@@ -3,9 +3,9 @@
   "version": 2,
   "id": "arc-platform-orange",
   "name": "Orange Arc Platform",
-  "packageRevision": 1,
+  "packageRevision": 2,
   "author": "Arch Dock project",
-  "description": "Original open arc shelf created from a blank canvas for Arch Dock",
+  "description": "Original orange arc artwork with an optional volumetric ring platform for depth-aware free-panel rotation.",
   "license": {
     "spdx": "GPL-3.0-or-later",
     "redistribution": "allowed",
@@ -16,6 +16,7 @@
       "free-desktop"
     ],
     "rendererTiers": [
+      "true3d",
       "baked2.5d",
       "procedural2d"
     ],
@@ -25,7 +26,9 @@
     ],
     "layouts": [
       "arc",
-      "semicircle"
+      "semicircle",
+      "ring",
+      "circular"
     ],
     "orientations": [
       "free"
@@ -33,13 +36,15 @@
     "features": [
       "dynamic-tint",
       "dynamic-glow",
-      "icon-state-styling"
+      "icon-state-styling",
+      "whole-panel-rotation"
     ],
     "presentationMechanisms": [
-      "open"
+      "open",
+      "collapse-radial"
     ],
     "rotation": {
-      "mode": "none"
+      "mode": "free"
     }
   },
   "assets": [
@@ -122,6 +127,31 @@
       "kind": "material",
       "mimeType": "application/json",
       "sha256": "6c01b39ed0286ad22c8a249a9a21a1d8f9ae6d4dea53d19c50d9d58aa3e64095"
+    },
+    {
+      "id": "platform",
+      "path": "assets/platform.json",
+      "kind": "mesh",
+      "mimeType": "application/json",
+      "sha256": "370addae9c6f0c19c52566f612dab7f94c2c8d2e28b6e775ebce032a4e6742af"
+    },
+    {
+      "id": "metal",
+      "path": "assets/material.json",
+      "kind": "material",
+      "mimeType": "application/json",
+      "sha256": "78a3822ee785914bbc1aaae09a317705726d8025a18f49a9146044d547f84ba4"
+    },
+    {
+      "id": "surface",
+      "path": "assets/texture.svg",
+      "kind": "vector",
+      "mimeType": "image/svg+xml",
+      "sha256": "e16738720143df26dba625b8402cfb5ce72db723ff8a3ed493103949f6431780",
+      "naturalSize": {
+        "width": 64,
+        "height": 64
+      }
     }
   ],
   "states": [
@@ -335,5 +365,98 @@
   "iconStyleRef": {
     "id": "neon-orange"
   },
-  "animationProfileRefs": []
+  "animationProfileRefs": [],
+  "scene3D": {
+    "mesh": "platform",
+    "iconMesh": "platform",
+    "material": "metal",
+    "texture": "surface",
+    "fieldOfView": 40,
+    "cameraPitch": 25,
+    "cameraYaw": 10,
+    "keyLightBrightness": 1.2,
+    "fillLightBrightness": 0.45,
+    "defaultQuality": "medium",
+    "parts": [
+      {
+        "id": "left-segment",
+        "kind": "ring-segment",
+        "scope": "panel",
+        "mechanism": "collapse-radial",
+        "mesh": "platform",
+        "material": "metal",
+        "scale": [
+          0.24,
+          0.24,
+          0.2
+        ],
+        "closedPosition": [
+          -0.4,
+          0,
+          0.06
+        ],
+        "openPosition": [
+          -0.62,
+          0,
+          0.1
+        ],
+        "openRotation": [
+          0,
+          0,
+          -30
+        ]
+      },
+      {
+        "id": "right-segment",
+        "kind": "ring-segment",
+        "scope": "panel",
+        "mechanism": "collapse-radial",
+        "mesh": "platform",
+        "material": "metal",
+        "scale": [
+          0.24,
+          0.24,
+          0.2
+        ],
+        "closedPosition": [
+          0.4,
+          0,
+          0.06
+        ],
+        "openPosition": [
+          0.62,
+          0,
+          0.1
+        ],
+        "openRotation": [
+          0,
+          0,
+          30
+        ]
+      },
+      {
+        "id": "icon-pedestal",
+        "kind": "pedestal",
+        "scope": "entry",
+        "mechanism": "collapse-radial",
+        "mesh": "platform",
+        "material": "metal",
+        "scale": [
+          0.6,
+          0.6,
+          0.2
+        ],
+        "closedPosition": [
+          0,
+          0,
+          -0.2
+        ],
+        "openPosition": [
+          0,
+          0,
+          0.3
+        ]
+      }
+    ]
+  }
 }

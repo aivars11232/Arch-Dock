@@ -21,6 +21,7 @@ QtObject {
     property int polygonSides: 6
     // Local rectangles of the rendered entries, in the scene's coordinates.
     property var entryRects: []
+    property var projectedScene: null
     // How far from the drawn path a press still counts, in pixels.
     property real bandWidth: 40
     property real entryMargin: 4
@@ -99,6 +100,7 @@ QtObject {
             if (rectContains(rects[index], x, y, entryMargin))
                 return true
         }
+        if (projectedScene) return projectedScene.containsInputPoint(point)
         if (maskActive) {
             return Boolean(maskItem.contains(
                 Qt.point(x - maskOriginX, y - maskOriginY)))

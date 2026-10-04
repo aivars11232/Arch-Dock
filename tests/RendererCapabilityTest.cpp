@@ -8,6 +8,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJSValue>
+#include <QtMath>
 #include <QPointer>
 #include <QQmlAbstractUrlInterceptor>
 #include <QQmlComponent>
@@ -17,6 +18,7 @@
 #include <QQuickItemGrabResult>
 #include <QQuickWindow>
 #include <QVector3D>
+#include <QWheelEvent>
 #include <QtTest>
 
 #include <memory>
@@ -72,14 +74,22 @@ class RendererCapabilityTest final : public QObject
     Q_OBJECT
 
 private slots:
+    void realScenePixelsQualityAndFallback_data()
+    {
+        QTest::addColumn<QString>("themeId");
+        QTest::newRow("cyan") << QStringLiteral("mesh-platform-cyan");
+        QTest::newRow("orange") << QStringLiteral("arc-platform-orange");
+    }
+
     void realScenePixelsQualityAndFallback()
     {
+        QFETCH(QString, themeId);
         if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
             return; // The private RHI invocation below is the real scene gate.
         const QString themeRoot = qEnvironmentVariable("ARCHDOCK_RENDERING_STAGED_THEME_ROOT",
             QStringLiteral(ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT));
         const auto package = ArchDock::ThemePackage::load(themeRoot
-            + QStringLiteral("/mesh-platform-cyan/archdock-theme.json"));
+            + QStringLiteral("/") + themeId + QStringLiteral("/archdock-theme.json"));
         QVERIFY2(package.isValid(), qPrintable(package.primaryCode()));
         QVariantMap theme = package.package->runtimeProjection();
         // A private XDG session need not have a desktop icon theme configured.
@@ -126,8 +136,32 @@ private slots:
         QVERIFY(capability(scene).value(QStringLiteral("rendererAvailable")).toBool());
         auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
         QVERIFY(renderer);
-        QCOMPARE(renderer->property("triangleCount").toInt(), 696);
+        const int meshTriangles = theme.value("scene3DResources").toMap()
+            .value("mesh").toMap().value("indexes").toList().size() / 3;
+        const int expectedTriangles = meshTriangles * 9 + 24;
+        QCOMPARE(renderer->property("triangleCount").toInt(), expectedTriangles);
+        QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 2);
         const QVariant geometry = plainValue(scene->property("entryRects"));
+        const auto projectionMatches = [&]() {
+            const auto rects = plainValue(scene->property("entryRects")).toList();
+            const auto projected = plainValue(renderer->property("projectedEntryGeometry")).toList();
+            auto *view = objectValue(renderer->property("viewport"));
+            if (!view || rects.size() != projected.size() || rects.isEmpty()) return false;
+            for (int i = 0; i < rects.size(); ++i) {
+                const auto bounds = rects[i].toMap();
+                const auto output = projected[i].toMap();
+                auto *glyph = renderer->findChild<QObject *>(QStringLiteral("mesh-glyph-%1").arg(i));
+                QVector3D center;
+                if (!glyph || !QMetaObject::invokeMethod(view, "mapFrom3DScene",
+                    Q_RETURN_ARG(QVector3D, center),
+                    Q_ARG(QVector3D, glyph->property("scenePosition").value<QVector3D>()))) return false;
+                for (const auto &key : {"x", "y", "width", "height"})
+                    if (qAbs(bounds.value(key).toDouble() - output.value(key).toDouble()) > 1) return false;
+                if (qAbs(center.x() - output.value("centerX").toDouble()) > 1
+                    || qAbs(center.y() - output.value("centerY").toDouble()) > 1) return false;
+            }
+            return true;
+        };
         const auto pixels = [scene]() -> QImage
         {
             auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
@@ -154,7 +188,10 @@ private slots:
             if (!model->objectName().startsWith(QStringLiteral("mesh-entry-"))
                 || model->objectName().startsWith(QStringLiteral("mesh-entry-part-")))
                 continue;
-            const QVariantMap expected = plainValue(model->property("rect")).toMap();
+            const int index = model->objectName().mid(QStringLiteral("mesh-entry-").size()).toInt();
+            const QVariantMap expected = plainValue(renderer->property("projectedEntryGeometry")).toList()[index].toMap();
+            model = renderer->findChild<QObject *>(QStringLiteral("mesh-glyph-%1").arg(index));
+            QVERIFY(model);
             const QVector3D position = model->property("scenePosition").value<QVector3D>();
             QVector3D projected;
             QVERIFY(QMetaObject::invokeMethod(viewport, "mapFrom3DScene",
@@ -188,7 +225,10 @@ private slots:
                 if (first.pixelColor(x, y).alpha() > 32)
                     ++visiblePixels;
         QVERIFY2(visiblePixels > 1000, qPrintable(QStringLiteral("Only %1 mesh pixels").arg(visiblePixels)));
-        const QString evidence = qEnvironmentVariable("ARCHDOCK_SCENE_EVIDENCE_DIR");
+        const QString evidenceRoot = qEnvironmentVariable("ARCHDOCK_SCENE_EVIDENCE_DIR");
+        const QString evidence = themeId == QStringLiteral("arc-platform-orange") && !evidenceRoot.isEmpty()
+            ? QDir(evidenceRoot).filePath(QStringLiteral("orange")) : evidenceRoot;
+        if (!evidence.isEmpty()) QVERIFY(QDir().mkpath(evidence));
         if (!evidence.isEmpty())
             QVERIFY(first.save(QDir(evidence).filePath(QStringLiteral("mesh-scene.png"))));
         auto tiltedDefinition = plainValue(scene->property("panelDefinition")).toMap();
@@ -201,20 +241,50 @@ private slots:
             const auto tilted = pixels();
             QVERIFY(!tilted.isNull());
             QVERIFY(tilted != first);
-            QCOMPARE(plainValue(scene->property("entryRects")), geometry);
-            for (QObject *model : renderer->findChildren<QObject *>()) {
-                if (!model->objectName().startsWith(QStringLiteral("mesh-entry-"))
-                    || model->objectName().startsWith(QStringLiteral("mesh-entry-part-"))) continue;
-                const auto expected = plainValue(model->property("rect")).toMap();
-                QVector3D projected;
-                QVERIFY(QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, projected),
-                    Q_ARG(QVector3D, model->property("scenePosition").value<QVector3D>())));
-                QVERIFY(qAbs(projected.x() - expected.value("centerX").toDouble()) < 1);
-                QVERIFY(qAbs(projected.y() - expected.value("centerY").toDouble()) < 1);
-            }
+            QTRY_VERIFY(projectionMatches());
+            QVERIFY(plainValue(scene->property("entryRects")) != geometry);
             if (!evidence.isEmpty())
                 QVERIFY(tilted.save(QDir(evidence).filePath(QStringLiteral("mesh-tilt-%1.png").arg(pitch))));
         }
+        // Wheel rotation moves real world-space icons between near and far
+        // positions; projected size and input bounds must follow their depth.
+        scene->setProperty("wheelRotationAngle", 90.0);
+        QTest::qWait(150);
+        QVERIFY(!pixels().isNull());
+        QTRY_VERIFY(projectionMatches());
+        const auto depthRects = plainValue(renderer->property("projectedEntryGeometry")).toList();
+        QVERIFY(qAbs(depthRects[0].toMap().value("depth").toDouble()
+            - depthRects[1].toMap().value("depth").toDouble()) > 1);
+        QVERIFY(qAbs(depthRects[0].toMap().value("width").toDouble()
+            - depthRects[1].toMap().value("width").toDouble()) > 1);
+        if (!evidence.isEmpty()) QVERIFY(pixels().save(QDir(evidence).filePath("mesh-depth-rotation.png")));
+        scene->setProperty("wheelRotationAngle", 0.0);
+        QTest::qWait(100);
+        const auto surfacePoint = [&](double angle) {
+            const double radius = renderer->property("platformScale").toDouble() * 0.84;
+            QVector3D point;
+            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, point),
+                Q_ARG(QVector3D, QVector3D(radius * qCos(angle), radius * qSin(angle),
+                    renderer->property("platformTop").toDouble())));
+            return QPointF(point.x(), point.y());
+        };
+        const QPointF dragStart = surfacePoint(M_PI / 4);
+        const QPointF dragFinish = surfacePoint(M_PI / 3);
+        QTest::mouseMove(&window, dragStart.toPoint());
+        QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, dragStart.toPoint());
+        QTRY_VERIFY(scene->property("rotationDragActive").toBool());
+        QTest::mouseMove(&window, dragFinish.toPoint(), 30);
+        QTRY_VERIFY(qAbs(scene->property("wheelRotationAngle").toDouble()) > 5);
+        QTest::mouseRelease(&window, Qt::LeftButton, Qt::NoModifier, dragFinish.toPoint());
+        QTRY_VERIFY(!scene->property("rotationDragActive").toBool());
+        const double dragged = scene->property("wheelRotationAngle").toDouble();
+        QWheelEvent wheel(dragFinish, window.mapToGlobal(dragFinish.toPoint()), QPoint(), QPoint(0, 120),
+            Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+        QCoreApplication::sendEvent(&window, &wheel);
+        QTRY_VERIFY(scene->property("wheelRotationAngle").toDouble() != dragged);
+        QTRY_VERIFY(projectionMatches());
+        scene->setProperty("wheelRotationAngle", 0.0);
+        if (themeId == QStringLiteral("arc-platform-orange")) return;
         tiltedDefinition.remove(QStringLiteral("scene3DCameraPitch"));
         scene->setProperty("panelDefinition", tiltedDefinition);
         QVariantMap tiles = plainValue(scene->property("panelDefinition")).toMap();
@@ -235,7 +305,7 @@ private slots:
         };
         const auto customTiles = pixels();
         QVERIFY(magentaPixels(customTiles) > 20);
-        QCOMPARE(plainValue(scene->property("entryRects")), geometry);
+        QTRY_VERIFY(projectionMatches());
         if (!evidence.isEmpty()) QVERIFY(customTiles.save(QDir(evidence).filePath("mesh-custom-tiles.png")));
         tiles.insert(QStringLiteral("iconShape"), QStringLiteral("circle"));
         scene->setProperty("panelDefinition", tiles);
@@ -243,7 +313,7 @@ private slots:
         const auto circleTiles = pixels();
         QVERIFY(magentaPixels(circleTiles) > 20);
         QVERIFY(circleTiles != customTiles);
-        QCOMPARE(plainValue(scene->property("entryRects")), geometry);
+        QTRY_VERIFY(projectionMatches());
         tiles.insert(QStringLiteral("iconTilesEnabled"), false);
         scene->setProperty("panelDefinition", tiles);
         QTest::qWait(100);
@@ -283,7 +353,7 @@ private slots:
                 QVERIFY(state.value(QStringLiteral("targetWidth")).toInt()
                         > low.value(QStringLiteral("targetWidth")).toInt());
             QVERIFY(!pixels().isNull());
-            QCOMPARE(plainValue(scene->property("entryRects")), geometry);
+            QTRY_VERIFY(projectionMatches());
         }
 
         // Use the shipped logical profile with the same controller used by 2D.
@@ -317,7 +387,7 @@ private slots:
         QVERIFY(qAbs(glyph->property("eulerRotation").value<QVector3D>().y()
             - channels.value(QStringLiteral("glyph/rotate-y")).toDouble()) < 0.01);
         QVERIFY(!controller->property("hasConflict").toBool());
-        QCOMPARE(plainValue(scene->property("entryRects")), geometry);
+        QTRY_VERIFY(projectionMatches());
         QObject *visual = objectValue(entry->property("meshVisualItem"));
         QVERIFY(visual);
         QCOMPARE(plainValue(visual->property("resolvedGlyphMotion")).toMap()
@@ -469,7 +539,7 @@ private slots:
             renderer = objectValue(scene->property("activeSurfaceRenderer"));
             QVERIFY(!pixels().isNull());
             QCOMPARE(renderer->findChildren<QObject *>().size(), resourcesAfterRecovery);
-            QCOMPARE(renderer->property("triangleCount").toInt(), 696);
+            QCOMPARE(renderer->property("triangleCount").toInt(), expectedTriangles);
         }
         const auto bakedPackage = ArchDock::ThemePackage::load(themeRoot
             + QStringLiteral("/ring-platform-blue/archdock-theme.json"));

@@ -1,5 +1,12 @@
 # Arch Dock current state
 
+<!-- WORLD_DEPTH_PAUSED_BEGIN -->
+**Paused 2026-10-04:** the newer 3D depth/controls correction is WIP, approximately
+58% complete. Runtime checks and release-8 packaging have not run. The PC and
+last verified checkpoint remain **0.1.1-7**. See the
+[resume handoff](3D_CORRECTION_HANDOFF.md).
+<!-- WORLD_DEPTH_PAUSED_END -->
+
 <!-- FOLDER_PATH_CURRENT_BEGIN -->
 **Current verified correction — 2026-10-04: application 0.1.1; Arch package 0.1.1-7.**
 

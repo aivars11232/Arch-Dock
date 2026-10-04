@@ -9,6 +9,7 @@
 #include <QUrl>
 #include <QtGlobal>
 
+#include <tuple>
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -600,6 +601,14 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     if (record.contains(QStringLiteral("scene3DCameraPitch")))
         definition.surface.parameters3D.insert(QStringLiteral("cameraPitch"),
             normalized(QStringLiteral("scene3DCameraPitch"), 25.0));
+    for (const auto &[key, parameter, fallback] :
+         {std::tuple{"scene3DCameraYaw", "cameraYaw", 10.0},
+          std::tuple{"scene3DThickness", "thickness", 1.0},
+          std::tuple{"scene3DIconElevation", "iconElevation", 0.3}}) {
+        if (record.contains(QLatin1String(key)))
+            definition.surface.parameters3D.insert(QLatin1String(parameter),
+                normalized(QLatin1String(key), fallback));
+    }
     if (record.contains(QStringLiteral("bakedTilt")))
         definition.surface.parameters2_5D.insert(QStringLiteral("tilt"),
             normalized(QStringLiteral("bakedTilt"), 0.0));
@@ -1114,6 +1123,13 @@ QVariantMap PanelDefinition::toLegacyMap() const
     if (surface.parameters3D.contains(QStringLiteral("cameraPitch")))
         record.insert(QStringLiteral("scene3DCameraPitch"),
             surface.parameters3D.value(QStringLiteral("cameraPitch")));
+    for (const auto &[key, parameter] :
+         {std::pair{"scene3DCameraYaw", "cameraYaw"},
+          std::pair{"scene3DThickness", "thickness"},
+          std::pair{"scene3DIconElevation", "iconElevation"}}) {
+        if (surface.parameters3D.contains(QLatin1String(parameter)))
+            record.insert(QLatin1String(key), surface.parameters3D.value(QLatin1String(parameter)));
+    }
     if (surface.parameters2_5D.contains(QStringLiteral("tilt")))
         record.insert(QStringLiteral("bakedTilt"),
             surface.parameters2_5D.value(QStringLiteral("tilt")));

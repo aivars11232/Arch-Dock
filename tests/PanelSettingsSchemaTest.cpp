@@ -115,19 +115,29 @@ void PanelSettingsSchemaTest::tiltScalarsPreserveParameterMaps()
 {
     auto definition = PanelDefinition::fromLegacyMap({
         {"id", "tilt-test"}, {"scene3DCameraPitch", 900.0}, {"bakedTilt", -900.0},
+        {"scene3DCameraYaw", 900.0}, {"scene3DThickness", 900.0}, {"scene3DIconElevation", -900.0},
         {"surface3D", QVariantMap{{"futureData", 7}}},
         {"surface2_5D", QVariantMap{{"futureData", 9}}}});
     QVERIFY(definition);
     QCOMPARE(definition->surface.parameters3D.value("cameraPitch").toDouble(), 60.0);
+    QCOMPARE(definition->surface.parameters3D.value("cameraYaw").toDouble(), 180.0);
+    QCOMPARE(definition->surface.parameters3D.value("thickness").toDouble(), 4.0);
+    QCOMPARE(definition->surface.parameters3D.value("iconElevation").toDouble(), 0.0);
     QCOMPARE(definition->surface.parameters2_5D.value("tilt").toDouble(), -60.0);
     auto values = definition->toPersistedMap();
     values.insert("scene3DCameraPitch", -35.0);
+    values.insert("scene3DCameraYaw", -20.0);
+    values.insert("scene3DThickness", 1.6);
+    values.insert("scene3DIconElevation", 0.5);
     values.insert("bakedTilt", 8.0);
     definition = PanelDefinition::fromLegacyMap(values);
     QVERIFY(definition);
     const auto restored = PanelDefinition::fromLegacyMap(definition->toPersistedMap());
     QVERIFY(restored);
     QCOMPARE(restored->surface.parameters3D.value("cameraPitch").toDouble(), -35.0);
+    QCOMPARE(restored->surface.parameters3D.value("cameraYaw").toDouble(), -20.0);
+    QCOMPARE(restored->surface.parameters3D.value("thickness").toDouble(), 1.6);
+    QCOMPARE(restored->surface.parameters3D.value("iconElevation").toDouble(), 0.5);
     QCOMPARE(restored->surface.parameters2_5D.value("tilt").toDouble(), 8.0);
     QCOMPARE(restored->surface.parameters3D.value("futureData").toInt(), 7);
     QCOMPARE(restored->surface.parameters2_5D.value("futureData").toInt(), 9);

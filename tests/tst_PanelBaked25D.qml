@@ -197,6 +197,11 @@ TestCase {
 
     function waitForTier(scene, tier) {
         tryCompare(scene, "effectiveRendererTier", tier, 5000)
+        if (tier === "baked2.5d") {
+            const fallback = findChild(scene, "procedural-surface-fallback")
+            verify(fallback)
+            compare(fallback.visible, false, "loaded artwork hides the fallback surface")
+        }
     }
 
     function fuzzy(actual, expected, message) {

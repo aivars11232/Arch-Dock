@@ -183,6 +183,7 @@ Item {
     readonly property bool sceneRotationEnabled: rotationController.enabled
     readonly property bool sceneRotationActive: rotationController.running
     property real wheelRotationAngle: 0
+    property bool rotationDragActive: false
     readonly property bool rotationGeometryAvailable:
         freeHost && rotationCapabilityAvailable && rotationLayoutSupported
     readonly property bool wheelRotationAvailable:
@@ -668,6 +669,21 @@ Item {
     }
 
     function entryGeometryAt(index) {
+        const base = baseEntryGeometryAt(index)
+        const mesh = surfaceLoader.true3DReady ? surfaceLoader.true3DItem : null
+        const rect = mesh && mesh.projectedEntryGeometry ? mesh.projectedEntryGeometry[index] : null
+        if (!rect) return base
+        return Object.assign({}, base, {
+            x: rect.x, y: rect.y,
+            position: {x: rect.x + (rect.width-layoutGeometry.iconSize)/2,
+                y: rect.y + (rect.height-layoutGeometry.iconSize)/2},
+            entryBounds: {x: rect.x, y: rect.y, width: rect.width, height: rect.height},
+            projectedWidth: rect.width, projectedHeight: rect.height, rotation: 0,
+            depthOrder: -rect.depth,
+            effectAllowance: entryEffectAllowance(rect)
+        })
+    }
+    function baseEntryGeometryAt(index) {
         if (segmentedScene && segmentLayout.entries[index]) {
             const result = Object.assign({}, segmentLayout.entries[index])
             result.effectBounds = effectBounds
@@ -690,7 +706,8 @@ Item {
             return output
         }
         const geometry = LayoutEngine.entryGeometry(
-            layoutPath, index, entryCount, layoutGeometry, effectiveLayoutAngle,
+            layoutPath, index, entryCount, layoutGeometry,
+            surfaceLoader.true3DReady ? 0 : effectiveLayoutAngle,
             polygonSides, pathOrientation, geometryCompatibilityProfile,
             placementEdge)
         const result = ({})
@@ -832,7 +849,7 @@ Item {
         hovered: root.panelHovered
         dragActive: root.dragInProgress
         editMode: root.editModeActive
-        configuring: Boolean(root.runtimeState.popupOpen)
+        configuring: Boolean(root.runtimeState.popupOpen) || root.rotationDragActive
         sceneConcealed: !root.entriesAnimatable || root.presentationState === "collapsed"
         reducedMotion: root.reducedMotion
         animationEnabled: root.rotationAnimationEnabled
@@ -856,6 +873,28 @@ Item {
         }
     }
 
+    MouseArea {
+        anchors.fill: parent
+        z: 0.5 // Entry delegates remain above this background gesture.
+        enabled: root.wheelRotationAvailable
+        acceptedButtons: Qt.LeftButton
+        property real previousAngle: 0
+        onPressed: mouse => {
+            if (!root.containsInputPoint(Qt.point(mouse.x, mouse.y))) { mouse.accepted = false; return }
+            previousAngle = Math.atan2(mouse.y - height / 2, mouse.x - width / 2)
+            root.rotationDragActive = true
+        }
+        onPositionChanged: mouse => {
+            if (!pressed || !root.rotationDragActive) return
+            const angle = Math.atan2(mouse.y - height / 2, mouse.x - width / 2)
+            const delta = Math.atan2(Math.sin(angle-previousAngle), Math.cos(angle-previousAngle))
+            root.wheelRotationAngle = (root.wheelRotationAngle + delta * 180 / Math.PI + 360) % 360
+            previousAngle = angle
+        }
+        onReleased: root.rotationDragActive = false
+        onCanceled: root.rotationDragActive = false
+    }
+
     GeometryHitRegion {
         id: geometryHitRegion
 
@@ -864,6 +903,7 @@ Item {
         angle: root.effectiveLayoutAngle
         polygonSides: root.polygonSides
         entryRects: root.entryRects
+        projectedScene: surfaceLoader.true3DReady ? surfaceLoader.true3DItem : null
         bandWidth: root.layoutGeometry.iconSize * 1.2
         entryMargin: root.layoutGeometry.iconSize * 0.4
         enabled: root.geometryHitRegionActive
@@ -930,11 +970,21 @@ Item {
                 ? definition.scene3DCameraPitch : parameters.cameraPitch !== undefined
                     ? parameters.cameraPitch : NaN)
         }
+        sceneParameters: {
+            const definition = root.panelDefinition || ({})
+            const parameters = Object.assign({}, (definition.surface || {}).parameters3D || definition.surface3D || ({}))
+            for (const [key, parameter] of [["scene3DCameraYaw", "cameraYaw"],
+                    ["scene3DThickness", "thickness"], ["scene3DIconElevation", "iconElevation"]])
+                if (definition[key] !== undefined) parameters[parameter] = definition[key]
+            return parameters
+        }
         entryVisuals: root.entryVisuals
-        entryGeometry: root.entryRects.map(function(rect, index) {
+        entryGeometry: root.orderedEntries.map(function(entry, index) {
+            const output = root.baseEntryGeometryAt(index)
+            const rect = output.entryBounds
             return { centerX: rect.x + rect.width / 2, centerY: rect.y + rect.height / 2,
                      width: rect.width, height: rect.height,
-                     rotation: root.entryGeometryAt(index).rotation }
+                     rotation: output.rotation }
         })
         sceneConcealed: !root.entriesAnimatable
     }
@@ -979,6 +1029,7 @@ Item {
     // panel is open the clipper covers the whole scene and does nothing.
     Item {
         id: entryClipper
+        z: 1
 
         x: root.entryClipRect.x
         y: root.entryClipRect.y
@@ -1059,6 +1110,11 @@ Item {
             width: root.layoutGeometry.iconSize
             height: width
             rotation: geometryOutput.rotation
+            transform: Scale {
+                origin.x: entryItem.width / 2; origin.y: entryItem.height / 2
+                xScale: Number(entryItem.geometryOutput.projectedWidth || entryItem.width) / entryItem.width
+                yScale: Number(entryItem.geometryOutput.projectedHeight || entryItem.height) / entryItem.height
+            }
             scale: geometryOutput.scaleFactor
             opacity: root.entryDelegate === null && sceneEntry.minimized ? 0.55 : 1
 

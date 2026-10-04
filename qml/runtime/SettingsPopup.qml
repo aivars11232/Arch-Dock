@@ -352,6 +352,13 @@ Window {
             value = value ? "true3d" : scene3DOffTier;
             if (value.length === 0)
                 return;
+            // A volumetric ring needs a closed path. Keep this change in the
+            // draft so Cancel still restores the saved artwork and layout.
+            if (value === "true3d" && ["arc", "semicircle"].includes(panelValue("layout", "")))
+                editorSession = EditorModel.setPanelValue(editorSession, "layout", "circular");
+            else if (value === "baked2.5d" && panelValue("layout", "") === "circular"
+                && (selectedPreviewTheme.tracks || []).some(track => track.shape === "arc"))
+                editorSession = EditorModel.setPanelValue(editorSession, "layout", "arc");
         }
         if (field.scope === "settings") {
             editorSession = EditorModel.setGlobalValue(editorSession, field.key, value);

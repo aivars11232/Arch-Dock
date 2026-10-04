@@ -29,6 +29,14 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   and fit that space before native Wayland placement.
 - Appearance explains the current 2D surface and offers a route to 3D themes;
   compatible themes retain the existing 3D switch, quality and tilt controls.
+- 3D icons sit on the platform in world coordinates. Rotation changes their
+  perspective, depth and input bounds. Free-panel surfaces support held-pointer
+  rotation as well as wheel and continuous clockwise/counterclockwise rotation.
+- Orange Arc includes a volumetric ring option. Enabling 3D switches its draft
+  to a circular path; the existing baked artwork remains available.
+- 3D orientation, platform thickness and pedestal height join the tilt and
+  layout size controls. Opacity is available for themed surfaces. A loaded
+  baked surface no longer draws the procedural fallback arc over its artwork.
 - Panels > Behavior can keep folder item names visible without hovering.
   This preference uses the existing draft, Apply/Cancel and persistence path.
 - Current-facing installation/version wording follows the corrected candidate;

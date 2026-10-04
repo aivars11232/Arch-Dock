@@ -62,6 +62,7 @@ Item {
             const visual = entryVisuals[index] ? entryVisuals[index].meshVisualItem : null
             count += 12 // Glyph card.
             if (visual && !visual.tileRenderingEnabled) continue
+            if (bounded("iconElevation", 0.3, 0, 2) > 0) count += iconResource.triangleCount
             count += visual && visual.customTileActive ? 12
                 : iconResource.triangleCount + partTriangles(entryParts)
         }
@@ -76,6 +77,35 @@ Item {
     readonly property bool frameRendered: completedFrameObserved
         || view.renderStats.frameTime > 0
     property bool completedFrameObserved: false
+    property var projectedEntryGeometry: []
+    readonly property real platformScale: Math.min(width, height) * 0.40
+    readonly property real platformTop: Math.max(0,
+        ...((resources || {}).mesh?.positions || []).map(p => Number(p[2])))
+        * platformScale * bounded("thickness", 1, 0.1, 4)
+    readonly property real pathFit: platformScale * bounded("entryRadius", 0.84, 0.1, 1)
+        / Math.max(1, ...entryGeometry.map(p => Math.hypot(p.centerX - width / 2, p.centerY - height / 2)))
+
+    function containsInputPoint(point) {
+        return rendererReady && Boolean(view.pick(point.x, point.y).objectHit)
+    }
+    function updateProjection() {
+        if (!rendererReady || width <= 0 || height <= 0) return
+        const result = []
+        for (let i = 0; i < worldEntries.count; ++i) {
+            const node = worldEntries.objectAt(i)
+            if (!node || !node.glyphModel) return
+            const glyph = node.glyphModel
+            const points = [[-50,-50], [50,-50], [50,50], [-50,50]].map(p =>
+                view.mapFrom3DScene(glyph.mapPositionToScene(Qt.vector3d(p[0], p[1], 0))))
+            const left = Math.min(...points.map(p => p.x)), top = Math.min(...points.map(p => p.y))
+            const right = Math.max(...points.map(p => p.x)), bottom = Math.max(...points.map(p => p.y))
+            if (![left, top, right, bottom].every(Number.isFinite) || right <= left || bottom <= top) return
+            const center = view.mapFrom3DScene(glyph.scenePosition)
+            result.push({x: left, y: top, width: right-left, height: bottom-top,
+                centerX: center.x, centerY: center.y, depth: center.z})
+        }
+        if (JSON.stringify(result) !== JSON.stringify(projectedEntryGeometry)) projectedEntryGeometry = result
+    }
 
     // RenderStats throttles change notifications. A static scene can stop
     // before that interval, so also inspect it after an actual window frame.
@@ -89,6 +119,7 @@ Item {
         function onFrameSwapped() {
             if (!root.completedFrameObserved)
                 Qt.callLater(root.observeCompletedFrame)
+            Qt.callLater(root.updateProjection)
         }
     }
 
@@ -162,134 +193,152 @@ Item {
                 clipFar: Math.max(100, z * 5)
                 // Camera-local coordinates preserve the logical pixel centers
                 // without querying viewport matrices during scene construction.
-                Repeater3D {
-                    // A count model preserves nodes and textures during rotation.
-                    model: root.geometryWithinBudget ? root.entryGeometry.length : 0
-                    delegate: Node {
-                        id: entryNode
-                        required property int index
-                        objectName: "mesh-entry-" + index
-                        readonly property var rect: root.entryGeometry[index] || ({})
-                        readonly property var entry: root.entryVisuals[index] || null
-                        readonly property var visual: entry ? entry.meshVisualItem : null
-                        readonly property var iconMotion: root.motionAllowed && entry ? entry.iconMotion : ({})
-                        readonly property var glyphMotion: root.motionAllowed && entry ? entry.glyphMotion : ({})
-                        readonly property var tileMotion: root.motionAllowed && entry ? entry.tileMotion : ({})
-                        readonly property real size: Number(rect.width || 1)
-                        readonly property real hoverScale: entry ? Number(entry.visualScale || 1) : 1
-                        // Keep application glyphs in front of the world-space platform.
-                        // Scaling position and size by the same depth ratio preserves
-                        // perspective projection and the stationary input geometry.
-                        readonly property real depthRatio: 0.25
-                        readonly property real glow: Math.max(root.number(iconMotion, "glow", 0),
-                            root.number(glyphMotion, "glow", 0), root.number(tileMotion, "glow", 0))
-                        position: Qt.vector3d((Number(rect.centerX) - root.width / 2 + root.number(iconMotion, "x", 0)) * depthRatio,
-                            (root.height / 2 - Number(rect.centerY) - root.number(iconMotion, "y", 0)) * depthRatio,
-                            -camera.z * depthRatio)
-                        eulerRotation: Qt.vector3d(0, root.number(iconMotion, "rotateY", 0),
-                            -root.number(iconMotion, "rotateZ", 0) - Number(rect.rotation || 0))
-                        scale: Qt.vector3d(depthRatio * hoverScale * root.number(iconMotion, "scale", 1) * root.number(iconMotion, "scaleX", 1),
-                            depthRatio * hoverScale * root.number(iconMotion, "scale", 1) * root.number(iconMotion, "scaleY", 1), depthRatio)
-                        opacity: root.number(iconMotion, "opacity", 1)
 
-                        Texture {
-                            id: glyphTexture
-                            readonly property Item candidateSource:
-                                entryNode.visual ? entryNode.visual.glyphTextureItem : null
-                            // A detached source releases its layer before QObject destruction.
-                            sourceItem: candidateSource && root.Window.window
-                                && candidateSource.Window.window === root.Window.window
-                                && entryNode.visual.meshVisualActive ? candidateSource : null
-                        }
-                        Texture {
-                            id: tileTexture
-                            readonly property Item candidateSource:
-                                entryNode.visual ? entryNode.visual.tileTextureItem : null
-                            sourceItem: candidateSource && root.Window.window
-                                && candidateSource.Window.window === root.Window.window
-                                && entryNode.visual.meshVisualActive ? candidateSource : null
-                        }
-                        IconStyle3D {
-                            objectName: "mesh-style-tile-" + entryNode.index
-                            visible: meshReady && (!entryNode.visual
-                                || (entryNode.visual.tileRenderingEnabled && !entryNode.visual.customTileActive))
-                            meshData: iconResource.meshData
-                            materialData: iconResource.materialData
-                            surfaceTexture: entryNode.visual ? tileTexture
-                                : root.textureRequired && root.textureReady ? surfaceTexture : null
-                            position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
-                                -root.number(entryNode.tileMotion, "y", 0), -entryNode.size * 0.58)
-                            eulerRotation: Qt.vector3d(-20, root.number(entryNode.tileMotion, "rotateY", 0),
-                                -root.number(entryNode.tileMotion, "rotateZ", 0))
-                            scale: Qt.vector3d(entryNode.size * 0.55 * root.number(entryNode.tileMotion, "scale", 1)
-                                    * root.number(entryNode.tileMotion, "scaleX", 1),
-                                entryNode.size * 0.55 * root.number(entryNode.tileMotion, "scale", 1)
-                                    * root.number(entryNode.tileMotion, "scaleY", 1), entryNode.size * 0.55)
-                            opacity: root.number(entryNode.tileMotion, "opacity", 1)
+            }
+        }
+        Node {
+            eulerRotation.z: -root.layoutAngle
+        Repeater3D {
+            id: worldEntries
+            // A count model preserves nodes and textures during rotation.
+            model: root.geometryWithinBudget ? root.entryGeometry.length : 0
+            delegate: Node {
+                id: entryNode
+                required property int index
+                objectName: "mesh-entry-" + index
+                readonly property var rect: root.entryGeometry[index] || ({})
+                readonly property var entry: root.entryVisuals[index] || null
+                readonly property var visual: entry ? entry.meshVisualItem : null
+                readonly property var iconMotion: root.motionAllowed && entry ? entry.iconMotion : ({})
+                readonly property var glyphMotion: root.motionAllowed && entry ? entry.glyphMotion : ({})
+                readonly property var tileMotion: root.motionAllowed && entry ? entry.tileMotion : ({})
+                readonly property real size: Number(rect.width || 1)
+                readonly property real hoverScale: entry ? Number(entry.visualScale || 1) : 1
+                readonly property real tileOffset: visual && visual.customTileActive ? 0.05 : 0.58
+                readonly property real tileFloor: visual && visual.customTileActive ? 0.01 : 0.044
+                readonly property real elevation: root.bounded("iconElevation", 0.3, 0, 2)
+                property alias glyphModel: glyphModel
+                readonly property real glow: Math.max(root.number(iconMotion, "glow", 0),
+                    root.number(glyphMotion, "glow", 0), root.number(tileMotion, "glow", 0))
+                position: Qt.vector3d((Number(rect.centerX) - root.width / 2) * root.pathFit + root.number(iconMotion, "x", 0),
+                    (root.height / 2 - Number(rect.centerY)) * root.pathFit - root.number(iconMotion, "y", 0),
+                    root.platformTop + size * (tileOffset + tileFloor + elevation))
+                eulerRotation: Qt.vector3d(0, root.number(iconMotion, "rotateY", 0),
+                    -root.number(iconMotion, "rotateZ", 0) - Number(rect.rotation || 0))
+                scale: Qt.vector3d(hoverScale * root.number(iconMotion, "scale", 1) * root.number(iconMotion, "scaleX", 1),
+                    hoverScale * root.number(iconMotion, "scale", 1) * root.number(iconMotion, "scaleY", 1), 1)
+                opacity: root.number(iconMotion, "opacity", 1)
+
+                IconStyle3D {
+                    objectName: "mesh-pedestal-" + entryNode.index
+                    meshData: iconResource.meshData
+                    materialData: iconResource.materialData
+                    visible: entryNode.visual && entryNode.visual.tileRenderingEnabled && entryNode.elevation > 0
+                    z: -entryNode.size * (entryNode.tileOffset + entryNode.tileFloor + entryNode.elevation / 2)
+                    scale: Qt.vector3d(entryNode.size * 0.12, entryNode.size * 0.12,
+                        entryNode.size * entryNode.elevation / 0.18)
+                }
+                Texture {
+                    id: glyphTexture
+                    readonly property Item candidateSource:
+                        entryNode.visual ? entryNode.visual.glyphTextureItem : null
+                    // A detached source releases its layer before QObject destruction.
+                    sourceItem: candidateSource && root.Window.window
+                        && candidateSource.Window.window === root.Window.window
+                        && entryNode.visual.meshVisualActive ? candidateSource : null
+                }
+                Texture {
+                    id: tileTexture
+                    readonly property Item candidateSource:
+                        entryNode.visual ? entryNode.visual.tileTextureItem : null
+                    sourceItem: candidateSource && root.Window.window
+                        && candidateSource.Window.window === root.Window.window
+                        && entryNode.visual.meshVisualActive ? candidateSource : null
+                }
+                IconStyle3D {
+                    objectName: "mesh-style-tile-" + entryNode.index
+                    visible: meshReady && (!entryNode.visual
+                        || (entryNode.visual.tileRenderingEnabled && !entryNode.visual.customTileActive))
+                    meshData: iconResource.meshData
+                    materialData: iconResource.materialData
+                    surfaceTexture: entryNode.visual ? tileTexture
+                        : root.textureRequired && root.textureReady ? surfaceTexture : null
+                    position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
+                        -root.number(entryNode.tileMotion, "y", 0), -entryNode.size * 0.58)
+                    eulerRotation: Qt.vector3d(-20, root.number(entryNode.tileMotion, "rotateY", 0),
+                        -root.number(entryNode.tileMotion, "rotateZ", 0))
+                    scale: Qt.vector3d(entryNode.size * 0.55 * root.number(entryNode.tileMotion, "scale", 1)
+                            * root.number(entryNode.tileMotion, "scaleX", 1),
+                        entryNode.size * 0.55 * root.number(entryNode.tileMotion, "scale", 1)
+                            * root.number(entryNode.tileMotion, "scaleY", 1), entryNode.size * 0.55)
+                    opacity: root.number(entryNode.tileMotion, "opacity", 1)
+                    emissionScale: root.emissionScale * (1 + entryNode.glow)
+                }
+                Model {
+                    objectName: "mesh-custom-tile-" + entryNode.index
+                    source: "#Cube"
+                    pickable: false
+                    visible: entryNode.visual !== null && entryNode.visual.customTileActive
+                        && entryNode.visual.tileRenderingEnabled && root.collapseProgress < 1
+                    position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
+                        -root.number(entryNode.tileMotion, "y", 0), -entryNode.size * 0.05)
+                    eulerRotation: Qt.vector3d(0, root.number(entryNode.tileMotion, "rotateY", 0),
+                        -root.number(entryNode.tileMotion, "rotateZ", 0))
+                    scale: Qt.vector3d(entryNode.size / 100 * root.number(entryNode.tileMotion, "scale", 1)
+                            * root.number(entryNode.tileMotion, "scaleX", 1),
+                        entryNode.size / 100 * root.number(entryNode.tileMotion, "scale", 1)
+                            * root.number(entryNode.tileMotion, "scaleY", 1), entryNode.size / 5000)
+                    opacity: root.number(entryNode.tileMotion, "opacity", 1) * (1 - root.collapseProgress)
+                    materials: PrincipledMaterial {
+                        lighting: PrincipledMaterial.NoLighting
+                        alphaMode: PrincipledMaterial.Blend
+                        baseColorMap: tileTexture
+                    }
+                }
+                Model {
+                    id: glyphModel
+                    pickable: true
+                    objectName: "mesh-glyph-" + entryNode.index
+                    source: "#Cube"
+                    pickable: false
+                    visible: entryNode.visual !== null && root.collapseProgress < 1
+                    position: Qt.vector3d(root.number(entryNode.glyphMotion, "x", 0),
+                        -root.number(entryNode.glyphMotion, "y", 0),
+                        entryNode.visual && !entryNode.visual.customTileActive ? -entryNode.size * 0.525 : 0)
+                    eulerRotation: Qt.vector3d(0, root.number(entryNode.glyphMotion, "rotateY", 0),
+                        -root.number(entryNode.glyphMotion, "rotateZ", 0))
+                    scale: Qt.vector3d(entryNode.size / 100 * root.number(entryNode.glyphMotion, "scale", 1)
+                            * root.number(entryNode.glyphMotion, "scaleX", 1),
+                        entryNode.size / 100 * root.number(entryNode.glyphMotion, "scale", 1)
+                            * root.number(entryNode.glyphMotion, "scaleY", 1), entryNode.size / 4000)
+                    opacity: root.number(entryNode.glyphMotion, "opacity", 1) * (1 - root.collapseProgress)
+                    materials: PrincipledMaterial {
+                        lighting: PrincipledMaterial.NoLighting
+                        alphaMode: PrincipledMaterial.Blend
+                        baseColorMap: glyphTexture
+                    }
+                }
+                Node {
+                    objectName: "mesh-tile-parts-" + entryNode.index
+                    visible: !entryNode.visual || (entryNode.visual.tileRenderingEnabled
+                        && !entryNode.visual.customTileActive)
+                    scale: Qt.vector3d(entryNode.size * 0.55, entryNode.size * 0.55, entryNode.size * 0.55)
+                    Repeater3D {
+                        model: root.entryParts.length
+                        delegate: IconStyle3D {
+                            required property int index
+                            objectName: "mesh-entry-part-" + entryNode.index + "-" + index
+                            partDefinition: root.entryParts[index].definition
+                            visible: partDefinition.mechanism === root.mechanism
+                            meshData: root.entryParts[index].resources.mesh || null
+                            materialData: root.entryParts[index].resources.material || ({})
+                            openAmount: root.partOpenAmount(partDefinition)
                             emissionScale: root.emissionScale * (1 + entryNode.glow)
-                        }
-                        Model {
-                            objectName: "mesh-custom-tile-" + entryNode.index
-                            source: "#Cube"
-                            pickable: false
-                            visible: entryNode.visual !== null && entryNode.visual.customTileActive
-                                && entryNode.visual.tileRenderingEnabled && root.collapseProgress < 1
-                            position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
-                                -root.number(entryNode.tileMotion, "y", 0), -entryNode.size * 0.05)
-                            eulerRotation: Qt.vector3d(0, root.number(entryNode.tileMotion, "rotateY", 0),
-                                -root.number(entryNode.tileMotion, "rotateZ", 0))
-                            scale: Qt.vector3d(entryNode.size / 100 * root.number(entryNode.tileMotion, "scale", 1)
-                                    * root.number(entryNode.tileMotion, "scaleX", 1),
-                                entryNode.size / 100 * root.number(entryNode.tileMotion, "scale", 1)
-                                    * root.number(entryNode.tileMotion, "scaleY", 1), entryNode.size / 5000)
-                            opacity: root.number(entryNode.tileMotion, "opacity", 1) * (1 - root.collapseProgress)
-                            materials: PrincipledMaterial {
-                                lighting: PrincipledMaterial.NoLighting
-                                alphaMode: PrincipledMaterial.Blend
-                                baseColorMap: tileTexture
-                            }
-                        }
-                        Model {
-                            objectName: "mesh-glyph-" + entryNode.index
-                            source: "#Cube"
-                            pickable: false
-                            visible: entryNode.visual !== null && root.collapseProgress < 1
-                            position: Qt.vector3d(root.number(entryNode.glyphMotion, "x", 0),
-                                -root.number(entryNode.glyphMotion, "y", 0), 0)
-                            eulerRotation: Qt.vector3d(0, root.number(entryNode.glyphMotion, "rotateY", 0),
-                                -root.number(entryNode.glyphMotion, "rotateZ", 0))
-                            scale: Qt.vector3d(entryNode.size / 100 * root.number(entryNode.glyphMotion, "scale", 1)
-                                    * root.number(entryNode.glyphMotion, "scaleX", 1),
-                                entryNode.size / 100 * root.number(entryNode.glyphMotion, "scale", 1)
-                                    * root.number(entryNode.glyphMotion, "scaleY", 1), entryNode.size / 4000)
-                            opacity: root.number(entryNode.glyphMotion, "opacity", 1) * (1 - root.collapseProgress)
-                            materials: PrincipledMaterial {
-                                lighting: PrincipledMaterial.NoLighting
-                                alphaMode: PrincipledMaterial.Blend
-                                baseColorMap: glyphTexture
-                            }
-                        }
-                        Node {
-                            objectName: "mesh-tile-parts-" + entryNode.index
-                            visible: !entryNode.visual || (entryNode.visual.tileRenderingEnabled
-                                && !entryNode.visual.customTileActive)
-                            scale: Qt.vector3d(entryNode.size * 0.55, entryNode.size * 0.55, entryNode.size * 0.55)
-                            Repeater3D {
-                                model: root.entryParts.length
-                                delegate: IconStyle3D {
-                                    required property int index
-                                    objectName: "mesh-entry-part-" + entryNode.index + "-" + index
-                                    partDefinition: root.entryParts[index].definition
-                                    meshData: root.entryParts[index].resources.mesh || null
-                                    materialData: root.entryParts[index].resources.material || ({})
-                                    openAmount: root.partOpenAmount(partDefinition)
-                                    emissionScale: root.emissionScale * (1 + entryNode.glow)
-                                }
-                            }
                         }
                     }
                 }
             }
+        }
         }
         DirectionalLight {
             eulerRotation: Qt.vector3d(-35, -35, 0)
@@ -304,10 +353,11 @@ Item {
         Node {
             objectName: "mesh-platform-motion"
             eulerRotation.z: -root.layoutAngle
-            scale: Qt.vector3d(root.width * 0.46, root.height * 0.46,
-                               Math.min(root.width, root.height) * 0.46)
+            scale: Qt.vector3d(root.platformScale, root.platformScale,
+                               root.platformScale * root.bounded("thickness", 1, 0.1, 4))
             IconStyle3D {
                 id: platform
+                pickable: true
                 meshData: (root.resources || ({})).mesh || null
                 materialData: (root.resources || ({})).material || ({})
                 surfaceTexture: root.textureRequired && root.textureReady ? surfaceTexture : null
@@ -319,6 +369,7 @@ Item {
                     required property int index
                     objectName: "mesh-panel-part-" + index
                     partDefinition: root.panelParts[index].definition
+                    visible: partDefinition.mechanism === root.mechanism
                     meshData: root.panelParts[index].resources.mesh || null
                     materialData: root.panelParts[index].resources.material || ({})
                     openAmount: root.partOpenAmount(partDefinition)

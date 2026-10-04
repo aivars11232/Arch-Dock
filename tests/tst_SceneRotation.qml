@@ -220,6 +220,26 @@ TestCase {
         compare(scene.containsInputPoint(band), true, "the ring band accepts input")
     }
 
+    function test_backgroundDragRotatesBothDirections() {
+        const scene = makeScene({ rotationAnimationEnabled: false })
+        const center = Qt.point(scene.width / 2, scene.height / 2)
+        const radius = scene.layoutGeometry.radius
+        function point(angle) {
+            return Qt.point(center.x + radius * Math.cos(angle),
+                            center.y + radius * Math.sin(angle))
+        }
+        const start = point(Math.PI / 4)
+        const finish = point(Math.PI / 3)
+        mousePress(scene, start.x, start.y)
+        compare(scene.rotationDragActive, true)
+        mouseMove(scene, finish.x, finish.y, 20)
+        verify(scene.wheelRotationAngle > 10)
+        mouseMove(scene, start.x, start.y, 20)
+        verify(Math.min(scene.wheelRotationAngle, 360 - scene.wheelRotationAngle) < 1)
+        mouseRelease(scene, start.x, start.y)
+        compare(scene.rotationDragActive, false)
+    }
+
     function test_nativeHostsUnsupportedLayoutsAndMissingCapabilityNeverRotate_data() {
         return [
             { tag: "native-host", context: { hostKind: "native" },

@@ -1,0 +1,9 @@
+{
+  "format": "org.archdock.material",
+  "version": 1,
+  "baseColor": "#b86c36",
+  "emissiveColor": "#f39142",
+  "emissiveStrength": 0.35,
+  "metalness": 0.65,
+  "roughness": 0.3
+}

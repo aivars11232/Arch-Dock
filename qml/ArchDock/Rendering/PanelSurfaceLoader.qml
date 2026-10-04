@@ -29,6 +29,7 @@ Item {
     property bool sceneConcealed: false
     property var true3DCapability: ({ rendererAvailable: false, reasonCode: "renderer-unavailable" })
     property var entryGeometry: []
+    property var sceneParameters: ({})
     property var entryVisuals: []
     property real collapseProgress: 0
     property string mechanism: "open"
@@ -186,9 +187,12 @@ Item {
         true3DRenderer.setSource(Qt.resolvedUrl("optional3d/PanelScene3D.qml"), {
             sceneDefinition: Qt.binding(function() {
                 const scene = root.themeDefinition && root.themeDefinition.scene3D || ({})
-                return isFinite(root.cameraPitch)
-                    ? Object.assign({}, scene, {cameraPitch: Math.max(-60, Math.min(60, root.cameraPitch))})
-                    : scene
+                const parameters = root.sceneParameters || ({})
+                const merged = Object.assign({}, scene)
+                for (const key of ["cameraYaw", "thickness", "iconElevation"])
+                    if (Number.isFinite(Number(parameters[key]))) merged[key] = Number(parameters[key])
+                if (isFinite(root.cameraPitch)) merged.cameraPitch = Math.max(-60, Math.min(60, root.cameraPitch))
+                return merged
             }),
             resources: Qt.binding(function() {
                 return root.themeDefinition && root.themeDefinition.scene3DResources || null
@@ -215,10 +219,11 @@ Item {
 
     Loader {
         id: proceduralRenderer
+        objectName: "procedural-surface-fallback"
 
         anchors.fill: parent
         sourceComponent: proceduralComponent
-        visible: !root.skinnedReady && !root.true3DReady
+        visible: !root.skinnedReady && !root.bakedReady && !root.true3DReady
     }
 
     Loader {
