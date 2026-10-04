@@ -16,6 +16,7 @@ PanelPresentationController 1.0 PanelPresentationController.qml
 PanelMotionController 1.0 PanelMotionController.qml
 SceneRotationController 1.0 SceneRotationController.qml
 GeometryHitRegion 1.0 inputs/GeometryHitRegion.qml
+ScrollInput 1.0 inputs/ScrollInput.qml
 IconStyle2D 1.0 renderers/IconStyle2D.qml
 PanelScene 1.0 PanelScene.qml
 PanelSegment 1.0 PanelSegment.qml

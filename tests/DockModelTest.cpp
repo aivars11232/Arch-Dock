@@ -317,12 +317,18 @@ void DockModelTest::freeEntriesUseCanonicalIdentity()
     const QString folderPath = m_desktopDirectory.filePath(
         QStringLiteral("folder"));
     QVERIFY(QDir().mkpath(folderPath));
+    QFile metadata(folderPath + QStringLiteral("/.directory"));
+    QVERIFY(metadata.open(QIODevice::WriteOnly));
+    metadata.write("[Desktop Entry]\nIcon=folder-documents\n");
+    metadata.close();
     WindowModel windowModel;
     DockModel model(windowModel);
     QVERIFY(model.pinUrl(QUrl::fromLocalFile(folderPath)));
 
     const QVariantList entries = model.panelEntries(QStringLiteral("launcher"));
     QCOMPARE(entries.size(), 1);
+    QCOMPARE(entries.constFirst().toMap().value(QStringLiteral("iconName")).toString(),
+             QStringLiteral("folder-documents"));
     QVERIFY(entries.constFirst().toMap()
         .value(QStringLiteral("stableIdentity")).toString()
         .startsWith(QStringLiteral("free.sha256-")));

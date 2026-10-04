@@ -1,5 +1,6 @@
 #include "FolderContentModel.h"
 
+#include <KFileItem>
 #include <QDirListing>
 #include <QFileInfo>
 #include <QMimeDatabase>
@@ -71,7 +72,7 @@ QVariantMap FolderContentModel::snapshot(const QUrl &folderUrl)
             {QStringLiteral("displayName"), file.fileName()},
             {QStringLiteral("isDirectory"), file.isDir() && !file.isSymLink()},
             {QStringLiteral("iconName"), file.isDir() && !file.isSymLink()
-                ? QStringLiteral("folder")
+                ? KFileItem(QUrl::fromLocalFile(file.absoluteFilePath())).iconName()
                 : mimeDatabase.mimeTypeForFile(file, QMimeDatabase::MatchExtension).iconName()},
             {QStringLiteral("selectable"), blocked.isEmpty()},
             {QStringLiteral("blockedReason"), blocked}});

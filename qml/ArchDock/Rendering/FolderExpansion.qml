@@ -108,6 +108,10 @@ QQC2.Pane {
             boundsBehavior: Flickable.StopAtBounds
             QQC2.ScrollBar.horizontal: QQC2.ScrollBar {}
             QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
+            ScrollInput {
+                parent: viewport
+                flickables: [viewport]
+            }
             Repeater {
                 model: root.entries
                 delegate: Item {

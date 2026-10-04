@@ -14,6 +14,7 @@
 #include "../persistence/ConfigurationBackup.h"
 
 #include <KIO/OpenUrlJob>
+#include <KFileItem>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
 #include <QQmlContext>
@@ -3279,7 +3280,8 @@ QVariantMap freeUrlEntry(const QUrl &url,
     QString displayName = info.fileName();
     if (info.isDir())
     {
-        iconName = QStringLiteral("folder");
+        // Match Dolphin, including .directory artwork and special-folder icons.
+        iconName = KFileItem(url).iconName();
     }
     else if (info.suffix().compare(QStringLiteral("desktop"), Qt::CaseInsensitive) == 0)
     {

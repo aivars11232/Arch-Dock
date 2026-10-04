@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Window
+import QtQuick.Controls
 import QtTest
 import ArchDock.Rendering 1.0
 import org.kde.plasma.core as PlasmaCore
@@ -96,6 +97,41 @@ TestCase {
         tryCompare(controller, "activeProfileIds", ["folder-open"])
         item.reducedMotion = true
         tryCompare(controller, "activeTracks", [])
+    }
+    function test_horizontalWheelAndShiftRespectBounds() {
+        const item = popup("fan", 48)
+        const viewport = findChild(item, "folderViewport")
+        verify(viewport.contentWidth > viewport.width)
+        mouseWheel(viewport, 100, 20, -120, 0)
+        tryVerify(function() { return viewport.contentX > 0 }, 500)
+        tryCompare(viewport, "moving", false, 1000)
+        const x = viewport.contentX
+        mouseWheel(viewport, 100, 20, 0, -120, Qt.NoButton, Qt.ShiftModifier)
+        tryVerify(function() { return viewport.contentX > x }, 500)
+        viewport.contentX = viewport.contentWidth - viewport.width
+        const end = viewport.contentX
+        mouseWheel(viewport, 100, 20, -120, 0)
+        wait(100)
+        compare(viewport.contentX, end)
+        const small = popup("grid", 1)
+        const fitted = findChild(small, "folderViewport")
+        mouseWheel(fitted, 20, 20, -120, 0)
+        wait(100)
+        compare(fitted.contentX, 0)
+    }
+    function test_horizontalScrollbarAndKeyboardStillMoveContent() {
+        const item = popup("fan", 48)
+        const viewport = findChild(item, "folderViewport")
+        const bar = viewport.ScrollBar.horizontal
+        verify(bar !== null)
+        verify(bar.size < 1)
+        mouseDrag(bar, bar.width * bar.size / 2, bar.height / 2, 120, 0, Qt.LeftButton)
+        verify(viewport.contentX > 0)
+        viewport.contentX = 0
+        item.forceActiveFocus()
+        for (let i = 0; i < 47; ++i) keyClick(Qt.Key_Right)
+        compare(item.selectedChildId, "child-47")
+        verify(viewport.contentX > 0)
     }
     function test_nativeHostLifecycle() {
         const window = createTemporaryObject(anchorComponent, null)

@@ -51,6 +51,10 @@ private slots:
         QVERIFY(directory.isValid());
         QVERIFY(QDir(directory.path()).mkdir("nested"));
         QVERIFY(writeFile(directory.filePath("nested/inside.txt")));
+        QFile metadata(directory.filePath("nested/.directory"));
+        QVERIFY(metadata.open(QIODevice::WriteOnly));
+        QVERIFY(metadata.write("[Desktop Entry]\nIcon=folder-documents\n") > 0);
+        metadata.close();
         const QString document = directory.filePath(QString::fromUtf8("A # café.txt"));
         QVERIFY(writeFile(document));
         QVERIFY(writeFile(directory.filePath(".hidden")));
@@ -58,6 +62,8 @@ private slots:
         const auto rows = FolderContentModel::snapshot(url).value("entries").toList();
         QCOMPARE(rows.size(), 2);
         QVERIFY(rows.first().toMap().value("isDirectory").toBool());
+        QCOMPARE(rows.first().toMap().value("iconName").toString(),
+                 QStringLiteral("folder-documents"));
         const auto child = rows.last().toMap();
         QCOMPARE(child.value("name").toString(), QFileInfo(document).fileName());
         QVERIFY(child.value("selectable").toBool());

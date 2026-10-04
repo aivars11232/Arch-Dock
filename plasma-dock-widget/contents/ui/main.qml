@@ -3,6 +3,7 @@ import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
 import ArchDock.Rendering 1.0
+import ArchDock.Integration 1.0
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.kirigami as Kirigami
@@ -11,6 +12,8 @@ import "FreeEntryPolicy.js" as FreeEntryPolicy
 
 PlasmoidItem {
     id: root
+
+    DropBackend { id: dropBackend }
 
     readonly property bool renderingModuleReady: RenderingModuleProbe.ready
     readonly property string panelId: Plasmoid.configuration.panelId || ""
@@ -513,29 +516,37 @@ PlasmoidItem {
     }
 
     function reorderEntry(appId, beforeAppId) {
-        if (appId === beforeAppId)
-            return;
+        if (!dockService.registered || plasmaEditMode || !configuration.acceptDrops
+                || appId === beforeAppId)
+            return false;
+        let movedId = appId;
+        let beforeId = beforeAppId;
         if (freeSurface) {
             // Free entries reorder within their own panel. A running-only
             // entry is not owned by the panel and cannot be ordered.
-            const movedId = FreeEntryPolicy.panelEntryId(root.entries, appId);
-            const beforeId = beforeAppId
+            movedId = FreeEntryPolicy.panelEntryId(root.entries, appId);
+            beforeId = beforeAppId
                 ? FreeEntryPolicy.panelEntryId(root.entries, beforeAppId) : "";
             if (movedId.length === 0 || (beforeAppId && beforeId.length === 0))
-                return;
-            callDock("movePanelEntryBefore", [panelId, movedId, beforeId], refresh);
-            return;
+                return false;
         }
-        callDock("movePanelEntryBefore", [panelId, appId, beforeAppId], refresh);
+        const accepted = dropBackend.moveEntry(panelId, movedId, beforeId);
+        if (accepted) refresh();
+        else console.warn("Arch Dock reorder refused:", dropBackend.lastError);
+        return accepted;
     }
 
     function pinDroppedUrls(urls) {
+        if (!dockService.registered || plasmaEditMode || !configuration.acceptDrops
+                || !["launcher", "hybrid"].includes(panelType))
+            return false;
         const values = [];
         for (const url of urls)
             values.push(url.toString());
-        if (values.length > 0)
-            callDock(root.freeSurface ? "addPanelEntries" : "pinDockUrls",
-                     root.freeSurface ? [panelId, values] : [values], refresh);
+        const accepted = dropBackend.addUrls(panelId, freeSurface, values);
+        if (accepted) refresh();
+        else console.warn("Arch Dock drop refused:", dropBackend.lastError);
+        return accepted;
     }
 
     function openPanelStudio() {
@@ -1001,7 +1012,9 @@ PlasmoidItem {
                         ? qsTr("Arch Dock service is unavailable")
                         : root.requestFailed
                             ? qsTr("Could not load dock entries")
-                            : qsTr("Drop applications here")
+                            : root.panelType === "empty"
+                                ? qsTr("Choose Launcher or Hybrid in Panel Studio to show dropped items")
+                                : qsTr("Drop applications or folders here")
                 }
                 QQC2.Button {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -1016,13 +1029,17 @@ PlasmoidItem {
 
                 anchors.fill: parent
                 enabled: Boolean(root.configuration.acceptDrops) && !root.plasmaEditMode
+                    && root.sceneInputEnabled && ["launcher", "hybrid"].includes(root.panelType)
                 keys: ["text/uri-list"]
                 onContainsDragChanged: root.panelDropActive = containsDrag
                 onDropped: drop => {
-                    if (drop.hasUrls)
-                        root.pinDroppedUrls(drop.urls);
-                    drop.acceptProposedAction();
-                    root.panelDropActive = false;
+                    drop.accepted = false;
+                    try {
+                        if (drop.hasUrls && root.pinDroppedUrls(drop.urls))
+                            drop.acceptProposedAction();
+                    } finally {
+                        root.panelDropActive = false;
+                    }
                 }
             }
         }

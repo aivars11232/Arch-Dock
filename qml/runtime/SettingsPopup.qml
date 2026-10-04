@@ -1320,6 +1320,8 @@ Window {
 
         ScrollView {
             id: studioScroll
+            objectName: "studio-page-scroll"
+            implicitWidth: 0
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
@@ -1341,6 +1343,7 @@ Window {
 
                 ComboBox {
                     id: panelSelector
+                    wheelEnabled: false
                     Accessible.name: qsTr("Panel")
 
                     Layout.fillWidth: true
@@ -1413,6 +1416,7 @@ Window {
                         }
 
                         ComboBox {
+                            wheelEnabled: false
                             id: previewModeSelector
                             Accessible.name: qsTr("Preview orientation")
 
@@ -1443,6 +1447,7 @@ Window {
                         }
 
                         ComboBox {
+                            wheelEnabled: false
                             id: previewIconStateSelector
                             Accessible.name: qsTr("Preview icon state")
 
@@ -1575,9 +1580,20 @@ Window {
             }
 
             TabBar {
+                id: studioTabs
+                objectName: "studio-page-tabs"
                 visible: root.currentSubtabs.length > 0
                 Layout.fillWidth: true
                 currentIndex: root.subTabIndex
+                contentItem.implicitHeight: count > 0 && itemAt(0) ? itemAt(0).height : 0
+
+                ScrollInput {
+                    parent: studioTabs
+                    flickables: [studioTabs.contentItem,
+                        studioForm.visible ? studioForm.contentItem
+                            : presetBrowser.visible ? presetBrowser.scrollFlickable : null,
+                        studioScroll.contentItem]
+                }
 
                 Repeater {
                     model: root.currentSubtabs
@@ -1625,6 +1641,8 @@ Window {
             }
 
             StudioForm {
+                id: studioForm
+                objectName: "studio-page-form"
                 visible: root.currentPresetPage === null && !root.currentProfilePage
                 enabled: !root.profilesService || !root.profilesService.active
                 Layout.fillWidth: true
@@ -1653,6 +1671,7 @@ Window {
             }
 
             PresetBrowser {
+                id: presetBrowser
                 objectName: "panel-studio-preset-browser"
                 visible: root.currentPresetPage !== null
                 Layout.fillWidth: true
@@ -1688,6 +1707,13 @@ Window {
                 }
             }
         }
+            ScrollInput {
+                parent: studioScroll
+                excludedItems: [studioTabs]
+                flickables: [studioForm.visible ? studioForm.contentItem
+                    : presetBrowser.visible ? presetBrowser.scrollFlickable : null,
+                    studioScroll.contentItem]
+            }
         }
     }
 

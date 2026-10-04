@@ -13,6 +13,7 @@
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QJSValue>
 #include <QtQuickTest>
 #include <QQmlApplicationEngine>
@@ -24,10 +25,13 @@
 #include <QSettings>
 #include <QScreen>
 #include <QScopeGuard>
+#include <QSaveFile>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QUrl>
+#include <QWheelEvent>
 #include <QtTest>
+#include <unistd.h>
 
 namespace
 {
@@ -115,6 +119,8 @@ private slots:
     void presentationStateAndRequestsAreObservableThroughTheBackend();
     void presentationProfileIsPublishedForLaterPresets();
     void freePanelContentFollowsItsRecordAndOrdersItsOwnEntries();
+    void freeFolderIconsUseNativeMetadata();
+    void studioPageWheelInput();
     void wholePanelRotationFieldsAreGatedByTheResolver();
     void meshSceneEditorIsGatedAndTransactional();
     void rendererSwitchRetainsOnlyUnchangedInactiveFields();
@@ -132,6 +138,212 @@ private slots:
 private:
     QTemporaryDir m_settingsDirectory;
 };
+
+void PanelWindowCapabilityTest::freeFolderIconsUseNativeMetadata()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    QTemporaryDir files;
+    QVERIFY(files.isValid());
+    QImage png(32, 32, QImage::Format_ARGB32);
+    png.fill(Qt::red);
+    const QString pngPath = files.filePath("custom icon.png");
+    QVERIFY(png.save(pngPath));
+    const QString svgPath = QFileInfo(QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg")).absoluteFilePath();
+    const QString panel = registry->addFreePanel();
+    const auto outcome = backend.applyPanelSettingsTransaction(panel,
+        registry->panelDefinition(panel)->settingsRevision, {{"type", "launcher"}});
+    QVERIFY(outcome.value("success").toBool());
+    const QStringList icons{"folder-documents", svgPath, pngPath};
+    for (int index = 0; index < icons.size(); ++index) {
+        const QString folder = files.filePath("Folder " + QString::number(index));
+        QVERIFY(QDir().mkpath(folder));
+        QFile metadata(folder + "/.directory");
+        QVERIFY(metadata.open(QIODevice::WriteOnly));
+        metadata.write(("[Desktop Entry]\nIcon=" + icons[index] + "\n").toUtf8());
+        metadata.close();
+        QVERIFY(backend.addPanelEntries(panel, {QUrl::fromLocalFile(folder).toString()}));
+        const auto rows = backend.dockEntriesForPanel(panel, "launcher");
+        const auto entry = rows.last().toMap();
+        QCOMPARE(entry.value("iconName").toString(), icons[index]);
+        QCOMPARE(entry.value("baseIconName").toString(), icons[index]);
+        QCOMPARE(entry.value("resolvedGlyph").toString(), icons[index]);
+        QVERIFY(entry.value("isFolder").toBool());
+        QCOMPARE(rows.size(), index + 1);
+    }
+    PanelRegistry reloaded;
+    QCOMPARE(reloaded.panelDefinition(panel)->content.urls.size(), icons.size());
+}
+
+void PanelWindowCapabilityTest::studioPageWheelInput()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    QStringList warnings;
+    connect(&engine, &QQmlEngine::warnings, &engine, [&](const QList<QQmlError> &errors) {
+        for (const auto &error : errors) warnings.append(error.toString());
+    });
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    QVERIFY(backend.applyPanelSettingsTransaction(panel,
+        registry->panelDefinition(panel)->settingsRevision, {{"type", "launcher"}})
+        .value("success").toBool());
+    const auto before = registry->panelDefinition(panel)->toPersistedMap();
+    const bool native = qEnvironmentVariable("ARCHDOCK_NATIVE_UI_PROBE") == "1";
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> popup(component.createWithInitialProperties({
+        {"selectedPanelId", panel}, {"mainTabIndex", native ? 2 : 1}, {"subTabIndex", native ? 0 : 2},
+        {"width", 640}, {"height", 520}}));
+    QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(popup.get());
+    QVERIFY(window);
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QQuickTest::qWaitForPolish(window));
+    const auto item = [&](const QString &name) {
+        return popup->findChild<QQuickItem *>(name);
+    };
+    auto *page = item("studio-page-scroll");
+    auto *form = item("studio-page-form");
+    auto *tabs = item("studio-page-tabs");
+    QVERIFY(page && form && tabs);
+    auto *inner = form->property("contentItem").value<QQuickItem *>();
+    auto *outer = page->property("contentItem").value<QQuickItem *>();
+    auto *tabView = tabs->property("contentItem").value<QQuickItem *>();
+    QVERIFY(inner && outer && tabView);
+    if (native) {
+        const QString root = qEnvironmentVariable("ARCHDOCK_RENDERING_SESSION_ROOT");
+        const QFileInfo directory(root);
+        QVERIFY(directory.isDir() && directory.ownerId() == getuid());
+        QVERIFY(directory.absolutePath() == "/tmp" && directory.fileName().startsWith("archdock-rendering-import."));
+        QCOMPARE(qEnvironmentVariable("XDG_RUNTIME_DIR"), root + "/runtime");
+        window->setTitle("Arch Dock UI input probe");
+        window->contentItem()->forceActiveFocus();
+        inner->setProperty("contentY", 0);
+        outer->setProperty("contentY", 0);
+        int sample = 0;
+        QElapsedTimer deadline;
+        deadline.start();
+        while (!QFileInfo::exists(root + "/ui-probe.done") && deadline.elapsed() < 25000) {
+            QVariantList controls;
+            QList<QQuickItem *> pending{form};
+            while (!pending.isEmpty()) {
+                auto *control = pending.takeLast();
+                if (control->isVisible() && (control->objectName().startsWith("studio-spin-")
+                    || control->objectName().startsWith("studio-combo-"))) {
+                    const QPointF point = control->mapToScene({30, 15});
+                    controls.append(QVariantMap{{"name", control->objectName()},
+                        {"point", QVariantList{point.x(), point.y()}},
+                        {"value", control->property(control->objectName().startsWith("studio-spin-")
+                            ? "value" : "currentIndex")}});
+                }
+                pending.append(control->childItems());
+            }
+            const auto point = [](QQuickItem *item, QPointF local) {
+                const auto mapped = item->mapToScene(local);
+                return QVariantList{mapped.x(), mapped.y()};
+            };
+            const QPointF top = page->mapToScene({0, 0});
+            const QVariantMap state{{"sample", ++sample}, {"size", QVariantList{window->width(), window->height()}},
+                {"header", point(page, {50, 20})}, {"tabs", point(tabs, {150, 15})},
+                {"viewport", QVariantList{top.x(), top.y(), page->width(), page->height()}},
+                {"innerY", inner->property("contentY")}, {"outerY", outer->property("contentY")},
+                {"tabX", tabView->property("contentX")}, {"selection", popup->property("subTabIndex")},
+                {"controls", controls}};
+            QSaveFile output(root + "/ui-probe.json");
+            QVERIFY(output.open(QIODevice::WriteOnly));
+            QVERIFY(output.write(QJsonDocument::fromVariant(state).toJson(QJsonDocument::Compact)) > 0);
+            QVERIFY(output.commit());
+            QTest::qWait(50);
+        }
+        QVERIFY2(QFileInfo::exists(root + "/ui-probe.done"), "Native EIS UI driver did not complete");
+        QVERIFY(!popup->property("hasSettingsChanges").toBool());
+        QCOMPARE(registry->panelDefinition(panel)->toPersistedMap(), before);
+        QVERIFY2(warnings.isEmpty(), qPrintable(warnings.join('\n')));
+        return;
+    }
+    const auto wheel = [&](QQuickItem *target, QPointF point, QPoint pixels, QPoint angles,
+                           Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
+        const QPointF position = target->mapToScene(point);
+        QWheelEvent event(position, window->mapToGlobal(position.toPoint()), pixels, angles,
+                          Qt::NoButton, modifiers, Qt::NoScrollPhase, false);
+        QCoreApplication::sendEvent(window, &event);
+        QCoreApplication::processEvents();
+    };
+    const auto overflows = [](QQuickItem *view) {
+        return view->property("contentHeight").toDouble() > view->height();
+    };
+    QQuickItem *primary = overflows(inner) ? inner : outer;
+    QVERIFY(overflows(primary));
+    inner->setProperty("contentY", 0);
+    outer->setProperty("contentY", 0);
+    wheel(page, {50, 20}, {0, -32}, {});
+    QCOMPARE(primary->property("contentY").toDouble(), 32.0);
+    if (primary == inner) QCOMPARE(outer->property("contentY").toDouble(), 0.0);
+    primary->setProperty("contentY", primary->property("contentHeight").toDouble() - primary->height());
+    const double end = primary->property("contentY").toDouble();
+    wheel(page, {50, 20}, {0, -32}, {});
+    QCOMPARE(primary->property("contentY").toDouble(), end);
+    if (primary == inner) QVERIFY(outer->property("contentY").toDouble() > 0);
+    outer->setProperty("contentY", 0);
+    QVERIFY(tabView->property("contentWidth").toDouble() > tabView->width());
+    wheel(tabs, {150, 15}, {}, {-120, 0});
+    QVERIFY(tabView->property("contentX").toDouble() > 0);
+    QCOMPARE(popup->property("subTabIndex").toInt(), 2);
+    const double x = tabView->property("contentX").toDouble();
+    wheel(tabs, {150, 15}, {-17, 0}, {});
+    QCOMPARE(tabView->property("contentX").toDouble(), x + 17);
+    wheel(tabs, {150, 15}, {0, -22}, {}, Qt::ShiftModifier);
+    QCOMPARE(tabView->property("contentX").toDouble(), x + 39);
+    QCOMPARE(popup->property("subTabIndex").toInt(), 2);
+    primary->setProperty("contentY", 0);
+    wheel(tabs, {150, 15}, {0, -30}, {});
+    QCOMPARE(primary->property("contentY").toDouble(), 30.0);
+    QCOMPARE(popup->property("subTabIndex").toInt(), 2);
+    struct Selection { int section; int page; QString prefix; const char *property; };
+    for (const auto &selection : {Selection{2, 0, "studio-spin-", "value"},
+                                 Selection{1, 2, "studio-combo-", "currentIndex"}}) {
+        popup->setProperty("mainTabIndex", selection.section);
+        popup->setProperty("subTabIndex", selection.page);
+        QVERIFY(QQuickTest::qWaitForPolish(window));
+        inner->setProperty("contentY", 0);
+        QQuickItem *control = nullptr;
+        QList<QQuickItem *> pending{form};
+        while (!pending.isEmpty()) {
+            auto *candidate = pending.takeLast();
+            if (candidate->isVisible() && candidate->objectName().startsWith(selection.prefix)) {
+                control = candidate;
+                break;
+            }
+            pending.append(candidate->childItems());
+        }
+        QVERIFY(control);
+        const char *property = selection.property;
+        const auto value = control->property(property);
+        auto *outerContent = outer->property("contentItem").value<QQuickItem *>();
+        QVERIFY(outerContent);
+        const double maxY = qMax(0.0, outer->property("contentHeight").toDouble() - outer->height());
+        outer->setProperty("contentY", qBound(0.0,
+            control->mapToItem(outerContent, {30, 15}).y() - outer->height() / 2, maxY));
+        QQuickItem *scrolling = overflows(inner) ? inner : outer;
+        QVERIFY(overflows(scrolling));
+        const double y = scrolling->property("contentY").toDouble();
+        const bool atEnd = y >= scrolling->property("contentHeight").toDouble() - scrolling->height();
+        wheel(control, {30, 15}, {}, {0, atEnd ? 120 : -120});
+        QCOMPARE(control->property(property), value);
+        QVERIFY(scrolling->property("contentY").toDouble() != y);
+    }
+    QVERIFY(!popup->property("hasSettingsChanges").toBool());
+    QCOMPARE(registry->panelDefinition(panel)->toPersistedMap(), before);
+    QVERIFY2(warnings.isEmpty(), qPrintable(warnings.join('\n')));
+}
 
 void PanelWindowCapabilityTest::studioArtworkPersistenceFailure_data()
 {
@@ -2370,6 +2582,9 @@ void PanelWindowCapabilityTest::freePanelContentFollowsItsRecordAndOrdersItsOwnE
         return QVariantMap{};
     };
     auto merged = alphaSnapshot();
+    QCOMPARE(merged.value("iconName"), alphaEntry.value("iconName"));
+    QCOMPARE(merged.value("baseIconName"), alphaEntry.value("baseIconName"));
+    QCOMPARE(merged.value("resolvedGlyph"), alphaEntry.value("resolvedGlyph"));
     QCOMPARE(merged.value("panelEntryId").toString(), alphaId);
     QVERIFY(!merged.value("runningAppId").toString().isEmpty());
     QCOMPARE(merged.value("windowPreviews").toList().size(), 2);
@@ -2381,6 +2596,7 @@ void PanelWindowCapabilityTest::freePanelContentFollowsItsRecordAndOrdersItsOwnE
                  .value("title").toString(), second.caption);
     windows->clearWindows();
     QVERIFY(alphaSnapshot().value("windowPreviews").toList().isEmpty());
+    QCOMPARE(alphaSnapshot().value("iconName"), alphaEntry.value("iconName"));
     QCOMPARE(shownIds(), QStringList({folderId, alphaId, betaId}));
 
     // Removal drops exactly one entry and is also refused for unknown ids.

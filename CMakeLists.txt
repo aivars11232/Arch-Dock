@@ -96,6 +96,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     RunningIndicator.qml
     inputs/AlphaHitMask.qml
     inputs/GeometryHitRegion.qml
+    inputs/ScrollInput.qml
     previews/LivePanelPreview.qml
     previews/WindowPreviewPopup.qml
     renderers/IconStyle2D.qml
@@ -147,6 +148,21 @@ add_custom_target(
   ${ARCHDOCK_RENDERING_COPY_COMMANDS}
   DEPENDS ${ARCHDOCK_RENDERING_MODULE_SOURCES}
   COMMENT "Preparing the ArchDock.Rendering QML module")
+
+qt_add_qml_module(archdock-integration SHARED
+  URI ArchDock.Integration VERSION 1.0
+  OUTPUT_DIRECTORY "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Integration"
+  SOURCES src/integration/DropBackend.h)
+target_link_libraries(archdock-integration PRIVATE Qt6::Core Qt6::DBus Qt6::Qml)
+target_include_directories(archdock-integration PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/integration")
+set_target_properties(archdock-integration archdock-integrationplugin
+  PROPERTIES INSTALL_RPATH "$ORIGIN")
+install(TARGETS archdock-integration archdock-integrationplugin
+  LIBRARY DESTINATION "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Integration")
+install(FILES
+  "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Integration/qmldir"
+  "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Integration/archdock-integration.qmltypes"
+  DESTINATION "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Integration")
 
 qt_add_library(archdock-profile-backend STATIC
   src/persistence/ConfigurationBackup.h src/persistence/ConfigurationBackup.cpp
@@ -320,6 +336,18 @@ target_compile_definitions(
 include(CTest)
 if(BUILD_TESTING)
   find_package(Qt6 REQUIRED COMPONENTS Test QmlTools QuickTest)
+
+  qt_add_executable(drop-delivery-test tests/DropDeliveryTest.cpp)
+  target_link_libraries(drop-delivery-test PRIVATE
+    Qt6::Core Qt6::DBus Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+  target_compile_definitions(drop-delivery-test PRIVATE
+    ARCHDOCK_RENDERING_IMPORT_ROOT="${ARCHDOCK_RENDERING_IMPORT_ROOT}"
+    ARCHDOCK_DOCK_UI_URL="file:${CMAKE_CURRENT_SOURCE_DIR}/plasma-dock-widget/contents/ui")
+  add_dependencies(drop-delivery-test archdock-integrationplugin archdock-rendering-module)
+  add_test(NAME drop-delivery-test COMMAND dbus-run-session -- $<TARGET_FILE:drop-delivery-test>)
+  set_tests_properties(drop-delivery-test PROPERTIES
+    TIMEOUT 30 RUN_SERIAL TRUE
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=org.kde.desktop;QT_NO_XDG_DESKTOP_PORTAL=1;QT_QPA_PLATFORMTHEME=generic")
 
   qt_add_executable(overlay-model-test tests/OverlayModelTest.cpp
     src/content/OverlayModel.h src/content/OverlayModel.cpp
@@ -964,7 +992,7 @@ if(BUILD_TESTING)
     src/model/FolderContentModel.cpp)
   target_include_directories(folder-content-model-test
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-  target_link_libraries(folder-content-model-test PRIVATE Qt6::Core Qt6::Test)
+  target_link_libraries(folder-content-model-test PRIVATE Qt6::Core Qt6::Test KF6::KIOCore)
   add_test(NAME folder-content-model-test COMMAND folder-content-model-test)
 
   qt_add_executable(window-preview-model-test
@@ -1217,6 +1245,13 @@ if(BUILD_TESTING)
   set_tests_properties(
     dock-geometry-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(NAME studio-scroll-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_StudioScroll.qml)
+  set_tests_properties(studio-scroll-test PROPERTIES ENVIRONMENT
+    "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=org.kde.desktop;QT_NO_XDG_DESKTOP_PORTAL=1")
 
   add_test(
     NAME layout-engine-visual-test
@@ -1492,6 +1527,16 @@ if(BUILD_TESTING)
             bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
   set_tests_properties(folder-interaction-smoke
     PROPERTIES DEPENDS window-interaction-smoke TIMEOUT 120)
+
+  add_test(NAME runtime-ui-interaction-smoke
+    COMMAND ${CMAKE_COMMAND} -E env
+            ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
+            ARCHDOCK_QMLTESTRUNNER=$<TARGET_FILE:Qt6::qmltestrunner>
+            ARCHDOCK_RENDERING_INTERACTIONS=1 ARCHDOCK_RUNTIME_UI=1
+            bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
+  set_tests_properties(runtime-ui-interaction-smoke PROPERTIES
+    DEPENDS rendering-import-smoke RUN_SERIAL TRUE TIMEOUT 120)
 
   add_test(
     NAME motion-policy-test

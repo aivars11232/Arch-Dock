@@ -10,6 +10,7 @@ import org.kde.kirigami as Kirigami
 // preset pages and none of them can reach a panel or the desktop.
 Item {
     id: root
+    readonly property alias scrollFlickable: list
 
     // "panel" or "icon". The two catalogs are separate and never mixed.
     property string kind: "panel"

@@ -6,6 +6,7 @@
 #include "model/IconEntryIdentity.h"
 
 #include <KDesktopFile>
+#include <KFileItem>
 #include <KIO/ApplicationLauncherJob>
 #include <KService>
 #include <KServiceAction>
@@ -398,7 +399,7 @@ bool DockModel::pinUrl(const QUrl &url)
         application.launchCommand = QStringLiteral("xdg-open ") + url.toString(QUrl::FullyEncoded);
         if (fileInfo.isDir())
         {
-            application.iconName = QStringLiteral("folder");
+            application.iconName = KFileItem(url).iconName();
         }
         else
         {

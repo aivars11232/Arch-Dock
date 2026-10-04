@@ -6,7 +6,51 @@
 > Older progress and audit narratives are historical evidence, not current
 > implementation claims.
 
-**Latest boundary — 2026-10-04: RC-03 exact artifact verification, RC-04 canonical
+**Latest boundary — 2026-10-04: first owner-observed runtime/UI correction
+PAUSED AT OWNER REQUEST. Starting main:
+`f7b72859b5410f57669c5c56dbda1dfd2861706b`. Focused drag/drop, native folder-icon
+resolution, 3D glyph visibility and page-wheel regressions PASS. The private
+Wayland input/drop matrix passed before the two latest harness changes.
+Complete one-job build, affected/full serial CTests, final native matrices,
+refreshed package/install verification, cleanup and owner update are pending.**
+
+The owner requested that the current changes be committed and synced, then all
+task work paused until tomorrow. The one-job all-target build was interrupted
+at **79%**, while compiling `panel-registry-test`, with exit status **130**;
+this records the requested stop, not a compiler failure. No build or test is
+left running. The completed build outputs and private evidence are retained
+under `/mnt/F/ui-runtime-pass/`, including `logs/build-all.log`. The application
+target and focused test targets were built successfully. The affected suite
+and fresh full **110-test** configured CTest suite have not been run.
+
+The last private native interaction gate passed **1/1 in 21.64 seconds**
+(`logs/native-runtime-ui-fallback-dismissed.log`). Subsequent changes to give
+the private session its own HOME and assert glyph rendering for every launcher
+row have only been syntax-checked; their native execution remains pending.
+The final focused icon/input run passed **5/5**
+(`logs/final-icon-input-focused.log`). Native input evidence uses an isolated
+Wayland fixture; owner Dolphin gestures and physical touchpad behavior still
+require owner testing after the corrected installation.
+
+Resume by reusing the retained build with
+`cmake --build /mnt/F/ui-runtime-pass/build --parallel 1`, then run the required
+affected and full CTests sequentially with
+`PATH=/mnt/F/ui-runtime-pass/venv/bin:$PATH CTEST_PARALLEL_LEVEL=1`. Continue the
+final native and installed-package gates before producing corrected release
+artifacts or updating the PC. Preserve the protected prior evidence, private
+configuration snapshot and core-dump baseline in the retained workspace.
+
+Production C++/QML and installed applet source have changed. The previous
+`0.1.1-1` source/package hashes below are historical evidence and **STALE for
+the corrected candidate**. Application version remains `0.1.1`; package release
+`2` is planned so the owner can upgrade the existing `0.1.1-1` installation.
+No corrected release artifact has yet been generated, published or installed.
+The owner authorized committing and syncing this paused work in progress now.
+Updating the PC remains deferred until the remaining verification gates pass;
+the installed package is still `0.1.1-1`. No release publication accompanies
+this checkpoint. The historical `v0.1.0` tag/assets remain preserved.
+
+**Historical previous boundary — 2026-10-04: RC-03 exact artifact verification, RC-04 canonical
 modes and GPL-3.0-or-later licensing correction PASS. Finalized 0.1.1-1 source,
 package, installed licensing and owned cleanup gates PASS. Candidate prepared;
 new real tag/publication NOT EXECUTED.**

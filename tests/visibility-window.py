@@ -29,6 +29,10 @@ def instrument_interaction_stage(stage):
         console.warn("ArchDockInteraction " + JSON.stringify({kind: "presentation", panel: root.panelId,
             at: Date.now(), state: root.reportedPresentation, hostConcealed: root.hostConcealed}));
 ''')
+    insert("main.qml", "const accepted = dropBackend.addUrls(panelId, freeSurface, values);", '''
+        console.warn("ArchDockInteraction " + JSON.stringify({kind: "drop-result", panel: root.panelId,
+            accepted: accepted, urls: values, at: Date.now()}));
+''')
     insert("main.qml", "function publishHostConcealed() {", '''
                 console.warn("ArchDockInteraction " + JSON.stringify({kind: "host-change", panel: root.panelId,
                     at: Date.now(), authoritative: authoritativeHost, concealed: hostConcealed,
@@ -48,6 +52,9 @@ def instrument_interaction_stage(stage):
                             windowVisible: host.visible, windowVisibility: panelScene.Window.visibility,
                             nativeState: root.nativeHostState,
                             rect: [host.x, host.y, host.width, host.height], concealed: representation.hostConcealed,
+                            dropPoint: (() => { const p = panelDropArea.mapToItem(null,
+                                panelDropArea.width / 2, panelDropArea.height / 2); return [p.x, p.y]; })(),
+                            dropEnabled: panelDropArea.enabled && panelDropArea.visible,
                             state: root.reportedPresentation}));
                         if (!panelScene.segmentedScene) return;
                         const segments = [];
@@ -131,6 +138,10 @@ def instrument_interaction_stage(stage):
             }
             const value = JSON.stringify({kind: "entry", panel: root.observedPanelId, sample: Date.now(),
                 app: root.entry.appId, center: [center.x, center.y],
+                iconSource: root.meshVisualItem.resolvedIconSource,
+                glyphSize: [root.meshVisualItem.glyphItem.width, root.meshVisualItem.glyphItem.height],
+                glyphValid: root.meshVisualItem.glyphItem.valid, meshActive: root.meshVisualActive,
+                dragging: root.dragging,
                 hostSize: [root.Window.window.width, root.Window.window.height],
                 menuSize: [contextMenu.width, contextMenu.height],
                 windows: root.entry.windowPreviews || [], menu: contextMenu.visible,
@@ -228,6 +239,8 @@ def run_interaction_matrix(free_panel):
         "device_pointer_motion_absolute": (None, [pointer, c.c_double, c.c_double]),
         "device_button_button": (None, [pointer, c.c_uint32, c.c_bool]),
         "device_keyboard_key": (None, [pointer, c.c_uint32, c.c_bool]),
+        "device_scroll_delta": (None, [pointer, c.c_double, c.c_double]),
+        "device_scroll_discrete": (None, [pointer, c.c_int32, c.c_int32]),
         "device_frame": (None, [pointer, c.c_uint64]), "now": (c.c_uint64, [pointer]),
         "new_ping": (pointer, [pointer]), "ping": (None, [pointer]),
         "ping_unref": (pointer, [pointer]), "unref": (pointer, [pointer]),
@@ -257,10 +270,10 @@ def run_interaction_matrix(free_panel):
             if kind == 2:
                 raise AssertionError("private KWin disconnected the input fixture")
             if kind == 3:
-                lib.ei_seat_bind_capabilities(lib.ei_event_get_seat(event), 2, 4, 32, pointer())
+                lib.ei_seat_bind_capabilities(lib.ei_event_get_seat(event), 2, 4, 16, 32, pointer())
             if kind == 8:
                 device = lib.ei_event_get_device(event)
-                for capability in (2, 4):
+                for capability in (2, 4, 16):
                     if lib.ei_device_has_capability(device, capability):
                         assert capability not in devices, "unexpected replacement EIS device"
                         devices[capability] = lib.ei_device_ref(device)
@@ -844,6 +857,217 @@ def run_interaction_matrix(free_panel):
             wait_for(lambda: not overlay(panel).get("temporary"), "temporary backend outcome expires")
         print("PASS: source disconnect removes native/free feedback and controls; temporary status expires", flush=True)
 
+    def run_runtime_ui_matrix():
+        import subprocess
+        from urllib.parse import unquote
+        gi.require_version("Gdk", "4.0")
+        gi.require_version("GdkPixbuf", "2.0")
+        from gi.repository import Gdk, GdkPixbuf
+
+        def motion(point):
+            assert 0 <= point[0] < 1280 and 0 <= point[1] < 720, point
+            lib.ei_device_pointer_motion_absolute(devices[2], *point)
+            lib.ei_device_frame(devices[2], lib.ei_now(context))
+            sync_input()
+
+        def wheel(point, x, y, discrete=False, shift=False):
+            motion(point)
+            if shift:
+                lib.ei_device_keyboard_key(devices[4], 42, True)
+                lib.ei_device_frame(devices[4], lib.ei_now(context))
+                sync_input()
+            try:
+                function = lib.ei_device_scroll_discrete if discrete else lib.ei_device_scroll_delta
+                function(devices[16], x, y)
+                lib.ei_device_frame(devices[16], lib.ei_now(context))
+                sync_input()
+            finally:
+                if shift:
+                    lib.ei_device_keyboard_key(devices[4], 42, False)
+                    lib.ei_device_frame(devices[4], lib.ei_now(context))
+                    sync_input()
+
+        def drag(start, end):
+            motion(start)
+            lib.ei_device_button_button(devices[2], 272, True)
+            lib.ei_device_frame(devices[2], lib.ei_now(context))
+            sync_input()
+            try:
+                for step in range(1, 21):
+                    motion([start[axis] + (end[axis] - start[axis]) * step / 20 for axis in (0, 1)])
+                    pump()
+                    time.sleep(0.015)
+            finally:
+                lib.ei_device_button_button(devices[2], 272, False)
+                lib.ei_device_frame(devices[2], lib.ei_now(context))
+                sync_input()
+
+        wait_for(lambda: 16 in devices, "native scroll capability ready")
+        probe_log = (root / "logs/ui-input-probe.log").open("w")
+        environment = dict(os.environ, ARCHDOCK_NATIVE_UI_PROBE="1", QT_QUICK_CONTROLS_STYLE="org.kde.desktop",
+                           QT_NO_XDG_DESKTOP_PORTAL="1", XDG_DATA_HOME=str(root / "ui-data"))
+        probe = subprocess.Popen([str(pathlib.Path(os.environ["ARCHDOCK_BUILD_DIR"]) / "panel-window-capability-test"),
+                                  "studioPageWheelInput"], env=environment, stdout=probe_log, stderr=subprocess.STDOUT)
+        def ui():
+            path = root / "ui-probe.json"
+            return json.loads(path.read_text()) if path.exists() else {}
+        def ui_point(local):
+            window = wait_for(lambda: next((w for w in kwin_geometry()["windows"]
+                if w["caption"] == "Arch Dock UI input probe"), None), "native Studio probe window")
+            assert window["buffer"][2:] == ui()["size"], (window, ui())
+            return [window["buffer"][axis] + local[axis] for axis in (0, 1)]
+        try:
+            wait_for(lambda: ui().get("controls"), "production Studio controls observed")
+            before = ui()
+            page_start = before
+            wheel(ui_point(before["header"]), 0, 32)
+            wait_for(lambda: ui()["outerY"] > before["outerY"] or ui()["innerY"] > before["innerY"],
+                     "Wayland vertical page wheel")
+            for _ in range(4):
+                wheel(ui_point(ui()["header"]), 0, -120, discrete=True)
+                time.sleep(0.08)
+                if ui()["outerY"] == page_start["outerY"] and ui()["innerY"] == page_start["innerY"]:
+                    break
+            wait_for(lambda: ui()["outerY"] == page_start["outerY"] and ui()["innerY"] == page_start["innerY"],
+                     "reverse Wayland page wheel restores the visible tab strip")
+            before = ui()
+            wheel(ui_point(before["tabs"]), 120, 0, discrete=True)
+            wait_for(lambda: ui()["tabX"] > before["tabX"], "Wayland horizontal tab wheel")
+            before = ui()
+            wheel(ui_point(before["tabs"]), 0, 120, discrete=True, shift=True)
+            wait_for(lambda: ui()["tabX"] > before["tabX"], "Wayland Shift-wheel tab scrolling")
+            assert ui()["selection"] == 0, ui()
+            for prefix in ("studio-spin-", "studio-combo-"):
+                def visible_control():
+                    state = ui()
+                    vx, vy, vw, vh = state["viewport"]
+                    return next((row for row in state["controls"] if row["name"].startswith(prefix)
+                        and vx <= row["point"][0] < vx + vw and vy <= row["point"][1] < vy + vh), None)
+                for _ in range(10):
+                    if visible_control(): break
+                    wheel(ui_point(ui()["header"]), 0, 35)
+                    pump(); time.sleep(0.07)
+                control = wait_for(visible_control, "visible native " + prefix)
+                before = ui()
+                wheel(ui_point(control["point"]), 0, 120, discrete=True)
+                wait_for(lambda: ui()["outerY"] != before["outerY"] or ui()["innerY"] != before["innerY"],
+                         "native control wheel scrolls the page")
+                assert next(row for row in ui()["controls"] if row["name"] == control["name"])["value"] == control["value"]
+            (root / "ui-probe.done").touch()
+            assert probe.wait(timeout=5) == 0, (root / "logs/ui-input-probe.log").read_text()
+            print("PASS: real Wayland vertical, horizontal, Shift-wheel and SpinBox/ComboBox input preserve settings", flush=True)
+        finally:
+            print("Native Studio final state:", json.dumps(ui()), flush=True)
+            if probe.poll() is None:
+                probe.terminate()
+                try: probe.wait(timeout=3)
+                except subprocess.TimeoutExpired: probe.kill(); probe.wait(timeout=3)
+            probe_log.close()
+
+        desktop = root / "data/applications" / (app_id + ".desktop")
+        desktop.parent.mkdir(exist_ok=True)
+        desktop.write_text("[Desktop Entry]\nType=Application\nName=Runtime drag fixture\nExec=/usr/bin/true\nIcon=applications-system\n")
+        folder = root / "Custom folder"
+        folder.mkdir()
+        icon = root / "custom icon.png"
+        image = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 64, 64)
+        image.fill(0xff22ccff)
+        image.savev(str(icon), "png", [], [])
+        (folder / ".directory").write_text("[Desktop Entry]\nIcon=" + str(icon) + "\n")
+        offered, outcomes = [desktop.as_uri()], []
+        failed_drags = set()
+        source = Gtk.DragSource.new()
+        source.set_actions(Gdk.DragAction.COPY)
+        source.connect("prepare", lambda *_: Gdk.ContentProvider.new_for_bytes(
+            "text/uri-list", GLib.Bytes.new((offered[0] + "\r\n").encode())))
+        source.connect("drag-cancel", lambda _, transfer, reason: failed_drags.add(transfer) or False)
+        source.connect("drag-end", lambda _, transfer, delete: outcomes.append(
+            transfer not in failed_drags and bool(transfer.get_selected_action())))
+        label = Gtk.Label(label="Native URI drag source")
+        label.add_controller(source)
+        first.set_child(label)
+        first.set_title("Runtime drag source")
+        first.set_default_size(180, 140)
+        first.present()
+        wait_for(lambda: first.get_mapped(), "native drag source mapped")
+        # Wayland clients cannot place their own windows. Use the private KWin
+        # scripting API to keep this owned source clear of the desktop applet.
+        placement = root / "drag-source-placement.js"
+        placement.write_text('const w = workspace.windowList().find(w => w.caption === "Runtime drag source"'
+            ' && w.resourceClass === "' + app_id + '"); if (w) w.frameGeometry = {x:1040,y:20,width:180,height:140};')
+        plugin = "org.archdock.runtime-drag-placement"
+        script = call("org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting", "loadScript", "(ss)", (str(placement), plugin))
+        assert script >= 0
+        try: call("org.kde.KWin", "/Scripting/Script" + str(script), "org.kde.kwin.Script", "run")
+        finally: call("org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting", "unloadScript", "(s)", (plugin,))
+        def source_point():
+            w = next(w for w in kwin_geometry()["windows"] if w["caption"] == "Runtime drag source")
+            return [w["x"] + w["width"] / 2, w["y"] + w["height"] / 2]
+        configure(free_panel, {"type": "launcher", "layout": "ring", "layoutRadius": 120,
+                              "rendererTier": "procedural2d", "acceptDrops": True})
+        native_before = panel_call("dockEntriesForPanel", "(ss)", ("bottom", "launcher"))
+        def rows(): return panel_call("dockEntriesForPanel", "(ss)", (free_panel, "launcher"))
+        def observed(app): return observations.get(("entry", free_panel, app), {})
+        def entry_point(app):
+            data = wait_for(lambda: observed(app), "real dropped entry")
+            return native_point(data["hostSize"], data["center"])
+        def drop(uri, target, accepted=True):
+            offered[0] = uri
+            previous = len(outcomes)
+            previous_result = observations.get(("drop-result", free_panel, ""), {}).get("at", 0)
+            drag(source_point(), target)
+            wait_for(lambda: len(outcomes) > previous, "Wayland drop completed")
+            if accepted:
+                assert outcomes[-1], (uri, outcomes)
+            if panel_call("dockConfiguration", "(s)", (free_panel,))["acceptDrops"]:
+                receipt = wait_for(lambda: observations.get(("drop-result", free_panel, ""), {}).get("at", 0) > previous_result
+                    and observations[("drop-result", free_panel, "")], "Arch Dock drop result observed")
+                assert receipt["accepted"] == accepted and [unquote(value) for value in receipt["urls"]] == [unquote(uri)], receipt
+            if not accepted:
+                print("Private desktop fallback after refused drop:", json.dumps(kwin_geometry()), flush=True)
+                escape()
+                wait_for(lambda: not any(w["popup"] for w in kwin_geometry()["windows"]),
+                         "private desktop fallback menu dismissed")
+        host = wait_for(lambda: observations.get(("host", free_panel, ""), {}).get("dropEnabled")
+            and observations[("host", free_panel, "")], "empty free launcher drop area ready")
+        target = native_point(host["rect"][2:], host["dropPoint"])
+        drop(desktop.as_uri(), target)
+        wait_for(lambda: len(rows()) == 1, "empty free launcher drop persisted")
+        app = rows()[0]["appId"]
+        drop(folder.as_uri(), entry_point(app))
+        wait_for(lambda: len(rows()) == 2, "folder drop on existing entry persisted")
+        folder_id = next(row["appId"] for row in rows() if row.get("isFolder"))
+        drop(folder.as_uri(), entry_point(app))
+        assert len(rows()) == 2, rows()
+        drop("https://example.invalid/unsupported", entry_point(app), False)
+        assert len(rows()) == 2, rows()
+        configure(free_panel, {"acceptDrops": False})
+        drop(desktop.as_uri(), entry_point(app), False)
+        assert len(rows()) == 2, rows()
+        configure(free_panel, {"acceptDrops": True})
+        for desktop_name in ("org.kde.dolphin.desktop", "org.kde.konsole.desktop"):
+            path = pathlib.Path("/usr/share/applications") / desktop_name
+            assert path.is_file(), path
+            count = len(rows())
+            drop(path.as_uri(), entry_point(folder_id))
+            wait_for(lambda: len(rows()) == count + 1, "real KDE application drop")
+        before_order = [row["appId"] for row in rows()]
+        drag(entry_point(before_order[0]), entry_point(before_order[-1]))
+        wait_for(lambda: [row["appId"] for row in rows()] != before_order, "native pointer reorder committed")
+        assert set(row["appId"] for row in rows()) == set(before_order)
+        wait_for(lambda: not panel_call("panelInteractionGuards", "(s)", (free_panel,))["dragActive"]
+            and all(not observed(row["appId"]).get("dragging", True) for row in rows()), "drag guard cleared")
+        assert panel_call("dockEntriesForPanel", "(ss)", ("bottom", "launcher")) == native_before
+        for tier, theme in (("procedural2d", ""), ("true3d", "mesh-platform-cyan")):
+            configure(free_panel, {"rendererTier": tier, "panelThemeId": theme, "completeThemeId": theme})
+            for row in rows():
+                wait_for(lambda: observed(row["appId"]).get("iconSource") == row["iconName"]
+                    and observed(row["appId"]).get("glyphValid")
+                    and all(v > 0 for v in observed(row["appId"])["glyphSize"])
+                    and observed(row["appId"]).get("meshActive") == (tier == "true3d"),
+                    "native application/folder glyph in " + tier + ": " + row["appId"])
+        print("PASS: actual Wayland URI/application/folder drops, deduplication, refusals, pointer reorder, native ownership and 2D/3D glyphs", flush=True)
+
     first = Gtk.ApplicationWindow(application=app)
     second = Gtk.ApplicationWindow(application=app)
     try:
@@ -854,6 +1078,9 @@ def run_interaction_matrix(free_panel):
         kwin_geometry(studio["id"])
         wait_for(lambda: not any(window["id"] == studio["id"] for window in kwin_geometry()["windows"]),
                  "private Studio closed before desktop input")
+        if os.environ.get("ARCHDOCK_RUNTIME_UI") == "1":
+            run_runtime_ui_matrix()
+            return
         if os.environ.get("ARCHDOCK_VISIBILITY_DISCRIMINATOR") == "1":
             configure("bottom", {"layout": "horizontal", "rendererTier": "procedural2d",
                                  "panelThemeId": "", "completeThemeId": ""})

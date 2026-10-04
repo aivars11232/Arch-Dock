@@ -55,7 +55,7 @@ assert root.parent == Path('/tmp') and root.name.startswith('archdock-rendering-
 assert root.stat().st_uid == os.getuid()
 address = os.environ['DBUS_SESSION_BUS_ADDRESS']
 assert address and address != os.environ.get('ARCHDOCK_RENDERING_PARENT_BUS'), 'not a private bus'
-private_dirs = {'XDG_RUNTIME_DIR': 'runtime', 'XDG_CONFIG_HOME': 'config',
+private_dirs = {'HOME': 'home', 'XDG_RUNTIME_DIR': 'runtime', 'XDG_CONFIG_HOME': 'config',
                 'XDG_CONFIG_DIRS': 'config-dirs', 'XDG_DATA_HOME': 'data',
                 'XDG_CACHE_HOME': 'cache', 'XDG_STATE_HOME': 'state'}
 for key, directory in private_dirs.items():
@@ -1420,6 +1420,7 @@ run_outer() {
     local icon_style_root="$stage_root/share/arch-dock/icon-styles"
     local log_dir="$ARCHDOCK_RENDERING_STATE_ROOT/logs"
     mkdir -p \
+        "$ARCHDOCK_RENDERING_STATE_ROOT/home/Desktop" \
         "$ARCHDOCK_RENDERING_STATE_ROOT/cache" \
         "$ARCHDOCK_RENDERING_STATE_ROOT/config" \
         "$ARCHDOCK_RENDERING_STATE_ROOT/config-dirs" \
@@ -1565,6 +1566,7 @@ run_outer() {
             -input "$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_RendererParity.qml"
 
     env \
+        HOME="$ARCHDOCK_RENDERING_STATE_ROOT/home" \
         ARCHDOCK_RENDERING_PARENT_BUS="${DBUS_SESSION_BUS_ADDRESS:-}" \
         ARCHDOCK_RENDERING_SESSION_ROOT="$ARCHDOCK_RENDERING_STATE_ROOT" \
         ARCHDOCK_RENDERING_IMPORT_SESSION=1 \

@@ -167,14 +167,19 @@ Item {
                         readonly property var tileMotion: root.motionAllowed && entry ? entry.tileMotion : ({})
                         readonly property real size: Number(rect.width || 1)
                         readonly property real hoverScale: entry ? Number(entry.visualScale || 1) : 1
+                        // Keep application glyphs in front of the world-space platform.
+                        // Scaling position and size by the same depth ratio preserves
+                        // perspective projection and the stationary input geometry.
+                        readonly property real depthRatio: 0.25
                         readonly property real glow: Math.max(root.number(iconMotion, "glow", 0),
                             root.number(glyphMotion, "glow", 0), root.number(tileMotion, "glow", 0))
-                        position: Qt.vector3d(Number(rect.centerX) - root.width / 2 + root.number(iconMotion, "x", 0),
-                            root.height / 2 - Number(rect.centerY) - root.number(iconMotion, "y", 0), -camera.z)
+                        position: Qt.vector3d((Number(rect.centerX) - root.width / 2 + root.number(iconMotion, "x", 0)) * depthRatio,
+                            (root.height / 2 - Number(rect.centerY) - root.number(iconMotion, "y", 0)) * depthRatio,
+                            -camera.z * depthRatio)
                         eulerRotation: Qt.vector3d(0, root.number(iconMotion, "rotateY", 0),
                             -root.number(iconMotion, "rotateZ", 0) - Number(rect.rotation || 0))
-                        scale: Qt.vector3d(hoverScale * root.number(iconMotion, "scale", 1) * root.number(iconMotion, "scaleX", 1),
-                            hoverScale * root.number(iconMotion, "scale", 1) * root.number(iconMotion, "scaleY", 1), 1)
+                        scale: Qt.vector3d(depthRatio * hoverScale * root.number(iconMotion, "scale", 1) * root.number(iconMotion, "scaleX", 1),
+                            depthRatio * hoverScale * root.number(iconMotion, "scale", 1) * root.number(iconMotion, "scaleY", 1), depthRatio)
                         opacity: root.number(iconMotion, "opacity", 1)
 
                         Texture {

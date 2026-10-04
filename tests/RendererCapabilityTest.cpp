@@ -144,6 +144,7 @@ private slots:
                 return {};
             return grab->image();
         };
+        QTest::qWait(200); // Allow the asynchronous icon source to reach the mesh texture.
         const QImage first = pixels();
         QVERIFY(!first.isNull());
         int checkedIcons = 0;
@@ -164,6 +165,20 @@ private slots:
             QVERIFY2(qAbs(projected.y() - expected.value(QStringLiteral("centerY")).toDouble()) < 1,
                 qPrintable(QStringLiteral("Mesh y=%1, logical y=%2").arg(projected.y())
                     .arg(expected.value(QStringLiteral("centerY")).toDouble())));
+            int glyphPixels = 0;
+            const int radius = expected.value(QStringLiteral("width")).toInt() / 2;
+            for (int y = qMax(0, qRound(projected.y()) - radius);
+                 y < qMin(first.height(), qRound(projected.y()) + radius); ++y)
+                for (int x = qMax(0, qRound(projected.x()) - radius);
+                     x < qMin(first.width(), qRound(projected.x()) + radius); ++x) {
+                    const QColor color = first.pixelColor(x, y);
+                    // The fixture's dark blue fill is distinct from the cyan platform.
+                    glyphPixels += color.alpha() > 32 && color.redF() < 0.4
+                        && color.greenF() < 0.4 && color.blueF() < 0.4;
+                }
+            QVERIFY2(glyphPixels > 100, qPrintable(QStringLiteral(
+                "Entry %1 glyph was covered by the platform: %2 visible pixels")
+                .arg(model->objectName()).arg(glyphPixels)));
             ++checkedIcons;
         }
         QCOMPARE(checkedIcons, 2);

@@ -90,7 +90,7 @@ Item {
     }
 
     function updateTabFocus() {
-        const available = inputEnabled && entry && entry.isStatus !== true
+        const available = Boolean(inputEnabled && entry && entry.isStatus !== true)
         // Qt refuses to withdraw an item that still owns active focus.
         if (!available) focus = false
         activeFocusOnTab = available
@@ -404,8 +404,9 @@ Item {
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         hoverEnabled: true
         enabled: root.inputEnabled
-        drag.target: root.acceptDrops && root.entry.isStatus !== true ? dragProxy : null
+        drag.target: root.acceptDrops && !root.editMode && root.entry.isStatus !== true ? dragProxy : null
         drag.threshold: Kirigami.Units.gridUnit / 2
+        drag.smoothed: false
 
         onEntered: {
             root.setHoveredIndex(root.entryIndex);
@@ -416,11 +417,19 @@ Item {
                 root.setHoveredIndex(-1);
             root.dispatchMotionEvent("hover-exit");
         }
-        onPressed: {
+        onPressed: mouse => {
+            dragProxy.Drag.hotSpot = Qt.point(mouse.x, mouse.y);
             root.clickPulse = true;
             root.dispatchMotionEvent("press");
         }
-        onCanceled: root.clickPulse = false
+        onCanceled: {
+            dragProxy.Drag.cancel();
+            dragProxy.x = 0;
+            dragProxy.y = 0;
+            root.dragging = false;
+            root.clickPulse = false;
+            root.setHoveredIndex(-1);
+        }
         onClicked: mouse => {
             if (root.dragging || root.entry.isStatus === true)
                 return;
@@ -439,6 +448,9 @@ Item {
         onReleased: mouse => {
             root.clickPulse = false;
             if (root.dragging) {
+                dragProxy.Drag.drop();
+                dragProxy.x = 0;
+                dragProxy.y = 0;
                 root.dragging = false;
                 root.setHoveredIndex(-1);
             }
@@ -451,6 +463,7 @@ Item {
         height: 1
         Drag.active: hoverArea.drag.active
         Drag.source: root
+        Drag.keys: ["application/x-archdock-app"]
         Drag.hotSpot.x: 0
         Drag.hotSpot.y: 0
         Drag.mimeData: ({ "application/x-archdock-app": root.entry.appId })
@@ -460,18 +473,22 @@ Item {
         id: entryDropArea
 
         anchors.fill: parent
-        enabled: root.acceptDrops && root.inputEnabled && root.entry.isStatus !== true
+        enabled: root.acceptDrops && root.inputEnabled && !root.editMode && root.entry.isStatus !== true
         keys: ["application/x-archdock-app", "text/uri-list"]
         onEntered: drag => {
             root.dispatchMotionEvent("drop-entered");
-            if (drag.source && drag.source.entry)
-                root.reorder(drag.source.entry.appId, root.entry.appId);
         }
         onDropped: drop => {
-            if (drop.hasUrls)
-                root.pinUrls(drop.urls);
-            root.dispatchMotionEvent("drop-committed");
-            drop.acceptProposedAction();
+            drop.accepted = false;
+            const internal = drop.source && drop.source.entry;
+            const accepted = internal
+                ? drop.source.entry.appId !== root.entry.appId
+                    && root.reorder(drop.source.entry.appId, root.entry.appId) === true
+                : drop.hasUrls && root.pinUrls(drop.urls) === true;
+            if (accepted) {
+                root.dispatchMotionEvent("drop-committed");
+                drop.acceptProposedAction();
+            }
         }
     }
 

@@ -540,4 +540,42 @@ TestCase {
         verify(!supported.requestIconProperties())
         compare(propertiesRequests.length, 0)
     }
+    function test_pointerReorder_data() {
+        return [
+            { tag: "commit", allowed: true, edit: false, accept: true },
+            { tag: "backend-refusal", allowed: false, edit: false, accept: true },
+            { tag: "edit-mode", allowed: true, edit: true, accept: true },
+            { tag: "drops-disabled", allowed: true, edit: false, accept: false }
+        ]
+    }
+
+    function test_pointerReorder(data) {
+        const host = createTemporaryObject(hostWindowComponent, testCase, { width: 400 })
+        verify(host !== null)
+        verify(waitForRendering(host.contentItem))
+        const calls = []
+        const source = createEntry({ x: 20, y: 40,
+            entry: entry({ appId: "source" }), magnificationEnabled: false }, host.contentItem)
+        const target = createEntry({ x: 150, y: 40,
+            entry: entry({ appId: "target" }), magnificationEnabled: false,
+            editMode: data.edit, acceptDrops: data.accept,
+            reorder: function(from, before) {
+                calls.push([from, before]); return data.allowed
+            }
+        }, host.contentItem)
+        wait(50)
+        mousePress(source, 20, 20)
+        mouseMove(source, 50, 20, 20)
+        mouseMove(source, 152, 20, 20)
+        wait(30)
+        compare(calls.length, 0, "hover alone must not persist a reorder")
+        mouseRelease(source, 152, 20)
+        wait(30)
+        compare(calls.length, data.edit || !data.accept ? 0 : 1)
+        if (calls.length) compare(JSON.stringify(calls[0]), '["source","target"]')
+        compare(source.dragging, false, "release clears the drag guard")
+        mouseMove(host.contentItem, 350, 180)
+        wait(20)
+        compare(target.iconVisualState, data.edit ? "edit" : "normal", "target highlight clears")
+    }
 }

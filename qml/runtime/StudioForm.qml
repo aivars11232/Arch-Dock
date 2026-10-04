@@ -13,6 +13,7 @@ ScrollView {
     property var rows: []
 
     clip: true
+    implicitWidth: 0 // The containing layout supplies width; avoid the KDE contentWidth loop.
     contentWidth: availableWidth
 
     ColumnLayout {
@@ -279,6 +280,7 @@ ScrollView {
                         }
 
                         ComboBox {
+                            wheelEnabled: false
                             objectName: "studio-combo-" + String(rowDelegate.modelData.key || "")
                             Accessible.name: rowDelegate.modelData.label || ""
                             visible: rowDelegate.kind === "combo"
@@ -291,6 +293,7 @@ ScrollView {
                         }
 
                         SpinBox {
+                            wheelEnabled: false
                             objectName: "studio-spin-" + String(rowDelegate.modelData.key || "")
                             Accessible.name: rowDelegate.modelData.label || ""
                             visible: rowDelegate.kind === "spin"
@@ -309,6 +312,7 @@ ScrollView {
                             spacing: 8
 
                             Slider {
+                                wheelEnabled: false
                                 objectName: "studio-slider-" + String(rowDelegate.modelData.key || "")
                                 Accessible.name: rowDelegate.modelData.label || ""
                                 Layout.fillWidth: true
