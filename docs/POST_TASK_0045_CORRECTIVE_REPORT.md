@@ -1,5 +1,59 @@
 # Post-TASK-0045 corrective pass
 
+<!-- FOLDER_PATH_REPORT_BEGIN -->
+## Folder path and 3D controls correction — 0.1.1-7, 2026-10-04
+
+Fan and Arc folder contents follow a compact invisible curve with wheel or
+held-pointer dragging. Folder scrollbars and selection boxes are removed; original
+glyphs, names preference, keyboard navigation and reduced motion remain. Free-panel
+popups measure the clicked anchor's current screen when opening, select the side
+with more space and fit that space before native Wayland placement.
+
+Appearance now explains a plain 2D surface and offers **Choose a 3D theme**.
+**Panel Themes / Skins -> Cyan Mesh Platform -> Load -> Apply** selects an existing
+compatible theme; its existing 3D switch/quality and Layout tilt controls remain.
+No arbitrary mesh-depth control was added. Slow Apply was not reproduced: read-only
+renderer/Studio snapshots measured approximately 15/80 ms; these are not Apply timings.
+
+Pack integrity 174/174 PASS. One-job build and six focused QML checks PASS;
+seven Studio QtTest cases PASS, including the 3D route, native/free Apply/Cancel,
+names, motion and tilt. Final folder regression PASS. Native Wayland five-layout,
+two-host folder matrix PASS (53.88 s), including
+screen bounds, transparency, names, 48-item wheel/held drag and no accidental launch.
+The complete 111-test suite was not rerun for this bounded QML correction.
+
+Installed package gate PASS (154.67 s):
+216 payload bytes/modes, licensing/resources, optional 3D startup, actual installed
+Studio/folder interactions, native 0.1.1-6 -> 0.1.1-7 upgrade, recovery and removals
+with private configuration preservation. Earlier failed native placement attempts
+and setup diagnostics are retained; no acceptance assertion was weakened.
+Post-show window movement did not fix the native failure. Measuring the current
+anchor and sizing before native placement passed the unchanged bounds assertions.
+
+Source freeze `366f9f25be4699eaf084acee56db8f55ed7f44f2`; 527 source files/528 regular archive members.
+Two exports and independent four-artifact regeneration, extracted bytes/Git modes,
+ownership/epochs, GPL/reference exclusions and exact root recipe pin PASS.
+Source SHA-256: `9a47ee361acacd088157485953de040c4be086d6bb6141957cb4968602c05869`.
+Package SHA-256: `847a85c88d19d10f690667d132999888c8174d89f56a036b0a535e2be6749755`.
+The fresh one-job Release compilation was reused after proving compiled/embedded
+inputs identical. Unmodified native makepkg/CMake packaging produced the final
+package; 215 payload files matched the previous package exactly and only the
+standalone FolderExpansionHost.qml changed. Disposable source/build extracts were
+removed and original checkout/Debug paths masked for installed verification.
+
+Owned cleanup PASS: 1,869,230,080 allocated and
+1,785,329,062 apparent bytes removed. All 999
+protected historical files retain identical bytes/modes; all 478
+baseline core identities remain, zero new core records, zero task dump payloads
+and zero task processes. Compact evidence and exact source/package artifacts remain
+in `build-codex-path-motion-0.1.1-7/`. One session, no subagents, one build job and
+one test worker throughout.
+
+Owner still runs 0.1.1-6; the authorized update follows cleanup and candidate Git sync.
+
+Historical version-specific checkpoints follow. The 0.1.1-7 record above is current. The existing v0.1.0 tag/publication are untouched; no new release was published.
+<!-- FOLDER_PATH_REPORT_END -->
+
 <!-- FOLDER_CONTENTS_REPORT_BEGIN -->
 ## Folder contents transparency, scrolling and names — 0.1.1-6, 2026-10-04
 
