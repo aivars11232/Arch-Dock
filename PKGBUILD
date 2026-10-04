@@ -16,7 +16,7 @@ optdepends=('qt6-quick3d: optional true 3D rendering; ordinary renderers work wi
 options=('!lto' '!debug')
 source=("arch-dock-${pkgver}.tar.gz")
 # tools/prepare-arch-source.py writes a checksummed source and pinned recipe.
-sha256sums=('dff87e9a8145834c5800bf867526be39bfbfc1b445e7af1e071b25013fa96ee3')
+sha256sums=('94a7beeedc8323e7fb57a52b8228b74a6edd3d9bfa770d5679adb749bbee6b04')
 
 build() {
     cmake -S "$srcdir/arch-dock-$pkgver" -B "$srcdir/build" \

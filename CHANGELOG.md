@@ -23,6 +23,11 @@ The proposed `v0.1.1` tag and publication need separate authorization.
 - Folder contents unfold from the clicked dock icon on a transparent native
   Plasma surface. Dense fan and grid layouts fit horizontally and scroll with
   the wheel or a held-pointer drag; dragging does not open a child.
+- Fan and Arc folder contents move along a compact curve with wheel or held
+  dragging, without visible scrollbars or selection boxes. Reduced motion
+  remains immediate.
+- Appearance explains the current 2D surface and offers a route to 3D themes;
+  compatible themes retain the existing 3D switch, quality and tilt controls.
 - Panels > Behavior can keep folder item names visible without hovering.
   This preference uses the existing draft, Apply/Cancel and persistence path.
 - Current-facing installation/version wording follows the corrected candidate;
