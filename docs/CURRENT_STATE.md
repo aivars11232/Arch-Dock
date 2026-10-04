@@ -50,8 +50,20 @@ package and payload/closure receipts retained locally under
 byte/mode identical. All 460 baseline coredump journal identities remain, with
 zero new dump records, task dump payloads or task processes. One primary serial
 session was used; no subagents. Operational Git closure and owner PC update are
-recorded separately from the source freeze. Owner PC update is pending Git sync.
-Physical owner acceptance remains separate from the private Wayland evidence.
+recorded separately from the source freeze. Source/candidate closure was committed
+and synced at `2c4c0d81822120c7cc98ace3fefc30879aa6a1d3` before the PC update.
+
+Owner PC now runs verified **0.1.1-3** after a fresh private configuration backup.
+Actual 216/216 installed bytes/modes, `pacman -Qkk` (325 files, zero altered),
+stable new D-Bus owner/executable hash, all six new tile editor fields and
+`arch-dock --settings` PASS. Both owner Arch Dock and Plasma configuration files
+are byte-identical, with no changed logical keys. No active Arch Dock applet or
+loaded integration module required a Plasma restart; the verified backend was
+restarted and Panel Studio is open. Post-update audit still preserves all 928
+historical files and 460 baseline core journal identities, with zero new dumps.
+The private backup/installation receipt and final operational Git closure are
+recorded in the local candidate STATE.json. Owner visual/physical acceptance
+remains separate from the private Wayland evidence.
 
 **Previous verified boundary — 2026-10-04: FIRST OWNER-OBSERVED RUNTIME/UI ISSUES
 CORRECTED AND VERIFIED. Starting main `f7b72859b5410f57669c5c56dbda1dfd2861706b`;

@@ -31,7 +31,8 @@ corrective sections, build/runtime entries retain historical candidate evidence.
 - [x] Package SHA-256 0f632369f5f0a8131b62d7fd60a3f22226e79b87537453532a34305520ab0f31; 216/216 installed payload bytes/modes; licensing/resources, 15+15 cards, startup with/without 3D and real installed UI pass after source removal/masking.
 - [x] Native 0.1.1-2 -> 0.1.1-3 upgrade, recovery, both removals and configuration preservation PASS.
 - [x] Final owned build/venv/fixtures removed; 162 compact evidence entries retained; all 928 protected historical files unchanged; no task processes/new dump records or payloads.
-- [ ] Owner PC 0.1.1-3 update and running-backend/new tile field verification; pending operational Git sync.
+- [x] Cleanup and candidate closure committed/synced at 2c4c0d81822120c7cc98ace3fefc30879aa6a1d3 before owner update; PC now runs verified 0.1.1-3, 216/216 bytes/modes, pacman Qkk (325 files/zero altered), stable new executable owner, all six tile fields and Panel Studio launch PASS.
+- [x] Fresh private owner backup retained; Arch Dock/Plasma configuration byte-identical; no new dump records, all 460 baseline journal identities and 928 protected historical files preserved.
 - [ ] Owner manual visual/physical acceptance; separate from private runtime evidence.
 
 ## First owner-observed runtime/UI correction — 0.1.1-2, 2026-10-04
