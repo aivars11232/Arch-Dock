@@ -137,13 +137,13 @@ TestCase {
     function test_motionUsesSharedController() {
         const item = popup("grid", 1, false)
         const child = findChild(item, "folder-child-0")
-        const controller = child.children[1]
+        const controller = findChild(child, "folder-motion-0")
         tryCompare(controller, "activeProfileIds", ["folder-open"])
         item.reducedMotion = true
         tryCompare(controller, "activeTracks", [])
     }
     function test_horizontalWheelAndShiftRespectBounds() {
-        const item = popup("arc", 48)
+        const item = popup("stack", 48)
         const viewport = findChild(item, "folderViewport")
         verify(viewport.contentWidth > viewport.width)
         mouseWheel(viewport, 100, 20, -120, 0)
@@ -163,19 +163,31 @@ TestCase {
         wait(100)
         compare(fitted.contentX, 0)
     }
-    function test_horizontalScrollbarAndKeyboardStillMoveContent() {
+    function test_compactArcFollowsCurveWithoutChrome() {
         const item = popup("arc", 48)
         const viewport = findChild(item, "folderViewport")
-        const bar = viewport.ScrollBar.horizontal
-        verify(bar !== null)
-        verify(bar.size < 1)
-        mouseDrag(bar, bar.width * bar.size / 2, bar.height / 2, 120, 0, Qt.LeftButton)
-        verify(viewport.contentX > 0)
-        viewport.contentX = 0
+        compare(viewport.ScrollBar.horizontal, null)
+        compare(viewport.ScrollBar.vertical, null)
+        verify(viewport.contentWidth <= viewport.width)
+        verify(item.width < 300, "a long folder never expands its arc across the desktop")
+        const child = findChild(item, "folder-child-1")
+        const startX = child.x
+        const startY = child.mapToItem(viewport, 0, 0).y
+        mouseWheel(viewport, viewport.width / 2, 30, 0, -120)
+        tryVerify(function() { return viewport.contentY > 0 })
+        verify(Math.abs(child.x - startX) > 1, "scrolling follows the curve, not a straight translation")
+        verify(child.mapToItem(viewport, 0, 0).y < startY)
+        mouseWheel(viewport, viewport.width / 2, 30, 0, 120)
+        tryCompare(viewport, "contentY", 0)
+        fuzzyCompare(child.x, startX, 0.01)
         item.forceActiveFocus()
         for (let i = 0; i < 47; ++i) keyClick(Qt.Key_Right)
         compare(item.selectedChildId, "child-47")
-        verify(viewport.contentX > 0)
+        verify(viewport.contentY > 0)
+        const last = findChild(item, "folder-child-47")
+        const point = last.mapToItem(viewport, last.width / 2, last.height / 2)
+        verify(point.x >= 0 && point.x < viewport.width)
+        verify(point.y >= 0 && point.y < viewport.height)
     }
     function test_contentsUnfoldFromOriginAndReducedMotionIsImmediate() {
         const item = createTemporaryObject(component, testCase, {

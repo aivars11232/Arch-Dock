@@ -1047,6 +1047,9 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
     const cellHeight = size + clamp(finite(presentation.labelHeight, 0), 0, 128);
     const availableWidth = Math.max(cellWidth, finite(presentation.maximumWidth, 0));
     const bounded = finite(presentation.maximumWidth, 0) > 0;
+    const followsPath = bounded && presentation.compactPath === true
+        && (resolved === "fan" || resolved === "arc");
+    const pathBend = Math.max(0, Math.min(96, availableWidth - cellWidth));
     const columns = Math.max(1, Math.min(safeCount,
         Math.floor((availableWidth + gap) / (cellWidth + gap))));
     let distance = clamp(finite(radius, 120), size * 1.2, 4096);
@@ -1064,7 +1067,12 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
     let maximumX = -Infinity, maximumY = -Infinity;
     for (let index = 0; index < safeCount; ++index) {
         let point;
-        if (bounded && resolved === "fan") {
+        if (followsPath) {
+            // The viewport supplies the path parameter while scrolling. Keep
+            // the virtual list compact rather than enlarging its arc radius
+            // to fit every file on screen at once.
+            point = { x: 0, y: index * (cellHeight + gap) };
+        } else if (bounded && resolved === "fan") {
             // A long fan bends within the view and grows vertically. Every
             // child remains reachable without a second scrolling axis.
             const progress = safeCount <= 1 ? 0 : index / (safeCount - 1);
@@ -1096,7 +1104,9 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
         iconSize: size,
         cellWidth: cellWidth,
         cellHeight: cellHeight,
-        width: Math.ceil(maximumX - minimumX + cellWidth),
+        followsPath: followsPath,
+        pathBend: followsPath ? pathBend : 0,
+        width: Math.ceil(maximumX - minimumX + cellWidth + (followsPath ? pathBend : 0)),
         height: Math.ceil(maximumY - minimumY + cellHeight),
         origin: { x: size / 2 - minimumX, y: size / 2 - minimumY },
         entries: points.map(function(point, index) {

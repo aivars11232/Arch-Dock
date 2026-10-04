@@ -1024,7 +1024,7 @@ def run_interaction_matrix(free_panel):
                            QT_NO_XDG_DESKTOP_PORTAL="1", XDG_DATA_HOME=str(root / "ui-data"))
         with (root / "logs/icon-tiles-native.log").open("w") as tile_log:
             tiles = subprocess.run([str(pathlib.Path(os.environ["ARCHDOCK_BUILD_DIR"]) / "panel-window-capability-test"),
-                                    "studioIconTiles", "studioFolderItemNames", "studioPanelMotionControls", "tiltEditorsFollowTheSelectedRenderer"],
+                                    "studioIconTiles", "studioFolderItemNames", "studioPlainSurfaceExplains3D", "studioPanelMotionControls", "tiltEditorsFollowTheSelectedRenderer"],
                                    env=environment, stdout=tile_log, stderr=subprocess.STDOUT, timeout=60)
             assert tiles.returncode == 0, ("native Icon Tiles edit/Cancel/Apply/persistence failed\n"
                 + (root / "logs/icon-tiles-native.log").read_text())

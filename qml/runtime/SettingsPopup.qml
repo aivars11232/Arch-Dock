@@ -578,6 +578,15 @@ Window {
             rows.splice(1, 0, { kind: "switch", key: "rendererTier", scope: "panel",
                 rendererToggle: true, label: qsTr("3D rendering"),
                 description: qsTr("Turn off to use this theme's available 2D surface.") });
+        } else {
+            rows.push(notice(embeddedRendererPreview.panelSceneItem.true3DCapability.rendererAvailable
+                ? qsTr("This surface uses 2D. Choose a theme with 3D support to enable 3D rendering, quality and perspective tilt. Panel animations are on the Animations tab.")
+                : qsTr("3D rendering is unavailable in this session. The 2D renderer and panel animations remain available.")));
+            rows.push({ kind: "actions", label: qsTr("3D rendering"), actions: [{
+                label: qsTr("Choose a 3D theme"), icon: "preferences-desktop-theme",
+                action: "browse-3d-themes",
+                available: embeddedRendererPreview.panelSceneItem.true3DCapability.rendererAvailable === true
+            }] });
         }
         rows.push(notice(qsTr("Built-in themes and imported artwork are on the Panel Themes / Skins page.")));
         return rows;
@@ -913,6 +922,10 @@ Window {
     }
 
     function performStudioAction(action, data) {
+        if (action === "browse-3d-themes") {
+            setSubTab(6);
+            return;
+        }
         if (action === "open-panel" || action === "close-panel") {
             if (hasPendingChanges || auditionBusy || !Boolean(panelValue("visible", false))
                 || panelValue("presentationMode", "open") !== "collapsed"

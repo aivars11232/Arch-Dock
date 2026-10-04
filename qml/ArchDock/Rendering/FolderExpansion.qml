@@ -24,10 +24,11 @@ QQC2.Pane {
     property point lastPointerPosition: Qt.point(-1, -1)
     readonly property var entries: (snapshot.entries || []).slice(0, 48)
     readonly property var geometry: LayoutEngine.expansionGeometry(
-        layout, entries.length, 56, 12, 140, Math.ceil(Math.sqrt(entries.length)), {
+        layout, entries.length, 48, 6, 140, Math.ceil(Math.sqrt(entries.length)), {
             maximumWidth: Math.max(56, maximumWidth - padding * 2),
-            labelWidth: showNames ? 112 : 0,
-            labelHeight: showNames ? nameMetrics.height * 2 + 4 : 0
+            labelWidth: showNames ? 108 : 0,
+            labelHeight: showNames ? nameMetrics.height * 2 + 4 : 0,
+            compactPath: true
         })
     readonly property var openingProfiles: [{
         id: "folder-open", target: "icon", trigger: "panel-reveal",
@@ -45,7 +46,7 @@ QQC2.Pane {
     focus: true
     activeFocusOnTab: true
     Accessible.name: folderTitle
-    implicitWidth: Math.min(Math.max(280, geometry.width + 20), Math.max(160, maximumWidth))
+    implicitWidth: Math.min(Math.max(160, geometry.width + 20), Math.max(160, maximumWidth))
     implicitHeight: column.implicitHeight + 20
 
     FontMetrics { id: nameMetrics; font: root.font }
@@ -115,7 +116,7 @@ QQC2.Pane {
         selectedChildId = String(entries[index].id)
         const point = geometry.entries[index]
         viewport.cancelFlick()
-        const x = point.x < viewport.contentX ? point.x
+        const x = geometry.followsPath ? 0 : point.x < viewport.contentX ? point.x
             : Math.max(viewport.contentX, point.x + geometry.cellWidth - viewport.width)
         const y = point.y < viewport.contentY ? point.y
             : Math.max(viewport.contentY, point.y + geometry.cellHeight - viewport.height)
@@ -180,8 +181,11 @@ QQC2.Pane {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             flickableDirection: Flickable.AutoFlickIfNeeded
-            QQC2.ScrollBar.horizontal: QQC2.ScrollBar {}
-            QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
+            Behavior on contentY {
+                enabled: root.opened && !root.openingInProgress && !root.reducedMotion
+                    && !root.keyboardSelection && !viewport.dragging && !viewport.flicking
+                NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+            }
             ScrollInput {
                 parent: viewport
                 flickables: [viewport]
@@ -194,23 +198,24 @@ QQC2.Pane {
                     required property int index
                     readonly property var point: root.geometry.entries[index] || ({ x: 0, y: 0 })
                     objectName: "folder-child-" + index
-                    x: point.x
+                    // Re-evaluate x at the child's current visible height:
+                    // both wheel and held dragging follow the same curve.
+                    x: {
+                        if (!root.geometry.followsPath) return point.x
+                        const progress = Math.max(0, Math.min(1,
+                            (point.y - viewport.contentY) / Math.max(1, viewport.height - height)))
+                        return Math.sin(progress * Math.PI
+                            * (root.geometry.layout === "fan" ? 0.5 : 1)) * root.geometry.pathBend
+                    }
                     y: point.y
                     width: root.geometry.cellWidth
                     height: root.geometry.cellHeight
                     Accessible.role: Accessible.Button
                     Accessible.name: String(modelData.displayName || modelData.name || "")
                     Accessible.onPressAction: root.selectChild(String(modelData.id))
-                    Rectangle {
-                        x: (parent.width - width) / 2
-                        width: root.geometry.iconSize
-                        height: width
-                        radius: 6
-                        color: root.selectedChildId === String(child.modelData.id) ? "#406ca5dd" : "transparent"
-                        border.color: root.selectedChildId === String(child.modelData.id) ? "#8fbaff" : "transparent"
-                    }
                     IconMotionController {
                         id: motion
+                        objectName: "folder-motion-" + child.index
                         profiles: root.openingProfiles
                         reducedMotion: root.reducedMotion
                         revealed: root.opened
@@ -226,7 +231,8 @@ QQC2.Pane {
                         iconStyleDefinition: root.iconStyleDefinition
                         showIndicator: false
                         disabled: child.modelData.selectable !== true
-                        hovered: pointer.containsMouse
+                        hovered: pointer.containsMouse || (root.keyboardSelection
+                            && root.selectedChildId === String(child.modelData.id))
                         reducedMotion: root.reducedMotion
                         glyphMotion: MotionChannels.motionFor(motion.channels, "icon", { size: root.geometry.iconSize })
                     }

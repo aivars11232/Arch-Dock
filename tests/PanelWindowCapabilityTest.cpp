@@ -138,6 +138,7 @@ private slots:
     void studioIconTiles();
     void studioFolderItemNames_data();
     void studioFolderItemNames();
+    void studioPlainSurfaceExplains3D();
     void wholePanelRotationFieldsAreGatedByTheResolver();
     void meshSceneEditorIsGatedAndTransactional();
     void rendererSwitchRetainsOnlyUnchangedInactiveFields();
@@ -260,6 +261,36 @@ void PanelWindowCapabilityTest::studioFolderItemNames()
             QVERIFY(!backend.panelRendererConfiguration(panel).value("folderShowNames").toBool());
         }
     }
+}
+
+void PanelWindowCapabilityTest::studioPlainSurfaceExplains3D()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    const auto before = registry->panelDefinition(panel)->toPersistedMap();
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> popup(component.createWithInitialProperties({
+        {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 2}}));
+    QVERIFY(popup);
+    QVERIFY(!popup->property("scene3DControlsAvailable").toBool());
+    QVariant rows;
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "panelAppearanceRows", Q_RETURN_ARG(QVariant, rows)));
+    bool found = false;
+    for (const auto &row : rows.toList())
+        for (const auto &action : row.toMap().value("actions").toList())
+            found |= action.toMap().value("action").toString() == "browse-3d-themes";
+    QVERIFY(found);
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "performStudioAction",
+        Q_ARG(QVariant, "browse-3d-themes"), Q_ARG(QVariant, QVariantMap{})));
+    QCOMPARE(popup->property("subTabIndex").toInt(), 6);
+    QCOMPARE(registry->panelDefinition(panel)->toPersistedMap(), before);
+    QVERIFY(!popup->property("hasPendingChanges").toBool());
 }
 
 void PanelWindowCapabilityTest::studioIconTiles()
