@@ -7,7 +7,7 @@
 > implementation claims.
 
 <!-- PANEL_MOTION_CURRENT_BEGIN -->
-**Latest verified boundary — 2026-10-04: PANEL CONTROLS AND MOTION VERIFIED; OWNER UPDATE PENDING.**
+**Latest verified boundary — 2026-10-04: PANEL CONTROLS AND MOTION VERIFIED; OWNER PC UPDATED.**
 Starting main was `08e24ce7b32bcc057dc62c7d41d2697f563ef724`.
 
 Panels tabs now have bounded navigation arrows alongside natural wheel scrolling.
@@ -66,7 +66,7 @@ were removed with diagnostics retained. Seventeen new records from concurrent
 Nexees work were identified by cwd/environment and preserved. No task dump
 payloads or task processes remain; corrected installed gates added no task crash. One primary serial session; no subagents.
 
-Owner PC still runs 0.1.1-3. The verified new package is ready; the authorized PC update follows candidate cleanup/commit/sync. Final Git and installation receipts belong to local STATE.json.
+Owner PC now runs verified **0.1.1-4** after a fresh private configuration backup. Actual 216/216 installed payload bytes/modes, pacman Qkk (325 files, zero altered), stable new D-Bus owner/executable hash, the new projected settings and `arch-dock --settings` PASS. Both Arch Dock and Plasma configuration files are byte-identical, with no changed logical keys. No active Arch Dock applet or loaded integration module needed a Plasma-wide refresh; the verified backend was restarted and Panel Studio is open. Desktop activation briefly restarted the old mapped executable during package installation; the post-install restart was accepted only after its live executable hash matched the new package. Candidate closure was committed/synced at `e364a1729030319d38221a70a0473b461890bf97` before this update. The final operational Git receipt belongs to local STATE.json.
 
 Owner visual/physical acceptance remains separate from private Plasma evidence.
 No new real tag/publication was performed in this correction.

@@ -15,7 +15,7 @@
 - [x] Source SHA-256 c53bd92345d29ba3325c48cac5894853650523acc737bacc3623bce524c42642; exact pinned recipe; fresh one-job Release/Quick3D-ON 0.1.1-4 package SHA-256 fb31f07927691614b9199e33c9f550ae0e79d3ee7de94c1b6d368cb0241c13f9.
 - [x] Native installed gates after compiled/extracted source removal and source masking: 216/216 payload bytes/modes, catalogs/cards, startup with/without 3D, real new UI, upgrade/recovery/removals and configuration preservation PASS.
 - [x] Owned cleanup complete; 941 protected files/460 baseline core identities preserved; one exact task probe dump/metadata cleaned, 17 unrelated new records preserved, and no task dump payload/process remains; compact evidence retained.
-- [ ] Candidate cleanup/commit/sync followed by private owner backup, verified PC update/backend restart, configuration preservation and final operational Git receipt.
+- [x] Candidate cleanup/commit/sync followed by private owner backup, verified PC update/backend restart, configuration preservation and final operational Git receipt.
 - [ ] Owner manual visual/physical acceptance; separate from private runtime evidence.
 <!-- PANEL_MOTION_CHECKLIST_END -->
 
