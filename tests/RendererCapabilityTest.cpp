@@ -775,6 +775,199 @@ private slots:
         QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
     }
 
+    // AD3D-TASK-002: the 3D page's transform scales, moves and rolls the
+    // platform and its icons together, their input follows them, the view and
+    // light settings reach the scene, and motion settings respect reduced
+    // motion.
+    void sceneTransformMovesPlatformIconsAndInputTogether()
+    {
+        if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+            return; // Needs the private RHI session, like the scene gates above.
+        const QString themeRoot = qEnvironmentVariable("ARCHDOCK_RENDERING_STAGED_THEME_ROOT",
+            QStringLiteral(ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT));
+        const auto package = ArchDock::ThemePackage::load(
+            themeRoot + QStringLiteral("/mesh-platform-cyan/archdock-theme.json"));
+        QVERIFY2(package.isValid(), qPrintable(package.primaryCode()));
+        const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
+        QVERIFY(!glyphFixture.isEmpty());
+        QQmlEngine engine;
+        QStringList unexpectedWarnings;
+        connect(&engine, &QQmlEngine::warnings, &engine, [&](const QList<QQmlError> &warnings) {
+            for (const auto &warning : warnings)
+                unexpectedWarnings.append(warning.toString());
+        });
+        engine.addImportPath(importRoot());
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import ArchDock.Rendering 1.0
+            PanelScene {
+                required property string glyphFixture
+                property real sceneScale: 1
+                property real scenePositionX: 0
+                property real sceneRoll: 0
+                property bool sceneTransitions: false
+                property bool sceneFloat: false
+                property real sceneFieldOfView: 40
+                property real sceneKeyLight: 1
+                property bool reduced: false
+                panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
+                                   scene3DQuality: "low", iconSize: 40, spacing: 8, layoutPadding: 10,
+                                   scene3DScale: sceneScale, scene3DPositionX: scenePositionX,
+                                   scene3DRoll: sceneRoll, scene3DTransitions: sceneTransitions,
+                                   scene3DFloat: sceneFloat, scene3DFieldOfView: sceneFieldOfView,
+                                   scene3DKeyLight: sceneKeyLight})
+                animationProfiles: ({reducedMotion: reduced})
+                entryDelegateContext: ({hostKind: "free"})
+                hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [
+                    {id: "open", available: true}]})
+                orderedEntries: [0, 1, 2, 3, 4, 5, 6, 7].map(function(index) {
+                    return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphFixture}
+                })
+            }
+        )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/TransformConsumer.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QQuickWindow window;
+        std::unique_ptr<QObject> object(component.createWithInitialProperties({
+            {QStringLiteral("themeDefinition"), package.package->runtimeProjection()},
+            {QStringLiteral("glyphFixture"), QUrl::fromLocalFile(glyphFixture).toString()}}));
+        QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+        auto *scene = qobject_cast<QQuickItem *>(object.get());
+        QVERIFY(scene);
+        scene->setParentItem(window.contentItem());
+        window.resize(qCeil(scene->width()), qCeil(scene->height()));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(),
+                                 QStringLiteral("true3d"), 5000);
+        auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+        QVERIFY(renderer);
+        QObject *viewport = objectValue(renderer->property("viewport"));
+        QObject *content = renderer->findChild<QObject *>(QStringLiteral("mesh-scene-content"));
+        QVERIFY(viewport && content);
+        QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 8);
+
+        const auto centres = [&]() {
+            QList<QPointF> result;
+            for (const QVariant &rect : plainValue(renderer->property("projectedEntryGeometry")).toList())
+                result.append(QPointF(rect.toMap().value("centerX").toDouble(),
+                                      rect.toMap().value("centerY").toDouble()));
+            return result;
+        };
+        const auto centroid = [](const QList<QPointF> &points) {
+            QPointF sum;
+            for (const QPointF &point : points) sum += point;
+            return points.isEmpty() ? sum : sum / points.size();
+        };
+        const auto spread = [&](const QList<QPointF> &points) {
+            const QPointF middle = centroid(points);
+            double reach = 0;
+            for (const QPointF &point : points) reach = std::max(reach, QLineF(middle, point).length());
+            return reach;
+        };
+        const auto projectionMatches = [&]() {
+            const auto rects = plainValue(scene->property("entryRects")).toList();
+            const auto projected = plainValue(renderer->property("projectedEntryGeometry")).toList();
+            if (rects.size() != 8 || projected.size() != 8) return false;
+            for (int i = 0; i < 8; ++i)
+                for (const auto &key : {"x", "y", "width", "height"})
+                    if (qAbs(rects[i].toMap().value(key).toDouble()
+                             - projected[i].toMap().value(key).toDouble()) > 1) return false;
+            return true;
+        };
+        // A point on the bare platform between two icons, wherever the
+        // transform has put the platform.
+        const double track = renderer->property("platformScale").toDouble() * 0.84;
+        const double top = renderer->property("platformTop").toDouble();
+        const auto surfacePoint = [&]() {
+            QVector3D world;
+            QMetaObject::invokeMethod(content, "mapPositionToScene", Q_RETURN_ARG(QVector3D, world),
+                Q_ARG(QVector3D, QVector3D(track * qCos(M_PI / 8), track * qSin(M_PI / 8), top)));
+            QVector3D view;
+            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, view),
+                Q_ARG(QVector3D, world));
+            return QPointF(view.x(), view.y());
+        };
+        const auto accepts = [&](const QPointF &point) {
+            QVariant accepted;
+            QMetaObject::invokeMethod(scene, "containsInputPoint", Q_RETURN_ARG(QVariant, accepted),
+                Q_ARG(QVariant, QVariant(point)));
+            return accepted.toBool();
+        };
+
+        const QList<QPointF> resting = centres();
+        const QPointF restingMiddle = centroid(resting);
+        const double restingSpread = spread(resting);
+        const QPointF restingSurface = surfacePoint();
+        QVERIFY(accepts(restingSurface));
+
+        // Scale shrinks the platform and its icons about their centre.
+        scene->setProperty("sceneScale", 0.6);
+        QTRY_VERIFY2(qAbs(spread(centres()) - restingSpread * 0.6) < restingSpread * 0.05,
+                     qPrintable(QStringLiteral("spread %1 of %2").arg(spread(centres())).arg(restingSpread)));
+        QVERIFY(QLineF(centroid(centres()), restingMiddle).length() < 3);
+        QTRY_VERIFY(projectionMatches());
+        QVERIFY(accepts(surfacePoint()));
+        QVERIFY2(!accepts(restingSurface), "the platform's old edge passes through once it shrinks");
+
+        // Position moves them right, within the panel; input moves with them.
+        scene->setProperty("scenePositionX", 1.0);
+        QTRY_VERIFY(centroid(centres()).x() > restingMiddle.x() + 10);
+        QTRY_VERIFY(projectionMatches());
+        for (const QPointF &point : centres())
+            QVERIFY2(point.x() > 0 && point.x() < scene->width(), "an icon left its panel");
+        QVERIFY(accepts(surfacePoint()));
+
+        // Roll turns the picture about the centre.
+        scene->setProperty("scenePositionX", 0.0);
+        scene->setProperty("sceneScale", 1.0);
+        QTRY_VERIFY(qAbs(spread(centres()) - restingSpread) < restingSpread * 0.05);
+        scene->setProperty("sceneRoll", 90.0);
+        QTRY_VERIFY(QLineF(centroid(centres()), restingMiddle).length() < 3);
+        const auto angleOf = [&](const QPointF &point, const QPointF &middle) {
+            return qRadiansToDegrees(std::atan2(point.y() - middle.y(), point.x() - middle.x()));
+        };
+        QTRY_VERIFY2(qAbs(std::remainder(angleOf(centres().value(0), restingMiddle)
+                                          - angleOf(resting.value(0), restingMiddle), 360.0)) > 75,
+                     "entry 0 turned with the roll");
+        QTRY_VERIFY(projectionMatches());
+        scene->setProperty("sceneRoll", 0.0);
+
+        // View and light settings reach the camera and the key light.
+        scene->setProperty("sceneFieldOfView", 60.0);
+        scene->setProperty("sceneKeyLight", 2.0);
+        QObject *camera = objectValue(viewport->property("camera"));
+        QVERIFY(camera);
+        QTRY_COMPARE(camera->property("fieldOfView").toDouble(), 60.0);
+        QTRY_COMPARE(renderer->findChild<QObject *>(QStringLiteral("mesh-key-light"))
+                         ->property("brightness").toDouble(), 2.0);
+        QTRY_VERIFY(projectionMatches());
+
+        // Transitions animate a change only without reduced motion.
+        scene->setProperty("sceneTransitions", true);
+        scene->setProperty("sceneScale", 0.6);
+        QTest::qWait(40);
+        const double midway = renderer->property("shownScale").toDouble();
+        QVERIFY2(midway > 0.6 + 1e-3 && midway < 1.0, qPrintable(QString::number(midway)));
+        QTRY_COMPARE(renderer->property("shownScale").toDouble(), 0.6);
+        scene->setProperty("reduced", true);
+        scene->setProperty("sceneScale", 1.0);
+        QCoreApplication::processEvents();
+        QCOMPARE(renderer->property("shownScale").toDouble(), 1.0);
+
+        // Float is off unless chosen and stops, at rest, under reduced motion.
+        scene->setProperty("reduced", false);
+        QTest::qWait(300);
+        QCOMPARE(renderer->property("floatOffset").toDouble(), 0.0);
+        scene->setProperty("sceneFloat", true);
+        QTRY_VERIFY_WITH_TIMEOUT(qAbs(renderer->property("floatOffset").toDouble()) > 0.01, 3000);
+        scene->setProperty("reduced", true);
+        QTRY_COMPARE(renderer->property("floatOffset").toDouble(), 0.0);
+        QTest::qWait(200);
+        QCOMPARE(renderer->property("floatOffset").toDouble(), 0.0);
+        QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
+    }
+
     void packagedBuildFacts()
     {
         const QString module = importRoot() + QStringLiteral("/ArchDock/Rendering/");

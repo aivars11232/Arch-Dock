@@ -86,6 +86,14 @@ public:
     [[nodiscard]] std::optional<QVariantMap> builtInThemeRuntimeProjection(
         const QString &themeId,
         QString *errorCode = nullptr) const;
+    // A free panel with a closed radial layout whose look ships no 3D scene of
+    // its own can still be drawn in 3D: the validated generic platform and
+    // pedestal meshes, with a material taken from the look's own colour and
+    // glow. Returns {scene3D, scene3DResources}, or nothing when the panel or
+    // its look cannot be adapted. The look keeps its id and its own renderer.
+    [[nodiscard]] std::optional<QVariantMap> genericScene3D(
+        const ArchDock::PanelDefinition &definition,
+        const QVariantMap &look) const;
     [[nodiscard]] ArchDock::CapabilityResolution resolvePanelCapabilities(
         const ArchDock::PanelDefinition &definition,
         QString *errorCode = nullptr) const;
@@ -261,9 +269,17 @@ private:
         QString *errorMessage);
     void setMigrationDiagnostic(const QString &diagnostic);
     void changed(bool nativeTopologyChanged);
+    [[nodiscard]] std::optional<ArchDock::ThemeCapabilityProfile> lookCapabilityProfile(
+        const ArchDock::PanelDefinition &definition, QString *errorCode) const;
+    [[nodiscard]] std::optional<QVariantMap> lookRuntimeProjection(
+        const ArchDock::PanelDefinition &definition, QString *errorCode) const;
+    [[nodiscard]] QVariantMap catalogTheme(const QString &themeId) const;
+    [[nodiscard]] static QString themeIdFor(const ArchDock::PanelDefinition &definition);
 
     QList<QVariantMap> m_panels;
     QVariantList m_themeDefinitions;
+    // The generic platform geometry, validated once on first use.
+    mutable std::optional<QVariantMap> m_genericSceneGeometry;
     std::optional<ArchDock::IconStyleStore> m_iconStyleStore;
     QString m_iconStyleStoreError;
     std::optional<ArchDock::AnimationProfileCatalog> m_animationProfileCatalog;

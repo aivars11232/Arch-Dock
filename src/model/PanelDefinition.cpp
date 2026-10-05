@@ -602,9 +602,19 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         definition.surface.parameters3D.insert(QStringLiteral("cameraPitch"),
             normalized(QStringLiteral("scene3DCameraPitch"), 25.0));
     for (const auto &[key, parameter, fallback] :
-         {std::tuple{"scene3DCameraYaw", "cameraYaw", 10.0},
-          std::tuple{"scene3DThickness", "thickness", 1.0},
-          std::tuple{"scene3DIconElevation", "iconElevation", 0.3}}) {
+         {std::tuple{"scene3DCameraYaw", "cameraYaw", QVariant(10.0)},
+          std::tuple{"scene3DThickness", "thickness", QVariant(1.0)},
+          std::tuple{"scene3DIconElevation", "iconElevation", QVariant(0.3)},
+          std::tuple{"scene3DRoll", "roll", QVariant(0.0)},
+          std::tuple{"scene3DPositionX", "positionX", QVariant(0.0)},
+          std::tuple{"scene3DPositionY", "positionY", QVariant(0.0)},
+          std::tuple{"scene3DPositionZ", "positionZ", QVariant(0.0)},
+          std::tuple{"scene3DScale", "scale", QVariant(1.0)},
+          std::tuple{"scene3DFieldOfView", "fieldOfView", QVariant(40.0)},
+          std::tuple{"scene3DKeyLight", "keyLightBrightness", QVariant(1.0)},
+          std::tuple{"scene3DFillLight", "fillLightBrightness", QVariant(0.4)},
+          std::tuple{"scene3DTransitions", "transitions", QVariant(true)},
+          std::tuple{"scene3DFloat", "float", QVariant(false)}}) {
         if (record.contains(QLatin1String(key)))
             definition.surface.parameters3D.insert(QLatin1String(parameter),
                 normalized(QLatin1String(key), fallback));
@@ -1126,7 +1136,17 @@ QVariantMap PanelDefinition::toLegacyMap() const
     for (const auto &[key, parameter] :
          {std::pair{"scene3DCameraYaw", "cameraYaw"},
           std::pair{"scene3DThickness", "thickness"},
-          std::pair{"scene3DIconElevation", "iconElevation"}}) {
+          std::pair{"scene3DIconElevation", "iconElevation"},
+          std::pair{"scene3DRoll", "roll"},
+          std::pair{"scene3DPositionX", "positionX"},
+          std::pair{"scene3DPositionY", "positionY"},
+          std::pair{"scene3DPositionZ", "positionZ"},
+          std::pair{"scene3DScale", "scale"},
+          std::pair{"scene3DFieldOfView", "fieldOfView"},
+          std::pair{"scene3DKeyLight", "keyLightBrightness"},
+          std::pair{"scene3DFillLight", "fillLightBrightness"},
+          std::pair{"scene3DTransitions", "transitions"},
+          std::pair{"scene3DFloat", "float"}}) {
         if (surface.parameters3D.contains(QLatin1String(parameter)))
             record.insert(QLatin1String(key), surface.parameters3D.value(QLatin1String(parameter)));
     }

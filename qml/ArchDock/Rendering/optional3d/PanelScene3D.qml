@@ -85,6 +85,97 @@ Item {
     // The ring the icons stand on: the middle of the platform's flat top.
     readonly property real entryTrackRadius: platformScale * bounded("entryRadius", 0.84, 0.1, 1)
 
+    // The scene's own transform from the Panels > 3D page. Pitch and yaw orbit
+    // the camera, as they always have; roll turns it about its view axis.
+    // Position moves the platform and its icons by a fraction of the room the
+    // panel has around them, and scale resizes them, so no value can carry
+    // the platform out of its panel. Everything is drawn, picked and pressed
+    // through the same nodes, so input and anchors follow without a copy.
+    property bool gizmoDragging: false
+    readonly property bool transitionsEnabled: !reducedMotion && !gizmoDragging
+        && (sceneDefinition || ({})).transitions !== false
+    readonly property real cameraDistance: Math.max(1, height)
+        / (2 * Math.tan(bounded("fieldOfView", 40, 20, 70) * Math.PI / 360))
+    // The platform and its icons reach a little past the platform's radius.
+    readonly property real sceneExtent: platformScale * 1.05
+    readonly property real targetScale: bounded("scale", 1, 0.5, 1.25)
+    readonly property real fitLimit: Math.min(width, height) / 2 / Math.max(1, sceneExtent)
+    // Nearer is larger: depth stops where the platform would outgrow the panel.
+    readonly property real targetDepth: Math.min(bounded("positionZ", 0, -1, 1) * platformScale * 0.5,
+        cameraDistance * Math.max(0, 1 - targetScale / Math.max(targetScale, fitLimit)))
+    readonly property real apparentScale: targetScale * cameraDistance
+        / Math.max(1, cameraDistance - targetDepth)
+    readonly property real roomX: Math.max(0, width / 2 - sceneExtent * apparentScale)
+    readonly property real roomY: Math.max(0, height / 2 - sceneExtent * apparentScale)
+    readonly property vector3d targetPosition: Qt.vector3d(
+        bounded("positionX", 0, -1, 1) * roomX * (cameraDistance - targetDepth) / cameraDistance,
+        bounded("positionY", 0, -1, 1) * roomY * (cameraDistance - targetDepth) / cameraDistance,
+        targetDepth)
+    readonly property real targetPitch: bounded("cameraPitch", 25, -60, 60)
+    readonly property real targetYaw: bounded("cameraYaw", 0, -180, 180)
+    readonly property real targetRoll: bounded("roll", 0, -180, 180)
+    // What is drawn. It eases toward the targets when transitions are on and
+    // jumps to them otherwise. One frame-driven easing instead of a Behavior
+    // per value: Qt creates a Behavior's animation on its first use, which
+    // would make the scene's objects depend on what it has been through.
+    property real shownPitch: 0
+    property real shownYaw: 0
+    property real shownRoll: 0
+    property vector3d shownPosition: Qt.vector3d(0, 0, 0)
+    property real shownScale: 1
+    // Exact: the easing lands each value on its target, then stops.
+    readonly property bool transformSettled: shownPitch === targetPitch
+        && shownYaw === targetYaw && shownRoll === targetRoll && shownScale === targetScale
+        && shownPosition.x === targetPosition.x && shownPosition.y === targetPosition.y
+        && shownPosition.z === targetPosition.z
+    function angleStep(from, to) { return ((to - from) % 360 + 540) % 360 - 180 }
+    function settleTransform() {
+        shownPitch = targetPitch
+        shownYaw = targetYaw
+        shownRoll = targetRoll
+        shownPosition = targetPosition
+        shownScale = targetScale
+    }
+    function followTransform() { if (!transitionsEnabled) settleTransform() }
+    function stepTransform(seconds) {
+        // About 95 percent of the way in a quarter of a second, the short way
+        // round for angles; within a hair of the target it lands on it.
+        const share = 1 - Math.exp(-12 * Math.max(0, seconds))
+        const toward = function(from, to, step, epsilon) {
+            return Math.abs(step) < epsilon ? to : from + step * share
+        }
+        shownPitch = toward(shownPitch, targetPitch, targetPitch - shownPitch, 1e-3)
+        shownYaw = toward(shownYaw, targetYaw, angleStep(shownYaw, targetYaw), 1e-3)
+        shownRoll = toward(shownRoll, targetRoll, angleStep(shownRoll, targetRoll), 1e-3)
+        const offset = targetPosition.minus(shownPosition)
+        shownPosition = offset.length() < 1e-3 ? targetPosition
+            : shownPosition.plus(offset.times(share))
+        shownScale = toward(shownScale, targetScale, targetScale - shownScale, 1e-4)
+    }
+    onTargetPitchChanged: followTransform()
+    onTargetYawChanged: followTransform()
+    onTargetRollChanged: followTransform()
+    onTargetPositionChanged: followTransform()
+    onTargetScaleChanged: followTransform()
+    onTransitionsEnabledChanged: followTransform()
+    Component.onCompleted: settleTransform()
+    FrameAnimation {
+        running: root.transitionsEnabled && !root.transformSettled
+        onTriggered: root.stepTransform(frameTime)
+    }
+    // A slow rise and fall, off unless chosen, and never under reduced motion.
+    readonly property bool floatRunning: (sceneDefinition || ({})).float === true
+        && !reducedMotion && motionAllowed && !gizmoDragging
+    property real floatOffset: 0
+    onFloatRunningChanged: if (!floatRunning) floatOffset = 0
+    SequentialAnimation on floatOffset {
+        running: root.floatRunning
+        loops: Animation.Infinite
+        NumberAnimation { to: root.platformScale * 0.03; duration: 1800; easing.type: Easing.InOutSine }
+        NumberAnimation { to: -root.platformScale * 0.03; duration: 3600; easing.type: Easing.InOutSine }
+        NumberAnimation { to: 0; duration: 1800; easing.type: Easing.InOutSine }
+    }
+
     function containsInputPoint(point) {
         if (!rendererReady) return false
         const hit = view.pick(point.x, point.y).objectHit
@@ -206,12 +297,14 @@ Item {
             mipFilter: Texture.Linear
         }
         Node {
-            eulerRotation.x: root.bounded("cameraPitch", 25, -60, 60)
-            eulerRotation.y: root.bounded("cameraYaw", 0, -180, 180)
+            objectName: "mesh-camera-rig"
+            eulerRotation.x: root.shownPitch
+            eulerRotation.y: root.shownYaw
             PerspectiveCamera {
                 id: camera
                 fieldOfView: root.bounded("fieldOfView", 40, 20, 70)
-                z: Math.max(1, root.height) / (2 * Math.tan(fieldOfView * Math.PI / 360))
+                z: root.cameraDistance
+                eulerRotation.z: root.shownRoll
                 clipNear: 1
                 clipFar: Math.max(100, z * 5)
                 // Camera-local coordinates preserve the logical pixel centers
@@ -219,6 +312,12 @@ Item {
 
             }
         }
+        Node {
+            id: sceneContent
+            objectName: "mesh-scene-content"
+            position: Qt.vector3d(root.shownPosition.x, root.shownPosition.y,
+                                  root.shownPosition.z + root.floatOffset)
+            scale: Qt.vector3d(root.shownScale, root.shownScale, root.shownScale)
         Node {
             eulerRotation.z: -root.layoutAngle
         Repeater3D {
@@ -371,16 +470,6 @@ Item {
             }
         }
         }
-        DirectionalLight {
-            eulerRotation: Qt.vector3d(-35, -35, 0)
-            brightness: root.bounded("keyLightBrightness", 1, 0, 4)
-            ambientColor: "#202630"
-        }
-        DirectionalLight {
-            eulerRotation: Qt.vector3d(25, 140, 0)
-            brightness: root.bounded("fillLightBrightness", 0.4, 0, 2)
-            color: "#78c8ff"
-        }
         Node {
             objectName: "mesh-platform-motion"
             eulerRotation.z: -root.layoutAngle
@@ -407,6 +496,20 @@ Item {
                     emissionScale: root.emissionScale
                 }
             }
+        }
+        }
+        // Lights stay in world space; only the platform and its icons move.
+        DirectionalLight {
+            objectName: "mesh-key-light"
+            eulerRotation: Qt.vector3d(-35, -35, 0)
+            brightness: root.bounded("keyLightBrightness", 1, 0, 4)
+            ambientColor: "#202630"
+        }
+        DirectionalLight {
+            objectName: "mesh-fill-light"
+            eulerRotation: Qt.vector3d(25, 140, 0)
+            brightness: root.bounded("fillLightBrightness", 0.4, 0, 2)
+            color: "#78c8ff"
         }
         // The shared geometry is retained even with no entries. Its readiness
         // participates in the whole scene's safe fallback decision.

@@ -10,6 +10,7 @@
 #include "themes/ThemePackage.h"
 #include "persistence/ConfigurationBackup.h"
 
+#include <QColor>
 #include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
@@ -41,6 +42,51 @@ constexpr auto kFreeCreationComplete = "complete";
 constexpr auto kFreeCreationRollbackPending = "rollback-pending";
 constexpr auto kPanelRecordsKey = "dock/panels";
 constexpr auto kPanelLegacyBackupKey = "dock/panelsLegacyV1Backup";
+
+// The material a generic 3D platform wears: the look's own colour as the
+// glowing accent, a deep shade of it as the body, and a finish that follows the
+// look's appearance. A dark look gets a lighter accent so its glow still reads.
+QVariantMap genericSceneMaterial(const QString &colourName, const QString &appearance,
+                                 qreal glowIntensity)
+{
+    QColor accent(colourName);
+    if (!accent.isValid())
+        accent = QColor(QStringLiteral("#78e9f4"));
+    const float hue = std::max(0.0f, accent.hslHueF());
+    const float saturation = accent.hslSaturationF();
+    const QColor emissive = QColor::fromHslF(hue, saturation,
+        std::clamp(accent.lightnessF(), 0.55f, 0.75f));
+    const QColor base = QColor::fromHslF(hue, saturation * 0.6f,
+        std::clamp(accent.lightnessF() * 0.45f, 0.12f, 0.3f));
+    double metalness = 0.6;
+    double roughness = 0.35;
+    if (appearance == QStringLiteral("glass") || appearance == QStringLiteral("crystal"))
+    {
+        metalness = 0.15;
+        roughness = 0.12;
+    }
+    else if (appearance == QStringLiteral("neon") || appearance == QStringLiteral("futuristic") ||
+             appearance == QStringLiteral("plasma") || appearance == QStringLiteral("lime") ||
+             appearance == QStringLiteral("holographic"))
+    {
+        metalness = 0.3;
+        roughness = 0.25;
+    }
+    else if (appearance == QStringLiteral("minimal") || appearance == QStringLiteral("organic"))
+    {
+        metalness = 0.2;
+        roughness = 0.6;
+    }
+    return {
+        {QStringLiteral("format"), QStringLiteral("org.archdock.material")},
+        {QStringLiteral("version"), 1},
+        {QStringLiteral("baseColor"), base.name(QColor::HexRgb)},
+        {QStringLiteral("emissiveColor"), emissive.name(QColor::HexRgb)},
+        {QStringLiteral("emissiveStrength"), std::clamp(0.35 * glowIntensity, 0.0, 2.0)},
+        {QStringLiteral("metalness"), metalness},
+        {QStringLiteral("roughness"), roughness},
+    };
+}
 
 bool isEdge(const QString &edge)
 {
@@ -920,6 +966,33 @@ PanelRegistry::themeCapabilityProfile(
     const ArchDock::PanelDefinition &definition,
     QString *errorCode) const
 {
+    std::optional<ArchDock::ThemeCapabilityProfile> profile =
+        lookCapabilityProfile(definition, errorCode);
+    if (!profile.has_value() ||
+        profile->rendererTiers.contains(ArchDock::RendererTier::True3D))
+    {
+        return profile;
+    }
+    if (!genericScene3D(definition, catalogTheme(themeIdFor(definition))).has_value())
+    {
+        return profile;
+    }
+    // The generic scene is one more renderer for the same look. If it cannot
+    // be drawn, the look's own renderer takes over, not a plainer one.
+    profile->rendererTiers.append(ArchDock::RendererTier::True3D);
+    if (profile->preferredRendererTier.has_value() &&
+        !profile->fallbackRendererTiers.contains(*profile->preferredRendererTier))
+    {
+        profile->fallbackRendererTiers.prepend(*profile->preferredRendererTier);
+    }
+    return profile;
+}
+
+std::optional<ArchDock::ThemeCapabilityProfile>
+PanelRegistry::lookCapabilityProfile(
+    const ArchDock::PanelDefinition &definition,
+    QString *errorCode) const
+{
     const QString themeId = !definition.surface.completeThemeId.trimmed().isEmpty()
         ? definition.surface.completeThemeId.trimmed()
         : definition.surface.panelThemeId.trimmed();
@@ -1150,6 +1223,143 @@ std::optional<QVariantMap> PanelRegistry::builtInThemeRuntimeProjection(
 }
 
 std::optional<QVariantMap> PanelRegistry::themeRuntimeProjection(
+    const ArchDock::PanelDefinition &definition,
+    QString *errorCode) const
+{
+    QString lookError;
+    std::optional<QVariantMap> projection = lookRuntimeProjection(definition, &lookError);
+    if (errorCode)
+    {
+        *errorCode = lookError;
+    }
+    if (!lookError.isEmpty() ||
+        (projection.has_value() && projection->contains(QStringLiteral("scene3D"))))
+    {
+        return projection;
+    }
+    const QString themeId = themeIdFor(definition);
+    const QVariantMap catalog = catalogTheme(themeId);
+    if (!themeId.isEmpty() && catalog.isEmpty())
+    {
+        return projection;
+    }
+    const std::optional<QVariantMap> generic = genericScene3D(definition, catalog);
+    if (!generic.has_value())
+    {
+        return projection;
+    }
+    // A look drawn procedurally has no package projection. It gets a minimal
+    // one, so the renderer can tell the look and its generic scene apart from
+    // a missing theme.
+    QVariantMap result = projection.value_or(QVariantMap{
+        {QStringLiteral("format"), QStringLiteral("org.archdock.theme")},
+        {QStringLiteral("version"), 2},
+        {QStringLiteral("valid"), true},
+        {QStringLiteral("id"), themeId},
+        // Every value here travels over D-Bus, which cannot carry an empty
+        // variant: a panel without a theme still gets a name.
+        {QStringLiteral("name"), catalog.value(QStringLiteral("name"),
+            QStringLiteral("Panel surface")).toString()},
+        {QStringLiteral("capabilities"), catalog.value(QStringLiteral("capabilities"),
+            QVariantMap{{QStringLiteral("rendererTiers"), QVariantList{QStringLiteral("procedural2d")}},
+                        {QStringLiteral("preferredRendererTier"), QStringLiteral("procedural2d")},
+                        {QStringLiteral("fallbackRendererTiers"), QVariantList{}}})}});
+    QVariantMap capabilities = result.value(QStringLiteral("capabilities")).toMap();
+    QVariantList tiers = capabilities.value(QStringLiteral("rendererTiers")).toList();
+    QVariantList fallbacks = capabilities.value(QStringLiteral("fallbackRendererTiers")).toList();
+    const QString preferred = capabilities.value(QStringLiteral("preferredRendererTier")).toString();
+    if (!tiers.contains(QStringLiteral("true3d")))
+        tiers.append(QStringLiteral("true3d"));
+    if (!preferred.isEmpty() && !fallbacks.contains(preferred))
+        fallbacks.prepend(preferred);
+    capabilities.insert(QStringLiteral("rendererTiers"), tiers);
+    capabilities.insert(QStringLiteral("fallbackRendererTiers"), fallbacks);
+    result.insert(QStringLiteral("capabilities"), capabilities);
+    result.insert(QStringLiteral("scene3D"), generic->value(QStringLiteral("scene3D")));
+    result.insert(QStringLiteral("scene3DResources"), generic->value(QStringLiteral("scene3DResources")));
+    result.insert(QStringLiteral("genericScene3D"), true);
+    return result;
+}
+
+QString PanelRegistry::themeIdFor(const ArchDock::PanelDefinition &definition)
+{
+    return !definition.surface.completeThemeId.trimmed().isEmpty()
+        ? definition.surface.completeThemeId.trimmed()
+        : definition.surface.panelThemeId.trimmed();
+}
+
+QVariantMap PanelRegistry::catalogTheme(const QString &themeId) const
+{
+    if (themeId.isEmpty())
+        return {};
+    for (const QVariant &candidate : m_themeDefinitions)
+    {
+        const QVariantMap theme = candidate.toMap();
+        if (theme.value(QStringLiteral("id")).toString() == themeId)
+            return theme;
+    }
+    return {};
+}
+
+std::optional<QVariantMap> PanelRegistry::genericScene3D(
+    const ArchDock::PanelDefinition &definition, const QVariantMap &look) const
+{
+    // Closed radial paths only: the generic platform is a whole ring, and an
+    // open arc or semicircle would stand on half of it.
+    static const QStringList radialLayouts{
+        QStringLiteral("circular"), QStringLiteral("ring"), QStringLiteral("ellipse"),
+        QStringLiteral("radial"), QStringLiteral("polygon"), QStringLiteral("triangle"),
+        QStringLiteral("square"), QStringLiteral("pentagon"), QStringLiteral("hexagon"),
+        QStringLiteral("octagon")};
+    if (definition.host.kind != ArchDock::PanelHostKind::FreeDesktop ||
+        !radialLayouts.contains(definition.layout.pathType) ||
+        look.contains(QStringLiteral("scene3D")) ||
+        !definition.surface.themePackageManifest.trimmed().isEmpty() ||
+        !definition.surface.themeAsset.trimmed().isEmpty() ||
+        !definition.surface.themeSource.trimmed().isEmpty())
+    {
+        return std::nullopt;
+    }
+    if (!m_genericSceneGeometry.has_value())
+    {
+        // The validated platform of the built-in mesh package, loaded once.
+        const std::optional<QVariantMap> source =
+            builtInThemeRuntimeProjection(QStringLiteral("mesh-platform-cyan"));
+        const QVariantMap resources = source.has_value()
+            ? source->value(QStringLiteral("scene3DResources")).toMap() : QVariantMap{};
+        const QVariantMap mesh = resources.value(QStringLiteral("mesh")).toMap();
+        if (mesh.isEmpty())
+            return std::nullopt;
+        QVariantMap scene = source->value(QStringLiteral("scene3D")).toMap();
+        scene.remove(QStringLiteral("texture"));
+        scene.insert(QStringLiteral("parts"), QVariantList{});
+        m_genericSceneGeometry = QVariantMap{
+            {QStringLiteral("scene3D"), scene},
+            {QStringLiteral("mesh"), mesh},
+            {QStringLiteral("iconMesh"), resources.value(QStringLiteral("iconMesh"))},
+            {QStringLiteral("indexBudget"), resources.value(QStringLiteral("indexBudget"))}};
+    }
+    const QVariantMap style = look.value(QStringLiteral("panelStyle")).toMap();
+    const QString colour = !definition.surface.color.trimmed().isEmpty()
+        ? definition.surface.color.trimmed()
+        : style.value(QStringLiteral("color")).toString();
+    const QString appearance = !definition.surface.appearance.trimmed().isEmpty() && look.isEmpty()
+        ? definition.surface.appearance.trimmed()
+        : style.value(QStringLiteral("appearance"), look.value(QStringLiteral("category"))).toString();
+    QVariantMap scene = m_genericSceneGeometry->value(QStringLiteral("scene3D")).toMap();
+    scene.insert(QStringLiteral("generic"), true);
+    return QVariantMap{
+        {QStringLiteral("scene3D"), scene},
+        {QStringLiteral("scene3DResources"), QVariantMap{
+            {QStringLiteral("mesh"), m_genericSceneGeometry->value(QStringLiteral("mesh"))},
+            {QStringLiteral("iconMesh"), m_genericSceneGeometry->value(QStringLiteral("iconMesh"))},
+            {QStringLiteral("material"), genericSceneMaterial(colour, appearance,
+                definition.surface.glowIntensity)},
+            {QStringLiteral("parts"), QVariantList{}},
+            {QStringLiteral("indexBudget"), m_genericSceneGeometry->value(QStringLiteral("indexBudget"))}}}};
+}
+
+std::optional<QVariantMap> PanelRegistry::lookRuntimeProjection(
     const ArchDock::PanelDefinition &definition,
     QString *errorCode) const
 {

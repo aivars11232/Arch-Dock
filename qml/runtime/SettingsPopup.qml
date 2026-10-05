@@ -189,7 +189,7 @@ Window {
         const themeId = String(candidate && (candidate.panelThemeId
             || candidate.completeThemeId) || "");
         const activeTheme = editorSession.themeDefinition || {};
-        if (themeId.length === 0)
+        if (themeId.length === 0 || String(activeTheme.id || "") === themeId)
             return activeTheme;
         const themes = CapabilityModel.normalized(selectedResolvedThemes);
         for (let index = 0; index < themes.length; ++index) {
@@ -508,8 +508,7 @@ Window {
             for (let index = 0; index < source.length; ++index) {
                 if (String(source[index].section) !== sectionId)
                     continue;
-                if (["scene3DQuality", "scene3DCameraPitch"].includes(String(source[index].key))
-                        && !scene3DQualityVisible)
+                if (String(source[index].key).indexOf("scene3D") === 0 && !scene3DQualityVisible)
                     continue;
                 if (String(source[index].key) === "bakedTilt"
                         && embeddedRendererPreview.panelSceneItem.effectiveRendererTier !== "baked2.5d")
@@ -588,22 +587,77 @@ Window {
 
     function panelAppearanceRows() {
         const rows = schemaSectionRows("panels-appearance", qsTr("Appearance"), qsTr("Surface styling for the selected panel."));
-        if (scene3DControlsAvailable) {
-            rows.splice(1, 0, { kind: "switch", key: "rendererTier", scope: "panel",
-                rendererToggle: true, label: qsTr("3D rendering"),
-                description: qsTr("Turn off to use this theme's available 2D surface.") });
-        } else {
-            rows.push(notice(embeddedRendererPreview.panelSceneItem.true3DCapability.rendererAvailable
-                ? qsTr("This surface uses 2D. Choose a theme with 3D support to enable 3D rendering, quality and perspective tilt. Panel animations are on the Animations tab.")
-                : qsTr("3D rendering is unavailable in this session. The 2D renderer and panel animations remain available.")));
-            rows.push({ kind: "actions", label: qsTr("3D rendering"), actions: [{
-                label: qsTr("Choose a 3D theme"), icon: "preferences-desktop-theme",
-                action: "browse-3d-themes",
-                available: embeddedRendererPreview.panelSceneItem.true3DCapability.rendererAvailable === true
-            }] });
-        }
+        rows.push({ kind: "actions", label: qsTr("3D"),
+            description: qsTr("Drawing this panel in 3D, and every 3D setting, is on the 3D page."),
+            actions: [{ label: qsTr("Open the 3D page"), icon: "view-preview", action: "open-3d-page",
+                        available: true }] });
         rows.push(notice(qsTr("Built-in themes and imported artwork are on the Panel Themes / Skins page.")));
         return rows;
+    }
+
+    // The one home of 3D editing. A compatible free panel draws its own look
+    // as a 3D platform; nothing here asks for a different theme.
+    function panel3DRows() {
+        const rows = [section(qsTr("3D"), qsTr("Draw this panel's own look as a 3D platform and place it in 3D."), true)];
+        const capability = embeddedRendererPreview.panelSceneItem.true3DCapability;
+        if (isNativePanel()) {
+            rows.push(notice(qsTr("3D is available for free panels. Edge panels stay flat.")));
+            return rows;
+        }
+        if (capability.rendererAvailable !== true) {
+            rows.push(notice(qsTr("3D rendering is unavailable in this session. The 2D renderer remains available.")));
+            return rows;
+        }
+        if (!scene3DControlsAvailable) {
+            rows.push(notice(qsTr("This layout cannot stand on a 3D platform. Choose a ring, circle or polygon layout on the Layout page. Arcs and semicircles stay flat unless their theme brings its own 3D platform.")));
+            rows.push({ kind: "actions", label: qsTr("Themes with their own 3D platform"), actions: [{
+                label: qsTr("Browse themes"), icon: "preferences-desktop-theme",
+                action: "browse-3d-themes", available: true }] });
+            return rows;
+        }
+        rows.push({ kind: "switch", key: "rendererTier", scope: "panel", rendererToggle: true,
+            label: qsTr("Enable 3D"),
+            description: qsTr("Keeps this panel's theme and colours. Off returns to its own %1 surface.")
+                .arg(CapabilityModel.rendererLabel(scene3DOffTier)) });
+        if (!scene3DQualityVisible)
+            return rows;
+        const fields = fieldsForSection("panels-3d");
+        const pick = function(keys) {
+            return keys.map(function(key) {
+                return fields.find(function(row) { return row.key === key; });
+            }).filter(function(row) { return row !== undefined; });
+        };
+        rows.push(section(qsTr("Orientation and position"),
+            qsTr("Pitch, yaw and roll turn the platform. Scene position moves it inside the panel's own area; where the panel sits on the desktop is set on the General page.")));
+        rows.push.apply(rows, pick(["scene3DCameraPitch", "scene3DCameraYaw", "scene3DRoll",
+            "scene3DPositionX", "scene3DPositionY", "scene3DPositionZ", "scene3DScale"]));
+        rows.push({ kind: "actions", label: qsTr("Transform"), actions: [{
+            label: qsTr("Reset 3D transform"), icon: "edit-reset", action: "reset-3d-transform",
+            available: true }] });
+        rows.push(section(qsTr("View and surface"), ""));
+        rows.push.apply(rows, pick(["scene3DFieldOfView", "scene3DThickness", "scene3DIconElevation",
+            "scene3DQuality"]));
+        rows.push.apply(rows, fieldsForSection("icons-appearance").filter(function(row) {
+            return row.key === "spacing";
+        }));
+        rows.push(section(qsTr("Lighting"), ""));
+        rows.push.apply(rows, pick(["scene3DKeyLight", "scene3DFillLight"]));
+        rows.push(section(qsTr("Motion"), ""));
+        rows.push.apply(rows, pick(["scene3DTransitions", "scene3DFloat"]));
+        rows.push(notice(qsTr("Whole-panel rotation works in 2D and 3D and is on the Animations page. Reduced motion stops the float and the animated changes.")));
+        return rows;
+    }
+
+    // The neutral transform: no roll, centred, full size, and the look's own
+    // viewing angle.
+    function reset3DTransform() {
+        for (const key of ["scene3DCameraPitch", "scene3DCameraYaw", "scene3DRoll",
+                           "scene3DPositionX", "scene3DPositionY", "scene3DPositionZ", "scene3DScale"]) {
+            const descriptor = fieldDescriptor(key, "panel");
+            if (descriptor)
+                editorSession = EditorModel.setPanelValue(editorSession, key, descriptor.defaultValue);
+        }
+        refreshProjection();
     }
 
     // Panel themes and skins are their own resource type, separate from
@@ -815,6 +869,8 @@ Window {
                 return panelSegmentRows();
             if (subTabIndex === 9)
                 return panelAnimationRows();
+            if (subTabIndex === 10)
+                return panel3DRows();
             return panelThemeRows();
         }
         if (mainTabIndex === 2) {
@@ -938,6 +994,14 @@ Window {
     function performStudioAction(action, data) {
         if (action === "browse-3d-themes") {
             setSubTab(6);
+            return;
+        }
+        if (action === "open-3d-page") {
+            setSubTab(10);
+            return;
+        }
+        if (action === "reset-3d-transform") {
+            reset3DTransform();
             return;
         }
         if (action === "open-panel" || action === "close-panel") {

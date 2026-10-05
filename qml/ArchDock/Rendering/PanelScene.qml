@@ -1030,7 +1030,12 @@ Item {
             const definition = root.panelDefinition || ({})
             const parameters = Object.assign({}, (definition.surface || {}).parameters3D || definition.surface3D || ({}))
             for (const [key, parameter] of [["scene3DCameraYaw", "cameraYaw"],
-                    ["scene3DThickness", "thickness"], ["scene3DIconElevation", "iconElevation"]])
+                    ["scene3DThickness", "thickness"], ["scene3DIconElevation", "iconElevation"],
+                    ["scene3DRoll", "roll"], ["scene3DPositionX", "positionX"],
+                    ["scene3DPositionY", "positionY"], ["scene3DPositionZ", "positionZ"],
+                    ["scene3DScale", "scale"], ["scene3DFieldOfView", "fieldOfView"],
+                    ["scene3DKeyLight", "keyLightBrightness"], ["scene3DFillLight", "fillLightBrightness"],
+                    ["scene3DTransitions", "transitions"], ["scene3DFloat", "float"]])
                 if (definition[key] !== undefined) parameters[parameter] = definition[key]
             return parameters
         }

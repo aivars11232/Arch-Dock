@@ -189,8 +189,14 @@ Item {
                 const scene = root.themeDefinition && root.themeDefinition.scene3D || ({})
                 const parameters = root.sceneParameters || ({})
                 const merged = Object.assign({}, scene)
-                for (const key of ["cameraYaw", "thickness", "iconElevation"])
-                    if (Number.isFinite(Number(parameters[key]))) merged[key] = Number(parameters[key])
+                for (const key of ["cameraYaw", "thickness", "iconElevation", "roll", "positionX",
+                        "positionY", "positionZ", "scale", "fieldOfView", "keyLightBrightness",
+                        "fillLightBrightness"])
+                    if (parameters[key] !== undefined && parameters[key] !== null
+                            && Number.isFinite(Number(parameters[key])))
+                        merged[key] = Number(parameters[key])
+                for (const key of ["transitions", "float"])
+                    if (typeof parameters[key] === "boolean") merged[key] = parameters[key]
                 if (isFinite(root.cameraPitch)) merged.cameraPitch = Math.max(-60, Math.min(60, root.cameraPitch))
                 return merged
             }),

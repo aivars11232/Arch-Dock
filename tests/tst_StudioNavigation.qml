@@ -31,7 +31,8 @@ TestCase {
             "Panel Themes / Skins",
             "Built-in Panel Presets",
             "My Panel Presets",
-            "Animations"
+            "Animations",
+            "3D"
         ])
         compareList(StudioNavigation.subtabsFor(2), [
             "Appearance",
@@ -59,7 +60,7 @@ TestCase {
 
     function test_clampsSubtabIndices() {
         compare(StudioNavigation.clampSubtabIndex(0, -1), 0)
-        compare(StudioNavigation.clampSubtabIndex(1, 99), 9)
+        compare(StudioNavigation.clampSubtabIndex(1, 99), 10)
         compare(StudioNavigation.clampSubtabIndex(2, 3), 3)
         compare(StudioNavigation.clampSubtabIndex(2, 99), 6)
         compare(StudioNavigation.clampSubtabIndex(3, 99), 0)
@@ -71,6 +72,9 @@ TestCase {
     function test_newPagesAreAppendedAfterTheExistingOnes() {
         compare(StudioNavigation.subtabsFor(1)[2], "Appearance")
         compare(StudioNavigation.subtabsFor(1)[5], "Segments")
+        compare(StudioNavigation.subtabsFor(1)[9], "Animations")
+        compare(StudioNavigation.subtabsFor(1)[10], "3D")
+        compare(StudioNavigation.presetPage(1, 10), null)
         compare(StudioNavigation.subtabsFor(2)[3], "Notifications")
         compare(StudioNavigation.subtabsFor(2)[4], "Icon Styles")
     }

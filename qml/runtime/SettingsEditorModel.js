@@ -309,7 +309,10 @@ function rendererThemeCandidate(session, theme) {
     });
     const ownDefaults = [
         "rendererTier", "layoutRadius", "bakedTilt", "scene3DCameraPitch",
-        "scene3DCameraYaw", "scene3DThickness", "scene3DIconElevation"
+        "scene3DCameraYaw", "scene3DThickness", "scene3DIconElevation",
+        "scene3DRoll", "scene3DPositionX", "scene3DPositionY", "scene3DPositionZ",
+        "scene3DScale", "scene3DFieldOfView", "scene3DKeyLight", "scene3DFillLight",
+        "scene3DTransitions", "scene3DFloat"
     ];
     for (let index = 0; index < ownDefaults.length; ++index)
         delete result[ownDefaults[index]];

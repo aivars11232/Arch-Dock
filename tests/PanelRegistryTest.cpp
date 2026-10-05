@@ -1,4 +1,5 @@
 #include "PanelRegistry.h"
+#include "RendererBuildConfig.h"
 #include "NativeContainmentLifecycle.h"
 #include "panel/FreePanelController.h"
 #include "PanelPlacement.h"
@@ -14,6 +15,7 @@
 #include "presets/PresetCapabilityResolver.h"
 #include "PresetTestSupport.h"
 
+#include <QColor>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -364,6 +366,7 @@ private slots:
     void resolvesBuiltInChassisPackagesAndImportPrecedence();
     void resolvesThemeCandidatesWithoutMutation();
     void completeThemeAdoptsItsOwnRendererTier();
+    void genericSceneAdaptsRadialLooksWithoutAScene();
     void rejectsIncompatibleThemeWithoutRecordMutation();
     void mapsVersionOneArtworkToProceduralFallback();
     void importsVersionedThemePackage();
@@ -3417,6 +3420,125 @@ void PanelRegistryTest::resolvesThemeCandidatesWithoutMutation()
     QCOMPARE(registry.panelSnapshot(QStringLiteral("bottom")), before);
     QCOMPARE(registry.revision(), revisionBefore);
     QVERIFY(!registry.panelIds().contains(preview.identity.id));
+}
+
+// AD3D-TASK-002: a free radial panel can be drawn in 3D without changing its
+// look. The look keeps its id; the generic scene adds the 3D tier, and turning
+// 3D off, or a session without 3D, returns to the look's own renderer.
+void PanelRegistryTest::genericSceneAdaptsRadialLooksWithoutAScene()
+{
+    PanelRegistry registry(taskThemeDefinitions());
+    const QString panelId = registry.addFreePanel();
+    QVERIFY(!panelId.isEmpty());
+    const auto rendererOf = [&registry](const QString &id) {
+        return registry.resolvePanelCapabilities(*registry.panelDefinition(id)).renderer;
+    };
+    const auto tierName = [](const std::optional<ArchDock::RendererTier> &tier) {
+        return tier.has_value() ? ArchDock::rendererTierName(*tier) : QString{};
+    };
+
+    // The baked blue ring: same look, one more renderer.
+    QVERIFY(registry.applyTheme(panelId, QStringLiteral("ring-platform-blue"),
+                                QStringLiteral("complete")));
+    auto projection = registry.themeRuntimeProjection(*registry.panelDefinition(panelId));
+    QVERIFY(projection.has_value());
+    QCOMPARE(projection->value("id").toString(), QStringLiteral("ring-platform-blue"));
+    QVERIFY(projection->value("genericScene3D").toBool());
+    QVERIFY(projection->value("scene3D").toMap().value("generic").toBool());
+    QVERIFY(!projection->value("scene3D").toMap().contains("texture"));
+    const QVariantMap resources = projection->value("scene3DResources").toMap();
+    QCOMPARE(resources.value("mesh").toMap().value("format").toString(), QStringLiteral("org.archdock.mesh"));
+    QCOMPARE(resources.value("iconMesh").toMap().value("format").toString(), QStringLiteral("org.archdock.mesh"));
+    QVERIFY(resources.value("parts").toList().isEmpty());
+    const QVariantMap material = resources.value("material").toMap();
+    QCOMPARE(material.value("format").toString(), QStringLiteral("org.archdock.material"));
+    // The accent keeps the look's hue.
+    const QColor accent(QStringLiteral("#58c8f0"));
+    const QColor emissive(material.value("emissiveColor").toString());
+    QVERIFY(emissive.isValid());
+    QVERIFY2(std::abs(emissive.hslHueF() - accent.hslHueF()) < 0.02,
+             qPrintable(material.value("emissiveColor").toString()));
+    QVERIFY(QColor(material.value("baseColor").toString()).lightnessF()
+            < emissive.lightnessF());
+    const QVariantMap capabilities = projection->value("capabilities").toMap();
+    QVERIFY(capabilities.value("rendererTiers").toStringList().contains("true3d"));
+    QCOMPARE(capabilities.value("fallbackRendererTiers").toStringList().value(0),
+             QStringLiteral("baked2.5d"));
+
+    registry.setPanelValue(panelId, QStringLiteral("rendererTier"), QStringLiteral("true3d"));
+    auto renderer = rendererOf(panelId);
+    QCOMPARE(tierName(renderer.requestedTier), QStringLiteral("true3d"));
+    QCOMPARE(tierName(renderer.effectiveTier),
+             ARCHDOCK_QUICK3D_BUILT && ARCHDOCK_SCENE3D_BUILT
+                 ? QStringLiteral("true3d") : QStringLiteral("baked2.5d"));
+    QCOMPARE(registry.panelValue(panelId, QStringLiteral("completeThemeId")).toString(),
+             QStringLiteral("ring-platform-blue"));
+    registry.setPanelValue(panelId, QStringLiteral("rendererTier"), QStringLiteral("baked2.5d"));
+    QCOMPARE(tierName(rendererOf(panelId).effectiveTier), QStringLiteral("baked2.5d"));
+
+    // A procedural look gets a minimal projection of its own.
+    QVERIFY(registry.applyTheme(panelId, QStringLiteral("holographic-ring"),
+                                QStringLiteral("complete")));
+    projection = registry.themeRuntimeProjection(*registry.panelDefinition(panelId));
+    QVERIFY(projection.has_value());
+    QCOMPARE(projection->value("format").toString(), QStringLiteral("org.archdock.theme"));
+    QCOMPARE(projection->value("version").toInt(), 2);
+    QVERIFY(projection->value("valid").toBool());
+    QCOMPARE(projection->value("id").toString(), QStringLiteral("holographic-ring"));
+    QVERIFY(projection->value("genericScene3D").toBool());
+    QCOMPARE(projection->value("capabilities").toMap().value("fallbackRendererTiers")
+                 .toStringList().value(0), QStringLiteral("procedural2d"));
+    registry.setPanelValue(panelId, QStringLiteral("rendererTier"), QStringLiteral("true3d"));
+    QCOMPARE(tierName(rendererOf(panelId).effectiveTier),
+             ARCHDOCK_QUICK3D_BUILT && ARCHDOCK_SCENE3D_BUILT
+                 ? QStringLiteral("true3d") : QStringLiteral("procedural2d"));
+    registry.setPanelValue(panelId, QStringLiteral("rendererTier"), QStringLiteral("procedural2d"));
+
+    // A panel with no theme at all gets the generic scene too, and its
+    // projection holds no empty value: D-Bus aborts the service on one.
+    QVERIFY(registry.applyTheme(panelId, QStringLiteral("holographic-ring"), QStringLiteral("icon")));
+    registry.setPanelValue(panelId, QStringLiteral("panelThemeId"), QString{});
+    registry.setPanelValue(panelId, QStringLiteral("completeThemeId"), QString{});
+    registry.setPanelValue(panelId, QStringLiteral("layout"), QStringLiteral("circular"));
+    projection = registry.themeRuntimeProjection(*registry.panelDefinition(panelId));
+    QVERIFY(projection.has_value());
+    QVERIFY(projection->value("genericScene3D").toBool());
+    std::function<QString(const QVariant &, const QString &)> emptyValue =
+        [&emptyValue](const QVariant &value, const QString &path) -> QString {
+        if (!value.isValid()) return path;
+        if (value.metaType() == QMetaType::fromType<QVariantMap>()) {
+            const QVariantMap map = value.toMap();
+            for (auto it = map.cbegin(); it != map.cend(); ++it)
+                if (const QString found = emptyValue(it.value(), path + "/" + it.key()); !found.isEmpty())
+                    return found;
+        } else if (value.metaType() == QMetaType::fromType<QVariantList>()) {
+            const QVariantList list = value.toList();
+            for (qsizetype index = 0; index < list.size(); ++index)
+                if (const QString found = emptyValue(list.at(index), path + "/" + QString::number(index)); !found.isEmpty())
+                    return found;
+        }
+        return {};
+    };
+    QCOMPARE(emptyValue(QVariant(*projection), QString{}), QString{});
+    registry.setPanelValue(panelId, QStringLiteral("layout"), QStringLiteral("ring"));
+
+    // Not adapted: an open curve, a native edge panel, a straight skin, and a
+    // look that ships its own scene.
+    registry.setPanelValue(panelId, QStringLiteral("layout"), QStringLiteral("semicircle"));
+    QVERIFY(!registry.genericScene3D(*registry.panelDefinition(panelId), {}).has_value());
+    QVERIFY(!registry.themeCapabilityProfile(*registry.panelDefinition(panelId))
+                 ->rendererTiers.contains(ArchDock::RendererTier::True3D));
+    QVERIFY(!registry.genericScene3D(*registry.panelDefinition(QStringLiteral("bottom")), {}).has_value());
+    QVERIFY(registry.applyTheme(panelId, QStringLiteral("mesh-platform-cyan"),
+                                QStringLiteral("complete")));
+    projection = registry.themeRuntimeProjection(*registry.panelDefinition(panelId));
+    QVERIFY(projection.has_value());
+    QVERIFY(!projection->value("genericScene3D").toBool());
+    QCOMPARE(projection->value("scene3D").toMap().value("texture").toString(), QStringLiteral("surface"));
+    QVERIFY(registry.applyTheme(QStringLiteral("bottom"), QStringLiteral("energy-frame-cyan"),
+                                QStringLiteral("complete")));
+    QVERIFY(!registry.themeRuntimeProjection(*registry.panelDefinition(QStringLiteral("bottom")))
+                 ->contains(QStringLiteral("genericScene3D")));
 }
 
 void PanelRegistryTest::completeThemeAdoptsItsOwnRendererTier()

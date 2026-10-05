@@ -43,6 +43,7 @@ private slots:
     void consumerProjectionCannotBroadenTransactionAuthority();
     void sceneQualityIsBoundedAndReversible();
     void tiltScalarsPreserveParameterMaps();
+    void sceneTransformFieldsAreBoundedAndReversible();
     void folderSettingsPreserveLegacyValues();
 };
 
@@ -144,6 +145,74 @@ void PanelSettingsSchemaTest::tiltScalarsPreserveParameterMaps()
     for (const QString &key : {QStringLiteral("x"), QStringLiteral("y"),
          QStringLiteral("openDelay"), QStringLiteral("closeDelay")})
         QVERIFY(PanelSettingsSchema::isEditorField(PanelSettingsFieldScope::Panel, key));
+}
+
+// AD3D-TASK-002: the 3D page's transform, view, light and motion settings are
+// saved in the same 3D parameter map, bounded, and read back unchanged. Every
+// 3D setting belongs to the one 3D page.
+void PanelSettingsSchemaTest::sceneTransformFieldsAreBoundedAndReversible()
+{
+    const QList<std::tuple<QString, QString, double, double, double>> ranges{
+        {"scene3DRoll", "roll", -180.0, 180.0, 0.0},
+        {"scene3DPositionX", "positionX", -1.0, 1.0, 0.0},
+        {"scene3DPositionY", "positionY", -1.0, 1.0, 0.0},
+        {"scene3DPositionZ", "positionZ", -1.0, 1.0, 0.0},
+        {"scene3DScale", "scale", 0.5, 1.25, 1.0},
+        {"scene3DFieldOfView", "fieldOfView", 20.0, 70.0, 40.0},
+        {"scene3DKeyLight", "keyLightBrightness", 0.0, 4.0, 1.0},
+        {"scene3DFillLight", "fillLightBrightness", 0.0, 2.0, 0.4}};
+    QVariantMap tooLarge{{"id", "transform-test"}, {"surface3D", QVariantMap{{"futureData", 7}}}};
+    QVariantMap tooSmall = tooLarge;
+    for (const auto &[key, parameter, minimum, maximum, fallback] : ranges)
+    {
+        const auto *descriptor = PanelSettingsSchema::panelDescriptor(key);
+        QVERIFY2(descriptor, qPrintable(key));
+        QCOMPARE(descriptor->editor.section, QStringLiteral("panels-3d"));
+        QCOMPARE(descriptor->editor.capability, QStringLiteral("scene3d-quality"));
+        QCOMPARE(descriptor->defaultValue.toDouble(), fallback);
+        QVERIFY(PanelSettingsSchema::isTransactionPanelField(key));
+        tooLarge.insert(key, maximum + 1000.0);
+        tooSmall.insert(key, minimum - 1000.0);
+    }
+    const auto large = PanelDefinition::fromLegacyMap(tooLarge);
+    const auto small = PanelDefinition::fromLegacyMap(tooSmall);
+    QVERIFY(large && small);
+    for (const auto &[key, parameter, minimum, maximum, fallback] : ranges)
+    {
+        QCOMPARE(large->surface.parameters3D.value(parameter).toDouble(), maximum);
+        QCOMPARE(small->surface.parameters3D.value(parameter).toDouble(), minimum);
+    }
+    QCOMPARE(large->surface.parameters3D.value("futureData").toInt(), 7);
+
+    // Values inside the ranges and both switches survive a save and reload.
+    QVariantMap values{{"id", "transform-test"}, {"scene3DRoll", -12.5},
+        {"scene3DPositionX", 0.25}, {"scene3DPositionY", -0.5}, {"scene3DPositionZ", 0.1},
+        {"scene3DScale", 0.85}, {"scene3DFieldOfView", 55.0}, {"scene3DKeyLight", 2.5},
+        {"scene3DFillLight", 0.75}, {"scene3DTransitions", false}, {"scene3DFloat", true}};
+    const auto saved = PanelDefinition::fromLegacyMap(values);
+    QVERIFY(saved);
+    const auto restored = PanelDefinition::fromLegacyMap(saved->toPersistedMap());
+    QVERIFY(restored);
+    const QVariantMap persisted = restored->toPersistedMap();
+    for (auto it = values.cbegin(); it != values.cend(); ++it)
+        if (it.key() != QStringLiteral("id"))
+            QVERIFY2(persisted.value(it.key()) == it.value(), qPrintable(it.key()));
+    QCOMPARE(restored->surface.parameters3D.value("transitions").toBool(), false);
+    QCOMPARE(restored->surface.parameters3D.value("float").toBool(), true);
+
+    // A panel saved before these settings existed keeps its look: none of them
+    // is written until the person changes it.
+    const auto legacy = PanelDefinition::fromLegacyMap({{"id", "legacy-3d"},
+        {"scene3DCameraPitch", 30.0}});
+    QVERIFY(legacy);
+    for (const auto &[key, parameter, minimum, maximum, fallback] : ranges)
+        QVERIFY2(!legacy->surface.parameters3D.contains(parameter), qPrintable(parameter));
+
+    for (const QString &key : {QStringLiteral("scene3DQuality"), QStringLiteral("scene3DCameraPitch"),
+             QStringLiteral("scene3DCameraYaw"), QStringLiteral("scene3DThickness"),
+             QStringLiteral("scene3DIconElevation"), QStringLiteral("scene3DTransitions"),
+             QStringLiteral("scene3DFloat")})
+        QCOMPARE(PanelSettingsSchema::panelDescriptor(key)->editor.section, QStringLiteral("panels-3d"));
 }
 
 void PanelSettingsSchemaTest::descriptorsAreUniqueAndComplete()

@@ -280,13 +280,32 @@ void PanelWindowCapabilityTest::studioPlainSurfaceExplains3D()
         {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 2}}));
     QVERIFY(popup);
     QVERIFY(!popup->property("scene3DControlsAvailable").toBool());
+    // Appearance no longer sends people to the themes for 3D: it points to
+    // the one 3D page.
     QVariant rows;
     QVERIFY(QMetaObject::invokeMethod(popup.get(), "panelAppearanceRows", Q_RETURN_ARG(QVariant, rows)));
-    bool found = false;
-    for (const auto &row : rows.toList())
-        for (const auto &action : row.toMap().value("actions").toList())
-            found |= action.toMap().value("action").toString() == "browse-3d-themes";
-    QVERIFY(found);
+    const auto actionsOf = [](const QVariant &list) {
+        QStringList result;
+        for (const auto &row : list.toList())
+            for (const auto &action : row.toMap().value("actions").toList())
+                result.append(action.toMap().value("action").toString());
+        return result;
+    };
+    QVERIFY(actionsOf(rows).contains("open-3d-page"));
+    QVERIFY(!actionsOf(rows).contains("browse-3d-themes"));
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "performStudioAction",
+        Q_ARG(QVariant, "open-3d-page"), Q_ARG(QVariant, QVariantMap{})));
+    QCOMPARE(popup->property("subTabIndex").toInt(), 10);
+    // This offscreen session has no 3D renderer: the page says so and offers
+    // no switch that cannot work.
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "panel3DRows", Q_RETURN_ARG(QVariant, rows)));
+    bool explained = false, switchOffered = false;
+    for (const auto &row : rows.toList()) {
+        explained |= row.toMap().value("text").toString().contains("unavailable in this session");
+        switchOffered |= row.toMap().value("rendererToggle").toBool();
+    }
+    QVERIFY(explained);
+    QVERIFY(!switchOffered);
     QVERIFY(QMetaObject::invokeMethod(popup.get(), "performStudioAction",
         Q_ARG(QVariant, "browse-3d-themes"), Q_ARG(QVariant, QVariantMap{})));
     QCOMPARE(popup->property("subTabIndex").toInt(), 6);
@@ -1302,7 +1321,7 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> popup(component.createWithInitialProperties({
         {QStringLiteral("selectedPanelId"), panelId}, {QStringLiteral("mainTabIndex"), 1},
-        {QStringLiteral("subTabIndex"), 2}}));
+        {QStringLiteral("subTabIndex"), 10}}));
     QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
     auto *studio = qobject_cast<QQuickWindow *>(popup.get());
     QVERIFY(studio);
@@ -1334,7 +1353,7 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
         QTRY_VERIFY_WITH_TIMEOUT(popup->property("scene3DQualityVisible").toBool(), 5000);
         // Recreating the form must not let a click use its unpolished geometry.
         popup->setProperty("subTabIndex", 1);
-        popup->setProperty("subTabIndex", 2);
+        popup->setProperty("subTabIndex", 10);
         QVERIFY(QQuickTest::qWaitForPolish(studio));
         QTRY_VERIFY(rendererToggle());
         QVERIFY(rendererToggle()->property("checked").toBool());
@@ -1383,7 +1402,7 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
             registry->panelDefinition(panelId)->settingsRevision, values, {}).value("success").toBool());
         const auto saved = registry->panelDefinition(panelId)->toPersistedMap();
         popup.reset(component.createWithInitialProperties({
-            {"selectedPanelId", panelId}, {"mainTabIndex", 1}, {"subTabIndex", 2}}));
+            {"selectedPanelId", panelId}, {"mainTabIndex", 1}, {"subTabIndex", 10}}));
         QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
         studio = qobject_cast<QQuickWindow *>(popup.get());
         QVERIFY(studio);
@@ -1408,6 +1427,73 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
         QTRY_VERIFY(!popup->property("scene3DQualityVisible").toBool());
         QVERIFY(QMetaObject::invokeMethod(popup.get(), "cancelStudioChanges"));
         QCOMPARE(registry->panelDefinition(panelId)->toPersistedMap(), saved);
+
+        // AD3D-TASK-002: a baked 2.5D panel is switched to 3D on the 3D page
+        // and back, and keeps its own theme throughout.
+        popup.reset();
+        const auto blue = registry->themeCandidate(panelId, "ring-platform-blue", "complete");
+        QVERIFY(blue.value("success").toBool());
+        QVERIFY(window.applyPanelSettingsTransaction(panelId,
+            registry->panelDefinition(panelId)->settingsRevision, blue.value("values").toMap(), {})
+                .value("success").toBool());
+        QCOMPARE(window.panelRendererConfiguration(panelId).value("effectiveRendererTier").toString(),
+                 QStringLiteral("baked2.5d"));
+        popup.reset(component.createWithInitialProperties({
+            {"selectedPanelId", panelId}, {"mainTabIndex", 1}, {"subTabIndex", 10}}));
+        QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
+        studio = qobject_cast<QQuickWindow *>(popup.get());
+        QVERIFY(studio);
+        studio->show();
+        QVERIFY(QTest::qWaitForWindowExposed(studio));
+        QTRY_VERIFY_WITH_TIMEOUT(rendererToggle(), 5000);
+        QVERIFY(!rendererToggle()->property("checked").toBool());
+        QVERIFY(QQuickTest::qWaitForPolish(studio));
+        QTest::mouseClick(studio, Qt::LeftButton, Qt::NoModifier,
+            rendererToggle()->mapToScene(QPointF(rendererToggle()->width() / 2,
+                                                rendererToggle()->height() / 2)).toPoint());
+        QTRY_VERIFY2(popup->property("scene3DQualityVisible").toBool(),
+                     qPrintable(popup->property("studioError").toString()));
+        // The page holds the whole 3D editor, and Reset returns the transform.
+        QVariant rows;
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "panel3DRows", Q_RETURN_ARG(QVariant, rows)));
+        QStringList keys, actions;
+        for (const auto &row : rows.toList()) {
+            keys.append(row.toMap().value("key").toString());
+            for (const auto &action : row.toMap().value("actions").toList())
+                actions.append(action.toMap().value("action").toString());
+        }
+        for (const QString &key : {"scene3DCameraPitch", "scene3DCameraYaw", "scene3DRoll",
+                 "scene3DPositionX", "scene3DPositionY", "scene3DPositionZ", "scene3DScale",
+                 "scene3DFieldOfView", "scene3DThickness", "scene3DIconElevation", "scene3DQuality",
+                 "spacing", "scene3DKeyLight", "scene3DFillLight", "scene3DTransitions", "scene3DFloat"})
+            QVERIFY2(keys.contains(key), qPrintable(key));
+        QVERIFY(actions.contains("reset-3d-transform"));
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue",
+            Q_ARG(QVariant, QVariantMap{{"key", "scene3DRoll"}, {"scope", "panel"}}), Q_ARG(QVariant, 45.0)));
+        QCOMPARE(popup->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap()
+                     .value("scene3DRoll").toDouble(), 45.0);
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "performStudioAction",
+            Q_ARG(QVariant, "reset-3d-transform"), Q_ARG(QVariant, QVariantMap{})));
+        QCOMPARE(popup->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap()
+                     .value("scene3DRoll").toDouble(), 0.0);
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "applyStudioChanges"));
+        QTRY_COMPARE(window.panelRendererConfiguration(panelId).value("effectiveRendererTier").toString(),
+                     QStringLiteral("true3d"));
+        QCOMPARE(registry->panelValue(panelId, "completeThemeId").toString(), QStringLiteral("ring-platform-blue"));
+        QVERIFY(window.panelRendererConfiguration(panelId).value("themeDefinition").toMap()
+                    .value("genericScene3D").toBool());
+        // Off returns the same theme in its own baked renderer.
+        QVERIFY(QQuickTest::qWaitForPolish(studio));
+        QTRY_VERIFY(rendererToggle() && rendererToggle()->property("checked").toBool());
+        QTest::mouseClick(studio, Qt::LeftButton, Qt::NoModifier,
+            rendererToggle()->mapToScene(QPointF(rendererToggle()->width() / 2,
+                                                rendererToggle()->height() / 2)).toPoint());
+        QTRY_VERIFY(!popup->property("scene3DQualityVisible").toBool());
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "applyStudioChanges"));
+        QTRY_COMPARE(window.panelRendererConfiguration(panelId).value("effectiveRendererTier").toString(),
+                     QStringLiteral("baked2.5d"));
+        QCOMPARE(registry->panelValue(panelId, "completeThemeId").toString(), QStringLiteral("ring-platform-blue"));
+        studio->close();
     }
     qInfo() << "Private Studio mesh controls and transaction checks passed; build available:" << available;
 }
