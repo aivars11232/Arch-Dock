@@ -235,7 +235,10 @@ Item {
         layoutScale, layoutPadding, verticalLayout, layoutAngle,
         pathOrientation, geometryCompatibilityProfile, placementEdge) : null
     readonly property var segmentSurfaces: segmentRepeater
-    readonly property var configuredLayoutGeometry: segmentedScene
+    // Consumers ask for the segment layout itself. Asking whether the scene is
+    // segmented and then reading the layout fails for one evaluation whenever
+    // the flag changes first.
+    readonly property var configuredLayoutGeometry: segmentLayout
         ? segmentLayout.geometry : LayoutEngine.metrics(
         layoutPath, entryCount, iconSize, iconSpacing, layoutScale,
         layoutRadius, layoutRows, layoutPadding, verticalLayout,
@@ -459,7 +462,7 @@ Item {
         : surfaceLoader.inputMaskItem ? surfaceLoader.inputMaskItem : null
 
     function containsInputPoint(point) {
-        if (segmentedScene) {
+        if (segmentLayout) {
             return segmentLayout.segments.some(function(run) {
                 return point.x >= run.x && point.y >= run.y
                     && point.x <= run.x + run.width && point.y <= run.y + run.height
@@ -728,7 +731,7 @@ Item {
         })
     }
     function baseEntryGeometryAt(index) {
-        if (segmentedScene && segmentLayout.entries[index]) {
+        if (segmentLayout && segmentLayout.entries[index]) {
             const result = Object.assign({}, segmentLayout.entries[index])
             result.effectBounds = effectBounds
             result.effectAllowance = entryEffectAllowance(result.entryBounds)
@@ -1044,7 +1047,7 @@ Item {
 
     Repeater {
         id: segmentRepeater
-        model: root.segmentedScene ? root.segmentLayout.segments.map(function(run) { return run.id }) : []
+        model: root.segmentLayout ? root.segmentLayout.segments.map(function(run) { return run.id }) : []
         delegate: PanelSegment {
             required property int index
             readonly property var run: root.segmentLayout.segments[index]

@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import ArchDock.Rendering 1.0
+import "CapabilityModel.js" as CapabilityModel
 import "SettingsEditorModel.js" as EditorModel
 
 // One Panel Preset or Icon Preset, drawn by the shared renderer. A card owns
@@ -139,16 +140,7 @@ Rectangle {
     }
 
     function reasonText(code) {
-        const reasons = {
-            "theme-not-found": qsTr("its theme is not installed"),
-            "theme-package-unavailable": qsTr("its theme package cannot be loaded"),
-            "required-capability-unavailable":
-                qsTr("a capability it requires is not available"),
-            "icon-style-unavailable": qsTr("its icon style is not installed"),
-            "motion-profile-unavailable": qsTr("its motion profile is not installed")
-        };
-        const key = String(code || "");
-        return reasons[key] || (key.length > 0 ? key : qsTr("no reason was reported"));
+        return CapabilityModel.reasonLabel(code);
     }
 
     function stateLabel() {
@@ -165,7 +157,7 @@ Rectangle {
             return qsTr("Cannot be used on this system: %1.").arg(reason);
         return panelPreset
             ? qsTr("Shown through its declared fallback (%1) because %2.")
-                .arg(String(compatibility.effectiveRendererTier || "procedural2d"))
+                .arg(CapabilityModel.rendererLabel(compatibility.effectiveRendererTier))
                 .arg(reason)
             : qsTr("Shown through its declared fallback because %1.").arg(reason);
     }
@@ -288,6 +280,15 @@ Rectangle {
                 color: root.presetState === "incompatible" ? "#ff9c9c" : "#ffc66d"
                 font.pixelSize: 10
                 wrapMode: Text.Wrap
+
+                // The code a report or a log would quote stays one hover away.
+                HoverHandler {
+                    id: stateDetailHover
+                }
+                ToolTip.visible: stateDetailHover.hovered
+                    && String(root.compatibility.reasonCode || "").length > 0
+                ToolTip.text: qsTr("Reported as: %1")
+                    .arg(String(root.compatibility.reasonCode || ""))
             }
         }
 

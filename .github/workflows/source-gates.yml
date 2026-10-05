@@ -1,0 +1,39 @@
+# The gates that need only the source tree. The rest of the suite needs Qt
+# 6.11, KDE Plasma 6 and private Wayland sessions, which hosted runners do not
+# provide; those gates run locally under CTest (see docs/CURRENT_STATE.md).
+# Each command is the one CMakeLists.txt registers for the CTest of that name.
+name: Source gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  source-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Source contracts
+        run: |
+          set -euo pipefail
+          # dock-entry-motion-contract-test
+          cmake -DSOURCE_DIR="$GITHUB_WORKSPACE" -P tests/ValidateDockEntryMotion.cmake
+          # rendering-module-host-neutral-test
+          cmake -DARCHDOCK_SOURCE_DIR="$GITHUB_WORKSPACE" -P tests/ValidateRenderingModule.cmake
+          # theme-v2-fixture-scaffold-test
+          cmake -DARCHDOCK_SOURCE_DIR="$GITHUB_WORKSPACE" -P tests/ValidateThemeV2Fixtures.cmake
+          # plasma-template-contract-test
+          cmake -DSOURCE_DIR="$GITHUB_WORKSPACE" -P tests/ValidatePlasmaTemplate.cmake
+          # studio-preview-contract-test
+          cmake -DSOURCE_DIR="$GITHUB_WORKSPACE" -P tests/ValidateStudioPreview.cmake
+
+      - name: Canonical source exporter (source-exporter-test)
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 tests/test_prepare_arch_source.py

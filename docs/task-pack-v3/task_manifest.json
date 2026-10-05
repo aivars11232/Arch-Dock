@@ -1,0 +1,667 @@
+{
+  "format": "org.archdock.codex-task-pack",
+  "version": 3,
+  "task_count": 45,
+  "completed_task_count": 21,
+  "active_task_count": 24,
+  "legacy_remaining_task_count": 65,
+  "epic_count": 18,
+  "target_platform": "Arch Linux / KDE Plasma 6 / Wayland",
+  "source_pack": "Arch_Dock_Codex_Task_Pack_v2(2).zip",
+  "source_plan": "Arch_Dock_Master_Architecture_and_Implementation_Plan_v3.md",
+  "preset_spec": "PRESET_SYSTEM_SPEC_V3.md",
+  "structure_tree": "TARGET_STRUCTURE_TREE_V3.md",
+  "tasks": [
+    {
+      "id": "TASK-0001",
+      "sequence": 1,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0001 — Canonical baseline and repository truth",
+      "title": "Read-only repository inventory and baseline audit",
+      "depends_on": [],
+      "suggested_commit": "Document Arch Dock baseline audit",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0002",
+      "sequence": 2,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0001 — Canonical baseline and repository truth",
+      "title": "Resolve repository and runtime-resource truth",
+      "depends_on": [
+        "TASK-0001"
+      ],
+      "suggested_commit": "Normalize Arch Dock repository resources",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0003",
+      "sequence": 3,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0001 — Canonical baseline and repository truth",
+      "title": "Install authoritative project documentation",
+      "depends_on": [
+        "TASK-0002"
+      ],
+      "suggested_commit": "Add authoritative Arch Dock documentation",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0004",
+      "sequence": 4,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0001 — Canonical baseline and repository truth",
+      "title": "Fresh configure, build, test, and stage-install baseline",
+      "depends_on": [
+        "TASK-0003"
+      ],
+      "suggested_commit": "Verify clean Arch Dock baseline build",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0005",
+      "sequence": 5,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0001 — Canonical baseline and repository truth",
+      "title": "Canonical baseline acceptance and checkpoint record",
+      "depends_on": [
+        "TASK-0004"
+      ],
+      "suggested_commit": "Record canonical Arch Dock baseline",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0006",
+      "sequence": 6,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0002 — Native panel lifecycle repair",
+      "title": "Define the native panel lifecycle contract",
+      "depends_on": [
+        "TASK-0005"
+      ],
+      "suggested_commit": "Define native panel lifecycle contract",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0007",
+      "sequence": 7,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0002 — Native panel lifecycle repair",
+      "title": "Repair native temporary hide and show behavior",
+      "depends_on": [
+        "TASK-0006"
+      ],
+      "suggested_commit": "Repair native panel hide and show",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0008",
+      "sequence": 8,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0002 — Native panel lifecycle repair",
+      "title": "Recreate a visible native panel whose host is missing",
+      "depends_on": [
+        "TASK-0007"
+      ],
+      "suggested_commit": "Recover missing native panel hosts",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0009",
+      "sequence": 9,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0002 — Native panel lifecycle repair",
+      "title": "Recover stale native associations and PlasmaShell restarts",
+      "depends_on": [
+        "TASK-0008"
+      ],
+      "suggested_commit": "Repair native panel restart recovery",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0010",
+      "sequence": 10,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0002 — Native panel lifecycle repair",
+      "title": "Complete native lifecycle ownership and regression coverage",
+      "depends_on": [
+        "TASK-0009"
+      ],
+      "suggested_commit": "Complete native panel lifecycle repair",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0011",
+      "sequence": 11,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0003 — Free-panel host lifecycle repair",
+      "title": "Persist ownership-verifiable free-host associations",
+      "depends_on": [
+        "TASK-0010"
+      ],
+      "suggested_commit": "Persist free panel host associations",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0012",
+      "sequence": 12,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0003 — Free-panel host lifecycle repair",
+      "title": "Unify free-panel creation behind one backend transaction",
+      "depends_on": [
+        "TASK-0011"
+      ],
+      "suggested_commit": "Unify free panel creation",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0013",
+      "sequence": 13,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0003 — Free-panel host lifecycle repair",
+      "title": "Add free-panel creation rollback and verification",
+      "depends_on": [
+        "TASK-0012"
+      ],
+      "suggested_commit": "Add free panel creation rollback",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0014",
+      "sequence": 14,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0003 — Free-panel host lifecycle repair",
+      "title": "Repair free-panel removal and stale-host recovery",
+      "depends_on": [
+        "TASK-0013"
+      ],
+      "suggested_commit": "Repair free panel removal and recovery",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0015",
+      "sequence": 15,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0003 — Free-panel host lifecycle repair",
+      "title": "Complete free-panel lifecycle regression suite",
+      "depends_on": [
+        "TASK-0014"
+      ],
+      "suggested_commit": "Complete free panel lifecycle repair",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0016",
+      "sequence": 16,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0004 — Native placement and visibility synchronization",
+      "title": "Define a normalized native placement contract",
+      "depends_on": [
+        "TASK-0015"
+      ],
+      "suggested_commit": "Define native panel placement contract",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0017",
+      "sequence": 17,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0004 — Native placement and visibility synchronization",
+      "title": "Implement the Plasma panel placement adapter",
+      "depends_on": [
+        "TASK-0016"
+      ],
+      "suggested_commit": "Add Plasma panel placement adapter",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0018",
+      "sequence": 18,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0004 — Native placement and visibility synchronization",
+      "title": "Apply thickness, length modes, and supported floating values",
+      "depends_on": [
+        "TASK-0017"
+      ],
+      "suggested_commit": "Synchronize native panel dimensions",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0019",
+      "sequence": 19,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0004 — Native placement and visibility synchronization",
+      "title": "Add host-state readback and placement error reporting",
+      "depends_on": [
+        "TASK-0018"
+      ],
+      "suggested_commit": "Report applied native panel placement",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0020",
+      "sequence": 20,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0004 — Native placement and visibility synchronization",
+      "title": "Implement the host-visibility decision controller",
+      "depends_on": [
+        "TASK-0019"
+      ],
+      "suggested_commit": "Implement panel visibility decisions",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0021",
+      "sequence": 21,
+      "status": "COMPLETE_USER_CONFIRMED",
+      "parent": "AD-0004 — Native placement and visibility synchronization",
+      "title": "Wire native visibility modes and make the UI truthful",
+      "depends_on": [
+        "TASK-0020"
+      ],
+      "suggested_commit": "Complete native panel placement and visibility",
+      "active_spec": false
+    },
+    {
+      "id": "TASK-0022",
+      "sequence": 22,
+      "status": "ACTIVE",
+      "parent": "AD-0005 — Versioned panel schema and capability model",
+      "title": "Implement the versioned panel model, runtime-state separation, and legacy migration",
+      "depends_on": [
+        "TASK-0021"
+      ],
+      "supersedes": [
+        "TASK-0022",
+        "TASK-0023",
+        "TASK-0024"
+      ],
+      "suggested_commit": "Add versioned panel model and migration",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0023",
+      "sequence": 23,
+      "status": "ACTIVE",
+      "parent": "AD-0005 — Versioned panel schema and capability model",
+      "title": "Complete atomic settings transactions, capability resolution, and truthful editors",
+      "depends_on": [
+        "TASK-0022"
+      ],
+      "supersedes": [
+        "TASK-0025",
+        "TASK-0026",
+        "TASK-0027"
+      ],
+      "suggested_commit": "Complete Arch Dock settings contract",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0024",
+      "sequence": 24,
+      "status": "ACTIVE",
+      "parent": "AD-0006 — Shared renderer foundation",
+      "title": "Create the shared rendering module, canonical LayoutEngine, and PanelScene",
+      "depends_on": [
+        "TASK-0023"
+      ],
+      "supersedes": [
+        "TASK-0028",
+        "TASK-0029",
+        "TASK-0030"
+      ],
+      "suggested_commit": "Add shared Arch Dock rendering core",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0025",
+      "sequence": 25,
+      "status": "ACTIVE",
+      "parent": "AD-0006 — Shared renderer foundation",
+      "title": "Bridge the live applet, layered IconScene, and Panel Studio preview to the shared renderer",
+      "depends_on": [
+        "TASK-0024"
+      ],
+      "supersedes": [
+        "TASK-0031",
+        "TASK-0032",
+        "TASK-0033"
+      ],
+      "suggested_commit": "Complete shared Arch Dock renderer integration",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0026",
+      "sequence": 26,
+      "status": "ACTIVE",
+      "parent": "AD-0007 — Theme package version 2 and sample catalog",
+      "title": "Implement Theme Package v2, provenance, asset processing, and sample classification",
+      "depends_on": [
+        "TASK-0025"
+      ],
+      "supersedes": [
+        "TASK-0034",
+        "TASK-0035",
+        "TASK-0036",
+        "TASK-0037",
+        "TASK-0038"
+      ],
+      "suggested_commit": "Complete Arch Dock theme package pipeline",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0027",
+      "sequence": 27,
+      "status": "ACTIVE",
+      "parent": "AD-0008 — First production 2D panel-skin family",
+      "title": "Implement the production science-fiction chassis skin family",
+      "depends_on": [
+        "TASK-0026"
+      ],
+      "supersedes": [
+        "TASK-0039",
+        "TASK-0040",
+        "TASK-0041"
+      ],
+      "suggested_commit": "Complete Arch Dock chassis theme family",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0028",
+      "sequence": 28,
+      "status": "ACTIVE",
+      "parent": "AD-0009 — Energy/glow skin family",
+      "title": "Implement the production energy and glow skin family",
+      "depends_on": [
+        "TASK-0027"
+      ],
+      "supersedes": [
+        "TASK-0042",
+        "TASK-0043",
+        "TASK-0044"
+      ],
+      "suggested_commit": "Complete Arch Dock energy theme family",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0029",
+      "sequence": 29,
+      "status": "ACTIVE",
+      "parent": "AD-0010 — Icon-style system and Icon Properties connection",
+      "title": "Implement icon-style packages, layered rendering, per-icon overrides, and Icon Properties",
+      "depends_on": [
+        "TASK-0028"
+      ],
+      "supersedes": [
+        "TASK-0045",
+        "TASK-0046",
+        "TASK-0047",
+        "TASK-0048"
+      ],
+      "suggested_commit": "Complete Arch Dock icon style system",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0030",
+      "sequence": 30,
+      "status": "ACTIVE",
+      "parent": "AD-0011 — Data-driven 2D animation engine",
+      "title": "Implement the animation-profile engine and migrate existing effects",
+      "depends_on": [
+        "TASK-0029"
+      ],
+      "supersedes": [
+        "TASK-0049",
+        "TASK-0050",
+        "TASK-0051"
+      ],
+      "suggested_commit": "Add Arch Dock animation profile engine",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0031",
+      "sequence": 31,
+      "status": "ACTIVE",
+      "parent": "AD-0011 — Data-driven 2D animation engine",
+      "title": "Implement requested icon motions, launch-event truth, reduced motion, and safety",
+      "depends_on": [
+        "TASK-0030"
+      ],
+      "supersedes": [
+        "TASK-0052",
+        "TASK-0053",
+        "TASK-0054"
+      ],
+      "suggested_commit": "Complete Arch Dock icon animation engine",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0032",
+      "sequence": 32,
+      "status": "ACTIVE",
+      "parent": "AD-0012 — Panel presentation and animation engine",
+      "title": "Implement panel presentation states, guards, opening mechanisms, and host integration",
+      "depends_on": [
+        "TASK-0031"
+      ],
+      "supersedes": [
+        "TASK-0055",
+        "TASK-0056",
+        "TASK-0057",
+        "TASK-0058"
+      ],
+      "suggested_commit": "Complete Arch Dock panel presentation",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0033",
+      "sequence": 33,
+      "status": "ACTIVE",
+      "parent": "AD-0013 — Free/multi-shape renderer hardening",
+      "title": "Complete free and multi-shape content, geometry, transformed input, rotation, and lifecycle verification",
+      "depends_on": [
+        "TASK-0032"
+      ],
+      "supersedes": [
+        "TASK-0059",
+        "TASK-0060",
+        "TASK-0061",
+        "TASK-0062"
+      ],
+      "suggested_commit": "Complete free multishape panel support",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0034",
+      "sequence": 34,
+      "status": "ACTIVE",
+      "parent": "AD-0014 — Baked 2.5D ring and arc themes",
+      "title": "Implement and verify baked 2.5D ring, octagonal, and arc themes",
+      "depends_on": [
+        "TASK-0033"
+      ],
+      "supersedes": [
+        "TASK-0063",
+        "TASK-0064",
+        "TASK-0065"
+      ],
+      "suggested_commit": "Complete Arch Dock 2.5D rendering",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0035",
+      "sequence": 35,
+      "status": "ACTIVE",
+      "parent": "AD-0015 — Optional true-3D renderer",
+      "title": "Add optional true-3D capability detection and the base scene renderer",
+      "depends_on": [
+        "TASK-0034"
+      ],
+      "supersedes": [
+        "TASK-0066",
+        "TASK-0067"
+      ],
+      "suggested_commit": "Add optional Arch Dock true 3D renderer",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0036",
+      "sequence": 36,
+      "status": "ACTIVE",
+      "parent": "AD-0015 — Optional true-3D renderer",
+      "title": "Complete true-3D motion, fallback, editor gating, and regression coverage",
+      "depends_on": [
+        "TASK-0035"
+      ],
+      "supersedes": [
+        "TASK-0068",
+        "TASK-0069"
+      ],
+      "suggested_commit": "Complete optional Arch Dock 3D support",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0037",
+      "sequence": 37,
+      "status": "ACTIVE",
+      "parent": "AD-0016 — Window previews and complete context menus",
+      "title": "Complete grouped-window previews, individual actions, context menus, and regression coverage",
+      "depends_on": [
+        "TASK-0036"
+      ],
+      "supersedes": [
+        "TASK-0070",
+        "TASK-0071",
+        "TASK-0072"
+      ],
+      "suggested_commit": "Complete Arch Dock window interaction",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0038",
+      "sequence": 38,
+      "status": "ACTIVE",
+      "parent": "AD-0017 — Folders, segments, notifications, and status modules",
+      "title": "Implement folder expansion and independent panel segments",
+      "depends_on": [
+        "TASK-0037"
+      ],
+      "supersedes": [
+        "TASK-0073",
+        "TASK-0074"
+      ],
+      "suggested_commit": "Add Arch Dock folders and panel segments",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0039",
+      "sequence": 39,
+      "status": "ACTIVE",
+      "parent": "AD-0017 — Folders, segments, notifications, and status modules",
+      "title": "Implement overlays, notifications, status modules, and close remaining content placeholders",
+      "depends_on": [
+        "TASK-0038"
+      ],
+      "supersedes": [
+        "TASK-0075",
+        "TASK-0076"
+      ],
+      "suggested_commit": "Complete Arch Dock content systems",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0040",
+      "sequence": 40,
+      "status": "ACTIVE",
+      "parent": "AD-0018 — Presets, profiles, shortcuts, packaging, and release",
+      "title": "Implement Panel and Icon preset definitions, browsers, and the exact 15 plus 15 built-in libraries",
+      "depends_on": [
+        "TASK-0039"
+      ],
+      "supersedes": [
+        "TASK-0077"
+      ],
+      "suggested_commit": "Add Arch Dock built-in preset catalogs",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0041",
+      "sequence": 41,
+      "status": "ACTIVE",
+      "parent": "AD-0018 — Presets, profiles, shortcuts, packaging, and release",
+      "title": "Implement transactional live desktop preset audition and active, custom, and default workflows",
+      "depends_on": [
+        "TASK-0040"
+      ],
+      "supersedes": [
+        "TASK-0078"
+      ],
+      "suggested_commit": "Add transactional Arch Dock preset audition",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0042",
+      "sequence": 42,
+      "status": "ACTIVE",
+      "parent": "AD-0018 — Presets, profiles, shortcuts, packaging, and release",
+      "title": "Implement profiles, import and export, transactional apply and rollback, and global shortcuts",
+      "depends_on": [
+        "TASK-0041"
+      ],
+      "supersedes": [
+        "TASK-0079",
+        "TASK-0080",
+        "TASK-0081"
+      ],
+      "suggested_commit": "Complete Arch Dock profile management",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0043",
+      "sequence": 43,
+      "status": "ACTIVE",
+      "parent": "AD-0018 — Presets, profiles, shortcuts, packaging, and release",
+      "title": "Unify startup and deliver verified Arch Linux packaging and install and uninstall",
+      "depends_on": [
+        "TASK-0042"
+      ],
+      "supersedes": [
+        "TASK-0082",
+        "TASK-0083"
+      ],
+      "suggested_commit": "Package Arch Dock for Arch Linux",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0044",
+      "sequence": 44,
+      "status": "ACTIVE",
+      "parent": "AD-0018 — Presets, profiles, shortcuts, packaging, and release",
+      "title": "Add configuration recovery and complete Wayland display, accessibility, diagnostics, and performance hardening",
+      "depends_on": [
+        "TASK-0043"
+      ],
+      "supersedes": [
+        "TASK-0084",
+        "TASK-0085"
+      ],
+      "suggested_commit": "Harden Arch Dock recovery and Wayland behavior",
+      "active_spec": true
+    },
+    {
+      "id": "TASK-0045",
+      "sequence": 45,
+      "status": "ACTIVE",
+      "parent": "AD-0018 — Presets, profiles, shortcuts, packaging, and release",
+      "title": "Run the release regression suite and produce versioned release evidence",
+      "depends_on": [
+        "TASK-0044"
+      ],
+      "supersedes": [
+        "TASK-0086"
+      ],
+      "suggested_commit": "Prepare Arch Dock release evidence",
+      "active_spec": true
+    }
+  ]
+}

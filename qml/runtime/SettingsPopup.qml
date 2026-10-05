@@ -515,6 +515,13 @@ Window {
                         && embeddedRendererPreview.panelSceneItem.effectiveRendererTier !== "baked2.5d")
                     continue;
                 const row = editorRow(source[index]);
+                // On a curved path the control has two ranges, and a slider
+                // that seems to stop working above 8 needs saying so.
+                if (String(source[index].key) === "spacing"
+                        && ["circular", "ring", "ellipse", "radial", "polygon", "triangle",
+                            "square", "pentagon", "hexagon", "octagon", "arc", "semicircle",
+                            "fan"].includes(String(panelValue("layout", ""))))
+                    row.description = qsTr("On a curved path, values below 8 draw the icons together and 0 makes them touch. From 8 up they are spread evenly, unless there are more icons than fit: then the value is the gap between the ones shown.");
                 if (source[index].capability === "presentation-mechanism") {
                     if (!scenePresentationMechanisms.some(function(id) { return id !== "open"; }))
                         continue;
@@ -993,7 +1000,8 @@ Window {
                 ? (auditionStatus.editorProjection.themeCandidates || {})[String(data.themeId || "")]
                 : panelRegistry.themeCandidate(selectedPanelId, String(data.themeId || ""), "complete");
             if (!candidate || candidate.success !== true) {
-                studioError = qsTr("Theme is unavailable: %1").arg(String(candidate && (candidate.errorMessage || candidate.errorCode) ? (candidate.errorMessage || candidate.errorCode) : qsTr("No details were returned.")));
+                studioError = qsTr("This theme cannot be loaded here: %1.")
+                    .arg(CapabilityModel.reasonLabel(candidate ? candidate.errorCode : ""));
                 return;
             }
             editorSession = EditorModel.stagePanelValues(editorSession, candidate.values || {});
@@ -1266,6 +1274,8 @@ Window {
         }
 
         Row {
+            id: titleLead
+
             anchors.left: parent.left
             anchors.leftMargin: 12
             anchors.verticalCenter: parent.verticalCenter
@@ -1302,9 +1312,16 @@ Window {
 
         Label {
             anchors.centerIn: parent
+            // Centred, so it may only be as wide as the narrower side allows:
+            // a long panel name is elided instead of running under the
+            // product name or the close button.
+            width: Math.min(implicitWidth, Math.max(0, parent.width - 2 * (12
+                + Math.max(titleLead.x + titleLead.width,
+                           parent.width - closeButton.x))))
             text: panelRegistry.panelName(root.selectedPanelId) || qsTr("Panel Editor")
             color: "#d5e5ed"
             font.pixelSize: 12
+            horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
         }
 
@@ -1325,6 +1342,10 @@ Window {
             width: 30
             height: 30
             icon.name: "window-close"
+            Accessible.name: qsTr("Close Panel Studio")
+            ToolTip.text: Accessible.name
+            ToolTip.visible: hovered
+            ToolTip.delay: 600
             onClicked: root.cancelStudioChanges()
 
             background: Rectangle {
@@ -1901,22 +1922,55 @@ Window {
             font.pixelSize: 10
         }
 
+        // The message takes the room the footer has, on up to two lines. What
+        // still does not fit is one hover away, and the whole text can be
+        // copied for a report.
         Label {
-            visible: root.studioError.length > 0
-            Layout.maximumWidth: 420
-            text: root.studioError
-            color: "#ff8c8c"
-            font.pixelSize: 10
+            id: studioMessage
+
+            objectName: "studio-message"
+            visible: text.length > 0
+            Layout.fillWidth: true
+            Layout.maximumHeight: footer.height
+            text: [root.studioError, root.studioWarning].filter(function(message) {
+                return message.length > 0;
+            }).join("  ·  ")
+            color: root.studioError.length > 0 ? "#ff8c8c" : "#ffc66d"
+            font.pixelSize: 11
+            wrapMode: Text.Wrap
+            maximumLineCount: 2
             elide: Text.ElideRight
+            verticalAlignment: Text.AlignVCenter
+            Accessible.role: Accessible.AlertMessage
+            Accessible.name: text
+
+            HoverHandler {
+                id: studioMessageHover
+            }
+            ToolTip.visible: studioMessageHover.hovered && studioMessage.truncated
+            ToolTip.text: text
         }
 
-        Label {
-            visible: root.studioWarning.length > 0
-            Layout.maximumWidth: 420
-            text: root.studioWarning
-            color: "#ffc66d"
-            font.pixelSize: 10
-            elide: Text.ElideRight
+        ToolButton {
+            objectName: "studio-message-copy"
+            visible: studioMessage.visible
+            icon.name: "edit-copy"
+            Accessible.name: qsTr("Copy this message")
+            ToolTip.text: Accessible.name
+            ToolTip.visible: hovered
+            ToolTip.delay: 600
+            onClicked: {
+                messageClipboard.text = studioMessage.text;
+                messageClipboard.selectAll();
+                messageClipboard.copy();
+                messageClipboard.text = "";
+            }
+        }
+
+        TextEdit {
+            id: messageClipboard
+
+            visible: false
         }
 
         Label {
@@ -1927,6 +1981,7 @@ Window {
         }
 
         Item {
+            visible: !studioMessage.visible
             Layout.fillWidth: true
         }
 

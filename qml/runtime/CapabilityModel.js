@@ -112,6 +112,59 @@ function availableItems(items) {
     return result
 }
 
+// What a reason code means to a person. Internal codes are for logs and
+// details; a sentence in Panel Studio uses these clauses instead. Each reads
+// after a colon or "because", with the theme or preset as "it".
+function reasonLabel(code) {
+    const key = String(code || "")
+    const labels = {
+        "theme-not-found": qsTr("its theme is not installed"),
+        "theme-package-unavailable": qsTr("its theme package cannot be loaded"),
+        "preset-not-found": qsTr("it is no longer installed"),
+        "preset-resources-unavailable": qsTr("some of its resources are missing"),
+        "required-capability-unavailable": qsTr("a capability it requires is not available"),
+        "icon-style-unavailable": qsTr("its icon style is not installed"),
+        "motion-profile-unavailable": qsTr("its motion profile is not installed"),
+        "theme-capability-undeclared": qsTr("its theme does not support a feature it uses"),
+        "theme-host-unsupported": qsTr("its theme does not support this kind of panel"),
+        "theme-layout-unsupported": qsTr("its theme does not support this layout"),
+        "theme-field-unavailable": qsTr("one of its settings does not fit this panel"),
+        "invalid-theme-candidate": qsTr("its settings do not fit this panel"),
+        "invalid-theme-capabilities": qsTr("its description could not be read"),
+        "invalid-capability-input": qsTr("its description could not be read"),
+        "host-layout-unsupported": qsTr("this kind of panel cannot use its layout"),
+        "host-capability-unavailable": qsTr("this kind of panel does not support a feature it uses"),
+        "platform-unsupported": qsTr("this system is not supported"),
+        "renderer-not-installed": qsTr("the renderer it needs is not installed"),
+        "renderer-disabled": qsTr("the renderer it needs is switched off"),
+        "renderer-scene-unavailable": qsTr("3D rendering is not available in this session"),
+        "renderer-host-unsupported": qsTr("this kind of panel cannot use its renderer"),
+        "renderer-platform-unsupported": qsTr("this system cannot use its renderer"),
+        "renderer-rotation-unavailable": qsTr("its renderer cannot turn the whole panel"),
+        "rotation-range-incompatible": qsTr("its rotation is outside what this panel allows"),
+        "presentation-mechanism-unavailable": qsTr("its open and close motion is not available here"),
+        "no-safe-renderer-fallback": qsTr("none of the renderers it declares can be used here")
+    }
+    if (labels[key] !== undefined)
+        return labels[key]
+    if (key.indexOf("scene3d-") === 0)
+        return qsTr("its 3D resources could not be loaded")
+    return key.length > 0 ? qsTr("an unrecognised problem was reported")
+                          : qsTr("no reason was reported")
+}
+
+// A renderer tier as a person would name it.
+function rendererLabel(tier) {
+    const labels = {
+        "procedural2d": qsTr("2D"),
+        "skinned2d": qsTr("skinned 2D"),
+        "baked2.5d": qsTr("baked 2.5D"),
+        "true3d": qsTr("3D")
+    }
+    const key = String(tier || "")
+    return labels[key] !== undefined ? labels[key] : qsTr("2D")
+}
+
 function reasonText(value) {
     const source = normalized(value)
     if (!source || source.available === true)

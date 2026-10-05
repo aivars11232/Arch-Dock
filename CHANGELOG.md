@@ -66,6 +66,25 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   preferred tier, so a 2D theme can be loaded over a platform theme. Cards are
   drawn in a fixed context, without the selected panel's angle, rotation, tilt,
   collapse or radius, at the height of a preset card.
+- Panel Studio and Icon Properties open on the screen of the panel they edit;
+  without one they open under the pointer, and on the primary screen only as a
+  last resort.
+- Preset cards and Panel Studio messages give reasons in plain language and
+  name renderers as 2D, baked 2.5D or 3D. The internal code stays available on
+  hover for reports. Studio messages use the footer's width on two lines, show
+  the whole text on hover and can be copied. The title-bar close button has an
+  accessible name and tooltip, and a long panel name no longer runs under the
+  title-bar controls.
+- On a curved layout the Spacing control explains its two ranges.
+- A scene that switches to or from independent segments no longer logs type
+  errors for one evaluation.
+- The rendering gate's resource check measures what repeated theme changes add
+  after a warm-up pass, from settled readings, with its limit unchanged. Its
+  earlier single reading included the first load of every family and transient
+  peaks the shell releases seconds later, so it failed at random.
+- The repository no longer tracks the stale `build-codex-task-0014/` build tree,
+  the master plan's three requirement-mapping files are restored under
+  `docs/task-pack-v3/`, and a GitHub workflow runs the source-only gates.
 - Current-facing installation/version wording follows the corrected candidate;
   historical package checkpoints and release assets retain their identities.
 - Runtime corrections and candidate gates are recorded in

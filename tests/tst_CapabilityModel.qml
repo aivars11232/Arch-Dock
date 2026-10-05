@@ -183,4 +183,33 @@ TestCase {
         compare(CapabilityModel.rendererSummary({}),
                 "invalid-capability-result")
     }
+
+    // Every code the capability resolver can report has a sentence a person
+    // can read, and no label repeats the code it explains.
+    function test_reasonLabelsArePlainLanguage() {
+        const codes = [
+            "invalid-capability-input", "platform-unsupported",
+            "host-capability-unavailable", "host-layout-unsupported",
+            "theme-capability-undeclared", "theme-host-unsupported",
+            "theme-layout-unsupported", "renderer-not-installed",
+            "renderer-disabled", "renderer-scene-unavailable",
+            "renderer-host-unsupported", "renderer-platform-unsupported",
+            "presentation-mechanism-unavailable", "rotation-range-incompatible",
+            "renderer-rotation-unavailable", "no-safe-renderer-fallback",
+            "theme-not-found", "theme-package-unavailable",
+            "required-capability-unavailable", "icon-style-unavailable",
+            "motion-profile-unavailable", "scene3d-mesh-unavailable"
+        ]
+        const unknown = CapabilityModel.reasonLabel("a-code-from-a-later-release")
+        for (const code of codes) {
+            const label = CapabilityModel.reasonLabel(code)
+            verify(label.length > 0 && label.indexOf(code) < 0, code + ": " + label)
+            verify(label !== unknown, code + " has its own sentence")
+        }
+        verify(unknown.indexOf("a-code-from-a-later-release") < 0, unknown)
+        compare(CapabilityModel.reasonLabel(""), "no reason was reported")
+        compare(CapabilityModel.rendererLabel("procedural2d"), "2D")
+        compare(CapabilityModel.rendererLabel("baked2.5d"), "baked 2.5D")
+        compare(CapabilityModel.rendererLabel("true3d"), "3D")
+    }
 }

@@ -31,6 +31,7 @@
 #include <QHash>
 #include <QDir>
 #include <QFile>
+#include <QCursor>
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -5004,7 +5005,10 @@ void PanelWindow::showSettings()
                                      this, &PanelWindow::updateContentDemand);
     }
 
-    presentUtilityWindow(m_settingsWindow);
+    const QString selected = m_settingsWindow
+        ? m_settingsWindow->property("selectedPanelId").toString() : QString{};
+    presentUtilityWindow(m_settingsWindow,
+                         selected.isEmpty() ? m_panelRegistry.activePanelId() : selected);
 }
 
 void PanelWindow::showPanelSettings(const QString &panelId)
@@ -5028,7 +5032,7 @@ void PanelWindow::showPanelSettings(const QString &panelId)
         m_settingsWindow->setProperty("mainTabIndex", 1);
         m_settingsWindow->setProperty("subTabIndex", 0);
     }
-    presentUtilityWindow(m_settingsWindow);
+    presentUtilityWindow(m_settingsWindow, panelId);
 }
 
 QString PanelWindow::createNativePanel(const QString &edge, const QString &type)
@@ -7974,7 +7978,7 @@ QVariantMap PanelWindow::showIconProperties(
     }
 
     m_iconPropertiesWindow->setProperty("editorSnapshot", snapshot);
-    presentUtilityWindow(m_iconPropertiesWindow);
+    presentUtilityWindow(m_iconPropertiesWindow, panelId);
     snapshot.insert(QStringLiteral("status"), QStringLiteral("opened"));
     snapshot.insert(QStringLiteral("editorVisible"),
                     m_iconPropertiesWindow->isVisible());
@@ -8002,14 +8006,25 @@ QWindow *PanelWindow::createUtilityWindow(const QUrl &source)
     return nullptr;
 }
 
-void PanelWindow::presentUtilityWindow(QWindow *window)
+void PanelWindow::presentUtilityWindow(QWindow *window, const QString &panelId)
 {
     if (!window)
     {
         return;
     }
 
-    QScreen *screen = QGuiApplication::primaryScreen();
+    // An editor opens where the panel it edits is. With no panel to follow it
+    // opens under the pointer, and on the primary screen only as a last resort.
+    QScreen *screen = m_panelRegistry.panelIds().contains(panelId)
+        ? screenForPanel(panelId) : nullptr;
+    if (!screen)
+    {
+        screen = QGuiApplication::screenAt(QCursor::pos());
+    }
+    if (!screen)
+    {
+        screen = QGuiApplication::primaryScreen();
+    }
     if (screen)
     {
         window->setScreen(screen);

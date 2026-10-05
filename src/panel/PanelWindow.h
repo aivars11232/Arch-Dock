@@ -435,7 +435,7 @@ private:
         const QString &script) const;
     int evaluatePlasmaScriptResult(const QString &script) const;
     QWindow *createUtilityWindow(const QUrl &source);
-    void presentUtilityWindow(QWindow *window);
+    void presentUtilityWindow(QWindow *window, const QString &panelId = {});
 
     QQmlApplicationEngine &m_engine;
     WindowModel m_windowModel;

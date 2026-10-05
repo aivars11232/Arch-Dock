@@ -60,6 +60,7 @@ What the next 3D task builds on:
   panel for Load, presets and cards alike. A generic 3D mode that keeps the
   selected theme should change the renderer tier through this candidate
   rather than beside it.
-- The memory check at the end of `rendering-import-smoke` is unreliable and
-  the growth it samples predates this work; see CURRENT_STATE.md before
-  treating a failure of that check as a regression.
+- The memory check at the end of `rendering-import-smoke` compares settled
+  readings after a warm-up pass and after 16 further theme changes (the audit
+  corrections record in CURRENT_STATE.md explains why). A failure of that
+  check now means memory that is not released.

@@ -361,6 +361,27 @@ plasmashell_rss_kb() {
     sed -n 's/^VmRSS:[[:space:]]*\([0-9][0-9]*\) kB$/\1/p' "$status_file"
 }
 
+# The lowest resident memory over a quiet interval of the given seconds. The
+# shell frees replaced textures, decoded images and script objects over the
+# seconds after a change, so a single reading taken at once is a peak.
+plasmashell_settled_rss_kb() {
+    local seconds="$1"
+    local lowest=''
+    local sample
+    local value
+    for ((sample = 0; sample <= seconds; ++sample)); do
+        if (( sample > 0 )); then
+            sleep 1
+        fi
+        value="$(plasmashell_rss_kb)" || return 1
+        [[ "$value" =~ ^[0-9]+$ ]] || return 1
+        if [[ -z "$lowest" ]] || (( value < lowest )); then
+            lowest="$value"
+        fi
+    done
+    printf '%s\n' "$lowest"
+}
+
 wait_for_wayland_socket() {
     local socket_path="$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"
     local attempt
@@ -895,21 +916,25 @@ run_private_session() {
     printf 'Private service restart preserved 3D intent and the same unique native/free hosts.\n'
 
     # Repeated theme changes must release the previous platform's textures.
-    # Four passes over three large perspective families plus the energy skin,
-    # measured against the private PlasmaShell's own resident memory.
+    # A warm-up pass loads each family once; from then on the shell keeps a
+    # bounded working set, which it may or may not hand back to the system.
+    # Four further passes over three large perspective families plus the
+    # energy skin must not add to it: memory that is never released grows
+    # with every pass. Both readings are settled ones.
     local rss_before
     local rss_after
     local rss_growth
     local cycle
-    rss_before="$(plasmashell_rss_kb)"
-    [[ "$rss_before" =~ ^[0-9]+$ ]] || {
-        printf 'Could not read the private PlasmaShell resident memory: %s\n' \
-            "$rss_before" >&2
-        return 1
-    }
-    printf 'Cycling perspective families for resource behaviour (RSS %s kB).\n' \
-        "$rss_before"
-    for ((cycle = 0; cycle < 4; ++cycle)); do
+    printf 'Cycling perspective families for resource behaviour.\n'
+    for ((cycle = 0; cycle < 5; ++cycle)); do
+        if (( cycle == 1 )); then
+            rss_before="$(plasmashell_settled_rss_kb 10)" || {
+                printf 'Could not read the private PlasmaShell resident memory.\n' >&2
+                return 1
+            }
+            printf 'PlasmaShell resident memory after the warm-up pass: %s kB settled.\n' \
+                "$rss_before"
+        fi
         for perspective_theme_id in ring-platform-blue octagon-platform-steel \
                                     arc-platform-orange energy-frame-cyan; do
             case "$perspective_theme_id" in
@@ -952,13 +977,12 @@ run_private_session() {
         kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
     done
     require_no_import_errors
-    rss_after="$(plasmashell_rss_kb)"
-    [[ "$rss_after" =~ ^[0-9]+$ ]] || {
+    rss_after="$(plasmashell_settled_rss_kb 10)" || {
         printf 'Could not re-read the private PlasmaShell resident memory.\n' >&2
         return 1
     }
     rss_growth=$((rss_after - rss_before))
-    printf 'PlasmaShell resident memory after 16 theme changes: %s kB (growth %s kB).\n' \
+    printf 'PlasmaShell resident memory after 16 further theme changes: %s kB settled (growth %s kB).\n' \
         "$rss_after" "$rss_growth"
     (( rss_growth < 131072 )) || {
         printf 'Repeated theme changes grew resident memory by %s kB.\n' \

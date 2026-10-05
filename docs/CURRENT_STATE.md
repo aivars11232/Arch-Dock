@@ -1,5 +1,54 @@
 # Arch Dock current state
 
+<!-- AUDIT_CORRECTIONS_BEGIN -->
+## Independent audit corrections — 2026-10-05
+
+Source only, on top of AD3D-TASK-001; the installed package is still
+**arch-dock 0.1.1-8**. One session, no subagents, one build job, one test worker.
+
+Corrected:
+
+- Panel Studio and Icon Properties open on the edited panel's screen, then the
+  pointer's, then the primary screen (AUD-F05).
+- Preset cards and Studio messages give plain-language reasons; internal codes
+  stay available on hover (AUD-F06). Studio messages wrap, show the whole text on
+  hover and can be copied (AUD-F09). The close button has an accessible name and
+  tooltip (AUD-F10); a long panel title is elided before the title-bar controls
+  (AUD-F11). Spacing explains its two ranges on curved layouts (AUD-F01 follow-up).
+- The segment bindings read the segment layout itself, removing the eight
+  `TypeError` warnings the native logs carried since 0.1.1-8.
+- `build-codex-task-0014/` is untracked (its local copy is left in place); the
+  three requirement-mapping files are restored in `docs/task-pack-v3/` with the
+  task pack's SHA-256 sums (AUD-F14, AUD-F15); a GitHub workflow runs the
+  source-only gates (AUD-F16); the 3D handoff document is current (AUD-F17).
+
+The rendering gate's resource check is repaired, not loosened. A 24-cycle
+measurement showed PlasmaShell memory moving within a bounded band, about 557 to
+720 MB, with no upward trend, and dropping back within seconds of the last
+change. The old single reading compared a transient peak with memory measured
+before the first load of any perspective family, so it failed at random (three
+of four runs at 146 to 278 MB). The check now takes settled readings (the lowest
+over 10 quiet seconds) after a warm-up pass and after 16 further changes, and
+keeps its 128 MB limit: memory that is never released still grows with every
+pass and still fails. Five uncontested runs passed with growth between -39
+and +10 MB, in about 82 seconds of the gate's 120-second budget; one more run
+that overlapped a rebuild also passed and is excluded.
+
+Measured, not changed (AUD-F07): Panel Studio's Apply in the backend, offscreen,
+median of 15 rounds: 138 ms on the native bottom panel and 163 ms on a free ring
+panel (transaction 16 to 26 ms, then two editor snapshots of 61 to 68 ms, of which
+about 57 ms resolves the 16 theme cards). An edit's draft projection takes 65 to
+83 ms. Plasma's native placement round trips are not part of these numbers, so
+the intermittent slow Apply report remains unreproduced.
+
+Recorded in [known limitations](KNOWN_LIMITATIONS.md#panel-studio-presentation):
+fixed Studio colours and text size (AUD-F12), the compact small-screen layout
+(AUD-F13), and the large-file split after release (AUD-F18).
+
+Owner-only: visual and interaction acceptance (AUD-F03) and the physical
+second-monitor and other-GPU cells (AUD-F04, R-01).
+<!-- AUDIT_CORRECTIONS_END -->
+
 <!-- AD3D_TASK_001_BEGIN -->
 ## Source-verified geometry, spacing, folder and theme-card correction — AD3D-TASK-001, 2026-10-05
 

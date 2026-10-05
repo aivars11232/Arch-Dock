@@ -34,6 +34,24 @@ KPipeWire is optional for live window thumbnails. Window actions and ordinary
 panel rendering remain separate from live-thumbnail availability. Reduced
 motion and fallback behavior remain applicable when optional rendering is off.
 
+## Panel Studio presentation
+
+Panel Studio draws its own dark chrome with fixed colours and pixel font sizes.
+It does not follow the KDE colour scheme, and the system font scale does not
+enlarge its text. Its custom title-bar close button and message copy button
+carry accessible names. A full move to Kirigami theme colours and scalable
+text is planned after the 0.1.1 release rather than mixed into release
+corrections.
+
+On a small screen Panel Studio switches to a compact single-column layout so
+that every page stays reachable. It is a fallback for limited space, not a
+designed responsive mode.
+
+Several source files are very large (`PanelWindow.cpp`, `PanelRegistry.cpp`,
+`SettingsPopup.qml`, `LayoutEngine.js`). Splitting them is maintainability
+work scheduled after the release; it does not change behaviour and was kept out
+of release corrections to avoid broad regressions.
+
 ## Hardware evidence
 
 The verified private matrices use native KWin/Plasma Wayland, virtual outputs

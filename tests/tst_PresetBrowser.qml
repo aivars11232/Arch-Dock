@@ -465,7 +465,11 @@ TestCase {
         const fallbackDetail = findChild(browser, "preset-state-detail-panel-a");
         verify(fallbackDetail.visible);
         verify(fallbackDetail.text.indexOf("its theme package cannot be loaded") >= 0);
-        verify(fallbackDetail.text.indexOf("procedural2d") >= 0);
+        verify(fallbackDetail.text.indexOf("(2D)") >= 0, fallbackDetail.text);
+        // The sentence names things as a person would; the internal names
+        // stay out of it.
+        verify(fallbackDetail.text.indexOf("theme-package-unavailable") < 0
+               && fallbackDetail.text.indexOf("procedural2d") < 0, fallbackDetail.text);
         verify(fallback.livePreview !== null);
 
         // An incompatible preset is marked, explains itself and draws nothing:
@@ -482,6 +486,27 @@ TestCase {
         compare(buttonTexts(incompatible).sort().join("|"), "Apply as Active|Duplicate to My Presets|Preview on Desktop");
         verify(!findChild(browser, "preset-preview-panel-b").enabled);
         verify(!findChild(browser, "preset-apply-panel-b").enabled);
+        // The code an audit found printed on a card reads as a reason, and a
+        // code the card does not know is never printed either.
+        browser.presets = [
+            panelCard("panel-d", {
+                compatibility: { available: false, fallbackApplied: false,
+                                 reasonCode: "theme-capability-undeclared" },
+                preview: undefined
+            }),
+            panelCard("panel-e", {
+                compatibility: { available: false, fallbackApplied: false,
+                                 reasonCode: "a-code-from-a-later-release" },
+                preview: undefined
+            })
+        ];
+        const undeclared = findChild(browser, "preset-state-detail-panel-d");
+        verify(undeclared.text.indexOf("its theme does not support a feature it uses") >= 0,
+               undeclared.text);
+        verify(undeclared.text.indexOf("theme-capability-undeclared") < 0, undeclared.text);
+        const unknown = findChild(browser, "preset-state-detail-panel-e");
+        verify(unknown.text.indexOf("an unrecognised problem was reported") >= 0, unknown.text);
+        verify(unknown.text.indexOf("a-code-from-a-later-release") < 0, unknown.text);
         // A ready card has no detail line at all.
         browser.presets = [panelCard("panel-c")];
         verify(!findChild(browser, "preset-state-detail-panel-c").visible);

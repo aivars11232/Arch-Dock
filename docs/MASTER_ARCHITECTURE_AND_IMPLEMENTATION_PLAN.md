@@ -2486,11 +2486,11 @@ The implementation sequence now contains **45 total tasks**:
 - TASK-0001 through TASK-0021: frozen as user-confirmed complete.
 - TASK-0022 through TASK-0045: 24 active consolidated tasks.
 
-The former 65 remaining tasks, TASK-0022 through TASK-0086 in the 86-task pack, are mapped exactly once into the active consolidated tasks. The mapping is authoritative in:
+The former 65 remaining tasks, TASK-0022 through TASK-0086 in the 86-task pack, are mapped exactly once into the active consolidated tasks. The mapping is authoritative in these files, copied unchanged from the version-3 consolidated task pack (their SHA-256 sums match the pack's `SHA256SUMS.txt`):
 
-- `TASK_ID_MIGRATION_FROM_86_TASK_PACK.md`
-- `REQUIREMENT_COVERAGE_MATRIX.md`
-- `task_manifest.json`
+- [`TASK_ID_MIGRATION_FROM_86_TASK_PACK.md`](task-pack-v3/TASK_ID_MIGRATION_FROM_86_TASK_PACK.md)
+- [`REQUIREMENT_COVERAGE_MATRIX.md`](task-pack-v3/REQUIREMENT_COVERAGE_MATRIX.md)
+- [`task_manifest.json`](task-pack-v3/task_manifest.json)
 
 Consolidation rules:
 
