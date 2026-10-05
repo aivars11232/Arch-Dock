@@ -106,7 +106,9 @@ ScrollView {
 
                             required property var modelData
                             Layout.fillWidth: true
-                            implicitHeight: 154
+                            // A theme is drawn at the height of a preset
+                            // card; an icon style only needs its row of icons.
+                            implicitHeight: sampleRow.iconStyles ? 154 : 188
                             radius: 8
                             color: "#1b2831"
                             border.width: 1
@@ -148,7 +150,8 @@ ScrollView {
                                             : "theme-live-preview-")
                                             + themeSample.modelData.id
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: 76
+                                        Layout.preferredHeight:
+                                            sampleRow.iconStyles ? 76 : 110
                                         panelDefinition:
                                             themeSample.rendererCandidate
                                         hostCapabilities:

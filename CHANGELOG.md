@@ -41,6 +41,31 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   controls exposed only by the 3D draft. Orange On/Off and Cancel are verified.
 - Panels > Behavior can keep folder item names visible without hovering.
   This preference uses the existing draft, Apply/Cancel and persistence path.
+- Baked 2.5D platform artwork fills the platform its icons stand on at every
+  layout radius. The artwork was decoded at the drawn size but cropped in
+  natural pixels, which drew a ring shrunk into the corner of its layer while
+  the icons kept the full-size track. Icons also stand on the drawn track: the
+  track's scene offset is applied once, not twice.
+- Spacing regulates separation along curved tracks (circle, ring, radial,
+  polygon, arc, semicircle, fan and baked platforms) in every renderer. At or
+  above the reference spacing of 8 the entries are spread evenly; below it they
+  draw together about the middle of the track, down to touching at zero.
+- An open curve with more entries than fit shows the entries that stand on it
+  at the configured spacing and moves the others along the curve with the
+  wheel, one entry per notch in both directions. Order is kept and no straight
+  tail is appended; closed rings keep turning. The wheel works on the bare
+  surface of a platform as well as on its icons.
+- True-3D icons stand on the platform's own track for every layout shape, so a
+  square or polygon path no longer places icons over the platform's hole.
+- Fan and Arc folder contents stand on an exact half circle that opens to the
+  right, or a half ellipse when the popup is short. A larger folder shows the
+  children that fit and moves the others along the same curve by wheel, held
+  drag or keys, one child per wheel notch; a small folder uses a smaller circle.
+- Theme cards resolve each theme with its own renderer tier through the same
+  candidate Load applies. A theme whose style names no tier adopts its declared
+  preferred tier, so a 2D theme can be loaded over a platform theme. Cards are
+  drawn in a fixed context, without the selected panel's angle, rotation, tilt,
+  collapse or radius, at the height of a preset card.
 - Current-facing installation/version wording follows the corrected candidate;
   historical package checkpoints and release assets retain their identities.
 - Runtime corrections and candidate gates are recorded in

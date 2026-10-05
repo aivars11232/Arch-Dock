@@ -297,8 +297,22 @@ function rendererCandidate(session) {
     return result;
 }
 
+// The record a theme card hands the shared renderer. A card shows a theme, not
+// the panel it would be loaded on: the panel still supplies its entries and
+// icons, but its angle, scale, rotation, collapse, tilt, camera, radius and
+// renderer tier are one panel's state, and they bent every other theme's card.
+// A theme that sets one of these in its own style keeps it.
 function rendererThemeCandidate(session, theme) {
-    let result = rendererCandidate(session);
+    let result = merge(rendererCandidate(session), {
+        layoutAngle: 0, layoutScale: 1, panelRotationMode: "none",
+        presentationMode: "open", collapseMechanism: "open"
+    });
+    const ownDefaults = [
+        "rendererTier", "layoutRadius", "bakedTilt", "scene3DCameraPitch",
+        "scene3DCameraYaw", "scene3DThickness", "scene3DIconElevation"
+    ];
+    for (let index = 0; index < ownDefaults.length; ++index)
+        delete result[ownDefaults[index]];
     const source = theme && typeof theme === "object" ? theme : {};
     const styleGroups = [
         "panelStyle", "iconStyle", "tileStyle", "indicatorStyle",
@@ -316,15 +330,21 @@ function rendererThemeCandidate(session, theme) {
     }
     result.recommendedIconStyleId = String(source.iconStyleRef
         && source.iconStyleRef.id || "");
-    if (source.capabilityResolution
-            && typeof source.capabilityResolution === "object") {
-        result.capabilityResolution = copyValue(
-            source.capabilityResolution);
-        const renderer = result.capabilityResolution.renderer;
-        result.effectiveRendererTier = String(renderer
-            && renderer.effectiveTier || result.rendererTier
-            || "procedural2d");
-    }
+    // A wide platform is drawn at card scale, so its icons stay readable.
+    const cardRadius = 110;
+    const radius = Number(result.layoutRadius);
+    result.layoutRadius = radius > 0 ? Math.min(radius, cardRadius) : cardRadius;
+    // The tier is the one the theme was resolved with; the selected panel's
+    // own resolution describes a different candidate and is not passed on.
+    result.capabilityResolution = copyValue(
+        source.capabilityResolution
+        && typeof source.capabilityResolution === "object"
+        ? source.capabilityResolution : {});
+    const renderer = result.capabilityResolution.renderer;
+    result.rendererTier = String(renderer && renderer.requestedTier
+        || result.rendererTier || "procedural2d");
+    result.effectiveRendererTier = String(renderer
+        && renderer.effectiveTier || result.rendererTier);
     return result;
 }
 

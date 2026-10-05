@@ -366,4 +366,204 @@ TestCase {
             entry.position.y + entry.entryBounds.height / 2, 0, 120)
         compare(scene.effectiveLayoutAngle, 0, data.tag + " preserves the angle")
     }
+
+    // ---- Wheel surface, spacing and overcrowded curves -------------------
+
+    // Wheel events no scene accepted: what the desktop behind a free panel
+    // would receive.
+    property int passedWheelCount: 0
+
+    WheelHandler {
+        target: null
+        onWheel: function(event) { testCase.passedWheelCount += 1 }
+    }
+
+    function stillScene(overrides, properties) {
+        const scene = makeScene(Object.assign(
+            { rotationAnimationEnabled: false }, properties || ({})))
+        scene.panelDefinition = Object.assign({}, scene.panelDefinition,
+            { panelRotationMode: "none" }, overrides || ({}))
+        return scene
+    }
+
+    // Criterion: the wheel works anywhere on the drawn surface - on the bare
+    // surface between two icons too - in both directions, and nowhere else.
+    function test_wheelTurnsFromTheSurfaceBetweenEntries() {
+        const scene = stillScene()
+        const centre = Qt.point(scene.width / 2, scene.height / 2)
+        const radius = scene.layoutGeometry.radius
+        // Four entries stand at 0, 90, 180 and 270 degrees; 45 is bare ring.
+        const surface = Qt.point(centre.x + radius * Math.cos(Math.PI / 4),
+                                 centre.y + radius * Math.sin(Math.PI / 4))
+        for (let index = 0; index < scene.entryCount; ++index) {
+            const bounds = scene.entryGeometryAt(index).entryBounds
+            verify(surface.x < bounds.x || surface.x > bounds.x + bounds.width
+                   || surface.y < bounds.y || surface.y > bounds.y + bounds.height,
+                   "the probe point is not over entry " + index)
+        }
+        verify(scene.containsInputPoint(surface), "the bare ring takes input")
+        testCase.passedWheelCount = 0
+        mouseWheel(scene, surface.x, surface.y, 0, 120)
+        compare(scene.effectiveLayoutAngle, 15, "wheel up turns from the bare ring")
+        mouseWheel(scene, surface.x, surface.y, 0, -120)
+        compare(scene.effectiveLayoutAngle, 0, "wheel down turns back")
+        mouseWheel(scene, surface.x, surface.y, 0, -120)
+        compare(scene.effectiveLayoutAngle, 345, "and on past the start")
+        mouseWheel(scene, surface.x, surface.y, 0, 120)
+        compare(scene.effectiveLayoutAngle, 0)
+        compare(testCase.passedWheelCount, 0, "the ring consumed every event")
+
+        // The empty interior and the corner belong to the desktop.
+        mouseWheel(scene, centre.x, centre.y, 0, 120)
+        mouseWheel(scene, 1, 1, 0, -120)
+        compare(scene.effectiveLayoutAngle, 0, "neither turns the ring")
+        compare(testCase.passedWheelCount, 2, "both events passed through")
+    }
+
+    // Criterion: the canonical spacing control moves the logical, drawn,
+    // popup-anchor and input geometry of a ring together.
+    function test_spacingMovesEveryGeometryConsumerTogether() {
+        const scene = stillScene()
+        const centre = Qt.point(scene.width / 2, scene.height / 2)
+        const size = scene.layoutGeometry.iconSize
+        const width = scene.width
+        const even = []
+        for (let index = 0; index < scene.entryCount; ++index)
+            even.push(scene.entryGeometryAt(index).position)
+
+        scene.panelDefinition = Object.assign({}, scene.panelDefinition, { spacing: 2 })
+        compare(scene.width, width, "spacing does not resize the ring")
+        verify(Math.hypot(scene.entryGeometryAt(1).position.x - even[1].x,
+                          scene.entryGeometryAt(1).position.y - even[1].y) > 10,
+               "a small spacing moves the entry along the ring")
+        for (let index = 0; index < scene.entryCount; ++index) {
+            const entry = scene.entryGeometryAt(index)
+            const middle = Qt.point(entry.position.x + size / 2,
+                                    entry.position.y + size / 2)
+            fuzzyCompare(Math.hypot(middle.x - centre.x, middle.y - centre.y),
+                         scene.layoutGeometry.radius, 0.001)
+            const item = scene.entryItemAt(index)
+            fuzzyCompare(item.x, entry.position.x, 0.001)
+            fuzzyCompare(item.y, entry.position.y, 0.001)
+            verify(item.visible && item.enabled, "entry " + index + " stays usable")
+            verify(scene.containsInputPoint(middle),
+                   "entry " + index + " takes input where it is drawn")
+            const anchor = scene.popupAnchors.entries[index]
+            fuzzyCompare(anchor.x, middle.x + entry.outwardNormal.x * size / 2, 0.001)
+            fuzzyCompare(anchor.y, middle.y + entry.outwardNormal.y * size / 2, 0.001)
+        }
+        // Neighbours are closer than before, and never overlap.
+        const first = scene.entryGeometryAt(1).position
+        const second = scene.entryGeometryAt(2).position
+        const separation = Math.hypot(first.x - second.x, first.y - second.y)
+        verify(separation < Math.hypot(even[1].x - even[2].x, even[1].y - even[2].y) - 10)
+        verify(separation >= size - 0.5, "neighbours do not overlap")
+
+        // The default and anything above it restore the even ring.
+        for (const spacing of [8, 30]) {
+            scene.panelDefinition = Object.assign({}, scene.panelDefinition, { spacing: spacing })
+            for (let index = 0; index < scene.entryCount; ++index) {
+                fuzzyCompare(scene.entryGeometryAt(index).position.x, even[index].x, 0.001)
+                fuzzyCompare(scene.entryGeometryAt(index).position.y, even[index].y, 0.001)
+            }
+        }
+    }
+
+    // Criterion: an overcrowded semicircle keeps its entries on the exact
+    // half circle and shows a window of them. The wheel moves the window in
+    // both directions; hidden entries take no input; the offset is transient.
+    function test_overcrowdedSemicircleBrowsesAlongTheCurve() {
+        const many = []
+        for (let index = 0; index < 14; ++index)
+            many.push({ id: "entry-" + index, displayName: "Entry " + index })
+        const scene = stillScene({ layout: "semicircle", layoutRadius: 150,
+                                   iconSize: 52, spacing: 8 },
+                                 { orderedEntries: many })
+        const capacity = Math.floor(Math.PI * 150 / 60) + 1
+        compare(capacity, 8)
+        compare(scene.trackWindow.windowed, true, "fourteen icons do not fit")
+        compare(scene.trackWindow.capacity, capacity)
+        compare(scene.wheelBrowseAvailable, true)
+        compare(scene.browseOffset, 0)
+        const width = scene.width
+        const height = scene.height
+        const centre = Qt.point(width / 2, height / 2)
+
+        function shown() {
+            const result = []
+            for (let index = 0; index < scene.entryCount; ++index) {
+                if (scene.entryItemAt(index).visible)
+                    result.push(index)
+            }
+            return result
+        }
+        function range(first) {
+            const result = []
+            for (let index = first; index < first + capacity; ++index)
+                result.push(index)
+            return result
+        }
+        function verifyWindow(first) {
+            compare(shown(), range(first))
+            for (let index = 0; index < scene.entryCount; ++index) {
+                const entry = scene.entryGeometryAt(index)
+                const item = scene.entryItemAt(index)
+                const middle = Qt.point(entry.position.x + 26, entry.position.y + 26)
+                // Every entry, shown or not, is on the half circle.
+                fuzzyCompare(Math.hypot(middle.x - centre.x, middle.y - centre.y), 150, 0.001)
+                verify(middle.y <= centre.y + 0.001, "entry " + index + " is on the upper half")
+                if (index < first || index >= first + capacity) {
+                    verify(!item.visible && !item.enabled,
+                           "entry " + index + " outside the window takes no input")
+                    continue
+                }
+                verify(item.enabled, "entry " + index + " takes input")
+                fuzzyCompare(item.x, entry.position.x, 0.001)
+                fuzzyCompare(item.y, entry.position.y, 0.001)
+                verify(scene.containsInputPoint(middle))
+                const anchor = scene.popupAnchors.entries[index]
+                fuzzyCompare(anchor.x, middle.x + entry.outwardNormal.x * 26, 0.001)
+                fuzzyCompare(anchor.y, middle.y + entry.outwardNormal.y * 26, 0.001)
+            }
+            // The two ends of the window are level: a half circle, no tail.
+            fuzzyCompare(scene.entryGeometryAt(first).position.y,
+                         scene.entryGeometryAt(first + capacity - 1).position.y, 0.001)
+            const neighbour = Math.hypot(
+                scene.entryGeometryAt(first).position.x - scene.entryGeometryAt(first + 1).position.x,
+                scene.entryGeometryAt(first).position.y - scene.entryGeometryAt(first + 1).position.y)
+            fuzzyCompare(neighbour, 2 * 150 * Math.sin(60 / 150 / 2), 0.001)
+        }
+
+        verifyWindow(0)
+        const apex = Qt.point(centre.x, centre.y - 150)
+        const slot = scene.entryGeometryAt(1).position
+        mouseWheel(scene, apex.x, apex.y, 0, -120)
+        compare(scene.browseOffset, 1, "wheel down moves to the next entry")
+        verifyWindow(1)
+        fuzzyCompare(scene.entryGeometryAt(2).position.x, slot.x, 0.001)
+        fuzzyCompare(scene.entryGeometryAt(2).position.y, slot.y, 0.001)
+        mouseWheel(scene, apex.x, apex.y, 0, 120)
+        compare(scene.browseOffset, 0, "wheel up moves back")
+        mouseWheel(scene, apex.x, apex.y, 0, 120)
+        compare(scene.browseOffset, 0, "the window stops at the first entry")
+        for (let notch = 0; notch < 20; ++notch)
+            mouseWheel(scene, apex.x, apex.y, 0, -120)
+        compare(scene.browseOffset, 14 - capacity, "the window stops at the last entry")
+        verifyWindow(14 - capacity)
+        compare(scene.effectiveLayoutAngle, 0, "browsing does not turn the scene")
+        compare(scene.width, width, "browsing does not resize the scene")
+        compare(scene.height, height)
+        verify(scene.panelDefinition.browseOffset === undefined,
+               "the offset is not a setting")
+
+        // A curve that holds its entries is as before: the wheel turns it.
+        scene.orderedEntries = many.slice(0, 5)
+        compare(scene.trackWindow.windowed, false)
+        compare(scene.wheelBrowseAvailable, false)
+        compare(scene.browseOffset, 0, "the offset is forgotten")
+        for (let index = 0; index < 5; ++index)
+            verify(scene.entryItemAt(index).visible && scene.entryItemAt(index).enabled)
+        mouseWheel(scene, apex.x, apex.y, 0, 120)
+        compare(scene.effectiveLayoutAngle, 15)
+    }
 }

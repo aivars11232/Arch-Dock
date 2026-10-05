@@ -4,9 +4,11 @@
 set -euo pipefail
 
 preset_variant_json() {
-    python - "$1" <<'PY'
-import ast, json, re, sys
-text = sys.argv[1]
+    # The reply travels on its own descriptor. A draft reply carries every
+    # theme candidate and can exceed what the kernel allows one argument.
+    python - 3<<<"$1" <<'PY'
+import ast, json, os, re, sys
+text = os.fdopen(3).read()
 pattern = re.compile(r'''\s*(@[a-zA-Z0-9{}()]+|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|[-+]?(?:0x[0-9a-fA-F]+|[0-9]+(?:\.[0-9]*)?(?:[eE][-+]?[0-9]+)?)|[a-zA-Z][a-zA-Z0-9]*|[<>()\[\]{},:])''')
 tokens = []
 position = 0
@@ -334,7 +336,9 @@ preset_defaults_group() {
     jq -e '.success==false and .errorCode=="unavailable-panel-field" and .state=="ACTIVE"' <<<"$reply" >/dev/null
     preset_ok cancel >/dev/null
     preset_ok beginPreview "{'kind': <'panel'>, 'presetId': <'circular-blue-ring'>, 'panelId': <'$id'>, 'newPanel': <false>, 'useRecommendedIcons': <false>}" >/dev/null
-    reply="$(preset_call updateDraft "{'opacity': <0.6>}")"
+    # A baked platform has no procedural shape. Opacity is not such a field:
+    # every renderer applies it, so it is no longer a refused edit.
+    reply="$(preset_call updateDraft "{'shape': <'rounded'>}")"
     jq -e '.success==false and .errorCode=="unavailable-panel-field" and .state=="ACTIVE"' <<<"$reply" >/dev/null
     preset_ok updateDraft "{'layoutRadius': <240>}" >/dev/null
     wait_for_free_host_snapshot_stable "$desktop" "$applet" preview >/dev/null

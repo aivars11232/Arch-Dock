@@ -46,7 +46,54 @@ def instrument_interaction_stage(stage):
                     onTriggered: {
                         if (!representation.authoritativeHost) return;
                         const host = panelScene.Window.window;
+                        // A point on the drawn surface that is not over an icon, and
+                        // the scene centre: where a wheel must and must not act.
+                        const surfaceProbe = (() => {
+                            const mesh = panelScene.effectiveRendererTier === "true3d"
+                                ? panelScene.activeSurfaceRenderer : null;
+                            const track = panelScene.activeTrackMetrics;
+                            const middle = track && track.center ? Qt.point(track.center.x, track.center.y)
+                                : Qt.point(panelScene.width / 2, panelScene.height / 2);
+                            // A tilted platform's hole is shallow, so the hit margins of the icons
+                            // above and below reach its centre. Look along the middle of the hole.
+                            const reach = track ? Number(track.radiusX) : Number(panelScene.layoutGeometry.radius);
+                            const result = {surface: null, interior: null};
+                            for (let step = 0; step <= 6 && !result.interior; ++step) {
+                                for (const side of step === 0 ? [0] : [1, -1]) {
+                                    const p = Qt.point(middle.x + side * step * reach * 0.1, middle.y);
+                                    if (panelScene.containsInputPoint(p)) continue;
+                                    const mapped = panelScene.mapToItem(null, p.x, p.y);
+                                    result.interior = [mapped.x, mapped.y];
+                                    break;
+                                }
+                            }
+                            if (!panelScene.wheelRotationAvailable) return result;
+                            const rects = panelScene.entryRects;
+                            const overEntry = p => rects.some(r => p.x >= r.x - 24 && p.x <= r.x + r.width + 24
+                                && p.y >= r.y - 24 && p.y <= r.y + r.height + 24);
+                            for (let degrees = 5; degrees < 360 && !result.surface; degrees += 10) {
+                                const turn = degrees * Math.PI / 180;
+                                let p;
+                                if (mesh && mesh.viewport) {
+                                    const radius = Number(mesh.entryTrackRadius || mesh.platformScale * 0.84);
+                                    const v = mesh.viewport.mapFrom3DScene(Qt.vector3d(
+                                        radius * Math.cos(turn), radius * Math.sin(turn), mesh.platformTop));
+                                    p = Qt.point(v.x, v.y);
+                                } else if (track) {
+                                    p = Qt.point(track.center.x + track.radiusX * Math.cos(turn),
+                                        track.center.y + track.radiusY * Math.sin(turn));
+                                } else {
+                                    p = Qt.point(middle.x + reach * Math.cos(turn), middle.y + reach * Math.sin(turn));
+                                }
+                                if (overEntry(p) || !panelScene.containsInputPoint(p)) continue;
+                                const mapped = panelScene.mapToItem(null, p.x, p.y);
+                                result.surface = [mapped.x, mapped.y];
+                            }
+                            return result;
+                        })();
                         console.warn("ArchDockInteraction " + JSON.stringify({kind: "host", panel: root.panelId,
+                            surfacePoint: surfaceProbe.surface, interiorPoint: surfaceProbe.interior,
+                            inputRegion: panelScene.activeInputRegionKind,
                             profile: String((root.configuration.presentationProfile || {}).id || ""),
                             at: Date.now(), itemVisible: representation.visible, itemOpacity: representation.opacity,
                             windowVisible: host.visible, windowVisibility: panelScene.Window.visibility,
@@ -105,11 +152,13 @@ def instrument_interaction_stage(stage):
                 if (!root.observedActive) return;
                 const items = {};
                 const names = {};
+                const shown = [];
                 function visit(item) {
                     if (!item.visible) return;
                     if (item.objectName.startsWith("folder-child-")) {
                         const point = item.mapToItem(null, item.width / 2, 28);
                         items[item.objectName] = [point.x, point.y];
+                        if (item.opacity > 0.999) shown.push(item.objectName);
                     }
                     if (item.objectName.startsWith("folder-name-"))
                         names[item.objectName] = item.text;
@@ -150,7 +199,9 @@ def instrument_interaction_stage(stage):
                         contentX: viewport.contentX, contentY: viewport.contentY,
                         contentWidth: viewport.contentWidth, contentHeight: viewport.contentHeight,
                         dragging: viewport.dragging, moving: viewport.moving} : {},
-                    rect: [root.x, root.y, root.width, root.height], items: items}));
+                    rect: [root.x, root.y, root.width, root.height], items: items, shown: shown,
+                    path: {radiusX: content.path.radiusX, radiusY: content.path.radiusY,
+                        capacity: content.path.capacity}}));
             }
         }
 ''')
@@ -621,6 +672,7 @@ def run_interaction_matrix(free_panel):
         click(point, button)
 
     def run_folder_matrix():
+        import math
         import subprocess
         import shutil
         from PySide6.QtGui import QImage
@@ -768,13 +820,45 @@ def run_interaction_matrix(free_panel):
             assert current["viewport"]["contentWidth"] <= current["viewport"]["width"], current
             assert current["viewport"]["contentHeight"] > current["viewport"]["height"], current
             verify_capture(panel, 48, True)
+
+            def on_path():
+                state = folder_popup(panel)
+                names = sorted(state.get("shown", []), key=lambda name: int(name.rsplit("-", 1)[1]))
+                return [(name, state["items"][name]) for name in names if name in state.get("items", {})]
+
+            def assert_half_circle(points):
+                # First and last on one vertical diameter, every child on the
+                # half circle the folder declares - a half ellipse when the
+                # popup is short - bulging by its radius: no straight tail.
+                shape = folder_popup(panel)["path"]
+                across, along = shape["radiusX"], shape["radiusY"]
+                assert len(points) >= 3 and len(points) == shape["capacity"], (points, shape)
+                (x0, y0), (x1, y1) = points[0][1], points[-1][1]
+                middle = (y0 + y1) / 2
+                assert abs(x0 - x1) < 1.5 and abs((y1 - y0) / 2 - along) < 1.5, (points, shape)
+                assert across > 40 and along > 40, shape
+                for _, (x, y) in points:
+                    assert abs(math.hypot((x - x0) / across, (y - middle) / along) - 1) < 0.02, (points, shape)
+                    assert x >= x0 - 1.5, (points, shape)
+                assert max(x for _, (x, _y) in points) - x0 > across * 0.8, (points, shape)
+
+            resting = wait_for(lambda: on_path() if on_path() and on_path()[0][0] == "folder-child-0" else None,
+                               "dense folder rests on its first child")
+            assert_half_circle(resting)
             point = folder_point(panel, "folder-child-0")
             # EIS positive Y scrolls down, like the existing Studio probe;
             # QtTest's synthetic angleDelta uses the opposite sign.
             wheel(point, 0, 120, discrete=True)
             wait_for(lambda: folder_popup(panel)["viewport"]["contentY"] > 0, "real downward folder wheel")
+            moved = wait_for(lambda: on_path() if on_path() and on_path()[0][0] == "folder-child-1"
+                             and len(on_path()) == len(resting) else None,
+                             "one wheel notch moves the folder one child along the curve")
+            assert_half_circle(moved)
+            for (_, before), (_, after) in zip(resting, moved):
+                assert abs(before[0] - after[0]) < 1.5 and abs(before[1] - after[1]) < 1.5, (resting, moved)
             wheel(point, 0, -120, discrete=True)
             wait_for(lambda: folder_popup(panel)["viewport"]["contentY"] == 0, "real upward folder wheel")
+            wait_for(lambda: on_path() and on_path()[0][0] == "folder-child-0", "the folder returns along the curve")
             start = folder_point(panel, "folder-child-0")
             drag(start, [start[0], start[1] - 100])
             wait_for(lambda: folder_popup(panel)["viewport"]["contentY"] > 0, "real held-pointer folder drag")
@@ -1215,7 +1299,8 @@ def run_interaction_matrix(free_panel):
         wait_for(lambda: not panel_call("panelInteractionGuards", "(s)", (free_panel,))["dragActive"]
             and all(not observed(row["appId"]).get("dragging", True) for row in rows()), "drag guard cleared")
         assert panel_call("dockEntriesForPanel", "(ss)", ("bottom", "launcher")) == native_before
-        for tier, theme in (("procedural2d", ""), ("true3d", "mesh-platform-cyan")):
+        for tier, theme in (("procedural2d", ""), ("baked2.5d", "ring-platform-blue"),
+                            ("true3d", "mesh-platform-cyan")):
             configure(free_panel, {"rendererTier": tier, "panelThemeId": theme, "completeThemeId": theme})
             for row in rows():
                 wait_for(lambda: observed(row["appId"]).get("iconSource") == row["iconName"]
@@ -1224,8 +1309,16 @@ def run_interaction_matrix(free_panel):
                     and observed(row["appId"]).get("meshActive") == (tier == "true3d"),
                     "native application/folder glyph in " + tier + ": " + row["appId"])
             def host_state(): return observations.get(("host", free_panel, ""), {})
-            before = wait_for(lambda: host_state().get("rotation", {}).get("wheelAvailable")
+            # The glyph facts above are the same in 2D and baked 2.5D, so they
+            # do not show that the new surface has replaced the previous one.
+            # Wait for its own input region, then for entry positions sampled
+            # on it: a wheel sent to the previous surface proves nothing.
+            region = "platform-mask" if tier == "baked2.5d" else "geometry-band"
+            before = wait_for(lambda: host_state().get("inputRegion") == region
+                and host_state().get("rotation", {}).get("wheelAvailable")
                 and host_state(), "live wheel rotation ready in " + tier)
+            wait_for(lambda: all(observed(row["appId"]).get("sample", 0) > before["at"] for row in rows()),
+                     "entries observed on the " + tier + " surface")
             angle = before["rotation"]["angle"]
             wheel(entry_point(app), 0, -120, discrete=True)
             wait_for(lambda: abs(host_state()["rotation"]["angle"] - (angle + 15) % 360) < 0.01,
@@ -1233,6 +1326,26 @@ def run_interaction_matrix(free_panel):
             wheel(entry_point(app), 0, 120, discrete=True)
             wait_for(lambda: abs(host_state()["rotation"]["angle"] - angle) < 0.01,
                 "Wayland wheel reverses free panel in " + tier)
+            # The wheel belongs to the whole drawn surface, not to the icons:
+            # the bare platform between two icons turns the panel both ways,
+            # and the empty interior leaves it alone.
+            probe = wait_for(lambda: host_state().get("surfacePoint") and host_state().get("interiorPoint")
+                and host_state(), "bare dock surface and empty interior located in " + tier)
+            surface = native_point(probe["rect"][2:], probe["surfacePoint"])
+            interior = native_point(probe["rect"][2:], probe["interiorPoint"])
+            wheel(surface, 0, -120, discrete=True)
+            wait_for(lambda: abs(host_state()["rotation"]["angle"] - (angle + 15) % 360) < 0.01,
+                "Wayland wheel turns from the bare surface in " + tier)
+            wheel(surface, 0, 120, discrete=True)
+            wait_for(lambda: abs(host_state()["rotation"]["angle"] - angle) < 0.01,
+                "Wayland wheel reverses from the bare surface in " + tier)
+            stamp = host_state()["at"]
+            wheel(interior, 0, -120, discrete=True)
+            wait_for(lambda: host_state()["at"] > stamp + 400, "host observed after the interior wheel")
+            assert abs(host_state()["rotation"]["angle"] - angle) < 0.01, (
+                "the empty interior turned the panel in " + tier, host_state()["rotation"])
+            print(f"PASS: {tier}: wheel on the bare surface both ways; empty interior passes through "
+                  f"({probe['inputRegion']})", flush=True)
             for mode, direction in (("clockwise", 1), ("counter-clockwise", -1)):
                 configure(free_panel, {"panelRotationMode": mode, "panelRotationSpeed": 90,
                     "panelRotationTrigger": "idle"})

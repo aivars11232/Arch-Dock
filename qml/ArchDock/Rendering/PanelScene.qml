@@ -190,6 +190,25 @@ Item {
         rotationGeometryAvailable && entryInteractionEnabled && entriesAnimatable
         && !dragInProgress && !editModeActive && !Boolean(runtimeState.popupOpen)
         && presentationState !== "collapsed"
+    // An open curve that cannot hold its entries shows a window of them, and
+    // the wheel then moves that window instead of turning the scene. The
+    // travel is transient, like the wheel rotation above: it is never saved.
+    property real browseTravel: 0
+    readonly property var trackWindow: bakedMetadataUsable && bakedTrackMetrics
+        ? ({ windowed: bakedTrackMetrics.windowed === true,
+             capacity: Number(bakedTrackMetrics.capacity || 0),
+             maximumOffset: Number(bakedTrackMetrics.maximumOffset || 0) })
+        : LayoutEngine.pathWindow(layoutPath, entryCount, trackGeometry)
+    readonly property int browseOffset: trackWindow.windowed === true
+        ? Math.max(0, Math.min(Number(trackWindow.maximumOffset || 0),
+                               Math.round(browseTravel)))
+        : 0
+    readonly property bool wheelBrowseAvailable:
+        freeHost && trackWindow.windowed === true && entryInteractionEnabled
+        && entriesAnimatable && !dragInProgress && !editModeActive
+        && !Boolean(runtimeState.popupOpen) && presentationState !== "collapsed"
+    onTrackWindowChanged: browseTravel = trackWindow.windowed === true
+        ? Math.min(browseTravel, Number(trackWindow.maximumOffset || 0)) : 0
     readonly property real sceneRotationAngle:
         rotationController.angleOffset + wheelRotationAngle
     readonly property real effectiveLayoutAngle:
@@ -226,6 +245,19 @@ Item {
     readonly property var layoutGeometry: sceneRotationEnabled || rotationGeometryAvailable
         ? LayoutEngine.rotationEnvelope(configuredLayoutGeometry)
         : configuredLayoutGeometry
+    // A mesh scene draws its entries on the platform's own track, which is
+    // not the layout radius. Spacing is measured where the icons really are.
+    readonly property real meshTrackRadius:
+        surfaceLoader.true3DReady && surfaceLoader.true3DItem
+        ? Number(surfaceLoader.true3DItem.entryTrackRadius || 0) : 0
+    readonly property var trackGeometry: Object.assign({}, layoutGeometry, {
+        trackRadius: meshTrackRadius
+    })
+    // What the entries are placed with: the track geometry plus the transient
+    // window offset of an overcrowded curve.
+    readonly property var entryLayoutGeometry: Object.assign({}, trackGeometry, {
+        browseOffset: Math.round(browseTravel)
+    })
     readonly property var activeThemeSlice: themeRecord(
         themeDefinition ? themeDefinition.slices : [],
         presentationState, themeOrientation)
@@ -271,7 +303,12 @@ Item {
             activeThemeTrack, bakedArtworkSize.width, bakedArtworkSize.height,
             entryCount, configuredLayoutGeometry.iconSize,
             configuredLayoutGeometry.padding, configuredLayoutGeometry.radius,
-            bakedTiltDegrees, sceneRotationEnabled || rotationGeometryAvailable)
+            bakedTiltDegrees, sceneRotationEnabled || rotationGeometryAvailable,
+            // The canonical spacing regulates a baked track as it does every
+            // other curved one.
+            ({ spacing: configuredLayoutGeometry.spacing,
+               spacingReference: configuredLayoutGeometry.spacingReference,
+               browseOffset: Math.round(browseTravel) }))
         : null
 
     readonly property var surfaceMetrics: buildSurfaceMetrics()
@@ -441,6 +478,13 @@ Item {
         const rects = []
         for (let index = 0; index < entryCount; ++index) {
             const output = entryGeometryAt(index)
+            // An entry outside the window of an overcrowded curve is not on
+            // screen, so it has no rectangle to press. The list keeps one
+            // record per entry; this one can contain no point.
+            if (output.onTrack === false) {
+                rects.push({ x: -100000, y: -100000, width: 0, height: 0 })
+                continue
+            }
             rects.push(output.entryBounds || {
                 x: output.position.x, y: output.position.y,
                 width: layoutGeometry.iconSize, height: layoutGeometry.iconSize
@@ -706,7 +750,7 @@ Item {
             return output
         }
         const geometry = LayoutEngine.entryGeometry(
-            layoutPath, index, entryCount, layoutGeometry,
+            layoutPath, index, entryCount, entryLayoutGeometry,
             surfaceLoader.true3DReady ? 0 : effectiveLayoutAngle,
             polygonSides, pathOrientation, geometryCompatibilityProfile,
             placementEdge)
@@ -857,13 +901,22 @@ Item {
 
     WheelHandler {
         target: null
-        enabled: root.wheelRotationAvailable
+        enabled: root.wheelRotationAvailable || root.wheelBrowseAvailable
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         acceptedModifiers: Qt.NoModifier
         onWheel: function(event) {
             const delta = event.pixelDelta.y !== 0 ? event.pixelDelta.y : event.angleDelta.y
             if (delta === 0) {
                 event.accepted = false
+                return
+            }
+            if (root.wheelBrowseAvailable) {
+                // One notch moves the window one entry: down brings the next
+                // entries onto the curve, up the previous ones.
+                root.browseTravel = Math.max(0, Math.min(
+                    Number(root.trackWindow.maximumOffset || 0),
+                    root.browseTravel - delta / 120))
+                event.accepted = true
                 return
             }
             // One normal wheel notch turns 15 degrees; touchpad deltas turn
@@ -984,7 +1037,7 @@ Item {
             const rect = output.entryBounds
             return { centerX: rect.x + rect.width / 2, centerY: rect.y + rect.height / 2,
                      width: rect.width, height: rect.height,
-                     rotation: output.rotation }
+                     rotation: output.rotation, onTrack: output.onTrack !== false }
         })
         sceneConcealed: !root.entriesAnimatable
     }
@@ -1076,9 +1129,13 @@ Item {
             readonly property var segmentItem: root.segmentItemForEntry(index)
             readonly property bool segmentOpen: !root.segmentedScene
                 || Boolean(segmentItem && segmentItem.expanded)
+            // False only for an entry outside the window of an overcrowded
+            // open curve.
+            readonly property bool onTrack: geometryOutput.onTrack !== false
             readonly property bool sceneInputEnabled:
-                root.entryInteractionEnabled && segmentOpen
-            readonly property bool sceneVisible: root.entriesAnimatable && segmentOpen
+                root.entryInteractionEnabled && segmentOpen && onTrack
+            readonly property bool sceneVisible:
+                root.entriesAnimatable && segmentOpen && onTrack
             readonly property var sceneGeometry: geometryOutput
             readonly property var sceneRuntimeState: root.runtimeState
             readonly property var scenePanelDefinition: root.panelDefinition
@@ -1102,7 +1159,7 @@ Item {
                 ? delegateItem.hoverScale : 1
 
             objectName: "panel-entry-" + index
-            visible: segmentOpen
+            visible: segmentOpen && onTrack
             enabled: sceneInputEnabled
             x: geometryOutput.position.x
             y: geometryOutput.position.y

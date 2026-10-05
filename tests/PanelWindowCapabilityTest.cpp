@@ -134,6 +134,7 @@ private slots:
     void studioPageWheelInput();
     void studioPanelMotionControls();
     void tiltEditorsFollowTheSelectedRenderer();
+    void themeCardsResolveEachThemesOwnRenderer();
     void studioIconTiles_data();
     void studioIconTiles();
     void studioFolderItemNames_data();
@@ -530,6 +531,146 @@ void PanelWindowCapabilityTest::tiltEditorsFollowTheSelectedRenderer()
     QCOMPARE(registry->panelDefinition("bottom")->toPersistedMap(), nativeBefore);
     PanelRegistry reloaded;
     QCOMPARE(reloaded.panelDefinition(panel)->surface.parameters2_5D.value("tilt").toDouble(), 8.0);
+}
+
+void PanelWindowCapabilityTest::themeCardsResolveEachThemesOwnRenderer()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    // The panel the broken cards were observed on wears the Blue Ring
+    // platform, so its saved renderer tier is baked 2.5D.
+    const QString panel = registry->addFreePanel();
+    const auto platform = registry->themeCandidate(panel, "ring-platform-blue", "complete");
+    QVERIFY(platform.value("success").toBool());
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        platform.value("values").toMap()).value("success").toBool());
+    QCOMPARE(registry->panelDefinition(panel)->surface.rendererTier, QStringLiteral("baked2.5d"));
+
+    const auto themesFor = [&](const QString &panelId) {
+        QHash<QString, QVariantMap> result;
+        for (const auto &value : backend.resolvedThemeDefinitions(panelId))
+            result.insert(value.toMap().value("id").toString(), value.toMap());
+        return result;
+    };
+    const auto rendererOf = [](const QVariantMap &theme) {
+        return theme.value("capabilityResolution").toMap().value("renderer").toMap();
+    };
+    const auto themes = themesFor(panel);
+    QCOMPARE(themes.size(), 16);
+
+    // Each skin is resolved with its own tier, not the platform's.
+    for (const QString id : {"energy-frame-cyan", "energy-frame-green", "energy-frame-orange",
+                             "energy-frame-purple", "sci-fi-chassis-dark", "sci-fi-chassis-red",
+                             "sci-fi-chassis-blue"}) {
+        const auto theme = themes.value(id);
+        QVERIFY2(theme.value("available").toBool(), qPrintable(id));
+        const auto renderer = rendererOf(theme);
+        QCOMPARE(renderer.value("requestedTier").toString(), QStringLiteral("skinned2d"));
+        QCOMPARE(renderer.value("effectiveTier").toString(), QStringLiteral("skinned2d"));
+        QVERIFY2(!renderer.value("fallbackApplied").toBool(),
+            qPrintable(id + ": " + renderer.value("reasonCode").toString()));
+    }
+
+    // The true-3D themes. The mesh platform asks for its mesh scene, and the
+    // answer stays truthful in a build that has no 3D renderer.
+    const bool spatial = ARCHDOCK_QUICK3D_BUILT && ARCHDOCK_SCENE3D_BUILT;
+    QVERIFY(themes.value("mesh-platform-cyan").value("available").toBool());
+    const auto mesh = rendererOf(themes.value("mesh-platform-cyan"));
+    QCOMPARE(mesh.value("requestedTier").toString(), QStringLiteral("true3d"));
+    QCOMPARE(mesh.value("effectiveTier").toString(),
+        spatial ? QStringLiteral("true3d") : QStringLiteral("procedural2d"));
+    QCOMPARE(mesh.value("fallbackApplied").toBool(), !spatial);
+    if (!spatial)
+        QVERIFY(mesh.value("reasonCode").toString().startsWith("renderer-"));
+    const auto orange = rendererOf(themes.value("arc-platform-orange"));
+    QCOMPARE(orange.value("effectiveTier").toString(), QStringLiteral("baked2.5d"));
+    QVERIFY(!orange.value("fallbackApplied").toBool());
+
+    // A theme whose style names no tier is listed again and resolves with
+    // its own renderer instead of inheriting the platform's.
+    for (const QString id : {"holographic-ring", "obsidian-glass", "neon-segments",
+                             "metallic-shelf", "minimal-underline"}) {
+        const auto theme = themes.value(id);
+        QVERIFY2(theme.value("available").toBool(),
+            qPrintable(id + ": " + theme.value("reasonCode").toString()));
+        QCOMPARE(rendererOf(theme).value("effectiveTier").toString(), QStringLiteral("procedural2d"));
+        QVERIFY2(!rendererOf(theme).value("fallbackApplied").toBool(), qPrintable(id));
+    }
+
+    // A card says what Load does: one resolution answers both.
+    for (auto it = themes.cbegin(); it != themes.cend(); ++it) {
+        const auto candidate = registry->themeCandidate(panel, it.key(), "complete");
+        QVERIFY2(candidate.value("success").toBool() == it.value().value("available").toBool(),
+            qPrintable(it.key() + ": " + candidate.value("errorCode").toString()));
+        if (candidate.value("success").toBool())
+            QCOMPARE(candidate.value("capabilityResolution").toMap().value("renderer").toMap(),
+                rendererOf(it.value()));
+    }
+
+    // A genuine incompatibility is still reported: an edge panel cannot take
+    // a free-only platform, and says why.
+    const auto native = themesFor("bottom");
+    QVERIFY(!native.value("ring-platform-blue").value("available").toBool());
+    QCOMPARE(native.value("ring-platform-blue").value("reasonCode").toString(),
+        QStringLiteral("host-layout-unsupported"));
+    QVERIFY(native.value("energy-frame-cyan").value("available").toBool());
+    QCOMPARE(rendererOf(native.value("energy-frame-cyan")).value("effectiveTier").toString(),
+        QStringLiteral("skinned2d"));
+
+    // The cards Panel Studio draws for the platform panel.
+    {
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> popup(component.createWithInitialProperties({
+            {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 6},
+            {"width", 980}, {"height", 720}}));
+        QVERIFY(popup);
+        auto *window = qobject_cast<QQuickWindow *>(popup.get());
+        QVERIFY(window);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QVERIFY(QQuickTest::qWaitForPolish(window));
+        for (auto it = themes.cbegin(); it != themes.cend(); ++it) {
+            const QString id = it.key();
+            QQuickItem *card = nullptr;
+            QTRY_VERIFY2((card = visibleItem(window, "theme-live-preview-" + id)) != nullptr, qPrintable(id));
+            const QString resolved = rendererOf(it.value()).value("effectiveTier").toString();
+            // The offscreen consumer has no mesh backend; its truthful
+            // fallback is covered by the renderer capability tests.
+            if (resolved != QStringLiteral("true3d")) {
+                QTRY_COMPARE(card->property("activeRendererTier").toString(), resolved);
+                QVERIFY2(!card->property("fallbackApplied").toBool(),
+                    qPrintable(id + ": " + card->property("rendererStatusText").toString()));
+            }
+            // Readable at card size: the preview is as tall as a preset
+            // card's and the drawn icons are not specks.
+            QVERIFY2(card->height() >= 110, qPrintable(id));
+            auto *scene = card->property("panelSceneItem").value<QQuickItem *>();
+            QVERIFY2(scene, qPrintable(id));
+            const double iconPixels = scene->property("layoutGeometry").value<QJSValue>().toVariant()
+                .toMap().value("iconSize").toDouble() * card->property("sceneFitScale").toDouble();
+            QVERIFY2(iconPixels >= 14, qPrintable(id + ": " + QString::number(iconPixels)));
+            if (id.startsWith("energy-frame-"))
+                QVERIFY2(iconPixels >= 24, qPrintable(id + ": " + QString::number(iconPixels)));
+        }
+        QVERIFY(!popup->property("hasPendingChanges").toBool());
+    }
+
+    // Loading a theme with no tier of its own replaces the platform's tier.
+    const auto ring = registry->themeCandidate(panel, "holographic-ring", "complete");
+    QVERIFY2(ring.value("success").toBool(), qPrintable(ring.value("errorCode").toString()));
+    QCOMPARE(ring.value("values").toMap().value("rendererTier").toString(), QStringLiteral("procedural2d"));
+    const auto loaded = backend.applyPanelSettingsTransaction(panel,
+        registry->panelDefinition(panel)->settingsRevision, ring.value("values").toMap());
+    QVERIFY2(loaded.value("success").toBool(), qPrintable(loaded.value("errorCode").toString()));
+    const auto applied = backend.panelRendererConfiguration(panel);
+    QCOMPARE(applied.value("effectiveRendererTier").toString(), QStringLiteral("procedural2d"));
+    QVERIFY(!applied.value("capabilityResolution").toMap().value("renderer").toMap()
+        .value("fallbackApplied").toBool());
 }
 
 void PanelWindowCapabilityTest::studioPageWheelInput()
@@ -1528,10 +1669,11 @@ void PanelWindowCapabilityTest::managedVersionTwoCapabilitiesDriveFallbackAndEdi
     QVERIFY(validKeys.contains(QStringLiteral("pathOrientation")));
     // The procedural surface controls belong to the procedural renderer. This
     // package is drawn by the baked renderer, so offering them would be the
-    // kind of non-working control the interface rules forbid.
+    // kind of non-working control the interface rules forbid. Opacity is not
+    // one of them: every renderer applies it to the surface it draws.
     QVERIFY(!validKeys.contains(QStringLiteral("appearance")));
     QVERIFY(!validKeys.contains(QStringLiteral("shape")));
-    QVERIFY(!validKeys.contains(QStringLiteral("opacity")));
+    QVERIFY(validKeys.contains(QStringLiteral("opacity")));
     QVERIFY(validKeys.contains(QStringLiteral("themeFit")));
     QVERIFY(validKeys.contains(QStringLiteral("iconShape")));
     QVERIFY(!validKeys.contains(QStringLiteral("color")));
@@ -1603,7 +1745,6 @@ void PanelWindowCapabilityTest::managedVersionTwoCapabilitiesDriveFallbackAndEdi
              QStringLiteral("pathOrientation"),
              QStringLiteral("appearance"),
              QStringLiteral("shape"),
-             QStringLiteral("opacity"),
              QStringLiteral("color"),
              QStringLiteral("themeFit"),
              QStringLiteral("iconShape"),
@@ -1612,6 +1753,9 @@ void PanelWindowCapabilityTest::managedVersionTwoCapabilitiesDriveFallbackAndEdi
     {
         QVERIFY2(!invalidKeys.contains(unsupported), qPrintable(unsupported));
     }
+    // Opacity depends on no theme capability: whatever surface is drawn in
+    // place of the broken package still applies it.
+    QVERIFY(invalidKeys.contains(QStringLiteral("opacity")));
 }
 
 void PanelWindowCapabilityTest::rendererProjectionPreservesConsumedValuesWithoutProtectedState()

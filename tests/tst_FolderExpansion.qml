@@ -189,6 +189,131 @@ TestCase {
         verify(point.x >= 0 && point.x < viewport.width)
         verify(point.y >= 0 && point.y < viewport.height)
     }
+    // The reference folder for the half-circle contract: 43 children in the
+    // 640 x 420 popup a free panel opens, with and without names.
+    function referenceFolder(layout, names) {
+        const item = createTemporaryObject(component, testCase, {
+            layout: layout, reducedMotion: true, folderTitle: "Reference",
+            showNames: names, maximumWidth: 640, maximumHeight: 420,
+            snapshot: { status: "ready", entries: rows(43), truncated: false }
+        })
+        verify(item !== null)
+        item.width = item.implicitWidth
+        item.height = item.implicitHeight
+        verify(waitForRendering(item))
+        selection.target = item; selection.clear()
+        dismissal.target = item; dismissal.clear()
+        return item
+    }
+    // The children a person can see and press, in order, with their centres
+    // in viewport coordinates.
+    function childrenOnPath(item, viewport) {
+        const result = []
+        for (let index = 0; index < item.entries.length; ++index) {
+            const child = findChild(item, "folder-child-" + index)
+            if (child.opacity < 0.999)
+                continue
+            const corner = child.mapToItem(viewport, 0, 0)
+            result.push({ index: index, x: corner.x + child.width / 2,
+                          y: corner.y + child.height / 2 })
+        }
+        return result
+    }
+    // First and last stand on one vertical diameter, every child is on the
+    // circle through them, and the curve bulges by its radius: no straight run.
+    function verifyHalfCircle(children, message) {
+        verify(children.length >= 3, message + ": at least three children show a curve")
+        const first = children[0]
+        const last = children[children.length - 1]
+        const radius = (last.y - first.y) / 2
+        verify(radius > 40, message + ": the path has a real radius, " + radius)
+        fuzzyCompare(first.x, last.x, 0.5)
+        const centre = { x: first.x, y: (first.y + last.y) / 2 }
+        let reach = 0
+        for (const child of children) {
+            fuzzyCompare(Math.hypot(child.x - centre.x, child.y - centre.y), radius, 0.5)
+            verify(child.x >= centre.x - 0.5, message + ": no child is behind the diameter")
+            reach = Math.max(reach, child.x - centre.x)
+        }
+        verify(reach >= radius * Math.cos(Math.PI / (children.length - 1) / 2) - 0.5,
+               message + ": the curve reaches " + reach + " of radius " + radius)
+        for (let slot = 1; slot < children.length; ++slot)
+            verify(children[slot].index === children[slot - 1].index + 1, message + ": logical order")
+    }
+    function test_referenceFolderFollowsAnExactHalfCircle_data() {
+        return [
+            { tag: "arc/names", layout: "arc", names: true },
+            { tag: "fan/names", layout: "fan", names: true },
+            { tag: "arc/icons", layout: "arc", names: false },
+            { tag: "fan/icons", layout: "fan", names: false }
+        ]
+    }
+    function test_referenceFolderFollowsAnExactHalfCircle(data) {
+        const item = referenceFolder(data.layout, data.names)
+        const viewport = findChild(item, "folderViewport")
+        verify(item.width <= 640 && item.height <= 420)
+        verify(viewport.contentWidth <= viewport.width, "one scrolling axis")
+        const resting = childrenOnPath(item, viewport)
+        compare(resting[0].index, 0)
+        verifyHalfCircle(resting, "at rest")
+        for (const child of resting) {
+            verify(child.x >= 0 && child.x < viewport.width, "child " + child.index + " is inside the popup")
+            verify(child.y >= 0 && child.y < viewport.height, "child " + child.index + " is inside the popup")
+        }
+        compare(findChild(item, "folder-child-" + resting.length).opacity, 0,
+                "the child beyond the end of the path is not shown")
+
+        // One wheel notch moves every child one slot along the same curve,
+        // in both directions, and stops at the ends.
+        const middle = Qt.point(viewport.width / 2, viewport.height / 2)
+        mouseWheel(viewport, middle.x, middle.y, 0, -120)
+        tryVerify(function() { return childrenOnPath(item, viewport)[0].index === 1 })
+        const moved = childrenOnPath(item, viewport)
+        compare(moved.length, resting.length)
+        for (let slot = 0; slot < moved.length; ++slot) {
+            compare(moved[slot].index, resting[slot].index + 1)
+            fuzzyCompare(moved[slot].x, resting[slot].x, 0.5)
+            fuzzyCompare(moved[slot].y, resting[slot].y, 0.5)
+        }
+        mouseWheel(viewport, middle.x, middle.y, 0, 120)
+        tryVerify(function() { return childrenOnPath(item, viewport)[0].index === 0 })
+        mouseWheel(viewport, middle.x, middle.y, 0, 120)
+        wait(50)
+        compare(childrenOnPath(item, viewport)[0].index, 0, "the first child stops at the top end")
+
+        // Hover and press targets are the curved positions.
+        const hovered = childrenOnPath(item, viewport)[2]
+        mouseMove(viewport, hovered.x, hovered.y - 2)
+        mouseMove(viewport, hovered.x, hovered.y)
+        tryCompare(item, "selectedChildId", "child-" + hovered.index)
+        const pressed = childrenOnPath(item, viewport)[1]
+        mouseClick(viewport, pressed.x, pressed.y)
+        compare(selection.count, 1)
+        compare(selection.signalArguments[0][0], "child-" + pressed.index)
+
+        // Keyboard selection walks past the window and stays on the path.
+        item.forceActiveFocus()
+        for (let step = 0; step < 20; ++step)
+            keyClick(Qt.Key_Down)
+        const selected = Number(item.selectedChildId.replace("child-", ""))
+        verify(selected > resting.length, "the selection left the first window: " + selected)
+        const walked = childrenOnPath(item, viewport)
+        verify(walked.some(function(child) { return child.index === selected }),
+               "the selected child is on the path")
+        verifyHalfCircle(walked, "after keyboard navigation")
+
+        // The far end: the last child stops on the bottom end of the curve.
+        for (let notch = 0; notch < 60; ++notch)
+            mouseWheel(viewport, middle.x, middle.y, 0, -120)
+        tryVerify(function() {
+            const shown = childrenOnPath(item, viewport)
+            return shown.length > 0 && shown[shown.length - 1].index === 42
+        })
+        const end = childrenOnPath(item, viewport)
+        compare(end.length, resting.length)
+        verifyHalfCircle(end, "at the end")
+        compare(selection.count, 1, "browsing never opens a child")
+    }
     function test_contentsUnfoldFromOriginAndReducedMotionIsImmediate() {
         const item = createTemporaryObject(component, testCase, {
             opened: false, reducedMotion: false, duration: 500,

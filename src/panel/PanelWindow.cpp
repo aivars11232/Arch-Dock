@@ -2120,7 +2120,8 @@ QVariantList PanelWindow::resolvedThemeDefinitions(
     result.reserve(themes.size());
     for (const QVariant &value : themes)
     {
-        QVariantMap theme = value.toMap();
+        const QVariantMap catalogTheme = value.toMap();
+        QVariantMap theme = catalogTheme;
         if (theme.contains(QStringLiteral("packageManifest")))
         {
             QString projectionError;
@@ -2155,38 +2156,27 @@ QVariantList PanelWindow::resolvedThemeDefinitions(
             theme.insert(
                 QStringLiteral("themeProjectionError"), QString{});
         }
-        const std::optional<ArchDock::ThemeCapabilityProfile> profile =
-            ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(theme);
-        if (!profile.has_value())
+        if (!ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(theme)
+                 .has_value())
         {
             continue;
         }
 
-        ArchDock::PanelDefinition themedCandidate = *candidate;
-        const QVariantMap layoutStyle = theme.value(
-            QStringLiteral("layoutStyle")).toMap();
-        if (layoutStyle.contains(QStringLiteral("layout")))
-        {
-            themedCandidate.layout.pathType =
-                ArchDock::PanelDefinition::normalizeLegacyValue(
-                    QStringLiteral("layout"),
-                    layoutStyle.value(QStringLiteral("layout"))).toString();
-        }
-        const ArchDock::CapabilityResolution resolution =
-            ArchDock::PanelCapabilityResolver::resolve(
-                themedCandidate,
-                ArchDock::PanelCapabilityResolver::productionHostProfile(
-                    themedCandidate.host.kind),
-                *profile,
-                ArchDock::PanelCapabilityResolver::productionRenderers(),
-                ArchDock::PanelCapabilityResolver::productionPlatform());
-        theme.insert(QStringLiteral("available"), resolution.available);
+        // A card is resolved exactly as Load resolves it: the theme's own
+        // renderer tier and layout on this panel. Resolved with the tier the
+        // panel wears now, every theme of another tier reads as unavailable
+        // or is drawn by the wrong renderer.
+        const QVariantMap themed = m_panelRegistry.themeCandidateForTheme(
+            *candidate, catalogTheme, QStringLiteral("complete"));
+        const bool available = themed.value(QStringLiteral("success")).toBool();
+        const QVariantMap resolution = themed.value(
+            QStringLiteral("capabilityResolution")).toMap();
+        theme.insert(QStringLiteral("available"), available);
         theme.insert(
             QStringLiteral("reasonCode"),
-            ArchDock::capabilityReasonCodeName(resolution.reason));
-        theme.insert(
-            QStringLiteral("capabilityResolution"),
-            resolution.toVariantMap());
+            available ? resolution.value(QStringLiteral("reasonCode"))
+                      : themed.value(QStringLiteral("errorCode")));
+        theme.insert(QStringLiteral("capabilityResolution"), resolution);
         result.append(theme);
     }
     return result;

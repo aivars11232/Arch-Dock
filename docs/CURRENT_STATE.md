@@ -1,5 +1,70 @@
 # Arch Dock current state
 
+<!-- AD3D_TASK_001_BEGIN -->
+## Source-verified geometry, spacing, folder and theme-card correction — AD3D-TASK-001, 2026-10-05
+
+Source only. The installed package is still **arch-dock 0.1.1-8**; this
+correction built no package and installed, tagged and published nothing.
+
+Corrected, each with a regression that fails on 0.1.1-8 source:
+
+- Baked 2.5D artwork fills the platform its icons stand on, and the icons stand
+  on the drawn track (the artwork was cropped in natural pixels after being
+  decoded at the drawn size; the track's scene offset was applied twice).
+- Spacing regulates separation on every curved track in every renderer, down to
+  touching at zero; 8 and above keep the even spread.
+- An overcrowded open curve shows the entries that fit and moves the rest along
+  the curve with the wheel, in order, with no straight tail.
+- True-3D icons stand on the platform's own track for every layout shape.
+- Fan and Arc folder contents stand on an exact half circle (a half ellipse in
+  a short popup) and move along it by wheel, held drag or keys.
+- Theme cards resolve each theme with its own renderer through the candidate
+  Load applies; a theme with no tier of its own can be loaded over a platform
+  theme; cards are drawn in a fixed context at preset-card height.
+
+Verification used one session, no subagents, one build job and one test worker.
+The complete configured suite passed on this source, 111 of 111: 99 in the full
+serial run and the other 12 in a serial rerun after these corrections.
+
+- Seven lifecycle tests (`wayland-hardening-*`, `session-startup-runtime-test`)
+  could not start their private KWin: its socket path under the task build
+  folder was 110 characters. They pass with `-DARCHDOCK_TEST_TMPDIR` set to a
+  short path. Environment only.
+- Four test expectations predated 0.1.1-8 and had not been rerun since: Orange
+  declares the mesh tier, the ring layouts, radial collapse and three mesh
+  assets; opacity is offered on every surface. `PanelRegistryTest`,
+  `PanelWindowCapabilityTest`, `Baked25DAssetTest` and the audition matrix's
+  S12 refusal now state the shipped contract.
+- The audition harness handed a draft reply to Python as one argument. More
+  theme candidates now resolve, the reply passed 128 KB, and it is read from a
+  file descriptor instead.
+- The runtime UI harness now waits for the new surface and fresh entry
+  positions before it sends a wheel to a tier it has just selected.
+
+Native Wayland and RHI gates pass: `rendering-import-smoke` (with the real-RHI
+track, spacing and wheel-surface checks for Cyan and Orange),
+`window-interaction-smoke`, `folder-interaction-smoke` and
+`runtime-ui-interaction-smoke` (wheel on the bare surface both ways and an
+empty interior that passes through, on procedural 2D, baked 2.5D and true 3D).
+
+Open, not caused by this correction:
+
+- The resident-memory check at the end of `rendering-import-smoke` is not
+  reliable. Unchanged, it failed twice on this source (146.9 and 146.1 MB
+  against its 128 MB limit) and then passed with 5.9 MB. Its sample on 0.1.1-8
+  renderer code ranged from 87 to 223 MB. Eight-cycle measurements grow at the
+  same rate with and without the artwork correction, entirely in anonymous
+  memory, and still grow with garbage collection forced every second. The
+  growth predates this work and needs a heap profiler to locate; the limit was
+  not changed.
+- Eight `TypeError` warnings from the segment bindings in `PanelScene.qml`
+  appear in the native logs, as they do in the 0.1.1-8 logs.
+- Owner visual and interaction acceptance, and the physical second-monitor and
+  other-GPU cells, remain the owner's.
+
+Evidence is retained, untracked, in `build-codex-ad3d-task-001/evidence/`.
+<!-- AD3D_TASK_001_END -->
+
 <!-- WORLD_DEPTH_PAUSED_BEGIN -->
 ## Verified installed world-space 3D correction — 0.1.1-8, 2026-10-05
 

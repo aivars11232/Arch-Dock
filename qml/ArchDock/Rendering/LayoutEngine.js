@@ -34,6 +34,108 @@ function pathSweep(layout) {
     return pathSweeps[layout] || null;
 }
 
+// The schema default of the canonical `spacing` control, in pixels at layout
+// scale 1. A curved track reads the control relative to it: see below.
+var canonicalSpacing = 8;
+
+// Where entry `index` of `count` sits along a curved track `length` pixels
+// long, as a fraction of the track: 0 at its start, 1 at its end (a closed
+// track ends where it starts).
+//
+// A track spreads its entries evenly, as every curved layout always has, and
+// that is still what the canonical spacing means at its default or above. A
+// smaller spacing closes the entries up in proportion about the middle of the
+// track - the front of a ring or platform, the apex of an arc - down to
+// touching at zero, and never closer. `spacingReference` is the default at the
+// panel's layout scale; a caller that passes none keeps the even spread.
+//
+// An open track that cannot hold its entries side by side keeps icon + spacing
+// between neighbours instead and shows a window of them, centred on the track.
+// `offset` says which entry the window starts at. It is transient browsing
+// state and is clamped here, so a caller never has to know the capacity first.
+// A closed track is never windowed: it turns.
+function trackPlacement(index, count, length, closed, iconSize, spacing,
+                        spacingReference, offset) {
+    const safeCount = Math.max(1, Math.round(finite(count, 0)));
+    const safeIndex = clamp(Math.round(finite(index, 0)), 0, safeCount - 1);
+    const size = Math.max(1, finite(iconSize, 1));
+    const gap = Math.max(0, finite(spacing, 0));
+    const reference = Math.max(0, finite(spacingReference, 0));
+    const trackLength = Math.max(0, finite(length, 0));
+    const spans = closed ? safeCount : safeCount - 1;
+    const result = {
+        progress: spans > 0 ? safeIndex / spans : 0.5,
+        onTrack: true,
+        visibility: 1,
+        pitch: spans > 0 ? trackLength / spans : 0,
+        windowed: false,
+        capacity: safeCount,
+        maximumOffset: 0
+    };
+    if (!closed && spans > 0 && trackLength > 0 && result.pitch < size) {
+        const pitch = size + gap;
+        const capacity = Math.max(1, Math.min(
+            safeCount - 1, Math.floor(trackLength / pitch) + 1));
+        const first = clamp(Math.round(finite(offset, 0)), 0, safeCount - capacity);
+        const slot = safeIndex - first;
+        const margin = (trackLength - (capacity - 1) * pitch) / 2;
+        result.windowed = true;
+        result.capacity = capacity;
+        result.maximumOffset = safeCount - capacity;
+        result.pitch = pitch;
+        result.onTrack = slot >= 0 && slot < capacity;
+        result.visibility = result.onTrack ? 1 : 0;
+        // An entry outside the window waits at the end it will enter from.
+        result.progress = clamp(
+            (margin + clamp(slot, 0, capacity - 1) * pitch) / trackLength, 0, 1);
+        return result;
+    }
+    const evenGap = result.pitch - size;
+    if (spans <= 0 || reference <= 0 || gap >= reference || evenGap <= 0)
+        return result;
+    // Never tighter than the spacing itself, never wider than the even spread.
+    const tightened = Math.min(evenGap, Math.max(gap, evenGap * gap / reference));
+    const contraction = (size + tightened) / result.pitch;
+    result.pitch = size + tightened;
+    result.progress = 0.5 + (result.progress - 0.5) * contraction;
+    return result;
+}
+
+// Whether an open-path layout currently shows a window of its entries, how
+// many it holds and how far the window can move.
+function pathWindow(layout, count, rawGeometry) {
+    const geometry = safeGeometry(rawGeometry, layout);
+    const track = curvedTrack(geometry.layout, geometry, geometry.sides);
+    const placement = track
+        ? trackPlacement(0, count, track.length, track.closed, geometry.iconSize,
+                         geometry.spacing, geometry.spacingReference, 0)
+        : null;
+    return {
+        windowed: placement ? placement.windowed : false,
+        capacity: placement ? placement.capacity
+                            : Math.max(0, Math.round(finite(count, 0))),
+        maximumOffset: placement ? placement.maximumOffset : 0
+    };
+}
+
+// The track a curved layout lays its entries along: its length at the
+// layout's radius and whether it closes on itself. Null for a layout that is
+// not one track; the star and the spiral keep their own paths.
+function curvedTrack(resolvedLayout, geometry, polygonSides) {
+    const radius = geometry.trackRadius > 0 ? geometry.trackRadius : geometry.radius;
+    if (["circular", "ring", "ellipse"].includes(resolvedLayout))
+        return { closed: true, length: 2 * Math.PI * radius };
+    if (["polygon", "triangle", "square", "pentagon", "hexagon",
+         "octagon"].includes(resolvedLayout)) {
+        const sides = shapeSides(resolvedLayout, polygonSides);
+        return { closed: true,
+                 length: sides * 2 * radius * Math.sin(Math.PI / sides) };
+    }
+    const path = pathSweep(resolvedLayout);
+    return path
+        ? { closed: false, length: path.sweep * Math.PI / 180 * radius } : null;
+}
+
 // Whole-scene rotation is offered only where a turning scene is meaningful:
 // the radial layouts. A straight row has no centre to turn about.
 function supportsWholeSceneRotation(layout) {
@@ -152,6 +254,7 @@ function metrics(layout, count, iconSize, spacing, scale, radius, rows,
         height: Math.max(1, Math.ceil(width * sine + height * cosine)),
         iconSize: size,
         spacing: gap,
+        spacingReference: canonicalSpacing * safeScale,
         radius: safeRadius,
         rows: safeRows,
         sides: shapeSides(resolvedLayout, polygonSides),
@@ -170,7 +273,15 @@ function safeGeometry(geometry, layout) {
         height: Math.max(1, finite(source.height, size)),
         iconSize: size,
         spacing: Math.max(0, finite(source.spacing, 0)),
+        // Zero keeps the even spread: a hand-built geometry asks for nothing.
+        spacingReference: Math.max(0, finite(source.spacingReference, 0)),
         radius: Math.max(size * 0.75, finite(source.radius, size * 0.75)),
+        // The radius the entries are finally drawn at, when a renderer scales
+        // the path onto its own track. Zero means the layout radius.
+        trackRadius: Math.max(0, finite(source.trackRadius, 0)),
+        // Which entry an overcrowded open path starts its window at. Runtime
+        // browsing state supplied by the scene; never a saved setting.
+        browseOffset: Math.max(0, finite(source.browseOffset, 0)),
         rows: clamp(Math.round(finite(source.rows, 1)), 1, 8),
         sides: clamp(Math.round(finite(source.sides, 6)), 3, 12),
         padding: Math.max(0, finite(source.padding, 0)),
@@ -252,8 +363,18 @@ function entryGeometry(layout, index, count, rawGeometry, angle, polygonSides,
     const slot = size + geometry.spacing;
     const centerX = geometry.width / 2;
     const centerY = geometry.height / 2;
-    const progress = safeCount === 1 ? 0.5 : safeIndex / (safeCount - 1);
-    const closedProgress = safeIndex / safeCount;
+    // Curved tracks place their entries through one rule, so the canonical
+    // spacing regulates every one of them alike.
+    const track = curvedTrack(resolvedLayout, geometry, polygonSides);
+    const placement = track
+        ? trackPlacement(safeIndex, safeCount, track.length, track.closed, size,
+                         geometry.spacing, geometry.spacingReference,
+                         geometry.browseOffset)
+        : null;
+    const progress = placement && !track.closed ? placement.progress
+        : safeCount === 1 ? 0.5 : safeIndex / (safeCount - 1);
+    const closedProgress = placement && track.closed ? placement.progress
+        : safeIndex / safeCount;
     const profile = compatibilityProfile || "canonical";
     let x = geometry.padding;
     let y = geometry.padding;
@@ -434,6 +555,8 @@ function entryGeometry(layout, index, count, rawGeometry, angle, polygonSides,
         panelBounds: panelBounds,
         entryBounds: entryBounds,
         safeInputRegion: panelBounds,
+        onTrack: placement ? placement.onTrack : true,
+        trackVisibility: placement ? placement.visibility : 1,
         position3D: null,
         orientation3D: null
     };
@@ -564,8 +687,10 @@ function trackTiltFactor(track, requestedDegrees) {
 // uniform artwork scale, and the box is the union of the drawn platform and
 // every scaled icon, so nothing the theme positions is cut off.
 function trackMetrics(track, artworkWidth, artworkHeight, count, iconSize,
-                      padding, layoutRadius, tiltDegrees, rotating) {
+                      padding, layoutRadius, tiltDegrees, rotating, placement) {
     const source = track || {};
+    const regulation = placement && typeof placement === "object"
+        ? placement : {};
     const size = Math.max(1, finiteAtLeast(iconSize, 1, 52));
     const safePadding = Math.max(0, finite(padding, 0));
     const safeCount = Math.max(0, Math.round(finite(count, 0)));
@@ -612,6 +737,15 @@ function trackMetrics(track, artworkWidth, artworkHeight, count, iconSize,
         iconSize: size,
         padding: safePadding,
         count: safeCount,
+        // The canonical spacing reads the track as the circle the artwork
+        // shows in perspective, so its horizontal radius is the true one.
+        spacing: Math.max(0, finite(regulation.spacing, 0)),
+        spacingReference: Math.max(0, finite(regulation.spacingReference, 0)),
+        browseOffset: Math.max(0, finite(regulation.browseOffset, 0)),
+        trackLength: 0,
+        windowed: false,
+        capacity: safeCount,
+        maximumOffset: 0,
         center: { x: centerX, y: centerY * tiltFactor + platform.y },
         radiusX: trackRadiusX * scale,
         radiusY: trackRadiusY * scale * tiltFactor,
@@ -622,6 +756,16 @@ function trackMetrics(track, artworkWidth, artworkHeight, count, iconSize,
         height: Math.max(1, Math.ceil(platform.height))
     };
 
+    metrics.trackLength = metrics.shape === "polygon"
+        ? metrics.sides * 2 * metrics.radiusX * Math.sin(Math.PI / metrics.sides)
+        : metrics.sweepDegrees * Math.PI / 180 * metrics.radiusX;
+    const window = trackPlacement(
+        0, safeCount, metrics.trackLength, metrics.closed, size, metrics.spacing,
+        metrics.spacingReference, 0);
+    metrics.windowed = window.windowed;
+    metrics.capacity = window.capacity;
+    metrics.maximumOffset = window.maximumOffset;
+
     let left = platform.x;
     let top = platform.y;
     let right = platform.x + platform.width;
@@ -630,10 +774,12 @@ function trackMetrics(track, artworkWidth, artworkHeight, count, iconSize,
     // box is measured around the whole closed path instead of the entries the
     // panel happens to hold. Otherwise the host would be asked to resize as
     // the scene rotated, which is exactly what the envelope exists to avoid.
-    const samples = rotating && metrics.closed && safeCount > 0
-        ? Math.max(safeCount, 72) : safeCount;
+    const wholePath = rotating && metrics.closed && safeCount > 0;
+    const samples = wholePath ? Math.max(safeCount, 72) : safeCount;
     for (let index = 0; index < samples; ++index) {
-        const point = trackPoint(metrics, index, samples, 0);
+        const point = wholePath
+            ? trackPointAt(metrics, index / samples, 0)
+            : trackPoint(metrics, index, samples, 0);
         const extent = size * point.scaleFactor / 2;
         left = Math.min(left, point.x - extent);
         top = Math.min(top, point.y - extent);
@@ -659,16 +805,23 @@ function trackMetrics(track, artworkWidth, artworkHeight, count, iconSize,
     return metrics;
 }
 
-// One anchor point in the metrics' own coordinate space, before the box
-// offset is applied. Kept separate so trackMetrics can size the box from the
-// same numbers the entries will use.
+// One anchor point in the coordinate space of the metrics it is given: the
+// artwork's own while trackMetrics is still sizing the box, the scene box once
+// those metrics are returned. Kept separate so the box is sized from the same
+// numbers the entries will use.
 function trackPoint(metrics, index, count, rotationDegrees) {
-    const safeCount = Math.max(1, Math.round(finite(count, 0)));
-    const safeIndex = clamp(Math.round(finite(index, 0)), 0, safeCount - 1);
+    const placement = trackPlacement(
+        index, count, metrics.trackLength, metrics.closed, metrics.iconSize,
+        metrics.spacing, metrics.spacingReference, metrics.browseOffset);
+    const point = trackPointAt(metrics, placement.progress, rotationDegrees);
+    point.onTrack = placement.onTrack;
+    point.visibility = placement.visibility;
+    return point;
+}
+
+// The point a given fraction of the way along the track.
+function trackPointAt(metrics, progress, rotationDegrees) {
     const closed = metrics.closed;
-    const progress = closed
-        ? safeIndex / safeCount
-        : (safeCount === 1 ? 0.5 : safeIndex / (safeCount - 1));
     const degrees = metrics.startDegrees + progress * metrics.sweepDegrees
         + (closed ? finite(rotationDegrees, 0) : 0);
     const radians = (degrees - 90) * Math.PI / 180;
@@ -712,8 +865,11 @@ function trackEntryGeometry(track, index, count, metrics, rotationDegrees,
     const safeCount = Math.max(1, Math.round(finite(count, 0)));
     const point = trackPoint(resolved, index, safeCount, rotationDegrees);
     const size = resolved.iconSize;
-    const x = point.x + resolved.offsetX - size / 2;
-    const y = point.y + resolved.offsetY - size / 2;
+    // trackMetrics() has already moved the track centre into the scene box,
+    // so a point on the track is a scene point. Adding the box offset again
+    // would push every entry off the platform by the panel's padding.
+    const x = point.x - size / 2;
+    const y = point.y - size / 2;
     const visualExtent = size * point.scaleFactor;
 
     // The outward direction of an ellipse is its gradient, not the ray from
@@ -746,8 +902,8 @@ function trackEntryGeometry(track, index, count, metrics, rotationDegrees,
         height: resolved.height
     };
     const entryBounds = {
-        x: point.x + resolved.offsetX - visualExtent / 2,
-        y: point.y + resolved.offsetY - visualExtent / 2,
+        x: point.x - visualExtent / 2,
+        y: point.y - visualExtent / 2,
         width: visualExtent,
         height: visualExtent
     };
@@ -771,6 +927,8 @@ function trackEntryGeometry(track, index, count, metrics, rotationDegrees,
         panelBounds: panelBounds,
         entryBounds: entryBounds,
         safeInputRegion: panelBounds,
+        onTrack: point.onTrack !== false,
+        trackVisibility: point.visibility === undefined ? 1 : point.visibility,
         position3D: null,
         orientation3D: null
     };
@@ -1049,29 +1207,53 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
     const bounded = finite(presentation.maximumWidth, 0) > 0;
     const followsPath = bounded && presentation.compactPath === true
         && (resolved === "fan" || resolved === "arc");
-    const pathBend = Math.max(0, Math.min(96, availableWidth - cellWidth));
     const columns = Math.max(1, Math.min(safeCount,
         Math.floor((availableWidth + gap) / (cellWidth + gap))));
+    const extent = cellWidth === size && cellHeight === size
+        ? size : Math.sqrt(cellWidth * cellWidth + cellHeight * cellHeight);
     let distance = clamp(finite(radius, 120), size * 1.2, 4096);
     if (safeCount > 1) {
         const step = resolved === "ring" ? 2 * Math.PI / safeCount
             : 144 * Math.PI / 180 / (safeCount - 1);
-        const extent = cellWidth === size && cellHeight === size
-            ? size : Math.sqrt(cellWidth * cellWidth + cellHeight * cellHeight);
         const needed = (extent + gap) / (2 * Math.sin(step / 2));
         if (resolved === "ring" || resolved === "arc" || resolved === "fan")
             distance = Math.max(distance, needed / (resolved === "fan" ? 0.82 : 1));
     }
+    // A compact Fan or Arc is an exact half circle that opens to the right.
+    // It keeps the folder's own radius, shrinks for the few children that
+    // need less, and gives way to the room it has. It is never enlarged to
+    // hold every child and never straightened: expansionPath() says how many
+    // children stand on it at once, and the rest are reached along the curve.
+    const pathPitch = extent + gap;
+    const pathClearance = cellHeight + gap;
+    let pathRadiusX = 0, pathRadiusY = 0;
+    if (followsPath && safeCount > 1) {
+        const nominal = clamp(finite(radius, 120), size * 1.2, 4096);
+        const wanted = Math.min(nominal, Math.max(size * 1.2, pathClearance / 2,
+            (safeCount - 1) * pathPitch / Math.PI));
+        const heightLimit = finite(presentation.maximumHeight, 0);
+        pathRadiusX = Math.max(0, Math.min(wanted, availableWidth - cellWidth));
+        pathRadiusY = heightLimit > 0
+            ? Math.max(0, Math.min(wanted, (heightLimit - cellHeight) / 2)) : wanted;
+    }
+    const pathShape = {
+        count: safeCount, cellHeight: cellHeight, pathPitch: pathPitch,
+        pathClearance: pathClearance, pathRadiusX: pathRadiusX,
+        pathRadiusY: pathRadiusY
+    };
+    const restingPath = followsPath
+        ? expansionPath(pathShape, 2 * pathRadiusY + cellHeight) : null;
     const points = [];
     let minimumX = Infinity, minimumY = Infinity;
     let maximumX = -Infinity, maximumY = -Infinity;
     for (let index = 0; index < safeCount; ++index) {
         let point;
         if (followsPath) {
-            // The viewport supplies the path parameter while scrolling. Keep
-            // the virtual list compact rather than enlarging its arc radius
-            // to fit every file on screen at once.
-            point = { x: 0, y: index * (cellHeight + gap) };
+            // Where the child rests before any scrolling; a child that is not
+            // on the path yet waits at its far end.
+            point = expansionPathPoint(pathShape, restingPath,
+                Math.min(index, restingPath.capacity - 1), 0);
+            point = { x: point.x, y: point.y };
         } else if (bounded && resolved === "fan") {
             // A long fan bends within the view and grows vertically. Every
             // child remains reachable without a second scrolling axis.
@@ -1105,12 +1287,88 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
         cellWidth: cellWidth,
         cellHeight: cellHeight,
         followsPath: followsPath,
-        pathBend: followsPath ? pathBend : 0,
-        width: Math.ceil(maximumX - minimumX + cellWidth + (followsPath ? pathBend : 0)),
-        height: Math.ceil(maximumY - minimumY + cellHeight),
-        origin: { x: size / 2 - minimumX, y: size / 2 - minimumY },
+        pathPitch: pathPitch,
+        pathClearance: pathClearance,
+        pathRadiusX: pathRadiusX,
+        pathRadiusY: pathRadiusY,
+        width: followsPath ? Math.ceil(pathRadiusX + cellWidth)
+                           : Math.ceil(maximumX - minimumX + cellWidth),
+        height: followsPath ? Math.ceil(2 * pathRadiusY + cellHeight)
+                            : Math.ceil(maximumY - minimumY + cellHeight),
+        origin: followsPath ? { x: size / 2, y: size / 2 }
+                            : { x: size / 2 - minimumX, y: size / 2 - minimumY },
         entries: points.map(function(point, index) {
-            return { index: index, x: point.x - minimumX, y: point.y - minimumY };
+            return followsPath ? { index: index, x: point.x, y: point.y }
+                : { index: index, x: point.x - minimumX, y: point.y - minimumY };
         })
+    };
+}
+
+// Length of the half ellipse x = radiusX cos(t), y = radiusY sin(t) between
+// two angles, by Simpson's rule. A circle has a constant integrand, so its
+// result is exact.
+function expansionPathLength(radiusX, radiusY, from, to) {
+    const intervals = 8;
+    const width = (to - from) / intervals;
+    let total = 0;
+    for (let step = 0; step <= intervals; ++step) {
+        const angle = from + step * width;
+        total += Math.hypot(radiusX * Math.sin(angle), radiusY * Math.cos(angle))
+            * (step === 0 || step === intervals ? 1 : step % 2 ? 4 : 2);
+    }
+    return total * width / 3;
+}
+
+// The compact folder path inside the height it is really given. The vertical
+// radius gives way first, so a short popup shows a half ellipse. Children are
+// spread over exactly 180 degrees, as many as keep one pitch between
+// neighbours along the path and one cell between its two ends.
+function expansionPath(geometry, viewportHeight) {
+    const value = geometry || {};
+    const count = Math.max(0, Math.floor(finite(value.count, 0)));
+    const cellHeight = Math.max(0, finite(value.cellHeight, 0));
+    const pitch = Math.max(1, finite(value.pathPitch, 1));
+    const radiusX = Math.max(0, finite(value.pathRadiusX, 0));
+    const room = (finite(viewportHeight, finite(value.height, 0)) - cellHeight) / 2;
+    const radiusY = Math.max(0, Math.min(finite(value.pathRadiusY, 0), room));
+    let capacity = Math.min(1, count);
+    if (2 * radiusY >= finite(value.pathClearance, 0) - 1e-9) {
+        for (let slots = 2; slots <= count; ++slots) {
+            const step = Math.PI / (slots - 1);
+            let shortest = Infinity;
+            for (let index = 0; index < slots - 1; ++index)
+                shortest = Math.min(shortest, expansionPathLength(radiusX, radiusY,
+                    -Math.PI / 2 + index * step, -Math.PI / 2 + (index + 1) * step));
+            if (shortest < pitch * (1 - 1e-9))
+                break;
+            capacity = slots;
+        }
+    }
+    return {
+        radiusX: radiusX,
+        radiusY: radiusY,
+        capacity: capacity,
+        windowed: count > capacity,
+        maximumOffset: Math.max(0, count - capacity),
+        step: capacity > 1 ? Math.PI / (capacity - 1) : 0,
+        startAngle: -Math.PI / 2
+    };
+}
+
+// Top-left of one child on the compact folder path when the folder has moved
+// offset children along it. A child leaving either end keeps to the curve
+// while it fades; it is on the path, and may be pressed, only between the ends.
+function expansionPathPoint(geometry, path, index, offset) {
+    const shape = path || {};
+    const last = Math.max(0, finite(shape.capacity, 1) - 1);
+    const slot = finite(index, 0) - finite(offset, 0);
+    const beyond = Math.max(0, -slot, slot - last);
+    const angle = finite(shape.startAngle, -Math.PI / 2)
+        + clamp(slot, -1, last + 1) * finite(shape.step, 0);
+    return {
+        x: finite(shape.radiusX, 0) * Math.cos(angle),
+        y: finite(shape.radiusY, 0) * (1 + Math.sin(angle)),
+        onPath: beyond < 1e-6,
+        visibility: clamp(1 - beyond, 0, 1)
     };
 }

@@ -195,6 +195,12 @@ public:
     [[nodiscard]] QVariantMap themeCandidateForDefinition(
         const ArchDock::PanelDefinition &definition, const QString &themeId,
         const QString &layer) const;
+    // What one catalogue theme makes of a panel. Theme cards and Load both
+    // resolve through here, so a card shows the renderer Load will select.
+    // `layer` is already normalised: panel, icon or complete.
+    [[nodiscard]] QVariantMap themeCandidateForTheme(
+        const ArchDock::PanelDefinition &definition, const QVariantMap &theme,
+        const QString &layer) const;
     bool applyTheme(const QString &panelId,
                     const QString &themeId,
                     const QString &layer);

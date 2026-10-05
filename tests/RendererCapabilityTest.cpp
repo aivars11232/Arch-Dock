@@ -593,6 +593,188 @@ private slots:
                    " active fallback and bounded recovery resources passed";
     }
 
+    void platformTrackSpacingAndWheelSurface_data()
+    {
+        QTest::addColumn<QString>("themeId");
+        QTest::addColumn<QStringList>("layouts");
+        // Every layout each theme's catalogue entry allows for a closed track.
+        QTest::newRow("cyan") << QStringLiteral("mesh-platform-cyan")
+            << QStringList{QStringLiteral("ring:6"), QStringLiteral("circular:6"),
+                           QStringLiteral("octagon:8"), QStringLiteral("polygon:4"),
+                           QStringLiteral("polygon:3")};
+        QTest::newRow("orange") << QStringLiteral("arc-platform-orange")
+            << QStringList{QStringLiteral("circular:6"), QStringLiteral("ring:6")};
+    }
+
+    // Icons stand on the platform's own track in every allowed layout, the
+    // canonical spacing regulates their separation there, and the wheel acts
+    // on the bare platform between two icons and nowhere off the platform.
+    void platformTrackSpacingAndWheelSurface()
+    {
+        QFETCH(QString, themeId);
+        QFETCH(QStringList, layouts);
+        if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+            return; // Needs the private RHI session, like the scene gate above.
+        const QString themeRoot = qEnvironmentVariable("ARCHDOCK_RENDERING_STAGED_THEME_ROOT",
+            QStringLiteral(ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT));
+        const auto package = ArchDock::ThemePackage::load(themeRoot
+            + QStringLiteral("/") + themeId + QStringLiteral("/archdock-theme.json"));
+        QVERIFY2(package.isValid(), qPrintable(package.primaryCode()));
+        const QVariantMap theme = package.package->runtimeProjection();
+        const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
+        QVERIFY(!glyphFixture.isEmpty());
+        QQmlEngine engine;
+        QStringList unexpectedWarnings;
+        connect(&engine, &QQmlEngine::warnings, &engine, [&](const QList<QQmlError> &warnings) {
+            for (const auto &warning : warnings)
+                unexpectedWarnings.append(warning.toString());
+        });
+        engine.addImportPath(importRoot());
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import ArchDock.Rendering 1.0
+            PanelScene {
+                required property string glyphFixture
+                property string trackLayout: "ring"
+                property int trackSides: 6
+                property real trackSpacing: 8
+                panelDefinition: ({rendererTier: "true3d", layout: trackLayout, pathSides: trackSides,
+                                   layoutRadius: 120, scene3DQuality: "low", iconSize: 40,
+                                   spacing: trackSpacing, layoutPadding: 10})
+                entryDelegateContext: ({hostKind: "free"})
+                hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [
+                    {id: "open", available: true}]})
+                orderedEntries: [0, 1, 2, 3, 4, 5, 6, 7].map(function(index) {
+                    return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphFixture}
+                })
+            }
+        )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/TrackConsumer.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QQuickWindow window;
+        std::unique_ptr<QObject> object(component.createWithInitialProperties({
+            {QStringLiteral("themeDefinition"), theme},
+            {QStringLiteral("glyphFixture"), QUrl::fromLocalFile(glyphFixture).toString()}}));
+        QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+        auto *scene = qobject_cast<QQuickItem *>(object.get());
+        QVERIFY(scene);
+        scene->setParentItem(window.contentItem());
+        window.resize(qCeil(scene->width()), qCeil(scene->height()));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(),
+                                 QStringLiteral("true3d"), 5000);
+        auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+        QVERIFY(renderer);
+        QObject *viewport = objectValue(renderer->property("viewport"));
+        QVERIFY(viewport);
+        QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 8);
+
+        // The platform's flat top spans 0.72 to 0.94 of its scale; the icon
+        // track is the ring at 0.84 of it.
+        const double track = renderer->property("platformScale").toDouble() * 0.84;
+        const double top = renderer->property("platformTop").toDouble();
+        const auto entryPosition = [&](int index) {
+            auto *node = renderer->findChild<QObject *>(QStringLiteral("mesh-entry-%1").arg(index));
+            return node ? node->property("scenePosition").value<QVector3D>() : QVector3D();
+        };
+        const auto offTrack = [&]() -> QString {
+            for (int index = 0; index < 8; ++index) {
+                const QVector3D position = entryPosition(index);
+                const double reach = std::hypot(position.x(), position.y());
+                if (qAbs(reach - track) > 0.5 || position.z() <= top)
+                    return QStringLiteral("entry %1 at radius %2 (track %3), height %4 (platform top %5)")
+                        .arg(index).arg(reach).arg(track).arg(position.z()).arg(top);
+            }
+            return {};
+        };
+        const auto projectionMatches = [&]() {
+            const auto rects = plainValue(scene->property("entryRects")).toList();
+            const auto projected = plainValue(renderer->property("projectedEntryGeometry")).toList();
+            if (rects.size() != 8 || projected.size() != 8) return false;
+            for (int i = 0; i < 8; ++i)
+                for (const auto &key : {"x", "y", "width", "height"})
+                    if (qAbs(rects[i].toMap().value(key).toDouble()
+                             - projected[i].toMap().value(key).toDouble()) > 1) return false;
+            return true;
+        };
+
+        for (const QString &layout : std::as_const(layouts)) {
+            const QStringList parts = layout.split(QLatin1Char(':'));
+            scene->setProperty("trackSides", parts.value(1).toInt());
+            scene->setProperty("trackLayout", parts.value(0));
+            QTest::qWait(150);
+            QCOMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("true3d"));
+            QTRY_VERIFY2(offTrack().isEmpty(), qPrintable(layout + QStringLiteral(": ") + offTrack()));
+            QTRY_VERIFY2(projectionMatches(), qPrintable(layout));
+        }
+
+        // Spacing: the default keeps the even ring; smaller values close the
+        // icons up along the platform's own circle, down to touching.
+        scene->setProperty("trackLayout", QStringLiteral("ring"));
+        const auto neighbours = [&]() { return double((entryPosition(3) - entryPosition(4)).length()); };
+        const double even = 2 * track * qSin(M_PI / 8);
+        const double touching = 2 * track * qSin(40.0 / (2 * track));
+        QTRY_VERIFY2(qAbs(neighbours() - even) < 0.5, qPrintable(QString::number(neighbours())));
+        scene->setProperty("trackSpacing", 0.0);
+        QTRY_VERIFY2(qAbs(neighbours() - touching) < 0.5,
+            qPrintable(QStringLiteral("zero spacing: %1, expected %2").arg(neighbours()).arg(touching)));
+        QVERIFY2(offTrack().isEmpty(), qPrintable(offTrack()));
+        QTRY_VERIFY(projectionMatches());
+        scene->setProperty("trackSpacing", 4.0);
+        QTRY_VERIFY2(neighbours() > touching + 5 && neighbours() < even - 5,
+            qPrintable(QString::number(neighbours())));
+        QVERIFY2(offTrack().isEmpty(), qPrintable(offTrack()));
+        scene->setProperty("trackSpacing", 30.0);
+        QTRY_VERIFY2(qAbs(neighbours() - even) < 0.5, qPrintable(QString::number(neighbours())));
+        QTRY_VERIFY(projectionMatches());
+
+        // Wheel: the bare platform between two icons turns the scene both
+        // ways; the hole and the transparent corner do not.
+        const auto mapped = [&](const QVector3D &position) {
+            QVector3D point;
+            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, point),
+                Q_ARG(QVector3D, position));
+            return QPointF(point.x(), point.y());
+        };
+        const auto wheel = [&](const QPointF &point, int delta) {
+            QWheelEvent event(point, window.mapToGlobal(point.toPoint()), QPoint(), QPoint(0, delta),
+                Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+            QCoreApplication::sendEvent(&window, &event);
+        };
+        // Eight icons stand 45 degrees apart; halfway between two is bare.
+        const QPointF surface = mapped(QVector3D(track * qCos(M_PI / 8), track * qSin(M_PI / 8), top));
+        for (const QVariant &rect : plainValue(scene->property("entryRects")).toList())
+            QVERIFY2(!rect.toRectF().isValid() || !rect.toRectF().contains(surface)
+                     || !QRectF(rect.toMap().value("x").toDouble(), rect.toMap().value("y").toDouble(),
+                                rect.toMap().value("width").toDouble(), rect.toMap().value("height").toDouble())
+                            .contains(surface),
+                     "the probe point is over an icon");
+        QVariant accepted;
+        QVERIFY(QMetaObject::invokeMethod(scene, "containsInputPoint", Q_RETURN_ARG(QVariant, accepted),
+            Q_ARG(QVariant, QVariant(surface))));
+        QVERIFY2(accepted.toBool(), "the bare platform must take input");
+        QCOMPARE(scene->property("wheelRotationAngle").toDouble(), 0.0);
+        wheel(surface, 120);
+        QTRY_COMPARE(scene->property("wheelRotationAngle").toDouble(), 15.0);
+        wheel(surface, -120);
+        QTRY_COMPARE(scene->property("wheelRotationAngle").toDouble(), 0.0);
+        wheel(surface, -120);
+        QTRY_COMPARE(scene->property("wheelRotationAngle").toDouble(), 345.0);
+        wheel(surface, 120);
+        QTRY_COMPARE(scene->property("wheelRotationAngle").toDouble(), 0.0);
+        const QPointF hole = mapped(QVector3D(0, 0, top));
+        for (const QPointF &outside : {hole, QPointF(2, 2)}) {
+            QVERIFY(QMetaObject::invokeMethod(scene, "containsInputPoint", Q_RETURN_ARG(QVariant, accepted),
+                Q_ARG(QVariant, QVariant(outside))));
+            QVERIFY2(!accepted.toBool(), "transparent desktop must pass through");
+            wheel(outside, 120);
+            QTest::qWait(60);
+            QCOMPARE(scene->property("wheelRotationAngle").toDouble(), 0.0);
+        }
+        QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
+    }
+
     void packagedBuildFacts()
     {
         const QString module = importRoot() + QStringLiteral("/ArchDock/Rendering/");

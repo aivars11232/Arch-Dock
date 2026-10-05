@@ -295,6 +295,53 @@ radial panels.
   `contains(point): bool` so Qt actually consults it; an unannotated signature
   is silently ignored and falls back to the plain rectangle.
 
+## Track placement, spacing and overflow — AD3D-TASK-001
+
+Every curved layout places its entries through `LayoutEngine.trackPlacement()`.
+It takes the entry index and count, the length of the track, whether the track
+is closed, the icon size, the configured spacing and the reference spacing
+(`canonicalSpacing` 8 times the layout scale, published by `metrics()` as
+`spacingReference`), and returns the entry's `progress` along the track with
+`onTrack` and `trackVisibility`. `curvedTrack()` supplies the length: `2πR` for
+the circle family, `sides · 2R · sin(π / sides)` for regular polygons and
+`sweep · R` for open sweeps. Star and spiral paths are not regulated.
+
+- At or above the reference spacing the entries are spread evenly, as before.
+- Below it the gap becomes `min(evenGap, max(spacing, evenGap · spacing / reference))`
+  and the entries draw together about the middle of the track: the front of a
+  ring or platform, the apex of an arc. Zero spacing makes neighbours touch.
+- An **open** track whose even pitch is smaller than an icon cannot hold every
+  entry. It holds `floor(length / (icon + spacing)) + 1` of them, centred, at a
+  pitch of `icon + spacing`, and the rest wait off the track. `pathWindow()`
+  reports `windowed`, `capacity` and `maximumOffset`. A closed ring is never
+  windowed; it turns.
+
+The offset of that window is `PanelScene.browseTravel`: transient scene state,
+never written to settings. The scene's wheel handler is enabled when the panel
+can rotate **or** browse; one notch moves the window by one entry and stops at
+both ends. An entry off the track has `onTrack: false`: its delegate is
+invisible and takes no input, its rectangle leaves the input region, and the
+3D scene hides its node. Order never changes and no straight tail is appended.
+
+The same placement feeds every renderer. `trackMetrics()` receives
+`{ spacing, spacingReference, browseOffset }` for a baked track, whose length
+is measured on the track's own radius, and `trackEntryGeometry()` returns the
+entry centre in scene-box coordinates: `trackMetrics()` has already moved the
+track centre by the scene offset, so adding it again put icons beside the
+platform. A mesh scene draws its entries on `PanelScene3D.entryTrackRadius`,
+the middle of the platform's flat top; `PanelScene` passes that radius to the
+placement as `trackRadius`, so spacing is measured where the icons really are.
+Each 3D entry is placed by its **direction** from the scene centre at that
+radius. Scaling the layout's own shape instead let a square or polygon path put
+icons over the hole of a ring platform.
+
+`PanelSkinLayer2D` with a raster budget decodes its asset at the drawn size.
+Qt applies `sourceClipRect` to that scaled image, so the layer scales the
+declared rectangle and the whole-image `sourceSize` by the same factors
+(`rasterSource`). Left in natural pixels, the clip cut a natural-sized piece
+out of a smaller picture and the artwork was drawn shrunk into the top-left
+corner of its layer, at `radius / trackRadius` of its size.
+
 ## PanelScene inputs
 
 | Property | Contract |
@@ -569,6 +616,33 @@ shared QML tests cover reduced motion and bounded dense layouts. Segment
 implementation is described below; current verification is in `CURRENT_STATE.md`.
 
 
+### Half-circle path — AD3D-TASK-001
+
+A compact Fan or Arc popup is an exact half circle that opens to the right.
+`expansionGeometry()` keeps the folder's radius (140), shrinks it to
+`(count − 1) · pitch / π` for a folder that needs less, never below 1.2 icons,
+and limits each radius to the room the popup has: `pathRadiusX` to the width,
+`pathRadiusY` to `maximumHeight`. The pitch is one cell extent plus the gap:
+the icon size for bare icons, the cell diagonal when names are shown.
+
+`expansionPath(geometry, viewportHeight)` fits the path into the height the
+viewport really has, so a short popup shows a half ellipse, and returns
+`radiusX`, `radiusY`, `capacity`, `windowed`, `maximumOffset` and `step`. The
+capacity is the largest number of children that keeps one pitch between
+neighbours along the path (arc length, exact for a circle) and one cell
+between its two ends. Those children span exactly 180 degrees: 4 named or 9
+unnamed children at the reference radius.
+
+`expansionPathPoint(geometry, path, index, offset)` gives one child's position
+when the folder has moved `offset` children along the path, with `onPath` and
+`visibility`. `FolderExpansion` derives the offset from the viewport:
+`pathTarget = round(contentY / pathScrollStep)`, where one step is one wheel
+notch, and animates `pathOffset` to it, so the folder always rests with a child
+on each end of the curve wherever a drag lets go. The viewport scrolls only by
+`maximumOffset` steps; the children are positioned against `contentY`, so the
+curve stays still while wheel, held drag and keys walk the same path. A child
+beyond either end stays in the scene with zero opacity and no pointer input.
+
 ## Independent segments — TASK-0038 Phase B
 
 `PanelDefinition.segments` stores 1–16 typed records with stable IDs, contiguous
@@ -666,6 +740,25 @@ staged rendering/Studio, window actions and combined folder/segment/content
 integration. The historical blocked checkpoints and final evidence are recorded
 in `CURRENT_STATE.md`; private virtual Wayland results are not physical hardware
 or release acceptance.
+
+## Theme cards — AD3D-TASK-001
+
+`PanelRegistry::themeCandidateForTheme()` is the one place a catalogue theme is
+turned into a panel candidate. `themeCandidateForDefinition()` (Load, presets)
+and `PanelWindow::resolvedThemeDefinitions()` (the cards) both use it, so a
+card's `available`, `reasonCode` and `capabilityResolution` are exactly what
+Load would decide. A theme whose style names no `rendererTier` adopts its
+declared `capabilities.preferredRendererTier` on the panel and complete
+layers; without that, the tier left by the previous theme kept asking for a
+renderer the new theme never declared.
+
+`SettingsEditorModel.rendererThemeCandidate()` draws a card in a fixed context.
+The selected panel still supplies its entries and icons, but its angle, scale,
+rotation, presentation, collapse, tilt, 3D camera, radius and renderer tier are
+replaced by neutral values before the theme's own styles are merged, so a
+theme that sets one of them keeps it. The radius is capped at 110 so a wide
+platform's icons stay readable, and the tier is the one the theme resolved
+with. The card preview is 110 pixels tall, like a preset card's.
 
 ## Preset cards — TASK-0040
 

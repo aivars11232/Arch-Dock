@@ -363,6 +363,7 @@ private slots:
     void adoptsExactlyOneVerifiedPreviewPanel();
     void resolvesBuiltInChassisPackagesAndImportPrecedence();
     void resolvesThemeCandidatesWithoutMutation();
+    void completeThemeAdoptsItsOwnRendererTier();
     void rejectsIncompatibleThemeWithoutRecordMutation();
     void mapsVersionOneArtworkToProceduralFallback();
     void importsVersionedThemePackage();
@@ -2992,9 +2993,12 @@ void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
         QVERIFY2(profile.has_value(), qPrintable(errorCode));
         QVERIFY(profile->rendererTiers.contains(
             ArchDock::RendererTier::Procedural2D));
-        const bool mesh = theme.value(QStringLiteral("id")).toString() ==
-            QStringLiteral("mesh-platform-cyan");
-        QCOMPARE(profile->rendererTiers.contains(ArchDock::RendererTier::True3D), mesh);
+        const QString id = theme.value(QStringLiteral("id")).toString();
+        const bool mesh = id == QStringLiteral("mesh-platform-cyan");
+        // The orange arc carries an optional volumetric ring beside its baked
+        // artwork, so it declares the mesh tier without preferring it.
+        QCOMPARE(profile->rendererTiers.contains(ArchDock::RendererTier::True3D),
+                 mesh || id == QStringLiteral("arc-platform-orange"));
         QVERIFY(!profile->capabilities.contains(
             ArchDock::PanelCapability::NonRectangularInput));
         const bool perspective = theme.value(
@@ -3036,8 +3040,11 @@ void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
                 QCOMPARE(profile->hostKinds,
                          QVector<ArchDock::PanelHostKind>{
                              ArchDock::PanelHostKind::FreeDesktop});
-                QCOMPARE(profile->layouts.size(), 2);
-                QCOMPARE(profile->presentationMechanisms.size(), 1);
+                // The orange arc adds the closed ring its volumetric platform
+                // stands on, and the radial collapse that platform performs.
+                const bool volumetric = id == QStringLiteral("arc-platform-orange");
+                QCOMPARE(profile->layouts.size(), volumetric ? 4 : 2);
+                QCOMPARE(profile->presentationMechanisms.size(), volumetric ? 2 : 1);
                 QCOMPARE(preview.value(QStringLiteral("mode")).toString(),
                          QStringLiteral("free"));
                 // Preset lineage for the built-in catalog TASK-0040 owns.
@@ -3410,6 +3417,78 @@ void PanelRegistryTest::resolvesThemeCandidatesWithoutMutation()
     QCOMPARE(registry.panelSnapshot(QStringLiteral("bottom")), before);
     QCOMPARE(registry.revision(), revisionBefore);
     QVERIFY(!registry.panelIds().contains(preview.identity.id));
+}
+
+void PanelRegistryTest::completeThemeAdoptsItsOwnRendererTier()
+{
+    PanelRegistry registry(taskThemeDefinitions());
+    const QString panelId = registry.addFreePanel();
+    QVERIFY(!panelId.isEmpty());
+
+    // The panel wears a baked platform, so its record names that tier.
+    QVERIFY(registry.applyTheme(
+        panelId, QStringLiteral("ring-platform-blue"), QStringLiteral("complete")));
+    QCOMPARE(registry.panelValue(panelId, QStringLiteral("rendererTier")).toString(),
+             QStringLiteral("baked2.5d"));
+
+    // A theme whose style names no tier replaces the previous theme's tier
+    // with its own; otherwise the panel keeps asking for a renderer the new
+    // theme never declared and the theme cannot be loaded at all.
+    const QVariantMap ring = registry.themeCandidate(
+        panelId, QStringLiteral("holographic-ring"), QStringLiteral("complete"));
+    QVERIFY2(ring.value(QStringLiteral("success")).toBool(),
+             qPrintable(ring.value(QStringLiteral("errorCode")).toString()));
+    QCOMPARE(ring.value(QStringLiteral("values")).toMap()
+                 .value(QStringLiteral("rendererTier")).toString(),
+             QStringLiteral("procedural2d"));
+    const QVariantMap renderer = ring.value(QStringLiteral("capabilityResolution"))
+        .toMap().value(QStringLiteral("renderer")).toMap();
+    QCOMPARE(renderer.value(QStringLiteral("requestedTier")).toString(),
+             QStringLiteral("procedural2d"));
+    QCOMPARE(renderer.value(QStringLiteral("effectiveTier")).toString(),
+             QStringLiteral("procedural2d"));
+    QVERIFY(!renderer.value(QStringLiteral("fallbackApplied")).toBool());
+    QVERIFY(registry.applyTheme(
+        panelId, QStringLiteral("holographic-ring"), QStringLiteral("complete")));
+    QCOMPARE(registry.panelValue(panelId, QStringLiteral("rendererTier")).toString(),
+             QStringLiteral("procedural2d"));
+    QCOMPARE(registry.panelValue(panelId, QStringLiteral("completeThemeId")).toString(),
+             QStringLiteral("holographic-ring"));
+
+    // A packaged theme keeps the tier its own style declares.
+    const QVariantMap energy = registry.themeCandidate(
+        panelId, QStringLiteral("energy-frame-cyan"), QStringLiteral("complete"));
+    QVERIFY2(energy.value(QStringLiteral("success")).toBool(),
+             qPrintable(energy.value(QStringLiteral("errorCode")).toString()));
+    QCOMPARE(energy.value(QStringLiteral("values")).toMap()
+                 .value(QStringLiteral("rendererTier")).toString(),
+             QStringLiteral("skinned2d"));
+    QCOMPARE(energy.value(QStringLiteral("capabilityResolution")).toMap()
+                 .value(QStringLiteral("renderer")).toMap()
+                 .value(QStringLiteral("effectiveTier")).toString(),
+             QStringLiteral("skinned2d"));
+
+    // The panel-only layer adopts the tier too; the icon layer never does.
+    QCOMPARE(registry.themeCandidate(
+                 QStringLiteral("bottom"), QStringLiteral("obsidian-glass"),
+                 QStringLiteral("panel"))
+                 .value(QStringLiteral("values")).toMap()
+                 .value(QStringLiteral("rendererTier")).toString(),
+             QStringLiteral("procedural2d"));
+    QVERIFY(!registry.themeCandidate(
+                 panelId, QStringLiteral("holographic-ring"), QStringLiteral("icon"))
+                 .value(QStringLiteral("values")).toMap()
+                 .contains(QStringLiteral("rendererTier")));
+
+    // A genuine incompatibility is still refused, with its reason.
+    const QVariantMap native = registry.themeCandidate(
+        QStringLiteral("bottom"), QStringLiteral("ring-platform-blue"),
+        QStringLiteral("complete"));
+    QVERIFY(!native.value(QStringLiteral("success")).toBool());
+    QCOMPARE(native.value(QStringLiteral("status")).toString(),
+             QStringLiteral("capability-unavailable"));
+    QCOMPARE(native.value(QStringLiteral("errorCode")).toString(),
+             QStringLiteral("host-layout-unsupported"));
 }
 
 void PanelRegistryTest::rejectsIncompatibleThemeWithoutRecordMutation()

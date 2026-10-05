@@ -902,4 +902,274 @@ TestCase {
         for (let index = 0; index < 5; ++index)
             verify(scene.entryItemAt(index) !== null, "entry " + index)
     }
+
+    // ---- The platform is where its track and its input are ---------------
+
+    // Wheel events nothing in the scene accepted: what the desktop behind a
+    // free panel would receive.
+    property int passedWheelCount: 0
+
+    WheelHandler {
+        target: null
+        onWheel: function(event) { testCase.passedWheelCount += 1 }
+    }
+
+    // The asset drawn whole at a given size: the picture a platform layer
+    // must show, however large the panel draws it.
+    Component {
+        id: referenceArtwork
+
+        Image {
+            cache: false
+            asynchronous: false
+            fillMode: Image.Stretch
+        }
+    }
+
+    // Whether a pixel shows artwork. A grab's background is transparent on a
+    // hardware scenegraph and opaque on the software one, so the test asks
+    // whether the pixel differs from the empty corner rather than reading
+    // alpha alone.
+    function painted(image, x, y) {
+        const empty = image.pixel(0, 0)
+        const colour = image.pixel(x, y)
+        return Math.abs(colour.r - empty.r) + Math.abs(colour.g - empty.g)
+            + Math.abs(colour.b - empty.b) + Math.abs(colour.a - empty.a) > 0.06
+    }
+
+    // The platform artwork is blue; the entries this file draws are red.
+    function blueBounds(image) {
+        let left = image.width
+        let top = image.height
+        let right = -1
+        let bottom = -1
+        for (let y = 0; y < image.height; y += 2) {
+            for (let x = 0; x < image.width; x += 2) {
+                const colour = image.pixel(x, y)
+                if (colour.b > 0.18 && colour.b > colour.r * 1.3) {
+                    left = Math.min(left, x)
+                    right = Math.max(right, x)
+                    top = Math.min(top, y)
+                    bottom = Math.max(bottom, y)
+                }
+            }
+        }
+        return { left: left, top: top, right: right, bottom: bottom }
+    }
+
+    function paintedBounds(image) {
+        let left = image.width
+        let top = image.height
+        let right = -1
+        let bottom = -1
+        for (let y = 0; y < image.height; y += 2) {
+            for (let x = 0; x < image.width; x += 2) {
+                if (painted(image, x, y)) {
+                    left = Math.min(left, x)
+                    right = Math.max(right, x)
+                    top = Math.min(top, y)
+                    bottom = Math.max(bottom, y)
+                }
+            }
+        }
+        return { left: left, top: top, right: right, bottom: bottom }
+    }
+
+    // The configuration the misplaced platform was observed with: Blue Ring,
+    // radius 300, icon 52, padding 18, six entries.
+    function observedRing(overrides) {
+        const definition = {
+            panelThemeId: "ring-platform-blue", layout: "ring",
+            layoutRadius: 300, layoutPadding: 18, iconSize: 52, spacing: 10
+        }
+        const additions = overrides || ({})
+        for (const key of Object.keys(additions))
+            definition[key] = additions[key]
+        const scene = createScene({
+            theme: productionFamily("ring-platform-blue"), count: 6,
+            definition: definition
+        })
+        waitForTier(scene, "baked2.5d")
+        return scene
+    }
+
+    // Criterion: the artwork fills the platform rectangle its track is laid
+    // out for, at every size a panel can draw it - smaller than the artwork,
+    // and larger.
+    function test_artworkFillsThePlatformItsTrackUses_data() {
+        const rows = []
+        for (const family of ["ring-platform-blue", "octagon-platform-steel",
+                              "arc-platform-orange"]) {
+            for (const radius of [200, 300, 380, 500]) {
+                rows.push({ tag: family + "/" + radius, family: family,
+                            radius: radius,
+                            layout: family === "arc-platform-orange"
+                                ? "arc" : family === "octagon-platform-steel"
+                                    ? "octagon" : "ring" })
+            }
+        }
+        return rows
+    }
+
+    function test_artworkFillsThePlatformItsTrackUses(data) {
+        // Only the required platform layer, and no entries, so every painted
+        // pixel in the scene is that one piece of artwork.
+        const theme = productionFamily(data.family)
+        theme.states = ["normal", "hover", "open", "collapsed"].map(function(id) {
+            return { id: id, layers: ["rear"] }
+        })
+        const scene = createScene({
+            theme: theme, count: 0,
+            definition: { panelThemeId: data.family, layout: data.layout,
+                          layoutRadius: data.radius, layoutPadding: 18,
+                          iconSize: 52, spacing: 10 }
+        })
+        waitForTier(scene, "baked2.5d")
+        const platform = scene.activeTrackMetrics.platform
+        fuzzy(platform.width, 1200 * data.radius / (data.family === "ring-platform-blue"
+              ? 446 : data.family === "octagon-platform-steel" ? 444 : 443),
+              "the platform rectangle is the artwork at the configured radius")
+        verify(scene.width <= testCase.width && scene.height <= testCase.height,
+               "the scene fits the test window")
+
+        // grabImage() crops the window by an item's own position, so the
+        // scene and the reference are both grabbed as top-level items at the
+        // window origin, one at a time.
+        scene.visible = false
+        const reference = createTemporaryObject(referenceArtwork, testCase, {
+            x: 0, y: 0, width: platform.width, height: platform.height,
+            source: theme.assetPaths["platform-rear"],
+            sourceSize: Qt.size(Math.ceil(platform.width),
+                                Math.ceil(platform.height))
+        })
+        verify(reference !== null)
+        tryCompare(reference, "status", Image.Ready, 5000)
+        const expected = paintedBounds(grabImage(reference))
+        verify(expected.right > expected.left && expected.bottom > expected.top,
+               "the reference artwork is visible")
+        reference.visible = false
+        scene.visible = true
+        const drawn = paintedBounds(grabImage(scene))
+        const offsets = { left: platform.x, right: platform.x,
+                          top: platform.y, bottom: platform.y }
+        for (const side of ["left", "top", "right", "bottom"]) {
+            verify(Math.abs(drawn[side] - (expected[side] + offsets[side])) <= 2,
+                   side + " edge: drawn at " + drawn[side] + ", artwork at "
+                   + (expected[side] + offsets[side]).toFixed(1) + " in a "
+                   + Math.round(platform.width) + " x "
+                   + Math.round(platform.height) + " platform")
+        }
+    }
+
+    // Criterion: icons stand on the drawn platform, and what is drawn is what
+    // takes input - including the platform surface between two icons.
+    function test_observedRingIconsInputAndArtworkAgree() {
+        const scene = observedRing()
+        const metrics = scene.activeTrackMetrics
+        const scale = 300 / 446
+        fuzzy(metrics.center.x - metrics.platform.x, 600 * scale,
+              "the track centre is the artwork centre in x")
+        fuzzy(metrics.center.y - metrics.platform.y, 300 * scale,
+              "the track centre is the artwork centre in y")
+
+        // The drawn ring is centred on the track the icons use, and as wide
+        // as its artwork at this radius: 1040 of 1200 artwork pixels.
+        const picture = grabImage(scene)
+        const ring = blueBounds(picture)
+        verify(Math.abs((ring.left + ring.right) / 2 - metrics.center.x) <= 3,
+               "the drawn ring is centred on the track in x: "
+               + (ring.left + ring.right) / 2 + " against " + metrics.center.x)
+        verify(Math.abs((ring.top + ring.bottom) / 2 - metrics.center.y) <= 8,
+               "the drawn ring is centred on the track in y: "
+               + (ring.top + ring.bottom) / 2 + " against " + metrics.center.y)
+        verify(Math.abs((ring.right - ring.left) - 1040 * scale) <= 6,
+               "the drawn ring is " + (ring.right - ring.left)
+               + " wide against " + 1040 * scale)
+
+        for (let index = 0; index < 6; ++index) {
+            const bounds = scene.entryGeometryAt(index).entryBounds
+            const radians = (index / 6 * 360 - 90) * Math.PI / 180
+            fuzzy(bounds.x + bounds.width / 2,
+                  metrics.center.x + Math.cos(radians) * metrics.radiusX,
+                  "entry " + index + " x stands on the track")
+            fuzzy(bounds.y + bounds.height / 2,
+                  metrics.center.y + Math.sin(radians) * metrics.radiusY,
+                  "entry " + index + " y stands on the track")
+        }
+
+        // Halfway between two icons, on the ring a person can see.
+        const between = (0.5 / 6 * 360 - 90) * Math.PI / 180
+        const surface = Qt.point(
+            metrics.center.x + Math.cos(between) * metrics.radiusX,
+            metrics.center.y + Math.sin(between) * metrics.radiusY)
+        verify(painted(picture, Math.round(surface.x), Math.round(surface.y)),
+               "the platform is drawn between the icons")
+        compare(scene.activeInputRegionKind, "platform-mask")
+        verify(scene.containsInputPoint(surface),
+               "the drawn platform takes input between the icons")
+        const hole = Qt.point(metrics.center.x, metrics.center.y)
+        verify(!scene.containsInputPoint(hole), "the ring's hole passes through")
+        verify(!scene.containsInputPoint(Qt.point(1, 1)), "the corner passes through")
+
+        // The wheel turns the ring from that surface, in both directions.
+        verify(scene.wheelRotationAvailable)
+        const resting = scene.entryGeometryAt(0).x
+        testCase.passedWheelCount = 0
+        mouseWheel(scene, surface.x, surface.y, 0, 120)
+        compare(scene.sceneRotationAngle, 15, "wheel up turns from the surface")
+        verify(Math.abs(scene.entryGeometryAt(0).x - resting) > 1,
+               "the icons turn with it")
+        mouseWheel(scene, surface.x, surface.y, 0, -120)
+        compare(scene.sceneRotationAngle, 0, "wheel down turns back")
+        fuzzy(scene.entryGeometryAt(0).x, resting, "and the icons return")
+        compare(testCase.passedWheelCount, 0, "the platform consumed both events")
+
+        // Away from the platform the wheel belongs to the desktop.
+        mouseWheel(scene, hole.x, hole.y, 0, 120)
+        mouseWheel(scene, 1, 1, 0, -120)
+        compare(scene.sceneRotationAngle, 0, "the hole and the corner do not turn it")
+        compare(testCase.passedWheelCount, 2, "both events passed through")
+    }
+
+    // Criterion: the canonical spacing control regulates separation along the
+    // baked track, and the logical, drawn and input geometry move together.
+    function test_spacingRegulatesTheBakedTrack() {
+        const scene = observedRing()
+        const even = []
+        for (let index = 0; index < 6; ++index)
+            even.push(scene.entryGeometryAt(index))
+        const wide = observedRing({ spacing: 48 })
+        const tight = observedRing({ spacing: 2 })
+        const touching = observedRing({ spacing: 0 })
+        compare(tight.width, scene.width, "spacing does not resize the scene")
+        compare(tight.height, scene.height)
+        function separation(target) {
+            const first = target.entryGeometryAt(2).entryBounds
+            const second = target.entryGeometryAt(3).entryBounds
+            return Math.hypot(
+                first.x + first.width / 2 - second.x - second.width / 2,
+                first.y + first.height / 2 - second.y - second.height / 2)
+        }
+        fuzzy(separation(wide), separation(scene),
+              "the default and larger values keep the even spread")
+        verify(separation(tight) < separation(scene) - 20,
+               "a small spacing brings neighbours visibly together")
+        verify(separation(touching) < separation(tight),
+               "and zero brings them closer still")
+        for (let index = 0; index < 6; ++index) {
+            const entry = tight.entryGeometryAt(index)
+            const item = tight.entryItemAt(index)
+            fuzzy(item.x, entry.position.x, "entry " + index + " is drawn where it is laid out")
+            fuzzy(item.y, entry.position.y, "entry " + index + " is drawn where it is laid out")
+            verify(tight.containsInputPoint(Qt.point(
+                       entry.entryBounds.x + entry.entryBounds.width / 2,
+                       entry.entryBounds.y + entry.entryBounds.height / 2)),
+                   "entry " + index + " takes input where it is drawn")
+            const anchor = tight.popupAnchors.entries[index]
+            fuzzy(anchor.x, entry.position.x + 26 + entry.outwardNormal.x * 26,
+                  "the popup anchor follows entry " + index)
+            verify(entry.depth >= even[index].depth - 0.0001,
+                   "entry " + index + " moves towards the front of the ring")
+        }
+    }
 }

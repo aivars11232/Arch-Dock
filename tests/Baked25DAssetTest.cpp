@@ -233,14 +233,19 @@ void Baked25DAssetTest::productionPackagesValidateAndShareGeometry()
             QStringLiteral("dynamic-glow")));
         QVERIFY(definition.capabilities.features.contains(
             QStringLiteral("dynamic-tint")));
-        // The radial mechanism is not implemented in this task, so no
-        // perspective package may advertise it.
+        // Baked artwork only opens. The orange arc also carries a volumetric
+        // ring for the mesh tier: three mesh resources, the radial collapse
+        // that ring performs, and the free rotation a closed ring allows.
+        const bool volumetric = spec.id == QStringLiteral("arc-platform-orange");
         QCOMPARE(definition.capabilities.presentationMechanisms,
-                 QStringList{QStringLiteral("open")});
+                 volumetric ? QStringList({QStringLiteral("open"),
+                                           QStringLiteral("collapse-radial")})
+                            : QStringList{QStringLiteral("open")});
         QCOMPARE(definition.capabilities.rotation.mode,
-                 spec.closed ? QStringLiteral("free") : QStringLiteral("none"));
+                 spec.closed || volumetric ? QStringLiteral("free")
+                                           : QStringLiteral("none"));
 
-        QCOMPARE(definition.assets.size(), 8);
+        QCOMPARE(definition.assets.size(), volumetric ? 11 : 8);
         QCOMPARE(definition.states.size(), 4);
         QCOMPARE(definition.layers.size(), 8);
         QCOMPARE(definition.tracks.size(), 1);

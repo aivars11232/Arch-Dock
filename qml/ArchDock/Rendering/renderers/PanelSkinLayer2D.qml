@@ -30,6 +30,29 @@ Item {
     readonly property int rasterHeight: rasterBudget > 0
         ? Math.max(1, Math.min(rasterBudget, Math.ceil(height))) : 0
 
+    // With a raster budget the asset is decoded at the size it is drawn, and
+    // Qt applies sourceClipRect to that scaled image, not to the asset's own
+    // pixels. The declared rectangle is therefore scaled the same way. Left in
+    // natural pixels it cuts a natural-sized piece out of a smaller picture,
+    // and the artwork is drawn shrunk into the top-left corner of its layer.
+    readonly property var rasterSource: {
+        const rect = sourceRectangle()
+        if (rasterBudget <= 0 || rect.width <= 0 || rect.height <= 0)
+            return { width: 0, height: 0, clip: rect }
+        const natural = assetDefinition && assetDefinition.naturalSize
+            ? assetDefinition.naturalSize : ({})
+        const scaleX = rasterWidth / rect.width
+        const scaleY = rasterHeight / rect.height
+        return {
+            width: Math.max(1, Math.round(Math.max(
+                numeric(natural.width, 0), rect.x + rect.width) * scaleX)),
+            height: Math.max(1, Math.round(Math.max(
+                numeric(natural.height, 0), rect.y + rect.height) * scaleY)),
+            clip: Qt.rect(Math.round(rect.x * scaleX), Math.round(rect.y * scaleY),
+                          rasterWidth, rasterHeight)
+        }
+    }
+
     // Presentation track for this layer's role, supplied by PanelSkin2D from
     // PanelMotionController. It moves and scales the whole drawn part; the
     // slice geometry inside it is untouched, so a declared cap keeps its
@@ -143,12 +166,12 @@ Item {
         width: root.outputWidth()
         height: root.height
         source: root.source
-        sourceClipRect: root.sourceRectangle()
+        sourceClipRect: root.rasterSource.clip
         fillMode: root.splitCenter && root.sliceDefinition
                 && String(root.sliceDefinition.centerMode || "stretch") === "tile"
             ? Image.TileHorizontally : Image.Stretch
-        sourceSize.width: root.rasterWidth
-        sourceSize.height: root.rasterHeight
+        sourceSize.width: root.rasterSource.width
+        sourceSize.height: root.rasterSource.height
         smooth: true
         asynchronous: false
         cache: root.cacheImage

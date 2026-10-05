@@ -31,9 +31,35 @@ cycling and recovery assertions. No broad suite was rerun. The earlier software
 module declaration and catalogue capability mismatches were corrected before
 these final gates. Protected evidence and existing core records remain intact.
 
-Remaining release closure: canonical source/checksum regeneration, fresh package
-build, installed-package verification, owned cleanup, Git sync, backed-up actual
-PC update and authorized Plasma refresh. Installed package remains 0.1.1-7 until
-that installation receipt is complete. No publication is required for this pass.
+That release closure is complete: package 0.1.1-8 was built from source freeze
+`78eceedddb9d6c508b592c027c3e49a2fb26feee`, verified, installed on the owner's
+PC and recorded in CURRENT_STATE.md on 2026-10-05. Nothing was published.
 
 The intermittent slow Apply report remains unreproduced; it is not claimed fixed.
+
+## AD3D-TASK-001 follow-up — 2026-10-05
+
+The owner then reported, with screenshots, that a baked ring was drawn small in
+the corner of its scene while the icons kept the full track, that Spacing did
+nothing on curved and 3D tracks, that a crowded semicircle and a large folder
+grew a straight tail, and that theme cards showed other themes through the
+selected panel's renderer. AD3D-TASK-001 corrects these in source; the
+mechanisms are described in [the renderer notes](shared-renderer.md) under
+"Track placement, spacing and overflow", "Half-circle path" and "Theme cards".
+
+What the next 3D task builds on:
+
+- `PanelScene3D.entryTrackRadius` is the one radius 3D entries stand on. Each
+  entry is placed by its direction from the scene centre, and `PanelScene`
+  hands the radius to `LayoutEngine.trackPlacement()` as `trackRadius`, so
+  spacing and overflow are decided where the icons really are.
+- `PanelScene.browseTravel` is transient browsing state, like
+  `wheelRotationAngle`. Neither is saved, and a 3D transform editor must not
+  persist them.
+- `PanelRegistry::themeCandidateForTheme()` decides what a theme makes of a
+  panel for Load, presets and cards alike. A generic 3D mode that keeps the
+  selected theme should change the renderer tier through this candidate
+  rather than beside it.
+- The memory check at the end of `rendering-import-smoke` is unreliable and
+  the growth it samples predates this work; see CURRENT_STATE.md before
+  treating a failure of that check as a regression.

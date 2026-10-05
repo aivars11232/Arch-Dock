@@ -82,8 +82,8 @@ Item {
     readonly property real platformTop: Math.max(0,
         ...((resources || {}).mesh?.positions || []).map(p => Number(p[2])))
         * platformScale * bounded("thickness", 1, 0.1, 4)
-    readonly property real pathFit: platformScale * bounded("entryRadius", 0.84, 0.1, 1)
-        / Math.max(1, ...entryGeometry.map(p => Math.hypot(p.centerX - width / 2, p.centerY - height / 2)))
+    // The ring the icons stand on: the middle of the platform's flat top.
+    readonly property real entryTrackRadius: platformScale * bounded("entryRadius", 0.84, 0.1, 1)
 
     function containsInputPoint(point) {
         if (!rendererReady) return false
@@ -240,11 +240,20 @@ Item {
                 readonly property real tileOffset: visual && visual.customTileActive ? 0.05 : 0.58
                 readonly property real tileFloor: visual && visual.customTileActive ? 0.01 : 0.044
                 readonly property real elevation: root.bounded("iconElevation", 0.3, 0, 2)
+                // An entry is placed by its direction from the scene centre, on
+                // the platform's own track. Scaling the layout's shape instead
+                // let any path that is not a circle put icons in the hole.
+                readonly property real reachX: Number(rect.centerX) - root.width / 2
+                readonly property real reachY: root.height / 2 - Number(rect.centerY)
+                readonly property real reach: Math.hypot(reachX, reachY)
                 property alias glyphModel: glyphModel
                 readonly property real glow: Math.max(root.number(iconMotion, "glow", 0),
                     root.number(glyphMotion, "glow", 0), root.number(tileMotion, "glow", 0))
-                position: Qt.vector3d((Number(rect.centerX) - root.width / 2) * root.pathFit + root.number(iconMotion, "x", 0),
-                    (root.height / 2 - Number(rect.centerY)) * root.pathFit - root.number(iconMotion, "y", 0),
+                // Outside the window of an overcrowded open curve the entry is
+                // not drawn, exactly as its 2D delegate is not.
+                visible: rect.onTrack !== false
+                position: Qt.vector3d((reach > 0.001 ? reachX / reach : 0) * root.entryTrackRadius + root.number(iconMotion, "x", 0),
+                    (reach > 0.001 ? reachY / reach : 1) * root.entryTrackRadius - root.number(iconMotion, "y", 0),
                     root.platformTop + size * (tileOffset + tileFloor + elevation))
                 eulerRotation: Qt.vector3d(0, root.number(iconMotion, "rotateY", 0),
                     -root.number(iconMotion, "rotateZ", 0) - Number(rect.rotation || 0))

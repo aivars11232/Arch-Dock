@@ -26,10 +26,26 @@ QQC2.Pane {
     readonly property var geometry: LayoutEngine.expansionGeometry(
         layout, entries.length, 48, 6, 140, Math.ceil(Math.sqrt(entries.length)), {
             maximumWidth: Math.max(56, maximumWidth - padding * 2),
+            maximumHeight: Math.max(56, maximumHeight - padding * 2),
             labelWidth: showNames ? 108 : 0,
             labelHeight: showNames ? nameMetrics.height * 2 + 4 : 0,
             compactPath: true
         })
+    // A compact Fan or Arc holds as many children as stand on its half circle
+    // and moves the rest along it: one wheel notch is one child.
+    readonly property real pathScrollStep: 20 * Math.max(1, Qt.styleHints.wheelScrollLines)
+    readonly property var path: LayoutEngine.expansionPath(geometry, viewport.height)
+    readonly property int pathTarget: geometry.followsPath
+        ? Math.max(0, Math.min(path.maximumOffset,
+            Math.round(viewport.contentY / pathScrollStep))) : 0
+    // The path rests on whole children, so both ends of the curve stay filled
+    // wherever a drag happens to let go.
+    property real pathOffset: pathTarget
+    Behavior on pathOffset {
+        enabled: root.opened && !root.openingInProgress && !root.reducedMotion
+            && !root.keyboardSelection
+        NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+    }
     readonly property var openingProfiles: [{
         id: "folder-open", target: "icon", trigger: "panel-reveal",
         reducedMotion: { mode: "none" },
@@ -114,9 +130,15 @@ QQC2.Pane {
         lastPointerPosition = positionObserver.point.position
         const index = Math.max(0, Math.min(entries.length - 1, indexForId(selectedChildId) + delta))
         selectedChildId = String(entries[index].id)
-        const point = geometry.entries[index]
         viewport.cancelFlick()
-        const x = geometry.followsPath ? 0 : point.x < viewport.contentX ? point.x
+        if (geometry.followsPath) {
+            // Bring the selected child onto the path with the least travel.
+            const offset = Math.max(index - (path.capacity - 1), Math.min(index, pathTarget))
+            viewport.contentY = Math.max(0, Math.min(path.maximumOffset, offset)) * pathScrollStep
+            return
+        }
+        const point = geometry.entries[index]
+        const x = point.x < viewport.contentX ? point.x
             : Math.max(viewport.contentX, point.x + geometry.cellWidth - viewport.width)
         const y = point.y < viewport.contentY ? point.y
             : Math.max(viewport.contentY, point.y + geometry.cellHeight - viewport.height)
@@ -177,7 +199,11 @@ QQC2.Pane {
                             return total + (label.visible ? label.implicitHeight + column.spacing : 0)
                         }, 0))) : 0
             contentWidth: root.geometry.width
-            contentHeight: root.geometry.height
+            // A path does not scroll as a list: the view only supplies how far
+            // the folder has moved along it.
+            contentHeight: root.geometry.followsPath
+                ? height + root.path.maximumOffset * root.pathScrollStep
+                : root.geometry.height
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             flickableDirection: Flickable.AutoFlickIfNeeded
@@ -196,20 +222,22 @@ QQC2.Pane {
                     id: child
                     required property var modelData
                     required property int index
-                    readonly property var point: root.geometry.entries[index] || ({ x: 0, y: 0 })
+                    readonly property var point: root.geometry.followsPath
+                        ? LayoutEngine.expansionPathPoint(root.geometry, root.path,
+                                                          index, root.pathOffset)
+                        : root.geometry.entries[index] || ({ x: 0, y: 0 })
+                    readonly property bool onPath:
+                        !root.geometry.followsPath || point.onPath === true
                     objectName: "folder-child-" + index
-                    // Re-evaluate x at the child's current visible height:
-                    // both wheel and held dragging follow the same curve.
-                    x: {
-                        if (!root.geometry.followsPath) return point.x
-                        const progress = Math.max(0, Math.min(1,
-                            (point.y - viewport.contentY) / Math.max(1, viewport.height - height)))
-                        return Math.sin(progress * Math.PI
-                            * (root.geometry.layout === "fan" ? 0.5 : 1)) * root.geometry.pathBend
-                    }
-                    y: point.y
+                    // The curve stays where it is while the view moves under
+                    // it: wheel, held dragging and keys all walk the same path.
+                    x: point.x
+                    y: root.geometry.followsPath ? viewport.contentY + point.y : point.y
                     width: root.geometry.cellWidth
                     height: root.geometry.cellHeight
+                    // A child beyond either end stays in the scene for
+                    // assistive tools but is neither drawn nor pressed.
+                    opacity: root.geometry.followsPath ? point.visibility : 1
                     Accessible.role: Accessible.Button
                     Accessible.name: String(modelData.displayName || modelData.name || "")
                     Accessible.onPressAction: root.selectChild(String(modelData.id))
@@ -255,7 +283,7 @@ QQC2.Pane {
                     MouseArea {
                         id: pointer
                         anchors.fill: parent
-                        enabled: root.opened && !root.openingInProgress
+                        enabled: root.opened && !root.openingInProgress && child.onPath
                         preventStealing: false
                         hoverEnabled: true
                         onEntered: if (!root.keyboardSelection)

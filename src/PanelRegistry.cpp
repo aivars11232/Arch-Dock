@@ -2174,119 +2174,7 @@ QVariantMap PanelRegistry::themeCandidateForDefinition(const ArchDock::PanelDefi
             }
         }
 
-        QVariantMap changes;
-        const auto mergeStyle = [&changes](const QVariantMap &style)
-        {
-            for (auto it = style.cbegin(); it != style.cend(); ++it)
-                changes.insert(it.key(), it.value());
-        };
-        if (normalizedLayer == QStringLiteral("panel") || normalizedLayer == QStringLiteral("complete"))
-        {
-            mergeStyle(theme.value(QStringLiteral("panelStyle")).toMap());
-            changes.insert(QStringLiteral("panelThemeId"), themeId);
-        }
-        if (normalizedLayer == QStringLiteral("icon") || normalizedLayer == QStringLiteral("complete"))
-        {
-            mergeStyle(theme.value(QStringLiteral("iconStyle")).toMap());
-        }
-        if (normalizedLayer == QStringLiteral("complete"))
-        {
-            mergeStyle(theme.value(QStringLiteral("tileStyle")).toMap());
-            mergeStyle(theme.value(QStringLiteral("indicatorStyle")).toMap());
-            mergeStyle(theme.value(QStringLiteral("animationStyle")).toMap());
-            mergeStyle(theme.value(QStringLiteral("layoutStyle")).toMap());
-            changes.insert(QStringLiteral("completeThemeId"), themeId);
-        }
-
-        QVariantMap normalizedChanges;
-        for (auto iterator = changes.cbegin(); iterator != changes.cend(); ++iterator)
-        {
-            const ArchDock::PanelSettingsFieldDescriptor *field =
-                ArchDock::PanelSettingsSchema::panelDescriptor(iterator.key());
-            if (!field || field->access != ArchDock::PanelSettingsFieldAccess::Editor)
-            {
-                return {
-                    {QStringLiteral("success"), false},
-                    {QStringLiteral("status"), QStringLiteral("validation-failed")},
-                    {QStringLiteral("errorCode"), QStringLiteral("theme-field-unavailable")},
-                    {QStringLiteral("errorMessage"), iterator.key()},
-                    {QStringLiteral("panelId"), panelId},
-                    {QStringLiteral("themeId"), themeId},
-                    {QStringLiteral("layer"), normalizedLayer},
-                    {QStringLiteral("values"), QVariantMap{}},
-                };
-            }
-            normalizedChanges.insert(
-                iterator.key(),
-                ArchDock::PanelSettingsSchema::normalizePanelValue(
-                    iterator.key(), iterator.value()));
-        }
-
-        QVariantMap candidateRecord = snapshot.toLegacyMap();
-        for (auto iterator = normalizedChanges.cbegin();
-             iterator != normalizedChanges.cend(); ++iterator)
-        {
-            candidateRecord.insert(iterator.key(), iterator.value());
-        }
-        QString definitionError;
-        const std::optional<ArchDock::PanelDefinition> definition =
-            ArchDock::PanelDefinition::fromLegacyMap(
-                candidateRecord, &definitionError);
-        QString capabilityError;
-        const std::optional<ArchDock::ThemeCapabilityProfile> profile =
-            ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
-                theme, &capabilityError);
-        if (!definition.has_value() || !profile.has_value())
-        {
-            return {
-                {QStringLiteral("success"), false},
-                {QStringLiteral("status"), QStringLiteral("validation-failed")},
-                {QStringLiteral("errorCode"), !definition.has_value()
-                     ? QStringLiteral("invalid-theme-candidate")
-                     : QStringLiteral("invalid-theme-capabilities")},
-                {QStringLiteral("errorMessage"), !definition.has_value()
-                     ? definitionError : capabilityError},
-                {QStringLiteral("panelId"), panelId},
-                {QStringLiteral("themeId"), themeId},
-                {QStringLiteral("layer"), normalizedLayer},
-                {QStringLiteral("values"), QVariantMap{}},
-            };
-        }
-        const ArchDock::CapabilityResolution resolution =
-            ArchDock::PanelCapabilityResolver::resolve(
-                *definition,
-                ArchDock::PanelCapabilityResolver::productionHostProfile(
-                    definition->host.kind),
-                *profile,
-                ArchDock::PanelCapabilityResolver::productionRenderers(),
-                ArchDock::PanelCapabilityResolver::productionPlatform());
-        if (!resolution.available)
-        {
-            return {
-                {QStringLiteral("success"), false},
-                {QStringLiteral("status"), QStringLiteral("capability-unavailable")},
-                {QStringLiteral("errorCode"),
-                 ArchDock::capabilityReasonCodeName(resolution.reason)},
-                {QStringLiteral("panelId"), panelId},
-                {QStringLiteral("themeId"), themeId},
-                {QStringLiteral("layer"), normalizedLayer},
-                {QStringLiteral("values"), QVariantMap{}},
-                {QStringLiteral("capabilityResolution"), resolution.toVariantMap()},
-            };
-        }
-        return {
-            {QStringLiteral("success"), true},
-            {QStringLiteral("status"), QStringLiteral("resolved")},
-            {QStringLiteral("errorCode"), QString{}},
-            {QStringLiteral("panelId"), panelId},
-            {QStringLiteral("themeId"), themeId},
-            {QStringLiteral("recommendedIconStyleId"),
-             theme.value(QStringLiteral("iconStyleRef"))
-                 .toMap().value(QStringLiteral("id"))},
-            {QStringLiteral("layer"), normalizedLayer},
-            {QStringLiteral("values"), normalizedChanges},
-            {QStringLiteral("capabilityResolution"), resolution.toVariantMap()},
-        };
+        return themeCandidateForTheme(snapshot, theme, normalizedLayer);
     }
     return {
         {QStringLiteral("success"), false},
@@ -2296,6 +2184,139 @@ QVariantMap PanelRegistry::themeCandidateForDefinition(const ArchDock::PanelDefi
         {QStringLiteral("themeId"), themeId},
         {QStringLiteral("layer"), normalizedLayer},
         {QStringLiteral("values"), QVariantMap{}},
+    };
+}
+
+QVariantMap PanelRegistry::themeCandidateForTheme(const ArchDock::PanelDefinition &snapshot,
+    const QVariantMap &theme, const QString &normalizedLayer) const
+{
+    const QString panelId = snapshot.identity.id;
+    const QString themeId = theme.value(QStringLiteral("id")).toString();
+    const bool panelLayer = normalizedLayer == QStringLiteral("panel") ||
+        normalizedLayer == QStringLiteral("complete");
+    QVariantMap changes;
+    const auto mergeStyle = [&changes](const QVariantMap &style)
+    {
+        for (auto it = style.cbegin(); it != style.cend(); ++it)
+            changes.insert(it.key(), it.value());
+    };
+    if (panelLayer)
+    {
+        mergeStyle(theme.value(QStringLiteral("panelStyle")).toMap());
+        changes.insert(QStringLiteral("panelThemeId"), themeId);
+    }
+    if (normalizedLayer == QStringLiteral("icon") || normalizedLayer == QStringLiteral("complete"))
+    {
+        mergeStyle(theme.value(QStringLiteral("iconStyle")).toMap());
+    }
+    if (normalizedLayer == QStringLiteral("complete"))
+    {
+        mergeStyle(theme.value(QStringLiteral("tileStyle")).toMap());
+        mergeStyle(theme.value(QStringLiteral("indicatorStyle")).toMap());
+        mergeStyle(theme.value(QStringLiteral("animationStyle")).toMap());
+        mergeStyle(theme.value(QStringLiteral("layoutStyle")).toMap());
+        changes.insert(QStringLiteral("completeThemeId"), themeId);
+    }
+    // A theme whose style names no renderer tier still replaces the tier
+    // the previous theme left on the panel. Kept, that tier goes on asking
+    // for a renderer this theme never declared, and the theme can neither
+    // be previewed nor loaded.
+    if (panelLayer && !changes.contains(QStringLiteral("rendererTier")))
+    {
+        const QString preferred = theme.value(QStringLiteral("capabilities")).toMap()
+            .value(QStringLiteral("preferredRendererTier")).toString();
+        if (!preferred.isEmpty())
+            changes.insert(QStringLiteral("rendererTier"), preferred);
+    }
+
+    QVariantMap normalizedChanges;
+    for (auto iterator = changes.cbegin(); iterator != changes.cend(); ++iterator)
+    {
+        const ArchDock::PanelSettingsFieldDescriptor *field =
+            ArchDock::PanelSettingsSchema::panelDescriptor(iterator.key());
+        if (!field || field->access != ArchDock::PanelSettingsFieldAccess::Editor)
+        {
+            return {
+                {QStringLiteral("success"), false},
+                {QStringLiteral("status"), QStringLiteral("validation-failed")},
+                {QStringLiteral("errorCode"), QStringLiteral("theme-field-unavailable")},
+                {QStringLiteral("errorMessage"), iterator.key()},
+                {QStringLiteral("panelId"), panelId},
+                {QStringLiteral("themeId"), themeId},
+                {QStringLiteral("layer"), normalizedLayer},
+                {QStringLiteral("values"), QVariantMap{}},
+            };
+        }
+        normalizedChanges.insert(
+            iterator.key(),
+            ArchDock::PanelSettingsSchema::normalizePanelValue(
+                iterator.key(), iterator.value()));
+    }
+
+    QVariantMap candidateRecord = snapshot.toLegacyMap();
+    for (auto iterator = normalizedChanges.cbegin();
+         iterator != normalizedChanges.cend(); ++iterator)
+    {
+        candidateRecord.insert(iterator.key(), iterator.value());
+    }
+    QString definitionError;
+    const std::optional<ArchDock::PanelDefinition> definition =
+        ArchDock::PanelDefinition::fromLegacyMap(
+            candidateRecord, &definitionError);
+    QString capabilityError;
+    const std::optional<ArchDock::ThemeCapabilityProfile> profile =
+        ArchDock::PanelCapabilityResolver::themeProfileFromVariantMap(
+            theme, &capabilityError);
+    if (!definition.has_value() || !profile.has_value())
+    {
+        return {
+            {QStringLiteral("success"), false},
+            {QStringLiteral("status"), QStringLiteral("validation-failed")},
+            {QStringLiteral("errorCode"), !definition.has_value()
+                 ? QStringLiteral("invalid-theme-candidate")
+                 : QStringLiteral("invalid-theme-capabilities")},
+            {QStringLiteral("errorMessage"), !definition.has_value()
+                 ? definitionError : capabilityError},
+            {QStringLiteral("panelId"), panelId},
+            {QStringLiteral("themeId"), themeId},
+            {QStringLiteral("layer"), normalizedLayer},
+            {QStringLiteral("values"), QVariantMap{}},
+        };
+    }
+    const ArchDock::CapabilityResolution resolution =
+        ArchDock::PanelCapabilityResolver::resolve(
+            *definition,
+            ArchDock::PanelCapabilityResolver::productionHostProfile(
+                definition->host.kind),
+            *profile,
+            ArchDock::PanelCapabilityResolver::productionRenderers(),
+            ArchDock::PanelCapabilityResolver::productionPlatform());
+    if (!resolution.available)
+    {
+        return {
+            {QStringLiteral("success"), false},
+            {QStringLiteral("status"), QStringLiteral("capability-unavailable")},
+            {QStringLiteral("errorCode"),
+             ArchDock::capabilityReasonCodeName(resolution.reason)},
+            {QStringLiteral("panelId"), panelId},
+            {QStringLiteral("themeId"), themeId},
+            {QStringLiteral("layer"), normalizedLayer},
+            {QStringLiteral("values"), QVariantMap{}},
+            {QStringLiteral("capabilityResolution"), resolution.toVariantMap()},
+        };
+    }
+    return {
+        {QStringLiteral("success"), true},
+        {QStringLiteral("status"), QStringLiteral("resolved")},
+        {QStringLiteral("errorCode"), QString{}},
+        {QStringLiteral("panelId"), panelId},
+        {QStringLiteral("themeId"), themeId},
+        {QStringLiteral("recommendedIconStyleId"),
+         theme.value(QStringLiteral("iconStyleRef"))
+             .toMap().value(QStringLiteral("id"))},
+        {QStringLiteral("layer"), normalizedLayer},
+        {QStringLiteral("values"), normalizedChanges},
+        {QStringLiteral("capabilityResolution"), resolution.toVariantMap()},
     };
 }
 

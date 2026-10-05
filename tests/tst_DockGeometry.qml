@@ -689,6 +689,396 @@ TestCase {
         }
     }
 
+    // ---- Tracks, spacing and overcrowded curves ------------------------
+
+    // The Blue Ring platform as shipped: artwork 1200 x 600, track radius
+    // 446 x 163. A panel draws it at radius 300 with icon 52 and padding 18.
+    function platformRingTrack() {
+        return ringTrack({
+            radiusX: 446, radiusY: 163,
+            depth: { farScale: 0.62, nearScale: 1.0, occlusionDepth: 0.62 },
+            tilt: { minimumDegrees: -10, maximumDegrees: 10, defaultDegrees: 0 }
+        })
+    }
+
+    function entryCentre(entry) {
+        return { x: entry.entryBounds.x + entry.entryBounds.width / 2,
+                 y: entry.entryBounds.y + entry.entryBounds.height / 2 }
+    }
+
+    // Criterion: an entry stands on the track the platform is drawn for. The
+    // scene box offset is applied once, whatever padding the panel has.
+    function test_trackEntriesStandOnThePlatformTrack_data() {
+        return [
+            { tag: "ring-300-padding-18", padding: 18, radius: 300, count: 6 },
+            { tag: "no-padding", padding: 0, radius: 300, count: 6 },
+            { tag: "enlarged-padding-40", padding: 40, radius: 520, count: 9 }
+        ]
+    }
+
+    function test_trackEntriesStandOnThePlatformTrack(data) {
+        const track = platformRingTrack()
+        const metrics = LayoutEngine.trackMetrics(
+            track, 1200, 600, data.count, 52, data.padding, data.radius)
+        const scale = data.radius / 446
+        fuzzy(metrics.center.x - metrics.platform.x, 600 * scale,
+              "the track centre sits on the artwork's own centre in x")
+        fuzzy(metrics.center.y - metrics.platform.y, 300 * scale,
+              "the track centre sits on the artwork's own centre in y")
+        for (let index = 0; index < data.count; ++index) {
+            const entry = LayoutEngine.trackEntryGeometry(
+                track, index, data.count, metrics, 0, "upright")
+            const centre = entryCentre(entry)
+            const radians = (index / data.count * 360 - 90) * Math.PI / 180
+            fuzzy(centre.x, metrics.center.x + Math.cos(radians) * metrics.radiusX,
+                  "entry " + index + " x is on the platform track")
+            fuzzy(centre.y, metrics.center.y + Math.sin(radians) * metrics.radiusY,
+                  "entry " + index + " y is on the platform track")
+            fuzzy(entry.x + metrics.iconSize / 2, centre.x,
+                  "entry " + index + " logical and drawn centres agree in x")
+            fuzzy(entry.y + metrics.iconSize / 2, centre.y,
+                  "entry " + index + " logical and drawn centres agree in y")
+        }
+    }
+
+    function curveStep(layout, count, spacing, index) {
+        const value = LayoutEngine.metrics(
+            layout, count, 52, spacing, 1, 300, 2, 18, false, 0, 6)
+        const first = LayoutEngine.entryGeometry(
+            layout, index, count, value, 0, 6, "upright", "live")
+        const second = LayoutEngine.entryGeometry(
+            layout, index + 1, count, value, 0, 6, "upright", "live")
+        return second.pathProgress - first.pathProgress
+    }
+
+    // Criterion: the canonical spacing control regulates separation along a
+    // curved track. At its default or above the entries keep the even spread
+    // every curved layout has always had; below it they close up about the
+    // middle of the track, down to touching at zero.
+    function test_spacingRegulatesSeparationAlongCurvedTracks_data() {
+        return [
+            { tag: "ring", layout: "ring", closed: true,
+              length: 2 * Math.PI * 300 },
+            { tag: "circular", layout: "circular", closed: true,
+              length: 2 * Math.PI * 300 },
+            { tag: "octagon", layout: "octagon", closed: true,
+              length: 8 * 2 * 300 * Math.sin(Math.PI / 8) },
+            { tag: "semicircle", layout: "semicircle", closed: false,
+              length: Math.PI * 300 },
+            { tag: "arc", layout: "arc", closed: false,
+              length: 130 * Math.PI / 180 * 300 },
+            { tag: "fan", layout: "fan", closed: false,
+              length: 116 * Math.PI / 180 * 300 }
+        ]
+    }
+
+    function test_spacingRegulatesSeparationAlongCurvedTracks(data) {
+        const count = 6
+        const spans = data.closed ? count : count - 1
+        const evenPitch = data.length / spans
+        for (const spacing of [8, 10, 48]) {
+            fuzzy(curveStep(data.layout, count, spacing, 2), 1 / spans,
+                  "spacing " + spacing + " keeps the even spread")
+        }
+        let previous = -1
+        for (const spacing of [0, 2, 4, 6, 8]) {
+            const pitch = curveStep(data.layout, count, spacing, 2) * data.length
+            verify(pitch > previous, "separation grows at spacing " + spacing)
+            previous = pitch
+            fuzzy(pitch, 52 + (evenPitch - 52) * spacing / 8,
+                  "spacing " + spacing + " scales the even gap")
+        }
+        fuzzy(curveStep(data.layout, count, 0, 2) * data.length, 52,
+              "zero spacing leaves the icons touching, never overlapping")
+
+        // The group closes up about the middle of the track, in order.
+        const tight = LayoutEngine.metrics(
+            data.layout, count, 52, 2, 1, 300, 2, 18, false, 0, 6)
+        const evenLast = data.closed ? (count - 1) / count : 1
+        const first = LayoutEngine.entryGeometry(
+            data.layout, 0, count, tight, 0, 6, "upright", "live")
+        const last = LayoutEngine.entryGeometry(
+            data.layout, count - 1, count, tight, 0, 6, "upright", "live")
+        verify(first.pathProgress > 0 && last.pathProgress < evenLast,
+               "both ends move towards the middle of the track")
+        fuzzy((first.pathProgress - 0.5) / (0 - 0.5),
+              (last.pathProgress - 0.5) / (evenLast - 0.5),
+              "both ends contract by the same factor")
+        verify(first.onTrack !== false && last.onTrack !== false,
+               "a track that holds its entries hides none of them")
+    }
+
+    // The same rule on a baked track: the icons close up towards the near
+    // side of the platform, which is where a ring's front is.
+    function test_spacingRegulatesBakedTracks() {
+        const track = platformRingTrack()
+        const count = 6
+        function placed(placement) {
+            const metrics = LayoutEngine.trackMetrics(
+                track, 1200, 600, count, 52, 18, 300, undefined, false,
+                placement)
+            const result = []
+            for (let index = 0; index < count; ++index) {
+                result.push(LayoutEngine.trackEntryGeometry(
+                    track, index, count, metrics, 0, "upright"))
+            }
+            return result
+        }
+        const legacy = placed(undefined)
+        const even = placed({ spacing: 10, spacingReference: 8 })
+        const tight = placed({ spacing: 2, spacingReference: 8 })
+        const touching = placed({ spacing: 0, spacingReference: 8 })
+        for (let index = 0; index < count; ++index) {
+            fuzzy(even[index].pathProgress, legacy[index].pathProgress,
+                  "entry " + index + " keeps the even spread at the default")
+            fuzzy(even[index].x, legacy[index].x,
+                  "entry " + index + " keeps its position at the default")
+            verify(tight[index].depth >= 0 && tight[index].depth <= 1,
+                   "depth stays normalized")
+            verify(tight[index].onTrack !== false, "a ring hides no entry")
+        }
+        const length = 2 * Math.PI * 300
+        fuzzy((touching[3].pathProgress - touching[2].pathProgress) * length,
+              52, "zero spacing touches on the platform's own circle")
+        verify(tight[3].pathProgress - tight[2].pathProgress
+               < even[3].pathProgress - even[2].pathProgress,
+               "a smaller spacing brings neighbours together")
+        fuzzy(tight[3].pathProgress, 0.5, "the entry at the front stays there")
+        verify(tight[0].depth > even[0].depth,
+               "the far entry comes towards the front")
+    }
+
+    // Criterion: an open curve that cannot hold its entries side by side
+    // keeps them icon + spacing apart and shows a window of them. A transient
+    // offset moves the window in stable order; nothing leaves the curve.
+    function test_overcrowdedOpenCurvesShowAWindow_data() {
+        return [
+            { tag: "semicircle", layout: "semicircle", sweep: 180 },
+            { tag: "arc", layout: "arc", sweep: 130 },
+            { tag: "fan", layout: "fan", sweep: 116 }
+        ]
+    }
+
+    function test_overcrowdedOpenCurvesShowAWindow(data) {
+        const radius = 150
+        const icon = 52
+        const spacing = 8
+        const count = 14
+        const length = data.sweep * Math.PI / 180 * radius
+        const capacity = Math.floor(length / (icon + spacing)) + 1
+        function value(entries) {
+            return LayoutEngine.metrics(data.layout, entries, icon, spacing, 1,
+                                        radius, 2, 18, false, 0, 6)
+        }
+        function placed(offset) {
+            const geometry = value(count)
+            geometry.browseOffset = offset
+            const result = []
+            for (let index = 0; index < count; ++index) {
+                result.push(LayoutEngine.entryGeometry(
+                    data.layout, index, count, geometry, 0, 6, "upright",
+                    "live"))
+            }
+            return result
+        }
+
+        const window = LayoutEngine.pathWindow(data.layout, count, value(count))
+        compare(window.windowed, true, "fourteen icons do not fit")
+        compare(window.capacity, capacity)
+        compare(window.maximumOffset, count - capacity)
+
+        for (const offset of [0, 3, count - capacity]) {
+            const entries = placed(offset)
+            let visible = 0
+            for (let index = 0; index < count; ++index) {
+                const inside = index >= offset && index < offset + capacity
+                compare(entries[index].onTrack, inside,
+                        "entry " + index + " at offset " + offset)
+                verify(entries[index].pathProgress >= 0
+                       && entries[index].pathProgress <= 1,
+                       "entry " + index + " never leaves the curve")
+                if (inside)
+                    ++visible
+            }
+            compare(visible, capacity)
+            for (let index = offset + 1; index < offset + capacity; ++index) {
+                fuzzy((entries[index].pathProgress
+                       - entries[index - 1].pathProgress) * length,
+                      icon + spacing, "neighbours keep icon + spacing")
+            }
+            fuzzy(entries[offset].pathProgress
+                  + entries[offset + capacity - 1].pathProgress, 1,
+                  "the window is centred on the curve")
+        }
+
+        // The order is stable: one step moves every entry one slot.
+        const before = placed(2)
+        const after = placed(3)
+        for (let index = 3; index < 2 + capacity; ++index) {
+            fuzzy(after[index].pathProgress, before[index - 1].pathProgress,
+                  "entry " + index + " takes its predecessor's slot")
+        }
+
+        // A curve that holds its entries is unchanged: they span all of it.
+        const few = value(5)
+        compare(LayoutEngine.pathWindow(data.layout, 5, few).windowed, false)
+        compare(LayoutEngine.entryGeometry(
+                    data.layout, 0, 5, few, 0, 6, "upright", "live")
+                    .pathProgress, 0)
+        compare(LayoutEngine.entryGeometry(
+                    data.layout, 4, 5, few, 0, 6, "upright", "live")
+                    .pathProgress, 1)
+
+        // A closed ring is never windowed; the wheel turns it instead.
+        compare(LayoutEngine.pathWindow(
+                    "ring", 40, LayoutEngine.metrics(
+                        "ring", 40, icon, spacing, 1, radius, 2, 18, false,
+                        0, 6)).windowed, false)
+    }
+
+    // Criterion: compact Fan and Arc folder contents sit on an exact half
+    // circle and larger folders move along it. The reference folder holds 43
+    // children; a named cell is 108 wide.
+    function test_folderContentsFollowAnExactHalfCircle_data() {
+        const rows = []
+        for (const layout of ["arc", "fan"]) {
+            rows.push({ tag: layout + "/names", layout: layout,
+                        labelWidth: 108, labelHeight: 36.65625, capacity: 4 })
+            rows.push({ tag: layout + "/icons", layout: layout,
+                        labelWidth: 0, labelHeight: 0, capacity: 9 })
+        }
+        return rows
+    }
+
+    function folderPath(layout, count, labelWidth, labelHeight, height) {
+        return LayoutEngine.expansionGeometry(layout, count, 48, 6, 140, 7, {
+            maximumWidth: 620, maximumHeight: height === undefined ? 400 : height,
+            labelWidth: labelWidth, labelHeight: labelHeight, compactPath: true
+        })
+    }
+
+    function test_folderContentsFollowAnExactHalfCircle(data) {
+        const count = 43
+        const value = folderPath(data.layout, count, data.labelWidth,
+                                 data.labelHeight)
+        verify(value.followsPath)
+        fuzzy(value.pathRadiusX, 140, "the nominal radius is kept")
+        fuzzy(value.pathRadiusY, 140, "a circle, not an ellipse, when it fits")
+        const path = LayoutEngine.expansionPath(value, value.height)
+        compare(path.windowed, true)
+        compare(path.capacity, data.capacity)
+        compare(path.maximumOffset, count - data.capacity)
+        fuzzy(path.step * (path.capacity - 1), Math.PI,
+              "the entries on the path span exactly 180 degrees")
+
+        const centre = { x: value.cellWidth / 2,
+                         y: path.radiusY + value.cellHeight / 2 }
+        for (const offset of [0, 1, 7.5, count - data.capacity]) {
+            const whole = Math.abs(offset - Math.round(offset)) < 0.0001
+            let onPath = 0
+            let previousAngle = -Infinity
+            for (let index = 0; index < count; ++index) {
+                const point = LayoutEngine.expansionPathPoint(
+                    value, path, index, offset)
+                if (point.visibility <= 0)
+                    continue
+                const x = point.x + value.cellWidth / 2 - centre.x
+                const y = point.y + value.cellHeight / 2 - centre.y
+                fuzzy(Math.hypot(x, y), 140,
+                      "entry " + index + " is on the circle at offset " + offset)
+                if (!point.onPath)
+                    continue
+                ++onPath
+                verify(x >= -0.0001, "entry " + index + " is on the half circle")
+                verify(point.x >= -0.0001
+                       && point.x + value.cellWidth <= value.width + 0.0001,
+                       "entry " + index + " fits the popup width")
+                verify(point.y >= -0.0001
+                       && point.y + value.cellHeight <= value.height + 0.0001,
+                       "entry " + index + " fits the popup height")
+                const angle = Math.atan2(y, x)
+                verify(angle > previousAngle,
+                       "entry " + index + " follows its predecessor on the path")
+                previousAngle = angle
+            }
+            compare(onPath, whole ? data.capacity : data.capacity - 1,
+                    "entries on the path at offset " + offset)
+        }
+
+        // At rest the first and last entries on the path stand on the two
+        // ends of the diameter: a half circle, with no straight run.
+        const top = LayoutEngine.expansionPathPoint(value, path, 5, 5)
+        const bottom = LayoutEngine.expansionPathPoint(
+            value, path, 5 + data.capacity - 1, 5)
+        fuzzy(top.x, 0, "the first entry is on the diameter")
+        fuzzy(top.y, 0, "the first entry is at the top end")
+        fuzzy(bottom.x, 0, "the last entry is on the diameter")
+        fuzzy(bottom.y, 2 * path.radiusY, "the last entry is at the bottom end")
+        // Stable order: one step moves every entry one slot along the curve.
+        for (let index = 6; index < 5 + data.capacity; ++index) {
+            const moved = LayoutEngine.expansionPathPoint(value, path, index, 6)
+            const former = LayoutEngine.expansionPathPoint(
+                value, path, index - 1, 5)
+            fuzzy(moved.x, former.x, "entry " + index + " takes the next slot x")
+            fuzzy(moved.y, former.y, "entry " + index + " takes the next slot y")
+        }
+        // An entry beyond either end is not on the path and cannot be hit.
+        compare(LayoutEngine.expansionPathPoint(value, path, 4, 5).onPath, false)
+        compare(LayoutEngine.expansionPathPoint(
+                    value, path, 5 + data.capacity, 5).onPath, false)
+    }
+
+    // A folder that fits shrinks its circle instead of leaving gaps, and a
+    // popup with too little room becomes a half ellipse, never a straight run.
+    function test_folderHalfCircleFitsSmallFoldersAndShortPopups() {
+        const single = folderPath("arc", 1, 108, 36.65625)
+        compare(single.width, single.cellWidth)
+        compare(single.height, Math.ceil(single.cellHeight))
+        const point = LayoutEngine.expansionPathPoint(
+            single, LayoutEngine.expansionPath(single, single.height), 0, 0)
+        fuzzy(point.x, 0, "a single child needs no curve")
+        fuzzy(point.y, 0, "a single child needs no curve")
+
+        for (const count of [2, 3, 4]) {
+            const value = folderPath("arc", count, 108, 36.65625)
+            const path = LayoutEngine.expansionPath(value, value.height)
+            compare(path.windowed, false, count + " named children fit")
+            verify(value.pathRadiusX <= 140 && value.pathRadiusX >= 48 * 1.2)
+            const first = LayoutEngine.expansionPathPoint(value, path, 0, 0)
+            const last = LayoutEngine.expansionPathPoint(
+                value, path, count - 1, 0)
+            fuzzy(first.x, 0, "the first child is on the diameter")
+            fuzzy(first.y, 0, "the first child is at the top end")
+            fuzzy(last.x, 0, "the last child is on the diameter")
+            fuzzy(last.y, 2 * path.radiusY, "the last child is at the bottom end")
+            for (let index = 0; index < count; ++index) {
+                const child = LayoutEngine.expansionPathPoint(
+                    value, path, index, 0)
+                compare(child.onPath, true)
+                verify(child.x >= -0.0001
+                       && child.x + value.cellWidth <= value.width + 0.0001)
+            }
+        }
+
+        // Only 200 pixels of height: the vertical radius gives way.
+        const value = folderPath("fan", 43, 108, 36.65625)
+        const squeezed = LayoutEngine.expansionPath(value, 200)
+        fuzzy(squeezed.radiusY, (200 - value.cellHeight) / 2,
+              "the vertical radius follows the room")
+        fuzzy(squeezed.radiusX, 140, "the horizontal radius is kept")
+        verify(squeezed.capacity >= 2)
+        fuzzy(squeezed.step * (squeezed.capacity - 1), Math.PI,
+              "a half ellipse still spans exactly 180 degrees")
+        for (let index = 0; index < squeezed.capacity; ++index) {
+            const child = LayoutEngine.expansionPathPoint(
+                value, squeezed, index, 0)
+            compare(child.onPath, true)
+            verify(child.y >= -0.0001
+                   && child.y + value.cellHeight <= 200 + 0.0001,
+                   "child " + index + " stays inside the short popup")
+        }
+    }
+
     function test_compatibilityUtilitiesRemainAvailable() {
         const value = geometry("horizontal", 3)
         compare(LayoutEngine.nearestIndex(

@@ -290,6 +290,82 @@ TestCase {
                 "procedural2d");
     }
 
+    // A theme card is drawn in a fixed context: the theme's own renderer and
+    // look, at card scale, without the selected panel's angle, rotation, tilt,
+    // collapse or radius. The panel a ring platform was last drawn at must not
+    // decide how an unrelated theme's card looks.
+    function test_themeCardIsDrawnInAFixedContext() {
+        const source = snapshot("free-8", 13);
+        Object.assign(source.panelValues, {
+            layout: "ring", layoutRadius: 300, layoutAngle: 30, layoutScale: 1.5,
+            panelRotationMode: "clockwise", presentationMode: "collapsed",
+            collapseMechanism: "collapse-radial", bakedTilt: 9,
+            scene3DCameraPitch: -35, scene3DCameraYaw: 40,
+            scene3DThickness: 2, scene3DIconElevation: 1,
+            rendererTier: "baked2.5d", iconSize: 52, spacing: 10
+        });
+        const session = EditorModel.load(source);
+        const resolved = {
+            available: true,
+            renderer: { requestedTier: "skinned2d", effectiveTier: "skinned2d",
+                        fallbackApplied: false, reasonCode: "available" }
+        };
+
+        // A horizontal skin: its own tier, none of the ring's state.
+        const energy = EditorModel.rendererThemeCandidate(session, {
+            id: "energy-frame-cyan",
+            panelStyle: { rendererTier: "skinned2d", color: "#44ddea" },
+            layoutStyle: { layout: "horizontal", layoutScale: 1.0 },
+            capabilityResolution: resolved
+        });
+        compare(energy.rendererTier, "skinned2d");
+        compare(energy.effectiveRendererTier, "skinned2d");
+        compare(energy.layout, "horizontal");
+        compare(energy.layoutAngle, 0);
+        compare(energy.layoutScale, 1);
+        compare(energy.panelRotationMode, "none");
+        compare(energy.presentationMode, "open");
+        compare(energy.collapseMechanism, "open");
+        for (const key of ["bakedTilt", "scene3DCameraPitch", "scene3DCameraYaw",
+                           "scene3DThickness", "scene3DIconElevation"])
+            compare(energy[key], undefined, key + " is the theme's own default");
+
+        // A theme that names no tier in its style takes the tier it resolved
+        // with, not the selected panel's, and a ring is drawn at card scale.
+        const ring = EditorModel.rendererThemeCandidate(session, {
+            id: "holographic-ring",
+            panelStyle: { appearance: "futuristic" },
+            layoutStyle: { layout: "ring", layoutScale: 1.0 },
+            capabilityResolution: {
+                available: true,
+                renderer: { requestedTier: "procedural2d",
+                            effectiveTier: "procedural2d",
+                            fallbackApplied: false, reasonCode: "available" }
+            }
+        });
+        compare(ring.rendererTier, "procedural2d");
+        compare(ring.effectiveRendererTier, "procedural2d");
+        compare(ring.layoutRadius, 110, "the selected panel's radius is not inherited");
+
+        // A platform's own radius is drawn at card scale too; a smaller one
+        // is kept.
+        const platform = EditorModel.rendererThemeCandidate(session, {
+            id: "ring-platform-blue",
+            panelStyle: { rendererTier: "baked2.5d" },
+            layoutStyle: { layout: "ring", layoutRadius: 300 }
+        });
+        compare(platform.layoutRadius, 110);
+        const small = EditorModel.rendererThemeCandidate(session, {
+            id: "small-ring", layoutStyle: { layout: "ring", layoutRadius: 96 }
+        });
+        compare(small.layoutRadius, 96);
+
+        // The panel's own draft and the session are untouched.
+        compare(EditorModel.panelValue(session, "layoutAngle", 0), 30);
+        compare(EditorModel.rendererCandidate(session).layoutRadius, 300);
+        compare(EditorModel.rendererCandidate(session).panelRotationMode, "clockwise");
+    }
+
     function test_unknownClientKeysCannotEnterTheCandidate() {
         const session = EditorModel.load(snapshot("bottom", 1));
         const protectedAttempt = EditorModel.setPanelValue(session, "screenId", "forged");
