@@ -16,6 +16,7 @@ public:
 
     void showSettings();
     void toggleAutoHide();
+    void stopIntentionally(const QString &reason);
 
 private:
     QQmlApplicationEngine &m_engine;

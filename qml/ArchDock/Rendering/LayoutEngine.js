@@ -1191,8 +1191,21 @@ function expansionOffset(layout, index, count, iconSize, spacing, radius, rows) 
     return { x: (index - (safeCount - 1) / 2) * slot, y: 0 };
 }
 
+// The side of the clicked folder a popup opens on. Its contents are laid out
+// in that side's frame: "out" leads away from the icon and the dock, "across"
+// runs beside them. Without a side a popup keeps its original frame and opens
+// to the right.
+function expansionSide(side) {
+    return ["left", "right", "top", "bottom"].includes(side) ? side : "right";
+}
+
+function expansionVertical(side) {
+    return side === "top" || side === "bottom";
+}
+
 // Folder expansion shares the canonical positions and their measured bounds.
 // Large pages may scroll; they never shrink icons into unreadable hit targets.
+// `anchor` is the point of the contents the clicked folder stands against.
 function expansionGeometry(layout, count, iconSize, spacing, radius, rows, options) {
     const requested = String(layout || "fan");
     const resolved = ["fan", "grid", "stack", "arc", "ring"].includes(requested)
@@ -1201,8 +1214,14 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
     const size = clamp(finite(iconSize, 48), 16, 128);
     const gap = clamp(finite(spacing, 8), 0, 32);
     const presentation = options || {};
+    const oriented = ["left", "right", "top", "bottom"].includes(presentation.side);
+    const side = expansionSide(presentation.side);
+    const vertical = expansionVertical(side);
+    // How far the folder's outward direction leans along "across".
+    const lean = clamp(finite(presentation.lean, 0), -1, 1);
     const cellWidth = Math.max(size, clamp(finite(presentation.labelWidth, 0), 0, 256));
     const cellHeight = size + clamp(finite(presentation.labelHeight, 0), 0, 128);
+    const cellAcross = vertical ? cellWidth : cellHeight;
     const availableWidth = Math.max(cellWidth, finite(presentation.maximumWidth, 0));
     const bounded = finite(presentation.maximumWidth, 0) > 0;
     const followsPath = bounded && presentation.compactPath === true
@@ -1219,30 +1238,41 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
         if (resolved === "ring" || resolved === "arc" || resolved === "fan")
             distance = Math.max(distance, needed / (resolved === "fan" ? 0.82 : 1));
     }
-    // A compact Fan or Arc is an exact half circle that opens to the right.
-    // It keeps the folder's own radius, shrinks for the few children that
-    // need less, and gives way to the room it has. It is never enlarged to
-    // hold every child and never straightened: expansionPath() says how many
-    // children stand on it at once, and the rest are reached along the curve.
+    // A compact Fan or Arc is an exact half circle that opens away from the
+    // folder. It keeps the folder's own radius, shrinks for the few children
+    // that need less, and gives way to the room it has. It is never enlarged
+    // to hold every child and never straightened: expansionPath() says how
+    // many children stand on it at once, and the rest are reached along the
+    // curve. pathRadiusX runs out from the folder, pathRadiusY across it.
     const pathPitch = extent + gap;
-    const pathClearance = cellHeight + gap;
+    const pathClearance = cellAcross + gap;
+    const heightLimit = finite(presentation.maximumHeight, 0);
+    const outLimit = vertical ? (heightLimit > 0 ? heightLimit - cellHeight : Infinity)
+        : availableWidth - cellWidth;
+    const acrossLimit = vertical ? (availableWidth - cellWidth) / 2
+        : (heightLimit > 0 ? (heightLimit - cellHeight) / 2 : Infinity);
     let pathRadiusX = 0, pathRadiusY = 0;
     if (followsPath && safeCount > 1) {
         const nominal = clamp(finite(radius, 120), size * 1.2, 4096);
         const wanted = Math.min(nominal, Math.max(size * 1.2, pathClearance / 2,
             (safeCount - 1) * pathPitch / Math.PI));
-        const heightLimit = finite(presentation.maximumHeight, 0);
-        pathRadiusX = Math.max(0, Math.min(wanted, availableWidth - cellWidth));
-        pathRadiusY = heightLimit > 0
-            ? Math.max(0, Math.min(wanted, (heightLimit - cellHeight) / 2)) : wanted;
+        pathRadiusX = Math.max(0, Math.min(wanted, outLimit));
+        pathRadiusY = Math.max(0, Math.min(wanted, acrossLimit));
     }
+    const pathWidth = Math.ceil(vertical ? 2 * pathRadiusY + cellWidth : pathRadiusX + cellWidth);
+    const pathHeight = Math.ceil(vertical ? pathRadiusX + cellHeight : 2 * pathRadiusY + cellHeight);
     const pathShape = {
-        count: safeCount, cellHeight: cellHeight, pathPitch: pathPitch,
+        count: safeCount, side: side, cellWidth: cellWidth, cellHeight: cellHeight,
+        width: pathWidth, height: pathHeight, pathPitch: pathPitch,
         pathClearance: pathClearance, pathRadiusX: pathRadiusX,
         pathRadiusY: pathRadiusY
     };
-    const restingPath = followsPath
-        ? expansionPath(pathShape, 2 * pathRadiusY + cellHeight) : null;
+    const restingPath = followsPath ? expansionPath(pathShape, pathHeight) : null;
+    // A frame direction in screen axes. Offsets are scaled by the cell, as
+    // the canonical positions always were.
+    const frame = vertical
+        ? { out: { x: 0, y: side === "top" ? -1 : 1 }, across: { x: 1, y: 0 } }
+        : { out: { x: side === "left" ? -1 : 1, y: 0 }, across: { x: 0, y: 1 } };
     const points = [];
     let minimumX = Infinity, minimumY = Infinity;
     let maximumX = -Infinity, maximumY = -Infinity;
@@ -1264,6 +1294,18 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
         } else if (bounded && resolved === "grid") {
             point = { x: (index % columns) * (cellWidth + gap),
                       y: Math.floor(index / columns) * (cellHeight + gap) };
+        } else if (oriented && resolved === "ring") {
+            // A ring begins beside the folder and turns once around.
+            const turn = Math.PI + index * 2 * Math.PI / Math.max(1, safeCount);
+            const out = distance * Math.cos(turn), across = distance * Math.sin(turn);
+            point = { x: (frame.out.x * out + frame.across.x * across) * cellWidth / size,
+                      y: (frame.out.y * out + frame.across.y * across) * cellHeight / size };
+        } else if (oriented && resolved === "stack") {
+            // A stack rises from the folder, drifting the way the folder leans.
+            const offset = expansionOffset(resolved, index, safeCount, size, gap, distance, rows);
+            const across = lean > 0.38 ? -offset.y : offset.y;
+            point = { x: (frame.out.x * offset.x + frame.across.x * across) * cellWidth / size,
+                      y: (frame.out.y * offset.x + frame.across.y * across) * cellHeight / size };
         } else {
             point = expansionOffset(resolved, index, safeCount, size, gap, distance, rows);
             point = { x: point.x * cellWidth / size, y: point.y * cellHeight / size };
@@ -1277,12 +1319,29 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
     if (safeCount === 0) {
         minimumX = minimumY = maximumX = maximumY = 0;
     }
+    const width = followsPath ? pathWidth : Math.ceil(maximumX - minimumX + cellWidth);
+    const height = followsPath ? pathHeight : Math.ceil(maximumY - minimumY + cellHeight);
+    const entries = points.map(function(point, index) {
+        return followsPath ? { index: index, x: point.x, y: point.y }
+            : { index: index, x: point.x - minimumX, y: point.y - minimumY };
+    });
+    // The folder stands against the edge nearest it. Across that edge it is
+    // centred, or toward the side its outward direction leans, so the
+    // contents lean away from the dock with it; a stack starts at the folder.
+    const acrossExtent = vertical ? width : height;
+    let anchorAcross = acrossExtent / 2 - lean * Math.max(0, acrossExtent / 2 - cellAcross / 2);
+    if (followsPath)
+        anchorAcross = pathRadiusY + cellAcross / 2 - lean * pathRadiusY;
+    else if (resolved === "stack" && entries.length > 0)
+        anchorAcross = (vertical ? entries[0].x : entries[0].y) + cellAcross / 2;
+    const anchorOut = side === "left" ? width : side === "top" ? height : 0;
     return {
         layout: resolved,
         requestedLayout: requested,
         fallbackApplied: resolved !== requested,
         fallbackReason: resolved !== requested ? "unsupported-folder-layout" : "",
         count: safeCount,
+        side: side,
         iconSize: size,
         cellWidth: cellWidth,
         cellHeight: cellHeight,
@@ -1291,16 +1350,12 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
         pathClearance: pathClearance,
         pathRadiusX: pathRadiusX,
         pathRadiusY: pathRadiusY,
-        width: followsPath ? Math.ceil(pathRadiusX + cellWidth)
-                           : Math.ceil(maximumX - minimumX + cellWidth),
-        height: followsPath ? Math.ceil(2 * pathRadiusY + cellHeight)
-                            : Math.ceil(maximumY - minimumY + cellHeight),
+        width: width,
+        height: height,
+        anchor: vertical ? { x: anchorAcross, y: anchorOut } : { x: anchorOut, y: anchorAcross },
         origin: followsPath ? { x: size / 2, y: size / 2 }
                             : { x: size / 2 - minimumX, y: size / 2 - minimumY },
-        entries: points.map(function(point, index) {
-            return followsPath ? { index: index, x: point.x, y: point.y }
-                : { index: index, x: point.x - minimumX, y: point.y - minimumY };
-        })
+        entries: entries
     };
 }
 
@@ -1319,18 +1374,22 @@ function expansionPathLength(radiusX, radiusY, from, to) {
     return total * width / 3;
 }
 
-// The compact folder path inside the height it is really given. The vertical
-// radius gives way first, so a short popup shows a half ellipse. Children are
-// spread over exactly 180 degrees, as many as keep one pitch between
-// neighbours along the path and one cell between its two ends.
+// The compact folder path inside the height it is really given. The radius
+// that runs up and down the screen gives way first, so a short popup shows a
+// half ellipse. Children are spread over exactly 180 degrees, as many as keep
+// one pitch between neighbours along the path and one cell between its ends.
 function expansionPath(geometry, viewportHeight) {
     const value = geometry || {};
     const count = Math.max(0, Math.floor(finite(value.count, 0)));
     const cellHeight = Math.max(0, finite(value.cellHeight, 0));
     const pitch = Math.max(1, finite(value.pathPitch, 1));
-    const radiusX = Math.max(0, finite(value.pathRadiusX, 0));
-    const room = (finite(viewportHeight, finite(value.height, 0)) - cellHeight) / 2;
-    const radiusY = Math.max(0, Math.min(finite(value.pathRadiusY, 0), room));
+    const height = finite(viewportHeight, finite(value.height, 0));
+    let radiusX = Math.max(0, finite(value.pathRadiusX, 0));
+    let radiusY = Math.max(0, finite(value.pathRadiusY, 0));
+    if (expansionVertical(value.side))
+        radiusX = Math.max(0, Math.min(radiusX, height - cellHeight));
+    else
+        radiusY = Math.max(0, Math.min(radiusY, (height - cellHeight) / 2));
     let capacity = Math.min(1, count);
     if (2 * radiusY >= finite(value.pathClearance, 0) - 1e-9) {
         for (let slots = 2; slots <= count; ++slots) {
@@ -1351,7 +1410,8 @@ function expansionPath(geometry, viewportHeight) {
         windowed: count > capacity,
         maximumOffset: Math.max(0, count - capacity),
         step: capacity > 1 ? Math.PI / (capacity - 1) : 0,
-        startAngle: -Math.PI / 2
+        startAngle: -Math.PI / 2,
+        viewHeight: height
     };
 }
 
@@ -1365,9 +1425,25 @@ function expansionPathPoint(geometry, path, index, offset) {
     const beyond = Math.max(0, -slot, slot - last);
     const angle = finite(shape.startAngle, -Math.PI / 2)
         + clamp(slot, -1, last + 1) * finite(shape.step, 0);
+    // Out from the near edge and across it, then into the popup's own axes.
+    const out = finite(shape.radiusX, 0) * Math.cos(angle);
+    const across = finite(shape.radiusY, 0) * (1 + Math.sin(angle));
+    const value = geometry || {};
+    const side = expansionSide(value.side);
+    const cellWidth = finite(value.cellWidth, 0), cellHeight = finite(value.cellHeight, 0);
+    let x = out, y = across;
+    if (side === "left") {
+        x = Math.max(0, finite(value.width, 0) - cellWidth) - out;
+    } else if (side === "bottom") {
+        x = across; y = out;
+    } else if (side === "top") {
+        x = across;
+        y = Math.max(0, Math.min(finite(shape.viewHeight, Infinity), finite(value.height, 0))
+                     - cellHeight) - out;
+    }
     return {
-        x: finite(shape.radiusX, 0) * Math.cos(angle),
-        y: finite(shape.radiusY, 0) * (1 + Math.sin(angle)),
+        x: x,
+        y: y,
         onPath: beyond < 1e-6,
         visibility: clamp(1 - beyond, 0, 1)
     };

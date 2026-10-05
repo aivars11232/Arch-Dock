@@ -780,18 +780,21 @@ PlasmoidItem {
             }
             function hideWindowPreview() { windowPreview.closePreview() }
 
+            // The clicked folder's drawn icon. Its popup opens against this
+            // square, on the side that faces out of the dock.
             Item {
-                id: folderAnchor
+                id: folderIcon
                 parent: panelScene
+                readonly property real size: panelScene.layoutGeometry.iconSize
                 x: representation.folderAnchorData ? representation.folderAnchorData.x
-                    - representation.folderAnchorData.outwardNormal.x * panelScene.layoutGeometry.iconSize / 2 : 0
+                    - representation.folderAnchorData.outwardNormal.x * size / 2 - size / 2 : 0
                 y: representation.folderAnchorData ? representation.folderAnchorData.y
-                    - representation.folderAnchorData.outwardNormal.y * panelScene.layoutGeometry.iconSize / 2 : 0
-                width: 1; height: 1
+                    - representation.folderAnchorData.outwardNormal.y * size / 2 - size / 2 : 0
+                width: size; height: size
             }
             FolderExpansionHost {
                 id: folderExpansion
-                visualParent: folderAnchor
+                folderItem: folderIcon
                 folderTitle: String(representation.folderEntry.displayName || "")
                 folderLayout: String(root.configuration.folderLayout || "fan")
                 folderSpeed: Number(root.configuration.folderSpeed || 260)

@@ -725,7 +725,16 @@ Item {
         const mesh = surfaceLoader.true3DReady ? surfaceLoader.true3DItem : null
         const rect = mesh && mesh.projectedEntryGeometry ? mesh.projectedEntryGeometry[index] : null
         if (!rect) return base
+        // A tilted or turned platform faces out of the dock where it is
+        // drawn: away from its projected centre, not from the flat layout's.
+        let outwardNormal = base.outwardNormal
+        const centre = mesh.projectedCentre
+        const dx = rect.x + rect.width / 2 - centre.x, dy = rect.y + rect.height / 2 - centre.y
+        if (Math.hypot(dx, dy) > 1)
+            outwardNormal = { x: dx / Math.hypot(dx, dy), y: dy / Math.hypot(dx, dy),
+                              angle: Math.atan2(dy, dx) * 180 / Math.PI }
         return Object.assign({}, base, {
+            outwardNormal: outwardNormal,
             x: rect.x, y: rect.y,
             position: {x: rect.x + (rect.width-layoutGeometry.iconSize)/2,
                 y: rect.y + (rect.height-layoutGeometry.iconSize)/2},

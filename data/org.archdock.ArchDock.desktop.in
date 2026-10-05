@@ -8,3 +8,8 @@ Terminal=false
 Categories=Utility;System;
 StartupNotify=false
 StartupWMClass=arch-dock
+Actions=Quit;
+
+[Desktop Action Quit]
+Name=Quit Arch Dock
+Exec=@ARCHDOCK_DESKTOP_EXEC@ --quit

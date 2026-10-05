@@ -79,6 +79,9 @@ Item {
         || view.renderStats.frameTime > 0
     property bool completedFrameObserved: false
     property var projectedEntryGeometry: []
+    // Where the icons' ring is centred on screen, at the icons' height: the
+    // dock a folder opens away from.
+    property point projectedCentre: Qt.point(width / 2, height / 2)
     readonly property real platformScale: Math.min(width, height) * 0.40
     readonly property real platformTop: Math.max(0,
         ...((resources || {}).mesh?.positions || []).map(p => Number(p[2])))
@@ -350,6 +353,14 @@ Item {
                 centerX: center.x, centerY: center.y, depth: center.z})
         }
         if (JSON.stringify(result) !== JSON.stringify(projectedEntryGeometry)) projectedEntryGeometry = result
+        const first = worldEntries.count > 0 ? worldEntries.objectAt(0) : null
+        if (first && first.glyphModel) {
+            const height = sceneContent.mapPositionFromScene(first.glyphModel.scenePosition).z
+            const centre = view.mapFrom3DScene(sceneContent.mapPositionToScene(Qt.vector3d(0, 0, height)))
+            if (Number.isFinite(centre.x) && Number.isFinite(centre.y)
+                    && (centre.x !== projectedCentre.x || centre.y !== projectedCentre.y))
+                projectedCentre = Qt.point(centre.x, centre.y)
+        }
     }
 
     // RenderStats throttles change notifications. A static scene can stop

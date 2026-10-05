@@ -357,7 +357,7 @@ TestCase {
     function test_nativeHostStaysInsideAnchorScreen() {
         const window = createTemporaryObject(anchorComponent, null)
         const host = createTemporaryObject(hostComponent, testCase, {
-            visualParent: findChild(window, "anchor"), reducedMotion: true,
+            folderItem: findChild(window, "anchor"), reducedMotion: true,
             folderLayout: "arc", snapshot: { status: "ready", entries: rows(48) }
         })
         verify(host.openFolder())
@@ -375,11 +375,79 @@ TestCase {
             host.closeFolder()
         }
     }
+    // The popup opens against the clicked icon on the side that faces out of
+    // the dock, with the folder on the contents' anchor; a native panel opens
+    // away from its screen edge.
+    function test_hostOpensAgainstTheFolderOnItsOutwardSide_data() {
+        const rows = []
+        for (const layout of ["fan", "grid", "stack", "arc", "ring"]) {
+            rows.push({ tag: layout + "/up", layout: layout, edge: "free", normal: { x: 0, y: -1 }, side: "top" })
+            rows.push({ tag: layout + "/down", layout: layout, edge: "free", normal: { x: 0, y: 1 }, side: "bottom" })
+            rows.push({ tag: layout + "/left", layout: layout, edge: "free", normal: { x: -1, y: 0 }, side: "left" })
+            rows.push({ tag: layout + "/right", layout: layout, edge: "free", normal: { x: 1, y: 0 }, side: "right" })
+            rows.push({ tag: layout + "/diagonal", layout: layout, edge: "free",
+                        normal: { x: 0.6, y: -0.8 }, side: "top" })
+            rows.push({ tag: layout + "/native-bottom", layout: layout, edge: "bottom",
+                        normal: { x: 0, y: -1 }, side: "top" })
+        }
+        return rows
+    }
+    function test_hostOpensAgainstTheFolderOnItsOutwardSide(data) {
+        const window = createTemporaryObject(anchorComponent, null)
+        const icon = findChild(window, "anchor")
+        const screen = window.screen
+        window.x = screen.virtualX
+        window.y = screen.virtualY
+        icon.x = screen.width / 2 - icon.width / 2
+        icon.y = screen.height / 2 - icon.height / 2
+        const host = createTemporaryObject(hostComponent, testCase, {
+            folderItem: icon, reducedMotion: true, folderLayout: data.layout,
+            panelEdge: data.edge, outwardNormal: data.normal,
+            snapshot: { status: "ready", entries: rows(3) }
+        })
+        verify(host.openFolder())
+        compare(host.expansionSide, data.side)
+        const content = host.mainItem
+        compare(content.geometry.side, data.side)
+        const corner = icon.mapToGlobal(0, 0)
+        const centre = icon.mapToGlobal(icon.width / 2, icon.height / 2)
+        const gap = host.folderGap
+        // Plasma puts the popup against the attachment's edge and centres it
+        // across the attachment: that centre carries the contents' anchor
+        // onto the folder. The edge is checked on the real popup; the offscreen
+        // platform recentres a popup's first show across it, so the across
+        // placement is proved natively by folder-anchor-smoke.
+        const place = host.placement
+        const size = data.side === "top" || data.side === "bottom" ? content.width : content.height
+        const across = data.side === "top" || data.side === "bottom"
+            ? corner.x + place.x + place.width / 2 : corner.y + place.y + place.height / 2
+        fuzzyCompare(across - size / 2 + content.anchorAcross,
+                     data.side === "top" || data.side === "bottom" ? centre.x : centre.y, 0.01)
+        tryVerify(function() {
+            if (!host.visible) return false
+            if (data.side === "top") return Math.abs(host.y + host.height - (corner.y - gap)) <= 1
+            if (data.side === "bottom") return Math.abs(host.y - (corner.y + icon.height + gap)) <= 1
+            if (data.side === "left") return Math.abs(host.x + host.width - (corner.x - gap)) <= 1
+            return Math.abs(host.x - (corner.x + icon.width + gap)) <= 1
+        }, 3000, data.tag + ": the popup opens against the folder, on its outward side, "
+                 + JSON.stringify([host.x, host.y, host.width, host.height, corner.x, corner.y]))
+        if (data.normal.x === 0.6) {
+            verify(host.expansionLean > 0.5, "a diagonal folder leans its contents")
+            verify(content.anchorAcross < content.width / 2 || data.layout === "stack",
+                   "the contents grow toward the lean")
+        }
+        // The contents unfold from the clicked icon, wherever the popup is.
+        tryVerify(function() {
+            return Math.abs(content.expansionOrigin.x - (centre.x - host.x - content.x)) <= 1
+                && Math.abs(content.expansionOrigin.y - (centre.y - host.y - content.y)) <= 1
+        }, 3000, "the opening animation starts at the folder icon")
+        host.closeFolder()
+    }
     function test_nativeHostLifecycle() {
         const window = createTemporaryObject(anchorComponent, null)
         verify(window !== null)
         const host = createTemporaryObject(hostComponent, testCase, {
-            visualParent: findChild(window, "anchor"), reducedMotion: true,
+            folderItem: findChild(window, "anchor"), reducedMotion: true,
             snapshot: { status: "empty", entries: [] }, folderTitle: "Empty folder"
         })
         verify(host !== null)

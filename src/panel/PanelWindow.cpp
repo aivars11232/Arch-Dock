@@ -12,6 +12,7 @@
 #include "IconOverrideTransaction.h"
 #include "../presets/PresetApplication.h"
 #include "../persistence/ConfigurationBackup.h"
+#include "../IntentionalStop.h"
 
 #include <KIO/OpenUrlJob>
 #include <KFileItem>
@@ -1068,6 +1069,39 @@ QVariantMap PanelWindow::presetEditorProjection(const ArchDock::PanelDefinition 
 bool PanelWindow::profileBusy() const
 {
     return m_profileManager && m_profileManager->active();
+}
+
+QVariantMap PanelWindow::quit()
+{
+    if (profileBusy())
+    {
+        return {{QStringLiteral("success"), false},
+                {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")},
+                {QStringLiteral("message"),
+                 tr("A profile is being applied. Quit Arch Dock again when it has finished.")}};
+    }
+    return stopIntentionally(QStringLiteral("quit"));
+}
+
+QVariantMap PanelWindow::stopIntentionally(const QString &reason)
+{
+    // Record first: from here on an activation request must find the stop.
+    QString error;
+    const bool recorded = ArchDock::IntentionalStop::record(reason, &error);
+    if (!recorded)
+    {
+        qWarning().noquote() << "Arch Dock stops without staying stopped:" << error;
+    }
+    if (m_presetAudition && m_presetAudition->state() != QStringLiteral("IDLE"))
+    {
+        m_presetAudition->cancel();
+    }
+    WindowWatcher::releaseKWinScripts();
+    QMetaObject::invokeMethod(QCoreApplication::instance(), &QCoreApplication::quit,
+                              Qt::QueuedConnection);
+    return {{QStringLiteral("success"), true},
+            {QStringLiteral("persistent"), recorded},
+            {QStringLiteral("message"), error}};
 }
 
 ArchDock::PresetPreviewRecord PanelWindow::profileHostRecord(

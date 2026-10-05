@@ -15,15 +15,23 @@ function(check_install logical_prefix physical_prefix)
   if(NOT EXISTS "${physical_prefix}/${INSTALL_BINDIR}/arch-dock")
     message(FATAL_ERROR "The startup executable was not installed")
   endif()
+  # On-demand activation is marked so a user's Quit can refuse it; the
+  # application entry starts Arch Dock explicitly and offers Quit.
   foreach(pair IN ITEMS
-      "share/dbus-1/services/org.archdock.ArchDock.service|Exec"
-      "share/applications/org.archdock.ArchDock.desktop|Exec"
-      "${INSTALL_LIBDIR}/systemd/user/arch-dock.service|ExecStart")
+      "share/dbus-1/services/org.archdock.ArchDock.service|Exec| --dbus-activated"
+      "share/applications/org.archdock.ArchDock.desktop|Exec|;Exec=\"${executable}\" --quit"
+      "${INSTALL_LIBDIR}/systemd/user/arch-dock.service|ExecStart|")
     string(REPLACE "|" ";" fields "${pair}")
     list(GET fields 0 relative)
     list(GET fields 1 key)
+    list(LENGTH fields field_count)
+    set(suffix "")
+    if(field_count GREATER 2)
+      list(SUBLIST fields 2 -1 suffix_fields)
+      list(JOIN suffix_fields ";" suffix)
+    endif()
     file(STRINGS "${physical_prefix}/${relative}" values REGEX "^${key}=")
-    if(NOT values STREQUAL "${key}=\"${executable}\"")
+    if(NOT values STREQUAL "${key}=\"${executable}\"${suffix}")
       message(FATAL_ERROR "Startup path mismatch in ${relative}: ${values}")
     endif()
     file(STRINGS "${BUILD_DIR}/install_manifest.txt" manifest)

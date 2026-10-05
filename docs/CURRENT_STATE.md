@@ -1,5 +1,24 @@
 # Arch Dock current state
 
+<!-- ADFIX_WIP_BEGIN -->
+## ADFIX correction pack — in progress, stopped by the owner, 2026-10-06
+
+Source only; the owner's PC still runs **arch-dock 0.1.1-9**. Work on
+ADFIX-TASK-001 stopped about a third of the way through the three-task pack.
+Resume from [ADFIX continuation handoff](ADFIX_CONTINUATION_HANDOFF.md).
+
+- Done and verified: intentional Quit (`arch-dock --quit`, D-Bus `quit`,
+  **Quit Arch Dock** menu action, TERM/INT) stays stopped for the login session
+  despite installed applets and the KWin watcher; KILL is a crash and recovers.
+- Mostly done: folder contents open from the clicked folder, away from the
+  dock. Native `folder-anchor-smoke` 29 of 35 (was 0 of 35);
+  `folder-interaction-smoke` fails at the native ring layout. Both causes are
+  diagnosed in the handoff.
+- Not started: the owner's "Along the dock" folder layout, wheel with animation
+  None, opening mechanisms, Tasks 002 and 003, the new icon and logo, the
+  comment pass and the readability pass.
+<!-- ADFIX_WIP_END -->
+
 <!-- AD3D_TASK_002_BEGIN -->
 ## Generic 3D, Panels > 3D page and desktop 3D editing — AD3D-TASK-002, 2026-10-05
 

@@ -18,6 +18,16 @@ executable and atomic D-Bus name guard. Repeating the command keeps the
 existing owner; `arch-dock --settings` opens Panel Studio through that owner.
 The process remains resident when its settings window closes.
 
+To stop Arch Dock, run `arch-dock --quit` or choose **Quit Arch Dock** on the
+application menu entry (right-click it in the launcher). It then stays stopped,
+although installed applets and the KWin window watcher would otherwise start it
+on demand, until it is started explicitly again (`arch-dock`, the menu entry,
+`arch-dock --settings`) or you log in again. Terminate (TERM or INT, as System
+Monitor's **Quit Application** sends) stops it the same way. Kill (KILL) cannot
+run any code: it is treated as a crash, and the next activation request starts
+Arch Dock again. While it is stopped, on-demand activation is refused with
+`org.freedesktop.DBus.Error.Spawn.ChildExited` and exit status 75.
+
 In Panel Studio, select the panel and open **Icon Tiles**. **From icon style**
 uses the selected style's frame or pedestal. **Custom tile** exposes shape,
 fill color, opacity, border color and border width independently of the panel
@@ -84,9 +94,9 @@ systemctl --user start arch-dock.service
 Use the D-Bus route normally. If an owner was already started independently,
 systemd cannot adopt that process as its main process. D-Bus activation and
 the executable guard still prevent a second backend; use systemd control
-when it is the initial launcher. Installed applets may reactivate a needed
-backend after it stops, so stopping a manual unit is not an applet-disable
-mechanism. Installation never starts or enables this unit.
+when it is the initial launcher. Stopping the unit sends TERM, which keeps
+Arch Dock stopped as Quit does; starting the unit starts it again.
+Installation never starts or enables this unit.
 
 ## Configuration recovery and upgrades
 

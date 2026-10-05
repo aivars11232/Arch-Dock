@@ -17,3 +17,8 @@ void PanelManager::toggleAutoHide()
 {
     m_panelWindow->toggleAutoHide();
 }
+
+void PanelManager::stopIntentionally(const QString &reason)
+{
+    m_panelWindow->stopIntentionally(reason);
+}

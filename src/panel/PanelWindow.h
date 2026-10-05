@@ -58,9 +58,15 @@ public:
     [[nodiscard]] qulonglong nativeVisibilityRevision() const;
     [[nodiscard]] qulonglong presentationRequestRevision() const;
     bool setDockConfiguration(const QString &panelId, const QString &key, const QVariant &value);
+    // Leaves the event loop after recording that the user wants Arch Dock to
+    // stay stopped, returning any audition to the saved desktop and releasing
+    // the KWin watcher whose window reports would start it again.
+    QVariantMap stopIntentionally(const QString &reason);
 
 public slots:
     void showSettings();
+    // The supported way to stop Arch Dock: `arch-dock --quit` calls this.
+    QVariantMap quit();
     void showPanelSettings(const QString &panelId);
     QString createNativePanel(const QString &edge, const QString &type);
     QVariantMap createFreePanel();

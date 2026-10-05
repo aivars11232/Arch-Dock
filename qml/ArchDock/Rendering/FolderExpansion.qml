@@ -22,6 +22,11 @@ QQC2.Pane {
     property string selectedChildId: ""
     property bool keyboardSelection: false
     property point lastPointerPosition: Qt.point(-1, -1)
+    // The side of the clicked folder the contents open on, and how far the
+    // folder's outward direction leans along that side. Empty keeps the
+    // original frame, opening to the right.
+    property string expansionSide: ""
+    property real expansionLean: 0
     readonly property var entries: (snapshot.entries || []).slice(0, 48)
     readonly property var geometry: LayoutEngine.expansionGeometry(
         layout, entries.length, 48, 6, 140, Math.ceil(Math.sqrt(entries.length)), {
@@ -29,8 +34,16 @@ QQC2.Pane {
             maximumHeight: Math.max(56, maximumHeight - padding * 2),
             labelWidth: showNames ? 108 : 0,
             labelHeight: showNames ? nameMetrics.height * 2 + 4 : 0,
-            compactPath: true
+            compactPath: true,
+            side: expansionSide,
+            lean: expansionLean
         })
+    readonly property bool expansionVertical: geometry.side === "top" || geometry.side === "bottom"
+    // Where the folder stands along the popup edge nearest it, in this
+    // item's coordinates: the host attaches the popup there.
+    readonly property real anchorAcross: expansionVertical
+        ? padding + viewport.x + Math.max(0, Math.min(geometry.anchor.x, viewport.width))
+        : padding + viewport.y + Math.max(0, Math.min(geometry.anchor.y, viewport.height))
     // A compact Fan or Arc holds as many children as stand on its half circle
     // and moves the rest along it: one wheel notch is one child.
     readonly property real pathScrollStep: 20 * Math.max(1, Qt.styleHints.wheelScrollLines)
@@ -191,7 +204,10 @@ QQC2.Pane {
         Flickable {
             id: viewport
             objectName: "folderViewport"
-            width: parent.width
+            // Contents opening to the left keep against the folder's edge.
+            x: root.geometry.side === "left" ? parent.width - width : 0
+            width: root.geometry.side === "left"
+                ? Math.min(parent.width, root.geometry.width) : parent.width
             height: root.entries.length ? Math.min(root.geometry.height,
                 Math.max(56, root.maximumHeight - 20
                     - [heading, layoutNotice, emptyNotice, currentName, pageNotice]

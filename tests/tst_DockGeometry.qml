@@ -1079,6 +1079,90 @@ TestCase {
         }
     }
 
+    // A folder opens on the side of the clicked icon that faces away from
+    // the dock. `anchor` is where the icon stands: on the edge nearest it.
+    function test_folderContentsOpenAwayFromTheFolder_data() {
+        const rows = []
+        for (const side of ["right", "left", "top", "bottom"])
+            for (const layout of ["fan", "arc", "grid", "stack", "ring"])
+                rows.push({ tag: side + "/" + layout, side: side, layout: layout })
+        return rows
+    }
+
+    function test_folderContentsOpenAwayFromTheFolder(data) {
+        const value = LayoutEngine.expansionGeometry(data.layout, 6, 48, 6, 140, 3, {
+            maximumWidth: 620, maximumHeight: 400, labelWidth: 108,
+            labelHeight: 36.65625, compactPath: true, side: data.side })
+        compare(value.side, data.side)
+        const vertical = data.side === "top" || data.side === "bottom"
+        // Unit vector away from the folder, and the near edge's coordinate.
+        const out = { right: [1, 0], left: [-1, 0], top: [0, -1], bottom: [0, 1] }[data.side]
+        const near = { right: 0, left: value.width, top: value.height, bottom: 0 }[data.side]
+        fuzzy(vertical ? value.anchor.y : value.anchor.x, near, "the folder stands on the near edge")
+        const centres = []
+        if (value.followsPath) {
+            const path = LayoutEngine.expansionPath(value, value.height)
+            for (let index = 0; index < path.capacity; ++index) {
+                const point = LayoutEngine.expansionPathPoint(value, path, index, 0)
+                centres.push({ x: point.x + value.cellWidth / 2, y: point.y + value.cellHeight / 2,
+                               left: point.x, top: point.y })
+            }
+        } else {
+            for (const point of value.entries)
+                centres.push({ x: point.x + value.cellWidth / 2, y: point.y + value.cellHeight / 2,
+                               left: point.x, top: point.y })
+        }
+        const depth = c => (c.x - value.anchor.x) * out[0] + (c.y - value.anchor.y) * out[1]
+        for (const c of centres) {
+            verify(c.left >= -0.001 && c.left + value.cellWidth <= value.width + 0.001
+                   && c.top >= -0.001 && c.top + value.cellHeight <= value.height + 0.001,
+                   "every child fits the popup")
+            verify(depth(c) > 0, data.tag + ": no child stands behind the folder")
+        }
+        if (value.followsPath) {
+            // Both ends of the half circle stand beside the folder, on the
+            // near edge's cells; the middle child is the farthest out.
+            const first = centres[0], last = centres[centres.length - 1]
+            fuzzy(depth(first), depth(last), "the ends share the near edge")
+            const middle = centres[Math.floor((centres.length - 1) / 2)]
+            verify(depth(middle) > depth(first) + 100, data.tag + ": the curve bulges outward")
+        }
+        if (data.layout === "stack" || data.layout === "ring") {
+            // Both start beside the folder.
+            const distance = c => Math.hypot(c.x - value.anchor.x, c.y - value.anchor.y)
+            const nearest = centres.reduce((best, c, index) =>
+                distance(c) < distance(centres[best]) ? index : best, 0)
+            compare(nearest, 0, data.tag + ": the first child is the nearest")
+        }
+        if (data.layout === "stack") {
+            for (let index = 1; index < centres.length; ++index)
+                verify(depth(centres[index]) > depth(centres[index - 1]), "a stack rises outward")
+        }
+
+        // Leaning along "across", the folder's anchor moves to that side's
+        // start so the contents grow toward the lean.
+        const leaning = LayoutEngine.expansionGeometry(data.layout, 6, 48, 6, 140, 3, {
+            maximumWidth: 620, maximumHeight: 400, labelWidth: 108, labelHeight: 36.65625,
+            compactPath: true, side: data.side, lean: 0.7 })
+        const across = a => vertical ? a.x : a.y
+        if (data.layout !== "stack")
+            verify(across(leaning.anchor) < across(value.anchor) - 10, data.tag + ": the lean moves the folder's anchor")
+    }
+
+    function test_folderWithoutASideKeepsItsFrame() {
+        const options = { maximumWidth: 620, maximumHeight: 400, labelWidth: 108,
+                          labelHeight: 36.65625, compactPath: true }
+        for (const layout of ["fan", "grid", "stack", "arc", "ring"]) {
+            const before = LayoutEngine.expansionGeometry(layout, 9, 48, 6, 140, 3, options)
+            const right = LayoutEngine.expansionGeometry(layout, 9, 48, 6, 140, 3,
+                Object.assign({ side: "right" }, options))
+            if (layout === "fan" || layout === "arc" || layout === "grid")
+                compare(JSON.stringify(right.entries), JSON.stringify(before.entries),
+                        layout + ": opening to the right is the original frame")
+            compare(before.side, "right")
+        }
+    }
+
     function test_compatibilityUtilitiesRemainAvailable() {
         const value = geometry("horizontal", 3)
         compare(LayoutEngine.nearestIndex(

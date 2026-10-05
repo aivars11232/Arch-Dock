@@ -273,7 +273,9 @@ qt_add_executable(
   src/WindowModel.h
   src/WindowModel.cpp
   src/WindowWatcher.h
-  src/WindowWatcher.cpp)
+  src/WindowWatcher.cpp
+  src/IntentionalStop.h
+  src/IntentionalStop.cpp)
 set(ARCHDOCK_APPLICATION_QML_FILES
   qml/runtime/CapabilityModel.js
   qml/runtime/IconPropertiesDraft.js
@@ -1129,7 +1131,9 @@ if(BUILD_TESTING)
     src/model/IconEntryIdentity.h
     src/model/IconEntryIdentity.cpp
     src/WindowWatcher.h
-    src/WindowWatcher.cpp)
+    src/WindowWatcher.cpp
+    src/IntentionalStop.h
+    src/IntentionalStop.cpp)
   qt_add_resources(
     panel-window-capability-test
     panel-window-capability-theme-catalog
@@ -1238,6 +1242,22 @@ if(BUILD_TESTING)
   add_test(
     NAME plasma-script-result-test
     COMMAND plasma-script-result-test)
+
+  qt_add_executable(
+    intentional-stop-test
+    tests/IntentionalStopTest.cpp
+    src/IntentionalStop.h
+    src/IntentionalStop.cpp)
+  target_include_directories(
+    intentional-stop-test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(
+    intentional-stop-test
+    PRIVATE Qt6::Core
+            Qt6::Test)
+  add_test(
+    NAME intentional-stop-test
+    COMMAND intentional-stop-test)
 
   add_test(
     NAME dock-geometry-test
@@ -1543,6 +1563,21 @@ if(BUILD_TESTING)
             bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
   set_tests_properties(folder-interaction-smoke
     PROPERTIES DEPENDS window-interaction-smoke TIMEOUT 120)
+
+  # Owner-visible folder placement on a curved free panel, baked and in true
+  # 3D: 35 real openings at five positions of the ring, each checked against
+  # the clicked icon, the dock's centre and the dock's other icons.
+  add_test(NAME folder-anchor-smoke
+    COMMAND ${CMAKE_COMMAND} -E env
+            ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
+            ARCHDOCK_QMLTESTRUNNER=$<TARGET_FILE:Qt6::qmltestrunner>
+            ARCHDOCK_RENDERING_INTERACTIONS=1
+            ARCHDOCK_RENDERING_FOLDERS=1
+            ARCHDOCK_RENDERING_FOLDER_ANCHORS=1
+            bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
+  set_tests_properties(folder-anchor-smoke
+    PROPERTIES DEPENDS folder-interaction-smoke RUN_SERIAL TRUE TIMEOUT 240)
 
   add_test(NAME runtime-ui-interaction-smoke
     COMMAND ${CMAKE_COMMAND} -E env

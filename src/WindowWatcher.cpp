@@ -3,6 +3,8 @@
 #include "WindowModel.h"
 
 #include <QDBusConnection>
+#include <QDBusConnectionInterface>
+#include <QDBusMessage>
 #include <QDBusError>
 #include <QDBusInterface>
 #include <QDBusReply>
@@ -17,6 +19,12 @@
 
 namespace
 {
+    // KWin reapplies installed-package enablement on configuration reload and
+    // Plasma startup. A backend-owned instance must not use the package id:
+    // the package is not user-enabled and KWin would silently unload it.
+    const QString PackageScriptName = QStringLiteral("org.archdock.windowwatcher");
+    const QString RuntimeScriptName = QStringLiteral("org.archdock.windowwatcher.runtime");
+
     QString resolveIconName(const QString &desktopFileName,
                             const QString &resourceClass)
     {
@@ -133,6 +141,30 @@ WindowWatcher::WindowWatcher(WindowModel &windowModel,
 bool WindowWatcher::available() const
 {
     return m_available;
+}
+
+void WindowWatcher::releaseKWinScripts()
+{
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    const QString kwin = QStringLiteral("org.kde.KWin");
+    if (!bus.isConnected() || !bus.interface()->isServiceRegistered(kwin).value())
+    {
+        return;
+    }
+    for (const QString &name : {RuntimeScriptName, PackageScriptName})
+    {
+        QDBusMessage call = QDBusMessage::createMethodCall(
+            kwin, QStringLiteral("/Scripting"), QStringLiteral("org.kde.kwin.Scripting"),
+            QStringLiteral("unloadScript"));
+        call << name;
+        // KWin may be ending with the session; never hold a stop for long.
+        const QDBusMessage reply = bus.call(call, QDBus::Block, 2000);
+        if (reply.type() == QDBusMessage::ErrorMessage)
+        {
+            qWarning() << "Could not unload the Arch Dock KWin script" << name << ':'
+                       << reply.errorMessage();
+        }
+    }
 }
 
 QVariantMap WindowWatcher::nativePanelState(const QRectF &bounds) const
@@ -314,11 +346,8 @@ bool WindowWatcher::loadKWinScript()
         return false;
     }
 
-    // KWin reapplies installed-package enablement on configuration reload and
-    // Plasma startup. A backend-owned instance must not use the package id:
-    // the package is not user-enabled and KWin would silently unload it.
-    const QString packageName = QStringLiteral("org.archdock.windowwatcher");
-    const QString pluginName = QStringLiteral("org.archdock.windowwatcher.runtime");
+    const QString &packageName = PackageScriptName;
+    const QString &pluginName = RuntimeScriptName;
     const QDBusReply<bool> legacyUnload = scripting.call(
         QStringLiteral("unloadScript"), packageName);
     if (!legacyUnload.isValid())

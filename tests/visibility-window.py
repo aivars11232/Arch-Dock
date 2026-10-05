@@ -91,8 +91,22 @@ def instrument_interaction_stage(stage):
                             }
                             return result;
                         })();
+                        const sceneCentre = (() => {
+                            const mesh = panelScene.effectiveRendererTier === "true3d"
+                                ? panelScene.activeSurfaceRenderer : null;
+                            const track = panelScene.activeTrackMetrics;
+                            let p = track && track.center ? Qt.point(track.center.x, track.center.y)
+                                : Qt.point(panelScene.width / 2, panelScene.height / 2);
+                            if (mesh && mesh.viewport) {
+                                const v = mesh.viewport.mapFrom3DScene(Qt.vector3d(0, 0, mesh.platformTop));
+                                p = Qt.point(v.x, v.y);
+                            }
+                            const mapped = panelScene.mapToItem(null, p.x, p.y);
+                            return [mapped.x, mapped.y];
+                        })();
                         console.warn("ArchDockInteraction " + JSON.stringify({kind: "host", panel: root.panelId,
                             surfacePoint: surfaceProbe.surface, interiorPoint: surfaceProbe.interior,
+                            center: sceneCentre,
                             inputRegion: panelScene.activeInputRegionKind,
                             profile: String((root.configuration.presentationProfile || {}).id || ""),
                             at: Date.now(), itemVisible: representation.visible, itemOpacity: representation.opacity,
@@ -737,6 +751,142 @@ def run_interaction_matrix(free_panel):
             return path
 
         layouts = ["fan", "grid", "stack", "arc", "ring"]
+
+        def run_folder_anchor_matrix():
+            # The owner's curved free panel, baked and in true 3D: each layout
+            # opens at the clicked folder, away from the dock, wherever the
+            # folder stands on the ring, and covers no icon of the dock.
+            panel = free_panel
+            evidence = pathlib.Path(os.environ.get("ARCHDOCK_SCENE_EVIDENCE_DIR") or str(root / "logs"))
+            evidence.mkdir(parents=True, exist_ok=True)
+            positions = [("right", 0), ("bottom", 90), ("left", 180), ("top", 270), ("diagonal", 315)]
+            scenarios = [("baked2.5d", "ring-platform-blue", {}, layouts),
+                         ("true3d", "mesh-platform-cyan", {"scene3DCameraPitch": 60}, ["arc", "grid"])]
+            icon_size = float(panel_call("dockConfiguration", "(s)", (panel,))["iconSize"])
+            rows, failures = [], []
+
+            def host():
+                return observations.get(("host", panel, ""), {})
+
+            def desktop_origin():
+                state = host()
+                return native_point(state["rect"][2:], [0, 0])
+
+            def folder_and_centre():
+                icon, state = entry(panel), host()
+                origin = desktop_origin()
+                folder = (origin[0] + icon["center"][0], origin[1] + icon["center"][1])
+                centre = (origin[0] + state["center"][0], origin[1] + state["center"][1])
+                return folder, centre
+
+            def angle_of(folder, centre):
+                return math.degrees(math.atan2(folder[1] - centre[1], folder[0] - centre[0])) % 360
+
+            def wrap(value):
+                return (value + 540) % 360 - 180
+
+            def turn_folder_to(target):
+                # A tilted platform turns its icons faster or slower on screen
+                # than the layout angle changes: measure that response.
+                gain = 1.0
+                for _ in range(8):
+                    wait_for(lambda: entry(panel) and host().get("center"), "folder and dock centre observed")
+                    current = angle_of(*folder_and_centre())
+                    error = wrap(target - current)
+                    angle = float(panel_call("dockConfiguration", "(s)", (panel,))["layoutAngle"])
+                    requested = int(round(wrap(angle + max(-170.0, min(170.0, error / gain)))))
+                    if abs(error) < 6 or requested == int(round(angle)):
+                        return
+                    before = entry(panel)["center"]
+                    configure(panel, {"layoutAngle": requested})
+                    wait_for(lambda: entry(panel).get("center") != before, "folder moved along the ring")
+                    time.sleep(0.3)
+                    moved = wrap(angle_of(*folder_and_centre()) - current)
+                    if abs(moved) > 0.5:
+                        gain = moved / wrap(requested - angle)
+                raise AssertionError(("folder could not be placed", target, angle_of(*folder_and_centre())))
+
+            def click_folder():
+                def hovered_target():
+                    current = entry(panel)
+                    point = native_point(current["hostSize"], current["center"])
+                    lib.ei_device_pointer_motion_absolute(devices[2], *point)
+                    lib.ei_device_frame(devices[2], lib.ei_now(context))
+                    sync_input()
+                    acknowledged = entry(panel).get("sample", 0)
+                    observed = wait_for(lambda: entry(panel) if entry(panel).get("sample", 0) > acknowledged
+                                        else None, "fresh applet pointer observation")
+                    # A true-3D icon's projected rectangle breathes with its
+                    # hover motion, so its centre is compared within pixels.
+                    near = math.hypot(observed["center"][0] - current["center"][0],
+                                      observed["center"][1] - current["center"][1]) < 4
+                    return point if observed.get("hovered") and near else None
+                click(wait_for(hovered_target, "folder icon hovered"), 272)
+
+            configure(panel, {"x": 430, "y": 150, "folderSpeed": 80, "folderEasing": "outCubic"})
+            for tier, theme, extra, scenario_layouts in scenarios:
+                configure(panel, dict({"layout": "ring", "layoutRadius": 150, "layoutAngle": 0,
+                    "rendererTier": tier, "panelThemeId": theme, "completeThemeId": theme,
+                    "panelRotationMode": "none"}, **extra))
+                for position, target in positions:
+                    turn_folder_to(target)
+                    for layout in scenario_layouts:
+                        configure(panel, {"folderLayout": layout})
+                        click_folder()
+                        state = wait_for(lambda: folder_popup(panel) if folder_popup(panel).get("visible")
+                            and not folder_popup(panel).get("opening") and folder_popup(panel).get("layout") == layout
+                            and len(folder_popup(panel).get("shown", [])) >= 3 else None, "anchored folder open")
+                        folder, centre = folder_and_centre()
+                        width, height = state["rect"][2:]
+                        left, top = native_point([width, height], [0, 0])
+                        outward = (folder[0] - centre[0], folder[1] - centre[1])
+                        length = math.hypot(*outward) or 1
+                        outward = (outward[0] / length, outward[1] / length)
+                        nearest = (min(max(folder[0], left), left + width), min(max(folder[1], top), top + height))
+                        gap = math.hypot(folder[0] - nearest[0], folder[1] - nearest[1])
+                        middle = (left + width / 2 - folder[0], top + height / 2 - folder[1])
+                        facing = (middle[0] * outward[0] + middle[1] * outward[1]) / (math.hypot(*middle) or 1)
+                        children = [(left + state["items"][name][0], top + state["items"][name][1])
+                                    for name in state["shown"]]
+                        behind = [round((c[0] - folder[0]) * outward[0] + (c[1] - folder[1]) * outward[1], 1)
+                                  for c in children]
+                        origin = desktop_origin()
+                        covered = [value["app"] for (kind, owner, _), value in list(observations.items())
+                                   if kind == "entry" and owner == panel and value["app"] != folder_app_ids[panel]
+                                   and left <= origin[0] + value["center"][0] <= left + width
+                                   and top <= origin[1] + value["center"][1] <= top + height]
+                        row = {"tier": tier, "position": position, "layout": layout,
+                               "folder": [round(v, 1) for v in folder], "dockCentre": [round(v, 1) for v in centre],
+                               "outward": [round(v, 3) for v in outward], "popup": [left, top, width, height],
+                               "gap": round(gap, 1), "facing": round(facing, 3), "childDepth": behind,
+                               "children": [[round(v, 1) for v in c] for c in children], "coveredIcons": covered}
+                        rows.append(row)
+                        problems = []
+                        if gap > icon_size * 0.75 + 16:
+                            problems.append("the popup does not start at the clicked folder")
+                        if facing < 0.3:
+                            problems.append("the popup does not open away from the dock")
+                        if min(behind) < -0.3 * icon_size:
+                            problems.append("children stand behind the folder, over the dock")
+                        if covered:
+                            problems.append("the popup covers icons of the dock")
+                        if problems:
+                            failures.append(dict(row, problems=problems))
+                        print("FOLDER ANCHOR " + ("FAIL" if problems else "PASS") + ": "
+                              + json.dumps({k: row[k] for k in ("tier", "position", "layout", "gap", "facing", "coveredIcons")}
+                                           | {"problems": problems}), flush=True)
+                        escape()
+                        wait_for(lambda: not folder_popup(panel).get("visible"), "anchored folder closed")
+            (evidence / "folder-anchor-geometry.json").write_text(json.dumps(rows, indent=1))
+            assert not failures, "folder anchoring failed in %d of %d cases: %s" % (
+                len(failures), len(rows), json.dumps(failures)[:4000])
+            print(f"PASS: {len(rows)} folder openings anchored at the clicked icon, outward, covering no dock icon",
+                  flush=True)
+
+        if os.environ.get("ARCHDOCK_RENDERING_FOLDER_ANCHORS") == "1":
+            run_folder_anchor_matrix()
+            return
+
         for panel in ("bottom", free_panel):
             for index, layout in enumerate(layouts):
                 edge = ["bottom", "top", "left", "right", "bottom"][index] if panel == "bottom" else None
@@ -1435,7 +1585,8 @@ def run_interaction_matrix(free_panel):
             return
         if os.environ.get("ARCHDOCK_RENDERING_FOLDERS") == "1":
             run_folder_matrix()
-            run_content_matrix()
+            if os.environ.get("ARCHDOCK_RENDERING_FOLDER_ANCHORS") != "1":
+                run_content_matrix()
             return
         marker = root / "logs/unexpected-icon-launch"
         desktop = root / "data/applications" / (app_id + ".desktop")

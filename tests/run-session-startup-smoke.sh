@@ -39,7 +39,7 @@ run_startup_diagnostics() {
     }
     local executable
     executable="$(sed -n 's/^Exec=//p' "$root/prefix with spaces/share/dbus-1/services/org.archdock.ArchDock.service")"
-    [[ "$executable" == "\"$root/prefix with spaces/bin/arch-dock\"" ]] || return 1
+    [[ "$executable" == "\"$root/prefix with spaces/bin/arch-dock\" --dbus-activated" ]] || return 1
     printf 'Native activation refused the missing executable; installed Exec=%s\n' "$executable"
     rm -rf -- "$root"
     trap - EXIT
@@ -124,6 +124,102 @@ run_session_startup_smoke() {
         printf 'Installed startup produced a runtime resource error.\n' >&2; return 1
     fi
     log_session_phase 'TASK-0043 installed activation, single owner and hidden source PASS'
+    run_intentional_quit_smoke "$owner"
+}
+
+wait_for_arch_dock_owner() {
+    local previous="$1" phase="$2" pid attempt
+    for ((attempt = 0; attempt < 300; ++attempt)); do
+        if pid="$(arch_dock_service_pid)" && [[ "$pid" != "$previous" ]]; then
+            printf '%s\n' "$pid"; return 0
+        fi
+        sleep 0.1
+    done
+    printf 'Arch Dock did not start during %s.\n' "$phase" >&2
+    return 1
+}
+
+wait_for_no_arch_dock_owner() {
+    local phase="$1" attempt
+    for ((attempt = 0; attempt < 150; ++attempt)); do
+        arch_dock_service_pid >/dev/null || [[ $? != 1 ]] || return 0
+        sleep 0.1
+    done
+    printf 'Arch Dock kept its D-Bus name after %s.\n' "$phase" >&2
+    return 1
+}
+
+# A stopped Arch Dock must not come back while new Plasma windows report to
+# the KWin watcher and freshly loaded applets look for their backend.
+hold_stopped() {
+    local phase="$1" until=$((SECONDS + 6)) reply
+    while ((SECONDS < until)); do
+        if arch_dock_service_pid >/dev/null; then
+            printf 'Arch Dock started again after %s.\n' "$phase" >&2; return 1
+        fi
+        sleep 0.2
+    done
+    if reply="$(gdbus call --session --timeout=10 --dest org.freedesktop.DBus \
+        --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.StartServiceByName \
+        org.archdock.ArchDock 0 2>&1)"; then
+        printf 'On-demand activation started a stopped Arch Dock: %s\n' "$reply" >&2; return 1
+    fi
+    [[ "$reply" == *org.freedesktop.DBus.Error.Spawn.ChildExited*'status 75'* ]] || {
+        printf 'Unexpected refusal of on-demand activation: %s\n' "$reply" >&2; return 1;
+    }
+}
+
+run_intentional_quit_smoke() {
+    local owner="$1" stop_file="$XDG_RUNTIME_DIR/arch-dock-intentional-stop.json" pid reply
+    log_session_phase 'ADFIX-TASK-001 a killed backend recovers; Quit and TERM stay stopped'
+    # KILL runs nothing in the process, so it is a crash: the KWin watcher's
+    # next report or an applet's request activates the backend again.
+    # The watcher usually reports before a plasmashell restart could: the name
+    # may never be seen free, only owned by a new process.
+    kill -KILL "$owner"
+    restart_plasmashell
+    pid="$(wait_for_arch_dock_owner "$owner" 'crash recovery')"
+    ARCHDOCK_SESSION_ARCH_DOCK_PID="$pid"
+    [[ ! -e "$stop_file" ]] || { printf 'A killed backend recorded a stop.\n' >&2; return 1; }
+    wait_for_kwin_script_state org.archdock.windowwatcher.runtime true 'crash recovery'
+    log_session_phase "ADFIX-TASK-001 KILL recovered through activation: $owner -> $pid"
+
+    "$ARCHDOCK_STARTUP_STAGED_BINARY" --quit >"$ARCHDOCK_TEST_LOG_DIR/quit.log" 2>&1 || {
+        cat "$ARCHDOCK_TEST_LOG_DIR/quit.log" >&2; return 1;
+    }
+    wait_for_no_arch_dock_owner 'Quit'
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    jq -e '.reason == "quit"' "$stop_file" >/dev/null
+    wait_for_kwin_script_state org.archdock.windowwatcher.runtime false 'Quit'
+    restart_plasmashell
+    hold_stopped 'Quit'
+    log_session_phase 'ADFIX-TASK-001 Quit stayed stopped through a Plasma restart and activation'
+
+    # Starting it explicitly ends the stop and restores normal activation.
+    "$ARCHDOCK_STARTUP_STAGED_BINARY" >"$ARCHDOCK_TEST_LOG_DIR/explicit-start.log" 2>&1 &
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=$!
+    pid="$(wait_for_arch_dock_owner '' 'explicit start')"
+    [[ "$pid" == "$ARCHDOCK_SESSION_ARCH_DOCK_PID" && ! -e "$stop_file" ]] || {
+        printf 'An explicit start did not clear the stop.\n' >&2; return 1;
+    }
+    wait_for_kwin_script_state org.archdock.windowwatcher.runtime true 'explicit start'
+    reply="$(gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+        --method org.freedesktop.DBus.StartServiceByName org.archdock.ArchDock 0)"
+    [[ "$reply" == '(uint32 2,)' ]]
+
+    # TERM, which System Monitor's "Quit Application" sends, is a Quit.
+    kill -TERM "$pid"
+    wait "$pid" 2>/dev/null || true
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    wait_for_no_arch_dock_owner 'TERM'
+    jq -e '.reason == "signal"' "$stop_file" >/dev/null
+    wait_for_kwin_script_state org.archdock.windowwatcher.runtime false 'TERM'
+    hold_stopped 'TERM'
+    if rg -n 'module "ArchDock.Rendering" is not installed|error when loading applet "org.archdock.dock"|ReferenceError:|TypeError:' \
+        "$ARCHDOCK_TEST_LOG_DIR"/*.log; then
+        printf 'Quit or crash recovery produced a runtime error.\n' >&2; return 1
+    fi
+    log_session_phase 'ADFIX-TASK-001 intentional Quit versus crash PASS'
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
