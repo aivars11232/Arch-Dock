@@ -307,7 +307,7 @@ Window {
             auditionCustomizations = changes;
             return loadAuditionEditor();
         }
-        const projected = panelController.resolvePanelSettingsEditorDraft(editorSession.panelId, editorSession.revision, EditorModel.panelCandidate(editorSession), EditorModel.globalCandidate(editorSession), "studio");
+        const projected = panelController.resolvePanelSettingsEditorDraft(editorSession.panelId, editorSession.revision, EditorModel.transactionPanelCandidate(editorSession), EditorModel.globalCandidate(editorSession), "studio");
         if (!projected || projected.success !== true) {
             editorSession = EditorModel.retainFailure(editorSession, projected);
             studioError = qsTr("Draft validation failed: %1 (%2)").arg(String(projected && projected.status ? projected.status : "failed")).arg(String(projected && (projected.errorMessage || projected.errorCode) ? (projected.errorMessage || projected.errorCode) : qsTr("No details were returned.")));
@@ -890,7 +890,7 @@ Window {
             return false;
 
         if (hasSettingsChanges) {
-            const result = panelController.applyPanelSettingsTransaction(editorSession.panelId, editorSession.revision, EditorModel.panelCandidate(editorSession), EditorModel.globalCandidate(editorSession));
+            const result = panelController.applyPanelSettingsTransaction(editorSession.panelId, editorSession.revision, EditorModel.transactionPanelCandidate(editorSession), EditorModel.globalCandidate(editorSession));
             if (!EditorModel.transactionSucceeded(result)) {
                 editorSession = EditorModel.retainFailure(editorSession, result);
                 studioError = EditorModel.transactionConflict(result) ? qsTr("This panel changed outside Panel Studio. Cancel and reopen it before applying.") : qsTr("Settings transaction failed: %1 (%2)").arg(String(result && result.status ? result.status : "failed")).arg(String(result && (result.errorMessage || result.errorCode) ? (result.errorMessage || result.errorCode) : qsTr("No details were returned.")));

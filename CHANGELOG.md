@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.1 candidate — unreleased, 2026-10-04
+## 0.1.1 candidate — unreleased, 2026-10-05
 
 Application version: `0.1.1`; the current Arch package candidate and verification
 status are recorded in [current state](docs/CURRENT_STATE.md).
@@ -37,6 +37,8 @@ The proposed `v0.1.1` tag and publication need separate authorization.
 - 3D orientation, platform thickness and pedestal height join the tilt and
   layout size controls. Opacity is available for themed surfaces. A loaded
   baked surface no longer draws the procedural fallback arc over its artwork.
+- Switching 3D off retains backend validation while omitting untouched
+  controls exposed only by the 3D draft. Orange On/Off and Cancel are verified.
 - Panels > Behavior can keep folder item names visible without hovering.
   This preference uses the existing draft, Apply/Cancel and persistence path.
 - Current-facing installation/version wording follows the corrected candidate;

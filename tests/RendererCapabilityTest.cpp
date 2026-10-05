@@ -183,6 +183,13 @@ private slots:
         QVERIFY(!first.isNull());
         int checkedIcons = 0;
         QObject *viewport = objectValue(renderer->property("viewport"));
+        QVector3D hole;
+        QVERIFY(QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, hole),
+            Q_ARG(QVector3D, QVector3D(0, 0, renderer->property("platformTop").toDouble()))));
+        QVariant holeHit;
+        QVERIFY(QMetaObject::invokeMethod(renderer, "containsInputPoint", Q_RETURN_ARG(QVariant, holeHit),
+            Q_ARG(QVariant, QVariant(QPointF(hole.x(), hole.y())))));
+        QVERIFY2(!holeHit.toBool(), "The empty ring centre must pass through native input");
         for (QObject *model : renderer->findChildren<QObject *>())
         {
             if (!model->objectName().startsWith(QStringLiteral("mesh-entry-"))

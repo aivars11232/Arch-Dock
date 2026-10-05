@@ -1,10 +1,19 @@
 # Arch Dock release checklist
 
 <!-- WORLD_DEPTH_PAUSED_BEGIN -->
-**Paused 2026-10-04:** the newer 3D depth/controls correction is WIP, approximately
-58% complete. Runtime checks and release-8 packaging have not run. The PC and
-last verified checkpoint remain **0.1.1-7**. See the
-[resume handoff](3D_CORRECTION_HANDOFF.md).
+## World-space 3D correction — 0.1.1-8 candidate, 2026-10-05
+
+Source verification PASS: nine affected CTests, isolated typed Studio controls
+and transactions, and the full staged native Wayland/RHI gate. Icons and themed
+pedestals share the 3D platform, projected depth/input match, wheel and held drag
+rotate both ways, and Orange offers a beveled 3D ring without the fallback arc.
+Orientation, thickness and elevation join tilt, size and opacity controls.
+Orange 3D On/Off and Cancel preserve saved settings; inactive defaults no longer
+block switching back to baked artwork. See [verification handoff](3D_CORRECTION_HANDOFF.md).
+
+Fresh packaging, installed-package verification, owned cleanup and actual-PC
+update are pending. The installed PC remains 0.1.1-7. The intermittent slow Apply
+report remains unreproduced. The version-specific records below are historical.
 <!-- WORLD_DEPTH_PAUSED_END -->
 
 <!-- FOLDER_PATH_CHECKLIST_BEGIN -->
@@ -58,7 +67,7 @@ one test worker throughout.
 
 Owner PC runs verified **arch-dock 0.1.1-7**: 216/216 payload bytes/modes, native pacman Qkk (325 files, zero altered), stable D-Bus owner/live installed executable and Panel Studio startup PASS. Saved panel user settings are preserved. Free panel 5 had no live desktop applet or backed-up desktop host before the update; recovery corrected only its stale ownership IDs/token/state/error and incremented the settings revision. Icons, appearance, position and all other panel values remain unchanged. Configuration differences are recorded in the private installation receipt; the fresh configuration ZIP/manifest remain mode 0600. Plasma was refreshed to reload the corrected widget code.
 
-Historical version-specific checkpoints follow. The 0.1.1-7 record above is current. The existing v0.1.0 tag/publication are untouched; no new release was published.
+Historical version-specific checkpoints follow. The 0.1.1-7 record above is the previous installed checkpoint. The existing v0.1.0 tag/publication are untouched; no new release was published.
 <!-- FOLDER_PATH_CHECKLIST_END -->
 
 <!-- FOLDER_CONTENTS_CHECKLIST_BEGIN -->

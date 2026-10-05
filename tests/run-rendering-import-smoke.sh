@@ -392,6 +392,7 @@ require_no_import_errors() {
 
 run_private_session() {
     trap cleanup_session EXIT
+    trap 'printf "Native renderer gate failed at line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 
     [[ -r "$ARCHDOCK_RENDERING_STAGED_THEME_MANIFEST" ]] || {
         printf 'The staged renderer smoke theme manifest is unavailable: %s\n' \

@@ -86,7 +86,30 @@ Item {
         / Math.max(1, ...entryGeometry.map(p => Math.hypot(p.centerX - width / 2, p.centerY - height / 2)))
 
     function containsInputPoint(point) {
-        return rendererReady && Boolean(view.pick(point.x, point.y).objectHit)
+        if (!rendererReady) return false
+        const hit = view.pick(point.x, point.y).objectHit
+        if (!hit) return false
+        if (hit !== platform) return true
+        // Qt picks custom geometry against its bounding volume. Refine that
+        // native coarse hit against the validated mesh so ring holes stay empty.
+        const origin = platform.mapPositionFromScene(view.mapTo3DScene(Qt.vector3d(point.x, point.y, 0)))
+        const far = platform.mapPositionFromScene(view.mapTo3DScene(Qt.vector3d(point.x, point.y, 1000)))
+        const direction = far.minus(origin).normalized()
+        const mesh = resources.mesh, vertices = mesh.positions, indexes = mesh.indexes
+        for (let i = 0; i < indexes.length; i += 3) {
+            const a = vertices[indexes[i]], b = vertices[indexes[i+1]], c = vertices[indexes[i+2]]
+            const ab = Qt.vector3d(b[0]-a[0], b[1]-a[1], b[2]-a[2])
+            const ac = Qt.vector3d(c[0]-a[0], c[1]-a[1], c[2]-a[2])
+            const cross = direction.crossProduct(ac), determinant = ab.dotProduct(cross)
+            if (Math.abs(determinant) < 1e-8) continue
+            const offset = origin.minus(Qt.vector3d(a[0], a[1], a[2]))
+            const u = offset.dotProduct(cross) / determinant
+            if (u < 0 || u > 1) continue
+            const q = offset.crossProduct(ab), v = direction.dotProduct(q) / determinant
+            if (v < 0 || u + v > 1) continue
+            if (ac.dotProduct(q) / determinant >= 0) return true
+        }
+        return false
     }
     function updateProjection() {
         if (!rendererReady || width <= 0 || height <= 0) return
@@ -300,7 +323,6 @@ Item {
                     pickable: true
                     objectName: "mesh-glyph-" + entryNode.index
                     source: "#Cube"
-                    pickable: false
                     visible: entryNode.visual !== null && root.collapseProgress < 1
                     position: Qt.vector3d(root.number(entryNode.glyphMotion, "x", 0),
                         -root.number(entryNode.glyphMotion, "y", 0),

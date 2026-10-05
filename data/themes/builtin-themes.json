@@ -967,6 +967,7 @@
           "free-desktop"
         ],
         "rendererTiers": [
+          "true3d",
           "baked2.5d",
           "procedural2d"
         ],
@@ -976,7 +977,9 @@
         ],
         "layouts": [
           "arc",
-          "semicircle"
+          "semicircle",
+          "ring",
+          "circular"
         ],
         "orientations": [
           "free"
@@ -984,13 +987,15 @@
         "features": [
           "dynamic-tint",
           "dynamic-glow",
-          "icon-state-styling"
+          "icon-state-styling",
+          "whole-panel-rotation"
         ],
         "presentationMechanisms": [
-          "open"
+          "open",
+          "collapse-radial"
         ],
         "rotation": {
-          "mode": "none"
+          "mode": "free"
         }
       },
       "panelStyle": {

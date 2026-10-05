@@ -133,6 +133,7 @@ function emptySession(errorCode, errorMessage) {
         revision: 0,
         consumer: "",
         panelBaseline: {},
+        initialPanelKeys: [],
         globalBaseline: {},
         panelChanges: {},
         globalChanges: {},
@@ -166,6 +167,7 @@ function load(snapshot) {
         revision: Number(snapshot.revision),
         consumer: String(snapshot.consumer || ""),
         panelBaseline: copyMap(snapshot.panelValues),
+        initialPanelKeys: Object.keys(snapshot.panelValues),
         globalBaseline: copyMap(snapshot.globalValues),
         panelChanges: {},
         globalChanges: {},
@@ -256,6 +258,18 @@ function dirty(session) {
 
 function panelCandidate(session) {
     return session && session.loaded ? merge(session.panelBaseline, session.panelChanges) : {};
+}
+
+function transactionPanelCandidate(session) {
+    const candidate = panelCandidate(session);
+    // Projected controls supply preview values. Submit newly exposed fields
+    // only when edited, so switching back does not send inactive defaults.
+    for (const key of Object.keys(candidate)) {
+        if (!(session.initialPanelKeys || []).includes(key)
+                && !hasOwn(session.panelChanges, key))
+            delete candidate[key];
+    }
+    return candidate;
 }
 
 function globalCandidate(session) {

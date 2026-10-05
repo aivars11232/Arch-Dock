@@ -378,6 +378,8 @@ TestCase {
         compare(projected.panelFields.length, 2);
         compare(projected.panelFields[0].key, "layout");
         compare(EditorModel.panelValue(projected, "layoutRadius", 0), 150);
+        verify(!Object.prototype.hasOwnProperty.call(
+            EditorModel.transactionPanelCandidate(projected), "layoutRadius"));
         compare(EditorModel.panelCandidate(projected).layout, "horizontal");
         compare(projected.revision, 5);
         compare(projected.themeDefinition.id, "fixture-projected-skin");
@@ -386,6 +388,7 @@ TestCase {
         compare(projected.iconStyles.length, 1);
 
         const radiusDraft = EditorModel.setPanelValue(projected, "layoutRadius", 230);
+        compare(EditorModel.transactionPanelCandidate(radiusDraft).layoutRadius, 230);
         const hiddenAgain = EditorModel.withProjection(radiusDraft, {
             success: true,
             status: "resolved",

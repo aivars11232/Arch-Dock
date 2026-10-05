@@ -1230,6 +1230,44 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
         QVERIFY(!rendererToggle());
     }
     studio->close();
+    if (available) {
+        // The existing Orange artwork must remain usable while its 3D switch
+        // offers a circular world-space platform without changing saved state.
+        popup.reset();
+        const auto orange = registry->themeCandidate(panelId, "arc-platform-orange", "complete");
+        QVERIFY(orange.value("success").toBool());
+        auto values = orange.value("values").toMap();
+        values.insert("layout", "arc");
+        QVERIFY(window.applyPanelSettingsTransaction(panelId,
+            registry->panelDefinition(panelId)->settingsRevision, values, {}).value("success").toBool());
+        const auto saved = registry->panelDefinition(panelId)->toPersistedMap();
+        popup.reset(component.createWithInitialProperties({
+            {"selectedPanelId", panelId}, {"mainTabIndex", 1}, {"subTabIndex", 2}}));
+        QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
+        studio = qobject_cast<QQuickWindow *>(popup.get());
+        QVERIFY(studio);
+        studio->show();
+        QVERIFY(QTest::qWaitForWindowExposed(studio));
+        QTRY_VERIFY_WITH_TIMEOUT(rendererToggle(), 5000);
+        QVERIFY(!rendererToggle()->property("checked").toBool());
+        QTest::mouseClick(studio, Qt::LeftButton, Qt::NoModifier,
+            rendererToggle()->mapToScene(QPointF(rendererToggle()->width()/2, rendererToggle()->height()/2)).toPoint());
+        QTRY_VERIFY(popup->property("scene3DQualityVisible").toBool());
+        QCOMPARE(registry->panelDefinition(panelId)->toPersistedMap(), saved);
+        QVERIFY(QQuickTest::qWaitForPolish(studio));
+        QTRY_VERIFY(rendererToggle() && rendererToggle()->property("checked").toBool());
+        QTest::mouseClick(studio, Qt::LeftButton, Qt::NoModifier,
+            rendererToggle()->mapToScene(QPointF(rendererToggle()->width()/2, rendererToggle()->height()/2)).toPoint());
+        QTRY_VERIFY2(!rendererToggle()->property("checked").toBool(),
+            qPrintable(QStringLiteral("draft=%1 off=%2 error=%3 position=%4,%5")
+                .arg(popup->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap().value("rendererTier").toString(),
+                     popup->property("scene3DOffTier").toString(), popup->property("studioError").toString())
+                .arg(rendererToggle()->mapToScene(QPointF(0, 0)).x())
+                .arg(rendererToggle()->mapToScene(QPointF(0, 0)).y())));
+        QTRY_VERIFY(!popup->property("scene3DQualityVisible").toBool());
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "cancelStudioChanges"));
+        QCOMPARE(registry->panelDefinition(panelId)->toPersistedMap(), saved);
+    }
     qInfo() << "Private Studio mesh controls and transaction checks passed; build available:" << available;
 }
 
