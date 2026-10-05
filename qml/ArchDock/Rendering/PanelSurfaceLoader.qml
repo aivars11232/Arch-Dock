@@ -35,6 +35,9 @@ Item {
     property string mechanism: "open"
     property string sceneQuality: "medium"
     property real cameraPitch: NaN
+    // Desktop 3D editing: handles on the mesh scene, and the edits it reports.
+    property bool sceneEditMode: false
+    signal sceneTransformEdited(var values)
 
     readonly property string normalizedRequestedTier:
         String(requestedRendererTier || "procedural2d").toLowerCase()
@@ -217,7 +220,8 @@ Item {
             glowIntensity: Qt.binding(function() { return root.glowIntensity }),
             quality: Qt.binding(function() { return root.sceneQuality }),
             panelOpacity: Qt.binding(function() { return root.panelOpacity }),
-            sceneConcealed: Qt.binding(function() { return root.sceneConcealed })
+            sceneConcealed: Qt.binding(function() { return root.sceneConcealed }),
+            editMode: Qt.binding(function() { return root.sceneEditMode })
         })
     }
     onTrue3DEnabledChanged: synchronizeScene()
@@ -246,6 +250,7 @@ Item {
         anchors.fill: parent
         active: root.true3DEnabled
         visible: root.true3DReady
+        onLoaded: item.transformEdited.connect(root.sceneTransformEdited)
     }
 
     Loader {

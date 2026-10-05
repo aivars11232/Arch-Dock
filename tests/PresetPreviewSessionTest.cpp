@@ -31,6 +31,7 @@ private slots:
     void sessionTemporaryConversionAndFailureCleanup();
     void sessionIconIsolationAndUserActions();
     void sessionInterruptionsKeepRecoverableEvidence();
+    void sessionSceneEditDraftsCommitsAndRecovers();
 };
 
 void PresetPreviewSessionTest::panelPreparationPreservesIndependentIcons()
@@ -351,6 +352,11 @@ struct PreviewHarness
             {
                 result.iconPreset = icon;
                 draft = PresetApplication::prepareIcon(snapshot, {}, icon, {}, error);
+            }
+            else if (result.record.kind == QStringLiteral("scene3d"))
+            {
+                result.fallback = {{QStringLiteral("available"), true}};
+                draft = PresetApplication::prepareSceneEdit(snapshot, {}, {}, error);
             }
             else if (result.record.kind == QStringLiteral("panel"))
             {
@@ -717,6 +723,83 @@ void PresetPreviewSessionTest::sessionIconIsolationAndUserActions()
     QCOMPARE(harness.applications, 0);
     QCOMPARE(harness.commits, 1);
     QCOMPARE(PresetTestSupport::directoryDigest(QStringLiteral(ARCHDOCK_SOURCE_PRESET_ROOT)), builtInsBefore);
+}
+
+// AD3D-TASK-002: desktop 3D editing is an audition of the panel itself. The
+// host shows every draft, only 3D settings may change, Cancel restores the
+// panel exactly, Apply commits once, and an interrupted edit is recovered.
+void PresetPreviewSessionTest::sessionSceneEditDraftsCommitsAndRecovers()
+{
+    QTemporaryDir temporary;
+    PreviewHarness harness(temporary.path());
+    {
+        PresetPreviewSession session(harness.operations(), harness.journalPath(), harness.defaultsPath());
+        harness.session = &session;
+        auto result = session.beginPreview(harness.request(false, QStringLiteral("scene3d")));
+        QVERIFY2(result.value(QStringLiteral("success")).toBool(),
+                 qPrintable(result.value(QStringLiteral("errorCode")).toString()));
+        QCOMPARE(result.value(QStringLiteral("kind")).toString(), QStringLiteral("scene3d"));
+        QVERIFY(harness.applications >= 1);
+        const int applicationsBefore = harness.applications;
+
+        const QVariantMap transform{{QStringLiteral("scene3DRoll"), 30.0},
+                                    {QStringLiteral("scene3DScale"), 0.8}};
+        result = session.updateDraft(transform);
+        QVERIFY2(result.value(QStringLiteral("success")).toBool(),
+                 qPrintable(result.value(QStringLiteral("errorCode")).toString()));
+        QCOMPARE(result.value(QStringLiteral("customizations")).toMap(), transform);
+        QCOMPARE(result.value(QStringLiteral("draftValues")).toMap()
+                     .value(QStringLiteral("scene3DRoll")).toDouble(), 30.0);
+        QVERIFY(harness.applications > applicationsBefore);
+        QCOMPARE(session.previewDefinition(QStringLiteral("bottom"))->surface.parameters3D
+                     .value(QStringLiteral("roll")).toDouble(), 30.0);
+
+        // Nothing but the 3D page's settings, and no preset actions.
+        result = session.updateDraft({{QStringLiteral("layout"), QStringLiteral("vertical")}});
+        QVERIFY(!result.value(QStringLiteral("success")).toBool());
+        QCOMPARE(result.value(QStringLiteral("errorCode")).toString(),
+                 QStringLiteral("unavailable-scene-edit-field"));
+        QCOMPARE(session.state(), QStringLiteral("ACTIVE"));
+        QCOMPARE(session.status().value(QStringLiteral("customizations")).toMap(), transform);
+        QCOMPARE(session.saveAsCustomPreset(QStringLiteral("Mine")).value(QStringLiteral("errorCode"))
+                     .toString(), QStringLiteral("scene-edit-has-no-preset"));
+        QCOMPARE(session.restoreBuiltInDefaults().value(QStringLiteral("errorCode")).toString(),
+                 QStringLiteral("scene-edit-has-no-preset"));
+
+        // Cancel restores the panel exactly and writes nothing.
+        QVERIFY(session.cancel().value(QStringLiteral("success")).toBool());
+        QCOMPARE(session.state(), QStringLiteral("IDLE"));
+        QVERIFY(harness.restores >= 1);
+        QVERIFY(harness.stored == harness.original);
+        QCOMPARE(harness.commits, 0);
+        QVERIFY(!QFileInfo::exists(harness.journalPath()));
+
+        // Apply commits the edit once.
+        QVERIFY(session.beginPreview(harness.request(false, QStringLiteral("scene3d")))
+                    .value(QStringLiteral("success")).toBool());
+        QVERIFY(session.updateDraft({{QStringLiteral("scene3DRoll"), 15.0}})
+                    .value(QStringLiteral("success")).toBool());
+        QVERIFY(session.applyAsActive().value(QStringLiteral("success")).toBool());
+        QCOMPARE(harness.commits, 1);
+        QCOMPARE(harness.stored.surface.parameters3D.value(QStringLiteral("roll")).toDouble(), 15.0);
+        QVERIFY(!QFileInfo::exists(harness.journalPath()));
+
+        // An edit interrupted mid-way leaves its journal behind.
+        harness.stored = harness.original;
+        QVERIFY(session.beginPreview(harness.request(false, QStringLiteral("scene3d")))
+                    .value(QStringLiteral("success")).toBool());
+        QVERIFY(session.updateDraft({{QStringLiteral("scene3DPositionX"), 0.5}})
+                    .value(QStringLiteral("success")).toBool());
+        QVERIFY(QFileInfo::exists(harness.journalPath()));
+    }
+    PresetPreviewSession restarted(harness.operations(), harness.journalPath(), harness.defaultsPath());
+    harness.session = &restarted;
+    QCOMPARE(restarted.state(), QStringLiteral("BLOCKED"));
+    QCOMPARE(restarted.status().value(QStringLiteral("kind")).toString(), QStringLiteral("scene3d"));
+    QVERIFY(restarted.recoverInterruptedPreview().value(QStringLiteral("success")).toBool());
+    QCOMPARE(restarted.state(), QStringLiteral("IDLE"));
+    QVERIFY(harness.stored == harness.original);
+    QVERIFY(!QFileInfo::exists(harness.journalPath()));
 }
 
 void PresetPreviewSessionTest::sessionInterruptionsKeepRecoverableEvidence()

@@ -70,6 +70,10 @@ public slots:
     bool setNativePanelType(const QString &panelId, const QString &type);
     QVariantMap dockConfiguration(const QString &panelId) const;
     QVariantMap panelRendererConfiguration(const QString &panelId) const;
+    // Desktop 3D editing: the panel's gizmo reports a finished drag here. The
+    // values join the active scene edit's draft; nothing is saved until the
+    // edit is applied, and nothing is accepted outside such an edit.
+    QVariantMap updateSceneEditDraft(const QString &panelId, const QVariantMap &values);
     QVariantMap contentRuntimeSnapshot(const QString &panelId) const;
     QVariantMap resolvePanelCapabilities(
         const QString &panelId,
@@ -255,6 +259,9 @@ private:
     [[nodiscard]] ArchDock::PresetPreviewSession::Operations presetAuditionOperations();
     [[nodiscard]] std::optional<ArchDock::PresetPreviewSession::Prepared> preparePresetPreview(
         const QVariantMap &request, QString *errorCode) const;
+    [[nodiscard]] std::optional<ArchDock::PresetPreviewSession::Prepared> prepareSceneEditPreview(
+        const QVariantMap &request, QString *errorCode) const;
+    [[nodiscard]] bool sceneEditActive(const QString &panelId) const;
     [[nodiscard]] QVariantMap presetResource(const QString &kind, const QString &presetId,
         bool builtInOnly = false) const;
     [[nodiscard]] QVariantMap presetEditorProjection(const ArchDock::PanelDefinition &candidate) const;

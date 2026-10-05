@@ -66,6 +66,23 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   preferred tier, so a 2D theme can be loaded over a platform theme. Cards are
   drawn in a fixed context, without the selected panel's angle, rotation, tilt,
   collapse or radius, at the height of a preset card.
+- A free panel with a ring, circle or polygon layout can be drawn in 3D
+  without changing its theme. A look that ships no 3D scene of its own stands
+  on the generic 3D platform, coloured by the look itself; turning 3D off
+  returns the same theme in its own 2D or baked 2.5D renderer. Arcs and
+  semicircles stay flat unless their theme brings its own 3D platform.
+- Panel Studio has one Panels > 3D page for every 3D setting: Enable 3D,
+  pitch, yaw and roll, scene position X, Y and Z inside the panel, scale, field
+  of view, platform thickness, pedestal height, quality, key and fill light,
+  animated orientation changes, a gentle float that is off by default, the
+  same Spacing control, Reset 3D transform and Edit on desktop. Appearance
+  points to it instead of to 3D themes.
+- Edit on desktop shows Blender-style move, rotate and scale handles on the
+  panel itself. Ctrl snaps, Shift is fine, Esc or the right button cancels a
+  drag. Each finished drag joins a desktop draft; Apply as Active saves it in
+  one transaction, Cancel restores the panel, and an interrupted edit is
+  recovered. While editing, the panel takes no application presses.
+- Reduced motion turns the 3D float and the animated orientation changes off.
 - Panel Studio and Icon Properties open on the screen of the panel they edit;
   without one they open under the pointer, and on the primary screen only as a
   last resort.

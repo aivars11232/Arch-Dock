@@ -631,9 +631,15 @@ Window {
             qsTr("Pitch, yaw and roll turn the platform. Scene position moves it inside the panel's own area; where the panel sits on the desktop is set on the General page.")));
         rows.push.apply(rows, pick(["scene3DCameraPitch", "scene3DCameraYaw", "scene3DRoll",
             "scene3DPositionX", "scene3DPositionY", "scene3DPositionZ", "scene3DScale"]));
+        const sceneEditing = auditionActive && auditionKind === "scene3d";
         rows.push({ kind: "actions", label: qsTr("Transform"), actions: [{
             label: qsTr("Reset 3D transform"), icon: "edit-reset", action: "reset-3d-transform",
-            available: true }] });
+            available: true }, {
+            label: qsTr("Edit on desktop"), icon: "transform-move", action: "edit-3d-on-desktop",
+            available: !sceneEditing && !auditionBusy && !hasPendingChanges }] });
+        rows.push(notice(sceneEditing
+            ? qsTr("Editing on the desktop: drag the handles on the panel itself. Apply as Active saves the result; Cancel restores the panel.")
+            : qsTr("Edit on desktop shows move, rotate and scale handles on the panel itself, like a 3D editor. Apply or cancel other changes first.")));
         rows.push(section(qsTr("View and surface"), ""));
         rows.push.apply(rows, pick(["scene3DFieldOfView", "scene3DThickness", "scene3DIconElevation",
             "scene3DQuality"]));
@@ -1004,6 +1010,10 @@ Window {
             reset3DTransform();
             return;
         }
+        if (action === "edit-3d-on-desktop") {
+            startSceneEdit();
+            return;
+        }
         if (action === "open-panel" || action === "close-panel") {
             if (hasPendingChanges || auditionBusy || !Boolean(panelValue("visible", false))
                 || panelValue("presentationMode", "open") !== "collapsed"
@@ -1102,6 +1112,21 @@ Window {
         editorSession = loaded;
         resetRendererPreview(EditorModel.rendererCandidate(loaded));
         return true;
+    }
+
+    // A desktop 3D edit is an audition of this panel itself: the panel shows
+    // the draft and its handles, and the audition bar applies or cancels it.
+    function startSceneEdit() {
+        if (!auditionService) return false;
+        if (auditionBusy || hasPendingChanges) {
+            studioError = qsTr("Apply or cancel the current changes before editing on the desktop.");
+            return false;
+        }
+        const result = auditionService.beginPreview({ kind: "scene3d", panelId: selectedPanelId });
+        if (!auditionSucceeded(result)) return false;
+        auditionOriginalPanelId = selectedPanelId;
+        auditionCustomizations = {};
+        return loadAuditionEditor();
     }
 
     function startPresetAudition(presetId, applyImmediately) {
@@ -1247,7 +1272,12 @@ Window {
     Connections {
         target: root.auditionService
         function onChanged() {
-            if (root.auditionActive) root.loadAuditionEditor();
+            if (!root.auditionActive) return;
+            // Desktop handles change the draft too; Studio edits build on it.
+            const status = root.auditionService.status;
+            if (String(status.kind || "") === "scene3d")
+                root.auditionCustomizations = EditorModel.copyValue(status.customizations || {});
+            root.loadAuditionEditor();
         }
     }
 

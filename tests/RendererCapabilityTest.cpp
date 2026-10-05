@@ -1,6 +1,8 @@
 #include "RendererBuildConfig.h"
 #include "themes/ThemePackage.h"
 
+#include <QLineF>
+#include <QSignalSpy>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -965,6 +967,171 @@ private slots:
         QTRY_COMPARE(renderer->property("floatOffset").toDouble(), 0.0);
         QTest::qWait(200);
         QCOMPARE(renderer->property("floatOffset").toDouble(), 0.0);
+        QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
+    }
+
+    // AD3D-TASK-002: on the desktop the panel's own handles edit its 3D
+    // transform with the mouse. Each finished drag is reported once; a
+    // cancelled drag leaves the scene and reports nothing; outside edit mode
+    // there are no handles and a press changes nothing.
+    void gizmoEditsTheTransformWithTheMouse()
+    {
+        if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+            return; // Needs the private RHI session, like the scene gates above.
+        const QString themeRoot = qEnvironmentVariable("ARCHDOCK_RENDERING_STAGED_THEME_ROOT",
+            QStringLiteral(ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT));
+        const auto package = ArchDock::ThemePackage::load(
+            themeRoot + QStringLiteral("/mesh-platform-cyan/archdock-theme.json"));
+        QVERIFY2(package.isValid(), qPrintable(package.primaryCode()));
+        const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
+        QQmlEngine engine;
+        QStringList unexpectedWarnings;
+        connect(&engine, &QQmlEngine::warnings, &engine, [&](const QList<QQmlError> &warnings) {
+            for (const auto &warning : warnings)
+                unexpectedWarnings.append(warning.toString());
+        });
+        engine.addImportPath(importRoot());
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import ArchDock.Rendering 1.0
+            PanelScene {
+                required property string glyphFixture
+                property bool editing: false
+                panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
+                                   scene3DQuality: "low", iconSize: 40, spacing: 8, layoutPadding: 10,
+                                   scene3DScale: 0.9, scene3DTransitions: false})
+                sceneEditActive: editing
+                entryDelegateContext: ({hostKind: "free"})
+                hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [
+                    {id: "open", available: true}]})
+                orderedEntries: [0, 1, 2, 3, 4, 5].map(function(index) {
+                    return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphFixture}
+                })
+            }
+        )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/GizmoConsumer.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QQuickWindow window;
+        std::unique_ptr<QObject> object(component.createWithInitialProperties({
+            {QStringLiteral("themeDefinition"), package.package->runtimeProjection()},
+            {QStringLiteral("glyphFixture"), QUrl::fromLocalFile(glyphFixture).toString()}}));
+        QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+        auto *scene = qobject_cast<QQuickItem *>(object.get());
+        QVERIFY(scene);
+        scene->setParentItem(window.contentItem());
+        window.resize(qCeil(scene->width()), qCeil(scene->height()));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(),
+                                 QStringLiteral("true3d"), 5000);
+        auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+        QObject *viewport = renderer ? objectValue(renderer->property("viewport")) : nullptr;
+        QVERIFY(renderer && viewport);
+        QSignalSpy edits(scene, SIGNAL(sceneTransformEdited(QVariant)));
+        QVERIFY(edits.isValid());
+        const auto editedValues = [&](int index) {
+            const QVariant value = edits.at(index).at(0);
+            return value.metaType() == QMetaType::fromType<QJSValue>()
+                ? value.value<QJSValue>().toVariant().toMap() : value.toMap();
+        };
+        const auto screenPoint = [&](const QString &name) -> QPoint {
+            QObject *handle = renderer->findChild<QObject *>(name);
+            if (!handle) return {};
+            QVector3D view;
+            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, view),
+                Q_ARG(QVector3D, handle->property("scenePosition").value<QVector3D>()));
+            return scene->mapToScene(QPointF(view.x(), view.y())).toPoint();
+        };
+        const auto drag = [&](const QPoint &from, const QPoint &to, Qt::KeyboardModifiers modifiers = {}) {
+            QTest::mousePress(&window, Qt::LeftButton, modifiers, from);
+            for (int step = 1; step <= 5; ++step)
+                QTest::mouseMove(&window, from + (to - from) * step / 5);
+            QTest::mouseRelease(&window, Qt::LeftButton, modifiers, to);
+        };
+        QObject *gizmo = renderer->findChild<QObject *>(QStringLiteral("mesh-gizmo"));
+        QVERIFY(gizmo);
+
+        // Outside edit mode: no handles, and a press changes nothing.
+        QVERIFY(!gizmo->property("visible").toBool());
+        const QPoint centre = screenPoint(QStringLiteral("mesh-gizmo"));
+        drag(centre, centre + QPoint(40, 0));
+        QTest::qWait(100);
+        QCOMPARE(edits.count(), 0);
+
+        scene->setProperty("editing", true);
+        QTRY_VERIFY(renderer->property("editMode").toBool());
+        QTRY_VERIFY(gizmo->property("visible").toBool());
+        QTest::qWait(150);
+
+        // Move: the red arrow carries the platform along X.
+        const QPoint tip = screenPoint(QStringLiteral("gizmo-move-x-tip"));
+        const QPoint middle = screenPoint(QStringLiteral("mesh-gizmo"));
+        QVERIFY(!tip.isNull());
+        const QPointF along = QPointF(tip - middle) / std::max(1.0, QLineF(middle, tip).length());
+        drag(tip, tip + (along * 40).toPoint());
+        QTRY_COMPARE(edits.count(), 1);
+        const double movedX = editedValues(0).value("scene3DPositionX").toDouble();
+        QVERIFY2(movedX > 0.01, qPrintable(QString::number(movedX)));
+        QCOMPARE(editedValues(0).keys(), QStringList{QStringLiteral("scene3DPositionX")});
+        // Picking answers from the last rendered frame: let the moved handle
+        // be drawn before pressing it again.
+        QTest::qWait(150);
+
+        // Ctrl snaps the move to steps of 0.05. Back toward the centre, so the
+        // handle stays inside the panel whatever room it has.
+        drag(screenPoint(QStringLiteral("gizmo-move-x-tip")),
+             screenPoint(QStringLiteral("gizmo-move-x-tip")) - (along * 23).toPoint(), Qt::ControlModifier);
+        QTRY_COMPARE(edits.count(), 2);
+        const double snappedX = editedValues(1).value("scene3DPositionX").toDouble();
+        QVERIFY2(qAbs(snappedX / 0.05 - qRound(snappedX / 0.05)) < 1e-6, qPrintable(QString::number(snappedX)));
+        QTest::qWait(150);
+
+        // Rotate: the white ring turns the view.
+        renderer->setProperty("gizmoMode", QStringLiteral("rotate"));
+        QTest::qWait(150);
+        const QPoint ringCentre = screenPoint(QStringLiteral("mesh-gizmo"));
+        const QPoint onRing = screenPoint(QStringLiteral("gizmo-rotate-view-0"));
+        QVERIFY(!onRing.isNull());
+        const QPointF radius = QPointF(onRing - ringCentre);
+        const double turn = qDegreesToRadians(30.0);
+        const QPointF turned(radius.x() * qCos(turn) - radius.y() * qSin(turn),
+                             radius.x() * qSin(turn) + radius.y() * qCos(turn));
+        drag(onRing, ringCentre + turned.toPoint());
+        QTRY_COMPARE(edits.count(), 3);
+        const double roll = editedValues(2).value("scene3DRoll").toDouble();
+        QVERIFY2(qAbs(qAbs(roll) - 30) < 6, qPrintable(QString::number(roll)));
+        QTest::qWait(150);
+
+        // Scale: dragging a cube handle outward enlarges the platform.
+        renderer->setProperty("gizmoMode", QStringLiteral("scale"));
+        QTest::qWait(150);
+        const QPoint cube = screenPoint(QStringLiteral("gizmo-scale-x-tip"));
+        const QPoint scaleCentre = screenPoint(QStringLiteral("mesh-gizmo"));
+        const QPointF outward = QPointF(cube - scaleCentre) / std::max(1.0, QLineF(scaleCentre, cube).length());
+        drag(cube, cube + (outward * 20).toPoint());
+        QTRY_COMPARE(edits.count(), 4);
+        QVERIFY(editedValues(3).value("scene3DScale").toDouble() > 0.9);
+        QTest::qWait(150);
+
+        // A right button cancels the drag in progress: nothing is reported
+        // and the scene shows the saved values again.
+        const QPoint again = screenPoint(QStringLiteral("gizmo-scale-x-tip"));
+        QTest::mousePress(&window, Qt::LeftButton, {}, again);
+        QTest::mouseMove(&window, again + (outward * 15).toPoint());
+        QVERIFY(renderer->property("gizmoDragging").toBool());
+        QTest::mousePress(&window, Qt::RightButton, {}, again + (outward * 15).toPoint());
+        QTest::mouseRelease(&window, Qt::RightButton, {}, again + (outward * 15).toPoint());
+        QTest::mouseRelease(&window, Qt::LeftButton, {}, again + (outward * 15).toPoint());
+        QTest::qWait(100);
+        QCOMPARE(edits.count(), 4);
+        QVERIFY(!renderer->property("gizmoDragging").toBool());
+        QVERIFY(renderer->property("dragOverride").isNull()
+                || !renderer->property("dragOverride").isValid()
+                || plainValue(renderer->property("dragOverride")).isNull());
+
+        // Leaving edit mode removes the handles.
+        scene->setProperty("editing", false);
+        QTRY_VERIFY(!gizmo->property("visible").toBool());
         QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
     }
 

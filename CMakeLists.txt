@@ -78,6 +78,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     RendererCapabilityProbe.qml
     RenderingModuleProbe.qml
     LayoutEngine.js
+    GizmoMath.js
     IconStyleResolver.js
     AnimationProfileRuntime.js
     MotionChannels.js
@@ -1285,6 +1286,14 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_SceneRotation.qml)
   set_tests_properties(
     scene-rotation-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME gizmo-math-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_GizmoMath.qml)
+  set_tests_properties(
+    gizmo-math-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(

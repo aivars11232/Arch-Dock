@@ -52,6 +52,21 @@ Several source files are very large (`PanelWindow.cpp`, `PanelRegistry.cpp`,
 work scheduled after the release; it does not change behaviour and was kept out
 of release corrections to avoid broad regressions.
 
+## 3D editing
+
+3D is available for free panels with a ring, circle or polygon layout. Arcs
+and semicircles stay flat unless their theme ships its own 3D platform (the
+built-in orange arc does). No built-in Panel Preset is labelled 3D: preset
+compatibility and preset preview cards resolve through the theme catalogue,
+which does not carry the generic 3D platform, so such a preset could only show
+its fallback. Apply a preset, then enable 3D on the Panels > 3D page.
+
+On the desktop gizmo, the X and Y rings tilt the platform with vertical and
+horizontal drags rather than by following the ring, which stays reliable when
+a ring is seen edge-on; the white ring follows the pointer around its centre.
+Scene position moves the platform within the panel's own area, which is sized
+for the platform, so the room to move is small at full scale.
+
 ## Hardware evidence
 
 The verified private matrices use native KWin/Plasma Wayland, virtual outputs

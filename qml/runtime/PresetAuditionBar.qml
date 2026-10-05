@@ -17,6 +17,9 @@ Rectangle {
     readonly property bool blocked: sessionState === "BLOCKED"
     readonly property bool idle: sessionState === "IDLE"
     readonly property bool canRestore: active && guardError.length === 0
+    // A desktop 3D edit auditions the panel itself: there is no preset to
+    // save, make the default or restore.
+    readonly property bool sceneEdit: String(auditionStatus.kind || "") === "scene3d"
 
     signal actionRequested(string action, string name)
 
@@ -30,6 +33,8 @@ Rectangle {
             return qsTr("Close the panel popup before previewing or applying.");
         if (guardError === "drag-active")
             return qsTr("Finish the drag before previewing or applying.");
+        if (active && sceneEdit)
+            return qsTr("Editing in 3D on the desktop. Drag the handles on the panel: Move, Rotate and Scale are at its top; Ctrl snaps, Shift is fine, Esc or the right button cancels a drag. Apply as Active saves; Cancel restores the panel.");
         if (active)
             return auditionStatus.temporary === true
                 ? qsTr("Desktop preview active on a temporary panel. Apply keeps it; Cancel removes it.")
@@ -99,7 +104,7 @@ Rectangle {
             wrapMode: Text.Wrap
         }
         RowLayout {
-            visible: root.active
+            visible: root.active && !root.sceneEdit
             Layout.fillWidth: true
             TextField {
                 id: nameField
@@ -132,6 +137,7 @@ Rectangle {
             }
             Button {
                 objectName: "preset-audition-default"
+                visible: !root.sceneEdit
                 text: root.selectedDefault ? qsTr("Remove as Default") : qsTr("Set as Default")
                 enabled: (root.idle || root.active) && root.resourceAvailable && root.presetId.length > 0
                 Accessible.name: text
@@ -153,6 +159,7 @@ Rectangle {
             }
             Button {
                 objectName: "preset-audition-restore"
+                visible: !root.sceneEdit
                 text: qsTr("Restore Built-in Defaults")
                 enabled: root.canRestore
                 Accessible.name: text

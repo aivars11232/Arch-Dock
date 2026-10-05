@@ -54,6 +54,7 @@ QVariantMap PresetPreviewSession::status() const
         const QString presetId = m_prepared->panelPreset ? m_prepared->panelPreset->identity.id
             : m_prepared->iconPreset ? m_prepared->iconPreset->identity.id : QString{};
         result.insert(QStringLiteral("presetId"), presetId);
+        result.insert(QStringLiteral("customizations"), m_customizations);
         result.insert(QStringLiteral("draftValues"), PanelSettingsSchema::editorValues(
             PanelSettingsFieldScope::Panel, m_prepared->draft.candidatePanel.toLegacyMap()));
         result.insert(QStringLiteral("fallback"), m_prepared->fallback);
@@ -157,7 +158,8 @@ QVariantMap PresetPreviewSession::beginPreview(const QVariantMap &request)
     if (m_prepared->record.temporary)
         applied = m_operations.createHost && m_operations.createHost(
             m_prepared->record, m_prepared->draft.candidatePanel, &error);
-    if (applied && m_prepared->record.kind == QStringLiteral("panel"))
+    if (applied && (m_prepared->record.kind == QStringLiteral("panel") ||
+                    m_prepared->record.kind == QStringLiteral("scene3d")))
         applied = m_operations.applyHost && m_operations.applyHost(
             m_prepared->draft.previousPanel, m_prepared->draft.candidatePanel, &error);
     if (!applied || !journal(QStringLiteral("ACTIVE"), &error))
@@ -184,7 +186,8 @@ bool PresetPreviewSession::installDraft(Prepared prepared, QString *error)
     m_prepared = std::move(prepared);
     ++m_revision;
     emit changed();
-    if (m_prepared->record.kind == QStringLiteral("panel") &&
+    if ((m_prepared->record.kind == QStringLiteral("panel") ||
+         m_prepared->record.kind == QStringLiteral("scene3d")) &&
         (!m_operations.applyHost || !m_operations.applyHost(previous, m_prepared->draft.candidatePanel, error)))
     {
         const QString failure = error && !error->isEmpty() ? *error : QStringLiteral("preview-host-failed");
@@ -202,7 +205,10 @@ QVariantMap PresetPreviewSession::updateDraft(const QVariantMap &customizations)
     const QString guardError = guard();
     if (!guardError.isEmpty()) return outcome(false, guardError);
     QString error;
-    auto draft = m_prepared->record.kind == QStringLiteral("icon") && m_prepared->iconPreset
+    auto draft = m_prepared->record.kind == QStringLiteral("scene3d")
+        ? PresetApplication::prepareSceneEdit(m_prepared->draft.previousPanel,
+              m_prepared->draft.previousGlobals, customizations, &error)
+        : m_prepared->record.kind == QStringLiteral("icon") && m_prepared->iconPreset
         ? PresetApplication::prepareIcon(m_prepared->draft.previousPanel, m_prepared->draft.previousGlobals,
               *m_prepared->iconPreset, customizations, &error)
         : m_prepared->panelPreset
@@ -294,6 +300,9 @@ QVariantMap PresetPreviewSession::saveAsCustomPreset(const QString &name)
 {
     if (!active()) return outcome(false, QStringLiteral("preview-not-active"));
     if (name.trimmed().isEmpty()) return outcome(false, QStringLiteral("preset-name-required"));
+    // A desktop 3D edit changes one panel; it has no preset to save from.
+    if (m_prepared->record.kind == QStringLiteral("scene3d"))
+        return outcome(false, QStringLiteral("scene-edit-has-no-preset"));
     if (!m_operations.saveCustom) return outcome(false, QStringLiteral("custom-store-unavailable"));
     const auto saved = m_operations.saveCustom(*m_prepared, name.trimmed());
     const bool success = saved.value(QStringLiteral("success")).toBool();
@@ -338,6 +347,8 @@ QVariantMap PresetPreviewSession::revert() { return cancel(); }
 QVariantMap PresetPreviewSession::restoreBuiltInDefaults()
 {
     if (!active()) return outcome(false, QStringLiteral("preview-not-active"));
+    if (m_prepared->record.kind == QStringLiteral("scene3d"))
+        return outcome(false, QStringLiteral("scene-edit-has-no-preset"));
     const QString guardError = guard();
     if (!guardError.isEmpty()) return outcome(false, guardError);
     QString error;

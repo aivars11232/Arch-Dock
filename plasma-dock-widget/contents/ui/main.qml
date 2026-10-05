@@ -988,7 +988,14 @@ PlasmoidItem {
                     duration: root.motionDuration
                 })
                 entryDelegate: liveEntryDelegate
+                // While Panel Studio holds a desktop 3D edit, presses belong
+                // to the handles and no application can start.
                 entryInteractionEnabled: root.sceneInputEnabled
+                    && !Boolean(root.configuration.sceneEditActive)
+                sceneEditActive: Boolean(root.configuration.sceneEditActive)
+                onSceneTransformEdited: function(values) {
+                    root.callDock("updateSceneEditDraft", [root.panelId, values]);
+                }
                 sceneConcealed: !presentationController.hostVisible
                 geometryCompatibilityProfile: root.freeSurface
                     ? "live" : "canonical"

@@ -194,6 +194,11 @@ Item {
     // the wheel then moves that window instead of turning the scene. The
     // travel is transient, like the wheel rotation above: it is never saved.
     property real browseTravel: 0
+    // Desktop 3D editing, set by the host while Panel Studio holds an edit of
+    // this panel. The handles take the whole panel; wheel and drag rotation
+    // wait until the edit ends.
+    property bool sceneEditActive: false
+    signal sceneTransformEdited(var values)
     readonly property var trackWindow: bakedMetadataUsable && bakedTrackMetrics
         ? ({ windowed: bakedTrackMetrics.windowed === true,
              capacity: Number(bakedTrackMetrics.capacity || 0),
@@ -457,8 +462,8 @@ Item {
         : geometryHitRegionActive ? "geometry-band" : "rectangle"
     readonly property var entryRects: buildEntryRects()
 
-    containmentMask: geometryHitRegionActive
-        ? geometryHitRegion
+    containmentMask: sceneEditActive ? null
+        : geometryHitRegionActive ? geometryHitRegion
         : surfaceLoader.inputMaskItem ? surfaceLoader.inputMaskItem : null
 
     function containsInputPoint(point) {
@@ -904,7 +909,7 @@ Item {
 
     WheelHandler {
         target: null
-        enabled: root.wheelRotationAvailable || root.wheelBrowseAvailable
+        enabled: (root.wheelRotationAvailable || root.wheelBrowseAvailable) && !root.sceneEditActive
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         acceptedModifiers: Qt.NoModifier
         onWheel: function(event) {
@@ -932,7 +937,7 @@ Item {
     MouseArea {
         anchors.fill: parent
         z: 0.5 // Entry delegates remain above this background gesture.
-        enabled: root.wheelRotationAvailable
+        enabled: root.wheelRotationAvailable && !root.sceneEditActive
         acceptedButtons: Qt.LeftButton
         property real previousAngle: 0
         onPressed: mouse => {
@@ -1016,6 +1021,8 @@ Item {
         mechanism: root.collapseMechanism
         trackMetrics: root.bakedTrackMetrics || ({})
         true3DCapability: root.true3DCapability
+        sceneEditMode: root.sceneEditActive
+        onSceneTransformEdited: function(values) { root.sceneTransformEdited(values) }
         sceneQuality: String(root.definitionValue("surface", "parameters3D", "surface3D", ({})).quality
             || root.panelDefinition.scene3DQuality
             || (root.themeDefinition.scene3D || ({})).defaultQuality || "medium")

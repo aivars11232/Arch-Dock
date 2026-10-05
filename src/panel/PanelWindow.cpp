@@ -848,6 +848,8 @@ std::optional<ArchDock::PresetPreviewSession::Prepared> PanelWindow::preparePres
         if (errorCode) *errorCode = code;
         return std::nullopt;
     };
+    if (request.value(QStringLiteral("kind")).toString() == QStringLiteral("scene3d"))
+        return prepareSceneEditPreview(request, errorCode);
     const QSet<QString> allowed{QStringLiteral("kind"), QStringLiteral("presetId"),
         QStringLiteral("panelId"), QStringLiteral("newPanel"), QStringLiteral("useRecommendedIcons")};
     for (auto it = request.cbegin(); it != request.cend(); ++it)
@@ -950,6 +952,62 @@ std::optional<ArchDock::PresetPreviewSession::Prepared> PanelWindow::preparePres
         prepared.record.appletId = free ? snapshot->host.freeDockAppletId : snapshot->host.nativeDockAppletId;
     }
     return prepared;
+}
+
+// A desktop 3D edit auditions the panel itself: a free panel drawn in 3D, its
+// own settings as the starting draft, and the 3D page's settings as the only
+// ones that may change.
+std::optional<ArchDock::PresetPreviewSession::Prepared> PanelWindow::prepareSceneEditPreview(
+    const QVariantMap &request, QString *errorCode) const
+{
+    using namespace ArchDock;
+    const auto fail = [errorCode](const QString &code) -> std::optional<PresetPreviewSession::Prepared>
+    {
+        if (errorCode) *errorCode = code;
+        return std::nullopt;
+    };
+    for (auto it = request.cbegin(); it != request.cend(); ++it)
+        if (it.key() != QStringLiteral("kind") && it.key() != QStringLiteral("panelId"))
+            return fail(QStringLiteral("invalid-preview-request"));
+    const auto snapshot = m_panelRegistry.panelDefinition(request.value(QStringLiteral("panelId")).toString());
+    if (!snapshot) return fail(QStringLiteral("panel-not-found"));
+    if (snapshot->host.kind != PanelHostKind::FreeDesktop)
+        return fail(QStringLiteral("scene-edit-needs-free-panel"));
+    if (m_panelRegistry.resolvePanelCapabilities(*snapshot).renderer.effectiveTier != RendererTier::True3D)
+        return fail(QStringLiteral("scene-edit-needs-3d"));
+    PresetPreviewSession::Prepared prepared;
+    prepared.record.kind = QStringLiteral("scene3d");
+    prepared.record.temporary = false;
+    prepared.fallback = {{QStringLiteral("available"), true}};
+    auto draft = PresetApplication::prepareSceneEdit(*snapshot, m_settings.transactionSnapshot(), {}, errorCode);
+    if (!draft) return std::nullopt;
+    prepared.draft = *draft;
+    prepared.record.panelId = snapshot->identity.id;
+    prepared.record.hostKind = PanelDefinition::hostKindName(snapshot->host.kind);
+    prepared.record.snapshot = *snapshot;
+    prepared.record.previewToken = snapshot->host.freeOwnershipToken;
+    prepared.record.containmentId = snapshot->host.freeDesktopContainmentId;
+    prepared.record.appletId = snapshot->host.freeDockAppletId;
+    return prepared;
+}
+
+bool PanelWindow::sceneEditActive(const QString &panelId) const
+{
+    if (!m_presetAudition || !m_presetAudition->active()) return false;
+    const QVariantMap status = m_presetAudition->status();
+    return status.value(QStringLiteral("kind")).toString() == QStringLiteral("scene3d")
+        && status.value(QStringLiteral("panelId")).toString() == panelId;
+}
+
+QVariantMap PanelWindow::updateSceneEditDraft(const QString &panelId, const QVariantMap &values)
+{
+    if (!sceneEditActive(panelId))
+        return {{QStringLiteral("success"), false},
+                {QStringLiteral("errorCode"), QStringLiteral("scene-edit-not-active")}};
+    QVariantMap merged = m_presetAudition->status().value(QStringLiteral("customizations")).toMap();
+    for (auto it = values.cbegin(); it != values.cend(); ++it)
+        merged.insert(it.key(), it.value());
+    return m_presetAudition->updateDraft(merged);
 }
 
 QVariantMap PanelWindow::presetEditorProjection(const ArchDock::PanelDefinition &candidate) const
@@ -1466,7 +1524,9 @@ ArchDock::PresetPreviewSession::Operations PanelWindow::presetAuditionOperations
             QVariantMap changes;
             const auto before = stored->toLegacyMap();
             const auto after = candidate.toLegacyMap();
-            const auto frozen = prepared.panelPreset
+            const auto frozen = prepared.record.kind == QStringLiteral("scene3d")
+                ? PresetApplication::prepareSceneEdit(*stored, prepared.draft.previousGlobals, {}, error)
+                : prepared.panelPreset
                 ? PresetApplication::preparePanel(*stored, prepared.draft.previousGlobals,
                     *prepared.panelPreset, {}, prepared.recommendedIcons, error)
                 : PresetApplication::prepareIcon(*stored, prepared.draft.previousGlobals,
@@ -1940,6 +2000,9 @@ QVariantMap PanelWindow::panelRendererConfiguration(const QString &panelId) cons
     {
         configuration.insert(it.key(), it.value());
     }
+    // The panel shows its 3D gizmo only while Panel Studio holds a desktop
+    // 3D edit of it.
+    configuration.insert(QStringLiteral("sceneEditActive"), sceneEditActive(panelId));
 
     const QVariantMap capabilityResolution =
         m_panelRegistry.resolvePanelCapabilities(*definition).toVariantMap();

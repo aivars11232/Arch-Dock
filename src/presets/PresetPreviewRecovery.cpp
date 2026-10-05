@@ -69,7 +69,8 @@ std::optional<PresetPreviewRecord> PresetPreviewRecord::fromVariantMap(const QVa
         QStringLiteral("CONVERTING"), QStringLiteral("ADOPTING"), QStringLiteral("COMMITTING"),
         QStringLiteral("COMMITTED"), QStringLiteral("ROLLING_BACK"), QStringLiteral("BLOCKED")};
     if (!original || QUuid(result.sessionId).isNull() || !PresetIdentity::isValidId(result.panelId) ||
-        (result.kind != QStringLiteral("panel") && result.kind != QStringLiteral("icon")) ||
+        (result.kind != QStringLiteral("panel") && result.kind != QStringLiteral("icon") &&
+         result.kind != QStringLiteral("scene3d")) ||
         !phases.contains(result.phase) || result.hostState.size() > 64 ||
         original->identity.id != result.panelId ||
         PanelDefinition::hostKindName(original->host.kind) != result.hostKind ||

@@ -25,6 +25,14 @@ public:
         const IconPresetDefinition &preset,
         const QVariantMap &customizations,
         QString *errorCode = nullptr);
+    // A desktop 3D edit of an existing panel: only the settings on the
+    // Panels > 3D page may change. Empty customizations give the panel itself.
+    [[nodiscard]] static std::optional<PanelSettingsTransactionDraft> prepareSceneEdit(
+        const PanelDefinition &snapshot,
+        const QVariantMap &globals,
+        const QVariantMap &customizations,
+        QString *errorCode = nullptr);
+    [[nodiscard]] static bool isSceneEditKey(const QString &key);
     [[nodiscard]] static bool iconOnlyChange(
         const PanelDefinition &snapshot, const PanelDefinition &candidate);
     [[nodiscard]] static PanelPresetDefinition panelSnapshot(

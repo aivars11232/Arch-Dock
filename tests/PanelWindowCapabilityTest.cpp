@@ -4,6 +4,7 @@
 #include "model/PanelSettingsSchema.h"
 #include "PanelRegistry.h"
 #include "panel/PanelWindow.h"
+#include "presets/PresetPreviewSession.h"
 #include "ScreenIdentity.h"
 #include "WindowModel.h"
 
@@ -135,6 +136,7 @@ private slots:
     void studioPanelMotionControls();
     void tiltEditorsFollowTheSelectedRenderer();
     void themeCardsResolveEachThemesOwnRenderer();
+    void sceneEditAuditionsOnlyAFree3DPanel();
     void studioIconTiles_data();
     void studioIconTiles();
     void studioFolderItemNames_data();
@@ -279,7 +281,11 @@ void PanelWindowCapabilityTest::studioPlainSurfaceExplains3D()
     std::unique_ptr<QObject> popup(component.createWithInitialProperties({
         {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 2}}));
     QVERIFY(popup);
-    QVERIFY(!popup->property("scene3DControlsAvailable").toBool());
+    // A plain circular free panel can be drawn in 3D wherever the session has
+    // a 3D renderer: the private native session does, offscreen runs do not.
+    const bool session3D = qEnvironmentVariableIsSet("ARCHDOCK_NATIVE_UI_PROBE")
+        && ARCHDOCK_QUICK3D_BUILT && ARCHDOCK_SCENE3D_BUILT;
+    QTRY_COMPARE(popup->property("scene3DControlsAvailable").toBool(), session3D);
     // Appearance no longer sends people to the themes for 3D: it points to
     // the one 3D page.
     QVariant rows;
@@ -296,16 +302,16 @@ void PanelWindowCapabilityTest::studioPlainSurfaceExplains3D()
     QVERIFY(QMetaObject::invokeMethod(popup.get(), "performStudioAction",
         Q_ARG(QVariant, "open-3d-page"), Q_ARG(QVariant, QVariantMap{})));
     QCOMPARE(popup->property("subTabIndex").toInt(), 10);
-    // This offscreen session has no 3D renderer: the page says so and offers
-    // no switch that cannot work.
+    // With a 3D renderer the page offers the switch for this very panel;
+    // without one it says so and offers no switch that cannot work.
     QVERIFY(QMetaObject::invokeMethod(popup.get(), "panel3DRows", Q_RETURN_ARG(QVariant, rows)));
     bool explained = false, switchOffered = false;
     for (const auto &row : rows.toList()) {
         explained |= row.toMap().value("text").toString().contains("unavailable in this session");
         switchOffered |= row.toMap().value("rendererToggle").toBool();
     }
-    QVERIFY(explained);
-    QVERIFY(!switchOffered);
+    QCOMPARE(switchOffered, session3D);
+    QCOMPARE(explained, !session3D);
     QVERIFY(QMetaObject::invokeMethod(popup.get(), "performStudioAction",
         Q_ARG(QVariant, "browse-3d-themes"), Q_ARG(QVariant, QVariantMap{})));
     QCOMPARE(popup->property("subTabIndex").toInt(), 6);
@@ -550,6 +556,47 @@ void PanelWindowCapabilityTest::tiltEditorsFollowTheSelectedRenderer()
     QCOMPARE(registry->panelDefinition("bottom")->toPersistedMap(), nativeBefore);
     PanelRegistry reloaded;
     QCOMPARE(reloaded.panelDefinition(panel)->surface.parameters2_5D.value("tilt").toDouble(), 8.0);
+}
+
+// AD3D-TASK-002: desktop 3D editing starts only for a free panel drawn in 3D,
+// and the panel's gizmo cannot change anything outside such an edit.
+void PanelWindowCapabilityTest::sceneEditAuditionsOnlyAFree3DPanel()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    auto *session = qobject_cast<ArchDock::PresetPreviewSession *>(
+        engine.rootContext()->contextProperty(QStringLiteral("presetAudition")).value<QObject *>());
+    QVERIFY(registry && session);
+    const auto begin = [&](const QString &panelId) {
+        return session->beginPreview({{"kind", "scene3d"}, {"panelId", panelId}});
+    };
+    QCOMPARE(begin("bottom").value("errorCode").toString(), QStringLiteral("scene-edit-needs-free-panel"));
+    const QString panel = registry->addFreePanel();
+    const auto blue = registry->themeCandidate(panel, "ring-platform-blue", "complete");
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        blue.value("values").toMap()).value("success").toBool());
+    QCOMPARE(begin(panel).value("errorCode").toString(), QStringLiteral("scene-edit-needs-3d"));
+    QCOMPARE(session->beginPreview({{"kind", "scene3d"}, {"panelId", panel}, {"presetId", "x"}})
+                 .value("errorCode").toString(), QStringLiteral("invalid-preview-request"));
+    QVERIFY(!backend.panelRendererConfiguration(panel).value("sceneEditActive").toBool());
+    QCOMPARE(backend.updateSceneEditDraft(panel, {{"scene3DRoll", 10.0}}).value("errorCode").toString(),
+             QStringLiteral("scene-edit-not-active"));
+    if (!(ARCHDOCK_QUICK3D_BUILT && ARCHDOCK_SCENE3D_BUILT))
+        return;
+    // Drawn in 3D, the panel passes preparation; this session has no Plasma
+    // host to verify, which the private desktop matrix provides.
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"rendererTier", "true3d"}}).value("success").toBool());
+    const auto started = begin(panel);
+    QVERIFY(!started.value("success").toBool());
+    const QString reason = started.value("errorCode").toString();
+    QVERIFY2(!reason.startsWith("scene-edit") && reason != "invalid-preview-request"
+             && reason != "panel-not-found", qPrintable(reason));
+    QCOMPARE(session->state(), QStringLiteral("IDLE"));
+    QVERIFY(!backend.panelRendererConfiguration(panel).value("sceneEditActive").toBool());
 }
 
 void PanelWindowCapabilityTest::themeCardsResolveEachThemesOwnRenderer()
@@ -1468,8 +1515,11 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
                  "spacing", "scene3DKeyLight", "scene3DFillLight", "scene3DTransitions", "scene3DFloat"})
             QVERIFY2(keys.contains(key), qPrintable(key));
         QVERIFY(actions.contains("reset-3d-transform"));
+        // Desktop editing is offered from the same page.
+        QVERIFY(actions.contains("edit-3d-on-desktop"));
+        const QVariantMap rollField{{"key", "scene3DRoll"}, {"scope", "panel"}};
         QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue",
-            Q_ARG(QVariant, QVariantMap{{"key", "scene3DRoll"}, {"scope", "panel"}}), Q_ARG(QVariant, 45.0)));
+            Q_ARG(QVariant, rollField), Q_ARG(QVariant, 45.0)));
         QCOMPARE(popup->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap()
                      .value("scene3DRoll").toDouble(), 45.0);
         QVERIFY(QMetaObject::invokeMethod(popup.get(), "performStudioAction",

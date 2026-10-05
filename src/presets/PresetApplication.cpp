@@ -76,6 +76,26 @@ std::optional<PanelSettingsTransactionDraft> PresetApplication::preparePanel(
     return result;
 }
 
+bool PresetApplication::isSceneEditKey(const QString &key)
+{
+    return key.startsWith(QStringLiteral("scene3D"));
+}
+
+std::optional<PanelSettingsTransactionDraft> PresetApplication::prepareSceneEdit(
+    const PanelDefinition &snapshot, const QVariantMap &globals,
+    const QVariantMap &customizations, QString *errorCode)
+{
+    for (auto it = customizations.cbegin(); it != customizations.cend(); ++it)
+    {
+        if (!isSceneEditKey(it.key()))
+        {
+            setError(errorCode, QStringLiteral("unavailable-scene-edit-field"));
+            return std::nullopt;
+        }
+    }
+    return prepare(snapshot, globals, customizations, errorCode);
+}
+
 std::optional<PanelSettingsTransactionDraft> PresetApplication::prepareIcon(
     const PanelDefinition &snapshot, const QVariantMap &globals,
     const IconPresetDefinition &preset, const QVariantMap &customizations,

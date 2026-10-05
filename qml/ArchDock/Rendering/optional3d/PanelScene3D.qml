@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import QtQuick3D
+import "../GizmoMath.js" as GizmoMath
 
 Item {
     id: root
@@ -91,29 +92,159 @@ Item {
     // panel has around them, and scale resizes them, so no value can carry
     // the platform out of its panel. Everything is drawn, picked and pressed
     // through the same nodes, so input and anchors follow without a copy.
-    property bool gizmoDragging: false
+    readonly property bool gizmoDragging: dragStart !== null
+
+    // Desktop 3D editing. In edit mode the platform carries Blender-style
+    // handles, one set per operation: arrows move it along X (red), Y (green)
+    // and Z (blue); the red and green rings tilt it (pitch and yaw) and the
+    // white ring turns the view (roll); the cube handles scale it. Ctrl snaps,
+    // Shift slows the drag for fine work, and Esc or the right button cancels.
+    // A finished drag is reported once through transformEdited(); the host
+    // keeps it as a draft until the edit is applied or cancelled.
+    property bool editMode: false
+    property string gizmoMode: "move"
+    signal transformEdited(var values)
+    // While a handle is dragged, and until the panel's settings come back with
+    // the result, these values stand in for the saved ones.
+    property var dragOverride: null
+    property var dragStart: null
+    readonly property real gizmoLength: platformScale * 0.55
+    readonly property var transformKeys: ({
+        cameraPitch: "scene3DCameraPitch", cameraYaw: "scene3DCameraYaw", roll: "scene3DRoll",
+        positionX: "scene3DPositionX", positionY: "scene3DPositionY", positionZ: "scene3DPositionZ",
+        scale: "scene3DScale"
+    })
+    function transformValue(key, fallback, minimum, maximum) {
+        const override = dragOverride && dragOverride[key] !== undefined ? Number(dragOverride[key]) : NaN
+        return Number.isFinite(override) ? Math.max(minimum, Math.min(maximum, override))
+            : bounded(key, fallback, minimum, maximum)
+    }
+    function wrapDegrees(value) { return ((value + 180) % 360 + 360) % 360 - 180 }
+    function savedTransform() {
+        return {
+            cameraPitch: bounded("cameraPitch", 25, -60, 60), cameraYaw: bounded("cameraYaw", 0, -180, 180),
+            roll: bounded("roll", 0, -180, 180), positionX: bounded("positionX", 0, -1, 1),
+            positionY: bounded("positionY", 0, -1, 1), positionZ: bounded("positionZ", 0, -1, 1),
+            scale: bounded("scale", 1, 0.5, 1.25)
+        }
+    }
+    function gizmoHandleAt(x, y) {
+        const hits = view.pickAll(x, y)
+        for (let index = 0; index < hits.length; ++index) {
+            const name = hits[index].objectHit ? String(hits[index].objectHit.objectName) : ""
+            const match = /^gizmo-(move|rotate|scale)-(x|y|z|view)/.exec(name)
+            if (match && match[1] === gizmoMode)
+                return { mode: match[1], axis: match[2] }
+        }
+        return null
+    }
+    function beginGizmoDrag(handle, x, y) {
+        const origin = gizmo.scenePosition
+        const centre = view.mapFrom3DScene(origin)
+        const values = savedTransform()
+        if (dragOverride)
+            for (const key of Object.keys(dragOverride)) values[key] = Number(dragOverride[key])
+        dragStart = { mode: handle.mode, axis: handle.axis, pointer: Qt.point(x, y),
+                      centre: Qt.point(centre.x, centre.y), origin: origin, values: values }
+        dragOverride = Object.assign({}, values)
+    }
+    function updateGizmoDrag(x, y, modifiers) {
+        const start = dragStart
+        const settings = GizmoMath.modifierSettings(modifiers)
+        const delta = Qt.point((x - start.pointer.x) * settings.precision,
+                               (y - start.pointer.y) * settings.precision)
+        const pointer = Qt.point(start.pointer.x + delta.x, start.pointer.y + delta.y)
+        const next = Object.assign({}, start.values)
+        if (start.mode === "move") {
+            const axis = start.axis === "x" ? Qt.vector3d(1, 0, 0)
+                : start.axis === "y" ? Qt.vector3d(0, 1, 0) : Qt.vector3d(0, 0, 1)
+            const from = view.mapFrom3DScene(start.origin)
+            const to = view.mapFrom3DScene(start.origin.plus(axis.times(gizmoLength)))
+            const travel = GizmoMath.axisTravel(Qt.point(from.x, from.y), Qt.point(to.x, to.y),
+                                                gizmoLength, delta)
+            // Scene units back to the fractions the settings store.
+            const perspective = (cameraDistance - targetDepth) / cameraDistance
+            const span = start.axis === "x" ? roomX * perspective
+                : start.axis === "y" ? roomY * perspective : platformScale * 0.5
+            const key = start.axis === "x" ? "positionX" : start.axis === "y" ? "positionY" : "positionZ"
+            let value = span > 1e-6 ? start.values[key] + travel / span : start.values[key]
+            if (settings.snap) value = GizmoMath.snapped(value, 0.05)
+            next[key] = GizmoMath.clamp(value, -1, 1)
+        } else if (start.mode === "rotate") {
+            if (start.axis === "x") {
+                let pitch = start.values.cameraPitch - delta.y * 0.25
+                if (settings.snap) pitch = GizmoMath.snapped(pitch, 15)
+                next.cameraPitch = GizmoMath.clamp(pitch, -60, 60)
+            } else {
+                let angle = start.axis === "y"
+                    ? start.values.cameraYaw + delta.x * 0.25
+                    : start.values.roll + GizmoMath.sweptDegrees(start.centre, start.pointer, pointer)
+                if (settings.snap) angle = GizmoMath.snapped(angle, 15)
+                next[start.axis === "y" ? "cameraYaw" : "roll"] = wrapDegrees(angle)
+            }
+        } else {
+            let scale = start.values.scale * GizmoMath.scaleRatio(start.centre, start.pointer, pointer)
+            if (settings.snap) scale = GizmoMath.snapped(scale, 0.05)
+            next.scale = GizmoMath.clamp(scale, 0.5, 1.25)
+        }
+        dragOverride = next
+    }
+    function finishGizmoDrag() {
+        const start = dragStart
+        const result = dragOverride || ({})
+        dragStart = null
+        const values = {}
+        for (const key of Object.keys(transformKeys))
+            if (Math.abs(Number(result[key]) - Number(start.values[key])) > 1e-6)
+                values[transformKeys[key]] = Number(result[key])
+        if (Object.keys(values).length === 0) {
+            dragOverride = null
+            return
+        }
+        overrideRelease.restart()
+        transformEdited(values)
+    }
+    function cancelGizmoDrag() {
+        dragStart = null
+        dragOverride = null
+    }
+    // The override gives way once the settings carry the edited values, or
+    // after a while if they never do.
+    onSceneDefinitionChanged: {
+        if (dragStart || !dragOverride) return
+        const saved = savedTransform()
+        if (Object.keys(dragOverride).every(function(key) {
+                return Math.abs(Number(saved[key]) - Number(dragOverride[key])) < 1e-3 }))
+            dragOverride = null
+    }
+    onEditModeChanged: if (!editMode) cancelGizmoDrag()
+    Timer {
+        id: overrideRelease
+        interval: 3000
+        onTriggered: if (!root.dragStart) root.dragOverride = null
+    }
     readonly property bool transitionsEnabled: !reducedMotion && !gizmoDragging
         && (sceneDefinition || ({})).transitions !== false
     readonly property real cameraDistance: Math.max(1, height)
         / (2 * Math.tan(bounded("fieldOfView", 40, 20, 70) * Math.PI / 360))
     // The platform and its icons reach a little past the platform's radius.
     readonly property real sceneExtent: platformScale * 1.05
-    readonly property real targetScale: bounded("scale", 1, 0.5, 1.25)
+    readonly property real targetScale: transformValue("scale", 1, 0.5, 1.25)
     readonly property real fitLimit: Math.min(width, height) / 2 / Math.max(1, sceneExtent)
     // Nearer is larger: depth stops where the platform would outgrow the panel.
-    readonly property real targetDepth: Math.min(bounded("positionZ", 0, -1, 1) * platformScale * 0.5,
+    readonly property real targetDepth: Math.min(transformValue("positionZ", 0, -1, 1) * platformScale * 0.5,
         cameraDistance * Math.max(0, 1 - targetScale / Math.max(targetScale, fitLimit)))
     readonly property real apparentScale: targetScale * cameraDistance
         / Math.max(1, cameraDistance - targetDepth)
     readonly property real roomX: Math.max(0, width / 2 - sceneExtent * apparentScale)
     readonly property real roomY: Math.max(0, height / 2 - sceneExtent * apparentScale)
     readonly property vector3d targetPosition: Qt.vector3d(
-        bounded("positionX", 0, -1, 1) * roomX * (cameraDistance - targetDepth) / cameraDistance,
-        bounded("positionY", 0, -1, 1) * roomY * (cameraDistance - targetDepth) / cameraDistance,
+        transformValue("positionX", 0, -1, 1) * roomX * (cameraDistance - targetDepth) / cameraDistance,
+        transformValue("positionY", 0, -1, 1) * roomY * (cameraDistance - targetDepth) / cameraDistance,
         targetDepth)
-    readonly property real targetPitch: bounded("cameraPitch", 25, -60, 60)
-    readonly property real targetYaw: bounded("cameraYaw", 0, -180, 180)
-    readonly property real targetRoll: bounded("roll", 0, -180, 180)
+    readonly property real targetPitch: transformValue("cameraPitch", 25, -60, 60)
+    readonly property real targetYaw: transformValue("cameraYaw", 0, -180, 180)
+    readonly property real targetRoll: transformValue("roll", 0, -180, 180)
     // What is drawn. It eases toward the targets when transitions are on and
     // jumps to them otherwise. One frame-driven easing instead of a Behavior
     // per value: Qt creates a Behavior's animation on its first use, which
@@ -272,6 +403,78 @@ Item {
         asynchronous: true
         sourceSize: Qt.size(1024, 1024)
         cache: false
+    }
+
+    Row {
+        objectName: "mesh-gizmo-toolbar"
+        visible: root.editMode && root.rendererReady
+        anchors.top: parent.top
+        anchors.topMargin: 4
+        anchors.horizontalCenter: parent.horizontalCenter
+        spacing: 4
+        z: 3
+        Repeater {
+            model: [{ mode: "move", label: qsTr("Move") }, { mode: "rotate", label: qsTr("Rotate") },
+                    { mode: "scale", label: qsTr("Scale") }]
+            delegate: Rectangle {
+                id: modeButton
+                required property var modelData
+                objectName: "mesh-gizmo-mode-" + modelData.mode
+                width: modeLabel.implicitWidth + 16
+                height: modeLabel.implicitHeight + 8
+                radius: 4
+                color: root.gizmoMode === modelData.mode ? "#2f6f88" : "#cc1b2831"
+                border.color: "#73cfe7"
+                Accessible.role: Accessible.Button
+                Accessible.name: modelData.label
+                Accessible.onPressAction: root.gizmoMode = modelData.mode
+                Text {
+                    id: modeLabel
+                    anchors.centerIn: parent
+                    text: modeButton.modelData.label
+                    color: "#f4f8fb"
+                    font.pixelSize: 11
+                }
+                TapHandler { onTapped: root.gizmoMode = modeButton.modelData.mode }
+            }
+        }
+    }
+
+    MouseArea {
+        objectName: "mesh-gizmo-input"
+        anchors.fill: parent
+        z: 2
+        // While editing, the whole panel belongs to the handles: a press that
+        // misses them does nothing, so no application starts by accident.
+        enabled: root.editMode && root.rendererReady
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        preventStealing: true
+        onPressed: function(mouse) {
+            if (mouse.button === Qt.RightButton) {
+                root.cancelGizmoDrag()
+                return
+            }
+            const handle = root.gizmoHandleAt(mouse.x, mouse.y)
+            if (handle)
+                root.beginGizmoDrag(handle, mouse.x, mouse.y)
+        }
+        onPositionChanged: function(mouse) {
+            if (root.dragStart)
+                root.updateGizmoDrag(mouse.x, mouse.y, mouse.modifiers)
+        }
+        onReleased: function(mouse) {
+            if (mouse.button !== Qt.LeftButton || !root.dragStart)
+                return
+            // The keys held when the button is let go decide the result.
+            root.updateGizmoDrag(mouse.x, mouse.y, mouse.modifiers)
+            root.finishGizmoDrag()
+        }
+        onCanceled: root.cancelGizmoDrag()
+    }
+    Shortcut {
+        sequences: [StandardKey.Cancel]
+        enabled: root.dragStart !== null
+        onActivated: root.cancelGizmoDrag()
     }
 
     View3D {
@@ -497,6 +700,87 @@ Item {
                 }
             }
         }
+        }
+        Node {
+            id: gizmo
+            objectName: "mesh-gizmo"
+            visible: root.editMode
+            position: Qt.vector3d(root.shownPosition.x, root.shownPosition.y,
+                root.shownPosition.z + root.floatOffset + root.platformTop * root.shownScale)
+            Repeater3D {
+                // Arrows to move, cube-tipped arms to scale.
+                model: [
+                    { axis: "x", color: "#ff5a5a", turn: Qt.vector3d(0, 0, -90) },
+                    { axis: "y", color: "#7be37b", turn: Qt.vector3d(0, 0, 0) },
+                    { axis: "z", color: "#5aa8ff", turn: Qt.vector3d(90, 0, 0) }
+                ]
+                delegate: Node {
+                    id: arm
+                    required property var modelData
+                    readonly property string handleMode: root.gizmoMode === "scale" ? "scale" : "move"
+                    visible: root.gizmoMode !== "rotate"
+                    eulerRotation: modelData.turn
+                    Model {
+                        objectName: "gizmo-" + arm.handleMode + "-" + arm.modelData.axis + "-shaft"
+                        source: "#Cylinder"
+                        pickable: true
+                        position: Qt.vector3d(0, root.gizmoLength / 2, 0)
+                        scale: Qt.vector3d(root.gizmoLength * 0.0006, root.gizmoLength / 100,
+                                           root.gizmoLength * 0.0006)
+                        materials: PrincipledMaterial {
+                            lighting: PrincipledMaterial.NoLighting
+                            baseColor: arm.modelData.color
+                        }
+                    }
+                    Model {
+                        objectName: "gizmo-" + arm.handleMode + "-" + arm.modelData.axis + "-tip"
+                        source: arm.handleMode === "scale" ? "#Cube" : "#Cone"
+                        pickable: true
+                        position: Qt.vector3d(0, root.gizmoLength, 0)
+                        scale: Qt.vector3d(root.gizmoLength * 0.0016, root.gizmoLength * 0.0022,
+                                           root.gizmoLength * 0.0016)
+                        materials: PrincipledMaterial {
+                            lighting: PrincipledMaterial.NoLighting
+                            baseColor: arm.modelData.color
+                        }
+                    }
+                }
+            }
+            Repeater3D {
+                // Rings to turn: pitch about X, yaw about Y, roll about the view.
+                model: [
+                    { axis: "x", color: "#ff5a5a", turn: Qt.vector3d(0, 90, 0) },
+                    { axis: "y", color: "#7be37b", turn: Qt.vector3d(90, 0, 0) },
+                    { axis: "view", color: "#f4f8fb", turn: Qt.vector3d(0, 0, 0) }
+                ]
+                delegate: Node {
+                    id: ring
+                    required property var modelData
+                    visible: root.gizmoMode === "rotate"
+                    readonly property real radius: root.gizmoLength * (modelData.axis === "view" ? 1.15 : 0.9)
+                    // The view ring always faces the camera.
+                    rotation: modelData.axis === "view" ? camera.sceneRotation : Qt.quaternion(1, 0, 0, 0)
+                    eulerRotation: modelData.axis === "view" ? Qt.vector3d(0, 0, 0) : modelData.turn
+                    Repeater3D {
+                        model: 32
+                        delegate: Model {
+                            required property int index
+                            readonly property real angle: index * Math.PI * 2 / 32
+                            objectName: "gizmo-rotate-" + ring.modelData.axis + "-" + index
+                            source: "#Cube"
+                            pickable: true
+                            position: Qt.vector3d(ring.radius * Math.cos(angle), ring.radius * Math.sin(angle), 0)
+                            eulerRotation: Qt.vector3d(0, 0, angle * 180 / Math.PI + 90)
+                            scale: Qt.vector3d(ring.radius * 2 * Math.PI / 32 / 100 * 0.9,
+                                               root.gizmoLength * 0.0005, root.gizmoLength * 0.0005)
+                            materials: PrincipledMaterial {
+                                lighting: PrincipledMaterial.NoLighting
+                                baseColor: ring.modelData.color
+                            }
+                        }
+                    }
+                }
+            }
         }
         // Lights stay in world space; only the platform and its icons move.
         DirectionalLight {

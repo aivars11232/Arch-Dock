@@ -357,6 +357,47 @@ preset_defaults_group() {
     wait_for_free_host_snapshot_stable "$desktop" "$applet" recovery >/dev/null
     preset_require_equal "$geometry" "$(preset_free_geometry "$desktop" "$applet")" 'S12 exact free crash recovery'
     preset_require_equal "$registry" "$(panel_registry_json)" 'S12 recovery never commits'
+    # AD3D-TASK-002: desktop 3D editing is an audition of the panel itself.
+    log_session_phase 'S13 desktop 3D edit / exact Cancel / single Apply / interruption recovery'
+    local revision applied
+    revision="$(panel_registry_value "$id" settingsRevision)"
+    reply="$(panel_call applyPanelSettingsTransaction "$id" "uint64 $revision" \
+        "{'layout': <'ring'>, 'panelThemeId': <'ring-platform-blue'>, 'completeThemeId': <'ring-platform-blue'>, 'rendererTier': <'true3d'>}" '{}')"
+    [[ "$reply" == *"'success': <true>"* ]] || { printf 'S13 3D setup failed: %s\n' "$reply" >&2; return 1; }
+    wait_for_free_host_snapshot_stable "$desktop" "$applet" scene3d >/dev/null
+    registry="$(panel_registry_json)"; renderer="$(preset_renderer "$id")"
+    jq -e '.effectiveRendererTier=="true3d" and .sceneEditActive==false' <<<"$renderer" >/dev/null
+    reply="$(panel_call updateSceneEditDraft "$id" "{'scene3DRoll': <30.0>}")"
+    [[ "$reply" == *"scene-edit-not-active"* ]] || { printf 'S13 edit outside a session: %s\n' "$reply" >&2; return 1; }
+    preset_ok beginPreview "{'kind': <'scene3d'>, 'panelId': <'$id'>}" >/dev/null
+    preset_renderer "$id" | jq -e '.sceneEditActive==true and .completeThemeId=="ring-platform-blue"' >/dev/null
+    reply="$(panel_call updateSceneEditDraft "$id" "{'scene3DRoll': <30.0>, 'scene3DScale': <0.8>}")"
+    [[ "$reply" == *"'success': <true>"* ]] || { printf 'S13 gizmo draft refused: %s\n' "$reply" >&2; return 1; }
+    preset_renderer "$id" | jq -e '.scene3DRoll==30 and .scene3DScale==0.8 and .sceneEditActive==true' >/dev/null
+    reply="$(panel_call updateSceneEditDraft "$id" "{'scene3DPositionX': <0.25>}")"
+    [[ "$reply" == *"'success': <true>"* ]]
+    preset_renderer "$id" | jq -e '.scene3DRoll==30 and .scene3DPositionX==0.25' >/dev/null
+    reply="$(panel_call updateSceneEditDraft "$id" "{'layout': <'vertical'>}")"
+    [[ "$reply" == *"unavailable-scene-edit-field"* ]] || { printf 'S13 non-3D edit accepted: %s\n' "$reply" >&2; return 1; }
+    preset_require_equal "$registry" "$(panel_registry_json)" 'S13 no durable desktop-edit write'
+    preset_ok cancel >/dev/null
+    preset_require_equal "$registry" "$(panel_registry_json)" 'S13 Cancel keeps the saved panel'
+    preset_require_equal "$renderer" "$(preset_renderer "$id")" 'S13 Cancel restores the drawn panel'
+    preset_ok beginPreview "{'kind': <'scene3d'>, 'panelId': <'$id'>}" >/dev/null
+    reply="$(panel_call updateSceneEditDraft "$id" "{'scene3DRoll': <20.0>}")"
+    [[ "$reply" == *"'success': <true>"* ]]
+    preset_ok applyAsActive >/dev/null
+    panel_registry_record_snapshot "$id" | jq -e '.scene3DRoll==20 and .completeThemeId=="ring-platform-blue"' >/dev/null
+    preset_renderer "$id" | jq -e '.sceneEditActive==false and .scene3DRoll==20' >/dev/null
+    applied="$(panel_registry_json)"
+    preset_ok beginPreview "{'kind': <'scene3d'>, 'panelId': <'$id'>}" >/dev/null
+    reply="$(panel_call updateSceneEditDraft "$id" "{'scene3DRoll': <45.0>}")"
+    [[ "$reply" == *"'success': <true>"* ]]
+    wait_for_free_host_snapshot_stable "$desktop" "$applet" scene3d-crash >/dev/null
+    preset_crash_service scene3d-edit
+    wait_for_free_host_snapshot_stable "$desktop" "$applet" scene3d-recovery >/dev/null
+    preset_require_equal "$applied" "$(panel_registry_json)" 'S13 an interrupted edit never commits'
+    preset_renderer "$id" | jq -e '.sceneEditActive==false and .scene3DRoll==20' >/dev/null
     preset_ok setAsDefault panel obsidian-glass-dock true >/dev/null
     log_session_phase 'S11 independent Icon Preset defaults / new native and free instances'
     registry="$(panel_registry_json)"

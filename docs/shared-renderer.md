@@ -342,6 +342,46 @@ declared rectangle and the whole-image `sourceSize` by the same factors
 out of a smaller picture and the artwork was drawn shrunk into the top-left
 corner of its layer, at `radius / trackRadius` of its size.
 
+## Generic 3D, transform and desktop editing — AD3D-TASK-002
+
+`PanelRegistry::genericScene3D()` lets a free panel with a closed radial layout
+(circular, ring, ellipse, radial, polygon and the regular polygons) be drawn by
+the existing mesh renderer even when its look ships no scene. It reuses the
+validated platform and pedestal meshes of the built-in mesh package, without
+its texture or moving parts, and builds the material from the look's own
+colour, appearance and glow. `themeCapabilityProfile()` adds the `true3d` tier
+and puts the look's own tier first among the fallbacks;
+`themeRuntimeProjection()` adds `scene3D`, `scene3DResources` and
+`genericScene3D: true`, and gives a procedural look a minimal projection of its
+own. Every value in it is a real variant: D-Bus aborts the service on an empty
+one. A look with its own scene is never replaced, and open arcs and semicircles
+are not adapted.
+
+The scene's transform is stored in `surface.parameters3D` and edited on the
+Panels > 3D page. Pitch and yaw keep their meaning (the camera rig); roll turns
+the camera about its view axis; position and uniform scale move the
+`mesh-scene-content` node that holds the platform and the icons. Position is a
+fraction of the room the panel has around them, and depth stops before the
+platform outgrows the panel, so no value can carry the scene out of its panel.
+Icon rectangles, input and anchors follow without a copy because they are
+projected from the same nodes. Changes ease in through one `FrameAnimation`
+rather than a Behavior per value: Qt creates a Behavior's animation on first
+use, which made the scene's object count depend on its history. Transitions
+and the float stop under reduced motion and during a drag.
+
+Desktop editing is a `scene3d` audition of the panel itself
+(`PresetPreviewSession`, `PresetApplication::prepareSceneEdit()`): only
+`scene3D*` settings may change, the host shows every draft, Apply as Active
+commits one revision-checked transaction, Cancel restores the panel exactly,
+and the journal recovers an interrupted edit. The panel's configuration
+carries `sceneEditActive` while the edit runs. `PanelScene3D` then shows the
+gizmo, picks its handles with `View3D.pickAll` and reports each finished drag
+once through `transformEdited`; the applet forwards it to
+`PanelWindow::updateSceneEditDraft`, which merges it into the audition's
+customizations. During an edit the scene's whole box takes input, wheel and
+drag rotation wait, and entries take no presses. The pointer arithmetic lives
+in `GizmoMath.js` so it can be tested without a GPU.
+
 ## PanelScene inputs
 
 | Property | Contract |
