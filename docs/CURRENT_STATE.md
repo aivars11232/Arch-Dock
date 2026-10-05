@@ -1,5 +1,86 @@
 # Arch Dock current state
 
+<!-- AD3D_TASK_002_BEGIN -->
+## Generic 3D, Panels > 3D page and desktop 3D editing — AD3D-TASK-002, 2026-10-05
+
+Package **arch-dock 0.1.1-9** from source `669d18ef9e213b13008411108934ad2868804488`
+(freeze `d501baa` plus the recipe). Installed on the owner's PC and verified:
+the package was installed through the owner's own authentication, the 220
+payload files match, `pacman -Qkk` reports 0 altered files, the new backend
+runs, Plasma was refreshed and Panel Studio opened. A private configuration
+backup (mode 0600) and an installation receipt are in
+`~/.local/state/arch-dock/`. Arch Dock's own configuration is byte-identical
+after the upgrade; in the Plasma layout only the wallpaper slideshow's current
+image and the third-party Panel Colorizer's record of the tray's widgets
+changed. The panels briefly re-activated the old backend while files were
+replaced; that exact process was stopped before the new one started.
+
+What changed for the owner:
+
+- A free panel with a ring, circle or polygon layout can switch to 3D on
+  **Panels > 3D > Enable 3D** without changing its theme. A look without a 3D
+  scene of its own stands on the generic 3D platform in its own colours;
+  turning 3D off returns the same theme in its own 2D or baked 2.5D renderer.
+  Arcs and semicircles stay flat unless their theme brings a 3D platform.
+- The 3D page holds every 3D setting: pitch, yaw and roll, scene position X, Y
+  and Z inside the panel (desktop position stays on General), scale, field of
+  view, thickness, pedestal height, quality, key and fill light, animated
+  orientation changes, an optional gentle float, Spacing, Reset 3D transform
+  and **Edit on desktop**.
+- Edit on desktop shows move, rotate and scale handles on the panel itself.
+  Ctrl snaps, Shift is fine, Esc or the right button cancels a drag. Apply as
+  Active in Panel Studio saves the edit in one transaction; Cancel restores
+  the panel; an interrupted edit is recovered. No application starts from a
+  press while editing.
+- Reduced motion turns the float and the animated changes off.
+- No built-in Panel Preset is relabelled 3D (see known limitations).
+
+Verification (one session, one build job, one test worker):
+
+- Complete configured suite 112/112: 111 in the full serial run and the
+  runtime UI gate after its 3D-page test was made to expect 3D where the
+  session has it. Log scan: no QML type, reference, binding-loop, import or
+  texture errors beyond the intended missing-Quick3D probe.
+- Real RHI: transform, roll, input and anchors move together; easing and
+  float respect reduced motion; gizmo move, Ctrl snap, rotate, scale and
+  right-button cancel with real mouse events; the Blue Ring baked panel
+  switches to 3D and back on the 3D page with its theme kept.
+- Private Plasma audition matrix: desktop 3D edit with exact Cancel, single
+  Apply and recovery after the service is killed mid-edit.
+- Two canonical exports identical (537 files, archive SHA256
+  `0d7b0f849c2b5a5b726fe33cb2d0b2c003c7531384036a1774df2706de5f9da5`); the
+  tagged verifier passes in a disposable clone (no tag in this repository);
+  `makepkg --verifysource` passes; one-job Release package built in 381 s,
+  SHA256 `5619fbe851b6b5150f80b56f3046445419c68e5e8dea4d5fdbd0a52f26cb8db4`.
+- Installed-package harness PASS: 220 payload files byte-identical, licensing,
+  hidden-source rendering, 15+15 preset catalogs, startup with and without
+  Quick3D, upgrade from 0.1.1-8 with configuration recovery, removal with user
+  configuration preserved. A first attempt could not start its interaction
+  check because the sandbox hides the project folder, where the test Python
+  lived; the rerun used the same Python outside it.
+- GitHub's Source gates workflow did not run for the two Task 002 pushes:
+  GitHub could not assign a hosted runner during its Actions incident of
+  2026-10-05 and cancelled both jobs after 15 minutes without running a step.
+  The workflow's exact commands pass on a fresh clone of `669d18e`.
+
+Owner acceptance checklist (not yet done by the owner):
+
+1. Panel Studio > Panels, select the free blue-ring panel > **3D** > Enable 3D,
+   Apply: a 3D platform in the ring's colours, icons on it, the theme unchanged.
+2. Change pitch, yaw, roll, scene position and scale; the preview follows;
+   Apply keeps them, Cancel restores. Reset 3D transform returns the neutral
+   pose.
+3. **Edit on desktop**: handles on the panel; Move, Rotate and Scale at its
+   top; drag them, try Ctrl and Shift, cancel one drag with Esc or the right
+   button; Apply as Active saves, Cancel restores.
+4. Turn 3D off: the baked blue ring returns.
+5. Task 001: crowded semicircle scrolls along the curve, the wheel works on
+   the bare platform, folders open on a half circle, theme cards show each
+   theme in its own renderer.
+6. On a second monitor: Panel Studio opens on the screen of the panel it
+   edits (physical cell R-01).
+<!-- AD3D_TASK_002_END -->
+
 <!-- AUDIT_CORRECTIONS_BEGIN -->
 ## Independent audit corrections — 2026-10-05
 

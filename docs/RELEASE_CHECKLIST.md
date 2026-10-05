@@ -1,5 +1,25 @@
 # Arch Dock release checklist
 
+## Generic 3D, 3D page and desktop editing — 0.1.1-9, 2026-10-05
+
+- [x] AD3D-TASK-001, the independent audit corrections and AD3D-TASK-002 are
+      committed and pushed; release source `669d18ef9e213b13008411108934ad2868804488`.
+- [x] Complete configured suite 112/112 serially, one worker; native Wayland
+      and RHI gates one at a time; log scan clean.
+- [x] Two canonical exports identical; tagged verifier PASS in a disposable
+      clone; `makepkg --verifysource` PASS; one-job Release package built.
+      Source SHA256 `0d7b0f849c2b5a5b726fe33cb2d0b2c003c7531384036a1774df2706de5f9da5`,
+      package SHA256 `5619fbe851b6b5150f80b56f3046445419c68e5e8dea4d5fdbd0a52f26cb8db4`.
+- [x] Installed-package harness PASS, including the 0.1.1-8 upgrade.
+- [x] Installed on the owner's PC with the owner's authorization; payload,
+      `pacman -Qkk`, backend and configuration preservation verified.
+- [ ] Owner visual and interaction acceptance (checklist in CURRENT_STATE.md).
+- [ ] Physical second-monitor and other-GPU cells (R-01).
+- [ ] `v0.1.1` tag and publication: not needed for this correction; separate
+      owner decision.
+- Package and evidence are retained, untracked, in `build-codex-ad3d-0.1.1-9/`.
+
+
 <!-- WORLD_DEPTH_PAUSED_BEGIN -->
 ## Verified installed world-space 3D correction — 0.1.1-8, 2026-10-05
 
