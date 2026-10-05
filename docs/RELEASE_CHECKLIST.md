@@ -1,7 +1,7 @@
 # Arch Dock release checklist
 
 <!-- WORLD_DEPTH_PAUSED_BEGIN -->
-## Verified world-space 3D correction — 0.1.1-8 candidate, 2026-10-05
+## Verified installed world-space 3D correction — 0.1.1-8, 2026-10-05
 
 Source verification PASS: nine affected CTests, isolated typed Studio controls
 and transactions, and full staged native Wayland/RHI. Icons and themed pedestals
@@ -28,9 +28,23 @@ One session, no subagents, one build job and one test worker. Failed native cycl
 and startup attempts are retained with the complete passing repeats; the startup
 timeout did not recur under diagnostics. The broad suite was not rerun.
 
-Actual-PC backed-up update and Plasma refresh are pending; the installed PC
-remains 0.1.1-7 until the owner receipt is complete. Intermittent slow Apply remains
-unreproduced. The version-specific records below are historical.
+Actual owner PC now runs **arch-dock 0.1.1-8**. Fresh private configuration
+ZIP/manifest are mode 0600; Plasma was refreshed and Panel Studio opened.
+Installed payload: 219/219 bytes/modes PASS; native pacman Qkk reports zero
+altered files. Stable live backend executable SHA256:
+`d7319b38bfa47d249950a70f497aea7e79815cf78d749db04d629379fa77f497`.
+Saved panel user settings are preserved; the only Plasma configuration change
+is its slideshow's current wallpaper image. Private installation receipt:
+`/home/aivars/.local/state/arch-dock/installation-0.1.1-8.json`.
+Final cleanup audit: protected 1,044 files unchanged, original 480 core records
+preserved, zero new core records, zero task processes/dumps, owned scratch gone.
+The owner's visual/interaction acceptance remains pending. To test Orange 3D,
+select that free panel, enable **Panels > Appearance > 3D rendering** and Apply;
+tilt/orientation/size controls are on Layout, thickness/elevation/opacity on
+Appearance, and automatic rotation on Animations. Wheel and platform drag
+provide manual rotation. Existing saved renderer preferences are preserved.
+Intermittent slow Apply remains unreproduced. The version-specific records
+below are historical.
 <!-- WORLD_DEPTH_PAUSED_END -->
 
 <!-- FOLDER_PATH_CHECKLIST_BEGIN -->
