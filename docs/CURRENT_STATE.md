@@ -1,19 +1,36 @@
 # Arch Dock current state
 
 <!-- WORLD_DEPTH_PAUSED_BEGIN -->
-## World-space 3D correction — 0.1.1-8 candidate, 2026-10-05
+## Verified world-space 3D correction — 0.1.1-8 candidate, 2026-10-05
 
 Source verification PASS: nine affected CTests, isolated typed Studio controls
-and transactions, and the full staged native Wayland/RHI gate. Icons and themed
-pedestals share the 3D platform, projected depth/input match, wheel and held drag
-rotate both ways, and Orange offers a beveled 3D ring without the fallback arc.
-Orientation, thickness and elevation join tilt, size and opacity controls.
-Orange 3D On/Off and Cancel preserve saved settings; inactive defaults no longer
-block switching back to baked artwork. See [verification handoff](3D_CORRECTION_HANDOFF.md).
+and transactions, and full staged native Wayland/RHI. Icons and themed pedestals
+share the 3D platform; depth, input, wheel and held drag match the projected path.
+Orange supports a beveled 3D ring without the fallback arc. Orientation,
+thickness and elevation join tilt, size and opacity controls. Orange On/Off and
+Cancel preserve saved settings; inactive defaults no longer block switching back.
+See [source verification handoff](3D_CORRECTION_HANDOFF.md).
 
-Fresh packaging, installed-package verification, owned cleanup and actual-PC
-update are pending. The installed PC remains 0.1.1-7. The intermittent slow Apply
-report remains unreproduced. The version-specific records below are historical.
+Fresh single-job Release package and installed-package gate PASS: 219/219 payload
+bytes/modes, presets/startup with and without Quick3D, native UI/folder interaction,
+0.1.1-7 -> 0.1.1-8 upgrade/recovery and removal/configuration preservation.
+Two independently regenerated canonical source/checkpoint/recipe/checksum sets
+match; extracted bytes/modes match the frozen source. Root PKGBUILD pins it.
+Source freeze: `78eceedddb9d6c508b592c027c3e49a2fb26feee`. Package SHA256:
+`f241db8640aa1cdedc041fcf6d27bc91e8b1c33fea1e3e04d16bc8908ad3e45e`.
+
+Cleanup PASS: disposable `/mnt/F/depth8` removed; package, source artifacts and
+verification ZIP retained in `build-codex-depth-motion-0.1.1-8/`. Protected
+1044 files remain byte/mode identical; existing 480 core records
+remain, zero new core records, zero task processes and zero task dump payloads.
+Removed 1006518272 allocated bytes across owned work only.
+One session, no subagents, one build job and one test worker. Failed native cycling
+and startup attempts are retained with the complete passing repeats; the startup
+timeout did not recur under diagnostics. The broad suite was not rerun.
+
+Actual-PC backed-up update and Plasma refresh are pending; the installed PC
+remains 0.1.1-7 until the owner receipt is complete. Intermittent slow Apply remains
+unreproduced. The version-specific records below are historical.
 <!-- WORLD_DEPTH_PAUSED_END -->
 
 <!-- FOLDER_PATH_CURRENT_BEGIN -->
