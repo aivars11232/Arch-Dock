@@ -1,5 +1,11 @@
 .pragma library
 
+// Panel Studio's editor session as plain data: the snapshot it loaded, the
+// user's draft changes to panel and shared settings, the candidates sent to
+// the backend for projection and Apply, and the renderer candidates the
+// preview, theme cards and preset cards draw. Pure functions, so the session
+// can be tested without a window.
+
 function hasOwn(map, key) {
     return map !== null && map !== undefined && Object.prototype.hasOwnProperty.call(map, key);
 }
@@ -312,7 +318,7 @@ function rendererThemeCandidate(session, theme) {
         "scene3DCameraYaw", "scene3DThickness", "scene3DIconElevation",
         "scene3DRoll", "scene3DPositionX", "scene3DPositionY", "scene3DPositionZ",
         "scene3DScale", "scene3DFieldOfView", "scene3DKeyLight", "scene3DFillLight",
-        "scene3DTransitions", "scene3DFloat"
+        "scene3DTransitions", "scene3DFloat", "scene3DBand", "scene3DBend"
     ];
     for (let index = 0; index < ownDefaults.length; ++index)
         delete result[ownDefaults[index]];

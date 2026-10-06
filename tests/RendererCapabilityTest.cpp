@@ -1,4 +1,5 @@
 #include "RendererBuildConfig.h"
+#include "themes/LookPalette.h"
 #include "themes/ThemePackage.h"
 
 #include <QLineF>
@@ -140,7 +141,10 @@ private slots:
         QVERIFY(renderer);
         const int meshTriangles = theme.value("scene3DResources").toMap()
             .value("mesh").toMap().value("indexes").toList().size() / 3;
-        const int expectedTriangles = meshTriangles * 9 + 24;
+        // The platform and its two declared panel parts, and per entry: a
+        // glyph and a tile quad (2 + 2), a 72-triangle pedestal, the theme's
+        // icon base and its declared entry part (one platform mesh each).
+        const int expectedTriangles = meshTriangles * 7 + 2 * (2 + 2 + 72);
         QCOMPARE(renderer->property("triangleCount").toInt(), expectedTriangles);
         QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 2);
         const QVariant geometry = plainValue(scene->property("entryRects"));
@@ -218,9 +222,11 @@ private slots:
                 for (int x = qMax(0, qRound(projected.x()) - radius);
                      x < qMin(first.width(), qRound(projected.x()) + radius); ++x) {
                     const QColor color = first.pixelColor(x, y);
-                    // The fixture's dark blue fill is distinct from the cyan platform.
+                    // The fixture's dark blue fill (#243447) is distinct from the
+                    // light cyan platform and from the dark brown orange one.
                     glyphPixels += color.alpha() > 32 && color.redF() < 0.4
-                        && color.greenF() < 0.4 && color.blueF() < 0.4;
+                        && color.greenF() < 0.4 && color.blueF() < 0.4
+                        && color.blueF() > color.redF() + 0.05;
                 }
             QVERIFY2(glyphPixels > 100, qPrintable(QStringLiteral(
                 "Entry %1 glyph was covered by the platform: %2 visible pixels")
@@ -499,16 +505,24 @@ private slots:
         QCOMPARE(scene->property("sceneRotationAngle").toDouble(), 0.0);
         QObject *part = renderer->findChild<QObject *>(QStringLiteral("mesh-panel-part-0"));
         QVERIFY(part);
+        QObject *content = renderer->findChild<QObject *>(QStringLiteral("mesh-scene-content"));
+        QVERIFY(content);
         const QVector3D openPosition = part->property("position").value<QVector3D>();
+        const QVector3D openScale = content->property("scale").value<QVector3D>();
         scene->setProperty("runtimeState", QVariantMap{
             {QStringLiteral("presentationState"), QStringLiteral("collapsed")},
             {QStringLiteral("presentationProgress"), 1.0}});
         QTRY_COMPARE(part->property("openAmount").toDouble(), 0.0);
         QVERIFY(part->property("position").value<QVector3D>() != openPosition);
+        // ADFIX UF-05: a radial collapse closes the whole platform toward its
+        // centre, down to a small ring, instead of leaving it full size.
+        QTRY_VERIFY(qAbs(content->property("scale").value<QVector3D>().x() - openScale.x() * 0.2f)
+            < 1e-4f * qMax(1.0f, openScale.x()));
         scene->setProperty("runtimeState", QVariantMap{
             {QStringLiteral("presentationState"), QStringLiteral("open")},
             {QStringLiteral("presentationProgress"), 0.0}});
         QTRY_COMPARE(part->property("position").value<QVector3D>(), openPosition);
+        QTRY_COMPARE(content->property("scale").value<QVector3D>(), openScale);
 
         motion.insert(QStringLiteral("reducedMotion"), false);
         motion.insert(QStringLiteral("animationProfile"), turn);
@@ -861,6 +875,22 @@ private slots:
             for (const QPointF &point : points) sum += point;
             return points.isEmpty() ? sum : sum / points.size();
         };
+        // Where each icon stands on the platform, as the camera sees it. The
+        // icons stand upright on pedestals above it, so their centres move
+        // with the platform's height when it is scaled; their feet show
+        // where the transform keeps the platform.
+        const auto feet = [&]() {
+            QList<QPointF> result;
+            for (int index = 0; index < 8; ++index) {
+                QObject *node = renderer->findChild<QObject *>(QStringLiteral("mesh-entry-%1").arg(index));
+                QVector3D view;
+                if (node)
+                    QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, view),
+                        Q_ARG(QVector3D, node->property("scenePosition").value<QVector3D>()));
+                result.append(QPointF(view.x(), view.y()));
+            }
+            return result;
+        };
         const auto spread = [&](const QList<QPointF> &points) {
             const QPointF middle = centroid(points);
             double reach = 0;
@@ -899,6 +929,7 @@ private slots:
 
         const QList<QPointF> resting = centres();
         const QPointF restingMiddle = centroid(resting);
+        const QPointF restingFeet = centroid(feet());
         const double restingSpread = spread(resting);
         const QPointF restingSurface = surfacePoint();
         QVERIFY(accepts(restingSurface));
@@ -907,7 +938,10 @@ private slots:
         scene->setProperty("sceneScale", 0.6);
         QTRY_VERIFY2(qAbs(spread(centres()) - restingSpread * 0.6) < restingSpread * 0.05,
                      qPrintable(QStringLiteral("spread %1 of %2").arg(spread(centres())).arg(restingSpread)));
-        QVERIFY(QLineF(centroid(centres()), restingMiddle).length() < 3);
+        QVERIFY2(QLineF(centroid(feet()), restingFeet).length() < 3,
+                 qPrintable(QStringLiteral("feet centred at %1,%2, were %3,%4")
+                     .arg(centroid(feet()).x()).arg(centroid(feet()).y())
+                     .arg(restingFeet.x()).arg(restingFeet.y())));
         QTRY_VERIFY(projectionMatches());
         QVERIFY(accepts(surfacePoint()));
         QVERIFY2(!accepts(restingSurface), "the platform's old edge passes through once it shrinks");
@@ -974,6 +1008,331 @@ private slots:
     // transform with the mouse. Each finished drag is reported once; a
     // cancelled drag leaves the scene and reports nothing; outside edit mode
     // there are no handles and a press changes nothing.
+    // ADFIX-TASK-002 (UF-03, AUD-02, UF-09): a look without a 3D mesh of its
+    // own stands on a platform generated along its own layout, in its own
+    // colours, with upright icons on pedestals. Every supported shape, the
+    // owner's baked blue ring and the steel octagon, drawn by the real RHI.
+    void generatedPlatformsFollowTheLayoutAndLook_data()
+    {
+        QTest::addColumn<QString>("layout");
+        QTest::addColumn<QString>("themeId");
+        QTest::addColumn<QString>("shape");
+        for (const char *layout : {"circular", "ring", "ellipse"})
+            QTest::newRow(layout) << QString::fromLatin1(layout) << QString() << QStringLiteral("ring");
+        QTest::newRow("radial") << QStringLiteral("radial") << QString() << QStringLiteral("arc");
+        for (const char *layout : {"triangle", "square", "pentagon", "hexagon", "octagon", "polygon"})
+            QTest::newRow(layout) << QString::fromLatin1(layout) << QString() << QStringLiteral("polygon");
+        QTest::newRow("baked blue ring") << QStringLiteral("ring")
+            << QStringLiteral("ring-platform-blue") << QStringLiteral("ring");
+        QTest::newRow("baked steel octagon") << QStringLiteral("octagon")
+            << QStringLiteral("octagon-platform-steel") << QStringLiteral("polygon");
+    }
+
+    void generatedPlatformsFollowTheLayoutAndLook()
+    {
+        QFETCH(QString, layout);
+        QFETCH(QString, themeId);
+        QFETCH(QString, shape);
+        if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+            return; // A generated platform is drawn only by the real RHI scene.
+        const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
+        QVERIFY(!glyphFixture.isEmpty());
+
+        // The look as PanelRegistry::genericScene3D projects it: a procedural
+        // neon style, or a baked package with the palette of its artwork.
+        QVariantMap theme{
+            {QStringLiteral("format"), QStringLiteral("org.archdock.theme")},
+            {QStringLiteral("version"), 2}, {QStringLiteral("valid"), true},
+            {QStringLiteral("id"), QStringLiteral("procedural-look")},
+            {QStringLiteral("name"), QStringLiteral("Procedural look")},
+            {QStringLiteral("capabilities"), QVariantMap{
+                {QStringLiteral("rendererTiers"), QVariantList{QStringLiteral("true3d"), QStringLiteral("procedural2d")}},
+                {QStringLiteral("preferredRendererTier"), QStringLiteral("procedural2d")},
+                {QStringLiteral("fallbackRendererTiers"), QVariantList{QStringLiteral("procedural2d")}}}}};
+        QVariantMap generated;
+        QVariantMap palette;
+        if (!themeId.isEmpty())
+        {
+            const QString themeRoot = qEnvironmentVariable("ARCHDOCK_RENDERING_STAGED_THEME_ROOT",
+                QStringLiteral(ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT));
+            const auto package = ArchDock::ThemePackage::load(themeRoot + QStringLiteral("/")
+                + themeId + QStringLiteral("/archdock-theme.json"));
+            QVERIFY2(package.isValid(), qPrintable(package.primaryCode()));
+            theme = package.package->runtimeProjection();
+            QVariantMap capabilities = theme.value(QStringLiteral("capabilities")).toMap();
+            QVariantList tiers = capabilities.value(QStringLiteral("rendererTiers")).toList();
+            tiers.prepend(QStringLiteral("true3d"));
+            capabilities.insert(QStringLiteral("rendererTiers"), tiers);
+            theme.insert(QStringLiteral("capabilities"), capabilities);
+            const auto sampled = ArchDock::LookPalette::fromArtwork(theme);
+            QVERIFY(sampled.has_value());
+            palette = *sampled;
+            generated.insert(QStringLiteral("palette"), palette);
+        }
+        theme.insert(QStringLiteral("scene3D"), QVariantMap{
+            {QStringLiteral("generic"), true}, {QStringLiteral("generated"), generated},
+            {QStringLiteral("fieldOfView"), 40}, {QStringLiteral("cameraPitch"), 0},
+            {QStringLiteral("cameraYaw"), 0}, {QStringLiteral("keyLightBrightness"), 1.2},
+            {QStringLiteral("fillLightBrightness"), 0.45},
+            {QStringLiteral("defaultQuality"), QStringLiteral("high")},
+            {QStringLiteral("transitions"), false}, {QStringLiteral("parts"), QVariantList{}}});
+        theme.insert(QStringLiteral("scene3DResources"), QVariantMap{
+            {QStringLiteral("material"), QVariantMap{
+                {QStringLiteral("format"), QStringLiteral("org.archdock.material")},
+                {QStringLiteral("version"), 1}, {QStringLiteral("baseColor"), QStringLiteral("#406080")},
+                {QStringLiteral("emissiveColor"), QStringLiteral("#000000")},
+                {QStringLiteral("emissiveStrength"), 0.0}, {QStringLiteral("metalness"), 0.3},
+                {QStringLiteral("roughness"), 0.45}}},
+            {QStringLiteral("parts"), QVariantList{}}, {QStringLiteral("indexBudget"), 262144}});
+
+        QQmlEngine engine;
+        engine.addImportPath(importRoot());
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import ArchDock.Rendering 1.0
+            PanelScene {
+                required property string glyphFixture
+                required property string layoutName
+                property real pitch: 0
+                panelDefinition: ({rendererTier: "true3d", layout: layoutName, layoutRadius: 120,
+                                   scene3DQuality: "high", iconSize: 40, layoutPadding: 10,
+                                   pathSides: 7, appearance: "neon", scene3DCameraPitch: pitch,
+                                   scene3DTransitions: false})
+                entryDelegateContext: ({hostKind: "free"})
+                hostCapabilities: ({rotation: {available: true}})
+                orderedEntries: [0, 1, 2, 3, 4, 5].map(function(index) {
+                    return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphFixture}
+                })
+            }
+        )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/GeneratedConsumer.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QQuickWindow window;
+        std::unique_ptr<QObject> object(component.createWithInitialProperties({
+            {QStringLiteral("themeDefinition"), theme},
+            {QStringLiteral("layoutName"), layout},
+            {QStringLiteral("glyphFixture"), QUrl::fromLocalFile(glyphFixture).toString()}}));
+        QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+        auto *scene = qobject_cast<QQuickItem *>(object.get());
+        QVERIFY(scene);
+        scene->setParentItem(window.contentItem());
+        window.resize(qCeil(scene->width()), qCeil(scene->height()));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(),
+                                 QStringLiteral("true3d"), 5000);
+        auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+        QVERIFY(renderer);
+        QObject *viewport = objectValue(renderer->property("viewport"));
+        QObject *content = renderer->findChild<QObject *>(QStringLiteral("mesh-scene-content"));
+        QVERIFY(viewport && content);
+        QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 6);
+
+        // The platform is the generated one, of the layout's own shape.
+        const QVariantMap platform = plainValue(renderer->property("generatedPlatform")).toMap();
+        QCOMPARE(platform.value(QStringLiteral("shape")).toString(), shape);
+        const double scale = renderer->property("platformScale").toDouble();
+        const double top = renderer->property("platformTop").toDouble();
+        const double track = platform.value(QStringLiteral("track")).toDouble();
+        const double band = platform.value(QStringLiteral("band")).toDouble();
+
+        // Every icon stands on the platform's flat top.
+        const QVariantList positions = platform.value(QStringLiteral("positions")).toList();
+        const QVariantList normals = platform.value(QStringLiteral("normals")).toList();
+        const QVariantList indexes = platform.value(QStringLiteral("indexes")).toList();
+        const int rimOffset = platform.value(QStringLiteral("rimOffset")).toInt();
+        const auto vertex = [&](int index) {
+            const QVariantList p = positions.value(indexes.value(index).toInt()).toList();
+            return QPointF(p.value(0).toDouble(), p.value(1).toDouble());
+        };
+        const auto onTop = [&](const QPointF &point) {
+            for (int i = 0; i + 2 < rimOffset; i += 3) {
+                if (normals.value(indexes.value(i).toInt()).toList().value(2).toDouble() < 0.999)
+                    continue;
+                const QPointF a = vertex(i), b = vertex(i + 1), c = vertex(i + 2);
+                const auto side = [](QPointF p, QPointF q, QPointF r) {
+                    return (p.x() - r.x()) * (q.y() - r.y()) - (q.x() - r.x()) * (p.y() - r.y());
+                };
+                const double d1 = side(point, a, b), d2 = side(point, b, c), d3 = side(point, c, a);
+                if (!((d1 < -1e-9 || d2 < -1e-9 || d3 < -1e-9) && (d1 > 1e-9 || d2 > 1e-9 || d3 > 1e-9)))
+                    return true;
+            }
+            return false;
+        };
+        for (int index = 0; index < 6; ++index) {
+            QObject *node = renderer->findChild<QObject *>(QStringLiteral("mesh-entry-%1").arg(index));
+            QVERIFY(node);
+            QVector3D local;
+            QVERIFY(QMetaObject::invokeMethod(content, "mapPositionFromScene", Q_RETURN_ARG(QVector3D, local),
+                Q_ARG(QVector3D, node->property("scenePosition").value<QVector3D>())));
+            // The pedestal's whole footprint, not only its middle.
+            const double footprint = 0.18 * 40 / scale;
+            for (int step = 0; step <= 8; ++step) {
+                const double x = local.x() / scale + (step < 8 ? footprint * std::cos(step * M_PI / 4) : 0);
+                const double y = local.y() / scale + (step < 8 ? footprint * std::sin(step * M_PI / 4) : 0);
+                QVERIFY2(onTop(QPointF(x, y)), qPrintable(QStringLiteral(
+                    "%1 entry %2's pedestal reaches %3,%4, off the platform").arg(layout).arg(index)
+                    .arg(x).arg(y)));
+            }
+            QVERIFY(local.z() > top);
+        }
+
+        const auto pixels = [&]() -> QImage {
+            auto *view = qobject_cast<QQuickItem *>(viewport);
+            const auto grab = view ? view->grabToImage() : nullptr;
+            if (!grab) return {};
+            QSignalSpy ready(grab.get(), &QQuickItemGrabResult::ready);
+            return ready.wait(5000) ? grab->image() : QImage();
+        };
+        // A point of the platform's own frame (units of its scale) as drawn.
+        const auto drawn = [&](double x, double y) {
+            QVector3D world, view;
+            QMetaObject::invokeMethod(content, "mapPositionToScene", Q_RETURN_ARG(QVector3D, world),
+                Q_ARG(QVector3D, QVector3D(x * scale, y * scale, top)));
+            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, view),
+                Q_ARG(QVector3D, world));
+            return QPoint(qRound(view.x()), qRound(view.y()));
+        };
+        QTest::qWait(200);
+        const QImage seen = pixels();
+        QVERIFY(!seen.isNull());
+        const auto at = [&](double x, double y) { return seen.pixelColor(drawn(x, y)); };
+        const auto opaque = [&](double x, double y) { return at(x, y).alpha() > 200; };
+        const auto clear = [&](double x, double y) { return at(x, y).alpha() < 32; };
+        QVERIFY2(clear(0, 0), "the platform's middle is open");
+
+        // The silhouette is the layout's shape, which a ring would not be.
+        if (layout == QStringLiteral("ellipse")) {
+            QVERIFY2(opaque(0, track * 0.62), "the ellipse's top edge");
+            QVERIFY2(clear(0, track), "no circle above the ellipse");
+            QVERIFY2(opaque(track, 0), "the ellipse's side");
+        } else if (layout == QStringLiteral("radial")) {
+            // The 300-degree arc opens on the left, where the layout's path does.
+            QVERIFY2(clear(-track, 0), "the radial arc's gap is open");
+            QVERIFY2(opaque(track, 0), "the radial arc's far side");
+        } else if (shape == QStringLiteral("polygon")) {
+            const int sides = platform.value(QStringLiteral("shape")).toString() == QStringLiteral("polygon")
+                ? (layout == QStringLiteral("triangle") ? 3 : layout == QStringLiteral("square") ? 4
+                   : layout == QStringLiteral("pentagon") ? 5 : layout == QStringLiteral("hexagon") ? 6
+                   : layout == QStringLiteral("octagon") ? 8 : 7) : 0;
+            const double mitre = 1 / std::cos(M_PI / sides);
+            const double corner = track + (band + 0.05) * mitre;
+            const double edge = track * std::cos(M_PI / sides) + band + 0.05;
+            const double probe = (corner + edge) / 2;
+            // Every corner, the first straight up, reaches past the probe and
+            // no edge's middle does: exactly this many sides, this way up.
+            for (int k = 0; k < sides; ++k) {
+                const double vertexAngle = M_PI / 2 - k * 2 * M_PI / sides;
+                const double edgeAngle = vertexAngle - M_PI / sides;
+                QVERIFY2(opaque(probe * std::cos(vertexAngle), probe * std::sin(vertexAngle)),
+                         qPrintable(QStringLiteral("%1 corner %2 at %3").arg(layout).arg(k).arg(probe)));
+                QVERIFY2(clear(probe * std::cos(edgeAngle), probe * std::sin(edgeAngle)),
+                         qPrintable(QStringLiteral("%1 edge %2 middle at %3").arg(layout).arg(k).arg(probe)));
+            }
+        } else {
+            for (int step = 0; step < 8; ++step)
+                QVERIFY(opaque(track * std::cos(step * M_PI / 4 + 0.2), track * std::sin(step * M_PI / 4 + 0.2)));
+        }
+
+        // The look's own colours: between the icons, on the platform's top.
+        if (!themeId.isEmpty() || layout == QStringLiteral("ring")) {
+            double r = 0, g = 0, b = 0;
+            int count = 0;
+            const QVariantList rects = plainValue(renderer->property("projectedEntryGeometry")).toList();
+            for (int step = 0; step < 24; ++step) {
+                const double angle = step * M_PI / 12 + 0.13;
+                double x = track * std::cos(angle), y = track * std::sin(angle);
+                if (shape == QStringLiteral("polygon")) {
+                    // Along the polygon's own centre line, half way along each side.
+                    const int sides = layout == QStringLiteral("octagon") ? 8 : 7;
+                    const double side = std::floor(step / 3.0);
+                    const double a0 = M_PI / 2 - side * 2 * M_PI / sides;
+                    const double a1 = a0 - 2 * M_PI / sides;
+                    const double t = (step % 3 + 1) / 4.0;
+                    x = track * ((1 - t) * std::cos(a0) + t * std::cos(a1));
+                    y = track * ((1 - t) * std::sin(a0) + t * std::sin(a1));
+                }
+                const QPoint point = drawn(x, y);
+                bool covered = false;
+                for (const QVariant &value : rects) {
+                    const QVariantMap rect = value.toMap();
+                    covered |= QRectF(rect.value("x").toDouble() - 4, rect.value("y").toDouble() - 4,
+                                      rect.value("width").toDouble() + 8,
+                                      rect.value("height").toDouble() + 8).contains(point);
+                }
+                const QColor colour = seen.pixelColor(point);
+                if (covered || colour.alpha() < 200) continue;
+                r += colour.redF(); g += colour.greenF(); b += colour.blueF();
+                ++count;
+            }
+            QVERIFY2(count >= 6, qPrintable(QStringLiteral("%1 platform samples").arg(count)));
+            const QColor body = QColor::fromRgbF(r / count, g / count, b / count);
+            if (themeId == QStringLiteral("ring-platform-blue")) {
+                // Dark teal like its artwork, not the cyan mesh's light steel blue.
+                QVERIFY2(std::abs(body.hslHueF() - QColor(QStringLiteral("#123c52")).hslHueF()) < 0.06
+                         && body.lightnessF() < 0.4, qPrintable(body.name()));
+                QVERIFY2(QColor(QStringLiteral("#7098ae")).lightnessF() - body.lightnessF() > 0.2,
+                         qPrintable(body.name()));
+            } else if (themeId == QStringLiteral("octagon-platform-steel")) {
+                QVERIFY2(body.hslSaturationF() < 0.3, qPrintable(body.name()));
+            } else {
+                // The neon look's own cyan stroke colour.
+                QVERIFY2(std::abs(body.hslHueF() - QColor(QStringLiteral("#50e6ff")).hslHueF()) < 0.05,
+                         qPrintable(body.name()));
+            }
+        }
+        const QString evidence = qEnvironmentVariable("ARCHDOCK_SCENE_EVIDENCE_DIR");
+        const QString tag = QString::fromLatin1(QTest::currentDataTag()).replace(QLatin1Char(' '), QLatin1Char('-'));
+        if (!evidence.isEmpty()) {
+            QVERIFY(QDir().mkpath(evidence + QStringLiteral("/generated")));
+            QVERIFY(seen.save(evidence + QStringLiteral("/generated/") + tag + QStringLiteral("-top.png")));
+        }
+
+        // Tilted: icons face the viewer and stand on pedestals above the top.
+        const QVariant flatRects = plainValue(renderer->property("projectedEntryGeometry"));
+        scene->setProperty("pitch", 45.0);
+        QTRY_COMPARE(renderer->property("shownPitch").toDouble(), 45.0);
+        // The input rectangles follow the tilt once a frame has drawn it.
+        QTRY_VERIFY(plainValue(renderer->property("projectedEntryGeometry")) != flatRects);
+        QTest::qWait(200);
+        const QImage tilted = pixels();
+        QVERIFY(!tilted.isNull());
+        if (!evidence.isEmpty())
+            QVERIFY(tilted.save(evidence + QStringLiteral("/generated/") + tag + QStringLiteral("-tilted.png")));
+        const QVariantList rects = plainValue(renderer->property("projectedEntryGeometry")).toList();
+        QCOMPARE(rects.size(), 6);
+        for (int index = 0; index < 6; ++index) {
+            const QVariantMap rect = rects.value(index).toMap();
+            const double width = rect.value("width").toDouble(), height = rect.value("height").toDouble();
+            QVERIFY2(width / height > 0.8 && width / height < 1.25, qPrintable(QStringLiteral(
+                "entry %1 is drawn %2 x %3, not facing the viewer").arg(index).arg(width).arg(height)));
+            QVERIFY2(height > 40 * 0.6, qPrintable(QStringLiteral("entry %1 is %2 high").arg(index).arg(height)));
+            QObject *node = renderer->findChild<QObject *>(QStringLiteral("mesh-entry-%1").arg(index));
+            QObject *anchor = renderer->findChild<QObject *>(QStringLiteral("mesh-input-anchor-%1").arg(index));
+            QVERIFY(node && anchor);
+            QVector3D local, world, foot, base;
+            QMetaObject::invokeMethod(content, "mapPositionFromScene", Q_RETURN_ARG(QVector3D, local),
+                Q_ARG(QVector3D, node->property("scenePosition").value<QVector3D>()));
+            QMetaObject::invokeMethod(content, "mapPositionToScene", Q_RETURN_ARG(QVector3D, world),
+                Q_ARG(QVector3D, QVector3D(local.x(), local.y(), top)));
+            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, foot),
+                Q_ARG(QVector3D, world));
+            // The icon's bottom edge, where it stands.
+            QMetaObject::invokeMethod(anchor, "mapPositionToScene", Q_RETURN_ARG(QVector3D, world),
+                Q_ARG(QVector3D, QVector3D(0, -20, 0)));
+            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, base),
+                Q_ARG(QVector3D, world));
+            const double bottom = base.y();
+            // Above the platform where it stands, not sunk into it ...
+            QVERIFY2(bottom < foot.y(), qPrintable(QStringLiteral(
+                "entry %1 reaches %2, its platform point is at %3").arg(index).arg(bottom).arg(foot.y())));
+            // ... and held up by a pedestal right under it.
+            const QPoint under(qRound((base.x() + foot.x()) / 2), qRound((bottom + foot.y()) / 2));
+            QVERIFY2(tilted.pixelColor(under).alpha() > 200, qPrintable(QStringLiteral(
+                "entry %1 has nothing under it at %2,%3").arg(index).arg(under.x()).arg(under.y())));
+        }
+    }
+
     void gizmoEditsTheTransformWithTheMouse()
     {
         if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
@@ -998,9 +1357,12 @@ private slots:
             PanelScene {
                 required property string glyphFixture
                 property bool editing: false
+                property real pitch: 25
+                property real yaw: 10
                 panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
                                    scene3DQuality: "low", iconSize: 40, spacing: 8, layoutPadding: 10,
-                                   scene3DScale: 0.9, scene3DTransitions: false})
+                                   scene3DScale: 0.9, scene3DTransitions: false,
+                                   scene3DCameraPitch: pitch, scene3DCameraYaw: yaw})
                 sceneEditActive: editing
                 entryDelegateContext: ({hostKind: "free"})
                 hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [
@@ -1128,6 +1490,65 @@ private slots:
         QVERIFY(renderer->property("dragOverride").isNull()
                 || !renderer->property("dragOverride").isValid()
                 || plainValue(renderer->property("dragOverride")).isNull());
+
+        // ADFIX UF-07: dragging the platform's body, away from every handle
+        // and icon, turns it across and tilts it up and down.
+        renderer->setProperty("gizmoMode", QStringLiteral("move"));
+        QTest::qWait(150);
+        QObject *content = renderer->findChild<QObject *>(QStringLiteral("mesh-scene-content"));
+        QVERIFY(content);
+        const auto bodyPoint = [&]() {
+            // On the track between the icons at -30 and +30 degrees.
+            const double track = renderer->property("platformScale").toDouble() * 0.84;
+            QVector3D world, view;
+            QMetaObject::invokeMethod(content, "mapPositionToScene", Q_RETURN_ARG(QVector3D, world),
+                Q_ARG(QVector3D, QVector3D(track, 0, renderer->property("platformTop").toDouble())));
+            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, view),
+                Q_ARG(QVector3D, world));
+            return scene->mapToScene(QPointF(view.x(), view.y())).toPoint();
+        };
+        const double yawBefore = renderer->property("targetYaw").toDouble();
+        const double pitchBefore = renderer->property("targetPitch").toDouble();
+        drag(bodyPoint(), bodyPoint() + QPoint(40, 0));
+        QTRY_COMPARE(edits.count(), 5);
+        QVERIFY2(qAbs(editedValues(4).value("scene3DCameraYaw").toDouble() - (yawBefore + 10)) < 1.5,
+                 qPrintable(QString::number(editedValues(4).value("scene3DCameraYaw").toDouble())));
+        QVERIFY(!editedValues(4).contains("scene3DPositionX"));
+        QTest::qWait(150);
+        // Ctrl snaps the tilt to 15 degrees; Shift drags a tenth as far.
+        drag(bodyPoint(), bodyPoint() + QPoint(0, -30), Qt::ControlModifier);
+        QTRY_COMPARE(edits.count(), 6);
+        const double tilted = editedValues(5).value("scene3DCameraPitch").toDouble();
+        QVERIFY2(qAbs(tilted / 15 - qRound(tilted / 15)) < 1e-6 && tilted != pitchBefore,
+                 qPrintable(QString::number(tilted)));
+        QTest::qWait(150);
+        const double yawNow = renderer->property("targetYaw").toDouble();
+        drag(bodyPoint(), bodyPoint() + QPoint(40, 0), Qt::ShiftModifier);
+        QTRY_COMPARE(edits.count(), 7);
+        QVERIFY2(qAbs(editedValues(6).value("scene3DCameraYaw").toDouble() - (yawNow + 1)) < 0.5,
+                 qPrintable(QString::number(editedValues(6).value("scene3DCameraYaw").toDouble())));
+        QTest::qWait(150);
+
+        // ADFIX AUD-04: seen from straight above, the Z arrow points at the
+        // viewer. It says so, and dragging it up still moves the platform.
+        scene->setProperty("pitch", 0.0);
+        scene->setProperty("yaw", 0.0);
+        // The drags above stand in for the saved values until those come back
+        // or a few seconds pass; this host never saves them.
+        QTRY_COMPARE_WITH_TIMEOUT(renderer->property("shownPitch").toDouble(), 0.0, 6000);
+        QTRY_COMPARE_WITH_TIMEOUT(renderer->property("shownYaw").toDouble(), 0.0, 6000);
+        QTRY_VERIFY(plainValue(renderer->property("endOnAxes")).toStringList().contains(QStringLiteral("z")));
+        QObject *hint = renderer->findChild<QObject *>(QStringLiteral("mesh-gizmo-hint"));
+        QVERIFY(hint);
+        QTRY_VERIFY2(hint->property("text").toString().contains(QStringLiteral("Z arrow")),
+                     qPrintable(hint->property("text").toString()));
+        QTest::qWait(150);
+        const QPoint zTip = screenPoint(QStringLiteral("gizmo-move-z-tip"));
+        QVERIFY(!zTip.isNull());
+        drag(zTip, zTip + QPoint(0, -60));
+        QTRY_COMPARE(edits.count(), 8);
+        QVERIFY2(editedValues(7).value("scene3DPositionZ").toDouble() > 0.01,
+                 qPrintable(QString::number(editedValues(7).value("scene3DPositionZ").toDouble())));
 
         // Leaving edit mode removes the handles.
         scene->setProperty("editing", false);

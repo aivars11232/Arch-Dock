@@ -4,6 +4,9 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
+// The bar Panel Studio shows while a preset, or a desktop 3D edit, is being
+// tried on a real panel: what is happening, and Apply as Active, save as a
+// preset, make default or Cancel, each offered only when it can be done.
 Rectangle {
     id: root
 

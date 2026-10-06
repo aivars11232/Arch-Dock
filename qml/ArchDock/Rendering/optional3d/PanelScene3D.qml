@@ -2,7 +2,16 @@ import QtQuick
 import QtQuick.Window
 import QtQuick3D
 import "../GizmoMath.js" as GizmoMath
+import "../LayoutEngine.js" as LayoutEngine
+import "../PlatformGeometry.js" as PlatformGeometry
 
+// The true-3D panel renderer (Qt Quick 3D), loaded only when the system can
+// draw it. It draws the theme's own platform mesh, or a platform generated
+// along the panel's layout in the look's colours, with every icon standing
+// upright on a pedestal and facing the viewer. It projects each icon back to
+// the screen for input, popup anchors and the folder curve, runs the 3D
+// parts of opening and closing, and in desktop edit mode carries the
+// move, rotate and scale handles and lets the body be dragged to tilt it.
 Item {
     id: root
 
@@ -17,6 +26,12 @@ Item {
     property real layoutAngle: 0
     property real collapseProgress: 0
     property string mechanism: "open"
+    // A radial collapse closes the platform toward its centre like an iris,
+    // while the theme's declared parts make their own moves, and stops at a
+    // small ring the pointer can still find to open the panel again.
+    readonly property real radialCollapseKept: 0.2
+    readonly property real radialCollapseScale: mechanism === "collapse-radial"
+        ? 1 - (1 - radialCollapseKept) * Math.max(0, Math.min(1, collapseProgress)) : 1
     property bool hovered: false
     property bool reducedMotion: false
     property real glowIntensity: 1
@@ -43,11 +58,61 @@ Item {
         textureLimit / Math.max(1, width, height))
     readonly property int targetWidth: Math.max(1, Math.ceil(width * boundedScale))
     readonly property int targetHeight: Math.max(1, Math.ceil(height * boundedScale))
+    // A look whose theme ships no 3D mesh stands on a platform generated from
+    // the panel's own layout (`sceneDefinition.generated`), in the look's own
+    // colours: the palette sampled from its artwork when it is drawn from
+    // artwork, or the colours its 2D surface is drawn with.
+    property real layoutTrackRadius: 0
+    property string appearance: ""
+    property string customColor: ""
+    readonly property var generatedSpec: (sceneDefinition || ({})).generated || null
+    readonly property var generatedShape: generatedSpec
+        ? PlatformGeometry.shapeForLayout(generatedSpec.layout, generatedSpec.polygonSides) : null
+    readonly property var generatedPalette: generatedSpec && generatedSpec.palette
+        ? generatedSpec.palette
+        : PlatformGeometry.paletteFromStyle(LayoutEngine.themeStyle(appearance, customColor, 48))
+    // The platform is rebuilt only when what it is built from changes: a
+    // string compares by value, so an edit elsewhere in the scene's
+    // definition leaves the mesh, and the GPU buffers made from it, alone.
+    readonly property string generatedKey: generatedShape ? JSON.stringify({
+        shape: generatedShape, band: bounded("band", 0.11, PlatformGeometry.minimumBand,
+                                             PlatformGeometry.maximumBand),
+        bend: bounded("bend", 0, -1, 1), palette: generatedPalette }) : ""
+    readonly property var generatedPlatform: generatedKey.length > 0
+        ? PlatformGeometry.platform(JSON.parse(generatedKey)) : null
+    readonly property var platformMesh: generatedSpec ? generatedPlatform
+        : (resources || ({})).mesh || null
+    // A generated platform's pedestals take its top's colour, and its rim
+    // glows in the look's glow colour.
+    readonly property var platformMaterial: {
+        const material = Object.assign({}, (resources || ({})).material || ({}))
+        if (generatedSpec && generatedPalette && generatedPalette.top) {
+            const top = generatedPalette.top
+            material.baseColor = Qt.rgba(top[0], top[1], top[2], 1)
+        }
+        if (generatedSpec && generatedPalette && generatedPalette.glow) {
+            const glow = generatedPalette.glow
+            material.rimEmissiveColor = Qt.rgba(glow[0], glow[1], glow[2], 1)
+            material.rimEmissiveStrength = Number(generatedPalette.glowStrength || 0)
+        }
+        return material
+    }
+    // The theme's own surface texture, for everything drawn in its material:
+    // its meshes map it from above, so a pedestal or a part takes the colour
+    // of the platform where it stands.
+    readonly property Texture themeTexture: textureRequired && textureReady ? surfaceTexture : null
+    // Turns an icon, from inside the entries' frame, to face the camera: the
+    // frame's own rotation undone, the camera's taken.
+    readonly property quaternion iconFacing: entryFrame.sceneRotation.inverted()
+        .times(camera.sceneRotation)
+    // The column every icon stands on; it takes the platform's material.
+    readonly property var pedestalMesh: PlatformGeometry.pedestal(24)
+    readonly property int pedestalTriangles: pedestalMesh.indexes.length / 3
     readonly property bool resourcesReady: resources !== null
-        && resources.mesh !== undefined && resources.iconMesh !== undefined
         && resources.material !== undefined
         && resources.material.format === "org.archdock.material"
-        && platform.meshReady && iconResource.meshReady && partsReady
+        && platform.meshReady && partsReady
+        && (generatedSpec !== null || (resources.iconMesh !== undefined && iconResource.meshReady))
     readonly property bool textureRequired: Boolean(sceneDefinition && sceneDefinition.texture)
     readonly property bool textureReady: !textureRequired || textureImage.status === Image.Ready
     readonly property bool geometryWithinBudget: triangleCount * 3 <= Math.min(262144,
@@ -61,11 +126,12 @@ Item {
         let count = 0
         for (let index = 0; index < entryGeometry.length; ++index) {
             const visual = entryVisuals[index] ? entryVisuals[index].meshVisualItem : null
-            count += 12 // Glyph card.
+            count += 2 // Glyph.
             if (visual && !visual.tileRenderingEnabled) continue
-            if (bounded("iconElevation", 0.3, 0, 2) > 0) count += iconResource.triangleCount
-            count += visual && visual.customTileActive ? 12
-                : iconResource.triangleCount + partTriangles(entryParts)
+            count += 2 // Tile.
+            if (bounded("iconElevation", 0.3, 0, 2) > 0)
+                count += pedestalTriangles + (generatedSpec ? 0 : iconResource.triangleCount)
+            if (!visual || !visual.customTileActive) count += partTriangles(entryParts)
         }
         return count
     }
@@ -79,15 +145,22 @@ Item {
         || view.renderStats.frameTime > 0
     property bool completedFrameObserved: false
     property var projectedEntryGeometry: []
-    // Where the icons' ring is centred on screen, at the icons' height: the
-    // dock a folder opens away from.
+    // Where the dock is centred on screen: the platform's middle at its top,
+    // the dock a folder opens away from.
     property point projectedCentre: Qt.point(width / 2, height / 2)
-    readonly property real platformScale: Math.min(width, height) * 0.40
-    readonly property real platformTop: Math.max(0,
-        ...((resources || {}).mesh?.positions || []).map(p => Number(p[2])))
+    // The platform's reach from its centre across and up, in its own units:
+    // 1 for a ring or a theme's mesh; an ellipse is wider than it is tall.
+    readonly property real platformReachX: generatedPlatform ? generatedPlatform.reachX : 1
+    readonly property real platformReachY: generatedPlatform ? generatedPlatform.reachY : 1
+    readonly property real platformScale: Math.min(width / platformReachX, height / platformReachY) * 0.40
+    // Where the icons stand: a generated platform's flat top is level along
+    // its centre line even when bent; a theme's top is its highest point.
+    readonly property real platformTop: (generatedSpec ? PlatformGeometry.topHeight
+        : Math.max(0, ...((platformMesh || {}).positions || []).map(p => Number(p[2]))))
         * platformScale * bounded("thickness", 1, 0.1, 4)
     // The ring the icons stand on: the middle of the platform's flat top.
-    readonly property real entryTrackRadius: platformScale * bounded("entryRadius", 0.84, 0.1, 1)
+    readonly property real entryTrackRadius: platformScale * (generatedPlatform
+        ? generatedPlatform.track : bounded("entryRadius", 0.84, 0.1, 1))
 
     // The scene's own transform from the Panels > 3D page. Pitch and yaw orbit
     // the camera, as they always have; roll turns it about its view axis.
@@ -148,8 +221,28 @@ Item {
         if (dragOverride)
             for (const key of Object.keys(dragOverride)) values[key] = Number(dragOverride[key])
         dragStart = { mode: handle.mode, axis: handle.axis, pointer: Qt.point(x, y),
-                      centre: Qt.point(centre.x, centre.y), origin: origin, values: values }
+                      centre: Qt.point(centre.x, centre.y), origin: origin, values: values,
+                      endOn: handle.mode === "move" && gizmoAxisEndOn(handle.axis) }
         dragOverride = Object.assign({}, values)
+    }
+    function gizmoAxisVector(axis) {
+        return axis === "x" ? Qt.vector3d(1, 0, 0)
+            : axis === "y" ? Qt.vector3d(0, 1, 0) : Qt.vector3d(0, 0, 1)
+    }
+    // Whether a move arrow points at the viewer, as drawn now.
+    function gizmoAxisEndOn(axis) {
+        const origin = gizmo.scenePosition
+        const from = view.mapFrom3DScene(origin)
+        const to = view.mapFrom3DScene(origin.plus(gizmoAxisVector(axis).times(gizmoLength)))
+        return GizmoMath.axisEndOn(Qt.point(from.x, from.y), Qt.point(to.x, to.y))
+    }
+    // The move arrows drawn end-on, kept current while editing so the
+    // toolbar can say how to drag them.
+    property var endOnAxes: []
+    function updateEndOnAxes() {
+        const axes = editMode && rendererReady
+            ? ["x", "y", "z"].filter(function(axis) { return gizmoAxisEndOn(axis) }) : []
+        if (axes.join() !== endOnAxes.join()) endOnAxes = axes
     }
     function updateGizmoDrag(x, y, modifiers) {
         const start = dragStart
@@ -158,13 +251,21 @@ Item {
                                (y - start.pointer.y) * settings.precision)
         const pointer = Qt.point(start.pointer.x + delta.x, start.pointer.y + delta.y)
         const next = Object.assign({}, start.values)
-        if (start.mode === "move") {
-            const axis = start.axis === "x" ? Qt.vector3d(1, 0, 0)
-                : start.axis === "y" ? Qt.vector3d(0, 1, 0) : Qt.vector3d(0, 0, 1)
+        if (start.mode === "orbit") {
+            // The platform's body: across turns it, up and down tilts it.
+            const turned = GizmoMath.orbit(start.values.cameraPitch, start.values.cameraYaw,
+                                           delta, settings.snap)
+            next.cameraPitch = turned.pitch
+            next.cameraYaw = turned.yaw
+        } else if (start.mode === "move") {
+            const axis = gizmoAxisVector(start.axis)
             const from = view.mapFrom3DScene(start.origin)
             const to = view.mapFrom3DScene(start.origin.plus(axis.times(gizmoLength)))
-            const travel = GizmoMath.axisTravel(Qt.point(from.x, from.y), Qt.point(to.x, to.y),
-                                                gizmoLength, delta)
+            // An arrow seen end-on has no direction on screen: up and down
+            // move it instead of a drag that would do nothing.
+            const travel = start.endOn ? GizmoMath.endOnTravel(delta, gizmoLength, 120)
+                : GizmoMath.axisTravel(Qt.point(from.x, from.y), Qt.point(to.x, to.y),
+                                       gizmoLength, delta)
             // Scene units back to the fractions the settings store.
             const perspective = (cameraDistance - targetDepth) / cameraDistance
             const span = start.axis === "x" ? roomX * perspective
@@ -231,16 +332,18 @@ Item {
     readonly property real cameraDistance: Math.max(1, height)
         / (2 * Math.tan(bounded("fieldOfView", 40, 20, 70) * Math.PI / 360))
     // The platform and its icons reach a little past the platform's radius.
-    readonly property real sceneExtent: platformScale * 1.05
+    readonly property real sceneExtentX: platformScale * platformReachX * 1.05
+    readonly property real sceneExtentY: platformScale * platformReachY * 1.05
     readonly property real targetScale: transformValue("scale", 1, 0.5, 1.25)
-    readonly property real fitLimit: Math.min(width, height) / 2 / Math.max(1, sceneExtent)
+    readonly property real fitLimit: Math.min(width / 2 / Math.max(1, sceneExtentX),
+                                              height / 2 / Math.max(1, sceneExtentY))
     // Nearer is larger: depth stops where the platform would outgrow the panel.
     readonly property real targetDepth: Math.min(transformValue("positionZ", 0, -1, 1) * platformScale * 0.5,
         cameraDistance * Math.max(0, 1 - targetScale / Math.max(targetScale, fitLimit)))
     readonly property real apparentScale: targetScale * cameraDistance
         / Math.max(1, cameraDistance - targetDepth)
-    readonly property real roomX: Math.max(0, width / 2 - sceneExtent * apparentScale)
-    readonly property real roomY: Math.max(0, height / 2 - sceneExtent * apparentScale)
+    readonly property real roomX: Math.max(0, width / 2 - sceneExtentX * apparentScale)
+    readonly property real roomY: Math.max(0, height / 2 - sceneExtentY * apparentScale)
     readonly property vector3d targetPosition: Qt.vector3d(
         transformValue("positionX", 0, -1, 1) * roomX * (cameraDistance - targetDepth) / cameraDistance,
         transformValue("positionY", 0, -1, 1) * roomY * (cameraDistance - targetDepth) / cameraDistance,
@@ -320,7 +423,7 @@ Item {
         const origin = platform.mapPositionFromScene(view.mapTo3DScene(Qt.vector3d(point.x, point.y, 0)))
         const far = platform.mapPositionFromScene(view.mapTo3DScene(Qt.vector3d(point.x, point.y, 1000)))
         const direction = far.minus(origin).normalized()
-        const mesh = resources.mesh, vertices = mesh.positions, indexes = mesh.indexes
+        const mesh = platformMesh, vertices = mesh.positions, indexes = mesh.indexes
         for (let i = 0; i < indexes.length; i += 3) {
             const a = vertices[indexes[i]], b = vertices[indexes[i+1]], c = vertices[indexes[i+2]]
             const ab = Qt.vector3d(b[0]-a[0], b[1]-a[1], b[2]-a[2])
@@ -336,31 +439,66 @@ Item {
         }
         return false
     }
+    // "Along the dock": the platform's own icon track at the folder's height,
+    // moved `outward` screen pixels out of the dock and projected like the
+    // icons, as `count` samples spanning `span` radians around the folder.
+    // `scale` is the perspective size there relative to the folder's own.
+    function folderTrackSamples(entryIndex, outward, span, count) {
+        const node = worldEntries.objectAt(entryIndex)
+        if (!rendererReady || !node || !node.inputAnchor || count < 2) return []
+        const anchor = node.inputAnchor
+        // An icon stands toward the camera's up from where it stands on the
+        // track, by the same offset for every icon: the icons' centres lie on
+        // the track moved by that offset, and so does the outer curve.
+        const foot = sceneContent.mapPositionFromScene(node.scenePosition)
+        const local = sceneContent.mapPositionFromScene(anchor.scenePosition)
+        const lift = local.minus(foot)
+        const radius = Math.hypot(foot.x, foot.y)
+        if (radius <= 0) return []
+        // How far a step out of the dock appears on screen at the folder:
+        // foreshortened where the platform tilts away from the viewer.
+        const here = view.mapFrom3DScene(anchor.scenePosition)
+        const step = radius * 0.05
+        const further = view.mapFrom3DScene(sceneContent.mapPositionToScene(Qt.vector3d(
+            foot.x * (radius + step) / radius, foot.y * (radius + step) / radius, foot.z).plus(lift)))
+        const pixelsPerUnit = Math.hypot(further.x - here.x, further.y - here.y) / step
+        const outer = radius + Math.max(0, outward) / Math.max(0.01, pixelsPerUnit)
+        const angle = Math.atan2(foot.y, foot.x)
+        const depth = here.z
+        const result = []
+        for (let index = 0; index < count; ++index) {
+            const turn = angle - span / 2 + span * index / (count - 1)
+            const point = view.mapFrom3DScene(sceneContent.mapPositionToScene(
+                Qt.vector3d(outer * Math.cos(turn), outer * Math.sin(turn), foot.z).plus(lift)))
+            if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || point.z <= 0) continue
+            result.push({ x: point.x, y: point.y, scale: depth / point.z })
+        }
+        return result
+    }
     function updateProjection() {
         if (!rendererReady || width <= 0 || height <= 0) return
         const result = []
         for (let i = 0; i < worldEntries.count; ++i) {
             const node = worldEntries.objectAt(i)
-            if (!node || !node.glyphModel) return
-            const glyph = node.glyphModel
-            const points = [[-50,-50], [50,-50], [50,50], [-50,50]].map(p =>
-                view.mapFrom3DScene(glyph.mapPositionToScene(Qt.vector3d(p[0], p[1], 0))))
+            if (!node || !node.inputAnchor) return
+            // The icon's resting square, as the camera sees it.
+            const anchor = node.inputAnchor, half = node.size / 2
+            const points = [[-half, -half], [half, -half], [half, half], [-half, half]].map(p =>
+                view.mapFrom3DScene(anchor.mapPositionToScene(Qt.vector3d(p[0], p[1], 0))))
             const left = Math.min(...points.map(p => p.x)), top = Math.min(...points.map(p => p.y))
             const right = Math.max(...points.map(p => p.x)), bottom = Math.max(...points.map(p => p.y))
             if (![left, top, right, bottom].every(Number.isFinite) || right <= left || bottom <= top) return
-            const center = view.mapFrom3DScene(glyph.scenePosition)
+            const center = view.mapFrom3DScene(anchor.scenePosition)
             result.push({x: left, y: top, width: right-left, height: bottom-top,
                 centerX: center.x, centerY: center.y, depth: center.z})
         }
         if (JSON.stringify(result) !== JSON.stringify(projectedEntryGeometry)) projectedEntryGeometry = result
-        const first = worldEntries.count > 0 ? worldEntries.objectAt(0) : null
-        if (first && first.glyphModel) {
-            const height = sceneContent.mapPositionFromScene(first.glyphModel.scenePosition).z
-            const centre = view.mapFrom3DScene(sceneContent.mapPositionToScene(Qt.vector3d(0, 0, height)))
-            if (Number.isFinite(centre.x) && Number.isFinite(centre.y)
-                    && (centre.x !== projectedCentre.x || centre.y !== projectedCentre.y))
-                projectedCentre = Qt.point(centre.x, centre.y)
-        }
+        // The dock's centre as drawn: the platform's middle at its top. A
+        // folder's contents open away from it, not from the icons' heads.
+        const centre = view.mapFrom3DScene(sceneContent.mapPositionToScene(Qt.vector3d(0, 0, platformTop)))
+        if (Number.isFinite(centre.x) && Number.isFinite(centre.y)
+                && (centre.x !== projectedCentre.x || centre.y !== projectedCentre.y))
+            projectedCentre = Qt.point(centre.x, centre.y)
     }
 
     // RenderStats throttles change notifications. A static scene can stop
@@ -376,6 +514,8 @@ Item {
             if (!root.completedFrameObserved)
                 Qt.callLater(root.observeCompletedFrame)
             Qt.callLater(root.updateProjection)
+            if (root.editMode)
+                Qt.callLater(root.updateEndOnAxes)
         }
     }
 
@@ -450,6 +590,27 @@ Item {
             }
         }
     }
+    // How to drag what is not obvious: the body itself, and an arrow that
+    // points at the viewer.
+    Text {
+        objectName: "mesh-gizmo-hint"
+        visible: root.editMode && root.rendererReady
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 4
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: Math.min(implicitWidth, parent.width - 8)
+        z: 3
+        wrapMode: Text.Wrap
+        horizontalAlignment: Text.AlignHCenter
+        color: "#f4f8fb"
+        style: Text.Outline
+        styleColor: "#cc1b2831"
+        font.pixelSize: 11
+        text: root.gizmoMode === "move" && root.endOnAxes.length > 0
+            ? qsTr("The %1 arrow points at you: drag it up or down.")
+                .arg(root.endOnAxes.map(function(axis) { return axis.toUpperCase() }).join(", "))
+            : qsTr("Drag the platform to tilt and turn it.")
+    }
 
     MouseArea {
         objectName: "mesh-gizmo-input"
@@ -465,9 +626,13 @@ Item {
                 root.cancelGizmoDrag()
                 return
             }
+            // A handle first; otherwise a press on the platform or its icons
+            // takes the body, to tilt and turn it.
             const handle = root.gizmoHandleAt(mouse.x, mouse.y)
             if (handle)
                 root.beginGizmoDrag(handle, mouse.x, mouse.y)
+            else if (root.containsInputPoint(Qt.point(mouse.x, mouse.y)))
+                root.beginGizmoDrag({ mode: "orbit", axis: "body" }, mouse.x, mouse.y)
         }
         onPositionChanged: function(mouse) {
             if (root.dragStart)
@@ -531,8 +696,11 @@ Item {
             objectName: "mesh-scene-content"
             position: Qt.vector3d(root.shownPosition.x, root.shownPosition.y,
                                   root.shownPosition.z + root.floatOffset)
-            scale: Qt.vector3d(root.shownScale, root.shownScale, root.shownScale)
+            scale: Qt.vector3d(root.shownScale * root.radialCollapseScale,
+                               root.shownScale * root.radialCollapseScale,
+                               root.shownScale * root.radialCollapseScale)
         Node {
+            id: entryFrame
             eulerRotation.z: -root.layoutAngle
         Repeater3D {
             id: worldEntries
@@ -550,38 +718,86 @@ Item {
                 readonly property var tileMotion: root.motionAllowed && entry ? entry.tileMotion : ({})
                 readonly property real size: Number(rect.width || 1)
                 readonly property real hoverScale: entry ? Number(entry.visualScale || 1) : 1
-                readonly property real tileOffset: visual && visual.customTileActive ? 0.05 : 0.58
-                readonly property real tileFloor: visual && visual.customTileActive ? 0.01 : 0.044
                 readonly property real elevation: root.bounded("iconElevation", 0.3, 0, 2)
-                // An entry is placed by its direction from the scene centre, on
-                // the platform's own track. Scaling the layout's shape instead
-                // let any path that is not a circle put icons in the hole.
+                // The pedestal's height, and the small gap that keeps an icon
+                // without one off the platform's top.
+                readonly property real pedestalHeight: size * elevation
+                readonly property real baseLift: size * 0.02
+                readonly property bool tileShown: visual !== null && visual.tileRenderingEnabled
+                // Where the entry stands. On a generated platform the layout's
+                // own position, carried onto the platform's centre line: the
+                // platform is that layout's path. On a theme's mesh, its
+                // direction from the scene centre on the theme's own track;
+                // scaling a layout that is not the mesh's shape could put an
+                // icon in the hole.
                 readonly property real reachX: Number(rect.centerX) - root.width / 2
                 readonly property real reachY: root.height / 2 - Number(rect.centerY)
                 readonly property real reach: Math.hypot(reachX, reachY)
+                readonly property var standPoint: root.generatedPlatform
+                    ? PlatformGeometry.standPoint(reachX, reachY, root.layoutTrackRadius,
+                                                  root.generatedPlatform.track).map(v => v * root.platformScale)
+                    : [(reach > 0.001 ? reachX / reach : 0) * root.entryTrackRadius,
+                       (reach > 0.001 ? reachY / reach : 1) * root.entryTrackRadius]
                 property alias glyphModel: glyphModel
+                property alias inputAnchor: inputAnchor
                 readonly property real glow: Math.max(root.number(iconMotion, "glow", 0),
                     root.number(glyphMotion, "glow", 0), root.number(tileMotion, "glow", 0))
                 // Outside the window of an overcrowded open curve the entry is
                 // not drawn, exactly as its 2D delegate is not.
                 visible: rect.onTrack !== false
-                position: Qt.vector3d((reach > 0.001 ? reachX / reach : 0) * root.entryTrackRadius + root.number(iconMotion, "x", 0),
-                    (reach > 0.001 ? reachY / reach : 1) * root.entryTrackRadius - root.number(iconMotion, "y", 0),
-                    root.platformTop + size * (tileOffset + tileFloor + elevation))
-                eulerRotation: Qt.vector3d(0, root.number(iconMotion, "rotateY", 0),
-                    -root.number(iconMotion, "rotateZ", 0) - Number(rect.rotation || 0))
-                scale: Qt.vector3d(hoverScale * root.number(iconMotion, "scale", 1) * root.number(iconMotion, "scaleX", 1),
-                    hoverScale * root.number(iconMotion, "scale", 1) * root.number(iconMotion, "scaleY", 1), 1)
+                // The entry's origin is where its icon stands: on the platform's
+                // track, on top of its pedestal. Motion offsets move it along.
+                position: Qt.vector3d(standPoint[0] + root.number(iconMotion, "x", 0),
+                    standPoint[1] - root.number(iconMotion, "y", 0),
+                    root.platformTop + pedestalHeight + baseLift)
                 opacity: root.number(iconMotion, "opacity", 1)
 
+                // The pedestal: a solid column from the platform's top up to
+                // the icon, in the platform's own material.
                 IconStyle3D {
                     objectName: "mesh-pedestal-" + entryNode.index
+                    meshData: root.pedestalMesh
+                    materialData: root.platformMaterial
+                    surfaceTexture: root.themeTexture
+                    visible: entryNode.tileShown && entryNode.elevation > 0
+                    z: -(entryNode.pedestalHeight + entryNode.baseLift)
+                    scale: Qt.vector3d(entryNode.size * 0.18, entryNode.size * 0.18,
+                        entryNode.pedestalHeight + entryNode.baseLift)
+                }
+                // A theme's own icon base, lying on the platform around the
+                // pedestal's foot.
+                IconStyle3D {
+                    objectName: "mesh-icon-base-" + entryNode.index
                     meshData: iconResource.meshData
                     materialData: iconResource.materialData
-                    visible: entryNode.visual && entryNode.visual.tileRenderingEnabled && entryNode.elevation > 0
-                    z: -entryNode.size * (entryNode.tileOffset + entryNode.tileFloor + entryNode.elevation / 2)
-                    scale: Qt.vector3d(entryNode.size * 0.12, entryNode.size * 0.12,
-                        entryNode.size * entryNode.elevation / 0.18)
+                    surfaceTexture: root.themeTexture
+                    visible: !root.generatedSpec && entryNode.tileShown && entryNode.elevation > 0
+                    z: -(entryNode.pedestalHeight + entryNode.baseLift)
+                    scale: Qt.vector3d(entryNode.size * 0.3, entryNode.size * 0.3, entryNode.size * 0.15)
+                    emissionScale: root.emissionScale * (1 + entryNode.glow)
+                }
+                // A theme's own parts for each entry (such as a ring that sinks
+                // as the panel closes), at the pedestal's foot.
+                Node {
+                    objectName: "mesh-tile-parts-" + entryNode.index
+                    visible: !entryNode.visual || (entryNode.visual.tileRenderingEnabled
+                        && !entryNode.visual.customTileActive)
+                    z: -(entryNode.pedestalHeight + entryNode.baseLift)
+                    scale: Qt.vector3d(entryNode.size * 0.55, entryNode.size * 0.55, entryNode.size * 0.55)
+                    Repeater3D {
+                        model: root.entryParts.length
+                        delegate: IconStyle3D {
+                            required property int index
+                            objectName: "mesh-entry-part-" + entryNode.index + "-" + index
+                            partDefinition: root.entryParts[index].definition
+                            visible: partDefinition.mechanism === root.mechanism
+                            meshData: root.entryParts[index].resources.mesh || null
+                            materialData: root.entryParts[index].resources.material || ({})
+                            surfaceTexture: root.themeTexture
+                            openAmount: root.partOpenAmount(partDefinition)
+                            emissionScale: root.emissionScale * (1 + entryNode.glow)
+                        }
+                    }
                 }
                 Texture {
                     id: glyphTexture
@@ -600,84 +816,74 @@ Item {
                         && candidateSource.Window.window === root.Window.window
                         && entryNode.visual.meshVisualActive ? candidateSource : null
                 }
-                IconStyle3D {
-                    objectName: "mesh-style-tile-" + entryNode.index
-                    visible: meshReady && (!entryNode.visual
-                        || (entryNode.visual.tileRenderingEnabled && !entryNode.visual.customTileActive))
-                    meshData: iconResource.meshData
-                    materialData: iconResource.materialData
-                    surfaceTexture: entryNode.visual ? tileTexture
-                        : root.textureRequired && root.textureReady ? surfaceTexture : null
-                    position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
-                        -root.number(entryNode.tileMotion, "y", 0), -entryNode.size * 0.58)
-                    eulerRotation: Qt.vector3d(-20, root.number(entryNode.tileMotion, "rotateY", 0),
-                        -root.number(entryNode.tileMotion, "rotateZ", 0))
-                    scale: Qt.vector3d(entryNode.size * 0.55 * root.number(entryNode.tileMotion, "scale", 1)
-                            * root.number(entryNode.tileMotion, "scaleX", 1),
-                        entryNode.size * 0.55 * root.number(entryNode.tileMotion, "scale", 1)
-                            * root.number(entryNode.tileMotion, "scaleY", 1), entryNode.size * 0.55)
-                    opacity: root.number(entryNode.tileMotion, "opacity", 1)
-                    emissionScale: root.emissionScale * (1 + entryNode.glow)
-                }
-                Model {
-                    objectName: "mesh-custom-tile-" + entryNode.index
-                    source: "#Cube"
-                    pickable: false
-                    visible: entryNode.visual !== null && entryNode.visual.customTileActive
-                        && entryNode.visual.tileRenderingEnabled && root.collapseProgress < 1
-                    position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
-                        -root.number(entryNode.tileMotion, "y", 0), -entryNode.size * 0.05)
-                    eulerRotation: Qt.vector3d(0, root.number(entryNode.tileMotion, "rotateY", 0),
-                        -root.number(entryNode.tileMotion, "rotateZ", 0))
-                    scale: Qt.vector3d(entryNode.size / 100 * root.number(entryNode.tileMotion, "scale", 1)
-                            * root.number(entryNode.tileMotion, "scaleX", 1),
-                        entryNode.size / 100 * root.number(entryNode.tileMotion, "scale", 1)
-                            * root.number(entryNode.tileMotion, "scaleY", 1), entryNode.size / 5000)
-                    opacity: root.number(entryNode.tileMotion, "opacity", 1) * (1 - root.collapseProgress)
-                    materials: PrincipledMaterial {
-                        lighting: PrincipledMaterial.NoLighting
-                        alphaMode: PrincipledMaterial.Blend
-                        baseColorMap: tileTexture
-                    }
-                }
-                Model {
-                    id: glyphModel
-                    pickable: true
-                    objectName: "mesh-glyph-" + entryNode.index
-                    source: "#Cube"
-                    visible: entryNode.visual !== null && root.collapseProgress < 1
-                    position: Qt.vector3d(root.number(entryNode.glyphMotion, "x", 0),
-                        -root.number(entryNode.glyphMotion, "y", 0),
-                        entryNode.visual && !entryNode.visual.customTileActive ? -entryNode.size * 0.525 : 0)
-                    eulerRotation: Qt.vector3d(0, root.number(entryNode.glyphMotion, "rotateY", 0),
-                        -root.number(entryNode.glyphMotion, "rotateZ", 0))
-                    scale: Qt.vector3d(entryNode.size / 100 * root.number(entryNode.glyphMotion, "scale", 1)
-                            * root.number(entryNode.glyphMotion, "scaleX", 1),
-                        entryNode.size / 100 * root.number(entryNode.glyphMotion, "scale", 1)
-                            * root.number(entryNode.glyphMotion, "scaleY", 1), entryNode.size / 4000)
-                    opacity: root.number(entryNode.glyphMotion, "opacity", 1) * (1 - root.collapseProgress)
-                    materials: PrincipledMaterial {
-                        lighting: PrincipledMaterial.NoLighting
-                        alphaMode: PrincipledMaterial.Blend
-                        baseColorMap: glyphTexture
-                    }
-                }
+                // The icon faces the viewer at every pitch, yaw and roll, so it
+                // keeps the application's own glyph readable instead of lying
+                // flat on the platform; it stands on its pedestal.
                 Node {
-                    objectName: "mesh-tile-parts-" + entryNode.index
-                    visible: !entryNode.visual || (entryNode.visual.tileRenderingEnabled
-                        && !entryNode.visual.customTileActive)
-                    scale: Qt.vector3d(entryNode.size * 0.55, entryNode.size * 0.55, entryNode.size * 0.55)
-                    Repeater3D {
-                        model: root.entryParts.length
-                        delegate: IconStyle3D {
-                            required property int index
-                            objectName: "mesh-entry-part-" + entryNode.index + "-" + index
-                            partDefinition: root.entryParts[index].definition
-                            visible: partDefinition.mechanism === root.mechanism
-                            meshData: root.entryParts[index].resources.mesh || null
-                            materialData: root.entryParts[index].resources.material || ({})
-                            openAmount: root.partOpenAmount(partDefinition)
-                            emissionScale: root.emissionScale * (1 + entryNode.glow)
+                    objectName: "mesh-icon-" + entryNode.index
+                    rotation: root.iconFacing
+                    // The icon's resting square, untouched by hover and motion:
+                    // its projection is the entry's input rectangle, so the
+                    // rectangle does not breathe under the pointer.
+                    Node {
+                        id: inputAnchor
+                        objectName: "mesh-input-anchor-" + entryNode.index
+                        y: entryNode.size / 2
+                    }
+                    Node {
+                        objectName: "mesh-icon-body-" + entryNode.index
+                        // Hover magnification and icon motion grow the icon about
+                        // its foot, so it stays standing on the pedestal.
+                        eulerRotation: Qt.vector3d(0, root.number(entryNode.iconMotion, "rotateY", 0),
+                            -root.number(entryNode.iconMotion, "rotateZ", 0) - Number(entryNode.rect.rotation || 0))
+                        scale: Qt.vector3d(entryNode.hoverScale * root.number(entryNode.iconMotion, "scale", 1)
+                                * root.number(entryNode.iconMotion, "scaleX", 1),
+                            entryNode.hoverScale * root.number(entryNode.iconMotion, "scale", 1)
+                                * root.number(entryNode.iconMotion, "scaleY", 1), 1)
+                        Model {
+                            objectName: "mesh-tile-" + entryNode.index
+                            source: "#Rectangle"
+                            pickable: false
+                            visible: entryNode.tileShown && root.collapseProgress < 1
+                            position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
+                                entryNode.size / 2 - root.number(entryNode.tileMotion, "y", 0), 0)
+                            eulerRotation: Qt.vector3d(0, root.number(entryNode.tileMotion, "rotateY", 0),
+                                -root.number(entryNode.tileMotion, "rotateZ", 0))
+                            scale: Qt.vector3d(entryNode.size / 100 * root.number(entryNode.tileMotion, "scale", 1)
+                                    * root.number(entryNode.tileMotion, "scaleX", 1),
+                                entryNode.size / 100 * root.number(entryNode.tileMotion, "scale", 1)
+                                    * root.number(entryNode.tileMotion, "scaleY", 1), 1)
+                            opacity: root.number(entryNode.tileMotion, "opacity", 1) * (1 - root.collapseProgress)
+                            materials: PrincipledMaterial {
+                                lighting: PrincipledMaterial.NoLighting
+                                alphaMode: PrincipledMaterial.Blend
+                                baseColorMap: tileTexture
+                                cullMode: Material.NoCulling
+                            }
+                        }
+                        Model {
+                            id: glyphModel
+                            pickable: true
+                            objectName: "mesh-glyph-" + entryNode.index
+                            source: "#Rectangle"
+                            visible: entryNode.visual !== null && root.collapseProgress < 1
+                            // In front of its tile.
+                            position: Qt.vector3d(root.number(entryNode.glyphMotion, "x", 0),
+                                entryNode.size / 2 - root.number(entryNode.glyphMotion, "y", 0),
+                                entryNode.size * 0.01)
+                            eulerRotation: Qt.vector3d(0, root.number(entryNode.glyphMotion, "rotateY", 0),
+                                -root.number(entryNode.glyphMotion, "rotateZ", 0))
+                            scale: Qt.vector3d(entryNode.size / 100 * root.number(entryNode.glyphMotion, "scale", 1)
+                                    * root.number(entryNode.glyphMotion, "scaleX", 1),
+                                entryNode.size / 100 * root.number(entryNode.glyphMotion, "scale", 1)
+                                    * root.number(entryNode.glyphMotion, "scaleY", 1), 1)
+                            opacity: root.number(entryNode.glyphMotion, "opacity", 1) * (1 - root.collapseProgress)
+                            materials: PrincipledMaterial {
+                                lighting: PrincipledMaterial.NoLighting
+                                alphaMode: PrincipledMaterial.Blend
+                                baseColorMap: glyphTexture
+                                cullMode: Material.NoCulling
+                            }
                         }
                     }
                 }
@@ -691,10 +897,11 @@ Item {
                                root.platformScale * root.bounded("thickness", 1, 0.1, 4))
             IconStyle3D {
                 id: platform
+                objectName: "mesh-platform"
                 pickable: true
-                meshData: (root.resources || ({})).mesh || null
-                materialData: (root.resources || ({})).material || ({})
-                surfaceTexture: root.textureRequired && root.textureReady ? surfaceTexture : null
+                meshData: root.platformMesh
+                materialData: root.platformMaterial
+                surfaceTexture: root.themeTexture
                 emissionScale: root.emissionScale
             }
             Repeater3D {
@@ -706,6 +913,7 @@ Item {
                     visible: partDefinition.mechanism === root.mechanism
                     meshData: root.panelParts[index].resources.mesh || null
                     materialData: root.panelParts[index].resources.material || ({})
+                    surfaceTexture: root.themeTexture
                     openAmount: root.partOpenAmount(partDefinition)
                     emissionScale: root.emissionScale
                 }

@@ -1,3 +1,4 @@
+// The theme package reader, validator and materializer.
 #include "ThemePackage.h"
 
 #include <QByteArrayView>
@@ -16,6 +17,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 
 namespace
@@ -2185,10 +2187,21 @@ ThemePackageLoadResult ThemePackage::load(const QString &manifestPath)
                      manifestInfo.absoluteFilePath());
 }
 
+namespace
+{
+std::atomic<quint64> packageLoads{0};
+}
+
+quint64 ThemePackage::loadCount()
+{
+    return packageLoads.load();
+}
+
 ThemePackageLoadResult ThemePackage::loadBytes(const QByteArray &manifestBytes,
                                                const QString &packageRoot,
                                                const QString &manifestPath)
 {
+    ++packageLoads;
     ThemePackageLoadResult result;
     if (manifestBytes.size() > MaximumManifestBytes)
     {

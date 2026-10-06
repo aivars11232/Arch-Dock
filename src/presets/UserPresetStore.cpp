@@ -1,3 +1,4 @@
+// The user's preset files and their store record.
 #include "UserPresetStore.h"
 
 #include "PresetCatalog.h"

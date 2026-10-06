@@ -1,3 +1,4 @@
+// Profile serialization, validation and the profile directory.
 #include "ProfileStore.h"
 #include "ConfigurationBackup.h"
 #include "../model/PanelRuntimeState.h"

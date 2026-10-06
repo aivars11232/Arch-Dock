@@ -10,6 +10,7 @@
 
 #include <optional>
 
+// Panel Presets: loadable one-panel starting configurations, parsed strictly.
 namespace ArchDock
 {
 

@@ -1,3 +1,5 @@
+// The Plasma scripts that apply and read back native panel placement and
+// visibility.
 #include "PlasmaPanelAdapter.h"
 
 #include <QVariantList>

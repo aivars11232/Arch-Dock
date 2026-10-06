@@ -1,6 +1,9 @@
 import QtQuick
 import org.kde.kirigami as Kirigami
 
+// The mark under a running application's icon: a bar, dot or square that
+// grows with its windows, takes the active colour for the focused one and
+// pulses while it asks for attention (unless motion is reduced).
 Rectangle {
     id: root
 

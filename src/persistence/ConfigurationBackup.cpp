@@ -1,3 +1,5 @@
+// ConfigurationBackup: capture, restore, interrupted-restore recovery and
+// pruning of configuration snapshots.
 #include "ConfigurationBackup.h"
 
 #include <QCryptographicHash>

@@ -32,6 +32,24 @@ class QQmlApplicationEngine;
 class QScreen;
 class QWindow;
 
+// The Arch Dock backend. One object owns the panel registry, the dock and
+// window models, the native and free panel hosts and Panel Studio, and is
+// the D-Bus service both Plasma applets and Studio talk to: panel
+// configurations and renderer projections, settings transactions, content,
+// folders, icon overrides, presets and auditions, profiles, presentation
+// requests and Quit. Its revisions tell consumers what changed.
+//
+// The implementation is split by topic:
+//   PanelWindow.cpp                 construction, revisions, live content,
+//                                   Quit, utility windows, legacy toggles
+//   PanelWindowSettings.cpp         configuration, capabilities, the settings
+//                                   editor and settings transactions
+//   PanelWindowEntries.cpp          entries, icon overrides, content, folders
+//   PanelWindowPresets.cpp          presets, scene edits, auditions, profiles
+//   PanelWindowScreens.cpp          screens, visibility, presentation
+//   PanelWindowFreePanels.cpp       free panel hosts
+//   PanelWindowNativePanels.cpp     native panels and Plasma scripting
+//   PanelWindowNativePlacement.cpp  native placement and visibility
 class PanelWindow final : public QObject
 {
     Q_OBJECT

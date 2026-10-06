@@ -2,6 +2,10 @@
 
 #include <optional>
 
+// The decisions behind a native edge panel's Plasma containment, kept free
+// of Plasma so they can be tested alone: whether a containment found in
+// Plasma is ours, and what to do with it (create, attach the renderer,
+// show, hide, recreate or remove) for a requested change.
 namespace ArchDock
 {
 enum class NativeContainmentHostStatus

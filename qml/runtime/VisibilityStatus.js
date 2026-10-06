@@ -1,5 +1,9 @@
 .pragma library
 
+// Visibility modes as Panel Studio offers and reports them: the modes a
+// panel's host supports, their labels, and plain-language text for what was
+// requested and what is in effect.
+
 function hasValue(map, key) {
     return map !== null
         && map !== undefined

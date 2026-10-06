@@ -4,6 +4,10 @@ import QtQuick
 import org.kde.kcmutils as KCM
 import org.kde.plasma.workspace.dbus as PlasmaDBus
 
+// The base of the applet's own configuration pages (Plasma's "Configure"
+// dialog). It reads the panel's settings snapshot from the Arch Dock backend
+// over D-Bus, keeps the page's edits as a draft against that snapshot, and
+// applies them in one backend settings transaction.
 KCM.SimpleKCM {
     id: root
 

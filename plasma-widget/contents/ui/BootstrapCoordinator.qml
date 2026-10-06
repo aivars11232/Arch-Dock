@@ -1,5 +1,9 @@
 import QtQuick
 
+// Finishes the "free panel" layout template: the short-lived native panel
+// that template created asks the Arch Dock backend, with retries, to create
+// the real free panel on its screen, after which the backend removes the
+// temporary panel.
 Item {
     id: root
 

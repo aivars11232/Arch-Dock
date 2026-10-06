@@ -2,6 +2,10 @@ import QtQuick
 import ArchDock.Rendering 1.0
 import org.kde.plasma.core as PlasmaCore
 
+// The popup listing an application's windows when its icon is hovered or
+// opened from the keyboard: live thumbnails where the system provides them,
+// otherwise a list. Choosing one raises that window. It opens on the side of
+// the icon that faces out of the dock.
 PlasmaCore.Dialog {
     id: root
 

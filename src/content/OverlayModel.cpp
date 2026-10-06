@@ -1,3 +1,5 @@
+// OverlayModel: badge, progress and short status updates applications send
+// (the Unity launcher API on D-Bus), kept per application for a few minutes.
 #include "OverlayModel.h"
 
 #include "../model/IconEntryIdentity.h"

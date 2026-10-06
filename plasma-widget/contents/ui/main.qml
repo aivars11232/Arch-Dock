@@ -6,11 +6,15 @@ import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.workspace.dbus as PlasmaDBus
 
+// The Arch Dock Control applet: a small panel button whose menu opens Panel
+// Studio, creates native Arch Dock panels and toggles auto-hide through the
+// backend. It also carries out the free panel layout template's request
+// (BootstrapCoordinator).
 PlasmoidItem {
     id: root
 
     Plasmoid.title: qsTr("Arch Dock Control")
-    Plasmoid.icon: "preferences-desktop-theme-global"
+    Plasmoid.icon: "org.archdock.ArchDock"
     preferredRepresentation: compactRepresentation
     switchWidth: Kirigami.Units.gridUnit * 20
     switchHeight: Kirigami.Units.gridUnit * 6

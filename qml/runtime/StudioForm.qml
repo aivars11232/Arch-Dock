@@ -6,6 +6,9 @@ import QtQuick.Layouts
 import ArchDock.Rendering 1.0
 import org.kde.kirigami as Kirigami
 
+// Draws one Panel Studio page from its rows: section titles, notices,
+// controls for settings (switches, sliders, spin boxes, combo boxes, colour
+// and file fields), action buttons, and theme and preset sample cards.
 ScrollView {
     id: root
 

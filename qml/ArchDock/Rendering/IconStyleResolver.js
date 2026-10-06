@@ -1,5 +1,10 @@
 .pragma library
 
+// Resolves an icon style for one icon state: which declared layers are
+// drawn, with what colours, opacity and treatment, by the style's state
+// precedence (edit and disabled first, normal last). Pure functions used by
+// IconScene and IconStyle2D; the 3D scene draws the textures they produce.
+
 const statePrecedence = [
     "edit", "disabled", "drop", "urgent", "pressed", "hover",
     "launching", "active", "minimized", "running", "normal"

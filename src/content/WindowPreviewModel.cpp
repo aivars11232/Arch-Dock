@@ -1,3 +1,4 @@
+// The rows of an application's window preview popup.
 #include "WindowPreviewModel.h"
 
 #include <QCoreApplication>

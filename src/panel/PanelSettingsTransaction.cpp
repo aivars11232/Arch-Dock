@@ -1,3 +1,4 @@
+// Settings transaction requests, drafts and outcomes.
 #include "PanelSettingsTransaction.h"
 #include "../model/PanelSettingsSchema.h"
 

@@ -1,3 +1,4 @@
+// Parses the result line printed by Arch Dock's Plasma scripts.
 #include "PlasmaScriptResult.h"
 
 #include <QRegularExpression>

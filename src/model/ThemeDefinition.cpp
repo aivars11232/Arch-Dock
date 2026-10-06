@@ -1,3 +1,4 @@
+// Theme definitions, their variant maps and runtime projections.
 #include "ThemeDefinition.h"
 
 #include <algorithm>

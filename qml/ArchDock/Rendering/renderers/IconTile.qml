@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Shapes
 
+// The plain tile behind an icon when the user picks their own tile colour:
+// a rounded, square, squircle, circle or hexagon shape.
 Item {
     id: root
 

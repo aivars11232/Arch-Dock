@@ -4,7 +4,7 @@
         "Id": "org.archdock.control",
         "Name": "Arch Dock Control",
         "Description": "Configure and control Arch Dock from a KDE Plasma panel.",
-        "Icon": "preferences-desktop-theme-global",
+        "Icon": "org.archdock.ArchDock",
         "Version": "1.0.0",
         "License": "MIT",
         "ServiceTypes": [

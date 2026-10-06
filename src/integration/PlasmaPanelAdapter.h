@@ -10,6 +10,10 @@
 #include <functional>
 #include <optional>
 
+// Applies a native panel's placement and visibility to its Plasma panel
+// containment through Plasma's scripting interface. Only a containment
+// marked with the panel's ownership token is touched, and every value is
+// read back, so each field reports whether Plasma really took it.
 namespace ArchDock
 {
 enum class PlasmaPanelApplyStatus

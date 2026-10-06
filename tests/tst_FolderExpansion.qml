@@ -15,6 +15,8 @@ TestCase {
     height: 500
     Component { id: component; FolderExpansion {} }
     Component { id: hostComponent; DockUi.FolderExpansionHost {} }
+    Component { id: trackComponent; FolderTrack {} }
+    Component { id: trackHostComponent; DockUi.FolderTrackHost {} }
     Component {
         id: anchorComponent
         Window {
@@ -423,6 +425,11 @@ TestCase {
             ? corner.x + place.x + place.width / 2 : corner.y + place.y + place.height / 2
         fuzzyCompare(across - size / 2 + content.anchorAcross,
                      data.side === "top" || data.side === "bottom" ? centre.x : centre.y, 0.01)
+        // Plasma moves an applet popup with a short attachment to the middle
+        // of the screen when that middle lies inside it; an attachment at
+        // least one and a half times the popup's length never qualifies.
+        verify((data.side === "top" || data.side === "bottom" ? place.width : place.height) >= 1.5 * size,
+               data.tag + ": the attachment outlasts Plasma's centring rule")
         tryVerify(function() {
             if (!host.visible) return false
             if (data.side === "top") return Math.abs(host.y + host.height - (corner.y - gap)) <= 1
@@ -442,6 +449,137 @@ TestCase {
                 && Math.abs(content.expansionOrigin.y - (centre.y - host.y - content.y)) <= 1
         }, 3000, "the opening animation starts at the folder icon")
         host.closeFolder()
+    }
+    // "Along the dock": a third of a circle of radius 160 around (350, 250),
+    // the folder at (190, 250) facing its middle from inside the dock.
+    function trackSamples() {
+        const samples = []
+        for (let k = 0; k < 91; ++k) {
+            const a = Math.PI - Math.PI / 3 + 2 * Math.PI / 3 * k / 90
+            samples.push({ x: 350 + 160 * Math.cos(a), y: 250 + 160 * Math.sin(a), scale: 1 })
+        }
+        return samples
+    }
+    function track(count, reduced, names) {
+        const item = createTemporaryObject(trackComponent, testCase, {
+            width: 700, height: 500, samples: trackSamples(), iconSize: 48,
+            reducedMotion: reduced === undefined ? true : reduced, showNames: names === true,
+            duration: 500, expansionOrigin: Qt.point(250, 250), folderTitle: "Documents",
+            snapshot: { status: "ready", entries: rows(count), truncated: count === 48 }
+        })
+        verify(item !== null)
+        item.opened = true
+        selection.target = item; selection.clear()
+        dismissal.target = item; dismissal.clear()
+        return item
+    }
+    function childCentre(item, index) {
+        const child = findChild(item, "folder-child-" + index)
+        return Qt.point(child.x + child.width / 2, child.y + item.iconSize * child.drawnScale / 2)
+    }
+    function test_trackStandsChildrenOnTheCurve() {
+        const item = track(5)
+        compare(item.track.capacity, 5)
+        for (let index = 0; index < 5; ++index) {
+            const centre = childCentre(item, index)
+            verify(Math.abs(Math.hypot(centre.x - 350, centre.y - 250) - 160) < 0.5,
+                   "child " + index + " stands on the dock's curve")
+        }
+        const middle = childCentre(item, 2)
+        fuzzyCompare(middle.x, 190, 0.5)
+        fuzzyCompare(middle.y, 250, 0.5)
+        const first = childCentre(item, 0)
+        mouseMove(item, first.x, first.y)
+        tryCompare(item, "selectedChildId", "child-0")
+        mouseClick(item, first.x, first.y)
+        compare(selection.count, 1)
+        compare(selection.signalArguments[0][0], "child-0")
+        const blocked = childCentre(item, 2)
+        mouseClick(item, blocked.x, blocked.y)
+        compare(selection.count, 1, "a blocked child never opens")
+        compare(item.selectedChildId, "child-2", "the pointer selects what it hovers")
+        item.forceActiveFocus()
+        keyClick(Qt.Key_Right)
+        compare(item.selectedChildId, "child-3")
+        keyClick(Qt.Key_Return)
+        compare(selection.count, 2)
+        compare(selection.signalArguments[1][0], "child-3")
+        mouseClick(item, 650, 450)
+        compare(dismissal.count, 1, "a press beside the children closes the folder")
+        keyClick(Qt.Key_Escape)
+        compare(dismissal.count, 2)
+    }
+    function test_trackMovesAnOvercrowdedFolderAlongTheCurve() {
+        const item = track(48, true, true)
+        verify(item.track.windowed)
+        const capacity = item.track.capacity
+        compare(findChild(item, "folder-child-" + capacity).opacity, 0, "a child past the end is not shown")
+        const first = childCentre(item, 0)
+        mouseWheel(item, first.x, first.y, 0, -120)
+        tryCompare(item, "trackOffset", 1)
+        verify(findChild(item, "folder-child-0").opacity < 0.01, "the wheel moved the first child off the curve")
+        verify(findChild(item, "folder-child-" + capacity).opacity > 0.99)
+        const shown = childCentre(item, capacity)
+        verify(Math.abs(Math.hypot(shown.x - 350, shown.y - 250) - 160) < 0.5)
+        mouseWheel(item, first.x, first.y, 0, 120)
+        tryCompare(item, "trackOffset", 0)
+        item.forceActiveFocus()
+        for (let step = 0; step < 47; ++step) keyClick(Qt.Key_Right)
+        compare(item.selectedChildId, "child-47")
+        compare(item.trackOffset, 48 - capacity, "keys bring the selection onto the curve")
+        compare(selection.count, 0, "browsing never opens a child")
+    }
+    function test_trackUnfoldsFromTheFolder() {
+        const item = track(3, false)
+        const start = childCentre(item, 1)
+        verify(Math.hypot(start.x - 250, start.y - 250) < 30, "children start at the folder icon")
+        verify(!item.selectChild("child-0"), "moving contents cannot launch")
+        tryCompare(item, "openingInProgress", false)
+        const end = childCentre(item, 1)
+        fuzzyCompare(end.x, 190, 0.5)
+        item.opened = false
+        item.reducedMotion = true
+        item.opened = true
+        compare(item.openingProgress, 1)
+    }
+    function test_trackHostDrawsTheContentsOnTheDocksCurve() {
+        const window = createTemporaryObject(anchorComponent, null)
+        const icon = findChild(window, "anchor")
+        const screen = window.screen
+        window.x = screen.virtualX
+        window.y = screen.virtualY
+        icon.x = screen.width / 2 - icon.width / 2
+        icon.y = screen.height / 2 - icon.height / 2
+        // The dock is centred 150 pixels left of the folder; its outer curve
+        // passes 64 pixels outside the folder.
+        const dock = Qt.point(icon.x + icon.width / 2 - 150, icon.y + icon.height / 2)
+        const samples = []
+        for (let k = 0; k < 91; ++k) {
+            const a = -Math.PI / 3 + 2 * Math.PI / 3 * k / 90
+            samples.push({ x: dock.x + 214 * Math.cos(a), y: dock.y + 214 * Math.sin(a), scale: 1 })
+        }
+        const host = createTemporaryObject(trackHostComponent, testCase, {
+            folderItem: icon, iconSize: 48, reducedMotion: true,
+            trackSamples: function() { return samples },
+            snapshot: { status: "ready", entries: rows(5) }
+        })
+        verify(host.openFolder())
+        tryCompare(host, "visible", true)
+        const dockGlobal = icon.parent.mapToGlobal(dock.x, dock.y)
+        tryVerify(function() {
+            for (let index = 0; index < 5; ++index) {
+                const child = findChild(host.mainItem, "folder-child-" + index)
+                const centre = child.mapToGlobal(child.width / 2, host.iconSize * child.drawnScale / 2)
+                if (Math.abs(Math.hypot(centre.x - dockGlobal.x, centre.y - dockGlobal.y) - 214) > 1)
+                    return false
+            }
+            return true
+        }, 3000, "every child stands on the dock's curve, wherever the window is")
+        const folder = icon.mapToGlobal(icon.width / 2, icon.height / 2)
+        fuzzyCompare(host.mainItem.expansionOrigin.x + host.x, folder.x, 1)
+        fuzzyCompare(host.mainItem.expansionOrigin.y + host.y, folder.y, 1)
+        host.mainItem.dismissRequested()
+        tryCompare(host, "visible", false)
     }
     function test_nativeHostLifecycle() {
         const window = createTemporaryObject(anchorComponent, null)

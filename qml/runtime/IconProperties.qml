@@ -6,6 +6,9 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import "IconPropertiesDraft.js" as IconPropertiesDraft
 
+// The Icon Properties editor for one dock entry: its own glyph, label, tile
+// and icon style. Changes stay a draft until Apply, which saves them for this
+// entry alone as a revision-checked transaction; Reset removes them.
 Item {
     id: root
 

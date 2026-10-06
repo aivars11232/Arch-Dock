@@ -1,3 +1,4 @@
+// The audition state machine: prepare, show, update, commit or roll back.
 #include "PresetPreviewSession.h"
 #include "../model/PanelSettingsSchema.h"
 

@@ -1,3 +1,4 @@
+// Normalization and validation of native panel placements.
 #include "PanelPlacement.h"
 
 #include <QtGlobal>

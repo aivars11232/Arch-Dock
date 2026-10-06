@@ -9,6 +9,10 @@
 #include <optional>
 #include <array>
 
+// A theme package's declared contents (Theme Package v2): assets,
+// capabilities, states and layers, slices, content regions, baked 2.5D
+// tracks, input masks and the optional 3D scene. ThemePackage parses and
+// verifies a package into it; renderers draw from its runtime projection.
 namespace ArchDock
 {
 

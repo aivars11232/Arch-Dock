@@ -1,3 +1,7 @@
+// PanelRegistry: panel records and their persistence, theme catalogue and
+// package projections (including the generated 3D scene of a look without
+// one), capability resolution, artwork import and rendering, and settings
+// transactions.
 #include "PanelRegistry.h"
 #include "DockSettings.h"
 #include "model/PanelDefinition.h"
@@ -6,6 +10,7 @@
 #include "model/SettingsMigration.h"
 #include "panel/IconOverrideTransaction.h"
 #include "presets/PresetCapabilityResolver.h"
+#include "themes/LookPalette.h"
 #include "themes/ThemeAssetProcessor.h"
 #include "themes/ThemePackage.h"
 #include "persistence/ConfigurationBackup.h"
@@ -973,7 +978,7 @@ PanelRegistry::themeCapabilityProfile(
     {
         return profile;
     }
-    if (!genericScene3D(definition, catalogTheme(themeIdFor(definition))).has_value())
+    if (!genericScene3D(definition, catalogTheme(themeIdFor(definition)), {}).has_value())
     {
         return profile;
     }
@@ -1040,7 +1045,7 @@ PanelRegistry::lookCapabilityProfile(
             return std::nullopt;
         }
         const ArchDock::ThemePackageLoadResult loaded =
-            ArchDock::ThemePackage::load(manifestUrl.toLocalFile());
+            loadThemePackage(manifestUrl.toLocalFile());
         if (!loaded.isValid())
         {
             if (errorCode)
@@ -1162,8 +1167,7 @@ std::optional<QVariantMap> PanelRegistry::builtInThemeRuntimeProjection(
         return std::nullopt;
     }
 
-    const ArchDock::ThemePackageLoadResult loaded =
-        ArchDock::ThemePackage::load(manifestPath);
+    const ArchDock::ThemePackageLoadResult loaded = loadThemePackage(manifestPath);
     if (!loaded.isValid())
     {
         if (errorCode)
@@ -1243,7 +1247,8 @@ std::optional<QVariantMap> PanelRegistry::themeRuntimeProjection(
     {
         return projection;
     }
-    const std::optional<QVariantMap> generic = genericScene3D(definition, catalog);
+    const std::optional<QVariantMap> generic = genericScene3D(
+        definition, catalog, projection.value_or(QVariantMap{}));
     if (!generic.has_value())
     {
         return projection;
@@ -1281,6 +1286,27 @@ std::optional<QVariantMap> PanelRegistry::themeRuntimeProjection(
     return result;
 }
 
+ArchDock::ThemePackageLoadResult PanelRegistry::loadThemePackage(const QString &manifestPath) const
+{
+    const QFileInfo info(manifestPath);
+    const QString key = info.absoluteFilePath();
+    const qint64 modified = info.exists() ? info.lastModified().toMSecsSinceEpoch() : -1;
+    const qint64 size = info.exists() ? info.size() : -1;
+    const auto cached = m_themePackages.constFind(key);
+    if (cached != m_themePackages.cend() && cached->modified == modified && cached->size == size)
+        return cached->result;
+    ArchDock::ThemePackageLoadResult loaded = ArchDock::ThemePackage::load(manifestPath);
+    // Only a package that read cleanly is kept: a failure is read again, so
+    // a repaired package is seen at once. A handful of packages are in use.
+    if (loaded.isValid())
+    {
+        if (m_themePackages.size() >= 64)
+            m_themePackages.clear();
+        m_themePackages.insert(key, {modified, size, loaded});
+    }
+    return loaded;
+}
+
 QString PanelRegistry::themeIdFor(const ArchDock::PanelDefinition &definition)
 {
     return !definition.surface.completeThemeId.trimmed().isEmpty()
@@ -1302,42 +1328,27 @@ QVariantMap PanelRegistry::catalogTheme(const QString &themeId) const
 }
 
 std::optional<QVariantMap> PanelRegistry::genericScene3D(
-    const ArchDock::PanelDefinition &definition, const QVariantMap &look) const
+    const ArchDock::PanelDefinition &definition, const QVariantMap &look,
+    const QVariantMap &lookProjection) const
 {
-    // Closed radial paths only: the generic platform is a whole ring, and an
-    // open arc or semicircle would stand on half of it.
-    static const QStringList radialLayouts{
+    // Layouts with an exact generated platform (PlatformGeometry.js): closed
+    // circles, ellipses and regular polygons, and the 300-degree radial arc,
+    // each drawn along the layout's own path so every icon stands on it.
+    // Arcs, semicircles and fans curve about a centre below their panel's
+    // middle, which a centred platform cannot follow; they stay flat.
+    static const QStringList platformLayouts{
         QStringLiteral("circular"), QStringLiteral("ring"), QStringLiteral("ellipse"),
         QStringLiteral("radial"), QStringLiteral("polygon"), QStringLiteral("triangle"),
         QStringLiteral("square"), QStringLiteral("pentagon"), QStringLiteral("hexagon"),
         QStringLiteral("octagon")};
     if (definition.host.kind != ArchDock::PanelHostKind::FreeDesktop ||
-        !radialLayouts.contains(definition.layout.pathType) ||
+        !platformLayouts.contains(definition.layout.pathType) ||
         look.contains(QStringLiteral("scene3D")) ||
         !definition.surface.themePackageManifest.trimmed().isEmpty() ||
         !definition.surface.themeAsset.trimmed().isEmpty() ||
         !definition.surface.themeSource.trimmed().isEmpty())
     {
         return std::nullopt;
-    }
-    if (!m_genericSceneGeometry.has_value())
-    {
-        // The validated platform of the built-in mesh package, loaded once.
-        const std::optional<QVariantMap> source =
-            builtInThemeRuntimeProjection(QStringLiteral("mesh-platform-cyan"));
-        const QVariantMap resources = source.has_value()
-            ? source->value(QStringLiteral("scene3DResources")).toMap() : QVariantMap{};
-        const QVariantMap mesh = resources.value(QStringLiteral("mesh")).toMap();
-        if (mesh.isEmpty())
-            return std::nullopt;
-        QVariantMap scene = source->value(QStringLiteral("scene3D")).toMap();
-        scene.remove(QStringLiteral("texture"));
-        scene.insert(QStringLiteral("parts"), QVariantList{});
-        m_genericSceneGeometry = QVariantMap{
-            {QStringLiteral("scene3D"), scene},
-            {QStringLiteral("mesh"), mesh},
-            {QStringLiteral("iconMesh"), resources.value(QStringLiteral("iconMesh"))},
-            {QStringLiteral("indexBudget"), resources.value(QStringLiteral("indexBudget"))}};
     }
     const QVariantMap style = look.value(QStringLiteral("panelStyle")).toMap();
     const QString colour = !definition.surface.color.trimmed().isEmpty()
@@ -1346,17 +1357,52 @@ std::optional<QVariantMap> PanelRegistry::genericScene3D(
     const QString appearance = !definition.surface.appearance.trimmed().isEmpty() && look.isEmpty()
         ? definition.surface.appearance.trimmed()
         : style.value(QStringLiteral("appearance"), look.value(QStringLiteral("category"))).toString();
-    QVariantMap scene = m_genericSceneGeometry->value(QStringLiteral("scene3D")).toMap();
-    scene.insert(QStringLiteral("generic"), true);
+    // The platform is generated by the renderer from the panel's layout. A
+    // look drawn from artwork lends it the artwork's own colours and glows in
+    // its glow colour; a look drawn procedurally is coloured by the renderer
+    // from the same style its 2D surface uses.
+    QVariantMap generated;
+    const QString digest = lookProjection.value(QStringLiteral("contentDigest")).toString();
+    if (!digest.isEmpty())
+    {
+        if (!m_lookPalettes.contains(digest))
+        {
+            const std::optional<QVariantMap> sampled = ArchDock::LookPalette::fromArtwork(lookProjection);
+            m_lookPalettes.insert(digest, sampled.value_or(QVariantMap{}));
+        }
+        QVariantMap palette = m_lookPalettes.value(digest);
+        if (!palette.isEmpty())
+        {
+            const QColor glow(colour);
+            if (glow.isValid())
+            {
+                // Doubles: D-Bus carries no float, and QColor's are floats.
+                palette.insert(QStringLiteral("glow"), QVariantList{double(glow.redF()),
+                    double(glow.greenF()), double(glow.blueF()), 1.0});
+                palette.insert(QStringLiteral("glowStrength"), 0.6);
+            }
+            generated.insert(QStringLiteral("palette"), palette);
+        }
+    }
+    QVariantMap scene{
+        {QStringLiteral("generic"), true},
+        {QStringLiteral("generated"), generated},
+        {QStringLiteral("fieldOfView"), 40},
+        {QStringLiteral("cameraPitch"), 25},
+        {QStringLiteral("cameraYaw"), 10},
+        {QStringLiteral("keyLightBrightness"), 1.2},
+        {QStringLiteral("fillLightBrightness"), 0.45},
+        {QStringLiteral("defaultQuality"), QStringLiteral("medium")},
+        {QStringLiteral("parts"), QVariantList{}}};
+    QVariantMap material = genericSceneMaterial(colour, appearance, definition.surface.glowIntensity);
+    // The body is lit, not lit up: only its rim glows.
+    material.insert(QStringLiteral("emissiveStrength"), 0.0);
     return QVariantMap{
         {QStringLiteral("scene3D"), scene},
         {QStringLiteral("scene3DResources"), QVariantMap{
-            {QStringLiteral("mesh"), m_genericSceneGeometry->value(QStringLiteral("mesh"))},
-            {QStringLiteral("iconMesh"), m_genericSceneGeometry->value(QStringLiteral("iconMesh"))},
-            {QStringLiteral("material"), genericSceneMaterial(colour, appearance,
-                definition.surface.glowIntensity)},
+            {QStringLiteral("material"), material},
             {QStringLiteral("parts"), QVariantList{}},
-            {QStringLiteral("indexBudget"), m_genericSceneGeometry->value(QStringLiteral("indexBudget"))}}}};
+            {QStringLiteral("indexBudget"), 262144}}}};
 }
 
 std::optional<QVariantMap> PanelRegistry::lookRuntimeProjection(
@@ -1406,7 +1452,7 @@ std::optional<QVariantMap> PanelRegistry::lookRuntimeProjection(
     }
 
     const ArchDock::ThemePackageLoadResult loaded =
-        ArchDock::ThemePackage::load(manifestUrl.toLocalFile());
+        loadThemePackage(manifestUrl.toLocalFile());
     if (!loaded.isValid())
     {
         if (errorCode)
@@ -1721,6 +1767,8 @@ QString PanelRegistry::beginFreePanelCreation(const QString &ownershipToken)
     panel.insert(QStringLiteral("contentAppIds"), QStringList{});
     panel.insert(QStringLiteral("contentUrls"), QStringList{});
     panel.insert(QStringLiteral("layout"), QStringLiteral("circular"));
+    // A new curved panel opens its folders along its own curve.
+    panel.insert(QStringLiteral("folderLayout"), QStringLiteral("track"));
     panel.insert(QStringLiteral("width"), 420);
     panel.insert(QStringLiteral("height"), 420);
     panel.insert(QStringLiteral("layoutRadius"), 145);
@@ -2596,6 +2644,8 @@ QString PanelRegistry::addFreePanel()
     panel.insert(QStringLiteral("contentAppIds"), QStringList{});
     panel.insert(QStringLiteral("contentUrls"), QStringList{});
     panel.insert(QStringLiteral("layout"), QStringLiteral("circular"));
+    // A new curved panel opens its folders along its own curve.
+    panel.insert(QStringLiteral("folderLayout"), QStringLiteral("track"));
     panel.insert(QStringLiteral("width"), 420);
     panel.insert(QStringLiteral("height"), 420);
     panel.insert(QStringLiteral("layoutRadius"), 145);

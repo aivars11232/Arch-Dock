@@ -3,6 +3,9 @@ import QtQuick.Controls as QQC2
 import org.kde.kcmutils as KCM
 import org.kde.kirigami as Kirigami
 
+// Not registered in config.qml, so Plasma never shows it: Panel Studio edits
+// appearance. It stays an inert placeholder, free of setters
+// (tests/ValidatePlasmaTemplate.cmake).
 KCM.SimpleKCM {
     property string cfg_panelId: ""
     property string cfg_panelIdDefault: ""

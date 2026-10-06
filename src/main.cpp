@@ -1,4 +1,14 @@
+// The arch-dock executable. The first instance is the resident backend: it
+// owns the session D-Bus name org.archdock.ArchDock and runs the panels
+// (PanelManager, PanelWindow). Started again while it runs, it forwards
+// --settings or --toggle-auto-hide to that instance and exits. It also runs the
+// one-shot commands: --quit, which stops the backend and keeps it stopped for
+// the login session, and the configuration backup commands, which need the
+// backend stopped. --dbus-activated marks an on-demand start, refused while a
+// stop is in force.
+
 #include <QGuiApplication>
+#include <QIcon>
 #include <QCoreApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
@@ -124,6 +134,10 @@ int main(int argc, char *argv[])
     {
         auto gui = std::make_unique<QGuiApplication>(argc, argv);
         gui->setQuitOnLastWindowClosed(false);
+        // Panel Studio's windows carry the Arch Dock icon from the icon theme.
+        // The application id stays "arch-dock": the window watcher and the
+        // focus request recognise Arch Dock's own windows by it.
+        QGuiApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("org.archdock.ArchDock")));
         application = std::move(gui);
     }
     QCoreApplication &app = *application;

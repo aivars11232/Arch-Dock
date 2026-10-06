@@ -1,5 +1,31 @@
 # Arch Dock release checklist
 
+## Folders, Quit, true-3D fidelity and performance — 0.1.1-10, 2026-10-06
+
+- [x] ADFIX-TASK-001 to -003 and the owner's added requests (icon and logo,
+      comments, readability) are committed in one commit on `main` (the
+      commit that adds this entry) and pushed.
+- [x] Complete configured suite 114/114 in one serial run on the final source,
+      one worker; native Wayland and real-RHI gates inside that run; log scan
+      clean.
+- [x] Two canonical exports identical (562 files); every archive member
+      checked against the source; `makepkg --verifysource` PASS; one-job
+      Release package built.
+      Source SHA256 `922acbf151808aec2105044348152cfe9732f76bd63230b5137f7bd3e6800db1`,
+      package SHA256 `65523172fdd7e92086648ff2e72da564885d2e68a3c6f23507d1b593edc2dd20`.
+- [x] Before the push: tagged-source verifier PASS in a throwaway clone
+      (local tag only); the committed tree equals the packaged source.
+- [x] Installed-package harness PASS, including the 0.1.1-9 upgrade.
+- [x] Installed on the owner's PC with the owner's authorization; payload,
+      `pacman -Qkk`, backend, Quit on the real desktop and configuration
+      preservation verified.
+- [ ] Owner visual and interaction acceptance (checklist in CURRENT_STATE.md).
+- [ ] Physical second-monitor and other-GPU cells (R-01).
+- [ ] `v0.1.1` tag and publication: not needed for this correction; separate
+      owner decision.
+- Package and evidence are retained, untracked, in `build-codex-adfix-0.1.1-10/`
+  and `build-codex-adfix/evidence/`.
+
 ## Generic 3D, 3D page and desktop editing — 0.1.1-9, 2026-10-05
 
 - [x] AD3D-TASK-001, the independent audit corrections and AD3D-TASK-002 are

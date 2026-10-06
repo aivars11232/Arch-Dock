@@ -1,5 +1,8 @@
 .pragma library
 
+// Panel Studio's page structure: the sections across the top and the tabs
+// under each.
+
 var sections = [
     {
         label: "Overview",

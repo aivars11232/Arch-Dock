@@ -5,6 +5,11 @@
 
 class QSettings;
 
+// The settings every Arch Dock panel shares (the "global" fields of Panel
+// Studio): magnification, motion, tooltips and indicators, the status
+// modules, auto-hide and which built-in panels of the desktop suite are
+// shown. They live in the user's QSettings and change through transactions
+// (stageTransaction, writeTransaction, adoptTransaction) like panel settings.
 class DockSettings final : public QObject
 {
     Q_OBJECT

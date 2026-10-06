@@ -1,6 +1,9 @@
 import QtQuick
 import ArchDock.Rendering 1.0
 
+// Whether this consumer (an applet or a Studio window) can draw true 3D:
+// Quick3D built in, its QML import loadable in this engine, and a graphics API
+// it supports (OpenGL or Vulkan). diagnosticCode names the first missing one.
 Item {
     id: root
 

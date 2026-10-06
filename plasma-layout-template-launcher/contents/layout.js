@@ -1,3 +1,6 @@
+// Add Panel template "Arch Dock Launcher Panel": a native bottom panel
+// holding the Arch Dock applet with pinned launchers.
+
 const panel = new Panel;
 panel.location = "bottom";
 panel.height = Math.round(gridUnit * 2);

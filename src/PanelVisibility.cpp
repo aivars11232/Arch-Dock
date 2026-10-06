@@ -1,3 +1,5 @@
+// Panel visibility modes, their Plasma equivalents and the reveal or conceal
+// decision.
 #include "PanelVisibility.h"
 
 namespace ArchDock

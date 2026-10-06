@@ -1,5 +1,12 @@
 .pragma library
 
+// The shared layout engine: pure functions that turn a panel's layout and
+// settings into geometry. It places entries along straight, curved, polygon
+// and baked tracks, computes the surface path and the procedural looks'
+// colours, and lays out folder contents (outward popups and the track along
+// the dock). Every renderer (and so Panel Studio's previews) and the dock
+// applet use it, so they agree on where everything stands.
+
 function clamp(value, minimum, maximum) {
     return Math.max(minimum, Math.min(maximum, value));
 }
@@ -138,6 +145,15 @@ function curvedTrack(resolvedLayout, geometry, polygonSides) {
 
 // Whole-scene rotation is offered only where a turning scene is meaningful:
 // the radial layouts. A straight row has no centre to turn about.
+// Layouts whose entries stand on a curved track: closed shapes and the open
+// paths of the sweep table. A folder on one can open along the dock.
+function curvedLayout(layout) {
+    const name = String(layout || "");
+    return ["circular", "ring", "ellipse", "polygon", "triangle", "square",
+            "pentagon", "hexagon", "octagon"].includes(name)
+        || pathSweep(name) !== null;
+}
+
 function supportsWholeSceneRotation(layout) {
     return radialLayoutNames.includes(String(layout || ""));
 }
@@ -1357,6 +1373,62 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
                             : { x: size / 2 - minimumX, y: size / 2 - minimumY },
         entries: entries
     };
+}
+
+// "Along the dock": a folder's contents stand on a curve beside the dock,
+// centred on the folder. `samples` trace that curve on screen, in order, as
+// { x, y, scale }; the folder faces the middle sample. Neighbours keep `pitch`
+// pixels apart along the curve. When they do not all fit, `offset` children
+// have moved along it, and a child beyond either end fades out, as on an
+// overcrowded dock; it is on the track, and may be pressed, only between the
+// ends.
+function folderTrackLayout(samples, count, pitch, offset) {
+    // A list read back from a QML property is indexable but not an Array.
+    const points = [];
+    const source = samples || [];
+    for (let index = 0; index < Math.floor(finite(source.length, 0)); ++index) {
+        const sample = source[index];
+        if (sample && isFinite(sample.x) && isFinite(sample.y))
+            points.push(sample);
+    }
+    const total = clamp(Math.floor(finite(count, 0)), 0, 48);
+    const empty = { capacity: 0, windowed: false, maximumOffset: 0, entries: [] };
+    if (points.length < 2 || total === 0)
+        return empty;
+    const lengths = [0];
+    for (let index = 1; index < points.length; ++index)
+        lengths.push(lengths[index - 1] + Math.hypot(points[index].x - points[index - 1].x,
+                                                     points[index].y - points[index - 1].y));
+    const length = lengths[lengths.length - 1];
+    const middle = lengths[Math.floor((points.length - 1) / 2)];
+    const spacing = Math.max(1, finite(pitch, 1));
+    const reach = Math.min(middle, length - middle);
+    const capacity = Math.max(1, Math.min(total, Math.floor(2 * reach / spacing) + 1));
+    const maximumOffset = Math.max(0, total - capacity);
+    const shift = clamp(finite(offset, 0), 0, maximumOffset);
+    const first = middle - (capacity - 1) * spacing / 2;
+    function pointAt(position) {
+        const target = clamp(position, 0, length);
+        let segment = 0;
+        while (segment < lengths.length - 2 && lengths[segment + 1] < target)
+            ++segment;
+        const span = lengths[segment + 1] - lengths[segment];
+        const t = span > 0 ? (target - lengths[segment]) / span : 0;
+        const a = points[segment], b = points[segment + 1];
+        const scaleA = finite(a.scale, 1), scaleB = finite(b.scale, 1);
+        return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t,
+                 scale: scaleA + (scaleB - scaleA) * t };
+    }
+    const entries = [];
+    for (let index = 0; index < total; ++index) {
+        const slot = index - shift;
+        const beyond = Math.max(0, -slot, slot - (capacity - 1));
+        const point = pointAt(first + clamp(slot, -1, capacity) * spacing);
+        entries.push({ index: index, x: point.x, y: point.y, scale: point.scale,
+                       onTrack: beyond < 1e-6, visibility: clamp(1 - beyond, 0, 1) });
+    }
+    return { capacity: capacity, windowed: total > capacity,
+             maximumOffset: maximumOffset, entries: entries };
 }
 
 // Length of the half ellipse x = radiusX cos(t), y = radiusY sin(t) between

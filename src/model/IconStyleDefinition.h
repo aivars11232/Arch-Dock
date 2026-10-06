@@ -9,6 +9,10 @@
 
 #include <optional>
 
+// An Icon Style package's declared look, as parsed from its manifest: the
+// layers drawn around a glyph (base, tile, treatments), its states, safe
+// insets, glyph policy, capabilities and preview. The 2D and 3D icon
+// renderers draw it.
 namespace ArchDock
 {
 

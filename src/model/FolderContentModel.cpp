@@ -1,3 +1,5 @@
+// FolderContentModel: one page of a folder's immediate children, and the
+// checks that a selected child is still that folder's and safe to open.
 #include "FolderContentModel.h"
 
 #include <KFileItem>

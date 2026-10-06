@@ -1,3 +1,4 @@
+// The native containment lifecycle rules declared in the header.
 #include "NativeContainmentLifecycle.h"
 
 #include <QtGlobal>

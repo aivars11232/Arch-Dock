@@ -1,3 +1,5 @@
+// DockSettings: the shared settings, their defaults and bounds, and the
+// transaction steps that validate, store and adopt them.
 #include "DockSettings.h"
 #include "model/PanelSettingsSchema.h"
 

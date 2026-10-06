@@ -3,6 +3,11 @@ import QtQuick.Window
 import ArchDock.Rendering 1.0
 import org.kde.plasma.core as PlasmaCore
 
+// A folder's contents as a popup beside the clicked folder icon (fan, grid,
+// stack, arc or ring), opening away from the dock: a native panel's folder
+// opens away from its screen edge, a free panel's the way the folder faces
+// out of the dock. The contents themselves are the shared FolderExpansion;
+// this places the popup and closes it when focus leaves.
 PlasmaCore.Dialog {
     id: root
     property var snapshot: ({ status: "unavailable", entries: [] })
@@ -88,9 +93,14 @@ PlasmaCore.Dialog {
         const icon = folderItem.width
         const across = expansionVertical ? content.width / 2 - content.anchorAcross
                                          : content.height / 2 - content.anchorAcross
+        // Plasma moves an applet popup to the middle of the screen when that
+        // middle falls inside it and its attachment is narrow
+        // (PlasmaQuick::Dialog::popupPosition). An attachment longer than the
+        // popup, centred where the popup belongs, keeps it on the folder.
+        const span = Math.max(1, 2 * (expansionVertical ? content.width : content.height))
         placement = expansionVertical
-            ? Qt.rect(icon / 2 + across - 0.5, -folderGap, 1, icon + 2 * folderGap)
-            : Qt.rect(-folderGap, icon / 2 + across - 0.5, icon + 2 * folderGap, 1)
+            ? Qt.rect(icon / 2 + across - span / 2, -folderGap, span, icon + 2 * folderGap)
+            : Qt.rect(-folderGap, icon / 2 + across - span / 2, icon + 2 * folderGap, span)
         placementItem.x = placement.x
         placementItem.y = placement.y
         placementItem.width = placement.width

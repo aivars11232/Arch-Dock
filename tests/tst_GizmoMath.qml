@@ -47,4 +47,31 @@ TestCase {
         compare(GizmoMath.snapped(0.37, 0), 0.37)
         compare(GizmoMath.clamp(3, 0, 1), 1)
     }
+
+    // ADFIX UF-07: dragging the platform's body turns and tilts it.
+    function test_orbitTurnsAcrossAndTiltsUpAndDown() {
+        let turned = GizmoMath.orbit(25, 10, Qt.point(40, 0), false)
+        fuzzyCompare(turned.yaw, 20, 1e-9)
+        fuzzyCompare(turned.pitch, 25, 1e-9)
+        turned = GizmoMath.orbit(25, 10, Qt.point(0, -40), false)
+        fuzzyCompare(turned.pitch, 35, 1e-9, "dragging up tilts the far side down")
+        // Ctrl snaps both to 15 degrees.
+        turned = GizmoMath.orbit(25, 10, Qt.point(13, 9), true)
+        compare(turned.yaw % 15, 0)
+        compare(turned.pitch % 15, 0)
+        // Pitch stays within its range; yaw wraps the short way round.
+        compare(GizmoMath.orbit(25, 0, Qt.point(0, -400), false).pitch, 60)
+        fuzzyCompare(GizmoMath.orbit(25, 170, Qt.point(80, 0), false).yaw, -170, 1e-9)
+    }
+
+    // ADFIX AUD-04: an arrow seen end-on is not a silent handle.
+    function test_anEndOnArrowMovesWithUpAndDown() {
+        verify(GizmoMath.axisEndOn(Qt.point(100, 100), Qt.point(104, 103)))
+        verify(!GizmoMath.axisEndOn(Qt.point(100, 100), Qt.point(130, 100)))
+        // Where the ordinary rule gives nothing ...
+        compare(GizmoMath.axisTravel(Qt.point(100, 100), Qt.point(102, 101), 10, Qt.point(0, -60)), 0)
+        // ... up moves along the axis and down back, one length per 120 pixels.
+        fuzzyCompare(GizmoMath.endOnTravel(Qt.point(0, -60), 10, 120), 5, 1e-9)
+        fuzzyCompare(GizmoMath.endOnTravel(Qt.point(25, 120), 10, 120), -10, 1e-9)
+    }
 }

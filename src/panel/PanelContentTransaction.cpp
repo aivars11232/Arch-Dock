@@ -1,3 +1,4 @@
+// The free panel content operations described in the header.
 #include "PanelContentTransaction.h"
 
 #include <QSet>

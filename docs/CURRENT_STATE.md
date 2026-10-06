@@ -1,23 +1,106 @@
 # Arch Dock current state
 
-<!-- ADFIX_WIP_BEGIN -->
-## ADFIX correction pack — in progress, stopped by the owner, 2026-10-06
+<!-- ADFIX_BEGIN -->
+## Folders, Quit, true-3D fidelity and performance — ADFIX pack, 0.1.1-10, 2026-10-06
 
-Source only; the owner's PC still runs **arch-dock 0.1.1-9**. Work on
-ADFIX-TASK-001 stopped about a third of the way through the three-task pack.
-Resume from [ADFIX continuation handoff](ADFIX_CONTINUATION_HANDOFF.md).
+Package **arch-dock 0.1.1-10** (source archive SHA256
+`922acbf151808aec2105044348152cfe9732f76bd63230b5137f7bd3e6800db1`, package
+SHA256 `65523172fdd7e92086648ff2e72da564885d2e68a3c6f23507d1b593edc2dd20`)
+closes the owner's correction pack ADFIX-TASK-001 to -003 and the owner's added
+requests (icon and logo, comments, readability). It is installed on the
+owner's PC and verified: installed with the owner's sudo password, all 232
+payload files match and `pacman -Qkk` reports 0 altered files, the new backend
+runs, and Panel Studio opened. Quit was observed on the real desktop:
+`arch-dock --quit` stopped Arch Dock, an activation request was refused in
+0.07 s and nothing restarted it for 8 s; starting it from the menu entry
+cleared the stop. Arch Dock's configuration, the Plasma layout and
+`plasmashellrc` are byte-identical after the upgrade. Plasma was not restarted:
+it hosts no Arch Dock applet at the moment. A private backup (mode 0600) and
+the installation receipt are in `~/.local/state/arch-dock/`.
 
-- Done and verified: intentional Quit (`arch-dock --quit`, D-Bus `quit`,
-  **Quit Arch Dock** menu action, TERM/INT) stays stopped for the login session
-  despite installed applets and the KWin watcher; KILL is a crash and recovers.
-- Mostly done: folder contents open from the clicked folder, away from the
-  dock. Native `folder-anchor-smoke` 29 of 35 (was 0 of 35);
-  `folder-interaction-smoke` fails at the native ring layout. Both causes are
-  diagnosed in the handoff.
-- Not started: the owner's "Along the dock" folder layout, wheel with animation
-  None, opening mechanisms, Tasks 002 and 003, the new icon and logo, the
-  comment pass and the readability pass.
-<!-- ADFIX_WIP_END -->
+What changed for the owner:
+
+- **Quit Arch Dock** (menu action, `arch-dock --quit`, TERM or INT) stops Arch
+  Dock for the rest of the login session; installed applets and the KWin window
+  watcher no longer start it again. Starting it yourself clears the stop; a
+  killed process is a crash and restarts on demand.
+- Folders open from the clicked folder, away from the dock, in every layout and
+  renderer. Curved free panels get the **Along the dock** folder layout (the
+  default for new curved free panels): the contents stand on an invisible track
+  just outside the dock that follows its curve, tilt and perspective. The other
+  five layouts stay popups; straight edge panels keep the popup.
+- The wheel turns a free panel while a window preview is shown; Panel Studio
+  reloads its editor once per batch of changes, which removed ~1 s dock stalls
+  during drops.
+- Every opening mechanism Studio offers visibly closes and reopens the panel;
+  mechanisms a renderer cannot draw are not offered and are refused.
+- 3D keeps the panel's look. A look without its own 3D platform stands on a
+  platform generated in the panel's exact shape (circle, ring, ellipse, 3 to 12
+  sided polygon, radial arc) in colours read from the look, its rim glowing in
+  the look's glow colour; Orange's own platform is redrawn in its 2D colours.
+  Panels > 3D has a Shape section (layout, platform width, bend). Icons stand
+  upright and face the viewer on solid pedestals. In **Edit on desktop**,
+  dragging the platform tilts and turns it, and an arrow seen end-on moves with
+  vertical drags. When 3D is unavailable the page names the actual reason.
+- Studio edits, page loads and Apply are 10 to 25 times faster (median: edit
+  792 → 44 ms, page 305 → 34 ms, Apply 495 → 20 ms on a free Orange 3D panel).
+- New icon and logo (`org.archdock.ArchDock`). Source files explain their
+  purpose, and `PanelWindow.cpp` is split into eight topic files.
+
+Verification (one session, no subagents, one build job, one test worker, one
+heavy process at a time):
+
+- Complete configured suite **114/114** in one serial run on the final source
+  (828.6 s). Log scan: no binding loop, type, reference, assignment or
+  component error; the only import/decode errors are the intended
+  missing-Quick3D probe and the corrupt-mask fixture. Native gates in that run:
+  folder anchors 50/50 (was 0/35); 10 offered mechanisms collapse and reopen,
+  25 refused; the wheel with animation off; folder and window interactions;
+  staged preset previews; real RHI for generated platforms of every exact
+  shape and both baked looks, gizmo, platform drag, end-on arrow, icons and
+  pedestals; and, in a disposable Plasma session with the installed layout,
+  KILL recovers while Quit and TERM stay stopped through a Plasma restart and
+  activation requests.
+- Memory: eight audition create/cancel cycles grew the backend by 9.6 MiB
+  (unchanged limit 64 MiB), no stale hosts.
+- Two canonical exports identical (562 files); every archive member checked
+  against the working tree; `makepkg --verifysource` PASS; one-job Release
+  package built in 412 s.
+- Installed-package harness PASS: 232 payload files byte-identical with
+  modes, licensing, hidden-source rendering, 15+15 catalogs, startup with and
+  without Quick3D, runtime UI and folder interactions, upgrade from 0.1.1-9
+  with configuration recovery, removal with user configuration preserved.
+  Earlier runs found a stale pointer target in the harness's folder step (it
+  now follows a native panel that settles to its applet's thickness, 92 → 108
+  px) and once saw a drop refused by the applet's 1 s backend timeout, which
+  did not recur.
+- Before the push, the commit was cloned, tagged locally in that throwaway
+  clone (no tag in this repository) and passed the tagged-source verifier; its
+  export lists exactly the packaged files (562 paths, hashes and modes).
+- AUD-09: `main` has no branch protection. That is repository governance,
+  outside this package, and was left unchanged. No tag or release was made.
+
+Evidence (untracked): `build-codex-adfix/evidence/` (TASK-001/002/003 closure
+notes, logs `91`–`93`) and `build-codex-adfix-0.1.1-10/` (source, package,
+harness and owner logs).
+
+Owner checklist (only what automation cannot see):
+
+1. Panel Studio > Panels > General: **Add free panel** (a new circle), set its
+   **Content** to Launcher, Apply, and drop a folder from Dolphin onto it.
+   Click the folder: its contents stand along the dock, following its curve
+   and tilt.
+2. On that panel, Panels > 3D > Enable 3D, Apply: a platform in the look's
+   colours, icons upright on pedestals. Try Shape (width, bend) and **Edit on
+   desktop**: drag the platform itself to tilt and turn it.
+3. Pick an opening mechanism in Studio and collapse the panel: it visibly
+   closes and reopens.
+4. Right-click Arch Dock in the application menu > **Quit Arch Dock**: it stays
+   closed until you start it again.
+5. The new icon in the application menu and on Panel Studio's window.
+6. On a second monitor: Studio opens on the screen of the panel it edits
+   (physical cell R-01, not executed here).
+<!-- ADFIX_END -->
 
 <!-- AD3D_TASK_002_BEGIN -->
 ## Generic 3D, Panels > 3D page and desktop 3D editing — AD3D-TASK-002, 2026-10-05
@@ -1974,6 +2057,8 @@ closure for TASK-0033 and was reported before any planning of that task.
   `thickness-reveal` (also vertical slide, reversed), `split-horizontal`,
   `split-vertical`, `shutter-horizontal`, `lid` (front plate), `identity`, and
   `radial-interface`. A form and its reverse are one track, not two.
+- (Superseded by ADFIX-TASK-001: true 3D now draws `collapse-radial` as an
+  iris; see `docs/shared-renderer.md`, Opening mechanisms.)
 - Radial/iris/fan is **declared, not implemented in 2D**. It reports
   `requiresRendererTier: "baked25d"` and
   `fallbackReason: "mechanism-requires-baked25d"`, then falls back to a centred
@@ -2080,7 +2165,8 @@ contract forbids without explicit authorisation.
 ### Known limitations of this work
 
 - Radial, iris and fan mechanisms are interfaces only. They report the renderer
-  tier they need and fall back to clip-and-fade in 2D.
+  tier they need and fall back to clip-and-fade in 2D. (Superseded by
+  ADFIX-TASK-001: true 3D draws `collapse-radial` as an iris.)
 - The vertical mechanism family is implemented but no shipped theme declares
   `collapse-vertical`, so it is reachable only through a user-supplied Theme
   Package v2 manifest.
@@ -2387,7 +2473,8 @@ TASK-0033.
 
 - `collapse-radial` is still an interface only. It reports the tier it needs
   and falls back to a centred clip and fade; no shipped perspective package
-  declares it. A real iris mechanism is not part of TASK-0034 and remains
+  declares it. (Stale since the Cyan and Orange 3D packages declared it with
+  mesh parts; ADFIX-TASK-001 draws it as an iris in true 3D.) A real iris mechanism is not part of TASK-0034 and remains
   open for the owner to schedule.
 - Tilt is read from the internal `surface.parameters2_5D` map and clamped to
   the theme's declared range. No editor exposes it, so no visible control

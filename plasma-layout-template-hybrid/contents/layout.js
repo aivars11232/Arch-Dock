@@ -1,3 +1,6 @@
+// Add Panel template "Arch Dock Hybrid Panel": a native bottom panel holding
+// the Arch Dock applet with launchers and running tasks.
+
 const panel = new Panel;
 panel.location = "bottom";
 panel.height = Math.round(gridUnit * 2);

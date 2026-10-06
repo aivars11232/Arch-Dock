@@ -11,6 +11,9 @@
 
 #include <optional>
 
+// Turns an imported picture into theme assets without changing the original:
+// it inspects the source (size, transparency, hash), crops and scales it
+// into managed copies at the requested sizes, and writes a preview.
 namespace ArchDock
 {
 

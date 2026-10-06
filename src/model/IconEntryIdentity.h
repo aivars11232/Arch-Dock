@@ -7,6 +7,9 @@
 namespace ArchDock
 {
 
+// The identity of a dock entry that survives restarts and renames: an
+// application's normalized desktop-entry id, or a free panel's pinned URL.
+// Per-icon overrides (Icon Properties) are keyed by it.
 class IconEntryIdentity final
 {
 public:

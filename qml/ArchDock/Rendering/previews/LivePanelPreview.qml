@@ -3,6 +3,10 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import ArchDock.Rendering 1.0
 
+// A panel drawn by the real PanelScene for Panel Studio's preview and the
+// preset and theme cards: in a chosen mode (free, horizontal, vertical),
+// state (open, collapsed, hovered) and icon state, without touching the
+// panel itself.
 Item {
     id: root
 

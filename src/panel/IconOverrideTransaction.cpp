@@ -1,3 +1,4 @@
+// Validation and preparation of per-entry icon override transactions.
 #include "IconOverrideTransaction.h"
 
 #include "../model/IconEntryIdentity.h"

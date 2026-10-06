@@ -47,16 +47,19 @@ On a small screen Panel Studio switches to a compact single-column layout so
 that every page stays reachable. It is a fallback for limited space, not a
 designed responsive mode.
 
-Several source files are very large (`PanelWindow.cpp`, `PanelRegistry.cpp`,
-`SettingsPopup.qml`, `LayoutEngine.js`). Splitting them is maintainability
-work scheduled after the release; it does not change behaviour and was kept out
-of release corrections to avoid broad regressions.
+Some source files are still large (`PanelRegistry.cpp`, `SettingsPopup.qml`,
+`LayoutEngine.js`). `PanelWindow.cpp` has been split by topic into the
+`src/panel/PanelWindow*.cpp` files (see the list in `PanelWindow.h`), moving
+whole functions unchanged; the others are left for later, since splitting them
+changes no behaviour.
 
 ## 3D editing
 
-3D is available for free panels with a ring, circle or polygon layout. Arcs
-and semicircles stay flat unless their theme ships its own 3D platform (the
-built-in orange arc does). No built-in Panel Preset is labelled 3D: preset
+3D is available for free panels with a ring, circle, ellipse, polygon
+(triangle to octagon, or 3 to 12 sides) or radial layout: Arch Dock builds the
+platform in that exact shape, in the colours of the panel's look. Arcs,
+semicircles and fans stay flat unless their theme ships its own 3D platform
+(the built-in orange arc does); a theme's own platform keeps its fixed shape. No built-in Panel Preset is labelled 3D: preset
 compatibility and preset preview cards resolve through the theme catalogue,
 which does not carry the generic 3D platform, so such a preset could only show
 its fallback. Apply a preset, then enable 3D on the Panels > 3D page.
@@ -64,6 +67,9 @@ its fallback. Apply a preset, then enable 3D on the Panels > 3D page.
 On the desktop gizmo, the X and Y rings tilt the platform with vertical and
 horizontal drags rather than by following the ring, which stays reliable when
 a ring is seen edge-on; the white ring follows the pointer around its centre.
+Dragging the platform itself turns it (across) and tilts it (up and down). An
+arrow seen end-on cannot follow the pointer, so it moves with vertical drags
+and the gizmo says so.
 Scene position moves the platform within the panel's own area, which is sized
 for the platform, so the room to move is small at full scale.
 

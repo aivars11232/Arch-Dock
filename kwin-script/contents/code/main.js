@@ -1,3 +1,8 @@
+// Arch Dock's KWin window watcher. It runs inside KWin and reports every
+// window to the Arch Dock backend over D-Bus (/WindowWatcher) when it appears,
+// changes (active, minimized, caption, geometry, screen, maximized,
+// fullscreen) and closes. The backend's window model, the task entries and the
+// "hide for maximized windows" visibility mode are built on these reports.
 print("Arch Dock KWin script loaded.");
 
 function outputIndex(output) {

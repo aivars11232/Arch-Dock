@@ -5,6 +5,9 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
 
+// Panel Studio's Profiles page: the saved sets of panels, with create,
+// rename, duplicate, delete, import, export and apply, and the global
+// shortcuts that apply them.
 ColumnLayout {
     id: root
     property var profiles: []

@@ -1,6 +1,9 @@
 import QtQuick
 import QtQuick.Effects
 
+// One layer of a skinned panel: its asset cut into fixed ends and a
+// stretched or tiled middle, tinted when the asset is a mask, and rasterised
+// at the size it is drawn so large artwork does not pile up in memory.
 Item {
     id: root
 

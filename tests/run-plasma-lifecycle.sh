@@ -3373,6 +3373,12 @@ run_outer() {
     if [[ -z "$installed_root" ]]; then
         cmake --install "$build_dir" --prefix "$stage_root"
     fi
+    # A package's install runs the icon-cache hook on hicolor; a staged theme
+    # without its index and cache is searched file by file on every lookup.
+    if [[ -d "$stage_root/share/icons/hicolor" && ! -e "$stage_root/share/icons/hicolor/icon-theme.cache" ]]; then
+        cp /usr/share/icons/hicolor/index.theme "$stage_root/share/icons/hicolor/index.theme"
+        gtk-update-icon-cache --force --quiet "$stage_root/share/icons/hicolor"
+    fi
     [[ -r "$free_template_script" ]] || {
         printf 'Staged free-panel template is unavailable: %s\n' "$free_template_script" >&2
         exit 1

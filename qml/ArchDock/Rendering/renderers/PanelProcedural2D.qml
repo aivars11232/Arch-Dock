@@ -1,6 +1,9 @@
 import QtQuick
 import ArchDock.Rendering 1.0
 
+// The dependency-free 2D surface: the panel's track drawn as a stroked path
+// in the colours of its appearance (glass, neon, metallic...). It is the
+// fallback whenever a theme's own renderer cannot be used.
 Item {
     id: root
 
@@ -19,10 +22,11 @@ Item {
     property string customColor: ""
     property real panelOpacity: 0.9
 
-    // The safe presentation track. A procedural surface has no declared parts
-    // to slide or split, so it honours a mechanism the only truthful way a
-    // drawn shape can: it clips and fades. PanelMotionController has already
-    // decided the geometry; this only applies it.
+    // The presentation track. A procedural surface has no declared parts to
+    // slide or split, so it takes the whole-surface track: a collapse squeezes
+    // the drawn shape onto its handle along the collapse axis, other
+    // mechanisms clip and fade it. PanelMotionController has already decided
+    // the geometry; this only applies it.
     property var motionTracks: null
 
     readonly property var surfaceMotionTrack: {
@@ -57,6 +61,11 @@ Item {
         motionClipRect.width < width - 0.0001
         || motionClipRect.height < height - 0.0001
         || motionClipRect.x > 0.0001 || motionClipRect.y > 0.0001
+    function motionNumber(key, fallback) {
+        const value = Number(surfaceMotionTrack && surfaceMotionTrack[key] !== undefined
+                             ? surfaceMotionTrack[key] : fallback)
+        return isFinite(value) ? value : fallback
+    }
 
     readonly property bool rendererReady: width > 0 && height > 0
     readonly property var surfacePath: LayoutEngine.surface(
@@ -78,6 +87,7 @@ Item {
 
     Canvas {
         id: canvas
+        objectName: "procedural-surface-canvas"
 
         x: -motionClipper.x
         y: -motionClipper.y
@@ -85,6 +95,20 @@ Item {
         height: root.height
         opacity: Math.max(0, Math.min(1, root.panelOpacity))
             * root.motionOpacity
+        // A collapse along an axis squeezes the drawn shape about its centre
+        // onto the handle the controller keeps.
+        transform: [
+            Scale {
+                origin.x: canvas.width / 2
+                origin.y: canvas.height / 2
+                xScale: Math.max(0, root.motionNumber("scaleX", 1))
+                yScale: Math.max(0, root.motionNumber("scaleY", 1))
+            },
+            Translate {
+                x: root.motionNumber("offsetX", 0)
+                y: root.motionNumber("offsetY", 0)
+            }
+        ]
         // Cooperative can replay costly shadow painting on Plasma's GUI
         // thread. Keep the same image commands on Canvas's private worker.
         renderStrategy: Canvas.Threaded

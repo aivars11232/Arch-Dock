@@ -9,6 +9,11 @@
 
 #include <optional>
 
+// Animation profiles: named, validated sets of motion tracks. Each track
+// moves one layer of an icon or panel (its target) when a trigger fires,
+// such as hover, click or a confirmed launch. Profiles are data: the shared
+// renderer runs them (AnimationProfileRuntime.js), and Studio and presets
+// refer to them by id.
 namespace ArchDock
 {
 

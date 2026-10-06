@@ -118,8 +118,13 @@ QQC2.Pane {
         if (opened) {
             if (!reducedMotion) openingAnimation.start()
             viewport.cancelFlick()
-            viewport.contentX = 0
-            viewport.contentY = 0
+            // A ring or stack starts beside the folder: when it is larger
+            // than the popup, the folder's end of it is shown first.
+            const fromFolder = geometry.layout === "ring" || geometry.layout === "stack"
+            viewport.contentX = fromFolder && geometry.side === "left"
+                ? Math.max(0, viewport.contentWidth - viewport.width) : 0
+            viewport.contentY = fromFolder && geometry.side === "top"
+                ? Math.max(0, viewport.contentHeight - viewport.height) : 0
             selectedChildId = entries.length ? String(entries[0].id) : ""
             keyboardSelection = false
         }

@@ -3,6 +3,12 @@ import QtQuick.Controls as QQC2
 import ArchDock.Rendering 1.0
 import org.kde.kirigami as Kirigami
 
+// One entry in the dock applet: its icon (IconScene) with magnification and
+// indicator, and everything a user does to it. Click launches or raises it,
+// and the context menu offers its desktop actions, window previews, folder
+// contents and Icon Properties. Dragging reorders it, and launch outcomes
+// are reported truthfully. Menus and drags hold the panel open while they
+// last.
 Item {
     id: root
 

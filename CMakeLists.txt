@@ -79,6 +79,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     RenderingModuleProbe.qml
     LayoutEngine.js
     GizmoMath.js
+    PlatformGeometry.js
     IconStyleResolver.js
     AnimationProfileRuntime.js
     MotionChannels.js
@@ -86,6 +87,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     ThemeStateSelection.js
     IconScene.qml
     FolderExpansion.qml
+    FolderTrack.qml
     IconMotionController.qml
     MotionTrackRunner.qml
     PanelPresentationController.qml
@@ -189,6 +191,7 @@ qt_add_executable(
   src/DockSettings.cpp
   src/PanelRegistry.h
   src/PanelRegistry.cpp
+  src/themes/LookPalette.cpp
   src/model/ThemeDefinition.h
   src/model/ThemeDefinition.cpp
   src/model/IconStyleDefinition.h
@@ -269,6 +272,14 @@ qt_add_executable(
   src/panel/IconOverrideTransaction.cpp
   src/panel/PanelWindow.h
   src/panel/PanelWindow.cpp
+  src/panel/PanelWindowHelpers.h
+  src/panel/PanelWindowEntries.cpp
+  src/panel/PanelWindowFreePanels.cpp
+  src/panel/PanelWindowNativePanels.cpp
+  src/panel/PanelWindowNativePlacement.cpp
+  src/panel/PanelWindowPresets.cpp
+  src/panel/PanelWindowScreens.cpp
+  src/panel/PanelWindowSettings.cpp
   src/WindowItem.h
   src/WindowModel.h
   src/WindowModel.cpp
@@ -288,7 +299,6 @@ set(ARCHDOCK_APPLICATION_QML_FILES
   qml/runtime/ProfilePage.qml
   qml/runtime/SettingsEditorModel.js
   qml/runtime/VisibilityStatus.js
-  qml/runtime/StudioDraft.js
   qml/runtime/StudioForm.qml
   qml/runtime/StudioNavigation.js
   qml/runtime/SettingsPopup.qml)
@@ -524,6 +534,7 @@ if(BUILD_TESTING)
     src/model/PanelPresetDefinition.cpp
     src/PanelRegistry.h
     src/PanelRegistry.cpp
+    src/themes/LookPalette.cpp
     src/DockSettings.h
     src/DockSettings.cpp
     src/model/ThemeDefinition.h
@@ -798,7 +809,7 @@ if(BUILD_TESTING)
   add_test(NAME animation-profile-test COMMAND animation-profile-test)
 
   qt_add_executable(renderer-capability-test tests/RendererCapabilityTest.cpp
-    src/model/ThemeDefinition.cpp src/themes/ThemePackage.cpp)
+    src/model/ThemeDefinition.cpp src/themes/ThemePackage.cpp src/themes/LookPalette.cpp)
   target_include_directories(renderer-capability-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
   target_link_libraries(renderer-capability-test PRIVATE Qt6::Quick Qt6::Test)
   target_compile_definitions(renderer-capability-test PRIVATE
@@ -921,6 +932,7 @@ if(BUILD_TESTING)
     src/DockSettings.cpp
     src/PanelRegistry.h
     src/PanelRegistry.cpp
+    src/themes/LookPalette.cpp
     src/model/ThemeDefinition.h
     src/model/ThemeDefinition.cpp
     src/model/IconStyleDefinition.h
@@ -1047,6 +1059,7 @@ if(BUILD_TESTING)
     src/DockSettings.cpp
     src/PanelRegistry.h
     src/PanelRegistry.cpp
+    src/themes/LookPalette.cpp
     src/model/ThemeDefinition.h
     src/model/ThemeDefinition.cpp
     src/model/IconStyleDefinition.h
@@ -1103,6 +1116,14 @@ if(BUILD_TESTING)
     src/panel/IconOverrideTransaction.cpp
     src/panel/PanelWindow.h
     src/panel/PanelWindow.cpp
+    src/panel/PanelWindowHelpers.h
+    src/panel/PanelWindowEntries.cpp
+    src/panel/PanelWindowFreePanels.cpp
+    src/panel/PanelWindowNativePanels.cpp
+    src/panel/PanelWindowNativePlacement.cpp
+    src/panel/PanelWindowPresets.cpp
+    src/panel/PanelWindowScreens.cpp
+    src/panel/PanelWindowSettings.cpp
     src/model/PresetIdentity.h
     src/model/PresetIdentity.cpp
     src/model/IconPresetDefinition.h
@@ -1314,6 +1335,15 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_GizmoMath.qml)
   set_tests_properties(
     gizmo-math-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME platform-geometry-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PlatformGeometry.qml)
+  set_tests_properties(
+    platform-geometry-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(
@@ -1539,7 +1569,9 @@ if(BUILD_TESTING)
             bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
   set_tests_properties(
     rendering-import-smoke
-    PROPERTIES DEPENDS rendering-module-import-test TIMEOUT 120)
+    # The private session is limited to 150 s (the real-RHI generated
+    # platform rows of ADFIX-TASK-002 take about 15 s of it).
+    PROPERTIES DEPENDS rendering-module-import-test TIMEOUT 210)
 
   add_test(
     NAME window-interaction-smoke
@@ -1579,6 +1611,19 @@ if(BUILD_TESTING)
   set_tests_properties(folder-anchor-smoke
     PROPERTIES DEPENDS folder-interaction-smoke RUN_SERIAL TRUE TIMEOUT 240)
 
+  # Every opening mechanism a panel offers, per renderer: the drawn panel
+  # visibly collapses and comes back; unoffered mechanisms are refused.
+  add_test(NAME presentation-mechanism-smoke
+    COMMAND ${CMAKE_COMMAND} -E env
+            ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
+            ARCHDOCK_QMLTESTRUNNER=$<TARGET_FILE:Qt6::qmltestrunner>
+            ARCHDOCK_RENDERING_INTERACTIONS=1
+            ARCHDOCK_RENDERING_MECHANISMS=1
+            bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
+  set_tests_properties(presentation-mechanism-smoke
+    PROPERTIES DEPENDS window-interaction-smoke RUN_SERIAL TRUE TIMEOUT 240)
+
   add_test(NAME runtime-ui-interaction-smoke
     COMMAND ${CMAKE_COMMAND} -E env
             ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
@@ -1588,14 +1633,6 @@ if(BUILD_TESTING)
             bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
   set_tests_properties(runtime-ui-interaction-smoke PROPERTIES
     DEPENDS rendering-import-smoke RUN_SERIAL TRUE TIMEOUT 120)
-
-  add_test(
-    NAME motion-policy-test
-    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
-            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_MotionPolicy.qml)
-  set_tests_properties(
-    motion-policy-test
-    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(
     NAME free-entry-policy-test
@@ -1684,14 +1721,6 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_StudioNavigation.qml)
   set_tests_properties(
     studio-navigation-test
-    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-
-  add_test(
-    NAME studio-draft-test
-    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
-            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_StudioDraft.qml)
-  set_tests_properties(
-    studio-draft-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(
@@ -1810,6 +1839,13 @@ foreach(rendering_file IN LISTS ARCHDOCK_RENDERING_MODULE_FILES)
     FILES "${ARCHDOCK_RENDERING_SOURCE_DIR}/${rendering_file}"
     DESTINATION
       "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Rendering/${rendering_directory}")
+endforeach()
+# The application's icon and logo, from the owner's artwork
+# (data/icons/arch-dock-logo-source.png), in the hicolor theme.
+foreach(icon_size IN ITEMS 16 22 24 32 48 64 128 256 512)
+  install(FILES "data/icons/hicolor/${icon_size}x${icon_size}.png"
+          DESTINATION "share/icons/hicolor/${icon_size}x${icon_size}/apps"
+          RENAME org.archdock.ArchDock.png)
 endforeach()
 install(FILES data/themes/builtin-themes.json DESTINATION share/arch-dock/themes)
 install(

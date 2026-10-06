@@ -10,6 +10,11 @@
 #include <functional>
 #include <optional>
 
+// A settings change for one panel and the shared settings, as one
+// transaction: prepared against the panel's current revision, validated by
+// the schema and the capability resolver, stored, applied to its Plasma host
+// and rolled back if the host refuses. Its outcome names the stage that
+// failed.
 namespace ArchDock
 {
 

@@ -2,6 +2,9 @@
 
 #include <QObject>
 
+// Acts on windows through KWin: a short KWin script is loaded and run for
+// each request, because Wayland lets no other client raise, minimize or close
+// another application's window.
 class KWinActionBridge final : public QObject
 {
     Q_OBJECT

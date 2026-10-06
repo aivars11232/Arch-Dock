@@ -1,3 +1,4 @@
+// Profile shortcut bindings and their KGlobalAccel registration.
 #include "ProfileShortcutManager.h"
 #include <KGlobalAccel>
 #include <QAction>

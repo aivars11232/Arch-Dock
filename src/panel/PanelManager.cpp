@@ -1,3 +1,4 @@
+// PanelManager: forwards main()'s requests to the backend.
 #include "PanelManager.h"
 
 #include <QQmlApplicationEngine>

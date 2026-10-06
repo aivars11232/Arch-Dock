@@ -10,6 +10,10 @@
 
 #include <optional>
 
+// The catalogue of the source artwork samples behind the built-in themes:
+// for each sample its file, hash, kind, intended use, provenance and
+// licence, and whether it may be installed. It records where artwork came
+// from; it is not itself a theme.
 namespace ArchDock
 {
 

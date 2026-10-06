@@ -7,6 +7,11 @@
 #include <QObject>
 #include <functional>
 
+// A live audition: a preset, or a desktop 3D edit, tried on a real panel
+// before it is kept. The panel's saved state is captured first; Apply
+// commits the trial as one transaction, Cancel restores the panel exactly,
+// and a recovery record covers a crash in between. Served over D-Bus as
+// org.archdock.PresetAudition.
 namespace ArchDock
 {
 class PresetPreviewSession final : public QObject

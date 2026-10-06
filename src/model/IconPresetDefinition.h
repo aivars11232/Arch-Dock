@@ -11,6 +11,9 @@
 
 #include <optional>
 
+// Icon Presets: a loadable look for a panel's icons. One names an icon
+// style and may adjust its layers and states, its glyph policy and its
+// motion. Like Panel Presets, it is parsed strictly (PresetParsing).
 namespace ArchDock
 {
 

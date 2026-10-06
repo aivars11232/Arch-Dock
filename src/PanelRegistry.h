@@ -15,9 +15,16 @@
 #include "animation/AnimationProfileCatalog.h"
 #include "iconstyles/IconStyleStore.h"
 #include "panel/PanelSettingsTransaction.h"
+#include "themes/ThemePackage.h"
 
 class QSettings;
 
+// Every panel Arch Dock manages: their saved definitions, revisions and
+// migration, the built-in theme catalogue and theme packages, imported
+// artwork, and the capability resolution that says what each panel can be
+// (renderer, layouts, controls). Settings change only through its
+// revision-checked transactions. It is the model behind Panel Studio and
+// both panel hosts.
 class PanelRegistry final : public QObject
 {
     Q_OBJECT
@@ -86,14 +93,17 @@ public:
     [[nodiscard]] std::optional<QVariantMap> builtInThemeRuntimeProjection(
         const QString &themeId,
         QString *errorCode = nullptr) const;
-    // A free panel with a closed radial layout whose look ships no 3D scene of
-    // its own can still be drawn in 3D: the validated generic platform and
-    // pedestal meshes, with a material taken from the look's own colour and
-    // glow. Returns {scene3D, scene3DResources}, or nothing when the panel or
-    // its look cannot be adapted. The look keeps its id and its own renderer.
+    // A free panel whose look ships no 3D scene of its own can still be drawn
+    // in 3D when its layout has an exact generated platform (a circle,
+    // ellipse, regular polygon or the radial arc): the renderer generates the
+    // platform along the layout's path, in the look's own colours (sampled
+    // from `lookProjection`'s artwork when it has some). Returns {scene3D,
+    // scene3DResources}, or nothing when the panel or its look cannot be
+    // adapted. The look keeps its id and its own renderer.
     [[nodiscard]] std::optional<QVariantMap> genericScene3D(
         const ArchDock::PanelDefinition &definition,
-        const QVariantMap &look) const;
+        const QVariantMap &look,
+        const QVariantMap &lookProjection) const;
     [[nodiscard]] ArchDock::CapabilityResolution resolvePanelCapabilities(
         const ArchDock::PanelDefinition &definition,
         QString *errorCode = nullptr) const;
@@ -275,11 +285,24 @@ private:
         const ArchDock::PanelDefinition &definition, QString *errorCode) const;
     [[nodiscard]] QVariantMap catalogTheme(const QString &themeId) const;
     [[nodiscard]] static QString themeIdFor(const ArchDock::PanelDefinition &definition);
+    // A theme package, parsed and verified once while its manifest stays the
+    // same. Reading one hashes every asset, and the settings path asks for
+    // the same package for every field of every edit (ADFIX UF-08).
+    [[nodiscard]] ArchDock::ThemePackageLoadResult loadThemePackage(const QString &manifestPath) const;
 
     QList<QVariantMap> m_panels;
     QVariantList m_themeDefinitions;
-    // The generic platform geometry, validated once on first use.
-    mutable std::optional<QVariantMap> m_genericSceneGeometry;
+    // Artwork palettes of looks drawn in generated 3D, by package digest.
+    mutable QHash<QString, QVariantMap> m_lookPalettes;
+    // Theme packages read successfully, by manifest path, with the manifest's
+    // modification time and size when they were read.
+    struct CachedThemePackage
+    {
+        qint64 modified = -1;
+        qint64 size = -1;
+        ArchDock::ThemePackageLoadResult result;
+    };
+    mutable QHash<QString, CachedThemePackage> m_themePackages;
     std::optional<ArchDock::IconStyleStore> m_iconStyleStore;
     QString m_iconStyleStoreError;
     std::optional<ArchDock::AnimationProfileCatalog> m_animationProfileCatalog;

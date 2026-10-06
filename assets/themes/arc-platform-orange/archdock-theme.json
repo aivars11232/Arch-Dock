@@ -140,17 +140,17 @@
       "path": "assets/material.json",
       "kind": "material",
       "mimeType": "application/json",
-      "sha256": "78a3822ee785914bbc1aaae09a317705726d8025a18f49a9146044d547f84ba4"
+      "sha256": "ebac77f0ade0cff147883d2e0756d4284071e540497184b09944942ff58014e7"
     },
     {
       "id": "surface",
       "path": "assets/texture.svg",
       "kind": "vector",
       "mimeType": "image/svg+xml",
-      "sha256": "e16738720143df26dba625b8402cfb5ce72db723ff8a3ed493103949f6431780",
+      "sha256": "cd86228ffdd333857101964c0ab3d6b1f1c02c8ebd52dd944cad57e24afd4a27",
       "naturalSize": {
-        "width": 64,
-        "height": 64
+        "width": 256,
+        "height": 256
       }
     }
   ],

@@ -1,3 +1,4 @@
+// Host, theme and platform capability profiles and their resolution.
 #include "PanelCapabilityResolver.h"
 #include "RendererBuildConfig.h"
 

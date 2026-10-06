@@ -1,3 +1,4 @@
+// Migration of saved panel records to version 2.
 #include "SettingsMigration.h"
 
 #include <QJsonArray>

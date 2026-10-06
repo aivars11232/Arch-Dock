@@ -1,5 +1,8 @@
 .pragma library
 
+// Plain-language text for a native panel's placement result in Panel
+// Studio: what was saved, what Plasma really applied, and any problem.
+
 function hasValue(map, key) {
     return map !== null
         && map !== undefined

@@ -50,3 +50,30 @@ function modifierSettings(modifiers) {
         precision: (modifiers & Qt.ShiftModifier) !== 0 ? 0.1 : 1
     }
 }
+
+// Turning the platform by dragging its body (ADFIX UF-07): across the screen
+// turns it (yaw), up and down tilts it (pitch), a quarter degree per pixel
+// like the rotate rings. Ctrl snaps both to 15 degrees.
+function orbit(startPitch, startYaw, delta, snap) {
+    let pitch = startPitch - delta.y * 0.25
+    let yaw = startYaw + delta.x * 0.25
+    if (snap) {
+        pitch = snapped(pitch, 15)
+        yaw = snapped(yaw, 15)
+    }
+    return { pitch: clamp(pitch, -60, 60), yaw: ((yaw + 180) % 360 + 360) % 360 - 180 }
+}
+
+// A move arrow shorter than this on screen points (nearly) at the viewer: it
+// has no direction on screen a drag could follow (ADFIX AUD-04).
+var endOnPixels = 12
+
+function axisEndOn(origin, axisEnd) {
+    return Math.hypot(axisEnd.x - origin.x, axisEnd.y - origin.y) < endOnPixels
+}
+
+// How far an arrow seen end-on moves: dragging up moves it along its axis,
+// down moves it back, one arrow length per `pixelsPerLength` pixels.
+function endOnTravel(delta, axisLength, pixelsPerLength) {
+    return -delta.y / Math.max(1, pixelsPerLength) * axisLength
+}

@@ -1,3 +1,4 @@
+// Stable entry identities for applications and pinned URLs.
 #include "IconEntryIdentity.h"
 
 #include <QCryptographicHash>

@@ -8,6 +8,8 @@
 #include <functional>
 #include <utility>
 
+// Saved profiles on disk: each a complete set of panel definitions, written
+// atomically with a revision guard, importable and exportable.
 namespace ArchDock
 {
 struct ProfileReferences

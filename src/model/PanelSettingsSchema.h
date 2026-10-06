@@ -8,6 +8,10 @@
 
 #include <optional>
 
+// The one list of every panel and global setting: its key, type, default,
+// range or choices, where it lives in PanelDefinition, who may change it,
+// and how Panel Studio shows it (page, label, control and the capability
+// that gates it). Transactions, editor snapshots and migration all read it.
 namespace ArchDock
 {
 

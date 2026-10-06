@@ -3444,22 +3444,52 @@ void PanelRegistryTest::genericSceneAdaptsRadialLooksWithoutAScene()
     QVERIFY(projection.has_value());
     QCOMPARE(projection->value("id").toString(), QStringLiteral("ring-platform-blue"));
     QVERIFY(projection->value("genericScene3D").toBool());
-    QVERIFY(projection->value("scene3D").toMap().value("generic").toBool());
-    QVERIFY(!projection->value("scene3D").toMap().contains("texture"));
+    const QVariantMap scene = projection->value("scene3D").toMap();
+    QVERIFY(scene.value("generic").toBool());
+    QVERIFY(!scene.contains("texture"));
+    // ADFIX UF-03: the renderer generates the platform from the panel's own
+    // layout; no other theme's mesh is borrowed and recoloured.
     const QVariantMap resources = projection->value("scene3DResources").toMap();
-    QCOMPARE(resources.value("mesh").toMap().value("format").toString(), QStringLiteral("org.archdock.mesh"));
-    QCOMPARE(resources.value("iconMesh").toMap().value("format").toString(), QStringLiteral("org.archdock.mesh"));
+    QVERIFY(!resources.contains("mesh"));
+    QVERIFY(!resources.contains("iconMesh"));
     QVERIFY(resources.value("parts").toList().isEmpty());
     const QVariantMap material = resources.value("material").toMap();
     QCOMPARE(material.value("format").toString(), QStringLiteral("org.archdock.material"));
-    // The accent keeps the look's hue.
-    const QColor accent(QStringLiteral("#58c8f0"));
-    const QColor emissive(material.value("emissiveColor").toString());
-    QVERIFY(emissive.isValid());
-    QVERIFY2(std::abs(emissive.hslHueF() - accent.hslHueF()) < 0.02,
-             qPrintable(material.value("emissiveColor").toString()));
-    QVERIFY(QColor(material.value("baseColor").toString()).lightnessF()
-            < emissive.lightnessF());
+    QCOMPARE(material.value("emissiveStrength").toDouble(), 0.0);
+    // The platform wears the blue ring's own colours, read from its artwork:
+    // a dark teal body (its slab is #123c52 to #08202e), a darker shade, a
+    // bright blue rim (its stroke is #2f9fd0), and its own glow colour.
+    const QVariantMap palette = scene.value("generated").toMap().value("palette").toMap();
+    QCOMPARE(palette.value("source").toString(), QStringLiteral("artwork"));
+    const auto colourOf = [&palette](const char *part) {
+        const QVariantList value = palette.value(QString::fromLatin1(part)).toList();
+        return value.size() >= 3 ? QColor::fromRgbF(value[0].toFloat(), value[1].toFloat(), value[2].toFloat())
+                                 : QColor();
+    };
+    const QColor top = colourOf("top"), wall = colourOf("wall"), rim = colourOf("rim");
+    const QColor slab(QStringLiteral("#123c52")), stroke(QStringLiteral("#2f9fd0"));
+    QVERIFY2(top.isValid() && std::abs(top.hslHueF() - slab.hslHueF()) < 0.04
+             && top.lightnessF() < 0.25, qPrintable(top.name()));
+    QVERIFY2(wall.isValid() && wall.lightnessF() < top.lightnessF(), qPrintable(wall.name()));
+    QVERIFY2(rim.isValid() && rim.lightnessF() > top.lightnessF() + 0.15
+             && std::abs(rim.hslHueF() - stroke.hslHueF()) < 0.06, qPrintable(rim.name()));
+    QCOMPARE(colourOf("glow").name(), QStringLiteral("#58c8f0"));
+    // The steel octagon reads as its own grey, not the blue's.
+    QVERIFY(registry.applyTheme(panelId, QStringLiteral("octagon-platform-steel"),
+                                QStringLiteral("complete")));
+    registry.setPanelValue(panelId, QStringLiteral("layout"), QStringLiteral("octagon"));
+    const auto steel = registry.themeRuntimeProjection(*registry.panelDefinition(panelId));
+    QVERIFY(steel.has_value() && steel->value("genericScene3D").toBool());
+    const QVariantList steelTop = steel->value("scene3D").toMap().value("generated").toMap()
+        .value("palette").toMap().value("top").toList();
+    QCOMPARE(steelTop.size(), 4);
+    QVERIFY(QColor::fromRgbF(steelTop[0].toFloat(), steelTop[1].toFloat(), steelTop[2].toFloat())
+                .hslSaturationF() < 0.25);
+    QVERIFY(registry.applyTheme(panelId, QStringLiteral("ring-platform-blue"),
+                                QStringLiteral("complete")));
+    registry.setPanelValue(panelId, QStringLiteral("layout"), QStringLiteral("ring"));
+    projection = registry.themeRuntimeProjection(*registry.panelDefinition(panelId));
+    QVERIFY(projection.has_value());
     const QVariantMap capabilities = projection->value("capabilities").toMap();
     QVERIFY(capabilities.value("rendererTiers").toStringList().contains("true3d"));
     QCOMPARE(capabilities.value("fallbackRendererTiers").toStringList().value(0),
@@ -3506,6 +3536,8 @@ void PanelRegistryTest::genericSceneAdaptsRadialLooksWithoutAScene()
     std::function<QString(const QVariant &, const QString &)> emptyValue =
         [&emptyValue](const QVariant &value, const QString &path) -> QString {
         if (!value.isValid()) return path;
+        // D-Bus has no float type either: the reply would not be sent.
+        if (value.metaType() == QMetaType::fromType<float>()) return path + " (float)";
         if (value.metaType() == QMetaType::fromType<QVariantMap>()) {
             const QVariantMap map = value.toMap();
             for (auto it = map.cbegin(); it != map.cend(); ++it)
@@ -3520,15 +3552,37 @@ void PanelRegistryTest::genericSceneAdaptsRadialLooksWithoutAScene()
         return {};
     };
     QCOMPARE(emptyValue(QVariant(*projection), QString{}), QString{});
+    // So is a look's sampled artwork palette.
+    QVERIFY(registry.applyTheme(panelId, QStringLiteral("ring-platform-blue"),
+                                QStringLiteral("complete")));
+    registry.setPanelValue(panelId, QStringLiteral("layout"), QStringLiteral("ring"));
+    const auto sampled = registry.themeRuntimeProjection(*registry.panelDefinition(panelId));
+    QVERIFY(sampled.has_value() && sampled->value("genericScene3D").toBool());
+    QCOMPARE(emptyValue(QVariant(*sampled), QString{}), QString{});
     registry.setPanelValue(panelId, QStringLiteral("layout"), QStringLiteral("ring"));
 
-    // Not adapted: an open curve, a native edge panel, a straight skin, and a
-    // look that ships its own scene.
-    registry.setPanelValue(panelId, QStringLiteral("layout"), QStringLiteral("semicircle"));
-    QVERIFY(!registry.genericScene3D(*registry.panelDefinition(panelId), {}).has_value());
-    QVERIFY(!registry.themeCapabilityProfile(*registry.panelDefinition(panelId))
-                 ->rendererTiers.contains(ArchDock::RendererTier::True3D));
-    QVERIFY(!registry.genericScene3D(*registry.panelDefinition(QStringLiteral("bottom")), {}).has_value());
+    // ADFIX AUD-02: adapted exactly where a platform follows the layout: the
+    // 300-degree radial arc and the polygons are generated along their own
+    // paths.
+    for (const QString &layout : {QStringLiteral("radial"), QStringLiteral("octagon"),
+                                  QStringLiteral("triangle"), QStringLiteral("ellipse")})
+    {
+        registry.setPanelValue(panelId, QStringLiteral("layout"), layout);
+        QVERIFY2(registry.genericScene3D(*registry.panelDefinition(panelId), {}, {}).has_value(),
+                 qPrintable(layout));
+    }
+    // Not adapted: an open curve about an off-centre point, a native edge
+    // panel, a straight skin, and a look that ships its own scene.
+    for (const QString &layout : {QStringLiteral("semicircle"), QStringLiteral("arc"),
+                                  QStringLiteral("fan")})
+    {
+        registry.setPanelValue(panelId, QStringLiteral("layout"), layout);
+        QVERIFY2(!registry.genericScene3D(*registry.panelDefinition(panelId), {}, {}).has_value(),
+                 qPrintable(layout));
+        QVERIFY(!registry.themeCapabilityProfile(*registry.panelDefinition(panelId))
+                     ->rendererTiers.contains(ArchDock::RendererTier::True3D));
+    }
+    QVERIFY(!registry.genericScene3D(*registry.panelDefinition(QStringLiteral("bottom")), {}, {}).has_value());
     QVERIFY(registry.applyTheme(panelId, QStringLiteral("mesh-platform-cyan"),
                                 QStringLiteral("complete")));
     projection = registry.themeRuntimeProjection(*registry.panelDefinition(panelId));

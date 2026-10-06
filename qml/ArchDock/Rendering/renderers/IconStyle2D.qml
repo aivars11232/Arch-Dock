@@ -3,6 +3,10 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import ArchDock.Rendering 1.0
 
+// Draws one role of an icon style (base, tile, glyph treatment...) in 2D:
+// every declared layer of that role, coloured and faded as the resolved
+// state asks. A layer that fails to load drops the whole style back to the
+// plain glyph rather than leaving it half drawn.
 Item {
     id: root
 

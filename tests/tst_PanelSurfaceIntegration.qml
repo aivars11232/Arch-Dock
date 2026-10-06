@@ -174,6 +174,22 @@ TestCase {
         verify(panel.scene.motionTracks["split-center"].scaleX < 1)
     }
 
+    // ADFIX UF-05: a collapse reaches the drawn shape, not only the icons'
+    // clip. Before, a procedural surface ignored the track's scale, so a
+    // collapsed ring or bar was drawn exactly as wide as an open one.
+    function test_aCollapsedProceduralSurfaceIsDrawnOnItsHandle() {
+        const panel = makePanel()
+        settle(panel)
+        const canvas = findChild(panel.scene, "procedural-surface-canvas")
+        verify(canvas, "procedural surface drawn")
+        verify(canvas.transform[0].xScale < 0.2, "squeezed onto its handle: " + canvas.transform[0].xScale)
+        compare(canvas.transform[0].yScale, 1, "collapse-horizontal keeps the height")
+
+        panel.pointerEntered()
+        settle(panel)
+        compare(canvas.transform[0].xScale, 1, "open again at full width")
+    }
+
     // The wiring this phase exists to add. Before it, the controller ran and
     // the scene never heard about it.
     function test_theSceneFollowsTheControllerRatherThanItsOwnIdea() {

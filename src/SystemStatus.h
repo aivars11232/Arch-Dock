@@ -6,6 +6,10 @@
 #include <QTimer>
 #include <QVariantMap>
 
+// The readings the status modules and status entries show: battery,
+// network, CPU, memory, disk and GPU use. They are sampled from /proc and
+// /sys on a worker thread while some panel shows them, and offered only when
+// this machine actually has the source.
 class SystemStatus final : public QObject
 {
     Q_OBJECT

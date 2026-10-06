@@ -1,6 +1,9 @@
 import QtQuick
 import ArchDock.Rendering 1.0
 
+// One independent segment of a segmented panel: its own background,
+// padding, corners and open or closed resting state, opened by hover and held
+// open by the panel's guards like a whole panel.
 Item {
     id: root
     property var definition: ({})

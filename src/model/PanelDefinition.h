@@ -7,6 +7,11 @@
 
 #include <optional>
 
+// A panel's saved definition (version 2): identity, host and placement,
+// content and segments, visibility, presentation, layout, surface (theme,
+// renderer and its 2D, 2.5D and 3D parameters), icon style and motion.
+// PanelSettingsSchema maps setting keys onto it, and its revision guards
+// every settings transaction.
 namespace ArchDock
 {
 

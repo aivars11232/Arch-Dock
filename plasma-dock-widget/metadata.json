@@ -4,7 +4,7 @@
         "Id": "org.archdock.dock",
         "Name": "Arch Dock",
         "Description": "A native Plasma dock backed by the Arch Dock service.",
-        "Icon": "applications-system",
+        "Icon": "org.archdock.ArchDock",
         "Version": "1.0.0",
         "License": "MIT",
         "ServiceTypes": [

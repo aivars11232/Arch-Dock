@@ -10,6 +10,12 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.workspace.dbus as PlasmaDBus
 import "FreeEntryPolicy.js" as FreeEntryPolicy
 
+// The Arch Dock Plasma applet. One applet hosts one panel: a native edge
+// panel inside a Plasma panel, or a free panel on the desktop. It fetches its
+// panel's configuration and entries from the backend over D-Bus, draws them
+// with the shared PanelScene, and does what only the host can: pointer,
+// wheel and drag-and-drop input, folder popups and window previews, opening,
+// collapsing and concealing the panel, and native placement.
 PlasmoidItem {
     id: root
 
@@ -93,6 +99,8 @@ PlasmoidItem {
         editMode: plasmaEditMode,
         dragInProgress: entryDragActive || panelDropActive,
         popupOpen: presentationController.popupOpen || presentationController.windowPreviewOpen,
+        // A hover preview gives way to the wheel; a folder or menu does not.
+        modalPopupOpen: presentationController.popupOpen,
         rendererFallback: "",
         presentationState: presentationController.surfaceState,
         transitionState: presentationController.transitionState,
@@ -241,7 +249,7 @@ PlasmoidItem {
     }
 
     Plasmoid.title: qsTr("Arch Dock")
-    Plasmoid.icon: "applications-system"
+    Plasmoid.icon: "org.archdock.ArchDock"
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
     preferredRepresentation: fullRepresentation
     switchWidth: Kirigami.Units.gridUnit * 24
@@ -745,12 +753,19 @@ PlasmoidItem {
             readonly property var folderAnchorData: folderEntryIndex >= 0
                 ? panelScene.popupAnchors.entries[folderEntryIndex] : null
             readonly property bool folderExpansionVisible: folderPending || folderExpansion.visible
+                || folderTrack.visible
+            // "Along the dock": a curved free panel can open its folders on
+            // its own curve instead of in a popup.
+            readonly property bool folderAlongDock: root.freeSurface
+                && String(root.configuration.folderLayout || "") === "track"
+                && LayoutEngine.curvedLayout(panelScene.layoutPath)
             onFolderEntryIndexChanged: if (folderEntryIndex < 0) hideFolderExpansion()
 
             function hideFolderExpansion() {
                 ++folderRequest
                 folderPending = false
                 folderExpansion.closeFolder()
+                folderTrack.closeFolder()
             }
             function showFolderExpansion(entry) {
                 if (!folderExpansion.interactionAllowed) return false
@@ -762,8 +777,13 @@ PlasmoidItem {
                 function show(snapshot) {
                     if (request !== representation.folderRequest || !folderExpansion.interactionAllowed
                             || representation.folderEntryIndex < 0) return
-                    folderExpansion.snapshot = snapshot
-                    folderExpansion.openFolder()
+                    const host = representation.folderAlongDock ? folderTrack : folderExpansion
+                    host.snapshot = snapshot
+                    // A curve that cannot be traced opens the popup instead.
+                    if (!host.openFolder() && host === folderTrack) {
+                        folderExpansion.snapshot = snapshot
+                        folderExpansion.openFolder()
+                    }
                     representation.folderPending = false
                 }
                 root.callDock("panelFolderSnapshot", [root.panelId, folderAppId], function(reply) {
@@ -808,6 +828,27 @@ PlasmoidItem {
                 interactionAllowed: representation.authoritativeHost && dockService.registered
                     && root.sceneInputEnabled && !root.plasmaEditMode
                     && !root.entryDragActive && !root.requestFailed
+                onInteractionAllowedChanged: if (!interactionAllowed) representation.hideFolderExpansion()
+                onChildSelected: childId => root.callDock("openPanelFolderChild",
+                    [root.panelId, representation.folderAppId, childId], root.refreshEntries)
+            }
+            FolderTrackHost {
+                id: folderTrack
+                folderItem: folderIcon
+                trackSamples: function() {
+                    // One icon and a gap out of the dock, two thirds of the
+                    // way around it at most, centred on the folder.
+                    return panelScene.folderTrackSamples(representation.folderEntryIndex,
+                        panelScene.layoutGeometry.iconSize + 16, 2 * Math.PI / 3, 91)
+                }
+                iconSize: panelScene.layoutGeometry.iconSize
+                folderTitle: String(representation.folderEntry.displayName || "")
+                folderSpeed: Number(root.configuration.folderSpeed || 260)
+                folderEasing: String(root.configuration.folderEasing || "outBack")
+                reducedMotion: Boolean(root.configuration.reducedMotion)
+                showNames: root.configuration.folderShowNames !== false
+                iconStyleDefinition: root.configuration.iconStyleDefinition || ({})
+                interactionAllowed: folderExpansion.interactionAllowed
                 onInteractionAllowedChanged: if (!interactionAllowed) representation.hideFolderExpansion()
                 onChildSelected: childId => root.callDock("openPanelFolderChild",
                     [root.panelId, representation.folderAppId, childId], root.refreshEntries)
@@ -999,6 +1040,10 @@ PlasmoidItem {
                 onSceneTransformEdited: function(values) {
                     root.callDock("updateSceneEditDraft", [root.panelId, values]);
                 }
+                // Turning the dock with the wheel closes a hover preview,
+                // which would otherwise stand beside an icon that moved.
+                onWheelUsed: if (root.activeDockRepresentation)
+                    root.activeDockRepresentation.hideWindowPreview()
                 sceneConcealed: !presentationController.hostVisible
                 geometryCompatibilityProfile: root.freeSurface
                     ? "live" : "canonical"

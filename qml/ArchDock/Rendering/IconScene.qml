@@ -3,6 +3,12 @@ import QtQuick.Effects
 import org.kde.kirigami as Kirigami
 import "MotionChannels.js" as MotionChannels
 
+// One dock icon, drawn in layers: rear effects, the icon style's base and
+// tile, the application's glyph, front treatments, the running indicator,
+// badge and progress. Its state (hover, pressed, active, running, urgent,
+// launching, disabled, drop target, edit mode) selects how each layer is
+// drawn, and motion channels move them. Its input rectangle never changes
+// size with hover magnification.
 Item {
     id: root
 

@@ -4,6 +4,9 @@
 #include <QString>
 #include <QVariantMap>
 
+// A panel's transient state: what the pointer and the user are doing, and
+// what the surface and its host are showing. It is never saved; a restart
+// begins from defaults().
 namespace ArchDock
 {
 

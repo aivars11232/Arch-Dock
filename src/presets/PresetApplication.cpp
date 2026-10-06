@@ -1,3 +1,4 @@
+// Preset preparation shared by auditions, application and defaults.
 #include "PresetApplication.h"
 #include "UserPresetStore.h"
 

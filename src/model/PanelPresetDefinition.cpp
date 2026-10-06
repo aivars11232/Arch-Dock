@@ -1,3 +1,4 @@
+// The Panel Preset parser.
 #include "PanelPresetDefinition.h"
 
 #include "PanelCapabilityResolver.h"

@@ -1,3 +1,4 @@
+// Runtime state defaults and the keys that must never be saved.
 #include "PanelRuntimeState.h"
 
 #include <QSet>

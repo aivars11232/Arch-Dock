@@ -20,6 +20,12 @@ run_startup_diagnostics() {
     cmake --install "$build_dir" --prefix "$root/prefix with spaces" >"$root/install.log" 2>&1 || {
         cat "$root/install.log" >&2; return 1;
     }
+    # A package's install runs the icon-cache hook on hicolor; a staged theme
+    # without its index and cache is searched file by file on every lookup.
+    if [[ -d "$root/prefix with spaces/share/icons/hicolor" ]]; then
+        cp /usr/share/icons/hicolor/index.theme "$root/prefix with spaces/share/icons/hicolor/index.theme"
+        gtk-update-icon-cache --force --quiet "$root/prefix with spaces/share/icons/hicolor"
+    fi
     # Remove only this disposable installed executable; exercise native D-Bus
     # activation with the actual installed descriptor and its generated path.
     rm -- "$root/prefix with spaces/bin/arch-dock"

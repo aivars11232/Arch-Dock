@@ -25,6 +25,24 @@ def instrument_interaction_stage(stage):
 
     insert("main.qml", "id: windowPreview", "\n                observedPanelId: root.panelId\n                observedActive: representation.authoritativeHost")
     insert("main.qml", "id: folderExpansion", "\n                observedPanelId: root.panelId\n                observedActive: representation.authoritativeHost")
+    # Wheel events the scene did not take reach the representation: record
+    # where, and what the scene said about that point at that moment.
+    insert("main.qml", "id: representation", '''
+            WheelHandler {
+                target: null
+                onWheel: function(event) {
+                    const local = representation.mapToItem(panelScene, event.x, event.y)
+                    const mask = panelScene.containmentMask
+                    console.warn("ArchDockInteraction " + JSON.stringify({kind: "missedWheel", panel: root.panelId,
+                        at: Date.now(), point: [local.x, local.y], available: panelScene.wheelRotationAvailable,
+                        maskContains: mask ? mask.contains(local) : null,
+                        sceneContains: panelScene.containsInputPoint(local),
+                        popupOpen: Boolean(root.sceneRuntimeState.popupOpen)}))
+                    event.accepted = false
+                }
+            }
+''')
+    insert("main.qml", "id: folderTrack", "\n                observedPanelId: root.panelId\n                observedActive: representation.authoritativeHost")
     insert("main.qml", "function publishPresentationState() {", '''
         console.warn("ArchDockInteraction " + JSON.stringify({kind: "presentation", panel: root.panelId,
             at: Date.now(), state: root.reportedPresentation, hostConcealed: root.hostConcealed}));
@@ -38,6 +56,55 @@ def instrument_interaction_stage(stage):
                     at: Date.now(), authoritative: authoritativeHost, concealed: hostConcealed,
                     itemVisible: visible, itemOpacity: opacity, windowVisible: Window.window ? Window.window.visible : null,
                     windowVisibility: Window.visibility, state: root.reportedPresentation}));
+''')
+    import json
+    insert("main.qml", "id: panelScene", '''
+                Timer {
+                    interval: 150; running: true; repeat: true
+                    property var lastConfiguration: null
+                    property int configurationSerial: 0
+                    // Every arrival at a state is drawn once, even when the
+                    // configuration did not change on the way.
+                    property string lastSurfaceState: ""
+                    property int stateSerial: 0
+                    property string captured: ""
+                    // A state is drawn once it has held for a few ticks, so a
+                    // threaded canvas or a 3D frame has painted it.
+                    property string pending: ""
+                    property int pendingTicks: 0
+                    onTriggered: {
+                        if (!representation.authoritativeHost) return;
+                        if (root.configuration !== lastConfiguration) {
+                            lastConfiguration = root.configuration;
+                            ++configurationSerial;
+                        }
+                        if (presentationController.surfaceState !== lastSurfaceState) {
+                            lastSurfaceState = presentationController.surfaceState;
+                            ++stateSerial;
+                        }
+                        if (presentationController.transitionState !== "idle") return;
+                        const key = [root.panelId, panelScene.effectiveRendererTier,
+                            presentationController.surfaceState, configurationSerial, stateSerial].join("~");
+                        if (key === captured) return;
+                        if (key !== pending) {
+                            pending = key;
+                            pendingTicks = 0;
+                            return;
+                        }
+                        if (++pendingTicks < 3) return;
+                        captured = key;
+                        const path = ''' + json.dumps(str(stage.parent / 'logs')) + ''' + "/panel-"
+                            + key.replace(/[^A-Za-z0-9~.-]/g, "_") + ".png";
+                        const state = presentationController.surfaceState;
+                        const tier = panelScene.effectiveRendererTier;
+                        panelScene.grabToImage(result => {
+                            const saved = result.saveToFile(path);
+                            console.warn("ArchDockInteraction " + JSON.stringify({kind: "panelCapture",
+                                panel: root.panelId, key: key, state: state, tier: tier, path: path,
+                                entries: panelScene.entryCount, saved: saved, at: Date.now()}));
+                        });
+                    }
+                }
 ''')
     insert("main.qml", "id: panelScene", '''
                 Timer {
@@ -155,6 +222,29 @@ def instrument_interaction_stage(stage):
                 }
 ''')
     import json
+    insert("FolderTrackHost.qml", "id: root", '\n    property string observedPanelId: ""\n    property bool observedActive: false')
+    insert("FolderTrackHost.qml", "id: content", '''
+        Timer {
+            interval: 100; running: true; repeat: true
+            onTriggered: {
+                if (!root.observedActive) return;
+                const items = {};
+                const shown = [];
+                for (let index = 0; index < content.entries.length; ++index) {
+                    const child = content.children.find(item => item.objectName === "folder-child-" + index);
+                    if (!child) continue;
+                    const point = child.mapToItem(null, child.width / 2, content.iconSize * child.drawnScale / 2);
+                    items[child.objectName] = [point.x, point.y];
+                    if (child.placed.onTrack && child.opacity > 0.99) shown.push(child.objectName);
+                }
+                console.warn("ArchDockInteraction " + JSON.stringify({kind: "folderTrack", panel: root.observedPanelId,
+                    visible: root.visible, opening: content.openingInProgress, layout: "track",
+                    selected: content.selectedChildId, snapshot: root.snapshot, pitch: content.pitch,
+                    capacity: content.track.capacity, items: items, shown: shown,
+                    rect: [root.x, root.y, root.width, root.height]}));
+            }
+        }
+''')
     insert("FolderExpansionHost.qml", "id: root", '\n    property string observedPanelId: ""\n    property bool observedActive: false\n    property string observedCaptureDirectory: '
            + json.dumps(str(stage.parent / 'logs')))
     insert("FolderExpansionHost.qml", "id: content", '''
@@ -198,6 +288,9 @@ def instrument_interaction_stage(stage):
                         width: content.width, height: content.height};
                 }
                 console.warn("ArchDockInteraction " + JSON.stringify({kind: "folder", panel: root.observedPanelId,
+                    lean: root.expansionLean !== undefined ? root.expansionLean : null,
+                    anchorAcross: content.anchorAcross !== undefined ? content.anchorAcross : null,
+                    contentWidth: content.width,
                     active: root.active, focused: content.activeFocus,
                     visible: root.visible, snapshot: root.snapshot, layout: content.geometry.layout,
                     selected: content.selectedChildId, reducedMotion: content.reducedMotion,
@@ -215,7 +308,7 @@ def instrument_interaction_stage(stage):
                         dragging: viewport.dragging, moving: viewport.moving} : {},
                     rect: [root.x, root.y, root.width, root.height], items: items, shown: shown,
                     path: {radiusX: content.path.radiusX, radiusY: content.path.radiusY,
-                        capacity: content.path.capacity}}));
+                        capacity: content.path.capacity, side: content.geometry.side}}));
             }
         }
 ''')
@@ -666,7 +759,18 @@ def run_interaction_matrix(free_panel):
     def click_entry(panel, edge=None, button=273):
         def hovered_target():
             current = entry(panel)
-            point = native_point(current["hostSize"], current["center"], edge=edge)
+
+            # A native panel can still settle to its applet's minimum
+            # thickness after a placement change (the folder matrix asks for
+            # 92 px, Plasma grows it to 108). Target the entry where it is
+            # now, not where the first sample saw it.
+            def latest():
+                nonlocal current
+                current = entry(panel) or current
+                return current["hostSize"], current["center"]
+
+            point = native_point(current["hostSize"], current["center"], edge=edge,
+                                 current_target=latest)
             lib.ei_device_pointer_motion_absolute(devices[2], *point)
             lib.ei_device_frame(devices[2], lib.ei_now(context))
             sync_input()
@@ -760,8 +864,9 @@ def run_interaction_matrix(free_panel):
             evidence = pathlib.Path(os.environ.get("ARCHDOCK_SCENE_EVIDENCE_DIR") or str(root / "logs"))
             evidence.mkdir(parents=True, exist_ok=True)
             positions = [("right", 0), ("bottom", 90), ("left", 180), ("top", 270), ("diagonal", 315)]
-            scenarios = [("baked2.5d", "ring-platform-blue", {}, layouts),
-                         ("true3d", "mesh-platform-cyan", {"scene3DCameraPitch": 60}, ["arc", "grid"])]
+            scenarios = [("baked2.5d", "ring-platform-blue", {}, layouts + ["track"]),
+                         ("true3d", "mesh-platform-cyan", {"scene3DCameraPitch": 60}, ["arc", "grid", "track"]),
+                         ("procedural2d", "", {}, ["track"])]
             icon_size = float(panel_call("dockConfiguration", "(s)", (panel,))["iconSize"])
             rows, failures = [], []
 
@@ -804,6 +909,9 @@ def run_interaction_matrix(free_panel):
                     moved = wrap(angle_of(*folder_and_centre()) - current)
                     if abs(moved) > 0.5:
                         gain = moved / wrap(requested - angle)
+                # The last move may have landed it: the same criterion, once more.
+                if abs(wrap(target - angle_of(*folder_and_centre()))) < 6:
+                    return
                 raise AssertionError(("folder could not be placed", target, angle_of(*folder_and_centre())))
 
             def click_folder():
@@ -823,6 +931,56 @@ def run_interaction_matrix(free_panel):
                     return point if observed.get("hovered") and near else None
                 click(wait_for(hovered_target, "folder icon hovered"), 272)
 
+            def check_track(tier, position):
+                # "Along the dock": the children stand on the dock's own curve
+                # outside it, beside the folder, clear of every dock icon.
+                state = wait_for(lambda: observations.get(("folderTrack", panel, ""), {})
+                    if observations.get(("folderTrack", panel, ""), {}).get("visible")
+                    and not observations.get(("folderTrack", panel, ""), {}).get("opening")
+                    and len(observations.get(("folderTrack", panel, ""), {}).get("shown", [])) >= 3 else None,
+                    "folder open along the dock")
+                folder, centre = folder_and_centre()
+                left, top = native_point(state["rect"][2:], [0, 0])
+                children = [(left + state["items"][name][0], top + state["items"][name][1])
+                            for name in sorted(state["shown"], key=lambda n: int(n.rsplit("-", 1)[1]))]
+                outward = (folder[0] - centre[0], folder[1] - centre[1])
+                length = math.hypot(*outward) or 1
+                outward = (outward[0] / length, outward[1] / length)
+                nearest = min(math.hypot(c[0] - folder[0], c[1] - folder[1]) for c in children)
+                middle = (sum(c[0] for c in children) / len(children) - folder[0],
+                          sum(c[1] for c in children) / len(children) - folder[1])
+                facing = (middle[0] * outward[0] + middle[1] * outward[1]) / (math.hypot(*middle) or 1)
+                origin = desktop_origin()
+                icons = [(origin[0] + value["center"][0], origin[1] + value["center"][1])
+                         for (kind, owner, _), value in list(observations.items())
+                         if kind == "entry" and owner == panel]
+                clearance = min(math.hypot(c[0] - i[0], c[1] - i[1]) for c in children for i in icons)
+                gaps = [math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(children, children[1:])]
+                row = {"tier": tier, "position": position, "layout": "track",
+                       "folder": [round(v, 1) for v in folder], "dockCentre": [round(v, 1) for v in centre],
+                       "outward": [round(v, 3) for v in outward], "popup": [left, top] + state["rect"][2:],
+                       "nearest": round(nearest, 1), "facing": round(facing, 3),
+                       "clearance": round(clearance, 1), "gaps": [round(g, 1) for g in gaps],
+                       "children": [[round(v, 1) for v in c] for c in children]}
+                rows.append(row)
+                problems = []
+                if nearest > icon_size + 16 + state["pitch"] / 2 + 10:
+                    problems.append("the contents do not start at the folder")
+                if facing < 0.3:
+                    problems.append("the contents do not stand outside the dock")
+                if clearance < icon_size * 0.9:
+                    problems.append("a child overlaps an icon of the dock")
+                if gaps and (max(gaps) > state["pitch"] * 1.15 or min(gaps) < state["pitch"] * 0.6):
+                    problems.append("the children are not spaced along the curve")
+                if problems:
+                    failures.append(dict(row, problems=problems))
+                print("FOLDER ANCHOR " + ("FAIL" if problems else "PASS") + ": "
+                      + json.dumps({k: row[k] for k in ("tier", "position", "layout", "nearest", "facing", "clearance")}
+                                   | {"problems": problems}), flush=True)
+                escape()
+                wait_for(lambda: not observations.get(("folderTrack", panel, ""), {}).get("visible"),
+                         "folder along the dock closed")
+
             configure(panel, {"x": 430, "y": 150, "folderSpeed": 80, "folderEasing": "outCubic"})
             for tier, theme, extra, scenario_layouts in scenarios:
                 configure(panel, dict({"layout": "ring", "layoutRadius": 150, "layoutAngle": 0,
@@ -833,6 +991,9 @@ def run_interaction_matrix(free_panel):
                     for layout in scenario_layouts:
                         configure(panel, {"folderLayout": layout})
                         click_folder()
+                        if layout == "track":
+                            check_track(tier, position)
+                            continue
                         state = wait_for(lambda: folder_popup(panel) if folder_popup(panel).get("visible")
                             and not folder_popup(panel).get("opening") and folder_popup(panel).get("layout") == layout
                             and len(folder_popup(panel).get("shown", [])) >= 3 else None, "anchored folder open")
@@ -846,8 +1007,10 @@ def run_interaction_matrix(free_panel):
                         gap = math.hypot(folder[0] - nearest[0], folder[1] - nearest[1])
                         middle = (left + width / 2 - folder[0], top + height / 2 - folder[1])
                         facing = (middle[0] * outward[0] + middle[1] * outward[1]) / (math.hypot(*middle) or 1)
+                        # The children a person sees: on the path and inside the popup.
                         children = [(left + state["items"][name][0], top + state["items"][name][1])
-                                    for name in state["shown"]]
+                                    for name in state["shown"]
+                                    if 0 <= state["items"][name][0] < width and 0 <= state["items"][name][1] < height]
                         behind = [round((c[0] - folder[0]) * outward[0] + (c[1] - folder[1]) * outward[1], 1)
                                   for c in children]
                         origin = desktop_origin()
@@ -977,20 +1140,27 @@ def run_interaction_matrix(free_panel):
                 return [(name, state["items"][name]) for name in names if name in state.get("items", {})]
 
             def assert_half_circle(points):
-                # First and last on one vertical diameter, every child on the
-                # half circle the folder declares - a half ellipse when the
-                # popup is short - bulging by its radius: no straight tail.
+                # First and last on one diameter beside the folder, every child
+                # on the half circle the folder declares - a half ellipse when
+                # the popup is short - bulging away from the folder by its
+                # radius: no straight tail. The popup's side gives the frame.
                 shape = folder_popup(panel)["path"]
-                across, along = shape["radiusX"], shape["radiusY"]
+                out_radius, across_radius = shape["radiusX"], shape["radiusY"]
                 assert len(points) >= 3 and len(points) == shape["capacity"], (points, shape)
-                (x0, y0), (x1, y1) = points[0][1], points[-1][1]
-                middle = (y0 + y1) / 2
-                assert abs(x0 - x1) < 1.5 and abs((y1 - y0) / 2 - along) < 1.5, (points, shape)
-                assert across > 40 and along > 40, shape
-                for _, (x, y) in points:
-                    assert abs(math.hypot((x - x0) / across, (y - middle) / along) - 1) < 0.02, (points, shape)
-                    assert x >= x0 - 1.5, (points, shape)
-                assert max(x for _, (x, _y) in points) - x0 > across * 0.8, (points, shape)
+                vertical = shape.get("side") in ("top", "bottom")
+                sign = -1 if shape.get("side") in ("top", "left") else 1
+                def frame(point):
+                    # (along the diameter, out from it)
+                    return (point[0], point[1]) if vertical else (point[1], point[0])
+                (a0, o0), (a1, o1) = frame(points[0][1]), frame(points[-1][1])
+                middle = (a0 + a1) / 2
+                assert abs(o0 - o1) < 1.5 and abs((a1 - a0) / 2 - across_radius) < 1.5, (points, shape)
+                assert out_radius > 40 and across_radius > 40, shape
+                for _, point in points:
+                    along, out = frame(point)
+                    assert abs(math.hypot((out - o0) / out_radius, (along - middle) / across_radius) - 1) < 0.02, (points, shape)
+                    assert sign * (out - o0) >= -1.5, (points, shape)
+                assert max(sign * (frame(point)[1] - o0) for _, point in points) > out_radius * 0.8, (points, shape)
 
             resting = wait_for(lambda: on_path() if on_path() and on_path()[0][0] == "folder-child-0" else None,
                                "dense folder rests on its first child")
@@ -1109,6 +1279,137 @@ def run_interaction_matrix(free_panel):
             assert panel_call("panelSettingsEditorSnapshot", "(ss)", (panel, "studio"))["revision"] == before
             assert not marker.exists(), "segment changes launched a folder root"
             print(f"PASS: segments {panel}: independent surfaces, ownership, native hover, popup guard, reorder, rejection", flush=True)
+
+    def run_mechanism_matrix():
+        # Every opening mechanism a panel offers visibly changes what it draws
+        # and gives it back when the panel reopens; one it does not offer is
+        # refused rather than saved as a mechanism that does nothing.
+        import shutil
+        from PySide6.QtGui import QImage
+        evidence = pathlib.Path(os.environ.get("ARCHDOCK_SCENE_EVIDENCE_DIR") or str(root / "logs"))
+        evidence.mkdir(parents=True, exist_ok=True)
+
+        def capture(panel, state, after):
+            # What the panel draws: painted pixels (every second one), how far
+            # they reach across and down, and the entries it holds.
+            observation = wait_for(lambda: next((value for (kind, owner, _), value in list(observations.items())
+                if kind == "panelCapture" and owner == panel and value.get("state") == state
+                and value.get("at", 0) > after and value.get("saved")), None), panel + " drawn " + state)
+            image = QImage(observation["path"])
+            assert not image.isNull(), observation
+            painted, xs, ys = 0, [], []
+            for y in range(0, image.height(), 2):
+                for x in range(0, image.width(), 2):
+                    if image.pixelColor(x, y).alpha() > 16:
+                        painted += 1
+                        xs.append(x)
+                        ys.append(y)
+            shutil.copy2(observation["path"], evidence / pathlib.Path(observation["path"]).name)
+            return {"painted": painted, "width": max(xs) - min(xs) + 1 if xs else 0,
+                    "height": max(ys) - min(ys) + 1 if ys else 0, "entries": observation.get("entries")}
+
+        def settled(panel, state):
+            wait_for(lambda: panel_call("panelPresentationState", "(s)", (panel,)).get("surfaceState") == state
+                     and panel_call("panelPresentationState", "(s)", (panel,)).get("transitionState") == "idle",
+                     panel + " rests " + state)
+
+        # Icons on both panels, so a mechanism has entries to hide as well as
+        # a surface to close.
+        fixtures = []
+        for number in range(3):
+            desktop = root / f"data/applications/org.archdock.mechanismfixture{number}.desktop"
+            desktop.parent.mkdir(exist_ok=True)
+            desktop.write_text(f"[Desktop Entry]\nType=Application\nName=Mechanism fixture {number}\n"
+                               "Exec=/usr/bin/true\nIcon=applications-system\n")
+            fixtures.append(desktop.as_uri())
+        import subprocess
+        subprocess.run(["kbuildsycoca6", "--noincremental"], check=True, stdout=subprocess.DEVNULL)
+        assert panel_call("pinPanelUrls", "(sas)", (free_panel, fixtures))
+        configure(free_panel, {"type": "hybrid"})
+        wait_for(lambda: len(panel_call("dockEntriesForPanel", "(ss)", (free_panel, "hybrid"))) >= 3,
+                 "free panel lists its pinned fixtures")
+        scenarios = [
+            ("native bottom row", "bottom", {"layout": "horizontal", "rendererTier": "procedural2d",
+                                             "panelThemeId": "", "completeThemeId": ""}),
+            ("native skinned row", "bottom", {"layout": "horizontal", "rendererTier": "skinned2d",
+                                              "panelThemeId": "sci-fi-chassis-blue",
+                                              "completeThemeId": "sci-fi-chassis-blue"}),
+            ("free skinned row", free_panel, {"layout": "horizontal", "rendererTier": "skinned2d",
+                                              "panelThemeId": "energy-frame-cyan",
+                                              "completeThemeId": "energy-frame-cyan"}),
+            ("procedural ring", free_panel, {"layout": "ring", "layoutRadius": 120, "rendererTier": "procedural2d",
+                                             "panelThemeId": "", "completeThemeId": ""}),
+            ("baked blue ring", free_panel, {"layout": "ring", "rendererTier": "baked2.5d",
+                                             "panelThemeId": "ring-platform-blue", "completeThemeId": "ring-platform-blue"}),
+            ("Cyan 3D ring", free_panel, {"layout": "ring", "rendererTier": "true3d",
+                                          "panelThemeId": "mesh-platform-cyan", "completeThemeId": "mesh-platform-cyan"}),
+            ("Orange 3D circle", free_panel, {"layout": "circular", "rendererTier": "true3d",
+                                              "panelThemeId": "arc-platform-orange", "completeThemeId": "arc-platform-orange"}),
+        ]
+        rows, failures = [], []
+        for name, panel, settings in scenarios:
+            scenario_start = time.time() * 1000
+            configure(panel, dict(settings, presentationMode="open", collapseMechanism="open",
+                                  presentationTrigger="click"))
+            resolution = panel_call("resolvePanelCapabilities", "(sa{sv})", (panel, {}))
+            tier = resolution["renderer"]["effectiveTier"]
+            offered = [m["id"] for m in resolution["presentationMechanisms"] if m["available"] and m["id"] != "open"]
+            unoffered = [m["id"] for m in resolution["presentationMechanisms"] if not m["available"]]
+            for mechanism in offered:
+              try:
+                configure(panel, {"presentationMode": "open", "collapseMechanism": "open"})
+                settled(panel, "open")
+                # The latest drawing of this scenario's open panel: applying
+                # settings it already has draws nothing new.
+                open_painted = capture(panel, "open", scenario_start)
+                before = time.time() * 1000
+                configure(panel, {"presentationMode": "collapsed", "collapseMechanism": mechanism})
+                settled(panel, "collapsed")
+                collapsed_painted = capture(panel, "collapsed", before)
+                before = time.time() * 1000
+                assert panel_call("requestPanelPresentation", "(ss)", (panel, "open"))
+                settled(panel, "open")
+                reopened_painted = capture(panel, "open", before)
+                # A collapse closes the panel: fewer pixels, and narrower along the
+                # axis it closes on. A theme's end caps may stay as its handle.
+                opened, collapsed, reopened = open_painted, collapsed_painted, reopened_painted
+                shrinks = {"collapse-horizontal": ("width",), "collapse-vertical": ("height",),
+                           "collapse-radial": ("width", "height")}.get(mechanism, ())
+                visible = opened["painted"] > 0 and opened["entries"] > 0 \
+                    and collapsed["painted"] <= 0.8 * opened["painted"] \
+                    and all(collapsed["painted"] == 0 or collapsed[axis] <= 0.85 * opened[axis] for axis in shrinks)
+                restored = opened["painted"] > 0 \
+                    and abs(reopened["painted"] - opened["painted"]) <= 0.15 * opened["painted"]
+                row = {"scenario": name, "panel": panel, "renderer": tier, "mechanism": mechanism,
+                       "open": opened, "collapsed": collapsed, "reopened": reopened,
+                       "visible": visible, "restored": restored}
+                rows.append(row)
+                print("MECHANISM " + ("PASS" if visible and restored else "FAIL") + ": " + json.dumps(row), flush=True)
+                if not (visible and restored):
+                    failures.append(row)
+              except AssertionError as error:
+                row = {"scenario": name, "panel": panel, "renderer": tier, "mechanism": mechanism,
+                       "error": str(error)[:200]}
+                rows.append(row)
+                failures.append(row)
+                print("MECHANISM FAIL: " + json.dumps(row), flush=True)
+                assert panel_call("requestPanelPresentation", "(ss)", (panel, "open"))
+            for mechanism in unoffered:
+                revision = panel_call("dockConfiguration", "(s)", (panel,))["settingsRevision"]
+                result = panel_call("applyPanelSettingsTransaction", "(sta{sv}a{sv})", (panel, revision,
+                    values({"presentationMode": "collapsed", "collapseMechanism": mechanism}), {}))
+                row = {"scenario": name, "panel": panel, "renderer": tier, "mechanism": mechanism,
+                       "offered": False, "refused": result.get("success") is not True,
+                       "errorCode": result.get("errorCode", "")}
+                rows.append(row)
+                print("MECHANISM " + ("REFUSED" if row["refused"] else "FAIL") + ": " + json.dumps(row), flush=True)
+                if not row["refused"]:
+                    failures.append(row)
+            configure(panel, {"presentationMode": "open", "collapseMechanism": "open"})
+        (evidence / "presentation-mechanism-matrix.json").write_text(json.dumps(rows, indent=1))
+        assert not failures, "presentation mechanisms without a visible result: " + json.dumps(failures)
+        print(f"PASS: {sum(1 for r in rows if r.get('offered', True))} offered mechanisms visibly collapse and "
+              f"reopen; {sum(1 for r in rows if not r.get('offered', True))} unoffered ones are refused", flush=True)
 
     def run_content_matrix():
         import subprocess
@@ -1557,6 +1858,66 @@ def run_interaction_matrix(free_panel):
             "native pointer leave closes the procedural panel")
         configure(free_panel, {"presentationMode": "open", "collapseMechanism": "open"})
         print("PASS: real Wayland wheel and optional continuous rotation in 2D/3D; owned free position read-back/rollback; procedural hover open/close", flush=True)
+        # Last: a radius-300 ring grows the desktop widget, which keeps the place
+        # it grew to, so no later step may depend on the panel's position.
+        # The owner's own free panels, with continuous animation off: free-9
+        # (circular, Orange in true 3D, pitch 60, radius 300) and free-4
+        # (circular, flat, radius 145). The wheel turns them from an icon
+        # and from the bare platform once the scene rests: a changed pitch
+        # eases in, and a point measured mid-way is not where the icon is.
+        import math
+        def host_state(): return observations.get(("host", free_panel, ""), {})
+        owner_keys = ("layout", "layoutRadius", "rendererTier", "panelThemeId", "completeThemeId",
+                      "scene3DCameraPitch", "scene3DCameraYaw", "panelRotationMode")
+        baseline = {key: value for key, value in panel_call("dockConfiguration", "(s)", (free_panel,)).items()
+                    if key in owner_keys}
+        def resting(app):
+            first = observed(app).get("center")
+            time.sleep(0.35)
+            second = observed(app).get("center")
+            return first and second and math.hypot(first[0] - second[0], first[1] - second[1]) < 0.5
+        for name, settings in (
+                ("owner free-9", {"layout": "circular", "layoutRadius": 300, "rendererTier": "true3d",
+                                  "panelThemeId": "arc-platform-orange", "completeThemeId": "arc-platform-orange",
+                                  "scene3DCameraPitch": 60, "scene3DCameraYaw": 5, "panelRotationMode": "none"}),
+                ("owner free-4", {"layout": "circular", "layoutRadius": 145, "rendererTier": "procedural2d",
+                                  "panelThemeId": "", "completeThemeId": "", "panelRotationMode": "none"})):
+            configure(free_panel, settings)
+            before = wait_for(lambda: host_state().get("rotation", {}).get("wheelAvailable")
+                and not host_state()["rotation"]["active"] and host_state(), name + " wheel ready")
+            wait_for(lambda: all(observed(row["appId"]).get("sample", 0) > before["at"] for row in rows()),
+                     "entries observed on " + name)
+            wait_for(lambda: resting(app), name + " scene at rest")
+            start = host_state()["rotation"]["angle"]
+            def turned_to(degrees, what):
+                wait_for(lambda: abs(host_state()["rotation"]["angle"] - degrees % 360) < 0.01,
+                         "Wayland wheel turns " + name + " " + what + " with animation off")
+                wait_for(lambda: resting(app), name + " scene at rest")
+            def surface_point():
+                probe = wait_for(lambda: host_state().get("surfacePoint") and host_state(),
+                                 "bare surface located on " + name)
+                return native_point(probe["rect"][2:], probe["surfacePoint"]), probe
+            # Down at an icon, down on the bare platform, then back up the
+            # same way: the panel rests where it started.
+            wheel(entry_point(app), 0, -120, discrete=True)
+            turned_to(start + 15, "from an icon")
+            surface, probe = surface_point()
+            wheel(surface, 0, -120, discrete=True)
+            try:
+                turned_to(start + 30, "from the bare platform")
+            except AssertionError:
+                print("MISSED WHEEL " + json.dumps({"probe": probe.get("surfacePoint"), "target": surface,
+                      "missed": observations.get(("missedWheel", free_panel, ""))}), flush=True)
+                raise
+            surface, probe = surface_point()
+            wheel(surface, 0, 120, discrete=True)
+            turned_to(start + 15, "back from the bare platform")
+            wheel(entry_point(app), 0, 120, discrete=True)
+            turned_to(start, "back from an icon")
+            print(f"PASS: {name}: wheel turns the panel both ways from an icon and the bare platform, "
+                  "animation off", flush=True)
+        configure(free_panel, baseline)
+
         print("PASS: actual Wayland URI/application/folder drops, deduplication, refusals, pointer reorder, native ownership and 2D/3D glyphs", flush=True)
 
     first = Gtk.ApplicationWindow(application=app)
@@ -1582,6 +1943,9 @@ def run_interaction_matrix(free_panel):
             wait_for(lambda: opened("bottom") and any(window["id"] == window_id and not window["hidden"]
                      for window in kwin_geometry()["windows"]), "same native window revealed and reported")
             print("PASS: native reveal restores the same compositor window and lifecycle", flush=True)
+            return
+        if os.environ.get("ARCHDOCK_RENDERING_MECHANISMS") == "1":
+            run_mechanism_matrix()
             return
         if os.environ.get("ARCHDOCK_RENDERING_FOLDERS") == "1":
             run_folder_matrix()

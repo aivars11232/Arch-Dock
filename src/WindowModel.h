@@ -6,6 +6,8 @@
 
 #include "WindowItem.h"
 
+// The application windows open on the desktop, as the KWin watcher reports
+// them (WindowWatcher). DockModel groups them by application.
 class WindowModel final : public QAbstractListModel
 {
     Q_OBJECT

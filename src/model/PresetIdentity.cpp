@@ -1,3 +1,4 @@
+// Preset identity parsing and the strict readers both preset parsers use.
 #include "PresetIdentity.h"
 
 #include "PanelCapabilityResolver.h"

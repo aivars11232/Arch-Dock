@@ -1,3 +1,6 @@
+// FreePanelController: the creation, adoption, verification and removal
+// steps for free panel hosts. The Plasma calls themselves are the operations
+// the backend passes in.
 #include "FreePanelController.h"
 
 #include "../PanelRegistry.h"

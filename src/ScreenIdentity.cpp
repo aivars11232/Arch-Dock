@@ -1,3 +1,4 @@
+// Stable screen identities and the screen a saved panel resolves to.
 #include "ScreenIdentity.h"
 
 #include <QCryptographicHash>

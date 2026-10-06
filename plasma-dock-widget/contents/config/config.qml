@@ -1,5 +1,7 @@
 import org.kde.plasma.configuration
 
+// The applet's Configure dialog: the page that opens Panel Studio and the
+// native Behavior page. Every other setting is edited in Panel Studio.
 ConfigModel {
     ConfigCategory {
         name: i18n("Panel Studio")

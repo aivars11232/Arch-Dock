@@ -6,6 +6,9 @@
 #include <QList>
 #include <QString>
 
+// Reads saved panel records of any supported version and brings them to
+// version 2 (PanelDefinition), saying whether the saved file must be
+// rewritten.
 namespace ArchDock
 {
 

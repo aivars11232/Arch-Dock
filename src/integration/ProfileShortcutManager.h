@@ -5,6 +5,9 @@
 #include <QMap>
 #include <functional>
 
+// Global keyboard shortcuts that apply a saved profile, registered with
+// KDE's global shortcut service (KGlobalAccel). Conflicts with other
+// shortcuts are reported, not overridden.
 namespace ArchDock
 {
 class ProfileShortcutManager final : public QObject

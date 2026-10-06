@@ -7,6 +7,11 @@
 
 #include <optional>
 
+// When a panel is shown or concealed: always, auto-hide, dodging the active
+// window, or hiding for maximized and fullscreen windows. A pointer inside
+// the panel, an open popup, a drag, keyboard focus or edit mode hold it
+// open (the locks). The rules are pure, so a native host can map them onto
+// Plasma's own hiding modes and a free host can apply them itself.
 namespace ArchDock
 {
 struct WindowOcclusion

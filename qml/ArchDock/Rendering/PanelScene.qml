@@ -2,6 +2,14 @@ import QtQuick
 import QtQuick.Window
 import ArchDock.Rendering 1.0
 
+// The shared panel renderer. Given a panel's definition, its runtime state,
+// its entries and what the host and theme allow, it lays the entries out
+// (LayoutEngine), draws the surface with the right renderer (procedural 2D,
+// skinned 2D, baked 2.5D or true 3D, through PanelSurfaceLoader), animates
+// opening and closing, rotation and icon motion, and reports what the host
+// needs: entry rectangles, input region, popup anchors and the folder curve.
+// The native applet, the free applet, Panel Studio's preview and preset
+// cards all draw panels through it, so they cannot drift apart.
 Item {
     id: root
 
@@ -186,9 +194,13 @@ Item {
     property bool rotationDragActive: false
     readonly property bool rotationGeometryAvailable:
         freeHost && rotationCapabilityAvailable && rotationLayoutSupported
+    // A folder or menu holds the dock still; a hover preview does not, so a
+    // wheel turn is never swallowed by a preview the pointer passed over.
+    readonly property bool modalPopupOpen: Boolean(runtimeState.modalPopupOpen !== undefined
+        ? runtimeState.modalPopupOpen : runtimeState.popupOpen)
     readonly property bool wheelRotationAvailable:
         rotationGeometryAvailable && entryInteractionEnabled && entriesAnimatable
-        && !dragInProgress && !editModeActive && !Boolean(runtimeState.popupOpen)
+        && !dragInProgress && !editModeActive && !modalPopupOpen
         && presentationState !== "collapsed"
     // An open curve that cannot hold its entries shows a window of them, and
     // the wheel then moves that window instead of turning the scene. The
@@ -199,6 +211,8 @@ Item {
     // wait until the edit ends.
     property bool sceneEditActive: false
     signal sceneTransformEdited(var values)
+    // The wheel turned or browsed the dock.
+    signal wheelUsed()
     readonly property var trackWindow: bakedMetadataUsable && bakedTrackMetrics
         ? ({ windowed: bakedTrackMetrics.windowed === true,
              capacity: Number(bakedTrackMetrics.capacity || 0),
@@ -211,7 +225,7 @@ Item {
     readonly property bool wheelBrowseAvailable:
         freeHost && trackWindow.windowed === true && entryInteractionEnabled
         && entriesAnimatable && !dragInProgress && !editModeActive
-        && !Boolean(runtimeState.popupOpen) && presentationState !== "collapsed"
+        && !modalPopupOpen && presentationState !== "collapsed"
     onTrackWindowChanged: browseTravel = trackWindow.windowed === true
         ? Math.min(browseTravel, Number(trackWindow.maximumOffset || 0)) : 0
     readonly property real sceneRotationAngle:
@@ -725,16 +739,7 @@ Item {
         const mesh = surfaceLoader.true3DReady ? surfaceLoader.true3DItem : null
         const rect = mesh && mesh.projectedEntryGeometry ? mesh.projectedEntryGeometry[index] : null
         if (!rect) return base
-        // A tilted or turned platform faces out of the dock where it is
-        // drawn: away from its projected centre, not from the flat layout's.
-        let outwardNormal = base.outwardNormal
-        const centre = mesh.projectedCentre
-        const dx = rect.x + rect.width / 2 - centre.x, dy = rect.y + rect.height / 2 - centre.y
-        if (Math.hypot(dx, dy) > 1)
-            outwardNormal = { x: dx / Math.hypot(dx, dy), y: dy / Math.hypot(dx, dy),
-                              angle: Math.atan2(dy, dx) * 180 / Math.PI }
         return Object.assign({}, base, {
-            outwardNormal: outwardNormal,
             x: rect.x, y: rect.y,
             position: {x: rect.x + (rect.width-layoutGeometry.iconSize)/2,
                 y: rect.y + (rect.height-layoutGeometry.iconSize)/2},
@@ -866,19 +871,81 @@ Item {
         }
     }
 
+    // The centre a curved free panel is drawn around, in scene coordinates:
+    // the projected platform in true 3D, the artwork's track when baked.
+    // Other layouts' own normals already point away from what is drawn.
+    function drawnCentre() {
+        if (!freeHost) return null
+        const mesh = surfaceLoader.true3DReady ? surfaceLoader.true3DItem : null
+        if (mesh && mesh.projectedCentre) return mesh.projectedCentre
+        if (bakedMetadataUsable && bakedTrackMetrics && bakedTrackMetrics.center)
+            return bakedTrackMetrics.center
+        return null
+    }
+
+    // "Along the dock": the curve a folder's contents follow, `outward`
+    // pixels out of the dock, as `count` scene-coordinate samples spanning
+    // `span` radians around the folder at `folderIndex`. True 3D projects the
+    // platform's own track; a baked or flat curve is the ellipse through the
+    // folder with the drawn track's proportions. `scale` is the icons' drawn
+    // size there relative to a flat icon.
+    function folderTrackSamples(folderIndex, outward, span, count) {
+        if (!freeHost || folderIndex < 0 || folderIndex >= entryCount || count < 2) return []
+        const output = entryGeometryAt(folderIndex)
+        const folder = { x: output.position.x + layoutGeometry.iconSize / 2,
+                         y: output.position.y + layoutGeometry.iconSize / 2 }
+        const mesh = surfaceLoader.true3DReady ? surfaceLoader.true3DItem : null
+        if (mesh && mesh.folderTrackSamples) {
+            const drawn = mesh.projectedEntryGeometry ? mesh.projectedEntryGeometry[folderIndex] : null
+            const size = drawn ? drawn.height / Math.max(1, layoutGeometry.iconSize) : 1
+            return mesh.folderTrackSamples(folderIndex, outward, span, count).map(function(sample) {
+                return { x: sample.x, y: sample.y, scale: sample.scale * size }
+            })
+        }
+        const centre = drawnCentre() || { x: contentBounds.x + layoutGeometry.width / 2,
+                                          y: contentBounds.y + layoutGeometry.height / 2 }
+        const metrics = bakedMetadataUsable ? bakedTrackMetrics : null
+        const ratio = metrics && metrics.radiusX > 0 ? metrics.radiusY / metrics.radiusX
+            : layoutPath === "ellipse" ? 0.62 : 1
+        const dx = folder.x - centre.x, dy = (folder.y - centre.y) / Math.max(0.05, ratio)
+        const angle = Math.atan2(dy, dx)
+        // The step out of the dock that appears `outward` pixels long on
+        // screen at the folder, however far the drawn track is tilted there.
+        const stretch = Math.hypot(Math.cos(angle), ratio * Math.sin(angle))
+        const radius = Math.hypot(dx, dy) + Math.max(0, outward) / Math.max(0.05, stretch)
+        const result = []
+        for (let index = 0; index < count; ++index) {
+            const turn = angle - span / 2 + span * index / (count - 1)
+            result.push({ x: centre.x + radius * Math.cos(turn),
+                          y: centre.y + radius * ratio * Math.sin(turn), scale: 1 })
+        }
+        return result
+    }
+
+    // Popups open away from the dock as it is drawn: a tilted, turned or
+    // projected platform faces out of its drawn centre.
     function buildPopupAnchors() {
         const anchors = []
+        const centre = drawnCentre()
         for (let index = 0; index < entryCount; ++index) {
             const output = entryGeometryAt(index)
+            let normal = output.outwardNormal
+            if (centre) {
+                const dx = output.position.x + layoutGeometry.iconSize / 2 - centre.x
+                const dy = output.position.y + layoutGeometry.iconSize / 2 - centre.y
+                const length = Math.hypot(dx, dy)
+                if (length > 1)
+                    normal = { x: dx / length, y: dy / length, angle: Math.atan2(dy, dx) * 180 / Math.PI }
+            }
             anchors.push({
                 index: index,
                 entryId: String(orderedEntries[index]
                                 ? orderedEntries[index].id || "" : ""),
                 x: output.position.x + layoutGeometry.iconSize / 2
-                    + output.outwardNormal.x * layoutGeometry.iconSize / 2,
+                    + normal.x * layoutGeometry.iconSize / 2,
                 y: output.position.y + layoutGeometry.iconSize / 2
-                    + output.outwardNormal.y * layoutGeometry.iconSize / 2,
-                outwardNormal: output.outwardNormal
+                    + normal.y * layoutGeometry.iconSize / 2,
+                outwardNormal: normal
             })
         }
         const hovered = Number(runtimeState
@@ -934,12 +1001,14 @@ Item {
                     Number(root.trackWindow.maximumOffset || 0),
                     root.browseTravel - delta / 120))
                 event.accepted = true
+                root.wheelUsed()
                 return
             }
             // One normal wheel notch turns 15 degrees; touchpad deltas turn
             // proportionally. This is transient geometry, not a saved edit.
             root.wheelRotationAngle = ((root.wheelRotationAngle + delta / 8) % 360 + 360) % 360
             event.accepted = true
+            root.wheelUsed()
         }
     }
 
@@ -1051,7 +1120,8 @@ Item {
                     ["scene3DPositionY", "positionY"], ["scene3DPositionZ", "positionZ"],
                     ["scene3DScale", "scale"], ["scene3DFieldOfView", "fieldOfView"],
                     ["scene3DKeyLight", "keyLightBrightness"], ["scene3DFillLight", "fillLightBrightness"],
-                    ["scene3DTransitions", "transitions"], ["scene3DFloat", "float"]])
+                    ["scene3DTransitions", "transitions"], ["scene3DFloat", "float"],
+                    ["scene3DBand", "band"], ["scene3DBend", "bend"]])
                 if (definition[key] !== undefined) parameters[parameter] = definition[key]
             return parameters
         }

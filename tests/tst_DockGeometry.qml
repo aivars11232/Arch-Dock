@@ -1149,6 +1149,57 @@ TestCase {
             verify(across(leaning.anchor) < across(value.anchor) - 10, data.tag + ": the lean moves the folder's anchor")
     }
 
+    // "Along the dock": children stand on the traced curve a pitch apart,
+    // centred on the folder; an overcrowded folder moves along it.
+    function test_folderTrackFollowsTheTracedCurve() {
+        function curve(radiusX, radiusY, count) {
+            const samples = []
+            for (let k = 0; k < count; ++k) {
+                const a = -Math.PI / 3 + 2 * Math.PI / 3 * k / (count - 1)
+                samples.push({ x: 300 + radiusX * Math.cos(a), y: 200 + radiusY * Math.sin(a),
+                               scale: 1 + k / (count - 1) })
+            }
+            return samples
+        }
+        const circle = LayoutEngine.folderTrackLayout(curve(200, 200, 181), 5, 70, 0)
+        compare(circle.capacity, 5)
+        verify(!circle.windowed)
+        fuzzy(circle.entries[2].x, 500, "the middle child stands straight out from the folder")
+        fuzzy(circle.entries[2].y, 200, "the middle child stands straight out from the folder")
+        fuzzy(circle.entries[2].scale, 1.5, "the curve's perspective carries over")
+        for (let index = 0; index < 5; ++index) {
+            const entry = circle.entries[index]
+            verify(Math.abs(Math.hypot(entry.x - 300, entry.y - 200) - 200) < 0.2, "child " + index + " is on the curve")
+            verify(entry.onTrack && entry.visibility === 1)
+            if (index > 0) {
+                const turn = Math.atan2(entry.y - 200, entry.x - 300)
+                    - Math.atan2(circle.entries[index - 1].y - 200, circle.entries[index - 1].x - 300)
+                verify(Math.abs(turn * 200 - 70) < 0.5, "neighbours are a pitch apart along the curve")
+            }
+        }
+        const tilted = LayoutEngine.folderTrackLayout(curve(200, 100, 181), 4, 60, 0)
+        for (const entry of tilted.entries)
+            verify(Math.abs(Math.pow((entry.x - 300) / 200, 2) + Math.pow((entry.y - 200) / 100, 2) - 1) < 0.01,
+                   "a tilted track's children stand on its ellipse")
+
+        // Two thirds of a circle of radius 200 holds six children 70 apart.
+        const crowded = LayoutEngine.folderTrackLayout(curve(200, 200, 181), 20, 70, 3)
+        compare(crowded.capacity, 6)
+        verify(crowded.windowed)
+        compare(crowded.maximumOffset, 14)
+        compare(crowded.entries[2].onTrack, false)
+        compare(crowded.entries[2].visibility, 0)
+        verify(crowded.entries[3].onTrack && crowded.entries[8].onTrack)
+        compare(crowded.entries[9].onTrack, false)
+        compare(LayoutEngine.folderTrackLayout(curve(200, 200, 181), 20, 70, 99).entries[19].onTrack, true,
+                "the offset stops at the last child")
+        compare(LayoutEngine.folderTrackLayout([], 5, 70, 0).entries.length, 0)
+        compare(LayoutEngine.folderTrackLayout(curve(200, 200, 181), 0, 70, 0).entries.length, 0)
+        verify(LayoutEngine.curvedLayout("ring") && LayoutEngine.curvedLayout("arc")
+               && LayoutEngine.curvedLayout("hexagon") && !LayoutEngine.curvedLayout("horizontal")
+               && !LayoutEngine.curvedLayout("star"))
+    }
+
     function test_folderWithoutASideKeepsItsFrame() {
         const options = { maximumWidth: 620, maximumHeight: 400, labelWidth: 108,
                           labelHeight: 36.65625, compactPath: true }

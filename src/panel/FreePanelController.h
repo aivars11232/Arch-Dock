@@ -8,6 +8,12 @@
 
 class PanelRegistry;
 
+// Free desktop panels live as Arch Dock applets on Plasma desktop
+// containments. This creates such a panel's applet host, or adopts one a
+// template or an earlier session made, verifies that a host found in Plasma
+// is really the panel's (its ownership token), and rebinds, detaches or
+// removes hosts as their records change. The Plasma calls are operations the
+// backend passes in, so the steps and their rollback can be tested alone.
 namespace ArchDock
 {
 enum class FreePanelCreationOrigin

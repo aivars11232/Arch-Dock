@@ -10,6 +10,10 @@ class QJsonObject;
 
 class WindowModel;
 
+// Receives window events from a KWin script it installs: Wayland gives an
+// ordinary client no list of other applications' windows, so a KWin script
+// calls these slots over D-Bus as windows appear, change and close. Feeds
+// WindowModel, and reports what native panels overlap for visibility.
 class WindowWatcher final : public QObject
 {
     Q_OBJECT

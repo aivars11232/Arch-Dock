@@ -4,6 +4,8 @@ import org.kde.kcmutils as KCM
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.workspace.dbus as PlasmaDBus
 
+// The Arch Dock Control applet's configuration page: a button that asks the
+// backend to open Panel Studio on this applet's panel.
 KCM.SimpleKCM {
     id: root
 

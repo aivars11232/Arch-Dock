@@ -3,6 +3,8 @@
 #include <QRect>
 #include <QString>
 
+// One application window as the KWin watcher reports it: identity, title,
+// geometry and state.
 class WindowItem
 {
 public:

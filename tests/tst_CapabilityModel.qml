@@ -37,6 +37,55 @@ TestCase {
         // A saved setting cannot replace the consumer's successful probe.
         verify(!CapabilityModel.scene3DControlsAvailable(resolution,
             { rendererTier: "true3d", scene3DQuality: "high" }, { rendererAvailable: false }))
+        // ADFIX-TASK-002: a look without meshes of its own qualifies when the
+        // renderer generates its platform, and only then.
+        const generated = { valid: true, scene3D: { generic: true, generated: {} },
+            scene3DResources: { material: {} },
+            capabilities: { rendererTiers: ["true3d", "baked2.5d"] } }
+        verify(CapabilityModel.scene3DControlsAvailable(resolution, generated, consumer))
+        const meshless = JSON.parse(JSON.stringify(generated))
+        delete meshless.scene3D.generated
+        verify(!CapabilityModel.scene3DControlsAvailable(resolution, meshless, consumer))
+        verify(!CapabilityModel.scene3DControlsAvailable(resolution, generated, {}))
+    }
+
+    // ADFIX AUD-03: the 3D page names what actually blocks 3D.
+    function test_scene3DBlockerNamesTheActualBlocker() {
+        const resolution = { rendererChoices: [{ tier: "true3d", available: true },
+                                               { tier: "baked2.5d", available: true }] }
+        const ready = { rendererAvailable: true }
+        const generated = { valid: true, scene3D: { generic: true, generated: {} },
+            scene3DResources: { material: {} },
+            capabilities: { rendererTiers: ["true3d", "baked2.5d"], layouts: ["ring", "circular"] } }
+        compare(CapabilityModel.scene3DBlocker(resolution, generated, ready, { layout: "ring" }), null)
+        compare(CapabilityModel.scene3DBlocker(resolution, generated, ready,
+            { nativePanel: true, layout: "ring" }).code, "host")
+        const noRenderer = CapabilityModel.scene3DBlocker(resolution, generated,
+            { rendererAvailable: false, reasonCode: "renderer-platform-unsupported" }, { layout: "ring" })
+        compare(noRenderer.code, "renderer")
+        verify(noRenderer.text.indexOf(CapabilityModel.reasonLabel("renderer-platform-unsupported")) >= 0)
+        compare(CapabilityModel.scene3DBlocker(resolution, { valid: false }, ready, { layout: "ring" }).code, "look")
+        // Without a 3D form: imported artwork, a straight skin and a curve
+        // that has no platform are three different answers.
+        const flat = { valid: true, capabilities: { rendererTiers: ["baked2.5d"], layouts: ["ring", "arc"] } }
+        compare(CapabilityModel.scene3DBlocker(resolution, flat, ready,
+            { layout: "ring", importedArtwork: true }).code, "look")
+        const skin = { valid: true, capabilities: { rendererTiers: ["skinned2d"], layouts: ["horizontal"] } }
+        const skinBlocker = CapabilityModel.scene3DBlocker(resolution, skin, ready, { layout: "horizontal" })
+        compare(skinBlocker.code, "look")
+        verify(skinBlocker.text.indexOf("straight") >= 0, skinBlocker.text)
+        compare(CapabilityModel.scene3DBlocker(resolution, flat, ready, { layout: "arc" }).code, "layout")
+        // A 3D form whose resources are missing, or a renderer the resolver refuses.
+        const broken = JSON.parse(JSON.stringify(generated))
+        delete broken.scene3D.generated
+        compare(CapabilityModel.scene3DBlocker(resolution, broken, ready, { layout: "ring" }).code, "resources")
+        const refused = { rendererChoices: [{ tier: "true3d", available: false, reasonCode: "renderer-host-unsupported" },
+                                            { tier: "baked2.5d", available: true }] }
+        const refusal = CapabilityModel.scene3DBlocker(refused, generated, ready, { layout: "ring" })
+        compare(refusal.code, "renderer-choice")
+        verify(refusal.text.indexOf(CapabilityModel.reasonLabel("renderer-host-unsupported")) >= 0)
+        const noReturn = { rendererChoices: [{ tier: "true3d", available: true }] }
+        compare(CapabilityModel.scene3DBlocker(noReturn, generated, ready, { layout: "ring" }).code, "off-tier")
     }
 
     function test_threeDOffUsesOnlyDeclaredAvailableSurface() {

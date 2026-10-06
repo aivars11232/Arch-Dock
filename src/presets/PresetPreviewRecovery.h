@@ -2,6 +2,8 @@
 
 #include "../model/PanelDefinition.h"
 
+// What an interrupted preset audition left on the desktop, written before
+// the desktop is touched so the next start can put it back.
 namespace ArchDock
 {
 struct PresetPreviewRecord

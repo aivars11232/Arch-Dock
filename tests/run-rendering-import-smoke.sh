@@ -1494,6 +1494,13 @@ run_outer() {
     else
         cmake --install "$build_dir" --prefix "$stage_root"
     fi
+    # A package's install runs the icon-cache hook on hicolor. A staged theme
+    # without its index and cache is searched file by file on every icon
+    # lookup, which made each Panel Studio window take seconds to appear.
+    if [[ -d "$stage_root/share/icons/hicolor" ]]; then
+        cp /usr/share/icons/hicolor/index.theme "$stage_root/share/icons/hicolor/index.theme"
+        gtk-update-icon-cache --force --quiet "$stage_root/share/icons/hicolor"
+    fi
     if [[ "${ARCHDOCK_RENDERING_INTERACTIONS:-}" == '1' ]]; then
         python3 "$ARCHDOCK_RENDERING_SCRIPT_DIR/visibility-window.py" \
             --instrument-interaction-stage "$stage_root"
@@ -1663,7 +1670,7 @@ run_outer() {
         XDG_SESSION_TYPE=wayland \
         XDG_STATE_HOME="$ARCHDOCK_RENDERING_STATE_ROOT/state" \
         dbus-run-session -- \
-        timeout --kill-after=10s 90s bash "$0"
+        timeout --kill-after=10s 150s bash "$0"
 
     printf 'ArchDock.Rendering staged import smoke succeeded.\n'
 }

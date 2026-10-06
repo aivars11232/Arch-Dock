@@ -10,6 +10,8 @@
 
 #include <optional>
 
+// Identity, lineage, diagnostics and strict value readers shared by Panel
+// Presets and Icon Presets.
 namespace ArchDock
 {
 

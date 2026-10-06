@@ -1,5 +1,10 @@
 # ADFIX continuation handoff — 2026-10-06
 
+> **Status: finished.** The run resumed from this file and closed all three
+> tasks on 2026-10-06; the outcome, package and verification are recorded in
+> [CURRENT_STATE.md](CURRENT_STATE.md) (ADFIX block). The text below is the
+> unchanged record of the interrupted run.
+
 Work on the owner's correction pack
 `/mnt/F/Arch_Dock_Full_Correction_LCL_3Task_v1.0.1/` (ADFIX-TASK-001, -002, -003)
 stopped on the owner's instruction ("Finish current run, commit and sync, make a

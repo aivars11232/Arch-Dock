@@ -21,6 +21,12 @@ cmake --install "$build_dir" --prefix "$prefix" >"$stage/install.log" 2>&1 || {
     echo "staged install failed" >&2
     exit 1
 }
+# A package's install runs the icon-cache hook on hicolor; a staged theme
+# without its index and cache is searched file by file on every icon lookup.
+if [[ -d "$prefix/share/icons/hicolor" ]]; then
+    cp /usr/share/icons/hicolor/index.theme "$prefix/share/icons/hicolor/index.theme"
+    gtk-update-icon-cache --force --quiet "$prefix/share/icons/hicolor"
+fi
 
 presets="$prefix/share/arch-dock/presets"
 for kind in panels icons; do

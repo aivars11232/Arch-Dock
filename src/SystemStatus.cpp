@@ -1,3 +1,4 @@
+// SystemStatus: the sampling thread and the /proc and /sys readers.
 #include "SystemStatus.h"
 
 #include <QDir>

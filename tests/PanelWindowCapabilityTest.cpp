@@ -5,16 +5,19 @@
 #include "PanelRegistry.h"
 #include "panel/PanelWindow.h"
 #include "presets/PresetPreviewSession.h"
+#include "themes/ThemePackage.h"
 #include "ScreenIdentity.h"
 #include "WindowModel.h"
 
 #include <QDir>
 #include <QDBusConnection>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonDocument>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QJSValue>
 #include <QtQuickTest>
 #include <QQmlApplicationEngine>
@@ -33,6 +36,10 @@
 #include <QWheelEvent>
 #include <QtTest>
 #include <unistd.h>
+
+#include <algorithm>
+#include <cmath>
+#include <functional>
 
 namespace
 {
@@ -137,6 +144,7 @@ private slots:
     void tiltEditorsFollowTheSelectedRenderer();
     void themeCardsResolveEachThemesOwnRenderer();
     void sceneEditAuditionsOnlyAFree3DPanel();
+    void settingsLatencyOnTheOwners3DPanel();
     void studioIconTiles_data();
     void studioIconTiles();
     void studioFolderItemNames_data();
@@ -412,6 +420,16 @@ void PanelWindowCapabilityTest::studioPanelMotionControls()
          QStringLiteral("presentationMode"), QStringLiteral("openDelay"),
          QStringLiteral("closeDelay"), QStringLiteral("panelRotationMode")})
         QVERIFY2(freeFields.contains(key), qPrintable(key));
+    // A curved free panel opens its folders along its own curve by default,
+    // and offers that first; native panels keep the five popup layouts.
+    QCOMPARE(registry->panelValue(panel, QStringLiteral("folderLayout")).toString(), QStringLiteral("track"));
+    const QVariantMap freeFolder = fieldByKey(backend.panelSettingsEditorSnapshot(panel, "studio")
+        .value("panelFields").toList(), QStringLiteral("folderLayout"));
+    QCOMPARE(freeFolder.value("choices").toStringList(),
+             QStringList({QStringLiteral("track"), QStringLiteral("fan"), QStringLiteral("grid"),
+                          QStringLiteral("stack"), QStringLiteral("arc"), QStringLiteral("ring")}));
+    QCOMPARE(freeFolder.value("options").toList().constFirst().toMap().value("label").toString(),
+             QStringLiteral("Along the dock"));
     const auto nativeFields = fieldKeys(backend.panelSettingsEditorSnapshot("bottom", "studio").value("panelFields").toList());
     QVERIFY(nativeFields.contains("presentationMode"));
     QVERIFY(!nativeFields.contains("x") && !nativeFields.contains("y"));
@@ -597,6 +615,91 @@ void PanelWindowCapabilityTest::sceneEditAuditionsOnlyAFree3DPanel()
              && reason != "panel-not-found", qPrintable(reason));
     QCOMPARE(session->state(), QStringLiteral("IDLE"));
     QVERIFY(!backend.panelRendererConfiguration(panel).value("sceneEditActive").toBool());
+}
+
+// ADFIX UF-08: what the owner waits for while editing a 3D panel in Panel
+// Studio. The owner's panel is Orange in its own 3D on a circle of radius 300
+// tilted to 60 degrees. Each operation is timed several times; with
+// ARCHDOCK_BENCHMARK_DIR set, p50 and p95 and the theme packages read from
+// disk are written there as settings-latency.json.
+void PanelWindowCapabilityTest::settingsLatencyOnTheOwners3DPanel()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    const auto orange = registry->themeCandidate(panel, "arc-platform-orange", "complete");
+    QVERIFY(orange.value("success").toBool());
+    QVariantMap values = orange.value("values").toMap();
+    values.insert("layout", "circular");
+    values.insert("layoutRadius", 300);
+    values.insert("rendererTier", "true3d");
+    values.insert("scene3DCameraPitch", 60.0);
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        values).value("success").toBool());
+
+    struct Measured { QString name; QList<double> ms; double loads; };
+    QList<Measured> results;
+    const auto measure = [&](const QString &name, int count, const std::function<void(int)> &operation) {
+        Measured result{name, {}, 0};
+        const quint64 before = ArchDock::ThemePackage::loadCount();
+        for (int index = 0; index < count; ++index) {
+            QElapsedTimer timer;
+            timer.start();
+            operation(index);
+            result.ms.append(timer.nsecsElapsed() / 1e6);
+        }
+        result.loads = double(ArchDock::ThemePackage::loadCount() - before) / count;
+        std::sort(result.ms.begin(), result.ms.end());
+        results.append(result);
+        return result;
+    };
+    const auto percentile = [](const QList<double> &sorted, double share) {
+        return sorted.value(qMin(sorted.size() - 1, int(std::ceil(share * sorted.size())) - 1));
+    };
+    // Warm up once: the first projection may load what later ones reuse.
+    backend.resolvePanelSettingsEditorDraft(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"spacing", 9}}, {}, "studio");
+    // Every change in Studio re-projects the draft.
+    const auto edit = measure("studio edit (draft projection)", 15, [&](int index) {
+        QVERIFY(backend.resolvePanelSettingsEditorDraft(panel, registry->panelDefinition(panel)->settingsRevision,
+            {{"spacing", 2 + index % 12}}, {}, "studio").value("success").toBool());
+    });
+    measure("studio page load (editor snapshot)", 10, [&](int) {
+        QVERIFY(!backend.panelSettingsEditorSnapshot(panel, "studio").isEmpty());
+    });
+    measure("live panel renderer configuration", 10, [&](int) {
+        QVERIFY(!backend.panelRendererConfiguration(panel).isEmpty());
+    });
+    measure("apply (settings transaction)", 10, [&](int index) {
+        QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+            {{"spacing", 2 + index % 12}}).value("success").toBool());
+    });
+    QJsonArray rows;
+    for (const auto &result : results) {
+        const double p50 = percentile(result.ms, 0.5), p95 = percentile(result.ms, 0.95);
+        qInfo().noquote() << QStringLiteral("SETTINGS LATENCY %1: p50 %2 ms, p95 %3 ms, %4 package reads each")
+            .arg(result.name).arg(p50, 0, 'f', 1).arg(p95, 0, 'f', 1).arg(result.loads, 0, 'f', 1);
+        rows.append(QJsonObject{{"operation", result.name}, {"p50Ms", p50}, {"p95Ms", p95},
+                                {"samples", result.ms.size()}, {"packageReadsEach", result.loads}});
+    }
+    const QString directory = qEnvironmentVariable("ARCHDOCK_BENCHMARK_DIR");
+    if (!directory.isEmpty()) {
+        QVERIFY(QDir().mkpath(directory));
+        QFile file(QDir(directory).filePath("settings-latency.json"));
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        file.write(QJsonDocument(rows).toJson());
+    }
+    // The measured hot path: each Studio edit read the panel's theme package
+    // from disk about 70 times (every asset hashed, the 3D mesh parsed). Once
+    // read, a package is reused while its manifest is unchanged.
+    for (const auto &result : results)
+        QVERIFY2(result.loads == 0, qPrintable(QStringLiteral("%1 read %2 theme packages each")
+            .arg(result.name).arg(result.loads)));
+    Q_UNUSED(edit);
 }
 
 void PanelWindowCapabilityTest::themeCardsResolveEachThemesOwnRenderer()
@@ -1514,6 +1617,23 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
                  "scene3DFieldOfView", "scene3DThickness", "scene3DIconElevation", "scene3DQuality",
                  "spacing", "scene3DKeyLight", "scene3DFillLight", "scene3DTransitions", "scene3DFloat"})
             QVERIFY2(keys.contains(key), qPrintable(key));
+        // ADFIX UF-06: the blue ring stands on a generated platform, so its
+        // shape is offered: the layout, limited to shapes 3D draws exactly,
+        // the platform's width and its bend.
+        for (const QString &key : {"layout", "scene3DBand", "scene3DBend"})
+            QVERIFY2(keys.contains(key), qPrintable(key));
+        for (const auto &row : rows.toList()) {
+            if (row.toMap().value("key").toString() != QStringLiteral("layout")) continue;
+            QStringList shapes;
+            for (const auto &option : row.toMap().value("options").toList())
+                shapes.append(option.toMap().value("value").toString());
+            // The blue ring's own layouts are a ring and a circle; both stand
+            // on an exact platform.
+            shapes.sort();
+            QCOMPARE(shapes, (QStringList{QStringLiteral("circular"), QStringLiteral("ring")}));
+            for (const QString &flat : {"arc", "semicircle", "fan", "horizontal", "star"})
+                QVERIFY2(!shapes.contains(flat), qPrintable(flat));
+        }
         QVERIFY(actions.contains("reset-3d-transform"));
         // Desktop editing is offered from the same page.
         QVERIFY(actions.contains("edit-3d-on-desktop"));

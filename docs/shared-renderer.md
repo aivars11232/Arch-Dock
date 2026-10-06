@@ -344,12 +344,12 @@ corner of its layer, at `radius / trackRadius` of its size.
 
 ## Generic 3D, transform and desktop editing — AD3D-TASK-002
 
-`PanelRegistry::genericScene3D()` lets a free panel with a closed radial layout
-(circular, ring, ellipse, radial, polygon and the regular polygons) be drawn by
-the existing mesh renderer even when its look ships no scene. It reuses the
-validated platform and pedestal meshes of the built-in mesh package, without
-its texture or moving parts, and builds the material from the look's own
-colour, appearance and glow. `themeCapabilityProfile()` adds the `true3d` tier
+`PanelRegistry::genericScene3D()` lets a free panel whose look ships no scene be
+drawn by the mesh renderer when its layout has an exact generated platform
+(see [Generated platforms](#generated-platforms-and-icon-composition--adfix-task-002)).
+Until ADFIX-TASK-002 it reused the built-in Cyan package's octagonal mesh and
+recoloured it, whatever the look and layout were; the scene now carries
+`generated` instead. `themeCapabilityProfile()` adds the `true3d` tier
 and puts the look's own tier first among the fallbacks;
 `themeRuntimeProjection()` adds `scene3D`, `scene3DResources` and
 `genericScene3D: true`, and gives a procedural look a minimal projection of its
@@ -381,6 +381,75 @@ once through `transformEdited`; the applet forwards it to
 customizations. During an edit the scene's whole box takes input, wheel and
 drag rotation wait, and entries take no presses. The pointer arithmetic lives
 in `GizmoMath.js` so it can be tested without a GPU.
+
+## Generated platforms and icon composition — ADFIX-TASK-002
+
+**Generated platforms.** `PlatformGeometry.js` builds a platform in the theme
+mesh format along the panel's own layout path: a circle, the layout's ellipse
+(0.62 squeeze), a regular polygon with its first corner up (mitred band
+corners, a smaller centre line for few sides so the corners stay within 1.05),
+or the radial layout's 300-degree arc, extended past its end icons by the
+band's width so their pedestals stand on it. Arcs, semicircles and fans curve
+about a centre below their panel's middle, so they have none and stay flat
+(`shapeForLayout()` returns null; the registry does not adapt them). An icon's
+foot is its 2D position relative to the track, scaled onto the platform's
+centre line (`standPoint()`), which lies on the platform for every shape.
+The band's cross-section has a flat top, bevelled edges and walls; `band`
+(half the top's width, 0.06 to 0.16) and `bend` (the top tilting outward up or
+down about the icons' line, -1 to 1) come from the Panels > 3D page
+(`scene3DBand`, `scene3DBend`, capability `scene3d-shape`, offered only for a
+generated platform).
+
+**The look's colours.** Faces carry vertex colours (`top`, `rim`, `wall`,
+`under`) and the rim faces are a separate index range drawn with a glowing
+material (`IconStyle3D` subsets). A look drawn from artwork lends the palette
+of its own platform layers: `LookPalette::fromArtwork()` decodes the `rear`
+and `foreground` layers, composes them, and takes the mean colours of
+luminance bands (body 40 to 75 percent, shade 5 to 25, rim the brightest 2),
+cached by package digest; the rim glows in the look's glow colour. A
+procedurally drawn look is coloured from the same `LayoutEngine.themeStyle()`
+its 2D surface uses (`paletteFromStyle()`): the stroke for the band, the
+shadow colour for a glowing rim. Values crossing D-Bus are doubles; D-Bus has
+no float, and a float in the projection stopped the backend's reply.
+
+**A theme's own scene.** Cyan and Orange keep their own meshes. Orange's
+texture is now its top view in the colours of its 2D artwork (dark brown slab,
+copper rim strokes), mapped by the mesh's planar UVs, and every model drawn in
+a theme's material (pedestals, icon bases, parts) takes the theme's texture.
+
+**Icons.** Each entry's origin is where its icon stands: on the track, on top
+of its pedestal (`size × iconElevation`). The pedestal is a solid column
+(`PlatformGeometry.pedestal()`) in the platform's material; a theme's
+`iconMesh` lies around its foot as a base. The tile and the glyph are flat
+quads in a node turned by `iconFacing` (the entry frame's rotation undone, the
+camera's taken), so the application's glyph faces the viewer at every pitch,
+yaw and roll and stands on the pedestal; hover and motion scale it about its
+foot. Before, the tile was drawn with the theme's platform mesh (a dark ring
+around every icon) and the glyph as a card lying in the platform's plane, so
+the camera's tilt flattened it. The input rectangle is the projection of
+`mesh-input-anchor-N`, the icon's resting square, untouched by hover and
+motion, so it no longer breathes under the pointer.
+
+**Desktop editing.** A press that misses every handle but lands on the
+platform or an icon takes the body: across turns it (yaw), up and down tilts
+it (pitch), a quarter degree per pixel, Ctrl snapping to 15 degrees and Shift
+dragging a tenth as far (`GizmoMath.orbit()`). A move arrow drawn shorter than
+12 pixels points at the viewer: it moves one arrow length per 120 pixels of
+vertical drag instead of doing nothing, and the hint under the toolbar says so
+(`endOnAxes`).
+
+**Unavailable 3D.** `CapabilityModel.scene3DBlocker()` names the first real
+blocker for the 3D page: an edge panel, the renderer (with its reason), a look
+that could not be loaded, imported artwork, a flat skin for straight panels,
+a layout without a platform, missing resources, the resolver refusing the 3D
+tier, or no flat renderer to return to.
+
+Evidence: `platform-geometry-test` (watertight, wound, every layout's icons on
+the top including each pedestal's footprint), the real-RHI rows of
+`generatedPlatformsFollowTheLayoutAndLook` (every supported shape, the baked
+blue ring and steel octagon: the silhouette is the layout's shape, the colours
+are the look's, the icons face the viewer and have a pedestal under them), and
+the gizmo test's body drags and end-on arrow.
 
 ## PanelScene inputs
 
@@ -527,10 +596,11 @@ PlasmaShell's resident memory required not to grow.
   resolves `renderer-host-unsupported` and falls back.
 - A baked package declares no end caps, so a collapsed baked panel keeps no
   handle of its own; the presentation controller supplies the bounded minimum.
-- `collapse-radial` remains an interface only. It reports the tier it needs
-  (`baked2.5d`) and falls back to a centred clip and fade; no shipped
-  perspective package declares it, and implementing a real iris is not part of
-  TASK-0034.
+- A baked package offers no collapse mechanism: the shipped baked packages
+  declare only `open`, so Panel Studio hides the choice and the backend refuses
+  a collapse. `collapse-radial` is drawn by the true-3D renderer only (see
+  [Opening mechanisms](#opening-mechanisms--adfix-task-001)); a flat renderer
+  asked for it falls back to a centred clip and fade.
 - Input narrowing is Qt Quick item hit testing only. A Plasma desktop applet
   is still a rectangle to the compositor, so `nonrectangular-input` stays
   unclaimed.
@@ -560,6 +630,30 @@ skin is visible, enabled, and non-transparent. Hidden, disabled, transparent,
 or reduced-motion skins stop the animation and reset its effective phase to
 zero. State selection, tint, and static glow remain visible under reduced
 motion, preserving hover/open/collapsed feedback without continuous movement.
+
+## Opening mechanisms — ADFIX-TASK-001
+
+A mechanism is offered only when the host, the theme and the effective
+renderer can all draw it (`PanelCapabilityResolver::resolve`): Panel Studio
+lists only those, hides the choice when a panel has none, and the settings
+transaction refuses any other with `capability-unavailable`.
+`PanelMotionController` turns the offered mechanism into per-role tracks; each
+renderer applies them:
+
+| Renderer | Offered | What a collapse draws |
+| --- | --- | --- |
+| Procedural 2D | `collapse-horizontal`, `collapse-vertical` | The drawn shape is squeezed about its centre onto the handle along the axis (`surface` track `scaleX`/`scaleY`); entries are clipped by the same track. |
+| Skinned 2D | what the theme declares (`collapse-horizontal`, `split`) | Caps converge and the centre gives up its travel, or the halves leave the frame; the theme's end caps stay as the handle. |
+| Baked 2.5D | none (shipped packages declare only `open`) | — |
+| True 3D | `collapse-radial` when the theme declares 3D parts for it | The whole platform closes toward its centre like an iris (`radialCollapseScale`, down to 20%), entries fade, and the theme's parts move between their open and closed positions. |
+
+Before this task the procedural renderer applied only a track's clip and
+opacity, so a collapsed procedural ring or bar was drawn full size behind its
+hidden icons, and the 3D platform never changed size. The native gate
+`presentation-mechanism-smoke` now captures the drawn panel open, collapsed and
+reopened for every offered mechanism (native and free procedural, skinned,
+3D Cyan and Orange) and checks that it shrinks along its axis and comes back;
+every mechanism not offered must be refused.
 
 ## Live and preview integration
 
@@ -682,6 +776,41 @@ on each end of the curve wherever a drag lets go. The viewport scrolls only by
 `maximumOffset` steps; the children are positioned against `contentY`, so the
 curve stays still while wheel, held drag and keys walk the same path. A child
 beyond either end stays in the scene with zero opacity and no pointer input.
+
+### Outward popups — ADFIX-TASK-001
+
+`expansionGeometry(…, { side, lean })` lays every popup layout out in the frame
+of the side it opens on (`left`, `right`, `top`, `bottom`): the Fan and Arc half
+circle bulges away from the folder, Ring and Stack begin beside it, and the
+returned `anchor` says where the folder stands on the popup's near edge.
+Without a side the original right-opening frame is kept.
+`FolderExpansionHost` chooses the side when the folder opens: a native panel
+opens away from its screen edge; a free panel opens along the folder's outward
+normal and flips only without screen room. Free panels measure that normal from
+the drawn centre (`PanelScene.drawnCentre()`, the projected platform in 3D). The
+popup is attached to an item on the folder icon, placed once from the
+popup's final size, so the anchor lands on the folder. The item is twice as
+long as the popup across its side: `PlasmaQuick::Dialog::popupPosition` moves
+an `AppletPopup` to the middle of the screen when that middle lies inside the
+popup and the attachment is narrow (it compares the distance with half the
+popup's width less a third of the attachment's), which once threw wide
+folders on the middle of the screen. `FolderTrackHost` attaches the same way.
+
+### Along the dock — ADFIX-TASK-001
+
+A curved free panel can use folder layout `track` ("Along the dock"), the
+default for new curved free panels. `PanelScene.folderTrackSamples()` traces an
+outer curve an icon and a 16 px gap beyond the dock, over 120 degrees centred
+on the folder, through the dock's own projection: the 2D circle, the baked ellipse with its tilt, or true 3D via
+`View3D.mapFrom3DScene` with a depth scale. `FolderTrackHost` (applet) measures
+those samples in screen coordinates when the folder opens and shows a
+transparent dialog just large enough for them; `FolderTrack` (shared) stands
+the children on the curve with `LayoutEngine.folderTrackLayout()` (arc-length
+placement centred on the folder, `capacity`, `windowed`, `maximumOffset`),
+unfolds them from the folder icon and moves them along the curve with the wheel
+and the arrow keys. A click outside or Esc closes it. The other five layouts
+stay outward popups; `folder-anchor-smoke` checks both kinds on every
+renderer.
 
 ## Independent segments — TASK-0038 Phase B
 

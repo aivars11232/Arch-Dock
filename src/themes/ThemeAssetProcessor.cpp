@@ -1,3 +1,4 @@
+// The bounded image pipeline behind imported theme artwork.
 #include "ThemeAssetProcessor.h"
 
 #include <QCryptographicHash>

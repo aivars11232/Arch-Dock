@@ -5,6 +5,11 @@
 
 #include <optional>
 
+// Where a native edge panel sits: its screen, edge, alignment, offset,
+// thickness, length and visibility, as Plasma's panel settings need them.
+// normalizeNativePanelPlacement turns a saved or requested placement into
+// one Plasma can apply, or into the issues that stop it; the edge helpers
+// work out the space panels on the same edge leave each other.
 namespace ArchDock
 {
 inline constexpr int kNativePanelMinimumDimension = 48;

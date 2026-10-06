@@ -1,5 +1,9 @@
 .pragma library
 
+// Small rules for free panel entries in the applet: which entry ids are
+// pinned URLs, when entries take input, and what a free panel keeps showing
+// when the backend is unavailable.
+
 const freeUrlPrefix = "free-url:";
 
 function encodedUrl(appId) {

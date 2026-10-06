@@ -1,3 +1,4 @@
+// The Icon Style package reader and validator.
 #include "IconStylePackage.h"
 
 #include <QByteArrayView>

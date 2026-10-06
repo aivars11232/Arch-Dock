@@ -5,6 +5,10 @@
 
 class QScreen;
 
+// Which screen a panel belongs on, across reboots and reconnections. A screen
+// is named by a hash of its EDID manufacturer, model and serial, or by its
+// output name when it has none; a saved panel finds its screen by that name
+// first and falls back to its saved index.
 namespace ArchDock
 {
 enum class ScreenResolutionReason

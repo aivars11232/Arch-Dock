@@ -12,6 +12,12 @@
 
 class WindowModel;
 
+// The dock's applications: pinned launchers merged with the running windows
+// the KWin watcher reports (WindowModel), one row per application. It
+// launches, raises, minimizes and closes them, keeps the pinned order in the
+// user's settings, and gives every panel its entries (panelEntries): a
+// launcher panel shows the pinned ones, a tasks panel the running ones, a
+// hybrid panel both.
 class DockModel final : public QAbstractListModel
 {
     Q_OBJECT

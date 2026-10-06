@@ -1,3 +1,6 @@
+// DockModel: pinned and running applications as dock entries. Desktop
+// entries are read through KService, windows come from WindowModel, and
+// window actions are sent to KWin through windowActionRequested.
 #include "DockModel.h"
 
 #include "WindowModel.h"

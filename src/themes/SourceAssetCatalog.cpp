@@ -1,3 +1,4 @@
+// The source asset catalogue parser and its checks against the samples.
 #include "SourceAssetCatalog.h"
 
 #include <QCryptographicHash>

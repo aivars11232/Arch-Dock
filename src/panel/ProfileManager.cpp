@@ -1,3 +1,4 @@
+// ProfileManager: profile storage, application and shortcuts.
 #include "ProfileManager.h"
 #include <QDir>
 #include <QFileInfo>

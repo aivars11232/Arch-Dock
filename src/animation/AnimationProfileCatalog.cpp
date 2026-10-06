@@ -1,3 +1,4 @@
+// The animation-profile catalog parser and validator.
 #include "AnimationProfileCatalog.h"
 
 #include "../model/PanelCapabilityResolver.h"

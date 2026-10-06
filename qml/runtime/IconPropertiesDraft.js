@@ -1,5 +1,9 @@
 .pragma library
 
+// The Icon Properties dialog's draft: the per-entry override it edits,
+// compared with the saved one, turned into the override a transaction saves,
+// and the icon style choices it offers. Pure functions.
+
 function hasValue(map, key) {
     return map !== null && map !== undefined
         && Object.prototype.hasOwnProperty.call(map, key);

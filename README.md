@@ -1,5 +1,9 @@
 # Arch Dock
 
+<p align="center">
+  <img src="data/icons/hicolor/256x256.png" alt="Arch Dock logo" width="160">
+</p>
+
 Arch Dock provides managed dock panels for **Arch Linux, KDE Plasma 6 and
 Wayland**. Native edge panels use Plasma containments; free panels use
 desktop-hosted Plasma applets. The service and both hosts share the same

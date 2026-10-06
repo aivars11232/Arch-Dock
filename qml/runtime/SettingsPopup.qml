@@ -13,6 +13,11 @@ import "SettingsEditorModel.js" as EditorModel
 import "StudioNavigation.js" as StudioNavigation
 import "VisibilityStatus.js" as VisibilityStatus
 
+// Panel Studio: Arch Dock's settings window. It edits one panel at a time
+// through a draft (SettingsEditorModel) that the backend validates on every
+// change and saves on Apply as one transaction, with a live preview drawn by
+// the shared renderer. Its pages cover the panel, its icons, themes, presets,
+// profiles and 3D; only settings the panel's capabilities allow are shown.
 Window {
     id: root
 
@@ -222,13 +227,41 @@ Window {
         previewIconState = "normal";
     }
 
-    function loadEditor(panelId) {
+    // The snapshot the editor was last built from. Rebuilding the form and
+    // its live preview is costly, so a revision that leaves this panel's
+    // snapshot as it was does not rebuild anything.
+    property string loadedSnapshotText: ""
+    property bool editorReloadQueued: false
+
+    // Every registry or content revision asks for one reload; they are
+    // coalesced into one per event-loop turn.
+    function queueEditorReload() {
+        if (editorReloadQueued) return;
+        editorReloadQueued = true;
+        Qt.callLater(function() {
+            root.editorReloadQueued = false;
+            // A hidden Studio reloads when it is shown; an audition owns the draft.
+            if (root.auditionBusy || !root.visible) return;
+            const snapshot = panelController.panelSettingsEditorSnapshot(root.selectedPanelId, "studio");
+            const text = JSON.stringify(snapshot);
+            if (text === root.loadedSnapshotText && root.editorSession.loaded) return;
+            if (!root.hasPendingChanges) root.loadEditor(root.selectedPanelId, snapshot, text);
+            else {
+                root.loadedSnapshotText = text;
+                root.editorSession = EditorModel.withContentFeedback(root.editorSession, snapshot);
+            }
+        });
+    }
+
+    function loadEditor(panelId, prefetched, prefetchedText) {
         const normalizedPanelId = String(panelId || "");
         if (normalizedPanelId.length === 0) {
             editorSession = EditorModel.emptySession("panel-not-found", qsTr("No panel is selected."));
+            loadedSnapshotText = "";
             return false;
         }
-        const snapshot = panelController.panelSettingsEditorSnapshot(normalizedPanelId, "studio");
+        const snapshot = prefetched || panelController.panelSettingsEditorSnapshot(normalizedPanelId, "studio");
+        loadedSnapshotText = prefetchedText || JSON.stringify(snapshot);
         const loaded = EditorModel.load(snapshot);
         editorSession = loaded;
         if (!loaded.loaded) {
@@ -599,20 +632,23 @@ Window {
     // as a 3D platform; nothing here asks for a different theme.
     function panel3DRows() {
         const rows = [section(qsTr("3D"), qsTr("Draw this panel's own look as a 3D platform and place it in 3D."), true)];
-        const capability = embeddedRendererPreview.panelSceneItem.true3DCapability;
-        if (isNativePanel()) {
-            rows.push(notice(qsTr("3D is available for free panels. Edge panels stay flat.")));
-            return rows;
-        }
-        if (capability.rendererAvailable !== true) {
-            rows.push(notice(qsTr("3D rendering is unavailable in this session. The 2D renderer remains available.")));
-            return rows;
-        }
+        // Say what actually blocks 3D: the panel's kind, the renderer, the
+        // look, its resources or its layout.
+        const blocker = scene3DControlsAvailable ? null : CapabilityModel.scene3DBlocker(
+            selectedCapabilityResolution, selectedPreviewTheme,
+            embeddedRendererPreview.panelSceneItem.true3DCapability, {
+                nativePanel: isNativePanel(),
+                layout: String(panelValue("layout", "")),
+                importedArtwork: ["themeSource", "themePackageManifest", "themeAsset"].some(function(key) {
+                    return String(panelValue(key, "")).trim().length > 0;
+                })
+            });
         if (!scene3DControlsAvailable) {
-            rows.push(notice(qsTr("This layout cannot stand on a 3D platform. Choose a ring, circle or polygon layout on the Layout page. Arcs and semicircles stay flat unless their theme brings its own 3D platform.")));
-            rows.push({ kind: "actions", label: qsTr("Themes with their own 3D platform"), actions: [{
-                label: qsTr("Browse themes"), icon: "preferences-desktop-theme",
-                action: "browse-3d-themes", available: true }] });
+            rows.push(notice(blocker ? blocker.text : qsTr("3D is not available for this panel.")));
+            if (blocker && (blocker.code === "layout" || blocker.code === "look"))
+                rows.push({ kind: "actions", label: qsTr("Themes with their own 3D platform"), actions: [{
+                    label: qsTr("Browse themes"), icon: "preferences-desktop-theme",
+                    action: "browse-3d-themes", available: true }] });
             return rows;
         }
         rows.push({ kind: "switch", key: "rendererTier", scope: "panel", rendererToggle: true,
@@ -638,8 +674,34 @@ Window {
             label: qsTr("Edit on desktop"), icon: "transform-move", action: "edit-3d-on-desktop",
             available: !sceneEditing && !auditionBusy && !hasPendingChanges }] });
         rows.push(notice(sceneEditing
-            ? qsTr("Editing on the desktop: drag the handles on the panel itself. Apply as Active saves the result; Cancel restores the panel.")
-            : qsTr("Edit on desktop shows move, rotate and scale handles on the panel itself, like a 3D editor. Apply or cancel other changes first.")));
+            ? qsTr("Editing on the desktop: drag the platform itself to tilt and turn it, or its handles to move, rotate and scale it. Apply as Active saves the result; Cancel restores the panel.")
+            : qsTr("Edit on desktop lets you drag the panel itself to tilt and turn it, and shows move, rotate and scale handles on it, like a 3D editor. Apply or cancel other changes first.")));
+        // The platform's shape. A look without a 3D platform of its own stands
+        // on one generated along the panel's layout: its shape is the layout,
+        // offered here with only the shapes 3D draws exactly, and its width and
+        // bend can be set. A theme's own 3D platform keeps the shape it brings.
+        const generatedScene = Boolean(((selectedPreviewTheme || {}).scene3D || {}).generated);
+        rows.push(section(qsTr("Shape"), generatedScene
+            ? qsTr("The platform follows the panel's layout, so every icon stands on it.")
+            : qsTr("This theme brings its own 3D platform; its shape is fixed.")));
+        if (generatedScene) {
+            const layoutField = fieldsForSection("panels-layout").find(function(row) {
+                return row.key === "layout";
+            });
+            if (layoutField) {
+                const exact = ["circular", "ring", "ellipse", "radial", "triangle", "square",
+                               "pentagon", "hexagon", "octagon", "polygon"];
+                const shapeRow = Object.assign({}, layoutField, {
+                    label: qsTr("Shape"),
+                    description: qsTr("The panel's layout. Arcs, semicircles and fans stay flat."),
+                    options: layoutField.options.filter(function(option) {
+                        return exact.includes(option.value);
+                    })
+                });
+                rows.push(shapeRow);
+            }
+            rows.push.apply(rows, pick(["scene3DBand", "scene3DBend"]));
+        }
         rows.push(section(qsTr("View and surface"), ""));
         rows.push.apply(rows, pick(["scene3DFieldOfView", "scene3DThickness", "scene3DIconElevation",
             "scene3DQuality"]));
@@ -1283,22 +1345,12 @@ Window {
 
     Connections {
         target: panelController
-        function onContentRevisionChanged() {
-            if (!root.auditionBusy && root.visible && root.editorSession.loaded) {
-                const snapshot = panelController.panelSettingsEditorSnapshot(root.selectedPanelId, "studio");
-                if (!root.hasPendingChanges) root.editorSession = EditorModel.load(snapshot);
-                else root.editorSession = EditorModel.withContentFeedback(root.editorSession, snapshot);
-            }
-        }
+        function onContentRevisionChanged() { root.queueEditorReload(); }
     }
 
     Connections {
         target: panelRegistry
-
-        function onRevisionChanged() {
-            if (!root.auditionBusy && !root.hasPendingChanges)
-                root.loadEditor(root.selectedPanelId);
-        }
+        function onRevisionChanged() { root.queueEditorReload(); }
     }
 
     width: 980

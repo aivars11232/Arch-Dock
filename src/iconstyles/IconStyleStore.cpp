@@ -1,3 +1,4 @@
+// The icon style catalogue and its resolution.
 #include "IconStyleStore.h"
 
 #include <QDir>

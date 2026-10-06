@@ -3,6 +3,9 @@
 #include <QString>
 #include <optional>
 
+// The Panel Preset and Icon Preset a new panel starts from, chosen in Panel
+// Studio and kept in a small file of their own. Setting a default never
+// changes an existing panel.
 namespace ArchDock
 {
 struct PresetDefaults

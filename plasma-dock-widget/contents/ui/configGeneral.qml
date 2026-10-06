@@ -4,6 +4,9 @@ import org.kde.kcmutils as KCM
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.workspace.dbus as PlasmaDBus
 
+// The applet's first configuration page: which Arch Dock panel this applet
+// hosts, its native placement as Plasma reports it, and the button that
+// opens Panel Studio.
 KCM.SimpleKCM {
     id: root
 

@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Window
 
+// The window that holds the Icon Properties editor. Closing it without
+// Apply discards the draft.
 Window {
     id: root
 

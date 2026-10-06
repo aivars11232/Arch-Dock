@@ -2,6 +2,10 @@ import QtQuick
 import ArchDock.Rendering 1.0
 import "ThemeStateSelection.js" as ThemeStates
 
+// Chooses and loads the renderer for a panel's surface: the theme's skin
+// (skinned 2D), its baked 2.5D platform or its 3D scene when they are
+// requested and can be drawn, and the procedural 2D surface otherwise, and
+// reports which one is in use and why.
 Item {
     id: root
 
@@ -192,9 +196,13 @@ Item {
                 const scene = root.themeDefinition && root.themeDefinition.scene3D || ({})
                 const parameters = root.sceneParameters || ({})
                 const merged = Object.assign({}, scene)
+                // A generated platform follows the panel's own layout path.
+                if (scene.generated)
+                    merged.generated = Object.assign({}, scene.generated,
+                        { layout: root.layout, polygonSides: root.polygonSides })
                 for (const key of ["cameraYaw", "thickness", "iconElevation", "roll", "positionX",
                         "positionY", "positionZ", "scale", "fieldOfView", "keyLightBrightness",
-                        "fillLightBrightness"])
+                        "fillLightBrightness", "band", "bend"])
                     if (parameters[key] !== undefined && parameters[key] !== null
                             && Number.isFinite(Number(parameters[key])))
                         merged[key] = Number(parameters[key])
@@ -211,6 +219,9 @@ Item {
                 return ThemeStates.assetUrl(definition, (definition.scene3D || ({})).texture)
             }),
             entryGeometry: Qt.binding(function() { return root.entryGeometry }),
+            layoutTrackRadius: Qt.binding(function() { return Number(root.geometry.radius || 0) }),
+            appearance: Qt.binding(function() { return root.appearance }),
+            customColor: Qt.binding(function() { return root.customColor }),
             entryVisuals: Qt.binding(function() { return root.entryVisuals }),
             layoutAngle: Qt.binding(function() { return root.layoutAngle }),
             collapseProgress: Qt.binding(function() { return root.collapseProgress }),

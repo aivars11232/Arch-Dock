@@ -57,8 +57,8 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   surface of a platform as well as on its icons.
 - True-3D icons stand on the platform's own track for every layout shape, so a
   square or polygon path no longer places icons over the platform's hole.
-- Fan and Arc folder contents stand on an exact half circle that opens to the
-  right, or a half ellipse when the popup is short. A larger folder shows the
+- Fan and Arc folder contents stand on an exact half circle that opens away
+  from the dock, or a half ellipse when the popup is short. A larger folder shows the
   children that fit and moves the others along the same curve by wheel, held
   drag or keys, one child per wheel notch; a small folder uses a smaller circle.
 - Theme cards resolve each theme with its own renderer tier through the same
@@ -104,6 +104,78 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   `docs/task-pack-v3/`, and a GitHub workflow runs the source-only gates.
 - Current-facing installation/version wording follows the corrected candidate;
   historical package checkpoints and release assets retain their identities.
+- **Quit Arch Dock** (an action of the application entry, or `arch-dock --quit`)
+  now stops Arch Dock for the rest of the login session. Installed panels and
+  the KWin window watcher no longer start it again on demand; an on-demand
+  start during the stop is refused at once. Starting Arch Dock yourself (the
+  menu, `arch-dock`, Panel Studio, the user service) clears the stop. TERM and
+  INT stop it like Quit; a killed process is a crash and restarts on demand.
+- A folder's contents open from the clicked folder, away from the dock. A
+  native panel's folder opens away from its screen edge; a free panel's folder
+  opens the way it faces out of the dock and turns to the other side only when
+  the screen leaves no room. Ring and stack contents begin at the folder.
+- New folder layout **Along the dock** for curved free panels, the default for
+  new curved free panels: the folder's contents stand on an invisible track
+  just outside the dock that follows its curve, tilt and perspective, unfold
+  from the folder, and move along the track with the wheel or the arrow keys
+  when they do not all fit. Existing panels keep their layout; choose it in
+  Panel Studio under **Panels > Behavior > Folder layout**. The other five
+  layouts stay available as popups, and straight edge panels keep the popup.
+- A wide folder popup whose span covers the middle of the screen stays on its
+  folder. Plasma moves such applet popups to the middle of the screen when
+  they are attached to a narrow point; the popup is now attached along a
+  stretch longer than itself, centred where it belongs.
+- The wheel keeps turning a free panel while an icon's window preview is
+  shown; turning the panel closes the preview.
+- Panel Studio no longer reloads its whole editor for each backend change:
+  changes that arrive together reload it once, and an unchanged panel is not
+  reloaded. Those reloads stalled the dock for about a second during drops.
+- Every opening mechanism Panel Studio offers now visibly closes and reopens
+  the panel. A drawn ring or bar is squeezed onto its handle along the chosen
+  axis instead of staying full size behind hidden icons, and a 3D platform
+  closes toward its centre like an iris, down to a small ring, while its
+  theme's own parts move. Mechanisms a panel's renderer cannot draw are not
+  offered and are refused.
+- 3D draws a panel's own look. A look without a 3D platform of its own (the
+  baked Blue ring and Steel octagon, and every procedurally drawn look) stands
+  on a platform generated along the panel's own layout (a circle, an ellipse,
+  a triangle to octagon or other regular polygon, or the 300-degree radial
+  arc) in the look's own colours, read from its artwork, with its rim glowing
+  in the look's glow colour. It no longer borrows the Cyan theme's octagonal
+  mesh and recolours it. Arcs, semicircles and fans stay flat in 3D.
+- Orange Arc's own 3D platform is drawn in the dark copper of its 2D artwork
+  instead of peach, and its pedestals and icon collars take the same colours.
+- Panels > 3D has a Shape section: the panel's shape among those 3D draws
+  exactly, the platform's width and a bend that tilts its top outward up or
+  down. A theme with its own 3D platform keeps the shape it brings, and the
+  page says so.
+- 3D icons stand upright and face you at their real size, on solid pedestals
+  in the platform's colour. They no longer lie flat inside dark rings or float
+  away from short pedestals, and an icon's click area no longer grows and
+  shrinks with its hover animation.
+- In **Edit on desktop**, dragging the platform itself tilts it (up and down)
+  and turns it (left and right); Ctrl snaps to 15 degrees and Shift is fine.
+  The move, rotate and scale handles remain. An arrow that points straight at
+  you moves with an up or down drag instead of doing nothing, and the editor
+  says so.
+- When 3D is not available, the 3D page names the actual reason: the kind of
+  panel, the renderer, imported artwork, a flat skin, missing resources or the
+  layout.
+- Panel Studio and Apply are much lighter. Every edit used to read the panel's
+  theme package from disk again, once for each 3D setting (about 70 reads per
+  edit, each hashing every asset and parsing the 3D mesh). A package is now
+  read once while its manifest is unchanged, and an edit builds the theme's
+  projection once. Measured on a free Orange 3D panel (Debug build, median):
+  a Studio edit 792 → 44 ms, opening the Studio page 305 → 34 ms, Apply
+  495 → 20 ms, the live panel's renderer configuration 39 → 4 ms.
+- Arch Dock has a new icon and logo. It is installed in every standard size as
+  `org.archdock.ArchDock` and used by the menu entry, both applets, Arch Dock's
+  windows and the README.
+- For contributors: source files say what they are for, the backend's largest
+  file (`PanelWindow.cpp`, about 8,300 lines) is split by topic into eight
+  files with every function moved unchanged (`PanelWindow.h` lists them), and
+  two unused QML helpers (`MotionPolicy.js`, `StudioDraft.js`) and their tests
+  are removed.
 - Runtime corrections and candidate gates are recorded in
   [the release checklist](docs/RELEASE_CHECKLIST.md) and
   [corrective report](docs/POST_TASK_0045_CORRECTIVE_REPORT.md).

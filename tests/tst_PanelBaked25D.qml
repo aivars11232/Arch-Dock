@@ -1165,9 +1165,20 @@ TestCase {
                        entry.entryBounds.x + entry.entryBounds.width / 2,
                        entry.entryBounds.y + entry.entryBounds.height / 2)),
                    "entry " + index + " takes input where it is drawn")
+            // The popup anchor follows the entry, half an icon out along the
+            // direction away from the drawn ring's centre (ADFIX UF-02: the
+            // flat track's own normal pointed back over a tilted ring).
             const anchor = tight.popupAnchors.entries[index]
-            fuzzy(anchor.x, entry.position.x + 26 + entry.outwardNormal.x * 26,
+            const centre = tight.bakedTrackMetrics.center
+            const dx = entry.position.x + 26 - centre.x
+            const dy = entry.position.y + 26 - centre.y
+            const length = Math.hypot(dx, dy)
+            fuzzy(anchor.x, entry.position.x + 26 + dx / length * 26,
                   "the popup anchor follows entry " + index)
+            fuzzy(anchor.y, entry.position.y + 26 + dy / length * 26,
+                  "the popup anchor follows entry " + index)
+            verify(anchor.outwardNormal.x * dx + anchor.outwardNormal.y * dy > 0,
+                   "entry " + index + "'s popup opens away from the ring")
             verify(entry.depth >= even[index].depth - 0.0001,
                    "entry " + index + " moves towards the front of the ring")
         }

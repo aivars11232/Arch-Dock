@@ -1,3 +1,4 @@
+// The profile apply transaction, its journal and its recovery.
 #include "ProfileApplyTransaction.h"
 #include <QDir>
 #include <QFile>

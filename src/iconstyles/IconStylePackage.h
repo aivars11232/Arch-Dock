@@ -15,6 +15,9 @@ namespace ArchDock
 
 struct IconStylePackageLoadResult;
 
+// One Icon Style package read from disk: its manifest parsed into an
+// IconStyleDefinition, every asset checked to stay inside the package and to
+// be an image Qt can decode, and the projection the icon renderers draw from.
 class IconStylePackage
 {
 public:

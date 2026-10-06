@@ -1,3 +1,4 @@
+// Whether each preset can be used on a panel, and how it would be drawn.
 #include "PresetCapabilityResolver.h"
 
 #include "../iconstyles/IconStylePackage.h"

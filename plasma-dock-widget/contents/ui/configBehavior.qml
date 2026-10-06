@@ -5,6 +5,8 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
+// The applet's native Behavior page: the panel's visibility mode, the modes
+// this host supports, and what is actually in effect.
 ConfigPageBase {
     id: root
 

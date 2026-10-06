@@ -1,3 +1,4 @@
+// The preset library Panel Studio browses.
 #include "PresetLibrary.h"
 
 #include "PresetCapabilityResolver.h"

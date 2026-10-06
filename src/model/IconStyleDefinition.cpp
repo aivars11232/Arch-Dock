@@ -1,3 +1,4 @@
+// Icon style definitions and their validation.
 #include "IconStyleDefinition.h"
 
 #include <algorithm>

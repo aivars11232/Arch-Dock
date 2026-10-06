@@ -4,6 +4,11 @@
 #include <QObject>
 #include <functional>
 
+// Applying a saved profile (a whole set of panels) as one recoverable
+// transaction: the configuration is backed up, each host is captured,
+// created, applied and verified in turn, and a failure restores every touched
+// host. A journal on disk lets an interrupted apply be recovered on the next
+// start.
 namespace ArchDock
 {
 struct ProfileHostSnapshot

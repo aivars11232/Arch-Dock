@@ -8,6 +8,11 @@
 
 #include <optional>
 
+// What a panel can be. From its host (a native edge panel or a free desktop
+// panel), its theme and the renderers this system has, the resolver decides
+// which controls, layouts, opening mechanisms, renderer tiers and rotation
+// the panel gets, each refusal with a reason. Panel Studio offers only what
+// it allows, and settings transactions refuse the rest.
 namespace ArchDock
 {
 

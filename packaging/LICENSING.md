@@ -71,7 +71,8 @@ texture, QML, visual-review evidence and excluded-reference records are retained
 | `assets/themes/energy-frame-purple/` | Same TASK-0028 independent production and excluded-reference evidence. |
 | `assets/themes/ring-platform-blue/` | TASK-0034 hand-authored SVG; production record excludes source pixels/derivatives. |
 | `assets/themes/octagon-platform-steel/` | Same TASK-0034 independent production and excluded-reference evidence. |
-| `assets/themes/arc-platform-orange/` | Same TASK-0034 independent production and excluded-reference evidence. |
+| `assets/themes/arc-platform-orange/` | Same TASK-0034 independent production and excluded-reference evidence. Its 3D `texture.svg` and `material.json` were redrawn by hand in ADFIX-TASK-002 (2026-10-06) as the platform's top view in the colours of its own 2D artwork; the manifest records their new hashes. |
+| `data/icons/` | The application icon and logo, supplied by the project owner on 2026-10-05 as a 1254 × 1254 transparent PNG (`arch-dock-logo-source.png`, SHA-256 `40cce92ccb42919184e4fe77a743f1a92c9d8e7120460a6544734359bef16c34`) for use as Arch Dock's icon and logo. The hicolor sizes are smooth downscales of it, installed as `org.archdock.ArchDock`. The owner stated no further licence terms with it. Its "A" form resembles the Arch Linux logo, whose use is governed by the Arch Linux trademark policy. |
 | `assets/themes/mesh-platform-cyan/` | TASK-0035 manifest records geometry/material/texture authored numerically from scratch without external assets; declared asset hashes verify. |
 | `assets/icon-styles/plain-original/` | TASK-0029 asset-free schema-authored fallback; production record excludes source pixels/derivatives. |
 | `assets/icon-styles/metallic-blue/` | TASK-0029 hand-authored procedural QML; production record excludes source pixels/derivatives. |

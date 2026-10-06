@@ -3,6 +3,9 @@
 #include "ProfileApplyTransaction.h"
 #include "integration/ProfileShortcutManager.h"
 
+// Profiles: saved sets of panels the user can create, rename, duplicate,
+// import, export, apply and bind to global shortcuts. Served over D-Bus as
+// org.archdock.Profiles; applying one runs ProfileApplyTransaction.
 namespace ArchDock
 {
 class ProfileManager final : public QObject

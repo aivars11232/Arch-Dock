@@ -1,3 +1,4 @@
+// The session-scoped stop request described in IntentionalStop.h.
 #include "IntentionalStop.h"
 
 #include <QDateTime>

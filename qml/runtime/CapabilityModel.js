@@ -1,5 +1,10 @@
 .pragma library
 
+// Turns the backend's capability resolution into what Panel Studio shows:
+// which options and renderers are available and, in plain language, why one
+// is not; which opening mechanisms a scene offers; whether the 3D page can
+// be used and what blocks it. Pure functions.
+
 function normalized(value) {
     if (Array.isArray(value) || (value !== null && typeof value === "object"
             && Number.isInteger(value.length) && value.length >= 0
@@ -80,10 +85,57 @@ function scene3DControlsAvailable(resolution, theme, consumer) {
         && runtime && runtime.rendererAvailable === true
         && selected && selected.valid === true
         && selected.scene3D && selected.scene3DResources
-        && selected.scene3DResources.mesh && selected.scene3DResources.iconMesh
+        // A theme's own meshes, or a platform the renderer generates.
+        && ((selected.scene3DResources.mesh && selected.scene3DResources.iconMesh)
+            || Boolean(selected.scene3D.generated))
         && selected.scene3DResources.material
         && selected.capabilities && Array.isArray(selected.capabilities.rendererTiers)
         && selected.capabilities.rendererTiers.includes("true3d")
+}
+
+// Layouts a generated 3D platform follows exactly (PlatformGeometry.js).
+var exact3DLayouts = ["circular", "ring", "ellipse", "radial", "polygon", "triangle",
+                      "square", "pentagon", "hexagon", "octagon"]
+
+// Why the 3D page cannot offer 3D for this panel, as { code, text }, or null
+// when it can. The checks run from the panel's kind to its renderer, its
+// look and its layout, so the message names what actually blocks 3D rather
+// than blaming the layout for everything (ADFIX AUD-03). `facts`: nativePanel,
+// layout, importedArtwork.
+function scene3DBlocker(resolution, theme, consumer, facts) {
+    const known = facts || ({})
+    const selected = normalized(theme)
+    const runtime = normalized(consumer)
+    const scene = selected && selected.scene3D ? selected.scene3D : null
+    if (known.nativePanel === true)
+        return { code: "host", text: qsTr("3D is available for free panels. Edge panels stay flat.") }
+    if (!runtime || runtime.rendererAvailable !== true)
+        return { code: "renderer", text: qsTr("3D rendering is unavailable in this session because %1. The 2D renderer remains available.")
+            .arg(reasonLabel(runtime && runtime.reasonCode ? runtime.reasonCode : "renderer-scene-unavailable")) }
+    if (!selected || selected.valid !== true)
+        return { code: "look", text: qsTr("This look could not be loaded, so it has no 3D form.") }
+    if (!scene) {
+        if (known.importedArtwork === true)
+            return { code: "look", text: qsTr("This look is imported artwork, which has no 3D form. Built-in and procedural looks can be drawn in 3D.") }
+        const layouts = selected.capabilities && Array.isArray(selected.capabilities.layouts)
+            ? selected.capabilities.layouts : []
+        if (layouts.length > 0 && !layouts.some(function(layout) { return exact3DLayouts.includes(layout) }))
+            return { code: "look", text: qsTr("This look is a flat skin made for straight panels; it has no 3D form.") }
+        if (!exact3DLayouts.includes(String(known.layout || "")))
+            return { code: "layout", text: qsTr("This layout has no 3D platform. Choose a ring, circle, ellipse, polygon or radial layout on the Layout page; arcs, semicircles and fans stay flat unless their theme brings its own 3D platform.") }
+        return { code: "look", text: qsTr("This look has no 3D form.") }
+    }
+    if (!selected.scene3DResources || !selected.scene3DResources.material
+            || !((selected.scene3DResources.mesh && selected.scene3DResources.iconMesh)
+                 || Boolean(scene.generated)))
+        return { code: "resources", text: qsTr("This look's 3D resources could not be loaded.") }
+    const choice = rendererChoice(resolution, "true3d")
+    if (choice.available !== true)
+        return { code: "renderer-choice", text: qsTr("3D cannot be used here because %1.")
+            .arg(reasonLabel(choice.reasonCode)) }
+    if (scene3DOffTier(resolution, theme).length === 0)
+        return { code: "off-tier", text: qsTr("This look has no flat renderer to return to, so 3D cannot be switched on safely.") }
+    return null
 }
 
 function availableOptions(options, resolution, group) {

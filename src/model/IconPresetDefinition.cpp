@@ -1,3 +1,4 @@
+// The Icon Preset parser and its projection to panel settings.
 #include "IconPresetDefinition.h"
 
 #include <QMetaType>

@@ -17,6 +17,9 @@ namespace ArchDock
 
 struct IconStyleStoreLoadResult;
 
+// The built-in icon styles: the catalogue of installed Icon Style packages,
+// each loaded and validated, and the fallback (plain-original) a panel gets
+// when the style it asks for is missing.
 class IconStyleStore
 {
 public:

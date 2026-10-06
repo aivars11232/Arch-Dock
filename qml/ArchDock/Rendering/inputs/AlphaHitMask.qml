@@ -1,5 +1,9 @@
 import QtQuick
 
+// Input that follows the opaque part of an image: a press counts only where
+// the theme's input mask is solid, so transparent corners and holes of a
+// skin or platform let clicks through to the desktop. The mask is decoded
+// once at the drawn size and cached.
 Item {
     id: root
 

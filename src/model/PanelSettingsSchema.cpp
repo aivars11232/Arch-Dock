@@ -1,3 +1,4 @@
+// The settings schema: every panel and global field's descriptor.
 #include "PanelSettingsSchema.h"
 
 #include <QMetaType>
@@ -433,7 +434,7 @@ const QVector<Descriptor> &schemaFields()
                      {"studio", "native"}, "drop-input")), {"dock-configuration"}),
         panel("folderLayout", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("fan"), "content.folderLayout",
-              {}, {}, {"fan", "grid", "stack", "arc", "ring", "spiral", "circular",
+              {}, {}, {"fan", "grid", "stack", "arc", "ring", "track", "spiral", "circular",
                        "radial", "vertical", "horizontal", "elastic", "physics"}, false, true,
               editor("panels-behavior", "Folder layout", "combo", {"studio", "native"})),
         panel("folderSpeed", Access::Editor, Type::Integer,
@@ -697,6 +698,17 @@ const QVector<Descriptor> &schemaFields()
         panel("scene3DIconElevation", Access::Editor, Type::Real, Normalization::RealRange,
               0.3, "surface.parameters3D.iconElevation", 0.0, 2.0, {}, true, true,
               editor("panels-3d", "Pedestal height", "slider", {"studio"}, "scene3d-quality",
+                     {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
+        // A generated platform's own shape (ADFIX-TASK-002): how wide its flat
+        // top is, as half its width in the platform's radius, and how far its
+        // top tilts up or down outward of the icons' line.
+        panel("scene3DBand", Access::Editor, Type::Real, Normalization::RealRange,
+              0.11, "surface.parameters3D.band", 0.06, 0.16, {}, true, true,
+              editor("panels-3d", "Platform width", "slider", {"studio"}, "scene3d-shape",
+                     {}, {{QStringLiteral("step"), 0.01}, {QStringLiteral("decimals"), 2}})),
+        panel("scene3DBend", Access::Editor, Type::Real, Normalization::RealRange,
+              0.0, "surface.parameters3D.bend", -1.0, 1.0, {}, true, true,
+              editor("panels-3d", "Bend", "slider", {"studio"}, "scene3d-shape",
                      {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
         panel("scene3DKeyLight", Access::Editor, Type::Real, Normalization::RealRange,
               1.0, "surface.parameters3D.keyLightBrightness", 0.0, 4.0, {}, true, true,

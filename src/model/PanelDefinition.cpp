@@ -1,3 +1,5 @@
+// PanelDefinition: reading and writing saved panel records and the flat
+// settings view of a definition.
 #include "PanelDefinition.h"
 #include "PanelRuntimeState.h"
 #include "PanelSettingsSchema.h"
@@ -614,7 +616,9 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
           std::tuple{"scene3DKeyLight", "keyLightBrightness", QVariant(1.0)},
           std::tuple{"scene3DFillLight", "fillLightBrightness", QVariant(0.4)},
           std::tuple{"scene3DTransitions", "transitions", QVariant(true)},
-          std::tuple{"scene3DFloat", "float", QVariant(false)}}) {
+          std::tuple{"scene3DFloat", "float", QVariant(false)},
+          std::tuple{"scene3DBand", "band", QVariant(0.11)},
+          std::tuple{"scene3DBend", "bend", QVariant(0.0)}}) {
         if (record.contains(QLatin1String(key)))
             definition.surface.parameters3D.insert(QLatin1String(parameter),
                 normalized(QLatin1String(key), fallback));
@@ -1146,7 +1150,9 @@ QVariantMap PanelDefinition::toLegacyMap() const
           std::pair{"scene3DKeyLight", "keyLightBrightness"},
           std::pair{"scene3DFillLight", "fillLightBrightness"},
           std::pair{"scene3DTransitions", "transitions"},
-          std::pair{"scene3DFloat", "float"}}) {
+          std::pair{"scene3DFloat", "float"},
+          std::pair{"scene3DBand", "band"},
+          std::pair{"scene3DBend", "bend"}}) {
         if (surface.parameters3D.contains(QLatin1String(parameter)))
             record.insert(QLatin1String(key), surface.parameters3D.value(QLatin1String(parameter)));
     }

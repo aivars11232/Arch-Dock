@@ -1,3 +1,5 @@
+// KWinActionBridge: writes a one-shot KWin script for a window action or a
+// focus request and runs it through KWin's Scripting D-Bus interface.
 #include "KWinActionBridge.h"
 
 #include <QDBusConnection>

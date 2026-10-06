@@ -1,3 +1,4 @@
+// Animation profile vocabularies, ranges and the profile validator.
 #include "AnimationProfile.h"
 
 #include <QHash>

@@ -1,3 +1,4 @@
+// The installed preset catalogs and the proof that every reference resolves.
 #include "PresetCatalog.h"
 
 #include "PresetCapabilityResolver.h"

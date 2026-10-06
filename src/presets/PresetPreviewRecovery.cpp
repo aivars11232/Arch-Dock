@@ -1,3 +1,4 @@
+// The audition recovery record on disk.
 #include "PresetPreviewRecovery.h"
 #include "../model/PresetIdentity.h"
 

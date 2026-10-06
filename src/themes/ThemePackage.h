@@ -10,6 +10,10 @@
 
 #include <optional>
 
+// One theme package read from disk (Theme Package v2 or a legacy package):
+// its manifest parsed into a ThemeDefinition, every asset's size and hash
+// verified, its 3D meshes and materials validated, and the runtime
+// projection the renderers draw from. Nothing in a package is executed.
 namespace ArchDock
 {
 
@@ -45,6 +49,10 @@ public:
         const QByteArray &manifestBytes,
         const QString &packageRoot,
         const QString &manifestPath = {});
+    // How many packages this process has parsed and verified: each one reads
+    // and hashes every asset, so tests use it to keep repeated work out of
+    // the settings path.
+    [[nodiscard]] static quint64 loadCount();
 
     [[nodiscard]] ThemePackageMaterializeResult materialize(
         const QString &managedPackagesRoot) const;

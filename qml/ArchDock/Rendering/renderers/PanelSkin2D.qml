@@ -1,6 +1,10 @@
 import QtQuick
 import ArchDock.Rendering 1.0
 
+// The skinned 2D renderer of Theme Package v2: fixed caps with a stretched
+// or tiled centre, and the declared surface, frame, glow, energy and
+// highlight layers drawn in order for the current state. Opening and closing
+// move the caps and the centre as the presentation tracks say.
 Item {
     id: root
 

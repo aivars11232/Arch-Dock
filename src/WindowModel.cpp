@@ -1,3 +1,4 @@
+// WindowModel: the window list and its roles.
 #include "WindowModel.h"
 
 WindowModel::WindowModel(QObject *parent)

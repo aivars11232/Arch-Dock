@@ -8,6 +8,9 @@
 #include <functional>
 #include <optional>
 
+// Changing or resetting one entry's icon overrides (Icon Properties) as a
+// revision-checked transaction: the panel's other entries and settings stay
+// as they are, and a stale revision is refused.
 namespace ArchDock
 {
 
