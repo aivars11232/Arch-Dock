@@ -211,7 +211,7 @@ Item {
                 if (isFinite(root.cameraPitch)) merged.cameraPitch = Math.max(-60, Math.min(60, root.cameraPitch))
                 return merged
             }),
-            resources: Qt.binding(function() {
+            sceneResources: Qt.binding(function() {
                 return root.themeDefinition && root.themeDefinition.scene3DResources || null
             }),
             textureSource: Qt.binding(function() {
@@ -321,6 +321,7 @@ Item {
             tintColor: root.tintColor
             glowIntensity: root.glowIntensity
             reducedMotion: root.reducedMotion
+            sceneConcealed: root.sceneConcealed
             panelOpacity: root.panelOpacity
             motionTracks: root.motionTracks
         }

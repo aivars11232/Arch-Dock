@@ -263,7 +263,7 @@ declared build dependencies before running makepkg; it does not install them.
 After reviewing the resulting package, the owner can install or remove it:
 
 ```bash
-sudo pacman -U arch-dock-0.1.1-10-x86_64.pkg.tar.zst
+sudo pacman -U arch-dock-0.1.1-11-x86_64.pkg.tar.zst
 ```
 
 Installation places the executable, direct D-Bus descriptor, manual systemd
@@ -278,13 +278,13 @@ private install/startup flow; there are no package hooks to perform either.
 
 ## Upgrade
 
-The current correction uses application `0.1.1`, package `0.1.1-10`; its
+The current correction uses application `0.1.1`, package `0.1.1-11`; its
 verification status is recorded in [CURRENT_STATE.md](CURRENT_STATE.md).
-The previous verified owner installation is `0.1.1-9`; native pacman performs
+The previous verified owner installation is `0.1.1-10`; native pacman performs
 the upgrade after candidate verification:
 
 ```bash
-sudo pacman -U arch-dock-0.1.1-10-x86_64.pkg.tar.zst
+sudo pacman -U arch-dock-0.1.1-11-x86_64.pkg.tar.zst
 ```
 
 Cancel an active audition and stop the backend before replacing its executable;
@@ -373,8 +373,8 @@ ARCHDOCK_PACKAGE_INSTALL_MANIFEST="$PWD/build-codex-arch-package/src/build/insta
 ARCHDOCK_PACKAGE_EVIDENCE_DIR="$PWD/build-codex-package-evidence" \
 TMPDIR="$task_tmp" \
 bash tests/run-arch-package-smoke.sh \
-    build-codex-arch-package/arch-dock-0.1.1-10-x86_64.pkg.tar.zst \
-    /absolute/path/to/arch-dock-0.1.1-9-x86_64.pkg.tar.zst
+    build-codex-arch-package/arch-dock-0.1.1-11-x86_64.pkg.tar.zst \
+    /absolute/path/to/arch-dock-0.1.1-10-x86_64.pkg.tar.zst
 ```
 
 The second package argument is optional for install/uninstall verification;

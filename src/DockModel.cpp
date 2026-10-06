@@ -8,12 +8,15 @@
 #include "model/FolderContentModel.h"
 #include "model/IconEntryIdentity.h"
 
+#include <KConfigGroup>
 #include <KDesktopFile>
 #include <KFileItem>
 #include <KIO/ApplicationLauncherJob>
+#include <KIO/DesktopExecParser>
 #include <KService>
 #include <KServiceAction>
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
@@ -24,10 +27,11 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMimeDatabase>
-#include <QProcess>
 #include <QSettings>
 #include <QSet>
 #include <QStandardPaths>
+
+#include <algorithm>
 
 namespace
 {
@@ -68,6 +72,39 @@ namespace
             QStringLiteral("applications/") + desktopFileName);
     }
 
+    // The fields the dock shows from a desktop file, read with KDE's reader
+    // (the Desktop Entry rules: escapes, translated names; a generic INI
+    // reader splits values at commas). The dock is rebuilt whenever a running
+    // window's title or state changes, so each file is parsed again only when
+    // it changes.
+    struct DesktopEntryFields
+    {
+        QDateTime modified;
+        qint64 size = -1;
+        QString name;
+        QString icon;
+        QString exec;
+    };
+
+    DesktopEntryFields desktopEntryFields(const QString &path)
+    {
+        static QHash<QString, DesktopEntryFields> cache;
+        const QFileInfo info(path);
+        auto cached = cache.find(path);
+        if (cached != cache.end() && cached->modified == info.lastModified()
+            && cached->size == info.size())
+        {
+            return cached.value();
+        }
+        if (cache.size() >= 256)
+        {
+            cache.clear();
+        }
+        const KDesktopFile file(path);
+        return cache.insert(path, {info.lastModified(), info.size(), file.readName(), file.readIcon(),
+                                   file.desktopGroup().readEntry("Exec", QString{})}).value();
+    }
+
 }
 
 DockModel::DockModel(WindowModel &windowModel, QObject *parent)
@@ -83,7 +120,20 @@ DockModel::DockModel(WindowModel &windowModel, QObject *parent)
     connect(&m_windowModel, &QAbstractItemModel::modelReset, this, refresh);
     connect(&m_windowModel, &QAbstractItemModel::rowsInserted, this, refresh);
     connect(&m_windowModel, &QAbstractItemModel::rowsRemoved, this, refresh);
-    connect(&m_windowModel, &QAbstractItemModel::dataChanged, this, refresh);
+    // The dock shows no window geometry, screen, maximized or fullscreen
+    // state. A window being dragged reports its geometry on every frame; such
+    // updates must not rebuild every entry and refresh every panel.
+    connect(&m_windowModel, &QAbstractItemModel::dataChanged, this,
+            [this](const QModelIndex &, const QModelIndex &, const QList<int> &roles)
+            {
+                static const QList<int> ignored{
+                    WindowModel::FrameGeometryRole, WindowModel::ScreenIndexRole,
+                    WindowModel::MaximizedRole, WindowModel::FullScreenRole};
+                const bool shown = roles.isEmpty() || std::any_of(roles.cbegin(), roles.cend(),
+                    [](int role) { return !ignored.contains(role); });
+                if (shown)
+                    rebuild();
+            });
 
     rebuild();
 }
@@ -261,15 +311,42 @@ bool DockModel::launch(int row)
     }
 
     const DockApplication &application = m_items.at(row);
-    const QStringList arguments = launchArguments(application.launchCommand);
-    if (arguments.isEmpty())
+    // A pinned file opens with its default application.
+    if (application.appId.startsWith(QStringLiteral("file:")))
+    {
+        return openUrl(QUrl::fromLocalFile(application.appId.mid(5)));
+    }
+
+    // An application starts through KDE's launcher, as Plasma's own launchers
+    // do: it honours Terminal=, Path= and D-Bus activation, puts the program
+    // in its own systemd scope (so it outlives Arch Dock) and only runs
+    // desktop files KDE trusts. Running the Exec= line directly bypassed all
+    // of that, including the trust check that stops a downloaded desktop
+    // file from running a command.
+    const QString path = desktopFilePath(application.desktopFileName);
+    const KService::Ptr service = path.isEmpty() ? KService::Ptr{} : launchableService(path);
+    if (!service)
     {
         return false;
     }
-
-    QStringList launchArguments = arguments;
-    const QString program = launchArguments.takeFirst();
-    return QProcess::startDetached(program, launchArguments);
+    // A program that is not installed fails at once rather than later.
+    const QString program = KIO::DesktopExecParser::executablePath(service->exec());
+    if (program.isEmpty() || QStandardPaths::findExecutable(program).isEmpty())
+    {
+        return false;
+    }
+    auto *job = new KIO::ApplicationLauncherJob(service, this);
+    const QString appId = application.appId;
+    connect(job, &KJob::result, this, [this, appId](KJob *result)
+            {
+                if (result->error())
+                {
+                    qWarning() << "Arch Dock could not start" << appId << result->errorText();
+                }
+                emit launchFinished(appId, result->error() == 0, result->errorText());
+            });
+    job->start();
+    return true;
 }
 
 void DockModel::close(int row, int windowIndex)
@@ -386,14 +463,16 @@ bool DockModel::pinUrl(const QUrl &url)
     PinnedApplication application;
     if (fileInfo.suffix().compare(QStringLiteral("desktop"), Qt::CaseInsensitive) == 0)
     {
-        QSettings desktopEntry(fileInfo.absoluteFilePath(), QSettings::IniFormat);
-        desktopEntry.beginGroup(QStringLiteral("Desktop Entry"));
+        const KDesktopFile desktopEntry(fileInfo.absoluteFilePath());
         application.appId = normalizedDesktopId(fileInfo.absoluteFilePath());
         application.desktopFileName = fileInfo.absoluteFilePath();
-        application.iconName = desktopEntry.value(QStringLiteral("Icon")).toString();
-        application.displayName = desktopEntry.value(QStringLiteral("Name"), fileInfo.completeBaseName()).toString();
-        application.launchCommand = desktopEntry.value(QStringLiteral("Exec")).toString();
-        desktopEntry.endGroup();
+        application.iconName = desktopEntry.readIcon();
+        application.displayName = desktopEntry.readName();
+        if (application.displayName.isEmpty())
+        {
+            application.displayName = fileInfo.completeBaseName();
+        }
+        application.launchCommand = desktopEntry.desktopGroup().readEntry("Exec", QString{});
     }
     else
     {
@@ -680,9 +759,9 @@ DockModel::ActivationOutcome DockModel::activateApplicationOutcome(
 
     if (m_items.at(row).windows.isEmpty())
     {
-        // QProcess tells us whether the program actually started, so this is a
-        // verified outcome in both directions.
-        return launch(row) ? ActivationOutcome::Launched
+        // A missing program or an untrusted desktop file fails at once; a
+        // start KDE's launcher accepted is a request (see launchFinished()).
+        return launch(row) ? ActivationOutcome::LaunchRequested
                            : ActivationOutcome::Failed;
     }
     // Raising a window is a request to the compositor with no reply.
@@ -693,7 +772,7 @@ DockModel::ActivationOutcome DockModel::activateApplicationOutcome(
 bool DockModel::activateApplication(const QString &appId)
 {
     const ActivationOutcome outcome = activateApplicationOutcome(appId);
-    return outcome == ActivationOutcome::Launched
+    return outcome == ActivationOutcome::LaunchRequested
         || outcome == ActivationOutcome::ActivationRequested;
 }
 
@@ -1010,16 +1089,14 @@ void DockModel::hydrateDesktopEntry(DockApplication &application)
         return;
     }
 
-    QSettings desktopEntry(path, QSettings::IniFormat);
-    desktopEntry.beginGroup(QStringLiteral("Desktop Entry"));
-    const QString desktopEntryName = desktopEntry.value(QStringLiteral("Name")).toString();
-    if (!desktopEntryName.isEmpty())
+    const DesktopEntryFields desktopEntry = desktopEntryFields(path);
+    if (!desktopEntry.name.isEmpty())
     {
-        application.displayName = desktopEntryName;
+        application.displayName = desktopEntry.name;
     }
     if (application.defaultIconName.isEmpty())
     {
-        application.defaultIconName = desktopEntry.value(QStringLiteral("Icon")).toString();
+        application.defaultIconName = desktopEntry.icon;
     }
     if (application.iconName.isEmpty())
     {
@@ -1027,27 +1104,8 @@ void DockModel::hydrateDesktopEntry(DockApplication &application)
     }
     if (application.launchCommand.isEmpty())
     {
-        application.launchCommand = desktopEntry.value(QStringLiteral("Exec")).toString();
+        application.launchCommand = desktopEntry.exec;
     }
-    desktopEntry.endGroup();
-}
-
-QStringList DockModel::launchArguments(const QString &command)
-{
-    QStringList arguments = QProcess::splitCommand(command);
-    for (auto iterator = arguments.begin(); iterator != arguments.end();)
-    {
-        if (iterator->startsWith(QLatin1Char('%')))
-        {
-            iterator = arguments.erase(iterator);
-        }
-        else
-        {
-            iterator->replace(QStringLiteral("%%"), QStringLiteral("%"));
-            ++iterator;
-        }
-    }
-    return arguments;
 }
 
 void DockModel::loadPinnedApplications()

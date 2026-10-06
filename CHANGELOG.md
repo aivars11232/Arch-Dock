@@ -182,6 +182,34 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   files with every function moved unchanged (`PanelWindow.h` lists them), and
   two unused QML helpers (`MotionPolicy.js`, `StudioDraft.js`) and their tests
   are removed.
+- Closing Panel Studio releases it. The closed window used to stay loaded with
+  its animations running: after Studio had been opened and closed, the
+  background service on the owner's PC held about 689 MB and kept using about
+  2% of a CPU core. An open, idle Studio uses about 7%. Closing it now returns
+  the service to its idle CPU use.
+- Moving or resizing a window no longer makes the dock reload. Every frame of
+  a window drag used to rebuild the dock and send all entries to every panel
+  again: about 6 ms per frame in the installed Release package, and 600
+  reloads for a 5-second drag. The dock now reacts only to what it shows. In
+  the same Debug build a frame went from 8.6 ms to 0.4 ms, with no reloads.
+- Clicking a pinned application starts it through KDE's launcher, as New
+  Instance and desktop actions already did. Terminal=, Path= and D-Bus
+  activation are honoured. The program gets its own systemd scope, so it no
+  longer belongs to Arch Dock's service, and a desktop file KDE does not trust
+  is refused: a downloaded `.desktop` file that is not marked executable used
+  to run its command on click. The dock shows "Application started" or "Launch
+  failed" from the real result.
+- Desktop files are read by KDE's Desktop Entry rules. A name with a comma
+  showed as empty and a semicolon cut it short; translated names are now used.
+- Names are shown exactly as typed in dock and folder tooltips and in
+  right-click actions. Markup in a name (a window title, file name or desktop
+  file) was read as rich text, so a name containing an image tag made the dock
+  fetch that image from the network when the tooltip or menu appeared.
+- A hidden skinned 2D panel stops its glow animation, like the other renderers.
+- Each panel's entries are 44% smaller (135 KB to 76 KB for nine entries): the
+  icon style definition is no longer sent twice for every entry.
+- The [full audit of 2026-10-06](docs/audits/FULL_AUDIT_2026-10-06.md) records
+  these findings, the measurements and what remains open.
 - Runtime corrections and candidate gates are recorded in
   [the release checklist](docs/RELEASE_CHECKLIST.md) and
   [corrective report](docs/POST_TASK_0045_CORRECTIVE_REPORT.md).

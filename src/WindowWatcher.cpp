@@ -2,6 +2,8 @@
 
 #include "WindowModel.h"
 
+#include <KDesktopFile>
+
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
 #include <QDBusMessage>
@@ -11,10 +13,10 @@
 #include <QDebug>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QHash>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QScreen>
-#include <QSettings>
 #include <QStandardPaths>
 
 namespace
@@ -25,8 +27,8 @@ namespace
     const QString PackageScriptName = QStringLiteral("org.archdock.windowwatcher");
     const QString RuntimeScriptName = QStringLiteral("org.archdock.windowwatcher.runtime");
 
-    QString resolveIconName(const QString &desktopFileName,
-                            const QString &resourceClass)
+    QString findIconName(const QString &desktopFileName,
+                         const QString &resourceClass)
     {
         const QStringList identifiers = {
             desktopFileName.trimmed(),
@@ -62,16 +64,9 @@ namespace
                 continue;
             }
 
-            QSettings desktopEntry(desktopFilePath, QSettings::IniFormat);
-            desktopEntry.beginGroup(QStringLiteral("Desktop Entry"));
-
-            const QString iconName =
-                desktopEntry.value(QStringLiteral("Icon"))
-                    .toString()
-                    .trimmed();
-
-            desktopEntry.endGroup();
-
+            // KDE's own reader: a generic INI reader splits values at
+            // commas and cuts them at semicolons.
+            const QString iconName = KDesktopFile(desktopFilePath).readIcon().trimmed();
             if (!iconName.isEmpty())
             {
                 return iconName;
@@ -79,6 +74,28 @@ namespace
         }
 
         return {};
+    }
+
+    // KWin reports a window on every change, a dragged one on every frame.
+    // The icon depends only on the window's desktop file name and class, so
+    // it is looked up (a file search and parse) once per pair.
+    QString resolveIconName(const QString &desktopFileName,
+                            const QString &resourceClass)
+    {
+        static QHash<QString, QString> iconNames;
+        const QString key = desktopFileName + QChar(0x1f) + resourceClass;
+        const auto cached = iconNames.constFind(key);
+        if (cached != iconNames.cend())
+        {
+            return cached.value();
+        }
+        if (iconNames.size() >= 512)
+        {
+            iconNames.clear();
+        }
+        const QString iconName = findIconName(desktopFileName, resourceClass);
+        iconNames.insert(key, iconName);
+        return iconName;
     }
 
     QJsonObject windowState(const QString &stateJson)

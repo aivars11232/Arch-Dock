@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSettings>
@@ -29,6 +30,8 @@ private slots:
     void individualActionsRevalidateMembershipAndCapability();
     void desktopActionsUseNativeValidationAndLaunch();
     void folderSnapshotsUseTheBoundedProvider();
+    void onlyEntryRelevantWindowChangesRebuildTheDock();
+    void desktopEntriesAreReadWithDesktopEntryRules();
 
 private:
     QString writeDesktopEntry(const QString &fileName,
@@ -371,10 +374,17 @@ void DockModelTest::legacyCustomGlyphRemainsExplicitBaseData()
 // and it may never be reported as a launch that succeeded.
 void DockModelTest::activationOutcomeSeparatesVerifiedLaunchFromRequest()
 {
+    // Pinned applications start through KDE's launcher, like Plasma's own
+    // launchers: it honours Terminal=, Path= and D-Bus activation, gives the
+    // application its own systemd scope (so it outlives Arch Dock) and only
+    // runs desktop files KDE trusts. Files outside the application folders
+    // must be executable to be trusted.
+    const QString marker = m_desktopDirectory.filePath(QStringLiteral("launched-marker"));
     const QString launchable = writeDesktopEntry(
         QStringLiteral("org.example.launchable.desktop"),
         QStringLiteral("Launchable"),
-        QStringLiteral("applications-system"));
+        QStringLiteral("applications-system"),
+        QStringLiteral("/usr/bin/touch \"%1\"").arg(marker));
     QVERIFY(!launchable.isEmpty());
     const QString broken = writeDesktopEntry(
         QStringLiteral("org.example.broken.desktop"),
@@ -382,39 +392,55 @@ void DockModelTest::activationOutcomeSeparatesVerifiedLaunchFromRequest()
         QStringLiteral("applications-system"),
         QStringLiteral("/nonexistent/arch-dock-should-not-exist"));
     QVERIFY(!broken.isEmpty());
+    const QString untrusted = writeDesktopEntry(
+        QStringLiteral("org.example.untrusted.desktop"),
+        QStringLiteral("Untrusted"),
+        QStringLiteral("applications-system"),
+        QStringLiteral("/usr/bin/touch \"%1-untrusted\"").arg(marker));
+    QVERIFY(!untrusted.isEmpty());
+    for (const QString &path : {launchable, broken})
+    {
+        QFile file(path);
+        QVERIFY(file.setPermissions(file.permissions() | QFileDevice::ExeOwner));
+    }
 
     WindowModel windowModel;
     DockModel model(windowModel);
     QVERIFY(model.pinUrl(QUrl::fromLocalFile(launchable)));
     QVERIFY(model.pinUrl(QUrl::fromLocalFile(broken)));
+    QVERIFY(model.pinUrl(QUrl::fromLocalFile(untrusted)));
 
-    const QVariantList entries = model.panelEntries(QStringLiteral("launcher"));
-    QCOMPARE(entries.size(), 2);
-    QString launchableId;
-    QString brokenId;
-    for (const QVariant &value : entries)
+    QHash<QString, QString> ids;
+    for (const QVariant &value : model.panelEntries(QStringLiteral("launcher")))
     {
         const QVariantMap entry = value.toMap();
-        const QString appId = entry.value(QStringLiteral("appId")).toString();
-        if (entry.value(QStringLiteral("displayName")).toString()
-                == QStringLiteral("Launchable"))
-        {
-            launchableId = appId;
-        }
-        else
-        {
-            brokenId = appId;
-        }
+        ids.insert(entry.value(QStringLiteral("displayName")).toString(),
+                   entry.value(QStringLiteral("appId")).toString());
     }
-    QVERIFY(!launchableId.isEmpty());
-    QVERIFY(!brokenId.isEmpty());
+    QCOMPARE(ids.size(), 3);
+    const QString launchableId = ids.value(QStringLiteral("Launchable"));
+    const QString brokenId = ids.value(QStringLiteral("Broken"));
+    const QString untrustedId = ids.value(QStringLiteral("Untrusted"));
 
-    // A program that starts is a verified success.
+    // KDE's launcher starts the program asynchronously: the click is a
+    // request, and the program really runs.
+    QSignalSpy finished(&model, &DockModel::launchFinished);
     QCOMPARE(model.activateApplicationOutcome(launchableId),
-             DockModel::ActivationOutcome::Launched);
-    // A program that cannot start is a verified failure, not an unknown.
+             DockModel::ActivationOutcome::LaunchRequested);
+    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(marker), 5000);
+    // The launcher confirms the start; that confirmation is what the applet
+    // waits for before it plays a launch animation.
+    QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 1, 5000);
+    QCOMPARE(finished.constFirst().at(0).toString(), launchableId);
+    QVERIFY(finished.constFirst().at(1).toBool());
+    // A program that is not there is a verified failure, reported at once.
     QCOMPARE(model.activateApplicationOutcome(brokenId),
              DockModel::ActivationOutcome::Failed);
+    // A desktop file KDE does not trust is never run.
+    QCOMPARE(model.activateApplicationOutcome(untrustedId),
+             DockModel::ActivationOutcome::Failed);
+    QTest::qWait(300);
+    QVERIFY(!QFileInfo::exists(marker + QStringLiteral("-untrusted")));
     // An entry that does not exist cannot have been launched.
     QCOMPARE(model.activateApplicationOutcome(QStringLiteral("org.example.absent")),
              DockModel::ActivationOutcome::UnknownEntry);
@@ -434,7 +460,75 @@ void DockModelTest::activationOutcomeSeparatesVerifiedLaunchFromRequest()
     // The historical bool contract is unchanged in every case.
     QVERIFY(model.activateApplication(launchableId));
     QVERIFY(!model.activateApplication(brokenId));
+    QVERIFY(!model.activateApplication(untrustedId));
     QVERIFY(!model.activateApplication(QStringLiteral("org.example.absent")));
+}
+
+// A dragged window reports a new geometry on every frame and a terminal can
+// retitle itself many times a second. The dock shows names, titles, icons and
+// state, not geometry: a geometry, screen, maximized or fullscreen change must
+// not rebuild every entry (and, through the backend, refresh every panel);
+// a title change still must.
+void DockModelTest::onlyEntryRelevantWindowChangesRebuildTheDock()
+{
+    WindowModel windowModel;
+    WindowItem window;
+    window.internalId = QStringLiteral("window-one");
+    window.desktopFileName = QStringLiteral("org.example.editor.desktop");
+    window.resourceClass = QStringLiteral("transient-editor");
+    window.iconName = QStringLiteral("applications-development");
+    window.caption = QStringLiteral("Editor");
+    window.frameGeometry = QRect(10, 10, 400, 300);
+    windowModel.setWindows({window});
+    DockModel model(windowModel);
+    QSignalSpy roles(&windowModel, &QAbstractItemModel::dataChanged);
+    QSignalSpy resets(&model, &QAbstractItemModel::modelReset);
+    QSignalSpy counts(&model, &DockModel::countChanged);
+
+    for (int step = 1; step <= 30; ++step)
+    {
+        window.frameGeometry.moveTo(10 + step, 10 + step);
+        QVERIFY(windowModel.updateWindow(window));
+    }
+    window.maximized = true;
+    QVERIFY(windowModel.updateWindow(window));
+    window.screenIndex = 1;
+    QVERIFY(windowModel.updateWindow(window));
+    QCOMPARE(resets.count(), 0);
+    QCOMPARE(counts.count(), 0);
+    // The window model names only the role that changed.
+    QCOMPARE(roles.count(), 32);
+    QCOMPARE(roles.first().at(2).value<QList<int>>(),
+             QList<int>{WindowModel::FrameGeometryRole});
+
+    window.caption = QStringLiteral("Editor - changed");
+    QVERIFY(windowModel.updateWindow(window));
+    QCOMPARE(resets.count(), 1);
+    QCOMPARE(model.panelEntries(QStringLiteral("tasks")).constFirst().toMap()
+                 .value(QStringLiteral("windowTitles")).toStringList(),
+             QStringList{QStringLiteral("Editor - changed")});
+}
+
+// Desktop entries follow the Desktop Entry rules, not a generic INI reader's:
+// that one returned a name containing a comma as a two-item list (read back
+// as an empty name) and cut a value at a semicolon.
+void DockModelTest::desktopEntriesAreReadWithDesktopEntryRules()
+{
+    const QString path = writeDesktopEntry(
+        QStringLiteral("org.example.punctuation.desktop"),
+        QStringLiteral("Foo, the Bar; and more"),
+        QStringLiteral("applications-system"));
+    QVERIFY(!path.isEmpty());
+    WindowModel windowModel;
+    DockModel model(windowModel);
+    QVERIFY(model.pinUrl(QUrl::fromLocalFile(path)));
+    const QVariantList entries = model.panelEntries(QStringLiteral("launcher"));
+    QCOMPARE(entries.size(), 1);
+    const QVariantMap entry = entries.constFirst().toMap();
+    QCOMPARE(entry.value(QStringLiteral("displayName")).toString(),
+             QStringLiteral("Foo, the Bar; and more"));
+    QCOMPARE(entry.value(QStringLiteral("iconName")).toString(),
+             QStringLiteral("applications-system"));
 }
 
 QString DockModelTest::writeDesktopEntry(const QString &fileName,

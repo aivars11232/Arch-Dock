@@ -3356,6 +3356,23 @@ void PanelRegistryTest::persistsPresetIconOverridesForPanelAndEntries()
                  .value(QStringLiteral("id")).toString(),
              QStringLiteral("metallic-red"));
 
+    // A panel's entries share one style cache: each result is the one resolved
+    // without it, and a style already resolved for the batch is reused.
+    const QVariantMap other{{QStringLiteral("type"), QStringLiteral("application")},
+        {QStringLiteral("appId"), QStringLiteral("org.kde.dolphin.desktop")},
+        {QStringLiteral("iconName"), QStringLiteral("system-file-manager")}};
+    PanelRegistry::IconStyleBatchCache styleCache;
+    QCOMPARE(reloaded.resolveIconEntryOverride(explicitStyle, entry, &styleCache),
+             reloaded.resolveIconEntryOverride(explicitStyle, entry));
+    QCOMPARE(reloaded.resolveIconEntryOverride(explicitStyle, other, &styleCache),
+             reloaded.resolveIconEntryOverride(explicitStyle, other));
+    QVERIFY(styleCache.contains(QStringLiteral("metallic-red")));
+    QVERIFY(styleCache.contains(explicitStyle.iconStyle.styleReference));
+    const auto cachedStyles = styleCache.size();
+    QCOMPARE(reloaded.resolveIconEntryOverride(explicitStyle, other, &styleCache),
+             reloaded.resolveIconEntryOverride(explicitStyle, other));
+    QCOMPARE(styleCache.size(), cachedStyles);
+
     auto invalid = *stored;
     auto block = source->icon.toVariantMap();
     block.insert(QStringLiteral("visualOverrides"), QVariantMap{

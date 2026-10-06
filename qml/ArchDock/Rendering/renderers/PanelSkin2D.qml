@@ -17,6 +17,9 @@ Item {
     property color tintColor: "#78e9f4"
     property real glowIntensity: 1
     property bool reducedMotion: false
+    // The host has hidden the panel (auto-hide, conceal). Its item can stay
+    // visible meanwhile, so this, not `visible`, stops the overlay animation.
+    property bool sceneConcealed: false
     property real panelOpacity: 1
 
     // Per-role presentation tracks from PanelMotionController. Null means the
@@ -85,7 +88,7 @@ Item {
     readonly property bool hasAnimatedOverlay: animatedOverlayAvailable()
     readonly property bool overlayAnimationRunning:
         dynamicGlowSupported && hasAnimatedOverlay && !reducedMotion
-        && root.visible && root.enabled && root.opacity > 0
+        && !sceneConcealed && root.visible && root.enabled && root.opacity > 0
     readonly property real effectiveOverlayPhase:
         overlayAnimationRunning ? overlayPhase : 0
     readonly property int skippedLayerCount: skippedLayers()

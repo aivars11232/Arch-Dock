@@ -48,14 +48,17 @@ public:
 
     // What actually happened when an entry was activated.
     //
-    // A click asks for an activation; only some answers are verifiable. Starting
-    // a process either succeeds or fails and we are told which. Raising an
-    // existing window is handed to the compositor, which does not report back,
-    // so it is a request and must never be presented as a verified success.
+    // A click asks for an activation; only some answers are verifiable. An
+    // application is started through KDE's launcher (its terminal, working
+    // directory, D-Bus activation, own systemd scope and trust rules): a
+    // missing program or an untrusted desktop file fails at once, otherwise
+    // the start is a request whose result arrives as launchFinished().
+    // Raising an existing window is handed to the compositor, which does not
+    // report back, so it is a request too and never a verified success.
     enum class ActivationOutcome
     {
         UnknownEntry,
-        Launched,
+        LaunchRequested,
         ActivationRequested,
         Failed
     };
@@ -114,6 +117,9 @@ public:
 
 signals:
     void countChanged();
+    // The result of a launch activateApplicationOutcome() accepted: whether
+    // KDE's launcher started the program, and why not.
+    void launchFinished(const QString &appId, bool started, const QString &errorText);
     void windowActionRequested(const QString &internalId,
                                const QString &action);
 
@@ -143,7 +149,6 @@ private:
     static QString normalizedDesktopId(const QString &identifier);
     static QString desktopIdForResourceClass(const QString &resourceClass);
     static void hydrateDesktopEntry(DockApplication &application);
-    static QStringList launchArguments(const QString &command);
     static QString folderPath(const DockApplication &application);
 
     void loadPinnedApplications();

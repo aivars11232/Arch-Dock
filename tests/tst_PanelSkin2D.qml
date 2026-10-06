@@ -661,6 +661,14 @@ TestCase {
         tryCompare(skin, "overlayAnimationRunning", false)
         compare(skin.effectiveOverlayPhase, 0)
         skin.visible = true
+        tryCompare(skin, "overlayAnimationRunning", true)
+        // An auto-hidden panel keeps its item visible; the host's concealment
+        // must stop the overlay animation, as it does for baked panels.
+        skin.sceneConcealed = true
+        tryCompare(skin, "overlayAnimationRunning", false)
+        compare(skin.effectiveOverlayPhase, 0)
+        skin.sceneConcealed = false
+        tryCompare(skin, "overlayAnimationRunning", true)
         skin.reducedMotion = true
         compare(skin.overlayAnimationRunning, false)
         compare(skin.effectiveOverlayPhase, 0)

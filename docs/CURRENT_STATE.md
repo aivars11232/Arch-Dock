@@ -1,10 +1,92 @@
 # Arch Dock current state
 
+<!-- FULL_AUDIT_BEGIN -->
+## Full audit and corrections — 0.1.1-11, 2026-10-06
+
+Package **arch-dock 0.1.1-11** (source archive SHA256
+`9cddfd60f4422d6976de7a8837b83886800fe77d13e6ac0199df93ba134f0b85`, package
+SHA256 `77c24273a06d50410b177b62c8067cfd546efd8e0cd9ff1a95b809076fa266ed`)
+carries the theme package cache revalidation below and the corrections from
+the [full audit of 2026-10-06](audits/FULL_AUDIT_2026-10-06.md). It is
+installed on the owner's PC and verified:
+
+- installed with the owner's sudo password;
+- all 232 payload files match, and `pacman -Qkk` reports 0 altered files;
+- the new backend runs, idle at 0.0% of a CPU core with 0.4 wake-ups a second
+  and 72 MB;
+- Quit stopped it, an activation request was refused in 0.07 s, and the
+  menu entry started it again;
+- Panel Studio opened;
+- Arch Dock's configuration, the Plasma layout and `plasmashellrc` are
+  byte-identical after the upgrade, and Plasma was not restarted because it
+  hosts no Arch Dock applet at the moment.
+
+A private backup (mode 0600) and the installation receipt are in
+`~/.local/state/arch-dock/`. Before the upgrade, the live 0.1.1-10 service held
+496 MB and averaged 2.6% of a CPU core over 4.5 hours, the D-01 symptom.
+
+What changed for the owner:
+
+- Closing Panel Studio frees it. A closed Studio used to stay loaded with its
+  animations running (689 MB and about 2% of a core on this PC).
+- Moving or resizing a window no longer reloads the dock. Before, each frame
+  cost 5.9 ms in the Release package and reloaded every panel; now a frame
+  costs 0.4 ms even in a Debug build, with no reloads.
+- Clicking a pinned application starts it through KDE's launcher. Terminal
+  programs get their terminal, and the program no longer belongs to Arch Dock.
+  A desktop file KDE does not trust is refused instead of run, and the dock
+  shows "Application started" or "Launch failed".
+- Names with a comma or semicolon show in full, and translated names are used.
+- Names in tooltips and right-click actions are shown as typed. A name with an
+  image tag could make the dock fetch that image from the network.
+- A hidden skinned 2D panel stops animating, and each panel's entries are 44%
+  smaller.
+
+Verification (one session, no subagents, one build job, one test worker):
+
+- Every audit defect has a test that fails on `faed409` and passes now.
+- Complete configured suite **114/114** in one serial run on the final source
+  (845.5 s). Native gates in that run: folder anchors 50/50; 10 offered
+  opening mechanisms collapse and reopen, 25 are refused. The log scan is
+  clean apart from the intended missing-Quick3D probe and missing-file
+  fixtures.
+- Two canonical exports identical (563 files); every archive member checked
+  against the working tree; `makepkg --verifysource` PASS; one-job Release
+  package built in 417 s.
+- Installed-package harness PASS on the unmodified source: 232 payload files
+  byte-identical with modes, licensing, hidden-source rendering, 15+15
+  catalogs, startup with and without Quick3D, runtime UI and folder
+  interactions, upgrade from 0.1.1-10 with configuration recovery, and removal
+  with user configuration preserved.
+  Two earlier runs each failed once on timing. In the first, the content step
+  saw 0 batched content revisions instead of 1; it did not recur, and a
+  diagnostic run showed both panels visible and 1 revision. In the second,
+  Dolphin's desktop file dropped onto the free panel's folder got `NoReply`,
+  because the applet waits at most 1 s for the service. 0.1.1-10's harness
+  recorded the same drop and error once.
+- Before the push, the commit passed the tagged-source verifier in a throwaway
+  clone with a local tag only. Its export lists exactly the packaged files.
+- Not changed: branch protection, CI build job, Studio theming, R-01 and the
+  trademark question. The audit report lists them.
+
+Evidence (untracked): `build-codex-audit/evidence/` (audit logs and
+measurements) and `build-codex-audit-0.1.1-11/` (source, package, harness and
+owner logs).
+
+Owner checklist (only what automation cannot see):
+
+1. Open Panel Studio, then close it. In System Monitor, Arch Dock's CPU use
+   drops back to 0%.
+2. Pin a terminal program (for example `htop`) and click it. It opens in a
+   terminal window.
+3. Hover over a few dock icons. Every name shows as plain text.
+<!-- FULL_AUDIT_END -->
+
 <!-- THEME_CACHE_BEGIN -->
 ## Theme package cache revalidation — 2026-10-06
 
-Source correction on top of `9525257`. It is not packaged yet: the owner's PC
-still runs **arch-dock 0.1.1-10**, which keeps the previous cache behaviour.
+Source correction on top of `9525257`, packaged and installed in
+**arch-dock 0.1.1-11** (above).
 
 The theme package cache added for ADFIX UF-08 reused a verified package while
 only its manifest's path, modification time (milliseconds) and size were

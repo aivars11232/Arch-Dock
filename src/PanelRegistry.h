@@ -202,9 +202,15 @@ public:
     [[nodiscard]] const ArchDock::IconStyleStore *iconStyleStore() const;
     [[nodiscard]] const ArchDock::AnimationProfileCatalog *
     animationProfileCatalog() const;
+    // Icon styles already resolved while resolving one batch of entries. Every
+    // entry of a panel resolves the same panel style, so a caller resolving a
+    // panel's entries passes one cache and each style is resolved once, not
+    // once per entry. Only valid for that batch: it is never kept.
+    using IconStyleBatchCache = QHash<QString, QVariantMap>;
     [[nodiscard]] QVariantMap resolveIconEntryOverride(
         const ArchDock::PanelDefinition &definition,
-        const QVariantMap &entry) const;
+        const QVariantMap &entry,
+        IconStyleBatchCache *styleCache = nullptr) const;
     [[nodiscard]] std::optional<QVariantMap> iconStyleRuntimeProjection(
         const ArchDock::PanelDefinition &definition,
         QString *errorCode = nullptr) const;

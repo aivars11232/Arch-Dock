@@ -16,7 +16,7 @@ Item {
     id: root
 
     required property var sceneDefinition
-    required property var resources
+    required property var sceneResources
     property url textureSource: ""
     property var entryGeometry: []
     property var entryVisuals: []
@@ -41,7 +41,7 @@ Item {
     readonly property var entryParts: partsForScope("entry")
     readonly property bool partsReady: {
         const definitions = (sceneDefinition || ({})).parts || []
-        const data = (resources || ({})).parts || []
+        const data = (sceneResources || ({})).parts || []
         return definitions.length === data.length && data.every(function(part) {
             return part && part.mesh && part.mesh.format === "org.archdock.mesh"
                 && part.material && part.material.format === "org.archdock.material"
@@ -81,11 +81,11 @@ Item {
     readonly property var generatedPlatform: generatedKey.length > 0
         ? PlatformGeometry.platform(JSON.parse(generatedKey)) : null
     readonly property var platformMesh: generatedSpec ? generatedPlatform
-        : (resources || ({})).mesh || null
+        : (sceneResources || ({})).mesh || null
     // A generated platform's pedestals take its top's colour, and its rim
     // glows in the look's glow colour.
     readonly property var platformMaterial: {
-        const material = Object.assign({}, (resources || ({})).material || ({}))
+        const material = Object.assign({}, (sceneResources || ({})).material || ({}))
         if (generatedSpec && generatedPalette && generatedPalette.top) {
             const top = generatedPalette.top
             material.baseColor = Qt.rgba(top[0], top[1], top[2], 1)
@@ -108,15 +108,15 @@ Item {
     // The column every icon stands on; it takes the platform's material.
     readonly property var pedestalMesh: PlatformGeometry.pedestal(24)
     readonly property int pedestalTriangles: pedestalMesh.indexes.length / 3
-    readonly property bool resourcesReady: resources !== null
-        && resources.material !== undefined
-        && resources.material.format === "org.archdock.material"
+    readonly property bool resourcesReady: sceneResources !== null
+        && sceneResources.material !== undefined
+        && sceneResources.material.format === "org.archdock.material"
         && platform.meshReady && partsReady
-        && (generatedSpec !== null || (resources.iconMesh !== undefined && iconResource.meshReady))
+        && (generatedSpec !== null || (sceneResources.iconMesh !== undefined && iconResource.meshReady))
     readonly property bool textureRequired: Boolean(sceneDefinition && sceneDefinition.texture)
     readonly property bool textureReady: !textureRequired || textureImage.status === Image.Ready
     readonly property bool geometryWithinBudget: triangleCount * 3 <= Math.min(262144,
-        Number((resources || ({})).indexBudget || 262144))
+        Number((sceneResources || ({})).indexBudget || 262144))
     readonly property bool rendererReady: resourcesReady && textureReady && geometryWithinBudget
     readonly property string errorReason: !resourcesReady ? "scene3d-mesh-unavailable"
         : textureRequired && textureImage.status === Image.Error ? "scene3d-texture-unavailable"
@@ -526,7 +526,7 @@ Item {
 
     function partsForScope(scope) {
         const definitions = (sceneDefinition || ({})).parts || []
-        const data = (resources || ({})).parts || []
+        const data = (sceneResources || ({})).parts || []
         const result = []
         for (let index = 0; index < definitions.length; ++index) {
             if (definitions[index].scope === scope)
@@ -1018,8 +1018,8 @@ Item {
         // participates in the whole scene's safe fallback decision.
         IconStyle3D {
             id: iconResource
-            meshData: (root.resources || ({})).iconMesh || null
-            materialData: (root.resources || ({})).material || ({})
+            meshData: (root.sceneResources || ({})).iconMesh || null
+            materialData: (root.sceneResources || ({})).material || ({})
             visible: false
         }
     }

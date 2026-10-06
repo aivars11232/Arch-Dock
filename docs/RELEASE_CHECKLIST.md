@@ -1,5 +1,34 @@
 # Arch Dock release checklist
 
+## Full audit corrections and theme cache revalidation — 0.1.1-11, 2026-10-06
+
+- [x] The corrections from the [full audit](audits/FULL_AUDIT_2026-10-06.md)
+      are in one commit on `main` (the commit that adds this entry) and
+      pushed. The package also carries the theme package cache revalidation
+      (`faed409`, pushed earlier).
+- [x] Every audit defect has a test that failed on `faed409` and passes.
+- [x] Complete configured suite 114/114 in one serial run on the final source,
+      one worker; native Wayland and real-RHI gates inside that run.
+- [x] Two canonical exports identical (563 files); every archive member
+      checked against the source; `makepkg --verifysource` PASS; one-job
+      Release package built.
+      Source SHA256 `9cddfd60f4422d6976de7a8837b83886800fe77d13e6ac0199df93ba134f0b85`,
+      package SHA256 `77c24273a06d50410b177b62c8067cfd546efd8e0cd9ff1a95b809076fa266ed`.
+- [x] Before the push: tagged-source verifier PASS in a throwaway clone
+      (local tag only); the committed tree equals the packaged source.
+- [x] Installed-package harness PASS on the unmodified source, including the
+      0.1.1-10 upgrade. Two earlier runs failed once each on timing (see
+      CURRENT_STATE.md); neither recurred.
+- [x] Installed on the owner's PC with the owner's authorization; payload,
+      `pacman -Qkk`, idle backend, Quit on the real desktop and configuration
+      preservation verified.
+- [ ] Owner visual and interaction acceptance (checklist in CURRENT_STATE.md).
+- [ ] Physical second-monitor and other-GPU cells (R-01).
+- [ ] `v0.1.1` tag and publication: not needed for this correction; separate
+      owner decision.
+- Package and evidence are retained, untracked, in `build-codex-audit-0.1.1-11/`
+  and `build-codex-audit/evidence/`.
+
 ## Folders, Quit, true-3D fidelity and performance — 0.1.1-10, 2026-10-06
 
 - [x] ADFIX-TASK-001 to -003 and the owner's added requests (icon and logo,

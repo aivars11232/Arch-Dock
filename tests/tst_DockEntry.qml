@@ -203,6 +203,22 @@ TestCase {
         compare(item.logicalInputRegion.height, 60)
     }
 
+    // An entry's name can come from another application's window caption
+    // (a running app with no desktop file). The tooltip shows it as typed:
+    // markup in a name must not become rich text, which can format the
+    // tooltip and load images from the network.
+    function test_tooltipShowsNamesAsPlainText() {
+        const item = createEntry({
+            entry: entry({ displayName: "<img src=\"http://example.invalid/x.png\"> <b>Title</b>" })
+        })
+        verify(item.toolTipText.indexOf("<img") < 0)
+        verify(item.toolTipText.indexOf("<\u200Bimg") === 0)
+        compare(item.toolTipText.replace(/\u200B/g, ""),
+                "<img src=\"http://example.invalid/x.png\"> <b>Title</b>")
+        item.entry = entry({ displayName: "Plain name" })
+        compare(item.toolTipText, "Plain name")
+    }
+
     function test_entryStateIsForwardedToSharedScene() {
         const item = createEntry({
             entry: entry({ running: true })
@@ -441,6 +457,15 @@ TestCase {
         compare(requests[1].method, "launchDockEntry")
         compare(requests[1].appId, item.entry.appId)
         compare(requests[1].action, "Write")
+        // An action name is shown as typed, never as markup.
+        item.entry = entry({ canNewInstance: true,
+            desktopActions: [{ id: "Tag", text: "<img src=\"http://example.invalid/x.png\"> Tag" }] })
+        verify(item.openEntryContextMenu())
+        tryCompare(item, "contextMenuVisible", true)
+        const tagged = findChild(item, "desktopAction-Tag")
+        verify(tagged !== null)
+        compare(tagged.text, "<\u200Bimg src=\"http://example.invalid/x.png\"> Tag")
+        // The menu stays open here; inputEnabled = false below closes it.
         item.entry = entry({ canNewInstance: true, desktopActions: [] })
         verify(!item.requestDesktopAction("Write"))
         verify(item.openEntryContextMenu())

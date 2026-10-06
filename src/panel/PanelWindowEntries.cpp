@@ -9,13 +9,13 @@
 #include "../model/FolderContentModel.h"
 #include "IconOverrideTransaction.h"
 
+#include <KDesktopFile>
 #include <KIO/OpenUrlJob>
 #include <KFileItem>
 #include <QDebug>
 #include <QFileInfo>
 #include <QHash>
 #include <QMimeDatabase>
-#include <QSettings>
 
 namespace
 {
@@ -37,13 +37,15 @@ QVariantMap freeUrlEntry(const QUrl &url,
     }
     else if (info.suffix().compare(QStringLiteral("desktop"), Qt::CaseInsensitive) == 0)
     {
-        QSettings desktopEntry(info.absoluteFilePath(), QSettings::IniFormat);
-        desktopEntry.beginGroup(QStringLiteral("Desktop Entry"));
-        displayName = desktopEntry.value(
-            QStringLiteral("Name"), info.completeBaseName()).toString();
-        iconName = desktopEntry.value(
-            QStringLiteral("Icon"), QStringLiteral("application-x-executable")).toString();
-        desktopEntry.endGroup();
+        // KDE's reader follows the Desktop Entry rules; a generic INI reader
+        // splits a name at its commas.
+        const KDesktopFile desktopEntry(info.absoluteFilePath());
+        displayName = desktopEntry.readName();
+        if (displayName.isEmpty())
+            displayName = info.completeBaseName();
+        iconName = desktopEntry.readIcon();
+        if (iconName.isEmpty())
+            iconName = QStringLiteral("application-x-executable");
         if (desktopIdentity)
         {
             *desktopIdentity = ArchDock::IconEntryIdentity::forApplication(
@@ -205,6 +207,9 @@ QVariantList PanelWindow::dockEntriesForPanel(const QString &panelId,
     {
         return entries;
     }
+    // A title change refetches every entry; the panel's icon style is
+    // resolved once for all of them.
+    PanelRegistry::IconStyleBatchCache styleCache;
     for (QVariant &value : entries)
     {
         QVariantMap entry = value.toMap();
@@ -220,8 +225,14 @@ QVariantList PanelWindow::dockEntriesForPanel(const QString &panelId,
             ArchDock::IconEntryIdentity::isValid(identity) &&
                 entry.value(QStringLiteral("pinned")).toBool());
         const QVariantMap resolution =
-            m_panelRegistry.resolveIconEntryOverride(*definition, entry);
-        entry.insert(QStringLiteral("iconOverrideResolution"), resolution);
+            m_panelRegistry.resolveIconEntryOverride(*definition, entry, &styleCache);
+        // The style definition travels once per entry, as
+        // resolvedIconStyleDefinition below (what the renderer reads first).
+        // Its copy inside the resolution doubled every entry refresh on the
+        // bus, which panels refetch whenever a window changes.
+        QVariantMap compactResolution = resolution;
+        compactResolution.remove(QStringLiteral("iconStyleDefinition"));
+        entry.insert(QStringLiteral("iconOverrideResolution"), compactResolution);
         entry.insert(
             QStringLiteral("iconOverride"),
             resolution.value(QStringLiteral("override")));
@@ -542,13 +553,31 @@ bool PanelWindow::activateDockEntry(const QString &appId)
     return m_dockModel.activateApplication(appId);
 }
 
+// A short launch status on the entry's overlay, keyed by its desktop file.
+void PanelWindow::showLaunchStatus(const QString &appId, const QString &text)
+{
+    for (const auto &value : m_dockModel.panelEntries(QStringLiteral("hybrid")))
+    {
+        const auto entry = value.toMap();
+        if (entry.value(QStringLiteral("appId")).toString() != appId) continue;
+        QString desktop = entry.value(QStringLiteral("desktopFileName"), appId).toString();
+        if (!desktop.endsWith(QStringLiteral(".desktop"))) desktop += QStringLiteral(".desktop");
+        m_overlayModel.setTemporaryStatus(QFileInfo(desktop).fileName(), text);
+    }
+}
+
 // The same activation as activateDockEntry, but reporting what happened.
 //
-// `succeeded` means a program was started and the start was confirmed.
-// `requested` means the activation was handed to the compositor, which does not
-// report back: the caller must not treat it as success. `failed` means the
-// entry could not be launched at all. The bool-returning activateDockEntry is
-// unchanged, so existing callers keep their exact contract.
+// `succeeded` means a file or URL entry was handed to its opener, or, for a
+// D-Bus caller, that KDE's launcher started the application: that reply waits
+// for the launcher. `requested` means the activation was handed on and cannot
+// be confirmed: a window raise goes to the compositor, which does not report
+// back, and a direct (non-D-Bus) caller's application start, whose later
+// failure shows as a "Launch failed" status. The caller must not treat it as
+// success. `failed` means the entry could not be launched (unknown entry,
+// missing program, untrusted desktop file, or the launcher's error). The
+// bool-returning activateDockEntry is unchanged, so existing callers keep
+// their exact contract.
 QVariantMap PanelWindow::activateDockEntryOutcome(const QString &appId)
 {
     QVariantMap result;
@@ -576,10 +605,22 @@ QVariantMap PanelWindow::activateDockEntryOutcome(const QString &appId)
         return result;
     }
 
+    QString status;
     switch (m_dockModel.activateApplicationOutcome(appId))
     {
-    case DockModel::ActivationOutcome::Launched:
-        result.insert(QStringLiteral("outcome"), QStringLiteral("succeeded"));
+    case DockModel::ActivationOutcome::LaunchRequested:
+        // KDE's launcher starts the program asynchronously. A D-Bus caller
+        // gets its answer when the launcher reports (DockModel::launchFinished,
+        // handled in the constructor): "succeeded" only for a start that
+        // happened. A direct caller gets "requested" now.
+        if (calledFromDBus())
+        {
+            setDelayedReply(true);
+            m_pendingLaunchReplies[appId].append(message());
+            return {};
+        }
+        result.insert(QStringLiteral("outcome"), QStringLiteral("requested"));
+        result.insert(QStringLiteral("reason"), QStringLiteral("launch-requested"));
         break;
     case DockModel::ActivationOutcome::ActivationRequested:
         result.insert(QStringLiteral("outcome"), QStringLiteral("requested"));
@@ -590,24 +631,18 @@ QVariantMap PanelWindow::activateDockEntryOutcome(const QString &appId)
         result.insert(QStringLiteral("outcome"), QStringLiteral("failed"));
         result.insert(QStringLiteral("reason"),
                       QStringLiteral("launch-failed"));
+        status = tr("Launch failed");
         break;
     case DockModel::ActivationOutcome::UnknownEntry:
         result.insert(QStringLiteral("outcome"), QStringLiteral("failed"));
         result.insert(QStringLiteral("reason"),
                       QStringLiteral("unknown-entry"));
+        status = tr("Launch failed");
         break;
     }
-    if (result.value(QStringLiteral("outcome")).toString() != QStringLiteral("requested"))
+    if (!status.isEmpty())
     {
-        for (const auto &value : m_dockModel.panelEntries(QStringLiteral("hybrid"))) {
-            const auto entry = value.toMap();
-            if (entry.value(QStringLiteral("appId")).toString() != appId) continue;
-            QString desktop = entry.value(QStringLiteral("desktopFileName"), appId).toString();
-            if (!desktop.endsWith(QStringLiteral(".desktop"))) desktop += QStringLiteral(".desktop");
-            m_overlayModel.setTemporaryStatus(QFileInfo(desktop).fileName(),
-                result.value(QStringLiteral("outcome")).toString() == QStringLiteral("succeeded")
-                    ? tr("Application started") : tr("Launch failed"));
-        }
+        showLaunchStatus(appId, status);
     }
     return result;
 }

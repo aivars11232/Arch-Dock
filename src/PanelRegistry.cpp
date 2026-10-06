@@ -2348,8 +2348,27 @@ QVariantMap PanelRegistry::iconStyleDefinition(const QString &styleId) const
 
 QVariantMap PanelRegistry::resolveIconEntryOverride(
     const ArchDock::PanelDefinition &definition,
-    const QVariantMap &entry) const
+    const QVariantMap &entry,
+    IconStyleBatchCache *styleCache) const
 {
+    const auto resolveStyle = [this, &definition](const QString &styleReference)
+    {
+        if (styleReference == definition.iconStyle.styleReference)
+        {
+            const auto projection = iconStyleRuntimeProjection(definition);
+            if (projection.has_value())
+            {
+                return *projection;
+            }
+        }
+        return m_iconStyleStore.has_value()
+            ? m_iconStyleStore->resolve(styleReference)
+            : QVariantMap{
+                {QStringLiteral("errorCode"), m_iconStyleStoreError},
+                {QStringLiteral("loadable"), false},
+                {QStringLiteral("valid"), false},
+            };
+    };
     return ArchDock::IconOverrideTransaction::resolve(
         definition,
         ArchDock::IconEntryIdentity::forEntry(entry),
@@ -2359,23 +2378,20 @@ QVariantMap PanelRegistry::resolveIconEntryOverride(
         entry.value(
             QStringLiteral("baseDisplayName"),
             entry.value(QStringLiteral("displayName"))).toString(),
-        [this, &definition](const QString &styleReference)
+        [&resolveStyle, styleCache](const QString &styleReference)
         {
-            if (styleReference == definition.iconStyle.styleReference)
+            if (!styleCache)
             {
-                const auto projection = iconStyleRuntimeProjection(definition);
-                if (projection.has_value())
-                {
-                    return *projection;
-                }
+                return resolveStyle(styleReference);
             }
-            return m_iconStyleStore.has_value()
-                ? m_iconStyleStore->resolve(styleReference)
-                : QVariantMap{
-                    {QStringLiteral("errorCode"), m_iconStyleStoreError},
-                    {QStringLiteral("loadable"), false},
-                    {QStringLiteral("valid"), false},
-                };
+            const auto cached = styleCache->constFind(styleReference);
+            if (cached != styleCache->cend())
+            {
+                return *cached;
+            }
+            const QVariantMap style = resolveStyle(styleReference);
+            styleCache->insert(styleReference, style);
+            return style;
         });
 }
 

@@ -62,6 +62,10 @@ Direct session D-Bus activation is the normal startup mechanism. Repeated
 launches forward to the existing service owner. Installation does not enable
 or start a systemd unit automatically.
 
+To stop Arch Dock, right-click its application menu entry and choose
+**Quit Arch Dock**, or run `arch-dock --quit`. It stays stopped until you start
+it again or log in again. See [starting and stopping](docs/INSTALL.md).
+
 Before removing the package, cancel any audition and remove managed panels
 through Arch Dock's ownership-checked removal actions. Package removal
 preserves user configuration, presets and backups; it does not edit personal

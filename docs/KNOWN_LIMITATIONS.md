@@ -34,6 +34,32 @@ KPipeWire is optional for live window thumbnails. Window actions and ordinary
 panel rendering remain separate from live-thumbnail availability. Reduced
 motion and fallback behavior remain applicable when optional rendering is off.
 
+## Resource use
+
+The [full audit of 2026-10-06](audits/FULL_AUDIT_2026-10-06.md) measured the
+background service in a private session. Idle, it uses no CPU and wakes up
+zero times a second, with about 53 MB of memory. An open Panel Studio uses about
+7% of one CPU core for its animations and about 130 MB more memory. Closing it
+ends that CPU use. The memory stays with the process to be reused, and
+repeated opening and closing does not keep adding to it.
+
+A window title change still makes each panel fetch its entries again, since the
+entries carry window titles. One fetch costs about 5 ms of service time in a
+Debug build: reading the panel's settings, building the entries, resolving
+icon styles and sending about 76 KB. The Release package is faster. A window
+that changes its title ten times a second therefore costs a few percent of one
+core per panel. Sending only the entries that changed would remove this cost.
+That is a larger change and is left for later.
+
+Glow and energy layers animate continuously while their panel is shown and
+reduced motion is off. They stop when the panel is hidden or reduced motion is
+on.
+
+Creating, placing or removing a panel, and some preset auditions, wait for
+Plasma's scripting interface or KWin to answer before the service continues.
+These waits happen only during those actions the user starts, never in
+steady use.
+
 ## Panel Studio presentation
 
 Panel Studio draws its own dark chrome with fixed colours and pixel font sizes.

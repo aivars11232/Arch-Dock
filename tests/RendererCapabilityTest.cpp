@@ -1578,7 +1578,7 @@ private slots:
             + QStringLiteral("/ArchDock/Rendering/optional3d/PanelScene3D.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         std::unique_ptr<QObject> scene(component.createWithInitialProperties({
-            {QStringLiteral("resources"), QVariantMap{}},
+            {QStringLiteral("sceneResources"), QVariantMap{}},
             {QStringLiteral("sceneDefinition"), QVariantMap{}}}));
         QVERIFY2(scene != nullptr, qPrintable(component.errorString()));
         QVERIFY(!scene->property("rendererReady").toBool());

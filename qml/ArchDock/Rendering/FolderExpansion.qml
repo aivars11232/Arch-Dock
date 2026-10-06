@@ -317,7 +317,9 @@ QQC2.Pane {
                         }
                     }
                     QQC2.ToolTip.visible: pointer.containsMouse && !root.showNames
+                    // Plain text: "<" followed by a zero-width space is never a tag.
                     QQC2.ToolTip.text: String(modelData.displayName || modelData.name || "")
+                        .replace(/</g, "<\u200B")
                 }
             }
         }

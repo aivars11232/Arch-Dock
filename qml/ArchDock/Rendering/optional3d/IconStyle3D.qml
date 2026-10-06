@@ -82,30 +82,30 @@ Model {
     }
     materials: rimCount > 0 ? [bodyMaterial, rimMaterial] : [bodyMaterial]
     readonly property PrincipledMaterial bodyMaterial: PrincipledMaterial {
-        readonly property var data: root.materialData || ({})
-        readonly property color emission: data.emissiveColor || "#000000"
+        readonly property var values: root.materialData || ({})
+        readonly property color emission: values.emissiveColor || "#000000"
         readonly property real strength: Math.max(0, Math.min(2,
-            Number(data.emissiveStrength || 0) * root.emissionScale))
-        baseColor: root.vertexColoured ? "#ffffff" : data.baseColor || "#ffffff"
+            Number(values.emissiveStrength || 0) * root.emissionScale))
+        baseColor: root.vertexColoured ? "#ffffff" : values.baseColor || "#ffffff"
         baseColorMap: root.surfaceTexture
         vertexColorsEnabled: root.vertexColoured
-        metalness: Math.max(0, Math.min(1, Number(data.metalness || 0)))
-        roughness: Math.max(0, Math.min(1, Number(data.roughness || 0)))
+        metalness: Math.max(0, Math.min(1, Number(values.metalness || 0)))
+        roughness: Math.max(0, Math.min(1, Number(values.roughness || 0)))
         emissiveFactor: Qt.vector3d(emission.r * strength,
                                    emission.g * strength, emission.b * strength)
         cullMode: Material.BackFaceCulling
     }
     // The rim keeps its vertex colour and glows in the look's glow colour.
     readonly property PrincipledMaterial rimMaterial: PrincipledMaterial {
-        readonly property var data: root.materialData || ({})
-        readonly property color emission: data.rimEmissiveColor || data.emissiveColor || "#000000"
+        readonly property var values: root.materialData || ({})
+        readonly property color emission: values.rimEmissiveColor || values.emissiveColor || "#000000"
         readonly property real strength: Math.max(0, Math.min(2,
-            Number(data.rimEmissiveStrength !== undefined ? data.rimEmissiveStrength
-                   : data.emissiveStrength || 0) * root.emissionScale))
+            Number(values.rimEmissiveStrength !== undefined ? values.rimEmissiveStrength
+                   : values.emissiveStrength || 0) * root.emissionScale))
         baseColor: "#ffffff"
         vertexColorsEnabled: root.vertexColoured
-        metalness: Math.max(0, Math.min(1, Number(data.metalness || 0)))
-        roughness: Math.max(0, Math.min(1, Number(data.roughness || 0)))
+        metalness: Math.max(0, Math.min(1, Number(values.metalness || 0)))
+        roughness: Math.max(0, Math.min(1, Number(values.roughness || 0)))
         emissiveFactor: Qt.vector3d(emission.r * strength,
                                    emission.g * strength, emission.b * strength)
         cullMode: Material.BackFaceCulling

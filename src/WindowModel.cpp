@@ -56,21 +56,31 @@ bool WindowModel::updateWindow(const WindowItem &window)
             continue;
         }
 
+        // Only the roles that changed are reported: a moving window changes
+        // its geometry on every frame, and consumers that show no geometry
+        // (the dock's entries) can ignore such updates.
         const WindowItem &current = m_windows.at(row);
-        if (current.desktopFileName == window.desktopFileName &&
-            current.iconName == window.iconName &&
-            current.resourceClass == window.resourceClass &&
-            current.resourceName == window.resourceName &&
-            current.caption == window.caption &&
-            current.frameGeometry == window.frameGeometry &&
-            current.screenIndex == window.screenIndex &&
-            current.active == window.active &&
-            current.minimized == window.minimized &&
-            current.maximized == window.maximized &&
-            current.fullScreen == window.fullScreen &&
-            current.canActivate == window.canActivate &&
-            current.canMinimize == window.canMinimize &&
-            current.canClose == window.canClose)
+        QList<int> changed;
+        const auto compare = [&changed](bool same, int role)
+        {
+            if (!same)
+                changed.append(role);
+        };
+        compare(current.desktopFileName == window.desktopFileName, DesktopFileNameRole);
+        compare(current.iconName == window.iconName, IconNameRole);
+        compare(current.resourceClass == window.resourceClass, ResourceClassRole);
+        compare(current.resourceName == window.resourceName, ResourceNameRole);
+        compare(current.caption == window.caption, CaptionRole);
+        compare(current.frameGeometry == window.frameGeometry, FrameGeometryRole);
+        compare(current.screenIndex == window.screenIndex, ScreenIndexRole);
+        compare(current.active == window.active, ActiveRole);
+        compare(current.minimized == window.minimized, MinimizedRole);
+        compare(current.maximized == window.maximized, MaximizedRole);
+        compare(current.fullScreen == window.fullScreen, FullScreenRole);
+        compare(current.canActivate == window.canActivate, CanActivateRole);
+        compare(current.canMinimize == window.canMinimize, CanMinimizeRole);
+        compare(current.canClose == window.canClose, CanCloseRole);
+        if (changed.isEmpty())
         {
             return true;
         }
@@ -78,23 +88,7 @@ bool WindowModel::updateWindow(const WindowItem &window)
         m_windows[row] = window;
 
         const QModelIndex modelIndex = index(row);
-        emit dataChanged(
-            modelIndex,
-            modelIndex,
-            {DesktopFileNameRole,
-             IconNameRole,
-             ResourceClassRole,
-             ResourceNameRole,
-             CaptionRole,
-             FrameGeometryRole,
-             ScreenIndexRole,
-             ActiveRole,
-             MinimizedRole,
-             MaximizedRole,
-             FullScreenRole,
-             CanActivateRole,
-             CanMinimizeRole,
-             CanCloseRole});
+        emit dataChanged(modelIndex, modelIndex, changed);
 
         return true;
     }

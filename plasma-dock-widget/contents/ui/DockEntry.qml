@@ -511,9 +511,15 @@ Item {
     QQC2.ToolTip.visible: root.showTooltip && hoverArea.containsMouse && !root.dragging
         && !root.windowPreviewAvailable
     QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
-    QQC2.ToolTip.text: (entry.windowCount > 1
+    // Shown as typed. The style's tooltip label detects markup on its own
+    // (Qt's AutoText), and a name can come from another application's window
+    // caption: an invisible zero-width space after each "<" keeps tags from
+    // being read as rich text (formatting, network images).
+    readonly property string toolTipText: String((entry.windowCount > 1
         ? qsTr("%1 (%2 windows)").arg(entry.displayName).arg(entry.windowCount)
-        : entry.displayName) + (entry.temporaryStatus ? "\n" + entry.temporaryStatus : "")
+        : entry.displayName) + (entry.temporaryStatus ? "\n" + entry.temporaryStatus : ""))
+        .replace(/</g, "<\u200B")
+    QQC2.ToolTip.text: toolTipText
 
     QQC2.Menu {
         id: contextMenu
@@ -533,7 +539,9 @@ Item {
             delegate: QQC2.MenuItem {
                 required property var modelData
                 objectName: "desktopAction-" + String(modelData.id)
-                text: String(modelData.text)
+                // The menu style shows its text as rich text; the name comes
+                // from a desktop file, so "<" is defused as in the tooltip.
+                text: String(modelData.text).replace(/</g, "<\u200B")
                 icon.name: String(modelData.iconName || "")
                 enabled: root.contextInteractionAllowed && root.entry.canNewInstance === true
                 onTriggered: root.requestDesktopAction(String(modelData.id))

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QDBusContext>
+#include <QDBusMessage>
 #include <QHash>
 #include <QObject>
 #include <QPointer>
@@ -50,7 +52,7 @@ class QWindow;
 //   PanelWindowFreePanels.cpp       free panel hosts
 //   PanelWindowNativePanels.cpp     native panels and Plasma scripting
 //   PanelWindowNativePlacement.cpp  native placement and visibility
-class PanelWindow final : public QObject
+class PanelWindow final : public QObject, protected QDBusContext
 {
     Q_OBJECT
 
@@ -467,6 +469,9 @@ private:
     int evaluatePlasmaScriptResult(const QString &script) const;
     QWindow *createUtilityWindow(const QUrl &source);
     void presentUtilityWindow(QWindow *window, const QString &panelId = {});
+    // Panel Studio, created when it is next opened and destroyed when closed.
+    QWindow *settingsWindow();
+    void showLaunchStatus(const QString &appId, const QString &text);
 
     QQmlApplicationEngine &m_engine;
     WindowModel m_windowModel;
@@ -485,6 +490,9 @@ private:
     WindowWatcher m_windowWatcher;
     QPointer<QWindow> m_settingsWindow;
     QPointer<QWindow> m_iconPropertiesWindow;
+    // activateDockEntryOutcome() calls over D-Bus whose application start is
+    // still with KDE's launcher: answered when it reports, oldest first.
+    QHash<QString, QList<QDBusMessage>> m_pendingLaunchReplies;
     int m_screenRevision = 0;
     QTimer m_screenChangeTimer;
     bool m_screenChangePending = false;

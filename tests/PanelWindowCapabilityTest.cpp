@@ -161,6 +161,7 @@ private slots:
     void presetAuditionGuardsAndInvalidRequestsLeaveNoWrites();
     void presetDefaultsDoNotRewriteExistingInstances();
     void screenSignalsCoalesceAndUtilityWindowFitsWorkArea();
+    void closedStudioIsReleased();
     void studioArtworkPersistenceFailure_data();
     void studioArtworkPersistenceFailure();
 
@@ -1157,6 +1158,35 @@ void PanelWindowCapabilityTest::screenSignalsCoalesceAndUtilityWindowFitsWorkAre
     QVERIFY(studio->width() <= studio->screen()->availableGeometry().width());
     QVERIFY(studio->height() <= studio->screen()->availableGeometry().height());
     QVERIFY(studio->width() > 0 && studio->height() > 0);
+}
+
+// Panel Studio is the heaviest thing the backend loads (its live preview,
+// preset cards and their renderers). A closed Studio is destroyed rather than
+// kept hidden: hidden, it held its whole scene in memory and its preview
+// animations kept waking the backend. Opening it again builds a new one.
+void PanelWindowCapabilityTest::closedStudioIsReleased()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    const auto findStudio = [] {
+        QPointer<QWindow> found;
+        for (QWindow *window : QGuiApplication::allWindows())
+            if (window->title() == QStringLiteral("Arch Dock Panel Studio")) found = window;
+        return found;
+    };
+    backend.showSettings();
+    QPointer<QWindow> studio = findStudio();
+    QVERIFY(studio);
+    QTRY_VERIFY(studio->isVisible());
+    studio->close();
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isNull(), 5000);
+    QVERIFY(findStudio().isNull());
+
+    backend.showSettings();
+    QPointer<QWindow> reopened = findStudio();
+    QVERIFY(reopened);
+    QTRY_VERIFY(reopened->isVisible());
 }
 
 void PanelWindowCapabilityTest::groupedWindowsFollowLiveKWinUpdates()
@@ -2812,6 +2842,9 @@ void PanelWindowCapabilityTest::iconOverridesCommitResolveAndResetOneEntryOnly()
                  QStringLiteral("resolvedIconStyleDefinition")).toMap()
                  .value(QStringLiteral("id")).toString(),
              QStringLiteral("dark-orb"));
+    // The style definition is sent once per entry, not twice.
+    QVERIFY(!resolvedFirst.value(QStringLiteral("iconOverrideResolution")).toMap()
+                 .contains(QStringLiteral("iconStyleDefinition")));
     QVERIFY(!resolvedSecond.value(
         QStringLiteral("iconOverrideApplied")).toBool());
     QCOMPARE(resolvedSecond.value(QStringLiteral("iconName")).toString(),

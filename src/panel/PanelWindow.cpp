@@ -85,6 +85,27 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
         &DockModel::windowActionRequested,
         &m_actionBridge,
         &KWinActionBridge::requestAction);
+    // KDE's launcher reports whether an accepted start really started: the
+    // entry shows it, and a D-Bus caller still waiting for the outcome of its
+    // click (the applet, which animates only a confirmed start) is answered.
+    connect(&m_dockModel, &DockModel::launchFinished, this,
+            [this](const QString &appId, bool started, const QString &)
+            {
+                showLaunchStatus(appId, started ? tr("Application started") : tr("Launch failed"));
+                QList<QDBusMessage> &pending = m_pendingLaunchReplies[appId];
+                if (!pending.isEmpty())
+                {
+                    const QDBusMessage call = pending.takeFirst();
+                    QDBusConnection::sessionBus().send(call.createReply(QVariant(QVariantMap{
+                        {QStringLiteral("appId"), appId},
+                        {QStringLiteral("outcome"), started ? QStringLiteral("succeeded")
+                                                            : QStringLiteral("failed")},
+                        {QStringLiteral("reason"), started ? QString{}
+                                                           : QStringLiteral("launch-failed")}})));
+                }
+                if (pending.isEmpty())
+                    m_pendingLaunchReplies.remove(appId);
+            });
 
     // The objects Studio and the utility windows bind to by name.
     m_engine.rootContext()->setContextProperty(
@@ -529,19 +550,41 @@ void PanelWindow::syncRegistryFromLegacySettings()
     }
 }
 
+// A closed Panel Studio is destroyed, not kept hidden. Its live preview and
+// preset cards are the heaviest scene the backend loads: hidden, they still
+// held hundreds of megabytes and their animations kept waking the backend.
+// Studio only hides when it is closed, and closing has already applied or
+// discarded its changes, so nothing is lost.
+QWindow *PanelWindow::settingsWindow()
+{
+    if (m_settingsWindow)
+        return m_settingsWindow;
+    QWindow *window = createUtilityWindow(
+        QUrl(QStringLiteral("qrc:/qt/qml/ArchDock/qml/runtime/SettingsPopup.qml")));
+    m_settingsWindow = window;
+    if (window)
+    {
+        connect(window, &QWindow::visibleChanged, this, [this, window](bool visible)
+                {
+                    if (!visible && m_settingsWindow == window)
+                    {
+                        // Detached first: a request to open Studio before the
+                        // deletion builds a new window instead of this one.
+                        m_settingsWindow = nullptr;
+                        window->deleteLater();
+                    }
+                    updateContentDemand();
+                });
+    }
+    return window;
+}
+
 void PanelWindow::showSettings()
 {
-    if (!m_settingsWindow)
-    {
-        m_settingsWindow = createUtilityWindow(
-            QUrl(QStringLiteral("qrc:/qt/qml/ArchDock/qml/runtime/SettingsPopup.qml")));
-        if (m_settingsWindow) connect(m_settingsWindow, &QWindow::visibleChanged,
-                                     this, &PanelWindow::updateContentDemand);
-    }
-
-    const QString selected = m_settingsWindow
-        ? m_settingsWindow->property("selectedPanelId").toString() : QString{};
-    presentUtilityWindow(m_settingsWindow,
+    QWindow *studio = settingsWindow();
+    const QString selected = studio
+        ? studio->property("selectedPanelId").toString() : QString{};
+    presentUtilityWindow(studio,
                          selected.isEmpty() ? m_panelRegistry.activePanelId() : selected);
 }
 
@@ -553,20 +596,14 @@ void PanelWindow::showPanelSettings(const QString &panelId)
     }
 
     m_panelRegistry.setActivePanelId(panelId);
-    if (!m_settingsWindow)
+    QWindow *studio = settingsWindow();
+    if (studio)
     {
-        m_settingsWindow = createUtilityWindow(
-            QUrl(QStringLiteral("qrc:/qt/qml/ArchDock/qml/runtime/SettingsPopup.qml")));
-        if (m_settingsWindow) connect(m_settingsWindow, &QWindow::visibleChanged,
-                                     this, &PanelWindow::updateContentDemand);
+        studio->setProperty("selectedPanelId", panelId);
+        studio->setProperty("mainTabIndex", 1);
+        studio->setProperty("subTabIndex", 0);
     }
-    if (m_settingsWindow)
-    {
-        m_settingsWindow->setProperty("selectedPanelId", panelId);
-        m_settingsWindow->setProperty("mainTabIndex", 1);
-        m_settingsWindow->setProperty("subTabIndex", 0);
-    }
-    presentUtilityWindow(m_settingsWindow, panelId);
+    presentUtilityWindow(studio, panelId);
 }
 
 bool PanelWindow::openKdeWidgetPreview(const QString &panelId, const QString &appletId)
