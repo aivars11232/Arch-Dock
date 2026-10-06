@@ -763,23 +763,20 @@ ArchDock::PresetPreviewSession::Operations PanelWindow::presetAuditionOperations
                     *prepared.iconPreset, {}, error);
             if (!frozen) return false;
             const auto frozenValues = frozen->candidatePanel.toLegacyMap();
-            const auto effectiveTier = m_panelRegistry.resolvePanelCapabilities(candidate).renderer.effectiveTier;
+            // The fields that act on this candidate (ADREP-TASK-001 truth rules).
+            QSet<QString> active;
+            for (const QVariant &value : panelSettingsEditorFields(candidate,
+                     m_panelRegistry.resolvePanelCapabilities(candidate), QStringLiteral("studio")))
+                active.insert(value.toMap().value(QStringLiteral("key")).toString());
             for (auto it = after.cbegin(); it != after.cend(); ++it)
             {
                 const auto *field = PanelSettingsSchema::panelDescriptor(it.key());
-                // A full preset carries normalized values for inactive layouts.
-                // Only the frozen source may supply those dormant values;
-                // unavailable custom edits still pass through the editor gate.
-                const bool inactiveLayout = field && !field->editor.layouts.isEmpty() &&
-                    !field->editor.layouts.contains(candidate.layout.pathType);
-                const bool inactiveRenderer = field &&
-                    ((field->editor.capability == QStringLiteral("procedural-surface") &&
-                      effectiveTier != RendererTier::Procedural2D) ||
-                     ((field->editor.capability == QStringLiteral("scene3d-quality") ||
-                       field->editor.capability == QStringLiteral("scene3d-shape")) &&
-                      effectiveTier != RendererTier::True3D));
-                const bool dormantPresetValue = (inactiveLayout || inactiveRenderer) &&
-                    it.value() == frozenValues.value(it.key());
+                // A full preset carries normalized values for fields that do
+                // not act on this candidate: another layout, renderer, host or
+                // content. Only the frozen source may supply those dormant
+                // values; unavailable custom edits still pass the editor gate.
+                const bool dormantPresetValue = field && field->editor.isPresented() &&
+                    !active.contains(it.key()) && it.value() == frozenValues.value(it.key());
                 if (PanelSettingsSchema::isTransactionPanelField(it.key()) && before.value(it.key()) != it.value() &&
                     !dormantPresetValue)
                     changes.insert(it.key(), it.value());

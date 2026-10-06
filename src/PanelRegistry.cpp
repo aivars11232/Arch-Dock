@@ -751,6 +751,11 @@ bool normalizeFreeHostRecord(QVariantMap *panel)
     setValue(QStringLiteral("freeHostState"), normalizedState);
     setValue(QStringLiteral("screen"), qMax(0, panel->value(QStringLiteral("screen")).toInt()));
     setValue(QStringLiteral("screenId"), panel->value(QStringLiteral("screenId")).toString().trimmed());
+    // A free panel has no opening or closing mechanism (ADREP-TASK-001, PD-01):
+    // one saved collapsed, or with a mechanism, is shown open. The other
+    // presentation values are kept.
+    setValue(QStringLiteral("presentationMode"), QStringLiteral("open"));
+    setValue(QStringLiteral("collapseMechanism"), QStringLiteral("open"));
     return changed;
 }
 

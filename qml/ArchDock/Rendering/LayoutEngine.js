@@ -511,15 +511,16 @@ function entryGeometry(layout, index, count, rawGeometry, angle, polygonSides,
     const legacyRuntimeRadial = profile === "runtime"
         && !radialLayoutNames.includes(resolvedLayout);
     const orientationRadial = legacyRuntimeRadial ? 0 : radial;
-    if (profile !== "live") {
-        if (orientation === "tangent")
-            rotation = tangent + safeAngle;
-        else if (orientation === "radial")
-            rotation = orientationRadial + safeAngle;
-        else if (profile === "runtime"
-                 && (resolvedLayout === "fan" || resolvedLayout === "ribbon"))
-            rotation += safeAngle * 0.35;
-    }
+    // A chosen orientation turns each icon with its path in every profile,
+    // the free applet's live one included: Panel Studio offers it there
+    // (ADREP-TASK-001, PD-08), so it has to act there.
+    if (orientation === "tangent")
+        rotation = tangent + safeAngle;
+    else if (orientation === "radial")
+        rotation = orientationRadial + safeAngle;
+    else if (profile === "runtime"
+             && (resolvedLayout === "fan" || resolvedLayout === "ribbon"))
+        rotation += safeAngle * 0.35;
     // Upright means upright. The fan, ribbon and floating paths carry a small
     // decorative tilt that only the frozen runtime profile keeps; the canonical
     // and live scenes draw a configured-upright icon with no rotation, which is

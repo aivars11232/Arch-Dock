@@ -683,7 +683,11 @@ TestCase {
         compare(slot.delegateItem.bridgedInputEnabled, false)
         compare(slot.width, scene.layoutGeometry.iconSize)
         compare(slot.height, scene.layoutGeometry.iconSize)
-        compare(slot.rotation, 0)
+        // Contract change, ADREP-TASK-001 (PD-08): Studio offers the path
+        // orientation on free panels, so the live scene turns a tangent icon
+        // with its path instead of ignoring the choice.
+        fuzzyCompare(slot.rotation, scene.entryGeometryAt(1).tangentAngle, 0.001)
+        verify(Math.abs(slot.rotation) > 1)
     }
 
     function test_windowStateRefreshPreservesInteractionOwner() {

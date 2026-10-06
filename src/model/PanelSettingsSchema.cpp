@@ -427,7 +427,8 @@ const QVector<Descriptor> &schemaFields()
               editor("icons-notifications", "Task progress", "switch", {"studio"}, "application-overlays")),
         panel("showTemporaryStatus", Access::Editor, Type::Boolean, Normalization::Boolean,
               true, "content.showTemporaryStatus", {}, {}, {}, false, true,
-              editor("icons-notifications", "Temporary launch feedback", "switch", {"studio"})),
+              editor("icons-notifications", "Temporary launch feedback", "switch", {"studio"},
+                     "launch-feedback")),
         exposedTo(panel("acceptDrops", Access::Editor, Type::Boolean, Normalization::Boolean, true,
               "content.acceptDrops", {}, {}, {}, false, true,
               editor("panels-behavior", "Accept drops", "switch",
@@ -436,21 +437,26 @@ const QVector<Descriptor> &schemaFields()
               Normalization::ChoiceLower, QStringLiteral("fan"), "content.folderLayout",
               {}, {}, {"fan", "grid", "stack", "arc", "ring", "track", "spiral", "circular",
                        "radial", "vertical", "horizontal", "elastic", "physics"}, false, true,
-              editor("panels-behavior", "Folder layout", "combo", {"studio", "native"})),
+              editor("panels-behavior", "Folder layout", "combo", {"studio", "native"},
+                     "folder-content")),
         panel("folderSpeed", Access::Editor, Type::Integer,
               Normalization::IntegerRange, 260, "content.folderSpeed", 80, 1200, {}, false, true,
-              editor("panels-behavior", "Folder animation duration (ms)", "spin", {"studio", "native"})),
+              editor("panels-behavior", "Folder animation duration (ms)", "spin", {"studio", "native"},
+                     "folder-content")),
         panel("folderEasing", Access::Editor, Type::String,
               Normalization::ChoiceExact, QStringLiteral("outBack"),
               "content.folderEasing", {}, {},
               {"outCubic", "outBack", "outElastic", "spring"}, false, true,
-              editor("panels-behavior", "Folder easing", "combo", {"studio", "native"})),
+              editor("panels-behavior", "Folder easing", "combo", {"studio", "native"},
+                     "folder-content")),
         panel("folderExpandOnClick", Access::Editor, Type::Boolean,
               Normalization::Boolean, true, "content.folderExpandOnClick", {}, {}, {}, false, true,
-              editor("panels-behavior", "Expand folders on click", "switch", {"studio", "native"})),
+              editor("panels-behavior", "Expand folders on click", "switch", {"studio", "native"},
+                     "folder-content")),
         panel("folderShowNames", Access::Editor, Type::Boolean,
               Normalization::Boolean, true, "content.folderShowNames", {}, {}, {}, false, true,
-              editor("panels-behavior", "Always show folder item names", "switch", {"studio", "native"})),
+              editor("panels-behavior", "Always show folder item names", "switch", {"studio", "native"},
+                     "folder-content")),
 
         exposedTo(panel("edge", Access::Editor, Type::String, Normalization::ChoiceLower,
               QStringLiteral("bottom"), "placement.edge", {}, {},
@@ -520,11 +526,11 @@ const QVector<Descriptor> &schemaFields()
               true),
         panel("openDelay", Access::Editor, Type::Integer,
               Normalization::IntegerRange, 0, "visibility.openDelay", 0, 60000, {}, false,
-              true, editor("panels-behavior", "Opening delay", "spin", {"studio"},
+              true, editor("panels-animations", "Opening delay", "spin", {"studio"},
                            "presentation-mechanism", {}, {{QStringLiteral("suffix"), QStringLiteral(" ms")}})),
         panel("closeDelay", Access::Editor, Type::Integer,
               Normalization::IntegerRange, 0, "visibility.closeDelay", 0, 60000, {}, false,
-              true, editor("panels-behavior", "Closing delay", "spin", {"studio"},
+              true, editor("panels-animations", "Closing delay", "spin", {"studio"},
                            "presentation-mechanism", {}, {{QStringLiteral("suffix"), QStringLiteral(" ms")}})),
         panel("windowOverlapPolicy", Access::Internal, Type::String,
               Normalization::LowerString, QString{}, "visibility.windowOverlapPolicy", {}, {},
@@ -537,32 +543,32 @@ const QVector<Descriptor> &schemaFields()
         panel("presentationMode", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("open"),
               "presentation.mode", {}, {}, {"open", "collapsed"}, true, true,
-              editor("panels-behavior", "Resting state", "combo", {"studio"},
+              editor("panels-animations", "Resting state", "combo", {"studio"},
                      "presentation-mechanism")),
         panel("presentationTrigger", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("hover"),
               "presentation.trigger", {}, {},
               {"hover", "click", "edge", "manual"}, true, true,
-              editor("panels-behavior", "Opens on", "combo", {"studio"},
+              editor("panels-animations", "Opens on", "combo", {"studio"},
                      "presentation-mechanism")),
         panel("collapseMechanism", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("open"),
               "presentation.collapseMechanism", {}, {},
               {"open", "collapse-horizontal", "collapse-vertical",
                "collapse-radial", "split", "shutter"}, true, true,
-              editor("panels-behavior", "Collapse mechanism", "combo",
+              editor("panels-animations", "Collapse mechanism", "combo",
                      {"studio"}, "presentation-mechanism")),
         panel("collapseAxis", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("horizontal"),
               "presentation.collapseAxis", {}, {},
               {"horizontal", "vertical"}, true, true,
-              editor("panels-behavior", "Collapse axis", "combo", {"studio"},
+              editor("panels-animations", "Collapse axis", "combo", {"studio"},
                      "presentation-mechanism")),
         panel("revealHandle", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("edge-strip"),
               "presentation.revealHandle", {}, {},
               {"edge-strip", "bar", "handle", "none"}, true, true,
-              editor("panels-behavior", "Reveal handle", "combo", {"studio"},
+              editor("panels-animations", "Reveal handle", "combo", {"studio"},
                      "presentation-mechanism")),
 
         panel("layout", Access::Editor, Type::String, Normalization::ChoiceLower,
@@ -601,11 +607,13 @@ const QVector<Descriptor> &schemaFields()
         panel("layoutPadding", Access::Editor, Type::Integer,
               Normalization::IntegerRange, 18, "layout.padding", 0, 240, {}, false, true,
               editor("panels-layout", "Panel padding", "spin", {"studio"}, "layout")),
+        // Only the free polygon and the star read their number of sides; a
+        // triangle, square, pentagon, hexagon or octagon is named by its sides
+        // (LayoutEngine.shapeSides), so the control would do nothing there.
         panel("pathSides", Access::Editor, Type::Integer,
               Normalization::IntegerRange, 6, "layout.polygonSides", 3, 12, {}, false, true,
               editor("panels-layout", "Polygon sides", "spin", {"studio"}, "layout",
-                     {"polygon", "triangle", "square", "pentagon", "hexagon",
-                      "octagon", "star"})),
+                     {"polygon", "star"})),
         panel("pathOrientation", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("upright"), "layout.orientation",
               {}, {}, {"upright", "tangent", "radial"}, false, true,
@@ -621,18 +629,19 @@ const QVector<Descriptor> &schemaFields()
         // Whole-scene rotation. Gated by the same capability as the static
         // layout angle, so a native panel never sees these controls, and
         // offered only for the radial layouts a turning scene makes sense for.
+        // Motion lives on the Animations page only (ADREP-TASK-001, PD-08).
         panel("panelRotationMode", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("none"),
               "layout.rotationMode", {}, {},
               {"none", "clockwise", "counter-clockwise"}, false, true,
-              editor("panels-layout", "Panel rotation", "combo", {"studio"},
+              editor("panels-animations", "Panel rotation", "combo", {"studio"},
                      "whole-panel-rotation",
                      {"circular", "ellipse", "ring", "radial", "arc", "semicircle",
                       "fan", "spiral", "polygon", "triangle", "square", "pentagon",
                       "hexagon", "octagon", "star"})),
         panel("panelRotationSpeed", Access::Editor, Type::Real, Normalization::RealRange,
               12.0, "layout.rotationSpeed", 1.0, 180.0, {}, false, true,
-              editor("panels-layout", "Rotation speed", "spin", {"studio"},
+              editor("panels-animations", "Rotation speed", "spin", {"studio"},
                      "whole-panel-rotation",
                      {"circular", "ellipse", "ring", "radial", "arc", "semicircle",
                       "fan", "spiral", "polygon", "triangle", "square", "pentagon",
@@ -642,7 +651,7 @@ const QVector<Descriptor> &schemaFields()
         panel("panelRotationTrigger", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("idle"),
               "layout.rotationTrigger", {}, {}, {"idle", "hover"}, false, true,
-              editor("panels-layout", "Rotation runs", "combo", {"studio"},
+              editor("panels-animations", "Rotation runs", "combo", {"studio"},
                      "whole-panel-rotation",
                      {"circular", "ellipse", "ring", "radial", "arc", "semicircle",
                       "fan", "spiral", "polygon", "triangle", "square", "pentagon",
@@ -742,15 +751,16 @@ const QVector<Descriptor> &schemaFields()
                "plate", "pedestal"}, false, true,
               editor("panels-appearance", "Theme", "combo", {"studio"},
                      "procedural-surface")), {"dock-configuration"}),
+        // No renderer draws a surface outline from this value: the layout
+        // decides a panel's shape. Panel Studio does not offer it (ADREP-TASK-001,
+        // PD-04); the saved value is kept.
         exposedTo(panel("shape", Access::Editor, Type::String, Normalization::ChoiceLower,
               QStringLiteral("pill"), "surface.shape", {}, {},
-              {"pill", "rounded", "hexagon"}, false, true,
-              editor("panels-appearance", "Shape", "combo", {"studio"},
-                     "procedural-surface")), {"dock-configuration"}),
+              {"pill", "rounded", "hexagon"}, false, true), {"dock-configuration"}),
         exposedTo(panel("opacity", Access::Editor, Type::Real, Normalization::RealRange, 0.9,
               "surface.opacity", 0.0, 1.0, {}, false, true,
               editor("panels-appearance", "Opacity", "slider", {"studio"},
-                     "", {}, {{QStringLiteral("step"), 0.05},
+                     "surface-opacity", {}, {{QStringLiteral("step"), 0.05},
                                                 {QStringLiteral("decimals"), 2}})),
                   {"dock-configuration"}),
         panel("color", Access::Editor, Type::String, Normalization::TrimmedString,
@@ -844,8 +854,10 @@ const QVector<Descriptor> &schemaFields()
         exposedTo(panel("iconShape", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("rounded"), "iconStyle.shape", {}, {},
               {"rounded", "square", "squircle", "circle", "hexagon"}, false, true,
-              editor("icons-appearance", "Shape", "combo", {"studio"},
-                     "icon-state-styling")), {"dock-configuration"}),
+              // The shape of the tiles drawn behind icons; a styled icon draws
+              // its own layers instead (ADREP-TASK-005 extends it to them).
+              editor("icon-tiles", "Tile shape", "combo", {"studio"},
+                     "tile-shape")), {"dock-configuration"}),
         exposedTo(panel("iconSize", Access::Editor, Type::Integer, Normalization::IntegerRange, 52,
               "iconStyle.size", 24, 128, {}, false, true,
               editor("icons-appearance", "Size", "spin", {"studio"},
@@ -1022,6 +1034,55 @@ const QVector<Descriptor> &schemaFields()
 
 namespace ArchDock
 {
+
+QString editorCapabilityName(EditorCapability capability)
+{
+    switch (capability)
+    {
+    case EditorCapability::ScreenPlacement: return QStringLiteral("screen-placement");
+    case EditorCapability::ContentType: return QStringLiteral("content-type");
+    case EditorCapability::Segments: return QStringLiteral("segments");
+    case EditorCapability::ApplicationOverlays: return QStringLiteral("application-overlays");
+    case EditorCapability::LaunchFeedback: return QStringLiteral("launch-feedback");
+    case EditorCapability::DropInput: return QStringLiteral("drop-input");
+    case EditorCapability::FolderContent: return QStringLiteral("folder-content");
+    case EditorCapability::EdgePlacement: return QStringLiteral("edge-placement");
+    case EditorCapability::Alignment: return QStringLiteral("alignment");
+    case EditorCapability::DynamicPlacement: return QStringLiteral("dynamic-placement");
+    case EditorCapability::LengthMutation: return QStringLiteral("length-mutation");
+    case EditorCapability::ThicknessMutation: return QStringLiteral("thickness-mutation");
+    case EditorCapability::ArbitraryXyPlacement: return QStringLiteral("arbitrary-xy-placement");
+    case EditorCapability::Visibility: return QStringLiteral("visibility");
+    case EditorCapability::VisibilityMode: return QStringLiteral("visibility-mode");
+    case EditorCapability::PresentationMechanism: return QStringLiteral("presentation-mechanism");
+    case EditorCapability::Layout: return QStringLiteral("layout");
+    case EditorCapability::WholePanelRotation: return QStringLiteral("whole-panel-rotation");
+    case EditorCapability::Scene3DQuality: return QStringLiteral("scene3d-quality");
+    case EditorCapability::Scene3DShape: return QStringLiteral("scene3d-shape");
+    case EditorCapability::BakedTilt: return QStringLiteral("baked-tilt");
+    case EditorCapability::ProceduralSurface: return QStringLiteral("procedural-surface");
+    case EditorCapability::SurfaceOpacity: return QStringLiteral("surface-opacity");
+    case EditorCapability::DynamicTint: return QStringLiteral("dynamic-tint");
+    case EditorCapability::DynamicGlow: return QStringLiteral("dynamic-glow");
+    case EditorCapability::ArtworkFit: return QStringLiteral("artwork-fit");
+    case EditorCapability::IconStateStyling: return QStringLiteral("icon-state-styling");
+    case EditorCapability::TileShape: return QStringLiteral("tile-shape");
+    case EditorCapability::GlobalRenderer: return QStringLiteral("global-renderer");
+    case EditorCapability::Count: break;
+    }
+    return QString{};
+}
+
+std::optional<EditorCapability> editorCapabilityFromName(const QString &name)
+{
+    for (int value = 0; value < static_cast<int>(EditorCapability::Count); ++value)
+    {
+        const auto capability = static_cast<EditorCapability>(value);
+        if (editorCapabilityName(capability) == name)
+            return capability;
+    }
+    return std::nullopt;
+}
 
 bool PanelSettingsEditorMetadata::isPresented() const
 {

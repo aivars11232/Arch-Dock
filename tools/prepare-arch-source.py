@@ -31,6 +31,8 @@ def main():
     epoch = int(git("show", "-s", "--format=%ct", "HEAD"))
     excluded = {"PKGBUILD", "docs/CURRENT_STATE.md", "docs/RELEASE_CHECKLIST.md",
                 "docs/POST_TASK_0045_CORRECTIVE_REPORT.md"}
+    # Operational record folders: nothing below them is ever exported.
+    excluded_folders = {"docs/repairs/"}
     reserved_root_members = {"SOURCE_CHECKPOINT.json"}
     paths = sorted(set(git("ls-files", "--cached", "--others", "--exclude-standard", "-z")
                        .decode().rstrip("\0").split("\0")))
@@ -47,7 +49,8 @@ def main():
     for relative in paths:
         path = root / relative
         first = Path(relative).parts[0]
-        if relative in excluded or first == "build" or first.startswith("build-"):
+        if relative in excluded or first == "build" or first.startswith("build-") \
+                or any(relative.startswith(folder) for folder in excluded_folders):
             continue
         if path.is_symlink():
             parser.error(f"unsupported source entry: {relative}")
@@ -69,7 +72,8 @@ def main():
                         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                         "mode": mode})
     checkpoint = {"head": head, "source_date_epoch": epoch,
-                  "excluded_operational_files": sorted(excluded), "files": records}
+                  "excluded_operational_files": sorted(excluded | excluded_folders),
+                  "files": records}
     manifest = (json.dumps(checkpoint, indent=2, sort_keys=True) + "\n").encode()
     output.mkdir(parents=True, exist_ok=True)
     archive = output / f"arch-dock-{version}.tar.gz"

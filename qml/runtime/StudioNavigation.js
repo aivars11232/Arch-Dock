@@ -14,8 +14,10 @@ var sections = [
             "Panel Themes / Skins", "Built-in Panel Presets", "My Panel Presets", "Animations", "3D"]
     },
     {
+        // The icon style is chosen in one place, Icons > Appearance
+        // (ADREP-TASK-001, PD-05); there is no separate Icon Styles page.
         label: "Icons",
-        subtabs: ["Appearance", "Behavior", "Indicators", "Notifications", "Icon Styles",
+        subtabs: ["Appearance", "Behavior", "Indicators", "Notifications",
             "Built-in Icon Presets", "My Icon Presets"]
     },
     {
@@ -33,8 +35,8 @@ var sections = [
 var presetPages = {
     "1:7": { kind: "panel", scope: "builtin" },
     "1:8": { kind: "panel", scope: "user" },
-    "2:5": { kind: "icon", scope: "builtin" },
-    "2:6": { kind: "icon", scope: "user" }
+    "2:4": { kind: "icon", scope: "builtin" },
+    "2:5": { kind: "icon", scope: "user" }
 }
 
 function clampIndex(index, count) {

@@ -45,6 +45,11 @@ class PrepareArchSourceTest(unittest.TestCase):
         self.write("docs/CURRENT_STATE.md", b"operational record\n")
         self.write("docs/RELEASE_CHECKLIST.md", b"operational record\n")
         self.write("docs/POST_TASK_0045_CORRECTIVE_REPORT.md", b"operational corrective evidence\n")
+        # Per-task repair reports (ADREP-TASK-001) are records, not source.
+        self.write("docs/repairs/README.md", b"repair records\n")
+        self.write("docs/repairs/ADREP-TASK-001.md", b"task report\n")
+        self.write("docs/repairs/nested/notes.md", b"nested record\n")
+        self.write("docs/repairs.md", b"ordinary source beside the record folder\n")
         self.write("docs/SOURCE_CHECKPOINT.json", b'{"nested":"ordinary source"}\n')
         self.git("add", ".")
         self.git("commit", "--quiet", "-m", "Synthetic exporter fixture")
@@ -150,11 +155,15 @@ class PrepareArchSourceTest(unittest.TestCase):
                 self.assertEqual(member.mode, 0o755 if relative == "run.sh" else 0o644)
             for excluded in ("PKGBUILD", "docs/CURRENT_STATE.md", "docs/RELEASE_CHECKLIST.md",
                              "docs/POST_TASK_0045_CORRECTIVE_REPORT.md",
+                             "docs/repairs/README.md", "docs/repairs/ADREP-TASK-001.md",
+                             "docs/repairs/nested/notes.md",
                              "build/generated.cpp", "build-old/generated.cpp", "removed.txt", "ignored.log"):
                 self.assertNotIn(excluded, records)
+            self.assertFalse([path for path in payloads if path.startswith("docs/repairs/")])
+            self.assertIn("docs/repairs/", checkpoint["excluded_operational_files"])
             for included in ("plain.txt", "approved new ē.txt", "run.sh", "fixture.gz", "fixture.zip",
                              "docs/SOURCE_CHECKPOINT.json", "test-data/SOURCE_CHECKPOINT.json",
-                             "nested/SOURCE_CHECKPOINT.json/notes.txt"):
+                             "nested/SOURCE_CHECKPOINT.json/notes.txt", "docs/repairs.md"):
                 self.assertIn(included, records)
             extraction = self.base / "extracted"
             extraction.mkdir()

@@ -62,6 +62,47 @@ enum class PanelSettingsNormalization
     Revision
 };
 
+// What decides whether Panel Studio offers a field for the selected panel
+// (ADREP-TASK-001). Every presented field names one, and Panel Studio has one
+// availability rule for each. A name that is not listed here is never offered
+// (fail closed), and panel-settings-schema-test fails on a field that uses one.
+enum class EditorCapability
+{
+    ScreenPlacement,
+    ContentType,
+    Segments,
+    ApplicationOverlays,
+    LaunchFeedback,
+    DropInput,
+    FolderContent,
+    EdgePlacement,
+    Alignment,
+    DynamicPlacement,
+    LengthMutation,
+    ThicknessMutation,
+    ArbitraryXyPlacement,
+    Visibility,
+    VisibilityMode,
+    PresentationMechanism,
+    Layout,
+    WholePanelRotation,
+    Scene3DQuality,
+    Scene3DShape,
+    BakedTilt,
+    ProceduralSurface,
+    SurfaceOpacity,
+    DynamicTint,
+    DynamicGlow,
+    ArtworkFit,
+    IconStateStyling,
+    TileShape,
+    GlobalRenderer,
+    Count
+};
+
+[[nodiscard]] QString editorCapabilityName(EditorCapability capability);
+[[nodiscard]] std::optional<EditorCapability> editorCapabilityFromName(const QString &name);
+
 struct PanelSettingsEditorMetadata
 {
     QString section;

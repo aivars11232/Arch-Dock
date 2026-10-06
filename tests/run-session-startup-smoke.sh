@@ -52,6 +52,152 @@ run_startup_diagnostics() {
     printf 'Disconnected-bus and missing-installed-executable diagnostics PASS.\n'
 }
 
+# Runs JavaScript once in the private KWin and prints what it reported with
+# report(). KWin numbers scripts by how many are loaded, so unloading one can
+# give the next the number of another still loaded, and a run then reaches
+# that one. Each snippet therefore has a name of its own, stays loaded, and
+# counts only once its own end line appears; otherwise it is loaded anew.
+run_kwin_snippet() {
+    local body="$1" kwin_log="$ARCHDOCK_TEST_LOG_DIR/kwin.log"
+    local serial script first_line reply script_id attempt try
+    for ((try = 0; try < 3; ++try)); do
+        serial="$(date +%s%N)$RANDOM"
+        script="$XDG_RUNTIME_DIR/archdock-snippet-$serial.js"
+        printf '%s\n' "const SERIAL = \"$serial\";" \
+            'function report(text) { print("ARCHDOCK_SNIPPET_" + SERIAL + "|" + text); }' \
+            "$body" 'print("ARCHDOCK_SNIPPET_END|" + SERIAL);' >"$script"
+        first_line="$(( $(wc -l <"$kwin_log") + 1 ))"
+        reply="$(gdbus call --session --dest org.kde.KWin --object-path /Scripting \
+            --method org.kde.kwin.Scripting.loadScript "$script" "org.archdock.snippet$serial")"
+        script_id="$(sed -n 's/^(\([0-9]\+\),)$/\1/p' <<<"$reply")"
+        [[ "$script_id" =~ ^[0-9]+$ ]] || continue
+        gdbus call --session --dest org.kde.KWin --object-path "/Scripting/Script$script_id" \
+            --method org.kde.kwin.Script.run >/dev/null 2>&1 || true
+        for ((attempt = 0; attempt < 30; ++attempt)); do
+            if sed -n "${first_line},\$p" "$kwin_log" | grep -Fqx "js: ARCHDOCK_SNIPPET_END|$serial"; then
+                sed -n "${first_line},\$p" "$kwin_log" | sed -n "s/^js: ARCHDOCK_SNIPPET_${serial}|//p"
+                return 0
+            fi
+            sleep 0.1
+        done
+    done
+    printf 'The private KWin did not run a script.\n' >&2
+    return 1
+}
+
+# Panel Studio's windows as the private KWin reports them, one
+# "hidden|active" line per window.
+studio_windows() {
+    run_kwin_snippet 'const windows = workspace.windowList();
+for (let index = 0; index < windows.length; ++index)
+    if (windows[index].resourceClass === "arch-dock"
+            && windows[index].caption === "Arch Dock Panel Studio")
+        report(windows[index].hidden + "|" + windows[index].active);'
+}
+
+# Exactly one Studio window, shown and active.
+wait_for_studio_shown() {
+    local phase="$1" attempt windows=''
+    for ((attempt = 0; attempt < 50; ++attempt)); do
+        windows="$(studio_windows)" || return 1
+        [[ "$windows" == 'false|true' ]] && return 0
+        sleep 0.2
+    done
+    printf 'Panel Studio was not shown in front after %s: %s\n' "$phase" \
+        "$(tr '\n' ';' <<<"${windows:-no Studio window}")" >&2
+    return 1
+}
+
+wait_for_studio_closed() {
+    local phase="$1" attempt windows
+    for ((attempt = 0; attempt < 50; ++attempt)); do
+        windows="$(studio_windows)" || return 1
+        [[ -z "$windows" ]] && return 0
+        sleep 0.2
+    done
+    printf 'Panel Studio stayed open after %s.\n' "$phase" >&2
+    return 1
+}
+
+# A start nobody asked to see must not open Studio, now or a moment later.
+require_no_studio() {
+    local phase="$1" sample windows
+    for ((sample = 0; sample < 8; ++sample)); do
+        windows="$(studio_windows)" || return 1
+        [[ -z "$windows" ]] || {
+            printf 'Panel Studio opened after %s, which must start Arch Dock in the background.\n' \
+                "$phase" >&2
+            return 1
+        }
+        sleep 0.25
+    done
+}
+
+close_studio() {
+    run_kwin_snippet 'const windows = workspace.windowList();
+for (let index = 0; index < windows.length; ++index)
+    if (windows[index].resourceClass === "arch-dock"
+            && windows[index].caption === "Arch Dock Panel Studio")
+        windows[index].closeWindow();' >/dev/null || return 1
+    wait_for_studio_closed "$1"
+}
+
+# This private session's processes started with --settings, other than the
+# Arch Dock that owns the service: the second starts handing a request over.
+menu_forwarders() {
+    local owner pid
+    owner="$(arch_dock_service_pid)" || owner=''
+    for pid in $(pgrep -f -- '/bin/arch-dock --settings'); do
+        [[ "$pid" != "$owner" ]] && tr '\0' '\n' <"/proc/$pid/environ" 2>/dev/null |
+            grep -Fqx "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" && printf '%s\n' "$pid"
+    done
+    return 0
+}
+
+# Activate the installed application entry the way Plasma's application menu
+# does: the desktop service through KDE's application launcher. A running
+# Arch Dock gets the request from a second start, which must hand it over,
+# get its answer and exit.
+launch_from_menu() {
+    local phase="$1" log="$ARCHDOCK_TEST_LOG_DIR/menu-launch.log" failures started=$SECONDS
+    touch "$log"
+    failures="$(grep -c 'could not forward' "$log" || true)"
+    kstart --application org.archdock.ArchDock >>"$log" 2>&1 || {
+        tail -n 20 "$log" >&2
+        printf 'The Arch Dock application entry could not be activated %s.\n' "$phase" >&2
+        return 1
+    }
+    until [[ -z "$(menu_forwarders)" ]]; do
+        ((SECONDS - started < 20)) || {
+            printf 'The menu entry'"'"'s second start did not finish %s.\n' "$phase" >&2; return 1;
+        }
+        sleep 0.1
+    done
+    [[ "$(grep -c 'could not forward' "$log" || true)" == "$failures" ]] || {
+        tail -n 5 "$log" >&2
+        printf 'The menu entry could not hand its request to Arch Dock %s.\n' "$phase" >&2
+        return 1
+    }
+    printf 'Menu entry %s handed over in %s s.\n' "$phase" "$((SECONDS - started))"
+}
+
+# A stopped Arch Dock started from the menu: a new owner started by the
+# entry's own command line, the stop cleared, and Panel Studio in front.
+require_menu_start() {
+    local phase="$1" stop_file="$XDG_RUNTIME_DIR/arch-dock-intentional-stop.json" pid
+    launch_from_menu "$phase"
+    pid="$(wait_for_arch_dock_owner '' "$phase")"
+    tr '\0' ' ' <"/proc/$pid/cmdline" | rg -q -- '--settings' || {
+        printf 'The menu entry started Arch Dock without opening Studio: %s\n' \
+            "$(tr '\0' ' ' <"/proc/$pid/cmdline")" >&2
+        return 1
+    }
+    [[ ! -e "$stop_file" ]] || { printf 'The menu start kept the stop.\n' >&2; return 1; }
+    ARCHDOCK_SESSION_ARCH_DOCK_PID="$pid"
+    wait_for_kwin_script_state org.archdock.windowwatcher.runtime true "$phase"
+    wait_for_studio_shown "the menu entry $phase"
+}
+
 run_session_startup_smoke() {
     [[ "${ARCHDOCK_PLASMA_LIFECYCLE_SESSION:-}" == 1 && \
        "$XDG_CURRENT_DESKTOP" == archdock-test ]] || return 2
@@ -111,8 +257,13 @@ run_session_startup_smoke() {
         <<<"$renderer" >/dev/null
     ids="$(panel_ids)"
     owner="$ARCHDOCK_SESSION_ARCH_DOCK_PID"
+    # Background starts never show Panel Studio (ADREP-TASK-001, PD-26).
+    require_no_studio 'on-demand D-Bus activation'
     "$ARCHDOCK_STARTUP_STAGED_BINARY" >"$ARCHDOCK_TEST_LOG_DIR/repeated-launch.log" 2>&1
+    require_no_studio 'a repeated plain start'
     "$ARCHDOCK_STARTUP_STAGED_BINARY" --settings >"$ARCHDOCK_TEST_LOG_DIR/forward-settings.log" 2>&1
+    wait_for_studio_shown 'a forwarded --settings'
+    close_studio 'closing the forwarded Studio'
     reply="$(gdbus call --session --dest org.freedesktop.DBus \
         --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.StartServiceByName \
         org.archdock.ArchDock 0)"
@@ -130,7 +281,27 @@ run_session_startup_smoke() {
         printf 'Installed startup produced a runtime resource error.\n' >&2; return 1
     fi
     log_session_phase 'TASK-0043 installed activation, single owner and hidden source PASS'
+    run_menu_entry_matrix "$owner"
     run_intentional_quit_smoke "$owner"
+}
+
+# ADREP-TASK-001, PD-26: activating the application entry always shows Panel
+# Studio. Here Arch Dock runs; the stopped states follow the Quit smoke.
+run_menu_entry_matrix() {
+    local owner="$1"
+    log_session_phase 'ADREP-TASK-001 the application entry opens Panel Studio'
+    launch_from_menu 'while Arch Dock runs'
+    wait_for_studio_shown 'the menu entry while Arch Dock runs'
+    close_studio 'closing Studio'
+    launch_from_menu 'after Studio was closed'
+    wait_for_studio_shown 'the menu entry after Studio was closed'
+    launch_from_menu 'while Studio is open'
+    wait_for_studio_shown 'the menu entry while Studio is open'
+    [[ "$(arch_dock_service_pid)" == "$owner" ]] || {
+        printf 'The application entry replaced the running Arch Dock.\n' >&2; return 1;
+    }
+    close_studio 'closing Studio again'
+    log_session_phase 'ADREP-TASK-001 running, Studio closed earlier and Studio open PASS'
 }
 
 wait_for_arch_dock_owner() {
@@ -188,6 +359,7 @@ run_intentional_quit_smoke() {
     ARCHDOCK_SESSION_ARCH_DOCK_PID="$pid"
     [[ ! -e "$stop_file" ]] || { printf 'A killed backend recorded a stop.\n' >&2; return 1; }
     wait_for_kwin_script_state org.archdock.windowwatcher.runtime true 'crash recovery'
+    require_no_studio 'crash recovery through the watcher and applets'
     log_session_phase "ADFIX-TASK-001 KILL recovered through activation: $owner -> $pid"
 
     "$ARCHDOCK_STARTUP_STAGED_BINARY" --quit >"$ARCHDOCK_TEST_LOG_DIR/quit.log" 2>&1 || {
@@ -209,6 +381,8 @@ run_intentional_quit_smoke() {
         printf 'An explicit start did not clear the stop.\n' >&2; return 1;
     }
     wait_for_kwin_script_state org.archdock.windowwatcher.runtime true 'explicit start'
+    # The user unit's plain command line starts Arch Dock in the background.
+    require_no_studio 'a plain explicit start'
     reply="$(gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
         --method org.freedesktop.DBus.StartServiceByName org.archdock.ArchDock 0)"
     [[ "$reply" == '(uint32 2,)' ]]
@@ -221,6 +395,20 @@ run_intentional_quit_smoke() {
     jq -e '.reason == "signal"' "$stop_file" >/dev/null
     wait_for_kwin_script_state org.archdock.windowwatcher.runtime false 'TERM'
     hold_stopped 'TERM'
+
+    # ADREP-TASK-001, PD-26: from the menu a stopped Arch Dock starts with
+    # Panel Studio in front, also after Quit, whose stop the start clears.
+    log_session_phase 'ADREP-TASK-001 the application entry starts a stopped Arch Dock'
+    require_menu_start 'while Arch Dock is stopped'
+    "$ARCHDOCK_STARTUP_STAGED_BINARY" --quit >>"$ARCHDOCK_TEST_LOG_DIR/quit.log" 2>&1 || {
+        cat "$ARCHDOCK_TEST_LOG_DIR/quit.log" >&2; return 1;
+    }
+    wait_for_no_arch_dock_owner 'the second Quit'
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    jq -e '.reason == "quit"' "$stop_file" >/dev/null
+    wait_for_kwin_script_state org.archdock.windowwatcher.runtime false 'the second Quit'
+    require_menu_start 'after Quit Arch Dock'
+    log_session_phase 'ADREP-TASK-001 stopped and after Quit PASS'
     if rg -n 'module "ArchDock.Rendering" is not installed|error when loading applet "org.archdock.dock"|ReferenceError:|TypeError:' \
         "$ARCHDOCK_TEST_LOG_DIR"/*.log; then
         printf 'Quit or crash recovery produced a runtime error.\n' >&2; return 1

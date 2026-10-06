@@ -24,6 +24,7 @@
 #include "../WindowModel.h"
 #include "../WindowWatcher.h"
 #include "../integration/PlasmaPanelAdapter.h"
+#include "../model/PanelSettingsSchema.h"
 #include "../presets/PresetLibrary.h"
 #include "../presets/PresetPreviewSession.h"
 #include "FreePanelController.h"
@@ -261,10 +262,13 @@ private:
     capabilityCandidateDefinition(
         const QString &panelId,
         const QVariantMap &candidateValues) const;
+    // The fields Panel Studio offers for a candidate: panel fields, or the
+    // global ones that act on this panel.
     [[nodiscard]] QVariantList panelSettingsEditorFields(
         const ArchDock::PanelDefinition &candidate,
         const ArchDock::CapabilityResolution &resolution,
-        const QString &consumer) const;
+        const QString &consumer,
+        ArchDock::PanelSettingsFieldScope scope = ArchDock::PanelSettingsFieldScope::Panel) const;
     [[nodiscard]] QVariantMap panelSettingsEditorValues(
         const ArchDock::PanelDefinition &candidate,
         const QVariantList &fields) const;

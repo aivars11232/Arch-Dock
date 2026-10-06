@@ -164,6 +164,7 @@ private slots:
     void closedStudioIsReleased();
     void studioArtworkPersistenceFailure_data();
     void studioArtworkPersistenceFailure();
+    void ownersFreeCircleOffersOnlyWhatWorks();
 
 private:
     QTemporaryDir m_settingsDirectory;
@@ -3941,6 +3942,177 @@ void PanelWindowCapabilityTest::presetDefaultsDoNotRewriteExistingInstances()
     QCOMPARE(session->defaultSelection().value(QStringLiteral("panelPresetId")).toString(), QString{});
     QCOMPARE(session->defaultSelection().value(QStringLiteral("iconPresetId")).toString(), QStringLiteral("glass-tile"));
     QCOMPARE(settingsSnapshot(), before);
+}
+
+// ADREP-TASK-001 (OF-02 to OF-10, PD-01 to PD-08): the owner's free circular
+// panel from the video audit of 2026-10-06 ("Free panel 13": a launcher circle
+// whose Width was set to 700). Each Studio page it opens is read as drawn,
+// and only controls that act on this panel may be offered, each on one page.
+// With ARCHDOCK_STUDIO_CAPTURE_DIR set, every page is also saved as a capture.
+void PanelWindowCapabilityTest::ownersFreeCircleOffersOnlyWhatWorks()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    QVERIFY(backend.applyPanelSettingsTransaction(panel,
+        registry->panelDefinition(panel)->settingsRevision,
+        {{"type", "launcher"}, {"layout", "circular"}, {"appearance", "futuristic"},
+         {"iconStyle", "dark-orb"}, {"panelRotationMode", "clockwise"}}).value("success").toBool());
+    // Values the owner stored through controls that did nothing there: the
+    // Width they typed and a shape Dark Orb's own layers ignore.
+    registry->setPanelValue(panel, QStringLiteral("width"), 700);
+    registry->setPanelValue(panel, QStringLiteral("iconShape"), QStringLiteral("squircle"));
+    QCOMPARE(registry->panelValue(panel, QStringLiteral("width")).toInt(), 700);
+    const QString captureDirectory = qEnvironmentVariable("ARCHDOCK_STUDIO_CAPTURE_DIR");
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    // A capture shows each whole page, so the window is tall enough for it.
+    std::unique_ptr<QObject> popup(component.createWithInitialProperties({
+        {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 0},
+        {"width", 1100}, {"height", captureDirectory.isEmpty() ? 820 : 2200}}));
+    QVERIFY(popup);
+    auto *window = qobject_cast<QQuickWindow *>(popup.get());
+    QVERIFY(window);
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+
+    struct Page { int section; int subtab; QString name; };
+    const QList<Page> pages{
+        {1, 0, "panels-general"}, {1, 1, "panels-size"}, {1, 2, "panels-appearance"},
+        {1, 3, "panels-behavior"}, {1, 4, "panels-layout"}, {1, 5, "panels-segments"},
+        {1, 9, "panels-animations"}, {1, 10, "panels-3d"}, {2, 0, "icons-appearance"},
+        {2, 1, "icons-behavior"}, {2, 2, "icons-indicators"}, {2, 3, "icons-notifications"},
+        {2, 4, "icons-fifth-tab"}, {3, 0, "icon-tiles"}};
+    QHash<QString, QVariantList> rowsByPage;
+    QHash<QString, bool> offeredByPage;
+    QHash<QString, QString> tabLabelByPage;
+    for (const Page &page : pages) {
+        popup->setProperty("mainTabIndex", page.section);
+        popup->setProperty("subTabIndex", page.subtab);
+        QVERIFY(QQuickTest::qWaitForPolish(window));
+        QTest::qWait(30);
+        QVariant rows;
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "rowsForCurrentPage", Q_RETURN_ARG(QVariant, rows)));
+        rowsByPage.insert(page.name, rows.toList());
+        // A page is offered when its tab is shown; before ADREP-TASK-001
+        // every tab was shown.
+        QVariant offered = true;
+        QMetaObject::invokeMethod(popup.get(), "subtabAvailable", Q_RETURN_ARG(QVariant, offered),
+                                  Q_ARG(QVariant, page.section), Q_ARG(QVariant, page.subtab));
+        offeredByPage.insert(page.name, offered.toBool());
+        const QStringList labels = popup->property("currentSubtabs").value<QJSValue>()
+            .toVariant().toStringList();
+        tabLabelByPage.insert(page.name, page.subtab < labels.size() ? labels.at(page.subtab) : QString{});
+        if (!captureDirectory.isEmpty() && offered.toBool()) {
+            const QString file = QDir(captureDirectory).filePath(
+                QStringLiteral("%1-%2.png").arg(page.section * 100 + page.subtab, 4, 10, QChar('0'))
+                    .arg(page.name));
+            QVERIFY2(window->grabWindow().save(file), qPrintable(file));
+        }
+    }
+    if (!captureDirectory.isEmpty()) {
+        // The same pages as text: each row's kind, key, label and sentence.
+        QJsonObject listing;
+        for (const Page &page : pages) {
+            QJsonArray rows;
+            for (const QVariant &value : rowsByPage.value(page.name)) {
+                const QVariantMap row = value.toMap();
+                rows.append(QJsonObject{{"kind", row.value("kind").toString()},
+                    {"key", row.value("key").toString()}, {"label", row.value("label").toString()},
+                    {"text", row.value("description").toString() + row.value("text").toString()}});
+            }
+            listing.insert(page.name, QJsonObject{{"tab", tabLabelByPage.value(page.name)},
+                {"offered", offeredByPage.value(page.name)}, {"rows", rows}});
+        }
+        QFile file(QDir(captureDirectory).filePath(QStringLiteral("pages.json")));
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        file.write(QJsonDocument(listing).toJson());
+    }
+
+    const auto controls = [&](const QString &page) {
+        QStringList keys;
+        if (!offeredByPage.value(page))
+            return keys;
+        for (const QVariant &value : rowsByPage.value(page)) {
+            const QVariantMap row = value.toMap();
+            const QString kind = row.value("kind").toString();
+            if (!row.value("key").toString().isEmpty() && kind != "readonly"
+                    && (!row.contains("available") || row.value("available").toBool()))
+                keys.append(row.value("key").toString());
+        }
+        return keys;
+    };
+    const auto sections = [&](const QString &page) {
+        QStringList labels;
+        for (const QVariant &value : rowsByPage.value(page))
+            if (value.toMap().value("kind").toString() == "section")
+                labels.append(value.toMap().value("label").toString());
+        return labels;
+    };
+    const QStringList presentation{"presentationMode", "presentationTrigger", "collapseMechanism",
+        "collapseAxis", "revealHandle", "openDelay", "closeDelay"};
+    const QStringList rotation{"panelRotationMode", "panelRotationSpeed", "panelRotationTrigger"};
+
+    // OF-02: no Alignment (nor any other edge-panel placement) on General.
+    for (const QString &key : {QStringLiteral("alignment"), QStringLiteral("edge")})
+        QVERIFY2(!controls("panels-general").contains(key), qPrintable(key));
+    QVERIFY(controls("panels-general").contains("x") && controls("panels-general").contains("y"));
+    // OF-03, PD-02: no Width or Height that does nothing. A tab with nothing
+    // to change is not shown (the owner, 2026-10-07: "If the tab is empty,
+    // there's no need for that tab"), so the Layout page says what sets a
+    // radius-driven circle's size.
+    QVERIFY(!offeredByPage.value("panels-size"));
+    bool sizeExplained = false;
+    for (const QVariant &value : rowsByPage.value("panels-layout"))
+        sizeExplained |= value.toMap().value("kind").toString() == "notice"
+            && value.toMap().value("text").toString().contains("Radius");
+    QVERIFY2(sizeExplained, "the Layout page does not say what sets this panel's size");
+    // OF-05, PD-04: Appearance has no Shape.
+    QVERIFY(!controls("panels-appearance").contains("shape"));
+    // OF-06, OF-07, PD-01: Behavior has no Dynamic and no opening or closing.
+    QVERIFY(!controls("panels-behavior").contains("dynamic"));
+    QVERIFY(!controls("panels-behavior").contains("visibilityMode"));
+    for (const QString &page : rowsByPage.keys())
+        for (const QString &key : presentation)
+            QVERIFY2(!controls(page).contains(key), qPrintable(page + ": " + key));
+    QVERIFY2(!sections("panels-animations").contains("Opening and closing"),
+             "Animations offers an opening and closing section on a free panel");
+    // OF-04, PD-08: rotation only on Animations.
+    for (const QString &key : rotation) {
+        QVERIFY2(!controls("panels-layout").contains(key), qPrintable(key));
+        QVERIFY2(controls("panels-animations").contains(key), qPrintable(key));
+    }
+    // OF-08, PD-06: no Indicators on a free panel.
+    QVERIFY(!offeredByPage.value("icons-indicators"));
+    for (const QString &page : rowsByPage.keys())
+        QVERIFY2(!controls(page).contains("showIndicators"), qPrintable(page));
+    // OF-09, PD-07: every notification item says in a sentence what it does.
+    for (const QVariant &value : rowsByPage.value("icons-notifications")) {
+        const QVariantMap row = value.toMap();
+        if (!row.value("key").toString().isEmpty())
+            QVERIFY2(row.value("description").toString().endsWith('.'),
+                     qPrintable(row.value("key").toString()));
+    }
+    // OF-10, PD-05: one icon style selector, on Icons > Appearance.
+    QVERIFY(!(offeredByPage.value("icons-fifth-tab")
+              && tabLabelByPage.value("icons-fifth-tab") == QStringLiteral("Icon Styles")));
+    QStringList styleSelectors;
+    for (const QString &page : rowsByPage.keys())
+        if (controls(page).contains("iconStyle"))
+            styleSelectors.append(page);
+    QCOMPARE(styleSelectors, QStringList{QStringLiteral("icons-appearance")});
+    // No setting is offered on two pages.
+    QHash<QString, QString> owner;
+    for (const QString &page : rowsByPage.keys())
+        for (const QString &key : controls(page)) {
+            QVERIFY2(!owner.contains(key) || owner.value(key) == page,
+                     qPrintable(key + " on " + owner.value(key) + " and " + page));
+            owner.insert(key, page);
+        }
 }
 
 int main(int argc, char **argv)

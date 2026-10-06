@@ -15,11 +15,12 @@ function(check_install logical_prefix physical_prefix)
   if(NOT EXISTS "${physical_prefix}/${INSTALL_BINDIR}/arch-dock")
     message(FATAL_ERROR "The startup executable was not installed")
   endif()
-  # On-demand activation is marked so a user's Quit can refuse it; the
-  # application entry starts Arch Dock explicitly and offers Quit.
+  # On-demand activation is marked so a user's Quit can refuse it. The
+  # application entry always opens Panel Studio, starting Arch Dock explicitly
+  # when it is stopped (ADREP-TASK-001, PD-26), and offers Quit.
   foreach(pair IN ITEMS
       "share/dbus-1/services/org.archdock.ArchDock.service|Exec| --dbus-activated"
-      "share/applications/org.archdock.ArchDock.desktop|Exec|;Exec=\"${executable}\" --quit"
+      "share/applications/org.archdock.ArchDock.desktop|Exec| --settings|Exec=\"${executable}\" --quit"
       "${INSTALL_LIBDIR}/systemd/user/arch-dock.service|ExecStart|")
     string(REPLACE "|" ";" fields "${pair}")
     list(GET fields 0 relative)

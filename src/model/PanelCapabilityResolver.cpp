@@ -753,16 +753,11 @@ HostCapabilityProfile PanelCapabilityResolver::productionHostProfile(
             PanelCapability::IconStateStyling,
         };
         profile.layouts = allLayouts();
-        // The free host animates entirely inside its own desktop applet, so
-        // every declared mechanism is reachable here. Radial is included only
-        // for this host: it needs a surface that is not a fixed rectangle.
+        // A free panel stands open on the desktop: opening and closing
+        // mechanisms belong to edge panels (ADREP-TASK-001, PD-01), so no
+        // Studio setting, preset or request can collapse a free panel.
         profile.presentationMechanisms = {
             PanelPresentationMechanism::Open,
-            PanelPresentationMechanism::CollapseHorizontal,
-            PanelPresentationMechanism::CollapseVertical,
-            PanelPresentationMechanism::CollapseRadial,
-            PanelPresentationMechanism::Split,
-            PanelPresentationMechanism::Shutter,
         };
         // Baked 2.5D is offered on the free desktop host only. A perspective
         // platform needs a surface that is not a fixed rectangle, which is

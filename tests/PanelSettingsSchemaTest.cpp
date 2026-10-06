@@ -45,7 +45,38 @@ private slots:
     void tiltScalarsPreserveParameterMaps();
     void sceneTransformFieldsAreBoundedAndReversible();
     void folderSettingsPreserveLegacyValues();
+    void everyEditorCapabilityHasAnAvailabilityRule();
 };
+
+// ADREP-TASK-001: Panel Studio offers a field only through the availability
+// rule of its capability, and the rules switch over EditorCapability, which
+// the compiler checks for completeness. A presented field naming a capability
+// with no rule would never be shown, so it fails here instead; a name the rule
+// set does not know is never offered (fail closed).
+void PanelSettingsSchemaTest::everyEditorCapabilityHasAnAvailabilityRule()
+{
+    QSet<int> used;
+    for (const PanelSettingsFieldDescriptor &field : PanelSettingsSchema::fields())
+    {
+        if (!field.editor.isPresented())
+            continue;
+        const auto capability = ArchDock::editorCapabilityFromName(field.editor.capability);
+        QVERIFY2(capability.has_value(), qPrintable(field.key + QStringLiteral(": capability '")
+            + field.editor.capability + QStringLiteral("' has no availability rule")));
+        used.insert(static_cast<int>(*capability));
+    }
+    for (int value = 0; value < static_cast<int>(ArchDock::EditorCapability::Count); ++value)
+    {
+        const auto capability = static_cast<ArchDock::EditorCapability>(value);
+        const QString name = ArchDock::editorCapabilityName(capability);
+        QVERIFY2(!name.isEmpty(), qPrintable(QString::number(value)));
+        QVERIFY2(ArchDock::editorCapabilityFromName(name) == capability, qPrintable(name));
+        QVERIFY2(used.contains(value), qPrintable(name + QStringLiteral(" is a rule no field uses")));
+    }
+    for (const QString &unknown : {QString{}, QStringLiteral("native-edge-placement"),
+                                   QStringLiteral("invented-capability")})
+        QVERIFY2(!ArchDock::editorCapabilityFromName(unknown).has_value(), qPrintable(unknown));
+}
 
 void PanelSettingsSchemaTest::descriptorMapsContainOnlyValidValues()
 {

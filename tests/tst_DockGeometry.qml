@@ -159,7 +159,12 @@ TestCase {
             "polygon", 0, 4, polygon, 0, 4, "radial", "runtime")
         compare(Math.round(liveUpright.x), 132)
         compare(Math.round(liveUpright.y), 12)
-        compare(liveTangent.rotation, liveUpright.rotation)
+        // Contract change, ADREP-TASK-001 (PD-08 and the settings truth
+        // contract): Panel Studio offers Icon path orientation on free panels,
+        // whose applet uses the live profile, so a chosen orientation turns the
+        // icon there too. It used to be ignored. Upright stays upright.
+        compare(liveUpright.rotation, 0)
+        compare(Math.round(liveTangent.rotation), 45)
         compare(Math.round(runtimeTangent.rotation), 45)
         compare(Math.round(runtimeRadial.rotation), -90)
 
@@ -178,8 +183,9 @@ TestCase {
         const singleFan = geometry("fan", 1, 17)
         compare(runtimePosition(
                     "fan", 0, 1, singleFan, 17, "tangent").rotation, 17)
+        // ADREP-TASK-001 (PD-08): the live profile honours the orientation.
         compare(livePosition(
-                    "fan", 0, 1, singleFan, 17, "tangent").rotation, 0)
+                    "fan", 0, 1, singleFan, 17, "tangent").rotation, 17)
     }
 
     function test_linearClosedAndSingleEntryBoundaries() {
@@ -423,10 +429,12 @@ TestCase {
                 compare(upright.rotation, 0,
                         data.layout + "/" + profile + " upright rotation")
             }
-            const tangent = LayoutEngine.entryGeometry(
-                data.layout, index, count, value, 23, 6, "tangent", "canonical")
-            fuzzy(tangent.rotation, tangent.tangentAngle,
-                  data.layout + " tangent follows the path")
+            for (const profile of ["canonical", "live"]) {
+                const tangent = LayoutEngine.entryGeometry(
+                    data.layout, index, count, value, 23, 6, "tangent", profile)
+                fuzzy(tangent.rotation, tangent.tangentAngle,
+                      data.layout + "/" + profile + " tangent follows the path")
+            }
         }
     }
 

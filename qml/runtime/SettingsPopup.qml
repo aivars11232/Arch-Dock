@@ -210,15 +210,6 @@ Window {
         return EditorModel.rendererThemeCandidate(editorSession, theme);
     }
 
-    // The current draft drawn with one icon style, for the Icon Styles page.
-    function iconStyleRendererCandidate(style) {
-        // Copied so the native lists in the draft reach the preview as arrays.
-        const candidate = EditorModel.copyValue(EditorModel.rendererCandidate(editorSession));
-        candidate.iconStyle = String(style && style.id || "");
-        candidate.iconStyleDefinition = panelRegistry.iconStyleDefinition(candidate.iconStyle);
-        return candidate;
-    }
-
     function resetRendererPreview(candidate) {
         previewMode = rendererPreviewMode(candidate);
         previewPresentationState = String(candidate.presentationMode
@@ -296,6 +287,56 @@ Window {
             setSubTab(0);
         }
     }
+
+    // Whether a tab has anything to change on the selected panel. A tab with
+    // nothing to change is not shown, as the owner asked; tabs keep their
+    // indices (ADREP-TASK-001).
+    function subtabAvailable(sectionIndex, subtabIndex) {
+        const sectionNumber = Number(sectionIndex);
+        const subtabNumber = Number(subtabIndex);
+        const presetPage = StudioNavigation.presetPage(sectionNumber, subtabNumber);
+        if (presetPage) {
+            // Your own catalog appears once it holds a preset.
+            if (presetPage.scope !== "user")
+                return true;
+            const revision = presetLibrary.revision;
+            return (presetPage.kind === "panel" ? presetLibrary.panelPresets("user")
+                                                : presetLibrary.iconPresets("user")).length > 0;
+        }
+        if (sectionNumber === 1) {
+            if (subtabNumber === 1)
+                return fieldsForSection("panels-size").length > 0;
+            if (subtabNumber === 4)
+                return fieldsForSection("panels-layout").length > 0;
+            if (subtabNumber === 5)
+                return fieldDescriptor("segments", "panel") !== null;
+            if (subtabNumber === 9)
+                return panelAnimationRows().length > 0;
+            if (subtabNumber === 10)
+                return scene3DControlsAvailable;
+        }
+        if (sectionNumber === 2) {
+            if (subtabNumber === 2)
+                return fieldsForSection("icons-indicators").length > 0;
+            if (subtabNumber === 3)
+                return fieldsForSection("icons-notifications").length > 0;
+        }
+        return true;
+    }
+
+    // The page shown is always one that is offered for the selected panel.
+    function ensureOfferedSubtab() {
+        if (subtabAvailable(mainTabIndex, subTabIndex))
+            return;
+        for (let index = 0; index < currentSubtabs.length; ++index) {
+            if (subtabAvailable(mainTabIndex, index)) {
+                setSubTab(index);
+                return;
+            }
+        }
+    }
+    onEditorSessionChanged: Qt.callLater(root.ensureOfferedSubtab)
+    onMainTabIndexChanged: Qt.callLater(root.ensureOfferedSubtab)
 
     function setMainTab(index) {
         const next = StudioNavigation.clampSectionIndex(index);
@@ -554,6 +595,16 @@ Window {
                             "square", "pentagon", "hexagon", "octagon", "arc", "semicircle",
                             "fan"].includes(String(panelValue("layout", ""))))
                     row.description = qsTr("On a curved path, values below 8 draw the icons together and 0 makes them touch. From 8 up they are spread evenly, unless there are more icons than fit: then the value is the gap between the ones shown.");
+                // One plain sentence for what each of these changes on the
+                // dock (ADREP-TASK-001, PD-03 and PD-07).
+                const sentences = {
+                    layoutPadding: qsTr("The space between the icons and the edge of the theme's artwork."),
+                    showBadges: qsTr("A round number in the top-right corner of an application's icon, such as unread messages, when the application reports one."),
+                    showProgress: qsTr("A thin bar along the bottom of an application's icon while the application reports progress, such as a download."),
+                    showTemporaryStatus: qsTr("For 5 seconds after you start an application, a small “!” on its icon, and a line in its tooltip, say whether it started.")
+                };
+                if (sentences[row.key] !== undefined)
+                    row.description = sentences[row.key];
                 if (source[index].capability === "presentation-mechanism") {
                     if (!scenePresentationMechanisms.some(function(id) { return id !== "open"; }))
                         continue;
@@ -585,7 +636,7 @@ Window {
     }
 
     function overviewIconRows() {
-        return [section(qsTr("Icons"), qsTr("Settings currently applied to icons in the selected panel."), true), readOnlyRow(qsTr("Style"), optionLabel("iconStyle", panelValue("iconStyle", "plain-original"))), readOnlyRow(qsTr("Size"), panelValue("iconSize", 52) + qsTr(" px")), readOnlyRow(qsTr("Spacing"), Math.round(Number(panelValue("spacing", 8))) + qsTr(" px")), readOnlyRow(qsTr("Shape"), optionLabel("iconShape", panelValue("iconShape", "rounded"))), readOnlyRow(qsTr("Animation"), optionLabel("iconAnimation", panelValue("iconAnimation", "scale"))), readOnlyRow(qsTr("Magnification"), globalValue("magnificationEnabled", true) ? Number(globalValue("magnification", 1.65)).toFixed(2) + "×" : qsTr("Off"))];
+        return [section(qsTr("Icons"), qsTr("Settings currently applied to icons in the selected panel."), true), readOnlyRow(qsTr("Style"), optionLabel("iconStyle", panelValue("iconStyle", "plain-original"))), readOnlyRow(qsTr("Size"), panelValue("iconSize", 52) + qsTr(" px")), readOnlyRow(qsTr("Spacing"), Math.round(Number(panelValue("spacing", 8))) + qsTr(" px")), readOnlyRow(qsTr("Tile shape"), optionLabel("iconShape", panelValue("iconShape", "rounded"))), readOnlyRow(qsTr("Animation"), optionLabel("iconAnimation", panelValue("iconAnimation", "scale"))), readOnlyRow(qsTr("Magnification"), globalValue("magnificationEnabled", true) ? Number(globalValue("magnification", 1.65)).toFixed(2) + "×" : qsTr("Off"))];
     }
 
     function panelGeneralRows() {
@@ -618,12 +669,26 @@ Window {
         return rows;
     }
 
+    // A size control is offered only where it changes what is drawn. A free
+    // panel is drawn from its layout, so it has no Size page and its Layout
+    // page says what sets its size (ADREP-TASK-001, PD-02).
+    function panelLayoutRows() {
+        const rows = schemaSectionRows("panels-layout", qsTr("Layout"),
+            qsTr("Shape geometry and content placement."));
+        if (fieldsForSection("panels-size").length === 0)
+            rows.splice(1, 0, notice(fieldDescriptor("layoutRadius", "panel")
+                ? qsTr("Radius and Layout scale set this panel's size.")
+                : qsTr("This panel is as large as its icons: Layout scale here, and Size and Spacing on Icons > Appearance.")));
+        return rows;
+    }
+
     function panelAppearanceRows() {
         const rows = schemaSectionRows("panels-appearance", qsTr("Appearance"), qsTr("Surface styling for the selected panel."));
-        rows.push({ kind: "actions", label: qsTr("3D"),
-            description: qsTr("Drawing this panel in 3D, and every 3D setting, is on the 3D page."),
-            actions: [{ label: qsTr("Open the 3D page"), icon: "view-preview", action: "open-3d-page",
-                        available: true }] });
+        if (subtabAvailable(1, 10))
+            rows.push({ kind: "actions", label: qsTr("3D"),
+                description: qsTr("Drawing this panel in 3D, and every 3D setting, is on the 3D page."),
+                actions: [{ label: qsTr("Open the 3D page"), icon: "view-preview", action: "open-3d-page",
+                            available: true }] });
         rows.push(notice(qsTr("Built-in themes and imported artwork are on the Panel Themes / Skins page.")));
         return rows;
     }
@@ -677,37 +742,18 @@ Window {
             ? qsTr("Editing on the desktop: drag the platform itself to tilt and turn it, or its handles to move, rotate and scale it. Apply as Active saves the result; Cancel restores the panel.")
             : qsTr("Edit on desktop lets you drag the panel itself to tilt and turn it, and shows move, rotate and scale handles on it, like a 3D editor. Apply or cancel other changes first.")));
         // The platform's shape. A look without a 3D platform of its own stands
-        // on one generated along the panel's layout: its shape is the layout,
-        // offered here with only the shapes 3D draws exactly, and its width and
-        // bend can be set. A theme's own 3D platform keeps the shape it brings.
+        // on one generated along the panel's layout, chosen on the Layout page
+        // (one place per setting, ADREP-TASK-001); its width and bend are set
+        // here. A theme's own 3D platform keeps the shape it brings.
         const generatedScene = Boolean(((selectedPreviewTheme || {}).scene3D || {}).generated);
         rows.push(section(qsTr("Shape"), generatedScene
-            ? qsTr("The platform follows the panel's layout, so every icon stands on it.")
+            ? qsTr("The platform follows the Dock layout on the Layout page, so every icon stands on it. Arcs, semicircles and fans stay flat.")
             : qsTr("This theme brings its own 3D platform; its shape is fixed.")));
-        if (generatedScene) {
-            const layoutField = fieldsForSection("panels-layout").find(function(row) {
-                return row.key === "layout";
-            });
-            if (layoutField) {
-                const exact = ["circular", "ring", "ellipse", "radial", "triangle", "square",
-                               "pentagon", "hexagon", "octagon", "polygon"];
-                const shapeRow = Object.assign({}, layoutField, {
-                    label: qsTr("Shape"),
-                    description: qsTr("The panel's layout. Arcs, semicircles and fans stay flat."),
-                    options: layoutField.options.filter(function(option) {
-                        return exact.includes(option.value);
-                    })
-                });
-                rows.push(shapeRow);
-            }
+        if (generatedScene)
             rows.push.apply(rows, pick(["scene3DBand", "scene3DBend"]));
-        }
-        rows.push(section(qsTr("View and surface"), ""));
+        rows.push(section(qsTr("View and surface"), qsTr("Icon spacing is set on Icons > Appearance.")));
         rows.push.apply(rows, pick(["scene3DFieldOfView", "scene3DThickness", "scene3DIconElevation",
             "scene3DQuality"]));
-        rows.push.apply(rows, fieldsForSection("icons-appearance").filter(function(row) {
-            return row.key === "spacing";
-        }));
         rows.push(section(qsTr("Lighting"), ""));
         rows.push.apply(rows, pick(["scene3DKeyLight", "scene3DFillLight"]));
         rows.push(section(qsTr("Motion"), ""));
@@ -763,20 +809,6 @@ Window {
         ];
     }
 
-    // Icon styles are their own resource type, separate from Icon Presets.
-    function iconStyleRows() {
-        if (!fieldDescriptor("iconStyle", "panel")) {
-            return [section(qsTr("Icon Styles"), qsTr("Reusable icon appearance sets."), true),
-                notice(qsTr("Icon styles are not available for the resolved panel capabilities."))];
-        }
-        return [{
-            kind: "iconStyleSamples",
-            label: qsTr("Icon Styles"),
-            description: qsTr("The installed icon styles, drawn on this panel. Load stages a style in the draft; Apply saves it."),
-            styles: editorSession.iconStyles || []
-        }];
-    }
-
     function panelBehaviorRows() {
         const rows = schemaSectionRows("panels-behavior", qsTr("Behavior"), qsTr("Visibility and interaction rules."));
         if (isNativePanel()) {
@@ -792,36 +824,36 @@ Window {
         return [section(label, description, true), notice(qsTr("This page remains unavailable until its renderer and persistence path are implemented."))];
     }
 
+    // The panel's own motion. Opening and closing belong to edge panels whose
+    // host and theme can draw a mechanism, rotation to free panels; a group
+    // with nothing to offer is not shown (ADREP-TASK-001, PD-01, PD-08).
     function panelAnimationRows() {
         const presentationKeys = ["presentationMode", "presentationTrigger", "collapseMechanism",
             "collapseAxis", "revealHandle", "openDelay", "closeDelay"];
-        const opening = fieldsForSection("panels-behavior").filter(function(row) {
-            return presentationKeys.includes(row.key);
-        });
-        const rows = [section(qsTr("Opening and closing"),
-            qsTr("Choose the resting state, reveal trigger and motion. Preview is a draft until Apply."), true)];
-        rows.push.apply(rows, opening);
-        if (opening.length && !hasPendingChanges && !auditionBusy
-                && Boolean(panelValue("visible", false)) && panelValue("presentationMode", "open") === "collapsed") {
-            rows.push({kind: "actions", label: qsTr("Saved panel"), actions: [
-                {action: "open-panel", label: qsTr("Open panel")},
-                {action: "close-panel", label: qsTr("Close panel")}
-            ]});
+        const rotationKeys = ["panelRotationMode", "panelRotationSpeed", "panelRotationTrigger"];
+        const fields = fieldsForSection("panels-animations");
+        const opening = fields.filter(function(row) { return presentationKeys.includes(row.key); });
+        const rotation = fields.filter(function(row) { return rotationKeys.includes(row.key); });
+        const rows = [];
+        if (opening.length) {
+            rows.push(section(qsTr("Opening and closing"),
+                qsTr("Choose the resting state, reveal trigger and motion. Preview is a draft until Apply."), true));
+            rows.push.apply(rows, opening);
+            if (!hasPendingChanges && !auditionBusy && Boolean(panelValue("visible", false))
+                    && panelValue("presentationMode", "open") === "collapsed") {
+                rows.push({kind: "actions", label: qsTr("Saved panel"), actions: [
+                    {action: "open-panel", label: qsTr("Open panel")},
+                    {action: "close-panel", label: qsTr("Close panel")}
+                ]});
+            }
         }
-        if (!opening.length)
-            rows.push(notice(qsTr("This theme does not declare an opening or closing mechanism.")));
-        rows.push.apply(rows, fieldsForSection("icons-behavior").filter(function(row) {
-            return row.key === "animationDuration";
-        }));
-        rows.push(section(qsTr("Free panel rotation"),
-            qsTr("Choose continuous clockwise or counterclockwise rotation, its speed, and when it runs.")));
-        const rotation = fieldsForSection("panels-layout").filter(function(row) {
-            return ["panelRotationMode", "panelRotationSpeed", "panelRotationTrigger"].includes(row.key);
-        });
-        rows.push.apply(rows, rotation);
-        rows.push(notice(rotation.length
-            ? qsTr("Hover the free panel and scroll up to turn clockwise, or down to turn counterclockwise. Wheel rotation works with continuous rotation off. Hover the preview to try hover-triggered continuous motion.")
-            : qsTr("Rotation requires a free panel with a supported radial layout or closed theme track.")));
+        if (rotation.length) {
+            rows.push(section(qsTr("Free panel rotation"),
+                qsTr("Choose continuous clockwise or counterclockwise rotation, its speed, and when it runs."),
+                rows.length === 0));
+            rows.push.apply(rows, rotation);
+            rows.push(notice(qsTr("Hover the free panel and scroll up to turn clockwise, or down to turn counterclockwise. Wheel rotation works with continuous rotation off. Hover the preview to try hover-triggered continuous motion.")));
+        }
         return rows;
     }
 
@@ -829,21 +861,26 @@ Window {
         const rows = schemaSectionRows("icon-tiles", qsTr("Icon Tiles"),
             qsTr("Tile backgrounds for this panel. Preview changes here, then Apply to save."));
         const custom = String(panelValue("iconTileMode", "style")) === "custom";
+        // Fill, border and opacity belong to a custom tile. The shape is
+        // offered whenever a tile is drawn with it, after the tile appearance.
+        const shape = rows.filter(function(row) { return row.key === "iconShape"; });
         const filtered = rows.filter(function(row) {
-            return !row.key || row.key === "iconTilesEnabled" || row.key === "iconTileMode" || custom;
+            return row.key !== "iconShape" && (!row.key || row.key === "iconTilesEnabled"
+                || row.key === "iconTileMode" || custom);
         });
-        for (const row of filtered) {
-            if (row.key === "iconTileMode") {
-                row.options = [{value: "style", label: qsTr("From icon style")},
+        for (let index = 0; index < filtered.length; ++index) {
+            if (filtered[index].key === "iconTileMode") {
+                filtered[index].options = [{value: "style", label: qsTr("From icon style")},
                     {value: "custom", label: qsTr("Custom tile")}];
+                filtered.splice.apply(filtered, [index + 1, 0].concat(shape));
+                break;
             }
         }
-        const descriptor = fieldDescriptor(custom ? "iconShape" : "iconStyle", "panel");
-        if (descriptor) {
-            const row = editorRow(descriptor);
-            row.label = custom ? qsTr("Tile shape") : qsTr("Icon style");
-            filtered.push(row);
-        }
+        // The icon style is chosen in one place, Icons > Appearance (PD-05).
+        if (!custom)
+            filtered.push(readOnlyRow(qsTr("Icon style"),
+                optionLabel("iconStyle", panelValue("iconStyle", "plain-original")),
+                qsTr("Tiles from the icon style follow the style chosen on Icons > Appearance.")));
         filtered.push(notice(qsTr("Individual icons can override the tile default in Icon Properties. Custom tiles preserve the icon glyph and use the same tile in 2D and 3D.")));
         return filtered;
     }
@@ -926,13 +963,13 @@ Window {
             if (subTabIndex === 0)
                 return panelGeneralRows();
             if (subTabIndex === 1)
-                return schemaSectionRows("panels-size", qsTr("Size"), qsTr("Panel dimensions and dynamic sizing."));
+                return schemaSectionRows("panels-size", qsTr("Size"), qsTr("Panel dimensions."));
             if (subTabIndex === 2)
                 return panelAppearanceRows();
             if (subTabIndex === 3)
                 return panelBehaviorRows();
             if (subTabIndex === 4)
-                return schemaSectionRows("panels-layout", qsTr("Layout"), qsTr("Shape geometry and content placement."));
+                return panelLayoutRows();
             if (subTabIndex === 5)
                 return panelSegmentRows();
             if (subTabIndex === 9)
@@ -950,11 +987,11 @@ Window {
                 return schemaSectionRows("icons-indicators", qsTr("Indicators"), qsTr("Running and attention markers."));
             if (subTabIndex === 3) {
                 const rows = schemaSectionRows("icons-notifications", qsTr("Notifications"),
-                    qsTr("Application badges, task progress and temporary launch feedback."));
-                rows.push(notice(qsTr("Badges and progress appear when an application supplies them. Use Plasma widgets for desktop notifications, sound, Bluetooth and the clock.")));
+                    qsTr("What applications can show on their icons in this panel."));
+                rows.push(notice(qsTr("Desktop notifications, sound and Bluetooth stay with Plasma's own widgets.")));
                 return rows;
             }
-            return iconStyleRows();
+            return [];
         }
         if (mainTabIndex === 3)
             return iconTileRows();
@@ -1142,8 +1179,6 @@ Window {
             }
             editorSession = EditorModel.stagePanelValues(editorSession, candidate.values || {});
             refreshProjection();
-        } else if (action === "load-icon-style") {
-            setFieldValue({ key: "iconStyle", scope: "panel" }, String(data.styleId || ""));
         } else if (action === "import-theme") {
             themeTargetPanelId = selectedPanelId;
             themeDialog.open();
@@ -1920,9 +1955,11 @@ Window {
                         delegate: TabButton {
                             required property string modelData
                             required property int index
+                            readonly property bool offered: root.subtabAvailable(root.mainTabIndex, index)
 
                             text: modelData
-                            width: Math.max(104, implicitWidth)
+                            visible: offered
+                            width: offered ? Math.max(104, implicitWidth) : 0
                             onClicked: root.setSubTab(index)
                         }
                     }

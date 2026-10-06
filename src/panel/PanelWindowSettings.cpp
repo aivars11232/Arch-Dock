@@ -399,16 +399,32 @@ QVariantList PanelWindow::iconStyleDefinitions() const
     return m_panelRegistry.iconStyleDefinitions();
 }
 
+// Panel Studio's truth (ADREP-TASK-001): a field is offered only where it acts
+// on the candidate's host, layout, renderer and theme. Every editor capability
+// has exactly one rule in the switch below, which the compiler checks; a
+// capability name the schema does not define is never offered (fail closed).
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wswitch"
 QVariantList PanelWindow::panelSettingsEditorFields(
     const ArchDock::PanelDefinition &candidate,
     const ArchDock::CapabilityResolution &resolution,
-    const QString &consumer) const
+    const QString &consumer,
+    ArchDock::PanelSettingsFieldScope scope) const
 {
     const QString normalizedConsumer = consumer.trimmed().toLower() ==
             QStringLiteral("studio")
         ? QStringLiteral("studio")
         : QStringLiteral("native");
     const bool freeHost = candidate.host.kind == ArchDock::PanelHostKind::FreeDesktop;
+    const std::optional<ArchDock::RendererTier> tier = resolution.available
+        ? resolution.renderer.effectiveTier : std::nullopt;
+    const QString content = candidate.content.type;
+    // Content that holds applications: launchers, running tasks or both.
+    const bool applicationContent = content == QStringLiteral("launcher") ||
+        content == QStringLiteral("tasks") || content == QStringLiteral("hybrid");
+    // Content filled by dropping applications, folders and files on it.
+    const bool droppedContent = content == QStringLiteral("launcher") ||
+        content == QStringLiteral("hybrid");
     const auto controlAvailable = [&resolution](const QString &id)
     {
         for (const ArchDock::CapabilityDecision &decision : resolution.controls)
@@ -440,16 +456,32 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             projectedTheme = m_panelRegistry.themeRuntimeProjection(candidate);
         return *projectedTheme;
     };
+    // Whether the icon style draws layers of its own, which take the place of
+    // the plain tile behind an icon. Resolved once, for the fields that ask.
+    std::optional<bool> styleLayers;
+    const auto iconStyleDrawsLayers = [&]() {
+        if (!styleLayers.has_value())
+        {
+            styleLayers = false;
+            const auto style = candidate.iconStyle.styleReference == QStringLiteral("plain-original")
+                ? std::nullopt : m_panelRegistry.iconStyleRuntimeProjection(candidate);
+            if (style)
+                for (const QVariant &role : style->value(QStringLiteral("layers")).toMap())
+                    if (!role.toList().isEmpty())
+                        styleLayers = true;
+        }
+        return *styleLayers;
+    };
 
     QVariantList result;
     const QVariantList schemaFields = ArchDock::PanelSettingsSchema::editorDescriptors(
-        ArchDock::PanelSettingsFieldScope::Panel, normalizedConsumer);
+        scope, normalizedConsumer);
     for (const QVariant &value : schemaFields)
     {
         QVariantMap field = value.toMap();
         const QString key = field.value(QStringLiteral("key")).toString();
         const ArchDock::PanelSettingsFieldDescriptor *descriptor =
-            ArchDock::PanelSettingsSchema::panelDescriptor(key);
+            ArchDock::PanelSettingsSchema::descriptor(scope, key);
         if (!descriptor)
         {
             continue;
@@ -459,70 +491,26 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         {
             continue;
         }
-        if ((key == QStringLiteral("edge") ||
-             key == QStringLiteral("visibilityMode")) && freeHost)
+        const std::optional<ArchDock::EditorCapability> capability =
+            ArchDock::editorCapabilityFromName(descriptor->editor.capability);
+        if (!capability.has_value())
         {
             continue;
         }
 
-        bool available = true;
-        const QString capability = descriptor->editor.capability;
-        if (capability == QStringLiteral("whole-panel-rotation"))
+        bool available = false;
+        switch (*capability)
         {
-            available = resolution.rotation.available;
-            // Only the static layout angle takes the resolved degree range;
-            // the rotation mode, speed and trigger fields share the gate but
-            // keep their own schema bounds.
-            if (available && key == QStringLiteral("layoutAngle"))
-            {
-                field.insert(QStringLiteral("minimumValue"),
-                             resolution.rotation.minimumDegrees);
-                field.insert(QStringLiteral("maximumValue"),
-                             resolution.rotation.maximumDegrees);
-            }
-        }
-        else if (capability == QStringLiteral("presentation-mechanism"))
-        {
-            // Only mechanisms this panel's host and theme both declare may be
-            // offered. The whole presentation group disappears when the panel
-            // has no way to collapse at all, rather than presenting a resting
-            // state or a reveal handle that nothing could ever draw.
-            QStringList mechanisms;
-            for (const ArchDock::CapabilityDecision &decision :
-                 resolution.presentationMechanisms)
-            {
-                if (decision.available)
-                {
-                    mechanisms.append(decision.id);
-                }
-            }
-            const bool collapsible = std::any_of(
-                mechanisms.cbegin(),
-                mechanisms.cend(),
-                [](const QString &mechanism)
-                {
-                    return mechanism != QStringLiteral("open");
-                });
-            available = resolution.available && collapsible;
-            if (available && key == QStringLiteral("collapseMechanism"))
-            {
-                field.insert(QStringLiteral("choices"), mechanisms);
-            }
-        }
-        else if (capability == QStringLiteral("layout"))
-        {
-            available = key == QStringLiteral("layout")
-                ? true
-                : layoutAvailable(candidate.layout.pathType);
-        }
-        else if (capability == QStringLiteral("procedural-surface"))
-        {
-            available = resolution.available &&
-                resolution.renderer.effectiveTier.has_value() &&
-                *resolution.renderer.effectiveTier ==
-                    ArchDock::RendererTier::Procedural2D;
-        }
-        else if (capability == QStringLiteral("segments"))
+        case ArchDock::EditorCapability::ScreenPlacement:
+            // Another display is all this control can choose.
+            available = QGuiApplication::screens().size() > 1;
+            break;
+        case ArchDock::EditorCapability::ContentType:
+        case ArchDock::EditorCapability::Visibility:
+        case ArchDock::EditorCapability::SurfaceOpacity:
+            available = true;
+            break;
+        case ArchDock::EditorCapability::Segments:
         {
             const auto capabilities = ArchDock::PanelCapabilityResolver::segmentCapabilities(
                 candidate, resolution, !m_systemStatus.availableSources().isEmpty());
@@ -545,18 +533,120 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             field.insert(QStringLiteral("availableEntries"), entries);
             field.insert(QStringLiteral("segmentEntries"),
                 ArchDock::PanelContentTransaction::segmentEntries(candidate, entries));
+            break;
         }
-        else if (capability == QStringLiteral("artwork-fit"))
+        case ArchDock::EditorCapability::ApplicationOverlays:
+            // Badges and progress come from the applications on this panel,
+            // when the system reports them (PD-07).
+            available = applicationContent && m_overlayModel.available();
+            break;
+        case ArchDock::EditorCapability::LaunchFeedback:
+            available = applicationContent;
+            break;
+        case ArchDock::EditorCapability::DropInput:
+        case ArchDock::EditorCapability::FolderContent:
+            // Only launcher and hybrid content take drops, and folders arrive
+            // by being dropped.
+            available = droppedContent;
+            break;
+        case ArchDock::EditorCapability::EdgePlacement:
+        case ArchDock::EditorCapability::Alignment:
+        case ArchDock::EditorCapability::DynamicPlacement:
+        case ArchDock::EditorCapability::VisibilityMode:
+            // Placement along a screen edge and Plasma's panel visibility
+            // belong to edge panels; a free panel has neither (OF-02, OF-06).
+            available = !freeHost;
+            break;
+        case ArchDock::EditorCapability::LengthMutation:
+        case ArchDock::EditorCapability::ThicknessMutation:
+            // A free panel is drawn from its layout's radius, scale and icons;
+            // a stored width or height reaches no renderer (OF-03, PD-02).
+            available = !freeHost && controlAvailable(descriptor->editor.capability);
+            break;
+        case ArchDock::EditorCapability::ArbitraryXyPlacement:
+        case ArchDock::EditorCapability::DynamicTint:
+        case ArchDock::EditorCapability::IconStateStyling:
+            available = controlAvailable(descriptor->editor.capability);
+            break;
+        case ArchDock::EditorCapability::DynamicGlow:
+            // The plain 2D surface draws no glow for this to scale.
+            available = controlAvailable(descriptor->editor.capability) &&
+                tier.has_value() && *tier != ArchDock::RendererTier::Procedural2D;
+            break;
+        case ArchDock::EditorCapability::PresentationMechanism:
         {
-            available = resolution.available &&
-                !candidate.surface.themeSource.trimmed().isEmpty();
+            // Only mechanisms this panel's host and theme both declare may be
+            // offered. The whole presentation group disappears when the panel
+            // has no way to collapse at all, rather than presenting a resting
+            // state or a reveal handle that nothing could ever draw. A free
+            // panel has none (PD-01).
+            QStringList mechanisms;
+            for (const ArchDock::CapabilityDecision &decision :
+                 resolution.presentationMechanisms)
+            {
+                if (decision.available)
+                {
+                    mechanisms.append(decision.id);
+                }
+            }
+            const bool collapsible = std::any_of(
+                mechanisms.cbegin(),
+                mechanisms.cend(),
+                [](const QString &mechanism)
+                {
+                    return mechanism != QStringLiteral("open");
+                });
+            available = resolution.available && collapsible;
+            // With the open mechanism nothing opens or closes, so only the
+            // choice of a mechanism and the resting state remain (PD-01).
+            if (available && candidate.presentation.collapseMechanism == QStringLiteral("open") &&
+                key != QStringLiteral("presentationMode") && key != QStringLiteral("collapseMechanism"))
+            {
+                available = false;
+            }
+            if (available && key == QStringLiteral("collapseMechanism"))
+            {
+                field.insert(QStringLiteral("choices"), mechanisms);
+            }
+            break;
         }
-        else if (capability == QStringLiteral("application-overlays"))
-        {
-            available = m_overlayModel.available();
-        }
-        else if (capability == QStringLiteral("scene3d-quality") ||
-                 capability == QStringLiteral("scene3d-shape"))
+        case ArchDock::EditorCapability::Layout:
+            // A native panel's applet lays its own row out along the edge, so
+            // the record's layout, scale and padding never reach it.
+            if (!freeHost)
+            {
+                break;
+            }
+            available = key == QStringLiteral("layout")
+                ? true
+                : layoutAvailable(candidate.layout.pathType);
+            // Padding is the margin of a skin's artwork around the icons; the
+            // other renderers draw nothing in it (OF-04, PD-03).
+            if (available && key == QStringLiteral("layoutPadding"))
+            {
+                available = tier == ArchDock::RendererTier::Skinned2D;
+            }
+            // A true-3D icon stands upright facing the viewer on any path.
+            if (available && key == QStringLiteral("pathOrientation"))
+            {
+                available = tier != ArchDock::RendererTier::True3D;
+            }
+            break;
+        case ArchDock::EditorCapability::WholePanelRotation:
+            available = resolution.rotation.available;
+            // Only the static layout angle takes the resolved degree range;
+            // the rotation mode, speed and trigger fields share the gate but
+            // keep their own schema bounds.
+            if (available && key == QStringLiteral("layoutAngle"))
+            {
+                field.insert(QStringLiteral("minimumValue"),
+                             resolution.rotation.minimumDegrees);
+                field.insert(QStringLiteral("maximumValue"),
+                             resolution.rotation.maximumDegrees);
+            }
+            break;
+        case ArchDock::EditorCapability::Scene3DQuality:
+        case ArchDock::EditorCapability::Scene3DShape:
         {
             const auto renderer = std::find_if(resolution.rendererChoices.cbegin(),
                 resolution.rendererChoices.cend(), [](const auto &choice) {
@@ -576,14 +666,14 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                         .toMap().value(QStringLiteral("cameraPitch"), 25.0));
                 // Only a generated platform has a shape to adjust; a theme's
                 // own mesh is drawn as its theme made it.
-                if (available && capability == QStringLiteral("scene3d-shape"))
+                if (available && *capability == ArchDock::EditorCapability::Scene3DShape)
                     available = theme->value(QStringLiteral("scene3D")).toMap()
                         .contains(QStringLiteral("generated"));
             }
+            break;
         }
-        else if (capability == QStringLiteral("baked-tilt"))
+        case ArchDock::EditorCapability::BakedTilt:
         {
-            available = false;
             const auto &theme = themeProjection();
             if (freeHost && resolution.available
                 && resolution.renderer.effectiveTier == ArchDock::RendererTier::Baked2_5D && theme)
@@ -607,17 +697,30 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                     break;
                 }
             }
+            break;
         }
-        else if (const std::optional<ArchDock::PanelCapability> parsed =
-                     ArchDock::panelCapabilityFromName(capability);
-                 parsed.has_value())
-        {
-            available = controlAvailable(capability);
-            if (freeHost && (capability == QStringLiteral("length-mutation") ||
-                             capability == QStringLiteral("thickness-mutation")))
-            {
-                available = true;
-            }
+        case ArchDock::EditorCapability::ProceduralSurface:
+            available = tier == ArchDock::RendererTier::Procedural2D;
+            break;
+        case ArchDock::EditorCapability::ArtworkFit:
+            available = resolution.available &&
+                !candidate.surface.themeSource.trimmed().isEmpty();
+            break;
+        case ArchDock::EditorCapability::TileShape:
+            // The shape of the tile drawn behind each icon, by default or by
+            // an icon's own choice: a custom tile, or the plain tile of an
+            // icon without styled layers of its own.
+            available = candidate.iconStyle.tileMode == QStringLiteral("custom") ||
+                !iconStyleDrawsLayers();
+            break;
+        case ArchDock::EditorCapability::GlobalRenderer:
+            // Running-application indicators belong to edge panels whose
+            // content shows running applications (OF-08, PD-06).
+            available = key != QStringLiteral("showIndicators") ||
+                (!freeHost && (content == QStringLiteral("tasks") || content == QStringLiteral("hybrid")));
+            break;
+        case ArchDock::EditorCapability::Count:
+            break;
         }
         if (!available)
         {
@@ -744,6 +847,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
     }
     return result;
 }
+#pragma GCC diagnostic pop
 
 QVariantMap PanelWindow::panelSettingsEditorValues(
     const ArchDock::PanelDefinition &candidate,
@@ -1040,8 +1144,8 @@ QVariantMap PanelWindow::panelSettingsEditorSnapshot(
         m_panelRegistry.resolvePanelCapabilities(*definition);
     const QVariantList panelFields = panelSettingsEditorFields(
         *definition, resolution, normalizedConsumer);
-    const QVariantList globalFields = ArchDock::PanelSettingsSchema::editorDescriptors(
-        ArchDock::PanelSettingsFieldScope::Global, normalizedConsumer);
+    const QVariantList globalFields = panelSettingsEditorFields(
+        *definition, resolution, normalizedConsumer, ArchDock::PanelSettingsFieldScope::Global);
     QSet<QString> globalKeys;
     for (const QVariant &value : globalFields)
     {
@@ -1127,8 +1231,9 @@ QVariantMap PanelWindow::resolvePanelSettingsEditorDraft(
         m_panelRegistry.resolvePanelCapabilities(draft->candidatePanel);
     const QVariantList panelFields = panelSettingsEditorFields(
         draft->candidatePanel, resolution, normalizedConsumer);
-    const QVariantList globalFields = ArchDock::PanelSettingsSchema::editorDescriptors(
-        ArchDock::PanelSettingsFieldScope::Global, normalizedConsumer);
+    const QVariantList globalFields = panelSettingsEditorFields(
+        draft->candidatePanel, resolution, normalizedConsumer,
+        ArchDock::PanelSettingsFieldScope::Global);
     QSet<QString> globalKeys;
     for (const QVariant &value : globalFields)
     {

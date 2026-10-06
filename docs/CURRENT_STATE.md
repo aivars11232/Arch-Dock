@@ -1,5 +1,52 @@
 # Arch Dock current state
 
+<!-- ADREP_TASK_001_WIP_BEGIN -->
+## ADREP-TASK-001 in progress (not closed) — 2026-10-07
+
+Work on the owner's video audit (package `/mnt/F/Arch Dock LCL repairs/`,
+ADREP 1.0.0) paused at the owner's request ("for now commit and Sync changes,
+pause everything"). This commit is work in progress: the task is not verified
+and not closed, nothing was packaged or installed (the PC still runs
+0.1.1-11), and the complete suite is not green yet.
+
+Done and verified so far:
+
+- OF-01: the application menu entry now runs `arch-dock --settings`. Reproduced
+  first with the installed 0.1.1-11 entry in a disposable Plasma session (the
+  entry only logged "Arch Dock is already running."). With the fix,
+  `session-startup-runtime-test` passed 3 of 3 runs: Studio opens in front
+  while running, after it was closed, while open, while stopped and after
+  Quit; D-Bus activation, applets, the KWin watcher, crash recovery and a plain
+  start never open it.
+- Studio truth rules: every editor capability has one availability rule
+  (`EditorCapability`, a `switch` the compiler checks), unknown capability
+  names are never offered, and global fields pass the same rules. Free panels
+  lose Alignment, Dynamic, Edge, Visibility mode, Width, Height, every opening
+  and closing setting (the free host is open-only, PD-01, with a migration of
+  free panels saved collapsed) and Indicators. Appearance > Shape (read by no
+  renderer) is no longer offered; Glow intensity is not offered on the plain
+  2D surface; Panel padding only on skinned free panels; Polygon sides only on
+  polygon and star; Icon path orientation now acts on free panels.
+- Studio pages: opening and closing and rotation only on Animations; one icon
+  style selector (the Icon Styles tab is removed; Icon Tiles shows the style
+  read-only); Tile shape on Icon Tiles where a tile is drawn with it; one
+  sentence for Panel padding and each Notifications item; no duplicates on the
+  3D page. Tabs with nothing to change are not shown (the owner: "If the tab
+  is empty, there's no need for that tab"); a free panel's Layout page says
+  what sets its size.
+- `docs/repairs/` holds the per-task reports and is never exported
+  (`source-exporter-test`).
+
+Still open before Report 1: the owner's request that Built-in Panel and Icon
+Presets list only presets for the selected panel; the Studio truth matrix
+test; 22 failing checks in tests that encode the old contract (resolver,
+schema, capability, Studio navigation), each to be updated with its decision
+cited, and one real gap they show (a built-in theme carries a Dock layout
+value that a native panel no longer offers, so applying it is refused);
+`presentation-mechanism-smoke` and `configuration-upgrade-test` for PD-01;
+documents; the complete suite. Evidence: `build-codex-adrep/evidence/ADREP-TASK-001/`.
+<!-- ADREP_TASK_001_WIP_END -->
+
 <!-- FULL_AUDIT_BEGIN -->
 ## Full audit and corrections — 0.1.1-11, 2026-10-06
 
