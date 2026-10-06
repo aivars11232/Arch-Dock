@@ -7,6 +7,7 @@
 #include <QUrl>
 #include <QVariant>
 #include <QVariantMap>
+#include <QVector>
 
 #include <optional>
 
@@ -285,21 +286,45 @@ private:
         const ArchDock::PanelDefinition &definition, QString *errorCode) const;
     [[nodiscard]] QVariantMap catalogTheme(const QString &themeId) const;
     [[nodiscard]] static QString themeIdFor(const ArchDock::PanelDefinition &definition);
-    // A theme package, parsed and verified once while its manifest stays the
-    // same. Reading one hashes every asset, and the settings path asks for
-    // the same package for every field of every edit (ADFIX UF-08).
+    // A theme package, parsed and verified once while its manifest and every
+    // asset it was verified from stay the very same files. Reading one hashes
+    // every asset, and the settings path asks for the same package for every
+    // field of every edit (ADFIX UF-08).
     [[nodiscard]] ArchDock::ThemePackageLoadResult loadThemePackage(const QString &manifestPath) const;
 
     QList<QVariantMap> m_panels;
     QVariantList m_themeDefinitions;
     // Artwork palettes of looks drawn in generated 3D, by package digest.
     mutable QHash<QString, QVariantMap> m_lookPalettes;
-    // Theme packages read successfully, by manifest path, with the manifest's
-    // modification time and size when they were read.
+    // One file a cached theme package was verified from, as the file system
+    // described it then: the path the package names, seen without following
+    // a link, and the file that path reaches, with nanosecond times. The
+    // change time moves on every write, rename or new link and cannot be set
+    // back, so even a rewrite that keeps the size and restores the
+    // modification time is seen.
+    struct ThemePackageFileStamp
+    {
+        QString path;
+        bool link = false;
+        quint64 linkDevice = 0;
+        quint64 linkInode = 0;
+        qint64 linkChanged = 0;
+        bool regular = false;
+        quint64 device = 0;
+        quint64 inode = 0;
+        qint64 size = -1;
+        qint64 modified = 0;
+        qint64 changed = 0;
+
+        bool operator==(const ThemePackageFileStamp &) const = default;
+    };
+    [[nodiscard]] static std::optional<ThemePackageFileStamp> stampThemePackageFile(
+        const QString &path);
+    // Theme packages read successfully, by manifest path, with the stamps of
+    // the manifest and every asset they were verified from.
     struct CachedThemePackage
     {
-        qint64 modified = -1;
-        qint64 size = -1;
+        QVector<ThemePackageFileStamp> files;
         ArchDock::ThemePackageLoadResult result;
     };
     mutable QHash<QString, CachedThemePackage> m_themePackages;

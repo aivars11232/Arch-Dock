@@ -17,6 +17,7 @@
 
 #include <QColor>
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
@@ -38,6 +39,8 @@
 
 #include <algorithm>
 #include <limits>
+
+#include <sys/stat.h>
 
 namespace
 {
@@ -1286,24 +1289,82 @@ std::optional<QVariantMap> PanelRegistry::themeRuntimeProjection(
     return result;
 }
 
+std::optional<PanelRegistry::ThemePackageFileStamp> PanelRegistry::stampThemePackageFile(
+    const QString &path)
+{
+    const QByteArray encoded = QFile::encodeName(path);
+    struct stat named{};
+    struct stat reached{};
+    if (::lstat(encoded.constData(), &named) != 0 || ::stat(encoded.constData(), &reached) != 0)
+        return std::nullopt;
+    const auto nanoseconds = [](const timespec &time) {
+        return qint64(time.tv_sec) * 1000000000 + time.tv_nsec;
+    };
+    ThemePackageFileStamp stamp;
+    stamp.path = path;
+    stamp.link = S_ISLNK(named.st_mode);
+    stamp.linkDevice = named.st_dev;
+    stamp.linkInode = named.st_ino;
+    stamp.linkChanged = nanoseconds(named.st_ctim);
+    stamp.regular = S_ISREG(reached.st_mode);
+    stamp.device = reached.st_dev;
+    stamp.inode = reached.st_ino;
+    stamp.size = reached.st_size;
+    stamp.modified = nanoseconds(reached.st_mtim);
+    stamp.changed = nanoseconds(reached.st_ctim);
+    return stamp;
+}
+
 ArchDock::ThemePackageLoadResult PanelRegistry::loadThemePackage(const QString &manifestPath) const
 {
-    const QFileInfo info(manifestPath);
-    const QString key = info.absoluteFilePath();
-    const qint64 modified = info.exists() ? info.lastModified().toMSecsSinceEpoch() : -1;
-    const qint64 size = info.exists() ? info.size() : -1;
+    const QString key = QFileInfo(manifestPath).absoluteFilePath();
     const auto cached = m_themePackages.constFind(key);
-    if (cached != m_themePackages.cend() && cached->modified == modified && cached->size == size)
-        return cached->result;
+    if (cached != m_themePackages.cend())
+    {
+        // Reused only while the manifest and every asset the package was
+        // verified from are the very same files: two stat calls each instead
+        // of reading and hashing them all again.
+        const bool unchanged = std::all_of(cached->files.cbegin(), cached->files.cend(),
+            [](const ThemePackageFileStamp &file) {
+                const std::optional<ThemePackageFileStamp> now = stampThemePackageFile(file.path);
+                return now && *now == file;
+            });
+        if (unchanged)
+            return cached->result;
+        m_themePackages.remove(key);
+    }
+
+    const qint64 readStarted = QDateTime::currentMSecsSinceEpoch();
     ArchDock::ThemePackageLoadResult loaded = ArchDock::ThemePackage::load(manifestPath);
     // Only a package that read cleanly is kept: a failure is read again, so
-    // a repaired package is seen at once. A handful of packages are in use.
-    if (loaded.isValid())
+    // a repaired package is seen at once.
+    if (!loaded.isValid())
+        return loaded;
+
+    // The files are stamped after the read. One that changed less than a
+    // second before the read began may have changed while it was read, so
+    // such a package is read again next time instead of being kept; once its
+    // files have settled it is kept.
+    QStringList paths{key};
+    const QDir root(loaded.package->sourceRoot());
+    for (const ArchDock::ThemeAssetDefinition &asset : loaded.package->definition().assets)
+        paths.append(root.filePath(asset.path));
+    paths.removeDuplicates();
+    const qint64 settledBefore = (readStarted - 1000) * 1000000;
+    QVector<ThemePackageFileStamp> files;
+    files.reserve(paths.size());
+    for (const QString &path : std::as_const(paths))
     {
-        if (m_themePackages.size() >= 64)
-            m_themePackages.clear();
-        m_themePackages.insert(key, {modified, size, loaded});
+        const std::optional<ThemePackageFileStamp> file = stampThemePackageFile(path);
+        if (!file || !file->regular || file->changed >= settledBefore ||
+            file->linkChanged >= settledBefore)
+            return loaded;
+        files.append(*file);
     }
+    // A handful of packages are in use.
+    if (m_themePackages.size() >= 64)
+        m_themePackages.clear();
+    m_themePackages.insert(key, {files, loaded});
     return loaded;
 }
 

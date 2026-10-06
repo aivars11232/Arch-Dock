@@ -35,6 +35,10 @@ assets into a temporary application-data directory, validates that copy again,
 and atomically publishes it under the package ID plus a content digest. It then
 renders the panel-sized cache from that managed copy when a usable 2D surface is
 present. Re-importing identical content reuses the validated managed package.
+A package that has been read and verified is reused only while its manifest
+and every declared asset are the very same files (identity, size and
+nanosecond modification and change times); any difference, a missing file or
+a link that now leads elsewhere sends it through the full validation again.
 The stored panel record exposes the package through `themePackageFormat`,
 `themePackageVersion`, `themePackageId`, `themePackageName`,
 `themePackageAuthor`, and `themePackageManifest`. `themeSource` remains the

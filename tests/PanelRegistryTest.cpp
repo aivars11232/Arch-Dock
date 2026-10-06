@@ -13,9 +13,11 @@
 #include "model/SettingsMigration.h"
 #include "persistence/ConfigurationBackup.h"
 #include "presets/PresetCapabilityResolver.h"
+#include "themes/ThemePackage.h"
 #include "PresetTestSupport.h"
 
 #include <QColor>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -38,6 +40,10 @@
 #include <functional>
 #include <optional>
 #include <utility>
+
+#include <cstdio>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 namespace
 {
@@ -309,6 +315,120 @@ QVariantList taskThemeDefinitions()
     }
     return catalog.value(QStringLiteral("themes")).toArray().toVariantList();
 }
+
+// A theme package for the cache tests: the skinned fixture copied into `root`
+// with every asset's SHA-256 declared, so the package's own hash check judges
+// a changed asset. Returns the manifest path, or an empty string.
+QString writeHashedThemePackage(const QString &root)
+{
+    const QString source = QDir(QFileInfo(QString::fromUtf8(__FILE__)).absolutePath())
+        .absoluteFilePath(QStringLiteral("fixtures/theme-v2/valid-skinned2d-states.json"));
+    QFile sourceFile(source);
+    if (!sourceFile.open(QIODevice::ReadOnly))
+        return {};
+    QJsonObject manifest = QJsonDocument::fromJson(sourceFile.readAll()).object();
+    QJsonArray assets;
+    for (const QJsonValue &value : manifest.value(QStringLiteral("assets")).toArray())
+    {
+        QJsonObject asset = value.toObject();
+        const QString relative = asset.value(QStringLiteral("path")).toString();
+        QFile input(QFileInfo(source).dir().filePath(relative));
+        if (!input.open(QIODevice::ReadOnly))
+            return {};
+        const QByteArray bytes = input.readAll();
+        const QString target = QDir(root).filePath(relative);
+        if (!QDir().mkpath(QFileInfo(target).absolutePath()))
+            return {};
+        QFile output(target);
+        if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size())
+            return {};
+        asset.insert(QStringLiteral("sha256"), QString::fromLatin1(
+            QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex()));
+        assets.append(asset);
+    }
+    manifest.insert(QStringLiteral("assets"), assets);
+    const QString path = QDir(root).filePath(QStringLiteral("archdock-theme.json"));
+    QFile output(path);
+    if (!output.open(QIODevice::WriteOnly) ||
+        output.write(QJsonDocument(manifest).toJson()) <= 0)
+        return {};
+    return path;
+}
+
+// A panel drawn with the theme package at `manifest` rather than a catalog look.
+ArchDock::PanelDefinition packageDefinition(const PanelRegistry &registry,
+                                            const QString &manifest)
+{
+    ArchDock::PanelDefinition definition =
+        registry.panelDefinition(QStringLiteral("bottom")).value();
+    definition.surface.panelThemeId.clear();
+    definition.surface.completeThemeId.clear();
+    definition.surface.themePackageFormat.clear();
+    definition.surface.themePackageVersion = 0;
+    definition.surface.themePackageId.clear();
+    definition.surface.themePackageManifest = QUrl::fromLocalFile(manifest).toString();
+    return definition;
+}
+
+// A package only stays cached once its files are older than its last read by
+// a margin (a file written while it was read must not be trusted), so the
+// cache tests let a freshly written package settle first.
+void letThemePackageSettle()
+{
+    QTest::qWait(1200);
+}
+
+// The modification time of `path`, to the nanosecond, and setting it back:
+// the cache tests change files without changing their size or this time.
+timespec modifiedAt(const QString &path)
+{
+    struct stat info{};
+    ::stat(QFile::encodeName(path).constData(), &info);
+    return info.st_mtim;
+}
+
+bool setModifiedAt(const QString &path, const timespec &modified)
+{
+    const timespec times[2] = {{0, UTIME_OMIT}, modified};
+    return ::utimensat(AT_FDCWD, QFile::encodeName(path).constData(), times, 0) == 0;
+}
+
+// Overwrites the file at `path` in place: same file, same size, same
+// modification time, different bytes.
+bool rewriteInPlace(const QString &path, const QByteArray &bytes)
+{
+    const timespec modified = modifiedAt(path);
+    QFile file(path);
+    if (!file.open(QIODevice::ReadWrite) || file.size() != bytes.size() ||
+        file.write(bytes) != bytes.size())
+        return false;
+    file.close();
+    return setModifiedAt(path, modified);
+}
+
+// Puts a new file at `path` (a new inode, renamed into place) holding `bytes`
+// and dated `modified`.
+bool replaceFile(const QString &path, const QByteArray &bytes, const timespec &modified)
+{
+    const QString temporary = path + QStringLiteral(".new");
+    QFile file(temporary);
+    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size())
+        return false;
+    file.close();
+    return setModifiedAt(temporary, modified) &&
+        ::rename(QFile::encodeName(temporary).constData(),
+                 QFile::encodeName(path).constData()) == 0;
+}
+
+// The fixture's surface with one colour digit changed: still a valid SVG of
+// the same size, but no longer the bytes the manifest's digest names.
+QByteArray alteredSurface(QByteArray bytes)
+{
+    const qsizetype index = bytes.indexOf("#182433");
+    if (index >= 0)
+        bytes[index + 1] = '2';
+    return bytes;
+}
 }
 
 class PanelRegistryTest final : public QObject
@@ -370,6 +490,12 @@ private slots:
     void rejectsIncompatibleThemeWithoutRecordMutation();
     void mapsVersionOneArtworkToProceduralFallback();
     void importsVersionedThemePackage();
+    void themePackageCacheReusesAnUnchangedPackage();
+    void themePackageCacheWaitsForAPackageToSettle();
+    void themePackageCacheRevalidatesAChangedAsset();
+    void themePackageCacheRevalidatesAChangedManagedAsset();
+    void themePackageCacheForgetsAMissingOrReplacedAsset();
+    void themePackageCacheKeepsThePackageSafetyRules();
     void importsVersionTwoThemePackageWithSafeFallback();
     void artworkImportPersistenceFailure_data();
     void artworkImportPersistenceFailure();
@@ -3888,6 +4014,217 @@ void PanelRegistryTest::artworkClearPersistenceFailure()
     QVERIFY(cleared);
     QVERIFY(reloaded.panelValue("bottom", "themePackageManifest").toString().isEmpty());
     QVERIFY(PanelRegistry().panelValue("bottom", "themePackageManifest").toString().isEmpty());
+}
+
+// The theme package cache keeps the ADFIX speed (UF-08): an unchanged package
+// is read and verified once, however often the settings path asks for it.
+void PanelRegistryTest::themePackageCacheReusesAnUnchangedPackage()
+{
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    const QString manifest = writeHashedThemePackage(root.path());
+    QVERIFY(!manifest.isEmpty());
+    PanelRegistry registry(taskThemeDefinitions());
+    const ArchDock::PanelDefinition definition = packageDefinition(registry, manifest);
+    letThemePackageSettle();
+
+    QString error;
+    const quint64 before = ArchDock::ThemePackage::loadCount();
+    for (int index = 0; index < 5; ++index)
+    {
+        QVERIFY2(registry.themeRuntimeProjection(definition, &error).has_value(), qPrintable(error));
+    }
+    QCOMPARE(ArchDock::ThemePackage::loadCount() - before, quint64(1));
+}
+
+// A package read moments after it was written may have been read while it
+// was still being written: it is read again until its files have settled,
+// and kept from then on.
+void PanelRegistryTest::themePackageCacheWaitsForAPackageToSettle()
+{
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    const QString manifest = writeHashedThemePackage(root.path());
+    QVERIFY(!manifest.isEmpty());
+    PanelRegistry registry(taskThemeDefinitions());
+    const ArchDock::PanelDefinition definition = packageDefinition(registry, manifest);
+
+    QString error;
+    quint64 before = ArchDock::ThemePackage::loadCount();
+    QVERIFY2(registry.themeRuntimeProjection(definition, &error).has_value(), qPrintable(error));
+    QVERIFY(ArchDock::ThemePackage::loadCount() > before);
+    before = ArchDock::ThemePackage::loadCount();
+    QVERIFY2(registry.themeRuntimeProjection(definition, &error).has_value(), qPrintable(error));
+    QVERIFY(ArchDock::ThemePackage::loadCount() > before);
+
+    letThemePackageSettle();
+    QVERIFY2(registry.themeRuntimeProjection(definition, &error).has_value(), qPrintable(error));
+    before = ArchDock::ThemePackage::loadCount();
+    QVERIFY2(registry.themeRuntimeProjection(definition, &error).has_value(), qPrintable(error));
+    QCOMPARE(ArchDock::ThemePackage::loadCount(), before);
+}
+
+// Only a referenced asset changes - the same file, size and modification
+// time, other bytes - while the manifest stays byte for byte the same. The
+// cached verification must not be reused: the package is read again and its
+// own digest refuses the asset; put back, the asset is accepted again.
+void PanelRegistryTest::themePackageCacheRevalidatesAChangedAsset()
+{
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    const QString manifest = writeHashedThemePackage(root.path());
+    QVERIFY(!manifest.isEmpty());
+    PanelRegistry registry(taskThemeDefinitions());
+    const ArchDock::PanelDefinition definition = packageDefinition(registry, manifest);
+    letThemePackageSettle();
+    QString error;
+    QVERIFY2(registry.themeRuntimeProjection(definition, &error).has_value(), qPrintable(error));
+
+    const QString surface = QDir(root.path()).filePath(QStringLiteral("assets/surface.svg"));
+    QFile surfaceFile(surface);
+    QVERIFY(surfaceFile.open(QIODevice::ReadOnly));
+    const QByteArray bytes = surfaceFile.readAll();
+    surfaceFile.close();
+    QFile manifestFile(manifest);
+    QVERIFY(manifestFile.open(QIODevice::ReadOnly));
+    const QByteArray manifestBytes = manifestFile.readAll();
+    manifestFile.close();
+    const timespec manifestModified = modifiedAt(manifest);
+    const QByteArray altered = alteredSurface(bytes);
+    QVERIFY(altered != bytes);
+    QVERIFY(rewriteInPlace(surface, altered));
+    QVERIFY(manifestFile.open(QIODevice::ReadOnly));
+    QCOMPARE(manifestFile.readAll(), manifestBytes);
+    manifestFile.close();
+    QCOMPARE(modifiedAt(manifest).tv_sec, manifestModified.tv_sec);
+    QCOMPARE(modifiedAt(manifest).tv_nsec, manifestModified.tv_nsec);
+
+    quint64 before = ArchDock::ThemePackage::loadCount();
+    QVERIFY(!registry.themeRuntimeProjection(definition, &error).has_value());
+    QCOMPARE(error, QStringLiteral("asset-hash-mismatch"));
+    QVERIFY(ArchDock::ThemePackage::loadCount() > before);
+
+    QVERIFY(rewriteInPlace(surface, bytes));
+    before = ArchDock::ThemePackage::loadCount();
+    QVERIFY2(registry.themeRuntimeProjection(definition, &error).has_value(), qPrintable(error));
+    QVERIFY(ArchDock::ThemePackage::loadCount() > before);
+}
+
+// The same for an imported theme: Arch Dock reads the managed,
+// content-addressed copy, and a changed file inside that copy is noticed.
+void PanelRegistryTest::themePackageCacheRevalidatesAChangedManagedAsset()
+{
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    const QString manifest = writeHashedThemePackage(root.path());
+    QVERIFY(!manifest.isEmpty());
+    PanelRegistry registry(taskThemeDefinitions());
+    QVERIFY(registry.importTheme(QStringLiteral("bottom"), QUrl::fromLocalFile(manifest)));
+    const auto definition = registry.panelDefinition(QStringLiteral("bottom"));
+    QVERIFY(definition.has_value());
+    const QString managed = QUrl(definition->surface.themePackageManifest).toLocalFile();
+    QVERIFY(QFileInfo(managed).isFile());
+    QVERIFY(QFileInfo(managed).canonicalPath() != QFileInfo(manifest).canonicalPath());
+    letThemePackageSettle();
+
+    QString error;
+    const auto projection = registry.themeRuntimeProjection(*definition, &error);
+    QVERIFY2(projection.has_value(), qPrintable(error));
+    const QString surface = projection->value(QStringLiteral("assetPaths")).toMap()
+        .value(QStringLiteral("surface")).toString();
+    QVERIFY(surface.startsWith(QFileInfo(managed).canonicalPath() + QLatin1Char('/')));
+    QFile surfaceFile(surface);
+    QVERIFY(surfaceFile.open(QIODevice::ReadOnly));
+    const QByteArray bytes = surfaceFile.readAll();
+    surfaceFile.close();
+
+    QVERIFY(rewriteInPlace(surface, alteredSurface(bytes)));
+    QVERIFY(!registry.themeRuntimeProjection(*definition, &error).has_value());
+    QCOMPARE(error, QStringLiteral("asset-hash-mismatch"));
+    QVERIFY(rewriteInPlace(surface, bytes));
+    QVERIFY2(registry.themeRuntimeProjection(*definition, &error).has_value(), qPrintable(error));
+}
+
+// A cached package whose asset disappears, or is replaced by another file, is
+// read again: a missing asset is refused, and a replacement - even one with
+// the old size and modification time - is judged by the package's digest.
+void PanelRegistryTest::themePackageCacheForgetsAMissingOrReplacedAsset()
+{
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    const QString manifest = writeHashedThemePackage(root.path());
+    QVERIFY(!manifest.isEmpty());
+    PanelRegistry registry(taskThemeDefinitions());
+    const ArchDock::PanelDefinition definition = packageDefinition(registry, manifest);
+    letThemePackageSettle();
+    QString error;
+    QVERIFY2(registry.themeRuntimeProjection(definition, &error).has_value(), qPrintable(error));
+
+    const QString surface = QDir(root.path()).filePath(QStringLiteral("assets/surface.svg"));
+    QFile surfaceFile(surface);
+    QVERIFY(surfaceFile.open(QIODevice::ReadOnly));
+    const QByteArray bytes = surfaceFile.readAll();
+    surfaceFile.close();
+    const timespec modified = modifiedAt(surface);
+
+    QVERIFY(QFile::remove(surface));
+    QVERIFY(!registry.themeRuntimeProjection(definition, &error).has_value());
+    QCOMPARE(error, QStringLiteral("missing-asset"));
+
+    quint64 before = ArchDock::ThemePackage::loadCount();
+    QVERIFY(replaceFile(surface, bytes, modified));
+    QVERIFY2(registry.themeRuntimeProjection(definition, &error).has_value(), qPrintable(error));
+    QVERIFY(ArchDock::ThemePackage::loadCount() > before);
+
+    letThemePackageSettle();
+    QVERIFY2(registry.themeRuntimeProjection(definition, &error).has_value(), qPrintable(error));
+    QVERIFY(replaceFile(surface, alteredSurface(bytes), modified));
+    QVERIFY(!registry.themeRuntimeProjection(definition, &error).has_value());
+    QCOMPARE(error, QStringLiteral("asset-hash-mismatch"));
+}
+
+// Cached state never bypasses the package's own safety rules: an asset that
+// becomes a link out of the package is refused as unsafe even though the
+// bytes it reaches are the original ones, and an asset that becomes a
+// directory is refused as not a regular file.
+void PanelRegistryTest::themePackageCacheKeepsThePackageSafetyRules()
+{
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    const QString manifest = writeHashedThemePackage(root.path());
+    QVERIFY(!manifest.isEmpty());
+    PanelRegistry registry(taskThemeDefinitions());
+    const ArchDock::PanelDefinition definition = packageDefinition(registry, manifest);
+    letThemePackageSettle();
+    QString error;
+    QVERIFY2(registry.themeRuntimeProjection(definition, &error).has_value(), qPrintable(error));
+
+    const QString surface = QDir(root.path()).filePath(QStringLiteral("assets/surface.svg"));
+    QFile surfaceFile(surface);
+    QVERIFY(surfaceFile.open(QIODevice::ReadOnly));
+    const QByteArray bytes = surfaceFile.readAll();
+    surfaceFile.close();
+    QTemporaryDir outside;
+    QVERIFY(outside.isValid());
+    const QString escaped = QDir(outside.path()).filePath(QStringLiteral("surface.svg"));
+    QFile escapedFile(escaped);
+    QVERIFY(escapedFile.open(QIODevice::WriteOnly));
+    QCOMPARE(escapedFile.write(bytes), bytes.size());
+    escapedFile.close();
+
+    QVERIFY(QFile::remove(surface));
+    QVERIFY(QFile::link(escaped, surface));
+    QVERIFY(!registry.themeRuntimeProjection(definition, &error).has_value());
+    QCOMPARE(error, QStringLiteral("unsafe-path"));
+
+    QVERIFY(QFile::remove(surface));
+    QVERIFY(replaceFile(surface, bytes, modifiedAt(escaped)));
+    letThemePackageSettle();
+    QVERIFY2(registry.themeRuntimeProjection(definition, &error).has_value(), qPrintable(error));
+    QVERIFY(QFile::remove(surface));
+    QVERIFY(QDir().mkpath(surface));
+    QVERIFY(!registry.themeRuntimeProjection(definition, &error).has_value());
+    QCOMPARE(error, QStringLiteral("asset-not-regular"));
 }
 
 void PanelRegistryTest::importsVersionTwoThemePackageWithSafeFallback()

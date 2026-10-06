@@ -1,5 +1,50 @@
 # Arch Dock current state
 
+<!-- THEME_CACHE_BEGIN -->
+## Theme package cache revalidation — 2026-10-06
+
+Source correction on top of `9525257`. It is not packaged yet: the owner's PC
+still runs **arch-dock 0.1.1-10**, which keeps the previous cache behaviour.
+
+The theme package cache added for ADFIX UF-08 reused a verified package while
+only its manifest's path, modification time (milliseconds) and size were
+unchanged. A package's assets can change on their own, so a rewritten, deleted
+or replaced asset, or one turned into a link out of the package, could still be
+served as verified.
+
+Contract now: a cached package is reused only while its manifest and every
+declared asset are the very same files — for each, the path the package names
+(not following a link) and the file it reaches, compared by device, inode,
+size and nanosecond modification and change times. Any difference sends the
+package through `ThemePackage::load()` again, with all its path, containment,
+size and digest rules, and only a valid result is kept. A package whose files
+changed less than a second before it was read is read again next time instead
+of being kept. Unchanged packages still take the fast path; managed
+(content-addressed) packages and built-ins work the same way.
+
+Verification (one build job, one test worker):
+
+- Six new `panel-registry-test` cases. Before the fix five failed and the
+  unchanged-package case passed; after it all pass: an unchanged package is
+  read once; a fresh package is kept only once settled; an asset rewritten in
+  place with the manifest's bytes, size and time untouched is read again,
+  refused by its digest and accepted again when restored (also for a managed
+  imported package); a deleted asset is refused; a replacement with the old
+  size and time is read again and judged by the digest; an asset turned into a
+  link out of the package is refused as unsafe, and one turned into a
+  directory as not a regular file.
+- Studio latency on the owner's Orange 3D panel, three runs, 0 package reads:
+  edit p50 44.8–45.7 ms, page 34.3–35.2 ms, renderer configuration 4.3–4.5 ms,
+  Apply 20.7–21.3 ms (ADFIX: 44.4 / 33.9 / 4.3 / 20.4 ms).
+- Focused theme, registry, capability and preset gates 15/15; complete
+  configured suite **114/114** in one serial run on the final source (848.7 s),
+  log scan clean apart from the intended missing-Quick3D probe and corrupt-mask
+  fixture; native gates inside it: folder anchors 50/50, 10 mechanisms
+  collapse and reopen with 25 refused. `git diff --check` clean.
+
+Evidence (untracked): `build-codex-cache/evidence/`.
+<!-- THEME_CACHE_END -->
+
 <!-- ADFIX_BEGIN -->
 ## Folders, Quit, true-3D fidelity and performance — ADFIX pack, 0.1.1-10, 2026-10-06
 

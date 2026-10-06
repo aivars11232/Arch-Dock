@@ -164,10 +164,16 @@ The proposed `v0.1.1` tag and publication need separate authorization.
 - Panel Studio and Apply are much lighter. Every edit used to read the panel's
   theme package from disk again, once for each 3D setting (about 70 reads per
   edit, each hashing every asset and parsing the 3D mesh). A package is now
-  read once while its manifest is unchanged, and an edit builds the theme's
-  projection once. Measured on a free Orange 3D panel (Debug build, median):
+  read once while its manifest and every asset it was verified from are
+  unchanged, and an edit builds the theme's projection once. Measured on a free Orange 3D panel (Debug build, median):
   a Studio edit 792 → 44 ms, opening the Studio page 305 → 34 ms, Apply
   495 → 20 ms, the live panel's renderer configuration 39 → 4 ms.
+- A theme package that changes on disk is verified again. The package cache
+  used to trust a package while only its manifest was unchanged, so an asset
+  rewritten, removed or turned into a link out of the package could still be
+  served as verified. It now also checks every asset's file identity, size and
+  times (nanoseconds) before reusing a package, and keeps a package only once
+  its files have settled. An unchanged package is still read once.
 - Arch Dock has a new icon and logo. It is installed in every standard size as
   `org.archdock.ArchDock` and used by the menu entry, both applets, Arch Dock's
   windows and the README.
