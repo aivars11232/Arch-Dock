@@ -173,3 +173,45 @@ Evidence: `build-codex-adrep/evidence/ADREP-TASK-002/` (index in `INDEX.txt`).
    moves Items, Whole panel and Both (Animations).
 
 ## Report 2 - recheck
+
+- Task commit: `e5dadc2`; follow-up commit: `1841b4e` (two document
+  sentences said more than the evidence).
+- Remote: `origin/main` equals `1841b4e` (verified with `git fetch` and
+  `git rev-parse` before this record).
+- Fresh clone of `origin/main`, round 1 at `e5dadc2`: build with one job
+  passed (22 min 8 s); 18 of 18 required and focused tests passed in 950 s:
+  `dock-geometry-test`, `layout-engine-visual-test`, `scene-rotation-test`,
+  `geometry-hit-region-test`, `panel-scene-test`, `panel-baked-25d-test`,
+  `live-panel-preview-test`, `panel-model-test`, `panel-registry-test`,
+  `panel-window-capability-test` (truth matrix included),
+  `configuration-upgrade-test`, `rendering-import-smoke`,
+  `presentation-mechanism-smoke`, `folder-interaction-smoke`,
+  `folder-anchor-smoke` (50 of 50 anchors, none with a problem),
+  `studio-truth-matrix-smoke`, `runtime-ui-interaction-smoke` and
+  `path-travel-smoke`.
+- Round 2 at `1841b4e`: build with one job passed (22 min 7 s); the task's
+  required tests passed, 10 of 10 in 297 s (`dock-geometry-test`,
+  `layout-engine-visual-test`, `scene-rotation-test`,
+  `geometry-hit-region-test`, `panel-scene-test`, `folder-interaction-smoke`,
+  `folder-anchor-smoke` with 50 of 50 anchors, `runtime-ui-interaction-smoke`,
+  `path-travel-smoke`, `configuration-upgrade-test`).
+- Acceptance criteria rechecked: 10 of 10 with proof. Gaps found: none in the
+  code; two sentences corrected in `1841b4e` (Known limitations said
+  Continuous motion moves is always shown, but a baked arc hides it; the
+  changelog said touchpads move "the same" where they are counted the same
+  way and were not driven for real).
+- Owner findings rechecked: OF-11, OF-12, OF-13, OF-14 and OF-15 closed;
+  OF-16 closed for panel travel, folder scrolling with ADREP-TASK-003.
+- Documents against evidence: after `1841b4e` this report, the install
+  guide, known limitations, changelog and current state match the evidence.
+- Diff from the base touches only in-scope files: 33 files from `803d18d` to
+  `1841b4e` - the travel and motion code (layout engine, scene, motion
+  controller, flat and 3D renderers), the Studio and the three settings
+  (schema, model, presets, editor rules, upgrade), their tests, the session
+  harness (including the mechanism smoke's capture copy, which the complete
+  suite needs when no evidence directory is set) and the documents.
+- Leftovers: no task process, private session, temporary root or crash
+  reporter left; the recheck clones and their test folder are removed in
+  cleanup.
+- Recheck rounds: 2.
+- Recheck record commit: this commit (pushed).

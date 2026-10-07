@@ -4,7 +4,8 @@
 ## ADREP-TASK-002 — Free-panel icons travel along the panel's own path (2026-10-07)
 
 The second task of the owner's video audit (package `/mnt/F/Arch Dock LCL
-repairs/`) is implemented and verified; its report is
+repairs/`) is closed: implemented, verified, pushed (`e5dadc2`, documents
+follow-up `1841b4e`) and rechecked on two fresh clones; its report is
 [docs/repairs/ADREP-TASK-002.md](repairs/ADREP-TASK-002.md). Nothing was
 packaged or installed: the PC still runs 0.1.1-11, and the package for this
 work comes with ADREP-TASK-005.
