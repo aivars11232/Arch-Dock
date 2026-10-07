@@ -105,9 +105,10 @@ Evidence: `build-codex-adrep/evidence/ADREP-TASK-003/` (index in `INDEX.txt`).
   `panel-settings-schema-test`, `panel-registry-test`,
   `panel-capability-resolver-test`, `panel-window-capability-test` (75 passed,
   1 skipped needing a live session; truth matrix included), and the session
-  tests `folder-interaction-smoke` (80 s), `folder-anchor-smoke` (90 openings,
-  103 s) passed on the final source; the evidence runs `folder-layouts/before`
-  and `folder-layouts/after` (90 openings each) passed.
+  tests `folder-interaction-smoke` (82 s in the final suite) and
+  `folder-anchor-smoke` (90 openings, 101 s in the final suite) passed on the
+  final source; the evidence runs `folder-layouts/before` and
+  `folder-layouts/after` (90 openings each) passed.
 - Complete configured suite: 117 of 117 passed in one serial run on the
   final source, 1548 s (`40-full-suite.log`). Before it, a run on the
   same source but for one test passed 115 of 117 in 1557 s
@@ -169,15 +170,16 @@ Evidence: `build-codex-adrep/evidence/ADREP-TASK-003/` (index in `INDEX.txt`).
   `folder-anchor/folder-anchor-notes.json`. On a flat panel it would fail the
   test; it does not happen there.
 - Found while extending the test: on tilted baked and 3D docks an Along the
-  dock child could stand 31 to 43 px from a neighbouring icon (centre to
-  centre). The curve now steps further out of the dock where that would
-  happen; the least distance measured is 47.9 px.
+  dock child could stand 31 to 47 px from a neighbouring icon (centre to
+  centre; 31.1, 43.0, 43.0 and 46.7 px in `32-folder-anchor-smoke.log`), under
+  the test's limit of nine tenths of an icon. The curve now steps further out
+  of the dock where that would happen; the least distance measured is 47.9 px.
 - The fan's sector and the ring are drawn in the panel's flat look (its
   appearance's colour, width and glow, or its custom colour); a baked or 3D
   look's artwork is not drawn on them.
 - Along the dock, Fan, Arc, Stack and Ring scroll with the wheel, the touchpad
-  and the keys; there is no drag scrolling on them. A press beside the
-  children in their window closes the folder.
+  and the keys; there is no drag scrolling on them. A press in their window
+  beside the children and the drawn fan or ring closes the folder.
 - A touchpad was not driven for real: KWin's input emulation delivers smooth
   scrolling as angle steps (12 per pixel), counted as notch-equivalents; the
   pixel path is proven by the unit test.

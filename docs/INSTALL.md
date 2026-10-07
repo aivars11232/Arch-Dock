@@ -469,8 +469,8 @@ and a child that leaves one end comes back at the other; on a ring they go
 round. In Grid one notch moves one row. On a free panel with a curved layout,
 **Scroll sensitivity** on Animations scales this as it scales the panel's own
 icons. Where the screen leaves no room in the outward direction, a fan, an
-arc or a stack first holds fewer children at once, then a shape turns towards
-the side that has room.
+arc, a stack or a small ring first holds fewer children at once, then a shape
+turns towards the side that has room.
 
 An edge panel's folders open in a popup beside the folder, as before, and
 scroll one child or one row per notch; in a popup you can also hold the left

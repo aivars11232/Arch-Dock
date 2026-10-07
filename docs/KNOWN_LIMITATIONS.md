@@ -117,8 +117,8 @@ layouts and each renderer tier they offer (21 panels). What follows from it:
   flat surface draws no line (Plate, Pedestal) draws no fan or ring outline.
 - Along the dock, Fan, Arc, Stack and Ring scroll with the wheel, the touchpad
   and the keys; they have no drag scrolling. Their window covers the shape's
-  whole box, so a press there beside the children closes the folder rather
-  than reaching the dock underneath.
+  whole box, so a press there beside the children and the drawn fan or ring
+  closes the folder rather than reaching the dock underneath.
 - Folder scrolling follows Scroll sensitivity on free panels with a curved
   layout, where Panel Studio offers it; elsewhere one notch moves one child or
   one row. Edge-panel folders keep their popup shapes (PD-23).
