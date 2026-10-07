@@ -55,9 +55,10 @@ restores the widget's previous position and saved settings. **Layout** keeps
 the layout angle separate from **Perspective tilt**. Tilt appears for a
 compatible baked theme within that theme's declared range, or for an active
 3D theme as camera pitch. Controls follow the renderer actually available.
-An edge panel lays its row out along its edge, so its **Layout** offers no Dock
-layout, scale or padding. A baked look stands its icons on its artwork's own
-track and offers no Dock layout; only a closed track (a ring or polygon) turns.
+An edge panel lays its row out along its edge, so it has no **Layout** page:
+Dock layout, scale and padding belong to free panels. A baked look stands its
+icons on its artwork's own track and offers no Dock layout; only a closed track
+(a ring or polygon) turns.
 
 On an edge panel, **Animations > Opening and closing** holds the resting
 state, mechanism, trigger, reveal handle and delays. The default procedural

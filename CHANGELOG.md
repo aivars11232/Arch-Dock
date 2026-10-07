@@ -218,7 +218,8 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   Visibility, Width, Height, Indicators and opening and closing; edge panels
   lose Dock layout, Layout scale and Panel padding, which their applet never
   used. Appearance > Shape, drawn by nothing, is gone. A setting the panel does
-  not offer is refused if changed through D-Bus.
+  not have is refused if changed through D-Bus; one it has that draws nothing
+  in its present state is hidden and keeps its value.
 - Opening and closing, and panel rotation, are on Animations only. The icon
   style is chosen in one place, Icons > Appearance; the Icon Styles tab is gone.
 - Built-in and own panel presets list only the presets made for the selected

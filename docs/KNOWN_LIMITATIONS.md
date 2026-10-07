@@ -85,8 +85,8 @@ changes no behaviour.
 
 Panel Studio shows a setting only where it changes the selected panel, and a
 tab only when it has something to change (ADREP-TASK-001). The Studio truth
-matrix test checks this for every host, layout and renderer tier. What follows
-from it:
+matrix test checks this on edge and free panels, for ten representative
+layouts and each renderer tier they offer (21 panels). What follows from it:
 
 - A free panel has no edge, alignment, Dynamic, Plasma visibility mode, Width,
   Height, opening and closing or running indicators. It cannot be hidden
