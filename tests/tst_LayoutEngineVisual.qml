@@ -117,6 +117,120 @@ TestCase {
         }
     }
 
+    // ---- ADREP-TASK-002: entries travel along the drawn path -------------
+    property real travel: 0
+    readonly property var travelGeometry: Object.assign({}, currentGeometry, { travel: travel })
+    readonly property var travelOutline: LayoutEngine.surface(currentLayout, currentGeometry, 0, 6)
+
+    Item {
+        id: travelFixture
+
+        x: 8
+        y: 8
+        width: testCase.currentGeometry.width
+        height: testCase.currentGeometry.height
+
+        Rectangle {
+            anchors.fill: parent
+            color: "#101820"
+        }
+
+        Repeater {
+            model: testCase.travelOutline.points
+
+            delegate: Rectangle {
+                required property var modelData
+                x: modelData.x - 1
+                y: modelData.y - 1
+                width: 3
+                height: 3
+                color: "#3a5a6a"
+            }
+        }
+
+        Repeater {
+            model: testCase.entryCount
+
+            delegate: Rectangle {
+                required property int index
+                readonly property var entry: LayoutEngine.entryGeometry(
+                    testCase.currentLayout, index, testCase.entryCount,
+                    testCase.travelGeometry, 0, 6, "upright", "canonical")
+
+                x: entry.position.x
+                y: entry.position.y
+                width: testCase.currentGeometry.iconSize
+                height: width
+                visible: entry.trackVisibility > 0
+                opacity: entry.trackVisibility
+                radius: width * 0.22
+                color: Qt.hsla(index / testCase.entryCount, 0.72, 0.58, 1)
+            }
+        }
+    }
+
+    function outlineDistance(x, y) {
+        const points = travelOutline.points
+        const last = travelOutline.closed ? points.length : points.length - 1
+        let best = Infinity
+        for (let index = 0; index < last; ++index) {
+            const a = points[index]
+            const b = points[(index + 1) % points.length]
+            const dx = b.x - a.x
+            const dy = b.y - a.y
+            const share = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy)
+                                                / Math.max(1e-9, dx * dx + dy * dy)))
+            best = Math.min(best, Math.hypot(x - a.x - share * dx, y - a.y - share * dy))
+        }
+        return best
+    }
+
+    // Criterion: travelling entries are drawn on the panel's own drawn path,
+    // at every phase of a step, and a whole loop brings back the same image.
+    function test_travelKeepsEntriesOnTheDrawnPath_data() {
+        return ["circular", "ellipse", "hexagon", "triangle", "square", "star",
+                "spiral", "arc", "fan", "semicircle", "radial"].map(function(layout) {
+            return { tag: layout, layout: layout }
+        })
+    }
+
+    function test_travelKeepsEntriesOnTheDrawnPath(data) {
+        currentLayout = data.layout
+        entryCount = 6
+        travel = 0
+        wait(0)
+        const rest = grabImage(travelFixture)
+        const loop = LayoutEngine.pathWindow(currentLayout, entryCount, currentGeometry).loop
+        verify(loop >= entryCount)
+        for (const step of [0.25, 0.5, 1, 2.5, -1.5]) {
+            travel = step
+            wait(0)
+            const image = grabImage(travelFixture)
+            let drawn = 0
+            for (let index = 0; index < entryCount; ++index) {
+                const entry = LayoutEngine.entryGeometry(
+                    currentLayout, index, entryCount, travelGeometry, 0, 6,
+                    "upright", "canonical")
+                if (entry.trackVisibility < 1)
+                    continue
+                const x = entry.position.x + currentGeometry.iconSize / 2
+                const y = entry.position.y + currentGeometry.iconSize / 2
+                verify(outlineDistance(x, y) < 1, data.tag + " entry " + index
+                       + " left the drawn path at travel " + step)
+                verify(!Qt.colorEqual(image.pixel(Math.round(x), Math.round(y)), "#101820"),
+                       data.tag + " entry " + index + " is drawn where it travelled")
+                ++drawn
+            }
+            // On an open path at most one entry is leaving and one arriving.
+            verify(drawn >= entryCount - 2, data.tag + " shows its entries while they travel")
+        }
+        travel = loop
+        wait(0)
+        verify(grabImage(travelFixture).equals(rest),
+               data.tag + ": a whole loop brings every entry back")
+        travel = 0
+    }
+
     function test_currentLayoutPixelParity_data() {
         return [
             { tag: "horizontal", layout: "horizontal" },

@@ -17,6 +17,16 @@ Item {
         layout: "horizontal"
     })
     property real layoutAngle: 0
+    // The configured angle without the scene's turn. A turning free panel is
+    // drawn in a square centred on its path (LayoutEngine.rotationEnvelope),
+    // so the path is painted at its resting angle and the turn rotates the
+    // painting as a whole: the threaded canvas would otherwise show each turn
+    // after the icons had already moved (ADREP-TASK-002, OF-11).
+    property real restingAngle: layoutAngle
+    readonly property bool turnsAsDrawn:
+        Boolean(geometry && geometry.rotationEnvelope === true)
+    readonly property real drawnAngle: turnsAsDrawn ? restingAngle : layoutAngle
+    readonly property real canvasTurn: turnsAsDrawn ? layoutAngle - restingAngle : 0
     property int polygonSides: 6
     property string appearance: "glass"
     property string customColor: ""
@@ -69,7 +79,7 @@ Item {
 
     readonly property bool rendererReady: width > 0 && height > 0
     readonly property var surfacePath: LayoutEngine.surface(
-        layout, geometry, layoutAngle, polygonSides)
+        layout, geometry, drawnAngle, polygonSides)
     readonly property var surfaceStyle: LayoutEngine.themeStyle(
         appearance, customColor, Number(geometry.iconSize || 40))
 
@@ -95,6 +105,7 @@ Item {
         height: root.height
         opacity: Math.max(0, Math.min(1, root.panelOpacity))
             * root.motionOpacity
+        rotation: root.canvasTurn
         // A collapse along an axis squeezes the drawn shape about its centre
         // onto the handle the controller keeps.
         transform: [
@@ -144,7 +155,7 @@ Item {
 
             function onLayoutChanged() { canvas.requestPaint() }
             function onGeometryChanged() { canvas.requestPaint() }
-            function onLayoutAngleChanged() { canvas.requestPaint() }
+            function onDrawnAngleChanged() { canvas.requestPaint() }
             function onPolygonSidesChanged() { canvas.requestPaint() }
             function onAppearanceChanged() { canvas.requestPaint() }
             function onCustomColorChanged() { canvas.requestPaint() }

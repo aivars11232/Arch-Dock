@@ -3593,7 +3593,8 @@ void PanelRegistry::load()
             needsBackup = normalizeFreeHostRecord(&probe) || needsBackup;
             needsBackup = migrateLegacyThemePackage(&probe) || needsBackup;
             needsBackup = !source.contains(QStringLiteral("screen")) ||
-                !source.contains(QStringLiteral("visibilityMode")) || needsBackup;
+                !source.contains(QStringLiteral("visibilityMode")) ||
+                !source.contains(QStringLiteral("panelMotionTarget")) || needsBackup;
         }
         if (needsBackup)
         {
@@ -3620,6 +3621,13 @@ void PanelRegistry::load()
                     panel.value(QStringLiteral("id")).toString() == QStringLiteral("bottom") && legacyAutoHide
                         ? QStringLiteral("auto-hide")
                         : QStringLiteral("always"));
+                compatibilityRewriteRequired = true;
+            }
+            // A record saved before "Continuous motion moves" existed was
+            // given the motion it had (PanelDefinition::fromLegacyMap,
+            // ADREP-TASK-002 PD-25); it is saved with it, after the backup.
+            if (!sourceRecord.contains(QStringLiteral("panelMotionTarget")))
+            {
                 compatibilityRewriteRequired = true;
             }
             compatibilityRewriteRequired = normalizeFreeHostRecord(&panel) ||

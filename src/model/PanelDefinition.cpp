@@ -576,6 +576,17 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         QStringLiteral("panelRotationSpeed"), definition.layout.rotationSpeed).toReal();
     definition.layout.rotationTrigger = normalized(
         QStringLiteral("panelRotationTrigger"), definition.layout.rotationTrigger).toString();
+    // A record saved before "Continuous motion moves" existed keeps the
+    // motion it had (ADREP-TASK-002, PD-25): a panel that rotated turns as a
+    // whole; any other moves its items, as a new panel does.
+    definition.layout.motionTarget = record.contains(QStringLiteral("panelMotionTarget"))
+        ? normalized(QStringLiteral("panelMotionTarget"), definition.layout.motionTarget).toString()
+        : definition.layout.rotationMode == QStringLiteral("none")
+            ? QStringLiteral("items") : QStringLiteral("panel");
+    definition.layout.travelSpeed = normalized(
+        QStringLiteral("panelTravelSpeed"), definition.layout.travelSpeed).toReal();
+    definition.layout.scrollSensitivity = normalized(
+        QStringLiteral("scrollSensitivity"), definition.layout.scrollSensitivity).toReal();
 
     setString(QStringLiteral("rendererTier"), &definition.surface.rendererTier, true);
     setString(QStringLiteral("panelThemeId"), &definition.surface.panelThemeId);
@@ -1115,6 +1126,9 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("panelRotationMode"), layout.rotationMode);
     record.insert(QStringLiteral("panelRotationSpeed"), layout.rotationSpeed);
     record.insert(QStringLiteral("panelRotationTrigger"), layout.rotationTrigger);
+    record.insert(QStringLiteral("panelMotionTarget"), layout.motionTarget);
+    record.insert(QStringLiteral("panelTravelSpeed"), layout.travelSpeed);
+    record.insert(QStringLiteral("scrollSensitivity"), layout.scrollSensitivity);
 
     insertIfNotEmpty(&record, QStringLiteral("rendererTier"), surface.rendererTier);
     insertIfNotEmpty(&record, QStringLiteral("panelThemeId"), surface.panelThemeId);

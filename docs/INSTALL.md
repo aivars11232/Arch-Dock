@@ -72,14 +72,32 @@ keeps the state changes while suppressing animated transitions and continuous
 rotation. A free panel stands open on the desktop and has no opening or closing
 settings; one saved collapsed by an earlier version is shown open.
 
-On an interactive free circular/radial panel, hover the panel and scroll up
-to turn the icons clockwise or down to turn them counterclockwise. Each wheel
-notch turns 15 degrees. This manual angle is temporary and requires no Apply.
-On **Animations**, choose **Clockwise** or **Counterclockwise**, speed and
-trigger for optional continuous rotation; **None** stops it. The live
-preview plays rotation on that page. Rotation pauses during dragging, editing,
-popups and collapsed/concealed states, so the icons and their click/drop areas
-stay together.
+On a free panel with a curved layout (circle, ellipse, polygon, star,
+spiral, fan, arc, semicircle or radial), hover the panel and scroll: the icons
+move along the panel's own outline while the panel stays still. Scrolling up
+moves them clockwise, down moves them back; one wheel notch moves every icon
+one place, eased in within 120 ms, and a fast spin never queues up. On a
+closed outline the icons go round; on a fan, arc, semicircle, radial or spiral
+an icon that leaves one end fades out and comes back at the other, even when
+every icon fits. Dragging the panel moves them too. Where the icons have
+moved is temporary: it needs no Apply and is never saved.
+
+On **Animations**, **Continuous motion** (Off, Clockwise or Counterclockwise)
+keeps them moving, and **Continuous motion moves** chooses what moves:
+**Items along the path** (new free panels), **Whole panel**, or **Both**. The
+wheel and dragging follow the same choice. **Item travel speed** (icons per
+second) and **Panel rotation speed** (degrees per second) appear for what is
+moving, with **Motion runs** (always, or while the pointer is over the
+panel). **Scroll sensitivity** sets how far one notch, or one icon's distance
+of touchpad scrolling, moves the icons: from a quarter to four places. A panel
+that rotated before this version keeps turning as a whole after the upgrade;
+choose **Items along the path** to make its icons travel instead. Motion
+pauses during dragging, editing and popups, and reduced motion makes wheel
+steps jump and keeps continuous motion off.
+
+On **Layout**, a fan, arc, semicircle or radial panel offers **Direction**:
+Up, Down, Left or Right turns the shape so the middle of its path faces that
+side. Layout angle below it still fine-tunes the angle.
 
 An explicit activation request in the user's Plasma Wayland session is:
 

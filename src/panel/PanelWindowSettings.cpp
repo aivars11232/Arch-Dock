@@ -16,6 +16,7 @@
 #include <QDBusArgument>
 #include <QDBusVariant>
 #include <QGuiApplication>
+#include <QHash>
 #include <QScreen>
 #include <QSet>
 
@@ -666,16 +667,26 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             }
             break;
         case ArchDock::EditorCapability::WholePanelRotation:
+        {
             available = resolution.rotation.available;
             // An open baked track (an arc) cannot turn under its artwork; any
             // other track is closed, as LayoutEngine.trackShape() reads it.
-            if (available && baked)
+            // Its entries still travel along it (ADREP-TASK-002), so the
+            // motion settings stay and move the items only.
+            const bool turns = !(available && baked &&
+                bakedTrack().value(QStringLiteral("shape")).toString() == QStringLiteral("arc"));
+            const bool itemMotion = key == QStringLiteral("panelRotationMode") ||
+                key == QStringLiteral("panelRotationTrigger") ||
+                key == QStringLiteral("panelMotionTarget") ||
+                key == QStringLiteral("panelTravelSpeed") ||
+                key == QStringLiteral("scrollSensitivity");
+            if (available && !turns && !itemMotion)
             {
-                available = bakedTrack().value(QStringLiteral("shape")).toString() != QStringLiteral("arc");
+                available = false;
             }
             // Only the static layout angle takes the resolved degree range;
-            // the rotation mode, speed and trigger fields share the gate but
-            // keep their own schema bounds.
+            // the motion fields share the gate but keep their own schema
+            // bounds.
             if (available && key == QStringLiteral("layoutAngle"))
             {
                 field.insert(QStringLiteral("minimumValue"),
@@ -683,7 +694,34 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 field.insert(QStringLiteral("maximumValue"),
                              resolution.rotation.maximumDegrees);
             }
+            // The speeds and the trigger act while continuous motion runs,
+            // each speed on what it moves; the wheel follows "Continuous
+            // motion moves" whether or not anything runs (PD-25).
+            if (available)
+            {
+                const bool continuous = candidate.layout.rotationMode != QStringLiteral("none");
+                const QString target = turns ? candidate.layout.motionTarget : QStringLiteral("items");
+                if (key == QStringLiteral("panelMotionTarget") && !turns)
+                {
+                    inactive = true;
+                }
+                if (key == QStringLiteral("panelRotationTrigger") && !continuous)
+                {
+                    inactive = true;
+                }
+                if (key == QStringLiteral("panelTravelSpeed") &&
+                    (!continuous || target == QStringLiteral("panel")))
+                {
+                    inactive = true;
+                }
+                if (key == QStringLiteral("panelRotationSpeed") &&
+                    (!continuous || target == QStringLiteral("items")))
+                {
+                    inactive = true;
+                }
+            }
             break;
+        }
         case ArchDock::EditorCapability::Scene3DQuality:
         case ArchDock::EditorCapability::Scene3DShape:
         {
@@ -885,10 +923,24 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         }
         else for (const QString &choice : choices)
         {
-            const bool alongDock = key == QStringLiteral("folderLayout") &&
-                choice == QStringLiteral("track");
+            // Plain names where the stored value is a code word.
+            static const QHash<QString, QHash<QString, const char *>> labels{
+                {QStringLiteral("folderLayout"), {{QStringLiteral("track"), QT_TR_NOOP("Along the dock")}}},
+                {QStringLiteral("panelRotationMode"),
+                 {{QStringLiteral("none"), QT_TR_NOOP("Off")},
+                  {QStringLiteral("clockwise"), QT_TR_NOOP("Clockwise")},
+                  {QStringLiteral("counter-clockwise"), QT_TR_NOOP("Counterclockwise")}}},
+                {QStringLiteral("panelRotationTrigger"),
+                 {{QStringLiteral("idle"), QT_TR_NOOP("Always")},
+                  {QStringLiteral("hover"), QT_TR_NOOP("While the pointer is over the panel")}}},
+                {QStringLiteral("panelMotionTarget"),
+                 {{QStringLiteral("items"), QT_TR_NOOP("Items along the path")},
+                  {QStringLiteral("panel"), QT_TR_NOOP("Whole panel")},
+                  {QStringLiteral("both"), QT_TR_NOOP("Both")}}},
+            };
+            const char *label = labels.value(key).value(choice, nullptr);
             options.append(QVariantMap{
-                {QStringLiteral("label"), alongDock ? tr("Along the dock") : choice},
+                {QStringLiteral("label"), label ? tr(label) : choice},
                 {QStringLiteral("value"), choice},
             });
         }

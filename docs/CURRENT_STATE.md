@@ -1,5 +1,43 @@
 # Arch Dock current state
 
+<!-- ADREP_TASK_002_BEGIN -->
+## ADREP-TASK-002 — Free-panel icons travel along the panel's own path (2026-10-07)
+
+The second task of the owner's video audit (package `/mnt/F/Arch Dock LCL
+repairs/`) is implemented and verified; its report is
+[docs/repairs/ADREP-TASK-002.md](repairs/ADREP-TASK-002.md). Nothing was
+packaged or installed: the PC still runs 0.1.1-11, and the package for this
+work comes with ADREP-TASK-005.
+
+- The wheel and a drag on a free panel with a curved layout move its icons
+  along the panel's own outline (circle, ellipse, polygon edges, star points,
+  spiral) while the panel stays still. One notch is one place, eased out over
+  100 ms from the wheel event (arrived 73 to 104 ms after it); the next frame
+  already moves, a spin queues nothing. Open paths (fan, arc, semicircle, radial, spiral) are a loop one
+  place longer than the path, so an icon that leaves one end fades out and
+  comes back at the other. Where the icons are is never saved.
+- `LayoutEngine.trackPlacement()` has a travel phase in entry slots, used by
+  every curved layout, the star, the spiral and theme tracks; hit regions,
+  tooltips, drops, reorder, popup anchors and keyboard focus follow it.
+- Animations: Continuous motion (Off, Clockwise, Counterclockwise), Continuous
+  motion moves (Items along the path, Whole panel, Both), Item travel speed,
+  Panel rotation speed, Motion runs and Scroll sensitivity (0.25x to 4x).
+  Saved panels keep their motion: one that rotated becomes Whole panel, with a
+  backup first. Layout: Direction (Up, Down, Left, Right) for fan, arc,
+  semicircle and radial, beside Layout angle.
+- A whole flat panel that turns no longer shows its outline behind its icons
+  (it was painted again 74 to 143 ms after the wheel event): the outline is
+  painted at its resting angle and turned as one picture. The spiral's line is
+  drawn where its icons stand.
+- New session test `path-travel-smoke`: real wheel input on twelve layouts,
+  every resting state captured and every frame recorded.
+- Complete suite: 116 of 116 in one serial run on the final source (1430 s).
+- Open: folder scrolling uses Scroll sensitivity in ADREP-TASK-003; passing
+  behind and in front of baked and 3D platforms is ADREP-TASK-004.
+
+Evidence: `build-codex-adrep/evidence/ADREP-TASK-002/`.
+<!-- ADREP_TASK_002_END -->
+
 <!-- ADREP_TASK_001_BEGIN -->
 ## ADREP-TASK-001 — Panel Studio shows only what works; the menu opens it (2026-10-07)
 

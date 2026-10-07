@@ -742,15 +742,18 @@ Item {
                 property alias inputAnchor: inputAnchor
                 readonly property real glow: Math.max(root.number(iconMotion, "glow", 0),
                     root.number(glyphMotion, "glow", 0), root.number(tileMotion, "glow", 0))
-                // Outside the window of an overcrowded open curve the entry is
-                // not drawn, exactly as its 2D delegate is not.
-                visible: rect.onTrack !== false
+                // An entry off its path is not drawn, and one leaving or coming
+                // back onto an open path fades, exactly as its 2D delegate does
+                // (ADREP-TASK-002).
+                readonly property real trackVisibility: rect.visibility === undefined
+                    ? (rect.onTrack === false ? 0 : 1) : Math.max(0, Math.min(1, Number(rect.visibility)))
+                visible: trackVisibility > 0
                 // The entry's origin is where its icon stands: on the platform's
                 // track, on top of its pedestal. Motion offsets move it along.
                 position: Qt.vector3d(standPoint[0] + root.number(iconMotion, "x", 0),
                     standPoint[1] - root.number(iconMotion, "y", 0),
                     root.platformTop + pedestalHeight + baseLift)
-                opacity: root.number(iconMotion, "opacity", 1)
+                opacity: root.number(iconMotion, "opacity", 1) * trackVisibility
 
                 // The pedestal: a solid column from the platform's top up to
                 // the icon, in the platform's own material.

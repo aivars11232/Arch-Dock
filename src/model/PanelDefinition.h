@@ -215,6 +215,15 @@ struct PanelLayoutDefinition
     QString rotationMode = QStringLiteral("none");
     qreal rotationSpeed = 12.0;
     QString rotationTrigger = QStringLiteral("idle");
+    // What that motion, the wheel and a drag move (ADREP-TASK-002, PD-25):
+    // `items` travel along the panel's own path, the whole `panel` turns, or
+    // `both`. Item travel speed is in entry slots per second. How far the
+    // items have travelled is runtime state and is never stored.
+    QString motionTarget = QStringLiteral("items");
+    qreal travelSpeed = 0.5;
+    // How far one wheel notch, or one entry pitch of touchpad travel, moves
+    // the items: one entry at 1, from a quarter to four entries (PD-16).
+    qreal scrollSensitivity = 1.0;
 
     bool operator==(const PanelLayoutDefinition &) const = default;
 };

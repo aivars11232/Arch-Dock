@@ -696,6 +696,10 @@ Window {
     function panelLayoutRows() {
         const rows = schemaSectionRows("panels-layout", qsTr("Layout"),
             qsTr("Shape geometry and content placement."));
+        const angleIndex = rows.findIndex(function(row) { return row.key === "layoutAngle"; });
+        const direction = angleIndex >= 0 ? directionRow(rows[angleIndex]) : null;
+        if (direction)
+            rows.splice(angleIndex, 0, direction);
         // A look made for one layout, or whose artwork places the icons,
         // offers no Dock layout to choose.
         const layoutField = fieldDescriptor("layout", "panel");
@@ -862,15 +866,21 @@ Window {
     }
 
     // The panel's own motion. Opening and closing belong to edge panels whose
-    // host and theme can draw a mechanism, rotation to free panels; a group
-    // with nothing to offer is not shown (ADREP-TASK-001, PD-01, PD-08).
+    // host and theme can draw a mechanism, motion along the path to free
+    // panels; a group with nothing to offer is not shown (ADREP-TASK-001,
+    // PD-01, PD-08). Motion is listed in the order it is decided: whether it
+    // runs, what it moves, how fast, when, and how far the wheel moves it
+    // (ADREP-TASK-002, PD-16, PD-25).
     function panelAnimationRows() {
         const presentationKeys = ["presentationMode", "presentationTrigger", "collapseMechanism",
             "collapseAxis", "revealHandle", "openDelay", "closeDelay"];
-        const rotationKeys = ["panelRotationMode", "panelRotationSpeed", "panelRotationTrigger"];
+        const motionKeys = ["panelRotationMode", "panelMotionTarget", "panelTravelSpeed",
+            "panelRotationSpeed", "panelRotationTrigger", "scrollSensitivity"];
         const fields = fieldsForSection("panels-animations");
         const opening = fields.filter(function(row) { return presentationKeys.includes(row.key); });
-        const rotation = fields.filter(function(row) { return rotationKeys.includes(row.key); });
+        const rotation = motionKeys.map(function(key) {
+            return fields.find(function(row) { return row.key === key; });
+        }).filter(function(row) { return row !== undefined; });
         const rows = [];
         if (opening.length) {
             rows.push(section(qsTr("Opening and closing"),
@@ -885,13 +895,56 @@ Window {
             }
         }
         if (rotation.length) {
-            rows.push(section(qsTr("Free panel rotation"),
-                qsTr("Choose continuous clockwise or counterclockwise rotation, its speed, and when it runs."),
+            rows.push(section(qsTr("Free panel motion"),
+                qsTr("Choose what the wheel, dragging and continuous motion move, how fast, and when it runs."),
                 rows.length === 0));
             rows.push.apply(rows, rotation);
-            rows.push(notice(qsTr("Hover the free panel and scroll up to turn clockwise, or down to turn counterclockwise. Wheel rotation works with continuous rotation off. Hover the preview to try hover-triggered continuous motion.")));
+            const target = String(panelValue("panelMotionTarget", "items"));
+            const moves = !fieldDescriptor("panelMotionTarget", "panel")
+                || fieldDescriptor("panelMotionTarget", "panel").inactive === true
+                ? "items" : target;
+            rows.push(notice(moves === "panel"
+                ? qsTr("Scroll over the panel to turn it: up turns it clockwise, down turns it back. Dragging it turns it too.")
+                : moves === "both"
+                ? qsTr("Scroll over the panel to move its icons along its path and turn it at the same time: up is clockwise, down is back. Dragging it does the same.")
+                : qsTr("Scroll over the panel to move its icons along its path while the panel stays still: up moves them clockwise, down moves them back. Dragging it moves them too. On an open path an icon that leaves one end comes back at the other.")));
+            if (String(panelValue("panelRotationMode", "none")) !== "none"
+                    && String(panelValue("panelRotationTrigger", "idle")) === "hover")
+                rows.push(notice(qsTr("Hover the preview to try the continuous motion.")));
         }
         return rows;
+    }
+
+    // Direction for the open paths (ADREP-TASK-002, PD-24): Up, Down, Left
+    // and Right are layout angles at which the middle of the path faces that
+    // side. The fan, arc and semicircle face up at angle 0, the radial path
+    // faces right. The fine Layout angle stays below it.
+    function directionRow(angleRow) {
+        const up = {fan: 0, arc: 0, semicircle: 0, radial: -90}[String(panelValue("layout", ""))];
+        if (up === undefined || !angleRow)
+            return null;
+        const facing = function(turn) {
+            const angle = ((up + turn) % 360 + 540) % 360 - 180;
+            return angle === -180 ? 180 : angle;
+        };
+        const options = [
+            {value: facing(0), label: qsTr("Up")},
+            {value: facing(90), label: qsTr("Right")},
+            {value: facing(180), label: qsTr("Down")},
+            {value: facing(-90), label: qsTr("Left")}
+        ];
+        const current = Number(panelValue("layoutAngle", 0));
+        if (!options.some(function(option) { return option.value === current; }))
+            options.push({value: current, label: qsTr("Custom (%1°)").arg(Math.round(current))});
+        return {
+            kind: "combo",
+            key: "layoutAngle",
+            label: qsTr("Direction"),
+            scope: "panel",
+            fallback: 0,
+            options: options,
+            description: qsTr("The side the middle of the path faces. Layout angle below fine-tunes it.")
+        };
     }
 
     function iconTileRows() {

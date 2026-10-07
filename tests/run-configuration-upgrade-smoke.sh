@@ -108,6 +108,57 @@ elif mode == 'free-open':
                     if panel['id'] == 'free-upgrade')
     assert original['presentationMode'] == 'collapsed' and original['collapseMechanism'] == 'collapse-radial'
     assert original['visible'] is False
+elif mode == 'motion-legacy':
+    # ADREP-TASK-002, PD-25: free panels saved before "Continuous motion
+    # moves", item travel speed and scroll sensitivity existed - one turning
+    # clockwise, one still.
+    panels = json.loads(bytes(settings.value('dock/panels')))
+    base = next(panel for panel in panels if panel['id'] == 'free-upgrade')
+    added = ('panelMotionTarget', 'panelTravelSpeed', 'scrollSensitivity')
+    # As on a machine that was once upgraded from the first panel format, the
+    # legacy record backup is present; this upgrade must not touch it.
+    assert settings.contains('dock/panelsLegacyV1Backup')
+    (state / 'legacy-backup.bin').write_bytes(bytes(settings.value('dock/panelsLegacyV1Backup')))
+    legacy = []
+    for name, rotation in (('free-turning', 'clockwise'), ('free-still', 'none')):
+        record = {key: value for key, value in base.items() if key not in added}
+        record.update(id=name, name=name, panelRotationMode=rotation, panelRotationSpeed=40)
+        legacy.append(record)
+    settings.setValue('dock/panels', QByteArray(json.dumps(
+        [panel for panel in panels if panel['id'] != 'free-upgrade'] + legacy).encode())); settings.sync()
+    assert settings.status() == QSettings.NoError
+    (state / 'motion-legacy.json').write_text(json.dumps(legacy))
+    backups = data / 'config-backups'
+    (state / 'motion-backups-before.json').write_text(json.dumps(sorted(path.name for path in backups.iterdir())))
+elif mode == 'motion-upgraded':
+    saved = {panel['id']: panel for panel in json.loads((state / 'motion-legacy.json').read_text())}
+    panels = {panel['id']: panel for panel in json.loads(bytes(settings.value('dock/panels')))}
+    expected = {'free-turning': 'panel', 'free-still': 'items'}
+    for name, target in expected.items():
+        panel = panels[name]
+        # The panel that turned keeps turning as a whole; the still one moves
+        # its items, as a new panel does. Nothing else changes.
+        assert panel['panelMotionTarget'] == target, panel
+        assert panel['panelTravelSpeed'] == 0.5 and panel['scrollSensitivity'] == 1, panel
+        assert panel['panelRotationMode'] == saved[name]['panelRotationMode'], panel
+        changed = {key for key in set(saved[name]) | set(panel) if saved[name].get(key) != panel.get(key)}
+        assert changed == {'panelMotionTarget', 'panelTravelSpeed', 'scrollSensitivity'}, changed
+        print('motion upgrade:', name, 'panelRotationMode', panel['panelRotationMode'],
+              '-> panelMotionTarget', panel['panelMotionTarget'])
+    before = set(json.loads((state / 'motion-backups-before.json').read_text()))
+    backups = data / 'config-backups'
+    created = [path for path in sorted(backups.iterdir()) if path.name not in before]
+    assert len(created) == 1, created
+    manifest = json.loads((created[0] / 'manifest.json').read_text())
+    assert manifest['reason'] == 'panel-migration', manifest
+    stored = next(created[0] / 'files' / row['location'] / row['path']
+                  for row in manifest['files'] if row['path'] == 'settings.conf')
+    backed_up = {panel['id']: panel for panel in json.loads(bytes(
+        QSettings(str(stored), QSettings.IniFormat).value('dock/panels')))}
+    for name in expected:
+        assert 'panelMotionTarget' not in backed_up[name], backed_up[name]
+    print('motion upgrade backup:', created[0].name, manifest['reason'])
+    assert bytes(settings.value('dock/panelsLegacyV1Backup')) == (state / 'legacy-backup.bin').read_bytes()
 else:
     raise AssertionError(mode)
 PY
@@ -167,4 +218,9 @@ fixture free-collapsed
 start_service
 fixture free-open
 stop_service
-printf 'Disposable configuration upgrade, future-version refusal, rollback, offline recovery and free panels saved collapsed passed.\n'
+# Saved free panels keep the motion they had (ADREP-TASK-002, PD-25).
+fixture motion-legacy
+start_service
+fixture motion-upgraded
+stop_service
+printf 'Disposable configuration upgrade, future-version refusal, rollback, offline recovery, free panels saved collapsed and free-panel motion passed.\n'

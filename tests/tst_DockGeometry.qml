@@ -857,9 +857,10 @@ TestCase {
     }
 
     // Criterion: an open curve that cannot hold its entries side by side
-    // keeps them icon + spacing apart and shows a window of them. A transient
-    // offset moves the window in stable order; nothing leaves the curve.
-    function test_overcrowdedOpenCurvesShowAWindow_data() {
+    // keeps them icon + spacing apart and shows `capacity` of them, centred.
+    // Travel moves every entry one slot per step round a loop longer than the
+    // curve (ADREP-TASK-002): an entry leaving one end comes back at the other.
+    function test_overcrowdedOpenCurvesWrapAround_data() {
         return [
             { tag: "semicircle", layout: "semicircle", sweep: 180 },
             { tag: "arc", layout: "arc", sweep: 130 },
@@ -867,81 +868,215 @@ TestCase {
         ]
     }
 
-    function test_overcrowdedOpenCurvesShowAWindow(data) {
+    function test_overcrowdedOpenCurvesWrapAround(data) {
         const radius = 150
         const icon = 52
         const spacing = 8
         const count = 14
         const length = data.sweep * Math.PI / 180 * radius
         const capacity = Math.floor(length / (icon + spacing)) + 1
+        const margin = (length - (capacity - 1) * (icon + spacing)) / 2
         function value(entries) {
             return LayoutEngine.metrics(data.layout, entries, icon, spacing, 1,
                                         radius, 2, 18, false, 0, 6)
         }
-        function placed(offset) {
-            const geometry = value(count)
-            geometry.browseOffset = offset
+        function placed(travel, entries) {
+            const total = entries === undefined ? count : entries
+            const geometry = value(total)
+            geometry.travel = travel
             const result = []
-            for (let index = 0; index < count; ++index) {
+            for (let index = 0; index < total; ++index) {
                 result.push(LayoutEngine.entryGeometry(
-                    data.layout, index, count, geometry, 0, 6, "upright",
+                    data.layout, index, total, geometry, 0, 6, "upright",
                     "live"))
             }
             return result
         }
 
         const window = LayoutEngine.pathWindow(data.layout, count, value(count))
+        compare(window.travels, true)
         compare(window.windowed, true, "fourteen icons do not fit")
         compare(window.capacity, capacity)
-        compare(window.maximumOffset, count - capacity)
+        compare(window.loop, count, "every entry takes a slot of the loop")
 
-        for (const offset of [0, 3, count - capacity]) {
-            const entries = placed(offset)
+        for (const travel of [0, -3, capacity - count, 2, count, 2 * count + 1]) {
+            const entries = placed(travel)
             let visible = 0
             for (let index = 0; index < count; ++index) {
-                const inside = index >= offset && index < offset + capacity
+                const slot = ((index + travel) % count + count) % count
+                const inside = slot < capacity
                 compare(entries[index].onTrack, inside,
-                        "entry " + index + " at offset " + offset)
-                verify(entries[index].pathProgress >= 0
-                       && entries[index].pathProgress <= 1,
-                       "entry " + index + " never leaves the curve")
-                if (inside)
-                    ++visible
+                        "entry " + index + " at travel " + travel)
+                compare(entries[index].trackVisibility, inside ? 1 : 0)
+                if (!inside)
+                    continue
+                ++visible
+                fuzzy(entries[index].pathProgress * length,
+                      margin + slot * (icon + spacing),
+                      "entry " + index + " stands in slot " + slot)
             }
             compare(visible, capacity)
-            for (let index = offset + 1; index < offset + capacity; ++index) {
-                fuzzy((entries[index].pathProgress
-                       - entries[index - 1].pathProgress) * length,
-                      icon + spacing, "neighbours keep icon + spacing")
-            }
-            fuzzy(entries[offset].pathProgress
-                  + entries[offset + capacity - 1].pathProgress, 1,
-                  "the window is centred on the curve")
         }
 
-        // The order is stable: one step moves every entry one slot.
-        const before = placed(2)
-        const after = placed(3)
-        for (let index = 3; index < 2 + capacity; ++index) {
-            fuzzy(after[index].pathProgress, before[index - 1].pathProgress,
-                  "entry " + index + " takes its predecessor's slot")
+        // One step moves every entry one slot along: the order is stable.
+        const before = placed(0)
+        const after = placed(1)
+        for (let index = 0; index + 1 < capacity; ++index) {
+            fuzzy(after[index].pathProgress, before[index + 1].pathProgress,
+                  "entry " + index + " takes its neighbour's slot")
         }
+        compare(after[capacity - 1].onTrack, false, "the last one leaves the end")
+        compare(after[count - 1].onTrack, true, "and one comes back at the start")
+        fuzzy(after[count - 1].pathProgress, before[0].pathProgress,
+              "into the first slot")
 
-        // A curve that holds its entries is unchanged: they span all of it.
+        // Half a slot on, the leaving entry fades just past the end and the
+        // arriving one just before the start; neither takes input.
+        const between = placed(0.5)
+        compare(between[capacity - 1].onTrack, false)
+        fuzzy(between[capacity - 1].trackVisibility, 0.5, "half faded out")
+        verify(between[capacity - 1].pathProgress > before[capacity - 1].pathProgress)
+        compare(between[count - 1].onTrack, false)
+        fuzzy(between[count - 1].trackVisibility, 0.5, "half faded in")
+        verify(between[count - 1].pathProgress < before[0].pathProgress)
+
+        // A curve that holds its entries is still a loop, one slot longer
+        // than it: the last entry leaves past the end and comes back first.
         const few = value(5)
-        compare(LayoutEngine.pathWindow(data.layout, 5, few).windowed, false)
-        compare(LayoutEngine.entryGeometry(
-                    data.layout, 0, 5, few, 0, 6, "upright", "live")
-                    .pathProgress, 0)
-        compare(LayoutEngine.entryGeometry(
-                    data.layout, 4, 5, few, 0, 6, "upright", "live")
-                    .pathProgress, 1)
+        const fits = LayoutEngine.pathWindow(data.layout, 5, few)
+        compare(fits.windowed, false)
+        compare(fits.capacity, 5)
+        compare(fits.loop, 6, "the loop wraps even when all entries fit")
+        compare(placed(0, 5)[0].pathProgress, 0)
+        compare(placed(0, 5)[4].pathProgress, 1)
+        compare(placed(1, 5)[4].onTrack, false, "one step hides the last entry")
+        compare(placed(1, 5)[4].trackVisibility, 0)
+        compare(placed(2, 5)[4].onTrack, true, "the next brings it back")
+        fuzzy(placed(2, 5)[4].pathProgress, 0, "at the start")
+        compare(placed(6, 5)[2].pathProgress, placed(0, 5)[2].pathProgress,
+                "a whole loop brings every entry back")
 
-        // A closed ring is never windowed; the wheel turns it instead.
-        compare(LayoutEngine.pathWindow(
+        // A closed ring is never windowed; its loop is its entries.
+        const ring = LayoutEngine.pathWindow(
                     "ring", 40, LayoutEngine.metrics(
                         "ring", 40, icon, spacing, 1, radius, 2, 18, false,
-                        0, 6)).windowed, false)
+                        0, 6))
+        compare(ring.windowed, false)
+        compare(ring.loop, 40)
+    }
+
+    // Criterion: on a closed track an entry's progress is ((index + travel)
+    // mod count) / count along the real outline - the circle, the ellipse,
+    // the polygon's edges, the star's points - never a circle standing in for
+    // a polygon (ADREP-TASK-002).
+    function test_closedTracksCarryEntriesRound_data() {
+        return [
+            { tag: "circular", layout: "circular" },
+            { tag: "ellipse", layout: "ellipse" },
+            { tag: "hexagon", layout: "hexagon" },
+            { tag: "triangle", layout: "triangle" },
+            { tag: "square", layout: "square" },
+            { tag: "star", layout: "star" }
+        ]
+    }
+
+    function test_closedTracksCarryEntriesRound(data) {
+        const count = 6
+        const geometry = LayoutEngine.metrics(data.layout, count, 40, 8, 1, 120,
+                                              2, 12, false, 0, 6)
+        const outline = LayoutEngine.surface(data.layout, geometry, 0, 6)
+        function at(travel, index) {
+            return LayoutEngine.entryGeometry(
+                data.layout, index, count, Object.assign({}, geometry, { travel: travel }),
+                0, 6, "upright", "canonical")
+        }
+        function centre(entry) {
+            return Qt.point(entry.position.x + 20, entry.position.y + 20)
+        }
+        function outlineDistance(point) {
+            let best = Infinity
+            const points = outline.points
+            for (let index = 0; index < points.length; ++index) {
+                const a = points[index]
+                const b = points[(index + 1) % points.length]
+                const dx = b.x - a.x
+                const dy = b.y - a.y
+                const share = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy)
+                                                    / Math.max(1e-9, dx * dx + dy * dy)))
+                best = Math.min(best, Math.hypot(point.x - a.x - share * dx,
+                                                 point.y - a.y - share * dy))
+            }
+            return best
+        }
+        compare(LayoutEngine.pathWindow(data.layout, count, geometry).loop, count)
+        for (const travel of [0, 0.25, 0.5, 1, 2.75, -1, -4.5, 13]) {
+            for (let index = 0; index < count; ++index) {
+                const entry = at(travel, index)
+                const expected = ((index + travel) % count + count) % count / count
+                fuzzy(entry.pathProgress, expected,
+                      data.tag + " entry " + index + " at travel " + travel)
+                compare(entry.onTrack, true, "a closed track hides no entry")
+                verify(outlineDistance(centre(entry)) < 0.75,
+                       data.tag + " entry " + index + " is on the drawn outline at travel " + travel)
+            }
+        }
+        // One slot is the neighbour's place, and a whole loop is no change.
+        for (let index = 0; index < count; ++index) {
+            fuzzy(at(1, index).x, at(0, (index + 1) % count).x, "one slot on")
+            fuzzy(at(1, index).y, at(0, (index + 1) % count).y, "one slot on")
+            fuzzy(at(count, index).x, at(0, index).x, "a whole loop")
+            fuzzy(at(count, index).y, at(0, index).y, "a whole loop")
+        }
+        // Half way along a straight edge an entry is inside the circle a
+        // polygon stands on; a circle stand-in would keep it on that circle.
+        if (["hexagon", "triangle", "square", "star"].includes(data.layout)) {
+            const half = centre(at(0.5, 0))
+            const middle = Qt.point(geometry.width / 2, geometry.height / 2)
+            verify(Math.hypot(half.x - middle.x, half.y - middle.y) < geometry.radius - 5,
+                   data.tag + " travels along its edges, not a circle")
+        }
+    }
+
+    // Criterion: a theme's own track carries its entries the same way: a
+    // closed one round, an open one through a loop one slot longer than it.
+    // Rotation of an open track stays ignored.
+    function test_bakedTracksTravel() {
+        const ring = ringTrack()
+        const metrics = trackMetrics(ring, 6)
+        compare(metrics.loop, 6)
+        for (let index = 0; index < 6; ++index) {
+            const moved = LayoutEngine.trackEntryGeometry(
+                ring, index, 6, metrics, 0, "upright", undefined, 1)
+            const neighbour = LayoutEngine.trackEntryGeometry(
+                ring, (index + 1) % 6, 6, metrics, 0, "upright", undefined, 0)
+            fuzzy(moved.x, neighbour.x, "a ring entry takes its neighbour's place")
+            fuzzy(moved.y, neighbour.y, "a ring entry takes its neighbour's place")
+            fuzzy(moved.depth, neighbour.depth, "and its depth")
+        }
+        const arc = ringTrack({ shape: "arc", sweepDegrees: 140 })
+        const arcMetrics = trackMetrics(arc, 6)
+        compare(arcMetrics.loop, 7, "an open track's loop is one slot longer")
+        const first = LayoutEngine.trackEntryGeometry(arc, 0, 6, arcMetrics, 0, "upright", undefined, 0)
+        const leaving = LayoutEngine.trackEntryGeometry(arc, 5, 6, arcMetrics, 0, "upright", undefined, 1)
+        compare(leaving.onTrack, false, "the last entry leaves the end")
+        compare(leaving.trackVisibility, 0)
+        const back = LayoutEngine.trackEntryGeometry(arc, 5, 6, arcMetrics, 0, "upright", undefined, 2)
+        compare(back.onTrack, true, "and comes back at the start")
+        fuzzy(back.x, first.x, "where the first entry stood")
+        fuzzy(back.y, first.y, "where the first entry stood")
+        // The box was measured for the whole journey: travel never resizes it.
+        for (const travel of [0, 0.5, 1, 3.5]) {
+            for (let index = 0; index < 6; ++index) {
+                const entry = LayoutEngine.trackEntryGeometry(
+                    arc, index, 6, arcMetrics, 0, "upright", undefined, travel)
+                if (entry.trackVisibility <= 0)
+                    continue
+                verify(entry.entryBounds.x >= -0.5 && entry.entryBounds.y >= -0.5
+                       && entry.entryBounds.x + entry.entryBounds.width <= arcMetrics.width + 0.5
+                       && entry.entryBounds.y + entry.entryBounds.height <= arcMetrics.height + 0.5,
+                       "entry " + index + " at travel " + travel + " stays inside the box")
+            }
+        }
     }
 
     // Criterion: compact Fan and Arc folder contents sit on an exact half

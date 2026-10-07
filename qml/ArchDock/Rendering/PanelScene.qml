@@ -164,10 +164,14 @@ Item {
         verticalLayout ? "vertical"
         : ["horizontal", "adaptive"].includes(layoutPath)
             ? "horizontal" : "free"
-    // Whole-scene rotation (free radial layouts only). The controller yields
-    // one angle offset; it is added to the configured layout angle and the sum
-    // is what every geometry call receives, so entries, hover targets, drop
-    // targets, popup anchors and the drawn surface all turn together.
+    // Free-panel motion (ADREP-TASK-002). The entries travel along the
+    // panel's own path, the whole scene turns, or both, as "Continuous motion
+    // moves" says, and the wheel and a drag move the same thing. Travel is a
+    // phase in entry slots that every geometry call receives
+    // (LayoutEngine.trackPlacement); a turn is an angle offset added to the
+    // configured layout angle. Entries, hover targets, drop targets and popup
+    // anchors follow either, because they are positioned by geometry rather
+    // than by a visual transform. Both are transient and never saved.
     readonly property bool freeHost:
         String(entryDelegateContext && entryDelegateContext.hostKind
                ? entryDelegateContext.hostKind : "") === "free"
@@ -181,6 +185,15 @@ Item {
         "layout", "rotationSpeed", "panelRotationSpeed", 12))
     readonly property string rotationTrigger: String(definitionValue(
         "layout", "rotationTrigger", "panelRotationTrigger", "idle"))
+    readonly property real travelSpeed: Number(definitionValue(
+        "layout", "travelSpeed", "panelTravelSpeed", 0.5))
+    // How many slots one wheel notch, or one slot's distance of touchpad
+    // travel, moves the entries (PD-16).
+    readonly property real scrollSensitivity: {
+        const value = Number(definitionValue(
+            "layout", "scrollSensitivity", "scrollSensitivity", 1))
+        return isFinite(value) ? Math.max(0.25, Math.min(4, value)) : 1
+    }
     // A baked panel turns when its own track is closed, whatever the
     // configured path says: the artwork, not the layout, decides whether
     // sweeping the entries keeps them on the platform.
@@ -188,52 +201,285 @@ Item {
         bakedTierRequested && activeThemeTrack !== null
         ? LayoutEngine.trackSupportsRotation(activeThemeTrack)
         : LayoutEngine.supportsWholeSceneRotation(layoutPath)
+    // What moves (PD-25): the entries along the path, the whole panel, or
+    // both. Where the scene cannot turn - an open baked track - only the
+    // entries can, whatever the record says.
+    readonly property string motionTarget: {
+        const value = String(definitionValue(
+            "layout", "motionTarget", "panelMotionTarget", "items")).trim().toLowerCase()
+        return rotationLayoutSupported && ["panel", "both"].includes(value)
+            ? value : "items"
+    }
     readonly property bool sceneRotationEnabled: rotationController.enabled
     readonly property bool sceneRotationActive: rotationController.running
+    readonly property bool travelMotionEnabled: rotationController.travelEnabled
+    readonly property bool travelMotionActive: rotationController.travelRunning
+    // The wheel's and a drag's share of the turn and of the travel. A wheel
+    // step eases the share towards its target (stepMotion); a drag moves it
+    // directly. The remainder is wheel input not yet worth a whole step.
     property real wheelRotationAngle: 0
+    property real wheelRotationTarget: 0
+    property real wheelTravel: 0
+    property real wheelTravelTarget: 0
+    property real wheelRemainder: 0
     property bool rotationDragActive: false
     readonly property bool rotationGeometryAvailable:
         freeHost && rotationCapabilityAvailable && rotationLayoutSupported
+    // The loop the entries travel round: whether they travel at all, how many
+    // of them stand on the path and after how many slots they are back.
+    readonly property var trackWindow: bakedMetadataUsable && bakedTrackMetrics
+        ? ({ travels: entryCount > 1, closed: bakedTrackMetrics.closed === true,
+             windowed: bakedTrackMetrics.windowed === true,
+             capacity: Number(bakedTrackMetrics.capacity || 0),
+             loop: Number(bakedTrackMetrics.loop || entryCount) })
+        : LayoutEngine.pathWindow(layoutPath, entryCount, trackGeometry)
+    readonly property bool travelGeometryAvailable:
+        freeHost && trackWindow.travels === true
     // A folder or menu holds the dock still; a hover preview does not, so a
     // wheel turn is never swallowed by a preview the pointer passed over.
     readonly property bool modalPopupOpen: Boolean(runtimeState.modalPopupOpen !== undefined
         ? runtimeState.modalPopupOpen : runtimeState.popupOpen)
+    readonly property bool wheelInputAvailable:
+        entryInteractionEnabled && entriesAnimatable && !dragInProgress
+        && !editModeActive && !modalPopupOpen && presentationState !== "collapsed"
+    readonly property bool wheelTravelAvailable:
+        travelGeometryAvailable && motionTarget !== "panel" && wheelInputAvailable
     readonly property bool wheelRotationAvailable:
-        rotationGeometryAvailable && entryInteractionEnabled && entriesAnimatable
-        && !dragInProgress && !editModeActive && !modalPopupOpen
-        && presentationState !== "collapsed"
-    // An open curve that cannot hold its entries shows a window of them, and
-    // the wheel then moves that window instead of turning the scene. The
-    // travel is transient, like the wheel rotation above: it is never saved.
-    property real browseTravel: 0
+        rotationGeometryAvailable && motionTarget !== "items" && wheelInputAvailable
     // Desktop 3D editing, set by the host while Panel Studio holds an edit of
-    // this panel. The handles take the whole panel; wheel and drag rotation
+    // this panel. The handles take the whole panel; wheel and drag motion
     // wait until the edit ends.
     property bool sceneEditActive: false
     signal sceneTransformEdited(var values)
-    // The wheel turned or browsed the dock.
+    // The wheel moved the entries or turned the dock.
     signal wheelUsed()
-    readonly property var trackWindow: bakedMetadataUsable && bakedTrackMetrics
-        ? ({ windowed: bakedTrackMetrics.windowed === true,
-             capacity: Number(bakedTrackMetrics.capacity || 0),
-             maximumOffset: Number(bakedTrackMetrics.maximumOffset || 0) })
-        : LayoutEngine.pathWindow(layoutPath, entryCount, trackGeometry)
-    readonly property int browseOffset: trackWindow.windowed === true
-        ? Math.max(0, Math.min(Number(trackWindow.maximumOffset || 0),
-                               Math.round(browseTravel)))
-        : 0
-    readonly property bool wheelBrowseAvailable:
-        freeHost && trackWindow.windowed === true && entryInteractionEnabled
-        && entriesAnimatable && !dragInProgress && !editModeActive
-        && !modalPopupOpen && presentationState !== "collapsed"
-    onTrackWindowChanged: browseTravel = trackWindow.windowed === true
-        ? Math.min(browseTravel, Number(trackWindow.maximumOffset || 0)) : 0
+    // The last wheel event the scene took, as Qt delivered it.
+    property var lastWheelInput: ({})
+    // How long one wheel step takes to arrive, eased out (OF-11). It ends
+    // within 120 ms of the wheel event, the frame that shows it included.
+    readonly property int stepDuration: 100
     readonly property real sceneRotationAngle:
         rotationController.angleOffset + wheelRotationAngle
     readonly property real effectiveLayoutAngle:
         layoutAngle + sceneRotationAngle
-    onRotationGeometryAvailableChanged: {
-        if (!rotationGeometryAvailable) wheelRotationAngle = 0
+    // How far the entries have travelled along their path, in entry slots.
+    readonly property real entryTravel: travelGeometryAvailable
+        ? wheelTravel + rotationController.travelOffset : 0
+    // The distance and the turn between two neighbouring entries at rest:
+    // what one slot of travel is on screen. Touchpad pixels and a drag's
+    // angle are counted in it.
+    readonly property var travelPitch: {
+        if (!travelGeometryAvailable || entryCount < 2)
+            return ({ pixels: 0, degrees: 0 })
+        const centre = travelCentre()
+        const points = [0, 1].map(function(index) {
+            const bounds = baseEntryGeometryAt(index, 0).entryBounds
+            return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+        })
+        const turn = (Math.atan2(points[1].y - centre.y, points[1].x - centre.x)
+            - Math.atan2(points[0].y - centre.y, points[0].x - centre.x)) * 180 / Math.PI
+        return ({ pixels: Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y),
+                  degrees: Math.abs(((turn % 360) + 540) % 360 - 180) })
+    }
+    onRotationGeometryAvailableChanged: if (!rotationGeometryAvailable) resetTurn()
+    onTravelGeometryAvailableChanged: if (!travelGeometryAvailable) resetTravel()
+    // Another layout starts with its entries in their own places and the
+    // panel unturned.
+    onLayoutPathChanged: {
+        resetTravel()
+        resetTurn()
+    }
+    onReducedMotionChanged: if (reducedMotion) foldContinuousTravel()
+
+    // The centre a drag turns about and a slot's turn is measured from: the
+    // baked track's centre, otherwise the middle of the laid-out scene.
+    function travelCentre() {
+        if (bakedMetadataUsable && bakedTrackMetrics && bakedTrackMetrics.center)
+            return bakedTrackMetrics.center
+        return { x: contentBounds.x + layoutGeometry.width / 2,
+                 y: contentBounds.y + layoutGeometry.height / 2 }
+    }
+
+    // Wheel input gathers until it makes whole steps (PD-16): 120 angle
+    // units are one notch, and touchpad pixels count by the distance between
+    // two neighbouring entries. One step moves the entries one slot, or
+    // turns the panel 15 degrees, and Scroll sensitivity says how many steps
+    // a notch makes. Returns the steps taken.
+    function takeWheel(angleDelta, pixelDelta) {
+        const pixels = Number(pixelDelta) || 0
+        const notches = pixels !== 0 && travelPitch.pixels > 0
+            ? pixels / travelPitch.pixels : (Number(angleDelta) || 0) / 120
+        wheelRemainder += notches * scrollSensitivity
+        const steps = wheelRemainder >= 0
+            ? Math.floor(wheelRemainder + 1e-6) : Math.ceil(wheelRemainder - 1e-6)
+        wheelRemainder -= steps
+        stepMotion(steps)
+        return steps
+    }
+
+    // A step eases out over stepDuration measured from the wheel event, so the
+    // very next frame already shows it moving. Steps that arrive while one is
+    // running retarget it from where the entries are, so a spun wheel never
+    // builds up a backlog.
+    function stepMotion(steps) {
+        if (steps === 0)
+            return
+        if (motionTarget !== "panel" && travelGeometryAvailable) {
+            wheelTravelTarget += steps
+            easeTravel()
+        }
+        if (motionTarget !== "items" && rotationGeometryAvailable) {
+            wheelRotationTarget += steps * 15
+            easeTurn()
+        }
+    }
+
+    // Where a running step started, and when. A step counts the frame that
+    // first shows it and takes that frame's share at once: the frame drawn
+    // next always moves, before the frame clock has ticked for the step.
+    readonly property real frameInterval: 1000 / 60
+    property real travelStepFrom: 0
+    property real travelStepStarted: 0
+    property bool travelStepping: false
+    property real turnStepFrom: 0
+    property real turnStepStarted: 0
+    property bool turnStepping: false
+
+    function easeTravel() {
+        if (reducedMotion || !entriesAnimatable) {
+            travelStepping = false
+            wheelTravel = wheelTravelTarget
+            restTravel()
+            return
+        }
+        travelStepFrom = wheelTravel
+        travelStepStarted = Date.now() - frameInterval
+        travelStepping = true
+        advanceSteps()
+    }
+
+    function easeTurn() {
+        if (reducedMotion || !entriesAnimatable) {
+            turnStepping = false
+            wheelRotationAngle = wheelRotationTarget
+            restTurn()
+            return
+        }
+        turnStepFrom = wheelRotationAngle
+        turnStepStarted = Date.now() - frameInterval
+        turnStepping = true
+        advanceSteps()
+    }
+
+    // Ease out (cubic) by the time since the step began.
+    function stepShare(started) {
+        const share = Math.max(0, Math.min(1, (Date.now() - started) / stepDuration))
+        return { done: share >= 1, eased: 1 - Math.pow(1 - share, 3) }
+    }
+
+    function advanceSteps() {
+        if (travelStepping) {
+            const step = stepShare(travelStepStarted)
+            wheelTravel = step.done ? wheelTravelTarget
+                : travelStepFrom + (wheelTravelTarget - travelStepFrom) * step.eased
+            if (step.done) {
+                travelStepping = false
+                restTravel()
+            }
+        }
+        if (turnStepping) {
+            const step = stepShare(turnStepStarted)
+            wheelRotationAngle = step.done ? wheelRotationTarget
+                : turnStepFrom + (wheelRotationTarget - turnStepFrom) * step.eased
+            if (step.done) {
+                turnStepping = false
+                restTurn()
+            }
+        }
+    }
+
+    // At rest the shares are brought back into one turn of their loop, which
+    // draws the same and keeps the numbers small.
+    function restTravel() {
+        const loop = Number(trackWindow.loop || 0)
+        if (loop > 0 && Math.abs(wheelTravel) >= loop) {
+            const turns = Math.trunc(wheelTravel / loop) * loop
+            wheelTravel -= turns
+            wheelTravelTarget -= turns
+        }
+    }
+
+    function restTurn() {
+        const turns = Math.floor(wheelRotationAngle / 360) * 360
+        wheelRotationAngle -= turns
+        wheelRotationTarget -= turns
+    }
+
+    // A drag moves the entries, or turns the panel, by the pointer's turn
+    // about the centre, without easing.
+    function dragMotion(degrees) {
+        if (motionTarget !== "panel" && travelGeometryAvailable
+                && travelPitch.degrees > 0) {
+            travelStepping = false
+            wheelTravel += degrees / travelPitch.degrees
+            wheelTravelTarget = wheelTravel
+        }
+        if (motionTarget !== "items" && rotationGeometryAvailable) {
+            turnStepping = false
+            wheelRotationAngle += degrees
+            wheelRotationTarget = wheelRotationAngle
+        }
+    }
+
+    // Released entries come to rest in their slots, so none is left half
+    // faded at the end of an open path.
+    function endDragMotion() {
+        rotationDragActive = false
+        if (wheelTravel !== Math.round(wheelTravel)) {
+            wheelTravelTarget = Math.round(wheelTravel)
+            easeTravel()
+        }
+        restTurn()
+    }
+
+    // Continuous travel that stops leaves its share with the wheel's, and
+    // the entries ease into the nearest slots instead of jumping back.
+    function foldContinuousTravel() {
+        const offset = rotationController.travelOffset
+        rotationController.travelOffset = 0
+        if (offset === 0 && wheelTravel === Math.round(wheelTravel))
+            return
+        travelStepping = false
+        wheelTravel += offset
+        wheelTravelTarget = Math.round(wheelTravel)
+        easeTravel()
+    }
+
+    function resetTravel() {
+        travelStepping = false
+        wheelTravel = 0
+        wheelTravelTarget = 0
+        wheelRemainder = 0
+        rotationController.travelOffset = 0
+    }
+
+    function resetTurn() {
+        turnStepping = false
+        wheelRotationAngle = 0
+        wheelRotationTarget = 0
+    }
+
+    FrameAnimation {
+        running: root.travelStepping || root.turnStepping
+        onTriggered: root.advanceSteps()
+    }
+
+    Connections {
+        target: rotationController
+        function onTravelEnabledChanged() {
+            if (!rotationController.travelEnabled)
+                root.foldContinuousTravel()
+        }
     }
     readonly property bool dragInProgress:
         Boolean(runtimeState ? runtimeState.dragInProgress : false)
@@ -275,10 +521,10 @@ Item {
     readonly property var trackGeometry: Object.assign({}, layoutGeometry, {
         trackRadius: meshTrackRadius
     })
-    // What the entries are placed with: the track geometry plus the transient
-    // window offset of an overcrowded curve.
+    // What the entries are placed with: the track geometry plus how far they
+    // have travelled along it.
     readonly property var entryLayoutGeometry: Object.assign({}, trackGeometry, {
-        browseOffset: Math.round(browseTravel)
+        travel: entryTravel
     })
     readonly property var activeThemeSlice: themeRecord(
         themeDefinition ? themeDefinition.slices : [],
@@ -325,12 +571,13 @@ Item {
             activeThemeTrack, bakedArtworkSize.width, bakedArtworkSize.height,
             entryCount, configuredLayoutGeometry.iconSize,
             configuredLayoutGeometry.padding, configuredLayoutGeometry.radius,
-            bakedTiltDegrees, sceneRotationEnabled || rotationGeometryAvailable,
+            // A free panel's entries can go round its track, by turning or
+            // travelling, so its box holds every place they pass through.
+            bakedTiltDegrees, freeHost || sceneRotationEnabled,
             // The canonical spacing regulates a baked track as it does every
             // other curved one.
             ({ spacing: configuredLayoutGeometry.spacing,
-               spacingReference: configuredLayoutGeometry.spacingReference,
-               browseOffset: Math.round(browseTravel) }))
+               spacingReference: configuredLayoutGeometry.spacingReference }))
         : null
 
     readonly property var surfaceMetrics: buildSurfaceMetrics()
@@ -500,9 +747,9 @@ Item {
         const rects = []
         for (let index = 0; index < entryCount; ++index) {
             const output = entryGeometryAt(index)
-            // An entry outside the window of an overcrowded curve is not on
-            // screen, so it has no rectangle to press. The list keeps one
-            // record per entry; this one can contain no point.
+            // An entry off its path (or leaving or coming back onto an open
+            // one) has no rectangle to press. The list keeps one record per
+            // entry; this one can contain no point.
             if (output.onTrack === false) {
                 rects.push({ x: -100000, y: -100000, width: 0, height: 0 })
                 continue
@@ -749,7 +996,10 @@ Item {
             effectAllowance: entryEffectAllowance(rect)
         })
     }
-    function baseEntryGeometryAt(index) {
+    // `travel` places the entry as if the entries had travelled that far; by
+    // default it is where they are now.
+    function baseEntryGeometryAt(index, travel) {
+        const phase = travel === undefined ? entryTravel : Number(travel)
         if (segmentLayout && segmentLayout.entries[index]) {
             const result = Object.assign({}, segmentLayout.entries[index])
             result.effectBounds = effectBounds
@@ -762,7 +1012,7 @@ Item {
             // which is the same space the foreground layer's z uses.
             const track = LayoutEngine.trackEntryGeometry(
                 activeThemeTrack, index, entryCount, bakedTrackMetrics,
-                effectiveLayoutAngle, pathOrientation, bakedTiltDegrees)
+                effectiveLayoutAngle, pathOrientation, bakedTiltDegrees, phase)
             const output = ({})
             const trackKeys = Object.keys(track || ({}))
             for (let keyIndex = 0; keyIndex < trackKeys.length; ++keyIndex)
@@ -772,7 +1022,8 @@ Item {
             return output
         }
         const geometry = LayoutEngine.entryGeometry(
-            layoutPath, index, entryCount, entryLayoutGeometry,
+            layoutPath, index, entryCount, travel === undefined
+                ? entryLayoutGeometry : Object.assign({}, trackGeometry, { travel: phase }),
             surfaceLoader.true3DReady ? 0 : effectiveLayoutAngle,
             polygonSides, pathOrientation, geometryCompatibilityProfile,
             placementEdge)
@@ -970,10 +1221,17 @@ Item {
     SceneRotationController {
         id: rotationController
 
-        mode: root.rotationLayoutSupported ? root.rotationMode : "none"
+        mode: root.rotationLayoutSupported || root.travelGeometryAvailable
+            ? root.rotationMode : "none"
         speedDegreesPerSecond: root.rotationSpeed
         trigger: root.rotationTrigger
         available: root.freeHost && root.rotationCapabilityAvailable
+            && root.rotationLayoutSupported
+        turnsPanel: root.motionTarget !== "items"
+        movesItems: root.motionTarget !== "panel"
+        travelAvailable: root.travelGeometryAvailable
+        travelSpeed: root.travelSpeed
+        travelPeriod: Number(root.trackWindow.loop || 0)
         hovered: root.panelHovered
         dragActive: root.dragInProgress
         editMode: root.editModeActive
@@ -983,30 +1241,23 @@ Item {
         animationEnabled: root.rotationAnimationEnabled
     }
 
+    // Scrolling up moves the entries clockwise along the path (or turns the
+    // panel clockwise), scrolling down the other way. This is transient
+    // geometry, not a saved edit.
     WheelHandler {
         target: null
-        enabled: (root.wheelRotationAvailable || root.wheelBrowseAvailable) && !root.sceneEditActive
+        enabled: (root.wheelRotationAvailable || root.wheelTravelAvailable) && !root.sceneEditActive
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         acceptedModifiers: Qt.NoModifier
         onWheel: function(event) {
-            const delta = event.pixelDelta.y !== 0 ? event.pixelDelta.y : event.angleDelta.y
-            if (delta === 0) {
+            const angle = event.angleDelta.y
+            const pixels = event.pixelDelta.y
+            if (angle === 0 && pixels === 0) {
                 event.accepted = false
                 return
             }
-            if (root.wheelBrowseAvailable) {
-                // One notch moves the window one entry: down brings the next
-                // entries onto the curve, up the previous ones.
-                root.browseTravel = Math.max(0, Math.min(
-                    Number(root.trackWindow.maximumOffset || 0),
-                    root.browseTravel - delta / 120))
-                event.accepted = true
-                root.wheelUsed()
-                return
-            }
-            // One normal wheel notch turns 15 degrees; touchpad deltas turn
-            // proportionally. This is transient geometry, not a saved edit.
-            root.wheelRotationAngle = ((root.wheelRotationAngle + delta / 8) % 360 + 360) % 360
+            root.lastWheelInput = { angleDelta: angle, pixelDelta: pixels, at: Date.now() }
+            root.takeWheel(angle, pixels)
             event.accepted = true
             root.wheelUsed()
         }
@@ -1015,23 +1266,25 @@ Item {
     MouseArea {
         anchors.fill: parent
         z: 0.5 // Entry delegates remain above this background gesture.
-        enabled: root.wheelRotationAvailable && !root.sceneEditActive
+        enabled: (root.wheelRotationAvailable || root.wheelTravelAvailable) && !root.sceneEditActive
         acceptedButtons: Qt.LeftButton
         property real previousAngle: 0
         onPressed: mouse => {
             if (!root.containsInputPoint(Qt.point(mouse.x, mouse.y))) { mouse.accepted = false; return }
-            previousAngle = Math.atan2(mouse.y - height / 2, mouse.x - width / 2)
+            const centre = root.travelCentre()
+            previousAngle = Math.atan2(mouse.y - centre.y, mouse.x - centre.x)
             root.rotationDragActive = true
         }
         onPositionChanged: mouse => {
             if (!pressed || !root.rotationDragActive) return
-            const angle = Math.atan2(mouse.y - height / 2, mouse.x - width / 2)
+            const centre = root.travelCentre()
+            const angle = Math.atan2(mouse.y - centre.y, mouse.x - centre.x)
             const delta = Math.atan2(Math.sin(angle-previousAngle), Math.cos(angle-previousAngle))
-            root.wheelRotationAngle = (root.wheelRotationAngle + delta * 180 / Math.PI + 360) % 360
             previousAngle = angle
+            root.dragMotion(delta * 180 / Math.PI)
         }
-        onReleased: root.rotationDragActive = false
-        onCanceled: root.rotationDragActive = false
+        onReleased: root.endDragMotion()
+        onCanceled: root.endDragMotion()
     }
 
     GeometryHitRegion {
@@ -1090,6 +1343,7 @@ Item {
         reducedMotion: root.reducedMotion
         geometry: root.rendererGeometry
         layoutAngle: root.effectiveLayoutAngle
+        restingAngle: root.layoutAngle
         polygonSides: root.polygonSides
         appearance: root.appearance
         customColor: root.customColor
@@ -1131,7 +1385,8 @@ Item {
             const rect = output.entryBounds
             return { centerX: rect.x + rect.width / 2, centerY: rect.y + rect.height / 2,
                      width: rect.width, height: rect.height,
-                     rotation: output.rotation, onTrack: output.onTrack !== false }
+                     rotation: output.rotation, onTrack: output.onTrack !== false,
+                     visibility: output.trackVisibility === undefined ? 1 : output.trackVisibility }
         })
         sceneConcealed: !root.entriesAnimatable
     }
@@ -1223,9 +1478,11 @@ Item {
             readonly property var segmentItem: root.segmentItemForEntry(index)
             readonly property bool segmentOpen: !root.segmentedScene
                 || Boolean(segmentItem && segmentItem.expanded)
-            // False only for an entry outside the window of an overcrowded
-            // open curve.
+            // False for an entry that is off its path, or leaving or coming
+            // back onto an open one; such an entry takes no input.
             readonly property bool onTrack: geometryOutput.onTrack !== false
+            readonly property real trackVisibility: geometryOutput.trackVisibility === undefined
+                ? 1 : Math.max(0, Math.min(1, Number(geometryOutput.trackVisibility)))
             readonly property bool sceneInputEnabled:
                 root.entryInteractionEnabled && segmentOpen && onTrack
             readonly property bool sceneVisible:
@@ -1253,7 +1510,7 @@ Item {
                 ? delegateItem.hoverScale : 1
 
             objectName: "panel-entry-" + index
-            visible: segmentOpen && onTrack
+            visible: segmentOpen && trackVisibility > 0
             enabled: sceneInputEnabled
             x: geometryOutput.position.x
             y: geometryOutput.position.y
@@ -1267,7 +1524,7 @@ Item {
                 yScale: Number(entryItem.geometryOutput.projectedHeight || entryItem.height) / entryItem.height
             }
             scale: geometryOutput.scaleFactor
-            opacity: root.entryDelegate === null && sceneEntry.minimized ? 0.55 : 1
+            opacity: trackVisibility * (root.entryDelegate === null && sceneEntry.minimized ? 0.55 : 1)
 
             Loader {
                 id: fallbackMotion

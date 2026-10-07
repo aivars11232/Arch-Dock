@@ -114,7 +114,8 @@ private slots:
             PanelScene {
                 required property string glyphFixture
                 panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
-                                   scene3DQuality: "low", iconSize: 40, layoutPadding: 10})
+                                   scene3DQuality: "low", iconSize: 40, layoutPadding: 10,
+                                   panelMotionTarget: "panel"})
                 entryDelegateContext: ({hostKind: "free"})
                 hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [
                     {id: "open", available: true}, {id: "collapse-radial", available: true}]})
@@ -298,7 +299,37 @@ private slots:
         QCoreApplication::sendEvent(&window, &wheel);
         QTRY_VERIFY(scene->property("wheelRotationAngle").toDouble() != dragged);
         QTRY_VERIFY(projectionMatches());
+        // A wheel step eases in over 120 ms (ADREP-TASK-002); let it rest
+        // before putting the panel back.
+        QTRY_VERIFY(!scene->property("turnStepping").toBool());
         scene->setProperty("wheelRotationAngle", 0.0);
+        scene->setProperty("wheelRotationTarget", 0.0);
+        // ADREP-TASK-002: with its entries travelling instead, the panel keeps
+        // still and the 3D entries, their projection and their input move
+        // along its track.
+        {
+            auto travelling = plainValue(scene->property("panelDefinition")).toMap();
+            travelling.insert(QStringLiteral("panelMotionTarget"), QStringLiteral("items"));
+            scene->setProperty("panelDefinition", travelling);
+            QTRY_VERIFY(projectionMatches());
+            const auto rested = plainValue(scene->property("entryRects"));
+            QObject *entry = renderer->findChild<QObject *>(QStringLiteral("mesh-entry-0"));
+            QVERIFY(entry);
+            const QVector3D stood = entry->property("position").value<QVector3D>();
+            QWheelEvent travel(dragFinish, window.mapToGlobal(dragFinish.toPoint()), QPoint(), QPoint(0, 120),
+                Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+            QCoreApplication::sendEvent(&window, &travel);
+            QTRY_COMPARE(scene->property("entryTravel").toDouble(), 1.0);
+            QCOMPARE(scene->property("effectiveLayoutAngle").toDouble(), 0.0);
+            QTRY_VERIFY(projectionMatches());
+            QVERIFY(plainValue(scene->property("entryRects")) != rested);
+            QVERIFY((entry->property("position").value<QVector3D>() - stood).length() > 1);
+            scene->setProperty("wheelTravel", 0.0);
+            scene->setProperty("wheelTravelTarget", 0.0);
+            travelling.insert(QStringLiteral("panelMotionTarget"), QStringLiteral("panel"));
+            scene->setProperty("panelDefinition", travelling);
+            QTRY_VERIFY(projectionMatches());
+        }
         if (themeId == QStringLiteral("arc-platform-orange")) return;
         tiltedDefinition.remove(QStringLiteral("scene3DCameraPitch"));
         scene->setProperty("panelDefinition", tiltedDefinition);
@@ -657,7 +688,8 @@ private slots:
                 property real trackSpacing: 8
                 panelDefinition: ({rendererTier: "true3d", layout: trackLayout, pathSides: trackSides,
                                    layoutRadius: 120, scene3DQuality: "low", iconSize: 40,
-                                   spacing: trackSpacing, layoutPadding: 10})
+                                   spacing: trackSpacing, layoutPadding: 10,
+                                   panelMotionTarget: "panel"})
                 entryDelegateContext: ({hostKind: "free"})
                 hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [
                     {id: "open", available: true}]})

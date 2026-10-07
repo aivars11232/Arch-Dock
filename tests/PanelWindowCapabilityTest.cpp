@@ -329,6 +329,7 @@ private slots:
     void studioFolderItemNames();
     void studioPlainSurfaceExplains3D();
     void wholePanelRotationFieldsAreGatedByTheResolver();
+    void studioMotionAndDirectionRows();
     void meshSceneEditorIsGatedAndTransactional();
     void rendererSwitchRetainsOnlyUnchangedInactiveFields();
     void groupedWindowsFollowLiveKWinUpdates();
@@ -3768,6 +3769,9 @@ void PanelWindowCapabilityTest::wholePanelRotationFieldsAreGatedByTheResolver()
         QStringLiteral("panelRotationMode"),
         QStringLiteral("panelRotationSpeed"),
         QStringLiteral("panelRotationTrigger"),
+        QStringLiteral("panelMotionTarget"),
+        QStringLiteral("panelTravelSpeed"),
+        QStringLiteral("scrollSensitivity"),
     };
 
     const QHash<QString, QVariantMap> nativeFields = fieldMap(
@@ -3831,6 +3835,206 @@ void PanelWindowCapabilityTest::wholePanelRotationFieldsAreGatedByTheResolver()
     QVERIFY(configuration.value(QStringLiteral("capabilityResolution")).toMap()
                 .value(QStringLiteral("rotation")).toMap()
                 .value(QStringLiteral("available")).toBool());
+
+    // ADREP-TASK-002 (PD-16, PD-25): what motion moves, the item travel
+    // speed and the scroll sensitivity. A new free panel moves its items.
+    QCOMPARE(registry->panelDefinition(panelId)->layout.motionTarget, QStringLiteral("items"));
+    const auto motionFields = [&]() {
+        return fieldMap(window.panelSettingsEditorSnapshot(panelId, QStringLiteral("studio")));
+    };
+    const auto set = [&](const QVariantMap &values) {
+        const QVariantMap outcome = window.applyPanelSettingsTransaction(
+            panelId, registry->panelDefinition(panelId)->settingsRevision, values);
+        QVERIFY2(outcome.value(QStringLiteral("success")).toBool(),
+                 qPrintable(outcome.value(QStringLiteral("errorMessage")).toString()));
+    };
+    auto fields = motionFields();
+    QCOMPARE(fields.value(QStringLiteral("panelMotionTarget")).value(QStringLiteral("choices")).toStringList(),
+             QStringList({QStringLiteral("items"), QStringLiteral("panel"), QStringLiteral("both")}));
+    QStringList labels;
+    for (const QVariant &option : fields.value(QStringLiteral("panelMotionTarget"))
+             .value(QStringLiteral("options")).toList())
+        labels.append(option.toMap().value(QStringLiteral("label")).toString());
+    QCOMPARE(labels, QStringList({QStringLiteral("Items along the path"), QStringLiteral("Whole panel"),
+                                  QStringLiteral("Both")}));
+    QCOMPARE(fields.value(QStringLiteral("panelMotionTarget")).value(QStringLiteral("label")).toString(),
+             QStringLiteral("Continuous motion moves"));
+    QCOMPARE(fields.value(QStringLiteral("panelMotionTarget")).value(QStringLiteral("section")).toString(),
+             QStringLiteral("panels-animations"));
+    QCOMPARE(fields.value(QStringLiteral("scrollSensitivity")).value(QStringLiteral("minimumValue")).toReal(), 0.25);
+    QCOMPARE(fields.value(QStringLiteral("scrollSensitivity")).value(QStringLiteral("maximumValue")).toReal(), 4.0);
+    QCOMPARE(fields.value(QStringLiteral("scrollSensitivity")).value(QStringLiteral("section")).toString(),
+             QStringLiteral("panels-animations"));
+    QCOMPARE(fields.value(QStringLiteral("panelTravelSpeed")).value(QStringLiteral("label")).toString(),
+             QStringLiteral("Item travel speed"));
+    QCOMPARE(fields.value(QStringLiteral("panelRotationSpeed")).value(QStringLiteral("label")).toString(),
+             QStringLiteral("Panel rotation speed"));
+    // The speeds and the trigger act while continuous motion runs, each
+    // speed on what it moves; what moves and the sensitivity always act,
+    // because the wheel follows them.
+    const auto inactive = [&](const QString &key) {
+        return motionFields().value(key).value(QStringLiteral("inactive")).toBool();
+    };
+    set({{QStringLiteral("panelRotationMode"), QStringLiteral("none")}});
+    for (const QString &key : {QStringLiteral("panelRotationSpeed"), QStringLiteral("panelRotationTrigger"),
+                               QStringLiteral("panelTravelSpeed")})
+        QVERIFY2(inactive(key), qPrintable(key + QStringLiteral(" acts without continuous motion")));
+    for (const QString &key : {QStringLiteral("panelMotionTarget"), QStringLiteral("scrollSensitivity"),
+                               QStringLiteral("panelRotationMode")})
+        QVERIFY2(!inactive(key), qPrintable(key + QStringLiteral(" is hidden")));
+    set({{QStringLiteral("panelRotationMode"), QStringLiteral("clockwise")},
+         {QStringLiteral("panelMotionTarget"), QStringLiteral("items")}});
+    QVERIFY(!inactive(QStringLiteral("panelTravelSpeed")));
+    QVERIFY(inactive(QStringLiteral("panelRotationSpeed")));
+    QVERIFY(!inactive(QStringLiteral("panelRotationTrigger")));
+    set({{QStringLiteral("panelMotionTarget"), QStringLiteral("panel")}});
+    QVERIFY(inactive(QStringLiteral("panelTravelSpeed")));
+    QVERIFY(!inactive(QStringLiteral("panelRotationSpeed")));
+    set({{QStringLiteral("panelMotionTarget"), QStringLiteral("both")}});
+    QVERIFY(!inactive(QStringLiteral("panelTravelSpeed")));
+    QVERIFY(!inactive(QStringLiteral("panelRotationSpeed")));
+    // Saved, held to their ranges, and handed to the applet.
+    set({{QStringLiteral("panelMotionTarget"), QStringLiteral("Both")},
+         {QStringLiteral("panelTravelSpeed"), 99},
+         {QStringLiteral("scrollSensitivity"), 0.01}});
+    const QVariantMap moved = window.panelRendererConfiguration(panelId);
+    QCOMPARE(moved.value(QStringLiteral("panelMotionTarget")).toString(), QStringLiteral("both"));
+    QCOMPARE(moved.value(QStringLiteral("panelTravelSpeed")).toReal(), 5.0);
+    QCOMPARE(moved.value(QStringLiteral("scrollSensitivity")).toReal(), 0.25);
+    PanelRegistry reloaded;
+    QCOMPARE(reloaded.panelDefinition(panelId)->layout.motionTarget, QStringLiteral("both"));
+    QCOMPARE(reloaded.panelDefinition(panelId)->layout.scrollSensitivity, 0.25);
+    // An unknown choice falls back to the default, as an unknown trigger does.
+    set({{QStringLiteral("panelMotionTarget"), QStringLiteral("sideways")}});
+    QCOMPARE(window.panelRendererConfiguration(panelId).value(QStringLiteral("panelMotionTarget")).toString(),
+             QStringLiteral("items"));
+}
+
+// ADREP-TASK-002: Animations lists free-panel motion in the order it is
+// decided and says what the wheel moves; Layout offers Direction for the open
+// shapes as presets of the layout angle, which stays below it (PD-24, PD-25).
+void PanelWindowCapabilityTest::studioMotionAndDirectionRows()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    const auto set = [&](const QVariantMap &values) {
+        return backend.applyPanelSettingsTransaction(panel,
+            registry->panelDefinition(panel)->settingsRevision, values).value("success").toBool();
+    };
+    QVERIFY(set({{"type", "launcher"}, {"layout", "fan"}, {"panelRotationMode", "none"}}));
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    const auto open = [&]() {
+        return std::unique_ptr<QObject>(component.createWithInitialProperties({
+            {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 9}}));
+    };
+    const auto rows = [](QObject *studio, int subtab) {
+        studio->setProperty("mainTabIndex", 1);
+        studio->setProperty("subTabIndex", subtab);
+        QVariant value;
+        QMetaObject::invokeMethod(studio, "rowsForCurrentPage", Q_RETURN_ARG(QVariant, value));
+        QVariantList result;
+        for (const QVariant &row : value.toList())
+            result.append(row.toMap());
+        return result;
+    };
+    const auto keys = [](const QVariantList &page) {
+        QStringList result;
+        for (const QVariant &row : page) {
+            const QString key = row.toMap().value("key").toString();
+            if (!key.isEmpty()) result.append(key);
+        }
+        return result;
+    };
+    const auto notices = [](const QVariantList &page) {
+        QStringList result;
+        for (const QVariant &row : page)
+            if (row.toMap().value("kind").toString() == QStringLiteral("notice"))
+                result.append(row.toMap().value("text").toString());
+        return result.join(QLatin1Char('\n'));
+    };
+    {
+        auto studio = open(); QVERIFY(studio);
+        const QVariantList animations = rows(studio.get(), 9);
+        QCOMPARE(keys(animations), QStringList({"panelRotationMode", "panelMotionTarget", "scrollSensitivity"}));
+        QVERIFY2(notices(animations).contains(QStringLiteral("icons along its path while the panel stays still")),
+                 qPrintable(notices(animations)));
+    }
+    QVERIFY(set({{"panelRotationMode", "clockwise"}}));
+    {
+        auto studio = open(); QVERIFY(studio);
+        QCOMPARE(keys(rows(studio.get(), 9)), QStringList({"panelRotationMode", "panelMotionTarget",
+            "panelTravelSpeed", "panelRotationTrigger", "scrollSensitivity"}));
+    }
+    QVERIFY(set({{"panelMotionTarget", "both"}}));
+    {
+        auto studio = open(); QVERIFY(studio);
+        const QVariantList animations = rows(studio.get(), 9);
+        QCOMPARE(keys(animations), QStringList({"panelRotationMode", "panelMotionTarget",
+            "panelTravelSpeed", "panelRotationSpeed", "panelRotationTrigger", "scrollSensitivity"}));
+        QVERIFY(notices(animations).contains(QStringLiteral("turn it at the same time")));
+    }
+    QVERIFY(set({{"panelMotionTarget", "items"}, {"panelRotationMode", "none"}}));
+
+    // Direction on Layout, beside the fine angle.
+    const auto layoutPage = [&](QObject *studio) {
+        for (int subtab = 0; subtab < 11; ++subtab) {
+            const QVariantList page = rows(studio, subtab);
+            if (keys(page).contains(QStringLiteral("layoutRadius")))
+                return page;
+        }
+        return QVariantList{};
+    };
+    const auto directions = [](const QVariantList &page) {
+        QVariantMap direction;
+        int angles = 0;
+        for (const QVariant &value : page) {
+            const QVariantMap row = value.toMap();
+            if (row.value("key").toString() != QStringLiteral("layoutAngle")) continue;
+            ++angles;
+            if (row.value("kind").toString() == QStringLiteral("combo")) direction = row;
+        }
+        QVariantMap result;
+        for (const QVariant &option : direction.value("options").toList())
+            result.insert(option.toMap().value("label").toString(), option.toMap().value("value"));
+        result.insert(QStringLiteral("rows"), angles);
+        result.insert(QStringLiteral("row"), direction);
+        return result;
+    };
+    for (const auto &[layout, up] : std::initializer_list<std::pair<const char *, double>>{
+             {"fan", 0}, {"arc", 0}, {"semicircle", 0}, {"radial", -90}}) {
+        QVERIFY(set({{"layout", QString::fromLatin1(layout)}, {"layoutAngle", 0}}));
+        auto studio = open(); QVERIFY(studio);
+        const QVariantMap options = directions(layoutPage(studio.get()));
+        QCOMPARE(options.value("rows").toInt(), 2);
+        const auto wrapped = [](double angle) {
+            const double value = std::fmod(std::fmod(angle, 360.0) + 540.0, 360.0) - 180.0;
+            return value == -180.0 ? 180.0 : value;
+        };
+        QCOMPARE(options.value("Up").toDouble(), wrapped(up));
+        QCOMPARE(options.value("Right").toDouble(), wrapped(up + 90));
+        QCOMPARE(options.value("Down").toDouble(), wrapped(up + 180));
+        QCOMPARE(options.value("Left").toDouble(), wrapped(up - 90));
+        // Choosing a side stages that layout angle, held until Apply.
+        const QVariant row = options.value("row");
+        QVERIFY(QMetaObject::invokeMethod(studio.get(), "setFieldValue",
+            Q_ARG(QVariant, row), Q_ARG(QVariant, options.value("Left"))));
+        QCOMPARE(studio->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap()
+                     .value("layoutAngle").toDouble(), wrapped(up - 90));
+        QCOMPARE(registry->panelDefinition(panel)->layout.angle, 0.0);
+        // A fine angle between the sides is shown as it is.
+        QVERIFY(QMetaObject::invokeMethod(studio.get(), "setFieldValue",
+            Q_ARG(QVariant, row), Q_ARG(QVariant, 37)));
+        QVERIFY(directions(layoutPage(studio.get())).contains(QStringLiteral("Custom (37°)")));
+    }
+    QVERIFY(set({{"layout", "circular"}}));
+    auto studio = open(); QVERIFY(studio);
+    QCOMPARE(directions(layoutPage(studio.get())).value("rows").toInt(), 1);
 }
 
 void PanelWindowCapabilityTest::presentationProfileIsPublishedForLaterPresets()
@@ -4271,7 +4475,10 @@ void PanelWindowCapabilityTest::ownersFreeCircleOffersOnlyWhatWorks()
     QVERIFY(backend.applyPanelSettingsTransaction(panel,
         registry->panelDefinition(panel)->settingsRevision,
         {{"type", "launcher"}, {"layout", "circular"}, {"appearance", "futuristic"},
-         {"iconStyle", "dark-orb"}, {"panelRotationMode", "clockwise"}}).value("success").toBool());
+         {"iconStyle", "dark-orb"}, {"panelRotationMode", "clockwise"},
+         // The owner's circle rotated, so the upgrade has it turn as a whole
+         // (ADREP-TASK-002, PD-25).
+         {"panelMotionTarget", "panel"}}).value("success").toBool());
     // Values the owner stored through controls that did nothing there: the
     // Width they typed and a shape Dark Orb's own layers ignore.
     registry->setPanelValue(panel, QStringLiteral("width"), 700);
@@ -4365,7 +4572,8 @@ void PanelWindowCapabilityTest::ownersFreeCircleOffersOnlyWhatWorks()
     };
     const QStringList presentation{"presentationMode", "presentationTrigger", "collapseMechanism",
         "collapseAxis", "revealHandle", "openDelay", "closeDelay"};
-    const QStringList rotation{"panelRotationMode", "panelRotationSpeed", "panelRotationTrigger"};
+    const QStringList rotation{"panelRotationMode", "panelRotationSpeed", "panelRotationTrigger",
+        "panelMotionTarget", "scrollSensitivity"};
 
     // OF-02: no Alignment (nor any other edge-panel placement) on General.
     for (const QString &key : {QStringLiteral("alignment"), QStringLiteral("edge")})
@@ -4391,11 +4599,14 @@ void PanelWindowCapabilityTest::ownersFreeCircleOffersOnlyWhatWorks()
             QVERIFY2(!controls(page).contains(key), qPrintable(page + ": " + key));
     QVERIFY2(!sections("panels-animations").contains("Opening and closing"),
              "Animations offers an opening and closing section on a free panel");
-    // OF-04, PD-08: rotation only on Animations.
+    // OF-04, PD-08: rotation and travel only on Animations. The panel turns
+    // as a whole, so its item travel speed is not shown.
     for (const QString &key : rotation) {
         QVERIFY2(!controls("panels-layout").contains(key), qPrintable(key));
         QVERIFY2(controls("panels-animations").contains(key), qPrintable(key));
     }
+    for (const QString &page : rowsByPage.keys())
+        QVERIFY2(!controls(page).contains("panelTravelSpeed"), qPrintable(page));
     // OF-08, PD-06: no Indicators on a free panel.
     QVERIFY(!offeredByPage.value("icons-indicators"));
     for (const QString &page : rowsByPage.keys())

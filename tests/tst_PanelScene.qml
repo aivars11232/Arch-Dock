@@ -215,6 +215,44 @@ TestCase {
         }
     }
 
+    // ADREP-TASK-002: while the entries travel the drawn outline keeps
+    // still; when the whole panel turns, the painting turns as one piece at
+    // once instead of being painted again a few frames after the icons moved.
+    function test_surfaceKeepsStillWhileEntriesTravelAndTurnsWhole() {
+        const scene = createTemporaryObject(sceneComponent, testCase, {
+            panelDefinition: definition({ layout: "hexagon", panelRotationMode: "none",
+                                          panelMotionTarget: "items" }),
+            orderedEntries: entries(),
+            hostCapabilities: { available: true,
+                                renderer: { effectiveTier: "procedural2d", fallbackApplied: false },
+                                rotation: { available: true, support: "arbitrary" } },
+            entryDelegateContext: { hostKind: "free" },
+            rotationAnimationEnabled: false
+        })
+        verify(scene)
+        const surface = scene.visualPanel
+        verify(surface && surface.surfacePath, "the procedural surface is drawn")
+        const outline = JSON.stringify(surface.surfacePath)
+        const bounds = scene.entryGeometryAt(0).entryBounds
+        // This harness window is not shown, so a step lands at once.
+        compare(scene.takeWheel(120, 0), 1)
+        compare(scene.entryTravel, 1)
+        compare(JSON.stringify(surface.surfacePath), outline, "the outline did not move")
+        compare(surface.canvasTurn, 0)
+        verify(Math.hypot(scene.entryGeometryAt(0).entryBounds.x - bounds.x,
+                          scene.entryGeometryAt(0).entryBounds.y - bounds.y) > 10,
+               "the entry moved along the outline")
+
+        scene.panelDefinition = definition({ layout: "hexagon", panelRotationMode: "none",
+                                             panelMotionTarget: "panel" })
+        compare(scene.takeWheel(120, 0), 1)
+        compare(scene.effectiveLayoutAngle, 15)
+        compare(JSON.stringify(surface.surfacePath), outline,
+                "the outline is painted at its resting angle")
+        compare(surface.canvasTurn, 15, "and the painting turns with the panel")
+        compare(surface.drawnAngle, 0)
+    }
+
     function definition(overrides) {
         const result = {
             schemaVersion: 2,

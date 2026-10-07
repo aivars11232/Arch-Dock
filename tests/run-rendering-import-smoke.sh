@@ -1484,10 +1484,13 @@ run_private_session() {
 
 run_outer() {
     # The private session's own limit; the Studio truth matrix draws every
-    # field of 21 panels and needs longer.
+    # field of 21 panels and the travel matrix (ADREP-TASK-002) twelve
+    # layouts step by step, so they need longer.
     local session_seconds=150
     if [[ "${ARCHDOCK_RENDERING_TRUTH_MATRIX:-}" == '1' ]]; then
         session_seconds=900
+    elif [[ "${ARCHDOCK_RENDERING_TRAVEL:-}" == '1' ]]; then
+        session_seconds=420
     fi
     require_command cmake
     require_command dbus-run-session

@@ -99,7 +99,7 @@ TestCase {
     function test_continuousRotationIsExplicitlyPlayable() {
         const preview = createPreview({visible: true,
             panelDefinition: definition({edge: "free", layout: "ring", panelRotationMode: "clockwise",
-                panelRotationSpeed: 90, panelRotationTrigger: "idle"}),
+                panelRotationSpeed: 90, panelRotationTrigger: "idle", panelMotionTarget: "panel"}),
             hostCapabilities: {available: true, rotation: {available: true}},
             animationProfiles: {reducedMotion: false}})
         compare(preview.panelSceneItem.sceneRotationActive, false, "cards start frozen")

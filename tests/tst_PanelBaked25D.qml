@@ -668,7 +668,8 @@ TestCase {
                 layoutRadius: 300,
                 panelRotationMode: "clockwise",
                 panelRotationSpeed: 30,
-                panelRotationTrigger: "idle"
+                panelRotationTrigger: "idle",
+                panelMotionTarget: "panel"
             },
             animationProfiles: ({ reducedMotion: false })
         })
@@ -1111,7 +1112,32 @@ TestCase {
         verify(!scene.containsInputPoint(hole), "the ring's hole passes through")
         verify(!scene.containsInputPoint(Qt.point(1, 1)), "the corner passes through")
 
-        // The wheel turns the ring from that surface, in both directions.
+        // ADREP-TASK-002: the wheel moves the icons along the ring track from
+        // that surface, in both directions, and the platform stays still.
+        verify(scene.wheelTravelAvailable)
+        compare(scene.wheelRotationAvailable, false, "the platform does not turn")
+        function centre(index) {
+            const bounds = scene.entryGeometryAt(index).entryBounds
+            return Qt.point(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+        }
+        const slots = [0, 1, 2, 3, 4, 5].map(centre)
+        testCase.passedWheelCount = 0
+        mouseWheel(scene, surface.x, surface.y, 0, 120)
+        compare(scene.entryTravel, 1, "one notch, one slot")
+        compare(scene.sceneRotationAngle, 0)
+        for (let index = 0; index < 6; ++index) {
+            fuzzy(centre(index).x, slots[(index + 1) % 6].x, "entry " + index + " took its neighbour's place")
+            fuzzy(centre(index).y, slots[(index + 1) % 6].y, "entry " + index + " took its neighbour's place")
+            verify(scene.containsInputPoint(centre(index)), "entry " + index + " takes input there")
+        }
+        mouseWheel(scene, surface.x, surface.y, 0, -120)
+        compare(scene.entryTravel, 0, "and back")
+        fuzzy(centre(0).x, slots[0].x, "the icons return")
+        compare(testCase.passedWheelCount, 0, "the platform consumed both events")
+
+        // "Continuous motion moves" Whole panel: the wheel turns the ring.
+        scene.panelDefinition = Object.assign({}, scene.panelDefinition,
+                                              { panelMotionTarget: "panel" })
         verify(scene.wheelRotationAvailable)
         const resting = scene.entryGeometryAt(0).x
         testCase.passedWheelCount = 0

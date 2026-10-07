@@ -57,71 +57,144 @@ var canonicalSpacing = 8;
 // panel's layout scale; a caller that passes none keeps the even spread.
 //
 // An open track that cannot hold its entries side by side keeps icon + spacing
-// between neighbours instead and shows a window of them, centred on the track.
-// `offset` says which entry the window starts at. It is transient browsing
-// state and is clamped here, so a caller never has to know the capacity first.
-// A closed track is never windowed: it turns.
+// between neighbours instead and shows `capacity` of them, centred on the
+// track.
+//
+// `travel` moves every entry along the track by that many entry slots
+// (ADREP-TASK-002). The wheel, a drag or continuous motion sets it; it is
+// transient browsing state, never saved. Positive travel moves the entries
+// towards the end of the track, which is clockwise on every layout drawn
+// here. A closed track carries its entries round: one slot puts each entry
+// where its neighbour stood. An open track is a loop longer than the path:
+// its entries rest in `capacity` slots on the path and the loop has at least
+// one more off it, so an entry that leaves one end fades out a little past
+// it and comes back at the other end, whether or not every entry fits.
+// Only an entry wholly on the path is `onTrack`, which is what may be drawn
+// solid and pressed; `visibility` fades one that is leaving or arriving.
 function trackPlacement(index, count, length, closed, iconSize, spacing,
-                        spacingReference, offset) {
+                        spacingReference, travel) {
     const safeCount = Math.max(1, Math.round(finite(count, 0)));
     const safeIndex = clamp(Math.round(finite(index, 0)), 0, safeCount - 1);
     const size = Math.max(1, finite(iconSize, 1));
     const gap = Math.max(0, finite(spacing, 0));
     const reference = Math.max(0, finite(spacingReference, 0));
     const trackLength = Math.max(0, finite(length, 0));
+    const phase = finite(travel, 0);
     const spans = closed ? safeCount : safeCount - 1;
     const result = {
         progress: spans > 0 ? safeIndex / spans : 0.5,
+        slot: safeIndex,
         onTrack: true,
         visibility: 1,
         pitch: spans > 0 ? trackLength / spans : 0,
         windowed: false,
         capacity: safeCount,
-        maximumOffset: 0
+        loop: safeCount,
+        startProgress: 0,
+        endProgress: 1
     };
-    if (!closed && spans > 0 && trackLength > 0 && result.pitch < size) {
-        const pitch = size + gap;
-        const capacity = Math.max(1, Math.min(
-            safeCount - 1, Math.floor(trackLength / pitch) + 1));
-        const first = clamp(Math.round(finite(offset, 0)), 0, safeCount - capacity);
-        const slot = safeIndex - first;
-        const margin = (trackLength - (capacity - 1) * pitch) / 2;
+    if (spans <= 0 || trackLength <= 0)
+        return result;
+    if (!closed && result.pitch < size) {
+        result.pitch = size + gap;
+        result.capacity = Math.max(1, Math.min(
+            safeCount - 1, Math.floor(trackLength / result.pitch) + 1));
         result.windowed = true;
-        result.capacity = capacity;
-        result.maximumOffset = safeCount - capacity;
-        result.pitch = pitch;
-        result.onTrack = slot >= 0 && slot < capacity;
-        result.visibility = result.onTrack ? 1 : 0;
-        // An entry outside the window waits at the end it will enter from.
-        result.progress = clamp(
-            (margin + clamp(slot, 0, capacity - 1) * pitch) / trackLength, 0, 1);
+    } else {
+        const evenGap = result.pitch - size;
+        // Never tighter than the spacing itself, never wider than the even
+        // spread; closed up about the middle of the track.
+        if (reference > 0 && gap < reference && evenGap > 0)
+            result.pitch = size + Math.min(
+                evenGap, Math.max(gap, evenGap * gap / reference));
+    }
+    const pitch = result.pitch;
+    const capacity = result.capacity;
+    const margin = (trackLength - (closed ? safeCount : capacity - 1) * pitch) / 2;
+    if (closed) {
+        const slot = wrapped(safeIndex + phase, safeCount);
+        result.slot = slot;
+        result.progress = wrapped(margin + slot * pitch, trackLength) / trackLength;
         return result;
     }
-    const evenGap = result.pitch - size;
-    if (spans <= 0 || reference <= 0 || gap >= reference || evenGap <= 0)
-        return result;
-    // Never tighter than the spacing itself, never wider than the even spread.
-    const tightened = Math.min(evenGap, Math.max(gap, evenGap * gap / reference));
-    const contraction = (size + tightened) / result.pitch;
-    result.pitch = size + tightened;
-    result.progress = 0.5 + (result.progress - 0.5) * contraction;
+    // How far past an end a leaving entry goes before it has faded: one
+    // slot, or one icon where the slots are wider than an icon.
+    const reach = Math.min(1, size / pitch);
+    const loop = Math.max(safeCount, capacity + 1);
+    const position = wrapped(safeIndex + phase, loop);
+    let slot = position;
+    let visibility = 1;
+    if (position > capacity - 1) {
+        if (position < capacity) {
+            const share = position - (capacity - 1);
+            slot = capacity - 1 + share * reach;
+            visibility = 1 - share;
+        } else if (position > loop - 1) {
+            const share = loop - position;
+            slot = -share * reach;
+            visibility = 1 - share;
+        } else {
+            // Waiting off the path for its turn to come back: not drawn, and
+            // kept at the end slot so it never stands outside the panel.
+            slot = capacity - 1;
+            visibility = 0;
+        }
+    }
+    result.loop = loop;
+    result.slot = slot;
+    result.visibility = visibility;
+    result.onTrack = position <= capacity - 1 + 1e-9;
+    result.progress = (margin + slot * pitch) / trackLength;
+    result.startProgress = (margin - reach * pitch) / trackLength;
+    result.endProgress = (margin + (capacity - 1 + reach) * pitch) / trackLength;
     return result;
 }
 
-// Whether an open-path layout currently shows a window of its entries, how
-// many it holds and how far the window can move.
+// `value` brought into [0, period).
+function wrapped(value, period) {
+    const result = value % period;
+    return result < 0 ? result + period : result;
+}
+
+// The track a layout's entries travel along (see trackPlacement), or null
+// for a layout whose entries stand in rows. The star and the spiral keep
+// their own even spread, which the canonical spacing does not regulate.
+function travelTrack(resolvedLayout, geometry, polygonSides, count) {
+    const track = curvedTrack(resolvedLayout, geometry, polygonSides);
+    if (track) {
+        return { closed: track.closed, length: track.length,
+                 spacing: geometry.spacing,
+                 spacingReference: geometry.spacingReference };
+    }
+    if (resolvedLayout === "star")
+        return { closed: true, length: 1, spacing: 0, spacingReference: 0 };
+    if (resolvedLayout === "spiral") {
+        const entries = Math.max(1, Math.round(finite(count, 0)));
+        return { closed: false,
+                 length: Math.max(1, entries - 1) * geometry.iconSize,
+                 spacing: 0, spacingReference: 0 };
+    }
+    return null;
+}
+
+// Whether a layout's entries travel, whether an open path shows only some of
+// them, how many it holds and how many slots its loop has: the period after
+// which travel brings every entry back to where it started.
 function pathWindow(layout, count, rawGeometry) {
     const geometry = safeGeometry(rawGeometry, layout);
-    const track = curvedTrack(geometry.layout, geometry, geometry.sides);
+    const entries = Math.max(0, Math.round(finite(count, 0)));
+    const track = travelTrack(geometry.layout, geometry, geometry.sides, entries);
     const placement = track
-        ? trackPlacement(0, count, track.length, track.closed, geometry.iconSize,
-                         geometry.spacing, geometry.spacingReference, 0)
+        ? trackPlacement(0, entries, track.length, track.closed,
+                         geometry.iconSize, track.spacing,
+                         track.spacingReference, 0)
         : null;
     return {
+        travels: placement !== null && entries > 1,
+        closed: track ? track.closed : false,
         windowed: placement ? placement.windowed : false,
-        capacity: placement ? placement.capacity
-                            : Math.max(0, Math.round(finite(count, 0))),
-        maximumOffset: placement ? placement.maximumOffset : 0
+        capacity: placement ? placement.capacity : entries,
+        loop: placement ? placement.loop : entries
     };
 }
 
@@ -275,6 +348,9 @@ function metrics(layout, count, iconSize, spacing, scale, radius, rows,
         rows: safeRows,
         sides: shapeSides(resolvedLayout, polygonSides),
         padding: safePadding,
+        // How many entries the panel was laid out for: the spiral draws the
+        // path that many entries stand on.
+        count: safeCount,
         layout: resolvedLayout
     };
 }
@@ -295,11 +371,13 @@ function safeGeometry(geometry, layout) {
         // The radius the entries are finally drawn at, when a renderer scales
         // the path onto its own track. Zero means the layout radius.
         trackRadius: Math.max(0, finite(source.trackRadius, 0)),
-        // Which entry an overcrowded open path starts its window at. Runtime
-        // browsing state supplied by the scene; never a saved setting.
-        browseOffset: Math.max(0, finite(source.browseOffset, 0)),
+        // How many entry slots the entries have travelled along their path
+        // (see trackPlacement). Runtime state supplied by the scene; never a
+        // saved setting.
+        travel: finite(source.travel, 0),
         rows: clamp(Math.round(finite(source.rows, 1)), 1, 8),
         sides: clamp(Math.round(finite(source.sides, 6)), 3, 12),
+        count: Math.max(0, Math.round(finite(source.count, 0))),
         padding: Math.max(0, finite(source.padding, 0)),
         layout: source.layout || normalizedLayout(layout, false),
         // Set by rotationEnvelope(): open paths are then centred on the box
@@ -380,12 +458,12 @@ function entryGeometry(layout, index, count, rawGeometry, angle, polygonSides,
     const centerX = geometry.width / 2;
     const centerY = geometry.height / 2;
     // Curved tracks place their entries through one rule, so the canonical
-    // spacing regulates every one of them alike.
-    const track = curvedTrack(resolvedLayout, geometry, polygonSides);
+    // spacing regulates every one of them alike, and every one of them
+    // travels the same way.
+    const track = travelTrack(resolvedLayout, geometry, polygonSides, safeCount);
     const placement = track
         ? trackPlacement(safeIndex, safeCount, track.length, track.closed, size,
-                         geometry.spacing, geometry.spacingReference,
-                         geometry.browseOffset)
+                         track.spacing, track.spacingReference, geometry.travel)
         : null;
     const progress = placement && !track.closed ? placement.progress
         : safeCount === 1 ? 0.5 : safeIndex / (safeCount - 1);
@@ -462,7 +540,9 @@ function entryGeometry(layout, index, count, rawGeometry, angle, polygonSides,
         if (resolvedLayout === "fan")
             rotation = (pathDegrees + 90) * 0.18;
     } else if (resolvedLayout === "spiral") {
-        const radians = -Math.PI / 2 + safeIndex * 1.25;
+        // Each slot is a fixed turn further round, so a travelling entry
+        // follows the spiral's own curve, inwards or outwards.
+        const radians = -Math.PI / 2 + (placement ? placement.slot : safeIndex) * 1.25;
         const distance = geometry.radius * (0.26 + 0.74 * progress);
         x = centerX + Math.cos(radians) * distance - size / 2;
         y = centerY + Math.sin(radians) * distance - size / 2;
@@ -702,7 +782,9 @@ function trackTiltFactor(track, requestedDegrees) {
 
 // The scene box for a baked panel. The user's configured radius drives one
 // uniform artwork scale, and the box is the union of the drawn platform and
-// every scaled icon, so nothing the theme positions is cut off.
+// every scaled icon, so nothing the theme positions is cut off. `rotating`
+// says the entries move round the track (the whole panel turns, or the
+// entries travel), so the box must hold every place they can pass through.
 function trackMetrics(track, artworkWidth, artworkHeight, count, iconSize,
                       padding, layoutRadius, tiltDegrees, rotating, placement) {
     const source = track || {};
@@ -758,11 +840,10 @@ function trackMetrics(track, artworkWidth, artworkHeight, count, iconSize,
         // shows in perspective, so its horizontal radius is the true one.
         spacing: Math.max(0, finite(regulation.spacing, 0)),
         spacingReference: Math.max(0, finite(regulation.spacingReference, 0)),
-        browseOffset: Math.max(0, finite(regulation.browseOffset, 0)),
         trackLength: 0,
         windowed: false,
         capacity: safeCount,
-        maximumOffset: 0,
+        loop: safeCount,
         center: { x: centerX, y: centerY * tiltFactor + platform.y },
         radiusX: trackRadiusX * scale,
         radiusY: trackRadiusY * scale * tiltFactor,
@@ -781,7 +862,7 @@ function trackMetrics(track, artworkWidth, artworkHeight, count, iconSize,
         metrics.spacingReference, 0);
     metrics.windowed = window.windowed;
     metrics.capacity = window.capacity;
-    metrics.maximumOffset = window.maximumOffset;
+    metrics.loop = window.loop;
 
     let left = platform.x;
     let top = platform.y;
@@ -791,12 +872,21 @@ function trackMetrics(track, artworkWidth, artworkHeight, count, iconSize,
     // box is measured around the whole closed path instead of the entries the
     // panel happens to hold. Otherwise the host would be asked to resize as
     // the scene rotated, which is exactly what the envelope exists to avoid.
+    // An open track is measured at its resting slots and as far past each end
+    // as a leaving entry goes, so travel never resizes it either.
     const wholePath = rotating && metrics.closed && safeCount > 0;
     const samples = wholePath ? Math.max(safeCount, 72) : safeCount;
+    const points = [];
     for (let index = 0; index < samples; ++index) {
-        const point = wholePath
+        points.push(wholePath
             ? trackPointAt(metrics, index / samples, 0)
-            : trackPoint(metrics, index, samples, 0);
+            : trackPoint(metrics, index, samples, 0, 0));
+    }
+    if (!metrics.closed && safeCount > 1) {
+        points.push(trackPointAt(metrics, window.startProgress, 0));
+        points.push(trackPointAt(metrics, window.endProgress, 0));
+    }
+    for (const point of points) {
         const extent = size * point.scaleFactor / 2;
         left = Math.min(left, point.x - extent);
         top = Math.min(top, point.y - extent);
@@ -825,11 +915,11 @@ function trackMetrics(track, artworkWidth, artworkHeight, count, iconSize,
 // One anchor point in the coordinate space of the metrics it is given: the
 // artwork's own while trackMetrics is still sizing the box, the scene box once
 // those metrics are returned. Kept separate so the box is sized from the same
-// numbers the entries will use.
-function trackPoint(metrics, index, count, rotationDegrees) {
+// numbers the entries will use. `travel` is the entries' travel in slots.
+function trackPoint(metrics, index, count, rotationDegrees, travel) {
     const placement = trackPlacement(
         index, count, metrics.trackLength, metrics.closed, metrics.iconSize,
-        metrics.spacing, metrics.spacingReference, metrics.browseOffset);
+        metrics.spacing, metrics.spacingReference, travel);
     const point = trackPointAt(metrics, placement.progress, rotationDegrees);
     point.onTrack = placement.onTrack;
     point.visibility = placement.visibility;
@@ -875,12 +965,12 @@ function trackPointAt(metrics, progress, rotationDegrees) {
 // linear and radial layouts return, so a scene consumes either without knowing
 // which produced it.
 function trackEntryGeometry(track, index, count, metrics, rotationDegrees,
-                            pathOrientation, tiltDegrees) {
+                            pathOrientation, tiltDegrees, travel) {
     const resolved = metrics && metrics.center
         ? metrics
         : trackMetrics(track, 0, 0, count, 0, 0, 0, tiltDegrees);
     const safeCount = Math.max(1, Math.round(finite(count, 0)));
-    const point = trackPoint(resolved, index, safeCount, rotationDegrees);
+    const point = trackPoint(resolved, index, safeCount, rotationDegrees, travel);
     const size = resolved.iconSize;
     // trackMetrics() has already moved the track centre into the scene box,
     // so a point on the track is a scene point. Adding the box offset again
@@ -1006,10 +1096,19 @@ function surface(layout, rawGeometry, rawAngle, polygonSides) {
             }, centerX, centerY, angle));
         }
     } else if (resolvedLayout === "spiral") {
+        // The path the entries stand on (entryGeometry): a fixed turn per
+        // entry, outwards from a quarter of the radius, so every entry sits on
+        // the drawn line and travels along it (ADREP-TASK-002). A geometry
+        // that does not say how many entries it holds keeps the older figure.
+        const span = Math.max(1, geometry.count - 1);
         for (let index = 0; index < samples; ++index) {
             const progress = index / (samples - 1);
-            const radians = -Math.PI / 2 + progress * Math.PI * 4.5;
-            const distance = radius * (0.16 + progress * 0.84);
+            const radians = geometry.count > 0
+                ? -Math.PI / 2 + progress * span * 1.25
+                : -Math.PI / 2 + progress * Math.PI * 4.5;
+            const distance = geometry.count > 0
+                ? radius * (0.26 + progress * 0.74)
+                : radius * (0.16 + progress * 0.84);
             points.push(rotate({
                 x: centerX + Math.cos(radians) * distance,
                 y: centerY + Math.sin(radians) * distance

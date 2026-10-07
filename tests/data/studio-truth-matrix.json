@@ -61,6 +61,9 @@
         "panelRotationMode",
         "panelRotationSpeed",
         "panelRotationTrigger",
+        "panelMotionTarget",
+        "panelTravelSpeed",
+        "scrollSensitivity",
         "bakedTilt",
         "scene3DBand",
         "scene3DBend",
@@ -102,8 +105,8 @@
     },
     "layouts": {
       "why": "Radius, rows, sides and rotation act only on the layouts that draw from them (PD-08).",
-      "horizontal": ["layoutRadius", "layoutRows", "pathSides", "panelRotationMode", "panelRotationSpeed", "panelRotationTrigger"],
-      "vertical": ["layoutRadius", "layoutRows", "pathSides", "panelRotationMode", "panelRotationSpeed", "panelRotationTrigger"],
+      "horizontal": ["layoutRadius", "layoutRows", "pathSides", "panelRotationMode", "panelRotationSpeed", "panelRotationTrigger", "panelMotionTarget", "panelTravelSpeed", "scrollSensitivity"],
+      "vertical": ["layoutRadius", "layoutRows", "pathSides", "panelRotationMode", "panelRotationSpeed", "panelRotationTrigger", "panelMotionTarget", "panelTravelSpeed", "scrollSensitivity"],
       "circular": ["layoutRows", "pathSides"],
       "ring": ["layoutRows", "pathSides"],
       "hexagon": ["layoutRows", "pathSides"],
@@ -111,7 +114,7 @@
       "fan": ["layoutRows", "pathSides"],
       "arc": ["layoutRows", "pathSides"],
       "semicircle": ["layoutRows", "pathSides"],
-      "grid": ["layoutRadius", "pathSides", "pathOrientation", "panelRotationMode", "panelRotationSpeed", "panelRotationTrigger"]
+      "grid": ["layoutRadius", "pathSides", "pathOrientation", "panelRotationMode", "panelRotationSpeed", "panelRotationTrigger", "panelMotionTarget", "panelTravelSpeed", "scrollSensitivity"]
     },
     "tiers": {
       "why": "PD-03: padding is a skin's artwork margin. The plain 2D surface draws no glow; 3D settings need the 3D renderer.",
@@ -188,6 +191,9 @@
     "panelRotationMode": "1:9",
     "panelRotationSpeed": "1:9",
     "panelRotationTrigger": "1:9",
+    "panelMotionTarget": "1:9",
+    "panelTravelSpeed": "1:9",
+    "scrollSensitivity": "1:9",
     "presentationMode": "1:9",
     "presentationTrigger": "1:9",
     "collapseMechanism": "1:9",
@@ -273,6 +279,19 @@
     },
     "panelRotationSpeed": {"probe": "runtime", "consumers": [["qml/ArchDock/Rendering/PanelScene.qml", "\"layout\", \"rotationSpeed\", \"panelRotationSpeed\", 12))"]]},
     "panelRotationTrigger": {"probe": "runtime", "consumers": [["qml/ArchDock/Rendering/PanelScene.qml", "\"layout\", \"rotationTrigger\", \"panelRotationTrigger\", \"idle\"))"]]},
+    "panelMotionTarget": {
+      "probe": "runtime",
+      "value": "both",
+      "alternate": "items",
+      "consumers": [["qml/ArchDock/Rendering/PanelScene.qml", "\"layout\", \"motionTarget\", \"panelMotionTarget\", \"items\")).trim().toLowerCase()"]],
+      "proof": "path-travel-smoke: the wheel and continuous motion move the items, the whole panel or both"
+    },
+    "panelTravelSpeed": {"probe": "runtime", "consumers": [["qml/ArchDock/Rendering/PanelScene.qml", "\"layout\", \"travelSpeed\", \"panelTravelSpeed\", 0.5))"]]},
+    "scrollSensitivity": {
+      "probe": "runtime",
+      "consumers": [["qml/ArchDock/Rendering/PanelScene.qml", "\"layout\", \"scrollSensitivity\", \"scrollSensitivity\", 1))"]],
+      "proof": "tst_SceneRotation: test_wheelInputGathersIntoWholeSteps"
+    },
     "segments": {
       "probe": "runtime",
       "value": [

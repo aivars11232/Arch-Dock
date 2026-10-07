@@ -23,6 +23,9 @@ Item {
     property bool reducedMotion: false
     property var geometry: ({})
     property real layoutAngle: 0
+    // The configured angle, without a free panel's turn (wheel, drag or
+    // continuous motion) that layoutAngle includes.
+    property real restingAngle: layoutAngle
     property int polygonSides: 6
     property string appearance: "glass"
     property string customColor: ""
@@ -280,6 +283,7 @@ Item {
             layout: root.layout
             geometry: root.geometry
             layoutAngle: root.layoutAngle
+            restingAngle: root.restingAngle
             polygonSides: root.polygonSides
             appearance: root.appearance
             customColor: root.customColor

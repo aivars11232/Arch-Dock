@@ -340,6 +340,35 @@ void PanelModelTest::contentOrderIsCanonicalAndDerived()
     QVERIFY(PanelRuntimeState::isTransientLegacyKey(QStringLiteral("sceneRotation")));
     QCOMPARE(derived->layout.rotationMode, QStringLiteral("none"));
     QCOMPARE(derived->layout.rotationSpeed, 12.0);
+
+    // ADREP-TASK-002 (PD-25): a record saved before "Continuous motion
+    // moves" existed keeps the motion it had - one that rotated turns as a
+    // whole, any other moves its items - and a saved choice is kept. How far
+    // the items have travelled is never stored.
+    QVERIFY(!legacy.contains(QStringLiteral("panelMotionTarget")));
+    QCOMPARE(turned->layout.motionTarget, QStringLiteral("panel"));
+    QCOMPARE(derived->layout.motionTarget, QStringLiteral("items"));
+    QVariantMap counter = legacy;
+    counter.insert(QStringLiteral("panelRotationMode"), QStringLiteral("counter-clockwise"));
+    QCOMPARE(PanelDefinition::fromLegacyMap(counter, &errorMessage)->layout.motionTarget,
+             QStringLiteral("panel"));
+    QVariantMap chosen = rotating;
+    chosen.insert(QStringLiteral("panelMotionTarget"), QStringLiteral("Items"));
+    chosen.insert(QStringLiteral("panelTravelSpeed"), 99);
+    chosen.insert(QStringLiteral("scrollSensitivity"), 0.01);
+    const auto kept = PanelDefinition::fromLegacyMap(chosen, &errorMessage);
+    QVERIFY2(kept.has_value(), qPrintable(errorMessage));
+    QCOMPARE(kept->layout.motionTarget, QStringLiteral("items"));
+    QCOMPARE(kept->layout.travelSpeed, 5.0);
+    QCOMPARE(kept->layout.scrollSensitivity, 0.25);
+    const QVariantMap persisted = kept->toPersistedMap();
+    QCOMPARE(persisted.value(QStringLiteral("panelMotionTarget")).toString(), QStringLiteral("items"));
+    for (auto it = persisted.cbegin(); it != persisted.cend(); ++it)
+        QVERIFY2(!it.key().contains(QStringLiteral("ravel")) || it.key() == QStringLiteral("panelTravelSpeed"),
+                 qPrintable(it.key()));
+    QCOMPARE(PanelDefinition::fromLegacyMap(persisted, &errorMessage)->layout, kept->layout);
+    QCOMPARE(derived->layout.travelSpeed, 0.5);
+    QCOMPARE(derived->layout.scrollSensitivity, 1.0);
 }
 
 void PanelModelTest::settingsRevisionRoundTripsWithoutSchemaBump()

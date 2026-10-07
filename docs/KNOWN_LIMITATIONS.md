@@ -97,12 +97,19 @@ layouts and each renderer tier they offer (21 panels). What follows from it:
   is hidden and keeps its value: Opens on, Collapse axis, Reveal handle and the
   delays while the panel cannot close, and Dock layout on a baked look, whose
   icons stand on its artwork's own track. Only a closed track (a ring or a
-  polygon) turns, so a baked arc offers no layout angle or rotation.
+  polygon) turns, so a baked arc offers no layout angle or whole-panel
+  rotation; its icons still travel along it.
 - Circle and Ring draw the same, as do Adaptive and Horizontal on a free
   panel, so Dock layout offers only one of each pair beside the others. A look
   made for one layout offers no Dock layout and says so on the Layout page.
-- Rotation speed and when the rotation runs act while the panel turns;
-  ADREP-TASK-002 reworks that section.
+- Item travel speed, Panel rotation speed and Motion runs appear only while
+  continuous motion runs, each speed only for what it moves; Continuous motion
+  moves and Scroll sensitivity are always shown, because the wheel follows
+  them.
+- On baked 2.5D and true 3D looks the icons travel along the platform's track,
+  but passing behind and in front of the platform is completed by
+  ADREP-TASK-004.
+- Edge panels have no wheel travel or rotation.
 - Badges and task progress appear only where the session reports them.
 
 ## 3D editing

@@ -234,6 +234,25 @@ The proposed `v0.1.1` tag and publication need separate authorization.
 - A Studio truth matrix test draws 21 panels, the way the applet does, and
   checks every shown setting against the drawn result or the runtime value it
   drives.
+- Scrolling over a free panel with a curved layout moves its icons along the
+  panel's own outline while the panel stays still (ADREP-TASK-002): one notch
+  moves every icon one place, eased in within 120 ms, and a fast spin queues
+  nothing. On circles, ellipses, polygons and stars the icons go round; on
+  fans, arcs, semicircles, radial paths and spirals an icon that leaves one end
+  fades out and comes back at the other, even when every icon fits. Dragging
+  the panel moves them too. Edge panels are unchanged.
+- Animations gains Continuous motion moves (Items along the path, Whole panel
+  or Both), Item travel speed and Scroll sensitivity (a quarter of a place to
+  four places per notch, the same for wheels, high-resolution wheels and
+  touchpads); the wheel and dragging move what continuous motion moves. A
+  panel that rotated keeps turning as a whole after the upgrade, with a backup
+  first; any other moves its items.
+- A whole flat panel that turns no longer shows its outline behind its
+  icons: the outline was painted again 74 to 143 ms after the wheel event,
+  while the icons moved at once; it is now turned as one picture.
+- Fan, arc, semicircle and radial panels offer Direction (Up, Down, Left,
+  Right) on Layout, beside the fine Layout angle.
+- A spiral panel's line is drawn where its icons stand.
 - Runtime corrections and candidate gates are recorded in
   [the release checklist](docs/RELEASE_CHECKLIST.md) and
   [corrective report](docs/POST_TASK_0045_CORRECTIVE_REPORT.md).

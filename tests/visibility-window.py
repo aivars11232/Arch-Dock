@@ -184,7 +184,9 @@ def instrument_interaction_stage(stage):
                                 panelDropArea.width / 2, panelDropArea.height / 2); return [p.x, p.y]; })(),
                             dropEnabled: panelDropArea.enabled && panelDropArea.visible,
                             rotation: {angle: panelScene.sceneRotationAngle, active: panelScene.sceneRotationActive,
-                                wheelAvailable: panelScene.wheelRotationAvailable},
+                                wheelAvailable: panelScene.wheelRotationAvailable,
+                                travel: panelScene.entryTravel !== undefined ? panelScene.entryTravel : null,
+                                travelAvailable: Boolean(panelScene.wheelTravelAvailable)},
                             collapseProgress: panelScene.collapseProgress,
                             revealPoint: (() => { const r = panelScene.revealHandle;
                                 const p = panelScene.mapToItem(null, r.x + r.width / 2, r.y + r.height / 2);
@@ -381,6 +383,134 @@ def instrument_interaction_stage(stage):
             }
         }
 ''')
+    if os.environ.get("ARCHDOCK_RENDERING_TRAVEL") != "1":
+        return
+    # ADREP-TASK-002 travel evidence: each frame that moves an entry or
+    # turns the drawn surface, each wheel the scene took, each repaint of a
+    # flat surface, the resting state, and one capture per resting state.
+    # Written against what both the old and the new scene expose, so the
+    # same matrix records the problem before the change and checks it after.
+    capture_directory = json.dumps(str(stage.parent / 'logs'))
+    insert("main.qml", "id: panelScene", '''
+                // Frames the panel's window has prepared since the shell started.
+                property int travelFrames: 0
+                function travelSnapshot() {
+                    const entries = [];
+                    for (let i = 0; i < panelScene.entryCount; ++i) {
+                        const item = panelScene.entryItemAt(i);
+                        if (!item) continue;
+                        const mapped = item.mapToItem(null, item.width / 2, item.height / 2);
+                        const output = panelScene.entryGeometryAt(i);
+                        entries.push({app: String(item.sceneEntry.appId || ""),
+                            c: [Math.round(mapped.x * 10) / 10, Math.round(mapped.y * 10) / 10],
+                            s: [Math.round((item.x + item.width / 2) * 10) / 10,
+                                Math.round((item.y + item.height / 2) * 10) / 10],
+                            v: item.visible, e: item.enabled, o: Math.round(item.opacity * 100) / 100,
+                            p: Math.round(Number(output.pathProgress || 0) * 10000) / 10000,
+                            t: output.onTrack !== false});
+                    }
+                    return {angle: Math.round(panelScene.sceneRotationAngle * 100) / 100,
+                        travel: panelScene.entryTravel !== undefined
+                            ? Math.round(panelScene.entryTravel * 1000) / 1000 : null,
+                        entries: entries};
+                }
+                Connections {
+                    target: panelScene.Window.window
+                    property string previous: ""
+                    function onAfterAnimating() {
+                        panelScene.travelFrames += 1;
+                        if (!representation.authoritativeHost) return;
+                        const snapshot = panelScene.travelSnapshot();
+                        const value = JSON.stringify(snapshot);
+                        if (value === previous) return;
+                        previous = value;
+                        snapshot.kind = "motionFrame";
+                        snapshot.panel = root.panelId;
+                        snapshot.frame = panelScene.travelFrames;
+                        snapshot.at = Date.now();
+                        console.warn("ArchDockInteraction " + JSON.stringify(snapshot));
+                    }
+                }
+                Connections {
+                    target: panelScene
+                    function onWheelUsed() {
+                        if (!representation.authoritativeHost) return;
+                        console.warn("ArchDockInteraction " + JSON.stringify({kind: "wheelUsed",
+                            panel: root.panelId, at: Date.now(), frame: panelScene.travelFrames,
+                            angle: panelScene.sceneRotationAngle,
+                            travel: panelScene.entryTravel !== undefined ? panelScene.entryTravel : null,
+                            input: panelScene.lastWheelInput !== undefined ? panelScene.lastWheelInput : null}));
+                    }
+                }
+                Timer {
+                    interval: 300; running: true; repeat: true
+                    property var connected: null
+                    onTriggered: {
+                        const find = item => {
+                            if (!item) return null;
+                            if (item.objectName === "procedural-surface-canvas") return item;
+                            for (const child of item.children) {
+                                const found = find(child);
+                                if (found) return found;
+                            }
+                            return null;
+                        };
+                        const canvas = find(panelScene);
+                        if (!canvas || canvas === connected) return;
+                        connected = canvas;
+                        canvas.painted.connect(function() {
+                            if (!representation.authoritativeHost) return;
+                            console.warn("ArchDockInteraction " + JSON.stringify({kind: "surfacePainted",
+                                panel: root.panelId, at: Date.now(), angle: panelScene.sceneRotationAngle}));
+                        });
+                    }
+                }
+                Timer {
+                    interval: 100; running: true; repeat: true
+                    property string pending: ""
+                    property int stableTicks: 0
+                    property string captured: ""
+                    property int serial: 0
+                    onTriggered: {
+                        if (!representation.authoritativeHost) return;
+                        const snapshot = panelScene.travelSnapshot();
+                        snapshot.kind = "travelState";
+                        snapshot.panel = root.panelId;
+                        snapshot.at = Date.now();
+                        snapshot.layout = panelScene.layoutPath;
+                        snapshot.tier = panelScene.effectiveRendererTier;
+                        snapshot.hostSize = [panelScene.Window.window.width, panelScene.Window.window.height];
+                        snapshot.wheelAvailable = Boolean(panelScene.wheelRotationAvailable
+                            || panelScene.wheelBrowseAvailable || panelScene.wheelTravelAvailable);
+                        snapshot.motionTarget = panelScene.motionTarget !== undefined ? panelScene.motionTarget : null;
+                        snapshot.rotationActive = panelScene.sceneRotationActive;
+                        snapshot.pitch = panelScene.travelPitch !== undefined ? panelScene.travelPitch : null;
+                        snapshot.sensitivity = panelScene.scrollSensitivity !== undefined
+                            ? panelScene.scrollSensitivity : null;
+                        snapshot.travelActive = panelScene.travelMotionActive !== undefined
+                            ? panelScene.travelMotionActive : null;
+                        snapshot.rects = panelScene.entryRects.map(r => [Math.round(r.x), Math.round(r.y),
+                            Math.round(r.width), Math.round(r.height)]);
+                        const centre = panelScene.mapToItem(null, panelScene.width / 2, panelScene.height / 2);
+                        snapshot.centre = [Math.round(centre.x * 10) / 10, Math.round(centre.y * 10) / 10];
+                        console.warn("ArchDockInteraction " + JSON.stringify(snapshot));
+                        // One capture of every state the scene rests in.
+                        const signature = JSON.stringify([snapshot.layout, snapshot.tier, snapshot.angle,
+                            snapshot.travel, snapshot.entries.map(e => [e.s, e.v, e.o])]);
+                        if (signature !== pending) { pending = signature; stableTicks = 0; return; }
+                        if (++stableTicks < 3 || signature === captured) return;
+                        captured = signature;
+                        const path = ''' + capture_directory + ''' + "/travel-" + (++serial) + ".png";
+                        const rested = snapshot;
+                        panelScene.grabToImage(result => {
+                            const saved = result.saveToFile(path);
+                            console.warn("ArchDockInteraction " + JSON.stringify({kind: "travelCapture",
+                                panel: root.panelId, path: path, saved: saved, at: Date.now(),
+                                signature: signature, angle: rested.angle, travel: rested.travel}));
+                        });
+                    }
+                }
+''')
 
 
 def run_interaction_matrix(free_panel):
@@ -456,6 +586,8 @@ def run_interaction_matrix(free_panel):
     observations = {}
     events = []
     host_trace = []
+    # Frame-by-frame motion records of the travel matrix (ADREP-TASK-002).
+    motion_trace = []
     log = (root / "logs/plasmashell.log").open()
     log_pending = ""
     pongs = 0
@@ -495,6 +627,10 @@ def run_interaction_matrix(free_panel):
                 if value["kind"] == "event":
                     events.append(value)
                     events[:] = events[-24:]
+                    continue
+                if value["kind"] in ("motionFrame", "wheelUsed", "surfacePainted"):
+                    motion_trace.append(value)
+                    motion_trace[:] = motion_trace[-6000:]
                     continue
                 observations[(value["kind"], value["panel"], value.get("app", ""))] = value
 
@@ -1308,7 +1444,11 @@ def run_interaction_matrix(free_panel):
                         painted += 1
                         xs.append(x)
                         ys.append(y)
-            shutil.copy2(observation["path"], evidence / pathlib.Path(observation["path"]).name)
+            # Without an evidence directory the capture already lies in the
+            # session's logs, which is where it would be copied to.
+            kept = evidence / pathlib.Path(observation["path"]).name
+            if kept.resolve() != pathlib.Path(observation["path"]).resolve():
+                shutil.copy2(observation["path"], kept)
             return {"painted": painted, "width": max(xs) - min(xs) + 1 if xs else 0,
                     "height": max(ys) - min(ys) + 1 if ys else 0, "entries": observation.get("entries")}
 
@@ -1766,7 +1906,10 @@ def run_interaction_matrix(free_panel):
         assert panel_call("dockEntriesForPanel", "(ss)", ("bottom", "launcher")) == native_before
         for tier, theme in (("procedural2d", ""), ("baked2.5d", "ring-platform-blue"),
                             ("true3d", "mesh-platform-cyan")):
-            configure(free_panel, {"rendererTier": tier, "panelThemeId": theme, "completeThemeId": theme})
+            # The turning checks below ask for the whole panel to move
+            # (ADREP-TASK-002, PD-25); the entries' travel is checked after them.
+            configure(free_panel, {"rendererTier": tier, "panelThemeId": theme, "completeThemeId": theme,
+                                   "panelMotionTarget": "panel"})
             for row in rows():
                 wait_for(lambda: observed(row["appId"]).get("iconSource") == row["iconName"]
                     and observed(row["appId"]).get("glyphValid")
@@ -1820,6 +1963,55 @@ def run_interaction_matrix(free_panel):
                     "continuous " + mode + " motion in " + tier)
             configure(free_panel, {"panelRotationMode": "none"})
             wait_for(lambda: not host_state()["rotation"]["active"], "continuous rotation disabled")
+            # "Continuous motion moves" Items: the same wheel moves the entries
+            # one slot along the panel's path and the panel stays still.
+            configure(free_panel, {"panelMotionTarget": "items"})
+            ready = wait_for(lambda: host_state().get("rotation", {}).get("travelAvailable")
+                and not host_state()["rotation"]["wheelAvailable"] and host_state(),
+                "live wheel travel ready in " + tier)
+            angle, travel = ready["rotation"]["angle"], ready["rotation"]["travel"]
+            point = entry_point(app)
+            wheel(point, 0, -120, discrete=True)
+            wait_for(lambda: abs(host_state()["rotation"]["travel"] - (travel + 1)) < 1e-6,
+                "Wayland wheel moves the entries along the path in " + tier)
+            assert abs(host_state()["rotation"]["angle"] - angle) < 0.01, (
+                "the panel turned while its entries travelled in " + tier, host_state()["rotation"])
+            wheel(point, 0, 120, discrete=True)
+            wait_for(lambda: abs(host_state()["rotation"]["travel"] - travel) < 1e-6,
+                "Wayland wheel moves the entries back in " + tier)
+            if tier == "procedural2d":
+                # A pointer reorder and a URI drop land on the entries where
+                # they travelled to.
+                wheel(point, 0, -120, discrete=True)
+                wait_for(lambda: abs(host_state()["rotation"]["travel"] - (travel + 1)) < 1e-6,
+                         "entries travelled before the reorder")
+                def observed_since(stamp):
+                    return all(observed(row["appId"]).get("sample", 0) > stamp + 50 for row in rows())
+                moved_at = time.time() * 1000
+                wait_for(lambda: observed_since(moved_at), "entries observed where they travelled")
+                order = [row["appId"] for row in rows()]
+                drag(entry_point(order[0]), entry_point(order[-1]))
+                wait_for(lambda: [row["appId"] for row in rows()] != order,
+                         "pointer reorder of travelled entries committed")
+                wait_for(lambda: not panel_call("panelInteractionGuards", "(s)", (free_panel,))["dragActive"]
+                    and all(not observed(row["appId"]).get("dragging", True) for row in rows()),
+                    "drag guard cleared after the travelled reorder")
+                travelled = root / "data/applications" / "org.archdock.travelled.desktop"
+                travelled.write_text("[Desktop Entry]\nType=Application\nName=Travelled drop\n"
+                                     "Exec=/usr/bin/true\nIcon=help-browser\n")
+                settled_at = time.time() * 1000
+                wait_for(lambda: observed_since(settled_at), "reordered entries observed")
+                count = len(rows())
+                drop(travelled.as_uri(), entry_point(rows()[0]["appId"]))
+                wait_for(lambda: len(rows()) == count + 1, "a URI dropped on a travelled entry is kept")
+                wheel(point, 0, 120, discrete=True)
+                wait_for(lambda: abs(host_state()["rotation"]["travel"] - travel) < 1e-6,
+                         "entries travelled back after the drop")
+                print("PASS: procedural2d: a pointer reorder and a URI drop land on travelled entries",
+                      flush=True)
+            print(f"PASS: {tier}: the wheel moves the entries along the path both ways; the panel stays still",
+                  flush=True)
+            configure(free_panel, {"panelMotionTarget": "panel"})
         configuration = panel_call("dockConfiguration", "(s)", (free_panel,))
         record = configuration["panel"]
         def free_geometry(command=None, clear=False):
@@ -1884,7 +2076,7 @@ def run_interaction_matrix(free_panel):
         import math
         def host_state(): return observations.get(("host", free_panel, ""), {})
         owner_keys = ("layout", "layoutRadius", "rendererTier", "panelThemeId", "completeThemeId",
-                      "scene3DCameraPitch", "scene3DCameraYaw", "panelRotationMode")
+                      "scene3DCameraPitch", "scene3DCameraYaw", "panelRotationMode", "panelMotionTarget")
         baseline = {key: value for key, value in panel_call("dockConfiguration", "(s)", (free_panel,)).items()
                     if key in owner_keys}
         def resting(app):
@@ -1895,9 +2087,11 @@ def run_interaction_matrix(free_panel):
         for name, settings in (
                 ("owner free-9", {"layout": "circular", "layoutRadius": 300, "rendererTier": "true3d",
                                   "panelThemeId": "arc-platform-orange", "completeThemeId": "arc-platform-orange",
-                                  "scene3DCameraPitch": 60, "scene3DCameraYaw": 5, "panelRotationMode": "none"}),
+                                  "scene3DCameraPitch": 60, "scene3DCameraYaw": 5, "panelRotationMode": "none",
+                                  "panelMotionTarget": "panel"}),
                 ("owner free-4", {"layout": "circular", "layoutRadius": 145, "rendererTier": "procedural2d",
-                                  "panelThemeId": "", "completeThemeId": "", "panelRotationMode": "none"})):
+                                  "panelThemeId": "", "completeThemeId": "", "panelRotationMode": "none",
+                                  "panelMotionTarget": "panel"})):
             configure(free_panel, settings)
             before = wait_for(lambda: host_state().get("rotation", {}).get("wheelAvailable")
                 and not host_state()["rotation"]["active"] and host_state(), name + " wheel ready")
@@ -1936,6 +2130,400 @@ def run_interaction_matrix(free_panel):
 
         print("PASS: actual Wayland URI/application/folder drops, deduplication, refusals, pointer reorder, native ownership and 2D/3D glyphs", flush=True)
 
+    def run_travel_matrix():
+        """ADREP-TASK-002: on a free panel the wheel moves the entries along
+        the panel's own outline while the drawn panel stays still.
+
+        With ARCHDOCK_TRAVEL_PHASE=before the same steps only record what
+        the scene does, to show the problem; by default every step is
+        checked. Frames, timings, a capture of every resting state and a
+        report are kept under ARCHDOCK_SCENE_EVIDENCE_DIR/travel.
+        """
+        import math
+        import shutil
+        phase = os.environ.get("ARCHDOCK_TRAVEL_PHASE", "after")
+        checking = phase == "after"
+        evidence = pathlib.Path(os.environ.get("ARCHDOCK_SCENE_EVIDENCE_DIR") or str(root / "logs")) / "travel"
+        evidence.mkdir(parents=True, exist_ok=True)
+        report = {"phase": phase, "layouts": {}, "input": {}, "modes": {}, "continuous": {},
+                  "directions": {}, "hits": {}}
+        wait_for(lambda: 2 in devices and 16 in devices, "native pointer and scroll devices ready")
+        icons = ("applications-system", "utilities-terminal", "system-file-manager",
+                 "preferences-system", "help-browser", "accessories-text-editor")
+        uris = []
+        for index, icon in enumerate(icons):
+            desktop = root / "data/applications" / ("org.archdock.travel" + str(index) + ".desktop")
+            desktop.parent.mkdir(exist_ok=True)
+            desktop.write_text("[Desktop Entry]\nType=Application\nName=Travel " + str(index)
+                               + "\nExec=/usr/bin/true\nIcon=" + icon + "\n")
+            uris.append(desktop.as_uri())
+        base = {"type": "launcher", "rendererTier": "procedural2d", "panelThemeId": "",
+                "completeThemeId": "", "panelRotationMode": "none", "layout": "circular",
+                "layoutRadius": 120, "layoutAngle": 0}
+        if checking:
+            base.update(panelMotionTarget="items", scrollSensitivity=1)
+        configure(free_panel, base)
+        assert panel_call("pinPanelUrls", "(sas)", (free_panel, uris))
+        def rows(): return panel_call("dockEntriesForPanel", "(ss)", (free_panel, "launcher"))
+        wait_for(lambda: len(rows()) == len(uris), "six travel launchers pinned")
+        apps = [row["appId"] for row in rows()]
+        count = len(apps)
+
+        def state(): return observations.get(("travelState", free_panel, ""), {})
+        def frame_key(value):
+            return json.dumps([value.get("angle"), value.get("travel"),
+                               [[item["s"], item["v"], item["o"]] for item in value.get("entries", [])]])
+        def rest(description, minimum=0.5):
+            stable = {"key": None, "since": 0.0}
+            def settled():
+                current = state()
+                if len(current.get("entries", [])) != count:
+                    return None
+                now = time.monotonic()
+                if frame_key(current) != stable["key"]:
+                    stable.update(key=frame_key(current), since=now)
+                    return None
+                return current if now - stable["since"] >= minimum else None
+            return wait_for(settled, description)
+        captured = {"key": None, "name": None}
+        def capture(name, rested):
+            if frame_key(rested) == captured["key"]:
+                return captured["name"]
+            shot = wait_for(lambda: (shot := observations.get(("travelCapture", free_panel, ""), {}))
+                and shot.get("saved") and shot.get("at", 0) >= rested["at"] - 800
+                and shot.get("angle") == rested["angle"] and shot.get("travel") == rested["travel"]
+                and shot, "capture of " + name)
+            target = evidence / (phase + "-" + name + ".png")
+            shutil.copyfile(shot["path"], target)
+            captured.update(key=frame_key(rested), name=target.name)
+            return target.name
+        def shown(item): return item["v"] and item["o"] > 0.99
+        def aim(rested):
+            for item in rested["entries"]:
+                if shown(item) and item["e"]:
+                    return native_point(rested["hostSize"], item["c"])
+            raise AssertionError("no visible entry to aim the wheel at: " + json.dumps(rested))
+        # ei: a negative vertical value scrolls up, which Qt reports as a
+        # positive angle delta - forward, clockwise.
+        def notches(point, number, value=-120):
+            motion(point)
+            sent = time.time() * 1000
+            for _ in range(number):
+                lib.ei_device_scroll_discrete(devices[16], 0, value)
+                lib.ei_device_frame(devices[16], lib.ei_now(context))
+            sync_input()
+            return sent
+        def smooth(point, steps, delta):
+            motion(point)
+            sent = time.time() * 1000
+            for _ in range(steps):
+                lib.ei_device_scroll_delta(devices[16], 0, delta)
+                lib.ei_device_frame(devices[16], lib.ei_now(context))
+                sync_input()
+            return sent
+        def timing(sent, before, after):
+            mine = [m for m in motion_trace if m.get("panel") == free_panel and m["at"] >= sent - 20]
+            used = [m["at"] for m in mine if m["kind"] == "wheelUsed"]
+            moved = [m for m in mine if m["kind"] == "motionFrame" and frame_key(m) != frame_key(before)]
+            arrived = [m["at"] for m in moved if frame_key(m) == frame_key(after)]
+            painted = [m["at"] for m in mine if m["kind"] == "surfacePainted" and m["at"] <= after["at"]]
+            receipt = used[0] if used else None
+            first = moved[0]["at"] if moved else None
+            used_frames = [m.get("frame") for m in mine if m["kind"] == "wheelUsed"]
+            first_frame = moved[0].get("frame") if moved else None
+            return {"wheelEventsTaken": len(used),
+                    "framesFromWheelToFirstMove": first_frame - used_frames[0]
+                        if first_frame is not None and used_frames and used_frames[0] is not None else None,
+                    "sentToSceneMs": round(receipt - sent, 1) if receipt else None,
+                    "sceneToFirstMovedFrameMs": first - receipt if receipt and first else None,
+                    "firstMovedFrameToRestMs": arrived[0] - first if arrived and first else None,
+                    "lastWheelToRestMs": arrived[0] - used[-1] if arrived and used else None,
+                    "movedFrames": len(moved), "surfaceRepaints": len(painted),
+                    "sceneToSurfaceRepaintMs": painted[0] - receipt if painted and receipt else None}
+        def frames_between(sent, after):
+            return [m for m in motion_trace if m.get("panel") == free_panel and m["kind"] == "motionFrame"
+                    and sent - 20 <= m["at"] <= after["at"]]
+        def positions(rested): return [item["s"] if shown(item) else None for item in rested["entries"]]
+        # The scene keeps travel within one loop at rest, so travel is
+        # compared modulo the loop.
+        def moved_by(after, before, slots, loop):
+            difference = (after - before - slots) % loop
+            return min(difference, loop - difference) < 1e-6
+        def distance(a, b): return math.hypot(a[0] - b[0], a[1] - b[1])
+        def expected_slots(slots, loop, travel):
+            # Entry i stands in slot (i + travel) mod loop; slots past the
+            # visible ones are off the path.
+            return [slots[(i + travel) % loop] if (i + travel) % loop < len(slots) else None
+                    for i in range(count)]
+        def check_slots(rested, slots, loop, travel, what):
+            expected = expected_slots(slots, loop, travel)
+            for index, item in enumerate(rested["entries"]):
+                if expected[index] is None:
+                    assert not item["e"] and (not item["v"] or item["o"] < 0.01), (
+                        what + ": entry " + str(index) + " should be off the path", item)
+                    assert rested["rects"][index][2] == 0, (what + ": hidden entry has a hit rectangle",
+                                                            rested["rects"][index])
+                else:
+                    assert shown(item) and item["e"], (what + ": entry " + str(index) + " should be shown", item)
+                    assert distance(item["s"], expected[index]) < 1.5, (
+                        what + ": entry " + str(index) + " is not in slot " + str((index + travel) % loop),
+                        item["s"], expected[index])
+                    rect = rested["rects"][index]
+                    assert rect[0] - 1 <= item["s"][0] <= rect[0] + rect[2] + 1 and \
+                        rect[1] - 1 <= item["s"][1] <= rect[1] + rect[3] + 1, (
+                        what + ": hit rectangle does not follow entry " + str(index), rect, item["s"])
+
+        def outline(layout, rested, slots):
+            # The real outline in window coordinates: polygon vertices from
+            # the first slot (a vertex at the top), the star's inner corners
+            # at 0.46 of its radius (LayoutEngine.starPoint).
+            centre = rested["centre"]
+            offset = [rested["entries"][0]["c"][axis] - rested["entries"][0]["s"][axis] for axis in (0, 1)]
+            top = [slots[0][0] + offset[0], slots[0][1] + offset[1]]
+            radius = distance(top, centre)
+            sides = {"triangle": 3, "square": 4, "hexagon": 6, "star": 6}[layout]
+            corners = []
+            for corner in range(sides * (2 if layout == "star" else 1)):
+                step = 360 / (sides * (2 if layout == "star" else 1))
+                reach = radius * (0.46 if layout == "star" and corner % 2 else 1)
+                angle = math.radians(-90 + corner * step)
+                corners.append([centre[0] + reach * math.cos(angle), centre[1] + reach * math.sin(angle)])
+            return corners
+        def outline_distance(point, corners):
+            best = float("inf")
+            for index, start in enumerate(corners):
+                end = corners[(index + 1) % len(corners)]
+                dx, dy = end[0] - start[0], end[1] - start[1]
+                share = max(0, min(1, ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy)
+                                   / max(1e-9, dx * dx + dy * dy)))
+                best = min(best, distance(point, [start[0] + share * dx, start[1] + share * dy]))
+            return best
+
+        closed = ("circular", "ellipse", "ring", "triangle", "square", "hexagon", "star")
+        layouts = (("circular", "hexagon", "star", "fan", "arc") if not checking else
+                   closed + ("spiral", "fan", "arc", "semicircle", "radial"))
+        for layout in layouts:
+            configure(free_panel, {"layout": layout})
+            start = rest(layout + " at rest")
+            assert start["layout"] == layout, start
+            row = {"capturedAtRest": capture(layout + "-0-rest", start), "steps": []}
+            slots = [item["s"] for item in start["entries"] if shown(item)]
+            capacity = len(slots)
+            loop = count if layout in closed else max(count, capacity + 1)
+            row.update(visibleAtRest=capacity, loopSlots=loop)
+            assert capacity >= 3, (layout, start)
+            # One notch forward.
+            sent = notches(aim(start), 1)
+            moved = rest(layout + " after one notch")
+            step = {"wheel": "one notch forward", "angleBefore": start["angle"], "angleAfter": moved["angle"],
+                    "travelBefore": start["travel"], "travelAfter": moved["travel"],
+                    "timing": timing(sent, start, moved), "capture": capture(layout + "-1-notch", moved)}
+            row["steps"].append(step)
+            if checking:
+                assert moved["angle"] == start["angle"], (layout + ": the panel surface turned", step)
+                assert step["timing"]["surfaceRepaints"] == 0, (layout + ": the surface was repainted", step)
+                assert moved_by(moved["travel"], start["travel"], 1, loop), (layout + ": one notch is one slot", step)
+                check_slots(moved, slots, loop, 1, layout + " one notch")
+                assert step["timing"]["framesFromWheelToFirstMove"] == 1, (
+                    layout + ": the first frame after the wheel did not move", step)
+                assert step["timing"]["lastWheelToRestMs"] <= 120, (layout + ": the step took too long", step)
+                if layout in ("triangle", "square", "hexagon", "star"):
+                    corners = outline(layout, start, slots)
+                    worst = max(outline_distance(item["c"], corners)
+                                for frame in frames_between(sent, moved) for item in frame["entries"]
+                                if shown(item))
+                    step["worstDistanceFromOutlinePx"] = round(worst, 2)
+                    assert worst < 2.5, (layout + ": an entry left the outline between slots", worst)
+            # Open paths: go round the whole loop backwards, one notch at a
+            # time; every entry leaves one end and comes back at the other.
+            if layout not in closed:
+                seen = {index: set() for index in range(count)}
+                travel = 1
+                current = moved
+                for number in range(loop + 1):
+                    sent = notches(aim(current), 1, 120)
+                    after = rest(layout + " after backward notch " + str(number + 1))
+                    travel -= 1
+                    record = {"wheel": "one notch back", "angleAfter": after["angle"],
+                              "travelAfter": after["travel"], "timing": timing(sent, current, after),
+                              "visible": [shown(item) for item in after["entries"]],
+                              "capture": capture(layout + "-back-" + str(number + 1), after)}
+                    row["steps"].append(record)
+                    for index, item in enumerate(after["entries"]):
+                        seen[index].add(shown(item))
+                    if checking:
+                        assert after["angle"] == start["angle"], (layout + ": the panel turned", record)
+                        assert moved_by(after["travel"], 0, travel, loop), (layout + ": travel", record)
+                        check_slots(after, slots, loop, travel % loop, layout + " back " + str(number + 1))
+                    current = after
+                row["everyEntryLeftAndReturned"] = all(len(values) == 2 for values in seen.values())
+                if checking:
+                    assert row["everyEntryLeftAndReturned"], (layout + ": wrap-around", seen)
+            report["layouts"][layout] = row
+            print(("PASS: " if checking else "RECORDED: ") + layout + ": " + json.dumps(row["steps"][0]["timing"]),
+                  flush=True)
+
+        # Input devices, on the circle: a fast spin, a high-resolution wheel
+        # and touchpad-like smooth deltas.
+        configure(free_panel, {"layout": "circular"})
+        start = rest("circle at rest for input checks")
+        sent = notches(aim(start), 10)
+        spun = rest("circle after a fast spin")
+        report["input"]["spin10"] = {"angleBefore": start["angle"], "angleAfter": spun["angle"],
+                                     "travelBefore": start["travel"], "travelAfter": spun["travel"],
+                                     "timing": timing(sent, start, spun), "capture": capture("circle-spin", spun)}
+        if checking:
+            assert moved_by(spun["travel"], start["travel"], 10, count), report["input"]["spin10"]
+            assert report["input"]["spin10"]["timing"]["lastWheelToRestMs"] <= 120, report["input"]["spin10"]
+        start = spun
+        sent = time.time() * 1000
+        for _ in range(8):
+            notches(aim(start), 1, -15)
+        fine = rest("circle after eight high-resolution steps")
+        report["input"]["highResolution8x15"] = {"angleBefore": start["angle"], "angleAfter": fine["angle"],
+                                                 "travelBefore": start["travel"], "travelAfter": fine["travel"],
+                                                 "timing": timing(sent, start, fine)}
+        if checking:
+            assert moved_by(fine["travel"], start["travel"], 1, count), report["input"]["highResolution8x15"]
+        start = fine
+        pitch = 2 * math.pi * distance(start["entries"][0]["c"], start["centre"]) / count
+        sent = smooth(aim(start), 12, -pitch / 10)
+        touch = rest("circle after touchpad-like deltas")
+        # What Qt delivered for these smooth deltas decides what they are
+        # worth: pixels count by a slot's distance, angle units by 120.
+        delivered = [m.get("input") or {} for m in motion_trace
+                     if m["kind"] == "wheelUsed" and m.get("panel") == free_panel and m["at"] >= sent - 20]
+        equivalents = sum((item.get("pixelDelta") or 0) / ((start.get("pitch") or {}).get("pixels") or 1)
+                          if item.get("pixelDelta") else (item.get("angleDelta") or 0) / 120
+                          for item in delivered)
+        report["input"]["touchpadLike"] = {"pitchPx": round(pitch, 1), "sentPx": round(pitch * 1.2, 1),
+                                           "delivered": delivered, "notchEquivalents": round(equivalents, 3),
+                                           "angleBefore": start["angle"], "angleAfter": touch["angle"],
+                                           "travelBefore": start["travel"], "travelAfter": touch["travel"],
+                                           "timing": timing(sent, start, touch)}
+        if checking:
+            expected = math.floor(equivalents + 1e-6)
+            assert moved_by(touch["travel"], start["travel"], expected, count), report["input"]["touchpadLike"]
+        print(("PASS" if checking else "RECORDED") + ": input " + json.dumps(report["input"]), flush=True)
+
+        if checking:
+            # The hit-test matrix: the pointer over each travelled entry
+            # hovers that entry and no other.
+            for layout in ("circular", "hexagon", "star", "fan"):
+                configure(free_panel, {"layout": layout})
+                start = rest(layout + " at rest for hit tests")
+                notches(aim(start), 1)
+                moved = rest(layout + " moved for hit tests")
+                rows_seen = []
+                for index, item in enumerate(moved["entries"]):
+                    if not shown(item):
+                        continue
+                    point = native_point(moved["hostSize"], item["c"])
+                    motion(point)
+                    moved_at = time.time() * 1000
+                    shown_apps = [apps[k] for k, other in enumerate(moved["entries"]) if shown(other)]
+                    # Every shown entry has reported since the pointer moved:
+                    # this one is under it, and no other.
+                    wait_for(lambda: (values := {app: observations.get(("entry", free_panel, app), {})
+                                                 for app in shown_apps})
+                        and all(value.get("sample", 0) > moved_at + 50 for value in values.values())
+                        and values[apps[index]].get("hovered")
+                        and not any(value.get("hovered") for app, value in values.items() if app != apps[index]),
+                        layout + ": travelled entry " + str(index) + " takes the pointer, alone")
+                    rows_seen.append({"entry": index, "at": item["c"], "hovered": apps[index]})
+                report["hits"][layout] = rows_seen
+                motion([1200, 500])
+            print("PASS: hit tests follow the travelled entries " + json.dumps(
+                {layout: len(value) for layout, value in report["hits"].items()}), flush=True)
+
+            # What the wheel and continuous motion move.
+            configure(free_panel, {"layout": "circular"})
+            for target, turns, travels in (("panel", True, False), ("both", True, True), ("items", False, True)):
+                configure(free_panel, {"panelMotionTarget": target})
+                start = rest("circle at rest, motion moves " + target)
+                sent = notches(aim(start), 1)
+                moved = rest("circle after a notch, motion moves " + target)
+                result = {"angleBefore": start["angle"], "angleAfter": moved["angle"],
+                          "travelBefore": start["travel"], "travelAfter": moved["travel"],
+                          "timing": timing(sent, start, moved), "capture": capture("circle-" + target, moved)}
+                report["modes"][target] = result
+                assert (abs((moved["angle"] - start["angle"]) % 360 - 15) < 0.01) == turns, (target, result)
+                assert moved_by(moved["travel"], start["travel"], 1, count) == travels, (target, result)
+            for target in ("items", "panel", "both"):
+                configure(free_panel, {"panelMotionTarget": target, "panelRotationMode": "clockwise",
+                                       "panelTravelSpeed": 2, "panelRotationSpeed": 90,
+                                       "panelRotationTrigger": "idle"})
+                wait_for(lambda: state().get("motionTarget") == target, "continuous " + target)
+                # Entries that stop travelling first ease into their slots.
+                time.sleep(0.3)
+                pump()
+                first = state()
+                time.sleep(1.0)
+                pump()
+                second = state()
+                change = (second["travel"] - first["travel"] + count / 2) % count - count / 2
+                result = {"angleChange": round((second["angle"] - first["angle"]) % 360, 2),
+                          "travelChange": round(change, 3),
+                          "seconds": round((second["at"] - first["at"]) / 1000, 2)}
+                report["continuous"][target] = result
+                assert (result["angleChange"] > 5) == (target != "items"), (target, result)
+                if target == "panel":
+                    assert abs(result["travelChange"]) < 0.01, (target, result)
+                else:
+                    assert result["travelChange"] > 0.5, (target, result)
+            # The shell's processor time with continuous travel running, then
+            # off: off, nothing in the scene advances (the probes of this test
+            # still poll ten times a second).
+            shell = int(call("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+                             "GetConnectionUnixProcessID", "(s)", ("org.kde.plasmashell",)))
+            def processor(seconds):
+                def ticks():
+                    fields = (pathlib.Path("/proc") / str(shell) / "stat").read_text().rsplit(")", 1)[1].split()
+                    return int(fields[11]) + int(fields[12])
+                first, started = ticks(), time.monotonic()
+                while time.monotonic() - started < seconds:
+                    pump()
+                    time.sleep(0.05)
+                return round(100 * (ticks() - first) / os.sysconf("SC_CLK_TCK") / (time.monotonic() - started), 1)
+            configure(free_panel, {"panelMotionTarget": "items"})
+            wait_for(lambda: state().get("travelActive"), "continuous travel running")
+            report["continuous"]["shellCpuPercentRunning"] = processor(3)
+            configure(free_panel, {"panelRotationMode": "none", "panelMotionTarget": "items"})
+            stopped = rest("continuous motion off")
+            report["continuous"]["off"] = {"angle": stopped["angle"], "travel": stopped["travel"]}
+            assert stopped["travel"] == round(stopped["travel"]), ("motion off rests in a slot", stopped)
+            assert stopped["travelActive"] is False and stopped["rotationActive"] is False, stopped
+            report["continuous"]["shellCpuPercentOff"] = processor(3)
+            assert report["continuous"]["shellCpuPercentOff"] < report["continuous"]["shellCpuPercentRunning"], \
+                report["continuous"]
+            print("PASS: motion moves items, the whole panel or both " + json.dumps(
+                {"wheel": report["modes"], "continuous": report["continuous"]}), flush=True)
+
+            # Direction: the open shapes turn to the chosen side.
+            configure(free_panel, {"layout": "fan"})
+            for name, degrees, axis, sign in (("up", 0, 1, -1), ("down", 180, 1, 1),
+                                              ("left", -90, 0, -1), ("right", 90, 0, 1)):
+                configure(free_panel, {"layoutAngle": degrees})
+                faced = rest("fan facing " + name)
+                points = [item["c"] for item in faced["entries"] if shown(item)]
+                rects = [rect for rect in faced["rects"] if rect[2] > 0]
+                mean = [sum(p[k] for p in points) / len(points) - faced["centre"][k] for k in (0, 1)]
+                offset = [faced["entries"][0]["c"][k] - faced["entries"][0]["s"][k] for k in (0, 1)]
+                hit = [sum(r[k] + r[k + 2] / 2 for r in rects) / len(rects) + offset[k] - faced["centre"][k]
+                       for k in (0, 1)]
+                report["directions"][name] = {"meanEntryOffset": [round(v, 1) for v in mean],
+                                              "meanHitOffset": [round(v, 1) for v in hit],
+                                              "capture": capture("fan-" + name, faced)}
+                assert sign * mean[axis] > 20 and abs(mean[1 - axis]) < abs(mean[axis]), (name, mean)
+                assert sign * hit[axis] > 20 and abs(hit[1 - axis]) < abs(hit[axis]), (name, hit)
+            configure(free_panel, {"layoutAngle": 0})
+            print("PASS: the fan and its hit regions face up, down, left and right " + json.dumps(
+                report["directions"]), flush=True)
+
+        (evidence / (phase + "-report.json")).write_text(json.dumps(report, indent=1))
+        (evidence / (phase + "-frames.json")).write_text(json.dumps(motion_trace))
+        configure(free_panel, {"layout": "circular", "panelRotationMode": "none"})
+
     first = Gtk.ApplicationWindow(application=app)
     second = Gtk.ApplicationWindow(application=app)
     try:
@@ -1948,6 +2536,9 @@ def run_interaction_matrix(free_panel):
                  "private Studio closed before desktop input")
         if os.environ.get("ARCHDOCK_RUNTIME_UI") == "1":
             run_runtime_ui_matrix()
+            return
+        if os.environ.get("ARCHDOCK_RENDERING_TRAVEL") == "1":
+            run_travel_matrix()
             return
         if os.environ.get("ARCHDOCK_VISIBILITY_DISCRIMINATOR") == "1":
             configure("bottom", {"rendererTier": "procedural2d",

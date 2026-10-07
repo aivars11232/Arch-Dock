@@ -2,13 +2,16 @@ import QtQuick
 import QtTest
 import ArchDock.Rendering 1.0
 
-// TASK-0033 Phase C: whole-scene rotation for free radial panels.
+// TASK-0033 Phase C: whole-scene rotation for free radial panels, and
+// ADREP-TASK-002: entries travelling along the panel's own path.
 //
 // The controller is proved on its own, then through PanelScene: the offset it
 // yields is added to the configured layout angle and every geometry consumer
 // receives the sum, so hover targets, popup anchors and the drawn surface turn
 // with the icons. A native host, an unsupported layout, an unavailable
 // capability, reduced motion, a drag, edit mode and concealment all stop it.
+// The scenes here turn the whole panel ("Continuous motion moves" Whole
+// panel) unless a test asks for the entries to travel.
 TestCase {
     id: testCase
 
@@ -52,7 +55,8 @@ TestCase {
                 rendererTier: "procedural2d",
                 panelRotationMode: "clockwise",
                 panelRotationSpeed: 90,
-                panelRotationTrigger: "idle"
+                panelRotationTrigger: "idle",
+                panelMotionTarget: "panel"
             })
             runtimeState: ({ hovered: false, hoveredEntry: -1, editMode: false,
                              dragInProgress: false, rendererFallback: "" })
@@ -325,7 +329,9 @@ TestCase {
         const height = scene.height
         mouseWheel(scene, before.position.x + before.entryBounds.width / 2,
             before.position.y + before.entryBounds.height / 2, 0, 120)
-        compare(scene.effectiveLayoutAngle, 15, "scroll up turns clockwise with automatic motion off")
+        // A step eases in over 120 ms.
+        tryCompare(scene, "effectiveLayoutAngle", 15, 1000,
+                   "scroll up turns clockwise with automatic motion off")
         compare(scene.width, width)
         compare(scene.height, height)
         const after = scene.entryGeometryAt(0)
@@ -337,9 +343,10 @@ TestCase {
             after.position.y + after.entryBounds.height / 2)
         verify(scene.containsInputPoint(point))
         mouseWheel(scene, point.x, point.y, 0, -120)
-        compare(scene.effectiveLayoutAngle, 0, "scroll down reverses the turn")
+        tryCompare(scene, "effectiveLayoutAngle", 0, 1000, "scroll down reverses the turn")
         mouseWheel(scene, point.x, point.y, 120, 0)
         mouseWheel(scene, point.x, point.y, 0, 120, Qt.NoButton, Qt.ShiftModifier)
+        wait(200)
         compare(scene.effectiveLayoutAngle, 0, "horizontal and modified scrolling remain available")
     }
 
@@ -364,7 +371,9 @@ TestCase {
         const entry = scene.entryGeometryAt(0)
         mouseWheel(scene, entry.position.x + entry.entryBounds.width / 2,
             entry.position.y + entry.entryBounds.height / 2, 0, 120)
+        wait(200)
         compare(scene.effectiveLayoutAngle, 0, data.tag + " preserves the angle")
+        compare(scene.wheelRotationTarget, 0, data.tag + " takes no step")
     }
 
     // ---- Wheel surface, spacing and overcrowded curves -------------------
@@ -404,18 +413,19 @@ TestCase {
         verify(scene.containsInputPoint(surface), "the bare ring takes input")
         testCase.passedWheelCount = 0
         mouseWheel(scene, surface.x, surface.y, 0, 120)
-        compare(scene.effectiveLayoutAngle, 15, "wheel up turns from the bare ring")
+        tryCompare(scene, "effectiveLayoutAngle", 15, 1000, "wheel up turns from the bare ring")
         mouseWheel(scene, surface.x, surface.y, 0, -120)
-        compare(scene.effectiveLayoutAngle, 0, "wheel down turns back")
+        tryCompare(scene, "effectiveLayoutAngle", 0, 1000, "wheel down turns back")
         mouseWheel(scene, surface.x, surface.y, 0, -120)
-        compare(scene.effectiveLayoutAngle, 345, "and on past the start")
+        tryCompare(scene, "effectiveLayoutAngle", 345, 1000, "and on past the start")
         mouseWheel(scene, surface.x, surface.y, 0, 120)
-        compare(scene.effectiveLayoutAngle, 0)
+        tryCompare(scene, "effectiveLayoutAngle", 0, 1000)
         compare(testCase.passedWheelCount, 0, "the ring consumed every event")
 
         // The empty interior and the corner belong to the desktop.
         mouseWheel(scene, centre.x, centre.y, 0, 120)
         mouseWheel(scene, 1, 1, 0, -120)
+        wait(200)
         compare(scene.effectiveLayoutAngle, 0, "neither turns the ring")
         compare(testCase.passedWheelCount, 2, "both events passed through")
     }
@@ -469,101 +479,452 @@ TestCase {
         }
     }
 
-    // Criterion: an overcrowded semicircle keeps its entries on the exact
-    // half circle and shows a window of them. The wheel moves the window in
-    // both directions; hidden entries take no input; the offset is transient.
-    function test_overcrowdedSemicircleBrowsesAlongTheCurve() {
+    // ---- ADREP-TASK-002: entries travel along the panel's own path -------
+
+    function travelScene(overrides, properties) {
+        return stillScene(Object.assign({ panelMotionTarget: "items" }, overrides || ({})),
+                          properties)
+    }
+
+    function entryCentres(scene) {
+        const result = []
+        for (let index = 0; index < scene.entryCount; ++index) {
+            const bounds = scene.entryGeometryAt(index).entryBounds
+            result.push(Qt.point(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2))
+        }
+        return result
+    }
+
+    function atRest(scene) {
+        return scene.wheelTravel === scene.wheelTravelTarget
+            && scene.wheelTravel === Math.round(scene.wheelTravel)
+    }
+
+    function distanceToOutline(point, outline) {
+        const points = outline.points
+        let best = Infinity
+        const last = outline.closed ? points.length : points.length - 1
+        for (let index = 0; index < last; ++index) {
+            const a = points[index]
+            const b = points[(index + 1) % points.length]
+            const dx = b.x - a.x
+            const dy = b.y - a.y
+            const share = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy)
+                                                / Math.max(1e-9, dx * dx + dy * dy)))
+            best = Math.min(best, Math.hypot(point.x - a.x - share * dx, point.y - a.y - share * dy))
+        }
+        return best
+    }
+
+    // Criterion: on a closed path one notch moves every entry one slot along
+    // the panel's own outline, into its neighbour's place, and the panel does
+    // not turn. Half way, an entry is on the outline itself: on a polygon's
+    // edge or the star's points, never on a circle standing in for them.
+    function test_wheelMovesEntriesAlongTheOutlineNotTheSurface_data() {
+        return [
+            { tag: "circular", layout: "circular" },
+            { tag: "ellipse", layout: "ellipse" },
+            { tag: "ring", layout: "ring" },
+            { tag: "triangle", layout: "triangle" },
+            { tag: "square", layout: "square" },
+            { tag: "hexagon", layout: "hexagon" },
+            { tag: "star", layout: "star" }
+        ]
+    }
+
+    function test_wheelMovesEntriesAlongTheOutlineNotTheSurface(data) {
+        const scene = travelScene({ layout: data.layout })
+        compare(scene.motionTarget, "items")
+        compare(scene.wheelTravelAvailable, true)
+        compare(scene.wheelRotationAvailable, false, "the wheel does not turn the panel")
+        compare(scene.trackWindow.loop, scene.entryCount, "a closed path carries every entry round")
+        const before = entryCentres(scene)
+        const outline = LayoutEngine.surface(data.layout, scene.layoutGeometry, 0, scene.polygonSides)
+        const width = scene.width
+        mouseWheel(scene, before[0].x, before[0].y, 0, 120)
+        compare(scene.wheelTravelTarget, 1, "one notch is one slot")
+        tryVerify(function() { return atRest(scene) }, 1000)
+        compare(scene.entryTravel, 1)
+        compare(scene.effectiveLayoutAngle, 0, "the panel did not turn")
+        compare(scene.sceneRotationAngle, 0)
+        compare(scene.width, width, "travel does not resize the panel")
+        const after = entryCentres(scene)
+        const size = scene.layoutGeometry.iconSize
+        for (let index = 0; index < scene.entryCount; ++index) {
+            const next = before[(index + 1) % scene.entryCount]
+            fuzzyCompare(after[index].x, next.x, 0.01)
+            fuzzyCompare(after[index].y, next.y, 0.01)
+            const item = scene.entryItemAt(index)
+            fuzzyCompare(item.x + size / 2, after[index].x, 0.01)
+            fuzzyCompare(item.y + size / 2, after[index].y, 0.01)
+            verify(item.visible && item.enabled, "entry " + index + " stays usable")
+            verify(scene.containsInputPoint(after[index]),
+                   "entry " + index + " takes input where it went")
+            const entry = scene.entryGeometryAt(index)
+            const anchor = scene.popupAnchors.entries[index]
+            fuzzyCompare(anchor.x, after[index].x + entry.outwardNormal.x * size / 2, 0.01)
+            fuzzyCompare(anchor.y, after[index].y + entry.outwardNormal.y * size / 2, 0.01)
+        }
+        // Half a slot on: every entry is on the drawn outline.
+        scene.wheelTravel = 1.5
+        for (const point of entryCentres(scene)) {
+            verify(distanceToOutline(Qt.point(point.x - scene.contentBounds.x,
+                                              point.y - scene.contentBounds.y), outline) < 0.75,
+                   data.tag + ": an entry between slots left the outline")
+        }
+        scene.wheelTravel = 1
+        mouseWheel(scene, after[0].x, after[0].y, 0, -120)
+        tryVerify(function() { return atRest(scene) }, 1000)
+        const back = entryCentres(scene)
+        for (let index = 0; index < scene.entryCount; ++index) {
+            fuzzyCompare(back[index].x, before[index].x, 0.01)
+            fuzzyCompare(back[index].y, before[index].y, 0.01)
+        }
+    }
+
+    // Criterion: on an open path the entries form a loop longer than the
+    // path, so one leaving one end comes back at the other, whether or not
+    // all of them fit. Entries off the path are invisible and take no input.
+    function test_openPathsWrapAround_data() {
+        return [
+            { tag: "semicircle-crowded", layout: "semicircle", count: 14 },
+            { tag: "arc-fits", layout: "arc", count: 4 },
+            { tag: "fan", layout: "fan", count: 6 },
+            { tag: "radial", layout: "radial", count: 6 },
+            { tag: "spiral", layout: "spiral", count: 5 }
+        ]
+    }
+
+    function test_openPathsWrapAround(data) {
         const many = []
-        for (let index = 0; index < 14; ++index)
+        for (let index = 0; index < data.count; ++index)
             many.push({ id: "entry-" + index, displayName: "Entry " + index })
-        const scene = stillScene({ layout: "semicircle", layoutRadius: 150,
-                                   iconSize: 52, spacing: 8 },
-                                 { orderedEntries: many })
-        const capacity = Math.floor(Math.PI * 150 / 60) + 1
-        compare(capacity, 8)
-        compare(scene.trackWindow.windowed, true, "fourteen icons do not fit")
-        compare(scene.trackWindow.capacity, capacity)
-        compare(scene.wheelBrowseAvailable, true)
-        compare(scene.browseOffset, 0)
+        const scene = travelScene({ layout: data.layout, layoutRadius: 150, iconSize: 52,
+                                    spacing: 8 }, { orderedEntries: many })
+        const capacity = scene.trackWindow.capacity
+        const loop = scene.trackWindow.loop
+        compare(scene.trackWindow.travels, true)
+        verify(loop > capacity, "the loop is longer than the path")
+        verify(capacity >= 3)
+        const rest = entryCentres(scene)
+        const slots = rest.slice(0, capacity)
         const width = scene.width
         const height = scene.height
-        const centre = Qt.point(width / 2, height / 2)
-
-        function shown() {
-            const result = []
+        function expectAt(travel) {
             for (let index = 0; index < scene.entryCount; ++index) {
-                if (scene.entryItemAt(index).visible)
-                    result.push(index)
-            }
-            return result
-        }
-        function range(first) {
-            const result = []
-            for (let index = first; index < first + capacity; ++index)
-                result.push(index)
-            return result
-        }
-        function verifyWindow(first) {
-            compare(shown(), range(first))
-            for (let index = 0; index < scene.entryCount; ++index) {
-                const entry = scene.entryGeometryAt(index)
+                const slot = ((index + travel) % loop + loop) % loop
                 const item = scene.entryItemAt(index)
-                const middle = Qt.point(entry.position.x + 26, entry.position.y + 26)
-                // Every entry, shown or not, is on the half circle.
-                fuzzyCompare(Math.hypot(middle.x - centre.x, middle.y - centre.y), 150, 0.001)
-                verify(middle.y <= centre.y + 0.001, "entry " + index + " is on the upper half")
-                if (index < first || index >= first + capacity) {
-                    verify(!item.visible && !item.enabled,
-                           "entry " + index + " outside the window takes no input")
-                    continue
+                const point = entryCentres(scene)[index]
+                if (slot < capacity) {
+                    verify(item.visible && item.enabled,
+                           data.tag + ": entry " + index + " in slot " + slot + " is shown")
+                    fuzzyCompare(point.x, slots[slot].x, 0.01)
+                    fuzzyCompare(point.y, slots[slot].y, 0.01)
+                    verify(scene.containsInputPoint(point))
+                } else {
+                    verify(!item.visible, data.tag + ": entry " + index + " off the path is invisible")
+                    verify(!item.enabled, data.tag + ": entry " + index + " off the path takes no input")
+                    compare(scene.entryRects[index].width, 0)
                 }
-                verify(item.enabled, "entry " + index + " takes input")
-                fuzzyCompare(item.x, entry.position.x, 0.001)
-                fuzzyCompare(item.y, entry.position.y, 0.001)
-                verify(scene.containsInputPoint(middle))
-                const anchor = scene.popupAnchors.entries[index]
-                fuzzyCompare(anchor.x, middle.x + entry.outwardNormal.x * 26, 0.001)
-                fuzzyCompare(anchor.y, middle.y + entry.outwardNormal.y * 26, 0.001)
             }
-            // The two ends of the window are level: a half circle, no tail.
-            fuzzyCompare(scene.entryGeometryAt(first).position.y,
-                         scene.entryGeometryAt(first + capacity - 1).position.y, 0.001)
-            const neighbour = Math.hypot(
-                scene.entryGeometryAt(first).position.x - scene.entryGeometryAt(first + 1).position.x,
-                scene.entryGeometryAt(first).position.y - scene.entryGeometryAt(first + 1).position.y)
-            fuzzyCompare(neighbour, 2 * 150 * Math.sin(60 / 150 / 2), 0.001)
         }
-
-        verifyWindow(0)
-        const apex = Qt.point(centre.x, centre.y - 150)
-        const slot = scene.entryGeometryAt(1).position
-        mouseWheel(scene, apex.x, apex.y, 0, -120)
-        compare(scene.browseOffset, 1, "wheel down moves to the next entry")
-        verifyWindow(1)
-        fuzzyCompare(scene.entryGeometryAt(2).position.x, slot.x, 0.001)
-        fuzzyCompare(scene.entryGeometryAt(2).position.y, slot.y, 0.001)
-        mouseWheel(scene, apex.x, apex.y, 0, 120)
-        compare(scene.browseOffset, 0, "wheel up moves back")
-        mouseWheel(scene, apex.x, apex.y, 0, 120)
-        compare(scene.browseOffset, 0, "the window stops at the first entry")
-        for (let notch = 0; notch < 20; ++notch)
-            mouseWheel(scene, apex.x, apex.y, 0, -120)
-        compare(scene.browseOffset, 14 - capacity, "the window stops at the last entry")
-        verifyWindow(14 - capacity)
-        compare(scene.effectiveLayoutAngle, 0, "browsing does not turn the scene")
-        compare(scene.width, width, "browsing does not resize the scene")
+        expectAt(0)
+        // The wheel over a slot the entries pass through: down moves them
+        // back along the path, so the first leaves the start and comes back
+        // at the end; up brings it back the same way.
+        const aim = slots[Math.floor(capacity / 2)]
+        for (let step = 1; step <= loop + 1; ++step) {
+            mouseWheel(scene, aim.x, aim.y, 0, -120)
+            tryVerify(function() { return atRest(scene) }, 1000)
+            compare(((scene.entryTravel + step) % loop + loop) % loop, 0,
+                    data.tag + ": one slot back per notch")
+            expectAt(scene.entryTravel)
+        }
+        for (let step = 1; step <= 2; ++step) {
+            mouseWheel(scene, aim.x, aim.y, 0, 120)
+            tryVerify(function() { return atRest(scene) }, 1000)
+            expectAt(scene.entryTravel)
+        }
+        compare(scene.effectiveLayoutAngle, 0, "travelling does not turn the scene")
+        compare(scene.width, width, "travelling does not resize the scene")
         compare(scene.height, height)
-        verify(scene.panelDefinition.browseOffset === undefined,
-               "the offset is not a setting")
+        // Half a slot on, the entry leaving fades and takes no input.
+        scene.wheelTravel = Math.round(scene.wheelTravel) + 0.5
+        let fading = 0
+        for (let index = 0; index < scene.entryCount; ++index) {
+            const item = scene.entryItemAt(index)
+            if (item.visible && item.opacity < 0.99) {
+                ++fading
+                verify(!item.enabled, "a fading entry takes no input")
+            }
+        }
+        verify(fading >= 1, data.tag + ": an entry fades out or in at an end")
+        verify(scene.panelDefinition.travel === undefined, "travel is not a setting")
+    }
 
-        // A curve that holds its entries is as before: the wheel turns it.
-        scene.orderedEntries = many.slice(0, 5)
-        compare(scene.trackWindow.windowed, false)
-        compare(scene.wheelBrowseAvailable, false)
-        compare(scene.browseOffset, 0, "the offset is forgotten")
-        for (let index = 0; index < 5; ++index)
-            verify(scene.entryItemAt(index).visible && scene.entryItemAt(index).enabled)
-        mouseWheel(scene, apex.x, apex.y, 0, 120)
+    // Criterion: motion starts within a frame of the wheel, and each step
+    // eases out in at most 120 ms.
+    function test_aStepStartsAtOnceAndEndsWithin120Milliseconds() {
+        const scene = travelScene()
+        const point = entryCentres(scene)[0]
+        const started = Date.now()
+        mouseWheel(scene, point.x, point.y, 0, 120)
+        compare(scene.wheelTravelTarget, 1)
+        compare(scene.stepDuration, 100)
+        // One frame later the entries are on their way.
+        wait(24)
+        verify(scene.wheelTravel > 0, "moving within a frame")
+        verify(scene.wheelTravel < 1, "and easing in")
+        tryVerify(function() { return atRest(scene) }, 1000)
+        const total = Date.now() - started
+        verify(total <= 250, "the step took " + total + " ms")
+    }
+
+    // Criterion: spinning the wheel builds no backlog. Steps that arrive
+    // while one runs retarget it, and the entries rest one step's time after
+    // the last notch.
+    function test_aFastSpinBuildsNoBacklog() {
+        const scene = travelScene()
+        const point = entryCentres(scene)[0]
+        for (let notch = 0; notch < 10; ++notch)
+            mouseWheel(scene, point.x, point.y, 0, 120)
+        compare(scene.wheelTravelTarget, 10, "every notch counted")
+        const last = Date.now()
+        tryVerify(function() { return atRest(scene) }, 1000)
+        const settled = Date.now() - last
+        verify(settled <= 250, "rested " + settled + " ms after the last notch")
+        compare(((scene.entryTravel % scene.entryCount) + scene.entryCount) % scene.entryCount,
+                10 % scene.entryCount)
+    }
+
+    // Criterion: wheel input gathers into whole steps - 120 angle units are
+    // a notch, a slot's distance of touchpad pixels is a step - and Scroll
+    // sensitivity scales it from a quarter to four slots a notch.
+    function test_wheelInputGathersIntoWholeSteps() {
+        const scene = travelScene({}, { animationProfiles: { reducedMotion: true } })
+        const loop = scene.trackWindow.loop
+        function slot() { return ((scene.wheelTravelTarget % loop) + loop) % loop }
+        for (let event = 0; event < 7; ++event)
+            compare(scene.takeWheel(15, 0), 0, "a part of a notch takes no step")
+        compare(scene.takeWheel(15, 0), 1, "eight high-resolution events make one notch")
+        compare(slot(), 1)
+        const pitch = scene.travelPitch.pixels
+        verify(pitch > 20, "a slot is " + pitch + " px on the ring")
+        fuzzyCompare(scene.travelPitch.degrees, 360 / scene.entryCount, 0.01)
+        compare(scene.takeWheel(0, pitch / 2), 0)
+        compare(scene.takeWheel(0, pitch / 2), 1, "one slot of touchpad travel is one step")
+        compare(slot(), 2)
+        compare(scene.takeWheel(-240, 0), -2, "and back")
+        compare(slot(), 0)
+        scene.panelDefinition = Object.assign({}, scene.panelDefinition, { scrollSensitivity: 0.25 })
+        for (let notch = 0; notch < 3; ++notch)
+            compare(scene.takeWheel(120, 0), 0, "a quarter of a slot per notch")
+        compare(scene.takeWheel(120, 0), 1)
+        scene.panelDefinition = Object.assign({}, scene.panelDefinition, { scrollSensitivity: 4 })
+        compare(scene.takeWheel(120, 0), 4, "four slots per notch")
+        scene.panelDefinition = Object.assign({}, scene.panelDefinition, { scrollSensitivity: 9 })
+        compare(scene.scrollSensitivity, 4, "sensitivity is held to 4x")
+        scene.panelDefinition = Object.assign({}, scene.panelDefinition, { scrollSensitivity: 0.01 })
+        compare(scene.scrollSensitivity, 0.25, "and to a quarter")
+    }
+
+    // Criterion: "Continuous motion moves" Items, Whole panel and Both each
+    // move what they name, at their own speeds, and the wheel follows the
+    // same choice. Stopping leaves the entries in slots.
+    function test_continuousMotionMovesItemsPanelOrBoth_data() {
+        return [
+            { tag: "items", target: "items", turns: false, travels: true },
+            { tag: "panel", target: "panel", turns: true, travels: false },
+            { tag: "both", target: "both", turns: true, travels: true }
+        ]
+    }
+
+    function test_continuousMotionMovesItemsPanelOrBoth(data) {
+        const scene = makeScene()
+        scene.panelDefinition = Object.assign({}, scene.panelDefinition, {
+            panelMotionTarget: data.target, panelTravelSpeed: 4, panelRotationSpeed: 90 })
+        compare(scene.sceneRotationEnabled, data.turns)
+        compare(scene.travelMotionEnabled, data.travels)
+        compare(scene.wheelRotationAvailable, data.turns, "the wheel turns what motion turns")
+        compare(scene.wheelTravelAvailable, data.travels, "the wheel moves what motion moves")
+        wait(400)
+        compare(scene.sceneRotationAngle > 5, data.turns, data.tag + " turns the panel")
+        compare(scene.entryTravel > 0.3, data.travels, data.tag + " moves the entries")
+        scene.panelDefinition = Object.assign({}, scene.panelDefinition, { panelRotationMode: "none" })
+        compare(scene.sceneRotationActive, false)
+        compare(scene.travelMotionActive, false)
+        tryVerify(function() { return atRest(scene) }, 1000, "the entries come to rest in slots")
+        compare(scene.sceneRotationAngle, 0, "the panel returns to its configured angle")
+    }
+
+    // Criterion: reduced motion makes wheel steps jump and keeps continuous
+    // motion off.
+    function test_reducedMotionJumpsAndHoldsStill() {
+        const scene = makeScene({ animationProfiles: { reducedMotion: true } })
+        scene.panelDefinition = Object.assign({}, scene.panelDefinition, { panelMotionTarget: "both" })
+        compare(scene.travelMotionActive, false, "continuous travel stays off")
+        compare(scene.sceneRotationActive, false, "continuous turning stays off")
+        const point = entryCentres(scene)[0]
+        mouseWheel(scene, point.x, point.y, 0, 120)
+        compare(scene.entryTravel, 1, "the step lands at once")
         compare(scene.effectiveLayoutAngle, 15)
+        wait(150)
+        compare(scene.entryTravel, 1)
+    }
+
+    // Criterion: a drag moves the entries with the pointer while the panel
+    // stays still; released, they rest in slots.
+    function test_dragMovesEntriesAlongThePath() {
+        const scene = travelScene()
+        const centre = scene.travelCentre()
+        const radius = scene.layoutGeometry.radius
+        function point(angle) {
+            return Qt.point(centre.x + radius * Math.cos(angle), centre.y + radius * Math.sin(angle))
+        }
+        const start = point(Math.PI / 4)
+        mousePress(scene, start.x, start.y)
+        compare(scene.rotationDragActive, true)
+        // Four entries: a slot is a quarter turn, so an eighth is half a slot.
+        const finish = point(Math.PI / 2)
+        mouseMove(scene, finish.x, finish.y, 20)
+        verify(Math.abs(scene.wheelTravel - 0.5) < 0.05, "travel " + scene.wheelTravel)
+        compare(scene.effectiveLayoutAngle, 0, "the panel stays still")
+        mouseRelease(scene, finish.x, finish.y)
+        compare(scene.rotationDragActive, false)
+        tryVerify(function() { return atRest(scene) }, 1000, "released entries rest in slots")
+    }
+
+    // Criterion: travel is browsing state: another layout starts at rest, and
+    // nothing of it is saved.
+    function test_travelIsTransient() {
+        const scene = travelScene()
+        const point = entryCentres(scene)[0]
+        mouseWheel(scene, point.x, point.y, 0, 120)
+        tryVerify(function() { return atRest(scene) }, 1000)
+        compare(scene.entryTravel, 1)
+        scene.panelDefinition = Object.assign({}, scene.panelDefinition, { layout: "hexagon" })
+        compare(scene.entryTravel, 0, "another layout starts with its entries in place")
+        compare(scene.wheelTravelTarget, 0)
+        for (const key of Object.keys(scene.panelDefinition))
+            verify(key.toLowerCase().indexOf("travel") < 0 || key === "panelTravelSpeed",
+                   key + " is not travel state")
+    }
+
+    // An entry delegate that takes keyboard focus the way the applet's does:
+    // only while the scene lets it take input.
+    Component {
+        id: focusableEntry
+
+        FocusScope {
+            anchors.fill: parent
+            activeFocusOnTab: Boolean(parent && parent.sceneInputEnabled)
+            readonly property int entryIndex: parent ? parent.sceneIndex : -1
+        }
+    }
+
+    // Criterion: keyboard selection follows the travelled entries. Tab moves
+    // through the entries on the path only, and the focused one is where it
+    // travelled to.
+    function test_keyboardFocusFollowsTravelledEntries() {
+        const many = []
+        for (let index = 0; index < 6; ++index)
+            many.push({ id: "entry-" + index, displayName: "Entry " + index })
+        const scene = travelScene({ layout: "arc", layoutRadius: 150, iconSize: 52, spacing: 8 },
+                                  { orderedEntries: many, entryDelegate: focusableEntry })
+        compare(scene.trackWindow.loop, 7)
+        scene.takeWheel(120, 0)
+        tryVerify(function() { return atRest(scene) }, 1000)
+        // Entry 5 waits off the path; the others moved one slot on.
+        const hidden = scene.entryItemAt(5)
+        compare(hidden.enabled, false)
+        const reached = []
+        scene.entryItemAt(0).forceActiveFocus()
+        for (let press = 0; press < 8; ++press) {
+            let focused = -1
+            for (let index = 0; index < scene.entryCount; ++index) {
+                const delegate = scene.entryItemAt(index).delegateItem
+                if (delegate && delegate.activeFocus)
+                    focused = index
+            }
+            if (focused >= 0 && !reached.includes(focused)) {
+                reached.push(focused)
+                const item = scene.entryItemAt(focused)
+                const output = scene.entryGeometryAt(focused)
+                fuzzyCompare(item.x, output.position.x, 0.01)
+                fuzzyCompare(item.y, output.position.y, 0.01)
+                verify(output.onTrack, "a focused entry stands on the path")
+            }
+            keyClick(Qt.Key_Tab)
+        }
+        reached.sort()
+        compare(reached, [0, 1, 2, 3, 4], "Tab reaches the entries on the path, and only them")
+    }
+
+    // Criterion: an edge panel, or a free panel's straight row, neither
+    // travels nor turns under the wheel.
+    function test_edgePanelsAndRowsDoNotTravel_data() {
+        return [
+            { tag: "native", context: { hostKind: "native" }, layout: "ring" },
+            { tag: "free-row", context: { hostKind: "free" }, layout: "horizontal" }
+        ]
+    }
+
+    function test_edgePanelsAndRowsDoNotTravel(data) {
+        const scene = travelScene({ layout: data.layout }, { entryDelegateContext: data.context })
+        compare(scene.travelGeometryAvailable, false)
+        compare(scene.wheelTravelAvailable, false)
+        const point = entryCentres(scene)[0]
+        mouseWheel(scene, point.x, point.y, 0, 120)
+        wait(200)
+        compare(scene.entryTravel, 0)
+        compare(scene.wheelTravelTarget, 0)
+        compare(scene.effectiveLayoutAngle, 0)
+    }
+
+    // Criterion: Direction Up, Right, Down and Left are layout angles that
+    // turn each open shape, and its hit region, to that side. A fan, an arc
+    // and a semicircle face up at 0 degrees, a radial path faces right.
+    function test_openShapesFaceTheChosenSide_data() {
+        const rows = []
+        const sides = { up: [0, -1], right: [1, 0], down: [0, 1], left: [-1, 0] }
+        const angles = {
+            fan: { up: 0, right: 90, down: 180, left: -90 },
+            arc: { up: 0, right: 90, down: 180, left: -90 },
+            semicircle: { up: 0, right: 90, down: 180, left: -90 },
+            radial: { up: -90, right: 0, down: 90, left: 180 }
+        }
+        for (const layout of Object.keys(angles))
+            for (const side of Object.keys(sides))
+                rows.push({ tag: layout + "-" + side, layout: layout, angle: angles[layout][side],
+                            side: sides[side] })
+        return rows
+    }
+
+    function test_openShapesFaceTheChosenSide(data) {
+        const scene = travelScene({ layout: data.layout, layoutAngle: data.angle })
+        const centre = scene.travelCentre()
+        // The middle of the drawn path, and of the entries standing on it.
+        const path = LayoutEngine.surface(data.layout, scene.layoutGeometry,
+                                          scene.effectiveLayoutAngle, scene.polygonSides).points
+        const before = path[path.length / 2 - 1]
+        const after = path[path.length / 2]
+        const offset = { x: (before.x + after.x) / 2 + scene.contentBounds.x - centre.x,
+                         y: (before.y + after.y) / 2 + scene.contentBounds.y - centre.y }
+        const along = offset.x * data.side[0] + offset.y * data.side[1]
+        const across = Math.abs(offset.x * data.side[1] - offset.y * data.side[0])
+        verify(along > 20 && across < 1, data.tag + ": the path's middle faces the side "
+               + JSON.stringify(offset))
+        const points = entryCentres(scene)
+        const reach = Math.max.apply(null, points.map(function(point) {
+            return (point.x - centre.x) * data.side[0] + (point.y - centre.y) * data.side[1]
+        }))
+        verify(reach > along * 0.5, data.tag + ": the entries stand on that side")
+        const radius = scene.layoutGeometry.radius
+        verify(scene.containsInputPoint(Qt.point(centre.x + data.side[0] * radius,
+                                                 centre.y + data.side[1] * radius)),
+               data.tag + ": the path's middle on that side takes input")
+        verify(!scene.containsInputPoint(Qt.point(centre.x - data.side[0] * radius,
+                                                  centre.y - data.side[1] * radius)),
+               data.tag + ": the opposite side passes through")
     }
 }

@@ -1644,7 +1644,21 @@ if(BUILD_TESTING)
             ARCHDOCK_RENDERING_INTERACTIONS=1 ARCHDOCK_RUNTIME_UI=1
             bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
   set_tests_properties(runtime-ui-interaction-smoke PROPERTIES
-    DEPENDS rendering-import-smoke RUN_SERIAL TRUE TIMEOUT 120)
+    DEPENDS rendering-import-smoke RUN_SERIAL TRUE TIMEOUT 180)
+
+  # ADREP-TASK-002: a free panel's entries travel along its own path. Real
+  # wheel input on twelve layouts in a private compositor: slots, wrap-around,
+  # hit tests, step timing, what motion moves, and Direction; every resting
+  # state is captured and every frame recorded.
+  add_test(NAME path-travel-smoke
+    COMMAND ${CMAKE_COMMAND} -E env
+            ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
+            ARCHDOCK_QMLTESTRUNNER=$<TARGET_FILE:Qt6::qmltestrunner>
+            ARCHDOCK_RENDERING_INTERACTIONS=1 ARCHDOCK_RENDERING_TRAVEL=1
+            bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
+  set_tests_properties(path-travel-smoke PROPERTIES
+    DEPENDS rendering-import-smoke RUN_SERIAL TRUE TIMEOUT 480)
 
   add_test(
     NAME free-entry-policy-test
