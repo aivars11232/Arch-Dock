@@ -182,3 +182,46 @@ hidden and keep their values; a setting the panel does not have is refused.
    closing settings, no Size control that does nothing, no Appearance Shape.
 3. Icons: one place chooses the icon style; no Indicators on the free panel;
    each Notifications item explains itself.
+
+## Report 2 - recheck
+
+- Task commit: `eeed2f5`; follow-up commits: `82e3d7e` (three document
+  sentences that claimed more than the evidence: the matrix covers ten
+  representative layouts, an edge panel has no Layout page, and a setting the
+  panel has but that draws nothing is kept rather than refused).
+- Remote: `origin/main` equals `82e3d7e` (verified with `git fetch` and
+  `git rev-parse`); the task commit is on it.
+- Fresh clone of `origin/main` at `82e3d7e` (recheck round 2): build with one
+  job passed in 22 min 35 s. The task's required and focused tests on that
+  build: 18 of 20 passed at once (`session-startup-metadata-test`,
+  `session-startup-diagnostics-test`, `panel-window-capability-test`,
+  `panel-settings-schema-test`, `panel-capability-resolver-test`,
+  `settings-editor-model-test`, `studio-navigation-test`,
+  `studio-preview-contract-test`, `dock-geometry-test`, `panel-scene-test`,
+  `presentation-mechanism-smoke`, `configuration-upgrade-test`,
+  `source-exporter-test`, `studio-truth-matrix-smoke`, `rendering-import-smoke`,
+  `window-interaction-smoke`, `folder-interaction-smoke`,
+  `runtime-ui-interaction-smoke`). The other two passed on a rerun with no
+  change to the source:
+  - `session-startup-runtime-test`: the clone's deeper test folder made the
+    private compositor's socket path 112 characters, over the system limit of
+    108, so the compositor could not start. With a shorter test folder the run
+    once hit the 30-second limit for the first activation, then passed with
+    every phase, the whole menu matrix included.
+  - `preset-audition-matrix-defaults`: its checks passed, then stopping the
+    private service at the end timed out (the known intermittent lifecycle
+    teardown); the rerun passed.
+- Acceptance criteria rechecked: 11 of 11 with proof; gaps found in round 1:
+  the three document sentences above, repaired in `82e3d7e`.
+- Owner findings rechecked: OF-01 to OF-10 closed.
+- Documents against evidence: consistent after `82e3d7e`.
+- Diff from the base touches only in-scope files: yes, 43 files (Studio rules
+  and pages, the menu entry and startup tests, the capability resolver, the
+  free-panel migration, path orientation in the shared layout engine, the
+  applet's scene definition shared with the test, tests, documents, the source
+  exporter).
+- Leftovers: no task process, disposable session or temporary root is running
+  or left; the fresh clone is removed in the cleanup that follows this record.
+- Recheck rounds: 2.
+- Recheck record commit: the commit that adds this section ("ADREP-TASK-001:
+  record the recheck"), pushed to `origin/main`.

@@ -4,7 +4,8 @@
 ## ADREP-TASK-001 — Panel Studio shows only what works; the menu opens it (2026-10-07)
 
 The first task of the owner's video audit (package `/mnt/F/Arch Dock LCL
-repairs/`, ADREP 1.0.0) is implemented and verified; its report is
+repairs/`, ADREP 1.0.0) is closed: implemented, verified, pushed (`eeed2f5`,
+documents follow-up `82e3d7e`) and rechecked on a fresh clone; its report is
 [docs/repairs/ADREP-TASK-001.md](repairs/ADREP-TASK-001.md). Nothing was
 packaged or installed: the PC still runs 0.1.1-11, and the package for this
 work comes with ADREP-TASK-005.
