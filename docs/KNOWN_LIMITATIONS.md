@@ -103,9 +103,10 @@ layouts and each renderer tier they offer (21 panels). What follows from it:
   panel, so Dock layout offers only one of each pair beside the others. A look
   made for one layout offers no Dock layout and says so on the Layout page.
 - Item travel speed, Panel rotation speed and Motion runs appear only while
-  continuous motion runs, each speed only for what it moves; Continuous motion
-  moves and Scroll sensitivity are always shown, because the wheel follows
-  them.
+  continuous motion runs, each speed only for what it moves. Continuous motion
+  moves and Scroll sensitivity are shown whether or not it runs, because the
+  wheel follows them; on a baked arc, where only the icons can move,
+  Continuous motion moves is not shown.
 - On baked 2.5D and true 3D looks the icons travel along the platform's track,
   but passing behind and in front of the platform is completed by
   ADREP-TASK-004.

@@ -243,10 +243,10 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   the panel moves them too. Edge panels are unchanged.
 - Animations gains Continuous motion moves (Items along the path, Whole panel
   or Both), Item travel speed and Scroll sensitivity (a quarter of a place to
-  four places per notch, the same for wheels, high-resolution wheels and
-  touchpads); the wheel and dragging move what continuous motion moves. A
-  panel that rotated keeps turning as a whole after the upgrade, with a backup
-  first; any other moves its items.
+  four places per notch, counted the same way for wheels, high-resolution
+  wheels and touchpads); the wheel and dragging move what continuous motion
+  moves. A panel that rotated keeps turning as a whole after the upgrade, with
+  a backup first; any other moves its items.
 - A whole flat panel that turns no longer shows its outline behind its
   icons: the outline was painted again 74 to 143 ms after the wheel event,
   while the icons moved at once; it is now turned as one picture.
