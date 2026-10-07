@@ -908,6 +908,9 @@ Window {
                 : moves === "both"
                 ? qsTr("Scroll over the panel to move its icons along its path and turn it at the same time: up is clockwise, down is back. Dragging it does the same.")
                 : qsTr("Scroll over the panel to move its icons along its path while the panel stays still: up moves them clockwise, down moves them back. Dragging it moves them too. On an open path an icon that leaves one end comes back at the other.")));
+            // One sensitivity for the panel and its folders (PD-16).
+            if (rotation.some(function(row) { return row.key === "scrollSensitivity"; }))
+                rows.push(notice(qsTr("Scroll sensitivity also sets how far one wheel notch moves the contents of an open folder.")));
             if (String(panelValue("panelRotationMode", "none")) !== "none"
                     && String(panelValue("panelRotationTrigger", "idle")) === "hover")
                 rows.push(notice(qsTr("Hover the preview to try the continuous motion.")));

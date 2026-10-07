@@ -111,6 +111,22 @@ layouts and each renderer tier they offer (21 panels). What follows from it:
   but passing behind and in front of the platform is completed by
   ADREP-TASK-004.
 - Edge panels have no wheel travel or rotation.
+- A free panel's folder Fan and Ring are drawn in the panel's flat look: its
+  appearance's colour, line width and glow, or its custom colour. On a baked
+  or 3D look they use that look's flat colours, not its artwork; a look whose
+  flat surface draws no line (Plate, Pedestal) draws no fan or ring outline.
+- Along the dock, Fan, Arc, Stack and Ring scroll with the wheel, the touchpad
+  and the keys; they have no drag scrolling. Their window covers the shape's
+  whole box, so a press there beside the children closes the folder rather
+  than reaching the dock underneath.
+- Folder scrolling follows Scroll sensitivity on free panels with a curved
+  layout, where Panel Studio offers it; elsewhere one notch moves one child or
+  one row. Edge-panel folders keep their popup shapes (PD-23).
+- Grid keeps its popup beside the folder. On a tilted baked or 3D ring a
+  neighbouring icon can stand on that side and the popup covers it; the
+  anchoring test records it (one of five positions on the baked ring). Along
+  the dock steps a little further out of a tilted dock where a child would
+  otherwise stand on one of its icons.
 - Badges and task progress appear only where the session reports them.
 
 ## 3D editing

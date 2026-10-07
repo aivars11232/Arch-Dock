@@ -330,6 +330,7 @@ private slots:
     void studioPlainSurfaceExplains3D();
     void wholePanelRotationFieldsAreGatedByTheResolver();
     void studioMotionAndDirectionRows();
+    void studioFolderShapeRows();
     void meshSceneEditorIsGatedAndTransactional();
     void rendererSwitchRetainsOnlyUnchangedInactiveFields();
     void groupedWindowsFollowLiveKWinUpdates();
@@ -4035,6 +4036,90 @@ void PanelWindowCapabilityTest::studioMotionAndDirectionRows()
     QVERIFY(set({{"layout", "circular"}}));
     auto studio = open(); QVERIFY(studio);
     QCOMPARE(directions(layoutPage(studio.get())).value("rows").toInt(), 1);
+}
+
+// ADREP-TASK-003: Fan opening, Stack length and Ring size stand on Behavior
+// right under Folder layout, each only while its own layout is chosen and
+// only on a free panel; Ring size only where the dock has a radius.
+void PanelWindowCapabilityTest::studioFolderShapeRows()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    const auto set = [&](const QVariantMap &values) {
+        return backend.applyPanelSettingsTransaction(panel,
+            registry->panelDefinition(panel)->settingsRevision, values).value("success").toBool();
+    };
+    QVERIFY(set({{"type", "launcher"}, {"layout", "circular"}, {"panelRotationMode", "none"}}));
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    const auto keys = [](const QVariantList &page) {
+        QStringList result;
+        for (const QVariant &row : page) {
+            const QString key = row.toMap().value("key").toString();
+            if (!key.isEmpty()) result.append(key);
+        }
+        return result;
+    };
+    // The Behavior page, wherever it is: the one with Folder layout.
+    const auto behaviour = [&]() {
+        std::unique_ptr<QObject> studio(component.createWithInitialProperties({
+            {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 0}}));
+        for (int subtab = 0; studio && subtab < 11; ++subtab) {
+            studio->setProperty("subTabIndex", subtab);
+            QVariant value;
+            QMetaObject::invokeMethod(studio.get(), "rowsForCurrentPage", Q_RETURN_ARG(QVariant, value));
+            if (keys(value.toList()).contains(QStringLiteral("folderLayout")))
+                return keys(value.toList());
+        }
+        return QStringList{};
+    };
+    const QStringList shapeKeys{"folderFanOpening", "folderStackLength", "folderRingSize"};
+    const QList<QPair<QString, QString>> cases{{"track", ""}, {"fan", "folderFanOpening"},
+        {"grid", ""}, {"stack", "folderStackLength"}, {"arc", ""}, {"ring", "folderRingSize"}};
+    for (const auto &[layout, setting] : cases) {
+        QVERIFY(set({{"folderLayout", layout}}));
+        const QStringList page = behaviour();
+        QVERIFY2(!page.isEmpty(), qPrintable(layout));
+        QStringList shown;
+        for (const QString &key : page)
+            if (shapeKeys.contains(key)) shown.append(key);
+        QCOMPARE(shown, setting.isEmpty() ? QStringList{} : QStringList{setting});
+        if (!setting.isEmpty())
+            QCOMPARE(page.indexOf(setting), page.indexOf(QStringLiteral("folderLayout")) + 1);
+    }
+    const QVariantMap snapshot = backend.panelSettingsEditorSnapshot(panel, QStringLiteral("studio"));
+    const QVariantList fields = snapshot.value(QStringLiteral("panelFields")).toList();
+    const QVariantMap ringSize = fieldByKey(fields, QStringLiteral("folderRingSize"));
+    QStringList labels;
+    for (const QVariant &option : ringSize.value(QStringLiteral("options")).toList())
+        labels.append(option.toMap().value(QStringLiteral("label")).toString());
+    QCOMPARE(labels, QStringList({QStringLiteral("Small"), QStringLiteral("Same as panel")}));
+    const QVariantMap opening = fieldByKey(fields, QStringLiteral("folderFanOpening"));
+    QCOMPARE(opening.value(QStringLiteral("minimumValue")).toInt(), 40);
+    QCOMPARE(opening.value(QStringLiteral("maximumValue")).toInt(), 160);
+    QCOMPARE(opening.value(QStringLiteral("defaultValue")).toInt(), 90);
+    const QVariantMap length = fieldByKey(fields, QStringLiteral("folderStackLength"));
+    QCOMPARE(length.value(QStringLiteral("minimumValue")).toInt(), 2);
+    QCOMPARE(length.value(QStringLiteral("maximumValue")).toInt(), 12);
+    QCOMPARE(length.value(QStringLiteral("defaultValue")).toInt(), 5);
+    // The values reach the applet.
+    QVERIFY(set({{"folderFanOpening", 120}, {"folderStackLength", 9}, {"folderRingSize", "panel"}}));
+    const QVariantMap configuration = backend.panelRendererConfiguration(panel);
+    QCOMPARE(configuration.value(QStringLiteral("folderFanOpening")).toInt(), 120);
+    QCOMPARE(configuration.value(QStringLiteral("folderStackLength")).toInt(), 9);
+    QCOMPARE(configuration.value(QStringLiteral("folderRingSize")).toString(), QStringLiteral("panel"));
+    // A row of icons has no radius: Small is its only ring, not a choice.
+    QVERIFY(set({{"layout", "horizontal"}}));
+    QVERIFY(!behaviour().contains(QStringLiteral("folderRingSize")));
+    // An edge panel's folders open a popup: none of the three is offered.
+    const QVariantMap edge = backend.panelSettingsEditorSnapshot(QStringLiteral("bottom"), QStringLiteral("studio"));
+    for (const QString &key : shapeKeys)
+        QVERIFY2(fieldByKey(edge.value(QStringLiteral("panelFields")).toList(), key).isEmpty(), qPrintable(key));
 }
 
 void PanelWindowCapabilityTest::presentationProfileIsPublishedForLaterPresets()

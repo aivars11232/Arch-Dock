@@ -462,8 +462,8 @@ run_private_session() {
     fi
     "${compositor_command[@]}" \
         --virtual \
-        --width 1280 \
-        --height 720 \
+        --width "${ARCHDOCK_RENDERING_SCREEN_WIDTH:-1280}" \
+        --height "${ARCHDOCK_RENDERING_SCREEN_HEIGHT:-720}" \
         --output-count 1 \
         --socket "$WAYLAND_DISPLAY" \
         --no-global-shortcuts \
@@ -1491,6 +1491,16 @@ run_outer() {
         session_seconds=900
     elif [[ "${ARCHDOCK_RENDERING_TRAVEL:-}" == '1' ]]; then
         session_seconds=420
+    elif [[ "${ARCHDOCK_RENDERING_FOLDER_ANCHORS:-}" == '1' ]]; then
+        # Every folder layout at five places on three renderers.
+        session_seconds=720
+    elif [[ "${ARCHDOCK_RENDERING_FOLDER_LAYOUTS:-}" == '1' ]]; then
+        # ADREP-TASK-003 evidence: every folder layout, three folder sizes,
+        # five folder positions.
+        session_seconds=1200
+    elif [[ "${ARCHDOCK_RENDERING_FOLDERS:-}" == '1' ]]; then
+        # Ten folder layouts, each also with Expand folders on click off.
+        session_seconds=300
     fi
     require_command cmake
     require_command dbus-run-session

@@ -194,6 +194,12 @@ Item {
             "layout", "scrollSensitivity", "scrollSensitivity", 1))
         return isFinite(value) ? Math.max(0.25, Math.min(4, value)) : 1
     }
+    // Panel Studio offers Scroll sensitivity where the wheel moves the panel's
+    // own entries or turns it, a free radial panel; its folders scroll by it
+    // there too, and one child or row per notch elsewhere (PD-16).
+    readonly property real folderScrollSensitivity:
+        freeHost && rotationCapabilityAvailable && LayoutEngine.supportsWholeSceneRotation(layoutPath)
+        ? scrollSensitivity : 1
     // A baked panel turns when its own track is closed, whatever the
     // configured path says: the artwork, not the layout, decides whether
     // sweeping the entries keeps them on the platform.
@@ -1133,6 +1139,22 @@ Item {
             return bakedTrackMetrics.center
         return null
     }
+    // The middle of the dock as drawn, or of its laid-out scene.
+    function dockCentre() {
+        return drawnCentre() || { x: contentBounds.x + layoutGeometry.width / 2,
+                                  y: contentBounds.y + layoutGeometry.height / 2 }
+    }
+    // The drawn centres of every entry but `folderIndex`: a folder's fan,
+    // arc, stack or ring keeps clear of them (ADREP-TASK-003).
+    function folderObstacles(folderIndex) {
+        const size = layoutGeometry.iconSize
+        return popupAnchors.entries.filter(function(anchor) {
+            return anchor.index !== folderIndex
+        }).map(function(anchor) {
+            return { x: anchor.x - anchor.outwardNormal.x * size / 2,
+                     y: anchor.y - anchor.outwardNormal.y * size / 2 }
+        })
+    }
 
     // "Along the dock": the curve a folder's contents follow, `outward`
     // pixels out of the dock, as `count` scene-coordinate samples spanning
@@ -1153,8 +1175,7 @@ Item {
                 return { x: sample.x, y: sample.y, scale: sample.scale * size }
             })
         }
-        const centre = drawnCentre() || { x: contentBounds.x + layoutGeometry.width / 2,
-                                          y: contentBounds.y + layoutGeometry.height / 2 }
+        const centre = dockCentre()
         const metrics = bakedMetadataUsable ? bakedTrackMetrics : null
         const ratio = metrics && metrics.radiusX > 0 ? metrics.radiusY / metrics.radiusX
             : layoutPath === "ellipse" ? 0.62 : 1

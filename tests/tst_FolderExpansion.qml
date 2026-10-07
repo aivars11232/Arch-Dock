@@ -515,18 +515,28 @@ TestCase {
         const capacity = item.track.capacity
         compare(findChild(item, "folder-child-" + capacity).opacity, 0, "a child past the end is not shown")
         const first = childCentre(item, 0)
+        // Turning the wheel back brings the next child in at the end.
         mouseWheel(item, first.x, first.y, 0, -120)
-        tryCompare(item, "trackOffset", 1)
+        tryCompare(item, "trackOffset", -1)
         verify(findChild(item, "folder-child-0").opacity < 0.01, "the wheel moved the first child off the curve")
         verify(findChild(item, "folder-child-" + capacity).opacity > 0.99)
         const shown = childCentre(item, capacity)
         verify(Math.abs(Math.hypot(shown.x - 350, shown.y - 250) - 160) < 0.5)
         mouseWheel(item, first.x, first.y, 0, 120)
         tryCompare(item, "trackOffset", 0)
+        // And on past the start: the last child comes round to the first place.
+        mouseWheel(item, first.x, first.y, 0, 120)
+        tryCompare(item, "trackOffset", 1)
+        verify(findChild(item, "folder-child-47").opacity > 0.99, "the last child came round")
+        fuzzyCompare(childCentre(item, 47).x, first.x, 0.5)
+        fuzzyCompare(childCentre(item, 47).y, first.y, 0.5)
+        mouseWheel(item, first.x, first.y, 0, -120)
+        tryCompare(item, "trackOffset", 0)
         item.forceActiveFocus()
         for (let step = 0; step < 47; ++step) keyClick(Qt.Key_Right)
         compare(item.selectedChildId, "child-47")
-        compare(item.trackOffset, 48 - capacity, "keys bring the selection onto the curve")
+        compare(item.trackOffset, -(48 - capacity), "keys bring the selection onto the curve")
+        verify(item.track.entries[47].onTrack)
         compare(selection.count, 0, "browsing never opens a child")
     }
     function test_trackUnfoldsFromTheFolder() {
@@ -602,5 +612,372 @@ TestCase {
         tryCompare(host, "visible", false)
         verify(!host.requested)
         verify(!host.openFolder())
+    }
+
+    // ADREP-TASK-003: a free panel's own folder shapes. The folder stands at
+    // the middle of a large screen with a dock icon either side of it, a
+    // little behind it, as on a ring.
+    readonly property point shapeFolder: Qt.point(1920, 1080)
+    function unit(vector) {
+        const length = Math.hypot(vector.x, vector.y)
+        return { x: vector.x / length, y: vector.y / length }
+    }
+    function neighbours(outward) {
+        const n = unit(outward), across = { x: -n.y, y: n.x }
+        return [-1, 1].map(function(side) {
+            return { x: shapeFolder.x + side * 64 * across.x - 12 * n.x,
+                     y: shapeFolder.y + side * 64 * across.y - 12 * n.y }
+        })
+    }
+    function shapeOf(kind, outward, count, names, extra) {
+        const options = { folder: { x: shapeFolder.x, y: shapeFolder.y }, outward: outward, iconSize: 48,
+            cellWidth: names ? 108 : 48, cellHeight: names ? 82 : 48, gap: 6, count: count,
+            fanOpening: 90, stackLength: 5, ringSize: "small", panelRadius: 150,
+            obstacles: neighbours(outward), obstacleSize: 48,
+            screen: { x: 0, y: 0, width: 3840, height: 2160 }, outlineMargin: 20 }
+        for (const key in extra || {}) options[key] = extra[key]
+        return LayoutEngine.folderShape(kind, options)
+    }
+    function layoutOf(shape, count, travel) {
+        return LayoutEngine.folderTrackLayout(shape.samples, count, shape.pitch, travel || 0,
+            { closed: shape.closed, start: shape.start, capacity: shape.capacity })
+    }
+    // Degrees from `from` to `to`, both directions, clockwise on the screen.
+    function turnBetween(from, to) {
+        const turn = (Math.atan2(to.y, to.x) - Math.atan2(from.y, from.x)) * 180 / Math.PI
+        return ((turn % 360) + 540) % 360 - 180
+    }
+    function direction(from, to) { return unit({ x: to.x - from.x, y: to.y - from.y }) }
+    function cellOverlaps(point, obstacle, names) {
+        const width = names ? 108 : 48, height = names ? 82 : 48, reach = 24
+        return point.x - width / 2 < obstacle.x + reach && point.x + width / 2 > obstacle.x - reach
+            && point.y - 24 < obstacle.y + reach && point.y - 24 + height > obstacle.y - reach
+    }
+    function test_folderShapes_data() {
+        const rows = []
+        const outwards = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 },
+                           right: { x: 1, y: 0 }, diagonal: { x: 0.6, y: -0.8 } }
+        for (const kind of ["fan", "arc", "stack", "ring"])
+            for (const way in outwards)
+                for (const count of [3, 8, 24])
+                    for (const names of [false, true])
+                        rows.push({ tag: kind + "/" + way + "/" + count + (names ? "/names" : ""),
+                                    kind: kind, outward: outwards[way], count: count, names: names })
+        return rows
+    }
+    function test_folderShapes(data) {
+        const shape = shapeOf(data.kind, data.outward, data.count, data.names)
+        const n = unit(data.outward)
+        compare(shape.shape, data.kind)
+        compare(shape.turn, 0, "it opens along the folder's outward direction")
+        const samples = shape.samples
+        const layout = layoutOf(shape, data.count)
+        const shown = layout.entries.filter(function(entry) { return entry.onTrack })
+        compare(shown.length, Math.min(data.count, layout.capacity))
+        verify(layout.capacity >= Math.min(data.count, 2), "the shape holds children: " + layout.capacity)
+        if (data.kind === "fan") {
+            // PD-11: the apex just outside the folder, the children on the arc
+            // joining two edges 90 degrees apart about the outward direction.
+            const reach = 24 / Math.max(Math.abs(n.x), Math.abs(n.y)) + 6
+            fuzzyCompare(shape.apex.x, shapeFolder.x + n.x * reach, 0.01)
+            fuzzyCompare(shape.apex.y, shapeFolder.y + n.y * reach, 0.01)
+            for (const point of samples)
+                fuzzyCompare(Math.hypot(point.x - shape.apex.x, point.y - shape.apex.y), shape.radius, 0.01)
+            fuzzyCompare(turnBetween(n, direction(shape.apex, samples[0])), -45, 0.01)
+            fuzzyCompare(turnBetween(n, direction(shape.apex, samples[samples.length - 1])), 45, 0.01)
+            verify(shape.outline.closed)
+            compare(shape.outline.points[0], shape.apex)
+            for (const entry of shown)
+                fuzzyCompare(Math.hypot(entry.x - shape.apex.x, entry.y - shape.apex.y), shape.radius, 0.05)
+        } else if (data.kind === "arc") {
+            // PD-13: at one distance from the folder, symmetric about its
+            // outward direction.
+            for (const point of samples)
+                fuzzyCompare(Math.hypot(point.x - shapeFolder.x, point.y - shapeFolder.y), shape.radius, 0.01)
+            fuzzyCompare(turnBetween(n, direction(shapeFolder, samples[0])), -75, 0.01)
+            fuzzyCompare(turnBetween(n, direction(shapeFolder, samples[samples.length - 1])), 75, 0.01)
+            const middle = layout.entries.filter(function(entry) { return entry.onTrack })
+            const first = middle[0], last = middle[middle.length - 1]
+            fuzzyCompare(turnBetween(n, direction(shapeFolder, first)),
+                         -turnBetween(n, direction(shapeFolder, last)), 0.05)
+        } else if (data.kind === "stack") {
+            // PD-12: a straight line from the folder outward, as long as
+            // Stack length allows.
+            compare(layout.capacity, Math.min(data.count, 5))
+            for (let index = 0; index < shown.length; ++index) {
+                const entry = shown[index]
+                const along = (entry.x - shapeFolder.x) * n.x + (entry.y - shapeFolder.y) * n.y
+                const aside = (entry.x - shapeFolder.x) * -n.y + (entry.y - shapeFolder.y) * n.x
+                verify(Math.abs(aside) < 0.01, "on the line: " + aside)
+                verify(along > 24, "beyond the folder: " + along)
+                if (index > 0) fuzzyCompare(Math.hypot(entry.x - shown[index - 1].x,
+                                                       entry.y - shown[index - 1].y), shape.pitch, 0.01)
+            }
+        } else {
+            // PD-14: a second circle beside the folder along its outward
+            // direction, the children on its circumference.
+            verify(shape.closed)
+            for (const point of samples)
+                fuzzyCompare(Math.hypot(point.x - shape.centre.x, point.y - shape.centre.y), shape.radius, 0.01)
+            const away = direction(shapeFolder, shape.centre)
+            fuzzyCompare(away.x, n.x, 1e-6)
+            fuzzyCompare(away.y, n.y, 1e-6)
+            verify(Math.hypot(shape.centre.x - shapeFolder.x, shape.centre.y - shapeFolder.y) > shape.radius + 24)
+            if (data.count <= layout.capacity)
+                compare(shown.length, data.count, "a small ring holds every child")
+        }
+        // No place a child passes through covers the folder or a dock icon,
+        // and neighbours on the path keep their cells apart.
+        const obstacles = neighbours(data.outward).concat([{ x: shapeFolder.x, y: shapeFolder.y }])
+        for (const point of samples)
+            for (const obstacle of obstacles)
+                verify(!cellOverlaps(point, obstacle, data.names),
+                       "a child at " + JSON.stringify(point) + " covers " + JSON.stringify(obstacle))
+        for (let index = 1; index < shown.length; ++index) {
+            const a = shown[index - 1], b = shown[index]
+            const width = data.names ? 108 : 48, height = data.names ? 82 : 48
+            verify(Math.abs(a.x - b.x) >= width - 0.5 || Math.abs(a.y - b.y) >= height - 0.5
+                   || !data.names, "neighbours " + index + " overlap")
+        }
+        // The room the window needs holds them all.
+        for (const point of samples) {
+            verify(point.x - (data.names ? 54 : 24) >= shape.bounds.x - 0.01)
+            verify(point.x + (data.names ? 54 : 24) <= shape.bounds.x + shape.bounds.width + 0.01)
+        }
+    }
+    function test_folderShapeSettings() {
+        const up = { x: 0, y: -1 }
+        // Fan opening: the angle between the fan's edges.
+        for (const opening of [40, 90, 160]) {
+            const fan = shapeOf("fan", up, 8, false, { fanOpening: opening })
+            fuzzyCompare(fan.opening, opening, 0.01)
+            const s = fan.samples
+            fuzzyCompare(turnBetween(direction(fan.apex, s[0]), direction(fan.apex, s[s.length - 1])), opening, 0.01)
+        }
+        compare(shapeOf("fan", up, 8, false, { fanOpening: 400 }).opening, 160)
+        compare(shapeOf("fan", up, 8, false, { fanOpening: 2 }).opening, 40)
+        verify(layoutOf(shapeOf("fan", up, 24, false, { fanOpening: 160 }), 24).capacity
+               > layoutOf(shapeOf("fan", up, 24, false, { fanOpening: 40 }), 24).capacity,
+               "a wider fan shows more children at once")
+        // Stack length: how many children the line shows.
+        for (const length of [2, 5, 12])
+            compare(layoutOf(shapeOf("stack", up, 24, false, { stackLength: length }), 24).capacity, length)
+        compare(layoutOf(shapeOf("stack", up, 3, false, { stackLength: 12 }), 3).capacity, 3)
+        compare(shapeOf("stack", up, 24, false, { stackLength: 40 }).capacity, 12)
+        // Ring size: fits the children, or has the dock's radius.
+        const small = shapeOf("ring", up, 8, false)
+        compare(small.ringSize, "small")
+        // Just wide enough that neighbours stand a pitch apart in a straight line.
+        fuzzyCompare(small.radius, 62 / (2 * Math.sin(Math.PI / 8)), 0.01)
+        const spread = layoutOf(small, 8).entries
+        fuzzyCompare(Math.hypot(spread[1].x - spread[0].x, spread[1].y - spread[0].y), 62, 0.5)
+        const panel = shapeOf("ring", up, 8, false, { ringSize: "panel" })
+        compare(panel.ringSize, "panel")
+        compare(panel.radius, 150)
+        compare(layoutOf(panel, 8).capacity, 8)
+        const noRadius = shapeOf("ring", up, 8, false, { ringSize: "panel", panelRadius: 0 })
+        compare(noRadius.ringSize, "small", "a dock without a radius keeps the small ring")
+    }
+    function test_folderShapeGivesWayOnlyToTheScreen() {
+        // Facing up from 60 pixels below the top of the screen: the fan holds
+        // fewer children at once, then turns, and never covers the dock.
+        const options = { screen: { x: 0, y: 0, width: 3840, height: 1080 + 60 + 200 } }
+        const roomy = shapeOf("fan", { x: 0, y: -1 }, 24, true, options)
+        compare(roomy.turn, 0)
+        compare(roomy.fewer, 0)
+        const tight = shapeOf("fan", { x: 0, y: -1 }, 24, true,
+                              { screen: { x: 0, y: 1080 - 260, width: 3840, height: 1000 } })
+        verify(tight.fewer > 0 || tight.turn !== 0, "the fan gave way to the screen")
+        verify(tight.bounds.y >= 1080 - 260 - 0.5, "and fits: " + JSON.stringify(tight.bounds))
+        // A ring with no room above but room beside the folder turns
+        // towards a side, not over the dock.
+        const ring = shapeOf("ring", { x: 0, y: -1 }, 8, true,
+                             { screen: { x: 0, y: 1080 - 260, width: 3840, height: 1100 } })
+        verify(ring.turn !== 0, "a ring that does not fit above turns to where it does")
+        verify(Math.abs(ring.turn) <= 90, "towards a side before the other way: " + ring.turn)
+        verify(ring.bounds.y >= 1080 - 260 - 0.5)
+        // A small ring short of room holds fewer children at once, still
+        // beside the folder; the others come round as it turns.
+        const shortRing = shapeOf("ring", { x: 0, y: -1 }, 24, true,
+                                  { screen: { x: 0, y: 1080 - 620, width: 3840, height: 2000 } })
+        compare(shortRing.turn, 0)
+        verify(shortRing.fewer > 0, "fewer children at once")
+        verify(layoutOf(shortRing, 24).capacity < 24 && layoutOf(shortRing, 24).capacity >= 3)
+        // A stack too long for the room shows fewer children, still outward.
+        const stack = shapeOf("stack", { x: 1, y: 0 }, 24, true,
+                              { stackLength: 12, screen: { x: 0, y: 0, width: 1920 + 700, height: 2160 } })
+        compare(stack.turn, 0)
+        verify(stack.capacity < 12 && stack.capacity >= 2, "a shorter stack: " + stack.capacity)
+        verify(stack.bounds.x + stack.bounds.width <= 1920 + 700 + 0.5)
+        // With no room above nor beside, it opens the other way.
+        const flipped = shapeOf("ring", { x: 0, y: -1 }, 8, true,
+                                { screen: { x: 1920 - 160, y: 1080 - 200, width: 320, height: 1100 } })
+        compare(flipped.turn, 180)
+        verify(flipped.bounds.x >= 1920 - 160 - 0.5 && flipped.bounds.y >= 1080 - 200 - 0.5)
+    }
+    function test_folderPathsWrapAround_data() {
+        return [
+            { tag: "fan/24", kind: "fan", count: 24 }, { tag: "arc/24", kind: "arc", count: 24 },
+            { tag: "stack/24", kind: "stack", count: 24 }, { tag: "stack/3", kind: "stack", count: 3 },
+            { tag: "fan/3", kind: "fan", count: 3 }, { tag: "ring/24", kind: "ring", count: 24 },
+            { tag: "ring/3", kind: "ring", count: 3 }
+        ]
+    }
+    function test_folderPathsWrapAround(data) {
+        // PD-10: an open path's child that leaves one end comes back at the
+        // other, whether or not every child fits; a ring carries them round.
+        const shape = shapeOf(data.kind, { x: 0, y: -1 }, data.count, true, { ringSize: "panel" })
+        const rest = layoutOf(shape, data.count, 0)
+        const loop = rest.loop
+        verify(loop >= data.count)
+        const around = layoutOf(shape, data.count, loop)
+        for (let index = 0; index < data.count; ++index) {
+            fuzzyCompare(around.entries[index].x, rest.entries[index].x, 1e-6)
+            fuzzyCompare(around.entries[index].y, rest.entries[index].y, 1e-6)
+            compare(around.entries[index].onTrack, rest.entries[index].onTrack)
+        }
+        const places = rest.entries.filter(function(entry) { return entry.onTrack })
+        if (!shape.closed) {
+            // One step on: the child in the last place leaves past the end and
+            // waits; one step back: the first leaves at the start.
+            const lastShown = rest.entries.reduce(function(found, entry) {
+                return entry.onTrack ? entry.index : found }, -1)
+            const forward = layoutOf(shape, data.count, 1)
+            verify(!forward.entries[lastShown].onTrack)
+            compare(forward.entries[lastShown].visibility, 0)
+            const back = layoutOf(shape, data.count, -1)
+            verify(!back.entries[places[0].index].onTrack)
+            compare(back.entries[places[0].index].visibility, 0)
+            // Far enough on, it comes back in the first place.
+            let steps = 1
+            while (steps <= loop && !(layoutOf(shape, data.count, steps).entries[lastShown].onTrack
+                   && layoutOf(shape, data.count, steps).entries[lastShown].slot < 0.5))
+                ++steps
+            verify(steps < loop, "the child came back at the start")
+            const returned = layoutOf(shape, data.count, steps).entries[lastShown]
+            const firstPlace = layoutOf(shape, data.count, 0).entries[places[0].index]
+            if (data.count > rest.capacity) {
+                fuzzyCompare(returned.x, firstPlace.x, 0.01)
+                fuzzyCompare(returned.y, firstPlace.y, 0.01)
+            }
+            // Half a step: the leaving child is half faded past the end.
+            const half = layoutOf(shape, data.count, 0.5).entries[lastShown]
+            verify(!half.onTrack)
+            fuzzyCompare(half.visibility, 0.5, 1e-6)
+        } else {
+            const step = layoutOf(shape, data.count, 1)
+            for (let index = 0; index < data.count; ++index) {
+                if (!step.entries[index].onTrack || index === data.count - 1) continue
+                const next = rest.entries[index + 1]
+                if (!next.onTrack) continue
+                fuzzyCompare(step.entries[index].x, next.x, 0.01)
+                fuzzyCompare(step.entries[index].y, next.y, 0.01)
+            }
+        }
+    }
+    // A fan's path inside a 700 x 500 view, the folder at (350, 400).
+    function fanView(count, names, properties) {
+        const outward = { x: 0, y: -1 }
+        const fan = LayoutEngine.folderShape("fan", { folder: { x: 350, y: 400 }, outward: outward,
+            iconSize: 48, cellWidth: names ? 108 : 48, cellHeight: names ? 82 : 48, gap: 6,
+            count: count, fanOpening: 90, obstacles: [], obstacleSize: 48,
+            screen: { x: 0, y: 0, width: 700, height: 500 }, outlineMargin: 20 })
+        const values = { width: 700, height: 500, iconSize: 48, shape: "fan", reducedMotion: true,
+            showNames: names, duration: 260, expansionOrigin: Qt.point(350, 400), folderTitle: "Documents",
+            samples: fan.samples, pathPitch: fan.pitch, outline: fan.outline, outlineFilled: true,
+            outlineStyle: LayoutEngine.themeStyle("futuristic", "", 48),
+            snapshot: { status: "ready", entries: rows(count) } }
+        for (const key in properties || {}) values[key] = properties[key]
+        const item = createTemporaryObject(trackComponent, testCase, values)
+        verify(item !== null)
+        item.opened = true
+        selection.target = item; selection.clear()
+        dismissal.target = item; dismissal.clear()
+        return { item: item, fan: fan }
+    }
+    function test_folderWheelGathersNotches() {
+        // PD-16: one notch, or one pitch of touchpad travel, moves one child,
+        // however finely the wheel reports it, scaled by Scroll sensitivity.
+        const view = fanView(24, false)
+        const item = view.item
+        const first = item.track.entries.find(function(entry) { return entry.onTrack })
+        const point = Qt.point(first.x, first.y)
+        for (let event = 0; event < 7; ++event) {
+            mouseWheel(item, point.x, point.y, 0, 15)
+            compare(item.trackOffset, 0, "a fraction of a notch moves nothing yet")
+        }
+        mouseWheel(item, point.x, point.y, 0, 15)
+        compare(item.trackOffset, 1, "eight fine events are one notch")
+        mouseWheel(item, point.x, point.y, 0, -120)
+        compare(item.trackOffset, 0)
+        item.scrollSensitivity = 2
+        mouseWheel(item, point.x, point.y, 0, 120)
+        compare(item.trackOffset, 2, "twice the sensitivity, two children a notch")
+        item.scrollSensitivity = 0.5
+        mouseWheel(item, point.x, point.y, 0, -120)
+        compare(item.trackOffset, 2)
+        mouseWheel(item, point.x, point.y, 0, -120)
+        compare(item.trackOffset, 1, "half the sensitivity, a child every two notches")
+        item.scrollSensitivity = 1
+        compare(item.takeWheel(0, item.pitch / 2), 0)
+        compare(item.takeWheel(0, item.pitch / 2), 1, "a pitch of touchpad travel is one child")
+        compare(item.trackOffset, 2)
+        // Everything fits on a short folder, and it still goes round (PD-10).
+        const small = fanView(3, false).item
+        const before = small.track.entries.map(function(entry) { return entry.onTrack })
+        verify(before.every(function(shown) { return shown }))
+        small.takeWheel(120, 0)
+        compare(small.trackOffset, 1)
+        verify(!small.track.entries[2].onTrack, "the last child left past the end")
+        small.takeWheel(120, 0)
+        verify(small.track.entries[2].onTrack, "and came back at the start")
+        compare(selection.count, 0, "browsing never opens a child")
+    }
+    function test_fanDrawsItsPanelAndKeepsPressesOnIt() {
+        const view = fanView(8, true)
+        const item = view.item
+        const canvas = findChild(item, "folderOutline")
+        verify(canvas.visible, "the fan's sector is drawn")
+        verify(waitForRendering(item))
+        // Inside the sector, between the folder and the arc: no dismissal.
+        const inside = { x: view.fan.apex.x, y: view.fan.apex.y - view.fan.radius / 2 }
+        mousePress(item, inside.x, inside.y)
+        mouseRelease(item, inside.x, inside.y)
+        compare(dismissal.count, 0, "a press on the folder's small panel keeps it open")
+        mouseClick(item, 20, 20)
+        compare(dismissal.count, 1, "a press beside it closes the folder")
+        // The children's hit targets are where they are drawn, on the arc.
+        const shown = item.track.entries.filter(function(entry) { return entry.onTrack })
+        const target = shown[1]
+        mouseMove(item, target.x, target.y)
+        tryCompare(item, "selectedChildId", "child-" + target.index)
+        mouseClick(item, target.x, target.y)
+        compare(selection.count, 1)
+        compare(selection.signalArguments[0][0], "child-" + target.index)
+        // Keys walk past the end and bring each child onto the arc.
+        item.forceActiveFocus()
+        for (let step = 0; step < 7; ++step) keyClick(Qt.Key_Right)
+        compare(item.selectedChildId, "child-7")
+        verify(item.track.entries[7].onTrack)
+        const label = findChild(item, "folder-name-7")
+        verify(label.visible && label.text === "Document 7")
+        item.showNames = false
+        tryCompare(label, "visible", false)
+    }
+    function test_gridScrollsOneRowPerNotch() {
+        const item = popup("grid", 48)
+        const viewport = findChild(item, "folderViewport")
+        const row = item.geometry.cellHeight + 6
+        verify(viewport.contentHeight > viewport.height + 2 * row)
+        mouseWheel(viewport, viewport.width / 2, 30, 0, -120)
+        tryCompare(viewport, "contentY", row)
+        mouseWheel(viewport, viewport.width / 2, 30, 0, -120)
+        tryCompare(viewport, "contentY", 2 * row)
+        mouseWheel(viewport, viewport.width / 2, 30, 0, 120)
+        tryCompare(viewport, "contentY", row)
+        item.scrollSensitivity = 2
+        mouseWheel(viewport, viewport.width / 2, 30, 0, -120)
+        tryCompare(viewport, "contentY", 3 * row)
+        compare(selection.count, 0)
     }
 }

@@ -436,6 +436,12 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         QStringLiteral("acceptDrops"), definition.content.acceptDrops).toBool();
     definition.content.folderLayout = normalized(
         QStringLiteral("folderLayout"), definition.content.folderLayout).toString();
+    definition.content.folderFanOpening = normalized(
+        QStringLiteral("folderFanOpening"), definition.content.folderFanOpening).toInt();
+    definition.content.folderStackLength = normalized(
+        QStringLiteral("folderStackLength"), definition.content.folderStackLength).toInt();
+    definition.content.folderRingSize = normalized(
+        QStringLiteral("folderRingSize"), definition.content.folderRingSize).toString();
     definition.content.folderSpeed = normalized(
         QStringLiteral("folderSpeed"), definition.content.folderSpeed).toInt();
     definition.content.folderEasing = normalized(
@@ -1063,6 +1069,9 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("kdeWidgets"), content.kdeWidgets);
     record.insert(QStringLiteral("acceptDrops"), content.acceptDrops);
     record.insert(QStringLiteral("folderLayout"), content.folderLayout);
+    record.insert(QStringLiteral("folderFanOpening"), content.folderFanOpening);
+    record.insert(QStringLiteral("folderStackLength"), content.folderStackLength);
+    record.insert(QStringLiteral("folderRingSize"), content.folderRingSize);
     record.insert(QStringLiteral("folderSpeed"), content.folderSpeed);
     record.insert(QStringLiteral("folderEasing"), content.folderEasing);
     record.insert(QStringLiteral("folderExpandOnClick"), content.folderExpandOnClick);

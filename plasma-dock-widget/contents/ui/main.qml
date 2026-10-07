@@ -743,11 +743,14 @@ PlasmoidItem {
                 ? panelScene.popupAnchors.entries[folderEntryIndex] : null
             readonly property bool folderExpansionVisible: folderPending || folderExpansion.visible
                 || folderTrack.visible
-            // "Along the dock": a curved free panel can open its folders on
-            // its own curve instead of in a popup.
-            readonly property bool folderAlongDock: root.freeSurface
-                && String(root.configuration.folderLayout || "") === "track"
-                && LayoutEngine.curvedLayout(panelScene.layoutPath)
+            // A free panel opens its folders on a path outside the dock: a
+            // curved one can open them on its own curve, "Along the dock",
+            // and any free panel as a fan, an arc, a stack or a ring
+            // (ADREP-TASK-003). Grid, and every edge panel, open a popup.
+            readonly property string folderLayout: String(root.configuration.folderLayout || "fan")
+            readonly property bool folderOnPath: root.freeSurface
+                && (folderLayout === "track" ? LayoutEngine.curvedLayout(panelScene.layoutPath)
+                    : ["fan", "arc", "stack", "ring"].includes(folderLayout))
             onFolderEntryIndexChanged: if (folderEntryIndex < 0) hideFolderExpansion()
 
             function hideFolderExpansion() {
@@ -766,9 +769,9 @@ PlasmoidItem {
                 function show(snapshot) {
                     if (request !== representation.folderRequest || !folderExpansion.interactionAllowed
                             || representation.folderEntryIndex < 0) return
-                    const host = representation.folderAlongDock ? folderTrack : folderExpansion
+                    const host = representation.folderOnPath ? folderTrack : folderExpansion
                     host.snapshot = snapshot
-                    // A curve that cannot be traced opens the popup instead.
+                    // A path that cannot be traced opens the popup instead.
                     if (!host.openFolder() && host === folderTrack) {
                         folderExpansion.snapshot = snapshot
                         folderExpansion.openFolder()
@@ -811,6 +814,7 @@ PlasmoidItem {
                 reducedMotion: Boolean(root.configuration.reducedMotion)
                 showNames: root.configuration.folderShowNames !== false
                 iconStyleDefinition: root.configuration.iconStyleDefinition || ({})
+                scrollSensitivity: panelScene.folderScrollSensitivity
                 panelEdge: root.freeSurface ? "free" : String(root.configuration.edge || "bottom")
                 outwardNormal: representation.folderAnchorData
                     ? representation.folderAnchorData.outwardNormal : ({ x: 0, y: -1 })
@@ -824,12 +828,30 @@ PlasmoidItem {
             FolderTrackHost {
                 id: folderTrack
                 folderItem: folderIcon
-                trackSamples: function() {
+                folderLayout: representation.folderLayout
+                trackSamples: function(extra) {
                     // One icon and a gap out of the dock, two thirds of the
                     // way around it at most, centred on the folder.
                     return panelScene.folderTrackSamples(representation.folderEntryIndex,
-                        panelScene.layoutGeometry.iconSize + 16, 2 * Math.PI / 3, 91)
+                        panelScene.layoutGeometry.iconSize + 16 + (Number(extra) || 0), 2 * Math.PI / 3, 91)
                 }
+                outwardNormal: representation.folderAnchorData
+                    ? representation.folderAnchorData.outwardNormal : ({ x: 0, y: -1 })
+                obstacles: function() {
+                    return panelScene.folderObstacles(representation.folderEntryIndex)
+                }
+                // A ring the size of the panel needs a dock with a radius.
+                dockCentre: function() {
+                    return LayoutEngine.supportsWholeSceneRotation(panelScene.layoutPath)
+                        ? panelScene.dockCentre() : null
+                }
+                fanOpening: Number(root.configuration.folderFanOpening || 90)
+                stackLength: Number(root.configuration.folderStackLength || 5)
+                ringSize: String(root.configuration.folderRingSize || "small")
+                appearance: panelScene.appearance
+                customColor: panelScene.customColor
+                panelOpacity: panelScene.panelOpacity
+                scrollSensitivity: panelScene.folderScrollSensitivity
                 iconSize: panelScene.layoutGeometry.iconSize
                 folderTitle: String(representation.folderEntry.displayName || "")
                 folderSpeed: Number(root.configuration.folderSpeed || 260)

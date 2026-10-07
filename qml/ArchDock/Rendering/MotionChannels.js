@@ -262,3 +262,37 @@ function maximumDisplacement(profiles, intensity) {
     }
     return largest;
 }
+
+// The four folder motions (PD-15): how far a folder has opened, 0 shut and 1
+// open, at time `t` through its animation, 0 to 1. An opening runs t up and a
+// closing runs it down, so the closing plays the same motion backwards.
+// outCubic, outBack and outElastic are Qt's curves of those names; spring is
+// a damped spring let go from rest: slower to start than any of them, it
+// swings past its place once and settles.
+function folderEasing(name, t) {
+    var time = clamp(number(t, 0), 0, 1);
+    if (time <= 0)
+        return 0;
+    if (time >= 1)
+        return 1;
+    var back = time - 1;
+    switch (String(name || "")) {
+    case "outCubic":
+        return 1 + back * back * back;
+    case "outElastic":
+        // QEasingCurve::OutElastic: amplitude 1, period 0.3.
+        return Math.pow(2, -10 * time)
+            * Math.sin((time - 0.3 / 4) * 2 * Math.PI / 0.3) + 1;
+    case "spring":
+        // x'' + 2 zeta w x' + w^2 x = w^2 from rest: zeta 0.4, within 0.1%
+        // of its place by the end.
+        var damping = 0.4;
+        var decay = 5;
+        var swing = decay / damping * Math.sqrt(1 - damping * damping);
+        return 1 - Math.exp(-decay * time)
+            * (Math.cos(swing * time) + decay / swing * Math.sin(swing * time));
+    default:
+        // QEasingCurve::OutBack: overshoot 1.70158.
+        return 1 + 2.70158 * back * back * back + 1.70158 * back * back;
+    }
+}

@@ -18,6 +18,7 @@ PlasmaCore.Dialog {
     property bool reducedMotion: false
     property bool showNames: true
     property var iconStyleDefinition: ({})
+    property real scrollSensitivity: 1
     property string panelEdge: "bottom"
     property var outwardNormal: ({ x: 0, y: -1 })
     // The clicked folder's drawn icon square, in its panel's scene.
@@ -47,7 +48,11 @@ PlasmaCore.Dialog {
     flags: Qt.Tool | Qt.FramelessWindowHint
     backgroundHints: PlasmaCore.Dialog.NoBackground
     color: "transparent"
-    hideOnWindowDeactivate: true
+    // A press elsewhere takes the keyboard from the folder, as Plasma's own
+    // popups notice it (the contents' handler below); the folder then closes
+    // through its closing motion rather than vanishing at once.
+    hideOnWindowDeactivate: false
+    onActiveChanged: if (!active && requested) closeFolder()
     // openFolder() refuses to request a popup without its attachment.
     visible: requested && interactionAllowed
     visualParent: placementItem
@@ -110,14 +115,21 @@ PlasmaCore.Dialog {
         if (!interactionAllowed || !folderItem || !placementItem) return false
         chooseSide()
         attach()
+        // Opened again while it was closing: it opens again from where it is.
+        if (requested && content.closing) content.reopen()
         requested = true
         requestActivate()
         content.forceActiveFocus()
         return true
     }
-    function closeFolder() { requested = false }
+    // Plays the closing motion, then hides the popup.
+    function closeFolder() {
+        if (!requested) return
+        if (visible && content.opened) content.close()
+        else requested = false
+    }
     onVisibleChanged: if (!visible) requested = false
-    onInteractionAllowedChanged: if (!interactionAllowed) closeFolder()
+    onInteractionAllowedChanged: if (!interactionAllowed) requested = false
     mainItem: FolderExpansion {
         id: content
         width: implicitWidth
@@ -130,6 +142,7 @@ PlasmaCore.Dialog {
         reducedMotion: root.reducedMotion
         showNames: root.showNames
         iconStyleDefinition: root.iconStyleDefinition
+        scrollSensitivity: root.scrollSensitivity
         opened: root.visible
         expansionSide: root.expansionSide
         expansionLean: root.expansionLean
@@ -156,5 +169,7 @@ PlasmaCore.Dialog {
             root.closeFolder()
         }
         onDismissRequested: root.closeFolder()
+        onCloseFinished: root.requested = false
+        onActiveFocusChanged: if (!activeFocus && root.requested && root.visible) root.closeFolder()
     }
 }

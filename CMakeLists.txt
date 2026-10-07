@@ -1405,6 +1405,15 @@ if(BUILD_TESTING)
   set_tests_properties(folder-expansion-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+  # ADREP-TASK-003: the four folder easings are four different motions in
+  # every folder layout, opening and closing, over the folder duration.
+  add_test(NAME folder-easing-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+      -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+      -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_FolderEasing.qml)
+  set_tests_properties(folder-easing-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
   add_test(
     NAME live-panel-preview-test
     COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
@@ -1594,11 +1603,14 @@ if(BUILD_TESTING)
             ARCHDOCK_RENDERING_FOLDERS=1
             bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
   set_tests_properties(folder-interaction-smoke
-    PROPERTIES DEPENDS window-interaction-smoke TIMEOUT 120)
+    PROPERTIES DEPENDS window-interaction-smoke TIMEOUT 300)
 
-  # Owner-visible folder placement on a curved free panel, baked and in true
-  # 3D: 35 real openings at five positions of the ring, each checked against
-  # the clicked icon, the dock's centre and the dock's other icons.
+  # Owner-visible folder placement on a curved free panel, flat, baked and in
+  # true 3D: 90 real openings, every folder layout at five positions of the
+  # ring, each checked against the clicked icon, the dock's centre and the
+  # dock's other icons; the owner's fan, arc, stack and ring by their own
+  # geometry (ADREP-TASK-003). A screen the size of the owner's leaves them
+  # room.
   add_test(NAME folder-anchor-smoke
     COMMAND ${CMAKE_COMMAND} -E env
             ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
@@ -1607,9 +1619,11 @@ if(BUILD_TESTING)
             ARCHDOCK_RENDERING_INTERACTIONS=1
             ARCHDOCK_RENDERING_FOLDERS=1
             ARCHDOCK_RENDERING_FOLDER_ANCHORS=1
+            ARCHDOCK_RENDERING_SCREEN_WIDTH=1920
+            ARCHDOCK_RENDERING_SCREEN_HEIGHT=1080
             bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
   set_tests_properties(folder-anchor-smoke
-    PROPERTIES DEPENDS folder-interaction-smoke RUN_SERIAL TRUE TIMEOUT 240)
+    PROPERTIES DEPENDS folder-interaction-smoke RUN_SERIAL TRUE TIMEOUT 900)
 
   # Every opening mechanism a panel offers, per renderer: the drawn panel
   # visibly collapses and comes back; unoffered mechanisms are refused.

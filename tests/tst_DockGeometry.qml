@@ -1326,7 +1326,8 @@ TestCase {
                    "a tilted track's children stand on its ellipse")
 
         // Two thirds of a circle of radius 200 holds six children 70 apart.
-        const crowded = LayoutEngine.folderTrackLayout(curve(200, 200, 181), 20, 70, 3)
+        // Moved three places back, the fourth to ninth children stand on it.
+        const crowded = LayoutEngine.folderTrackLayout(curve(200, 200, 181), 20, 70, -3)
         compare(crowded.capacity, 6)
         verify(crowded.windowed)
         compare(crowded.maximumOffset, 14)
@@ -1334,8 +1335,16 @@ TestCase {
         compare(crowded.entries[2].visibility, 0)
         verify(crowded.entries[3].onTrack && crowded.entries[8].onTrack)
         compare(crowded.entries[9].onTrack, false)
-        compare(LayoutEngine.folderTrackLayout(curve(200, 200, 181), 20, 70, 99).entries[19].onTrack, true,
-                "the offset stops at the last child")
+        // Contract change, ADREP-TASK-003 (PD-10): the travel no longer stops
+        // at the last child; the folder's children come round, so the last
+        // one stands in the first place one step on from rest.
+        const end = LayoutEngine.folderTrackLayout(curve(200, 200, 181), 20, 70, -14)
+        compare(end.entries[19].onTrack, true, "the last child reaches the end of the curve")
+        const round = LayoutEngine.folderTrackLayout(curve(200, 200, 181), 20, 70, 1)
+        compare(round.entries[19].onTrack, true, "and comes round to the first place")
+        const rest = LayoutEngine.folderTrackLayout(curve(200, 200, 181), 20, 70, 0)
+        fuzzy(round.entries[19].x, rest.entries[0].x, "the last child stands where the first did")
+        fuzzy(round.entries[19].y, rest.entries[0].y, "the last child stands where the first did")
         compare(LayoutEngine.folderTrackLayout([], 5, 70, 0).entries.length, 0)
         compare(LayoutEngine.folderTrackLayout(curve(200, 200, 181), 0, 70, 0).entries.length, 0)
         verify(LayoutEngine.curvedLayout("ring") && LayoutEngine.curvedLayout("arc")

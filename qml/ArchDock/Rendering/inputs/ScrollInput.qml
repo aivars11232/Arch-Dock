@@ -8,6 +8,15 @@ Item {
     property bool horizontalOnly: false
     property bool consumeAtBounds: true
     property var excludedItems: []
+    // How far one wheel notch (120 angle units) scrolls each way, and how many
+    // pixels one pixel of touchpad travel scrolls; Scroll sensitivity scales
+    // both (PD-16).
+    readonly property real lineNotch: 20 * Qt.styleHints.wheelScrollLines
+    property real verticalNotch: lineNotch
+    property real horizontalNotch: lineNotch
+    property real verticalPixelScale: 1
+    property real horizontalPixelScale: 1
+    property real sensitivity: 1
     anchors.fill: parent
     z: 10000
 
@@ -31,11 +40,13 @@ Item {
     function scroll(event) {
         const pixels = event.pixelDelta
         const angles = event.angleDelta
-        const step = 20 * Qt.styleHints.wheelScrollLines / 120
-        let dx = pixels.x !== 0 ? -pixels.x : -angles.x * step
-        let dy = pixels.y !== 0 ? -pixels.y : -angles.y * step
+        const scale = Math.max(0.25, Math.min(4, Number(sensitivity) || 1))
+        let dx = (pixels.x !== 0 ? -pixels.x * horizontalPixelScale
+                                 : -angles.x * horizontalNotch / 120) * scale
+        let dy = (pixels.y !== 0 ? -pixels.y * verticalPixelScale
+                                 : -angles.y * verticalNotch / 120) * scale
         if ((event.modifiers & Qt.ShiftModifier) && dx === 0) {
-            dx = dy
+            dx = dy / Math.max(1e-6, verticalNotch) * horizontalNotch
             dy = 0
         }
         if (horizontalOnly)

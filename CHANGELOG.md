@@ -253,6 +253,23 @@ The proposed `v0.1.1` tag and publication need separate authorization.
 - Fan, arc, semicircle and radial panels offer Direction (Up, Down, Left,
   Right) on Layout, beside the fine Layout angle.
 - A spiral panel's line is drawn where its icons stand.
+- A free panel's folders open in the shapes the owner defined
+  (ADREP-TASK-003): Fan is a slice-shaped small panel in the panel's look, its
+  point at the folder and the children on its arc (Fan opening 40 to 160
+  degrees); Stack is a straight line out from the folder (Stack length 2 to
+  12); Arc stands the children at one distance from the folder, facing it;
+  Ring is a second circle beside the folder (Ring size Small or Same as panel).
+  Each opens along the way the folder faces out of the dock and keeps clear of
+  the dock's icons; the three settings appear only for their own layout.
+- Folder scrolling moves one child, or one Grid row, per wheel notch,
+  however finely the wheel or touchpad reports it; along a path a child that
+  leaves one end comes back at the other. On free panels with a curved layout
+  Scroll sensitivity scales it. Along the dock moved one child per wheel event
+  before, far too fast; Grid moved 60 pixels a notch, less than a row.
+- Folder easing gives four different motions, opening and closing: spring is
+  now a damped spring, not the same curve as outElastic, and a folder folds
+  back into its icon when it closes. Reduced motion still opens and closes
+  folders at once. Edge-panel folders keep their popup shapes.
 - Runtime corrections and candidate gates are recorded in
   [the release checklist](docs/RELEASE_CHECKLIST.md) and
   [corrective report](docs/POST_TASK_0045_CORRECTIVE_REPORT.md).

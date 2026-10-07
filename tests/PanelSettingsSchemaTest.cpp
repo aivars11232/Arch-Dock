@@ -118,8 +118,38 @@ void PanelSettingsSchemaTest::folderSettingsPreserveLegacyValues()
     }
     for (const QString &key : {QStringLiteral("folderLayout"), QStringLiteral("folderSpeed"),
          QStringLiteral("folderEasing"), QStringLiteral("folderExpandOnClick"),
-         QStringLiteral("folderShowNames")})
+         QStringLiteral("folderShowNames"), QStringLiteral("folderFanOpening"),
+         QStringLiteral("folderStackLength"), QStringLiteral("folderRingSize")})
         QVERIFY(PanelSettingsSchema::isTransactionPanelField(key));
+
+    // ADREP-TASK-003: a free panel's folder shapes. A saved panel without
+    // them opens a 90 degree fan, a stack of five and a small ring.
+    QCOMPARE(legacy->content.folderFanOpening, 90);
+    QCOMPARE(legacy->content.folderStackLength, 5);
+    QCOMPARE(legacy->content.folderRingSize, QStringLiteral("small"));
+    const auto shapes = PanelDefinition::fromLegacyMap({
+        {QStringLiteral("id"), QStringLiteral("folder-shapes")},
+        {QStringLiteral("folderFanOpening"), 400},
+        {QStringLiteral("folderStackLength"), 1},
+        {QStringLiteral("folderRingSize"), QStringLiteral("PANEL")}});
+    QVERIFY(shapes.has_value());
+    QCOMPARE(shapes->content.folderFanOpening, 160);
+    QCOMPARE(shapes->content.folderStackLength, 2);
+    QCOMPARE(shapes->content.folderRingSize, QStringLiteral("panel"));
+    const auto shapesBack = PanelDefinition::fromLegacyMap(shapes->toPersistedMap());
+    QVERIFY(shapesBack.has_value());
+    QCOMPARE(shapesBack->content.folderFanOpening, 160);
+    QCOMPARE(shapesBack->content.folderStackLength, 2);
+    QCOMPARE(shapesBack->content.folderRingSize, QStringLiteral("panel"));
+    const auto narrow = PanelDefinition::fromLegacyMap({
+        {QStringLiteral("id"), QStringLiteral("folder-narrow")},
+        {QStringLiteral("folderFanOpening"), 10},
+        {QStringLiteral("folderStackLength"), 99},
+        {QStringLiteral("folderRingSize"), QStringLiteral("huge")}});
+    QVERIFY(narrow.has_value());
+    QCOMPARE(narrow->content.folderFanOpening, 40);
+    QCOMPARE(narrow->content.folderStackLength, 12);
+    QCOMPARE(narrow->content.folderRingSize, QStringLiteral("small"));
 }
 
 void PanelSettingsSchemaTest::sceneQualityIsBoundedAndReversible()

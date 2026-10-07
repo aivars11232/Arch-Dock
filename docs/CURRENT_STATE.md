@@ -1,5 +1,45 @@
 # Arch Dock current state
 
+<!-- ADREP_TASK_003_BEGIN -->
+## ADREP-TASK-003 — Folder layouts as the owner defines them (2026-10-07)
+
+The third task of the owner's video audit (package `/mnt/F/Arch Dock LCL
+repairs/`) is implemented and verified; its report is
+[docs/repairs/ADREP-TASK-003.md](repairs/ADREP-TASK-003.md). Nothing was
+packaged or installed: the PC still runs 0.1.1-11, and the package for this
+work comes with ADREP-TASK-005.
+
+- A free panel opens Fan, Arc, Stack and Ring on a path of their own outside
+  the dock, in the transparent window Along the dock already used
+  (`FolderTrackHost`, `FolderTrack`); `LayoutEngine.folderShape()` builds them
+  from the folder and the way it faces out of the dock: a sector drawn in the
+  panel's look (Fan opening 40 to 160 degrees), an arc centred on the folder,
+  a straight stack (Stack length 2 to 12) and a second ring (Small or Same as
+  panel). They keep clear of the dock's icons, and where the screen is short
+  they first hold fewer children, then turn. Grid stays the popup; edge panels
+  keep their popups.
+- One path model for all of them and Along the dock
+  (`LayoutEngine.folderTrackLayout()`): open paths are a loop one slot longer
+  than their places, so a child that leaves one end comes back at the other;
+  rings carry their children round.
+- The wheel gathers into whole steps: one notch, or one pitch of touchpad
+  travel, per child, one row per notch in Grid, times Scroll sensitivity on
+  free panels with a curved layout.
+- `MotionChannels.folderEasing()`: outCubic, outBack, outElastic and a damped
+  spring; folders open on a linear clock over their duration and close by
+  running it back.
+- Along the dock steps further out of a tilted dock where a child would stand
+  on one of its icons.
+- New test `folder-easing-test`; `folder-anchor-smoke` runs every layout on
+  three looks (90 openings) with neighbours on the dock;
+  `folder-interaction-smoke` covers every layout on both panel kinds,
+  Expand folders on click included.
+- Complete suite: 117 of 117 in one serial run on the final source (1548 s).
+- Open: a Grid popup on a tilted baked ring can cover a neighbouring icon.
+
+Evidence: `build-codex-adrep/evidence/ADREP-TASK-003/`.
+<!-- ADREP_TASK_003_END -->
+
 <!-- ADREP_TASK_002_BEGIN -->
 ## ADREP-TASK-002 — Free-panel icons travel along the panel's own path (2026-10-07)
 

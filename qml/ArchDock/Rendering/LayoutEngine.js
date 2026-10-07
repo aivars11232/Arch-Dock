@@ -1475,14 +1475,29 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
     };
 }
 
-// "Along the dock": a folder's contents stand on a curve beside the dock,
-// centred on the folder. `samples` trace that curve on screen, in order, as
-// { x, y, scale }; the folder faces the middle sample. Neighbours keep `pitch`
-// pixels apart along the curve. When they do not all fit, `offset` children
-// have moved along it, and a child beyond either end fades out, as on an
-// overcrowded dock; it is on the track, and may be pressed, only between the
-// ends.
-function folderTrackLayout(samples, count, pitch, offset) {
+// A free panel's folder contents stand on a path (ADREP-TASK-003): "Along
+// the dock" is the dock's own curve beside the folder, the other shapes come
+// from folderShape(). `samples` trace the path on screen, in order, as
+// { x, y, scale }. Neighbours keep `pitch` pixels apart along it.
+//
+// An open path holds as many slots as fit, at most `options.capacity`,
+// centred on its middle sample - the folder faces it - or, with
+// `options.start` "start", from its first sample. Fewer children than slots
+// stand centred among them. `offset` moves every child along the path by
+// that many slots (PD-10): the wheel and keys set it; it is never saved. The
+// path is a loop one slot longer than it is, or as long as the folder, so a
+// child that leaves one end fades out a pitch past it and comes back at the
+// other end, whether or not every child fits.
+//
+// A closed path (`options.closed`, a ring) spreads its children evenly round
+// it. A folder longer than the ring holds shows that many at once; the others
+// come in where the path starts as one leaves there.
+//
+// Only a child wholly on the path is `onTrack`, which is what may be drawn
+// solid and pressed; `visibility` fades one that is leaving or arriving.
+function folderTrackLayout(samples, count, pitch, offset, options) {
+    const settings = options || {};
+    const closed = settings.closed === true;
     // A list read back from a QML property is indexable but not an Array.
     const points = [];
     const source = samples || [];
@@ -1492,23 +1507,26 @@ function folderTrackLayout(samples, count, pitch, offset) {
             points.push(sample);
     }
     const total = clamp(Math.floor(finite(count, 0)), 0, 48);
-    const empty = { capacity: 0, windowed: false, maximumOffset: 0, entries: [] };
+    const empty = { capacity: 0, loop: 0, closed: closed, windowed: false,
+                    maximumOffset: 0, entries: [] };
     if (points.length < 2 || total === 0)
         return empty;
+    if (closed)
+        points.push(points[0]);
     const lengths = [0];
     for (let index = 1; index < points.length; ++index)
         lengths.push(lengths[index - 1] + Math.hypot(points[index].x - points[index - 1].x,
                                                      points[index].y - points[index - 1].y));
     const length = lengths[lengths.length - 1];
-    const middle = lengths[Math.floor((points.length - 1) / 2)];
+    if (!(length > 0))
+        return empty;
     const spacing = Math.max(1, finite(pitch, 1));
-    const reach = Math.min(middle, length - middle);
-    const capacity = Math.max(1, Math.min(total, Math.floor(2 * reach / spacing) + 1));
-    const maximumOffset = Math.max(0, total - capacity);
-    const shift = clamp(finite(offset, 0), 0, maximumOffset);
-    const first = middle - (capacity - 1) * spacing / 2;
+    const travel = finite(offset, 0);
+    const limit = Math.floor(finite(settings.capacity, 0));
+    // The point `position` pixels along the path. Past an open path's ends a
+    // child carries on the way the path was going there.
     function pointAt(position) {
-        const target = clamp(position, 0, length);
+        const target = closed ? wrapped(position, length) : position;
         let segment = 0;
         while (segment < lengths.length - 2 && lengths[segment + 1] < target)
             ++segment;
@@ -1517,18 +1535,360 @@ function folderTrackLayout(samples, count, pitch, offset) {
         const a = points[segment], b = points[segment + 1];
         const scaleA = finite(a.scale, 1), scaleB = finite(b.scale, 1);
         return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t,
-                 scale: scaleA + (scaleB - scaleA) * t };
+                 scale: scaleA + (scaleB - scaleA) * clamp(t, 0, 1) };
     }
     const entries = [];
-    for (let index = 0; index < total; ++index) {
-        const slot = index - shift;
-        const beyond = Math.max(0, -slot, slot - (capacity - 1));
-        const point = pointAt(first + clamp(slot, -1, capacity) * spacing);
-        entries.push({ index: index, x: point.x, y: point.y, scale: point.scale,
-                       onTrack: beyond < 1e-6, visibility: clamp(1 - beyond, 0, 1) });
+    if (closed) {
+        // A sampled curve is a hair shorter than the curve it traces.
+        const fit = Math.max(1, Math.floor(length / spacing + 0.01));
+        const capacity = Math.max(1, Math.min(total, fit, limit > 0 ? limit : fit));
+        const step = length / capacity;
+        for (let index = 0; index < total; ++index) {
+            const position = wrapped(index + travel, total);
+            let slot = position;
+            let visibility = 1;
+            if (total > capacity && position > capacity - 1) {
+                if (position < capacity) {
+                    // Leaving: on towards the start, fading out.
+                    visibility = capacity - position;
+                } else if (position > total - 1) {
+                    // Arriving: from one slot before the start, fading in.
+                    slot = position - total;
+                    visibility = 1 - (total - position);
+                } else {
+                    slot = 0;
+                    visibility = 0;
+                }
+            }
+            const point = pointAt(slot * step);
+            entries.push({ index: index, x: point.x, y: point.y, scale: point.scale, slot: slot,
+                           position: position,
+                           onTrack: total <= capacity || position <= capacity - 1 + 1e-9,
+                           visibility: clamp(visibility, 0, 1) });
+        }
+        return { capacity: capacity, loop: total, closed: true, windowed: total > capacity,
+                 maximumOffset: Math.max(0, total - capacity), spacing: step, entries: entries };
     }
-    return { capacity: capacity, windowed: total > capacity,
-             maximumOffset: maximumOffset, entries: entries };
+    const fromStart = settings.start === "start";
+    const middle = fromStart ? 0 : lengths[Math.floor((points.length - 1) / 2)];
+    const usable = fromStart ? length : 2 * Math.min(middle, length - middle);
+    let capacity = Math.floor(usable / spacing + 0.01) + 1;
+    if (limit > 0)
+        capacity = Math.min(capacity, limit);
+    // A short folder stands centred on whole slots, so a child never rests
+    // half past an end.
+    if (!fromStart && total < capacity)
+        capacity -= (capacity - total) % 2;
+    capacity = Math.max(1, capacity);
+    const first = fromStart ? 0 : middle - (capacity - 1) * spacing / 2;
+    const loop = Math.max(total, capacity + 1);
+    const rest = fromStart || total >= capacity ? 0 : (capacity - total) / 2;
+    for (let index = 0; index < total; ++index) {
+        const position = wrapped(index + rest + travel, loop);
+        let slot = position;
+        let visibility = 1;
+        if (position > capacity - 1) {
+            if (position < capacity) {
+                visibility = capacity - position;
+            } else if (position > loop - 1) {
+                slot = position - loop;
+                visibility = 1 - (loop - position);
+            } else {
+                // Waiting off the path for its turn: not drawn, kept at the
+                // last slot.
+                slot = capacity - 1;
+                visibility = 0;
+            }
+        }
+        const point = pointAt(first + slot * spacing);
+        entries.push({ index: index, x: point.x, y: point.y, scale: point.scale, slot: slot,
+                       position: position, onTrack: position <= capacity - 1 + 1e-9,
+                       visibility: clamp(visibility, 0, 1) });
+    }
+    return { capacity: capacity, loop: loop, closed: false, windowed: total > capacity,
+             maximumOffset: Math.max(0, total - capacity), spacing: spacing, entries: entries,
+             // Where a child leaving or arriving stands as it fades out.
+             ends: [pointAt(first - spacing), pointAt(first + capacity * spacing)] };
+}
+
+// The travel that brings child `index` onto the path with the least motion:
+// the given travel when it is on already, otherwise the nearer of moving it
+// to the first or the last slot.
+function folderTravelTo(layout, index, travel) {
+    const track = layout || {};
+    const current = finite(travel, 0);
+    const entry = (track.entries || [])[index];
+    if (!entry || entry.onTrack === true || !(track.loop > 0))
+        return current;
+    const forward = track.loop - entry.position;
+    const backward = entry.position - (Math.max(1, finite(track.capacity, 1)) - 1);
+    return forward <= backward ? current + forward : current - backward;
+}
+
+// One rectangle round all of `rectangles`, each { x, y, width, height }.
+function unitedBounds(rectangles) {
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    for (const rectangle of rectangles) {
+        left = Math.min(left, rectangle.x);
+        top = Math.min(top, rectangle.y);
+        right = Math.max(right, rectangle.x + rectangle.width);
+        bottom = Math.max(bottom, rectangle.y + rectangle.height);
+    }
+    return isFinite(left) ? { x: left, y: top, width: right - left, height: bottom - top }
+                          : { x: 0, y: 0, width: 0, height: 0 };
+}
+
+// The free-panel folder shapes other than "Along the dock" (ADREP-TASK-003),
+// in screen coordinates: the path the children stand on (for
+// folderTrackLayout), the outline drawn under them and the room they need.
+//
+//   fan    PD-11  a sector: its apex just outside the folder, its edges
+//                 `fanOpening` degrees apart about the outward direction,
+//                 the children on its arc.
+//   arc    PD-13  the children at one distance from the folder, facing it,
+//                 symmetric about the outward direction.
+//   stack  PD-12  a straight line from the folder outward, `stackLength`
+//                 children at a time.
+//   ring   PD-14  a circle beside the folder along the outward direction,
+//                 "small" to fit the children or "panel" at the dock's radius.
+//
+// A shape opens along the folder's outward direction, `outward`, and turns
+// away from it only as far as the screen requires. Its radius - a ring's
+// distance - grows until no place a child passes through covers an icon of
+// the dock (`obstacles`, centres of `obstacleSize` squares) or the folder.
+// `cellWidth` and `cellHeight` are one child with its name, its icon
+// `iconSize` square at the top; `outlineMargin` is how far the drawn outline
+// reaches beyond its line.
+function folderShape(shape, options) {
+    const value = options || {};
+    const kind = ["fan", "arc", "stack", "ring"].includes(shape) ? shape : "fan";
+    const folder = { x: finite(value.folder && value.folder.x, 0),
+                     y: finite(value.folder && value.folder.y, 0) };
+    const facing = { x: finite(value.outward && value.outward.x, 0),
+                     y: finite(value.outward && value.outward.y, -1) };
+    const facingLength = Math.hypot(facing.x, facing.y);
+    const outward = facingLength > 1e-6
+        ? { x: facing.x / facingLength, y: facing.y / facingLength } : { x: 0, y: -1 };
+    const size = clamp(finite(value.iconSize, 48), 8, 256);
+    const cellWidth = Math.max(size, finite(value.cellWidth, size));
+    const cellHeight = Math.max(size, finite(value.cellHeight, size));
+    const gap = clamp(finite(value.gap, 6), 0, 64);
+    const count = clamp(Math.floor(finite(value.count, 0)), 0, 48);
+    const named = cellWidth > size + 0.5 || cellHeight > size + 0.5;
+    // Neighbours on a curve stand a name's diagonal apart, so no two names
+    // touch whichever way the curve runs; icons alone keep the dock's pitch.
+    const curvePitch = named ? Math.hypot(cellWidth, cellHeight) + gap : size + 14;
+    const obstacleSize = Math.max(0, finite(value.obstacleSize, size));
+    const obstacles = [{ x: folder.x, y: folder.y }];
+    for (const point of value.obstacles || [])
+        if (point && isFinite(point.x) && isFinite(point.y))
+            obstacles.push({ x: Number(point.x), y: Number(point.y) });
+    const outlineMargin = Math.max(0, finite(value.outlineMargin, 0));
+    // The screen, less the margin the window keeps round the shape.
+    const inset = Math.max(0, finite(value.screenMargin, 0));
+    const screen = value.screen && finite(value.screen.width, 0) > 2 * inset
+        ? { x: finite(value.screen.x, 0) + inset, y: finite(value.screen.y, 0) + inset,
+            width: finite(value.screen.width, 0) - 2 * inset,
+            height: finite(value.screen.height, 0) - 2 * inset }
+        : null;
+
+    function cell(point) {
+        return { x: point.x - cellWidth / 2, y: point.y - size / 2,
+                 width: cellWidth, height: cellHeight };
+    }
+    // Whether a child standing at `point` keeps clear of every dock icon.
+    function clear(point) {
+        const child = cell(point);
+        const reach = obstacleSize / 2 + 4;
+        for (const obstacle of obstacles) {
+            if (child.x < obstacle.x + reach && child.x + child.width > obstacle.x - reach
+                    && child.y < obstacle.y + reach && child.y + child.height > obstacle.y - reach)
+                return false;
+        }
+        return true;
+    }
+    function turned(direction, radians) {
+        const c = Math.cos(radians), s = Math.sin(radians);
+        return { x: direction.x * c - direction.y * s, y: direction.x * s + direction.y * c };
+    }
+    function along(origin, direction, distance) {
+        return { x: origin.x + direction.x * distance, y: origin.y + direction.y * distance };
+    }
+    // How far a square of `side`, or a child's cell, reaches from its
+    // centre along `direction`.
+    function squareReach(side, direction) {
+        return side / 2 / Math.max(Math.abs(direction.x), Math.abs(direction.y), 1e-6);
+    }
+    // An arc of `radius` about `centre`, `span` radians wide about `direction`.
+    function arcSamples(centre, direction, radius, span, steps) {
+        const result = [];
+        for (let index = 0; index <= steps; ++index)
+            result.push(along(centre, turned(direction, -span / 2 + span * index / steps), radius));
+        return result;
+    }
+    function allClear(points) {
+        for (const point of points)
+            if (!clear(point)) return false;
+        return true;
+    }
+    const largest = 640;
+    // How many children a small ring holds at once: all of them, then three
+    // quarters, half, a third and a quarter where the screen is short, never
+    // fewer than three. A ring the size of the panel keeps its radius.
+    const ringShown = [];
+    if (kind === "ring" && value.ringSize !== "panel") {
+        for (const share of [1, 0.75, 0.5, 1 / 3, 0.25]) {
+            const shown = Math.max(Math.min(count, 3), Math.ceil(count * share));
+            if (ringShown.indexOf(shown) < 0)
+                ringShown.push(shown);
+        }
+    }
+    if (ringShown.length === 0)
+        ringShown.push(count);
+
+    // `fewer` children than it would show at once, where the screen is short.
+    function build(direction, fewer) {
+        const result = { shape: kind, direction: direction, closed: false, start: "centre",
+                         pitch: curvePitch, capacity: 0, outline: null };
+        if (kind === "fan") {
+            const opening = clamp(finite(value.fanOpening, 90), 40, 160) * Math.PI / 180;
+            const apex = along(folder, direction, squareReach(size, direction) + 6);
+            // A small panel: a few children at once, more the wider it opens.
+            const shown = Math.max(2, Math.min(count, clamp(Math.round(
+                opening / (Math.PI / 2) * (named ? 4 : 6)), 3, 12)) - fewer);
+            let radius = Math.max(curvePitch, 1.2 * size, (shown - 1) * curvePitch / opening);
+            while (radius < largest && !allClear(arcSamples(apex, direction, radius, opening, 32)))
+                radius += 4;
+            const arc = arcSamples(apex, direction, radius, opening, 48);
+            result.samples = arc;
+            result.outline = { closed: true, points: [apex].concat(arc) };
+            result.apex = apex;
+            result.radius = radius;
+            result.opening = opening * 180 / Math.PI;
+        } else if (kind === "arc") {
+            const span = 150 * Math.PI / 180;
+            const shown = Math.max(2, Math.min(count, named ? 5 : 7) - fewer);
+            let radius = Math.max(1.6 * size, (shown - 1) * curvePitch / span);
+            while (radius < largest && !allClear(arcSamples(folder, direction, radius, span, 32)))
+                radius += 4;
+            result.samples = arcSamples(folder, direction, radius, span, 48);
+            result.centre = folder;
+            result.radius = radius;
+            result.span = 150;
+        } else if (kind === "stack") {
+            // Neighbours along the line just clear each other's cells.
+            const pitch = Math.min(cellWidth / Math.max(Math.abs(direction.x), 1e-6),
+                                   cellHeight / Math.max(Math.abs(direction.y), 1e-6)) + gap;
+            const length = clamp(Math.round(finite(value.stackLength, 5)), 2, 12);
+            const slots = Math.max(1, Math.min(count, length) - fewer);
+            let distance = squareReach(size, direction);
+            while (distance < largest && !allClear([along(folder, direction, distance)]))
+                distance += 2;
+            const line = [];
+            for (let index = 0; index < Math.max(2, slots); ++index)
+                line.push(along(folder, direction, distance + index * pitch));
+            while (distance < largest && !allClear(line)) {
+                distance += 4;
+                for (let index = 0; index < line.length; ++index)
+                    line[index] = along(folder, direction, distance + index * pitch);
+            }
+            result.samples = line;
+            result.start = "start";
+            result.pitch = pitch;
+            result.capacity = slots;
+            result.stackLength = length;
+            result.first = line[0];
+        } else {
+            const panelRadius = Math.max(0, finite(value.panelRadius, 0));
+            // Neighbours on a circle stand a chord apart, a little less than
+            // the arc between them: the small ring is just wide enough for
+            // that chord to be a pitch between all its children, or between
+            // fewer of them where the screen is short.
+            const shown = ringShown[Math.min(fewer, ringShown.length - 1)];
+            const fitting = Math.max(1.2 * size, shown >= 2
+                ? curvePitch / (2 * Math.sin(Math.PI / shown)) : 0);
+            const radius = Math.min(largest / 2, value.ringSize === "panel" && panelRadius > 0
+                ? Math.max(1.2 * size, panelRadius) : fitting);
+            // The circle from its point nearest the folder, clockwise.
+            function circle(distance) {
+                const centre = along(folder, direction, distance);
+                const back = { x: -direction.x, y: -direction.y };
+                const points = [];
+                for (let index = 0; index < 96; ++index)
+                    points.push(along(centre, turned(back, 2 * Math.PI * index / 96), radius));
+                return { centre: centre, points: points };
+            }
+            let distance = squareReach(size, direction) + gap + radius;
+            let ring = circle(distance);
+            while (distance < largest + radius && !allClear(ring.points)) {
+                distance += 4;
+                ring = circle(distance);
+            }
+            result.samples = ring.points;
+            result.closed = true;
+            // As many children at once as keep a chord of a pitch apart.
+            result.capacity = Math.max(1, Math.floor(Math.PI / Math.asin(
+                Math.min(1, curvePitch / (2 * radius))) + 1e-6));
+            result.outline = { closed: true, points: ring.points };
+            result.centre = ring.centre;
+            result.radius = radius;
+            result.ringSize = value.ringSize === "panel" && panelRadius > 0 ? "panel" : "small";
+        }
+        // The room it needs: every place a child passes through, a pitch past
+        // an open path's ends where one fades, the outline and the folder.
+        const places = result.samples.slice();
+        if (!result.closed) {
+            const s = result.samples;
+            const head = { x: s[0].x - s[1].x, y: s[0].y - s[1].y };
+            const tail = { x: s[s.length - 1].x - s[s.length - 2].x, y: s[s.length - 1].y - s[s.length - 2].y };
+            const headLength = Math.hypot(head.x, head.y) || 1, tailLength = Math.hypot(tail.x, tail.y) || 1;
+            places.push(along(s[0], { x: head.x / headLength, y: head.y / headLength }, result.pitch));
+            places.push(along(s[s.length - 1], { x: tail.x / tailLength, y: tail.y / tailLength }, result.pitch));
+        }
+        const rectangles = places.map(cell);
+        if (result.outline)
+            for (const point of result.outline.points)
+                rectangles.push({ x: point.x - outlineMargin, y: point.y - outlineMargin,
+                                  width: 2 * outlineMargin, height: 2 * outlineMargin });
+        rectangles.push({ x: folder.x - size / 2, y: folder.y - size / 2, width: size, height: size });
+        result.bounds = unitedBounds(rectangles);
+        return result;
+    }
+
+    function placed(degrees, fewer) {
+        const candidate = build(turned(outward, degrees * Math.PI / 180), fewer);
+        candidate.turn = degrees;
+        candidate.fewer = fewer;
+        candidate.overflow = 0;
+        if (screen) {
+            const b = candidate.bounds;
+            const inside = Math.max(0, Math.min(b.x + b.width, screen.x + screen.width) - Math.max(b.x, screen.x))
+                * Math.max(0, Math.min(b.y + b.height, screen.y + screen.height) - Math.max(b.y, screen.y));
+            candidate.overflow = b.width * b.height - inside;
+        }
+        return candidate;
+    }
+    // Along the outward direction where the screen has room: a fan, an arc
+    // or a stack first holds fewer children at once, then the shape turns a
+    // little more each time towards either side, and only last opens the
+    // other way.
+    const shrinks = [0];
+    const fewest = kind === "fan" || kind === "arc" ? 4
+        : kind === "stack" ? clamp(Math.round(finite(value.stackLength, 5)), 2, 12) - 2
+        : ringShown.length - 1;
+    for (let fewer = 1; fewer <= fewest; ++fewer)
+        shrinks.push(fewer);
+    let best = null;
+    for (const degrees of [0, 15, -15, 30, -30, 45, -45, 60, -60, 75, -75, 90, -90, 180]) {
+        for (const fewer of shrinks) {
+            const candidate = placed(degrees, fewer);
+            if (candidate.overflow <= 0.5)
+                return candidate;
+            if (!best || candidate.overflow < best.overflow - 0.5)
+                best = candidate;
+        }
+    }
+    return best;
 }
 
 // Length of the half ellipse x = radiusX cos(t), y = radiusY sin(t) between

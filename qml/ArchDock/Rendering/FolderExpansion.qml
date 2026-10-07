@@ -14,8 +14,15 @@ QQC2.Pane {
     property bool opened: true
     property bool showNames: true
     property point expansionOrigin: Qt.point(width / 2, height)
-    property real openingProgress: opened ? 1 : 0
+    // An opening runs this phase from 0 to 1 over the folder animation, a
+    // closing from 1 to 0; `openingProgress` is the chosen motion at that
+    // time, so a closing plays the opening backwards (PD-15).
+    property real openingPhase: opened ? 1 : 0
+    readonly property real openingProgress: MotionChannels.folderEasing(easing, openingPhase)
     readonly property bool openingInProgress: openingAnimation.running
+    property bool closing: false
+    // Wheel notches, or rows of touchpad travel, per row or child (PD-16).
+    property real scrollSensitivity: 1
     property var iconStyleDefinition: ({})
     property int maximumWidth: 640
     property int maximumHeight: 420
@@ -47,6 +54,13 @@ QQC2.Pane {
     // A compact Fan or Arc holds as many children as stand on its half circle
     // and moves the rest along it: one wheel notch is one child.
     readonly property real pathScrollStep: 20 * Math.max(1, Qt.styleHints.wheelScrollLines)
+    // How far one wheel notch scrolls (PD-16): one child along a path or a
+    // stack, one row of a grid or a ring, one column sideways.
+    readonly property real stackStep: Math.max(geometry.iconSize * 0.65, 6) / geometry.iconSize
+    readonly property real notchHeight: geometry.followsPath ? pathScrollStep
+        : geometry.layout === "stack" ? stackStep * geometry.cellHeight : geometry.cellHeight + 6
+    readonly property real notchWidth: geometry.layout === "stack"
+        ? stackStep * geometry.cellWidth : geometry.cellWidth + 6
     readonly property var path: LayoutEngine.expansionPath(geometry, viewport.height)
     readonly property int pathTarget: geometry.followsPath
         ? Math.max(0, Math.min(path.maximumOffset,
@@ -62,13 +76,17 @@ QQC2.Pane {
     readonly property var openingProfiles: [{
         id: "folder-open", target: "icon", trigger: "panel-reveal",
         reducedMotion: { mode: "none" },
+        // Each icon also rises into its place; the chosen motion is the
+        // contents' own (openingProgress), so a spring rises softly.
         tracks: [{ id: "rise", property: "translate-y", from: 0.35, to: 0,
             duration: Math.max(80, Math.min(1200, duration)),
-            easing: easing === "outCubic" ? "out-cubic"
-                : easing === "outElastic" || easing === "spring" ? "out-elastic" : "out-back" }]
+            easing: easing === "outElastic" ? "out-elastic"
+                : easing === "outBack" ? "out-back" : "out-cubic" }]
     }]
     signal childSelected(string childId)
     signal dismissRequested()
+    // The closing has played out: the host may hide its window.
+    signal closeFinished()
     objectName: "folderExpansion"
     padding: 10
     background: null
@@ -100,23 +118,56 @@ QQC2.Pane {
     NumberAnimation {
         id: openingAnimation
         target: root
-        property: "openingProgress"
-        from: 0
-        to: 1
-        duration: Math.max(80, Math.min(1200, root.duration))
-        easing.type: root.easing === "outCubic" ? Easing.OutCubic
-            : root.easing === "outElastic" || root.easing === "spring" ? Easing.OutElastic
-            : Easing.OutBack
+        property: "openingPhase"
+        easing.type: Easing.Linear
+        onFinished: if (root.closing) root.finishClosing()
+    }
+    function runPhase(to) {
+        openingAnimation.stop()
+        openingAnimation.from = openingPhase
+        openingAnimation.to = to
+        openingAnimation.duration = Math.max(1, Math.round(
+            Math.max(80, Math.min(1200, duration)) * Math.abs(to - openingPhase)))
+        openingAnimation.start()
+    }
+    function finishClosing() {
+        closing = false
+        closeFinished()
+    }
+    // Fold the contents back into the folder, then report it.
+    function close() {
+        if (closing) return
+        closing = true
+        if (reducedMotion || !opened || openingPhase <= 0) {
+            openingAnimation.stop()
+            openingPhase = 0
+            finishClosing()
+            return
+        }
+        runPhase(0)
+    }
+    // Opened again while it was closing: it opens from where it has got to.
+    function reopen() {
+        if (!closing) return
+        closing = false
+        if (reducedMotion) {
+            openingAnimation.stop()
+            openingPhase = 1
+        } else {
+            runPhase(1)
+        }
     }
     onReducedMotionChanged: if (reducedMotion) {
         openingAnimation.stop()
-        openingProgress = opened ? 1 : 0
+        openingPhase = opened && !closing ? 1 : 0
+        if (closing) finishClosing()
     }
     onOpenedChanged: {
         openingAnimation.stop()
-        openingProgress = opened && reducedMotion ? 1 : 0
+        closing = false
+        openingPhase = opened && reducedMotion ? 1 : 0
         if (opened) {
-            if (!reducedMotion) openingAnimation.start()
+            if (!reducedMotion) runPhase(1)
             viewport.cancelFlick()
             // A ring or stack starts beside the folder: when it is larger
             // than the popup, the folder's end of it is shown first.
@@ -236,6 +287,12 @@ QQC2.Pane {
             ScrollInput {
                 parent: viewport
                 flickables: [viewport]
+                verticalNotch: root.notchHeight
+                horizontalNotch: root.notchWidth
+                // A touchpad moves a path one child per pitch of travel.
+                verticalPixelScale: root.geometry.followsPath
+                    ? root.pathScrollStep / Math.max(1, root.geometry.pathPitch) : 1
+                sensitivity: root.scrollSensitivity
             }
             Repeater {
                 model: root.entries

@@ -46,7 +46,7 @@
   "forbidden": {
     "everywhere": {"why": "PD-04: no renderer draws Appearance > Shape.", "fields": ["shape"]},
     "edge": {
-      "why": "An edge panel's applet lays its row out along its edge (plasma-dock-widget SceneDefinition.js); free placement, rotation and 3D belong to free panels.",
+      "why": "An edge panel's applet lays its row out along its edge (plasma-dock-widget SceneDefinition.js); free placement, rotation, 3D and the folder shapes of ADREP-TASK-003 belong to free panels.",
       "fields": [
         "x",
         "y",
@@ -64,6 +64,9 @@
         "panelMotionTarget",
         "panelTravelSpeed",
         "scrollSensitivity",
+        "folderFanOpening",
+        "folderStackLength",
+        "folderRingSize",
         "bakedTilt",
         "scene3DBand",
         "scene3DBend",
@@ -246,6 +249,9 @@
     "visibilityMode": {"probe": "visibility"},
     "acceptDrops": {"probe": "runtime", "consumers": [["plasma-dock-widget/contents/ui/main.qml", "enabled: Boolean(root.configuration.acceptDrops) && !root.plasmaEditMode"]]},
     "folderLayout": {"probe": "runtime", "consumers": [["plasma-dock-widget/contents/ui/main.qml", "folderLayout: String(root.configuration.folderLayout || \"fan\")"]]},
+    "folderFanOpening": {"probe": "runtime", "consumers": [["plasma-dock-widget/contents/ui/main.qml", "fanOpening: Number(root.configuration.folderFanOpening || 90)"]]},
+    "folderStackLength": {"probe": "runtime", "consumers": [["plasma-dock-widget/contents/ui/main.qml", "stackLength: Number(root.configuration.folderStackLength || 5)"]]},
+    "folderRingSize": {"probe": "runtime", "consumers": [["plasma-dock-widget/contents/ui/main.qml", "ringSize: String(root.configuration.folderRingSize || \"small\")"]]},
     "folderSpeed": {"probe": "runtime", "consumers": [["plasma-dock-widget/contents/ui/main.qml", "folderSpeed: Number(root.configuration.folderSpeed || 260)"]]},
     "folderEasing": {"probe": "runtime", "consumers": [["plasma-dock-widget/contents/ui/main.qml", "folderEasing: String(root.configuration.folderEasing || \"outBack\")"]]},
     "folderShowNames": {"probe": "runtime", "consumers": [["plasma-dock-widget/contents/ui/main.qml", "showNames: root.configuration.folderShowNames !== false"]]},

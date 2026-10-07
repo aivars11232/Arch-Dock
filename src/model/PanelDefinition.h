@@ -114,6 +114,12 @@ struct PanelContent
     QStringList kdeWidgets;
     bool acceptDrops = true;
     QString folderLayout = QStringLiteral("fan");
+    // A free panel's own folder shapes (ADREP-TASK-003): the fan's opening in
+    // degrees, how many children a stack shows, and a ring that fits its
+    // children ("small") or has the dock's radius ("panel").
+    int folderFanOpening = 90;
+    int folderStackLength = 5;
+    QString folderRingSize = QStringLiteral("small");
     int folderSpeed = 260;
     QString folderEasing = QStringLiteral("outBack");
     bool folderExpandOnClick = true;

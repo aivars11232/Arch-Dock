@@ -571,10 +571,39 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             break;
         case ArchDock::EditorCapability::DropInput:
         case ArchDock::EditorCapability::FolderContent:
+        {
             // Only launcher and hybrid content take drops, and folders arrive
             // by being dropped.
             available = droppedContent;
+            // A free panel opens its folders as a fan, a stack or a ring of
+            // its own, each with its setting, shown while that layout is
+            // chosen; an edge panel's folders open a popup (ADREP-TASK-003).
+            static const QHash<QString, QString> shapeSettings{
+                {QStringLiteral("folderFanOpening"), QStringLiteral("fan")},
+                {QStringLiteral("folderStackLength"), QStringLiteral("stack")},
+                {QStringLiteral("folderRingSize"), QStringLiteral("ring")},
+            };
+            if (available && shapeSettings.contains(key))
+            {
+                available = freeHost;
+                if (candidate.content.folderLayout != shapeSettings.value(key))
+                {
+                    inactive = true;
+                }
+            }
+            // A ring the size of the panel needs a dock with a radius: the
+            // layouts that turn and travel. Elsewhere Small is the only size.
+            if (available && key == QStringLiteral("folderRingSize"))
+            {
+                const auto *sensitivity = ArchDock::PanelSettingsSchema::descriptor(
+                    scope, QStringLiteral("scrollSensitivity"));
+                if (!sensitivity || !sensitivity->editor.layouts.contains(candidate.layout.pathType))
+                {
+                    inactive = true;
+                }
+            }
             break;
+        }
         case ArchDock::EditorCapability::EdgePlacement:
         case ArchDock::EditorCapability::Alignment:
         case ArchDock::EditorCapability::DynamicPlacement:
@@ -926,6 +955,9 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             // Plain names where the stored value is a code word.
             static const QHash<QString, QHash<QString, const char *>> labels{
                 {QStringLiteral("folderLayout"), {{QStringLiteral("track"), QT_TR_NOOP("Along the dock")}}},
+                {QStringLiteral("folderRingSize"),
+                 {{QStringLiteral("small"), QT_TR_NOOP("Small")},
+                  {QStringLiteral("panel"), QT_TR_NOOP("Same as panel")}}},
                 {QStringLiteral("panelRotationMode"),
                  {{QStringLiteral("none"), QT_TR_NOOP("Off")},
                   {QStringLiteral("clockwise"), QT_TR_NOOP("Clockwise")},

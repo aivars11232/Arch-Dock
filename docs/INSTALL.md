@@ -438,16 +438,52 @@ an independent distribution-image or physical GPU acceptance test.
 
 ## Folder contents
 
-Click a dock folder icon to unfold its children from that icon on a transparent
-surface. Use the mouse wheel to scroll up or down, or hold the left mouse button
-over an item and drag the contents. Releasing a scrolling drag does not open the
-pressed item; an ordinary click opens the selected child. Escape and clicking
-outside dismiss the contents. Arrow keys and Enter remain available.
+Click a dock folder icon to open it: its children unfold from that icon on a
+transparent surface and fold back into it when the folder closes. An ordinary
+click opens the selected child. Escape, clicking beside the contents and
+clicking elsewhere close the folder; arrow keys move the selection and Enter
+opens it.
 
-In **Panel Studio > Panels > Behavior**, **Always show folder item names**
-controls the labels beneath the children. It is enabled by default. Apply saves
-it for that panel; Cancel preserves the previous value. Turning it off retains
-hover names and tooltips. Fan and grid layouts fit horizontally and scroll
-vertically; the other saved layouts retain their layout and horizontal scrolling.
-The existing bounded snapshot shows up to 48 children. Reduced motion opens the
-contents immediately.
+On a free panel, **Panel Studio > Panels > Behavior > Folder layout** chooses
+the shape the folder opens in, outside the dock and along the way the folder
+faces out of it:
+
+- **Along the dock** (curved free panels): the children stand on the dock's own
+  curve beside the folder.
+- **Fan**: a slice-shaped small panel, drawn in the panel's look, its point at
+  the folder and the children on its arc. **Fan opening** (40 to 160 degrees,
+  90 by default) sets how wide it opens.
+- **Grid**: rows of children in a popup beside the folder.
+- **Stack**: a straight line of children from the folder outward. **Stack
+  length** (2 to 12, 5 by default) sets how many show at once.
+- **Arc**: the children on an arc centred on the folder, all at one distance
+  from it.
+- **Ring**: a second circle beside the folder with the children on it. **Ring
+  size** is **Small** (just big enough for the children) or **Same as panel**
+  (the dock's own radius, offered on panels that have one).
+
+Fan opening, Stack length and Ring size appear only while their layout is
+chosen. Scrolling over the contents moves them along their path: one wheel
+notch, or one child's distance of touchpad scrolling, moves them one place,
+and a child that leaves one end comes back at the other; on a ring they go
+round. In Grid one notch moves one row. On a free panel with a curved layout,
+**Scroll sensitivity** on Animations scales this as it scales the panel's own
+icons. Where the screen leaves no room in the outward direction, a fan, an
+arc or a stack first holds fewer children at once, then a shape turns towards
+the side that has room.
+
+An edge panel's folders open in a popup beside the folder, as before, and
+scroll one child or one row per notch; in a popup you can also hold the left
+mouse button and drag the contents, and releasing that drag opens nothing.
+
+**Folder easing** chooses how a folder opens and closes, over **Folder
+animation duration**: outCubic glides out and settles, outBack goes a little
+past its place and comes back, outElastic snaps out and wobbles, and spring
+starts softly and swings past its place once before it settles. Closing plays
+the same motion backwards. Reduced motion opens and closes folders at once.
+
+**Always show folder item names** controls the labels beneath the children;
+turned off, a child's name appears as a tooltip. **Expand folders on click**
+turned off makes a click open the folder itself; the icon's menu still offers
+**Show contents…**. Apply saves these for that panel; Cancel keeps the previous
+values. The existing bounded snapshot shows up to 48 children.
