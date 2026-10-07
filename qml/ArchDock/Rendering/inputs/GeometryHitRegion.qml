@@ -22,6 +22,7 @@ QtObject {
     // Local rectangles of the rendered entries, in the scene's coordinates.
     property var entryRects: []
     property var projectedScene: null
+    property var entryPointFilter: null
     // How far from the drawn path a press still counts, in pixels.
     property real bandWidth: 40
     property real entryMargin: 4
@@ -97,7 +98,8 @@ QtObject {
         const rects = entryRects && entryRects.length !== undefined
             ? entryRects : []
         for (let index = 0; index < rects.length; ++index) {
-            if (rectContains(rects[index], x, y, entryMargin))
+            if (rectContains(rects[index], x, y, entryMargin)
+                    && (!entryPointFilter || entryPointFilter(index, point)))
                 return true
         }
         if (projectedScene) return projectedScene.containsInputPoint(point)

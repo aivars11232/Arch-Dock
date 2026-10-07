@@ -161,6 +161,13 @@ TestCase {
             verify(centre.x >= rect.x && centre.x <= rect.x + rect.width
                    && centre.y >= rect.y && centre.y <= rect.y + rect.height)
             compare(item.enabled, true)
+            // PD-18: an entry's custom visibility mask must keep Qt's
+            // original local bounds, including after its travel transform.
+            compare(item.contains(Qt.point(item.width / 2, item.height / 2)), true)
+            compare(item.contains(Qt.point(-1, item.height / 2)), false)
+            compare(item.contains(Qt.point(item.width + 1, item.height / 2)), false)
+            compare(item.contains(Qt.point(item.width / 2, -1)), false)
+            compare(item.contains(Qt.point(item.width / 2, item.height + 1)), false)
         }
         compare(hidden, 1, "one entry waits off the path")
     }

@@ -42,6 +42,7 @@ private slots:
     void globalNormalizationIsSchemaDrivenAndStrictForChoices();
     void consumerProjectionCannotBroadenTransactionAuthority();
     void sceneQualityIsBoundedAndReversible();
+    void materialsAndFlatLookRoundTrip();
     void tiltScalarsPreserveParameterMaps();
     void sceneTransformFieldsAreBoundedAndReversible();
     void folderSettingsPreserveLegacyValues();
@@ -171,6 +172,34 @@ void PanelSettingsSchemaTest::sceneQualityIsBoundedAndReversible()
     QVERIFY(normalized.has_value());
     QCOMPARE(normalized->surface.parameters3D
                  .value(QStringLiteral("quality")).toString(), QStringLiteral("medium"));
+}
+
+void PanelSettingsSchemaTest::materialsAndFlatLookRoundTrip()
+{
+    const QVariantMap flat{{"rendererTier", "procedural2d"}, {"appearance", "floating-glass"},
+        {"color", "#345678"}, {"opacity", 0.43}, {"layout", "circular"}, {"layoutRadius", 137.0}};
+    const auto panel = PanelDefinition::fromLegacyMap({{"id", "materials"},
+        {"previousFlatLook", flat}, {"sparkleIntensity", 0.6},
+        {"scene3DColor", "#987654"}, {"scene3DMaterial", "METALLIC"},
+        {"scene3DTexture", "organic"}, {"surface2D", QVariantMap{{"futureData", 7}}}});
+    QVERIFY(panel);
+    const auto restored = PanelDefinition::fromLegacyMap(panel->toPersistedMap());
+    QVERIFY(restored);
+    QCOMPARE(restored->surface.parameters2D.value("previousFlatLook").toMap(), flat);
+    QCOMPARE(restored->surface.parameters2D.value("sparkleIntensity").toReal(), 0.6);
+    QCOMPARE(restored->surface.parameters2D.value("futureData").toInt(), 7);
+    QCOMPARE(restored->surface.parameters3D.value("color").toString(), QStringLiteral("#987654"));
+    QCOMPARE(restored->surface.parameters3D.value("material").toString(), QStringLiteral("metallic"));
+    QCOMPARE(restored->surface.parameters3D.value("texture").toString(), QStringLiteral("organic"));
+    const auto bounded = PanelDefinition::fromLegacyMap({{"id", "bounded-material"},
+        {"sparkleIntensity", 8.0}, {"scene3DTexture", "../../outside.svg"}});
+    QVERIFY(bounded);
+    QCOMPARE(bounded->surface.parameters2D.value("sparkleIntensity").toReal(), 1.0);
+    QCOMPARE(bounded->surface.parameters3D.value("texture").toString(), QStringLiteral("theme"));
+    const auto snapshot = PanelSettingsSchema::flatLookValues(panel->toLegacyMap());
+    QVERIFY(snapshot.contains("appearance") && snapshot.contains("layout"));
+    for (const auto *key : {"id", "host", "visible", "previousFlatLook", "launchers", "surface2D"})
+        QVERIFY(!snapshot.contains(QLatin1String(key)));
 }
 
 void PanelSettingsSchemaTest::tiltScalarsPreserveParameterMaps()

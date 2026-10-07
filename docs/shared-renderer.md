@@ -113,9 +113,10 @@ Logical entry rectangles, pointer handling, keyboard order and accessibility
 stay in the shared 2D delegates. Their glyph and tile items supply textures to
 the optional mesh scene while their duplicate drawing is suppressed. Source
 items and the mesh consumer share one window; no cross-window texture is used.
-Mesh nodes are not pickable.
-Camera-local icon mesh positions project onto the same logical pixel centers;
-changing camera orientation or quality does not move those input rectangles.
+Mesh picks support gizmos and visible-entry checks; application actions and
+accessibility remain in the shared 2D delegates. The native scene projects the
+glyphs' bounds back to those delegates as the camera, platform or fold changes.
+Changing render quality scales the target without changing this input mapping.
 
 ### Fallback and diagnostics
 
@@ -148,18 +149,25 @@ disabled for that source. Quality changes reuse the same logical geometry.
 `surface.parameters3D.quality`; invalid choices normalize to `medium`, and
 other persisted members of that parameter map survive.
 
-3D is optional. Studio shows its main 3D switch only when the backend, theme
-and actual preview consumer support it and the theme has an available ordinary
-surface. The switch edits the existing `rendererTier` field; it adds no separate
-saved flag. Turning it off selects a declared, available baked 2.5D, skinned 2D,
-or procedural 2D surface in that order. Detailed quality controls require the
+3D is optional. Panel Themes / Skins separates **Flat looks** and **Platform
+looks**. Loading a platform remembers the complete previous flat appearance in
+`surface.parameters2D.previousFlatLook`: surface, layout, icon appearance and
+icon motion settings, excluding host identity, placement, content and user
+data. **Platform presentation** on Panels > 3D edits `rendererTier`; turning
+it off restores that saved look exactly and clears the snapshot. A legacy
+platform with no snapshot returns to its retained procedural appearance.
+Platforms with perspective artwork additionally offer **Use true 3D**; off
+selects their baked artwork, while Platform presentation off restores the flat
+look. Detailed quality controls require the
 active preview to be true 3D, and the backend rejects quality changes while
 3D is off. Runtime fallback also hides mesh-part presentation mechanisms.
 Ordinary 2D presentation controls remain available where supported.
 
 Apply uses the ordinary revisioned settings transaction. Unchanged formerly
 available fields may survive a renderer switch; changing an unavailable field
-or submitting protected state is still rejected. Cancel closes the draft, and
+or submitting protected state is still rejected. Restoring the saved flat look
+may also restore hidden appearance fields, only when each value exactly matches
+this panel's durable snapshot and the same transaction clears it. Cancel closes the draft, and
 reopening reloads the saved renderer. Existing capability metadata preserves
 requested intent, effective tier and fallback reason independently, including
 when a preset requests 3D on a build without the optional module.
@@ -496,6 +504,55 @@ host and does not call the Arch Dock service.
 | `activeTrackMetrics` | Baked 2.5D scene geometry, or `null` when the scene is not laid out on a theme track. |
 | `occlusionDepth` / `foregroundOcclusionItem` | The declared depth at which foreground layers cut across the entries, and the instantiated layer. |
 
+## Textured procedural materials — ADREP-TASK-004
+
+The thirteen retained procedural looks use original bundled SVG maps in
+`qml/ArchDock/Rendering/materials`, generated deterministically by
+`tools/generate-material-textures.py`. Their licence and provenance are in
+[packaging/LICENSING.md](../packaging/LICENSING.md). The existing threaded
+Canvas paints them along the shared layout path; a multiply tint preserves
+the material's detail, including with the software scene graph. There is no
+runtime download or replacement rendering framework.
+
+Glass has a translucent body, light frost, a refraction-like gradient and a
+fine edge highlight; Floating Glass adds elevation and a cast shadow. Crystal
+has facets; Metallic has brushed grain; Futuristic has seams and circuit light
+lines; Organic has soft grain; Neon has tubes; Plasma has energy waves;
+Minimal has satin detail; Lime has cells; Platform, Plate and Pedestal have
+solid panel, joint or flute detail and depth. All thirteen remain distinct
+under a common tint. Opacity scales the whole material. Sparkle defaults to
+zero and is offered only for Crystal and Plasma.
+
+Only Futuristic and Plasma have an animated light overlay, capped at 8 Hz.
+Their textured body is cached. Hidden, concealed and reduced-motion scenes
+stop the overlay; static looks have no periodic paint timer. A look with its
+own skinned, baked or 3D material hides the procedural Theme control and
+explains where to choose a different look.
+
+Panels > 3D offers **Platform colour**, **Material** and **Texture** from the
+same thirteen maps, plus Theme and texture None. **Reset material** restores
+the selected look's own colour/material/texture. Native PrincipledMaterial
+properties and bounded 512-pixel source textures implement these controls;
+the numerical mesh, validated package resources and renderer tier remain
+shared. Animated energy materials stop when the native scene is hidden. The flat
+Appearance colour field is absent in the native tier; Platform colour edits
+the material the native mesh actually draws.
+
+**Bend** folds the rear half of a generated or numerical platform up or down
+by up to 90 degrees. Mesh positions and normals and the icons' feet use the
+same bounded fold, preserving the platform outline and entry anchoring. The
+generated platform's previous cross-section control remains as **Edge tilt**.
+Perspective artwork cannot fold and says so on the page; supported true 3D
+provides the numerical alternative. Native entry input refines Qt's bounding
+volume picks against the same platform triangles, including folds, and ignores
+rear glyphs covered by the platform or its panel parts.
+
+PD-17's complete flat-look restore normalizes many appearance keys for each
+theme candidate. The immutable settings schema is indexed once by scope and
+key with Qt's `QHash`; field ordering and the descriptor objects are unchanged.
+This avoids repeated linear descriptor scans in Studio's draft and catalog
+projection while retaining the same normalization and transaction rules.
+
 ## Skinned 2D and safe fallback
 
 TASK-0027 adds the first production `skinned2d` implementation without changing
@@ -559,12 +616,36 @@ An open `arc` does not rotate, because sweeping it would carry entries off the
 platform drawn beneath them.
 
 Input is the package's own alpha mask, positioned at the platform rectangle,
-combined with the entry rectangles; `activeInputRegionKind` reports
+combined with the visible entry rectangles; `activeInputRegionKind` reports
 `platform-mask`. The empty desktop inside and around a ring passes through,
 while an icon standing proud of the rim stays clickable. As with every other
 tier this narrows Qt Quick item hit testing only: a Plasma desktop applet is
 still a rectangle to the compositor, and `nonrectangular-input` remains
 unclaimed.
+
+ADREP-TASK-004 gives all three production perspective platforms a foreground
+surface layer using their existing original platform artwork, before the
+existing foreground rim. Rear entries paint beneath the solid body as well as
+the rim; front entries paint over both. Orange Arc uses depth 0.9 because its
+open track stays on the front half of its artwork: 0.62 put every on-track
+entry in front. The numerical platform keeps its own mesh and material.
+The platform input predicate also exposes its decoder readiness to the scene;
+without it, the scene used a procedural band instead of the loaded mask.
+Foreground alpha masks are decoded at bounded drawn sizes and cached by the
+renderer's retained layer instances; readiness includes them. The drawn layer
+and the entry input use the same masks. A parent's containment mask does not
+prevent Qt Quick from delivering input to its children, so the actual live
+DockEntry MouseArea and DropArea also apply the scene's visible-entry predicate.
+Their masks and the entry delegate's mask check local rectangular bounds first:
+Qt's custom containment mask replaces the default bounds test. Without that
+check, an entry with no platform occlusion could accept points outside itself.
+
+An entry owns its passive native tooltip. Qt draws a Popup's content in the
+window overlay without inheriting the entry's perspective scale; a tooltip
+over a small rear icon could intercept a press on its exposed glyph. The
+owned tooltip's popup item has an empty containment mask, so it still paints
+and shows the same text while presses reach the visible icon beneath it. This
+changes only that tooltip, not Plasma's menus or the window overlay.
 
 A missing or undecodable platform layer fails closed to procedural 2D with a
 specific reason and leaves every entry rendered; a decorative layer that fails

@@ -108,6 +108,41 @@ TestCase {
         return item
     }
 
+    function test_toolTipOverAnExposedEntryDoesNotTakeItsPress() {
+        // PD-18: a platform may leave only the top of an icon exposed. Qt's
+        // unscaled popup can overlap that part when the icon is scaled down.
+        let launches = 0
+        const item = createHostedEntry({
+            showTooltip: true, invoke: function() { ++launches },
+            inputContainsPoint: function(point) { return point.y < 20 }
+        })
+        const tip = findChild(item, "dockEntryToolTip")
+        verify(tip !== null)
+        tip.parent = item
+        tip.x = 0
+        tip.y = 0
+        tip.delay = 0
+        tip.visible = true
+        tryVerify(function() { return tip.opened })
+        mouseClick(item, 10, 10)
+        compare(launches, 1, "an informational tooltip must not take the exposed entry's press")
+        tip.close()
+    }
+
+    function test_platformInputMaskKeepsTheEntryRectangle() {
+        // PD-18: visibility narrows the entry's own target; it must never
+        // replace that rectangle with an unbounded visible plane.
+        const item = createHostedEntry({
+            inputContainsPoint: function(point) { return true }
+        })
+        const target = findChild(item, "dockEntryPointerTarget")
+        verify(target !== null)
+        compare(target.contains(Qt.point(30, 30)), true)
+        for (const point of [Qt.point(-1, 30), Qt.point(61, 30),
+                             Qt.point(30, -1), Qt.point(30, 61)])
+            compare(target.contains(point), false, "outside the entry stays outside")
+    }
+
     function test_statusEntryCannotLaunchOrOpenApplicationMenu() {
         let launches = 0;
         const item = createHostedEntry({entry: entry({appId: "status:cpu", isStatus: true,
@@ -117,6 +152,21 @@ TestCase {
         compare(launches, 0);
         verify(!item.contextMenuVisible);
         verify(!item.contextInteractionAllowed);
+    }
+
+    function test_platformMaskRejectsTheCoveredPartOfTheRealPointerTarget() {
+        let launches = 0
+        const item = createHostedEntry({invoke: function() { ++launches },
+            inputContainsPoint: function(point) { return point.x >= 30 }})
+        mouseMove(item, 15, 30)
+        mouseClick(item, 15, 30)
+        compare(launches, 0, "a rim-covered point cannot launch")
+        compare(lastHoveredIndex, -2, "a covered point cannot hover")
+        mouseClick(item, 45, 30)
+        compare(launches, 1, "the visible part of the same entry stays clickable")
+        item.inputContainsPoint = function(point) { return false }
+        mouseClick(item, 45, 30, Qt.RightButton)
+        verify(!item.contextMenuVisible, "an entirely covered entry has no pointer menu")
     }
 
     function test_folderExpansionNeverFallsThroughToLaunch() {

@@ -330,6 +330,40 @@ function standPoint(offsetX, offsetY, layoutRadius, track) {
     return [offsetX / radius * centre, offsetY / radius * centre]
 }
 
+// PD-18 / OF-31: fold the rear half about its top's horizontal diameter.
+// Positive is up, negative down, bounded to a right angle. Mesh vertices and
+// icon feet use this same transform, so the icons stay on the platform.
+function foldPoint(point, fold, hingeHeight) {
+    const turn = clamp(finite(fold, 0), -1, 1) * Math.PI / 2
+    if (point[1] <= 0 || Math.abs(turn) < 1e-9) return point.slice()
+    const hinge = finite(hingeHeight, topHeight), z = point[2] - hinge
+    return [point[0], point[1] * Math.cos(turn) - z * Math.sin(turn),
+            hinge + point[1] * Math.sin(turn) + z * Math.cos(turn)]
+}
+
+function foldMesh(mesh, fold, hingeHeight) {
+    if (!mesh || !mesh.positions || !mesh.indexes) return null
+    if (Math.abs(clamp(finite(fold, 0), -1, 1)) < 1e-9) return mesh
+    if (mesh.indexes.length > 262144) return null
+    const result = Object.assign({}, mesh, {positions: [], normals: [], uv0s: [], indexes: []})
+    if (mesh.colors) result.colors = []
+    // Each face keeps its winding and gets its actual deformed normal. This
+    // also gives the crease a hard edge instead of an interpolated false one.
+    for (let i = 0; i < mesh.indexes.length; i += 3) {
+        const ids = mesh.indexes.slice(i, i + 3)
+        const points = ids.map(index => foldPoint(mesh.positions[index], fold, hingeHeight))
+        const normal = normalized(crossProduct(subtract(points[1], points[0]), subtract(points[2], points[0])))
+        for (let j = 0; j < 3; ++j) {
+            result.positions.push(points[j])
+            result.normals.push(normal.slice())
+            result.uv0s.push((mesh.uv0s[ids[j]] || [0, 0]).slice())
+            if (mesh.colors) result.colors.push(mesh.colors[ids[j]].slice())
+            result.indexes.push(result.indexes.length)
+        }
+    }
+    return result
+}
+
 // A CSS colour as [r, g, b, a] in 0..1: "#rgb", "#rrggbb", "#aarrggbb"
 // (Qt's order), "rgb(...)" and "rgba(...)", the forms the look tables use.
 // Anything else is null.

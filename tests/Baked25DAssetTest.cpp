@@ -11,6 +11,7 @@
 #include <QPainter>
 #include <QSet>
 #include <QTest>
+#include <algorithm>
 
 using ArchDock::ThemePackage;
 
@@ -247,7 +248,7 @@ void Baked25DAssetTest::productionPackagesValidateAndShareGeometry()
 
         QCOMPARE(definition.assets.size(), volumetric ? 11 : 8);
         QCOMPARE(definition.states.size(), 4);
-        QCOMPARE(definition.layers.size(), 8);
+        QCOMPARE(definition.layers.size(), 9);
         QCOMPARE(definition.tracks.size(), 1);
         QCOMPARE(definition.inputMasks.size(), 4);
         QCOMPARE(definition.effectMargins.left, 16.0);
@@ -255,8 +256,8 @@ void Baked25DAssetTest::productionPackagesValidateAndShareGeometry()
         QCOMPARE(definition.effectMargins.right, 16.0);
         QCOMPARE(definition.effectMargins.bottom, 16.0);
 
-        // A baked package needs one rear platform and one foreground rim; the
-        // rim is what a real icon passes behind.
+        // PD-18: rear entries pass beneath the solid surface and the rim.
+        // Reuse the original rear artwork as a second foreground layer.
         int rearLayers = 0;
         int foregroundLayers = 0;
         for (const auto &layer : definition.layers)
@@ -271,7 +272,14 @@ void Baked25DAssetTest::productionPackagesValidateAndShareGeometry()
             }
         }
         QCOMPARE(rearLayers, 1);
-        QCOMPARE(foregroundLayers, 1);
+        QCOMPARE(foregroundLayers, 2);
+        const auto surface = std::find_if(definition.layers.cbegin(), definition.layers.cend(),
+            [](const auto &layer) { return layer.id == QStringLiteral("surface-occlusion"); });
+        QVERIFY(surface != definition.layers.cend());
+        QCOMPARE(surface->role, QStringLiteral("foreground"));
+        QCOMPARE(surface->asset, QStringLiteral("platform-rear"));
+        for (const auto &state : definition.states)
+            QVERIFY(state.layers.contains(QStringLiteral("surface-occlusion")));
 
         for (const auto &asset : definition.assets)
         {
@@ -302,7 +310,7 @@ void Baked25DAssetTest::tracksDescribeWhereRealIconsStand()
 
         QCOMPARE(track.depth.farScale, 0.62);
         QCOMPARE(track.depth.nearScale, 1.0);
-        QCOMPARE(track.depth.occlusionDepth, 0.62);
+        QCOMPARE(track.depth.occlusionDepth, spec.closed ? 0.62 : 0.9);
         QVERIFY(track.depth.farScale < track.depth.nearScale);
 
         QVERIFY(track.tilt.has_value());

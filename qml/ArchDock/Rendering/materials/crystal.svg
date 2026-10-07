@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<!-- Original Arch Dock vector material. GPL-3.0-or-later. -->
+<defs><linearGradient id="sheen" x2="0.8" y2="1"><stop stop-color="#f8f8f8"/><stop offset=".36" stop-color="#777"/><stop offset=".62" stop-color="#d8d8d8"/><stop offset="1" stop-color="#4d4d4d"/></linearGradient></defs>
+<rect x="0" y="0" width="128" height="128" fill="#a5a5a5" opacity="1"/>
+<path d="M0 0 h32 l-16 32 Z" fill="rgb(100,100,100)" stroke="#eee" stroke-width=".8"/>
+<path d="M32 0 h32 l-16 32 Z" fill="rgb(240,240,240)" stroke="#eee" stroke-width=".8"/>
+<path d="M64 0 h32 l-16 32 Z" fill="rgb(220,220,220)" stroke="#eee" stroke-width=".8"/>
+<path d="M96 0 h32 l-16 32 Z" fill="rgb(200,200,200)" stroke="#eee" stroke-width=".8"/>
+<path d="M0 32 h32 l-16 32 Z" fill="rgb(160,160,160)" stroke="#eee" stroke-width=".8"/>
+<path d="M32 32 h32 l-16 32 Z" fill="rgb(140,140,140)" stroke="#eee" stroke-width=".8"/>
+<path d="M64 32 h32 l-16 32 Z" fill="rgb(120,120,120)" stroke="#eee" stroke-width=".8"/>
+<path d="M96 32 h32 l-16 32 Z" fill="rgb(100,100,100)" stroke="#eee" stroke-width=".8"/>
+<path d="M0 64 h32 l-16 32 Z" fill="rgb(220,220,220)" stroke="#eee" stroke-width=".8"/>
+<path d="M32 64 h32 l-16 32 Z" fill="rgb(200,200,200)" stroke="#eee" stroke-width=".8"/>
+<path d="M64 64 h32 l-16 32 Z" fill="rgb(180,180,180)" stroke="#eee" stroke-width=".8"/>
+<path d="M96 64 h32 l-16 32 Z" fill="rgb(160,160,160)" stroke="#eee" stroke-width=".8"/>
+<path d="M0 96 h32 l-16 32 Z" fill="rgb(120,120,120)" stroke="#eee" stroke-width=".8"/>
+<path d="M32 96 h32 l-16 32 Z" fill="rgb(100,100,100)" stroke="#eee" stroke-width=".8"/>
+<path d="M64 96 h32 l-16 32 Z" fill="rgb(240,240,240)" stroke="#eee" stroke-width=".8"/>
+<path d="M96 96 h32 l-16 32 Z" fill="rgb(220,220,220)" stroke="#eee" stroke-width=".8"/>
+</svg>

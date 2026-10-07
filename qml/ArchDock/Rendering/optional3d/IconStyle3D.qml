@@ -89,6 +89,9 @@ Model {
         baseColor: root.vertexColoured ? "#ffffff" : values.baseColor || "#ffffff"
         baseColorMap: root.surfaceTexture
         vertexColorsEnabled: root.vertexColoured
+        opacity: Math.max(0, Math.min(1, Number(values.opacity === undefined ? 1 : values.opacity)))
+        alphaMode: opacity < 1 ? PrincipledMaterial.Blend : PrincipledMaterial.Opaque
+        depthDrawMode: Material.AlwaysDepthDraw
         metalness: Math.max(0, Math.min(1, Number(values.metalness || 0)))
         roughness: Math.max(0, Math.min(1, Number(values.roughness || 0)))
         emissiveFactor: Qt.vector3d(emission.r * strength,

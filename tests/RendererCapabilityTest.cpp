@@ -330,6 +330,175 @@ private slots:
             scene->setProperty("panelDefinition", travelling);
             QTRY_VERIFY(projectionMatches());
         }
+        // ADREP-TASK-004: native material editing and a folded platform must
+        // change the GPU output, preserve the track and keep input projection.
+        {
+            const auto own = plainValue(scene->property("panelDefinition")).toMap();
+            auto edited = own;
+            edited.insert("scene3DTransitions", false);
+            edited.insert("scene3DFloat", false);
+            edited.insert("scene3DFold", 0.0);
+            scene->setProperty("panelDefinition", edited);
+            scene->setProperty("animationProfiles", QVariantMap{{"reducedMotion", true}});
+            // Material and track captures hold hover still; the separate
+            // hover gate below proves that input anchors do not breathe.
+            QTest::mouseMove(&window, QPoint(0, 0));
+            QTest::qWait(150);
+            const auto ownPixels = pixels();
+            QVERIFY(!ownPixels.isNull());
+            QImage preceding = ownPixels;
+            for (const QString &look : {QStringLiteral("glass"), QStringLiteral("crystal"),
+                QStringLiteral("neon"), QStringLiteral("minimal"), QStringLiteral("plasma"),
+                QStringLiteral("lime"), QStringLiteral("floating-glass"), QStringLiteral("metallic"),
+                QStringLiteral("futuristic"), QStringLiteral("organic"), QStringLiteral("platform"),
+                QStringLiteral("plate"), QStringLiteral("pedestal")}) {
+                edited.insert("scene3DMaterial", look);
+                edited.insert("scene3DTexture", "theme");
+                scene->setProperty("panelDefinition", edited);
+                QTRY_VERIFY_WITH_TIMEOUT(renderer->property("materialTextureReady").toBool(), 5000);
+                QTest::qWait(100);
+                const auto material = pixels();
+                QVERIFY2(!material.isNull() && material != preceding, qPrintable(look));
+                if (!evidence.isEmpty()) QVERIFY(material.save(QDir(evidence).filePath("material-" + look + ".png")));
+                preceding = material;
+                QTRY_VERIFY(projectionMatches());
+            }
+            edited.insert("scene3DColor", "#dd3399");
+            edited.insert("scene3DTexture", "none");
+            scene->setProperty("panelDefinition", edited);
+            QTest::qWait(120);
+            const auto coloured = pixels();
+            QVERIFY(coloured != preceding);
+            edited.insert("scene3DTexture", "organic");
+            scene->setProperty("panelDefinition", edited);
+            QTRY_VERIFY_WITH_TIMEOUT(renderer->property("materialTextureReady").toBool(), 5000);
+            QTest::qWait(120);
+            QVERIFY(pixels() != coloured);
+            edited.remove("scene3DColor"); edited.remove("scene3DTexture"); edited.remove("scene3DMaterial");
+            scene->setProperty("panelDefinition", edited);
+            QTest::qWait(150);
+            QCOMPARE(pixels(), ownPixels);
+            const auto flatGeometry = plainValue(renderer->property("projectedEntryGeometry"));
+            for (double fold : {0.75, -0.75}) {
+                edited.insert("scene3DFold", fold);
+                scene->setProperty("panelDefinition", edited);
+                QTRY_COMPARE(renderer->property("platformFold").toDouble(), fold);
+                QTRY_VERIFY(projectionMatches());
+                QTest::qWait(120);
+                const auto folded = pixels();
+                QVERIFY(folded != ownPixels);
+                QCOMPARE(renderer->property("triangleCount").toInt(), expectedTriangles);
+                QVERIFY(plainValue(renderer->property("projectedEntryGeometry")) != flatGeometry);
+                if (!evidence.isEmpty()) QVERIFY(folded.save(QDir(evidence).filePath(QStringLiteral("fold-%1.png").arg(fold))));
+            }
+            edited.insert("scene3DFold", 0.0);
+            edited.insert("scene3DIconElevation", 0.0);
+            edited.insert("scene3DThickness", 4.0);
+            edited.insert("panelMotionTarget", "items");
+            bool covered = false, exposed = false;
+            const double period = plainValue(scene->property("trackWindow")).toMap().value("loop").toDouble();
+            QVERIFY(period > 0);
+            for (double pitch : {-60.0, -35.0, 35.0, 60.0}) {
+                edited.insert("scene3DCameraPitch", pitch);
+                scene->setProperty("panelDefinition", edited);
+                QTest::qWait(150);
+                for (int step = 0; step < 8; ++step) {
+                    scene->setProperty("wheelTravel", period * step / 8);
+                    scene->setProperty("wheelTravelTarget", period * step / 8);
+                    QTest::qWait(60);
+                    // A View3D's GPU output follows the window render pass.
+                    // Observe an actual submitted frame after the track edit
+                    // before starting an independent offscreen item grab.
+                    QSignalSpy completedFrame(&window, &QQuickWindow::frameSwapped);
+                    window.update();
+                    QVERIFY(completedFrame.wait(5000));
+                    const auto projectionDiagnostic = [&]() {
+                        QVariantMap values;
+                        for (QObject *item : QList<QObject *>{scene, renderer, viewport}) {
+                            QVariantMap fields;
+                            for (const auto *key : {"width", "height", "platformScale", "cameraDistance", "platformTop",
+                                "shownPitch", "shownYaw", "shownScale", "entryTravel", "layoutTrackRadius"})
+                                if (item->property(key).isValid()) fields.insert(QLatin1String(key), plainValue(item->property(key)));
+                            values.insert(item == scene ? "scene" : item == renderer ? "renderer" : "viewport", fields);
+                        }
+                        for (int i = 0; i < 2; ++i) {
+                            auto *node = renderer->findChild<QObject *>(QStringLiteral("mesh-entry-%1").arg(i));
+                            auto *glyph = renderer->findChild<QObject *>(QStringLiteral("mesh-glyph-%1").arg(i));
+                            for (QObject *item : {node, glyph}) {
+                                const auto pos = item->property("scenePosition").value<QVector3D>();
+                                values.insert(item->objectName(), QVariantList{pos.x(), pos.y(), pos.z()});
+                            }
+                        }
+                        return QString::fromUtf8(QJsonDocument::fromVariant(values).toJson(QJsonDocument::Compact));
+                    };
+                    QTRY_VERIFY2(projectionMatches(), qPrintable(QStringLiteral("travel pitch=%1 step=%2 period=%3 rects=%4 projected=%5 state=%6")
+                        .arg(pitch).arg(step).arg(period)
+                        .arg(QString::fromUtf8(QJsonDocument::fromVariant(plainValue(scene->property("entryRects"))).toJson(QJsonDocument::Compact)),
+                             QString::fromUtf8(QJsonDocument::fromVariant(plainValue(renderer->property("projectedEntryGeometry"))).toJson(QJsonDocument::Compact)))
+                        .arg(projectionDiagnostic())));
+                    QVERIFY(renderer->property("rendererReady").toBool());
+                    QCOMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("true3d"));
+                    const auto travelled = pixels();
+                    QVERIFY(!travelled.isNull());
+                    int drawn = 0;
+                    for (int y = 0; y < travelled.height(); y += 2)
+                        for (int x = 0; x < travelled.width(); x += 2)
+                            drawn += travelled.pixelColor(x, y).alpha() > 32;
+                    if (drawn <= 250) {
+                        if (!evidence.isEmpty()) QVERIFY(travelled.save(QDir(evidence).filePath("travel-empty.png")));
+                        const auto windowFrame = window.grabWindow();
+                        if (!evidence.isEmpty()) QVERIFY(windowFrame.save(QDir(evidence).filePath("travel-empty-window.png")));
+                        QVariantMap diagnostic{{"pitch", pitch}, {"step", step}, {"period", period}, {"drawn", drawn}};
+                        for (QObject *item : QList<QObject *>{scene, renderer, viewport}) {
+                            QVariantMap fields;
+                            for (const auto *key : {"visible", "opacity", "width", "height", "sceneConcealed",
+                                "platformScale", "platformTop", "platformFold", "shownPitch", "rendererReady", "errorReason",
+                                "entryTravel", "panelOpacity", "targetWidth", "targetHeight", "motionOpacity", "motionTracks"})
+                                if (item->property(key).isValid()) fields.insert(QLatin1String(key), plainValue(item->property(key)));
+                            diagnostic.insert(item == scene ? "scene" : item == renderer ? "renderer" : "viewport", fields);
+                        }
+                        qInfo().noquote() << "TRAVEL_EMPTY" << QJsonDocument::fromVariant(diagnostic).toJson(QJsonDocument::Compact);
+                    }
+                    QVERIFY2(drawn > 250, "the native platform must remain drawn throughout its track");
+                    const auto rects = plainValue(renderer->property("projectedEntryGeometry")).toList();
+                    for (int index = 0; index < rects.size(); ++index) {
+                        const auto rect = rects[index].toMap();
+                        QVariant visible;
+                        QVERIFY(QMetaObject::invokeMethod(renderer, "entryPointVisible", Q_RETURN_ARG(QVariant, visible),
+                            Q_ARG(QVariant, index), Q_ARG(QVariant, QVariant(QPointF(rect.value("centerX").toDouble(),
+                                                                                rect.value("centerY").toDouble())))));
+                        covered |= !visible.toBool(); exposed |= visible.toBool();
+                    }
+                    if (!evidence.isEmpty() && pitch == -60)
+                        QVERIFY(travelled.save(QDir(evidence).filePath(QStringLiteral("travel-occlusion-%1.png").arg(step))));
+                    QCOMPARE(scene->property("effectiveLayoutAngle").toDouble(), 0.0);
+                }
+            }
+            QVERIFY2(covered && exposed, "native platform travel must expose front entries and exclude covered rear entries");
+            edited.insert("panelRotationMode", "clockwise");
+            edited.insert("panelRotationTrigger", "idle");
+            edited.insert("panelTravelSpeed", 2.0);
+            scene->setProperty("animationProfiles", QVariantMap{{"reducedMotion", false}});
+            scene->setProperty("panelDefinition", edited);
+            QTRY_VERIFY(scene->property("travelMotionActive").toBool());
+            QTest::qWait(1200);
+            QObject *stats = objectValue(viewport->property("renderStats"));
+            QVERIFY(stats);
+            qInfo().noquote() << "NATIVE_FRAME_TIME" << themeId
+                << "intervalMs=" << stats->property("frameTime").toDouble()
+                << "renderMs=" << stats->property("renderTime").toDouble()
+                << "syncMs=" << stats->property("syncTime").toDouble()
+                << "fps=" << stats->property("fps").toInt();
+            edited.insert("panelRotationMode", "none");
+            scene->setProperty("panelDefinition", edited);
+            QTRY_VERIFY(!scene->property("travelMotionActive").toBool());
+            QTRY_VERIFY(!scene->property("travelStepping").toBool());
+            QVERIFY(QMetaObject::invokeMethod(scene, "resetTravel"));
+            scene->setProperty("wheelTravel", 0.0); scene->setProperty("wheelTravelTarget", 0.0);
+            scene->setProperty("panelDefinition", own);
+            scene->setProperty("animationProfiles", QVariantMap{});
+            QTest::qWait(150);
+        }
         if (themeId == QStringLiteral("arc-platform-orange")) return;
         tiltedDefinition.remove(QStringLiteral("scene3DCameraPitch"));
         scene->setProperty("panelDefinition", tiltedDefinition);
@@ -1127,10 +1296,15 @@ private slots:
                 required property string glyphFixture
                 required property string layoutName
                 property real pitch: 0
+                property real fold: 0
+                property real thickness: 1
+                property bool moving: false
                 panelDefinition: ({rendererTier: "true3d", layout: layoutName, layoutRadius: 120,
                                    scene3DQuality: "high", iconSize: 40, layoutPadding: 10,
                                    pathSides: 7, appearance: "neon", scene3DCameraPitch: pitch,
-                                   scene3DTransitions: false})
+                                   scene3DTransitions: false, scene3DFold: fold, scene3DThickness: thickness,
+                                   panelMotionTarget: "items", panelRotationMode: moving ? "clockwise" : "none",
+                                   panelTravelSpeed: 2, panelRotationTrigger: "idle"})
                 entryDelegateContext: ({hostKind: "free"})
                 hostCapabilities: ({rotation: {available: true}})
                 orderedEntries: [0, 1, 2, 3, 4, 5].map(function(index) {
@@ -1362,6 +1536,83 @@ private slots:
             const QPoint under(qRound((base.x() + foot.x()) / 2), qRound((bottom + foot.y()) / 2));
             QVERIFY2(tilted.pixelColor(under).alpha() > 200, qPrintable(QStringLiteral(
                 "entry %1 has nothing under it at %2,%3").arg(index).arg(under.x()).arg(under.y())));
+        }
+        // ADREP-TASK-004: all generated outlines fold their actual GPU mesh;
+        // the entry feet and input projection move with it, then reset.
+        const int triangles = renderer->property("triangleCount").toInt();
+        const auto unfolded = plainValue(renderer->property("projectedEntryGeometry"));
+        for (double fold : {0.75, -0.75}) {
+            scene->setProperty("fold", fold);
+            QTRY_COMPARE(renderer->property("platformFold").toDouble(), fold);
+            QTRY_VERIFY(plainValue(renderer->property("projectedEntryGeometry")) != unfolded);
+            QTest::qWait(150);
+            const auto folded = pixels();
+            QVERIFY(!folded.isNull() && folded != tilted);
+            QCOMPARE(renderer->property("triangleCount").toInt(), triangles);
+            if (!evidence.isEmpty()) QVERIFY(folded.save(evidence + "/generated/" + tag
+                + QStringLiteral("-fold-%1.png").arg(fold)));
+        }
+        scene->setProperty("fold", 0.0);
+        QTRY_COMPARE(renderer->property("platformFold").toDouble(), 0.0);
+        QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")), unfolded);
+        QSignalSpy resetFrame(&window, &QQuickWindow::frameSwapped);
+        window.update(); QVERIFY(resetFrame.wait(5000));
+        QTest::mouseMove(&window, QPoint(0, 0));
+        const auto wheelRects = plainValue(renderer->property("projectedEntryGeometry")).toList();
+        const auto wheelRect = wheelRects[2].toMap();
+        const QPointF wheelPoint(wheelRect.value("centerX").toDouble(), wheelRect.value("centerY").toDouble());
+        QWheelEvent wheel(wheelPoint, window.mapToGlobal(wheelPoint.toPoint()), QPoint(), QPoint(0, 120),
+            Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+        QCoreApplication::sendEvent(&window, &wheel);
+        QTRY_COMPARE(scene->property("entryTravel").toDouble(), 1.0);
+        QCOMPARE(scene->property("effectiveLayoutAngle").toDouble(), 0.0);
+        scene->setProperty("moving", true);
+        QTRY_VERIFY(scene->property("travelMotionActive").toBool());
+        const double started = scene->property("entryTravel").toDouble();
+        QTRY_VERIFY(scene->property("entryTravel").toDouble() > started + 0.2);
+        QCOMPARE(scene->property("effectiveLayoutAngle").toDouble(), 0.0);
+        if (layout == QStringLiteral("circular")) {
+            QTest::qWait(1200);
+            QObject *stats = objectValue(viewport->property("renderStats"));
+            QVERIFY(stats);
+            qInfo().noquote() << "NATIVE_FRAME_TIME generated-circle"
+                << "intervalMs=" << stats->property("frameTime").toDouble()
+                << "renderMs=" << stats->property("renderTime").toDouble()
+                << "syncMs=" << stats->property("syncTime").toDouble()
+                << "fps=" << stats->property("fps").toInt();
+        }
+        scene->setProperty("moving", false);
+        QTRY_VERIFY(!scene->property("travelStepping").toBool());
+        scene->setProperty("wheelTravel", 0.0); scene->setProperty("wheelTravelTarget", 0.0);
+        if (layout == QStringLiteral("circular") || !themeId.isEmpty()) {
+            bool hidden = false, visible = false;
+            const double period = plainValue(scene->property("trackWindow")).toMap().value("loop").toDouble();
+            scene->setProperty("thickness", 4.0);
+            for (double pitch : {45.0, -60.0}) {
+                scene->setProperty("pitch", pitch);
+                for (int step = 0; step <= 8; ++step) {
+                    scene->setProperty("wheelTravel", period * step / 8);
+                    scene->setProperty("wheelTravelTarget", period * step / 8);
+                    QSignalSpy swapped(&window, &QQuickWindow::frameSwapped);
+                    window.update(); QVERIFY(swapped.wait(5000));
+                    const auto picture = pixels();
+                    QVERIFY(!picture.isNull());
+                    QVERIFY(renderer->property("rendererReady").toBool());
+                    if (!evidence.isEmpty()) QVERIFY(picture.save(evidence + "/generated/" + tag
+                        + QStringLiteral("-travel-%1-%2.png").arg(pitch).arg(step)));
+                    const auto projected = plainValue(renderer->property("projectedEntryGeometry")).toList();
+                    for (int i = 0; i < projected.size(); ++i) {
+                        const auto rect = projected[i].toMap();
+                        const QPointF point(rect.value("centerX").toDouble(), rect.value("centerY").toDouble());
+                        if (point.x() < 0 || point.y() < 0 || point.x() >= picture.width() || point.y() >= picture.height()) continue;
+                        QVariant accepted;
+                        QVERIFY(QMetaObject::invokeMethod(renderer, "entryPointVisible", Q_RETURN_ARG(QVariant, accepted),
+                            Q_ARG(QVariant, i), Q_ARG(QVariant, QVariant(point))));
+                        hidden |= !accepted.toBool(); visible |= accepted.toBool();
+                    }
+                }
+            }
+            QVERIFY2(hidden && visible, qPrintable(tag + " must expose front glyphs and exclude rear ones"));
         }
     }
 

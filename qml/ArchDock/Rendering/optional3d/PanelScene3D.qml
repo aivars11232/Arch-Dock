@@ -65,11 +65,42 @@ Item {
     property real layoutTrackRadius: 0
     property string appearance: ""
     property string customColor: ""
+    readonly property var materialNames: ["glass", "crystal", "neon", "minimal", "plasma", "lime",
+        "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"]
+    readonly property string materialLook: materialNames.includes(String(sceneDefinition.materialLook))
+        ? String(sceneDefinition.materialLook) : "theme"
+    readonly property string materialColour: PlatformGeometry.parseColour(sceneDefinition.materialColor)
+        ? String(sceneDefinition.materialColor) : ""
+    readonly property string effectiveMaterialLook: materialLook !== "theme" ? materialLook
+        : generatedSpec && !generatedSpec.palette && !textureRequired
+            ? LayoutEngine.themeStyle(appearance, "", 48).material : "theme"
+    readonly property string textureChoice: ["theme", "none"].concat(materialNames)
+        .includes(String(sceneDefinition.materialTexture)) ? String(sceneDefinition.materialTexture) : "theme"
+    readonly property string textureMaterial: textureChoice === "none" ? ""
+        : textureChoice !== "theme" ? textureChoice
+        : materialLook !== "theme" ? materialLook
+        : generatedSpec && !generatedSpec.palette && !textureRequired
+            ? LayoutEngine.themeStyle(appearance, "", 48).material : ""
+    readonly property url materialTextureSource: textureMaterial.length
+        ? Qt.resolvedUrl("../materials/" + textureMaterial + ".svg") : ""
+    readonly property bool materialTextureReady: !textureMaterial.length || materialImage.status === Image.Ready
+    readonly property bool materialAnimationActive: effectiveMaterialLook !== "theme"
+        && LayoutEngine.themeStyle(effectiveMaterialLook, "", 48).animated
+        && motionAllowed && visible && !sceneConcealed && !reducedMotion
+    property real materialPulse: 0
+    SequentialAnimation on materialPulse {
+        running: root.materialAnimationActive
+        loops: Animation.Infinite
+        NumberAnimation { to: 1; duration: 2400; easing.type: Easing.InOutSine }
+        NumberAnimation { to: 0; duration: 2400; easing.type: Easing.InOutSine }
+    }
     readonly property var generatedSpec: (sceneDefinition || ({})).generated || null
     readonly property var generatedShape: generatedSpec
         ? PlatformGeometry.shapeForLayout(generatedSpec.layout, generatedSpec.polygonSides) : null
-    readonly property var generatedPalette: generatedSpec && generatedSpec.palette
-        ? generatedSpec.palette
+    readonly property var generatedPalette: materialColour.length || materialLook !== "theme"
+        ? PlatformGeometry.paletteFromStyle(LayoutEngine.themeStyle(
+            materialLook === "theme" ? appearance : materialLook, materialColour, 48))
+        : generatedSpec && generatedSpec.palette ? generatedSpec.palette
         : PlatformGeometry.paletteFromStyle(LayoutEngine.themeStyle(appearance, customColor, 48))
     // The platform is rebuilt only when what it is built from changes: a
     // string compares by value, so an edit elsewhere in the scene's
@@ -80,8 +111,12 @@ Item {
         bend: bounded("bend", 0, -1, 1), palette: generatedPalette }) : ""
     readonly property var generatedPlatform: generatedKey.length > 0
         ? PlatformGeometry.platform(JSON.parse(generatedKey)) : null
-    readonly property var platformMesh: generatedSpec ? generatedPlatform
+    readonly property var basePlatformMesh: generatedSpec ? generatedPlatform
         : (sceneResources || ({})).mesh || null
+    readonly property real baseTopHeight: generatedSpec ? PlatformGeometry.topHeight
+        : Math.max(0, ...((basePlatformMesh || {}).positions || []).map(p => Number(p[2])))
+    readonly property real platformFold: bounded("fold", 0, -1, 1)
+    readonly property var platformMesh: PlatformGeometry.foldMesh(basePlatformMesh, platformFold, baseTopHeight)
     // A generated platform's pedestals take its top's colour, and its rim
     // glows in the look's glow colour.
     readonly property var platformMaterial: {
@@ -95,12 +130,26 @@ Item {
             material.rimEmissiveColor = Qt.rgba(glow[0], glow[1], glow[2], 1)
             material.rimEmissiveStrength = Number(generatedPalette.glowStrength || 0)
         }
+        if (materialColour.length) material.baseColor = materialColour
+        if (effectiveMaterialLook !== "theme") {
+            const look = effectiveMaterialLook
+            material.metalness = ["metallic", "platform", "plate", "pedestal", "futuristic"].includes(look) ? 0.85 : 0
+            material.roughness = ["glass", "floating-glass", "crystal"].includes(look) ? 0.12
+                : look === "organic" || look === "minimal" ? 0.85 : 0.38
+            material.opacity = LayoutEngine.themeStyle(look, "", 48).alpha
+            if (["neon", "plasma", "lime", "futuristic"].includes(look)) {
+                material.emissiveColor = materialColour || LayoutEngine.themeStyle(look, "", 48).stroke
+                material.emissiveStrength = 0.2 + root.materialPulse * 0.35
+            }
+        }
         return material
     }
     // The theme's own surface texture, for everything drawn in its material:
     // its meshes map it from above, so a pedestal or a part takes the colour
     // of the platform where it stands.
-    readonly property Texture themeTexture: textureRequired && textureReady ? surfaceTexture : null
+    readonly property Texture themeTexture: textureChoice === "none" ? null
+        : textureMaterial.length ? (materialTextureReady ? selectedMaterialTexture : null)
+        : textureRequired && textureReady ? surfaceTexture : null
     // Turns an icon, from inside the entries' frame, to face the camera: the
     // frame's own rotation undone, the camera's taken.
     readonly property quaternion iconFacing: entryFrame.sceneRotation.inverted()
@@ -117,11 +166,12 @@ Item {
     readonly property bool textureReady: !textureRequired || textureImage.status === Image.Ready
     readonly property bool geometryWithinBudget: triangleCount * 3 <= Math.min(262144,
         Number((sceneResources || ({})).indexBudget || 262144))
-    readonly property bool rendererReady: resourcesReady && textureReady && geometryWithinBudget
+    readonly property bool rendererReady: resourcesReady && textureReady && materialTextureReady && geometryWithinBudget
     readonly property string errorReason: !resourcesReady ? "scene3d-mesh-unavailable"
         : textureRequired && textureImage.status === Image.Error ? "scene3d-texture-unavailable"
         : !geometryWithinBudget ? "scene3d-resource-limit"
-        : !textureReady ? "renderer-loading" : ""
+        : textureMaterial.length && materialImage.status === Image.Error ? "material-texture-unavailable"
+        : !textureReady || !materialTextureReady ? "renderer-loading" : ""
     readonly property int entryTriangleCount: {
         let count = 0
         for (let index = 0; index < entryGeometry.length; ++index) {
@@ -153,11 +203,10 @@ Item {
     readonly property real platformReachX: generatedPlatform ? generatedPlatform.reachX : 1
     readonly property real platformReachY: generatedPlatform ? generatedPlatform.reachY : 1
     readonly property real platformScale: Math.min(width / platformReachX, height / platformReachY) * 0.40
+        / (1 + Math.abs(platformFold) * bounded("thickness", 1, 0.1, 4) * 0.4)
     // Where the icons stand: a generated platform's flat top is level along
     // its centre line even when bent; a theme's top is its highest point.
-    readonly property real platformTop: (generatedSpec ? PlatformGeometry.topHeight
-        : Math.max(0, ...((platformMesh || {}).positions || []).map(p => Number(p[2]))))
-        * platformScale * bounded("thickness", 1, 0.1, 4)
+    readonly property real platformTop: baseTopHeight * platformScale * bounded("thickness", 1, 0.1, 4)
     // The ring the icons stand on: the middle of the platform's flat top.
     readonly property real entryTrackRadius: platformScale * (generatedPlatform
         ? generatedPlatform.track : bounded("entryRadius", 0.84, 0.1, 1))
@@ -413,17 +462,17 @@ Item {
         NumberAnimation { to: 0; duration: 1800; easing.type: Easing.InOutSine }
     }
 
-    function containsInputPoint(point) {
-        if (!rendererReady) return false
-        const hit = view.pick(point.x, point.y).objectHit
-        if (!hit) return false
-        if (hit !== platform) return true
-        // Qt picks custom geometry against its bounding volume. Refine that
-        // native coarse hit against the validated mesh so ring holes stay empty.
-        const origin = platform.mapPositionFromScene(view.mapTo3DScene(Qt.vector3d(point.x, point.y, 0)))
-        const far = platform.mapPositionFromScene(view.mapTo3DScene(Qt.vector3d(point.x, point.y, 1000)))
+    // Qt 6.11 picks custom meshes against their bounding volume. Refine that
+    // coarse hit against the same validated triangles the GPU draws, including
+    // a bend, so holes and hidden rear entries do not receive clicks.
+    function meshHitDistance(model, mesh, point) {
+        if (!model || !mesh || !mesh.positions || !mesh.indexes) return Infinity
+        const sceneOrigin = view.mapTo3DScene(Qt.vector3d(point.x, point.y, 0))
+        const origin = model.mapPositionFromScene(sceneOrigin)
+        const far = model.mapPositionFromScene(view.mapTo3DScene(Qt.vector3d(point.x, point.y, 1000)))
         const direction = far.minus(origin).normalized()
-        const mesh = platformMesh, vertices = mesh.positions, indexes = mesh.indexes
+        const vertices = mesh.positions, indexes = mesh.indexes
+        let distance = Infinity
         for (let i = 0; i < indexes.length; i += 3) {
             const a = vertices[indexes[i]], b = vertices[indexes[i+1]], c = vertices[indexes[i+2]]
             const ab = Qt.vector3d(b[0]-a[0], b[1]-a[1], b[2]-a[2])
@@ -435,7 +484,49 @@ Item {
             if (u < 0 || u > 1) continue
             const q = offset.crossProduct(ab), v = direction.dotProduct(q) / determinant
             if (v < 0 || u + v > 1) continue
-            if (ac.dotProduct(q) / determinant >= 0) return true
+            const t = ac.dotProduct(q) / determinant
+            if (t >= 0)
+                distance = Math.min(distance, model.mapPositionToScene(origin.plus(direction.times(t)))
+                    .minus(sceneOrigin).length())
+        }
+        return distance
+    }
+
+    function entryPointVisible(index, point) {
+        if (!motionAllowed || !worldEntries.objectAt(index) || !worldEntries.objectAt(index).visible)
+            return false
+        const hits = view.pickAll(point.x, point.y)
+        let glyph = null
+        for (let i = 0; i < hits.length; ++i)
+            if (hits[i].objectHit && String(hits[i].objectHit.objectName) === "mesh-glyph-" + index) {
+                glyph = hits[i]; break
+            }
+        if (!glyph) return false
+        const origin = view.mapTo3DScene(Qt.vector3d(point.x, point.y, 0))
+        const distance = glyph.scenePosition.minus(origin).length()
+        if (meshHitDistance(platform, platformMesh, point) < distance - 0.01) return false
+        for (let i = 0; i < panelPartNodes.count; ++i) {
+            const part = panelPartNodes.objectAt(i)
+            if (part && part.visible && meshHitDistance(part, part.meshData, point) < distance - 0.01)
+                return false
+        }
+        // Overlapping entries are picked in the same near-to-far order as drawn.
+        for (let i = 0; i < hits.length; ++i) {
+            const name = hits[i].objectHit ? String(hits[i].objectHit.objectName) : ""
+            if (/^mesh-glyph-\d+$/.test(name)) return name === "mesh-glyph-" + index
+        }
+        return false
+    }
+
+    function containsInputPoint(point) {
+        if (!motionAllowed) return false
+        if (Number.isFinite(meshHitDistance(platform, platformMesh, point))) return true
+        const hits = view.pickAll(point.x, point.y)
+        for (let i = 0; i < hits.length; ++i) {
+            const name = hits[i].objectHit ? String(hits[i].objectHit.objectName) : ""
+            const entry = /^mesh-glyph-(\d+)$/.exec(name)
+            if (entry && entryPointVisible(Number(entry[1]), point)) return true
+            if (editMode && name.startsWith("gizmo-")) return true
         }
         return false
     }
@@ -545,6 +636,15 @@ Item {
     function number(object, key, fallback) {
         const value = Number((object || ({}))[key])
         return Number.isFinite(value) ? value : fallback
+    }
+
+    Image {
+        id: materialImage
+        visible: false
+        source: root.materialTextureSource
+        sourceSize: Qt.size(512, 512)
+        asynchronous: true
+        cache: true
     }
 
     Image {
@@ -669,6 +769,13 @@ Item {
                 ? SceneEnvironment.High : SceneEnvironment.Medium
         }
         Texture {
+            id: selectedMaterialTexture
+            sourceItem: root.Window.window && materialImage.Window.window === root.Window.window
+                ? materialImage : null
+            generateMipmaps: true
+            mipFilter: Texture.Linear
+        }
+        Texture {
             id: surfaceTexture
             sourceItem: root.Window.window && textureImage.Window.window === root.Window.window
                 ? textureImage : null
@@ -733,11 +840,14 @@ Item {
                 readonly property real reachX: Number(rect.centerX) - root.width / 2
                 readonly property real reachY: root.height / 2 - Number(rect.centerY)
                 readonly property real reach: Math.hypot(reachX, reachY)
-                readonly property var standPoint: root.generatedPlatform
+                readonly property var baseStandPoint: root.generatedPlatform
                     ? PlatformGeometry.standPoint(reachX, reachY, root.layoutTrackRadius,
-                                                  root.generatedPlatform.track).map(v => v * root.platformScale)
-                    : [(reach > 0.001 ? reachX / reach : 0) * root.entryTrackRadius,
-                       (reach > 0.001 ? reachY / reach : 1) * root.entryTrackRadius]
+                                                  root.generatedPlatform.track)
+                    : [(reach > 0.001 ? reachX / reach : 0) * root.entryTrackRadius / root.platformScale,
+                       (reach > 0.001 ? reachY / reach : 1) * root.entryTrackRadius / root.platformScale]
+                readonly property var standPoint: PlatformGeometry.foldPoint(
+                    [baseStandPoint[0], baseStandPoint[1], root.baseTopHeight],
+                    root.platformFold, root.baseTopHeight).map(v => v * root.platformScale)
                 property alias glyphModel: glyphModel
                 property alias inputAnchor: inputAnchor
                 readonly property real glow: Math.max(root.number(iconMotion, "glow", 0),
@@ -752,7 +862,7 @@ Item {
                 // track, on top of its pedestal. Motion offsets move it along.
                 position: Qt.vector3d(standPoint[0] + root.number(iconMotion, "x", 0),
                     standPoint[1] - root.number(iconMotion, "y", 0),
-                    root.platformTop + pedestalHeight + baseLift)
+                    standPoint[2] * root.bounded("thickness", 1, 0.1, 4) + pedestalHeight + baseLift)
                 opacity: root.number(iconMotion, "opacity", 1) * trackVisibility
 
                 // The pedestal: a solid column from the platform's top up to
@@ -908,13 +1018,15 @@ Item {
                 emissionScale: root.emissionScale
             }
             Repeater3D {
+                id: panelPartNodes
                 model: root.panelParts.length
                 delegate: IconStyle3D {
                     required property int index
                     objectName: "mesh-panel-part-" + index
                     partDefinition: root.panelParts[index].definition
                     visible: partDefinition.mechanism === root.mechanism
-                    meshData: root.panelParts[index].resources.mesh || null
+                    meshData: PlatformGeometry.foldMesh(root.panelParts[index].resources.mesh || null,
+                        root.platformFold, root.baseTopHeight)
                     materialData: root.panelParts[index].resources.material || ({})
                     surfaceTexture: root.themeTexture
                     openAmount: root.partOpenAmount(partDefinition)

@@ -112,6 +112,9 @@ Item {
         "surface", "color", "color", ""))
     readonly property real panelOpacity: Number(definitionValue(
         "surface", "opacity", "opacity", 0.9))
+    readonly property real sparkleIntensity: Number(panelDefinition.sparkleIntensity !== undefined
+        ? panelDefinition.sparkleIntensity
+        : definitionValue("surface", "parameters2D", "surface2D", ({})).sparkleIntensity || 0)
     readonly property real glowIntensity: {
         const candidate = Number(definitionValue(
             "surface", "glowIntensity", "glowIntensity", 1))
@@ -749,6 +752,18 @@ Item {
         return x >= 0 && y >= 0 && x <= width && y <= height
     }
 
+    function entryPointVisible(index, point) {
+        if (index < 0 || index >= entryCount) return false
+        const geometry = entryGeometryAt(index)
+        if (geometry.onTrack === false || Number(geometry.trackVisibility ?? 1) <= 0) return false
+        if (surfaceLoader.true3DReady)
+            return surfaceLoader.true3DItem.entryPointVisible(index, point)
+        if (bakedMetadataUsable && Number(geometry.depthOrder) < occlusionDepth
+                && foregroundOcclusion.item && foregroundOcclusion.item.occludesPoint(point))
+            return false
+        return true
+    }
+
     function buildEntryRects() {
         const rects = []
         for (let index = 0; index < entryCount; ++index) {
@@ -1316,6 +1331,7 @@ Item {
         angle: root.effectiveLayoutAngle
         polygonSides: root.polygonSides
         entryRects: root.entryRects
+        entryPointFilter: function(index, point) { return root.entryPointVisible(index, point) }
         projectedScene: surfaceLoader.true3DReady ? surfaceLoader.true3DItem : null
         bandWidth: root.layoutGeometry.iconSize * 1.2
         entryMargin: root.layoutGeometry.iconSize * 0.4
@@ -1369,6 +1385,7 @@ Item {
         appearance: root.appearance
         customColor: root.customColor
         panelOpacity: root.panelOpacity
+        sparkleIntensity: root.sparkleIntensity
         motionTracks: root.motionTracks
         collapseProgress: root.collapseProgress
         mechanism: root.collapseMechanism
@@ -1396,7 +1413,10 @@ Item {
                     ["scene3DScale", "scale"], ["scene3DFieldOfView", "fieldOfView"],
                     ["scene3DKeyLight", "keyLightBrightness"], ["scene3DFillLight", "fillLightBrightness"],
                     ["scene3DTransitions", "transitions"], ["scene3DFloat", "float"],
-                    ["scene3DBand", "band"], ["scene3DBend", "bend"]])
+                    ["scene3DBand", "band"], ["scene3DBend", "bend"],
+                    ["scene3DFold", "fold"],
+                    ["scene3DColor", "color"], ["scene3DMaterial", "material"],
+                    ["scene3DTexture", "texture"]])
                 if (definition[key] !== undefined) parameters[parameter] = definition[key]
             return parameters
         }
@@ -1533,6 +1553,17 @@ Item {
             objectName: "panel-entry-" + index
             visible: segmentOpen && trackVisibility > 0
             enabled: sceneInputEnabled
+            containmentMask: QtObject {
+                function contains(point: point): bool {
+                    // PD-18 visibility narrows the local rectangle. Qt uses
+                    // this result instead of its default bounds check.
+                    return root !== null && entryItem !== null
+                        && point.x >= 0 && point.y >= 0
+                        && point.x <= entryItem.width && point.y <= entryItem.height
+                        && root.entryPointVisible(entryItem.index,
+                        entryItem.mapToItem(root, point.x, point.y))
+                }
+            }
             x: geometryOutput.position.x
             y: geometryOutput.position.y
             z: geometryOutput.depthOrder
@@ -1577,6 +1608,11 @@ Item {
 
             Loader {
                 id: entryLoader
+
+                function sceneEntryPointVisible(point) {
+                    return root.entryPointVisible(entryItem.index,
+                        entryLoader.mapToItem(root, point.x, point.y))
+                }
 
                 readonly property var sceneEntry: entryItem.sceneEntry
                 readonly property int sceneIndex: entryItem.sceneIndex

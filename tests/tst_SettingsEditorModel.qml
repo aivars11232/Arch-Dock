@@ -5,6 +5,55 @@ import "../qml/runtime/SettingsEditorModel.js" as EditorModel
 TestCase {
     name: "SettingsEditorModel"
 
+    function test_platformOffRestoresTheDraftFlatLookAfterReload() {
+        const source = snapshot("free-1", 4)
+        source.panelValues = Object.assign(source.panelValues, {
+            rendererTier: "procedural2d", panelThemeId: "obsidian-glass",
+            completeThemeId: "", appearance: "glass", color: "#334455",
+            layout: "circular", layoutRadius: 137, layoutAngle: 23,
+            previousFlatLook: {}, scene3DColor: "", scene3DMaterial: "theme", scene3DTexture: "theme"
+        })
+        source.flatLookValues = Object.assign({}, source.panelValues)
+        delete source.flatLookValues.visible
+        delete source.flatLookValues.previousFlatLook
+        let flat = EditorModel.setPanelValue(EditorModel.load(source), "opacity", 0.43)
+        const platform = EditorModel.stageThemeLook(flat, {values: {
+            rendererTier: "baked2.5d", panelThemeId: "arc-platform-orange",
+            layout: "arc", layoutRadius: 300, color: "#ff8f47" }})
+        const remembered = EditorModel.panelValue(platform, "previousFlatLook", {})
+        compare(remembered.opacity, 0.43)
+        compare(remembered.color, "#334455")
+        compare(remembered.layoutRadius, 137)
+        verify(!remembered.visible)
+        compare(remembered.iconStyle, source.panelValues.iconStyle)
+
+        const reopened = snapshot("free-1", 5)
+        reopened.panelValues = EditorModel.panelCandidate(platform)
+        // The platform's current controls no longer expose these flat fields.
+        delete reopened.panelValues.appearance
+        reopened.flatLookValues = Object.assign({}, source.flatLookValues,
+            { rendererTier: "baked2.5d", panelThemeId: "arc-platform-orange", color: "#ff8f47" })
+        const off = EditorModel.platformOff(EditorModel.load(reopened))
+        const restored = EditorModel.panelCandidate(off)
+        for (const key of Object.keys(remembered)) compare(restored[key], remembered[key], key)
+        compare(restored.previousFlatLook, {})
+        compare(restored.iconStyle, source.panelValues.iconStyle)
+        const cancelled = EditorModel.cancel(off)
+        compare(EditorModel.panelCandidate(cancelled).rendererTier, "baked2.5d")
+        compare(EditorModel.panelCandidate(cancelled).previousFlatLook, remembered)
+    }
+
+    function test_lookStagingCannotIntroduceProtectedKeys() {
+        const source = snapshot("free-1", 1)
+        source.flatLookValues = { opacity: 0.9, rendererTier: "procedural2d" }
+        const staged = EditorModel.stageLookValues(EditorModel.load(source), {
+            opacity: 0.5, rendererTier: "true3d", id: "other-panel", host: "native", command: "unsafe" })
+        const values = EditorModel.panelCandidate(staged)
+        compare(values.opacity, 0.5)
+        compare(values.rendererTier, "true3d")
+        verify(!("id" in values) && !("host" in values) && !("command" in values))
+    }
+
     function test_runtimeFeedbackPreservesDraftAndHidesUnavailableSource() {
         const source = snapshot("free-1", 9);
         source.panelValues.showBadges = true;

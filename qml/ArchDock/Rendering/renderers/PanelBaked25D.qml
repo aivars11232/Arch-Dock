@@ -276,6 +276,8 @@ Item {
         eachLayerItem(function(item) {
             if (!item || !item.settled)
                 settled = false
+            if (item && !item.skipped && item.occlusionMask && !item.occlusionMask.ready)
+                settled = false
         })
         return settled
     }
@@ -384,6 +386,30 @@ Item {
         // Loader without its own position being overwritten.
         Item {
             id: foregroundRoot
+            opacity: Math.max(0, Math.min(1, root.panelOpacity))
+            readonly property bool occlusionReady: {
+                const retained = foregroundHost.item
+                return retained !== null && retained.layerItems().every(function(layer) {
+                    return layer.skipped || layer.occlusionMask.ready
+                })
+            }
+
+            function occludesPoint(point) {
+                if (root.panelOpacity <= 0.01) return false
+                for (let i = 0; i < foregroundRepeater.count; ++i) {
+                    const layer = foregroundRepeater.itemAt(i)
+                    if (!layer || !layer.visible || layer.opacity <= 0.01) continue
+                    // The renderer's retained foreground instance owns one
+                    // cache per rim. Actual drawn instances share it and do
+                    // not race an independent decode after renderer readiness.
+                    const retained = foregroundHost.item ? foregroundHost.item.layerItems()[i] : null
+                    const mask = retained ? retained.occlusionMask : null
+                    if (!mask) return true
+                    if (!mask.ready) return true // A loading rim cannot expose a hidden click target.
+                    if (mask.contains(layer.mapFromItem(foregroundRoot, point.x, point.y))) return true
+                }
+                return false
+            }
 
             function layerItems() {
                 const items = []
@@ -410,6 +436,7 @@ Item {
                     model: root.foregroundEntries
 
                     delegate: PanelSkinLayer2D {
+                        id: foregroundLayer
                         required property var modelData
                         required property int index
 
@@ -429,6 +456,27 @@ Item {
                         tintColor: root.safeTintColor
                         rasterBudget: root.rasterBudget
                         cacheImage: false
+                        property alias occlusionMask: rimMask
+
+                        AlphaHitMask {
+                            id: rimMask
+                            visible: false
+                            width: foregroundLayer.width
+                            height: foregroundLayer.height
+                            source: foregroundRoot.parent === foregroundHost ? foregroundLayer.source : ""
+                            readonly property var natural: foregroundLayer.assetDefinition.naturalSize || ({})
+                            readonly property rect originalRect: foregroundLayer.sourceRectangle()
+                            readonly property real decodeScale: Math.min(1,
+                                width / Math.max(1, originalRect.width),
+                                height / Math.max(1, originalRect.height),
+                                root.rasterBudget / Math.max(1, Number(natural.width || 0), Number(natural.height || 0)))
+                            decodeSize: Qt.size(Math.max(1, Math.ceil(Number(natural.width || 0) * decodeScale)),
+                                                Math.max(1, Math.ceil(Number(natural.height || 0) * decodeScale)))
+                            sourceSize: decodeSize
+                            sourceRect: Qt.rect(originalRect.x * decodeScale, originalRect.y * decodeScale,
+                                                originalRect.width * decodeScale, originalRect.height * decodeScale)
+                            threshold: 0.5
+                        }
                     }
                 }
             }

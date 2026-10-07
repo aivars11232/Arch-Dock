@@ -320,6 +320,7 @@ private slots:
     void studioPageWheelInput();
     void studioPanelMotionControls();
     void tiltEditorsFollowTheSelectedRenderer();
+    void platformOffRestoresTheCompleteFlatLook();
     void themeCardsResolveEachThemesOwnRenderer();
     void sceneEditAuditionsOnlyAFree3DPanel();
     void settingsLatencyOnTheOwners3DPanel();
@@ -520,7 +521,8 @@ void PanelWindowCapabilityTest::studioPlainSurfaceExplains3D()
         QVERIFY(QMetaObject::invokeMethod(popup.get(), "panel3DRows", Q_RETURN_ARG(QVariant, rows)));
         bool switchOffered = false;
         for (const auto &row : rows.toList())
-            switchOffered |= row.toMap().value("rendererToggle").toBool();
+            switchOffered |= row.toMap().value("platformToggle").toBool()
+                && row.toMap().value("label").toString() == QStringLiteral("Platform presentation");
         QVERIFY(switchOffered);
         QVERIFY(!explains(rows));
     }
@@ -745,6 +747,69 @@ void PanelWindowCapabilityTest::studioPanelMotionControls()
              QStringLiteral("collapse-horizontal"));
 }
 
+void PanelWindowCapabilityTest::platformOffRestoresTheCompleteFlatLook()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    const auto apply = [&](const QVariantMap &values) {
+        return window.applyPanelSettingsTransaction(panel,
+            registry->panelDefinition(panel)->settingsRevision, values, {});
+    };
+    auto flat = window.panelThemeCandidate(panel, "holographic-ring").value("values").toMap();
+    flat.insert("appearance", "organic");
+    flat.insert("color", "#476b83");
+    flat.insert("opacity", 0.63);
+    flat.insert("iconSize", 57);
+    flat.insert("spacing", 13);
+    flat.insert("iconShape", "diamond");
+    flat.insert("panelMotionTarget", "items");
+    flat.insert("panelRotationMode", "clockwise");
+    flat.insert("panelTravelSpeed", 0.75);
+    const auto initial = apply(flat);
+    QVERIFY2(initial.value("success").toBool(), qPrintable(initial.value("errorMessage").toString()));
+    const auto expected = ArchDock::PanelSettingsSchema::flatLookValues(
+        registry->panelDefinition(panel)->toLegacyMap());
+    QVERIFY(expected.contains("iconShape"));
+    const auto motionValues = [&]() {
+        const auto record = registry->panelDefinition(panel)->toLegacyMap();
+        QVariantMap values;
+        for (const QString &key : {QStringLiteral("panelMotionTarget"), QStringLiteral("panelRotationMode"),
+                                   QStringLiteral("panelTravelSpeed"), QStringLiteral("panelRotationTrigger")})
+            values.insert(key, record.value(key));
+        return values;
+    };
+    const auto motion = motionValues();
+    for (const QString &theme : {QStringLiteral("ring-platform-blue"),
+                                QStringLiteral("octagon-platform-steel"),
+                                QStringLiteral("arc-platform-orange"),
+                                QStringLiteral("mesh-platform-cyan")}) {
+        const auto candidate = window.panelThemeCandidate(panel, theme);
+        QVERIFY2(candidate.value("success").toBool(), qPrintable(candidate.value("errorMessage").toString()));
+        const auto loaded = apply(candidate.value("values").toMap());
+        QVERIFY2(loaded.value("success").toBool(), qPrintable(loaded.value("errorMessage").toString()));
+        QCOMPARE(registry->panelDefinition(panel)->surface.parameters2D.value("previousFlatLook").toMap(), expected);
+        QCOMPARE(motionValues(), motion);
+        PanelRegistry reopened;
+        const auto remembered = reopened.panelDefinition(panel)->surface.parameters2D.value("previousFlatLook").toMap();
+        QCOMPARE(remembered, expected);
+        QCOMPARE(window.panelSettingsEditorSnapshot(panel, "studio").value("flatLookValues").toMap(),
+                 ArchDock::PanelSettingsSchema::flatLookValues(reopened.panelDefinition(panel)->toLegacyMap()));
+        auto restore = remembered;
+        restore.insert("previousFlatLook", QVariantMap{});
+        const auto restored = apply(restore);
+        QVERIFY2(restored.value("success").toBool(), qPrintable(restored.value("errorMessage").toString()));
+        QCOMPARE(ArchDock::PanelSettingsSchema::flatLookValues(registry->panelDefinition(panel)->toLegacyMap()), expected);
+        QCOMPARE(motionValues(), motion);
+        QCOMPARE(registry->panelDefinition(panel)->surface.parameters2D.value("previousFlatLook").toMap(), QVariantMap{});
+        PanelRegistry restoredRegistry;
+        QCOMPARE(ArchDock::PanelSettingsSchema::flatLookValues(restoredRegistry.panelDefinition(panel)->toLegacyMap()), expected);
+    }
+}
+
 void PanelWindowCapabilityTest::tiltEditorsFollowTheSelectedRenderer()
 {
     QQmlApplicationEngine engine;
@@ -864,8 +929,15 @@ void PanelWindowCapabilityTest::settingsLatencyOnTheOwners3DPanel()
     values.insert("layoutRadius", 300);
     values.insert("rendererTier", "true3d");
     values.insert("scene3DCameraPitch", 60.0);
-    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
-        values).value("success").toBool());
+    // The native Orange platform draws its own material. Its baked tint is
+    // unavailable in true 3D; leave the native material's default colour.
+    values.remove("color");
+    const auto setupResult = backend.applyPanelSettingsTransaction(
+        panel, registry->panelDefinition(panel)->settingsRevision, values);
+    auto setupDiagnostic = setupResult;
+    setupDiagnostic.remove(QStringLiteral("capabilityResolution"));
+    QVERIFY2(setupResult.value("success").toBool(),
+             qPrintable(QString::fromUtf8(QJsonDocument::fromVariant(setupDiagnostic).toJson(QJsonDocument::Compact))));
 
     struct Measured { QString name; QList<double> ms; double loads; };
     QList<Measured> results;
@@ -899,6 +971,9 @@ void PanelWindowCapabilityTest::settingsLatencyOnTheOwners3DPanel()
     });
     measure("live panel renderer configuration", 10, [&](int) {
         QVERIFY(!backend.panelRendererConfiguration(panel).isEmpty());
+    });
+    measure("theme catalog candidates", 10, [&](int) {
+        QVERIFY(!backend.resolvedThemeDefinitions(panel).isEmpty());
     });
     measure("apply (settings transaction)", 10, [&](int index) {
         QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
@@ -1688,6 +1763,9 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
     QCOMPARE(fieldKeys(snapshot.value(QStringLiteral("panelFields")).toList())
         .contains(QStringLiteral("scene3DQuality")), available);
     const auto keys = fieldKeys(snapshot.value(QStringLiteral("panelFields")).toList());
+    for (const QString &key : {QStringLiteral("scene3DColor"), QStringLiteral("scene3DMaterial"),
+                               QStringLiteral("scene3DTexture"), QStringLiteral("scene3DFold")})
+        QCOMPARE(keys.contains(key), available);
     for (const QString &key : {QStringLiteral("layoutAngle"), QStringLiteral("panelRotationMode"),
                                QStringLiteral("panelRotationSpeed"), QStringLiteral("panelRotationTrigger")})
         QVERIFY(keys.contains(key));
@@ -1700,6 +1778,23 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
         .contains(QStringLiteral("scene3DResources")));
     if (available)
     {
+        const auto material = window.applyPanelSettingsTransaction(panelId,
+            registry->panelDefinition(panelId)->settingsRevision,
+            {{"scene3DColor", "#557799"}, {"scene3DMaterial", "metallic"},
+             {"scene3DTexture", "organic"}, {"scene3DFold", 0.75}}, {});
+        QVERIFY2(material.value("success").toBool(), qPrintable(material.value("errorMessage").toString()));
+        const auto drawn = window.panelRendererConfiguration(panelId);
+        QCOMPARE(drawn.value("scene3DColor").toString(), QStringLiteral("#557799"));
+        QCOMPARE(drawn.value("scene3DMaterial").toString(), QStringLiteral("metallic"));
+        QCOMPARE(drawn.value("scene3DTexture").toString(), QStringLiteral("organic"));
+        QCOMPARE(drawn.value("scene3DFold").toDouble(), 0.75);
+        PanelRegistry reopened;
+        QCOMPARE(reopened.panelDefinition(panelId)->surface.parameters3D.value("texture").toString(), QStringLiteral("organic"));
+        const auto reset = window.applyPanelSettingsTransaction(panelId,
+            registry->panelDefinition(panelId)->settingsRevision,
+            {{"scene3DColor", ""}, {"scene3DMaterial", "theme"},
+             {"scene3DTexture", "theme"}, {"scene3DFold", 0.0}}, {});
+        QVERIFY(reset.value("success").toBool());
         const auto rotationDraft = window.resolvePanelSettingsEditorDraft(panelId,
             registry->panelDefinition(panelId)->settingsRevision,
             {{QStringLiteral("panelRotationMode"), QStringLiteral("clockwise")}}, {}, QStringLiteral("studio"));
@@ -1735,7 +1830,7 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
     QVERIFY(studio);
     studio->show();
     QVERIFY(QTest::qWaitForWindowExposed(studio));
-    const auto rendererToggle = [&]() -> QQuickItem * {
+    const auto rendererToggle = [&](bool presentation = false) -> QQuickItem * {
         QList<QQuickItem *> pending{studio->contentItem()};
         while (!pending.isEmpty())
         {
@@ -1749,7 +1844,7 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
                 const auto row = value.metaType() == QMetaType::fromType<QJSValue>()
                     ? value.value<QJSValue>().toVariant().toMap() : value.toMap();
                 if (row.value("key").toString() == QStringLiteral("rendererTier")
-                    && row.value("rendererToggle").toBool())
+                    && row.value(presentation ? "platformToggle" : "rendererToggle").toBool())
                     return item;
             }
         }
@@ -1763,11 +1858,11 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
         popup->setProperty("subTabIndex", 1);
         popup->setProperty("subTabIndex", 10);
         QVERIFY(QQuickTest::qWaitForPolish(studio));
-        QTRY_VERIFY(rendererToggle());
-        QVERIFY(rendererToggle()->property("checked").toBool());
+        QTRY_VERIFY(rendererToggle(true));
+        QVERIFY(rendererToggle(true)->property("checked").toBool());
         QTest::mouseClick(studio, Qt::LeftButton, Qt::NoModifier,
-            rendererToggle()->mapToScene(QPointF(rendererToggle()->width() / 2,
-                                                rendererToggle()->height() / 2)).toPoint());
+            rendererToggle(true)->mapToScene(QPointF(rendererToggle(true)->width() / 2,
+                                                rendererToggle(true)->height() / 2)).toPoint());
         QTRY_VERIFY(!popup->property("scene3DQualityVisible").toBool());
         QVERIFY(popup->property("scene3DControlsAvailable").toBool());
         QVERIFY(QMetaObject::invokeMethod(popup.get(), "applyStudioChanges"));
@@ -1776,11 +1871,11 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
         QVERIFY(!fieldKeys(window.panelSettingsEditorSnapshot(panelId, QStringLiteral("studio"))
             .value(QStringLiteral("panelFields")).toList()).contains(QStringLiteral("scene3DQuality")));
         QVERIFY(QQuickTest::qWaitForPolish(studio));
-        QTRY_VERIFY(rendererToggle());
-        QVERIFY(!rendererToggle()->property("checked").toBool());
+        QTRY_VERIFY(rendererToggle(true));
+        QVERIFY(!rendererToggle(true)->property("checked").toBool());
         QTest::mouseClick(studio, Qt::LeftButton, Qt::NoModifier,
-            rendererToggle()->mapToScene(QPointF(rendererToggle()->width() / 2,
-                                                rendererToggle()->height() / 2)).toPoint());
+            rendererToggle(true)->mapToScene(QPointF(rendererToggle(true)->width() / 2,
+                                                rendererToggle(true)->height() / 2)).toPoint());
         QTRY_VERIFY2(popup->property("scene3DQualityVisible").toBool(),
                      qPrintable(popup->property("studioError").toString()));
         QVERIFY(QMetaObject::invokeMethod(popup.get(), "cancelStudioChanges"));
@@ -4890,7 +4985,8 @@ void PanelWindowCapabilityTest::studioTruthMatrix()
     quint64 revision = snapshot.value(QStringLiteral("revision")).toULongLong();
     for (const QString &key : std::as_const(shown)) {
         const QVariantMap effect = key == QStringLiteral("rendererTier")
-            ? QVariantMap{{QStringLiteral("probe"), QStringLiteral("frame")}}
+            ? QVariantMap{{QStringLiteral("probe"), QStringLiteral("frame")},
+                {QStringLiteral("needsShaders"), QStringList{QStringLiteral("true3d")}}}
             : effects.value(key).toMap();
         const QString probe = effect.value(QStringLiteral("probe")).toString();
         if (probe.isEmpty()) {
@@ -4905,7 +5001,8 @@ void PanelWindowCapabilityTest::studioTruthMatrix()
             ? QVariant(tier)
             : snapshot.value(global ? QStringLiteral("globalValues") : QStringLiteral("panelValues")).toMap().value(key);
         const QVariant value = key == QStringLiteral("rendererTier")
-            ? (tier == QStringLiteral("true3d") ? studio->property("scene3DOffTier") : QVariant(QStringLiteral("true3d")))
+            ? (tier == QStringLiteral("true3d") || tier == QStringLiteral("baked2.5d")
+                ? QVariant(QStringLiteral("procedural2d")) : QVariant(QStringLiteral("true3d")))
             : truthChangedValue(offered.value(key), original, effect);
         const auto observe = [&]() -> QVariant {
             if (probe == QStringLiteral("runtime")) {
@@ -4923,8 +5020,22 @@ void PanelWindowCapabilityTest::studioTruthMatrix()
         };
         const QVariant before = observe();
         const auto apply = [&](const QVariant &next) {
+            QVariantMap changedValues{{key, next}};
+            if (key == QStringLiteral("rendererTier")) {
+                // PD-17: Platform presentation is the action now shown even
+                // when the consumer cannot draw true 3D. Legacy bases here
+                // have no saved flat look; off clears their platform IDs.
+                // Restore the complete base after testing that action.
+                if (next == original)
+                    changedValues = snapshot.value(QStringLiteral("panelValues")).toMap();
+                else if (next.toString() == QStringLiteral("procedural2d")) {
+                    changedValues.insert(QStringLiteral("panelThemeId"), QString{});
+                    changedValues.insert(QStringLiteral("completeThemeId"), QString{});
+                    changedValues.insert(QStringLiteral("previousFlatLook"), QVariantMap{});
+                }
+            }
             const QVariantMap result = window.applyPanelSettingsTransaction(panel, revision,
-                global ? QVariantMap{} : QVariantMap{{key, next}},
+                global ? QVariantMap{} : changedValues,
                 global ? QVariantMap{{key, next}} : QVariantMap{});
             if (result.value(QStringLiteral("success")).toBool())
                 revision = result.value(QStringLiteral("revision")).toULongLong();

@@ -42,6 +42,7 @@ Item {
     readonly property var meshVisualItem: visual
     property real motionSpeed: 1
     required property bool inputEnabled
+    property var inputContainsPoint: function(point) { return true }
     required property bool editMode
     required property bool acceptDrops
     required property var invoke
@@ -404,6 +405,18 @@ Item {
         }
     }
 
+    QtObject {
+        id: entryHitMask
+        // A custom mask replaces Qt's default rectangle check. Visibility
+        // may narrow that rectangle, but must not make a neighbour's point
+        // part of this entry's pointer or drop target (PD-18).
+        function contains(point: point): bool {
+            return root !== null && point.x >= 0 && point.y >= 0
+                && point.x <= root.width && point.y <= root.height
+                && root.inputContainsPoint(point)
+        }
+    }
+
     MouseArea {
         id: hoverArea
 
@@ -412,6 +425,7 @@ Item {
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         hoverEnabled: true
         enabled: root.inputEnabled
+        containmentMask: entryHitMask
         drag.target: root.acceptDrops && !root.editMode && root.entry.isStatus !== true ? dragProxy : null
         drag.threshold: Kirigami.Units.gridUnit / 2
         drag.smoothed: false
@@ -481,6 +495,7 @@ Item {
         id: entryDropArea
 
         anchors.fill: parent
+        containmentMask: entryHitMask
         enabled: root.acceptDrops && root.inputEnabled && !root.editMode && root.entry.isStatus !== true
         keys: ["application/x-archdock-app", "text/uri-list"]
         onEntered: drag => {
@@ -508,9 +523,6 @@ Item {
         onTriggered: root.requestWindowPreview(false)
     }
 
-    QQC2.ToolTip.visible: root.showTooltip && hoverArea.containsMouse && !root.dragging
-        && !root.windowPreviewAvailable
-    QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
     // Shown as typed. The style's tooltip label detects markup on its own
     // (Qt's AutoText), and a name can come from another application's window
     // caption: an invisible zero-width space after each "<" keeps tags from
@@ -519,7 +531,34 @@ Item {
         ? qsTr("%1 (%2 windows)").arg(entry.displayName).arg(entry.windowCount)
         : entry.displayName) + (entry.temporaryStatus ? "\n" + entry.temporaryStatus : ""))
         .replace(/</g, "<\u200B")
-    QQC2.ToolTip.text: toolTipText
+    QtObject {
+        id: transparentToolTipMask
+        function contains(point: point): bool { return false }
+    }
+
+    QQC2.ToolTip {
+        id: entryToolTip
+        objectName: "dockEntryToolTip"
+        parent: root
+        // Qt draws popup contents in the window overlay without the entry's
+        // perspective scale. The tip can therefore overlap the exposed part
+        // of an icon. This entry-owned informational popup takes no input;
+        // the visible icon keeps its pointer target (PD-18).
+        enabled: false
+        visible: root.showTooltip && hoverArea.containsMouse && !root.dragging
+            && !root.windowPreviewAvailable
+        delay: Kirigami.Units.toolTipDelay
+        timeout: -1
+        text: root.toolTipText
+        onAboutToShow: {
+            // Qt's overlay also consults the popup item's contains() even
+            // when the control is disabled. Narrow this tooltip's own popup
+            // to an empty input region; its text and background still draw.
+            const popupItem = contentItem ? contentItem.parent : null
+            if (popupItem && popupItem !== parent)
+                popupItem.containmentMask = transparentToolTipMask
+        }
+    }
 
     QQC2.Menu {
         id: contextMenu

@@ -131,6 +131,22 @@ hardening_resource_group() {
     after="$(awk '/VmRSS:/ {print $2}' "/proc/$ARCHDOCK_SESSION_ARCH_DOCK_PID/status")"
     (( after-before < 65536 )) || { printf 'Audition cycles grew resident memory by >=64 MiB.\n' >&2; return 1; }
     printf 'Eight create/cancel cycles: RSS before=%s KiB after=%s KiB; zero stale hosts.\n' "$before" "$after"
+    # ADREP-TASK-004: the same private backend must return to idle after the
+    # eight cycles. Read its own CPU time; do not mix in the compositor or a
+    # polling UI fixture. The existing memory bound above is unchanged.
+    python3 - "$ARCHDOCK_SESSION_ARCH_DOCK_PID" <<'PY'
+import os, pathlib, sys, time
+process = pathlib.Path('/proc') / sys.argv[1] / 'stat'
+def ticks():
+    fields = process.read_text().rsplit(')', 1)[1].split()
+    return int(fields[11]) + int(fields[12])
+time.sleep(1)
+before, started = ticks(), time.monotonic()
+time.sleep(5)
+percent = 100 * (ticks() - before) / os.sysconf('SC_CLK_TCK') / (time.monotonic() - started)
+print(f'Private backend settled idle CPU: {percent:.1f}% of one core over 5 seconds.')
+assert percent < 0.3, percent
+PY
     "$ARCHDOCK_HARDENING_BUILD_DIR/overlay-model-test" idleExpiryStopsWithoutLosingSourceRecovery \
         >"$ARCHDOCK_TEST_LOG_DIR/overlay-resource.log" 2>&1
     "$ARCHDOCK_HARDENING_BUILD_DIR/panel-registry-test" generatedRenderHistoryIsBoundedAndProtectsReferences \

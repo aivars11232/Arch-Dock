@@ -3,7 +3,7 @@
   "version": 2,
   "id": "octagon-platform-steel",
   "name": "Steel Octagon Platform",
-  "packageRevision": 1,
+  "packageRevision": 2,
   "author": "Arch Dock project",
   "description": "Original bevelled octagonal platform created from a blank canvas for Arch Dock",
   "license": {
@@ -114,7 +114,7 @@
       "path": "metadata/production-record.json",
       "kind": "material",
       "mimeType": "application/json",
-      "sha256": "90ef20a73de5c3fae7d8bb45baef7c869c9f77ee635b2564d0b8d3082e6848d9"
+      "sha256": "81639c7f041a696fd18d53bd960a89a2c017389536c642767c7f9adb024681c3"
     },
     {
       "id": "visual-review",
@@ -132,6 +132,7 @@
         "rear",
         "reflection",
         "glow-normal",
+        "surface-occlusion",
         "front"
       ]
     },
@@ -142,6 +143,7 @@
         "rear",
         "reflection",
         "glow-hover",
+        "surface-occlusion",
         "front"
       ]
     },
@@ -152,6 +154,7 @@
         "rear",
         "reflection",
         "glow-open",
+        "surface-occlusion",
         "front"
       ]
     },
@@ -162,6 +165,7 @@
         "rear",
         "reflection",
         "glow-collapsed",
+        "surface-occlusion",
         "front"
       ]
     }
@@ -256,6 +260,19 @@
         "height": 600
       },
       "opacity": 0.28,
+      "blendMode": "source-over"
+    },
+    {
+      "id": "surface-occlusion",
+      "asset": "platform-rear",
+      "role": "foreground",
+      "sourceRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1200,
+        "height": 600
+      },
+      "opacity": 1.0,
       "blendMode": "source-over"
     },
     {

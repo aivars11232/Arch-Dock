@@ -10,6 +10,7 @@ ARCHDOCK_RENDERING_KWIN_PID=''
 ARCHDOCK_RENDERING_SERVICE_PID=''
 ARCHDOCK_RENDERING_LAUNCH_PID=''
 ARCHDOCK_RENDERING_PLASMASHELL_PID=''
+ARCHDOCK_RENDERING_BUS_TRACE_PID=''
 
 require_command() {
     command -v "$1" >/dev/null 2>&1 || {
@@ -214,6 +215,7 @@ cleanup_session() {
     local cleanup_status=0
     private_service_owner cleanup || cleanup_status=$?
     private_service_owner auxiliary-cleanup || cleanup_status=$?
+    stop_process "$ARCHDOCK_RENDERING_BUS_TRACE_PID"
     if ((exit_status == 0)); then
         return "$cleanup_status"
     fi
@@ -583,7 +585,7 @@ run_private_session() {
     # known pre-existing binding loop (SettingsPopup.qml `rows`) owned by the
     # TASK-0044 diagnostics cleanup, and this smoke asserts the applet, not
     # Studio internals.
-    QT_FORCE_STDERR_LOGGING=1 QT_LOGGING_RULES='org.archdock.rendering.debug=true' plasmashell --no-respawn \
+    QT_FORCE_STDERR_LOGGING=1 QT_LOGGING_RULES="${ARCHDOCK_RENDERING_QT_INPUT_TRACE:-org.archdock.rendering.debug=true}" plasmashell --no-respawn \
         >"$ARCHDOCK_RENDERING_LOG_DIR/plasmashell.log" 2>&1 &
     ARCHDOCK_RENDERING_PLASMASHELL_PID=$!
     gdbus wait --session --timeout=20 org.kde.plasmashell
@@ -671,6 +673,12 @@ run_private_session() {
 
     IFS='|' read -r _ free_panel_id _ _ _ _ <<<"$free_snapshot"
     if [[ "${ARCHDOCK_RENDERING_INTERACTIONS:-}" == '1' ]]; then
+        if [[ "${ARCHDOCK_RENDERING_TRACE_BUS:-}" == '1' ]]; then
+            require_command dbus-monitor
+            dbus-monitor --session \
+                >"$ARCHDOCK_RENDERING_LOG_DIR/dbus-input-trace.log" 2>&1 &
+            ARCHDOCK_RENDERING_BUS_TRACE_PID=$!
+        fi
         ARCHDOCK_RENDERING_KWIN_PID="$ARCHDOCK_RENDERING_KWIN_PID" \
             python3 "$ARCHDOCK_RENDERING_SCRIPT_DIR/visibility-window.py" \
                 --interaction-matrix "$free_panel_id"

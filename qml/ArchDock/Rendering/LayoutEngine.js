@@ -1159,8 +1159,8 @@ function themeStyle(appearance, customColor, iconSize) {
     const preset = appearance || "glass";
     const styles = {
         "glass": {
-            stroke: "rgba(64, 91, 118, 0.78)",
-            shadow: "rgba(0, 0, 0, 0.78)", width: 0.48, blur: 16
+            stroke: "#b5d3e0",
+            shadow: "rgba(28, 56, 74, 0.18)", width: 0.48, blur: 10
         },
         "crystal": {
             stroke: "rgba(158, 238, 255, 0.90)",
@@ -1180,8 +1180,8 @@ function themeStyle(appearance, customColor, iconSize) {
             stroke: "#7dff58", shadow: "#7dff58", width: 0.30, blur: 22
         },
         "floating-glass": {
-            stroke: "rgba(109, 181, 225, 0.58)",
-            shadow: "rgba(67, 152, 218, 0.62)", width: 0.50, blur: 20
+            stroke: "#caeafb",
+            shadow: "rgba(38, 70, 89, 0.28)", width: 0.50, blur: 18
         },
         "metallic": {
             stroke: "#aeb9c4", shadow: "rgba(0, 0, 0, 0.72)",
@@ -1196,15 +1196,15 @@ function themeStyle(appearance, customColor, iconSize) {
         },
         "platform": {
             stroke: "#6e7884", shadow: "rgba(0, 0, 0, 0.72)",
-            width: 0.32, blur: 9
+            width: 0.72, blur: 9
         },
         "plate": {
-            stroke: "rgba(76, 89, 102, 0.36)",
-            shadow: "rgba(0, 0, 0, 0.45)", width: 0.14, blur: 4
+            stroke: "#9ea9b4",
+            shadow: "rgba(0, 0, 0, 0.45)", width: 0.64, blur: 4
         },
         "pedestal": {
-            stroke: "rgba(83, 105, 122, 0.32)",
-            shadow: "rgba(0, 0, 0, 0.48)", width: 0.12, blur: 5
+            stroke: "#8395a6",
+            shadow: "rgba(0, 0, 0, 0.48)", width: 0.82, blur: 5
         }
     };
     const result = styles[preset] || styles.glass;
@@ -1214,7 +1214,13 @@ function themeStyle(appearance, customColor, iconSize) {
         shadow: result.shadow,
         lineWidth: Math.max(3, iconSize * result.width),
         blur: result.blur,
-        trackVisible: preset !== "plate" && preset !== "pedestal"
+        trackVisible: true,
+        material: styles[preset] ? preset : "glass",
+        alpha: preset === "glass" ? 0.56 : preset === "floating-glass" ? 0.50 : 1,
+        depth: preset === "pedestal" ? 9 : preset === "platform" ? 6
+            : preset === "plate" ? 3 : preset === "floating-glass" ? 5 : 0,
+        animated: preset === "futuristic" || preset === "plasma",
+        sparkle: preset === "crystal" || preset === "plasma"
     };
 }
 

@@ -267,8 +267,9 @@ TestCase {
         const pedestal = LayoutEngine.themeStyle("pedestal", "", 52)
         verify(glass.trackVisible)
         verify(floating.trackVisible)
-        verify(!plate.trackVisible)
-        verify(!pedestal.trackVisible)
+        // PD-19: Plate and Pedestal now draw solid textured bodies.
+        verify(plate.trackVisible && plate.depth > 0)
+        verify(pedestal.trackVisible && pedestal.depth > plate.depth)
         verify(glass.stroke !== floating.stroke)
         verify(glass.lineWidth !== plate.lineWidth)
         compare(LayoutEngine.themeStyle(

@@ -1,6 +1,7 @@
 // The settings schema: every panel and global field's descriptor.
 #include "PanelSettingsSchema.h"
 
+#include <QHash>
 #include <QMetaType>
 #include <QRegularExpression>
 #include <QUrl>
@@ -761,7 +762,11 @@ const QVector<Descriptor> &schemaFields()
                      {}, {{QStringLiteral("step"), 0.01}, {QStringLiteral("decimals"), 2}})),
         panel("scene3DBend", Access::Editor, Type::Real, Normalization::RealRange,
               0.0, "surface.parameters3D.bend", -1.0, 1.0, {}, true, true,
-              editor("panels-3d", "Bend", "slider", {"studio"}, "scene3d-shape",
+              editor("panels-3d", "Edge tilt", "slider", {"studio"}, "scene3d-shape",
+                     {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
+        panel("scene3DFold", Access::Editor, Type::Real, Normalization::RealRange,
+              0.0, "surface.parameters3D.fold", -1.0, 1.0, {}, true, true,
+              editor("panels-3d", "Bend", "slider", {"studio"}, "scene3d-quality",
                      {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
         panel("scene3DKeyLight", Access::Editor, Type::Real, Normalization::RealRange,
               1.0, "surface.parameters3D.keyLightBrightness", 0.0, 4.0, {}, true, true,
@@ -778,6 +783,23 @@ const QVector<Descriptor> &schemaFields()
         panel("scene3DFloat", Access::Editor, Type::Boolean, Normalization::Boolean,
               false, "surface.parameters3D.float", {}, {}, {}, true, true,
               editor("panels-3d", "Gentle float", "switch", {"studio"}, "scene3d-quality")),
+        panel("scene3DColor", Access::Editor, Type::String, Normalization::TrimmedString,
+              QString{}, "surface.parameters3D.color", {}, {}, {}, true, true,
+              editor("panels-3d", "Platform colour", "color", {"studio"}, "scene3d-quality")),
+        panel("scene3DMaterial", Access::Editor, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("theme"), "surface.parameters3D.material", {}, {},
+              {"theme", "glass", "crystal", "neon", "minimal", "plasma", "lime",
+               "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"},
+              true, true, editor("panels-3d", "Material", "combo", {"studio"}, "scene3d-quality")),
+        panel("scene3DTexture", Access::Editor, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("theme"), "surface.parameters3D.texture", {}, {},
+              {"theme", "none", "glass", "crystal", "neon", "minimal", "plasma", "lime",
+               "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"},
+              true, true, editor("panels-3d", "Texture", "combo", {"studio"}, "scene3d-quality")),
+        // PD-17: a platform remembers the flat surface and layout it replaced.
+        // It is editor data so Preview/Cancel/Apply share the same transaction.
+        panel("previousFlatLook", Access::Editor, Type::Map, Normalization::Map,
+              QVariantMap{}, "surface.parameters2D.previousFlatLook", {}, {}, {}, true, true),
         panel("bakedTilt", Access::Editor, Type::Real, Normalization::RealRange,
               0.0, "surface.parameters2_5D.tilt", -60.0, 60.0, {}, true, true,
               editor("panels-layout", "Perspective tilt", "spin", {"studio"}, "baked-tilt",
@@ -795,6 +817,11 @@ const QVector<Descriptor> &schemaFields()
                "plate", "pedestal"}, false, true,
               editor("panels-appearance", "Theme", "combo", {"studio"},
                      "procedural-surface")), {"dock-configuration"}),
+        panel("sparkleIntensity", Access::Editor, Type::Real, Normalization::RealRange,
+              0.0, "surface.parameters2D.sparkleIntensity", 0.0, 1.0, {}, true, true,
+              editor("panels-appearance", "Sparkle intensity", "slider", {"studio"},
+                     "procedural-surface", {}, {{QStringLiteral("step"), 0.05},
+                                                {QStringLiteral("decimals"), 2}})),
         // No renderer draws a surface outline from this value: the layout
         // decides a panel's shape. Panel Studio does not offer it (ADREP-TASK-001,
         // PD-04); the saved value is kept.
@@ -1177,14 +1204,16 @@ const PanelSettingsFieldDescriptor *PanelSettingsSchema::descriptor(
     PanelSettingsFieldScope scope,
     const QString &key)
 {
-    for (const PanelSettingsFieldDescriptor &candidate : fields())
-    {
-        if (candidate.scope == scope && candidate.key == key)
-        {
-            return &candidate;
-        }
-    }
-    return nullptr;
+    // A complete flat look adds many fields to a theme candidate. Index the
+    // immutable schema once instead of scanning it for every normalized key.
+    static const auto indexes = [] {
+        QHash<int, QHash<QString, const PanelSettingsFieldDescriptor *>> result;
+        for (const auto &field : fields())
+            result[static_cast<int>(field.scope)].insert(field.key, &field);
+        return result;
+    }();
+    const auto index = indexes.constFind(static_cast<int>(scope));
+    return index == indexes.cend() ? nullptr : index->value(key, nullptr);
 }
 
 const PanelSettingsFieldDescriptor *PanelSettingsSchema::panelDescriptor(
@@ -1364,6 +1393,23 @@ QVariantMap PanelSettingsSchema::editorValues(PanelSettingsFieldScope scope,
         {
             continue;
         }
+        result.insert(field.key, record.value(field.key, field.defaultValue));
+    }
+    return result;
+}
+
+QVariantMap PanelSettingsSchema::flatLookValues(const QVariantMap &record)
+{
+    QVariantMap result;
+    for (const auto &field : fields()) {
+        if (field.scope != PanelSettingsFieldScope::Panel
+            || field.access != PanelSettingsFieldAccess::Editor
+            || field.key == QStringLiteral("previousFlatLook")
+            || !(field.persistencePath.startsWith(QStringLiteral("surface."))
+                 || field.persistencePath.startsWith(QStringLiteral("layout."))
+                 || field.persistencePath.startsWith(QStringLiteral("iconStyle."))
+                 || field.persistencePath.startsWith(QStringLiteral("motion."))))
+            continue;
         result.insert(field.key, record.value(field.key, field.defaultValue));
     }
     return result;

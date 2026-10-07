@@ -261,15 +261,25 @@ QVariantMap PanelWindow::themeCandidateFor(const ArchDock::PanelDefinition &cand
         for (auto it = values.begin(); it != values.end();)
         {
             const auto *field = ArchDock::PanelSettingsSchema::panelDescriptor(it.key());
-            if (field && field->editor.isPresented() && !available.contains(it.key()))
+            const auto remembered = candidate.surface.parameters2D
+                .value(QStringLiteral("previousFlatLook")).toMap();
+            const bool restoresSaved = values.contains(QStringLiteral("previousFlatLook"))
+                && values.value(QStringLiteral("previousFlatLook")).toMap().isEmpty()
+                && remembered.contains(it.key()) && remembered.value(it.key()) == it.value();
+            if (field && field->editor.isPresented() && !available.contains(it.key()) && !restoresSaved)
                 it = values.erase(it);
             else ++it;
         }
     }
+    QVariantMap themeValues;
+    const auto requested = prepared.value(QStringLiteral("themeValues")).toMap();
+    for (auto it = requested.cbegin(); it != requested.cend(); ++it)
+        if (values.contains(it.key()))
+            themeValues.insert(it.key(), ArchDock::PanelSettingsSchema::normalizePanelValue(it.key(), it.value()));
     return {{QStringLiteral("success"), prepared.value(QStringLiteral("success")).toBool()},
             {QStringLiteral("errorCode"), prepared.value(QStringLiteral("errorCode")).toString()},
             {QStringLiteral("errorMessage"), prepared.value(QStringLiteral("errorMessage")).toString()},
-            {QStringLiteral("values"), values}};
+            {QStringLiteral("values"), values}, {QStringLiteral("themeValues"), themeValues}};
 }
 
 QVariantMap PanelWindow::panelThemeCandidate(const QString &panelId, const QString &themeId) const
@@ -299,6 +309,7 @@ QVariantMap PanelWindow::presetEditorProjection(const ArchDock::PanelDefinition 
         {QStringLiteral("panelId"), candidate.identity.id}, {QStringLiteral("revision"), candidate.settingsRevision},
         {QStringLiteral("consumer"), QStringLiteral("studio")},
         {QStringLiteral("panelValues"), panelSettingsEditorValues(candidate, fields)},
+        {QStringLiteral("flatLookValues"), ArchDock::PanelSettingsSchema::flatLookValues(candidate.toLegacyMap())},
         {QStringLiteral("panelFields"), fields}, {QStringLiteral("globalFields"), QVariantList{}},
         {QStringLiteral("globalValues"), m_settings.transactionSnapshot()},
         {QStringLiteral("capabilityResolution"), resolution.toVariantMap()},
@@ -916,13 +927,17 @@ var result = (function() {
         .arg(plasmaScriptStringLiteral(definition.identity.id)).arg(plasmaScriptStringLiteral(host.freeOwnershipToken))
         .arg(plasmaScriptStringLiteral(payload)));
     std::optional<QVariantMap> observed;
+    int stableSamples = 0;
     for (int attempt = 0; applied == 1 && attempt < 80; ++attempt)
     {
         QEventLoop wait;
         QTimer::singleShot(25, &wait, &QEventLoop::quit);
         wait.exec(QEventLoop::ExcludeUserInputEvents);
         observed = presetFreeHostGeometry(definition, errorCode);
-        if (observed && *observed == geometry) break;
+        stableSamples = observed && *observed == geometry ? stableSamples + 1 : 0;
+        // A single matching frame can precede Plasma's queued size-hint
+        // relayout. Require the exact owned geometry to remain stable.
+        if (stableSamples >= 3) break;
     }
     // A command is not retained as active configuration. The recovery
     // journal remains authoritative if restoration cannot be verified.
@@ -939,7 +954,7 @@ var result = (function() {
 })(); print('ARCHDOCK_RESULT:' + String(result));
 )JS").arg(host.freeDesktopContainmentId).arg(host.freeDockAppletId)
         .arg(plasmaScriptStringLiteral(definition.identity.id)).arg(plasmaScriptStringLiteral(host.freeOwnershipToken)));
-    if (cleared != 1 || !observed || *observed != geometry)
+    if (cleared != 1 || stableSamples < 3 || !observed || *observed != geometry)
     {
         qWarning() << "Preset free geometry read-back failed:" << definition.identity.id
             << "script-result" << applied << "requested" << geometry

@@ -256,6 +256,9 @@ TestCase {
                 "the foreground band covers the far icon")
         compare(hidden.red(sampleX, sampleY), 0,
                 "no part of the far icon shows through")
+        tryCompare(behind.foregroundOcclusionItem, "occlusionReady", true)
+        verify(!behind.entryPointVisible(0, Qt.point(sampleX, sampleY)),
+            "a pixel proved covered by the rim cannot receive an entry click")
 
         // Only the declared occlusion depth changes: every entry is now at or
         // beyond it, so the same icon must draw over the same band.
@@ -278,6 +281,25 @@ TestCase {
         const shown = grabImage(front)
         compare(shown.red(sampleX, sampleY), 255,
                 "the same icon now draws over the band")
+        verify(front.entryPointVisible(0, Qt.point(sampleX, sampleY)),
+            "the same entry becomes clickable when it is drawn in front")
+    }
+
+    function test_opacityAlsoFadesTheOccludingSurface() {
+        const scene = createScene()
+        waitForTier(scene, "baked2.5d")
+        tryCompare(scene.foregroundOcclusionItem, "occlusionReady", true)
+        const bounds = scene.entryGeometryAt(0).entryBounds
+        const point = Qt.point(Math.round(bounds.x + bounds.width / 2),
+                               Math.round(bounds.y + bounds.height / 2))
+        compare(grabImage(scene).blue(point.x, point.y), 255)
+        verify(!scene.entryPointVisible(0, point))
+        scene.panelDefinition = bakedDefinition({opacity: 0})
+        tryCompare(scene.foregroundOcclusionItem, "opacity", 0)
+        wait(60)
+        compare(grabImage(scene).red(point.x, point.y), 255,
+            "the foreground must fade too, exposing the actual icon")
+        verify(scene.entryPointVisible(0, point))
     }
 
     // Criterion: depth order and scale are deterministic, and the near entry
@@ -505,12 +527,17 @@ TestCase {
         layers.push({ id: "front", asset: "platform-front",
                       role: "foreground", sourceRect: artwork, opacity: 1,
                       blendMode: "source-over" })
+        layers.splice(layers.length - 1, 0, {id: "surface-occlusion", asset: "platform-rear",
+            role: "foreground", sourceRect: artwork, opacity: 1, blendMode: "source-over"})
+        for (const state of states)
+            state.layers.splice(state.layers.indexOf("front"), 0, "surface-occlusion")
 
         const track = {
             id: "platform-track", shape: shape,
             center: { x: 600, y: 300 }, radiusX: radiusX, radiusY: radiusY,
             startDegrees: 0, sweepDegrees: 360,
-            depth: { farScale: 0.62, nearScale: 1, occlusionDepth: 0.62 },
+            depth: { farScale: 0.62, nearScale: 1,
+                     occlusionDepth: themeId === "arc-platform-orange" ? 0.9 : 0.62 },
             tilt: { minimumDegrees: -10, maximumDegrees: 10,
                     defaultDegrees: 0 }
         }
@@ -575,6 +602,71 @@ TestCase {
         }
         return productionTheme(name, "ellipse", 446, 163, "free",
                                ["ring", "circular"])
+    }
+
+    function test_platformTravelKeepsDrawAndVisibleInput_data() {
+        return [{tag: "blue-ring", family: "ring-platform-blue", layout: "ring"},
+                {tag: "steel-octagon", family: "octagon-platform-steel", layout: "octagon"},
+                {tag: "orange-arc", family: "arc-platform-orange", layout: "arc"}]
+    }
+
+    function test_platformTravelKeepsDrawAndVisibleInput(data) {
+        const scene = createScene({theme: productionFamily(data.family), count: 6,
+            definition: {panelThemeId: data.family, layout: data.layout,
+                         layoutRadius: 300, iconSize: 52, panelMotionTarget: "items"}})
+        waitForTier(scene, "baked2.5d")
+        tryCompare(scene.foregroundOcclusionItem, "occlusionReady", true)
+        verify(scene.wheelTravelAvailable)
+        const period = scene.trackWindow.loop
+        let covered = 0, exposed = 0
+        for (let step = 0; step <= 8; ++step) {
+            scene.wheelTravel = period * step / 8
+            scene.wheelTravelTarget = scene.wheelTravel
+            wait(60)
+            const picture = grabImage(scene)
+            picture.save("platform-travel-" + data.family + "-" + step + ".png")
+            compare(scene.effectiveRendererTier, "baked2.5d")
+            compare(scene.sceneRotationAngle, 0)
+            for (let index = 0; index < 6; ++index) {
+                const geometry = scene.entryGeometryAt(index)
+                if (geometry.onTrack === false) continue
+                const bounds = geometry.entryBounds
+                for (let row = 1; row <= 3; ++row) {
+                    for (let column = 1; column <= 3; ++column) {
+                        const point = Qt.point(bounds.x + bounds.width * column / 4,
+                                               bounds.y + bounds.height * row / 4)
+                        const visible = scene.entryPointVisible(index, point)
+                        // A rim edge below the mask's 0.5 alpha threshold
+                        // leaves at least half the red delegate visible. Its
+                        // orange antialiasing must not be mistaken for absence.
+                        const red = picture.red(Math.round(point.x), Math.round(point.y)) > 160
+                            && picture.green(Math.round(point.x), Math.round(point.y)) < 80
+                            && picture.red(Math.round(point.x), Math.round(point.y))
+                                - picture.green(Math.round(point.x), Math.round(point.y)) > 110
+                        if (visible) { verify(red, "a clickable entry pixel must be drawn: "
+                            + JSON.stringify({family: data.family, step: step, index: index,
+                                point: point, geometry: geometry,
+                                colour: picture.pixel(Math.round(point.x), Math.round(point.y))})); exposed++ }
+                        else if (!red && !geometry.inFront) covered++
+                    }
+                }
+            }
+        }
+        verify(covered > 0, data.family + " needs rear icon pixels hidden by its rim")
+        verify(exposed > 0, data.family + " needs front icon pixels that take input")
+        console.info("PLATFORM_TRAVEL " + JSON.stringify({family: data.family,
+            covered: covered, exposed: exposed, period: period}))
+        scene.wheelTravel = 0; scene.wheelTravelTarget = 0
+        tryCompare(scene.activeSurfaceRenderer, "rendererReady", true)
+        const bounds = scene.entryGeometryAt(2).entryBounds
+        verify(scene.containsInputPoint(Qt.point(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)))
+        mouseWheel(scene, bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0, 120)
+        compare(scene.entryTravel, 1, "real wheel input travels on this platform")
+        scene.animationProfiles = {reducedMotion: false}
+        scene.panelDefinition = Object.assign({}, scene.panelDefinition,
+            {panelRotationMode: "clockwise", panelRotationTrigger: "idle", panelTravelSpeed: 1})
+        tryVerify(function() { return scene.entryTravel > 1.1 })
+        compare(scene.sceneRotationAngle, 0, "continuous item travel keeps its platform still")
     }
 
     // Criterion: real icons align with the perspective platform, the themes

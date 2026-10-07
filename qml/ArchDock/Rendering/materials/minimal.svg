@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<!-- Original Arch Dock vector material. GPL-3.0-or-later. -->
+<defs><linearGradient id="sheen" x2="0.8" y2="1"><stop stop-color="#f8f8f8"/><stop offset=".36" stop-color="#777"/><stop offset=".62" stop-color="#d8d8d8"/><stop offset="1" stop-color="#4d4d4d"/></linearGradient></defs>
+<rect x="0" y="0" width="128" height="128" fill="#b3b3b3" opacity="1"/>
+<path d="M0 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+<path d="M8 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+<path d="M16 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+<path d="M24 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+<path d="M32 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+<path d="M40 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+<path d="M48 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+<path d="M56 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+<path d="M64 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+<path d="M72 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+<path d="M80 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+<path d="M88 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+<path d="M96 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+<path d="M104 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+<path d="M112 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+<path d="M120 0 l-32 128" fill="none" stroke="#888" stroke-width="1" opacity="0.6"/>
+</svg>

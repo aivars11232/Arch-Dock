@@ -391,6 +391,31 @@ def instrument_interaction_stage(stage):
         onTriggered: {
             if (!root.visible || !root.inputEnabled) return;
             const center = root.mapToItem(null, root.width / 2, root.height / 2);
+            // PD-18: a perspective platform can cover an icon's centre
+            // while leaving its top exposed. Report an actual visible input
+            // point; EIS must still produce a real MouseArea hover there.
+            let inputPoint = null;
+            const candidates = [[0.5, 0.5], [0.5, 0.2], [0.5, 0.8],
+                               [0.2, 0.5], [0.8, 0.5], [0.2, 0.2],
+                               [0.8, 0.2], [0.2, 0.8], [0.8, 0.8]];
+            for (const y of [0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95])
+                for (const x of [0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95])
+                    candidates.push([x, y]);
+            function accepts(local) {
+                let accepted = hoverArea.contains(local);
+                for (let ancestor = root.parent; accepted && ancestor; ancestor = ancestor.parent) {
+                    if (ancestor.containmentMask)
+                        accepted = ancestor.contains(ancestor.mapFromItem(root, local));
+                }
+                return accepted;
+            }
+            for (const unit of candidates) {
+                const mapped = root.mapToItem(null, root.width * unit[0], root.height * unit[1]);
+                if (accepts(root.mapFromItem(null, mapped))) {
+                    inputPoint = [mapped.x, mapped.y];
+                    break;
+                }
+            }
             const actions = {};
             if (contextMenu.visible) {
                 for (let i = 0; i < contextMenu.count; ++i) {
@@ -401,7 +426,9 @@ def instrument_interaction_stage(stage):
                 }
             }
             const value = JSON.stringify({kind: "entry", panel: root.observedPanelId, sample: Date.now(),
-                app: root.entry.appId, center: [center.x, center.y],
+                app: root.entry.appId, center: [center.x, center.y], inputPoint: inputPoint,
+                pointerPoint: (() => { const p = hoverArea.mapToItem(null, hoverArea.mouseX, hoverArea.mouseY);
+                    return [p.x, p.y]; })(),
                 iconSource: root.meshVisualItem.resolvedIconSource,
                 glyphSize: [root.meshVisualItem.glyphItem.width, root.meshVisualItem.glyphItem.height],
                 glyphValid: root.meshVisualItem.glyphItem.valid, meshActive: root.meshVisualActive,
@@ -411,6 +438,7 @@ def instrument_interaction_stage(stage):
                 windows: root.entry.windowPreviews || [], menu: contextMenu.visible,
                 presentation: root.observedPresentation, profile: root.observedProfile.id,
                 hovered: hoverArea.containsMouse,
+                pointerAccepted: hoverArea.contains(Qt.point(hoverArea.mouseX, hoverArea.mouseY)),
                 actions: actions});
             console.warn("ArchDockInteraction " + value);
         }
@@ -418,6 +446,9 @@ def instrument_interaction_stage(stage):
 ''')
     insert("DockEntry.qml", "onInputEnabledChanged: {", '\n        observeEvent("input:" + inputEnabled);')
     insert("DockEntry.qml", "function openEntryContextMenu() {", '\n        observeEvent("menu-request");')
+    insert("DockEntry.qml", "onPressed: mouse => {", '\n            root.observeEvent("press:" + mouse.button);')
+    insert("DockEntry.qml", "onReleased: mouse => {", '\n            root.observeEvent("release:" + mouse.button);')
+    insert("DockEntry.qml", "onCanceled: {", '\n            root.observeEvent("press-canceled");')
     insert("DockEntry.qml", "onClicked: mouse => {", '\n            root.observeEvent("click:" + mouse.button);')
     insert("DockEntry.qml", "id: contextMenu", '\n        onAboutToShow: root.observeEvent("menu-show")\n        onAboutToHide: root.observeEvent("menu-hide")')
     insert("WindowPreviewHost.qml", "id: root", '\n    property string observedPanelId: ""\n    property bool observedActive: false')
@@ -972,6 +1003,8 @@ def run_interaction_matrix(free_panel):
     def click_entry(panel, edge=None, button=273):
         def hovered_target():
             current = entry(panel)
+            if not current.get("inputPoint"):
+                return None
 
             # A native panel can still settle to its applet's minimum
             # thickness after a placement change (the folder matrix asks for
@@ -980,9 +1013,9 @@ def run_interaction_matrix(free_panel):
             def latest():
                 nonlocal current
                 current = entry(panel) or current
-                return current["hostSize"], current["center"]
+                return current["hostSize"], current["inputPoint"]
 
-            point = native_point(current["hostSize"], current["center"], edge=edge,
+            point = native_point(current["hostSize"], current["inputPoint"], edge=edge,
                                  current_target=latest)
             lib.ei_device_pointer_motion_absolute(devices[2], *point)
             lib.ei_device_frame(devices[2], lib.ei_now(context))
@@ -993,7 +1026,8 @@ def run_interaction_matrix(free_panel):
             acknowledged_sample = entry(panel).get("sample", 0)
             observed = wait_for(lambda: entry(panel) if entry(panel).get("sample", 0) > acknowledged_sample else None,
                                 "fresh applet pointer observation")
-            return point if observed.get("hovered") and observed["center"] == current["center"] else None
+            return point if observed.get("hovered") and observed.get("pointerAccepted") \
+                and observed["center"] == current["center"] else None
 
         try:
             point = wait_for(hovered_target, "target applet icon received pointer hover")
@@ -1118,7 +1152,9 @@ def run_interaction_matrix(free_panel):
         def click_folder():
             def hovered_target():
                 current = entry(free_panel)
-                point = native_point(current["hostSize"], current["center"])
+                if not current.get("inputPoint"):
+                    return None
+                point = native_point(current["hostSize"], current["inputPoint"])
                 lib.ei_device_pointer_motion_absolute(devices[2], *point)
                 lib.ei_device_frame(devices[2], lib.ei_now(context))
                 sync_input()
@@ -1129,8 +1165,9 @@ def run_interaction_matrix(free_panel):
                 # hover motion, so its centre is compared within pixels.
                 near = math.hypot(observed["center"][0] - current["center"][0],
                                   observed["center"][1] - current["center"][1]) < 4
-                return point if observed.get("hovered") and near else None
-            click(wait_for(hovered_target, "folder icon hovered"), 272)
+                return point if observed.get("hovered") and observed.get("pointerAccepted") and near else None
+            point = wait_for(hovered_target, "folder icon hovered")
+            click(point, 272)
 
         def centre_dock():
             # The free panel's dock in the middle of the screen, measured on
@@ -2401,8 +2438,14 @@ def run_interaction_matrix(free_panel):
         def rows(): return panel_call("dockEntriesForPanel", "(ss)", (free_panel, "launcher"))
         def observed(app): return observations.get(("entry", free_panel, app), {})
         def entry_point(app):
-            data = wait_for(lambda: observed(app), "real dropped entry")
-            return native_point(data["hostSize"], data["center"])
+            # PD-18: use the exposed part of a platform entry. Mapping the
+            # native window pumps new QML observations, so refresh this point
+            # too when switching between differently sized flat/3D scenes.
+            def latest():
+                data = observed(app)
+                return (data["hostSize"], data["inputPoint"]) if data.get("inputPoint") else None
+            data = wait_for(latest, "real visible dropped entry")
+            return native_point(*data, current_target=latest)
         def drop(uri, target, accepted=True):
             # A refused drop can leave the private Plasma desktop focused.
             # Restore the owned source through KWin before the next real drag;

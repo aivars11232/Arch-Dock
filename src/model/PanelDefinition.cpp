@@ -612,6 +612,13 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     definition.surface.shadow = record.value(QStringLiteral("shadow")).toMap();
     definition.surface.blur = record.value(QStringLiteral("blur")).toMap();
     definition.surface.parameters2D = record.value(QStringLiteral("surface2D")).toMap();
+    for (const auto &[key, fallback] :
+         {std::pair{"previousFlatLook", QVariant(QVariantMap{})},
+          std::pair{"sparkleIntensity", QVariant(0.0)}}) {
+        if (record.contains(QLatin1String(key)))
+            definition.surface.parameters2D.insert(QLatin1String(key),
+                normalized(QLatin1String(key), fallback));
+    }
     definition.surface.parameters2_5D = record.value(QStringLiteral("surface2_5D")).toMap();
     definition.surface.parameters3D = record.value(QStringLiteral("surface3D")).toMap();
     if (record.contains(QStringLiteral("scene3DQuality")))
@@ -635,7 +642,11 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
           std::tuple{"scene3DTransitions", "transitions", QVariant(true)},
           std::tuple{"scene3DFloat", "float", QVariant(false)},
           std::tuple{"scene3DBand", "band", QVariant(0.11)},
-          std::tuple{"scene3DBend", "bend", QVariant(0.0)}}) {
+          std::tuple{"scene3DBend", "bend", QVariant(0.0)},
+          std::tuple{"scene3DFold", "fold", QVariant(0.0)},
+          std::tuple{"scene3DColor", "color", QVariant(QString{})},
+          std::tuple{"scene3DMaterial", "material", QVariant(QStringLiteral("theme"))},
+          std::tuple{"scene3DTexture", "texture", QVariant(QStringLiteral("theme"))}}) {
         if (record.contains(QLatin1String(key)))
             definition.surface.parameters3D.insert(QLatin1String(parameter),
                 normalized(QLatin1String(key), fallback));
@@ -1152,6 +1163,9 @@ QVariantMap PanelDefinition::toLegacyMap() const
     insertIfNotEmpty(&record, QStringLiteral("shadow"), surface.shadow);
     insertIfNotEmpty(&record, QStringLiteral("blur"), surface.blur);
     insertIfNotEmpty(&record, QStringLiteral("surface2D"), surface.parameters2D);
+    for (const auto *key : {"previousFlatLook", "sparkleIntensity"})
+        if (surface.parameters2D.contains(QLatin1String(key)))
+            record.insert(QLatin1String(key), surface.parameters2D.value(QLatin1String(key)));
     insertIfNotEmpty(&record, QStringLiteral("surface2_5D"), surface.parameters2_5D);
     insertIfNotEmpty(&record, QStringLiteral("surface3D"), surface.parameters3D);
     if (surface.parameters3D.contains(QStringLiteral("quality")))
@@ -1175,7 +1189,11 @@ QVariantMap PanelDefinition::toLegacyMap() const
           std::pair{"scene3DTransitions", "transitions"},
           std::pair{"scene3DFloat", "float"},
           std::pair{"scene3DBand", "band"},
-          std::pair{"scene3DBend", "bend"}}) {
+          std::pair{"scene3DBend", "bend"},
+          std::pair{"scene3DFold", "fold"},
+          std::pair{"scene3DColor", "color"},
+          std::pair{"scene3DMaterial", "material"},
+          std::pair{"scene3DTexture", "texture"}}) {
         if (surface.parameters3D.contains(QLatin1String(parameter)))
             record.insert(QLatin1String(key), surface.parameters3D.value(QLatin1String(parameter)));
     }

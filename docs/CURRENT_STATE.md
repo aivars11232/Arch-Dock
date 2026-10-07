@@ -1,5 +1,52 @@
 # Arch Dock current state
 
+<!-- ADREP_TASK_004_BEGIN -->
+## ADREP-TASK-004 — Paused checkpoint (2026-10-07)
+
+The owner asked to commit and sync the current changes and pause until
+tomorrow. Task 4's implementation is saved; verification and formal closure
+remain in progress. Task 5 has not started. The checkpoint, evidence and
+resume sequence are in [ADREP-TASK-004.md](repairs/ADREP-TASK-004.md).
+
+- Thirteen original textured materials preserve tint and opacity; Glass and
+  Floating Glass have controlled frost/highlights, Futuristic has seams and
+  light lines, and sparkle defaults to zero.
+- Studio separates flat and platform looks. Platform presentation off
+  restores the complete previous flat look; native platforms have live
+  colour/material/texture controls, own-material Reset and numerical Bend.
+- Perspective and native platforms preserve wheel/continuous travel and
+  visible-entry input. Custom masks keep local bounds, and an entry-owned
+  passive tooltip no longer intercepts presses over a scaled rear glyph.
+- The final one-job Debug build passed. Focused final-source batches passed
+  7/7, 4/4 and 5/5 CTests, including 23 native GPU checks, 76 backend checks
+  (one live-session-only skip), 559 dock-geometry, 8 GeometryHitRegion and 25
+  DockEntry checks.
+- Final isolated Studio medians: edit 45.49 ms, page 37.18 ms, Apply 13.31 ms;
+  all meet the original 120% ADFIX limits. Static and hidden animated
+  materials: 0.0% CPU. Eight audition/cancel cycles: +11.39 MiB, zero stale
+  hosts, private backend idle CPU 0.0%.
+- The complete serial run was interrupted on request after 95/118 CTests
+  passed, with no failures in completed tests. Test 96 was interrupted;
+  97-118 were not run. Native graphics, window/folder interaction, all 90
+  folder anchor openings, native Studio truth, runtime input, path travel and
+  profile apply/shortcuts passed before interruption. One inherited Grid
+  overlap note remains. This is not complete-suite acceptance.
+- Resume with reconciliation and pack validation, rerun the complete suite
+  from the start, then formal Report 1/commit/sync, pushed-source fresh-clone
+  recheck and Report 2/cleanup. Only then start Task 5.
+- No Task 4 package build/install occurred. The actual installed baseline is
+  **0.1.1-12**, matching the interim recipe at `617bd96`; older sections saying
+  0.1.1-11 describe earlier checkpoints. The owner's installed backend remains
+  running. Shared build and evidence are retained; the interrupted private
+  session and its inactive disposable root were cleaned up. No coredumps
+  were found since Task 4 began.
+
+Evidence: `build-codex-adrep/evidence/ADREP-TASK-004/` (especially
+`94-latency-limits.log`, `95`-`99` final-source logs, `100-full-suite.log`,
+`100-final-source-hashes.json`, `101` pause cleanup records and
+`102-checkpoint-source-hashes.json`).
+<!-- ADREP_TASK_004_END -->
+
 <!-- ADREP_TASK_003_BEGIN -->
 ## ADREP-TASK-003 — Folder layouts as the owner defines them (2026-10-07)
 

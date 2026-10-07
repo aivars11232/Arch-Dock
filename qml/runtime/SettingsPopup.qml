@@ -329,7 +329,9 @@ Window {
             if (subtabNumber === 9)
                 return panelAnimationRows().length > 0;
             if (subtabNumber === 10)
-                return scene3DControlsAvailable;
+                return scene3DControlsAvailable || (!isNativePanel()
+                    && EditorModel.platformTier(panelValue("rendererTier", "")
+                        || (selectedCapabilityResolution.renderer || {}).requestedTier));
         }
         if (sectionNumber === 2) {
             if (subtabNumber === 2)
@@ -418,6 +420,9 @@ Window {
         if (field.rendererToggle === true)
             return String(panelValue("rendererTier", "")
                 || (selectedCapabilityResolution.renderer || {}).requestedTier) === "true3d";
+        if (field.platformToggle === true)
+            return EditorModel.platformTier(panelValue("rendererTier", "")
+                || (selectedCapabilityResolution.renderer || {}).requestedTier);
         return field.scope === "settings" ? globalValue(field.key, field.fallback) : panelValue(field.key, field.fallback);
     }
 
@@ -439,8 +444,22 @@ Window {
             refreshProjection();
             return;
         }
+        if (field.platformToggle === true) {
+            if (!value) {
+                editorSession = EditorModel.platformOff(editorSession);
+                refreshProjection();
+                return;
+            }
+            editorSession = EditorModel.rememberFlatLook(editorSession);
+            value = "true3d";
+        }
         if (field.rendererToggle === true) {
             value = value ? "true3d" : scene3DOffTier;
+            if (!EditorModel.platformTier(value)) {
+                editorSession = EditorModel.platformOff(editorSession);
+                refreshProjection();
+                return;
+            }
             if (value.length === 0)
                 return;
             // A volumetric ring needs a closed path. Keep this change in the
@@ -715,6 +734,10 @@ Window {
 
     function panelAppearanceRows() {
         const rows = schemaSectionRows("panels-appearance", qsTr("Appearance"), qsTr("Surface styling for the selected panel."));
+        if (!fieldDescriptor("appearance", "panel"))
+            rows.push(notice(qsTr("This look supplies its own material. Flat materials are on Panel Themes / Skins; switch Platform presentation off on the 3D page to restore your previous flat look.")));
+        if (scene3DQualityVisible)
+            rows.push(notice(qsTr("Platform colour, material and texture are on Panels > 3D.")));
         if (subtabAvailable(1, 10))
             rows.push({ kind: "actions", label: qsTr("3D"),
                 description: qsTr("Drawing this panel in 3D, and every 3D setting, is on the 3D page."),
@@ -750,19 +773,31 @@ Window {
     // The one home of 3D editing. A compatible free panel draws its own look
     // as a 3D platform; nothing here asks for a different theme.
     function panel3DRows() {
-        const rows = [section(qsTr("3D"), qsTr("Draw this panel's own look as a 3D platform and place it in 3D."), true)];
+        const rows = [section(qsTr("3D"), qsTr("Choose the platform's presentation and edit its surface."), true)];
+        const platform = EditorModel.platformTier(panelValue("rendererTier", "")
+            || (selectedCapabilityResolution.renderer || {}).requestedTier);
+        if (platform || scene3DControlsAvailable)
+            rows.push({kind: "switch", key: "rendererTier", scope: "panel", platformToggle: true,
+                label: qsTr("Platform presentation"),
+                description: qsTr("Off restores the exact flat look you used before this platform, including its colour, opacity and layout.")});
         // Say what actually blocks 3D: the panel's kind, the renderer, the
         // look, its resources or its layout.
         if (!scene3DControlsAvailable) {
             rows.push.apply(rows, scene3DUnavailableRows());
             return rows;
         }
-        rows.push({ kind: "switch", key: "rendererTier", scope: "panel", rendererToggle: true,
-            label: qsTr("Enable 3D"),
-            description: qsTr("Keeps this panel's theme and colours. Off returns to its own %1 surface.")
-                .arg(CapabilityModel.rendererLabel(scene3DOffTier)) });
-        if (!scene3DQualityVisible)
+        if (!platform) {
+            rows.push(notice(qsTr("Turn Platform presentation on to edit this look in 3D, or load a look from the Platform looks group.")));
             return rows;
+        }
+        if (scene3DOffTier === "baked2.5d")
+            rows.push({ kind: "switch", key: "rendererTier", scope: "panel", rendererToggle: true,
+                label: qsTr("Use true 3D"),
+                description: qsTr("Off uses this platform's perspective artwork. Platform presentation off restores the previous flat look.") });
+        if (!scene3DQualityVisible) {
+            rows.push(notice(qsTr("Perspective artwork has a fixed shape and cannot bend. Use true 3D to edit a numerical platform's material and bend.")));
+            return rows;
+        }
         const fields = fieldsForSection("panels-3d");
         const pick = function(keys) {
             return keys.map(function(key) {
@@ -789,12 +824,18 @@ Window {
         const generatedScene = Boolean(((selectedPreviewTheme || {}).scene3D || {}).generated);
         rows.push(section(qsTr("Shape"), generatedScene
             ? qsTr("The platform follows the Dock layout on the Layout page, so every icon stands on it. Arcs, semicircles and fans stay flat.")
-            : qsTr("This theme brings its own 3D platform; its shape is fixed.")));
+            : qsTr("This theme keeps its own outline. Bend folds its rear half.")));
         if (generatedScene)
             rows.push.apply(rows, pick(["scene3DBand", "scene3DBend"]));
+        rows.push.apply(rows, pick(["scene3DFold"]));
+        rows.push(notice(qsTr("Bend folds the rear half up or down by up to 90 degrees. Its icons stay anchored on the folded surface.")));
         rows.push(section(qsTr("View and surface"), qsTr("Icon spacing is set on Icons > Appearance.")));
         rows.push.apply(rows, pick(["scene3DFieldOfView", "scene3DThickness", "scene3DIconElevation",
             "scene3DQuality"]));
+        rows.push(section(qsTr("Material"), qsTr("Colour tints the texture. Theme uses this look's own material and artwork.")));
+        rows.push.apply(rows, pick(["scene3DColor", "scene3DMaterial", "scene3DTexture"]));
+        rows.push({kind: "actions", label: qsTr("Surface"), actions: [{label: qsTr("Reset material"),
+            icon: "edit-reset", action: "reset-3d-material", available: true}]});
         rows.push(section(qsTr("Lighting"), ""));
         rows.push.apply(rows, pick(["scene3DKeyLight", "scene3DFillLight"]));
         rows.push(section(qsTr("Motion"), ""));
@@ -818,12 +859,23 @@ Window {
     // Panel themes and skins are their own resource type, separate from
     // Panel Presets: a theme restyles this panel, it is not a whole panel.
     function panelThemeRows() {
+        const available = CapabilityModel.availableItems(selectedResolvedThemes);
+        const platform = function(theme) {
+            return EditorModel.platformTier((theme.panelStyle || {}).rendererTier
+                || (theme.capabilities || {}).preferredRendererTier);
+        };
         return [
             {
                 kind: "themeSamples",
-                label: qsTr("Panel Themes / Skins"),
-                description: qsTr("Available themes are resolved by the backend for this panel. Load stages a theme in the draft; Apply saves it."),
-                themes: CapabilityModel.availableItems(selectedResolvedThemes)
+                label: qsTr("Flat looks"),
+                description: qsTr("Flat skins and procedural materials. Load stages the look; Apply saves it."),
+                themes: available.filter(theme => !platform(theme))
+            },
+            {
+                kind: "themeSamples",
+                label: qsTr("Platform looks"),
+                description: qsTr("Perspective and true 3D platforms. Load turns Platform presentation on and remembers your flat look."),
+                themes: available.filter(platform)
             },
             {
                 kind: "actions",
@@ -1202,6 +1254,12 @@ Window {
             reset3DTransform();
             return;
         }
+        if (action === "reset-3d-material") {
+            for (const key of ["scene3DColor", "scene3DMaterial", "scene3DTexture"])
+                editorSession = EditorModel.setPanelValue(editorSession, key, fieldDescriptor(key, "panel").defaultValue);
+            refreshProjection();
+            return;
+        }
         if (action === "edit-3d-on-desktop") {
             startSceneEdit();
             return;
@@ -1270,7 +1328,7 @@ Window {
                     .arg(CapabilityModel.reasonLabel(candidate ? candidate.errorCode : ""));
                 return;
             }
-            editorSession = EditorModel.stagePanelValues(editorSession, candidate.values || {});
+            editorSession = EditorModel.stageThemeLook(editorSession, candidate);
             refreshProjection();
         } else if (action === "import-theme") {
             themeTargetPanelId = selectedPanelId;

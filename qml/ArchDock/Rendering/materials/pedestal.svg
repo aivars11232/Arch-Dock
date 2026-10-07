@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<!-- Original Arch Dock vector material. GPL-3.0-or-later. -->
+<defs><linearGradient id="sheen" x2="0.8" y2="1"><stop stop-color="#f8f8f8"/><stop offset=".36" stop-color="#777"/><stop offset=".62" stop-color="#d8d8d8"/><stop offset="1" stop-color="#4d4d4d"/></linearGradient></defs>
+<rect x="0" y="0" width="128" height="128" fill="#555" opacity="1"/>
+<rect x="0" y="0" width="8" height="128" fill="#aaa" opacity="1"/>
+<path d="M0 0 V128" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="16" y="0" width="8" height="128" fill="#aaa" opacity="1"/>
+<path d="M16 0 V128" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="32" y="0" width="8" height="128" fill="#aaa" opacity="1"/>
+<path d="M32 0 V128" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="48" y="0" width="8" height="128" fill="#aaa" opacity="1"/>
+<path d="M48 0 V128" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="64" y="0" width="8" height="128" fill="#aaa" opacity="1"/>
+<path d="M64 0 V128" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="80" y="0" width="8" height="128" fill="#aaa" opacity="1"/>
+<path d="M80 0 V128" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="96" y="0" width="8" height="128" fill="#aaa" opacity="1"/>
+<path d="M96 0 V128" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="112" y="0" width="8" height="128" fill="#aaa" opacity="1"/>
+<path d="M112 0 V128" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+</svg>

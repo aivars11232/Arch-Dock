@@ -152,6 +152,29 @@ TestCase {
         fuzzyCompare((tilted[0] + tilted[1]) / 2, PlatformGeometry.topHeight, 1e-9)
     }
 
+    function test_rearHalfBendKeepsTheClosedMeshAndItsAnchors() {
+        for (const layout of supportedLayouts) {
+            const flat = PlatformGeometry.platform({shape: PlatformGeometry.shapeForLayout(layout, 7), band: 0.1})
+            for (const bend of [-1, -0.5, 0.5, 1]) {
+                const folded = PlatformGeometry.foldMesh(flat, bend, PlatformGeometry.topHeight)
+                compare(folded.indexes.length, flat.indexes.length)
+                compare(boundaryEdges(folded).length, 0, layout + " remains closed")
+                compare(misWound(folded), 0, layout + " faces its deformed normals")
+                compare(folded.rimOffset, flat.rimOffset)
+                compare(folded.rimCount, flat.rimCount)
+                const foot = PlatformGeometry.foldPoint([0, flat.track, PlatformGeometry.topHeight], bend)
+                verify(Math.abs(foot[2] - PlatformGeometry.topHeight) > 0.5,
+                    "the rear icon's foot follows the folded half")
+                const front = [0, -flat.track, PlatformGeometry.topHeight]
+                compare(PlatformGeometry.foldPoint(front, bend), front, "the front half stays still")
+                // Polygon bands have shorter y reach than a circular band.
+                verify(folded.positions.some(p => Math.abs(p[2] - PlatformGeometry.topHeight) > 0.25),
+                    layout + " has a substantial fold, not only a rim tilt")
+            }
+            compare(PlatformGeometry.foldMesh(flat, 0), flat, "zero bend preserves the original mesh")
+        }
+    }
+
     function test_layoutsWithoutAnExactPlatform_data() {
         return ["arc", "semicircle", "fan", "horizontal", "vertical", "star", "spiral", ""]
             .map(function(layout) { return { tag: layout || "empty", layout: layout } })

@@ -87,5 +87,13 @@
     "spdx": "GPL-3.0-or-later",
     "redistribution": "allowed",
     "evidence": "User approved creation and redistribution of newly created original TASK-0034 artwork as part of Arch Dock; the owner selected GPL-3.0-or-later on 2026-10-04 for this independently authored original Arch Dock work"
-  }
+  },
+  "repairs": [
+    {
+      "task": "ADREP-TASK-004",
+      "method": "reuse-original-surface-at-declared-occlusion-depth",
+      "description": "The original solid platform surface also sits before rear entries and after front entries. The existing foreground rim remains the final artwork layer. No artwork bytes or external resources change.",
+      "occlusionDepth": 0.62
+    }
+  ]
 }

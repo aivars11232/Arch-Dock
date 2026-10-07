@@ -108,6 +108,10 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     renderers/PanelSkin2D.qml
     renderers/PanelSkinLayer2D.qml
     renderers/PanelBaked25D.qml)
+foreach(material glass crystal neon minimal plasma lime floating-glass metallic
+                 futuristic organic platform plate pedestal)
+  list(APPEND ARCHDOCK_RENDERING_MODULE_FILES materials/${material}.svg)
+endforeach()
 set(ARCHDOCK_RENDERING_MODULE_SOURCES)
 set(ARCHDOCK_OPTIONAL_RENDERING_FILES
     optional3d/RendererImportProbe.qml
@@ -1354,6 +1358,15 @@ if(BUILD_TESTING)
   set_tests_properties(
     geometry-hit-region-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME panel-materials-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PanelMaterials.qml)
+  set_tests_properties(panel-materials-test PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
   add_test(
     NAME panel-surface-integration-test

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<!-- Original Arch Dock vector material. GPL-3.0-or-later. -->
+<defs><linearGradient id="sheen" x2="0.8" y2="1"><stop stop-color="#f8f8f8"/><stop offset=".36" stop-color="#777"/><stop offset=".62" stop-color="#d8d8d8"/><stop offset="1" stop-color="#4d4d4d"/></linearGradient></defs>
+<rect x="0" y="0" width="128" height="128" fill="#818181" opacity="1"/>
+<rect x="2" y="2" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M4 25 V4 H25" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="34" y="2" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M36 25 V4 H57" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="66" y="2" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M68 25 V4 H89" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="98" y="2" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M100 25 V4 H121" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="2" y="34" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M4 57 V36 H25" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="34" y="34" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M36 57 V36 H57" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="66" y="34" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M68 57 V36 H89" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="98" y="34" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M100 57 V36 H121" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="2" y="66" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M4 89 V68 H25" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="34" y="66" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M36 89 V68 H57" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="66" y="66" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M68 89 V68 H89" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="98" y="66" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M100 89 V68 H121" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="2" y="98" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M4 121 V100 H25" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="34" y="98" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M36 121 V100 H57" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="66" y="98" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M68 121 V100 H89" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<rect x="98" y="98" width="28" height="28" fill="#bababa" opacity="1"/>
+<path d="M100 121 V100 H121" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+</svg>

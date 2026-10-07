@@ -30,6 +30,7 @@ Item {
     property string appearance: "glass"
     property string customColor: ""
     property real panelOpacity: 0.9
+    property real sparkleIntensity: 0
     property var motionTracks: null
     // Scene geometry for the active baked track, from LayoutEngine.
     property var trackMetrics: ({})
@@ -205,12 +206,15 @@ Item {
                         { layout: root.layout, polygonSides: root.polygonSides })
                 for (const key of ["cameraYaw", "thickness", "iconElevation", "roll", "positionX",
                         "positionY", "positionZ", "scale", "fieldOfView", "keyLightBrightness",
-                        "fillLightBrightness", "band", "bend"])
+                        "fillLightBrightness", "band", "bend", "fold"])
                     if (parameters[key] !== undefined && parameters[key] !== null
                             && Number.isFinite(Number(parameters[key])))
                         merged[key] = Number(parameters[key])
                 for (const key of ["transitions", "float"])
                     if (typeof parameters[key] === "boolean") merged[key] = parameters[key]
+                for (const [key, target] of [["color", "materialColor"], ["material", "materialLook"],
+                                            ["texture", "materialTexture"]])
+                    if (typeof parameters[key] === "string") merged[target] = parameters[key]
                 if (isFinite(root.cameraPitch)) merged.cameraPitch = Math.max(-60, Math.min(60, root.cameraPitch))
                 return merged
             }),
@@ -289,6 +293,9 @@ Item {
             customColor: root.customColor
             panelOpacity: root.panelOpacity
             motionTracks: root.motionTracks
+            sparkleIntensity: root.sparkleIntensity
+            reducedMotion: root.reducedMotion
+            sceneConcealed: root.sceneConcealed
         }
     }
 

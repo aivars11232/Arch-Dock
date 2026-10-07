@@ -2572,6 +2572,32 @@ QVariantMap PanelRegistry::themeCandidateForTheme(const ArchDock::PanelDefinitio
             changes.insert(QStringLiteral("rendererTier"), preferred);
     }
 
+    const QVariantMap themeValues = changes;
+    if (panelLayer) {
+        const auto platformTier = [](const QString &tier) {
+            return tier == QStringLiteral("baked2.5d") || tier == QStringLiteral("true3d");
+        };
+        const bool wasPlatform = platformTier(snapshot.surface.rendererTier);
+        const bool becomesPlatform = platformTier(changes.value(QStringLiteral("rendererTier")).toString());
+        if (becomesPlatform && !wasPlatform) {
+            changes.insert(QStringLiteral("previousFlatLook"),
+                ArchDock::PanelSettingsSchema::flatLookValues(snapshot.toLegacyMap()));
+        } else if (!becomesPlatform && wasPlatform) {
+            // A flat theme is applied over the remembered flat surface, not
+            // over the platform's layout and material overrides (PD-17).
+            QVariantMap restored = snapshot.surface.parameters2D
+                .value(QStringLiteral("previousFlatLook")).toMap();
+            const auto allowed = ArchDock::PanelSettingsSchema::flatLookValues(snapshot.toLegacyMap());
+            for (auto it = restored.begin(); it != restored.end();)
+                if (!allowed.contains(it.key())) it = restored.erase(it);
+                else ++it;
+            for (auto it = changes.cbegin(); it != changes.cend(); ++it)
+                restored.insert(it.key(), it.value());
+            restored.insert(QStringLiteral("previousFlatLook"), QVariantMap{});
+            changes = std::move(restored);
+        }
+    }
+
     QVariantMap normalizedChanges;
     for (auto iterator = changes.cbegin(); iterator != changes.cend(); ++iterator)
     {
@@ -2659,6 +2685,7 @@ QVariantMap PanelRegistry::themeCandidateForTheme(const ArchDock::PanelDefinitio
              .toMap().value(QStringLiteral("id"))},
         {QStringLiteral("layer"), normalizedLayer},
         {QStringLiteral("values"), normalizedChanges},
+        {QStringLiteral("themeValues"), themeValues},
         {QStringLiteral("capabilityResolution"), resolution.toVariantMap()},
     };
 }

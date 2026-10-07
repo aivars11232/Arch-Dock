@@ -173,6 +173,9 @@ function load(snapshot) {
         revision: Number(snapshot.revision),
         consumer: String(snapshot.consumer || ""),
         panelBaseline: copyMap(snapshot.panelValues),
+        flatLookValues: copyValue(snapshot.flatLookValues || {}),
+        initialFlatLookValues: copyValue(snapshot.flatLookValues || {}),
+        restoredLookKeys: [],
         initialPanelKeys: Object.keys(snapshot.panelValues),
         globalBaseline: copyMap(snapshot.globalValues),
         panelChanges: {},
@@ -236,6 +239,67 @@ function stagePanelValues(session, values) {
     for (let index = 0; index < keys.length; ++index)
         result = setPanelValue(result, keys[index], values[keys[index]]);
     return result;
+}
+
+function platformTier(tier) {
+    return ["baked2.5d", "true3d"].includes(String(tier || ""));
+}
+
+function currentFlatLook(session) {
+    const values = copyValue(session.flatLookValues || {});
+    for (const key of Object.keys(values))
+        if (hasOwn(session.panelChanges, key)) values[key] = copyValue(session.panelChanges[key]);
+    return values;
+}
+
+// A theme/remembered look can change tier and therefore reveal fields that
+// were absent from the old tier's controls. Only the backend's complete
+// appearance projection supplies these extra keys; ordinary controls
+// still use setPanelValue's fail-closed snapshot rule.
+function stageLookValues(session, values) {
+    let result = copySession(session);
+    result.panelBaseline = copyMap(session.panelBaseline);
+    for (const key of Object.keys(values || {})) {
+        if (!hasOwn(result.panelBaseline, key) && hasOwn(session.flatLookValues, key))
+            result.panelBaseline[key] = copyValue(session.flatLookValues[key]);
+        result = setPanelValue(result, key, copyValue(values[key]));
+    }
+    return result;
+}
+
+function rememberFlatLook(session) {
+    if (platformTier(panelValue(session, "rendererTier", ""))) return session;
+    return setPanelValue(session, "previousFlatLook", currentFlatLook(session));
+}
+
+function platformOff(session) {
+    const saved = copyValue(panelValue(session, "previousFlatLook", {}));
+    let result;
+    if (Object.keys(saved).length) {
+        result = stageLookValues(session, saved);
+        result.restoredLookKeys = Object.keys(saved).filter(key => hasOwn(session.flatLookValues, key));
+    } else {
+        // Legacy platforms have no previous snapshot. Their preserved
+        // procedural appearance is the deterministic flat fallback.
+        result = stageLookValues(session, { rendererTier: "procedural2d",
+            panelThemeId: "", completeThemeId: "" });
+    }
+    return setPanelValue(result, "previousFlatLook", {});
+}
+
+function stageThemeLook(session, candidate) {
+    let values = copyValue(candidate.values || {});
+    const wasPlatform = platformTier(panelValue(session, "rendererTier", ""));
+    const becomesPlatform = platformTier(values.rendererTier);
+    let result = session;
+    if (becomesPlatform && !wasPlatform)
+        values.previousFlatLook = currentFlatLook(session);
+    else if (!becomesPlatform && wasPlatform) {
+        result = platformOff(session);
+        values = copyValue(candidate.themeValues || values);
+        values.previousFlatLook = {};
+    }
+    return stageLookValues(result, values);
 }
 
 function panelValue(session, key, fallback) {
@@ -318,7 +382,8 @@ function rendererThemeCandidate(session, theme) {
         "scene3DCameraYaw", "scene3DThickness", "scene3DIconElevation",
         "scene3DRoll", "scene3DPositionX", "scene3DPositionY", "scene3DPositionZ",
         "scene3DScale", "scene3DFieldOfView", "scene3DKeyLight", "scene3DFillLight",
-        "scene3DTransitions", "scene3DFloat", "scene3DBand", "scene3DBend"
+        "scene3DTransitions", "scene3DFloat", "scene3DBand", "scene3DBend", "scene3DFold",
+        "scene3DColor", "scene3DMaterial", "scene3DTexture", "sparkleIntensity"
     ];
     for (let index = 0; index < ownDefaults.length; ++index)
         delete result[ownDefaults[index]];
@@ -395,6 +460,8 @@ function cancel(session) {
     if (!session || !session.loaded)
         return session;
     const result = copySession(session);
+    result.flatLookValues = copyValue(session.initialFlatLookValues || {});
+    result.restoredLookKeys = [];
     result.panelChanges = {};
     result.globalChanges = {};
     result.status = "cancelled";
@@ -418,6 +485,9 @@ function withProjection(session, projection) {
     result.panelBaseline = projectedBaseline(session.panelBaseline, session.panelPresentedKeys, result.panelFields, projection.panelValues || {});
     result.globalBaseline = projectedBaseline(session.globalBaseline, session.globalPresentedKeys, result.globalFields, projection.globalValues || {});
     result.panelChanges = projectedChanges(session.panelChanges, session.panelPresentedKeys, result.panelFields);
+    for (const key of session.restoredLookKeys || [])
+        if (hasOwn(session.panelChanges, key)) result.panelChanges[key] = session.panelChanges[key];
+    result.flatLookValues = copyValue(projection.flatLookValues || session.flatLookValues || {});
     result.globalChanges = projectedChanges(session.globalChanges, session.globalPresentedKeys, result.globalFields);
     result.panelPresentedKeys = fieldKeys(result.panelFields);
     result.globalPresentedKeys = fieldKeys(result.globalFields);

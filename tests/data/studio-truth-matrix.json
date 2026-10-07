@@ -84,7 +84,11 @@
         "scene3DRoll",
         "scene3DScale",
         "scene3DThickness",
-        "scene3DTransitions"
+        "scene3DTransitions",
+        "scene3DColor",
+        "scene3DMaterial",
+        "scene3DTexture",
+        "scene3DFold"
       ]
     },
     "free": {
@@ -142,7 +146,11 @@
         "scene3DRoll",
         "scene3DScale",
         "scene3DThickness",
-        "scene3DTransitions"
+        "scene3DTransitions",
+        "scene3DColor",
+        "scene3DMaterial",
+        "scene3DTexture",
+        "scene3DFold"
       ],
       "skinned2d": [
         "appearance",
@@ -163,7 +171,11 @@
         "scene3DRoll",
         "scene3DScale",
         "scene3DThickness",
-        "scene3DTransitions"
+        "scene3DTransitions",
+        "scene3DColor",
+        "scene3DMaterial",
+        "scene3DTexture",
+        "scene3DFold"
       ],
       "baked2.5d": [
         "appearance",
@@ -184,9 +196,13 @@
         "scene3DRoll",
         "scene3DScale",
         "scene3DThickness",
-        "scene3DTransitions"
+        "scene3DTransitions",
+        "scene3DColor",
+        "scene3DMaterial",
+        "scene3DTexture",
+        "scene3DFold"
       ],
-      "true3d": ["appearance", "layoutPadding", "pathOrientation", "bakedTilt"]
+      "true3d": ["appearance", "color", "layoutPadding", "pathOrientation", "bakedTilt"]
     }
   },
   "homes": {
@@ -204,7 +220,11 @@
     "revealHandle": "1:9",
     "openDelay": "1:9",
     "closeDelay": "1:9",
-    "iconStyle": "2:0"
+    "iconStyle": "2:0",
+    "scene3DColor": "1:10",
+    "scene3DMaterial": "1:10",
+    "scene3DTexture": "1:10",
+    "scene3DFold": "1:10"
   },
   "effects": {
     "about": [
@@ -387,6 +407,11 @@
     },
     "scene3DBand": {"probe": "frame"},
     "scene3DBend": {"probe": "frame"},
+    "scene3DFold": {"probe": "frame", "value": 0.75, "alternate": -0.75},
+    "scene3DColor": {"probe": "frame", "value": "#dd3399", "alternate": "#33aa77"},
+    "scene3DMaterial": {"probe": "frame", "value": "metallic", "alternate": "organic"},
+    "scene3DTexture": {"probe": "frame", "value": "organic", "alternate": "none"},
+    "sparkleIntensity": {"probe": "frame", "value": 0.8, "alternate": 0.0},
     "scene3DCameraPitch": {"probe": "frame"},
     "scene3DCameraYaw": {"probe": "frame"},
     "scene3DFieldOfView": {"probe": "frame"},

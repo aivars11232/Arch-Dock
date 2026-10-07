@@ -619,9 +619,14 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             available = !freeHost && controlAvailable(descriptor->editor.capability);
             break;
         case ArchDock::EditorCapability::ArbitraryXyPlacement:
-        case ArchDock::EditorCapability::DynamicTint:
         case ArchDock::EditorCapability::IconStateStyling:
             available = controlAvailable(descriptor->editor.capability);
+            break;
+        case ArchDock::EditorCapability::DynamicTint:
+            // A theme's 2D tint capability does not tint its native mesh.
+            // Native colour is the live material control on Panels > 3D.
+            available = tier != ArchDock::RendererTier::True3D
+                && controlAvailable(descriptor->editor.capability);
             break;
         case ArchDock::EditorCapability::DynamicGlow:
             // The plain 2D surface draws no glow for this to scale.
@@ -807,6 +812,9 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         }
         case ArchDock::EditorCapability::ProceduralSurface:
             available = tier == ArchDock::RendererTier::Procedural2D;
+            if (key == QStringLiteral("sparkleIntensity"))
+                available = available && (candidate.surface.appearance == QStringLiteral("crystal")
+                    || candidate.surface.appearance == QStringLiteral("plasma"));
             break;
         case ArchDock::EditorCapability::ArtworkFit:
             available = resolution.available &&
@@ -1243,6 +1251,20 @@ PanelWindow::preparePanelSettingsDraft(
             {
                 continue;
             }
+            // PD-17 restores the exact saved look, including material values
+            // whose controls disappear in the flat tier. Only values equal
+            // to this panel's durable snapshot can use this exception.
+            const auto remembered = currentPanel->surface.parameters2D
+                .value(QStringLiteral("previousFlatLook")).toMap();
+            const auto restoredTier = draft->candidatePanel.surface.rendererTier;
+            if (panelValues.contains(QStringLiteral("previousFlatLook"))
+                && panelValues.value(QStringLiteral("previousFlatLook")).toMap().isEmpty()
+                && restoredTier != QStringLiteral("true3d")
+                && restoredTier != QStringLiteral("baked2.5d")
+                && ArchDock::PanelSettingsSchema::flatLookValues(currentValues).contains(it.key())
+                && remembered.contains(it.key())
+                && candidateValues.value(it.key()) == remembered.value(it.key()))
+                continue;
             if (outcome)
             {
                 outcome->status = ArchDock::PanelSettingsTransactionStatus::ValidationFailed;
@@ -1328,6 +1350,8 @@ QVariantMap PanelWindow::panelSettingsEditorSnapshot(
         {QStringLiteral("consumer"), normalizedConsumer},
         {QStringLiteral("panelValues"),
          panelSettingsEditorValues(*definition, panelFields)},
+        {QStringLiteral("flatLookValues"),
+         ArchDock::PanelSettingsSchema::flatLookValues(definition->toLegacyMap())},
         {QStringLiteral("globalValues"), globalValues},
         {QStringLiteral("panelFields"), panelFields},
         {QStringLiteral("globalFields"), globalFields},
@@ -1416,6 +1440,8 @@ QVariantMap PanelWindow::resolvePanelSettingsEditorDraft(
         {QStringLiteral("consumer"), normalizedConsumer},
         {QStringLiteral("panelValues"),
          panelSettingsEditorValues(draft->candidatePanel, panelFields)},
+        {QStringLiteral("flatLookValues"),
+         ArchDock::PanelSettingsSchema::flatLookValues(draft->candidatePanel.toLegacyMap())},
         {QStringLiteral("globalValues"), projectedGlobals},
         {QStringLiteral("panelFields"), panelFields},
         {QStringLiteral("globalFields"), globalFields},

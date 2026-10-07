@@ -336,6 +336,31 @@ PlasmoidItem {
 
     // Plasma 6's scripting geometry setter is a no-op. Restore only our own
     // desktop container, after the backend has removed its preview projection.
+    property var pendingAuditionGeometry: null
+    Timer {
+        id: auditionGeometryMove
+        interval: 25
+        onTriggered: {
+            const command = root.pendingAuditionGeometry;
+            root.pendingAuditionGeometry = null;
+            if (!command || String(Plasmoid.configuration.auditionRestoreGeometry || "") !== command.raw
+                    || !root.freeSurface || root.panelId !== command.requested.panelId
+                    || Plasmoid.configuration.ownerToken !== command.requested.ownerToken
+                    || root.configuredPanelType !== "empty" || Plasmoid.configuration.bootstrapFreeDock)
+                return;
+            const container = command.container;
+            if (!container || !container.applet || !container.applet.plasmoid || !container.layout
+                    || container.applet.plasmoid.id !== Plasmoid.id)
+                return;
+            // Plasma's zero-interval size-hint timer can reposition a newly
+            // resized container. Move after that queued resize has settled.
+            const position = container.applet.mapToItem(container.layout, 0, 0);
+            container.x += command.requested.x - position.x;
+            container.y += command.requested.y - position.y;
+            container.layout.save();
+        }
+    }
+
     function restoreAuditionGeometry() {
         const raw = String(Plasmoid.configuration.auditionRestoreGeometry || "");
         if (!freeSurface || !panelId || !raw || raw.length > 4096) return;
@@ -362,10 +387,8 @@ PlasmoidItem {
                 // position, so that relayout cannot replace the move.
                 container.width = requested.width + container.leftPadding + container.rightPadding;
                 container.height = requested.height + container.topPadding + container.bottomPadding;
-                const position = container.applet.mapToItem(container.layout, 0, 0);
-                container.x += requested.x - position.x;
-                container.y += requested.y - position.y;
-                container.layout.save();
+                root.pendingAuditionGeometry = {raw: raw, requested: requested, container: container};
+                auditionGeometryMove.restart();
             });
         });
     }
@@ -1121,6 +1144,7 @@ PlasmoidItem {
         id: liveEntryDelegate
 
         DockEntry {
+            id: liveEntry
             anchors.centerIn: parent
             entry: parent.sceneEntry
             entryIndex: parent.sceneIndex
@@ -1153,6 +1177,9 @@ PlasmoidItem {
             animationCatalog: root.animationCatalogMap
             reducedMotion: root.configuration.reducedMotion
             inputEnabled: parent.sceneInputEnabled
+            inputContainsPoint: function(point) {
+                return parent.sceneEntryPointVisible(liveEntry.mapToItem(parent, point.x, point.y));
+            }
             sceneVisible: parent.sceneVisible
             meshVisualActive: parent.sceneMeshActive
             motionContextKey: parent.sceneMotionContextKey

@@ -178,6 +178,9 @@ public:
     [[nodiscard]] static QVariantMap runtimeValues(
         PanelSettingsFieldScope scope,
         const QVariantMap &record);
+    // The editor-owned surface, layout and icon appearance for PD-17. This is
+    // projection data, including values whose controls are currently hidden.
+    [[nodiscard]] static QVariantMap flatLookValues(const QVariantMap &record);
     [[nodiscard]] static QVariantList editorDescriptors(
         PanelSettingsFieldScope scope,
         const QString &consumer);

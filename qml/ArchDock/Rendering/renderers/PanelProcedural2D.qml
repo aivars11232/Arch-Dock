@@ -1,9 +1,9 @@
 import QtQuick
 import ArchDock.Rendering 1.0
 
-// The dependency-free 2D surface: the panel's track drawn as a stroked path
-// in the colours of its appearance (glass, neon, metallic...). It is the
-// fallback whenever a theme's own renderer cannot be used.
+// The dependency-free fallback surface. Original vector material maps are
+// painted on the existing track, including the software scene-graph backend
+// where ShaderEffect is unavailable. Geometry and rotation stay shared.
 Item {
     id: root
 
@@ -31,6 +31,9 @@ Item {
     property string appearance: "glass"
     property string customColor: ""
     property real panelOpacity: 0.9
+    property real sparkleIntensity: 0
+    property bool reducedMotion: false
+    property bool sceneConcealed: false
 
     // The presentation track. A procedural surface has no declared parts to
     // slide or split, so it takes the whole-surface track: a collapse squeezes
@@ -82,6 +85,31 @@ Item {
         layout, geometry, drawnAngle, polygonSides)
     readonly property var surfaceStyle: LayoutEngine.themeStyle(
         appearance, customColor, Number(geometry.iconSize || 40))
+    readonly property url materialSource: Qt.resolvedUrl(
+        "../materials/" + surfaceStyle.material + ".svg")
+    readonly property bool materialReady: canvas.materialLoaded
+    readonly property bool materialAnimationActive: visible && !sceneConcealed
+        && !reducedMotion && surfaceStyle.animated && motionOpacity > 0 && panelOpacity > 0
+    property real energyPhase: 0
+
+    function trace(context) {
+        context.beginPath()
+        const points = surfacePath.points
+        context.moveTo(points[0].x, points[0].y)
+        for (let i = 1; i < points.length; ++i)
+            context.lineTo(points[i].x, points[i].y)
+        if (surfacePath.closed) context.closePath()
+    }
+
+    Timer {
+        interval: 125
+        repeat: true
+        running: root.materialAnimationActive
+        onTriggered: {
+            root.energyPhase = (root.energyPhase + 0.025) % 1
+            energy.requestPaint()
+        }
+    }
 
     width: Number(geometry.width || 0)
     height: Number(geometry.height || 0)
@@ -98,13 +126,26 @@ Item {
     Canvas {
         id: canvas
         objectName: "procedural-surface-canvas"
+        property bool materialLoaded: false
+
+        function loadMaterial() {
+            if (!isImageLoaded(root.materialSource)) loadImage(root.materialSource)
+            materialLoaded = isImageLoaded(root.materialSource)
+            requestPaint()
+        }
+        onAvailableChanged: if (available) loadMaterial()
+        Component.onCompleted: if (available) loadMaterial()
+        onImageLoaded: {
+            materialLoaded = isImageLoaded(root.materialSource)
+            requestPaint()
+        }
 
         x: -motionClipper.x
         y: -motionClipper.y
         width: root.width
         height: root.height
         opacity: Math.max(0, Math.min(1, root.panelOpacity))
-            * root.motionOpacity
+            * root.motionOpacity * root.surfaceStyle.alpha
         rotation: root.canvasTurn
         // A collapse along an axis squeezes the drawn shape about its centre
         // onto the handle the controller keeps.
@@ -127,6 +168,7 @@ Item {
         onPaint: {
             const context = getContext("2d")
             context.reset()
+            materialLoaded = isImageLoaded(root.materialSource)
             if (!root.rendererReady || root.surfacePath.points.length === 0
                     || !root.surfaceStyle.trackVisible)
                 return
@@ -137,17 +179,52 @@ Item {
             context.shadowBlur = root.surfaceStyle.blur
             context.lineCap = "round"
             context.lineJoin = "round"
-            context.beginPath()
-            context.moveTo(root.surfacePath.points[0].x,
-                           root.surfacePath.points[0].y)
-            for (let index = 1;
-                 index < root.surfacePath.points.length; ++index) {
-                context.lineTo(root.surfacePath.points[index].x,
-                               root.surfacePath.points[index].y)
+            if (root.surfaceStyle.depth > 0) {
+                context.save()
+                context.translate(0, root.surfaceStyle.depth)
+                context.strokeStyle = root.appearance === "floating-glass"
+                    ? "rgba(84,131,156,0.45)" : "#28343f"
+                root.trace(context)
+                context.stroke()
+                context.restore()
             }
-            if (root.surfacePath.closed)
-                context.closePath()
+            root.trace(context)
+            // Keep the cast shadow separate from the textured, tinted body.
+            context.strokeStyle = root.surfaceStyle.stroke
             context.stroke()
+            context.shadowBlur = 0
+            context.shadowColor = "transparent"
+            context.strokeStyle = materialLoaded
+                ? context.createPattern(String(root.materialSource), "repeat")
+                : root.surfaceStyle.stroke
+            context.stroke()
+            // Multiply preserves the map's grain and facets under every tint.
+            context.shadowBlur = 0
+            context.shadowColor = "transparent"
+            context.globalCompositeOperation = "qt-multiply"
+            context.strokeStyle = root.surfaceStyle.stroke
+            context.stroke()
+            context.globalCompositeOperation = "source-over"
+            // Fine polished edge, rather than random glitter.
+            context.save()
+            context.translate(0, -root.surfaceStyle.lineWidth / 2 + 1)
+            context.lineWidth = 1.1
+            context.strokeStyle = "rgba(255,255,255,0.45)"
+            root.trace(context)
+            context.stroke()
+            context.restore()
+            if (root.surfaceStyle.sparkle && root.sparkleIntensity > 0) {
+                context.strokeStyle = "rgba(255,255,255," + Math.min(1, root.sparkleIntensity) + ")"
+                context.lineWidth = 1
+                const points = root.surfacePath.points
+                for (let i = 3; i < points.length; i += 13) {
+                    const p = points[i]
+                    context.beginPath()
+                    context.moveTo(p.x - 3, p.y); context.lineTo(p.x + 3, p.y)
+                    context.moveTo(p.x, p.y - 3); context.lineTo(p.x, p.y + 3)
+                    context.stroke()
+                }
+            }
         }
 
         Connections {
@@ -160,6 +237,55 @@ Item {
             function onAppearanceChanged() { canvas.requestPaint() }
             function onCustomColorChanged() { canvas.requestPaint() }
             function onPanelOpacityChanged() { canvas.requestPaint() }
+            function onSparkleIntensityChanged() { canvas.requestPaint() }
+            function onMaterialSourceChanged() { canvas.loadMaterial() }
+        }
+    }
+
+    // Only the small light overlay repaints at 8 Hz. Static textured bodies
+    // remain cached; neither canvas paints periodically while hidden.
+    Canvas {
+        id: energy
+        objectName: "procedural-material-energy"
+        anchors.fill: canvas
+        rotation: canvas.rotation
+        transform: [
+            Scale {
+                origin.x: energy.width / 2
+                origin.y: energy.height / 2
+                xScale: Math.max(0, root.motionNumber("scaleX", 1))
+                yScale: Math.max(0, root.motionNumber("scaleY", 1))
+            },
+            Translate {
+                x: root.motionNumber("offsetX", 0)
+                y: root.motionNumber("offsetY", 0)
+            }
+        ]
+        visible: root.surfaceStyle.animated
+        opacity: canvas.opacity
+        renderStrategy: Canvas.Threaded
+        onPaint: {
+            if (!root.surfaceStyle.animated) return
+            const context = getContext("2d")
+            context.reset()
+            const points = root.surfacePath.points
+            if (points.length < 2) return
+            context.lineWidth = root.appearance === "plasma" ? 3 : 1.6
+            for (let i = 1; i < points.length; ++i) {
+                const wave = (i / points.length - root.energyPhase + 1) % 1
+                context.strokeStyle = "rgba(225,250,255," +
+                    (root.appearance === "plasma" ? Math.max(0, 1 - wave * 4)
+                        : 0.2 + 0.4 * (1 + Math.sin(wave * Math.PI * 6))) + ")"
+                context.beginPath()
+                context.moveTo(points[i-1].x, points[i-1].y)
+                context.lineTo(points[i].x, points[i].y)
+                context.stroke()
+            }
+        }
+        Connections {
+            target: root
+            function onSurfacePathChanged() { if (root.surfaceStyle.animated) energy.requestPaint() }
+            function onAppearanceChanged() { if (root.surfaceStyle.animated) energy.requestPaint() }
         }
     }
     }

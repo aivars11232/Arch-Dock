@@ -9,6 +9,9 @@ Item {
 
     property url source: ""
     property size sourceSize: Qt.size(0, 0)
+    // Optional bounded SVG decode size. Legacy masks keep their natural
+    // coordinates; callers supplying this size also scale sourceRect.
+    property size decodeSize: Qt.size(0, 0)
     property rect sourceRect: Qt.rect(0, 0, sourceSize.width, sourceSize.height)
     property real fixedStart: 0
     property real fixedEnd: 0
@@ -26,15 +29,18 @@ Item {
     property var alphaBytes: null
     property int loadPolls: 0
     property url cachedSource: ""
+    property size cachedDecodeSize: Qt.size(0, 0)
 
     function resetCache() {
         cacheReady = false
         alphaBytes = null
         loadPolls = 0
         const value = String(source || "")
-        if (String(cachedSource) !== value) {
+        if (String(cachedSource) !== value || cachedDecodeSize.width !== decodeSize.width
+                || cachedDecodeSize.height !== decodeSize.height) {
             if (String(cachedSource).length > 0) cache.unloadImage(cachedSource)
             cachedSource = source
+            cachedDecodeSize = decodeSize
         }
         if (value.length === 0) {
             loadError = "mask-source-missing"
@@ -61,6 +67,8 @@ Item {
         loadError = ""
         if (cache.isImageLoaded(source))
             cache.requestPaint()
+        else if (decodeSize.width > 0 && decodeSize.height > 0)
+            cache.loadImage(source, decodeSize)
         else
             cache.loadImage(source)
     }
@@ -84,6 +92,9 @@ Item {
 
     QtObject {
         id: hitTest
+        // GeometryHitRegion receives this hit-test object, not the
+        // decoding item. Keep the ready state with the predicate it guards.
+        readonly property bool ready: root.ready
 
         function contains(point: point): bool {
             return root.contains(point)
@@ -92,6 +103,7 @@ Item {
 
     onSourceChanged: resetCache()
     onSourceSizeChanged: resetCache()
+    onDecodeSizeChanged: resetCache()
     onSourceRectChanged: resetCache()
     onFixedStartChanged: resetCache()
     onFixedEndChanged: resetCache()
