@@ -198,3 +198,42 @@ Evidence: `build-codex-adrep/evidence/ADREP-TASK-003/` (index in `INDEX.txt`).
 3. Switch Folder easing between the four choices: each opening and closing
    looks different.
 
+## Report 2 - recheck
+
+- Task commit: `047bdc5`; follow-up commit: `3b63b47` (documents only: three
+  sentences said more or less than the evidence).
+- Remote: `origin/main` equals `3b63b47` (verified with `git fetch` and
+  `git rev-parse` before this record).
+- Fresh clone of `origin/main` at `047bdc5`: build with one job passed
+  (22 min 4 s); 13 of 13 required and focused tests passed in 933 s
+  (`51-recheck-tests.log`): `panel-model-test`, `panel-settings-schema-test`,
+  `panel-registry-test`, `panel-window-capability-test` (truth matrix and
+  `studioFolderShapeRows` included), `dock-geometry-test`,
+  `layout-engine-visual-test`, `folder-expansion-test`, `folder-easing-test`,
+  `rendering-import-smoke`, `folder-interaction-smoke`, `folder-anchor-smoke`
+  (90 openings), `studio-truth-matrix-smoke` and
+  `runtime-ui-interaction-smoke`.
+- Round 2 at `3b63b47`: the follow-up changes three documents and no code
+  (`git diff 047bdc5 3b63b47` touches `docs/INSTALL.md`,
+  `docs/KNOWN_LIMITATIONS.md` and this report only), so the rechecked build
+  and tests stand; the corrected sentences were checked against the logs.
+- Acceptance criteria rechecked: 11 of 11 with proof. Gaps found: none in the
+  code; three sentences corrected in `3b63b47` (the old Along-the-dock
+  distances are 31.1 to 46.7 px, not 31 to 43; the folder session times are
+  those of the final suite, 82 s and 101 s; a small ring also holds fewer
+  children where the screen is short, and a press on the drawn fan or ring
+  keeps the folder open).
+- Owner findings rechecked: OF-17, OF-18, OF-19, OF-20, OF-21, OF-22 and OF-23
+  closed; OF-16 closed (panel travel in ADREP-TASK-002, folder scrolling here).
+- Documents against evidence: after `3b63b47` this report, the install guide,
+  known limitations, changelog and current state match the evidence.
+- Diff from the base touches only in-scope files: 28 files from `62eaeba` to
+  `047bdc5` - the folder layout code (layout engine, folder track and popup,
+  wheel input, motion curves, scene helpers, hosts and applet), the three
+  folder settings (schema, model, editor rules, Studio's sensitivity note),
+  their tests, the session harness and the documents; `3b63b47` documents only.
+- Leftovers: no task process, private session or temporary root left; the
+  recheck clone and its test folder, and the crash-reporter launchers that
+  private test sessions left behind today, are removed in cleanup.
+- Recheck rounds: 2 (the second for the documents-only follow-up).
+- Recheck record commit: this commit (pushed).

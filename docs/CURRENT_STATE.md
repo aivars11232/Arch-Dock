@@ -4,7 +4,8 @@
 ## ADREP-TASK-003 — Folder layouts as the owner defines them (2026-10-07)
 
 The third task of the owner's video audit (package `/mnt/F/Arch Dock LCL
-repairs/`) is implemented and verified; its report is
+repairs/`) is closed: implemented, verified, pushed (`047bdc5`, documents
+follow-up `3b63b47`) and rechecked on a fresh clone; its report is
 [docs/repairs/ADREP-TASK-003.md](repairs/ADREP-TASK-003.md). Nothing was
 packaged or installed: the PC still runs 0.1.1-11, and the package for this
 work comes with ADREP-TASK-005.
