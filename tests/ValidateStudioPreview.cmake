@@ -99,11 +99,15 @@ foreach(required_preset_studio_contract
   endif()
 endforeach()
 
+# A preset page lists its catalog for the selected panel: panel presets made
+# for that panel's kind and orientation, every icon preset (ADREP-TASK-001,
+# the owner's request of 2026-10-07).
 foreach(required_preset_studio_contract
         "PresetBrowser {"
         "StudioNavigation.presetPage(mainTabIndex, subTabIndex)"
-        "presetLibrary.panelPresets(page.scope)"
-        "presetLibrary.iconPresets(page.scope)"
+        "presetsForSelectedPanel(page.kind, page.scope)"
+        "presetLibrary.panelPresets(scope)"
+        "presetLibrary.iconPresets(scope)"
         "panelDefinition: root.selectedPresetCandidate"
         "Preset preview only — no panel is changed")
   string(FIND "${settings_popup}" "${required_preset_studio_contract}"

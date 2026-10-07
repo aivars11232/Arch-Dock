@@ -83,6 +83,10 @@ public:
     // stay stopped, returning any audition to the saved desktop and releasing
     // the KWin watcher whose window reports would start it again.
     QVariantMap stopIntentionally(const QString &reason);
+    // A built-in theme's values for Panel Studio to load into a panel's draft,
+    // without values for fields that do not act on that panel.
+    Q_INVOKABLE QVariantMap panelThemeCandidate(const QString &panelId,
+                                                const QString &themeId) const;
 
 public slots:
     void showSettings();
@@ -295,6 +299,8 @@ private:
     [[nodiscard]] QVariantMap presetResource(const QString &kind, const QString &presetId,
         bool builtInOnly = false) const;
     [[nodiscard]] QVariantMap presetEditorProjection(const ArchDock::PanelDefinition &candidate) const;
+    [[nodiscard]] QVariantMap themeCandidateFor(const ArchDock::PanelDefinition &candidate,
+                                                const QString &themeId) const;
     [[nodiscard]] std::optional<QVariantMap> presetFreeHostGeometry(
         const ArchDock::PanelDefinition &definition, QString *errorCode) const;
     bool setPresetFreeHostGeometry(const ArchDock::PanelDefinition &definition,

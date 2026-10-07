@@ -472,6 +472,23 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         }
         return *styleLayers;
     };
+    // On a baked 2.5D look the icons stand on the track its artwork declares
+    // for the current state, not on the record's layout; only a closed track
+    // can turn (LayoutEngine.trackSupportsRotation).
+    const auto bakedTrack = [&]() -> QVariantMap {
+        const auto &theme = themeProjection();
+        if (!theme)
+            return {};
+        for (const QVariant &value : theme->value(QStringLiteral("tracks")).toList())
+        {
+            const QVariantMap track = value.toMap();
+            const QString state = track.value(QStringLiteral("state")).toString();
+            if (state.isEmpty() || state == candidate.presentation.mode)
+                return track;
+        }
+        return {};
+    };
+    const bool baked = tier == ArchDock::RendererTier::Baked2_5D;
 
     QVariantList result;
     const QVariantList schemaFields = ArchDock::PanelSettingsSchema::editorDescriptors(
@@ -499,6 +516,10 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         }
 
         bool available = false;
+        // A field of this panel that draws nothing in its present state: not
+        // shown, but kept and accepted, since it acts once the state changes
+        // (a mechanism is chosen, the renderer changes) or a look needs it.
+        bool inactive = false;
         switch (*capability)
         {
         case ArchDock::EditorCapability::ScreenPlacement:
@@ -506,9 +527,13 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             available = QGuiApplication::screens().size() > 1;
             break;
         case ArchDock::EditorCapability::ContentType:
-        case ArchDock::EditorCapability::Visibility:
         case ArchDock::EditorCapability::SurfaceOpacity:
             available = true;
+            break;
+        case ArchDock::EditorCapability::Visibility:
+            // Only an edge panel's Plasma host can be hidden; a free panel is
+            // drawn whatever it holds, and is removed instead (truth matrix).
+            available = !freeHost;
             break;
         case ArchDock::EditorCapability::Segments:
         {
@@ -598,11 +623,12 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 });
             available = resolution.available && collapsible;
             // With the open mechanism nothing opens or closes, so only the
-            // choice of a mechanism and the resting state remain (PD-01).
+            // choice of a mechanism and the resting state are shown; the
+            // settings of a mechanism wait until one is chosen (PD-01).
             if (available && candidate.presentation.collapseMechanism == QStringLiteral("open") &&
                 key != QStringLiteral("presentationMode") && key != QStringLiteral("collapseMechanism"))
             {
-                available = false;
+                inactive = true;
             }
             if (available && key == QStringLiteral("collapseMechanism"))
             {
@@ -620,6 +646,13 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             available = key == QStringLiteral("layout")
                 ? true
                 : layoutAvailable(candidate.layout.pathType);
+            // A baked look places its icons on its artwork's own track, so
+            // its Dock layout draws nothing different; it still decides the
+            // look's compatibility and the 3D and flat drawings (truth matrix).
+            if (available && key == QStringLiteral("layout") && baked)
+            {
+                inactive = true;
+            }
             // Padding is the margin of a skin's artwork around the icons; the
             // other renderers draw nothing in it (OF-04, PD-03).
             if (available && key == QStringLiteral("layoutPadding"))
@@ -634,6 +667,12 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             break;
         case ArchDock::EditorCapability::WholePanelRotation:
             available = resolution.rotation.available;
+            // An open baked track (an arc) cannot turn under its artwork; any
+            // other track is closed, as LayoutEngine.trackShape() reads it.
+            if (available && baked)
+            {
+                available = bakedTrack().value(QStringLiteral("shape")).toString() != QStringLiteral("arc");
+            }
             // Only the static layout angle takes the resolved degree range;
             // the rotation mode, speed and trigger fields share the gate but
             // keep their own schema bounds.
@@ -710,8 +749,8 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             // The shape of the tile drawn behind each icon, by default or by
             // an icon's own choice: a custom tile, or the plain tile of an
             // icon without styled layers of its own.
-            available = candidate.iconStyle.tileMode == QStringLiteral("custom") ||
-                !iconStyleDrawsLayers();
+            available = controlAvailable(QStringLiteral("icon-state-styling")) &&
+                (candidate.iconStyle.tileMode == QStringLiteral("custom") || !iconStyleDrawsLayers());
             break;
         case ArchDock::EditorCapability::GlobalRenderer:
             // Running-application indicators belong to edge panels whose
@@ -759,18 +798,47 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         }
         else if (key == QStringLiteral("layout"))
         {
+            // A layout that draws exactly like another is no choice: a ring
+            // and a circle place icons and platforms alike, and on a free
+            // panel adaptive is the horizontal row. The current layout keeps
+            // its own name (ADREP-TASK-001 truth matrix).
+            const auto drawing = [freeHost](const QString &layout)
+            {
+                if (layout == QStringLiteral("ring"))
+                {
+                    return QStringLiteral("circular");
+                }
+                if (freeHost && layout == QStringLiteral("adaptive"))
+                {
+                    return QStringLiteral("horizontal");
+                }
+                return layout;
+            };
+            const QString current = candidate.layout.pathType;
+            QSet<QString> drawings{drawing(current)};
             QStringList availableChoices;
             for (const QString &choice : choices)
             {
-                if (layoutAvailable(choice))
+                if (!layoutAvailable(choice))
+                {
+                    continue;
+                }
+                if (choice == current || !drawings.contains(drawing(choice)))
                 {
                     availableChoices.append(choice);
+                    drawings.insert(drawing(choice));
                 }
             }
             choices = availableChoices;
             if (choices.isEmpty())
             {
                 continue;
+            }
+            // One layout left is no choice to show, but it is kept: a look
+            // may need the one layout it is made for.
+            if (choices.size() < 2)
+            {
+                inactive = true;
             }
             field.insert(QStringLiteral("choices"), choices);
         }
@@ -842,6 +910,10 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         if (!options.isEmpty())
         {
             field.insert(QStringLiteral("options"), options);
+        }
+        if (inactive)
+        {
+            field.insert(QStringLiteral("inactive"), true);
         }
         result.append(field);
     }
@@ -1052,12 +1124,6 @@ PanelWindow::preparePanelSettingsDraft(
         if (value.toMap().value(QStringLiteral("key")).toString() == QStringLiteral("bakedTilt"))
             tiltEditor = value.toMap();
     }
-    QSet<QString> previousFields;
-    for (const QVariant &value : panelSettingsEditorFields(*currentPanel,
-             m_panelRegistry.resolvePanelCapabilities(*currentPanel), QStringLiteral("studio")))
-    {
-        previousFields.insert(value.toMap().value(QStringLiteral("key")).toString());
-    }
     const QVariantMap currentValues = currentPanel->toLegacyMap();
     const QVariantMap candidateValues = draft->candidatePanel.toLegacyMap();
     if (!tiltEditor.isEmpty() && panelValues.contains(QStringLiteral("bakedTilt"))
@@ -1083,11 +1149,12 @@ PanelWindow::preparePanelSettingsDraft(
         if (field && field->access == ArchDock::PanelSettingsFieldAccess::Editor &&
             field->editor.isPresented() && !availableFields.contains(it.key()))
         {
-            // Studio submits its full snapshot when changing capabilities.
-            // Retain inactive values only if they were previously available
-            // and the normalized candidate leaves them unchanged.
-            if ((previousFields.contains(it.key()) || field->editor.capability == QStringLiteral("application-overlays")) &&
-                candidateValues.value(it.key(), field->defaultValue) ==
+            // Studio submits its full snapshot when changing capabilities, and
+            // presets and profiles carry values for fields that do not act on
+            // this panel. A value that stays as it is changes nothing and is
+            // retained; only a change to a field the panel does not offer is
+            // refused (ADREP-TASK-001 truth rules).
+            if (candidateValues.value(it.key(), field->defaultValue) ==
                     currentValues.value(it.key(), field->defaultValue))
             {
                 continue;

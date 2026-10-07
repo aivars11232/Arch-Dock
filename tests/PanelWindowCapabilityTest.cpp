@@ -30,10 +30,12 @@
 #include <QScreen>
 #include <QScopeGuard>
 #include <QSaveFile>
+#include <QSGRendererInterface>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QUrl>
 #include <QWheelEvent>
+#include <QtMath>
 #include <QtTest>
 #include <unistd.h>
 
@@ -108,6 +110,182 @@ QQuickItem *visibleItem(QQuickWindow *window, const QString &name)
     return nullptr;
 }
 
+// ADREP-TASK-001 Studio truth matrix (tests/data/studio-truth-matrix.json).
+QVariantMap truthMatrixFixture()
+{
+    QFile file(QTest::qFindTestData(QStringLiteral("data/studio-truth-matrix.json"),
+                                    __FILE__, __LINE__));
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
+    return QJsonDocument::fromJson(file.readAll()).object().toVariantMap();
+}
+
+QString sourceText(const QString &relativePath)
+{
+    QFile file(QTest::qFindTestData(QStringLiteral("../") + relativePath, __FILE__, __LINE__));
+    return file.open(QIODevice::ReadOnly) ? QString::fromUtf8(file.readAll()) : QString{};
+}
+
+bool sameValue(const QVariant &left, const QVariant &right)
+{
+    return QJsonValue::fromVariant(left) == QJsonValue::fromVariant(right);
+}
+
+// One panel drawn the way the applet draws it (tests/TruthMatrixPanel.qml),
+// grabbed once it has come to rest.
+class TruthFrame
+{
+public:
+    TruthFrame(QQmlEngine &engine, bool freeSurface, bool vertical, const QVariantMap &configuration)
+    {
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QTest::qFindTestData(
+            QStringLiteral("TruthMatrixPanel.qml"), __FILE__, __LINE__)));
+        if (!component.isReady()) {
+            m_error = component.errorString();
+            return;
+        }
+        m_window = std::make_unique<QQuickWindow>();
+        m_window->setColor(QColor(QStringLiteral("#101418")));
+        // Entries are created with the configuration they draw, as in the
+        // applet, whose delegates require their values when they are made.
+        m_item.reset(qobject_cast<QQuickItem *>(component.createWithInitialProperties(
+            {{QStringLiteral("freeSurface"), freeSurface}, {QStringLiteral("vertical"), vertical},
+             {QStringLiteral("configuration"), configuration}})));
+        if (!m_item) {
+            m_error = component.errorString();
+            return;
+        }
+        // A host of fixed size, the panel's own with room to grow, with the
+        // scene centred in it: an icon growing under the pointer stays under
+        // it, as on the desktop.
+        m_item->setParentItem(m_window->contentItem());
+        const QSize host(qCeil(m_item->width()) + 240, qCeil(m_item->height()) + 200);
+        m_item->setProperty("hostWidth", host.width());
+        m_item->setProperty("hostHeight", host.height());
+        m_window->resize(host);
+        m_window->show();
+        if (!QTest::qWaitForWindowExposed(m_window.get()))
+            m_error = QStringLiteral("the harness window was never exposed");
+    }
+
+    QString error() const { return m_error; }
+    QQuickItem *item() const { return m_item.get(); }
+    // Qt Quick's software renderer draws no shader effects.
+    bool softwareRenderer() const
+    {
+        return m_window->rendererInterface()->graphicsApi() == QSGRendererInterface::Software;
+    }
+
+    // The resting frame, with the pointer away or over one entry, moved there
+    // as a person moves it. It is drawn as for a person with reduced motion
+    // and without tooltips, so that every frame comes to rest; motion and
+    // tooltips are proven by their own runtime properties. A frame that still
+    // equals the reference is given time for a late paint: the procedural
+    // surface paints on a worker thread.
+    QImage draw(QVariantMap configuration, int hoveredIndex, const QImage &reference = {})
+    {
+        configuration.insert(QStringLiteral("reducedMotion"), true);
+        configuration.insert(QStringLiteral("showTooltips"), false);
+        m_item->setProperty("configuration", configuration);
+        QImage last;
+        QElapsedTimer timer;
+        timer.start();
+        // The pointer is aimed once and held there, as a hand holds it while
+        // the icon under it grows.
+        QPoint pointer(1, 1);
+        bool aimed = hoveredIndex < 0;
+        QElapsedTimer late;
+        while (timer.elapsed() < 4000) {
+            (void)QQuickTest::qWaitForPolish(m_window.get());
+            if (!aimed) {
+                QVariant point;
+                QMetaObject::invokeMethod(m_item.get(), "entryPoint", Q_RETURN_ARG(QVariant, point),
+                                          Q_ARG(QVariant, hoveredIndex));
+                pointer = point.toPointF().toPoint();
+                aimed = true;
+            }
+            QTest::mouseMove(m_window.get(), pointer);
+            QTest::qWait(25);
+            const QImage frame = m_window->grabWindow();
+            if (!last.isNull() && frame == last) {
+                if (reference.isNull() || frame != reference)
+                    return frame;
+                if (!late.isValid())
+                    late.start();
+                if (late.elapsed() > 800)
+                    return frame;
+                continue;
+            }
+            m_unsettled = {last, frame};
+            last = frame;
+        }
+        return {};
+    }
+
+    // The last two different frames of a draw that never came to rest.
+    QPair<QImage, QImage> unsettled() const { return m_unsettled; }
+
+    // A frame every later draw is compared with: drawn until two draws agree,
+    // so that no late paint is mistaken for a change.
+    QImage reference(const QVariantMap &configuration, int hoveredIndex)
+    {
+        QImage previous = draw(configuration, hoveredIndex);
+        for (int attempt = 0; attempt < 3 && !previous.isNull(); ++attempt) {
+            const QImage next = draw(configuration, hoveredIndex, previous);
+            if (next == previous)
+                return next;
+            previous = next;
+        }
+        return {};
+    }
+
+private:
+    std::unique_ptr<QQuickWindow> m_window;
+    std::unique_ptr<QQuickItem> m_item;
+    QString m_error;
+    QPair<QImage, QImage> m_unsettled;
+};
+
+// A different valid value for a shown field: the fixture's, or one its
+// control offers.
+QVariant truthChangedValue(const QVariantMap &field, const QVariant &current, const QVariantMap &effect)
+{
+    const QStringList choices = field.value(QStringLiteral("choices")).toStringList();
+    if (effect.contains(QStringLiteral("value"))) {
+        const QVariant value = sameValue(effect.value(QStringLiteral("value")), current)
+            ? effect.value(QStringLiteral("alternate")) : effect.value(QStringLiteral("value"));
+        // A choice this panel does not offer gives way to one it does.
+        if (choices.isEmpty() || choices.contains(value.toString()))
+            return value;
+    }
+    const QString type = field.value(QStringLiteral("type")).toString();
+    const QString control = field.value(QStringLiteral("control")).toString();
+    if (type == QStringLiteral("boolean") || control == QStringLiteral("switch"))
+        return !current.toBool();
+    if (!choices.isEmpty()) {
+        for (const QString &choice : choices)
+            if (choice != current.toString())
+                return choice;
+        return {};
+    }
+    if (control == QStringLiteral("color"))
+        return current.toString().compare(QStringLiteral("#c83c3c"), Qt::CaseInsensitive) == 0
+            ? QStringLiteral("#3cc85a") : QStringLiteral("#c83c3c");
+    const QVariant minimum = field.value(QStringLiteral("minimumValue"));
+    const QVariant maximum = field.value(QStringLiteral("maximumValue"));
+    const double low = minimum.isValid() ? minimum.toDouble() : current.toDouble() - 100;
+    const double high = maximum.isValid() ? maximum.toDouble() : current.toDouble() + 100;
+    const double delta = effect.contains(QStringLiteral("delta"))
+        ? effect.value(QStringLiteral("delta")).toDouble() : (high - low) / 4;
+    double next = current.toDouble() + delta;
+    if (next > high)
+        next = current.toDouble() - delta;
+    next = qBound(low, next, high);
+    if (type == QStringLiteral("integer"))
+        return int(qRound(next));
+    return next;
+}
+
 }
 
 class PanelWindowCapabilityTest final : public QObject
@@ -157,6 +335,7 @@ private slots:
     void desktopLaunchIsBoundToTheSelectedPanelEntry();
     void folderRequestsValidatePanelAndChild();
     void studioPresetPagesBrowseWithoutChangingAnyPanel();
+    void studioPresetListsMatchTheSelectedPanel();
     void profileServicePersistsAndHonorsPanelGuards();
     void presetAuditionGuardsAndInvalidRequestsLeaveNoWrites();
     void presetDefaultsDoNotRewriteExistingInstances();
@@ -165,6 +344,9 @@ private slots:
     void studioArtworkPersistenceFailure_data();
     void studioArtworkPersistenceFailure();
     void ownersFreeCircleOffersOnlyWhatWorks();
+    void studioTruthMatrixHarnessIsTheApplet();
+    void studioTruthMatrix_data();
+    void studioTruthMatrix();
 
 private:
     QTemporaryDir m_settingsDirectory;
@@ -233,6 +415,12 @@ void PanelWindowCapabilityTest::studioFolderItemNames()
         ->contextProperty("panelRegistry").value<QObject *>());
     QVERIFY(registry);
     const QString panel = native ? QStringLiteral("bottom") : registry->addFreePanel();
+    // Folder settings are offered for content that can hold folders, the
+    // launcher and hybrid content that take drops (ADREP-TASK-001).
+    if (!native)
+        QVERIFY(backend.applyPanelSettingsTransaction(panel,
+            registry->panelDefinition(panel)->settingsRevision, {{"type", "launcher"}})
+            .value("success").toBool());
     const auto before = registry->panelDefinition(panel)->toPersistedMap();
     QVERIFY(before.value("folderShowNames").toBool());
     QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
@@ -297,7 +485,9 @@ void PanelWindowCapabilityTest::studioPlainSurfaceExplains3D()
         && ARCHDOCK_QUICK3D_BUILT && ARCHDOCK_SCENE3D_BUILT;
     QTRY_COMPARE(popup->property("scene3DControlsAvailable").toBool(), session3D);
     // Appearance no longer sends people to the themes for 3D: it points to
-    // the one 3D page.
+    // the one 3D page where 3D works. Contract change, ADREP-TASK-001 (owner,
+    // 2026-10-07: "If the tab is empty, there's no need for that tab"): a
+    // session that cannot draw 3D has no 3D page, and Appearance says why.
     QVariant rows;
     QVERIFY(QMetaObject::invokeMethod(popup.get(), "panelAppearanceRows", Q_RETURN_ARG(QVariant, rows)));
     const auto actionsOf = [](const QVariant &list) {
@@ -307,21 +497,31 @@ void PanelWindowCapabilityTest::studioPlainSurfaceExplains3D()
                 result.append(action.toMap().value("action").toString());
         return result;
     };
-    QVERIFY(actionsOf(rows).contains("open-3d-page"));
+    const auto explains = [](const QVariant &list) {
+        for (const auto &row : list.toList())
+            if (row.toMap().value("text").toString().contains("unavailable in this session"))
+                return true;
+        return false;
+    };
+    QVariant offered;
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "subtabAvailable", Q_RETURN_ARG(QVariant, offered),
+        Q_ARG(QVariant, 1), Q_ARG(QVariant, 10)));
+    QCOMPARE(offered.toBool(), session3D);
+    QCOMPARE(actionsOf(rows).contains("open-3d-page"), session3D);
     QVERIFY(!actionsOf(rows).contains("browse-3d-themes"));
-    QVERIFY(QMetaObject::invokeMethod(popup.get(), "performStudioAction",
-        Q_ARG(QVariant, "open-3d-page"), Q_ARG(QVariant, QVariantMap{})));
-    QCOMPARE(popup->property("subTabIndex").toInt(), 10);
-    // With a 3D renderer the page offers the switch for this very panel;
-    // without one it says so and offers no switch that cannot work.
-    QVERIFY(QMetaObject::invokeMethod(popup.get(), "panel3DRows", Q_RETURN_ARG(QVariant, rows)));
-    bool explained = false, switchOffered = false;
-    for (const auto &row : rows.toList()) {
-        explained |= row.toMap().value("text").toString().contains("unavailable in this session");
-        switchOffered |= row.toMap().value("rendererToggle").toBool();
+    QCOMPARE(explains(rows), !session3D);
+    if (session3D) {
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "performStudioAction",
+            Q_ARG(QVariant, "open-3d-page"), Q_ARG(QVariant, QVariantMap{})));
+        QCOMPARE(popup->property("subTabIndex").toInt(), 10);
+        // With a 3D renderer the page offers the switch for this very panel.
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "panel3DRows", Q_RETURN_ARG(QVariant, rows)));
+        bool switchOffered = false;
+        for (const auto &row : rows.toList())
+            switchOffered |= row.toMap().value("rendererToggle").toBool();
+        QVERIFY(switchOffered);
+        QVERIFY(!explains(rows));
     }
-    QCOMPARE(switchOffered, session3D);
-    QCOMPARE(explained, !session3D);
     QVERIFY(QMetaObject::invokeMethod(popup.get(), "performStudioAction",
         Q_ARG(QVariant, "browse-3d-themes"), Q_ARG(QVariant, QVariantMap{})));
     QCOMPARE(popup->property("subTabIndex").toInt(), 6);
@@ -418,10 +618,13 @@ void PanelWindowCapabilityTest::studioPanelMotionControls()
         {{"type", "launcher"}, {"layout", "ring"}, {"x", 340}, {"y", 220}}).value("success").toBool());
     const auto before = registry->panelDefinition(panel)->toPersistedMap();
     const auto freeFields = fieldKeys(backend.panelSettingsEditorSnapshot(panel, "studio").value("panelFields").toList());
-    for (const QString &key : {QStringLiteral("x"), QStringLiteral("y"),
-         QStringLiteral("presentationMode"), QStringLiteral("openDelay"),
-         QStringLiteral("closeDelay"), QStringLiteral("panelRotationMode")})
+    for (const QString &key : {QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("panelRotationMode")})
         QVERIFY2(freeFields.contains(key), qPrintable(key));
+    // Contract change, ADREP-TASK-001 (PD-01): a free panel has no opening or
+    // closing mechanism, so none of its settings is offered there.
+    for (const QString &key : {QStringLiteral("presentationMode"), QStringLiteral("openDelay"),
+         QStringLiteral("closeDelay"), QStringLiteral("collapseMechanism")})
+        QVERIFY2(!freeFields.contains(key), qPrintable(key));
     // A curved free panel opens its folders along its own curve by default,
     // and offers that first; native panels keep the five popup layouts.
     QCOMPARE(registry->panelValue(panel, QStringLiteral("folderLayout")).toString(), QStringLiteral("track"));
@@ -447,9 +650,9 @@ void PanelWindowCapabilityTest::studioPanelMotionControls()
     }
     QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
-    const auto open = [&] {
+    const auto open = [&](const QString &panelId) {
         return std::unique_ptr<QObject>(component.createWithInitialProperties({
-            {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 9},
+            {"selectedPanelId", panelId}, {"mainTabIndex", 1}, {"subTabIndex", 9},
             {"width", 980}, {"height", 720}}));
     };
     const auto item = [](QObject *popup, const QString &name) -> QQuickItem * {
@@ -461,13 +664,22 @@ void PanelWindowCapabilityTest::studioPanelMotionControls()
         }
         return nullptr;
     };
+    const auto press = [&](QObject *popup, const QString &name) {
+        auto *window = qobject_cast<QQuickWindow *>(popup);
+        auto *button = item(popup, name);
+        QVERIFY(button && button->isEnabled());
+        QTest::mouseClick(window, Qt::LeftButton, {},
+            button->mapToScene({button->width()/2, button->height()/2}).toPoint());
+    };
+    // The free panel: position and rotation are edited and kept or dropped.
     for (const bool apply : {false, true}) {
-        auto popup = open(); QVERIFY(popup);
+        auto popup = open(panel); QVERIFY(popup);
         auto *window = qobject_cast<QQuickWindow *>(popup.get());
         QVERIFY(window);
         window->show();
         QVERIFY(QTest::qWaitForWindowExposed(window));
         QVERIFY(QQuickTest::qWaitForPolish(window));
+        QVERIFY(!item(popup.get(), "studio-combo-presentationMode"));
         popup->setProperty("subTabIndex", 0);
         QVERIFY(QQuickTest::qWaitForPolish(window));
         for (const QString &key : {QStringLiteral("x"), QStringLiteral("y")}) {
@@ -479,31 +691,17 @@ void PanelWindowCapabilityTest::studioPanelMotionControls()
         }
         popup->setProperty("subTabIndex", 9);
         QVERIFY(QQuickTest::qWaitForPolish(window));
-        auto *resting = item(popup.get(), "studio-combo-presentationMode");
-        QVERIFY(resting);
-        resting->forceActiveFocus();
-        QTest::keyClick(window, Qt::Key_Down);
-        QVERIFY(QQuickTest::qWaitForPolish(window));
-        QCOMPARE(popup->property("studioError").toString(), QString{});
-        const auto candidate = popup->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap();
-        QCOMPARE(candidate.value("presentationMode").toString(), QStringLiteral("collapsed"));
-        QCOMPARE(candidate.value("collapseMechanism").toString(), QStringLiteral("collapse-horizontal"));
-        auto *preview = item(popup.get(), "panel-studio-live-renderer-preview");
-        QVERIFY(preview);
-        QTRY_COMPARE(preview->property("collapseProgress").toDouble(), 1.0);
         auto *rotation = item(popup.get(), "studio-combo-panelRotationMode");
         QVERIFY(rotation);
         rotation->forceActiveFocus();
         QTest::keyClick(window, Qt::Key_Down);
         QVERIFY(QQuickTest::qWaitForPolish(window));
+        QCOMPARE(popup->property("studioError").toString(), QString{});
         QCOMPARE(popup->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap()
             .value("panelRotationMode").toString(), QStringLiteral("clockwise"));
         QVERIFY(popup->property("hasSettingsChanges").toBool());
         QCOMPARE(registry->panelDefinition(panel)->toPersistedMap(), before);
-        auto *button = item(popup.get(), apply ? "studio-apply" : "studio-cancel");
-        QVERIFY(button && button->isEnabled());
-        QTest::mouseClick(window, Qt::LeftButton, {},
-            button->mapToScene({button->width()/2, button->height()/2}).toPoint());
+        press(popup.get(), apply ? "studio-apply" : "studio-cancel");
         if (apply) QVERIFY(QQuickTest::qWaitForPolish(window));
         else QTRY_VERIFY(!window->isVisible());
         QCOMPARE(popup->property("studioError").toString(), QString{});
@@ -514,11 +712,35 @@ void PanelWindowCapabilityTest::studioPanelMotionControls()
     QVERIFY(saved);
     QCOMPARE(saved->placement.x, 341);
     QCOMPARE(saved->placement.y, 221);
-    QCOMPARE(saved->presentation.mode, QStringLiteral("collapsed"));
-    QCOMPARE(saved->presentation.collapseMechanism, QStringLiteral("collapse-horizontal"));
+    QCOMPARE(saved->presentation.mode, QStringLiteral("open"));
     QCOMPARE(saved->layout.rotationMode, QStringLiteral("clockwise"));
-    auto popup = open(); QVERIFY(popup);
-    QCOMPARE(popup->property("previewPresentationState").toString(), QStringLiteral("collapsed"));
+    // The edge panel keeps its opening and closing: the resting state and its
+    // mechanism are edited on Animations, previewed, and kept on Apply.
+    auto popup = open(QStringLiteral("bottom")); QVERIFY(popup);
+    auto *window = qobject_cast<QQuickWindow *>(popup.get());
+    QVERIFY(window);
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QQuickTest::qWaitForPolish(window));
+    auto *resting = item(popup.get(), "studio-combo-presentationMode");
+    QVERIFY(resting);
+    resting->forceActiveFocus();
+    QTest::keyClick(window, Qt::Key_Down);
+    QVERIFY(QQuickTest::qWaitForPolish(window));
+    QCOMPARE(popup->property("studioError").toString(), QString{});
+    const auto candidate = popup->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap();
+    QCOMPARE(candidate.value("presentationMode").toString(), QStringLiteral("collapsed"));
+    QCOMPARE(candidate.value("collapseMechanism").toString(), QStringLiteral("collapse-horizontal"));
+    auto *preview = item(popup.get(), "panel-studio-live-renderer-preview");
+    QVERIFY(preview);
+    QTRY_COMPARE(preview->property("collapseProgress").toDouble(), 1.0);
+    press(popup.get(), "studio-apply");
+    QVERIFY(QQuickTest::qWaitForPolish(window));
+    QCOMPARE(popup->property("studioError").toString(), QString{});
+    PanelRegistry edgeReloaded;
+    QCOMPARE(edgeReloaded.panelDefinition("bottom")->presentation.mode, QStringLiteral("collapsed"));
+    QCOMPARE(edgeReloaded.panelDefinition("bottom")->presentation.collapseMechanism,
+             QStringLiteral("collapse-horizontal"));
 }
 
 void PanelWindowCapabilityTest::tiltEditorsFollowTheSelectedRenderer()
@@ -864,8 +1086,11 @@ void PanelWindowCapabilityTest::studioPageWheelInput()
     const bool native = qEnvironmentVariable("ARCHDOCK_NATIVE_UI_PROBE") == "1";
     QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    // Panels > Behavior keeps enough rows to overflow at this size, and the
+    // Panels tabs overflow its width; Appearance lost its Shape row (PD-04)
+    // and Icons now has too few tabs to overflow (ADREP-TASK-001).
     std::unique_ptr<QObject> popup(component.createWithInitialProperties({
-        {"selectedPanelId", panel}, {"mainTabIndex", native ? 2 : 1}, {"subTabIndex", native ? 0 : 2},
+        {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 3},
         {"width", 640}, {"height", 520}}));
     QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(popup.get());
@@ -931,8 +1156,8 @@ void PanelWindowCapabilityTest::studioPageWheelInput()
             QVERIFY(click(previousTabs));
         QVERIFY(!previousTabs->isEnabled());
         QCOMPARE(popup->property("subTabIndex").toInt(), 9);
-        popup->setProperty("mainTabIndex", native ? 2 : 1);
-        popup->setProperty("subTabIndex", native ? 0 : 2);
+        popup->setProperty("mainTabIndex", 1);
+        popup->setProperty("subTabIndex", 3);
         QVERIFY(QQuickTest::qWaitForPolish(window));
         tabView->setProperty("contentX", 0);
     }
@@ -1020,20 +1245,20 @@ void PanelWindowCapabilityTest::studioPageWheelInput()
     QVERIFY(tabView->property("contentWidth").toDouble() > tabView->width());
     wheel(tabs, {150, 15}, {}, {-120, 0});
     QVERIFY(tabView->property("contentX").toDouble() > 0);
-    QCOMPARE(popup->property("subTabIndex").toInt(), 2);
+    QCOMPARE(popup->property("subTabIndex").toInt(), 3);
     const double x = tabView->property("contentX").toDouble();
     wheel(tabs, {150, 15}, {-17, 0}, {});
     QCOMPARE(tabView->property("contentX").toDouble(), x + 17);
     wheel(tabs, {150, 15}, {0, -22}, {}, Qt::ShiftModifier);
     QCOMPARE(tabView->property("contentX").toDouble(), x + 39);
-    QCOMPARE(popup->property("subTabIndex").toInt(), 2);
+    QCOMPARE(popup->property("subTabIndex").toInt(), 3);
     primary->setProperty("contentY", 0);
     wheel(tabs, {150, 15}, {0, -30}, {});
     QCOMPARE(primary->property("contentY").toDouble(), 30.0);
-    QCOMPARE(popup->property("subTabIndex").toInt(), 2);
+    QCOMPARE(popup->property("subTabIndex").toInt(), 3);
     struct Selection { int section; int page; QString prefix; const char *property; };
     for (const auto &selection : {Selection{2, 0, "studio-spin-", "value"},
-                                 Selection{1, 2, "studio-combo-", "currentIndex"}}) {
+                                 Selection{1, 3, "studio-combo-", "currentIndex"}}) {
         popup->setProperty("mainTabIndex", selection.section);
         popup->setProperty("subTabIndex", selection.page);
         QVERIFY(QQuickTest::qWaitForPolish(window));
@@ -1646,25 +1871,18 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
         for (const QString &key : {"scene3DCameraPitch", "scene3DCameraYaw", "scene3DRoll",
                  "scene3DPositionX", "scene3DPositionY", "scene3DPositionZ", "scene3DScale",
                  "scene3DFieldOfView", "scene3DThickness", "scene3DIconElevation", "scene3DQuality",
-                 "spacing", "scene3DKeyLight", "scene3DFillLight", "scene3DTransitions", "scene3DFloat"})
+                 "scene3DKeyLight", "scene3DFillLight", "scene3DTransitions", "scene3DFloat"})
             QVERIFY2(keys.contains(key), qPrintable(key));
-        // ADFIX UF-06: the blue ring stands on a generated platform, so its
-        // shape is offered: the layout, limited to shapes 3D draws exactly,
-        // the platform's width and its bend.
-        for (const QString &key : {"layout", "scene3DBand", "scene3DBend"})
+        // ADFIX UF-06: the blue ring stands on a generated platform, so the
+        // platform's width and its bend are offered.
+        for (const QString &key : {"scene3DBand", "scene3DBend"})
             QVERIFY2(keys.contains(key), qPrintable(key));
-        for (const auto &row : rows.toList()) {
-            if (row.toMap().value("key").toString() != QStringLiteral("layout")) continue;
-            QStringList shapes;
-            for (const auto &option : row.toMap().value("options").toList())
-                shapes.append(option.toMap().value("value").toString());
-            // The blue ring's own layouts are a ring and a circle; both stand
-            // on an exact platform.
-            shapes.sort();
-            QCOMPARE(shapes, (QStringList{QStringLiteral("circular"), QStringLiteral("ring")}));
-            for (const QString &flat : {"arc", "semicircle", "fan", "horizontal", "star"})
-                QVERIFY2(!shapes.contains(flat), qPrintable(flat));
-        }
+        // Contract change, ADREP-TASK-001 (no setting on two pages, PD-08):
+        // icon spacing is on Icons > Appearance and the Dock layout on Layout,
+        // where the blue ring's ring and circle, which draw the same, are not
+        // two choices.
+        for (const QString &key : {"spacing", "layout"})
+            QVERIFY2(!keys.contains(key), qPrintable(key));
         QVERIFY(actions.contains("reset-3d-transform"));
         // Desktop editing is offered from the same page.
         QVERIFY(actions.contains("edit-3d-on-desktop"));
@@ -1870,12 +2088,13 @@ void PanelWindowCapabilityTest::editorSnapshotsExposeOnlyProjectedEditableState(
     QVERIFY(studioSnapshot.value(QStringLiteral("success")).toBool());
     const QVariantList studioFields = studioSnapshot.value(
         QStringLiteral("panelFields")).toList();
-    const QVariantMap layout = fieldByKey(studioFields, QStringLiteral("layout"));
-    QVERIFY(!layout.isEmpty());
-    QCOMPARE(layout.value(QStringLiteral("choices")).toStringList(),
-             QStringList({QStringLiteral("adaptive"),
-                          QStringLiteral("horizontal"),
-                          QStringLiteral("vertical")}));
+    // Contract change, ADREP-TASK-001 (settings truth): an edge panel's applet
+    // lays its row out from the panel's own orientation and padding, so the
+    // record's Dock layout, Layout scale and Panel padding reach nothing there
+    // and are not offered.
+    for (const QString &noEffect : {QStringLiteral("layout"), QStringLiteral("layoutScale"),
+                                    QStringLiteral("layoutPadding")})
+        QVERIFY2(fieldByKey(studioFields, noEffect).isEmpty(), qPrintable(noEffect));
     const QSet<QString> studioKeys = fieldKeys(studioFields);
     QVERIFY(studioKeys.contains(QStringLiteral("folderLayout")));
     QCOMPARE(fieldByKey(studioFields, QStringLiteral("folderLayout"))
@@ -2219,8 +2438,15 @@ void PanelWindowCapabilityTest::builtInThemeCandidateCommitsThroughUnifiedTransa
     QVERIFY(!values.contains(QStringLiteral("screenId")));
     QVERIFY(!values.contains(QStringLiteral("surface3D")));
 
+    // ADREP-TASK-001: Studio loads a theme through panelThemeCandidate(),
+    // which leaves out values for fields that do not act on the panel. An edge
+    // panel's applet draws its own row, so the theme's layout is not set.
+    const QVariantMap studioValues = window.panelThemeCandidate(
+        QStringLiteral("bottom"), QStringLiteral("obsidian-glass")).value(QStringLiteral("values")).toMap();
+    QVERIFY(!studioValues.contains(QStringLiteral("layout")));
+    QCOMPARE(studioValues.value(QStringLiteral("completeThemeId")), values.value(QStringLiteral("completeThemeId")));
     const QVariantMap result = window.applyPanelSettingsTransaction(
-        QStringLiteral("bottom"), revision, values, {});
+        QStringLiteral("bottom"), revision, studioValues, {});
     QVERIFY2(result.value(QStringLiteral("success")).toBool(),
              qPrintable(QStringLiteral("%1/%2: %3")
                             .arg(result.value(QStringLiteral("status")).toString(),
@@ -2301,8 +2527,17 @@ void PanelWindowCapabilityTest::builtInChassisCandidateProjectsIntoStudioAndRend
     QCOMPARE(values.value(QStringLiteral("layout")).toString(),
              QStringLiteral("horizontal"));
 
+    // ADREP-TASK-001: Studio loads a theme through panelThemeCandidate(),
+    // which leaves out values for fields that do not act on the panel. An edge
+    // panel's applet draws its own row, so the theme's layout is not set.
+    const QVariantMap studioValues = window.panelThemeCandidate(
+        QStringLiteral("bottom"), QStringLiteral("sci-fi-chassis-red")).value(QStringLiteral("values")).toMap();
+    QVERIFY(!studioValues.contains(QStringLiteral("layout")));
+    QCOMPARE(studioValues.value(QStringLiteral("rendererTier")).toString(), QStringLiteral("skinned2d"));
+    const QString layoutBefore = window.panelRendererConfiguration(QStringLiteral("bottom"))
+        .value(QStringLiteral("layout")).toString();
     const QVariantMap result = window.applyPanelSettingsTransaction(
-        QStringLiteral("bottom"), revision, values, {});
+        QStringLiteral("bottom"), revision, studioValues, {});
     QVERIFY2(result.value(QStringLiteral("success")).toBool(),
              qPrintable(QStringLiteral("%1/%2: %3")
                             .arg(result.value(QStringLiteral("status")).toString(),
@@ -2323,8 +2558,11 @@ void PanelWindowCapabilityTest::builtInChassisCandidateProjectsIntoStudioAndRend
                  .value(QStringLiteral("id"))
                  .toString(),
              QStringLiteral("sci-fi-chassis-red"));
-    QCOMPARE(renderer.value(QStringLiteral("layout")).toString(),
-             QStringLiteral("horizontal"));
+    // The theme leaves the Dock layout, which an edge panel does not offer,
+    // as it was. The applet draws the row along the bottom edge, the
+    // horizontal layout this theme is made for: plasma-dock-widget sets an
+    // edge panel's layout from its form factor.
+    QCOMPARE(renderer.value(QStringLiteral("layout")).toString(), layoutBefore);
 }
 
 void PanelWindowCapabilityTest::builtInEnergyCandidateProjectsGlowAndTheme()
@@ -2397,8 +2635,15 @@ void PanelWindowCapabilityTest::builtInEnergyCandidateProjectsGlowAndTheme()
     }
     QVERIFY(!cyanValues.isEmpty());
 
+    // ADREP-TASK-001: Studio loads a theme through panelThemeCandidate(),
+    // which leaves out values for fields that do not act on the panel. An edge
+    // panel's applet draws its own row, so the theme's layout is not set.
+    const QVariantMap studioValues = window.panelThemeCandidate(
+        QStringLiteral("bottom"), QStringLiteral("energy-frame-cyan")).value(QStringLiteral("values")).toMap();
+    QVERIFY(!studioValues.contains(QStringLiteral("layout")));
+    QCOMPARE(studioValues.value(QStringLiteral("glowIntensity")), cyanValues.value(QStringLiteral("glowIntensity")));
     const QVariantMap result = window.applyPanelSettingsTransaction(
-        QStringLiteral("bottom"), revision, cyanValues, {});
+        QStringLiteral("bottom"), revision, studioValues, {});
     QVERIFY2(result.value(QStringLiteral("success")).toBool(),
              qPrintable(result.value(QStringLiteral("errorMessage")).toString()));
 
@@ -2582,8 +2827,11 @@ void PanelWindowCapabilityTest::contentProvidersUseTransactionsAndVisibility()
     auto panel = *registry->panelDefinition(panelId);
     panel.segments.first().source = QStringLiteral("status");
     panel.segments.first().entryIds = {QStringLiteral("status:cpu"), QStringLiteral("status:memory")};
+    // Launch feedback is offered for content that launches applications
+    // (ADREP-TASK-001, PD-07), so this panel holds launcher content.
     const auto applied = window.applyPanelSettingsTransaction(panelId, panel.settingsRevision,
-        {{"layout", "horizontal"}, {"segments", QVariantList{panel.segments.first().toVariantMap()}},
+        {{"type", "launcher"}, {"layout", "horizontal"},
+         {"segments", QVariantList{panel.segments.first().toVariantMap()}},
          {"showTemporaryStatus", false}});
     QVERIFY2(applied.value("success").toBool(), qPrintable(applied.value("errorMessage").toString()));
     const auto rows = window.dockEntriesForPanel(panelId, "launcher");
@@ -3734,13 +3982,26 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
     const auto browser = QStringLiteral("panel-studio-preset-browser");
     const auto presetPreview = QStringLiteral("panel-studio-preset-preview");
 
-    // The four preset pages list two separate catalogs, and selecting a card
+    // The preset pages list two separate catalogs, and selecting a card
     // replaces the panel's preview with the preset's without applying it.
+    // Contract change, ADREP-TASK-001: the icon preset pages are 2:4 and 2:5
+    // since the Icon Styles tab was removed (PD-05); the bottom edge panel
+    // lists the 11 presets made for horizontal edge panels (owner,
+    // 2026-10-07: "if I make free panel why would I need to see horizontal
+    // and vertical panel presets"); and a catalog of your own with nothing
+    // in it has no tab (owner: "If the tab is empty, there's no need for that
+    // tab").
+    const auto offered = [&](int section, int subtab) {
+        QVariant result;
+        return QMetaObject::invokeMethod(popup.get(), "subtabAvailable",
+                   Q_RETURN_ARG(QVariant, result), Q_ARG(QVariant, section),
+                   Q_ARG(QVariant, subtab)) && result.toBool();
+    };
+    QVERIFY(!offered(1, 8));
+    QVERIFY(!offered(2, 5));
     struct Page { int section; int subtab; QString kind; QString scope; int count; };
-    for (const Page &page : {Page{1, 7, QStringLiteral("panel"), QStringLiteral("builtin"), 15},
-                             Page{1, 8, QStringLiteral("panel"), QStringLiteral("user"), 0},
-                             Page{2, 5, QStringLiteral("icon"), QStringLiteral("builtin"), 15},
-                             Page{2, 6, QStringLiteral("icon"), QStringLiteral("user"), 0}})
+    for (const Page &page : {Page{1, 7, QStringLiteral("panel"), QStringLiteral("builtin"), 11},
+                             Page{2, 4, QStringLiteral("icon"), QStringLiteral("builtin"), 15}})
     {
         QVERIFY(openPage(page.section, page.subtab));
         const QVariantMap current = plain(popup->property("currentPresetPage")).toMap();
@@ -3804,42 +4065,38 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
     QVERIFY(!findVisible(presetPreview));
     QVERIFY(findVisible(QStringLiteral("panel-studio-live-renderer-preview")));
 
-    // Themes and icon styles have pages of their own and are not presets.
+    // Themes have a page of their own and are not presets. The icon style is
+    // chosen in one place, the Icon style choice on Icons > Appearance; the
+    // Icon Styles tab that repeated it is gone (PD-05).
     QVERIFY(openPage(1, 2));
     QVERIFY(!findVisible(QStringLiteral("theme-live-preview-obsidian-glass")));
     QVERIFY(openPage(1, 6));
     QVERIFY(plain(popup->property("currentPresetPage")).isNull());
     QTRY_VERIFY(findVisible(QStringLiteral("theme-live-preview-obsidian-glass")));
     QVERIFY(!findVisible(browser));
-    QVERIFY(openPage(2, 4));
-    QTRY_VERIFY(findVisible(QStringLiteral("icon-style-live-preview-metallic-blue")));
-    QVERIFY(findVisible(QStringLiteral("icon-style-live-preview-dark-orb")));
+    QVERIFY(openPage(2, 0));
+    QVERIFY(!plain(popup->property("currentSubtabs")).toStringList()
+                 .contains(QStringLiteral("Icon Styles")));
+    QTRY_VERIFY(findVisible(QStringLiteral("studio-combo-iconStyle")));
+    QVERIFY(!findVisible(QStringLiteral("icon-style-live-preview-metallic-blue")));
     QVERIFY(!findVisible(QStringLiteral("theme-live-preview-obsidian-glass")));
-    // Loading an icon style stages it in the draft; the panel keeps its own.
-    QVERIFY(QMetaObject::invokeMethod(popup.get(), "performStudioAction",
-        Q_ARG(QVariant, QStringLiteral("load-icon-style")),
-        Q_ARG(QVariant, (QVariantMap{{QStringLiteral("styleId"), QStringLiteral("metallic-blue")}}))));
-    QTRY_VERIFY(popup->property("hasPendingChanges").toBool());
-    QCOMPARE(plain(popup->property("selectedRendererCandidate")).toMap()
-        .value(QStringLiteral("iconStyle")).toString(), QStringLiteral("metallic-blue"));
-    QVERIFY(popup->property("studioError").toString().isEmpty());
-    QVERIFY(nothingChanged());
-    QVERIFY(QMetaObject::invokeMethod(popup.get(), "discardStudioChanges"));
-    QVERIFY(!popup->property("hasPendingChanges").toBool());
 
     // Duplicate, rename and delete reach only the user's preset store.
     const auto presetAction = [&](const QString &action, const QString &id, const QString &name) {
         return QMetaObject::invokeMethod(popup.get(), "performPresetAction",
             Q_ARG(QVariant, action), Q_ARG(QVariant, id), Q_ARG(QVariant, name));
     };
+    // The copy is of a preset made for this edge panel, so it is listed for
+    // it, and its tab appears.
     QVERIFY(openPage(1, 7));
-    QVERIFY(presetAction(QStringLiteral("duplicate"), QStringLiteral("circular-blue-ring"),
+    QVERIFY(presetAction(QStringLiteral("duplicate"), QStringLiteral("obsidian-glass-dock"),
                          QStringLiteral("My Ring")));
     QVERIFY(!popup->property("presetNoticeIsError").toBool());
     QVERIFY(popup->property("presetNoticeText").toString().contains(QStringLiteral("My Panel Presets")));
     QCOMPARE(library->property("revision").toInt(), 1);
-    QCOMPARE(cards().size(), 15);
+    QCOMPARE(cards().size(), 11);
     QVERIFY(QFileInfo(presetStore).isDir());
+    QVERIFY(offered(1, 8));
     QVERIFY(openPage(1, 8));
     QTRY_COMPARE(cards().size(), 1);
     const QString userId = cards().first().toMap().value(QStringLiteral("id")).toString();
@@ -3854,7 +4111,7 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
                  QStringLiteral("Desk Ring"));
     QCOMPARE(popup->property("selectedPresetId").toString(), userId);
     // A built-in cannot be renamed or deleted, and the refusal is reported.
-    QVERIFY(presetAction(QStringLiteral("rename"), QStringLiteral("circular-blue-ring"),
+    QVERIFY(presetAction(QStringLiteral("rename"), QStringLiteral("obsidian-glass-dock"),
                          QStringLiteral("Mine")));
     QVERIFY(popup->property("presetNoticeIsError").toBool());
     QVERIFY(popup->property("presetNoticeText").toString().contains(QStringLiteral("not-user-preset")));
@@ -3864,12 +4121,65 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
     QTRY_COMPARE(cards().size(), 0);
     QCOMPARE(popup->property("selectedPresetId").toString(), QString{});
     QVERIFY(!findVisible(presetPreview));
+    // The last preset of your own is gone, and so are its tab and page.
+    QVERIFY(!offered(1, 8));
+    QTRY_VERIFY(popup->property("subTabIndex").toInt() != 8);
     QVERIFY(openPage(1, 7));
-    QCOMPARE(cards().size(), 15);
+    QCOMPARE(cards().size(), 11);
 
     QVERIFY(nothingChanged());
     QVERIFY2(studioWarnings.isEmpty(), qPrintable(studioWarnings.join(QLatin1Char('\n'))));
     studio->close();
+}
+
+void PanelWindowCapabilityTest::studioPresetListsMatchTheSelectedPanel()
+{
+    // ADREP-TASK-001, the owner (2026-10-07): "if I make free panel why would
+    // I need to see horizontal and vertical panel presets". Built-in Panel
+    // Presets lists the presets made for the selected panel: a free panel its
+    // free-panel presets, an edge panel the edge presets of its orientation.
+    // Icon presets set only icon values, which act on every panel, so every
+    // panel lists all of them.
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + QStringLiteral("/qml-imports"));
+    PanelWindow window(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("panelRegistry")).value<QObject *>());
+    QVERIFY(registry);
+    const QString freePanel = registry->addFreePanel();
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    const auto listed = [&](const QString &panel, int section, int subtab) {
+        const std::unique_ptr<QObject> popup(component.createWithInitialProperties({
+            {QStringLiteral("selectedPanelId"), panel}, {QStringLiteral("mainTabIndex"), section},
+            {QStringLiteral("subTabIndex"), subtab}}));
+        QStringList ids;
+        if (!popup)
+            return ids;
+        const QVariant value = popup->property("presetCards");
+        const QVariantList cards = value.metaType() == QMetaType::fromType<QJSValue>()
+            ? value.value<QJSValue>().toVariant().toList() : value.toList();
+        for (const QVariant &card : cards)
+            ids.append(card.toMap().value(QStringLiteral("id")).toString());
+        ids.sort();
+        return ids;
+    };
+    QCOMPARE(listed(freePanel, 1, 7),
+             QStringList({QStringLiteral("circular-blue-ring"), QStringLiteral("holographic-semicircle"),
+                          QStringLiteral("octagonal-platform"), QStringLiteral("orange-arc-dock")}));
+    QCOMPARE(listed(QStringLiteral("bottom"), 1, 7),
+             QStringList({QStringLiteral("energy-frame-cyan"), QStringLiteral("energy-frame-green"),
+                          QStringLiteral("energy-frame-orange"), QStringLiteral("energy-frame-purple"),
+                          QStringLiteral("mechanical-collapsible-rail"), QStringLiteral("metallic-shelf-dock"),
+                          QStringLiteral("minimal-neon-rail"), QStringLiteral("obsidian-glass-dock"),
+                          QStringLiteral("sci-fi-chassis-blue"), QStringLiteral("sci-fi-chassis-dark"),
+                          QStringLiteral("sci-fi-chassis-red")}));
+    registry->setPanelValue(QStringLiteral("bottom"), QStringLiteral("edge"), QStringLiteral("left"));
+    QCOMPARE(listed(QStringLiteral("bottom"), 1, 7),
+             QStringList({QStringLiteral("minimal-neon-rail"), QStringLiteral("obsidian-glass-dock")}));
+    const QStringList icons = listed(freePanel, 2, 4);
+    QCOMPARE(icons.size(), 15);
+    QCOMPARE(listed(QStringLiteral("bottom"), 2, 4), icons);
 }
 
 void PanelWindowCapabilityTest::presetAuditionGuardsAndInvalidRequestsLeaveNoWrites()
@@ -4113,6 +4423,314 @@ void PanelWindowCapabilityTest::ownersFreeCircleOffersOnlyWhatWorks()
                      qPrintable(key + " on " + owner.value(key) + " and " + page));
             owner.insert(key, page);
         }
+}
+
+void PanelWindowCapabilityTest::studioTruthMatrixHarnessIsTheApplet()
+{
+    // The truth matrix draws a panel through tests/TruthMatrixPanel.qml. Each
+    // line of it marked "// applet" is the applet's own, and both build their
+    // scene definition with SceneDefinition.js.
+    const QString harness = sourceText(QStringLiteral("tests/TruthMatrixPanel.qml"));
+    const QString applet = sourceText(QStringLiteral("plasma-dock-widget/contents/ui/main.qml"));
+    QVERIFY(!harness.isEmpty() && !applet.isEmpty());
+    QSet<QString> appletLines;
+    for (const QString &line : applet.split(QLatin1Char('\n')))
+        appletLines.insert(line.trimmed());
+    int mirrored = 0;
+    for (const QString &line : harness.split(QLatin1Char('\n'))) {
+        const qsizetype tag = line.indexOf(QStringLiteral("// applet"));
+        if (tag < 0)
+            continue;
+        const QString code = line.left(tag).trimmed();
+        QVERIFY2(appletLines.contains(code), qPrintable(QStringLiteral("main.qml no longer has: ") + code));
+        ++mirrored;
+    }
+    QVERIFY(mirrored > 60);
+    for (const QString &source : {harness, applet})
+        QVERIFY(source.contains(QStringLiteral("SceneDefinition.js\" as SceneDefinition")));
+    QVERIFY(applet.contains(QStringLiteral("return SceneDefinition.build(configuration, {")));
+}
+
+void PanelWindowCapabilityTest::studioTruthMatrix_data()
+{
+    QTest::addColumn<QVariantMap>("combination");
+    for (const QVariant &value : truthMatrixFixture().value(QStringLiteral("combinations")).toList()) {
+        const QVariantMap combination = value.toMap();
+        QTest::newRow(qPrintable(combination.value(QStringLiteral("id")).toString())) << combination;
+    }
+}
+
+void PanelWindowCapabilityTest::studioTruthMatrix()
+{
+    QFETCH(QVariantMap, combination);
+    const QVariantMap fixture = truthMatrixFixture();
+    QVERIFY(!fixture.isEmpty());
+    const QVariantMap effects = fixture.value(QStringLiteral("effects")).toMap();
+    const bool free = combination.value(QStringLiteral("host")).toString() == QStringLiteral("free");
+    const QString layout = combination.value(QStringLiteral("layout")).toString();
+    const bool vertical = !free && QStringList{QStringLiteral("left"), QStringLiteral("right")}
+        .contains(combination.value(QStringLiteral("edge")).toString());
+
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + QStringLiteral("/qml-imports"));
+    PanelWindow window(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("panelRegistry")).value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = free ? registry->addFreePanel() : QStringLiteral("bottom");
+    QVariantMap base = fixture.value(QStringLiteral("base")).toMap()
+        .value(free ? QStringLiteral("free") : QStringLiteral("edge")).toMap();
+    base.insert(combination.value(QStringLiteral("base")).toMap());
+    if (free)
+        base.insert(QStringLiteral("layout"), layout);
+    else
+        base.insert(QStringLiteral("edge"), combination.value(QStringLiteral("edge")));
+    const QString theme = combination.value(QStringLiteral("theme")).toString();
+    base.insert(QStringLiteral("rendererTier"), combination.value(QStringLiteral("tier")));
+    base.insert(QStringLiteral("panelThemeId"), theme);
+    base.insert(QStringLiteral("completeThemeId"), theme);
+    QVERIFY2(registry->updatePanelChecked(panel, base), "the base state was refused");
+    const QString tier = window.resolvePanelCapabilities(panel).value(QStringLiteral("renderer")).toMap()
+        .value(QStringLiteral("effectiveTier")).toString();
+    QVERIFY2(!tier.isEmpty(), "the panel resolves to no renderer");
+
+    // What the backend offers, and what Studio shows on its pages.
+    const QVariantMap snapshot = window.panelSettingsEditorSnapshot(panel, QStringLiteral("studio"));
+    QVERIFY(snapshot.value(QStringLiteral("success")).toBool());
+    QHash<QString, QVariantMap> offered;
+    for (const QString &scope : {QStringLiteral("panelFields"), QStringLiteral("globalFields")})
+        for (const QVariant &value : snapshot.value(scope).toList())
+            offered.insert(value.toMap().value(QStringLiteral("key")).toString(), value.toMap());
+
+    QQmlComponent studioComponent(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(studioComponent.isReady(), qPrintable(studioComponent.errorString()));
+    std::unique_ptr<QObject> studio(studioComponent.createWithInitialProperties({
+        {QStringLiteral("selectedPanelId"), panel}, {QStringLiteral("mainTabIndex"), 0},
+        {QStringLiteral("subTabIndex"), 0}}));
+    QVERIFY(studio);
+    // Studio is read as a person sees it: shown, with its own preview drawn.
+    // Its 3D settings appear once that preview draws the panel in 3D.
+    auto *studioWindow = qobject_cast<QQuickWindow *>(studio.get());
+    QVERIFY(studioWindow);
+    studioWindow->show();
+    QVERIFY(QTest::qWaitForWindowExposed(studioWindow));
+    if (tier == QStringLiteral("true3d") && studio->property("scene3DControlsAvailable").toBool())
+        QTRY_VERIFY2_WITH_TIMEOUT(studio->property("scene3DQualityVisible").toBool(),
+                                  "Studio's preview never drew the 3D panel", 10000);
+    QHash<QString, QString> pageOf;
+    QStringList failures;
+    const auto pageKeys = [&](int section, int subtab) {
+        QStringList keys;
+        QVariant isOffered;
+        QMetaObject::invokeMethod(studio.get(), "subtabAvailable", Q_RETURN_ARG(QVariant, isOffered),
+                                  Q_ARG(QVariant, section), Q_ARG(QVariant, subtab));
+        if (!isOffered.toBool())
+            return keys;
+        studio->setProperty("mainTabIndex", section);
+        studio->setProperty("subTabIndex", subtab);
+        QVariant rows;
+        QMetaObject::invokeMethod(studio.get(), "rowsForCurrentPage", Q_RETURN_ARG(QVariant, rows));
+        for (const QVariant &value : rows.toList()) {
+            const QVariantMap row = value.toMap();
+            const QString key = row.value(QStringLiteral("key")).toString();
+            if (!key.isEmpty() && row.value(QStringLiteral("kind")).toString() != QStringLiteral("readonly")
+                    && (!row.contains(QStringLiteral("available")) || row.value(QStringLiteral("available")).toBool()))
+                keys.append(key);
+        }
+        return keys;
+    };
+    for (int section = 1; section <= 3; ++section) {
+        const int subtabs = section == 3 ? 1 : (section == 1 ? 11 : 6);
+        for (int subtab = 0; subtab < subtabs; ++subtab) {
+            const QString page = QStringLiteral("%1:%2").arg(section).arg(subtab);
+            for (const QString &key : pageKeys(section, subtab)) {
+                // (c) No setting is shown on two pages.
+                if (pageOf.contains(key) && pageOf.value(key) != page)
+                    failures.append(QStringLiteral("%1 is on %2 and %3").arg(key, pageOf.value(key), page));
+                pageOf.insert(key, page);
+            }
+        }
+    }
+    studioWindow->hide();
+    QStringList shown = pageOf.keys();
+    shown.removeAll(QStringLiteral("rendererTier")); // the 3D page's own switch, checked below
+    std::sort(shown.begin(), shown.end());
+    for (const QString &key : std::as_const(shown)) {
+        if (!offered.contains(key))
+            failures.append(key + QStringLiteral(" is shown but the backend refuses it"));
+        // A setting that draws nothing in the panel's present state is kept
+        // by the backend and never shown.
+        else if (offered.value(key).value(QStringLiteral("inactive")).toBool())
+            failures.append(key + QStringLiteral(" is shown although it draws nothing here"));
+    }
+    // (c) Each setting named under homes is on its page.
+    const QVariantMap homes = fixture.value(QStringLiteral("homes")).toMap();
+    for (auto it = homes.cbegin(); it != homes.cend(); ++it)
+        if (it.key() != QStringLiteral("why") && pageOf.contains(it.key()) && pageOf.value(it.key()) != it.value().toString())
+            failures.append(QStringLiteral("%1 is on %2, not on %3").arg(it.key(), pageOf.value(it.key()), it.value().toString()));
+    // (b) Nothing forbidden for this host, layout or renderer is offered.
+    const QVariantMap forbidden = fixture.value(QStringLiteral("forbidden")).toMap();
+    QStringList refused = forbidden.value(QStringLiteral("everywhere")).toMap().value(QStringLiteral("fields")).toStringList();
+    refused += forbidden.value(free ? QStringLiteral("free") : QStringLiteral("edge")).toMap()
+        .value(QStringLiteral("fields")).toStringList();
+    refused += forbidden.value(QStringLiteral("layouts")).toMap().value(layout).toStringList();
+    refused += forbidden.value(QStringLiteral("tiers")).toMap().value(tier).toStringList();
+    for (const QString &key : std::as_const(refused))
+        if (offered.contains(key) || pageOf.contains(key))
+            failures.append(key + QStringLiteral(" is offered although it is forbidden here"));
+
+    // (a) Every shown field changes the drawn panel or its documented runtime
+    // property.
+    const QVariantMap baseConfiguration = window.panelRendererConfiguration(panel);
+    TruthFrame frame(engine, free, vertical, baseConfiguration);
+    QVERIFY2(frame.error().isEmpty(), qPrintable(frame.error()));
+    const QImage baseFrame = frame.reference(baseConfiguration, -1);
+    QVERIFY2(!baseFrame.isNull(), "the panel never came to rest");
+    QImage baseHoverFrame;
+    QHash<QString, QString> sources;
+    QJsonArray evidence;
+    if (pageOf.contains(QStringLiteral("rendererTier")))
+        shown.prepend(QStringLiteral("rendererTier"));
+    quint64 revision = snapshot.value(QStringLiteral("revision")).toULongLong();
+    for (const QString &key : std::as_const(shown)) {
+        const QVariantMap effect = key == QStringLiteral("rendererTier")
+            ? QVariantMap{{QStringLiteral("probe"), QStringLiteral("frame")}}
+            : effects.value(key).toMap();
+        const QString probe = effect.value(QStringLiteral("probe")).toString();
+        if (probe.isEmpty()) {
+            failures.append(key + QStringLiteral(" is shown with no documented effect"));
+            continue;
+        }
+        // Each field is restored before the next, so the row's snapshot
+        // holds every base value.
+        const bool global = offered.value(key).value(QStringLiteral("scope")).toString() == QStringLiteral("global")
+            || snapshot.value(QStringLiteral("globalValues")).toMap().contains(key);
+        const QVariant original = key == QStringLiteral("rendererTier")
+            ? QVariant(tier)
+            : snapshot.value(global ? QStringLiteral("globalValues") : QStringLiteral("panelValues")).toMap().value(key);
+        const QVariant value = key == QStringLiteral("rendererTier")
+            ? (tier == QStringLiteral("true3d") ? studio->property("scene3DOffTier") : QVariant(QStringLiteral("true3d")))
+            : truthChangedValue(offered.value(key), original, effect);
+        const auto observe = [&]() -> QVariant {
+            if (probe == QStringLiteral("runtime")) {
+                return effect.value(QStringLiteral("source")).toString() == QStringLiteral("dock")
+                    ? window.dockConfiguration(panel).value(key)
+                    : window.panelRendererConfiguration(panel).value(key);
+            }
+            if (probe == QStringLiteral("placement"))
+                return window.nativePanelPlacementStatus(panel).value(QStringLiteral("savedIntent")).toMap().value(key);
+            if (probe == QStringLiteral("visibility"))
+                return window.nativePanelVisibilityStatus(panel).value(QStringLiteral("requestedMode"));
+            if (probe == QStringLiteral("conceal"))
+                return window.shouldConcealPanel(panel);
+            return {};
+        };
+        const QVariant before = observe();
+        const auto apply = [&](const QVariant &next) {
+            const QVariantMap result = window.applyPanelSettingsTransaction(panel, revision,
+                global ? QVariantMap{} : QVariantMap{{key, next}},
+                global ? QVariantMap{{key, next}} : QVariantMap{});
+            if (result.value(QStringLiteral("success")).toBool())
+                revision = result.value(QStringLiteral("revision")).toULongLong();
+            return result;
+        };
+        const QVariantMap applied = apply(value);
+        if (!applied.value(QStringLiteral("success")).toBool()) {
+            failures.append(QStringLiteral("%1 = %2 could not be applied: %3 %4").arg(key,
+                QString::fromUtf8(QJsonDocument(QJsonArray{QJsonValue::fromVariant(value)}).toJson(QJsonDocument::Compact)),
+                applied.value(QStringLiteral("errorCode")).toString(), applied.value(QStringLiteral("errorMessage")).toString()));
+            continue;
+        }
+        bool changed = false;
+        bool deferred = false;
+        QString detail;
+        if (probe == QStringLiteral("frame") || probe == QStringLiteral("hoverFrame")) {
+            const int hovered = probe == QStringLiteral("hoverFrame") ? 1 : -1;
+            if (hovered >= 0 && baseHoverFrame.isNull())
+                baseHoverFrame = frame.reference(baseConfiguration, hovered);
+            const QImage after = frame.draw(window.panelRendererConfiguration(panel), hovered,
+                                            hovered >= 0 ? baseHoverFrame : baseFrame);
+            changed = !after.isNull() && after != (hovered >= 0 ? baseHoverFrame : baseFrame);
+            const QString diagnostics = qEnvironmentVariable("ARCHDOCK_TRUTH_MATRIX_OUTPUT");
+            if (!changed && !diagnostics.isEmpty()) {
+                const QString stem = QDir(diagnostics).filePath(
+                    combination.value(QStringLiteral("id")).toString() + QLatin1Char('-') + key);
+                if (after.isNull()) {
+                    frame.unsettled().first.save(stem + QStringLiteral("-unsettled-a.png"));
+                    frame.unsettled().second.save(stem + QStringLiteral("-unsettled-b.png"));
+                } else {
+                    (hovered >= 0 ? baseHoverFrame : baseFrame).save(stem + QStringLiteral("-before.png"));
+                    after.save(stem + QStringLiteral("-after.png"));
+                }
+            }
+            detail = after.isNull() ? QStringLiteral("never came to rest")
+                : QStringLiteral("%1x%2").arg(after.width()).arg(after.height());
+            // A shader-drawn effect cannot appear under the software
+            // renderer; studio-truth-matrix-smoke requires it with the real
+            // graphics backend.
+            if (!changed && !after.isNull() && frame.softwareRenderer()
+                    && effect.value(QStringLiteral("needsShaders")).toStringList().contains(tier)) {
+                deferred = true;
+                detail += QStringLiteral(" drawn by a shader: proved by studio-truth-matrix-smoke");
+            }
+        } else {
+            const QVariant after = observe();
+            changed = !sameValue(before, after);
+            detail = QString::fromUtf8(QJsonDocument(QJsonArray{QJsonValue::fromVariant(before),
+                QJsonValue::fromVariant(after)}).toJson(QJsonDocument::Compact));
+            for (const QVariant &consumer : effect.value(QStringLiteral("consumers")).toList()) {
+                const QStringList pair = consumer.toStringList();
+                if (!sources.contains(pair.value(0)))
+                    sources.insert(pair.value(0), sourceText(pair.value(0)));
+                if (!sources.value(pair.value(0)).contains(pair.value(1))) {
+                    changed = false;
+                    detail += QStringLiteral(" consumer missing in ") + pair.value(0);
+                }
+            }
+        }
+        if (!changed && !deferred)
+            failures.append(QStringLiteral("%1 (%2) changes nothing: %3").arg(key, probe, detail));
+        evidence.append(QJsonObject{{QStringLiteral("field"), key}, {QStringLiteral("page"), pageOf.value(key)},
+            {QStringLiteral("probe"), probe}, {QStringLiteral("changed"), changed},
+            {QStringLiteral("deferred"), deferred},
+            {QStringLiteral("value"), QJsonValue::fromVariant(value)}, {QStringLiteral("detail"), detail},
+            {QStringLiteral("proof"), effect.value(QStringLiteral("proof")).toString()}});
+        // Back to the base state for the next field.
+        const QVariantMap restored = apply(original);
+        QVERIFY2(restored.value(QStringLiteral("success")).toBool(),
+                 qPrintable(key + QStringLiteral(" could not be restored: ") + restored.value(QStringLiteral("errorCode")).toString()));
+        // Back means the values Studio shows are the base ones again; a value
+        // set back to its default may now be stored where it was absent.
+        const QVariantMap restoredSnapshot = window.panelSettingsEditorSnapshot(panel, QStringLiteral("studio"));
+        QVariantMap now = restoredSnapshot.value(QStringLiteral("panelValues")).toMap();
+        now.insert(restoredSnapshot.value(QStringLiteral("globalValues")).toMap());
+        QVariantMap then = snapshot.value(QStringLiteral("panelValues")).toMap();
+        then.insert(snapshot.value(QStringLiteral("globalValues")).toMap());
+        QStringList differing;
+        for (const QString &name : QSet<QString>(now.keyBegin(), now.keyEnd()) + QSet<QString>(then.keyBegin(), then.keyEnd()))
+            if (!sameValue(now.value(name), then.value(name)))
+                differing.append(name);
+        QVERIFY2(differing.isEmpty(), qPrintable(key + QStringLiteral(" did not restore the panel: ") + differing.join(QLatin1Char(' '))));
+    }
+
+    const QString output = qEnvironmentVariable("ARCHDOCK_TRUTH_MATRIX_OUTPUT");
+    if (!output.isEmpty()) {
+        QJsonArray absent;
+        QStringList all = effects.keys();
+        all.removeAll(QStringLiteral("about"));
+        for (const QString &key : std::as_const(all))
+            if (!pageOf.contains(key))
+                absent.append(key);
+        QDir().mkpath(output);
+        QFile file(QDir(output).filePath(combination.value(QStringLiteral("id")).toString() + QStringLiteral(".json")));
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        file.write(QJsonDocument(QJsonObject{{QStringLiteral("combination"), QJsonObject::fromVariantMap(combination)},
+            {QStringLiteral("effectiveTier"), tier}, {QStringLiteral("shown"), evidence},
+            {QStringLiteral("absent"), absent}, {QStringLiteral("failures"), QJsonArray::fromStringList(failures)}})
+            .toJson());
+        frame.draw(baseConfiguration, -1).save(QDir(output).filePath(combination.value(QStringLiteral("id")).toString() + QStringLiteral(".png")));
+    }
+    QVERIFY2(failures.isEmpty(), qPrintable(failures.join(QStringLiteral("\n"))));
 }
 
 int main(int argc, char **argv)

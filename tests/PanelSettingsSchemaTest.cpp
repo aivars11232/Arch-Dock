@@ -364,7 +364,9 @@ void PanelSettingsSchemaTest::editorCandidatesExcludeProtectedAndHiddenState()
         const PanelSettingsFieldDescriptor *descriptor =
             PanelSettingsSchema::panelDescriptor(key);
         QVERIFY2(descriptor, qPrintable(key));
-        QCOMPARE(descriptor->editor.section, QStringLiteral("panels-behavior"));
+        // Contract change, ADREP-TASK-001 (OF-07, CF-05): opening and
+        // closing is shown on one page, Animations > Opening and closing.
+        QCOMPARE(descriptor->editor.section, QStringLiteral("panels-animations"));
         QCOMPARE(descriptor->editor.capability,
                  QStringLiteral("presentation-mechanism"));
         QVERIFY2(!descriptor->choices.isEmpty(), qPrintable(key));

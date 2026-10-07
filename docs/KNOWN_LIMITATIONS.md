@@ -11,11 +11,13 @@ The production target is Arch Linux, KDE Plasma 6 and Wayland. Other operating
 systems, desktop environments and X11 are outside this verification record.
 
 Native edge panels retain real Plasma containments and the standard Plasma
-editing model. Their available layouts are adaptive, horizontal and vertical;
-their renderer tiers are procedural/skinned 2D. Whole-panel free rotation,
-ring/arc layouts, baked 2.5D, radial presentation and true 3D belong to supported
-desktop-hosted free panels. The shared capability resolver controls availability
-and explanatory UI; a draft value alone is not evidence that a host supports it.
+editing model. They lay their row out along their edge, horizontal at the top
+and bottom and vertical at the sides; their renderer tiers are procedural/skinned
+2D. Whole-panel free rotation, ring/arc layouts, baked 2.5D and true 3D belong
+to supported desktop-hosted free panels. Opening and closing mechanisms belong
+to edge panels: a free panel stands open. The shared capability resolver
+controls availability and explanatory UI; a draft value alone is not evidence
+that a host supports it.
 
 Free panels remain Plasma desktop applets and use the existing verified
 geometry/recovery integration. Plasma controls the host; Arch Dock renders
@@ -78,6 +80,30 @@ Some source files are still large (`PanelRegistry.cpp`, `SettingsPopup.qml`,
 `src/panel/PanelWindow*.cpp` files (see the list in `PanelWindow.h`), moving
 whole functions unchanged; the others are left for later, since splitting them
 changes no behaviour.
+
+## What Panel Studio offers
+
+Panel Studio shows a setting only where it changes the selected panel, and a
+tab only when it has something to change (ADREP-TASK-001). The Studio truth
+matrix test checks this for every host, layout and renderer tier. What follows
+from it:
+
+- A free panel has no edge, alignment, Dynamic, Plasma visibility mode, Width,
+  Height, opening and closing or running indicators. It cannot be hidden
+  either; remove it instead. A free panel saved hidden or collapsed by an
+  earlier version is shown, and open, after the upgrade; a backup is taken
+  first.
+- A setting that belongs to the panel but draws nothing in its present state
+  is hidden and keeps its value: Opens on, Collapse axis, Reveal handle and the
+  delays while the panel cannot close, and Dock layout on a baked look, whose
+  icons stand on its artwork's own track. Only a closed track (a ring or a
+  polygon) turns, so a baked arc offers no layout angle or rotation.
+- Circle and Ring draw the same, as do Adaptive and Horizontal on a free
+  panel, so Dock layout offers only one of each pair beside the others. A look
+  made for one layout offers no Dock layout and says so on the Layout page.
+- Rotation speed and when the rotation runs act while the panel turns;
+  ADREP-TASK-002 reworks that section.
+- Badges and task progress appear only where the session reports them.
 
 ## 3D editing
 

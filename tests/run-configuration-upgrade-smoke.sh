@@ -69,6 +69,45 @@ elif mode == 'future':
     shutil.copy2(config, state / 'future.conf')
 elif mode == 'future-unchanged':
     assert config.read_bytes() == (state / 'future.conf').read_bytes()
+elif mode == 'free-collapsed':
+    # ADREP-TASK-001, PD-01: a current configuration whose only outdated
+    # values are a free panel saved collapsed and hidden, as earlier versions
+    # allowed although nothing could hide or collapse a free panel.
+    panels = json.loads(bytes(settings.value('dock/panels')))
+    assert len(panels) == 1 and panels[0]['schemaVersion'] == 2
+    free = dict(panels[0], id='free-upgrade', name='Free upgrade', edge='free', hostKind='free-desktop',
+                layout='circular',
+                freeDesktopContainmentId=-1, freeDockAppletId=-1, freeOwnershipToken='',
+                freeHostMode='desktop', freeHostState='unhosted', screen=0, screenId='',
+                visible=False, presentationMode='collapsed', collapseMechanism='collapse-radial',
+                presentationTrigger='click', collapseAxis='vertical', openDelay=120, closeDelay=340)
+    settings.setValue('dock/panels', QByteArray(json.dumps(panels + [free]).encode())); settings.sync()
+    assert settings.status() == QSettings.NoError
+    (state / 'free-collapsed.json').write_text(json.dumps(free))
+    backups = data / 'config-backups'
+    (state / 'backups-before.json').write_text(json.dumps(sorted(path.name for path in backups.iterdir())))
+elif mode == 'free-open':
+    saved = json.loads((state / 'free-collapsed.json').read_text())
+    free = next(panel for panel in json.loads(bytes(settings.value('dock/panels'))) if panel['id'] == 'free-upgrade')
+    # Shown and open; every other stored value is kept, nothing is deleted.
+    assert free['presentationMode'] == 'open' and free['collapseMechanism'] == 'open', free
+    assert free['visible'] is True, free
+    changed = {key for key in set(saved) | set(free) if saved.get(key) != free.get(key)}
+    assert changed == {'presentationMode', 'collapseMechanism', 'visible'}, changed
+    # The value as saved stays recoverable in the automatic migration backup.
+    before = set(json.loads((state / 'backups-before.json').read_text()))
+    backups = data / 'config-backups'
+    created = [path for path in sorted(backups.iterdir()) if path.name not in before]
+    assert len(created) == 1, created
+    manifest = json.loads((created[0] / 'manifest.json').read_text())
+    assert manifest['reason'] == 'panel-migration', manifest
+    stored = next(created[0] / 'files' / row['location'] / row['path']
+                  for row in manifest['files'] if row['path'] == 'settings.conf')
+    backed_up = QSettings(str(stored), QSettings.IniFormat)
+    original = next(panel for panel in json.loads(bytes(backed_up.value('dock/panels')))
+                    if panel['id'] == 'free-upgrade')
+    assert original['presentationMode'] == 'collapsed' and original['collapseMechanism'] == 'collapse-radial'
+    assert original['visible'] is False
 else:
     raise AssertionError(mode)
 PY
@@ -121,4 +160,11 @@ rm -- "$data_root/config-backups"
 mv "$state/saved-backups" "$data_root/config-backups"
 "$binary" --restore-config-backup "$original_id"
 fixture original
-printf 'Disposable configuration upgrade, future-version refusal, rollback and offline recovery passed.\n'
+# A free panel saved collapsed is shown open after the upgrade (PD-01).
+start_service
+stop_service
+fixture free-collapsed
+start_service
+fixture free-open
+stop_service
+printf 'Disposable configuration upgrade, future-version refusal, rollback, offline recovery and free panels saved collapsed passed.\n'

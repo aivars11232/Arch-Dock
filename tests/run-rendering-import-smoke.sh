@@ -471,6 +471,28 @@ run_private_session() {
     ARCHDOCK_RENDERING_KWIN_PID=$!
     wait_for_wayland_socket
 
+    if [[ "${ARCHDOCK_RENDERING_TRUTH_MATRIX:-}" == '1' ]]; then
+        # ADREP-TASK-001: the Studio truth matrix drawn with this private
+        # compositor's real graphics backend. The offscreen run draws with Qt
+        # Quick's software renderer, which has no shader effects and no 3D;
+        # here every shown field must change the drawn panel or its documented
+        # runtime property, shader-drawn and 3D effects included.
+        printf 'Running the Studio truth matrix against the private Wayland graphics backend.\n'
+        if ! ARCHDOCK_TRUTH_MATRIX_OUTPUT="$ARCHDOCK_RENDERING_LOG_DIR/truth-matrix" \
+            "$ARCHDOCK_RENDERING_ICON_PROPERTIES_INTERACTION_TEST" \
+                studioTruthMatrixHarnessIsTheApplet studioTruthMatrix \
+                >"$ARCHDOCK_RENDERING_LOG_DIR/truth-matrix.log" 2>&1; then
+            tail -n 160 "$ARCHDOCK_RENDERING_LOG_DIR/truth-matrix.log" >&2
+            return 1
+        fi
+        if rg -l 'drawn by a shader' "$ARCHDOCK_RENDERING_LOG_DIR/truth-matrix"; then
+            printf 'A shader-drawn effect was left unproved with the real graphics backend.\n' >&2
+            return 1
+        fi
+        sed -n '/^Totals:/p' "$ARCHDOCK_RENDERING_LOG_DIR/truth-matrix.log"
+        return 0
+    fi
+
     # Negative mask fixtures stay in their own log. Exercise recovery in the
     # same scene against this staged/installed module and the real RHI backend.
     if ! "$ARCHDOCK_RENDERING_QMLTESTRUNNER" \
@@ -698,13 +720,15 @@ run_private_session() {
             return 1
         }
 
-        energy_values="{'layout': <'horizontal'>, 'rendererTier': <'skinned2d'>, 'panelThemeId': <'$energy_theme_id'>, 'completeThemeId': <'$energy_theme_id'>, 'color': <'$energy_tint'>, 'glowIntensity': <1.15>}"
+        # The edge host's row follows its edge, so it offers no Dock layout
+        # (ADREP-TASK-001); the free host is made a horizontal row.
+        energy_values="{'rendererTier': <'skinned2d'>, 'panelThemeId': <'$energy_theme_id'>, 'completeThemeId': <'$energy_theme_id'>, 'color': <'$energy_tint'>, 'glowIntensity': <1.15>}"
         printf 'Selecting staged energy theme %s on the private native and free hosts.\n' \
             "$energy_theme_id"
         native_theme_reply="$(panel_call applyPanelSettingsTransaction \
             bottom "uint64 $native_revision" "$energy_values" '{}')"
         free_theme_reply="$(panel_call applyPanelSettingsTransaction \
-            "$free_panel_id" "uint64 $free_revision" "$energy_values" '{}')"
+            "$free_panel_id" "uint64 $free_revision" "{'layout': <'horizontal'>, ${energy_values#\{}" '{}')"
         [[ "$native_theme_reply" == *"'success': <true>"* &&
            "$native_theme_reply" == *"'status': <'succeeded'>"* &&
            "$free_theme_reply" == *"'success': <true>"* &&
@@ -1249,18 +1273,42 @@ run_private_session() {
     kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
     require_no_import_errors
 
-    # TASK-0032 Phase D live evidence. Each real host is switched to a
+    # TASK-0032 Phase D live evidence. The real edge host is switched to a
     # collapsed manual shell through the settings transaction; its own applet
     # must report that it rests collapsed while the host still shows it. An
     # explicit request then opens it and another collapses it again, which is
-    # the producer the manual trigger relies on. Both hosts are restored to an
-    # open hover panel afterwards.
+    # the producer the manual trigger relies on. It is restored to an open
+    # hover panel afterwards.
+    #
+    # Contract change, ADREP-TASK-001 (owner decision PD-01): a free panel has
+    # no opening or closing mechanism. The same collapse is refused for the
+    # free host, which stays open.
     local presentation_panel
     local presentation_revision
     local presentation_reply
     local presentation_values="{'presentationMode': <'collapsed'>, 'collapseMechanism': <'collapse-horizontal'>, 'collapseAxis': <'horizontal'>, 'presentationTrigger': <'manual'>}"
-    local restore_presentation_values="{'presentationMode': <'open'>, 'collapseMechanism': <'open'>, 'presentationTrigger': <'hover'>}"
-    for presentation_panel in bottom "$free_panel_id"; do
+    wait_for_presentation_state "$free_panel_id" open || return 1
+    presentation_revision="$(sed -n \
+        "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
+        <<<"$(panel_call dockConfiguration "$free_panel_id")")"
+    [[ "$presentation_revision" =~ ^[0-9]+$ ]] || {
+        printf 'Could not read the revision of the free host.\n' >&2
+        return 1
+    }
+    presentation_reply="$(panel_call applyPanelSettingsTransaction \
+        "$free_panel_id" "uint64 $presentation_revision" \
+        "$presentation_values" '{}')"
+    # The free host offers no mechanism, so the resolver refuses it.
+    [[ "$presentation_reply" == *"'success': <false>"* &&
+       "$presentation_reply" == *"'errorCode': <'capability-unavailable'>"* &&
+       "$presentation_reply" == *"'errorMessage': <'presentation-mechanism-unavailable'>"* ]] || {
+        printf 'The free host accepted a collapsed presentation: %s\n' \
+            "$presentation_reply" >&2
+        return 1
+    }
+    wait_for_presentation_state "$free_panel_id" open || return 1
+    printf 'The free host refused to collapse and stays open (PD-01).\n'
+    for presentation_panel in bottom; do
         wait_for_presentation_state "$presentation_panel" open || return 1
 
         presentation_revision="$(sed -n \
@@ -1308,15 +1356,30 @@ run_private_session() {
                 "$presentation_panel" >&2
             return 1
         }
-        presentation_reply="$(panel_call applyPanelSettingsTransaction \
-            "$presentation_panel" "uint64 $presentation_revision" \
-            "$restore_presentation_values" '{}')"
-        [[ "$presentation_reply" == *"'success': <true>"* &&
-           "$presentation_reply" == *"'status': <'succeeded'>"* ]] || {
-            printf 'Could not restore the open presentation on %s: %s\n' \
-                "$presentation_panel" "$presentation_reply" >&2
-            return 1
-        }
+        # "Opens on" is offered only while the panel can close (PD-01), so
+        # it goes back to hover first and the panel is then opened.
+        local restore_presentation_values
+        for restore_presentation_values in \
+            "{'presentationTrigger': <'hover'>}" \
+            "{'presentationMode': <'open'>, 'collapseMechanism': <'open'>}"; do
+            presentation_revision="$(sed -n \
+                "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
+                <<<"$(panel_call dockConfiguration "$presentation_panel")")"
+            [[ "$presentation_revision" =~ ^[0-9]+$ ]] || {
+                printf 'Could not read the revision before restoring %s.\n' \
+                    "$presentation_panel" >&2
+                return 1
+            }
+            presentation_reply="$(panel_call applyPanelSettingsTransaction \
+                "$presentation_panel" "uint64 $presentation_revision" \
+                "$restore_presentation_values" '{}')"
+            [[ "$presentation_reply" == *"'success': <true>"* &&
+               "$presentation_reply" == *"'status': <'succeeded'>"* ]] || {
+                printf 'Could not restore the open presentation on %s: %s\n' \
+                    "$presentation_panel" "$presentation_reply" >&2
+                return 1
+            }
+        done
         wait_for_presentation_state "$presentation_panel" open || return 1
     done
     private_service_owner check
@@ -1420,6 +1483,12 @@ run_private_session() {
 }
 
 run_outer() {
+    # The private session's own limit; the Studio truth matrix draws every
+    # field of 21 panels and needs longer.
+    local session_seconds=150
+    if [[ "${ARCHDOCK_RENDERING_TRUTH_MATRIX:-}" == '1' ]]; then
+        session_seconds=900
+    fi
     require_command cmake
     require_command dbus-run-session
     require_command gdbus
@@ -1670,7 +1739,7 @@ run_outer() {
         XDG_SESSION_TYPE=wayland \
         XDG_STATE_HOME="$ARCHDOCK_RENDERING_STATE_ROOT/state" \
         dbus-run-session -- \
-        timeout --kill-after=10s 150s bash "$0"
+        timeout --kill-after=10s "${session_seconds}s" bash "$0"
 
     printf 'ArchDock.Rendering staged import smoke succeeded.\n'
 }

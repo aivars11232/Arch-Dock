@@ -52,7 +52,8 @@ Use the checksum-pinned local Arch package route in
 [the installation guide](docs/INSTALL.md#arch-package). It lists dependencies,
 source export, native makepkg, upgrade, recovery and uninstall commands.
 
-After installation, open the desktop application entry or run:
+After installation, open **Arch Dock** from the application menu, which
+always shows Panel Studio, or run:
 
 ```bash
 arch-dock --settings

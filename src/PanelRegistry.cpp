@@ -756,6 +756,9 @@ bool normalizeFreeHostRecord(QVariantMap *panel)
     // presentation values are kept.
     setValue(QStringLiteral("presentationMode"), QStringLiteral("open"));
     setValue(QStringLiteral("collapseMechanism"), QStringLiteral("open"));
+    // Nor can it be hidden: it is drawn whatever "visible" holds, so one saved
+    // hidden is recorded as shown and keeps receiving its content.
+    setValue(QStringLiteral("visible"), true);
     return changed;
 }
 

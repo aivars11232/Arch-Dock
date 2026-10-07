@@ -210,6 +210,29 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   icon style definition is no longer sent twice for every entry.
 - The [full audit of 2026-10-06](docs/audits/FULL_AUDIT_2026-10-06.md) records
   these findings, the measurements and what remains open.
+- Opening Arch Dock from the application menu always shows Panel Studio:
+  when Arch Dock is stopped, after Quit, while it runs and after Panel Studio
+  was closed. Background starts still never open it (ADREP-TASK-001).
+- Panel Studio offers a setting only where it changes the panel, and hides a
+  tab with nothing to change. Free panels lose Alignment, Dynamic, Edge,
+  Visibility, Width, Height, Indicators and opening and closing; edge panels
+  lose Dock layout, Layout scale and Panel padding, which their applet never
+  used. Appearance > Shape, drawn by nothing, is gone. A setting the panel does
+  not offer is refused if changed through D-Bus.
+- Opening and closing, and panel rotation, are on Animations only. The icon
+  style is chosen in one place, Icons > Appearance; the Icon Styles tab is gone.
+- Built-in and own panel presets list only the presets made for the selected
+  panel: free panels see free-panel presets, edge panels those of their
+  orientation. The tabs for your own presets appear once they hold one.
+- Free panels saved collapsed or hidden are shown open after the upgrade, with
+  an automatic backup first; nothing could collapse or hide a free panel.
+- Edge panels judge a theme by the row they draw, so a theme made for
+  horizontal panels applies to a bottom panel whatever its old stored layout.
+- Icon path orientation now turns the icons of a free panel; it did nothing
+  there.
+- A Studio truth matrix test draws 21 panels, the way the applet does, and
+  checks every shown setting against the drawn result or the runtime value it
+  drives.
 - Runtime corrections and candidate gates are recorded in
   [the release checklist](docs/RELEASE_CHECKLIST.md) and
   [corrective report](docs/POST_TASK_0045_CORRECTIVE_REPORT.md).

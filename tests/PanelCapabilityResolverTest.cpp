@@ -199,10 +199,11 @@ private slots:
     void layoutVocabularyRoundTrips();
     void nativeEdgeUsesOnlyLinearProceduralCapabilities();
     void nativeEdgeRejectsRingTheme();
+    void edgePanelThemesAreJudgedByTheDrawnLayout();
     void freeDesktopAcceptsRingTheme();
     void hostsDeclareTheMechanismsTheySurfaceCanActuallyRun();
     void aMechanismNeedsBothHostAndThemeDeclaration();
-    void radialIsFreeHostOnly();
+    void radialIsOfferedByNoHost();
     void openIsNotADeclarableMechanism();
     void freeDesktopResolvesBoundedRotation();
     void productionNativeRotationIsUnavailable();
@@ -281,6 +282,49 @@ void PanelCapabilityResolverTest::nativeEdgeRejectsRingTheme()
     QCOMPARE(ring->reason, CapabilityReasonCode::HostLayoutUnsupported);
 }
 
+void PanelCapabilityResolverTest::edgePanelThemesAreJudgedByTheDrawnLayout()
+{
+    // ADREP-TASK-001: an edge panel's applet lays its row out along its edge
+    // whatever Dock layout its record holds, and that field is not offered
+    // there. A theme made for horizontal panels fits a bottom or top panel
+    // whatever its record says, and never a left or right one.
+    const ThemeCapabilityProfile horizontalOnly = themeFor(
+        QStringLiteral("horizontal-only"),
+        {PanelHostKind::NativeEdge, PanelHostKind::FreeDesktop},
+        {PanelLayoutKind::Horizontal},
+        {RendererTier::Procedural2D},
+        RendererTier::Procedural2D);
+    const auto resolveAt = [](const QString &edge, const QString &layout,
+                              const ThemeCapabilityProfile &theme)
+    {
+        PanelDefinition panel = panelFor(PanelHostKind::NativeEdge, layout);
+        panel.placement.edge = edge;
+        return PanelCapabilityResolver::resolve(
+            panel,
+            PanelCapabilityResolver::productionHostProfile(PanelHostKind::NativeEdge),
+            theme,
+            PanelCapabilityResolver::productionRenderers(),
+            PanelCapabilityResolver::productionPlatform());
+    };
+    for (const QString &stored : {QStringLiteral("adaptive"), QStringLiteral("horizontal"),
+                                  QStringLiteral("vertical")})
+    {
+        QVERIFY2(resolveAt(QStringLiteral("bottom"), stored, horizontalOnly).available,
+                 qPrintable(stored));
+        QVERIFY2(resolveAt(QStringLiteral("top"), stored, horizontalOnly).available,
+                 qPrintable(stored));
+        const CapabilityResolution left = resolveAt(QStringLiteral("left"), stored, horizontalOnly);
+        QVERIFY2(!left.available, qPrintable(stored));
+        QCOMPARE(left.reason, CapabilityReasonCode::ThemeLayoutUnsupported);
+    }
+    // A theme that adapts to its edge fits either orientation.
+    ThemeCapabilityProfile adaptiveOnly = horizontalOnly;
+    adaptiveOnly.id = QStringLiteral("adaptive-only");
+    adaptiveOnly.layouts = {PanelLayoutKind::Adaptive};
+    QVERIFY(resolveAt(QStringLiteral("bottom"), QStringLiteral("vertical"), adaptiveOnly).available);
+    QVERIFY(resolveAt(QStringLiteral("right"), QStringLiteral("horizontal"), adaptiveOnly).available);
+}
+
 void PanelCapabilityResolverTest::freeDesktopAcceptsRingTheme()
 {
     ThemeCapabilityProfile theme = themeFor(
@@ -338,9 +382,13 @@ void PanelCapabilityResolverTest::hostsDeclareTheMechanismsTheySurfaceCanActuall
         QVERIFY2(decision->available, qPrintable(mechanism));
     }
 
+    // Contract change, ADREP-TASK-001 (owner decision PD-01): a free panel
+    // offers no opening or closing mechanism. It is always open, whatever its
+    // theme declares.
+    const auto freeHost = PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop);
     const CapabilityResolution freeResult = PanelCapabilityResolver::resolve(
         panelFor(PanelHostKind::FreeDesktop),
-        PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop),
+        freeHost,
         theme,
         PanelCapabilityResolver::productionRenderers(),
         PanelCapabilityResolver::productionPlatform());
@@ -349,22 +397,29 @@ void PanelCapabilityResolverTest::hostsDeclareTheMechanismsTheySurfaceCanActuall
          value < static_cast<int>(PanelPresentationMechanism::Count);
          ++value)
     {
-        const QString mechanism = panelPresentationMechanismName(
-            static_cast<PanelPresentationMechanism>(value));
+        const auto kind = static_cast<PanelPresentationMechanism>(value);
+        const QString mechanism = panelPresentationMechanismName(kind);
         const CapabilityDecision *decision = decisionById(
             freeResult.presentationMechanisms, mechanism);
         QVERIFY2(decision, qPrintable(mechanism));
-        QVERIFY2(decision->available, qPrintable(mechanism));
+        QCOMPARE(decision->available, kind == PanelPresentationMechanism::Open);
+        if (kind != PanelPresentationMechanism::Open)
+        {
+            QCOMPARE(decision->reason, CapabilityReasonCode::PresentationMechanismUnavailable);
+            QCOMPARE(decision->blockedBy, freeHost.id);
+        }
     }
+    QVERIFY(freeResult.available);
 }
 
 void PanelCapabilityResolverTest::aMechanismNeedsBothHostAndThemeDeclaration()
 {
     // The procedural surface can reveal along either axis, but it declares
-    // no mechanical split. Host support alone cannot invent theme parts.
+    // no mechanical split. Host support alone cannot invent theme parts. The
+    // edge host declares split; free panels declare no mechanism (PD-01).
     const CapabilityResolution undeclared = PanelCapabilityResolver::resolve(
-        panelFor(PanelHostKind::FreeDesktop),
-        PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop),
+        panelFor(PanelHostKind::NativeEdge),
+        PanelCapabilityResolver::productionHostProfile(PanelHostKind::NativeEdge),
         PanelCapabilityResolver::proceduralThemeProfile(),
         PanelCapabilityResolver::productionRenderers(),
         PanelCapabilityResolver::productionPlatform());
@@ -381,7 +436,7 @@ void PanelCapabilityResolverTest::aMechanismNeedsBothHostAndThemeDeclaration()
     QVERIFY(decisionById(undeclared.presentationMechanisms, QStringLiteral("collapse-vertical"))->available);
 }
 
-void PanelCapabilityResolverTest::radialIsFreeHostOnly()
+void PanelCapabilityResolverTest::radialIsOfferedByNoHost()
 {
     ThemeCapabilityProfile theme = PanelCapabilityResolver::proceduralThemeProfile();
     theme.presentationMechanisms = {PanelPresentationMechanism::CollapseRadial};
@@ -401,14 +456,21 @@ void PanelCapabilityResolverTest::radialIsFreeHostOnly()
              PanelCapabilityResolver::productionHostProfile(
                  PanelHostKind::NativeEdge).id);
 
+    // Contract change, ADREP-TASK-001 (PD-01): free panels, the only host
+    // that could close like an iris, offer no mechanism any more, so no host
+    // offers radial.
+    const auto freeHost = PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop);
     const CapabilityResolution freeResult = PanelCapabilityResolver::resolve(
         panelFor(PanelHostKind::FreeDesktop),
-        PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop),
+        freeHost,
         theme,
         PanelCapabilityResolver::productionRenderers(),
         PanelCapabilityResolver::productionPlatform());
-    QVERIFY(decisionById(freeResult.presentationMechanisms,
-                         QStringLiteral("collapse-radial"))->available);
+    const CapabilityDecision *freeRadial = decisionById(
+        freeResult.presentationMechanisms, QStringLiteral("collapse-radial"));
+    QVERIFY(freeRadial);
+    QVERIFY(!freeRadial->available);
+    QCOMPARE(freeRadial->blockedBy, freeHost.id);
 }
 
 // Being open is what a panel does when it is not collapsed.
@@ -778,6 +840,9 @@ void PanelCapabilityResolverTest::meshPartsRequireDeclaredPartsAndAnActiveMeshRe
 {
     auto host = PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop);
     host.rendererTiers.append(RendererTier::True3D);
+    // The production free host offers no mechanism (PD-01); this host
+    // declares one so that the mesh-part rule itself is what is tested.
+    host.presentationMechanisms.append(PanelPresentationMechanism::CollapseRadial);
     auto theme = themeFor(QStringLiteral("parts"), {PanelHostKind::FreeDesktop},
         {PanelLayoutKind::Ring}, {RendererTier::True3D, RendererTier::Procedural2D}, RendererTier::True3D);
     theme.fallbackRendererTiers = {RendererTier::Procedural2D};

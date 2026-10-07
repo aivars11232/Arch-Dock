@@ -1059,8 +1059,9 @@ def run_interaction_matrix(free_panel):
                         "edge": edge, "dynamic": False, "width": 92 if vertical else 720,
                         "height": 600 if vertical else 92})))
                     assert placed["success"], placed
-                    configure(panel, {"layout": "vertical" if vertical else "horizontal",
-                                      "panelThemeId": "", "completeThemeId": "", "rendererTier": "procedural2d"})
+                    # The edge applet lays its row out along the edge it is
+                    # on; an edge panel offers no Dock layout (ADREP-TASK-001).
+                    configure(panel, {"panelThemeId": "", "completeThemeId": "", "rendererTier": "procedural2d"})
                 else:
                     shape = "ring" if index % 2 == 0 else "arc"
                     theme = "ring-platform-blue" if shape == "ring" else "arc-platform-orange"
@@ -1222,7 +1223,10 @@ def run_interaction_matrix(free_panel):
                      "entryIds": [folder_app_ids[panel]], "background": "solid", "color": "#883322",
                      "corners": "capsule", "padding": 20, "spacing": 12,
                      "presentation": "closed", "motionProfile": "pulse"}
-            configure(panel, {"layout": "horizontal", "rendererTier": "procedural2d",
+            # An edge panel lays its row out along its edge and offers no
+            # Dock layout; the free panel is made a row (ADREP-TASK-001).
+            configure(panel, {**({"layout": "horizontal"} if panel == free_panel else {}),
+                              "rendererTier": "procedural2d",
                               "panelThemeId": "", "completeThemeId": "", "presentationMode": "open",
                               "collapseMechanism": "open", "segments": [baseline, files]})
             assert panel_call("requestPanelPresentation", "(ss)", (panel, "open"))
@@ -1329,9 +1333,10 @@ def run_interaction_matrix(free_panel):
         wait_for(lambda: len(panel_call("dockEntriesForPanel", "(ss)", (free_panel, "hybrid"))) >= 3,
                  "free panel lists its pinned fixtures")
         scenarios = [
-            ("native bottom row", "bottom", {"layout": "horizontal", "rendererTier": "procedural2d",
+            # An edge panel's row follows its edge; it offers no Dock layout.
+            ("native bottom row", "bottom", {"rendererTier": "procedural2d",
                                              "panelThemeId": "", "completeThemeId": ""}),
-            ("native skinned row", "bottom", {"layout": "horizontal", "rendererTier": "skinned2d",
+            ("native skinned row", "bottom", {"rendererTier": "skinned2d",
                                               "panelThemeId": "sci-fi-chassis-blue",
                                               "completeThemeId": "sci-fi-chassis-blue"}),
             ("free skinned row", free_panel, {"layout": "horizontal", "rendererTier": "skinned2d",
@@ -1349,12 +1354,16 @@ def run_interaction_matrix(free_panel):
         rows, failures = [], []
         for name, panel, settings in scenarios:
             scenario_start = time.time() * 1000
-            configure(panel, dict(settings, presentationMode="open", collapseMechanism="open",
-                                  presentationTrigger="click"))
+            configure(panel, dict(settings, presentationMode="open", collapseMechanism="open"))
             resolution = panel_call("resolvePanelCapabilities", "(sa{sv})", (panel, {}))
             tier = resolution["renderer"]["effectiveTier"]
             offered = [m["id"] for m in resolution["presentationMechanisms"] if m["available"] and m["id"] != "open"]
             unoffered = [m["id"] for m in resolution["presentationMechanisms"] if not m["available"]]
+            # Contract change, ADREP-TASK-001 (owner decision PD-01): a free
+            # panel offers no opening or closing mechanism; every one is
+            # refused below. Edge panels keep theirs and must draw each.
+            if panel == free_panel:
+                assert not offered, (name, offered)
             for mechanism in offered:
               try:
                 configure(panel, {"presentationMode": "open", "collapseMechanism": "open"})
@@ -1363,7 +1372,10 @@ def run_interaction_matrix(free_panel):
                 # settings it already has draws nothing new.
                 open_painted = capture(panel, "open", scenario_start)
                 before = time.time() * 1000
-                configure(panel, {"presentationMode": "collapsed", "collapseMechanism": mechanism})
+                # "Opens on" belongs to a panel that can close, so it is set
+                # with the mechanism (PD-01 hides it while the panel is open).
+                configure(panel, {"presentationMode": "collapsed", "collapseMechanism": mechanism,
+                                  "presentationTrigger": "click"})
                 settled(panel, "collapsed")
                 collapsed_painted = capture(panel, "collapsed", before)
                 before = time.time() * 1000
@@ -1592,6 +1604,8 @@ def run_interaction_matrix(free_panel):
                     break
             wait_for(lambda: ui()["outerY"] == page_start["outerY"] and ui()["innerY"] == page_start["innerY"],
                      "reverse Wayland page wheel restores the visible tab strip")
+            # Input must never change the selected page.
+            selection = page_start["selection"]
             for name, direction in (("nextTabs", 1), ("previousTabs", -1)):
                 before = ui()
                 assert before[name]["enabled"], before
@@ -1604,14 +1618,14 @@ def run_interaction_matrix(free_panel):
                 sync_input()
                 wait_for(lambda: direction * (ui()["tabX"] - before["tabX"]) > 0,
                          "Wayland tab navigation arrow " + name)
-                assert ui()["selection"] == 0, ui()
+                assert ui()["selection"] == selection, ui()
             before = ui()
             wheel(ui_point(before["tabs"]), 120, 0, discrete=True)
             wait_for(lambda: ui()["tabX"] > before["tabX"], "Wayland horizontal tab wheel")
             before = ui()
             wheel(ui_point(before["tabs"]), 0, 120, discrete=True, shift=True)
             wait_for(lambda: ui()["tabX"] > before["tabX"], "Wayland Shift-wheel tab scrolling")
-            assert ui()["selection"] == 0, ui()
+            assert ui()["selection"] == selection, ui()
             for prefix in ("studio-spin-", "studio-combo-"):
                 def visible_control():
                     state = ui()
@@ -1846,18 +1860,20 @@ def run_interaction_matrix(free_panel):
         after = panel_call("dockConfiguration", "(s)", (free_panel,))
         assert (after["x"], after["y"]) == (before["x"], before["y"])
         motion([1200, 500])
-        configure(free_panel, {"rendererTier": "procedural2d", "panelThemeId": "", "completeThemeId": "",
-            "presentationMode": "collapsed", "collapseMechanism": "collapse-horizontal", "presentationTrigger": "hover"})
-        wait_for(lambda: host_state().get("collapseProgress") == 1, "procedural panel rests closed")
-        host = host_state()
-        motion(native_point(host["rect"][2:], host["revealPoint"]))
+        # Contract change, ADREP-TASK-001 (owner decision PD-01): a free panel
+        # has no opening or closing mechanism. Asking it to rest collapsed is
+        # refused and it stays open; this replaces the hover opening and
+        # closing of a collapsed free panel that was checked here.
+        configure(free_panel, {"rendererTier": "procedural2d", "panelThemeId": "", "completeThemeId": ""})
+        revision = panel_call("dockConfiguration", "(s)", (free_panel,))["settingsRevision"]
+        refused = panel_call("applyPanelSettingsTransaction", "(sta{sv}a{sv})", (free_panel, revision,
+            values({"presentationMode": "collapsed", "collapseMechanism": "collapse-horizontal"}), {}))
+        # The free host offers no mechanism, so the resolver refuses it.
+        assert not refused["success"] and refused["errorCode"] == "capability-unavailable" \
+            and refused["errorMessage"] == "presentation-mechanism-unavailable", refused
         wait_for(lambda: opened(free_panel) and host_state().get("collapseProgress") == 0,
-            "native hover opens the procedural panel")
-        motion([1200, 500])
-        wait_for(lambda: host_state().get("collapseProgress") == 1,
-            "native pointer leave closes the procedural panel")
-        configure(free_panel, {"presentationMode": "open", "collapseMechanism": "open"})
-        print("PASS: real Wayland wheel and optional continuous rotation in 2D/3D; owned free position read-back/rollback; procedural hover open/close", flush=True)
+            "free panel stays open")
+        print("PASS: real Wayland wheel and optional continuous rotation in 2D/3D; owned free position read-back/rollback; a free panel refuses to collapse and stays open", flush=True)
         # Last: a radius-300 ring grows the desktop widget, which keeps the place
         # it grew to, so no later step may depend on the panel's position.
         # The owner's own free panels, with continuous animation off: free-9
@@ -1934,7 +1950,7 @@ def run_interaction_matrix(free_panel):
             run_runtime_ui_matrix()
             return
         if os.environ.get("ARCHDOCK_VISIBILITY_DISCRIMINATOR") == "1":
-            configure("bottom", {"layout": "horizontal", "rendererTier": "procedural2d",
+            configure("bottom", {"rendererTier": "procedural2d",
                                  "panelThemeId": "", "completeThemeId": ""})
             click([1200, 500])
             wait_for(lambda: opened("bottom") and observations.get(("host", "bottom", "")), "native host ready")
@@ -1986,8 +2002,9 @@ def run_interaction_matrix(free_panel):
             else:
                 shape = layout
                 theme = "ring-platform-blue" if layout == "ring" else "arc-platform-orange"
-            configure(panel, {"type": "hybrid", "layout": shape,
-                              **({"layoutRadius": 120} if panel == free_panel else {}),
+            # An edge panel's row follows its edge; it offers no Dock layout.
+            configure(panel, {"type": "hybrid",
+                              **({"layout": shape, "layoutRadius": 120} if panel == free_panel else {}),
                               "panelThemeId": theme, "completeThemeId": theme,
                               "rendererTier": "baked2.5d" if panel == free_panel else "skinned2d" if theme else "procedural2d",
                               "presentationMode": "collapsed" if theme == "energy-frame-cyan" else "open",

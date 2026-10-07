@@ -1073,6 +1073,24 @@ CapabilityResolution PanelCapabilityResolver::resolve(
     }
     const CapabilityDecision *layoutDecision = decisionById(
         result.layouts, panelLayoutKindName(*requestedLayout));
+    if (definition.host.kind == PanelHostKind::NativeEdge && layoutDecision &&
+        layoutDecision->reason != CapabilityReasonCode::HostLayoutUnsupported)
+    {
+        // An edge panel's applet lays its row out along the edge, whatever
+        // Dock layout the record holds, and that field is not offered there
+        // (ADREP-TASK-001). So the theme is judged by the layout actually
+        // drawn; a theme that adapts to its edge fits either orientation. A
+        // record holding a layout no edge host knows stays refused.
+        const QString edge = definition.placement.edge;
+        const PanelLayoutKind drawn = edge == QStringLiteral("left") || edge == QStringLiteral("right")
+            ? PanelLayoutKind::Vertical
+            : PanelLayoutKind::Horizontal;
+        layoutDecision = decisionById(result.layouts, panelLayoutKindName(drawn));
+        const CapabilityDecision *adaptive = decisionById(
+            result.layouts, panelLayoutKindName(PanelLayoutKind::Adaptive));
+        if ((!layoutDecision || !layoutDecision->available) && adaptive && adaptive->available)
+            layoutDecision = adaptive;
+    }
     if (!layoutDecision || !layoutDecision->available)
     {
         result.reason = layoutDecision

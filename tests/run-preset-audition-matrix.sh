@@ -336,9 +336,11 @@ preset_defaults_group() {
     jq -e '.success==false and .errorCode=="unavailable-panel-field" and .state=="ACTIVE"' <<<"$reply" >/dev/null
     preset_ok cancel >/dev/null
     preset_ok beginPreview "{'kind': <'panel'>, 'presetId': <'circular-blue-ring'>, 'panelId': <'$id'>, 'newPanel': <false>, 'useRecommendedIcons': <false>}" >/dev/null
-    # A baked platform has no procedural shape. Opacity is not such a field:
-    # every renderer applies it, so it is no longer a refused edit.
-    reply="$(preset_call updateDraft "{'shape': <'rounded'>}")"
+    # A baked platform draws no procedural surface, so its Theme is a refused
+    # edit. Appearance > Shape, drawn by nothing, is no editor field any more
+    # (ADREP-TASK-001, PD-04). Opacity is not such a field: every renderer
+    # applies it, so it is no longer a refused edit.
+    reply="$(preset_call updateDraft "{'appearance': <'neon'>}")"
     jq -e '.success==false and .errorCode=="unavailable-panel-field" and .state=="ACTIVE"' <<<"$reply" >/dev/null
     preset_ok updateDraft "{'layoutRadius': <240>}" >/dev/null
     wait_for_free_host_snapshot_stable "$desktop" "$applet" preview >/dev/null

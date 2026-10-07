@@ -13,10 +13,15 @@ The native Plasma applet's service watcher can request that activation when
 the applet needs its backend. There is no desktop autostart entry or automatic
 systemd enablement.
 
-The desktop application entry and manual `arch-dock` command use the same
-executable and atomic D-Bus name guard. Repeating the command keeps the
-existing owner; `arch-dock --settings` opens Panel Studio through that owner.
-The process remains resident when its settings window closes.
+Opening **Arch Dock** from the application menu runs `arch-dock --settings`
+and always shows Panel Studio: it starts Arch Dock when it is stopped, also
+after **Quit Arch Dock** (a menu start clears that stop), and brings Panel
+Studio forward when Arch Dock is already running or Panel Studio was closed.
+Starts in the background never open Panel Studio: D-Bus activation by the
+applets or the KWin window watcher, the systemd unit, and a plain `arch-dock`.
+All of them use the same executable and atomic D-Bus name guard, so a repeated
+start keeps the existing owner. The process remains resident when Panel Studio
+closes.
 
 To stop Arch Dock, run `arch-dock --quit` or choose **Quit Arch Dock** on the
 application menu entry (right-click it in the launcher). It then stays stopped,
@@ -29,9 +34,11 @@ Arch Dock again. While it is stopped, on-demand activation is refused with
 `org.freedesktop.DBus.Error.Spawn.ChildExited` and exit status 75.
 
 In Panel Studio, select the panel and open **Icon Tiles**. **From icon style**
-uses the selected style's frame or pedestal. **Custom tile** exposes shape,
-fill color, opacity, border color and border width independently of the panel
-surface. **Show tiles by default** controls the panel default; an explicit
+uses the frame or pedestal of the style chosen on **Icons > Appearance**, the
+one place an icon style is chosen; a plain icon shows its tile under the
+pointer, in the **Tile shape** chosen here. **Custom tile** adds fill color,
+opacity, border color and border width independently of the panel surface.
+**Show tiles by default** controls the panel default; an explicit
 Icon Properties visibility override takes precedence for that entry. The live
 preview shows the draft in both 2D and 3D. Apply saves it, while Cancel discards
 changes made since the last Apply. Tiles keep the application's real icon glyph
@@ -48,14 +55,21 @@ restores the widget's previous position and saved settings. **Layout** keeps
 the layout angle separate from **Perspective tilt**. Tilt appears for a
 compatible baked theme within that theme's declared range, or for an active
 3D theme as camera pitch. Controls follow the renderer actually available.
+An edge panel lays its row out along its edge, so its **Layout** offers no Dock
+layout, scale or padding. A baked look stands its icons on its artwork's own
+track and offers no Dock layout; only a closed track (a ring or polygon) turns.
 
-**Animations** groups opening/closing behavior, trigger, reveal handle,
-delays and duration. The default procedural renderer supports horizontal and
-vertical collapse. Select **Collapsed** for the resting state, then use its
-reveal handle with the chosen trigger to open it. Compatible themes expose
-their own supported mechanisms. After Apply, **Open panel** and **Close panel**
+On an edge panel, **Animations > Opening and closing** holds the resting
+state, mechanism, trigger, reveal handle and delays. The default procedural
+renderer supports horizontal and vertical collapse; compatible themes expose
+their own supported mechanisms. With the **Open** mechanism nothing opens or
+closes, so only the mechanism and resting state are shown. Select
+**Collapsed** for the resting state, then use its reveal handle with the
+chosen trigger to open it. After Apply, **Open panel** and **Close panel**
 operate the saved collapsible panel. Cancel discards the draft. Reduced motion
-keeps the state changes while suppressing animated transitions and continuous rotation.
+keeps the state changes while suppressing animated transitions and continuous
+rotation. A free panel stands open on the desktop and has no opening or closing
+settings; one saved collapsed by an earlier version is shown open.
 
 On an interactive free circular/radial panel, hover the panel and scroll up
 to turn the icons clockwise or down to turn them counterclockwise. Each wheel

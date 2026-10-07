@@ -1624,6 +1624,18 @@ if(BUILD_TESTING)
   set_tests_properties(presentation-mechanism-smoke
     PROPERTIES DEPENDS window-interaction-smoke RUN_SERIAL TRUE TIMEOUT 240)
 
+  # ADREP-TASK-001: the Studio truth matrix drawn with a private compositor's
+  # real graphics backend, where shader-drawn effects and true 3D appear.
+  add_test(NAME studio-truth-matrix-smoke
+    COMMAND ${CMAKE_COMMAND} -E env
+            ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
+            ARCHDOCK_QMLTESTRUNNER=$<TARGET_FILE:Qt6::qmltestrunner>
+            ARCHDOCK_RENDERING_TRUTH_MATRIX=1
+            bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
+  set_tests_properties(studio-truth-matrix-smoke
+    PROPERTIES DEPENDS rendering-import-smoke RUN_SERIAL TRUE TIMEOUT 1200)
+
   add_test(NAME runtime-ui-interaction-smoke
     COMMAND ${CMAKE_COMMAND} -E env
             ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}

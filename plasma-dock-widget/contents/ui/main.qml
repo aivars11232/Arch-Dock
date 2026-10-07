@@ -9,6 +9,7 @@ import org.kde.plasma.core as PlasmaCore
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.workspace.dbus as PlasmaDBus
 import "FreeEntryPolicy.js" as FreeEntryPolicy
+import "SceneDefinition.js" as SceneDefinition
 
 // The Arch Dock Plasma applet. One applet hosts one panel: a native edge
 // panel inside a Plasma panel, or a free panel on the desktop. It fetches its
@@ -305,25 +306,13 @@ PlasmoidItem {
     }
 
     function buildScenePanelDefinition() {
-        const definition = {};
-        const source = configuration || {};
-        for (const key of Object.keys(source)) {
-            if (key !== "capabilityResolution")
-                definition[key] = source[key];
-        }
-        definition.edge = freeSurface ? "free" : vertical ? "left" : "bottom";
-        definition.rendererTier = String(
-            source.rendererTier || effectiveRendererTier || "procedural2d");
-        if (freeSurface) {
-            definition.layout = source.layout || "circular";
-        } else {
-            definition.layout = vertical ? "vertical" : "horizontal";
-            definition.layoutScale = 1;
-            definition.layoutAngle = 0;
-            definition.layoutPadding = nativeScenePadding;
-            definition.iconSize = baseCellSize;
-        }
-        return definition;
+        return SceneDefinition.build(configuration, {
+            freeSurface: freeSurface,
+            vertical: vertical,
+            effectiveRendererTier: effectiveRendererTier,
+            nativeScenePadding: nativeScenePadding,
+            baseCellSize: baseCellSize
+        });
     }
 
     function refreshConfiguration(onUpdated) {

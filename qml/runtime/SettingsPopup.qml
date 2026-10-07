@@ -106,8 +106,27 @@ Window {
         const page = currentPresetPage;
         if (!page)
             return [];
-        return page.kind === "panel" ? presetLibrary.panelPresets(page.scope)
-                                     : presetLibrary.iconPresets(page.scope);
+        return presetsForSelectedPanel(page.kind, page.scope);
+    }
+
+    // The presets made for the selected panel. A free panel lists free-panel
+    // presets and an edge panel the edge presets of its orientation (the
+    // owner, 2026-10-07: "if I make free panel why would I need to see
+    // horizontal and vertical panel presets"). Icon presets set only icon
+    // values, which act on every panel.
+    function presetsForSelectedPanel(kind, scope) {
+        const revision = presetLibrary.revision;
+        if (kind !== "panel")
+            return presetLibrary.iconPresets(scope);
+        const free = !isNativePanel();
+        const edge = String(panelValue("edge", "bottom"));
+        const orientation = free ? "free"
+            : edge === "left" || edge === "right" ? "vertical" : "horizontal";
+        return presetLibrary.panelPresets(scope).filter(function(card) {
+            const freePreset = String(card.hostKind || "") === "free-desktop";
+            return free ? freePreset
+                : !freePreset && (card.orientations || []).includes(orientation);
+        });
     }
     readonly property var selectedPresetCard: {
         const cards = presetCards;
@@ -296,12 +315,9 @@ Window {
         const subtabNumber = Number(subtabIndex);
         const presetPage = StudioNavigation.presetPage(sectionNumber, subtabNumber);
         if (presetPage) {
-            // Your own catalog appears once it holds a preset.
-            if (presetPage.scope !== "user")
-                return true;
-            const revision = presetLibrary.revision;
-            return (presetPage.kind === "panel" ? presetLibrary.panelPresets("user")
-                                                : presetLibrary.iconPresets("user")).length > 0;
+            // Your own catalog appears once it holds a preset for this panel.
+            return presetPage.scope !== "user"
+                || presetsForSelectedPanel(presetPage.kind, "user").length > 0;
         }
         if (sectionNumber === 1) {
             if (subtabNumber === 1)
@@ -337,6 +353,7 @@ Window {
     }
     onEditorSessionChanged: Qt.callLater(root.ensureOfferedSubtab)
     onMainTabIndexChanged: Qt.callLater(root.ensureOfferedSubtab)
+    onSubTabIndexChanged: Qt.callLater(root.ensureOfferedSubtab)
 
     function setMainTab(index) {
         const next = StudioNavigation.clampSectionIndex(index);
@@ -582,6 +599,10 @@ Window {
             for (let index = 0; index < source.length; ++index) {
                 if (String(source[index].section) !== sectionId)
                     continue;
+                // A setting that draws nothing in the panel's present state
+                // is kept by the backend but not shown (ADREP-TASK-001).
+                if (source[index].inactive === true)
+                    continue;
                 if (String(source[index].key).indexOf("scene3D") === 0 && !scene3DQualityVisible)
                     continue;
                 if (String(source[index].key) === "bakedTilt"
@@ -675,6 +696,12 @@ Window {
     function panelLayoutRows() {
         const rows = schemaSectionRows("panels-layout", qsTr("Layout"),
             qsTr("Shape geometry and content placement."));
+        // A look made for one layout, or whose artwork places the icons,
+        // offers no Dock layout to choose.
+        const layoutField = fieldDescriptor("layout", "panel");
+        if (!isNativePanel() && (!layoutField || layoutField.inactive === true))
+            rows.splice(1, 0, notice(qsTr("This look sets the layout (%1). Looks with other layouts are on Panel Themes / Skins.")
+                .arg(optionLabel("layout", panelValue("layout", "")))));
         if (fieldsForSection("panels-size").length === 0)
             rows.splice(1, 0, notice(fieldDescriptor("layoutRadius", "panel")
                 ? qsTr("Radius and Layout scale set this panel's size.")
@@ -689,7 +716,30 @@ Window {
                 description: qsTr("Drawing this panel in 3D, and every 3D setting, is on the 3D page."),
                 actions: [{ label: qsTr("Open the 3D page"), icon: "view-preview", action: "open-3d-page",
                             available: true }] });
+        else
+            rows.push.apply(rows, scene3DUnavailableRows());
         rows.push(notice(qsTr("Built-in themes and imported artwork are on the Panel Themes / Skins page.")));
+        return rows;
+    }
+
+    // Why this panel cannot be drawn in 3D, and the one way out where there
+    // is one. Without 3D there is no 3D page, so Appearance says this
+    // (ADREP-TASK-001, owner rule: a tab with nothing to change is not shown).
+    function scene3DUnavailableRows() {
+        const blocker = CapabilityModel.scene3DBlocker(
+            selectedCapabilityResolution, selectedPreviewTheme,
+            embeddedRendererPreview.panelSceneItem.true3DCapability, {
+                nativePanel: isNativePanel(),
+                layout: String(panelValue("layout", "")),
+                importedArtwork: ["themeSource", "themePackageManifest", "themeAsset"].some(function(key) {
+                    return String(panelValue(key, "")).trim().length > 0;
+                })
+            });
+        const rows = [notice(blocker ? blocker.text : qsTr("3D is not available for this panel."))];
+        if (blocker && (blocker.code === "layout" || blocker.code === "look"))
+            rows.push({ kind: "actions", label: qsTr("Themes with their own 3D platform"), actions: [{
+                label: qsTr("Browse themes"), icon: "preferences-desktop-theme",
+                action: "browse-3d-themes", available: true }] });
         return rows;
     }
 
@@ -699,21 +749,8 @@ Window {
         const rows = [section(qsTr("3D"), qsTr("Draw this panel's own look as a 3D platform and place it in 3D."), true)];
         // Say what actually blocks 3D: the panel's kind, the renderer, the
         // look, its resources or its layout.
-        const blocker = scene3DControlsAvailable ? null : CapabilityModel.scene3DBlocker(
-            selectedCapabilityResolution, selectedPreviewTheme,
-            embeddedRendererPreview.panelSceneItem.true3DCapability, {
-                nativePanel: isNativePanel(),
-                layout: String(panelValue("layout", "")),
-                importedArtwork: ["themeSource", "themePackageManifest", "themeAsset"].some(function(key) {
-                    return String(panelValue(key, "")).trim().length > 0;
-                })
-            });
         if (!scene3DControlsAvailable) {
-            rows.push(notice(blocker ? blocker.text : qsTr("3D is not available for this panel.")));
-            if (blocker && (blocker.code === "layout" || blocker.code === "look"))
-                rows.push({ kind: "actions", label: qsTr("Themes with their own 3D platform"), actions: [{
-                    label: qsTr("Browse themes"), icon: "preferences-desktop-theme",
-                    action: "browse-3d-themes", available: true }] });
+            rows.push.apply(rows, scene3DUnavailableRows());
             return rows;
         }
         rows.push({ kind: "switch", key: "rendererTier", scope: "panel", rendererToggle: true,
@@ -1171,7 +1208,7 @@ Window {
         } else if (action === "load-built-in-theme") {
             const candidate = auditionActive
                 ? (auditionStatus.editorProjection.themeCandidates || {})[String(data.themeId || "")]
-                : panelRegistry.themeCandidate(selectedPanelId, String(data.themeId || ""), "complete");
+                : panelController.panelThemeCandidate(selectedPanelId, String(data.themeId || ""));
             if (!candidate || candidate.success !== true) {
                 studioError = qsTr("This theme cannot be loaded here: %1.")
                     .arg(CapabilityModel.reasonLabel(candidate ? candidate.errorCode : ""));
@@ -1386,6 +1423,12 @@ Window {
     Connections {
         target: panelRegistry
         function onRevisionChanged() { root.queueEditorReload(); }
+    }
+
+    // Removing the last preset of your own also removes its tab.
+    Connections {
+        target: presetLibrary
+        function onRevisionChanged() { Qt.callLater(root.ensureOfferedSubtab); }
     }
 
     width: 980

@@ -240,6 +240,48 @@ QVariantMap PanelWindow::updateSceneEditDraft(const QString &panelId, const QVar
     return m_presetAudition->updateDraft(merged);
 }
 
+// A built-in theme's values for a panel, without the values of fields that do
+// not act on the panel the theme would make: a theme cannot set what that
+// panel does not have, such as an edge panel's layout (ADREP-TASK-001).
+QVariantMap PanelWindow::themeCandidateFor(const ArchDock::PanelDefinition &candidate,
+                                           const QString &themeId) const
+{
+    const auto prepared = m_panelRegistry.themeCandidateForDefinition(candidate, themeId, QStringLiteral("complete"));
+    auto values = prepared.value(QStringLiteral("values")).toMap();
+    if (prepared.value(QStringLiteral("success")).toBool())
+    {
+        auto record = candidate.toLegacyMap();
+        record.insert(values);
+        const auto themed = ArchDock::PanelDefinition::fromLegacyMap(record);
+        QSet<QString> available;
+        if (themed)
+            for (const auto &field : panelSettingsEditorFields(*themed,
+                     m_panelRegistry.resolvePanelCapabilities(*themed), QStringLiteral("studio")))
+                available.insert(field.toMap().value(QStringLiteral("key")).toString());
+        for (auto it = values.begin(); it != values.end();)
+        {
+            const auto *field = ArchDock::PanelSettingsSchema::panelDescriptor(it.key());
+            if (field && field->editor.isPresented() && !available.contains(it.key()))
+                it = values.erase(it);
+            else ++it;
+        }
+    }
+    return {{QStringLiteral("success"), prepared.value(QStringLiteral("success")).toBool()},
+            {QStringLiteral("errorCode"), prepared.value(QStringLiteral("errorCode")).toString()},
+            {QStringLiteral("errorMessage"), prepared.value(QStringLiteral("errorMessage")).toString()},
+            {QStringLiteral("values"), values}};
+}
+
+QVariantMap PanelWindow::panelThemeCandidate(const QString &panelId, const QString &themeId) const
+{
+    const auto definition = m_panelRegistry.panelDefinition(panelId);
+    if (!definition)
+        return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("panel-not-found")},
+                {QStringLiteral("errorMessage"), QStringLiteral("the panel does not exist")},
+                {QStringLiteral("values"), QVariantMap{}}};
+    return themeCandidateFor(*definition, themeId);
+}
+
 QVariantMap PanelWindow::presetEditorProjection(const ArchDock::PanelDefinition &candidate) const
 {
     const auto resolution = m_panelRegistry.resolvePanelCapabilities(candidate);
@@ -251,30 +293,7 @@ QVariantMap PanelWindow::presetEditorProjection(const ArchDock::PanelDefinition 
     for (const auto &entry : m_panelRegistry.themeDefinitions())
     {
         const QString id = entry.toMap().value(QStringLiteral("id")).toString();
-        const auto prepared = m_panelRegistry.themeCandidateForDefinition(candidate, id, QStringLiteral("complete"));
-        auto values = prepared.value(QStringLiteral("values")).toMap();
-        if (prepared.value(QStringLiteral("success")).toBool())
-        {
-            auto record = candidate.toLegacyMap();
-            record.insert(values);
-            const auto themed = ArchDock::PanelDefinition::fromLegacyMap(record);
-            QSet<QString> available;
-            if (themed)
-                for (const auto &field : panelSettingsEditorFields(*themed,
-                         m_panelRegistry.resolvePanelCapabilities(*themed), QStringLiteral("studio")))
-                    available.insert(field.toMap().value(QStringLiteral("key")).toString());
-            for (auto it = values.begin(); it != values.end();)
-            {
-                const auto *field = ArchDock::PanelSettingsSchema::panelDescriptor(it.key());
-                if (field && field->editor.isPresented() && !available.contains(it.key()))
-                    it = values.erase(it);
-                else ++it;
-            }
-        }
-        themeCandidates.insert(id, QVariantMap{{QStringLiteral("success"), prepared.value(QStringLiteral("success")).toBool()},
-            {QStringLiteral("errorCode"), prepared.value(QStringLiteral("errorCode")).toString()},
-            {QStringLiteral("errorMessage"), prepared.value(QStringLiteral("errorMessage")).toString()},
-            {QStringLiteral("values"), values}});
+        themeCandidates.insert(id, themeCandidateFor(candidate, id));
     }
     return {{QStringLiteral("success"), true}, {QStringLiteral("status"), QStringLiteral("loaded")},
         {QStringLiteral("panelId"), candidate.identity.id}, {QStringLiteral("revision"), candidate.settingsRevision},

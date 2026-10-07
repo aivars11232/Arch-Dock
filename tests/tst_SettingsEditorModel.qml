@@ -185,6 +185,39 @@ TestCase {
         verify(!Object.prototype.hasOwnProperty.call(EditorModel.panelCandidate(session), "id"));
     }
 
+    // ADREP-TASK-001: a field's page is the server's. Opening and closing and
+    // rotation live on Animations, the icon style on Icons > Appearance, and
+    // the model neither moves a field to another page nor lists it twice.
+    function test_fieldPagesComeFromTheServer() {
+        const source = snapshot("bottom", 3);
+        const placed = {
+            presentationMode: "panels-animations",
+            collapseMechanism: "panels-animations",
+            panelRotationMode: "panels-animations",
+            iconStyle: "icons-appearance"
+        };
+        source.panelFields = source.panelFields.filter(function(field) {
+            return field.key !== "iconStyle";
+        });
+        for (const key in placed)
+            source.panelFields.push({ key: key, scope: "panel", control: "combo", section: placed[key] });
+        source.panelValues.presentationMode = "open";
+        source.panelValues.collapseMechanism = "open";
+        source.panelValues.panelRotationMode = "none";
+        const session = EditorModel.setPanelValue(EditorModel.load(source),
+                                                  "collapseMechanism", "collapse-horizontal");
+        const seen = {};
+        for (let index = 0; index < session.panelFields.length; ++index) {
+            const field = session.panelFields[index];
+            verify(!seen[field.key], field.key + " is listed twice");
+            seen[field.key] = true;
+            if (placed[field.key] !== undefined)
+                compare(field.section, placed[field.key]);
+        }
+        for (const key in placed)
+            verify(seen[key], key);
+    }
+
     function test_editProducesOneCompleteCandidateWithoutMutatingBaseline() {
         const original = EditorModel.load(snapshot("bottom", 7));
         let edited = EditorModel.setPanelValue(original, "opacity", 0.55);
