@@ -44,6 +44,21 @@ preview shows the draft in both 2D and 3D. Apply saves it, while Cancel discards
 changes made since the last Apply. Tiles keep the application's real icon glyph
 and its interaction area.
 
+**Panel Themes / Skins** separates **Flat looks** from **Platform looks**.
+Loading a platform turns its presentation on and remembers the complete flat
+look. Turn **Platform presentation** off on **Panels > 3D** to restore that
+look exactly. A platform with perspective artwork also offers **Use true 3D**:
+turning that off returns to its artwork while keeping platform presentation.
+
+On a procedural surface, **Appearance > Theme** chooses one of thirteen
+textured materials. Colour tints the texture and opacity scales the surface;
+sparkle starts at zero and is offered only for Crystal and Plasma. A look
+with its own artwork or native material explains where its controls are.
+With true 3D active, **Platform colour**, **Material** and **Texture** on
+**Panels > 3D** edit the drawn platform; **Reset material** restores the look's
+own defaults. **Bend** folds supported numerical platforms with icons anchored
+to the surface. Fixed perspective artwork explains that it cannot fold.
+
 In **Panels**, use the arrows beside the tab strip when all tabs do not fit.
 Horizontal wheel input or Shift-wheel also pans the tabs. Ordinary vertical
 wheel input scrolls the page, including over spin boxes and combo boxes,

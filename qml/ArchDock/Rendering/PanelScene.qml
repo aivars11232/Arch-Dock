@@ -1280,14 +1280,14 @@ Item {
     // Scrolling up moves the entries clockwise along the path (or turns the
     // panel clockwise), scrolling down the other way. This is transient
     // geometry, not a saved edit.
-    WheelHandler {
-        target: null
+    ScrollInput {
         enabled: (root.wheelRotationAvailable || root.wheelTravelAvailable) && !root.sceneEditActive
-        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        containmentMask: root.containmentMask
+        verticalOnly: true
         acceptedModifiers: Qt.NoModifier
-        onWheel: function(event) {
+        wheelConsumer: function(event, normalizedPixels) {
             const angle = event.angleDelta.y
-            const pixels = event.pixelDelta.y
+            const pixels = normalizedPixels.y
             if (angle === 0 && pixels === 0) {
                 event.accepted = false
                 return

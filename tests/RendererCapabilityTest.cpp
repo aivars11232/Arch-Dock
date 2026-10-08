@@ -13,6 +13,7 @@
 #include <QJSValue>
 #include <QtMath>
 #include <QPointer>
+#include <QPointingDevice>
 #include <QQmlAbstractUrlInterceptor>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -53,6 +54,20 @@ QObject *objectValue(const QVariant &value)
         ? value.value<QJSValue>().toQObject() : value.value<QObject *>();
 }
 
+// Keep the native pixel/geometry oracle independent of the QML helper. The
+// public Camera overload reads the renderer's projection; View3D's overload
+// writes that shared projection while the threaded renderer can be using it.
+bool projectScenePoint(QObject *view, const QVector3D &position, QVector3D &point)
+{
+    auto *camera = view ? objectValue(view->property("camera")) : nullptr;
+    QVector3D normalized;
+    if (!camera || !QMetaObject::invokeMethod(camera, "mapToViewport",
+        Q_RETURN_ARG(QVector3D, normalized), Q_ARG(QVector3D, position))) return false;
+    point = normalized * QVector3D(view->property("width").toFloat(),
+                                  view->property("height").toFloat(), 1);
+    return true;
+}
+
 // Each missing-module case runs in a separate process: another engine cannot
 // leave a registered optional plugin behind and accidentally satisfy it.
 class MissingModule final : public QQmlAbstractUrlInterceptor
@@ -77,6 +92,66 @@ class RendererCapabilityTest final : public QObject
     Q_OBJECT
 
 private slots:
+    void wheelSourcesPreserveNotchesAndSmoothPixels()
+    {
+        // PD-16: a real notch remains a notch even when Wayland also supplies
+        // pixels. A synthesized smooth event keeps its pixel travel, including
+        // continuous devices that do not provide scroll phases.
+        QQmlEngine engine;
+        engine.addImportPath(importRoot());
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import "inputs" as Inputs
+            Item {
+                width: 240; height: 160
+                property alias contentY: view.contentY
+                Flickable {
+                    id: view
+                    anchors.fill: parent
+                    contentWidth: width; contentHeight: 800
+                }
+                Inputs.ScrollInput {
+                    flickables: [view]
+                    verticalNotch: 60
+                    verticalPixelScale: 0.4
+                }
+            }
+        )", QUrl::fromLocalFile(importRoot() + "/ArchDock/Rendering/WheelConsumer.qml"));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QQuickWindow window;
+        std::unique_ptr<QObject> object(component.create());
+        auto *item = qobject_cast<QQuickItem *>(object.get());
+        QVERIFY(item);
+        item->setParentItem(window.contentItem());
+        window.resize(240, 160);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        const auto send = [&](Qt::MouseEventSource source, Qt::ScrollPhase phase, int angle,
+                              const QPointingDevice *device = nullptr) {
+            item->setProperty("contentY", 0);
+            const QPointF point(50, 50);
+            QWheelEvent event(point, window.mapToGlobal(point.toPoint()), QPoint(0, -15),
+                QPoint(0, angle), Qt::NoButton, Qt::NoModifier, phase, false, source,
+                device ? device : QPointingDevice::primaryPointingDevice());
+            QCoreApplication::sendEvent(&window, &event);
+        };
+        send(Qt::MouseEventNotSynthesized, Qt::NoScrollPhase, -120);
+        QTRY_COMPARE(item->property("contentY").toDouble(), 60.0);
+        send(Qt::MouseEventSynthesizedBySystem, Qt::NoScrollPhase, -180);
+        QTRY_COMPARE(item->property("contentY").toDouble(), 6.0);
+        send(Qt::MouseEventSynthesizedBySystem, Qt::ScrollUpdate, -180);
+        QTRY_COMPARE(item->property("contentY").toDouble(), 6.0);
+        QPointingDevice seat(QStringLiteral("opaque Wayland seat"), 1,
+            QInputDevice::DeviceType::TouchPad, QPointingDevice::PointerType::Finger,
+            QInputDevice::Capability::Position | QInputDevice::Capability::Scroll
+                | QInputDevice::Capability::PixelScroll, 1, 0);
+        send(Qt::MouseEventNotSynthesized, Qt::NoScrollPhase, -120, &seat);
+        QTRY_COMPARE(item->property("contentY").toDouble(), 60.0);
+        send(Qt::MouseEventSynthesizedBySystem, Qt::NoScrollPhase, -180, &seat);
+        QTRY_COMPARE(item->property("contentY").toDouble(), 6.0);
+    }
+
     void realScenePixelsQualityAndFallback_data()
     {
         QTest::addColumn<QString>("themeId");
@@ -159,9 +234,7 @@ private slots:
                 const auto output = projected[i].toMap();
                 auto *glyph = renderer->findChild<QObject *>(QStringLiteral("mesh-glyph-%1").arg(i));
                 QVector3D center;
-                if (!glyph || !QMetaObject::invokeMethod(view, "mapFrom3DScene",
-                    Q_RETURN_ARG(QVector3D, center),
-                    Q_ARG(QVector3D, glyph->property("scenePosition").value<QVector3D>()))) return false;
+                if (!glyph || !projectScenePoint(view, glyph->property("scenePosition").value<QVector3D>(), center)) return false;
                 for (const auto &key : {"x", "y", "width", "height"})
                     if (qAbs(bounds.value(key).toDouble() - output.value(key).toDouble()) > 1) return false;
                 if (qAbs(center.x() - output.value("centerX").toDouble()) > 1
@@ -191,8 +264,7 @@ private slots:
         int checkedIcons = 0;
         QObject *viewport = objectValue(renderer->property("viewport"));
         QVector3D hole;
-        QVERIFY(QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, hole),
-            Q_ARG(QVector3D, QVector3D(0, 0, renderer->property("platformTop").toDouble()))));
+        QVERIFY(projectScenePoint(viewport, QVector3D(0, 0, renderer->property("platformTop").toDouble()), hole));
         QVariant holeHit;
         QVERIFY(QMetaObject::invokeMethod(renderer, "containsInputPoint", Q_RETURN_ARG(QVariant, holeHit),
             Q_ARG(QVariant, QVariant(QPointF(hole.x(), hole.y())))));
@@ -208,8 +280,7 @@ private slots:
             QVERIFY(model);
             const QVector3D position = model->property("scenePosition").value<QVector3D>();
             QVector3D projected;
-            QVERIFY(QMetaObject::invokeMethod(viewport, "mapFrom3DScene",
-                Q_RETURN_ARG(QVector3D, projected), Q_ARG(QVector3D, position)));
+            QVERIFY(projectScenePoint(viewport, position, projected));
             QVERIFY2(qAbs(projected.x() - expected.value(QStringLiteral("centerX")).toDouble()) < 1,
                 qPrintable(QStringLiteral("Mesh x=%1, logical x=%2").arg(projected.x())
                     .arg(expected.value(QStringLiteral("centerX")).toDouble())));
@@ -279,9 +350,8 @@ private slots:
         const auto surfacePoint = [&](double angle) {
             const double radius = renderer->property("platformScale").toDouble() * 0.84;
             QVector3D point;
-            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, point),
-                Q_ARG(QVector3D, QVector3D(radius * qCos(angle), radius * qSin(angle),
-                    renderer->property("platformTop").toDouble())));
+            projectScenePoint(viewport, QVector3D(radius * qCos(angle), radius * qSin(angle),
+                    renderer->property("platformTop").toDouble()), point);
             return QPointF(point.x(), point.y());
         };
         const QPointF dragStart = surfacePoint(M_PI / 4);
@@ -438,6 +508,18 @@ private slots:
                         .arg(projectionDiagnostic())));
                     QVERIFY(renderer->property("rendererReady").toBool());
                     QCOMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("true3d"));
+                    if (qEnvironmentVariableIsSet("ARCHDOCK_SCENE_CAPTURE_TRACE")) {
+                        const auto before = window.grabWindow();
+                        int coloured = 0;
+                        for (int y = 0; y < before.height(); y += 2)
+                            for (int x = 0; x < before.width(); x += 2)
+                                coloured += before.pixelColor(x, y) != window.color();
+                        qInfo() << "TRAVEL_WINDOW_BEFORE" << pitch << step << coloured
+                                << "window" << window.size() << window.isExposed()
+                                << "scene" << scene->position() << scene->scale() << scene->rotation();
+                        if (!evidence.isEmpty()) QVERIFY(before.save(QDir(evidence).filePath(
+                            QStringLiteral("travel-window-before-%1-%2.png").arg(pitch).arg(step))));
+                    }
                     const auto travelled = pixels();
                     QVERIFY(!travelled.isNull());
                     int drawn = 0;
@@ -950,8 +1032,7 @@ private slots:
         // ways; the hole and the transparent corner do not.
         const auto mapped = [&](const QVector3D &position) {
             QVector3D point;
-            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, point),
-                Q_ARG(QVector3D, position));
+            projectScenePoint(viewport, position, point);
             return QPointF(point.x(), point.y());
         };
         const auto wheel = [&](const QPointF &point, int delta) {
@@ -1086,8 +1167,7 @@ private slots:
                 QObject *node = renderer->findChild<QObject *>(QStringLiteral("mesh-entry-%1").arg(index));
                 QVector3D view;
                 if (node)
-                    QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, view),
-                        Q_ARG(QVector3D, node->property("scenePosition").value<QVector3D>()));
+                    projectScenePoint(viewport, node->property("scenePosition").value<QVector3D>(), view);
                 result.append(QPointF(view.x(), view.y()));
             }
             return result;
@@ -1117,8 +1197,7 @@ private slots:
             QMetaObject::invokeMethod(content, "mapPositionToScene", Q_RETURN_ARG(QVector3D, world),
                 Q_ARG(QVector3D, QVector3D(track * qCos(M_PI / 8), track * qSin(M_PI / 8), top)));
             QVector3D view;
-            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, view),
-                Q_ARG(QVector3D, world));
+            projectScenePoint(viewport, world, view);
             return QPointF(view.x(), view.y());
         };
         const auto accepts = [&](const QPointF &point) {
@@ -1395,8 +1474,7 @@ private slots:
             QVector3D world, view;
             QMetaObject::invokeMethod(content, "mapPositionToScene", Q_RETURN_ARG(QVector3D, world),
                 Q_ARG(QVector3D, QVector3D(x * scale, y * scale, top)));
-            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, view),
-                Q_ARG(QVector3D, world));
+            projectScenePoint(viewport, world, view);
             return QPoint(qRound(view.x()), qRound(view.y()));
         };
         QTest::qWait(200);
@@ -1521,13 +1599,11 @@ private slots:
                 Q_ARG(QVector3D, node->property("scenePosition").value<QVector3D>()));
             QMetaObject::invokeMethod(content, "mapPositionToScene", Q_RETURN_ARG(QVector3D, world),
                 Q_ARG(QVector3D, QVector3D(local.x(), local.y(), top)));
-            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, foot),
-                Q_ARG(QVector3D, world));
+            projectScenePoint(viewport, world, foot);
             // The icon's bottom edge, where it stands.
             QMetaObject::invokeMethod(anchor, "mapPositionToScene", Q_RETURN_ARG(QVector3D, world),
                 Q_ARG(QVector3D, QVector3D(0, -20, 0)));
-            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, base),
-                Q_ARG(QVector3D, world));
+            projectScenePoint(viewport, world, base);
             const double bottom = base.y();
             // Above the platform where it stands, not sunk into it ...
             QVERIFY2(bottom < foot.y(), qPrintable(QStringLiteral(
@@ -1683,8 +1759,7 @@ private slots:
             QObject *handle = renderer->findChild<QObject *>(name);
             if (!handle) return {};
             QVector3D view;
-            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, view),
-                Q_ARG(QVector3D, handle->property("scenePosition").value<QVector3D>()));
+            projectScenePoint(viewport, handle->property("scenePosition").value<QVector3D>(), view);
             return scene->mapToScene(QPointF(view.x(), view.y())).toPoint();
         };
         const auto drag = [&](const QPoint &from, const QPoint &to, Qt::KeyboardModifiers modifiers = {}) {
@@ -1786,8 +1861,7 @@ private slots:
             QVector3D world, view;
             QMetaObject::invokeMethod(content, "mapPositionToScene", Q_RETURN_ARG(QVector3D, world),
                 Q_ARG(QVector3D, QVector3D(track, 0, renderer->property("platformTop").toDouble())));
-            QMetaObject::invokeMethod(viewport, "mapFrom3DScene", Q_RETURN_ARG(QVector3D, view),
-                Q_ARG(QVector3D, world));
+            projectScenePoint(viewport, world, view);
             return scene->mapToScene(QPointF(view.x(), view.y())).toPoint();
         };
         const double yawBefore = renderer->property("targetYaw").toDouble();

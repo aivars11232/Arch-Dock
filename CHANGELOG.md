@@ -273,29 +273,33 @@ The proposed `v0.1.1` tag and publication need separate authorization.
 - Runtime corrections and candidate gates are recorded in
   [the release checklist](docs/RELEASE_CHECKLIST.md) and
   [corrective report](docs/POST_TASK_0045_CORRECTIVE_REPORT.md).
-- Task 4 checkpoint: thirteen original bundled panel textures preserve colour
-  tint and opacity. Glass is frosted and highlighted, Floating Glass adds
+- Task 4 (2026-10-08): thirteen original bundled panel textures preserve
+  colour tint and opacity. Glass is frosted/highlighted, Floating Glass adds
   elevation, Futuristic has seams/light lines, and sparkle defaults to zero.
-  Static materials have no periodic paint timer; animated energy pauses while
-  hidden.
-- Flat and platform looks are grouped separately. Turning Platform
-  presentation off restores the previous complete flat look. Native platforms
-  have live colour/material/texture editing, own-material Reset and a Bend
-  that folds the rear half while the icons stay anchored.
-- Perspective platforms hide covered rear icons beneath the body and rim;
-  their pointer/drop targets follow exposed glyphs. Native input checks actual
-  platform triangles. Local mask bounds and passive entry-owned tooltips keep
-  neighbouring and scaled rear icons reachable.
-- Studio's repeated settings descriptor lookups use an immutable index;
-  final measured medians meet the existing latency limits. Owned preview
-  geometry restoration waits for Plasma's queued size hints and checks three
-  consecutive exact readbacks within the existing bound.
-- **Paused on the owner's request, 2026-10-07:** Task 4's final build and
-  focused/native/performance checks pass; the complete serial run stopped
-  after 95/118 passed with no completed-test failures. Formal reports,
-  complete-suite acceptance and the fresh-clone recheck are pending. Task 5
-  and the final package installation have not started. See the
-  [checkpoint and resume sequence](docs/repairs/ADREP-TASK-004.md).
+  Static materials have no periodic paint timer; visible energy animates at
+  8 Hz and stops while hidden.
+- Flat and platform looks are grouped separately. Platform presentation off
+  restores the complete previous flat look. Native platforms expose live
+  colour/material/texture, own-material Reset and supported numerical Bend.
+- Perspective body/rim masks and native triangle picks hide covered rear glyphs
+  and route pointer/drop input to exposed parts. Wheel and continuous travel
+  keep running behind the platform and back in front.
+- Qt 6.12 verification adds public Camera projection mapping and native wheel
+  event-source routing. Matching bounded baked pixmaps are shared, pixel vars
+  clear on disposal, and KDE's single-shot D-Bus callback API releases the
+  completed reply chain while retaining current conversion/error behavior.
+- Studio's immutable descriptor index meets the original latency limits:
+  37.46/32.14/12.05 ms medians for edit/page/Apply. Static and hidden animated
+  materials measured 0.0% CPU; audition/cancel resource growth is 11.10 MiB
+  with zero stale hosts and 0.0% backend idle CPU. Theme switching stays below
+  the unchanged 128 MiB bound (53.66 MiB in the full run).
+- Complete final-source verification: **118/118 serial CTests, zero failures,
+  1607.15 s**, including 24 native renderer cases, all 90 folder anchors,
+  Studio truth, real runtime input and recovery/resource gates. Formal
+  [Report 1](docs/repairs/ADREP-TASK-004.md) records internal Qt skips, retained
+  diagnosis and physical limits. Pushed-source recheck/Report 2 are pending.
+  Task 5 packaging and installation have not started; the installed baseline
+  remains 0.1.1-12.
 
 ## 0.1.0 candidate — 2026-10-03
 

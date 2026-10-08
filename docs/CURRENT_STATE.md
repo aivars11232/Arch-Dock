@@ -1,50 +1,60 @@
 # Arch Dock current state
 
 <!-- ADREP_TASK_004_BEGIN -->
-## ADREP-TASK-004 — Paused checkpoint (2026-10-07)
+## ADREP-TASK-004 — Verified; pushed-source recheck pending (2026-10-08)
 
-The owner asked to commit and sync the current changes and pause until
-tomorrow. Task 4's implementation is saved; verification and formal closure
-remain in progress. Task 5 has not started. The checkpoint, evidence and
-resume sequence are in [ADREP-TASK-004.md](repairs/ADREP-TASK-004.md).
+Task 4's implementation and complete configured suite pass. Formal
+[Report 1](repairs/ADREP-TASK-004.md) records all ten owner findings OF-24 to
+OF-33 and ten acceptance criteria with evidence. Commit/sync, the fresh-clone
+recheck and Report 2 remain in progress. Task 5 has not started.
 
-- Thirteen original textured materials preserve tint and opacity; Glass and
-  Floating Glass have controlled frost/highlights, Futuristic has seams and
-  light lines, and sparkle defaults to zero.
-- Studio separates flat and platform looks. Platform presentation off
-  restores the complete previous flat look; native platforms have live
-  colour/material/texture controls, own-material Reset and numerical Bend.
-- Perspective and native platforms preserve wheel/continuous travel and
-  visible-entry input. Custom masks keep local bounds, and an entry-owned
-  passive tooltip no longer intercepts presses over a scaled rear glyph.
-- The final one-job Debug build passed. Focused final-source batches passed
-  7/7, 4/4 and 5/5 CTests, including 23 native GPU checks, 76 backend checks
-  (one live-session-only skip), 559 dock-geometry, 8 GeometryHitRegion and 25
-  DockEntry checks.
-- Final isolated Studio medians: edit 45.49 ms, page 37.18 ms, Apply 13.31 ms;
-  all meet the original 120% ADFIX limits. Static and hidden animated
-  materials: 0.0% CPU. Eight audition/cancel cycles: +11.39 MiB, zero stale
-  hosts, private backend idle CPU 0.0%.
-- The complete serial run was interrupted on request after 95/118 CTests
-  passed, with no failures in completed tests. Test 96 was interrupted;
-  97-118 were not run. Native graphics, window/folder interaction, all 90
-  folder anchor openings, native Studio truth, runtime input, path travel and
-  profile apply/shortcuts passed before interruption. One inherited Grid
-  overlap note remains. This is not complete-suite acceptance.
-- Resume with reconciliation and pack validation, rerun the complete suite
-  from the start, then formal Report 1/commit/sync, pushed-source fresh-clone
-  recheck and Report 2/cleanup. Only then start Task 5.
-- No Task 4 package build/install occurred. The actual installed baseline is
-  **0.1.1-12**, matching the interim recipe at `617bd96`; older sections saying
-  0.1.1-11 describe earlier checkpoints. The owner's installed backend remains
-  running. Shared build and evidence are retained; the interrupted private
-  session and its inactive disposable root were cleaned up. No coredumps
-  were found since Task 4 began.
+- Thirteen original bundled textures preserve tint and opacity. Glass has
+  frost/highlights, Floating Glass adds elevation, Futuristic has seams/light
+  lines, and sparkle is declared only where supported, with zero default.
+- Studio separates flat and platform looks. Platform off restores the exact
+  complete flat look. Native platforms expose live colour/material/texture,
+  own-material Reset and supported numerical Bend.
+- Baked and native platforms preserve wheel/continuous travel, behind/front
+  ordering and exposed-entry input. Bounds/readiness, exact triangle picks
+  and a passive entry-owned tooltip keep input with visible glyphs.
+- Overnight Qt 6.12 drift required public Camera mapping to avoid recalculating
+  the shared render projection and native wheel-source metadata to retain
+  physical notch steps when Wayland also supplies pixels.
+- Baked layers share bounded matching pixmaps; mask destruction clears pixel
+  storage. The remaining memory investigation identified retained decoded
+  reply data in the native KDE QML D-Bus path. The applet now uses KDE's
+  single-shot callback API, retaining conversion/errors/destruction and a
+  stale-applet guard. The precise failed RSS allocations remain inferred.
+- Complete one-job Debug build passed; **118/118 CTests passed serially in
+  1607.15 s**, zero failures. All 550 pinned non-document files and modes
+  match. Native renderer: 24 cases; all 90 folder anchors, Studio truth,
+  real runtime input, path travel, profiles, recovery and resource gates pass.
+- Ten internal Qt SKIP rows occur in initial offscreen/no-fixture tests.
+  Nine execute in dedicated native/D-Bus gates; the live source archive fixture
+  was not supplied here and belongs to Task 5 packaging. No CTest was skipped.
+- Studio medians: edit 37.46 ms, page 32.14 ms, Apply 12.05 ms; original
+  limits 53.76/41.16/24.84 ms pass, with zero package reads each. Eleven static
+  and both hidden animated materials measured 0.0% CPU. Eight audition/cancel
+  cycles: +11.10 MiB, zero stale hosts, backend idle CPU 0.0%. Native theme
+  switching: +53.66 MiB, below the unchanged 128 MiB bound.
+- Private compositor samples and rendered checks establish automated behavior;
+  physical owner-desktop visual, GPU/display and hardware input acceptance
+  remain for the owner after Task 5 installation. One inherited diagonal
+  baked-ring Grid popup overlap note remains (29.5 px gap, one covered icon).
+- Task 4 packages and installs nothing. Actual installed baseline:
+  **0.1.1-12**. Owner backend PID 941 is preserved. One verified orphaned
+  private backend was stopped; no coredumps were found since resume preflight.
+  Shared build/evidence remain; final task-owned cleanup follows Report 2.
+- The owner's 2026-10-07 pause was saved in checkpoint `fe0ec4a`. Its
+  interrupted 95/118 run and subsequent failed diagnosis remain retained;
+  none is counted toward the final complete-suite acceptance.
 
-Evidence: `build-codex-adrep/evidence/ADREP-TASK-004/` (especially
-`94-latency-limits.log`, `95`-`99` final-source logs, `100-full-suite.log`,
-`100-final-source-hashes.json`, `101` pause cleanup records and
-`102-checkpoint-source-hashes.json`).
+Evidence: `build-codex-adrep/evidence/ADREP-TASK-004/`, especially
+`200-single-shot-build.log`, `201-single-shot-native.log`,
+`202-final-source-hashes.json`, `203-full-suite-final.log`,
+`205-full-final-latency-limits.log`, `206-final-source-receipt.json`,
+`148-final-material-cpu.json`, `resources-full-single-shot/` and
+`207-orphan-cleanup.json`. Research and failed diagnosis are indexed there.
 <!-- ADREP_TASK_004_END -->
 
 <!-- ADREP_TASK_003_BEGIN -->

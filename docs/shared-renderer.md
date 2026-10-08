@@ -117,6 +117,10 @@ Mesh picks support gizmos and visible-entry checks; application actions and
 accessibility remain in the shared 2D delegates. The native scene projects the
 glyphs' bounds back to those delegates as the camera, platform or fold changes.
 Changing render quality scales the target without changing this input mapping.
+Projection and unprojection use the public Camera normalized mapping methods.
+Unlike the View3D overloads, these read the render-camera projection without
+recalculating it from the GUI thread. This avoids shared projection mutation
+during threaded rendering; the native pixel and input assertions remain intact.
 
 ### Fallback and diagnostics
 
@@ -330,6 +334,14 @@ can rotate **or** browse; one notch moves the window by one entry and stops at
 both ends. An entry off the track has `onTrack: false`: its delegate is
 invisible and takes no input, its rectangle leaves the input region, and the
 3D scene hides its node. Order never changes and no straight tail is appended.
+
+Panel and folder wheel input shares `ScrollInput`'s source normalization.
+Qt Wayland can supply both angle and pixel deltas for a physical notch and
+label its seat as a touchpad. The Qt-only `ArchDock.Input.WheelSource` observes
+`QWheelEvent::source()` on the owning window without changing or accepting the
+event. Physical wheel input uses angle steps; synthesized smooth input keeps
+pixel travel, including devices without scroll phases. The existing travel,
+rotation and scrolling reducers keep their bounds and sensitivity.
 
 The same placement feeds every renderer. `trackMetrics()` receives
 `{ spacing, spacingReference, browseOffset }` for a baked track, whose length
@@ -633,7 +645,11 @@ The platform input predicate also exposes its decoder readiness to the scene;
 without it, the scene used a procedural band instead of the loaded mask.
 Foreground alpha masks are decoded at bounded drawn sizes and cached by the
 renderer's retained layer instances; readiness includes them. The drawn layer
-and the entry input use the same masks. A parent's containment mask does not
+and the entry input use the same masks. Matching background, foreground and
+readiness artwork shares Qt's pixmap cache by URL, decode size and crop. The
+per-axis raster cap is retained, and Qt bounds and evicts unused cache entries;
+this avoids duplicate body decodes during repeated theme switching.
+A parent's containment mask does not
 prevent Qt Quick from delivering input to its children, so the actual live
 DockEntry MouseArea and DropArea also apply the scene's visible-entry predicate.
 Their masks and the entry delegate's mask check local rectangular bounds first:
@@ -883,7 +899,7 @@ A curved free panel can use folder layout `track` ("Along the dock"), the
 default for new curved free panels. `PanelScene.folderTrackSamples()` traces an
 outer curve an icon and a 16 px gap beyond the dock, over 120 degrees centred
 on the folder, through the dock's own projection: the 2D circle, the baked ellipse with its tilt, or true 3D via
-`View3D.mapFrom3DScene` with a depth scale. `FolderTrackHost` (applet) measures
+the renderer's Camera projection with a depth scale. `FolderTrackHost` (applet) measures
 those samples in screen coordinates when the folder opens and shows a
 transparent dialog just large enough for them; `FolderTrack` (shared) stands
 the children on the curve with `LayoutEngine.folderTrackLayout()` (arc-length

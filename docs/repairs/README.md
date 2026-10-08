@@ -11,9 +11,10 @@ This folder holds one report per task of the Arch Dock LCL repairs package
 | `ADREP-TASK-004.md` | Panel looks with real texture, reliable Apply, and platform looks that keep motion |
 | `ADREP-TASK-005.md` | Icons and tiles the owner can shape, readable logos, working presets, and the final package |
 
-Task 4 currently holds an owner-authorized paused checkpoint (2026-10-07),
-with implementation evidence and a resume sequence. Its formal Report 1 and
-Report 2 are pending; the checkpoint does not close the task.
+Task 4's formal Report 1 records its complete 118/118 serial test pass
+(2026-10-08). Its pushed-source fresh-clone recheck and Report 2 are pending;
+Task 5 has not started. The earlier owner-authorized pause remains recorded
+as checkpoint history.
 
 Each completed report has two formal sections:
 

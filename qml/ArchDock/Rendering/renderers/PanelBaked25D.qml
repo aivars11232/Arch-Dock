@@ -39,11 +39,10 @@ Item {
 
     property real glowPhase: 0
 
-    // A perspective platform is drawn far larger than a rail skin, so its
-    // layers are rasterised at the size they are drawn, capped per axis, and
-    // are not kept in the shared pixmap cache. Switching families therefore
-    // releases the previous platform's textures instead of retaining one entry
-    // per size it was ever drawn at.
+    // Rasterise large perspective artwork at the drawn size, capped per axis.
+    // Share matching URL/size/crop rasters between the background, foreground
+    // and readiness instances. Qt's bounded unused-pixmap cache evicts replaced
+    // families; uncached instances repeatedly decode the same large body.
     readonly property int rasterBudget: 2048
 
     readonly property string effectiveState: ThemeStateSelection.effectiveStateId(
@@ -370,7 +369,7 @@ Item {
                 tintEnabled: root.dynamicTintSupported
                 tintColor: root.safeTintColor
                 rasterBudget: root.rasterBudget
-                cacheImage: false
+                cacheImage: true
             }
         }
     }
@@ -455,7 +454,7 @@ Item {
                         tintEnabled: root.dynamicTintSupported
                         tintColor: root.safeTintColor
                         rasterBudget: root.rasterBudget
-                        cacheImage: false
+                        cacheImage: true
                         property alias occlusionMask: rimMask
 
                         AlphaHitMask {

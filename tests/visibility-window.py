@@ -16,6 +16,22 @@ def instrument_interaction_stage(stage):
     assert stage.parent.name.startswith("archdock-rendering-import.")
     assert stage.stat().st_uid == os.getuid()
     ui = stage / "share/plasma/plasmoids/org.archdock.dock/contents/ui"
+    if os.environ.get("ARCHDOCK_SCROLL_TRACE") == "1":
+        paths = list(stage.rglob("ScrollInput.qml"))
+        assert len(paths) == 1, paths
+        path = paths[0]
+        source = path.read_text()
+        anchor = "function dispatchWheel(event, discrete) {"
+        assert source.count(anchor) == 1
+        source = source.replace(anchor, anchor + '''
+        console.warn("ArchDockScrollTrace " + JSON.stringify({angle: event.angleDelta,
+            pixels: event.pixelDelta, phase: event.phase, discrete: discrete,
+            device: event.device ? {type: event.device.type,
+                pointerType: event.device.pointerType, name: event.device.name} : null,
+            verticalPixelScale: verticalPixelScale, verticalNotch: verticalNotch,
+            sensitivity: sensitivity, before: flickables.map(view => view.contentY)}))
+''')
+        path.write_text(source)
 
     def insert(file, anchor, addition):
         path = ui / file
@@ -2252,8 +2268,12 @@ def run_interaction_matrix(free_panel):
             for index in range(100):
                 update(index, index / 100.0)
             sender.flush_sync(None)
+            # A host refresh can draw the latest source snapshot before the
+            # backend's separate 100 ms content-publication timer fires.
+            # Require that publication too within the original wait deadline.
             wait_for(lambda: all(overlay(panel).get("badge") == "99" and overlay(panel).get("progress") == 0.99
-                     for panel in panels), "burst coalesced to latest supported source values")
+                     for panel in panels) and runtime()["contentRevision"] > before,
+                     "burst drawn with its coalesced content publication")
             changes = runtime()["contentRevision"] - before
             assert 0 < changes < 100 and changes <= (time.monotonic() - started) * 10 + 3, changes
             print(f"PASS: native/free combined content, persisted overlay controls, no applet duplicates; 100 updates/{changes} revisions", flush=True)
@@ -2682,10 +2702,15 @@ def run_interaction_matrix(free_panel):
         baseline = {key: value for key, value in panel_call("dockConfiguration", "(s)", (free_panel,)).items()
                     if key in owner_keys}
         def resting(app):
-            first = observed(app).get("center")
+            first = observed(app)
             time.sleep(0.35)
-            second = observed(app).get("center")
-            return first and second and math.hypot(first[0] - second[0], first[1] - second[1]) < 0.5
+            # The log reader advances only in pump(). Compare two actual
+            # scene samples rather than the same cached record twice.
+            pump()
+            second = observed(app)
+            a, b = first.get("center"), second.get("center")
+            return a and b and second.get("sample", 0) > first.get("sample", 0) \
+                and math.hypot(a[0] - b[0], a[1] - b[1]) < 0.5
         for name, settings in (
                 ("owner free-9", {"layout": "circular", "layoutRadius": 300, "rendererTier": "true3d",
                                   "panelThemeId": "arc-platform-orange", "completeThemeId": "arc-platform-orange",
@@ -2697,7 +2722,10 @@ def run_interaction_matrix(free_panel):
             configure(free_panel, settings)
             before = wait_for(lambda: host_state().get("rotation", {}).get("wheelAvailable")
                 and not host_state()["rotation"]["active"] and host_state(), name + " wheel ready")
-            wait_for(lambda: all(observed(row["appId"]).get("sample", 0) > before["at"] for row in rows()),
+            wait_for(lambda: all(observed(row["appId"]).get("sample", 0)
+                > max(before["at"], changed_at.get(free_panel, 0))
+                and observed(row["appId"]).get("meshActive") == (settings["rendererTier"] == "true3d")
+                for row in rows()),
                      "entries observed on " + name)
             wait_for(lambda: resting(app), name + " scene at rest")
             start = host_state()["rotation"]["angle"]

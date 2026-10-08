@@ -264,10 +264,12 @@ PlasmoidItem {
         });
         message.iface = "local.PanelWindow";
         message.arguments = parameters || [];
-        const reply = PlasmaDBus.SessionBus.asyncCall(message)
-            as PlasmaDBus.DBusPendingReply;
-        reply.finished.connect(root, function() {
+        // KDE's callback overload uses a single-shot connection: a finished
+        // callback must not keep its reply and decoded values alive in a cycle.
+        function completed(reply) {
             try {
+                if (!root)
+                    return;
                 if (reply.isError) {
                     const error = {
                         name: reply.error.name,
@@ -287,7 +289,8 @@ PlasmoidItem {
             } finally {
                 reply.destroy();
             }
-        });
+        }
+        PlasmaDBus.SessionBus.asyncCall(message, completed, completed);
     }
 
     function normalizeReply(reply) {

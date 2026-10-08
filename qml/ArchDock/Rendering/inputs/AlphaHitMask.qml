@@ -112,6 +112,8 @@ Item {
     onRasterHeightChanged: resetCache()
     Component.onCompleted: resetCache()
     Component.onDestruction: {
+        // Drop the pixel buffer before QML's property storage is collected.
+        alphaBytes = null
         if (String(cachedSource).length > 0) cache.unloadImage(cachedSource)
     }
 

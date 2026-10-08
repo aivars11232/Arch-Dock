@@ -265,7 +265,7 @@ Item {
     }
     function beginGizmoDrag(handle, x, y) {
         const origin = gizmo.scenePosition
-        const centre = view.mapFrom3DScene(origin)
+        const centre = root.projectScenePoint(origin)
         const values = savedTransform()
         if (dragOverride)
             for (const key of Object.keys(dragOverride)) values[key] = Number(dragOverride[key])
@@ -281,8 +281,8 @@ Item {
     // Whether a move arrow points at the viewer, as drawn now.
     function gizmoAxisEndOn(axis) {
         const origin = gizmo.scenePosition
-        const from = view.mapFrom3DScene(origin)
-        const to = view.mapFrom3DScene(origin.plus(gizmoAxisVector(axis).times(gizmoLength)))
+        const from = root.projectScenePoint(origin)
+        const to = root.projectScenePoint(origin.plus(gizmoAxisVector(axis).times(gizmoLength)))
         return GizmoMath.axisEndOn(Qt.point(from.x, from.y), Qt.point(to.x, to.y))
     }
     // The move arrows drawn end-on, kept current while editing so the
@@ -308,8 +308,8 @@ Item {
             next.cameraYaw = turned.yaw
         } else if (start.mode === "move") {
             const axis = gizmoAxisVector(start.axis)
-            const from = view.mapFrom3DScene(start.origin)
-            const to = view.mapFrom3DScene(start.origin.plus(axis.times(gizmoLength)))
+            const from = root.projectScenePoint(start.origin)
+            const to = root.projectScenePoint(start.origin.plus(axis.times(gizmoLength)))
             // An arrow seen end-on has no direction on screen: up and down
             // move it instead of a drag that would do nothing.
             const travel = start.endOn ? GizmoMath.endOnTravel(delta, gizmoLength, 120)
@@ -467,9 +467,9 @@ Item {
     // a bend, so holes and hidden rear entries do not receive clicks.
     function meshHitDistance(model, mesh, point) {
         if (!model || !mesh || !mesh.positions || !mesh.indexes) return Infinity
-        const sceneOrigin = view.mapTo3DScene(Qt.vector3d(point.x, point.y, 0))
+        const sceneOrigin = root.unprojectViewPoint(Qt.vector3d(point.x, point.y, 0))
         const origin = model.mapPositionFromScene(sceneOrigin)
-        const far = model.mapPositionFromScene(view.mapTo3DScene(Qt.vector3d(point.x, point.y, 1000)))
+        const far = model.mapPositionFromScene(root.unprojectViewPoint(Qt.vector3d(point.x, point.y, 1000)))
         const direction = far.minus(origin).normalized()
         const vertices = mesh.positions, indexes = mesh.indexes
         let distance = Infinity
@@ -502,7 +502,7 @@ Item {
                 glyph = hits[i]; break
             }
         if (!glyph) return false
-        const origin = view.mapTo3DScene(Qt.vector3d(point.x, point.y, 0))
+        const origin = root.unprojectViewPoint(Qt.vector3d(point.x, point.y, 0))
         const distance = glyph.scenePosition.minus(origin).length()
         if (meshHitDistance(platform, platformMesh, point) < distance - 0.01) return false
         for (let i = 0; i < panelPartNodes.count; ++i) {
@@ -534,6 +534,17 @@ Item {
     // moved `outward` screen pixels out of the dock and projected like the
     // icons, as `count` samples spanning `span` radians around the folder.
     // `scale` is the perspective size there relative to the folder's own.
+    // View3D's mapping overloads recalculate its shared render-camera
+    // projection. Camera's normalized public methods read the projection
+    // submitted by the renderer instead, without writing from the GUI thread.
+    function projectScenePoint(point) {
+        const normalized = camera.mapToViewport(point)
+        return Qt.vector3d(normalized.x * view.width, normalized.y * view.height, normalized.z)
+    }
+    function unprojectViewPoint(point) {
+        return camera.mapFromViewport(Qt.vector3d(point.x / Math.max(1, view.width),
+            point.y / Math.max(1, view.height), point.z))
+    }
     function folderTrackSamples(entryIndex, outward, span, count) {
         const node = worldEntries.objectAt(entryIndex)
         if (!rendererReady || !node || !node.inputAnchor || count < 2) return []
@@ -548,9 +559,9 @@ Item {
         if (radius <= 0) return []
         // How far a step out of the dock appears on screen at the folder:
         // foreshortened where the platform tilts away from the viewer.
-        const here = view.mapFrom3DScene(anchor.scenePosition)
+        const here = root.projectScenePoint(anchor.scenePosition)
         const step = radius * 0.05
-        const further = view.mapFrom3DScene(sceneContent.mapPositionToScene(Qt.vector3d(
+        const further = root.projectScenePoint(sceneContent.mapPositionToScene(Qt.vector3d(
             foot.x * (radius + step) / radius, foot.y * (radius + step) / radius, foot.z).plus(lift)))
         const pixelsPerUnit = Math.hypot(further.x - here.x, further.y - here.y) / step
         const outer = radius + Math.max(0, outward) / Math.max(0.01, pixelsPerUnit)
@@ -559,7 +570,7 @@ Item {
         const result = []
         for (let index = 0; index < count; ++index) {
             const turn = angle - span / 2 + span * index / (count - 1)
-            const point = view.mapFrom3DScene(sceneContent.mapPositionToScene(
+            const point = root.projectScenePoint(sceneContent.mapPositionToScene(
                 Qt.vector3d(outer * Math.cos(turn), outer * Math.sin(turn), foot.z).plus(lift)))
             if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || point.z <= 0) continue
             result.push({ x: point.x, y: point.y, scale: depth / point.z })
@@ -575,18 +586,18 @@ Item {
             // The icon's resting square, as the camera sees it.
             const anchor = node.inputAnchor, half = node.size / 2
             const points = [[-half, -half], [half, -half], [half, half], [-half, half]].map(p =>
-                view.mapFrom3DScene(anchor.mapPositionToScene(Qt.vector3d(p[0], p[1], 0))))
+                root.projectScenePoint(anchor.mapPositionToScene(Qt.vector3d(p[0], p[1], 0))))
             const left = Math.min(...points.map(p => p.x)), top = Math.min(...points.map(p => p.y))
             const right = Math.max(...points.map(p => p.x)), bottom = Math.max(...points.map(p => p.y))
             if (![left, top, right, bottom].every(Number.isFinite) || right <= left || bottom <= top) return
-            const center = view.mapFrom3DScene(anchor.scenePosition)
+            const center = root.projectScenePoint(anchor.scenePosition)
             result.push({x: left, y: top, width: right-left, height: bottom-top,
                 centerX: center.x, centerY: center.y, depth: center.z})
         }
         if (JSON.stringify(result) !== JSON.stringify(projectedEntryGeometry)) projectedEntryGeometry = result
         // The dock's centre as drawn: the platform's middle at its top. A
         // folder's contents open away from it, not from the icons' heads.
-        const centre = view.mapFrom3DScene(sceneContent.mapPositionToScene(Qt.vector3d(0, 0, platformTop)))
+        const centre = root.projectScenePoint(sceneContent.mapPositionToScene(Qt.vector3d(0, 0, platformTop)))
         if (Number.isFinite(centre.x) && Number.isFinite(centre.y)
                 && (centre.x !== projectedCentre.x || centre.y !== projectedCentre.y))
             projectedCentre = Qt.point(centre.x, centre.y)

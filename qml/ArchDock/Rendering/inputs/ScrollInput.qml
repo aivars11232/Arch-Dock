@@ -1,4 +1,6 @@
 import QtQuick
+import QtQuick.Window
+import ArchDock.Input 1.0 as NativeInput
 
 // A wheel-only overlay: clicks, touch dragging, keys and scrollbar controls
 // remain on the existing views. Supply nested Flickables in priority order.
@@ -6,6 +8,11 @@ Item {
     id: root
     property var flickables: []
     property bool horizontalOnly: false
+    property bool verticalOnly: false
+    property int acceptedModifiers: Qt.KeyboardModifierMask
+    // Panels and free-folder tracks reuse the native source routing while
+    // retaining their own bounded travel/rotation reducers.
+    property var wheelConsumer: null
     property bool consumeAtBounds: true
     property var excludedItems: []
     // How far one wheel notch (120 angle units) scrolls each way, and how many
@@ -19,6 +26,7 @@ Item {
     property real sensitivity: 1
     anchors.fill: parent
     z: 10000
+    NativeInput.WheelSource { id: wheelSource; window: root.Window.window }
 
     // Exclude regions before pointer acceptance; onWheel runs after a blocking
     // WheelHandler has already accepted its event point.
@@ -37,8 +45,17 @@ Item {
         }
     }
 
-    function scroll(event) {
-        const pixels = event.pixelDelta
+    function dispatchWheel(event, discrete) {
+        const pixels = Qt.point(discrete && event.angleDelta.x !== 0 ? 0 : event.pixelDelta.x,
+                                discrete && event.angleDelta.y !== 0 ? 0 : event.pixelDelta.y)
+        if (typeof wheelConsumer === "function")
+            wheelConsumer(event, pixels)
+        else
+            scroll(event, pixels)
+    }
+
+    function scroll(event, pixels) {
+        if (!pixels) pixels = event.pixelDelta
         const angles = event.angleDelta
         const scale = Math.max(0.25, Math.min(4, Number(sensitivity) || 1))
         let dx = (pixels.x !== 0 ? -pixels.x * horizontalPixelScale
@@ -75,21 +92,26 @@ Item {
         event.accepted = moved || consumeAtBounds
     }
 
+    // The native event source remains reliable when Wayland identifies the
+    // whole seat as a touchpad. Deltas, device type and phase alone do not.
     WheelHandler {
         target: null
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        acceptedModifiers: root.acceptedModifiers
         onWheel: function(event) {
             if (event.pixelDelta.y !== 0 || event.angleDelta.y !== 0)
-                root.scroll(event)
+                root.dispatchWheel(event, wheelSource.discrete)
         }
     }
     WheelHandler {
         target: null
         orientation: Qt.Horizontal
+        enabled: !root.verticalOnly
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        acceptedModifiers: root.acceptedModifiers
         onWheel: function(event) {
             if (event.pixelDelta.y === 0 && event.angleDelta.y === 0)
-                root.scroll(event)
+                root.dispatchWheel(event, wheelSource.discrete)
         }
     }
 }

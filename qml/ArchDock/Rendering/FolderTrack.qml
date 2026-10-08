@@ -202,8 +202,9 @@ Item {
         wheelTaken(Number(angleDelta) || 0, pixels, steps)
         return steps
     }
-    function wheelEvent(wheel) {
-        const pixels = wheel.pixelDelta.y !== 0 ? wheel.pixelDelta.y : wheel.pixelDelta.x
+    function wheelEvent(wheel, normalizedPixels) {
+        const delta = normalizedPixels || wheel.pixelDelta
+        const pixels = delta.y !== 0 ? delta.y : delta.x
         const angle = wheel.angleDelta.y !== 0 ? wheel.angleDelta.y : wheel.angleDelta.x
         if (opened && !closing)
             takeWheel(angle, pixels)
@@ -248,7 +249,9 @@ Item {
         onPressed: mouse => {
             if (!root.onOutline(mouse.x, mouse.y)) root.dismissRequested()
         }
-        onWheel: wheel => root.wheelEvent(wheel)
+    }
+    ScrollInput {
+        wheelConsumer: function(wheel, pixels) { root.wheelEvent(wheel, pixels) }
     }
     // The fan's sector or the second ring, in the panel's own look: its
     // track's colour, width and glow. It grows from the folder as it opens.
@@ -390,7 +393,6 @@ Item {
                     root.keyboardSelection = false
                     root.selectChild(String(child.modelData.id))
                 }
-                onWheel: wheel => root.wheelEvent(wheel)
             }
             QQC2.ToolTip.visible: pointer.containsMouse && !root.showNames
             // Plain text: "<" followed by a zero-width space is never a tag.

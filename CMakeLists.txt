@@ -157,6 +157,22 @@ add_custom_target(
   DEPENDS ${ARCHDOCK_RENDERING_MODULE_SOURCES}
   COMMENT "Preparing the ArchDock.Rendering QML module")
 
+qt_add_qml_module(archdock-input SHARED
+  URI ArchDock.Input VERSION 1.0
+  OUTPUT_DIRECTORY "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Input"
+  SOURCES src/inputs/WheelSource.h)
+target_link_libraries(archdock-input PRIVATE Qt6::Core Qt6::Gui Qt6::Qml)
+target_include_directories(archdock-input PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/inputs")
+set_target_properties(archdock-input archdock-inputplugin
+  PROPERTIES INSTALL_RPATH "$ORIGIN")
+install(TARGETS archdock-input archdock-inputplugin
+  LIBRARY DESTINATION "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Input")
+install(FILES
+  "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Input/qmldir"
+  "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Input/archdock-input.qmltypes"
+  DESTINATION "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Input")
+add_dependencies(archdock-rendering-module archdock-inputplugin)
+
 qt_add_qml_module(archdock-integration SHARED
   URI ArchDock.Integration VERSION 1.0
   OUTPUT_DIRECTORY "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Integration"

@@ -2,163 +2,191 @@
 
 Repository: `/mnt/F/Arch Dock/`, origin `https://github.com/aivars11232/Arch-Dock`, branch `main`.
 Package: `/mnt/F/Arch Dock LCL repairs/`, ADREP 1.0.0.
-Base: `617bd96e8972111c3277c542be89e018e7cfd2f6`.
-Evidence: `build-codex-adrep/evidence/ADREP-TASK-004/`, indexed in `INDEX.txt`.
+Base commit: `617bd96e8972111c3277c542be89e018e7cfd2f6`.
+Evidence: `build-codex-adrep/evidence/ADREP-TASK-004/`.
 
-## Paused checkpoint - 2026-10-07
+## Report 1 - implementation
 
-The owner requested: "commit and Sync current changes and pause, we'll continue tomorrow".
-This checkpoint saves implementation and verification in progress. It is not
-Report 1 or Report 2, and ADREP-TASK-004 is not closed. ADREP-TASK-005 has not
-started. The owner explicitly authorized this checkpoint commit and sync before
-the ordinary per-task closure sequence finished.
+### What changed for the owner
 
-The complete-suite serial run was stopped at the owner's request: **95 of 118
-CTests passed, zero failures among completed tests**, with test 96 interrupted
-and tests 97-118 not executed in that run. CTest exited 130 after SIGINT; the
-remaining private harness received TERM so its owned EXIT cleanup could run.
-The paused run is not complete-suite acceptance and must be rerun from the
-start. The source was pinned before it and all 59 pinned files still matched
-at interruption.
+- All thirteen procedural looks have distinct original bundled textures. Glass has translucency, frost, highlights and a refraction-like gradient; Floating Glass adds elevation and shadow; Futuristic has seams and circuit lights. Crystal has facets, Metallic brushed grain, Organic soft grain, Neon tubes, Plasma energy, Minimal satin, Lime cells, and Platform/Plate/Pedestal solid bodies. Tint preserves texture and opacity scales the material. Sparkle is offered only for Crystal and Plasma and defaults to zero.
+- Flat looks and Platform looks are separate in Studio. Loading a platform remembers the complete previous flat appearance, layout and visual motion; turning Platform presentation off restores it exactly through draft, Apply, Cancel and reopen. Legacy panels without a snapshot return to their retained procedural appearance.
+- A procedural Theme control cannot change a look's own skinned/baked/native material. It is absent with a reason and a route to Flat looks. Native Platform colour, Material and Texture controls change the drawn 3D surface live; Reset material restores the look's own defaults.
+- Blue Ring, Steel Octagon and Orange Arc perspective artwork hides covered rear entries beneath its body and rim. Actual entry pointer/drop targets use the exposed glyph region. Numerical platforms refine picks against their actual triangles. Wheel and continuous travel keep entries moving behind the platform and back in front.
+- Bend folds the rear half of numerical platforms up or down by up to 90 degrees, with icon feet anchored to the same surface. Fixed perspective artwork explains why it cannot fold. Items, Whole panel and Both keep their existing motion behavior.
+- Static looks have no periodic paint timer; animated Plasma/Futuristic overlays run at 8 Hz only while visible. An immutable settings-schema index removes repeated linear scans from Studio's complete-flat projection path without changing validation or descriptor order.
+- After the overnight Qt 6.12 update, public Camera mapping replaced View3D mapping that recalculates a shared render projection. Physical wheel notches also now keep their angle steps when Wayland supplies both angle and pixel deltas; synthesized smooth input retains pixels. A small Qt-only window observer exposes the missing native event-source metadata to the existing ScrollInput and its existing reducers.
 
-Task 4 progress is approximately 85% complete as a checklist estimate;
-full-suite acceptance, formal reports, pushed-source fresh-clone recheck and
-closure remain. No package was built or installed for Task 4. The actual
-installed baseline is 0.1.1-12.
+### Owner findings
 
-## Implementation
+All ten findings have passing automated repair evidence. Physical visual and interaction acceptance remains for the owner after Task 5 installs the package.
 
-- All thirteen procedural looks have distinct original bundled textures. Glass has translucency, frost, edge highlights and a refraction-like gradient; Floating Glass adds elevation and shadow. Crystal has facets, Metallic brushed grain, Futuristic seams/circuit lights, Organic soft grain, Neon tubes, Plasma energy waves, Minimal satin, Lime cells, and Platform/Plate/Pedestal solid panel/joint/flute bodies. Tint preserves texture; opacity affects the full material. Sparkle defaults to zero and is offered only for Crystal and Plasma.
-- Flat looks and platform looks have separate groups. Loading a platform turns its presentation on and remembers the complete previous flat appearance, layout and visual motion settings. Turning Platform presentation off restores that look exactly through the existing draft/Apply/Cancel path. Legacy platforms without a remembered snapshot use their preserved procedural appearance and clear platform theme IDs.
-- Procedural Theme is absent on a look with its own skinned/baked/native material, with a reason and route to Flat looks. The new native Platform colour/Material/Texture controls apply live; Reset material restores the look's own defaults.
-- Blue Ring, Steel Octagon and Orange Arc perspective artwork has a retained foreground body mask as well as its front rim. Actual MouseArea and DropArea masks exclude covered rear entries. The alpha-mask object now exposes readiness. Local bounds narrow custom entry masks before the occlusion predicate. A native Qt input trace proved that an entry tooltip intercepted presses over scaled rear glyphs; the entry-owned tooltip now has an empty popup input mask and remains visible. DockEntry 25 cases and all 90 native folder anchor openings pass; native test targets select a fresh exposed point after renderer changes. Orange's occlusion threshold follows its open track. Wheel and continuous item travel keep working, with front/rear ordering and reappearance. Native mesh picking refines Qt's bounding-volume hits against actual platform triangles.
-- Bend folds the rear half of generated and numerical native platforms up or down by up to 90 degrees. Positions, normals and icon feet share the fold; texture coordinates, topology and resource bounds remain intact. Fixed perspective artwork explains that it cannot fold and offers true 3D where supported. Items/Whole panel/Both behavior from Task 2 remains intact.
-- Static materials have no periodic paint timer. Plasma and Futuristic animate a small cached-body overlay at 8 Hz and stop when hidden, concealed, reduced-motion or zero opacity. The complete flat-look normalization path uses an immutable Qt QHash schema index to avoid repeated linear scans while retaining descriptor ordering and transaction validation.
-
-## Owner findings and evidence
-
-OF-24 through OF-33 are implemented and have passing focused evidence. They
-remain pending formal task closure; the rows below do not declare the task
-closed.
-
-| Finding | Repair | Proof |
+| Finding | Status | Repair and proof |
 |---|---|---|
-| OF-24 | Thirteen materials with texture; declared controlled sparkle rather than generic glitter. | Material distinctness: all 78 common-tint pairs differ, each interior variance >4; 21 material QtTests; comparison.html. |
-| OF-25 | A procedural appearance control cannot change a look's own baked/skinned/native material. It is absent with an explicit route; Load and Apply use the same candidate; native materials have their own live controls. | Capability/Studio matrix, transactional native Studio interaction, material/reset GPU pixels and full-flat restore. |
-| OF-26 | Translucent Glass and elevated Floating Glass, frost/gradient/highlights. | Matched radius-300 before/after captures, common-tint interior variances 27.89 and 22.23, opacity tests. |
-| OF-27 | Futuristic seams, circuit/light lines and slow pulses. | Material SVG, before/after capture; visible/hidden energy and idle CPU evidence. |
-| OF-28 | Tint preserves texture; opacity affects material and detached perspective foreground. | All 13 tint/opacity cases; baked zero-opacity visible-entry/input regression; native material color/texture/reset pixels. |
-| OF-29 | Loading a platform preserves the selected item/panel/both motion; does not reset travel. | Backend candidate invariants, model Apply/Cancel/reopen; perspective wheel/continuous cases and native matrix. |
-| OF-30 | Entries travel behind the far body and return in front; covered areas do not take entry input. | Three perspective capture sequences; native Cyan/Orange/generated and generated Blue/Steel track cases, exact-triangle picks. |
-| OF-31 | Actual geometry fold with anchored feet and fixed-artwork unsupported explanation. | Fold geometry tests and native pixel/triangle/projection checks for 12 look/layout rows. |
-| OF-32 | Flat/platform groups and exact previous-flat restore; motion target preserved. | Backend complete-flat restore, model draft/Cancel/reopen, native Studio toggle interaction; Task 2 regression tests. |
-| OF-33 | Editable native platform colour, material and texture with own-material Reset. | Thirteen native material captures; magenta/texture None/Organic and exact own-pixel Reset; Studio native fields. |
+| OF-24 | Closed in automated checks | Thirteen textured materials; controlled declared sparkle. `panel-materials-test`: all 78 common-tint pairs differ by mean absolute pixel difference >1; every texture variance >4. Thirteen matched before/after pairs in `materials/comparison-qt612.html`. |
+| OF-25 | Closed in automated checks | Inapplicable procedural controls are absent with a reason; native material controls target the active surface. Backend/editor transactions, native Studio truth/input and native material/reset pixel checks in the final suite. |
+| OF-26 | Closed in automated checks | Translucent frosted Glass and elevated Floating Glass. Matched owner-circle captures and texture/tint/opacity checks; common-tint variance 27.89 and 22.23. |
+| OF-27 | Closed in automated checks | Futuristic seams, circuit/light lines and slow pulses. Original SVG, matched captures, visible/hidden animation assertions and CPU measurements. |
+| OF-28 | Closed in automated checks | Tint retains texture; opacity scales material and detached foreground. All thirteen material rows, baked zero-opacity visible-input case and native colour/texture/reset pixels. |
+| OF-29 | Closed in automated checks | Platform candidates preserve item/panel/both motion and travel. Backend/model Apply/Cancel/reopen invariants, perspective wheel/continuous cases, native renderer and path-travel gates. |
+| OF-30 | Closed in automated checks | Body/rim and numerical triangles hide covered rear glyphs; exposed glyph input follows travel. Three perspective capture sequences, native Cyan/Orange/generated rows, exact triangle picks and real folder-anchor input. |
+| OF-31 | Closed in automated checks | Numerical fold changes positions, normals and feet together; fixed artwork gives an unsupported explanation. Geometry tests and native pixel/projection/triangle checks across twelve look/layout rows. |
+| OF-32 | Closed in automated checks | Separate groups and exact complete-flat restore; selected motion target survives platform changes. Backend snapshot restore, editor draft/Cancel/reopen, native Studio interactions and Task 2 regressions. |
+| OF-33 | Closed in automated checks | Native colour/material/texture editing and own-material Reset. Thirteen native material captures; magenta, None/Organic texture and exact own-pixel Reset; live native Studio fields. |
 
-## Product decisions applied
+### Product decisions applied
 
-- PD-17: separate Flat looks and Platform looks; loading a platform captures the complete flat look, and Platform presentation off restores it exactly through draft, Cancel, Apply and reopen.
-- PD-18: continuous and wheel travel use each platform's own track; foreground artwork or native triangles occlude covered glyphs, and the real entry pointer/drop targets follow the exposed glyphs.
-- PD-19: thirteen original materials remain visibly distinct under a common tint, retain texture with colour and opacity, and offer sparkle only for Crystal and Plasma, off by default.
-- PD-25: the existing Items/Whole panel/Both target, speeds and trigger survive look changes and native/perspective selection. Fixed open perspective arcs retain their unsupported whole-rotation explanation.
+- PD-17: separate flat/platform groups and exact complete-flat restoration through the existing settings transaction.
+- PD-18: wheel and continuous entry travel keep running on every platform; actual foreground masks/triangles limit input to exposed entries.
+- PD-19: thirteen original, distinct, tinted textures with working opacity and declared, default-off sparkle.
+- PD-23: edge-panel behavior retained and included in the native input/Studio regression gates.
+- PD-25: Items/Whole panel/Both and their existing speeds/trigger survive look changes. Fixed open perspective arcs retain their unsupported whole-rotation explanation.
+- PD-16 preserved: physical notches use angle steps, smooth sources use pixels. The Qt 6.12 regression changes metadata routing, not movement expectations, thresholds or deadlines.
 
-## Acceptance criteria
+### Acceptance criteria
 
 | # | Criterion | Result | Proof |
 |---|---|---|---|
-| 1 | Every procedural look shows a distinct textured material; Glass reads as glass and Futuristic has future-tech detail. | Automated checks pass; final suite pending | 21 material QtTests; all 78 common-tint pairs differ; materials/comparison.html (13 radius-300/icon-52 before/after pairs). |
-| 2 | Apply changes the panel to the chosen look, or the control is absent with a reason. | Automated checks pass; final suite pending | Backend/editor look transactions, native Studio truth matrix and runtime interaction; inapplicable procedural Theme and flat colour are absent, with a route to the active renderer's material controls. |
-| 3 | Colour tints and opacity work on every look and keep its texture. | Automated checks pass; final suite pending | All 13 material tint/opacity rows; baked foreground opacity and input; native colour/texture/reset GPU pixels. |
-| 4 | Every platform keeps continuous/wheel travel, behind/front ordering and visible-only entry input. | Automated checks pass; final suite pending | Three perspective travel capture sequences, native Cyan/Orange/generated checks and actual-triangle picks; 25 DockEntry checks; runtime native matrix; 90 folder anchor openings. |
-| 5 | Separate flat/platform groups; platform off restores the exact previous flat look. | Automated checks pass; final suite pending | Backend complete-flat snapshot restore; model draft/Cancel/reopen and live Studio interactions. |
-| 6 | With 3D on, colour/material/texture edits apply. | Automated checks pass; final suite pending | Native GPU material rows, magenta colour and None/Organic texture changes, exact own-material Reset; live native Studio controls. |
-| 7 | Bend works on supported shapes; unsupported looks say so. | Automated checks pass; final suite pending | Numerical fold geometry, native triangle/projection/pixel checks including 12 look/layout rows; perspective artwork explanation in Studio. |
-| 8 | Platform rotation follows Continuous motion moves. | Automated checks pass; final suite pending | Preserved motion candidate/model contracts, native Studio probes, perspective/native wheel and continuous travel. |
-| 9 | Static/hidden-material CPU and Studio latency meet the contract. | Final focused performance checks pass; final suite pending | 94-latency-limits.log: 45.49/37.18/13.31 ms; resources-final-source/session.log: 0.0% backend CPU, +11.39 MiB for eight cycles, zero stale hosts; 98-material-cpu.json: all eleven static and both hidden animated materials at 0.0%; visible energy materials 3.0%. |
-| 10 | Complete configured suite passes once serially on final source. | Pending | 100-full-suite.log stopped after 95/118 passed at the owner's request; no complete-suite acceptance. The earlier 110/118 run remains diagnosis only. |
+| 1 | Distinct textured materials; Glass reads as glass and Futuristic has future-tech detail. | Met in automated checks | 21 material cases; 78 distinct pairs; per-look variance >4; thirteen same-Qt before/after pairs. Owner visual judgement pending. |
+| 2 | Apply changes the chosen look, or the control is absent with a reason. | Met | Backend/editor transactions, native Studio truth and runtime input; native material/reset RHI pixels. |
+| 3 | Colour tints and opacity work on every look and keep texture. | Met | Thirteen tint/opacity rows, baked foreground opacity/input, native colour/texture/reset. |
+| 4 | Every platform keeps motion/travel, behind/front ordering and visible-only entry input. | Met | Perspective capture sequences; native Cyan/Orange/generated matrix; real path-travel and folder-anchor gates. |
+| 5 | Separate flat/platform groups; platform off restores the exact previous flat look. | Met | Backend complete-flat snapshot, editor draft/Cancel/reopen and real native Studio interaction. |
+| 6 | Native colour/material/texture edits apply. | Met | Native GPU material/texture/reset captures and live Studio controls. |
+| 7 | Bend works on supported shapes; unsupported looks explain why. | Met | 33 geometry cases, twelve native look/layout rows and Studio explanation. |
+| 8 | Platform rotation follows Continuous motion moves. | Met | Preserved motion candidates/model contracts, native Studio and perspective/native travel. |
+| 9 | Static/hidden CPU and Studio latency meet the contract. | Met | `148-final-material-cpu.json`, `205-full-final-latency-limits.log`, final-suite resource log. |
+| 10 | Complete configured suite passes once serially on final source. | Met | `203-full-suite-final.log`; 550-file hash/mode pin and post-run comparison. |
 
-## Performance and retained diagnostics
+### Tests and performance
 
-- All eleven static procedural materials and both hidden animated materials: 0.0% of one core, five-second /proc samples after settling. Final visible Plasma and Futuristic: 3.0%; 98-material-cpu.json contains all fifteen final-source phases. Initial paint samples and the longer settling diagnostic are retained; see CPU_PROTOCOL.txt.
-- Final isolated Studio medians: edit 45.49 ms, page 37.18 ms, Apply 13.31 ms (94-latency-final.log). Limits: 53.76/41.16/24.84 ms. Zero theme-package reads each. Retained earlier measurements exceeded the first two bounds; the schema index repairs that path.
-- Final-source private backend: 0.0% idle CPU. Eight audition/cancel cycles: 63652 to 75320 KiB resident memory, +11668 KiB (11.39 MiB), below 64 MiB; zero stale hosts.
-- Final-source private native View3D sampled intervals: Cyan 17.69 ms, Orange 18.02 ms, generated circle 17.31 ms; rendering CPU 1.02/0.51/0.02 ms. These are short private-compositor samples, not physical desktop cadence acceptance; physical monitor/GPU/owner-desktop acceptance remains unexecuted.
-- Earlier exploratory native capture/projection failures remain in logs 29/32/34/49; the preliminary full-suite failures remain in 62 and were repaired in focused regression checks. A native placement failure (test 94) motivated a narrow owned-container move after Plasma's queued size hints and three consecutive exact geometry readbacks within the original bound. The queued-relayout mechanism is inferred from KDE source, not proved in the original failing trace; PLACEMENT_RESEARCH.txt and 65/67 preserve the diagnostic and passing checks. Frame completion waits and projection diagnostics remain; strict native checks passed in 51, 60 and 96, and in the interrupted full run's completed rendering-import-smoke gate. Do not infer a proven production cause from the exploratory capture failures.
+- Final complete one-job Debug build: `200-single-shot-build.log`, exit 0, Qt 6.12.0.
+- Prior input-focused batch: 8/8 CTests in 11.94 s (`147-final-input-focused.log`): software/missing-module renderer, dock geometry, Studio scrolling, folder expansion, renderer parity, host-neutral policy and module import.
+- Prior native import plus path travel: 2/2 in 213.59 s (`146-native-wheel-platforms.log`), including 24 native renderer cases. Real folder input: passed in 77.83 s (`144-native-wheel-folder-after.log`); native traces prove one-child notch movement despite the seat being labelled a touchpad.
+- Intermediate mask-disposal checks: 4/4 CTests in 136.35 s (`162-mask-disposal-native.log`), including all 24 native renderer cases. Normal theme-switching RSS growth was 33652 KiB (32.86 MiB), below the unchanged 128 MiB cap; hit-region, skin and baked tests also passed.
+- Prior native folder/content gate: 1/1 in 79.78 s (`167-content-probe-native.log`); 100 actual D-Bus updates coalesce into one published revision, with latest badges/progress drawn on both panels. Folder, wheel, segment, conceal/reveal and disconnect assertions pass.
+- Prior affected native batch: 9/9 CTests in 469.10 s (`179-shared-pixmap-native.log`): asset contract, geometry-hit-region, baked platform, renderer parity, native rendering/import, folder interaction, all 90 folder anchors, runtime UI and path travel. Native RHI matrix: 24 cases; repeated-theme RSS +34064 KiB (33.27 MiB), below the unchanged 128 MiB cap.
+- Final runtime readiness gate: 1/1 in 63.93 s (`187-runtime-readiness-native.log`), including both owner free-9/free-4 wheel cases after the fresh-sample repair.
+- Final reply-lifetime native batch: 2/2 in 192.83 s (`201-single-shot-native.log`); all 24 native graphics cases, repeated-theme RSS -2384 KiB, complete real runtime input and owner wheel cases pass.
+- Complete configured suite: 118/118 CTests, zero failures in one serial run on final source, 1607.15 s. Required native Studio, runtime, window/folder/anchor, resource and renderer gates are included. There are ten internal Qt SKIP rows in initial offscreen/no-fixture invocations: overlay D-Bus, live source archive, live grouped windows, energy pixels and six live popup-placement rows. Nine are exercised in dedicated D-Bus/native gates in this run; the live source archive fixture was not supplied here and remains for Task 5 packaging. No CTest was skipped or disabled.
+- Full-run Studio medians: edit 37.46 ms, page 32.14 ms, Apply 12.05 ms; original limits 53.76/41.16/24.84 ms pass. Zero theme-package reads each.
+- Fifteen-phase CPU probe: all eleven static and both hidden animated materials 0.0% of one core; visible Plasma/Futuristic 3.4%/3.6%. Five-second samples after 4.5 s settling, using the retained /proc tick protocol (`CPU_PROTOCOL.txt`).
+- Final-suite resources: eight audition/cancel cycles: backend RSS 65776 to 77140 KiB, +11364 KiB (11.10 MiB), below the unchanged 64 MiB bound; zero stale hosts; backend settled idle CPU 0.0% of one core over five seconds (`resources-full-single-shot/session.log`). Native theme-switching PlasmaShell: 632644 to 687596 KiB, +54952 KiB (53.66 MiB), below the unchanged 128 MiB bound.
+- Native sampled frame intervals/render CPU: Cyan/Orange/generated circle intervals 12.7573/12.5426/19.581 ms, rendering CPU 0.68806/0.453979/1.29687 ms (`203-full-suite-final.log`, NATIVE_FRAME_TIME).. These are bounded private-compositor samples, not physical desktop cadence acceptance.
+- Contract expectation changes explicitly implement PD-17/18/19: complete-flat restoration, native material controls, thirteen texture cases, extra baked body layers and exposed-only input. Original numeric variance, response, resource and latency bounds remain intact. The new wheel-source regression sends actual Qt QWheelEvents, including physical and synthesized smooth events with NoScrollPhase and an opaque Wayland touchpad seat.
 
-The old native latency fixture carried a baked tint into the true-3D candidate; the OF-33 control boundary requires omitting that inactive legacy field from setup while retaining the native Orange defaults, measurement method and limits. One runtime D-Bus NoReply occurred in run 85 although the Dolphin row committed; a seven-call trace in 86 measured 0.16-12.01 ms replies and the complete native runtime matrix passed in 87. The one-off deadline cause remains unproved; no production RPC deadline or assertion changed.
+### Root-cause evidence and retained diagnosis
 
-## Current verification
+The reproduced Apply case was a procedural appearance control on a surface with its own material; the control boundary and native material fields now match the actual renderer. Readiness, local bounds and foreground masks repair occluded entry input. A native trace proved that an entry-owned tooltip intercepted a press over a scaled rear glyph; its popup now has an empty input mask while retaining visible text. Exact owned geometry restoration uses a 25 ms move after Plasma size hints and three consecutive readbacks within the original bound; the queued-placement cause is inferred from source, not proved in the original trace (`PLACEMENT_RESEARCH.txt`).
 
-- Final complete one-job Debug build: 99-final-build.log, exit 0.
-- Final-source focused runs: 95 passed 7/7 CTests in 101.84 s; 96 passed 4/4 in 141.86 s, including the native import gate. Counts include 19 schema, 21 material, 25 settings-model, 63 baked QML, 9 asset and 23 native graphics QtTests. 97 passed 5/5 CTests in 254.34 s: 76 backend checks (1 live-session-only skip), 559 dock geometry, 8 geometry-hit-region and 25 DockEntry checks; host-neutral import policy also passes.
-- Full suite: 100-full-suite.log stopped on request after 95/118 passed, no completed-test failures. Test 96 interrupted; 97-118 unexecuted. A new complete serial run is required.
-- Pushed-commit fresh-clone recheck: PENDING; no Task 4 recheck clone was created.
+After Qt upgraded from 6.11.2 to 6.12.0, threaded captures were blank before item grabbing and projected coordinates became inconsistent; the unchanged mapping passed under Qt's basic loop. Official Qt source shows View3D mapping recalculates the shared projection. Public one-argument Camera mapping avoids those writes and passes with the normal threaded loop. Shared projection mutation is the supported inferred cause; no debugger captured simultaneous writes (`CAMERA_MAPPING_RESEARCH.txt`, 107/109/110/112).
 
-## Scope and delivery limits
+The Qt 6.12 wheel failure is reproduced and its delta cause confirmed: physical angle -120 plus pixel -15 followed the pixel path, yielding 6.2838 rather than the expected 60 pixels. A mouse-only QML source filter failed because Wayland identified the seat as a touchpad. Qt/Kirigami native APIs and source were researched before the small Qt-only observer was added; native event source distinguishes physical and synthesized input without a device/phase heuristic. Actual-event and private Wayland regressions pass (`WHEEL_SOURCE_RESEARCH.txt`, 119/122/123/127/136/141/143/144/146).
 
-Work inspected the current source, Task 3 Report 2 and live Git baseline rather than relying on completed-task labels. The actual installed baseline is 0.1.1-12, matching the interim Tasks 1-3 recipe at 617bd96; older current-state sections saying 0.1.1-11 are historical. Task 4 does not package/install; final packaging belongs to Task 5. Required Qt/KDE native research preceded edits: KWindowEffects blur is a compositor/window operation; ShaderEffect cannot draw through Qt Quick's software backend, so original maps extend the existing Canvas. Qt's custom-mesh pick is refined with actual triangles. No external textures or replacement renderer stack were added.
+The first resumed final suite (150) passed 77 tests before the native import resource check exceeded its unchanged 128 MiB cap: +134436 KiB. A disposable trace (158) reproduced +137052 KiB and showed mask QObject destruction rather than accumulation. Qt Canvas owns the pixel QImage until collection, and QML property storage can outlive the QObject; a disposal discriminator (160) clearing only the pixel var passed at +85672 KiB. `AlphaHitMask` now explicitly clears that var before unloading its image on destruction. The normal native repair check (162), without mask tracing or forced GC, passed at +33652 KiB. Delayed pixel-cache retention is the supported inferred cause; no trace captured the exact allocations for all RSS growth (`MASK_MEMORY_RESEARCH.txt`). The initial supplied-prefix diagnostic (156) failed executable identity because its copied D-Bus launcher retained an absolute prefix path; it was corrected to use the existing fresh-install path and left no backend behind. No numeric cap, deadline, rendering quality or garbage-collection policy changed.
 
-Owner checks after Task 5 installs: compare Glass/Floating Glass/Futuristic; load Orange or Cyan and watch item travel behind/in front; switch platform off/on, change native material/color/texture and try Bend. These are the visual/physical checks automation cannot close.
+The cleanup-only repair was insufficient: run 169 again exceeded the theme-switching RSS bound (+145804 KiB), despite passing the native renderer assertions. Native Qt source confirms that cache-disabled matching image instances each decode the same artwork; the retained readiness and drawn foreground/body instances were doing that. Qt's unused-pixmap cache is bounded (2 MiB in this Qt build). A disposable shared-cache discriminator (177), with no forced collection, stopped the previous steady per-pass climb and passed at +61756 KiB. Baked layers now share Qt's matching URL/size/crop rasters while retaining the same decode-size cap, package validation and visible geometry. The normal nine-test native batch (179) passed at +34064 KiB. Allocation sharing is the supported repair; the exact individual allocations in each failed RSS sample were not captured. Diagnostic 171 did not invoke collection because Qt.gc was undefined and is invalid collection evidence; 174 verifies the global API, and 175 actually invoked it only in a disposable prefix. Production has no forced collection or permanent quality reduction.
 
-## Files in the checkpoint
+Run 164 passed 79 tests, including the repaired native resource gate (+32852 KiB), then its folder gate reached latest rendered badge/progress on both panels before the separate content-publication revision advanced. The source uses a separate 100 ms publication timer. The probe now requires both drawn latest values and that published revision within the same eight-second wait; the original 0<changes<100 and elapsed*10+3 rate assertions are unchanged. No production publication behavior changed. The normal folder/content gate passed in 167 with 100 updates/one publication. The exact independent host refresh trigger was not captured (`CONTENT_PUBLICATION_RESEARCH.txt`).
 
-- `CMakeLists.txt`: explicit material install/copy list and material capture test.
-- `qml/ArchDock/Rendering/materials/*.svg` (13 original maps), `tools/generate-material-textures.py`, `packaging/LICENSING.md`: deterministic original bundled materials and provenance.
-- `LayoutEngine.js`, `renderers/PanelProcedural2D.qml`: textured body, tint, opacity, controlled sparkle and bounded visible-only energy animation.
-- `PlatformGeometry.js`, `PanelSurfaceLoader.qml`, `optional3d/{PanelScene3D,IconStyle3D}.qml`: native materials, numerical fold, anchored feet, triangle visibility and alpha/depth behavior.
-- `PanelScene.qml`, `inputs/{GeometryHitRegion,AlphaHitMask}.qml`, `renderers/PanelBaked25D.qml`, three production perspective theme manifests/records: foreground occlusion, mask readiness, local bounds and visible-entry input.
-- `src/model/Panel{Definition,SettingsSchema}.cpp`, `PanelSettingsSchema.h`, `PanelRegistry.cpp`, `src/panel/PanelWindow{Settings,Presets}.cpp`, `qml/runtime/{SettingsEditorModel.js,SettingsPopup.qml}`: durable flat-look restore, grouped looks, native controls, immutable descriptor index and exact owned geometry readback.
-- `plasma-dock-widget/contents/ui/{DockEntry,main}.qml`: real pointer/drop predicates, passive owned tooltip, and bounded owned placement restoration.
-- C++/QML renderer, schema, material, editor, input and geometry tests; `tests/data/studio-truth-matrix.json`; `tests/{visibility-window.py,run-rendering-import-smoke.sh,run-wayland-hardening-matrix.sh}`: regression proof, native visible input targets, optional diagnostic tracing and idle CPU evidence.
-- `README.md`, `docs/shared-renderer.md`, `docs/CURRENT_STATE.md`, `CHANGELOG.md`, `docs/repairs/README.md` and this checkpoint: behavior, scope, verified results and remaining closure.
+Run 181 passed 83 tests, including the shared-pixmap resource check (+50192 KiB), then missed the owner flat free-4 icon wheel. The rest predicate compared the same cached log record twice; diagnostic 185 confirms identical sample timestamps. It now requires the requested renderer after the settings request and advancing observations across the original 350 ms interval. Eight-second deadlines, movement expectations and tolerances are unchanged. The exact failing native target was not captured, so stale readiness is an inferred cause rather than a proved sole cause. Diagnostic 184 stopped earlier with Dolphin-drop NoReply under verbose pointer logging. Bus-traced 185 passed all runtime cases, and all captured content additions replied within 0.011931 s. That earlier timeout cause remains unproved; no timeout changed (`WHEEL_TARGET_RESEARCH.txt`). Focused 187 and the new complete run provide final-source evidence.
 
-## Pause cleanup and limits
+The memory gate recurred in run 189: native assertions passed but theme-switch RSS grew +132488 KiB, so mask cleanup and pixmap sharing did not close it. Heaptrack's same-run warm/cycled comparison (198) showed +21.68 MB decimal of live heap, dominated in the largest allocation stacks by native KDE QML D-Bus decoding and value serialization. The exact normal-run RSS excess was not reproduced under profiler overhead. KDE's own callback API documents a single-shot connection to prevent callback/reply reference cycles. The applet now uses that overload, preserving JSON conversion, errors and explicit destruction, and ignoring replies after its applet is destroyed. Disposable discriminator 199 decreased RSS by 9212 KiB; normal native import/runtime 201 passed 2/2 in 192.83 s, with theme-switch RSS -2384 KiB. Retained replies are the supported inferred remaining cause; no forced GC, bounds or wait times changed (`DBUS_REPLY_MEMORY_RESEARCH.txt`). Invalid profiler setup 192 was a space-split LD_PRELOAD path; corrected 194 captures the trace. Optional detailed reporter 196 was stopped as too expensive; complete normal rankings 197/198 reuse the same trace and retain unresolved transient plugin symbols.
 
-- The interrupted private session had no surviving process with its XDG homes;
-  its logs were retained in `interrupted-full-suite/` and only its inactive
-  `/tmp/archdock-plasma-lifecycle.LuP5vz` root was removed.
-- Generated `tests/__pycache__` was removed. The shared build, test Python
-  environment, benchmark tools and all Task 4 evidence remain for tomorrow.
-- No coredumps were found since Task 4 began, checked at pause in
-  `101-dump-audit.log`. The owner's installed `/usr/bin/arch-dock` process
-  (PID 1008002 at the checkpoint) remained running.
-- The Task 3 Grid-popup overlap on the diagonal baked ring remains recorded:
-  the final anchor run had 89 ordinary passing rows and one allowed overlap
-  note, 90 actual openings in total. It does not broaden Task 4's scope.
-- The one-off drop NoReply did not recur in the interrupted full run's completed
-  `runtime-ui-interaction-smoke` (66.35 s); its cause remains unproved.
-- Private native graphics/input samples do not establish physical GPU, display
-  cadence, touchpad or owner-desktop visual acceptance. The owner checks above
-  wait for the authorized Task 5 package installation.
+Earlier failures and the owner's interrupted 95/118 run are retained as diagnosis; they are not counted toward final acceptance. The old native latency fixture omitted an inactive baked tint in true 3D while preserving Orange's own material, measurement method and limits. A one-off Dolphin-drop NoReply did not recur in later complete native interaction checks; its deadline cause remains unproved and no production deadline changed.
 
-## Resume here
+The standalone material CPU probe (148) is retained because the later alpha-mask, pixmap-sharing and applet reply changes do not alter its procedural renderer or its standalone probe. The full suite reruns structural animation/hidden-state assertions on current source.
 
-1. Read this checkpoint and `build-codex-adrep/evidence/ADREP-TASK-004/INDEX.txt`.
-   Reconcile Git/remote, installed package, personal backend and source against
-   `102-checkpoint-source-hashes.json` (the earlier full-run pin is
-   `100-final-source-hashes.json`); source changes after pause need appropriate
-   fresh checks. Run the repair pack's `validation/verify_all.sh` again.
-2. Keep one heavy gate at a time, build with one job and test serially. Reuse
-   `build-codex-adrep/build`, the retained test Python environment and existing
-   passing focused/performance evidence if the relevant source is unchanged.
-3. Rerun all 118 configured tests from the start on the final source. Do not
-   add the interrupted 95 results to the remaining 23 and call that a full run.
-   The command used was:
+### Files changed
 
-   ```sh
-   env PATH="$PWD/build-codex-adrep/test-python/bin:$PATH" \
-     ctest --test-dir build-codex-adrep/build -V --output-on-failure -j 1
-   ```
+68 exact paths from the Task 4 base, grouped by purpose: original material assets/generator/licensing; existing layout and 2D/3D renderers; platform geometry and visible-entry masks; schema/model/registry/Studio transactions; host input/owned placement; native wheel metadata; focused/native tests and operational documentation. The exact list is:
 
-4. Once the complete run passes, finish the ten-criterion evidence map, formal
-   Report 1, current-state/changelog documents, and the task-scoped commit/sync.
-   This checkpoint is not a substitute for that closure record.
-5. Recheck the pushed source in a fresh, short-path clone (for example
-   `/mnt/F/ad4.XXXXXX/b`), build with one job, run the required focused/native
-   tests and performance checks, audit scope/documents/leftovers, then append,
-   commit and push Report 2. Keep the full original assertions and limits.
-6. Give Report 2 visibly and complete Task 4 cleanup before starting Task 5.
-   Task 5 then covers icon shapes/parameters/logos, real tile depth/materials,
-   all 15 icon presets, final canonical exports, package upgrade/recovery/
-   removal gates and the authorized final installation. Reconcile the actual
-   0.1.1-12 baseline rather than assuming the historical 0.1.1-11 label; no
-   Task 5 source, recipe, package, install or closure work was done here.
+```text
+CHANGELOG.md
+CMakeLists.txt
+README.md
+assets/themes/arc-platform-orange/archdock-theme.json
+assets/themes/arc-platform-orange/metadata/production-record.json
+assets/themes/octagon-platform-steel/archdock-theme.json
+assets/themes/octagon-platform-steel/metadata/production-record.json
+assets/themes/ring-platform-blue/archdock-theme.json
+assets/themes/ring-platform-blue/metadata/production-record.json
+docs/CURRENT_STATE.md
+docs/INSTALL.md
+docs/KNOWN_LIMITATIONS.md
+docs/repairs/ADREP-TASK-004.md
+docs/repairs/README.md
+docs/shared-renderer.md
+packaging/LICENSING.md
+plasma-dock-widget/contents/ui/DockEntry.qml
+plasma-dock-widget/contents/ui/main.qml
+qml/ArchDock/Rendering/FolderTrack.qml
+qml/ArchDock/Rendering/LayoutEngine.js
+qml/ArchDock/Rendering/PanelScene.qml
+qml/ArchDock/Rendering/PanelSurfaceLoader.qml
+qml/ArchDock/Rendering/PlatformGeometry.js
+qml/ArchDock/Rendering/inputs/AlphaHitMask.qml
+qml/ArchDock/Rendering/inputs/GeometryHitRegion.qml
+qml/ArchDock/Rendering/inputs/ScrollInput.qml
+qml/ArchDock/Rendering/materials/crystal.svg
+qml/ArchDock/Rendering/materials/floating-glass.svg
+qml/ArchDock/Rendering/materials/futuristic.svg
+qml/ArchDock/Rendering/materials/glass.svg
+qml/ArchDock/Rendering/materials/lime.svg
+qml/ArchDock/Rendering/materials/metallic.svg
+qml/ArchDock/Rendering/materials/minimal.svg
+qml/ArchDock/Rendering/materials/neon.svg
+qml/ArchDock/Rendering/materials/organic.svg
+qml/ArchDock/Rendering/materials/pedestal.svg
+qml/ArchDock/Rendering/materials/plasma.svg
+qml/ArchDock/Rendering/materials/plate.svg
+qml/ArchDock/Rendering/materials/platform.svg
+qml/ArchDock/Rendering/optional3d/IconStyle3D.qml
+qml/ArchDock/Rendering/optional3d/PanelScene3D.qml
+qml/ArchDock/Rendering/renderers/PanelBaked25D.qml
+qml/ArchDock/Rendering/renderers/PanelProcedural2D.qml
+qml/runtime/SettingsEditorModel.js
+qml/runtime/SettingsPopup.qml
+src/PanelRegistry.cpp
+src/inputs/WheelSource.h
+src/model/PanelDefinition.cpp
+src/model/PanelSettingsSchema.cpp
+src/model/PanelSettingsSchema.h
+src/panel/PanelWindowPresets.cpp
+src/panel/PanelWindowSettings.cpp
+tests/Baked25DAssetTest.cpp
+tests/PanelSettingsSchemaTest.cpp
+tests/PanelWindowCapabilityTest.cpp
+tests/RendererCapabilityTest.cpp
+tests/data/studio-truth-matrix.json
+tests/run-rendering-import-smoke.sh
+tests/run-wayland-hardening-matrix.sh
+tests/tst_DockEntry.qml
+tests/tst_DockGeometry.qml
+tests/tst_GeometryHitRegion.qml
+tests/tst_PanelBaked25D.qml
+tests/tst_PanelMaterials.qml
+tests/tst_PlatformGeometry.qml
+tests/tst_SettingsEditorModel.qml
+tests/visibility-window.py
+tools/generate-material-textures.py
+```
+
+### Open points and limits
+
+- Physical owner-desktop visual, GPU/display cadence and hardware input acceptance are unexecuted. Automated native evidence uses disposable D-Bus/KWin/Plasma sessions.
+- Task 4 builds no package and installs nothing. The owner runs 0.1.1-12; final packaging/install belongs to Task 5, which has not started. Older 0.1.1-11 documentation sections are historical.
+- The inherited Task 3 diagonal baked-ring Grid popup overlap remains recorded. The final 90-opening anchor gate records one baked diagonal Grid note: gap 29.5 px, facing 0.725, one covered icon. This is the inherited Grid placement limitation, not a failed new Fan/Arc/Stack/Ring assertion.
+- One orphaned private backend (PID 117670, deleted staged executable and verified private XDG root) was stopped after the full run; the owner backend PID 941 remains. No coredumps were found since the resume preflight. Remaining task-owned profiler/clone/scratch artifacts will be disposed during closure (`207-orphan-cleanup.json`).
+- No texture download or replacement renderer/settings/geometry/recovery framework was added. Original bundled material provenance is in `packaging/LICENSING.md`.
+- Report 1 precedes commit/sync and the fresh-clone recheck. Report 2 is pending.
+
+### Owner checks for this task (after Task 5 installs)
+
+1. Compare Glass, Floating Glass and Futuristic; check the texture remains when tint/opacity change and Apply always changes the active look.
+2. Load Orange Arc or Cyan Mesh; watch icons move behind the platform and return, and wheel around it.
+3. Check separate Flat/Platform groups, turn Platform presentation off/on, edit native colour/material/texture and try Bend.
+
+### Checkpoint history
+
+The owner explicitly paused on 2026-10-07. `fe0ec4a7c35c0acce337b32bfbae791ff539bd23` saved the implementation before formal closure; its suite stopped on request after 95/118 passed, no completed failures. The private interrupted session was disposed with its logs retained. On resume 2026-10-08 the pack preflight passed again, installed state and predecessor closure were reconciled, and the Qt minor-version drift required fresh verification. All 550 non-document source/fixture/asset/recipe files are pinned in `202-final-source-hashes.json` including the newly added wheel-source header.

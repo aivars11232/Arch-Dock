@@ -108,8 +108,9 @@ layouts and each renderer tier they offer (21 panels). What follows from it:
   wheel follows them; on a baked arc, where only the icons can move,
   Continuous motion moves is not shown.
 - On baked 2.5D and true 3D looks the icons travel along the platform's track,
-  but passing behind and in front of the platform is completed by
-  ADREP-TASK-004.
+  pass behind its body and front rim, and return in front. Pointer and drop
+  targets follow the exposed part of each icon; covered rear glyphs take no
+  input. Physical desktop acceptance remains in the owner's checklist.
 - Edge panels have no wheel travel or rotation.
 - A free panel's folder Fan and Ring are drawn in the panel's flat look: its
   appearance's colour, line width and glow, or its custom colour. On a baked
@@ -139,6 +140,14 @@ semicircles and fans stay flat unless their theme ships its own 3D platform
 compatibility and preset preview cards resolve through the theme catalogue,
 which does not carry the generic 3D platform, so such a preset could only show
 its fallback. Apply a preset, then enable 3D on the Panels > 3D page.
+
+Panel Themes / Skins lists Flat looks and Platform looks separately. Turning
+Platform presentation off restores the complete previous flat look. Native
+platforms have their own colour, material and texture controls and a Reset
+material action. Bend folds supported numerical platforms with their icons
+anchored to the surface; fixed perspective artwork cannot fold and explains
+that on the page. Procedural materials preserve texture under tint and opacity.
+Sparkle defaults to zero; only Crystal and Plasma offer its intensity control.
 
 On the desktop gizmo, the X and Y rings tilt the platform with vertical and
 horizontal drags rather than by following the ring, which stays reliable when
