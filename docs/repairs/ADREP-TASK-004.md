@@ -190,3 +190,42 @@ tools/generate-material-textures.py
 ### Checkpoint history
 
 The owner explicitly paused on 2026-10-07. `fe0ec4a7c35c0acce337b32bfbae791ff539bd23` saved the implementation before formal closure; its suite stopped on request after 95/118 passed, no completed failures. The private interrupted session was disposed with its logs retained. On resume 2026-10-08 the pack preflight passed again, installed state and predecessor closure were reconciled, and the Qt minor-version drift required fresh verification. All 550 non-document source/fixture/asset/recipe files are pinned in `202-final-source-hashes.json` including the newly added wheel-source header.
+
+
+## Report 2 - recheck
+
+- Task source commit: `2882d462ce4e9065ddd4b714e0885bcc9714e8ea`, on top of the owner-authorized `fe0ec4a` checkpoint; no source follow-up was needed after the push. Recheck round: **1 of at most 3**.
+- Remote `origin/main` and local HEAD were verified equal to that source commit after a successful non-force push and fetch (`212-source-sync.json`). The recheck record is carried by the subsequent documentation-only commit titled `ADREP-TASK-004: record the recheck`; its actual hash and final remote parity are given in the visible Report 2 and retained in the sync receipt. A document cannot contain its own commit hash without changing that hash.
+- Fresh clone from `origin/main`, with no copied binaries: one-job Debug/Quick3D configure and full build **passed**, exit 0, 1342.09 s (`214-recheck-clone.log`, `215-recheck-configure.log`, `216-recheck-build.log`, `217-recheck-build-receipt.json`).
+- All **33/33 planned focused, regression and required native/resource CTests passed serially**, zero failures, 1173.30 s (`204-recheck-test-plan.txt`, `219-recheck-tests.log`, `220-recheck-tests-receipt.json`). This includes native rendering/import, real Studio/runtime input, window/folder interaction, all 90 folder-anchor openings, presentation, path travel, staged presets, existing preset matrix and resources.
+- All **550 pinned non-document source/fixture/asset/recipe file contents** match both the original full-suite source and the fresh clone. Git executable intent matches. One existing permissions difference is recorded: `data/source-assets/source-asset-catalog.json` is 0600 in the original workspace and Git 100644/0644 in the clone; its bytes match and both are non-executable. The owner's permissions were preserved (`218-recheck-source-scope.json`, `222-recheck-final-receipt.json`).
+- The original complete configured suite remains **118/118 in one serial run**, 1607.15 s on this exact source (`203-full-suite-final.log`). No CTest was disabled or skipped. In the focused recheck, two internal Qt rows request a native session (grouped windows and energy pixels); both execute in the dedicated native rendering gate.
+
+### Every criterion and owner finding rechecked
+
+| Criterion | Findings | Pushed-source proof and result |
+|---|---|---|
+| 1: distinct texture; Glass and Futuristic details | OF-24, OF-26, OF-27 | Material capture/statistics test passes again; retained thirteen same-Qt before/after pairs and original licensed SVG details match the byte-identical source. Visual owner judgement remains unexecuted. |
+| 2: Apply changes the look, or an inapplicable control has a reason | OF-25 | Backend/window/editor transactions, native Studio truth matrix and real runtime Apply pass. |
+| 3: tint and opacity retain texture | OF-28 | Material, skin, baked, surface/parity and native colour/texture/reset pixel checks pass. |
+| 4: platforms keep motion, behind/front ordering and visible-only input | OF-29, OF-30 | All 24 native renderer cases, baked/geometry hit-region tests, native wheel/runtime input, path travel and all 90 folder anchors pass. |
+| 5: separate flat/platform groups and exact flat restoration | OF-32 | Preset/backend/editor restore contracts and native Studio switching/Apply/Cancel/reopen pass. |
+| 6: editable native colour/material/texture | OF-33 | Native material/reset pixels and real Studio fields pass. |
+| 7: supported Bend; unsupported reason | OF-31 | Geometry, twelve native look/layout rows and Studio reason/field checks pass. |
+| 8: rotation follows the selected motion target | OF-29, OF-32 | Preserved preset/model motion contracts, presentation, native Studio/runtime and path travel pass. |
+| 9: idle/hidden CPU and Studio latency | OF-24, OF-27 | Fresh resource/latency gates pass. Retained fifteen-phase material CPU measurements use unchanged procedural source; current full/focused tests recheck static/hidden animation assertions. |
+| 10: complete configured suite once on final source | OF-24 to OF-33 | 118/118 original final suite, plus 550-file byte pin against the pushed source and 33/33 fresh-clone recheck. |
+
+All **10/10 criteria** and **OF-24 through OF-33** retain passing automated proof. No new implementation gap was found; no recheck repair commit was required. PD-17/18/19/23/25 behavior and the preserved physical/smooth wheel rule remain as in Report 1.
+
+### Fresh performance, documentary audit and limits
+
+- Studio medians: edit **39.85 ms**, page **34.25 ms**, Apply **12.60 ms**; unchanged limits **53.76/41.16/24.84 ms** pass, with zero package reads each (`221-recheck-latency-limits.log`, `recheck-latency/`).
+- Eight audition/cancel cycles: backend RSS **65872 to 75524 KiB**, **+9652 KiB (9.43 MiB)**, below 64 MiB; zero stale hosts; settled idle CPU **0.0%** of one core over five seconds (`resources-recheck/session.log`).
+- Native theme switching: PlasmaShell **649936 to 704060 KiB**, **+54124 KiB (52.86 MiB)**, below the unchanged 128 MiB bound.
+- Native sampled frame interval/render CPU, Cyan/Orange/generated circle: **12.917/25.2862/19.2867 ms**, **0.547167/0.874739/1.33499 ms**. These private-compositor samples do not establish physical desktop cadence.
+- Documents were checked against the raw full-suite and clone logs, captures, measurements, source pin and exact base diff. The **68 paths** from base `617bd96` match the Report 1 list and the task's renderer/settings/input/test/asset/document scope. No LCL repository, successor implementation or unrelated file was edited.
+- The inherited diagonal baked-ring Grid note remains identical: gap 29.5 px, facing 0.725, one covered icon, no reported new Fan/Arc/Stack/Ring problem. Physical owner-desktop visuals, hardware input and GPU/display acceptance remain unexecuted. The live source-archive fixture remains for Task 5 packaging.
+- Post-recheck process audit found **no running task backend, private Plasma/KWin session, profiler, build or test process**, and no `archdock-rendering-import.*` temporary root. Owner backend **PID 941** and desktop PlasmaShell **PID 1042** were preserved. No coredump was found since the 2026-10-08 04:35 UTC resume preflight (`223-recheck-process-audit.json`).
+- The inactive fresh clone, raw profiler scratch root, extracted profiler, diagnostic stage and scratch Python environment are scheduled for the mandatory cleanup immediately after this record is pushed and given. Detailed evidence, captures, interpreted profiles and the shared build are retained for Task 5. The cleanup receipt records actual removals; they are not claimed as already removed here.
+- Installed owner package remains **0.1.1-12**. Task 4 made no package and installed nothing. Task 5 starts only after this Report 2 and cleanup.

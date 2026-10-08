@@ -1,12 +1,13 @@
 # Arch Dock current state
 
 <!-- ADREP_TASK_004_BEGIN -->
-## ADREP-TASK-004 — Verified; pushed-source recheck pending (2026-10-08)
+## ADREP-TASK-004 — Verified and rechecked (2026-10-08)
 
-Task 4's implementation and complete configured suite pass. Formal
-[Report 1](repairs/ADREP-TASK-004.md) records all ten owner findings OF-24 to
-OF-33 and ten acceptance criteria with evidence. Commit/sync, the fresh-clone
-recheck and Report 2 remain in progress. Task 5 has not started.
+Task 4's implementation, complete configured suite and pushed-source
+fresh-clone recheck pass. [Reports 1 and 2](repairs/ADREP-TASK-004.md) record
+all ten owner findings OF-24 to OF-33 and ten acceptance criteria with
+evidence. Source commit: `2882d462ce4e9065ddd4b714e0885bcc9714e8ea`.
+Recheck round 1 needed no source repair. Task 5 has not started.
 
 - Thirteen original bundled textures preserve tint and opacity. Glass has
   frost/highlights, Floating Glass adds elevation, Futuristic has seams/light
@@ -29,6 +30,12 @@ recheck and Report 2 remain in progress. Task 5 has not started.
   1607.15 s**, zero failures. All 550 pinned non-document files and modes
   match. Native renderer: 24 cases; all 90 folder anchors, Studio truth,
   real runtime input, path travel, profiles, recovery and resource gates pass.
+- A fresh origin/main clone built with one job (1342.09 s) and passed
+  **33/33 required focused/native/resource CTests serially in 1173.30 s**.
+  All 550 pinned file contents and executable intent match; the existing
+  source-catalog 0600 versus Git 0644 permissions difference is recorded.
+  Fresh latency: 39.85/34.25/12.60 ms; audition RSS +9.43 MiB, no stale hosts,
+  idle CPU 0.0%; native theme RSS +52.86 MiB. All original bounds pass.
 - Ten internal Qt SKIP rows occur in initial offscreen/no-fixture tests.
   Nine execute in dedicated native/D-Bus gates; the live source archive fixture
   was not supplied here and belongs to Task 5 packaging. No CTest was skipped.
@@ -54,7 +61,9 @@ Evidence: `build-codex-adrep/evidence/ADREP-TASK-004/`, especially
 `202-final-source-hashes.json`, `203-full-suite-final.log`,
 `205-full-final-latency-limits.log`, `206-final-source-receipt.json`,
 `148-final-material-cpu.json`, `resources-full-single-shot/` and
-`207-orphan-cleanup.json`. Research and failed diagnosis are indexed there.
+`207-orphan-cleanup.json`, `219-recheck-tests.log`,
+`218-recheck-source-scope.json`, `222-recheck-final-receipt.json` and
+`resources-recheck/`. Research and failed diagnosis are indexed there.
 <!-- ADREP_TASK_004_END -->
 
 <!-- ADREP_TASK_003_BEGIN -->

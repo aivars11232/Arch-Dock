@@ -296,8 +296,10 @@ The proposed `v0.1.1` tag and publication need separate authorization.
 - Complete final-source verification: **118/118 serial CTests, zero failures,
   1607.15 s**, including 24 native renderer cases, all 90 folder anchors,
   Studio truth, real runtime input and recovery/resource gates. Formal
-  [Report 1](docs/repairs/ADREP-TASK-004.md) records internal Qt skips, retained
-  diagnosis and physical limits. Pushed-source recheck/Report 2 are pending.
+  [Reports 1 and 2](docs/repairs/ADREP-TASK-004.md) record internal Qt skips,
+  retained diagnosis and physical limits. The pushed-source fresh clone built
+  with one job and passed 33/33 required focused/native/resource tests in
+  1173.30 s; all 550 pinned source contents match. Round 1 needed no repair.
   Task 5 packaging and installation have not started; the installed baseline
   remains 0.1.1-12.
 
