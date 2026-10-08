@@ -1,15 +1,29 @@
 # Arch Dock current state
 
 <!-- ADREP_TASK_005_BEGIN -->
-## ADREP-TASK-005 — Verified and installed; Git/recheck closure in progress (2026-10-08)
+## ADREP-TASK-005 — Verified, installed and rechecked (2026-10-08)
 
 Task 5 follows Task 4's closed and pushed recheck at `73cd1c3`. Its icon,
 tile and preset implementation is complete, with passing focused native
-checks. [Report 1 and the final owner checklist](repairs/ADREP-TASK-005.md)
+checks. [Reports 1 and 2 and the final owner checklist](repairs/ADREP-TASK-005.md)
 map OF-34 to OF-43 and all twelve acceptance criteria. The complete suite
 passes 120/120 in 2332.19 s, serially; package/harness and owner installation
-also pass. Scoped Git sync, fresh-clone recheck, Report 2 and task-owned
-cleanup remain; this section does not claim task closure.
+also pass. Source commit `3a40575f917d307f6d41e8f2c5baa3397697a870` is pushed
+and its fresh-clone recheck passes in round 1, with no source follow-up.
+The documentation-only recheck record is synced before Report 2 and the
+ordered task-owned cleanup; actual sync/cleanup receipts are retained.
+
+- Fresh clone: all 552 non-Markdown source pins and all 586 canonical source
+  file bytes/Git executable intent match. Complete one-job Debug/Quick3D
+  build passes in 1515.98 s. All 52/52 planned serial focused/native/regression
+  checks pass in 2011.93 s; the dedicated native 3D tile/readability branch
+  passes 1/1 in 25.30 s (`340-*`–`347-*`). Fresh native Studio, runtime UI/drop,
+  profile/shortcuts, all fifteen icon-preset actions and actual startup pass.
+  Two internal native-only Qt rows have passing counterparts in the dedicated
+  native rendering gate. Source/package pins remain unchanged; both trees
+  are clean and no running task/private session process remains (`350-*`,
+  `351-*`). Disposable clone/prefix/exports/Python/native roots are removed
+  after Report 2, with actual disk/removal/process results in `353-*`/`354-*`.
 
 - All six built-in styles follow all six Shape choices and retain their
   signature defaults. Diameter, Logo size, outline/colours and supported
@@ -134,7 +148,10 @@ Evidence: `build-codex-adrep/evidence/ADREP-TASK-005/`, especially
 `316-guard-final-canonical-verification.json`, `317-guard-final-source-hashes.json`,
 `320-full-suite-receipt.json`, `322-post-suite-source-verification.log`,
 `326-package-identity.json`, `331-installed-package-harness-visible-python-receipt.json`,
-`333-owner-native-installation-receipt.json` and `owner-receipt.json`.
+`333-owner-native-installation-receipt.json`, `owner-receipt.json`,
+`345-fresh-clone-required-tests-summary.json`, `347-fresh-clone-native-tiles-summary.json`,
+`350-post-recheck-integrity-process-audit.json`, `352-recheck-record-sync.json`,
+`353-task-owned-cleanup-receipt.json` and `354-final-git-process-state.json`.
 <!-- ADREP_TASK_005_END -->
 
 <!-- ADREP_TASK_004_BEGIN -->

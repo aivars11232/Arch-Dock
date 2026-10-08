@@ -1,7 +1,7 @@
 # Arch Dock release checklist
 
 <!-- ADREP_TASK_005_RELEASE_BEGIN -->
-## ADREP five-task repair delivery — 0.1.1-13, in progress, 2026-10-08
+## ADREP five-task repair delivery — 0.1.1-13, verified and rechecked, 2026-10-08
 
 - [x] ADREP-TASK-001 to -004 closed in order, with their reports and pushed
       recheck records. Task 5 implementation and focused native checks pass;
@@ -41,7 +41,7 @@
       Source SHA256
       `fb835ceee39438f9f1b6bb67e931d3527b347f53cf25262412d3a846eb044bdc`.
       Export records base `73cd1c3` plus the approved working-tree changes;
-      final pushed-source comparison remains required. Final export receipt:
+      final pushed-source comparison passes in `340-*`/`350-*`. Final export receipt:
       `316-*`; source verification passes in `318-*`. Post-suite regeneration
       preserves all four artifacts exactly (`320-*`, `322-*`). Ten internal
       Qt skips are disclosed: nine have exact passing counterparts in the
@@ -68,8 +68,22 @@
       Private backups/receipt and the compressed diagnostic dump copy remain;
       its exact original system dump was removed after hash verification.
 - [x] Report 1 records implementation, tests, installation and owner checks.
-- [ ] Scoped non-force Git sync, fresh-clone required checks,
-      Report 2/recheck record sync and task-owned cleanup.
+- [x] Scoped non-force source sync at `3a40575f917d307f6d41e8f2c5baa3397697a870`;
+      clean tree and fetched remote parity verified (`338-*`).
+- [x] Fresh clone, complete one-job Debug/Quick3D build: 1515.98 s; all
+      52/52 planned serial focused/native/regression checks: 2011.93 s;
+      dedicated native tile/readability branch: 1/1, 25.30 s (`340-*`–`347-*`).
+      All 552 source pins/586 canonical files match. Recheck round 1 needed
+      no implementation follow-up; all twelve criteria and OF-34–43 retain
+      passing automated proof. No running task/private-session process remains.
+- [x] Report 2 records the source, tests, scope, limits and ordered cleanup.
+      Its documentation-only record commit and actual fetched parity are
+      retained in `352-recheck-record-sync.json` and the visible Report 2.
+
+Task-owned cleanup follows the pushed Report 2; actual removed paths, allocated
+disk impact, retained evidence/package/build/backups and final Git/process state
+are recorded in `353-task-owned-cleanup-receipt.json` and `354-final-git-process-state.json`.
+
 - [ ] Owner physical visual/input acceptance: only the five short checks in
       [the Task 5 report](repairs/ADREP-TASK-005.md).
 - [ ] Physical second-monitor and other-GPU cells: UNVERIFIED when absent.

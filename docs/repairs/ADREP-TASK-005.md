@@ -5,9 +5,10 @@ Task package: `/mnt/F/Arch Dock LCL repairs/` (ADREP 1.0.0)
 Base commit: `73cd1c3faaa8846ad0949a0e0369c1680f318110`
 Evidence: `build-codex-adrep/evidence/ADREP-TASK-005/`.
 
-**Report 1: implementation, final suite, package, installed harness and owner
-installation verified. Scoped Git sync, fresh-clone recheck, Report 2 and cleanup
-remain pending. Physical owner acceptance is separate.**
+**Reports 1 and 2: implementation, final suite, package, installed harness,
+owner installation and pushed-source fresh-clone recheck verified. This
+recheck record is synced before the ordered task-owned cleanup. Physical
+owner acceptance remains separate.**
 
 ## Report 1 - implementation
 
@@ -321,4 +322,83 @@ remain pending. Physical owner acceptance is separate.**
    depth/placement/orbit. Preview/apply/duplicate a preferred preset and inspect
    the result in My Icon Presets on your desktop.
 
-Report 2 and cleanup remain pending.
+## Report 2 - recheck
+
+- Task source commit: `3a40575f917d307f6d41e8f2c5baa3397697a870`.
+  Recheck round **1**; no implementation follow-up was required.
+- After the non-force push and fetch, local HEAD equals `origin/main` and the
+  tree is clean (`338-task-commit-sync.json`). The documentation-only record
+  commit is titled `ADREP-TASK-005: record the recheck`; its actual hash and
+  final fetched parity are retained in `352-recheck-record-sync.json` and the
+  visible Report 2. Its own hash cannot be embedded in this document.
+- Fresh clone of that pushed commit, without copied binaries: Debug/Quick3D
+  configure, complete one-job build and disposable installation **pass**.
+  Build: **1515.98 s** (`339-*`–`343-*`). The disposable prefix has the native
+  hicolor index/cache; test dependencies and the short disk-backed runtime
+  root match the verified setup. Original assertions/deadlines remain.
+- All **52/52 planned focused/regression/native CTests pass serially**,
+  **2011.93 s** raw CTest time (`344-*`, `345-*`). This includes native
+  rendering, window/folder interaction and anchors, presentation, Studio,
+  runtime UI/drop delivery, path travel, all fifteen icon presets,
+  profile/shortcuts, resources and actual session startup.
+- The separate native tile/readability branch **passes 1/1**, **25.30 s**
+  (`346-*`, `347-*`). Real-RHI tile depth/material/elevation/orbit executes:
+  3 C++ checks, 26 tile QML checks and 3 readability QML checks, with no
+  internal skips in those groups. The two internal Qt skips in the 52-check
+  run (live grouped windows and energy pixels) have passing counterparts in
+  its dedicated native rendering gate.
+- All **552 pinned non-Markdown source files** and **586 canonical source
+  files** match the fresh clone byte-for-byte; Git executable intent matches
+  (`340-*`, `350-*`). The existing local 0600 versus cloned 0644 non-executable
+  source-catalog permission difference is preserved and is not misreported
+  as identical permission bits. Both original and cloned trees remain clean.
+  The installed Release package hash is unchanged.
+
+### Every criterion and finding rechecked
+
+| Criterion | Findings | Proof and result |
+|---|---|---|
+| 1: every shape/style; signature defaults | OF-34–36 | Fresh package/assets, visual style/shape and native renderer tests pass; canonical bytes match the captured implementation. |
+| 2: readable real application logos | OF-34, OF-36 | Fresh native readability checks pass; retained 108-case/216-frame measured bounds remain exact for Firefox/Dolphin/Kate at the documented defaults. |
+| 3: saved parameters beside one selector | OF-38 | Fresh schema/model, capability/editor and real native Studio tests pass. |
+| 4: Dark Orb pedestal off; optional controls/presets | OF-37 | Fresh package/catalog, model, native preset actions and Studio tests pass. |
+| 5: every preset action, persistence and My Presets | OF-39 | Fresh library/Duplicate, browser/audition and all three native icon groups pass; groups take 150.27/162.00/150.86 s. |
+| 6: texture/thickness/placement and seated upright travel | OF-41 | Fresh tile/geometry tests, real-RHI tile branch and native path travel pass. |
+| 7: drawn 3D thickness/bevel/material/elevation | OF-42 | Fresh real-RHI branch passes; native Studio capability/field matrix passes. |
+| 8: original custom tiles preserved | OF-40 | Fresh tile reset/persistence and native Studio tests pass. |
+| 9: complete configured suite on exact final source | OF-34–43 | Original final suite remains 120/120 in one serial run; 552 pins match pushed and fresh-cloned source, followed by 52/52 plus 1/1 fresh checks. |
+| 10: export, package, installed harness/upgrade/removal | OF-34–43 | Canonical 586-file manifest matches clone; final package identity unchanged; retained Release/harness receipts prove 250 files and 0.1.1-11 upgrade/recovery/removal. |
+| 11: one password, owner install, payload/backend/Studio | Final delivery | `333-*`, `336-*`, `owner-receipt.json`: installed 0.1.1-13, 250 matching files, zero pacman alterations, native menu/Studio startup, seven configuration files byte-identical. |
+| 12: accurate five-task documents/checklist | Final delivery | Current-state, changelog, release checklist and five-task owner checklist map to retained raw evidence; physical acceptance stays pending. |
+
+All **12/12 criteria** and **OF-34 through OF-43** retain passing automated
+proof within PD-05/20/21/22/23 scope. No new gap or source repair was needed.
+Fresh native Studio passes in **339.33 s**, runtime UI/drop in **65.86 s**,
+path travel in **89.35 s**, profile apply/shortcuts in **20.14/18.27 s**, and
+actual session startup in **40.63 s**. Physical visual/input, second-monitor
+and other-GPU acceptance remain unexecuted. The original optional live
+reference archive/root cell and inherited diagonal baked-ring Grid note
+remain disclosed; no unrelated successor repair is claimed.
+
+### Scope, processes, dump and ordered cleanup
+
+- The **71 changed paths** from base `73cd1c3` exactly match the staged scope
+  receipt `337-*`: Task 5 implementation, required recovery repairs/tests,
+  packaging and delivery documents. No LCL files, tag, publication, force
+  push or history rewrite are part of this task.
+- Source/document/evidence audits pass (`340-*`, `349-*`, `350-*`). The
+  process audit finds no running task build/test/backend or private
+  Plasma/KWin session, including roots proven by the task's native logs
+  (`351-*`). The installed owner backend is intentionally retained.
+- The rejected private crash's exact original system dump was removed during
+  the authorized installation after original/copy hash validation. Its
+  **27817485-byte compressed evidence copy, mode 0600**, remains and its hash
+  rechecks. Other system/owner dumps are untouched.
+- Two inactive native roots, the fresh clone/prefix, obsolete exports/package
+  staging and task Python/support scratch are queued for mandatory cleanup
+  **after this record is pushed and Report 2 is given** (`348-*`, `351-*`).
+  They are not claimed removed at this reporting step. Shared Debug build,
+  passing/failed evidence and captures, final canonical four artifacts,
+  Release package/install manifest, private dump copy and owner backups/receipt
+  remain. `353-task-owned-cleanup-receipt.json` records actual removals and
+  allocated disk impact; final Git/process state is recorded in `354-*`.
