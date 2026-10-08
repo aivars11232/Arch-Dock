@@ -11,9 +11,10 @@
   "outputs": [
     {
       "path": "archdock-icon-style.json",
-      "sha256": "a53f4415cf8357308ceb27960c2f32f969d7ce0895d4802ced7d37fc977fb5c3"
+      "sha256": "696e57ef46684880e52545236fd833aacd4a1a81e5003b191cf5becfd085f7a3"
     }
   ],
+  "repair": {"task": "ADREP-TASK-005", "productDecisions": ["PD-20"], "changes": "Conditional package-defined shape layer for explicit choices; default and fallback preserve the original application glyph."},
   "parameters": {
     "glyphPolicy": "original",
     "externalAssets": 0,

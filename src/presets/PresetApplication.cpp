@@ -143,6 +143,33 @@ bool PresetApplication::iconOnlyChange(
     compared.iconStyle.styleReference = snapshot.iconStyle.styleReference;
     compared.iconStyle.themeId = snapshot.iconStyle.themeId;
     compared.iconStyle.globalDefaults = snapshot.iconStyle.globalDefaults;
+    // PD-20/21/22: appearance and tile values belong to an icon preset.
+    // Keep size, spacing and per-entry overrides in the comparison: those
+    // must not be changed by an icon preset or by this scope allowance.
+    compared.iconStyle.shape = snapshot.iconStyle.shape;
+    compared.iconStyle.diameter = snapshot.iconStyle.diameter;
+    compared.iconStyle.logoSize = snapshot.iconStyle.logoSize;
+    compared.iconStyle.outlineWidth = snapshot.iconStyle.outlineWidth;
+    compared.iconStyle.bodyColor = snapshot.iconStyle.bodyColor;
+    compared.iconStyle.outlineColor = snapshot.iconStyle.outlineColor;
+    compared.iconStyle.glowColor = snapshot.iconStyle.glowColor;
+    compared.iconStyle.pedestalEnabled = snapshot.iconStyle.pedestalEnabled;
+    compared.iconStyle.pedestalHeight = snapshot.iconStyle.pedestalHeight;
+    compared.iconStyle.pedestalColor = snapshot.iconStyle.pedestalColor;
+    compared.iconStyle.tilesEnabled = snapshot.iconStyle.tilesEnabled;
+    compared.iconStyle.tileMode = snapshot.iconStyle.tileMode;
+    compared.iconStyle.tileColor = snapshot.iconStyle.tileColor;
+    compared.iconStyle.tileOpacity = snapshot.iconStyle.tileOpacity;
+    compared.iconStyle.tileBorderColor = snapshot.iconStyle.tileBorderColor;
+    compared.iconStyle.tileBorderWidth = snapshot.iconStyle.tileBorderWidth;
+    compared.iconStyle.tileTexture = snapshot.iconStyle.tileTexture;
+    compared.iconStyle.tileThickness = snapshot.iconStyle.tileThickness;
+    compared.iconStyle.tileIconOffsetX = snapshot.iconStyle.tileIconOffsetX;
+    compared.iconStyle.tileIconOffsetY = snapshot.iconStyle.tileIconOffsetY;
+    compared.iconStyle.tileIconScale = snapshot.iconStyle.tileIconScale;
+    compared.iconStyle.tileBevel = snapshot.iconStyle.tileBevel;
+    compared.iconStyle.tileMaterial = snapshot.iconStyle.tileMaterial;
+    compared.iconStyle.tileElevation = snapshot.iconStyle.tileElevation;
     compared.motion.iconProfile = snapshot.motion.iconProfile;
     compared.motion.trigger = snapshot.motion.trigger;
     compared.motion.speed = snapshot.motion.speed;
@@ -196,6 +223,10 @@ IconPresetDefinition PresetApplication::iconSnapshot(
             result.icon = stored->icon;
     }
     result.icon.iconStyleId = draft.iconStyle.styleReference;
+    const auto iconValues = draft.normalized().toLegacyMap();
+    result.icon.parameters.clear();
+    for (const auto &key : IconPresetDefinition::parameterValueKeys())
+        result.icon.parameters.insert(key, iconValues.value(key));
     result.icon.motion.profileId = draft.motion.iconProfile;
     result.icon.motion.trigger = draft.motion.trigger;
     result.icon.motion.speed = draft.motion.speed;

@@ -3,7 +3,7 @@
   "version": 1,
   "id": "neon-green",
   "name": "Neon Green",
-  "revision": 1,
+  "revision": 2,
   "author": "Arch Dock contributors",
   "description": "A dark diamond tile with a clean green neon frame around the original application glyph.",
   "license": {
@@ -15,16 +15,16 @@
   "safeGlyphInset": {"left": 0.19, "top": 0.19, "right": 0.19, "bottom": 0.19},
   "layers": {
     "rear": [
-      {"id": "green-aura", "kind": "procedural", "shape": "diamond", "color": "#163d2c", "secondaryColor": "#61ffad", "opacity": 0.38, "inset": 0.03, "radius": 0.1, "borderColor": "#48e893", "borderWidth": 0.055}
+      {"id": "green-aura", "kind": "procedural", "shape": "diamond", "followsIconShape": true, "color": "#163d2c", "secondaryColor": "#61ffad", "opacity": 0.38, "inset": 0.03, "radius": 0.1, "borderColor": "#48e893", "borderWidth": 0.055}
     ],
     "base": [
-      {"id": "green-core", "kind": "procedural", "shape": "diamond", "color": "#071d16", "secondaryColor": "#104631", "opacity": 0.94, "inset": 0.095, "radius": 0.08, "borderColor": "#4cf2a0", "borderWidth": 0.025}
+      {"id": "green-core", "kind": "procedural", "shape": "diamond", "followsIconShape": true, "color": "#071d16", "secondaryColor": "#104631", "opacity": 0.94, "inset": 0.095, "radius": 0.08, "borderColor": "#4cf2a0", "borderWidth": 0.025}
     ],
     "front": [
-      {"id": "green-frame", "kind": "procedural", "shape": "diamond", "color": "transparent", "secondaryColor": "#d9ffeb", "opacity": 1, "inset": 0.075, "radius": 0.08, "borderColor": "#61ffad", "borderWidth": 0.035}
+      {"id": "green-frame", "kind": "procedural", "shape": "ring", "followsIconShape": true, "color": "transparent", "secondaryColor": "#d9ffeb", "opacity": 1, "inset": 0.075, "radius": 0.08, "borderColor": "#61ffad", "borderWidth": 0.035}
     ],
-    "shadow": {"id": "green-shadow", "kind": "procedural", "shape": "diamond", "color": "#020b08", "opacity": 0.62, "inset": 0.015, "radius": 0.1, "borderColor": "transparent", "borderWidth": 0},
-    "glow": {"id": "green-glow", "kind": "procedural", "shape": "diamond", "color": "transparent", "opacity": 0.82, "inset": 0.015, "radius": 0.1, "borderColor": "#61ffad", "borderWidth": 0.06}
+    "shadow": {"id": "green-shadow", "kind": "procedural", "shape": "diamond", "followsIconShape": true, "color": "#020b08", "opacity": 0.62, "inset": 0.015, "radius": 0.1, "borderColor": "transparent", "borderWidth": 0},
+    "glow": {"id": "green-glow", "kind": "procedural", "shape": "diamond", "followsIconShape": true, "color": "transparent", "opacity": 0.82, "inset": 0.015, "radius": 0.1, "borderColor": "#61ffad", "borderWidth": 0.06}
   },
   "states": [
     {"id": "normal", "rearOpacity": 0.42, "baseOpacity": 0.92, "frontOpacity": 0.76, "glyphOpacity": 1, "glyphScale": 0.8, "borderColor": "#4cf2a0", "glowColor": "#61ffad", "glowOpacity": 0.22, "reflectionOpacity": 0, "indicatorColor": "#61ffad", "indicatorOpacity": 0},
@@ -45,5 +45,6 @@
     "animationCapabilities": ["hover-scale", "press-scale", "glow-pulse", "urgent-pulse", "launching-pulse", "indicator-transition"],
     "supports3D": false
   },
+  "extensions": {"org.archdock.iconParameters": {"defaultShape": "diamond"}},
   "preview": {"seed": "neon-green-v1", "iconName": "system-file-manager", "state": "running", "tileSize": 64}
 }

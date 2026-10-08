@@ -1,5 +1,83 @@
 # Arch Dock release checklist
 
+<!-- ADREP_TASK_005_RELEASE_BEGIN -->
+## ADREP five-task repair delivery — 0.1.1-13, in progress, 2026-10-08
+
+- [x] ADREP-TASK-001 to -004 closed in order, with their reports and pushed
+      recheck records. Task 5 implementation and focused native checks pass;
+      [Report 1](repairs/ADREP-TASK-005.md) lists the twelve acceptance
+      criteria and final five-task owner checklist.
+- [x] One-job final Debug build; 552 pinned non-Markdown tracked source bytes
+      and modes verified. Native style/shape/glyph, 3D tiles, all fifteen
+      preset action workflows and 23-case/1137-field Studio checks pass. The
+      rebuilt recovery repair also passes the recovery-first IPC fixture and
+      unchanged real private Plasma runtime gate (`234-*`, 2/2, 67.19 s).
+- [x] Complete configured suite: 120/120 in 2332.19 s (`319-*`, `320-*`),
+      one worker, exact pinned source `317-*`, with the required native gates.
+      Run `240-*` passed checks 1–93, then hit the valid profile lifecycle
+      guard. The harness observes recovery completion; focused profile checks
+      pass 2/2 in 38.76 s (`250-*`). Run `256-*` reached 119/120, then
+      failed startup before an independent fixture mutation. The startup
+      recovery-complete precondition passes configured startup 1/1 in 42.43 s
+      (`274-*`), with all original statements/deadlines preserved (`280-*`).
+      Run `281-*` stopped after 79 passes for a deferred-context warning;
+      scene-owned frame updates now stop on destruction. Native rendering,
+      input and path travel pass 3/3 in 289.34 s, and static 3D settles at one
+      frame/1000 ms (`286-*`, `288-*`, `296-*`). Final build/install pass.
+      Run `297-*` then failed native folder interaction; its private D-Bus
+      trace proves a stale placement rollback overwrote newer foreground
+      intent. Superseded background placement now cancels before further
+      writes or rollback (`299-*`, `302-*`, `304-*`). Rebuild/install and all
+      seven focused drop/folder/runtime/path/profile/shortcut/startup checks
+      pass (`308-*`–`311-*`, 329.88 s). Current freeze is `317-*`; complete
+      serial run `319-*` passes. The
+      existing native temporary-root cache uses the short disk-backed `build-r5`.
+      Earlier failed runs and the rejected client-side wait/crash are retained,
+      not counted toward acceptance. The circular wait is reproduced and
+      repaired in backend recovery; original drop delivery/deadline remain.
+- [x] Two canonical four-artifact exports match: 586 source files/587 archive
+      members, source bytes/Git executable intent/normalized metadata and root
+      checksum-pinned recipe verified; `makepkg --verifysource` passes.
+      Source SHA256
+      `fb835ceee39438f9f1b6bb67e931d3527b347f53cf25262412d3a846eb044bdc`.
+      Export records base `73cd1c3` plus the approved working-tree changes;
+      final pushed-source comparison remains required. Final export receipt:
+      `316-*`; source verification passes in `318-*`. Post-suite regeneration
+      preserves all four artifacts exactly (`320-*`, `322-*`). Ten internal
+      Qt skips are disclosed: nine have exact passing counterparts in the
+      same suite's native/D-Bus gates; the optional live reference source-asset
+      archive/root cell remains unexecuted.
+- [x] One-job Release package 0.1.1-13 built in 473.15 s (`323-*`, `324-*`);
+      3002034 bytes, SHA256
+      `997e8b82a09810fbc0026fd89d3ee99672591143b974f51551d76cc1b3286a13`
+      (`326-*`, Release manifest retained).
+- [x] Installed-package harness, 250 exact payload bytes/modes/resources, startup
+      with and without Quick3D, native UI/folders, recovery, upgrade from
+      0.1.1-11 and removal with configuration preserved (`330-*`, `331-*`,
+      295.37 s). Checkout hiding initially hid repo-local Python; the exact
+      test dependency copy outside the hidden root fixes that environment
+      boundary (`329-*`). Source/package/assertions remain unchanged.
+- [x] Owner installation with one native password request; installed payload,
+      native pacman audit, backend/Panel Studio startup and configuration
+      preservation verified (`333-*`, `336-*`, `owner-receipt.json`). Owner
+      package is 0.1.1-13, backend PID 1087001; all 250 payload files match,
+      `pacman -Qkk` reports zero altered files, and all seven backed-up owner
+      configuration files remain byte-identical. The task-opened Studio
+      window was closed and the temporary KWin observer unloaded after proof.
+      No applet was present, so owner PlasmaShell PID 1042 was not refreshed.
+      Private backups/receipt and the compressed diagnostic dump copy remain;
+      its exact original system dump was removed after hash verification.
+- [x] Report 1 records implementation, tests, installation and owner checks.
+- [ ] Scoped non-force Git sync, fresh-clone required checks,
+      Report 2/recheck record sync and task-owned cleanup.
+- [ ] Owner physical visual/input acceptance: only the five short checks in
+      [the Task 5 report](repairs/ADREP-TASK-005.md).
+- [ ] Physical second-monitor and other-GPU cells: UNVERIFIED when absent.
+
+Evidence: `build-codex-adrep/evidence/ADREP-TASK-005/`; source artifacts in
+`build-codex-adrep/package-output-guard-final/`. No tag or publication is part of this task.
+<!-- ADREP_TASK_005_RELEASE_END -->
+
 ## Full audit corrections and theme cache revalidation — 0.1.1-11, 2026-10-06
 
 - [x] The corrections from the [full audit](audits/FULL_AUDIT_2026-10-06.md)

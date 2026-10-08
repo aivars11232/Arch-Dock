@@ -221,6 +221,7 @@ run_session_startup_smoke() {
     export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
     dbus-update-activation-environment PATH WAYLAND_DISPLAY QT_QPA_PLATFORM \
         QML_IMPORT_PATH XDG_DATA_HOME XDG_DATA_DIRS XDG_CONFIG_HOME XDG_CACHE_HOME
+    start_signal_monitor nativePanelRecoveryFinished
     local reply
     reply="$(gdbus call --session --timeout=30 --dest org.freedesktop.DBus \
         --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.StartServiceByName \
@@ -238,6 +239,9 @@ run_session_startup_smoke() {
         printf 'Activated executable bytes differ from the installed payload.\n' >&2; return 1;
     }
     wait_for_kwin_script_state org.archdock.windowwatcher.runtime true 'installed activation'
+    # Name acquisition and watcher registration precede native host recovery.
+    # Observe its completion before the independent Plasma fixture mutation.
+    wait_for_signal_monitor nativePanelRecoveryFinished
     PRESET_UNRELATED_ID="$(create_unrelated_panel_fixture)"
     wait_for_native_panel_screen "$PRESET_UNRELATED_ID" 0
     PRESET_UNRELATED_SNAPSHOT="$(unrelated_panel_snapshot "$PRESET_UNRELATED_ID")"

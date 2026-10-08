@@ -10,6 +10,7 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <functional>
 #include <optional>
 
 #include "../DockModel.h"
@@ -476,6 +477,9 @@ private:
     int evaluatePlasmaScript(const QString &script) const;
     [[nodiscard]] std::optional<int> evaluatePlasmaScriptResultOptional(
         const QString &script) const;
+    [[nodiscard]] std::optional<int> evaluatePlasmaScriptResultOptional(
+        const QString &script, bool dispatchRecoveryCalls,
+        const std::function<bool()> &stillCurrent = {}) const;
     int evaluatePlasmaScriptResult(const QString &script) const;
     QWindow *createUtilityWindow(const QUrl &source);
     void presentUtilityWindow(QWindow *window, const QString &panelId = {});

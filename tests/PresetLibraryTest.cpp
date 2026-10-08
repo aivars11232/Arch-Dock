@@ -182,6 +182,7 @@ private slots:
     void everyBuiltInCardCarriesSharedRendererPreviewData();
     void unusableThemeSelectsTheFallbackOrMarksThePresetIncompatible();
     void userPresetActionsNeverTouchABuiltIn();
+    void everyIconPresetDuplicatesToAReusableMyPreset();
     void listingAndPreviewingChangeNothing();
     void rejectedCatalogIsReportedAndOffersNothing();
     void everyBuiltInCardRendersThroughTheSharedRenderer();
@@ -776,6 +777,42 @@ void PresetLibraryTest::userPresetActionsNeverTouchABuiltIn()
     QCOMPARE(reopened.iconPresets(QStringLiteral("user")).size(), 1);
     QCOMPARE(reopened.iconPresets(QStringLiteral("user")).first().toMap()
                  .value(QStringLiteral("name")).toString(), QStringLiteral("Kept"));
+}
+
+void PresetLibraryTest::everyIconPresetDuplicatesToAReusableMyPreset()
+{
+    QTemporaryDir userDirectory;
+    QVERIFY(userDirectory.isValid());
+    const PanelRegistry registry(themeCatalog());
+    const QString userRoot = userDirectory.filePath(QStringLiteral("presets"));
+    PresetLibrary library(registry, builtInRoot(), userRoot);
+    const QByteArray originalFiles = directoryDigest(builtInRoot());
+    const QVariantList originals = library.iconPresets(QStringLiteral("builtin"));
+    QCOMPARE(originals.size(), 15);
+    int copies = 0;
+    for (const QVariant &value : originals) {
+        const QVariantMap original = value.toMap();
+        const QString id = original.value(QStringLiteral("id")).toString();
+        const QVariantMap result = library.duplicatePreset(QStringLiteral("icon"), id,
+            QStringLiteral("My ") + original.value(QStringLiteral("name")).toString());
+        QVERIFY2(result.value(QStringLiteral("success")).toBool(), qPrintable(id));
+        const QString copyId = result.value(QStringLiteral("presetId")).toString();
+        QVERIFY(PresetIdentity::isUserId(copyId));
+        PresetLibrary reloaded(registry, builtInRoot(), userRoot);
+        const QVariantList saved = reloaded.iconPresets(QStringLiteral("user"));
+        QCOMPARE(saved.size(), ++copies);
+        const QVariantMap copy = cardById(saved, copyId);
+        QCOMPARE(copy.value(QStringLiteral("derivedFromPresetId")), id);
+        QCOMPARE(copy.value(QStringLiteral("sourceRevision")), original.value(QStringLiteral("revision")));
+        QCOMPARE(copy.value(QStringLiteral("preview")), original.value(QStringLiteral("preview")));
+        const QVariantMap drawn = previewDefinition(copy);
+        QCOMPARE(drawn.value(QStringLiteral("iconPedestalEnabled")).toBool(),
+            id == QStringLiteral("blue-pedestal") || id == QStringLiteral("red-pedestal"));
+        // PD-20/21/22: the whole bounded appearance block survives duplication.
+        for (const QString &key : ArchDock::IconPresetDefinition::parameterValueKeys())
+            QCOMPARE(drawn.value(key), previewDefinition(original).value(key));
+        QCOMPARE(directoryDigest(builtInRoot()), originalFiles);
+    }
 }
 
 void PresetLibraryTest::listingAndPreviewingChangeNothing()

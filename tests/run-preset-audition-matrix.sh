@@ -78,9 +78,39 @@ preset_ok() {
     printf '%s\n' "$reply"
 }
 preset_begin() {
-    preset_ok beginPreview "{'kind': <'$1'>, 'presetId': <'$2'>, 'panelId': <'bottom'>, 'newPanel': <$3>, 'useRecommendedIcons': <false>}"
+    preset_ok beginPreview "{'kind': <'$1'>, 'presetId': <'$2'>, 'panelId': <'${4:-bottom}'>, 'newPanel': <$3>, 'useRecommendedIcons': <false>}"
 }
 preset_renderer() { preset_variant_json "$(panel_call panelRendererConfiguration "$1")"; }
+preset_capture() {
+    local id="$1" label="$2" request="$ARCHDOCK_TEST_LOG_DIR/preset-capture-request.json"
+    local receipt="$ARCHDOCK_TEST_LOG_DIR/$label.json" attempt
+    preset_renderer "$id" | jq --arg id "$id" --arg label "$label" \
+        '{panel:$id,label:$label,style:.iconStyle,pedestal:.iconPedestalEnabled,speed:.animationSpeed}' >"$request.new"
+    mv "$request.new" "$request"
+    for ((attempt=0; attempt<100; ++attempt)); do
+        python - "$ARCHDOCK_TEST_LOG_DIR/plasmashell.log" "$label" "$receipt" <<'PY_CAPTURE'
+import json, sys
+from pathlib import Path
+log, label, receipt = sys.argv[1:]
+for line in Path(log).read_text(errors="replace").splitlines():
+    marker = "ArchDockPresetCapture "
+    if marker not in line: continue
+    try: value = json.loads(line.split(marker, 1)[1])
+    except ValueError: continue
+    if value.get("label") == label:
+        Path(receipt).write_text(json.dumps(value, indent=2) + "\n")
+        break
+PY_CAPTURE
+        if [[ -s "$receipt" ]]; then
+            jq -e '.saved and .entries>0 and .authoritative and .width>0 and .height>0' "$receipt" >/dev/null
+            [[ -s "$ARCHDOCK_TEST_LOG_DIR/$label.png" ]]
+            return
+        fi
+        sleep 0.1
+    done
+    printf 'Native preset capture did not complete: %s\n' "$label" >&2; return 1
+}
+
 preset_require_equal() {
     [[ "$1" == "$2" ]] || { printf 'Preset matrix mismatch: %s\nexpected=%s\nactual=%s\n' "$3" "$1" "$2" >&2; return 1; }
 }
@@ -217,8 +247,8 @@ preset_icons_group() {
     host="$(preset_host_snapshot "$PRESET_BOTTOM_HOST")"
     log_session_phase 'S7 icon-only Preview / Cancel / Apply and reusable custom copy'
     preset_begin icon glass-tile false >/dev/null
-    before="$(jq -cS 'del(.iconStyle,.iconThemeId,.themeId,.iconStyleDefinition,.iconGlobalDefaults,.iconAnimation,.animationTrigger,.animationSpeed,.animationIntensity,.magnificationRadius,.magnificationFalloff,.presetOrigin,.settingsRevision)' <<<"$renderer")"
-    after="$(preset_renderer bottom | jq -cS 'del(.iconStyle,.iconThemeId,.themeId,.iconStyleDefinition,.iconGlobalDefaults,.iconAnimation,.animationTrigger,.animationSpeed,.animationIntensity,.magnificationRadius,.magnificationFalloff,.presetOrigin,.settingsRevision)')"
+    before="$(jq -cS 'del(.animationProfile,.iconStyle,.iconThemeId,.themeId,.iconStyleDefinition,.iconGlobalDefaults,.iconAnimation,.animationTrigger,.animationSpeed,.animationIntensity,.magnificationRadius,.magnificationFalloff,.presetOrigin,.settingsRevision,.iconShape,.iconDiameter,.iconLogoSize,.iconOutlineWidth,.iconBodyColor,.iconOutlineColor,.iconGlowColor,.iconPedestalEnabled,.iconPedestalHeight,.iconPedestalColor,.iconTilesEnabled,.iconTileMode,.iconTileColor,.iconTileOpacity,.iconTileBorderColor,.iconTileBorderWidth,.iconTileTexture,.iconTileThickness,.iconTileIconOffsetX,.iconTileIconOffsetY,.iconTileIconScale,.iconTileBevel,.iconTileMaterial,.iconTileElevation)' <<<"$renderer")"
+    after="$(preset_renderer bottom | jq -cS 'del(.animationProfile,.iconStyle,.iconThemeId,.themeId,.iconStyleDefinition,.iconGlobalDefaults,.iconAnimation,.animationTrigger,.animationSpeed,.animationIntensity,.magnificationRadius,.magnificationFalloff,.presetOrigin,.settingsRevision,.iconShape,.iconDiameter,.iconLogoSize,.iconOutlineWidth,.iconBodyColor,.iconOutlineColor,.iconGlowColor,.iconPedestalEnabled,.iconPedestalHeight,.iconPedestalColor,.iconTilesEnabled,.iconTileMode,.iconTileColor,.iconTileOpacity,.iconTileBorderColor,.iconTileBorderWidth,.iconTileTexture,.iconTileThickness,.iconTileIconOffsetX,.iconTileIconOffsetY,.iconTileIconScale,.iconTileBevel,.iconTileMaterial,.iconTileElevation)')"
     preset_require_equal "$before" "$after" 'S7 preview preserves all panel values'
     preset_require_equal "$host" "$(preset_host_snapshot "$PRESET_BOTTOM_HOST")" 'S7 host unchanged'
     preset_require_equal "$registry" "$(panel_registry_json)" 'S7 preview no registry write'
@@ -237,14 +267,109 @@ preset_icons_group() {
     preset_ok restoreBuiltInDefaults >/dev/null
     preset_require_equal glass-tile "$(preset_call getStatus | jq -r '.presetId')" 'S7 Restore built-in lineage'
     preset_ok applyAsActive >/dev/null
-    before="$(jq -cS 'map(del(.iconStyle,.iconThemeId,.themeId,.iconGlobalDefaults,.iconAnimation,.animationTrigger,.animationSpeed,.animationIntensity,.magnificationRadius,.magnificationFalloff,.presetOrigin,.settingsRevision))' <<<"$registry")"
-    after="$(panel_registry_json | jq -cS 'map(del(.iconStyle,.iconThemeId,.themeId,.iconGlobalDefaults,.iconAnimation,.animationTrigger,.animationSpeed,.animationIntensity,.magnificationRadius,.magnificationFalloff,.presetOrigin,.settingsRevision))')"
+    before="$(jq -cS 'map(del(.animationProfile,.iconStyle,.iconThemeId,.themeId,.iconStyleDefinition,.iconGlobalDefaults,.iconAnimation,.animationTrigger,.animationSpeed,.animationIntensity,.magnificationRadius,.magnificationFalloff,.presetOrigin,.settingsRevision,.iconShape,.iconDiameter,.iconLogoSize,.iconOutlineWidth,.iconBodyColor,.iconOutlineColor,.iconGlowColor,.iconPedestalEnabled,.iconPedestalHeight,.iconPedestalColor,.iconTilesEnabled,.iconTileMode,.iconTileColor,.iconTileOpacity,.iconTileBorderColor,.iconTileBorderWidth,.iconTileTexture,.iconTileThickness,.iconTileIconOffsetX,.iconTileIconOffsetY,.iconTileIconScale,.iconTileBevel,.iconTileMaterial,.iconTileElevation))' <<<"$registry")"
+    after="$(panel_registry_json | jq -cS 'map(del(.animationProfile,.iconStyle,.iconThemeId,.themeId,.iconStyleDefinition,.iconGlobalDefaults,.iconAnimation,.animationTrigger,.animationSpeed,.animationIntensity,.magnificationRadius,.magnificationFalloff,.presetOrigin,.settingsRevision,.iconShape,.iconDiameter,.iconLogoSize,.iconOutlineWidth,.iconBodyColor,.iconOutlineColor,.iconGlowColor,.iconPedestalEnabled,.iconPedestalHeight,.iconPedestalColor,.iconTilesEnabled,.iconTileMode,.iconTileColor,.iconTileOpacity,.iconTileBorderColor,.iconTileBorderWidth,.iconTileTexture,.iconTileThickness,.iconTileIconOffsetX,.iconTileIconOffsetY,.iconTileIconScale,.iconTileBevel,.iconTileMaterial,.iconTileElevation))')"
     preset_require_equal "$before" "$after" 'S7 Apply preserves all panel values'
     preset_require_equal "$(($(jq -r '.[] | select(.id=="bottom") | .settingsRevision' <<<"$registry")+1))" \
         "$(panel_registry_value bottom settingsRevision)" 'S7 one icon Apply revision'
     panel_registry_json | jq -e 'first(.[] | select(.id=="bottom")) | .iconThemeId==.iconStyle and .presetOrigin.iconPresetId=="glass-tile"' >/dev/null
     preset_require_equal "$host" "$(preset_host_snapshot "$PRESET_BOTTOM_HOST")" 'S7 Apply host unchanged'
     preset_unrelated_unchanged S7; preset_no_orphans
+
+    # ADREP-TASK-005 / PD-20..22: every icon preset may change its bounded
+    # appearance block; geometry, content, iconSize, spacing, per-entry
+    # overrides and ownership remain protected by the full-record projection.
+    local id preset definition expected saved revision defaults_file copy_file
+    local protected baseline builtins before_values target_values new_id reply
+    reply="$(preset_variant_json "$(panel_call createFreePanel)")"
+    jq -e '.success and .ownershipVerified' <<<"$reply" >/dev/null
+    id="$(jq -r '.panelId' <<<"$reply")"
+    revision="$(panel_registry_value "$id" settingsRevision)"
+    reply="$(panel_call applyPanelSettingsTransaction "$id" "uint64 $revision" \
+        "{'type': <'launcher'>, 'layout': <'circular'>, 'layoutRadius': <150>, 'iconSize': <52>, 'spacing': <9>}" '{}')"
+    [[ "$reply" == *"'success': <true>"* ]] || { printf '%s\n' "$reply" >&2; return 1; }
+    require_true_reply "$(panel_call pinPanelUrls "$id" "['file:///usr/share/applications/firefox.desktop', 'file:///usr/share/applications/org.kde.dolphin.desktop', 'file:///usr/share/applications/org.kde.kate.desktop']")"
+    builtins="$(find "$ARCHDOCK_PRESET_BUILTIN_ROOT/icons" -type f -name '*.json' -print0 | sort -z | xargs -0 sha256sum)"
+    defaults_file="$XDG_DATA_HOME/Arch Dock/Arch Dock/presets/defaults.json"
+    local index=0 selection='.presets[0:5][]'
+    case "$ARCHDOCK_PRESET_MATRIX_GROUP" in
+        icons-middle) selection='.presets[5:10][]' ;;
+        icons-last) selection='.presets[10:15][]' ;;
+    esac
+    for preset in $(jq -r "$selection" "$ARCHDOCK_PRESET_BUILTIN_ROOT/icons/builtin-icon-presets.json"); do
+        log_session_phase "ADREP-TASK-005 icon preset $preset seven actions"
+        definition="$ARCHDOCK_PRESET_BUILTIN_ROOT/icons/$preset.json"
+        expected="$(jq -r '.icon.iconStyleId' "$definition")"
+        baseline="$(preset_renderer "$id")"; registry="$(panel_registry_json)"
+        protected="$(jq -cS 'del(.animationProfile,.iconStyle,.iconThemeId,.themeId,.iconStyleDefinition,.iconGlobalDefaults,.iconAnimation,.animationTrigger,.animationSpeed,.animationIntensity,.magnificationRadius,.magnificationFalloff,.presetOrigin,.settingsRevision,.iconShape,.iconDiameter,.iconLogoSize,.iconOutlineWidth,.iconBodyColor,.iconOutlineColor,.iconGlowColor,.iconPedestalEnabled,.iconPedestalHeight,.iconPedestalColor,.iconTilesEnabled,.iconTileMode,.iconTileColor,.iconTileOpacity,.iconTileBorderColor,.iconTileBorderWidth,.iconTileTexture,.iconTileThickness,.iconTileIconOffsetX,.iconTileIconOffsetY,.iconTileIconScale,.iconTileBevel,.iconTileMaterial,.iconTileElevation)' <<<"$baseline")"
+        preset_begin icon "$preset" false "$id" >/dev/null
+        preset_require_equal "$expected" "$(preset_renderer "$id" | jq -r '.iconStyle')" "$preset preview style"
+        preset_require_equal "$(jq -r '.icon.motion.profileId' "$definition")" \
+            "$(preset_renderer "$id" | jq -r '.animationProfile.id')" "$preset projected motion profile"
+        preset_require_equal "$registry" "$(panel_registry_json)" "$preset preview no durable write"
+        preset_require_equal "$protected" "$(preset_renderer "$id" | jq -cS 'del(.animationProfile,.iconStyle,.iconThemeId,.themeId,.iconStyleDefinition,.iconGlobalDefaults,.iconAnimation,.animationTrigger,.animationSpeed,.animationIntensity,.magnificationRadius,.magnificationFalloff,.presetOrigin,.settingsRevision,.iconShape,.iconDiameter,.iconLogoSize,.iconOutlineWidth,.iconBodyColor,.iconOutlineColor,.iconGlowColor,.iconPedestalEnabled,.iconPedestalHeight,.iconPedestalColor,.iconTilesEnabled,.iconTileMode,.iconTileColor,.iconTileOpacity,.iconTileBorderColor,.iconTileBorderWidth,.iconTileTexture,.iconTileThickness,.iconTileIconOffsetX,.iconTileIconOffsetY,.iconTileIconScale,.iconTileBevel,.iconTileMaterial,.iconTileElevation)')" "$preset preview icon-only scope"
+        preset_capture "$id" "$preset-preview"
+        target_values="$(preset_renderer "$id" | jq -cS 'del(.settingsRevision)')"
+        preset_ok cancel >/dev/null
+        preset_require_equal "$baseline" "$(preset_renderer "$id")" "$preset Cancel exact"
+        preset_capture "$id" "$preset-cancel"
+        preset_begin icon "$preset" false "$id" >/dev/null
+        preset_ok revert >/dev/null
+        preset_require_equal "$baseline" "$(preset_renderer "$id")" "$preset Revert exact"
+        preset_capture "$id" "$preset-revert"
+        preset_begin icon "$preset" false "$id" >/dev/null
+        preset_ok updateDraft "{'animationSpeed': <1.4>}" >/dev/null
+        saved="$(preset_ok saveAsCustomPreset "Matrix $preset" | jq -r '.presetId')"
+        [[ "$saved" == user-* ]]
+        copy_file="$XDG_DATA_HOME/Arch Dock/Arch Dock/presets/icons/$saved.json"
+        [[ -f "$copy_file" ]]
+        jq -e --arg p "$preset" '.identity.builtIn==false and .identity.derivedFromPresetId==$p and .icon.motion.animationSpeed==1.4 and (.icon.parameters|length)==24' "$copy_file" >/dev/null
+        preset_ok restoreBuiltInDefaults >/dev/null
+        preset_require_equal "$target_values" "$(preset_renderer "$id" | jq -cS 'del(.settingsRevision)')" "$preset Restore exact built-in"
+        preset_capture "$id" "$preset-restore"
+        revision="$(panel_registry_value "$id" settingsRevision)"
+        preset_ok applyAsActive >/dev/null
+        preset_require_equal "$((revision+1))" "$(panel_registry_value "$id" settingsRevision)" "$preset Apply one revision"
+        preset_require_equal "$preset" "$(panel_registry_record_snapshot "$id" | jq -r '.presetOrigin.iconPresetId')" "$preset durable origin"
+        preset_require_equal "$protected" "$(preset_renderer "$id" | jq -cS 'del(.animationProfile,.iconStyle,.iconThemeId,.themeId,.iconStyleDefinition,.iconGlobalDefaults,.iconAnimation,.animationTrigger,.animationSpeed,.animationIntensity,.magnificationRadius,.magnificationFalloff,.presetOrigin,.settingsRevision,.iconShape,.iconDiameter,.iconLogoSize,.iconOutlineWidth,.iconBodyColor,.iconOutlineColor,.iconGlowColor,.iconPedestalEnabled,.iconPedestalHeight,.iconPedestalColor,.iconTilesEnabled,.iconTileMode,.iconTileColor,.iconTileOpacity,.iconTileBorderColor,.iconTileBorderWidth,.iconTileTexture,.iconTileThickness,.iconTileIconOffsetX,.iconTileIconOffsetY,.iconTileIconScale,.iconTileBevel,.iconTileMaterial,.iconTileElevation)')" "$preset Apply icon-only scope"
+        preset_capture "$id" "$preset-apply"
+        preset_begin icon "$saved" false "$id" >/dev/null
+        preset_require_equal 1.4 "$(preset_renderer "$id" | jq -r '.animationSpeed')" "$preset My copy reusable"
+        preset_ok applyAsActive >/dev/null
+        preset_require_equal "$saved" "$(panel_registry_record_snapshot "$id" | jq -r '.presetOrigin.iconPresetId')" "$preset My copy durable"
+        preset_capture "$id" "$preset-my-copy"
+        registry="$(panel_registry_json)"
+        preset_ok setAsDefault icon "$preset" false >/dev/null
+        preset_require_equal "$preset" "$(jq -r '.iconPresetId' "$defaults_file")" "$preset default durable"
+        preset_require_equal "$registry" "$(panel_registry_json)" "$preset default preserves existing panels"
+        reply="$(preset_variant_json "$(panel_call createFreePanel)")"
+        jq -e '.success and .ownershipVerified' <<<"$reply" >/dev/null
+        new_id="$(jq -r '.panelId' <<<"$reply")"
+        preset_require_equal "$preset" "$(panel_registry_record_snapshot "$new_id" | jq -r '.presetOrigin.iconPresetId')" "$preset default used by new panel"
+        apply_panel_settings "$new_id" "{'type': <'launcher'>}" "$preset default capture content"
+        require_true_reply "$(panel_call pinPanelUrls "$new_id" "['file:///usr/share/applications/firefox.desktop', 'file:///usr/share/applications/org.kde.dolphin.desktop', 'file:///usr/share/applications/org.kde.kate.desktop']")"
+        preset_capture "$new_id" "$preset-default"
+        panel_call removePanel "$new_id" >/dev/null
+        preset_ok setAsDefault icon "$preset" true >/dev/null
+        preset_require_equal '' "$(jq -r '.iconPresetId' "$defaults_file")" "$preset default removed"
+        preset_unrelated_unchanged "$preset"; preset_no_orphans
+        python - "$ARCHDOCK_TEST_LOG_DIR" "$preset" <<'PY_PIXELS'
+from pathlib import Path
+from PySide6.QtGui import QImage
+import sys
+root, preset = Path(sys.argv[1]), sys.argv[2]
+for left, right in (("cancel", "revert"), ("preview", "restore"), ("restore", "apply")):
+    first = QImage(str(root / (preset + "-" + left + ".png")))
+    second = QImage(str(root / (preset + "-" + right + ".png")))
+    assert not first.isNull() and first == second, (preset, left, right, "native pixels differ")
+print(preset, "Cancel/Revert, Preview/Restore and Restore/Apply native pixels identical")
+PY_PIXELS
+        printf '%s\tPASS seven actions; durable My copy %s\n' "$preset" "$saved" >>"$ARCHDOCK_TEST_LOG_DIR/icon-actions.log"
+        ((++index))
+    done
+    preset_require_equal 5 "$index" 'five presets in the bounded group'
+    preset_require_equal "$builtins" "$(find "$ARCHDOCK_PRESET_BUILTIN_ROOT/icons" -type f -name '*.json' -print0 | sort -z | xargs -0 sha256sum)" 'all built-in bytes immutable'
+    panel_call removePanel "$id" >/dev/null
 }
 
 preset_recovery_group() {
@@ -446,7 +571,7 @@ run_preset_audition_matrix() {
     case "$ARCHDOCK_PRESET_MATRIX_GROUP" in
         existing) preset_existing_group ;;
         temporary) preset_temporary_group ;;
-        icons) preset_icons_group ;;
+        icons|icons-middle|icons-last) preset_icons_group ;;
         recovery) preset_recovery_group ;;
         defaults) preset_defaults_group ;;
         *) return 2 ;;

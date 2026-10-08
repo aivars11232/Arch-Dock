@@ -69,6 +69,7 @@ profile_shortcuts_group() {
     reply="$(gdbus call --session --dest org.kde.kglobalaccel --object-path /kglobalaccel \
         --method org.kde.KGlobalAccel.getComponent 'org.archdock.ArchDock')"
     component_path="$(preset_variant_json "${reply/objectpath /}" | jq -r .)"
+    start_signal_monitor nativePanelRecoveryFinished
     gdbus call --session --dest org.kde.kglobalaccel --object-path "$component_path" \
         --method org.kde.kglobalaccel.Component.invokeShortcut "$first" >/dev/null
     local deadline=$((SECONDS + 20))
@@ -81,6 +82,7 @@ profile_shortcuts_group() {
     jq -e --arg id "$first" '.state == "APPLIED" and .profileId == $id' <<<"$(profile_call getStatus)" >/dev/null
     profile_no_journal
     preset_unrelated_unchanged S3
+    wait_for_signal_monitor nativePanelRecoveryFinished
 
     log_session_phase 'S4 invalid target / disabled feature / deleted profile'
     local names
@@ -188,6 +190,7 @@ PY
     wait "$ARCHDOCK_SESSION_ARCH_DOCK_PID" 2>/dev/null || true
     ARCHDOCK_SESSION_ARCH_DOCK_PID=''
     unload_kwin_script org.archdock.windowwatcher.runtime
+    start_signal_monitor nativePanelRecoveryFinished
     start_arch_dock arch-dock-profile-recovery.log
     reply="$(profile_call getStatus)"
     jq -e '.state == "BLOCKED" and .recoveryRequired == true' <<<"$reply" >/dev/null
@@ -198,6 +201,9 @@ PY
     preset_require_equal "$free_before" "$(free_host_snapshot "$free_desktop" "$free_applet")" 'explicit recovery restores free host'
     profile_no_journal
     preset_unrelated_unchanged P3
+    # Profile mutations remain guarded while native startup recovery is active.
+    # Observe its real completion before starting the independent cleanup action.
+    wait_for_signal_monitor nativePanelRecoveryFinished
     profile_ok deleteProfile "$failed" 1 >/dev/null
     profile_ok deleteProfile "$baseline" 1 >/dev/null
     panel_call showSettings >/dev/null
@@ -217,6 +223,7 @@ run_profile_matrix() {
     fixture="$(create_unrelated_free_host_sentinel)"
     PRESET_FREE_DESKTOP="${fixture%%|*}"; PRESET_FREE_APPLET="${fixture#*|}"
     PRESET_FREE_SNAPSHOT="$(wait_for_free_host_snapshot_stable "$PRESET_FREE_DESKTOP" "$PRESET_FREE_APPLET" fixture)"
+    start_signal_monitor nativePanelRecoveryFinished
     start_arch_dock arch-dock.log
     wait_for_owned_panel bottom
     local host
@@ -224,6 +231,7 @@ run_profile_matrix() {
     host="${host%%|*}"
     wait_for_panel_registry_value bottom nativePanelId "$host"
     wait_for_native_panel_placement "$host" bottom bottom center baseline
+    wait_for_signal_monitor nativePanelRecoveryFinished
     case "$ARCHDOCK_PROFILE_MATRIX_GROUP" in
         apply) profile_apply_group ;;
         shortcuts) profile_shortcuts_group ;;

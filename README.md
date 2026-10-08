@@ -38,9 +38,16 @@ and the remaining publication and physical boundaries.
   and platform looks separately; Platform presentation off restores the saved
   flat look. Native 3D platforms offer material editing and bending, with icons
   anchored to the surface and input limited by visible depth.
-- Icon styles and per-icon overrides, reduced-motion-aware animation,
-  panel presentation, grouped-window actions, folder expansion, segments,
-  overlays and status modules.
+- Six icon styles with six selectable shapes, adjustable diameter and logo
+  size, outline and colours, and an optional Dark Orb pedestal. Original
+  application glyphs are retained. Built-in and My Icon Presets save their
+  complete appearance alongside motion.
+- Custom and styled tiles with thirteen textures, thickness and glyph
+  placement. Native 3D tiles add solid depth, bevel, material and elevation;
+  tiles travel with upright glyphs along the panel's path.
+- Per-icon overrides, reduced-motion-aware animation, panel presentation,
+  grouped-window actions, folder expansion, segments, overlays and status
+  modules.
 - Persistent profiles, explicit multi-panel apply/rollback, optional KDE
   global shortcuts, and bounded configuration backups and recovery.
 

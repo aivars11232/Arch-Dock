@@ -1,5 +1,142 @@
 # Arch Dock current state
 
+<!-- ADREP_TASK_005_BEGIN -->
+## ADREP-TASK-005 — Verified and installed; Git/recheck closure in progress (2026-10-08)
+
+Task 5 follows Task 4's closed and pushed recheck at `73cd1c3`. Its icon,
+tile and preset implementation is complete, with passing focused native
+checks. [Report 1 and the final owner checklist](repairs/ADREP-TASK-005.md)
+map OF-34 to OF-43 and all twelve acceptance criteria. The complete suite
+passes 120/120 in 2332.19 s, serially; package/harness and owner installation
+also pass. Scoped Git sync, fresh-clone recheck, Report 2 and task-owned
+cleanup remain; this section does not claim task closure.
+
+- All six built-in styles follow all six Shape choices and retain their
+  signature defaults. Diameter, Logo size, outline/colours and supported
+  pedestal options are saved beside the single Style selector. Dark Orb
+  pedestal defaults off; Blue/Red Pedestal revision 2 explicitly enable it.
+- Native real application glyph captures cover 108 style/shape/application
+  cases (216 paired frames) at 52 px/default settings. Minimum inner glyph
+  share is 0.936657; graphical RGB RMS contrast 0.333748, with strong-pixel
+  share 0.571429. These are graphical measurements, not a WCAG text ratio or
+  physical owner-display acceptance.
+- Custom tiles preserve shape/fill/border/opacity, adding thirteen existing
+  textures, thickness, glyph offsets/scale and seated upright orbit. Real
+  3D depth/bevel/material/elevation, six contours, thirteen textures/materials
+  and opacity were checked under native RHI.
+- All fifteen presets passed the native action matrix: 105 captured actions
+  and 45 exact pixel pairs. Actual Duplicate/reload/My cards and all fifteen
+  UI action routes also pass. Complete icon/tile defaults are applied while
+  panel geometry/content/size/spacing/ownership remain protected.
+- Native Studio truth: 23 cases, 1137 field changes, zero failures/deferred
+  changes; horizontal/vertical host rows are included. The recovery repair's
+  full one-job Debug rebuild passed (`232-*`). Complete serial run `240-*`
+  passed checks 1–93, then stopped at profile application; total 1432.26 s.
+  Its native runtime gate passed in 64.78 s. Profile mutations correctly hit
+  the existing lifecycle guard during background recovery; the harness now
+  waits for the existing recovery-complete signal before independent actions.
+  Production guards, assertions and deadlines remain unchanged. Rebuild and
+  disposable install are in `248-*`/`249-*`; focused profile checks in `250-*`.
+  Run `256-*` passed 119/120 in 2318.59 s, then failed installed startup.
+  Tracing reproduces a three-second clock-panel fixture timeout. A short
+  disk-backed path avoids native KIO socket errors, but is insufficient alone;
+  configured run `270-*` still failed. Startup now waits for the existing native
+  recovery-complete signal before the independent fixture mutation. The
+  configured focused startup passes 1/1 in 42.43 s (`274-*`), preserving all
+  original statements and deadlines (`280-*`). Production startup is unchanged.
+  Run `281-*` passed 79 checks, then was stopped during check 80 after a
+  deferred native-editor projection emitted an expired-context warning.
+  Its private leftovers were stopped with logs retained (`283-*`). Scene-owned
+  single-shot frame updates now stop on destruction. Native editor/rendering,
+  input and path travel pass 3/3 in 289.34 s (`286-*`); the static-scene guard
+  records one frame in 1000 ms and passes (`288-*`), with no recurrence of the
+  warning. The exact sole lifetime cause remains inferred (`296-*`). Final
+  build/install `289-*`/`290-*` pass. Run `297-*` passed checks 1–79, then
+  failed Top/Grid folder interaction. Its private D-Bus trace proves a stale
+  background placement rollback overwrote newer Top intent with Bottom
+  (`298-*`, `299-*`). Recovery now checks runtime persisted intent before and
+  after each placement script and cancels superseded work before further
+  writes or rollback, preserving the foreground result. The shared native
+  regression is red/green (`302-*`/`304-*`); complete Debug build/install pass
+  (`308-*`/`309-*`). All seven focused native/drop/profile/startup checks pass
+  in 329.88 s (`310-*`, `311-*`), with original guards and deadlines. All 552
+  current source bytes/modes are frozen in `317-*`. Complete serial run
+  `319-*` passes 120/120 in 2332.19 s, with
+  `ARCHDOCK_TEST_TMPDIR` set to the short owned disk-backed `build-r5` root.
+- Repaired-source canonical export: two matching four-artifact sets, 586 source files/587
+  archive members; source SHA256
+  `fb835ceee39438f9f1b6bb67e931d3527b347f53cf25262412d3a846eb044bdc`.
+  Recipe pkgrel 13, both exports and source checks verify (`316-*`, `318-*`).
+  Post-suite regeneration preserves all four artifacts exactly and all 552
+  source hashes/modes remain unchanged (`320-*`, `322-*`). One-job Release
+  build passes in 473.15 s (`323-*`, `324-*`). Package 0.1.1-13 is 3002034
+  bytes, SHA256
+  `997e8b82a09810fbc0026fd89d3ee99672591143b974f51551d76cc1b3286a13`.
+  Installed-package harness passes in 295.37 s: 250 exact payload files,
+  15+15 catalogs, optional 3D startup, hidden-source native UI/folders,
+  0.1.1-11 upgrade/configuration recovery and both removal paths preserve
+  user configuration (`330-*`, `331-*`). The first harness failed only because
+  checkout hiding hid the test Python environment; the exact dependency copy
+  outside that namespace boundary resolves it (`329-*`) without changing
+  source, package, assertions or deadlines. Owner installation passes with
+  the single native password request (`333-*`, `336-*`). Ten
+  internal Qt skips are disclosed in `320-*`: nine have exact passing
+  dedicated native/D-Bus counterparts in that same suite; the optional live
+  reference source-asset archive/root cell remains unexecuted.
+- Complete-suite attempts `205-*` and `209-*` passed checks 1–83, then failed
+  native folder/Dolphin drops with a one-second D-Bus NoReply. A standalone
+  unchanged traced run passed, but the traced second full run reproduced the
+  circular wait: the backend awaited Plasma's geometry query while Plasma
+  awaited the mutation; reply latency was 1004.488 ms. A client-side event-loop
+  attempt was rejected after a private Qt drag-delivery crash (PID 684352).
+  The original drop helper is restored byte-for-byte. Backend recovery now
+  uses Qt's event-processing call mode, with a reentry/stale-generation guard;
+  its two-process recovery-first regression passes (`227-*` red, `229-*`
+  green). Unchanged real private Plasma runtime verification passed with the
+  IPC fixture (`234-*`: 2/2 CTests, 67.19 s); seven drop requests returned in
+  at most 8.254 ms, under the unchanged 1000 ms deadline. No new crash dump
+  occurred in that passing run. The complete final suite passes in `319-*`.
+  All failed logs and the one private crash record/compressed payload are
+  retained (`242-*`, 27817485 compressed bytes, mode 0600).
+- Owner PC runs **arch-dock 0.1.1-13**, installed backend PID 1087001,
+  PlasmaShell PID 1042. All 250 payload files match their packaged bytes/modes;
+  `pacman -Qkk` reports zero altered files. The menu entry starts the installed
+  backend and native KWin observed its visible Panel Studio window, then the
+  task-opened window was closed and the temporary observer unloaded. Seven
+  backed-up owner files remain byte-identical; private backup and installation
+  receipt are retained with mode 0600 (`owner-receipt.json`). No Arch Dock
+  applet was present, so no PlasmaShell refresh was needed. The exact original
+  rejected-experiment system dump was removed after hash verification; its
+  private compressed evidence copy remains. Physical display/input, second-monitor and
+  other-GPU acceptance remain pending; the inherited diagonal baked-ring Grid
+  overlap note is retained.
+
+Evidence: `build-codex-adrep/evidence/ADREP-TASK-005/`, especially
+`176-all-preset-action-receipt.json`, `178-final-native-icons-tiles.log`,
+`180-final-native-readability.json`, `181-final-native-style-shape-grid.png`,
+`182-full-final-source-build.log`, `188-canonical-source-verification.json`,
+`189-final-source-hashes.json`, `190-final-native-studio-receipt.json`,
+`201-native-cache-discriminator.json`, `207-runtime-drop-diagnostic.log`,
+`208-runtime-drop-discriminator.json`, `209-full-suite-final.log`,
+`210-failed-drop-bus-timing.json`, `221-block-with-gui-crash-info.log`,
+`227-background-recovery-red.log`, `229-background-recovery-call.log` and
+`232-full-final-recovery-build.log`, `234-final-native-recovery-drop.log`,
+`235-recovery-repair-receipt.json`, `238-final-recovery-canonical-verification.json`,
+`239-final-source-hashes.json`, `240-full-suite-final.log` and
+`242-rejected-client-dump-retention.json`, `250-profile-readiness-final-focused.log`,
+`253-profile-ready-canonical-verification.json`, `254-profile-ready-source-hashes.json`,
+`256-full-suite-final.log`, `274-startup-readiness-focused.log`,
+`277-startup-ready-canonical-verification.json`, `278-startup-ready-source-hashes.json`
+`280-startup-readiness-receipt.json`, `286-scene-lifetime-native.log`,
+`288-static-frame-regression-native.log`, `293-scene-final-canonical-verification.json`,
+`294-scene-final-source-hashes.json`, `296-scene-lifetime-receipt.json`,
+`299-folder-stale-placement-bus.json`, `311-recovery-intent-guard-focused-receipt.json`,
+`316-guard-final-canonical-verification.json`, `317-guard-final-source-hashes.json`,
+`320-full-suite-receipt.json`, `322-post-suite-source-verification.log`,
+`326-package-identity.json`, `331-installed-package-harness-visible-python-receipt.json`,
+`333-owner-native-installation-receipt.json` and `owner-receipt.json`.
+<!-- ADREP_TASK_005_END -->
+
 <!-- ADREP_TASK_004_BEGIN -->
 ## ADREP-TASK-004 — Verified and rechecked (2026-10-08)
 
@@ -7,7 +144,7 @@ Task 4's implementation, complete configured suite and pushed-source
 fresh-clone recheck pass. [Reports 1 and 2](repairs/ADREP-TASK-004.md) record
 all ten owner findings OF-24 to OF-33 and ten acceptance criteria with
 evidence. Source commit: `2882d462ce4e9065ddd4b714e0885bcc9714e8ea`.
-Recheck round 1 needed no source repair. Task 5 has not started.
+Recheck round 1 needed no source repair. Task 4 closed before Task 5 started.
 
 - Thirteen original bundled textures preserve tint and opacity. Glass has
   frost/highlights, Floating Glass adds elevation, Futuristic has seams/light

@@ -7,6 +7,31 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- ADREP-TASK-005: all six icon styles follow Rounded, Square, Squircle,
+  Circle, Hexagon and Diamond through package declarations, retaining their
+  signature defaults. Diameter, Logo size, outline and colours are saved beside
+  Style. Real application glyphs use continuous sizing and measured share and
+  graphical contrast; Neon frames preserve the original glyph colour.
+- Dark Orb has no pedestal by default. Its optional pedestal has saved height
+  and colour; Blue Pedestal and Red Pedestal revision 2 enable it.
+- Icon Presets carry a bounded appearance block and My Icon Presets retain it
+  after reload. Applying a preset restores its complete icon/tile defaults
+  while preserving panel geometry, content, icon size, spacing and ownership.
+- Tiles retain custom shape/fill/border/opacity and add thirteen textures,
+  thickness and glyph offsets/scale. Native 3D uses closed tile solids with
+  bevel, material and elevation. Tiles travel with upright glyphs during orbit;
+  the reset action preserves the existing custom-tile values.
+- Native panel recovery can receive a committed application/folder drop while
+  it awaits Plasma's geometry reply. Recovery dispatches incoming backend
+  calls and guards overlapping/stale passes; drop delivery retains its
+  synchronous result and existing deadline.
+- Background native placement stops when newer panel intent commits during
+  its Plasma call. An obsolete pass preserves the newer position and result
+  instead of rolling its old host snapshot over the foreground change.
+- Native 3D frame-projection updates belong to the scene and stop during
+  replacement. Static scenes settle without continuously requesting frames;
+  input, tile rendering and upright path travel retain their existing checks.
+
 - The official source verifier regenerates all four canonical export artifacts
   and rejects any byte difference, including recipe commands/metadata, archive
   metadata/member ordering and manually repaired checksum receipts.

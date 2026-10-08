@@ -1,5 +1,6 @@
 // The Icon Preset parser and its projection to panel settings.
 #include "IconPresetDefinition.h"
+#include "PanelSettingsSchema.h"
 
 #include <QMetaType>
 
@@ -236,7 +237,7 @@ QVariantMap IconPresetIcon::toVariantMap() const
     {
         animationOverrides.insert(it.key(), it.value());
     }
-    return {
+    QVariantMap result{
         {QStringLiteral("glyphPolicy"), glyphPolicy.toVariantMap()},
         {QStringLiteral("iconStyleId"), iconStyleId},
         {QStringLiteral("motion"), motion.toVariantMap()},
@@ -244,6 +245,8 @@ QVariantMap IconPresetIcon::toVariantMap() const
         {QStringLiteral("stateOverrides"), stateOverrides},
         {QStringLiteral("visualOverrides"), visualOverrides},
     };
+    if (!parameters.isEmpty()) result.insert(QStringLiteral("parameters"), parameters);
+    return result;
 }
 
 QVariantMap IconPresetFallback::toVariantMap() const
@@ -298,19 +301,33 @@ const QStringList &IconPresetDefinition::stateIds()
 
 const QStringList &IconPresetDefinition::panelValueKeys()
 {
-    static const QStringList keys{
+    static const QStringList keys = QStringList{
         QStringLiteral("iconStyle"), QStringLiteral("iconAnimation"),
         QStringLiteral("animationTrigger"), QStringLiteral("animationSpeed"),
         QStringLiteral("animationIntensity"),
         QStringLiteral("magnificationRadius"),
         QStringLiteral("magnificationFalloff"),
-    };
+    } + parameterValueKeys();
+    return keys;
+}
+
+const QStringList &IconPresetDefinition::parameterValueKeys()
+{
+    static const QStringList keys{
+        QStringLiteral("iconShape"), QStringLiteral("iconDiameter"), QStringLiteral("iconLogoSize"),
+        QStringLiteral("iconOutlineWidth"), QStringLiteral("iconBodyColor"), QStringLiteral("iconOutlineColor"),
+        QStringLiteral("iconGlowColor"), QStringLiteral("iconPedestalEnabled"), QStringLiteral("iconPedestalHeight"),
+        QStringLiteral("iconPedestalColor"), QStringLiteral("iconTilesEnabled"), QStringLiteral("iconTileMode"),
+        QStringLiteral("iconTileColor"), QStringLiteral("iconTileOpacity"), QStringLiteral("iconTileBorderColor"),
+        QStringLiteral("iconTileBorderWidth"), QStringLiteral("iconTileTexture"), QStringLiteral("iconTileThickness"),
+        QStringLiteral("iconTileIconOffsetX"), QStringLiteral("iconTileIconOffsetY"), QStringLiteral("iconTileIconScale"),
+        QStringLiteral("iconTileBevel"), QStringLiteral("iconTileMaterial"), QStringLiteral("iconTileElevation")};
     return keys;
 }
 
 QVariantMap IconPresetDefinition::panelValues() const
 {
-    return {
+    QVariantMap result{
         {QStringLiteral("iconStyle"), icon.iconStyleId},
         {QStringLiteral("iconAnimation"), icon.motion.profileId},
         {QStringLiteral("animationTrigger"), icon.motion.trigger},
@@ -319,6 +336,13 @@ QVariantMap IconPresetDefinition::panelValues() const
         {QStringLiteral("magnificationRadius"), icon.motion.magnificationRadius},
         {QStringLiteral("magnificationFalloff"), icon.motion.magnificationFalloff},
     };
+    for (const auto &key : parameterValueKeys()) {
+        const auto *field = PanelSettingsSchema::panelDescriptor(key);
+        Q_ASSERT(field);
+        result.insert(key, field->defaultValue);
+    }
+    result.insert(icon.parameters);
+    return result;
 }
 
 QVariantMap IconPresetDefinition::toVariantMap() const
@@ -386,9 +410,22 @@ std::optional<IconPresetDefinition> IconPresetDefinition::fromVariantMap(
         QStringLiteral("iconStyleId"), QStringLiteral("visualOverrides"),
         QStringLiteral("stateOverrides"), QStringLiteral("glyphPolicy"),
         QStringLiteral("motion"), QStringLiteral("perStateAnimationOverrides"),
+        QStringLiteral("parameters"),
     }, iconPointer, &found);
     result.icon.iconStyleId = identifierMember(
         icon, QStringLiteral("iconStyleId"), iconPointer, true, &found);
+    const QString parameterPointer = pointerChild(iconPointer, QStringLiteral("parameters"));
+    const QVariantMap parameters = objectMember(icon, QStringLiteral("parameters"), iconPointer, false, &found);
+    for (auto it = parameters.cbegin(); it != parameters.cend(); ++it) {
+        const QString pointer = pointerChild(parameterPointer, it.key());
+        if (!parameterValueKeys().contains(it.key())) {
+            addDiagnostic(&found, QStringLiteral("unknown-field"), pointer,
+                QStringLiteral("field is outside the icon/tile appearance scope"));
+            continue;
+        }
+        if (const auto value = strictPanelValue(it.key(), it.value(), pointer, &found))
+            result.icon.parameters.insert(it.key(), *value);
+    }
     result.icon.visualOverrides = overrideTable(
         icon, QStringLiteral("visualOverrides"), iconPointer, layerOverrideKeys(),
         nullptr, &found);

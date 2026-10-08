@@ -618,7 +618,8 @@ private:
             QStringLiteral("color"), QStringLiteral("secondaryColor"),
             QStringLiteral("borderColor"), QStringLiteral("opacity"),
             QStringLiteral("inset"), QStringLiteral("radius"),
-            QStringLiteral("borderWidth")
+            QStringLiteral("borderWidth"), QStringLiteral("followsIconShape"),
+            QStringLiteral("option")
         }, pointer);
         IconStyleLayerDefinition layer;
         layer.id = identifier(object, QStringLiteral("id"), pointer, true);
@@ -644,8 +645,24 @@ private:
                                         false, 0.0, 0.0, 0.25);
         layer.borderColor = colorValue(object, QStringLiteral("borderColor"), pointer,
                                        false, QStringLiteral("transparent"));
+        layer.followsIconShape = boolValue(
+            object, QStringLiteral("followsIconShape"), pointer, false, false);
+        layer.option = stringValue(object, QStringLiteral("option"), pointer, false);
+        if (!layer.option.isEmpty() && layer.option != QStringLiteral("pedestal")
+            && layer.option != QStringLiteral("shape-override"))
+        {
+            add(QStringLiteral("invalid-enum"),
+                pointerChild(pointer, QStringLiteral("option")),
+                QStringLiteral("unsupported layer option"));
+        }
         if (layer.kind == QStringLiteral("asset"))
         {
+            if (layer.followsIconShape)
+            {
+                add(QStringLiteral("invalid-value"),
+                    pointerChild(pointer, QStringLiteral("followsIconShape")),
+                    QStringLiteral("only procedural layers can follow Icon Shape"));
+            }
             layer.asset = stringValue(object, QStringLiteral("asset"), pointer, true);
             if (!layer.asset.isEmpty())
             {
@@ -659,7 +676,9 @@ private:
                                       QStringLiteral("rounded-rect"));
             if (!QSet<QString>{QStringLiteral("rounded-rect"), QStringLiteral("circle"),
                                QStringLiteral("diamond"), QStringLiteral("orb"),
-                               QStringLiteral("plate"), QStringLiteral("ring")}
+                               QStringLiteral("plate"), QStringLiteral("ring"),
+                               QStringLiteral("square"), QStringLiteral("squircle"),
+                               QStringLiteral("hexagon")}
                      .contains(layer.shape))
             {
                 add(QStringLiteral("invalid-enum"),
@@ -1057,6 +1076,34 @@ private:
         }
         definition->extensions = manifest.value(QStringLiteral("extensions"))
                                      .toObject().toVariantMap();
+        // PD-20: signature defaults are package data, shared by every
+        // renderer. Other namespaced extensions retain their old behavior.
+        const QString key = QStringLiteral("org.archdock.iconParameters");
+        if (definition->extensions.contains(key))
+        {
+            const QJsonValue parameters = manifest.value(QStringLiteral("extensions"))
+                                              .toObject().value(key);
+            const QString pointer = pointerChild(QStringLiteral("/extensions"), key);
+            if (!parameters.isObject())
+            {
+                add(QStringLiteral("invalid-type"), pointer,
+                    QStringLiteral("icon parameters must be an object"));
+                return;
+            }
+            const QJsonObject object = parameters.toObject();
+            rejectUnknown(object, {QStringLiteral("defaultShape")}, pointer);
+            const QString shape = stringValue(
+                object, QStringLiteral("defaultShape"), pointer, true);
+            if (!QSet<QString>{QStringLiteral("rounded"), QStringLiteral("square"),
+                               QStringLiteral("squircle"), QStringLiteral("circle"),
+                               QStringLiteral("hexagon"), QStringLiteral("diamond")}
+                     .contains(shape))
+            {
+                add(QStringLiteral("invalid-enum"),
+                    pointerChild(pointer, QStringLiteral("defaultShape")),
+                    QStringLiteral("unsupported default icon shape"));
+            }
+        }
     }
 
     void validateDefinition(const IconStyleDefinition &definition)

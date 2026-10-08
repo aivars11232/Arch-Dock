@@ -3,7 +3,7 @@
   "version": 1,
   "id": "neon-orange",
   "name": "Neon Orange",
-  "revision": 1,
+  "revision": 2,
   "author": "Arch Dock contributors",
   "description": "A dark diamond tile with a vivid orange neon frame around the original application glyph.",
   "license": {
@@ -15,16 +15,16 @@
   "safeGlyphInset": {"left": 0.19, "top": 0.19, "right": 0.19, "bottom": 0.19},
   "layers": {
     "rear": [
-      {"id": "orange-aura", "kind": "procedural", "shape": "diamond", "color": "#693318", "secondaryColor": "#ff9a4d", "opacity": 0.38, "inset": 0.03, "radius": 0.1, "borderColor": "#f47a32", "borderWidth": 0.055}
+      {"id": "orange-aura", "kind": "procedural", "shape": "diamond", "followsIconShape": true, "color": "#693318", "secondaryColor": "#ff9a4d", "opacity": 0.38, "inset": 0.03, "radius": 0.1, "borderColor": "#f47a32", "borderWidth": 0.055}
     ],
     "base": [
-      {"id": "orange-core", "kind": "procedural", "shape": "diamond", "color": "#261208", "secondaryColor": "#633119", "opacity": 0.94, "inset": 0.095, "radius": 0.08, "borderColor": "#ff8e3d", "borderWidth": 0.025}
+      {"id": "orange-core", "kind": "procedural", "shape": "diamond", "followsIconShape": true, "color": "#261208", "secondaryColor": "#633119", "opacity": 0.94, "inset": 0.095, "radius": 0.08, "borderColor": "#ff8e3d", "borderWidth": 0.025}
     ],
     "front": [
-      {"id": "orange-frame", "kind": "procedural", "shape": "diamond", "color": "transparent", "secondaryColor": "#fff0d8", "opacity": 1, "inset": 0.075, "radius": 0.08, "borderColor": "#ff9a4d", "borderWidth": 0.035}
+      {"id": "orange-frame", "kind": "procedural", "shape": "ring", "followsIconShape": true, "color": "transparent", "secondaryColor": "#fff0d8", "opacity": 1, "inset": 0.075, "radius": 0.08, "borderColor": "#ff9a4d", "borderWidth": 0.035}
     ],
-    "shadow": {"id": "orange-shadow", "kind": "procedural", "shape": "diamond", "color": "#0b0502", "opacity": 0.62, "inset": 0.015, "radius": 0.1, "borderColor": "transparent", "borderWidth": 0},
-    "glow": {"id": "orange-glow", "kind": "procedural", "shape": "diamond", "color": "transparent", "opacity": 0.82, "inset": 0.015, "radius": 0.1, "borderColor": "#ff9a4d", "borderWidth": 0.06}
+    "shadow": {"id": "orange-shadow", "kind": "procedural", "shape": "diamond", "followsIconShape": true, "color": "#0b0502", "opacity": 0.62, "inset": 0.015, "radius": 0.1, "borderColor": "transparent", "borderWidth": 0},
+    "glow": {"id": "orange-glow", "kind": "procedural", "shape": "diamond", "followsIconShape": true, "color": "transparent", "opacity": 0.82, "inset": 0.015, "radius": 0.1, "borderColor": "#ff9a4d", "borderWidth": 0.06}
   },
   "states": [
     {"id": "normal", "rearOpacity": 0.42, "baseOpacity": 0.92, "frontOpacity": 0.76, "glyphOpacity": 1, "glyphScale": 0.8, "borderColor": "#ff8e3d", "glowColor": "#ff9a4d", "glowOpacity": 0.22, "reflectionOpacity": 0, "indicatorColor": "#ff9a4d", "indicatorOpacity": 0},
@@ -45,5 +45,6 @@
     "animationCapabilities": ["hover-scale", "press-scale", "glow-pulse", "urgent-pulse", "launching-pulse", "indicator-transition"],
     "supports3D": false
   },
+  "extensions": {"org.archdock.iconParameters": {"defaultShape": "diamond"}},
   "preview": {"seed": "neon-orange-v1", "iconName": "applications-graphics", "state": "hover", "tileSize": 64}
 }

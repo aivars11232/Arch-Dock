@@ -1,8 +1,9 @@
 // Small helpers shared by PanelWindow's implementation files
-// (PanelWindow*.cpp in this folder). Nothing else includes this header.
+// (PanelWindow*.cpp in this folder) and their IPC regression fixture.
 
 #pragma once
 
+#include <QDBusInterface>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QScreen>
@@ -10,8 +11,33 @@
 #include <QString>
 #include <QWindow>
 
+#include <functional>
+
 namespace PanelWindowHelpers
 {
+// Keep the native script call in one seam so a two-process regression can
+// exercise a drop arriving while background recovery awaits Plasma.
+struct PlasmaScriptSuperseded final {};
+
+inline QDBusMessage callPlasmaScript(QDBusInterface &shell, const QString &script,
+                                    bool backgroundRecovery,
+                                    const std::function<bool()> &stillCurrent = {})
+{
+    if (stillCurrent && !stillCurrent())
+        throw PlasmaScriptSuperseded{};
+    // A drop client can be waiting synchronously for this backend while
+    // recovery awaits that client's geometry reply. Keep dispatching backend
+    // method calls during recovery; never reenter the client's drag delivery.
+    const QDBusMessage reply = shell.call(
+        backgroundRecovery ? QDBus::BlockWithGui : QDBus::Block,
+        QStringLiteral("evaluateScript"), script);
+    // A foreground mutation can commit while this recovery call dispatches
+    // events. Its newer intent must survive any subsequent write or rollback.
+    if (stillCurrent && !stillCurrent())
+        throw PlasmaScriptSuperseded{};
+    return reply;
+}
+
 // `value` as a quoted, escaped JavaScript string literal, safe to splice into
 // a Plasma desktop script.
 inline QString plasmaScriptStringLiteral(const QString &value)

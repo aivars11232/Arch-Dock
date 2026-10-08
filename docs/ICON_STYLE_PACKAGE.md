@@ -1,6 +1,6 @@
 # Arch Dock icon-style package format
 
-Status: version 1 production contract for TASK-0029.
+Status: version 1 production contract, extended by ADREP-TASK-005 (PD-20/21/22).
 
 An icon style is a reusable visual resource. It is not a panel theme, an icon
 preset, an animation profile, or a replacement for the system-wide icon theme.
@@ -104,6 +104,41 @@ unclipped. A `mask` therefore never makes a style renderable on its own.
 
 `safeGlyphInset` has finite `left`, `top`, `right`, and `bottom` values from
 `0.0` through `0.45`. It constrains visual glyph placement only.
+
+## Owner shape and tile parameters
+
+Built-in revision-2 styles declare
+`extensions["org.archdock.iconParameters"].defaultShape` as `rounded`, `square`,
+`squircle`, `circle`, `hexagon` or `diamond`. The saved panel value
+`iconShape: "style-default"` uses that signature: Metallic styles are rounded,
+Neon styles are diamonds and Dark Orb is circular. An explicit shape overrides
+it through the shared resolver. Plain Original remains unframed until a shape
+or tile treatment is explicitly selected.
+
+A procedural layer can declare `followsIconShape: true`. Its contour then follows
+the selected shape. `option: "pedestal"` draws only when the panel enables
+Pedestal; `option: "shape-override"` draws only with an explicit shape. These
+options are validated declarations; packages contain no executable code.
+Dark Orb's pedestal is off by default. Blue Pedestal and Red Pedestal icon
+presets enable it explicitly.
+
+Icons > Appearance saves diameter (40–100% of the cell), Logo size (55–100% of
+the inner diameter), outline width (Style default or 0–12 px), body/outline/glow
+colours and optional pedestal height/colour beside the single Style selector.
+Empty colours retain the package palette. Controls appear only when their
+layers draw; pedestal height/colour wait for Pedestal to be enabled.
+The resolver fits the original application glyph to the contour's inner area;
+the glyph is rendered continuously without Kirigami's standard-size rounding.
+
+Icon Tiles keeps custom shape, fill, opacity and border. Additional settings
+are texture (`none` or the thirteen bundled panel materials), thickness
+(0–24 px), icon offsets (−40–40 px) and icon scale (25–150%). Native 3D panels
+also offer bevel (0–12 px, bounded by depth), material and elevation
+(−24–96 px). A 2D tile uses a static native Canvas for texture and thickness
+bevel; a 3D tile uses a closed procedural solid with native materials. Tiles
+travel with their glyphs, whose orbit orientation stays upright. Reset tile
+options resets the additional parameters while preserving custom shape, fill,
+border and opacity.
 
 ## Explicit states
 

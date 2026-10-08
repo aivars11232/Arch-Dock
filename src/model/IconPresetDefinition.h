@@ -47,6 +47,9 @@ struct IconPresetIcon
     // The icon style this preset is built on. An icon preset is not an icon
     // style: it references one and may adjust how it is drawn.
     QString iconStyleId;
+    // Optional bounded panel icon/tile values. Older version-one resources
+    // omit this block and receive the style/tile parameter defaults.
+    QVariantMap parameters;
     // Layer id -> the layer fields this preset replaces.
     QVariantMap visualOverrides;
     // Icon state id -> the state fields this preset replaces.
@@ -94,6 +97,7 @@ struct IconPresetDefinition
     // layout, placement, visibility, presentation or content key appears here,
     // which is what lets an icon preset be applied without touching a panel.
     [[nodiscard]] static const QStringList &panelValueKeys();
+    [[nodiscard]] static const QStringList &parameterValueKeys();
     [[nodiscard]] QVariantMap panelValues() const;
 
     [[nodiscard]] QVariantMap toVariantMap() const;

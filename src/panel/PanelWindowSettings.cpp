@@ -457,21 +457,59 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             projectedTheme = m_panelRegistry.themeRuntimeProjection(candidate);
         return *projectedTheme;
     };
-    // Whether the icon style draws layers of its own, which take the place of
-    // the plain tile behind an icon. Resolved once, for the fields that ask.
-    std::optional<bool> styleLayers;
-    const auto iconStyleDrawsLayers = [&]() {
-        if (!styleLayers.has_value())
+    // PD-20/21: declarations govern shape and style controls. Resolve once;
+    // repeated package projections would regress the Studio latency gate.
+    std::optional<std::optional<QVariantMap>> projectedIconStyle;
+    const auto iconStyleProjection = [&]() -> const std::optional<QVariantMap> & {
+        if (!projectedIconStyle.has_value())
+            projectedIconStyle = m_panelRegistry.iconStyleRuntimeProjection(candidate);
+        return *projectedIconStyle;
+    };
+    std::optional<QVariantList> declaredIconLayers;
+    const auto iconLayers = [&]() -> const QVariantList & {
+        if (!declaredIconLayers.has_value())
         {
-            styleLayers = false;
-            const auto style = candidate.iconStyle.styleReference == QStringLiteral("plain-original")
-                ? std::nullopt : m_panelRegistry.iconStyleRuntimeProjection(candidate);
+            declaredIconLayers.emplace();
+            const auto &style = iconStyleProjection();
             if (style)
-                for (const QVariant &role : style->value(QStringLiteral("layers")).toMap())
-                    if (!role.toList().isEmpty())
-                        styleLayers = true;
+            {
+                const auto roles = style->value(QStringLiteral("layers")).toMap();
+                for (auto it = roles.cbegin(); it != roles.cend(); ++it)
+                {
+                    QVariantList layers = it.value().toList();
+                    if (!it.value().toMap().isEmpty())
+                        layers.append(it.value());
+                    for (const QVariant &value : layers)
+                    {
+                        QVariantMap layer = value.toMap();
+                        layer.insert(QStringLiteral("role"), it.key());
+                        declaredIconLayers->append(layer);
+                    }
+                }
+            }
         }
-        return *styleLayers;
+        return *declaredIconLayers;
+    };
+    const bool drawsTiles = candidate.iconStyle.tilesEnabled || std::any_of(
+        candidate.iconStyle.perEntryOverrides.cbegin(), candidate.iconStyle.perEntryOverrides.cend(),
+        [](const auto &entry) { return entry.tileEnabled.value_or(false); });
+    const auto layerDrawn = [&](const QVariantMap &layer) {
+        const QString option = layer.value(QStringLiteral("option")).toString();
+        return drawsTiles && candidate.iconStyle.tileMode != QStringLiteral("custom")
+            && layer.value(QStringLiteral("role")).toString() != QStringLiteral("mask")
+            && !(option == QStringLiteral("pedestal") && !candidate.iconStyle.pedestalEnabled)
+            && !(option == QStringLiteral("shape-override")
+                 && candidate.iconStyle.shape == QStringLiteral("style-default"));
+    };
+    const auto hasIconLayer = [&](const auto &predicate, bool drawnOnly = false) {
+        const auto &layers = iconLayers();
+        return std::any_of(layers.cbegin(), layers.cend(), [&](const QVariant &value) {
+            const QVariantMap layer = value.toMap();
+            return (!drawnOnly || layerDrawn(layer)) && predicate(layer);
+        });
+    };
+    const auto iconStyleDrawsLayers = [&]() {
+        return hasIconLayer([](const QVariantMap &) { return true; }, true);
     };
     // On a baked 2.5D look the icons stand on the track its artwork declares
     // for the current state, not on the record's layout; only a closed track
@@ -619,9 +657,75 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             available = !freeHost && controlAvailable(descriptor->editor.capability);
             break;
         case ArchDock::EditorCapability::ArbitraryXyPlacement:
-        case ArchDock::EditorCapability::IconStateStyling:
             available = controlAvailable(descriptor->editor.capability);
             break;
+        case ArchDock::EditorCapability::IconStateStyling:
+        {
+            available = controlAvailable(descriptor->editor.capability);
+            const bool tileParameter = key == QStringLiteral("iconTileTexture")
+                || key == QStringLiteral("iconTileThickness") || key == QStringLiteral("iconTileIconOffsetX")
+                || key == QStringLiteral("iconTileIconOffsetY") || key == QStringLiteral("iconTileIconScale")
+                || key == QStringLiteral("iconTileBevel") || key == QStringLiteral("iconTileMaterial")
+                || key == QStringLiteral("iconTileElevation");
+            if (available && tileParameter)
+            {
+                const bool only3D = key == QStringLiteral("iconTileBevel")
+                    || key == QStringLiteral("iconTileMaterial") || key == QStringLiteral("iconTileElevation");
+                available = !only3D || tier == ArchDock::RendererTier::True3D;
+                if (available && (key == QStringLiteral("iconTileTexture")
+                         || key == QStringLiteral("iconTileThickness")))
+                    available = candidate.iconStyle.tileMode == QStringLiteral("custom")
+                        || !iconStyleDrawsLayers() || hasIconLayer([](const QVariantMap &layer) {
+                            return layer.value(QStringLiteral("role")).toString() == QStringLiteral("base")
+                                && layer.value(QStringLiteral("followsIconShape")).toBool();
+                        });
+                inactive = available && (!drawsTiles || (key == QStringLiteral("iconTileBevel")
+                    && candidate.iconStyle.tileThickness <= 0));
+            }
+            const bool parameter = key == QStringLiteral("iconDiameter") || key == QStringLiteral("iconLogoSize")
+                || key == QStringLiteral("iconOutlineWidth") || key == QStringLiteral("iconBodyColor")
+                || key == QStringLiteral("iconOutlineColor") || key == QStringLiteral("iconGlowColor")
+                || key == QStringLiteral("iconPedestalEnabled") || key == QStringLiteral("iconPedestalHeight")
+                || key == QStringLiteral("iconPedestalColor");
+            if (available && parameter)
+            {
+                const auto &style = iconStyleProjection();
+                available = style && style->value(QStringLiteral("extensions")).toMap()
+                    .contains(QStringLiteral("org.archdock.iconParameters"));
+                if (available && key.startsWith(QStringLiteral("iconPedestal")))
+                {
+                    available = drawsTiles && candidate.iconStyle.tileMode != QStringLiteral("custom")
+                        && hasIconLayer([](const QVariantMap &layer) {
+                            return layer.value(QStringLiteral("option")).toString() == QStringLiteral("pedestal");
+                        });
+                    inactive = available && key != QStringLiteral("iconPedestalEnabled")
+                        && !candidate.iconStyle.pedestalEnabled;
+                }
+                else if (available && key == QStringLiteral("iconBodyColor"))
+                {
+                    available = hasIconLayer([](const QVariantMap &layer) {
+                        return layer.value(QStringLiteral("role")).toString() == QStringLiteral("base")
+                            && layer.value(QStringLiteral("option")).toString() != QStringLiteral("pedestal");
+                    }, true);
+                }
+                else if (available && key == QStringLiteral("iconGlowColor"))
+                {
+                    available = hasIconLayer([](const QVariantMap &layer) {
+                        return layer.value(QStringLiteral("role")).toString() == QStringLiteral("glow");
+                    }, true);
+                }
+                else if (available && (key == QStringLiteral("iconOutlineWidth")
+                         || key == QStringLiteral("iconOutlineColor")))
+                {
+                    available = hasIconLayer([](const QVariantMap &layer) {
+                        return layer.value(QStringLiteral("borderWidth")).toDouble() > 0;
+                    }, true);
+                    inactive = available && key == QStringLiteral("iconOutlineColor")
+                        && candidate.iconStyle.outlineWidth == 0;
+                }
+            }
+            break;
+        }
         case ArchDock::EditorCapability::DynamicTint:
             // A theme's 2D tint capability does not tint its native mesh.
             // Native colour is the live material control on Panels > 3D.
@@ -821,11 +925,12 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 !candidate.surface.themeSource.trimmed().isEmpty();
             break;
         case ArchDock::EditorCapability::TileShape:
-            // The shape of the tile drawn behind each icon, by default or by
-            // an icon's own choice: a custom tile, or the plain tile of an
-            // icon without styled layers of its own.
+            // PD-20: a package-declared silhouette follows the chosen shape.
             available = controlAvailable(QStringLiteral("icon-state-styling")) &&
-                (candidate.iconStyle.tileMode == QStringLiteral("custom") || !iconStyleDrawsLayers());
+                drawsTiles && (candidate.iconStyle.tileMode == QStringLiteral("custom") || !iconStyleDrawsLayers()
+                    || hasIconLayer([](const QVariantMap &layer) {
+                        return layer.value(QStringLiteral("followsIconShape")).toBool();
+                    }));
             break;
         case ArchDock::EditorCapability::GlobalRenderer:
             // Running-application indicators belong to edge panels whose

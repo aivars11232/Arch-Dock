@@ -313,27 +313,149 @@ function hasRenderableLayers(styleDefinition) {
     return false;
 }
 
-function resolve(styleDefinition, flags, entry, tileSettings) {
+function iconShape(styleDefinition, settings) {
+    const shapes = ["rounded", "square", "squircle", "circle", "hexagon", "diamond"];
+    const parameters = objectValue(objectValue(objectValue(styleDefinition).extensions)
+        ["org.archdock.iconParameters"]);
+    const signature = String(parameters.defaultShape || "rounded");
+    const selected = String(objectValue(settings).iconShape || "style-default");
+    return shapes.includes(selected) ? selected
+        : shapes.includes(signature) ? signature : "rounded";
+}
+
+function parameterizedDefinition(styleDefinition, settings, shape, logicalSize) {
+    // PD-20/21: transform declared layers, never branch on a built-in ID.
+    // Copy before changing a layer: manifests are shared by panel previews,
+    // live hosts and per-entry overrides.
+    const style = copyMap(styleDefinition);
+    const layers = {};
+    const source = objectValue(style.layers);
+    const values = objectValue(settings);
+    const size = Math.max(1, finiteNumber(logicalSize, finiteNumber(values.iconSize, 52)));
+    const diameter = bounded(values.iconDiameter, 40, 100, 100) / 100;
+    const outline = bounded(values.iconOutlineWidth, -1, 12, -1);
+    const bodyColor = String(values.iconBodyColor || "");
+    const outlineColor = String(values.iconOutlineColor || "");
+    const glowColor = String(values.iconGlowColor || "");
+    const pedestalColor = String(values.iconPedestalColor || "");
+    for (const role of Object.keys(source)) {
+        const resolved = [];
+        for (const declared of layersForRole(styleDefinition, role)) {
+            if (declared.option === "pedestal" && !values.iconPedestalEnabled)
+                continue;
+            if (declared.option === "shape-override"
+                    && !["rounded", "square", "squircle", "circle", "hexagon", "diamond"]
+                        .includes(String(values.iconShape || "style-default")))
+                continue;
+            const layer = copyMap(declared);
+            layer.inset = (1 - (1 - 2 * bounded(layer.inset, 0, 0.45, 0)) * diameter) / 2;
+            if (outline >= 0 && Number(layer.borderWidth || 0) > 0)
+                layer.borderWidth = outline / size;
+            if (outlineColor && Number(layer.borderWidth || 0) > 0 && role !== "glow")
+                layer.borderColor = outlineColor;
+            if (role === "base" && layer.option !== "pedestal" && bodyColor) {
+                layer.color = bodyColor;
+                layer.secondaryColor = Qt.lighter(bodyColor, 1.35).toString();
+            }
+            if (role === "glow" && glowColor) {
+                layer.color = glowColor;
+                layer.borderColor = glowColor;
+            }
+            if (layer.option === "pedestal") {
+                layer.heightFactor = bounded(values.iconPedestalHeight, 5, 50, 20) / 100;
+                if (pedestalColor) {
+                    layer.color = pedestalColor;
+                    layer.secondaryColor = Qt.lighter(pedestalColor, 1.35).toString();
+                }
+            }
+            if (layer.followsIconShape === true) {
+                if (layer.shape === "ring") {
+                    layer.color = "transparent";
+                    layer.secondaryColor = "transparent";
+                }
+                layer.shape = shape === "rounded" ? "rounded-rect" : shape;
+                layer.radius = shape === "square" ? 0
+                    : shape === "squircle" ? 0.32
+                    : shape === "circle" ? 0.5
+                    : shape === "diamond" ? 0.04 : 0.22;
+            }
+            resolved.push(layer);
+        }
+        if (["rear", "base", "front"].includes(role))
+            layers[role] = resolved;
+        else if (resolved.length > 0)
+            layers[role] = resolved[0];
+    }
+    style.layers = layers;
+    return style;
+}
+
+function glyphInterior(styleDefinition, settings, shape, logicalSize) {
+    const values = objectValue(settings);
+    const size = Math.max(1, finiteNumber(logicalSize, finiteNumber(values.iconSize, 52)));
+    const diameter = bounded(values.iconDiameter, 40, 100, 100) / 100;
+    const outline = bounded(values.iconOutlineWidth, -1, 12, -1);
+    let inset = 0.06;
+    let border = 0.015;
+    for (const layer of layersForRole(styleDefinition, "base")) {
+        if (layer.option === "pedestal" || layer.kind === "asset")
+            continue;
+        inset = bounded(layer.inset, 0, 0.45, inset);
+        border = bounded(layer.borderWidth, 0, 0.25, border);
+        break;
+    }
+    if (values.iconTileMode === "custom") {
+        inset = 0.04;
+        border = bounded(values.iconTileBorderWidth, 0, 8, 1) / size;
+    } else if (outline >= 0) {
+        border = outline / size;
+    }
+    const shapeFactor = shape === "diamond" ? 0.96 * Math.SQRT1_2 : 1;
+    return Math.max(0.05, (1 - 2 * inset) * diameter * shapeFactor - 2 * border);
+}
+
+function resolve(styleDefinition, flags, entry, tileSettings, logicalSize) {
     const entryStyle = entryStyleDefinition(entry);
     const hasEntryStyle = Object.keys(entryStyle).length > 0;
     const entryStyleUsable = usableDefinition(entryStyle);
     const panelStyleUsable = usableDefinition(styleDefinition);
     const usable = entryStyleUsable || panelStyleUsable;
-    const style = entryStyleUsable ? entryStyle
+    const sourceStyle = entryStyleUsable ? entryStyle
         : panelStyleUsable ? styleDefinition : {};
+    const tiles = objectValue(tileSettings);
+    const shape = iconShape(sourceStyle, tiles);
+    const style = parameterizedDefinition(sourceStyle, tiles, shape, logicalSize);
     const requestedState = stateId(flags);
+    const state = usable ? normalizedState(style, requestedState) : fallbackState(requestedState);
+    if (tiles.iconOutlineColor)
+        state.borderColor = String(tiles.iconOutlineColor);
+    if (tiles.iconGlowColor)
+        state.glowColor = String(tiles.iconGlowColor);
+    const parametersActive = usable && objectValue(sourceStyle.extensions)
+        ["org.archdock.iconParameters"] !== undefined;
+    const innerDiameter = glyphInterior(sourceStyle, tiles, shape, logicalSize);
+    if (parametersActive) {
+        const logo = innerDiameter * bounded(tiles.iconLogoSize, 55, 100, 95) / 100;
+        const normalScale = normalizedState(sourceStyle, "normal").glyphScale;
+        // Preserve each state's declared relative enlargement; compensate
+        // its normal scale so Logo size measures the painted inner share.
+        const inset = bounded((1 - logo / normalScale) / 2, 0, 0.45, 0);
+        style.safeGlyphInset = {left: inset, top: inset, right: inset, bottom: inset};
+    }
     const glyph = resolvedGlyph(style, entry);
     const styleId = usable ? String(style.id) : "plain-original";
-    const tiles = objectValue(tileSettings);
     const tileEnabled = entryTileEnabled(entry, tiles.iconTilesEnabled === undefined
         ? true : Boolean(tiles.iconTilesEnabled));
     return {
         valid: usable,
         styleId: styleId,
         styleDefinition: style,
+        iconShape: shape,
+        parametersActive: parametersActive,
+        innerDiameter: innerDiameter,
+        diameter: bounded(tiles.iconDiameter, 40, 100, 100) / 100,
         stateId: requestedState,
-        state: usable ? normalizedState(style, requestedState)
-                      : fallbackState(requestedState),
+        state: state,
         glyphSource: glyph.source,
         glyphPolicy: glyph.policy,
         glyphTreatment: usable ? glyph.treatment : "original",
@@ -348,8 +470,8 @@ function resolve(styleDefinition, flags, entry, tileSettings) {
         layers: usable ? objectValue(style.layers) : {},
         assetPaths: usable ? objectValue(style.assetPaths) : {},
         tileEnabled: tileEnabled,
-        renderStyledLayers: usable && styleId !== "plain-original"
-            && tileEnabled && tiles.iconTileMode !== "custom" && hasRenderableLayers(style),
+        renderStyledLayers: usable && tileEnabled
+            && tiles.iconTileMode !== "custom" && hasRenderableLayers(style),
         fallbackApplied: !usable || (hasEntryStyle && !entryStyleUsable),
         fallbackReason: !usable ? "style-unavailable"
             : hasEntryStyle && !entryStyleUsable

@@ -19,6 +19,7 @@ class PresetPreviewSessionTest final : public QObject
 private slots:
     void panelPreparationPreservesIndependentIcons();
     void iconPreparationRejectsEveryPanelMutation();
+    void iconParameterPreparationAndSnapshotsStayInScope();
     void customizedSnapshotsAreIndependentUserResources();
     void styleCustomizationLeavesNoStaleOverrides();
     void lineageChangesOnlyForGovernedSettings();
@@ -103,6 +104,51 @@ void PresetPreviewSessionTest::iconPreparationRejectsEveryPanelMutation()
     QVERIFY(!PresetApplication::prepareIcon(before, {}, *icon,
         {{QStringLiteral("width"), 900}}, &error));
     QCOMPARE(error, QStringLiteral("icon-only-violation"));
+}
+
+void PresetPreviewSessionTest::iconParameterPreparationAndSnapshotsStayInScope()
+{
+    // ADREP-TASK-005: appearance/tile parameters belong to the icon preset;
+    // icon cell size, spacing, per-entry overrides and panel settings do not.
+    auto icon = IconPresetDefinition::fromVariantMap(PresetTestSupport::iconPresetMap());
+    QVERIFY(icon);
+    const QVariantMap parameters{{"iconShape", "circle"}, {"iconDiameter", 72},
+        {"iconLogoSize", 88}, {"iconPedestalEnabled", true}, {"iconPedestalHeight", 32},
+        {"iconTileMode", "custom"}, {"iconTileTexture", "organic"}, {"iconTileThickness", 8.0},
+        {"iconTileIconOffsetX", -7.0}, {"iconTileIconOffsetY", 4.0}, {"iconTileIconScale", 85},
+        {"iconTileBevel", 3.0}, {"iconTileMaterial", "metallic"}, {"iconTileElevation", 12.0}};
+    icon->icon.parameters = parameters;
+    const auto source = icon->toVariantMap();
+    auto before = PanelDefinition::defaults("free-icons", "Free icons", "free", false);
+    before.iconStyle.shape = "hexagon";
+    before.iconStyle.tileMode = "custom";
+    before.iconStyle.diameter = 55;
+    before.iconStyle.size = 64;
+    before.iconStyle.spacing = 11;
+    before = before.normalized();
+    QString error;
+    const auto draft = PresetApplication::prepareIcon(before, {}, *icon, {}, &error);
+    QVERIFY2(draft, qPrintable(error));
+    QVERIFY(PresetApplication::iconOnlyChange(before, draft->candidatePanel));
+    QCOMPARE(draft->candidatePanel.iconStyle.size, 64);
+    QCOMPARE(draft->candidatePanel.iconStyle.spacing, 11.0);
+    const auto values = draft->candidatePanel.toLegacyMap();
+    for (auto it = parameters.cbegin(); it != parameters.cend(); ++it)
+        QCOMPARE(values.value(it.key()), it.value());
+    QTemporaryDir temporary; QVERIFY(temporary.isValid());
+    UserPresetStore store(temporary.path());
+    const auto saved = store.save(PresetApplication::iconSnapshot(*icon, draft->candidatePanel, "My tile icons"), &error);
+    QVERIFY2(saved, qPrintable(error));
+    QCOMPARE(store.iconPresets().size(), 1);
+    QCOMPARE(store.iconPresets().first(), *saved);
+    for (const QString &key : IconPresetDefinition::parameterValueKeys())
+        QCOMPARE(saved->icon.parameters.value(key), values.value(key));
+    const auto reapplied = PresetApplication::prepareIcon(before, {}, *saved, {}, &error);
+    QVERIFY2(reapplied, qPrintable(error));
+    const auto reappliedValues = reapplied->candidatePanel.toLegacyMap();
+    for (const QString &key : IconPresetDefinition::panelValueKeys())
+        QCOMPARE(reappliedValues.value(key), values.value(key));
+    QCOMPARE(icon->toVariantMap(), source);
 }
 
 void PresetPreviewSessionTest::customizedSnapshotsAreIndependentUserResources()

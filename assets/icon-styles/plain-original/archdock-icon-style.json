@@ -3,7 +3,7 @@
   "version": 1,
   "id": "plain-original",
   "name": "Plain Original",
-  "revision": 1,
+  "revision": 2,
   "author": "Arch Dock contributors",
   "description": "Fail-closed fallback that preserves the application's original glyph.",
   "license": {
@@ -23,7 +23,22 @@
   },
   "layers": {
     "rear": [],
-    "base": [],
+    "base": [
+      {
+        "id": "original-shape",
+        "kind": "procedural",
+        "shape": "rounded-rect",
+        "followsIconShape": true,
+        "option": "shape-override",
+        "color": "#18222d",
+        "secondaryColor": "#27394c",
+        "opacity": 0.8,
+        "inset": 0.06,
+        "radius": 0.22,
+        "borderColor": "#60768a",
+        "borderWidth": 0.015
+      }
+    ],
     "front": []
   },
   "states": [
@@ -188,7 +203,8 @@
     ],
     "features": [
       "safe-glyph-inset",
-      "state-styling"
+      "state-styling",
+      "tile"
     ],
     "animationCapabilities": [],
     "supports3D": false
@@ -198,5 +214,10 @@
     "iconName": "applications-system",
     "state": "running",
     "tileSize": 64
+  },
+  "extensions": {
+    "org.archdock.iconParameters": {
+      "defaultShape": "rounded"
+    }
   }
 }

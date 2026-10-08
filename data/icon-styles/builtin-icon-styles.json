@@ -12,7 +12,7 @@
       "packageManifest": "plain-original/archdock-icon-style.json",
       "capabilities": {
         "rendererTiers": ["procedural2d"],
-        "features": ["safe-glyph-inset", "state-styling"],
+        "features": ["safe-glyph-inset", "state-styling", "tile"],
         "animationCapabilities": [],
         "supports3D": false
       },
@@ -106,7 +106,7 @@
     {
       "id": "dark-orb",
       "name": "Dark Orb",
-      "description": "A dark glass orb on a compact pedestal with a violet energy ring around the original application glyph.",
+      "description": "A dark glass orb with an optional pedestal and a violet energy ring around the original application glyph.",
       "author": "Arch Dock contributors",
       "category": "orb",
       "packageManifest": "dark-orb/archdock-icon-style.json",

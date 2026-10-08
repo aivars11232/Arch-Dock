@@ -33,16 +33,30 @@ run any code: it is treated as a crash, and the next activation request starts
 Arch Dock again. While it is stopped, on-demand activation is refused with
 `org.freedesktop.DBus.Error.Spawn.ChildExited` and exit status 75.
 
-In Panel Studio, select the panel and open **Icon Tiles**. **From icon style**
-uses the frame or pedestal of the style chosen on **Icons > Appearance**, the
-one place an icon style is chosen; a plain icon shows its tile under the
-pointer, in the **Tile shape** chosen here. **Custom tile** adds fill color,
-opacity, border color and border width independently of the panel surface.
-**Show tiles by default** controls the panel default; an explicit
-Icon Properties visibility override takes precedence for that entry. The live
-preview shows the draft in both 2D and 3D. Apply saves it, while Cancel discards
-changes made since the last Apply. Tiles keep the application's real icon glyph
-and its interaction area.
+In Panel Studio, select the panel and open **Icons > Appearance**. The single
+**Style** selector sits beside **Shape**, **Diameter** and **Logo size**.
+**Style default** keeps each style's signature shape; the six explicit choices
+are Rounded, Square, Squircle, Circle, Hexagon and Diamond. Outline thickness
+and body, outline and glow colours appear where the style draws them. Empty
+colours use its own palette. Dark Orb starts without a pedestal; enabling
+**Pedestal** reveals its height and colour. Blue Pedestal and Red Pedestal
+presets enable it.
+
+**Icon Tiles > From icon style** uses that style's frame. Plain Original remains
+unframed at rest until an explicit shape or tile treatment is chosen.
+**Custom tile** retains shape, fill colour, opacity, border colour and border
+width independently of the panel surface. **Show tiles by default** controls
+the panel default; an explicit Icon Properties visibility override takes
+precedence for that entry. Texture offers None and the thirteen panel
+materials. Thickness draws a bevel in 2D and a solid tile depth in 3D. Horizontal
+and vertical offsets and scale place the real glyph on its tile. On a native
+3D panel, bevel, material and elevation also apply. Tiles travel with their
+icons, whose glyphs stay upright during orbit. **Reset tile options** preserves
+custom shape, fill, border and opacity while resetting the additional options.
+
+The live preview shows the draft in both 2D and 3D. Apply saves it; Cancel
+restores the last saved values. The application's real glyph and interaction
+area are retained.
 
 **Panel Themes / Skins** separates **Flat looks** from **Platform looks**.
 Loading a platform turns its presentation on and remembers the complete flat

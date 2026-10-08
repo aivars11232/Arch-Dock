@@ -467,13 +467,16 @@ void PanelWindow::scheduleNativePanelRecovery()
             this,
             [this, generation, finalAttempt = index == static_cast<int>(recoveryDelays.size()) - 1]
             {
-                if (generation != m_nativePanelRecoveryGeneration)
+                // Recovery's native script wait dispatches incoming backend
+                // calls so a synchronous Plasma drop can finish. A later
+                // timer must not reenter that recovery or complete a stale one.
+                if (generation != m_nativePanelRecoveryGeneration || m_nativePanelRecoveryActive)
                 {
                     return;
                 }
 
                 recoverNativePanels(finalAttempt);
-                if (finalAttempt)
+                if (finalAttempt && generation == m_nativePanelRecoveryGeneration)
                 {
                     emit nativePanelRecoveryFinished();
                 }

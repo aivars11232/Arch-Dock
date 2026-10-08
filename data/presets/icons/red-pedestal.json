@@ -6,7 +6,7 @@
     "name": "Red Pedestal",
     "description": "A red glass orb standing on a lit red pedestal around the application's own icon.",
     "builtIn": true,
-    "revision": 1
+    "revision": 2
   },
   "compatibility": {
     "rendererTiers": ["procedural2d"],
@@ -15,6 +15,7 @@
   },
   "icon": {
     "iconStyleId": "dark-orb",
+    "parameters": {"iconPedestalEnabled": true},
     "visualOverrides": {
       "orb-shadow": {"borderColor": "#4f2429"},
       "orb-pedestal": {"color": "#1d070a", "secondaryColor": "#6b2730", "borderColor": "#ff4d5e", "opacity": 1, "borderWidth": 0.03},

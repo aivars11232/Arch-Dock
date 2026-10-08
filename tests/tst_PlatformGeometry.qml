@@ -49,6 +49,40 @@ TestCase {
         return wrong
     }
 
+    function test_tileIsABoundedSolidWithRealDepthAndBevel() {
+        // ADREP-TASK-005, OF-42: a closed volume rather than a textured plane.
+        function volume(mesh) {
+            let sum = 0
+            for (let i = 0; i < mesh.indexes.length; i += 3) {
+                const a = mesh.positions[mesh.indexes[i]]
+                const b = mesh.positions[mesh.indexes[i + 1]]
+                const c = mesh.positions[mesh.indexes[i + 2]]
+                sum += a[0] * (b[1]*c[2]-b[2]*c[1])
+                    + a[1] * (b[2]*c[0]-b[0]*c[2]) + a[2] * (b[0]*c[1]-b[1]*c[0])
+            }
+            return sum / 6
+        }
+        for (const shape of ["rounded", "square", "squircle", "circle", "hexagon", "diamond"]) {
+            const thin = PlatformGeometry.tile({shape: shape, thickness: 0.2, bevel: 0, diameter: 0.9})
+            const thick = PlatformGeometry.tile({shape: shape, thickness: 0.8, bevel: 0, diameter: 0.9})
+            const beveled = PlatformGeometry.tile({shape: shape, thickness: 0.8, bevel: 0.08, diameter: 0.9})
+            for (const mesh of [thin, thick, beveled]) {
+                compare(mesh.format, "org.archdock.mesh")
+                compare(misWound(mesh), 0, shape + " every face winds outward")
+                verify(volume(mesh) > 0, shape + " encloses positive volume")
+                for (const p of mesh.positions) {
+                    verify(p[0] >= -0.9 && p[0] <= 0.9 && p[1] >= -0.9 && p[1] <= 0.9)
+                    verify(p[2] >= -0.8 && p[2] <= 0)
+                }
+                for (const uv of mesh.uv0s) verify(uv[0] >= 0 && uv[0] <= 1 && uv[1] >= 0 && uv[1] <= 1)
+                verify(mesh.indexes.length / 3 < 1000, "a tile stays within the shared scene budget")
+            }
+            fuzzyCompare(volume(thick) / volume(thin), 4, 0.00001)
+            verify(volume(beveled) < volume(thick), "a bevel removes the outer corners of the solid")
+            verify(beveled.indexes.length > thick.indexes.length, "the bevel has its own faces")
+        }
+    }
+
     function test_pedestalIsAClosedColumnFacingOutward() {
         const mesh = PlatformGeometry.pedestal(24)
         compare(mesh.format, "org.archdock.mesh")

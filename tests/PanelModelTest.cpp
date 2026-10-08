@@ -128,7 +128,9 @@ void PanelModelTest::defaultsExposeEveryVersionTwoSection()
     QCOMPARE(definition.layout.pathType, QStringLiteral("circular"));
     QCOMPARE(definition.surface.appearance, QStringLiteral("glass"));
     QCOMPARE(definition.surface.glowIntensity, 1.0);
-    QCOMPARE(definition.iconStyle.shape, QStringLiteral("rounded"));
+    // ADREP-TASK-005, PD-20: new panels use the style's signature until
+    // the owner explicitly chooses a shape. Saved choices remain explicit.
+    QCOMPARE(definition.iconStyle.shape, QStringLiteral("style-default"));
     QCOMPARE(definition.iconStyle.styleReference,
              QStringLiteral("plain-original"));
     QCOMPARE(definition.toLegacyMap().value(QStringLiteral("iconThemeId")).toString(),

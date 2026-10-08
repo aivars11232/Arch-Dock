@@ -331,6 +331,8 @@ private slots:
     void studioPlainSurfaceExplains3D();
     void wholePanelRotationFieldsAreGatedByTheResolver();
     void studioMotionAndDirectionRows();
+    void studioIconAppearanceOptionsAreTransactional();
+    void studioTileParametersAreTransactional();
     void studioFolderShapeRows();
     void meshSceneEditorIsGatedAndTransactional();
     void rendererSwitchRetainsOnlyUnchangedInactiveFields();
@@ -4133,6 +4135,199 @@ void PanelWindowCapabilityTest::studioMotionAndDirectionRows()
     QCOMPARE(directions(layoutPage(studio.get())).value("rows").toInt(), 1);
 }
 
+// ADREP-TASK-005, PD-20/21: package declarations govern available options;
+// editable native controls stage values, and Apply alone persists them.
+void PanelWindowCapabilityTest::studioIconAppearanceOptionsAreTransactional()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    const auto set = [&](const QVariantMap &values) {
+        return backend.applyPanelSettingsTransaction(panel,
+            registry->panelDefinition(panel)->settingsRevision, values).value("success").toBool();
+    };
+    const auto fields = [&]() {
+        return backend.panelSettingsEditorSnapshot(panel, "studio").value("panelFields").toList();
+    };
+    QVERIFY(set({{"type", "launcher"}, {"layout", "circular"}, {"iconTilesEnabled", true}}));
+    for (const QString &style : {QStringLiteral("plain-original"), QStringLiteral("metallic-blue"),
+             QStringLiteral("metallic-red"), QStringLiteral("neon-green"),
+             QStringLiteral("neon-orange"), QStringLiteral("dark-orb")}) {
+        QVERIFY(set({{"iconStyle", style}}));
+        const QVariantList offered = fields();
+        QVERIFY2(fieldKeys(offered).contains("iconShape"), qPrintable(style));
+        QVERIFY(fieldKeys(offered).contains("iconDiameter"));
+        QVERIFY(fieldKeys(offered).contains("iconLogoSize"));
+        QCOMPARE(fieldKeys(offered).contains("iconPedestalEnabled"), style == "dark-orb");
+        QCOMPARE(fieldKeys(offered).contains("iconBodyColor"), style != "plain-original");
+    }
+    QVERIFY(fieldByKey(fields(), "iconPedestalHeight").value("inactive").toBool());
+    QVERIFY(set({{"iconPedestalEnabled", true}}));
+    QVERIFY(!fieldByKey(fields(), "iconPedestalHeight").value("inactive").toBool());
+    QVERIFY(set({{"iconOutlineWidth", 0}}));
+    QVERIFY(fieldByKey(fields(), "iconOutlineColor").value("inactive").toBool());
+    QVERIFY(set({{"iconTileMode", "custom"}}));
+    for (const QString &key : {QStringLiteral("iconBodyColor"), QStringLiteral("iconGlowColor"),
+             QStringLiteral("iconOutlineWidth"), QStringLiteral("iconPedestalEnabled")})
+        QVERIFY2(!fieldKeys(fields()).contains(key), qPrintable(key));
+    QVERIFY(set({{"iconTileMode", "style"}, {"iconPedestalEnabled", false}, {"iconOutlineWidth", -1}}));
+
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    const auto open = [&]() {
+        return std::unique_ptr<QObject>(component.createWithInitialProperties({
+            {"selectedPanelId", panel}, {"mainTabIndex", 2}, {"subTabIndex", 0}}));
+    };
+    const auto rows = [](QObject *studio) {
+        QVariant value;
+        QMetaObject::invokeMethod(studio, "rowsForCurrentPage", Q_RETURN_ARG(QVariant, value));
+        QVariantList result;
+        for (const QVariant &row : value.toList()) result.append(row.toMap());
+        return result;
+    };
+    const auto draft = [](QObject *studio) {
+        return studio->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap();
+    };
+    auto popup = open(); QVERIFY(popup);
+    auto *window = qobject_cast<QQuickWindow *>(popup.get()); QVERIFY(window);
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QQuickTest::qWaitForPolish(window));
+    auto *diameter = visibleItem(window, "studio-spin-iconDiameter"); QVERIFY(diameter);
+    auto *outline = visibleItem(window, "studio-spin-iconOutlineWidth"); QVERIFY(outline);
+    QCOMPARE(diameter->property("displayText").toString(), QStringLiteral("100%"));
+    QCOMPARE(outline->property("displayText").toString(), QStringLiteral("Style default"));
+    auto *input = qvariant_cast<QQuickItem *>(diameter->property("contentItem")); QVERIFY(input);
+    input->forceActiveFocus();
+    QTest::keyClick(window, Qt::Key_A, Qt::ControlModifier);
+    for (char key : QByteArray("74%")) QTest::keyClick(window, key);
+    QTest::keyClick(window, Qt::Key_Return);
+    QTRY_COMPARE(draft(popup.get()).value("iconDiameter").toInt(), 74);
+    QCOMPARE(registry->panelDefinition(panel)->iconStyle.diameter, 100);
+    input->forceActiveFocus();
+    QTest::keyClick(window, Qt::Key_A, Qt::ControlModifier);
+    for (char key : QByteArray("invalid")) QTest::keyClick(window, key);
+    QTest::keyClick(window, Qt::Key_Return);
+    QCOMPARE(draft(popup.get()).value("iconDiameter").toInt(), 74);
+
+    auto *pedestal = visibleItem(window, "studio-switch-iconPedestalEnabled"); QVERIFY(pedestal);
+    pedestal->forceActiveFocus();
+    QTest::keyClick(window, Qt::Key_Space);
+    QTRY_VERIFY(draft(popup.get()).value("iconPedestalEnabled").toBool());
+
+    const QVariantMap values{{"iconShape", "hexagon"}, {"iconLogoSize", 88},
+        {"iconOutlineWidth", 3}, {"iconBodyColor", "#162a39"},
+        {"iconOutlineColor", "#90b7dc"}, {"iconGlowColor", "#28d6af"},
+        {"iconPedestalEnabled", true}, {"iconPedestalHeight", 32}, {"iconPedestalColor", "#39597e"}};
+    for (auto it = values.cbegin(); it != values.cend(); ++it) {
+        const QVariant row = fieldByKey(rows(popup.get()), it.key());
+        QVERIFY2(!row.toMap().isEmpty(), qPrintable(it.key()));
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue", Q_ARG(QVariant, row), Q_ARG(QVariant, it.value())));
+    }
+    QVariant applied;
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "applyStudioChanges", Q_RETURN_ARG(QVariant, applied)));
+    QVERIFY2(applied.toBool(), qPrintable(popup->property("studioError").toString()));
+    popup.reset();
+    {
+        PanelRegistry reloaded;
+        const QVariantMap saved = reloaded.panelDefinition(panel)->toPersistedMap();
+        QCOMPARE(saved.value("iconDiameter").toInt(), 74);
+        for (auto it = values.cbegin(); it != values.cend(); ++it)
+            QVERIFY2(sameValue(saved.value(it.key()), it.value()), qPrintable(it.key()));
+    }
+    popup = open(); QVERIFY(popup);
+    QCOMPARE(draft(popup.get()).value("iconDiameter").toInt(), 74);
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "performStudioAction",
+        Q_ARG(QVariant, "reset-icon-style-options"), Q_ARG(QVariant, QVariantMap{})));
+    QCOMPARE(draft(popup.get()).value("iconDiameter").toInt(), 100);
+    QCOMPARE(draft(popup.get()).value("iconShape").toString(), QStringLiteral("hexagon"));
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "cancelStudioChanges"));
+    QCOMPARE(registry->panelDefinition(panel)->iconStyle.diameter, 74);
+    popup.reset();
+    popup = open(); QVERIFY(popup);
+    QCOMPARE(draft(popup.get()).value("iconPedestalHeight").toInt(), 32);
+}
+
+void PanelWindowCapabilityTest::studioTileParametersAreTransactional()
+{
+    // ADREP-TASK-005, OF-40/41: new tile controls preserve the original custom
+    // shape/fill/border/opacity, stage before Apply, and survive reopening.
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    const QVariantMap original{{"type", "launcher"}, {"layout", "circular"}, {"iconTileMode", "custom"},
+        {"iconShape", "hexagon"}, {"iconTileColor", "#294b63"}, {"iconTileBorderColor", "#aabbcc"},
+        {"iconTileBorderWidth", 3.0}, {"iconTileOpacity", 0.65}};
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        original).value("success").toBool());
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    const auto open = [&]() {
+        return std::unique_ptr<QObject>(component.createWithInitialProperties({
+            {"selectedPanelId", panel}, {"mainTabIndex", 3}}));
+    };
+    const auto rows = [](QObject *popup) {
+        QVariant value;
+        QMetaObject::invokeMethod(popup, "rowsForCurrentPage", Q_RETURN_ARG(QVariant, value));
+        QVariantList result;
+        for (const QVariant &row : value.toList()) result.append(row.toMap());
+        return result;
+    };
+    const auto draft = [](QObject *popup) {
+        return popup->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap();
+    };
+    auto popup = open(); QVERIFY(popup);
+    auto *window = qobject_cast<QQuickWindow *>(popup.get()); QVERIFY(window);
+    window->show(); QVERIFY(QTest::qWaitForWindowExposed(window)); QVERIFY(QQuickTest::qWaitForPolish(window));
+    QVERIFY(visibleItem(window, "studio-combo-iconShape"));
+    const QSet<QString> offered = fieldKeys(rows(popup.get()));
+    for (const QString &key : {QStringLiteral("iconTileTexture"), QStringLiteral("iconTileThickness"),
+            QStringLiteral("iconTileIconOffsetX"), QStringLiteral("iconTileIconOffsetY"), QStringLiteral("iconTileIconScale")})
+        QVERIFY2(offered.contains(key), qPrintable(key));
+    for (const QString &key : {QStringLiteral("iconTileBevel"), QStringLiteral("iconTileMaterial"), QStringLiteral("iconTileElevation")})
+        QVERIFY2(!offered.contains(key), qPrintable(key + " must wait for a 3D renderer"));
+    auto *texture = visibleItem(window, "studio-combo-iconTileTexture"); QVERIFY(texture);
+    texture->forceActiveFocus(); QTest::keyClick(window, Qt::Key_End);
+    QTRY_COMPARE(draft(popup.get()).value("iconTileTexture").toString(), QStringLiteral("pedestal"));
+    const QVariantMap values{{"iconTileTexture", "pedestal"}, {"iconTileThickness", 8.0},
+        {"iconTileIconOffsetX", -9.0}, {"iconTileIconOffsetY", 6.0}, {"iconTileIconScale", 85}};
+    for (auto it = values.cbegin(); it != values.cend(); ++it) {
+        const QVariant row = fieldByKey(rows(popup.get()), it.key());
+        QVERIFY(!row.toMap().isEmpty());
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue", Q_ARG(QVariant, row), Q_ARG(QVariant, it.value())));
+    }
+    QCOMPARE(registry->panelDefinition(panel)->iconStyle.tileThickness, 0.0);
+    QVariant applied;
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "applyStudioChanges", Q_RETURN_ARG(QVariant, applied)));
+    QVERIFY2(applied.toBool(), qPrintable(popup->property("studioError").toString()));
+    popup.reset();
+    {
+        PanelRegistry reloaded;
+        const auto saved = reloaded.panelDefinition(panel)->toPersistedMap();
+        for (const auto &map : {original, values})
+            for (auto it = map.cbegin(); it != map.cend(); ++it)
+                QVERIFY2(sameValue(saved.value(it.key()), it.value()), qPrintable(it.key()));
+    }
+    popup = open(); QVERIFY(popup);
+    QCOMPARE(draft(popup.get()).value("iconTileThickness").toDouble(), 8.0);
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "performStudioAction",
+        Q_ARG(QVariant, "reset-icon-tile-options"), Q_ARG(QVariant, QVariantMap{})));
+    QCOMPARE(draft(popup.get()).value("iconTileThickness").toDouble(), 0.0);
+    QCOMPARE(draft(popup.get()).value("iconTileTexture").toString(), QStringLiteral("none"));
+    for (auto it = original.cbegin(); it != original.cend(); ++it)
+        QVERIFY2(sameValue(draft(popup.get()).value(it.key()), it.value()), qPrintable(it.key()));
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "cancelStudioChanges"));
+    QCOMPARE(registry->panelDefinition(panel)->iconStyle.tileThickness, 8.0);
+}
+
 // ADREP-TASK-003: Fan opening, Stack length and Ring size stand on Behavior
 // right under Folder layout, each only while its own layout is chosen and
 // only on a free panel; Ring size only where the dock has a radius.
@@ -4810,7 +5005,12 @@ void PanelWindowCapabilityTest::ownersFreeCircleOffersOnlyWhatWorks()
     QHash<QString, QString> owner;
     for (const QString &page : rowsByPage.keys())
         for (const QString &key : controls(page)) {
-            QVERIFY2(!owner.contains(key) || owner.value(key) == page,
+            // PD-20 places Shape beside Style; OF-40 preserves custom tile
+            // Shape on its original page. No other duplicate is permitted.
+            const bool sharedShape = key == QStringLiteral("iconShape")
+                && QSet<QString>{owner.value(key), page}
+                    == QSet<QString>{QStringLiteral("icons-appearance"), QStringLiteral("icon-tiles")};
+            QVERIFY2(sharedShape || !owner.contains(key) || owner.value(key) == page,
                      qPrintable(key + " on " + owner.value(key) + " and " + page));
             owner.insert(key, page);
         }
@@ -4936,8 +5136,14 @@ void PanelWindowCapabilityTest::studioTruthMatrix()
             const QString page = QStringLiteral("%1:%2").arg(section).arg(subtab);
             for (const QString &key : pageKeys(section, subtab)) {
                 // (c) No setting is shown on two pages.
-                if (pageOf.contains(key) && pageOf.value(key) != page)
+                if (pageOf.contains(key) && pageOf.value(key) != page) {
+                    // PD-20 / OF-40: only Shape has the two required homes.
+                    const bool sharedShape = key == QStringLiteral("iconShape")
+                        && QSet<QString>{pageOf.value(key), page}
+                            == QSet<QString>{QStringLiteral("2:0"), QStringLiteral("3:0")};
+                    if (sharedShape) continue; // Appearance remains its canonical home.
                     failures.append(QStringLiteral("%1 is on %2 and %3").arg(key, pageOf.value(key), page));
+                }
                 pageOf.insert(key, page);
             }
         }

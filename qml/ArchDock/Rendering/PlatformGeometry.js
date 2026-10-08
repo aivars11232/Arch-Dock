@@ -128,6 +128,77 @@ function pedestal(segments) {
 // path in the layout's screen degrees (y down), `sides` a polygon's count.
 // Arcs, semicircles and fans are drawn about a centre below their panel's
 // middle, which a centred 3D platform cannot follow, so they have none.
+// PD-20/22, OF-42: one bounded solid behind an upright icon. Its front is
+// z=0 and its real depth extends backwards; UVs share the IconScene texture's
+// full-cell frame. Reuse MeshBuilder and the existing native mesh renderer.
+function tile(spec) {
+    const values = spec || ({})
+    const depth = clamp(finite(values.thickness, 0), 0, 4)
+    if (depth <= 0) return null
+    const diameter = clamp(finite(values.diameter, 0.92), 0.1, 1)
+    const bevel = clamp(finite(values.bevel, 0), 0, Math.min(depth / 2, diameter * 0.45))
+    const shape = String(values.shape || "rounded")
+    let outline = []
+    if (shape === "diamond") outline = [[1,0], [0,1], [-1,0], [0,-1]]
+    else if (shape === "hexagon") outline = [[1,0], [0.5,1], [-0.5,1], [-1,0], [-0.5,-1], [0.5,-1]]
+    else {
+        const radius = shape === "circle" ? 1 : shape === "square" ? 0 : shape === "squircle" ? 0.64 : 0.44
+        const corners = [[1-radius,1-radius], [-1+radius,1-radius],
+            [-1+radius,-1+radius], [1-radius,-1+radius]]
+        for (let corner = 0; corner < 4; ++corner) {
+            for (let step = 0; step <= 8; ++step) {
+                const angle = (corner + step / 8) * Math.PI / 2
+                const p = [corners[corner][0] + radius * Math.cos(angle),
+                    corners[corner][1] + radius * Math.sin(angle)]
+                const previous = outline[outline.length-1]
+                if (!previous || Math.hypot(p[0]-previous[0], p[1]-previous[1]) > 1e-9) outline.push(p)
+            }
+        }
+        if (outline.length > 1 && Math.hypot(outline[0][0]-outline[outline.length-1][0],
+                outline[0][1]-outline[outline.length-1][1]) < 1e-9) outline.pop()
+    }
+    const rings = bevel > 0
+        ? [[diameter-bevel,0], [diameter,-bevel], [diameter,-depth+bevel], [diameter-bevel,-depth]]
+        : [[diameter,0], [diameter,-depth]]
+    // When the two bevels meet there is no vertical wall; do not emit a
+    // zero-area middle face or let it consume the scene's geometry budget.
+    if (bevel > 0 && depth - 2 * bevel < 1e-9) rings.splice(2,1)
+    const mesh = new MeshBuilder()
+    const point = (ring, i) => [outline[i][0] * ring[0], outline[i][1] * ring[0], ring[1]]
+    for (let level = 0; level < rings.length - 1; ++level) {
+        for (let i = 0; i < outline.length; ++i) {
+            const next = (i + 1) % outline.length
+            const a = point(rings[level], i), b = point(rings[level], next)
+            const c = point(rings[level+1], next), d = point(rings[level+1], i)
+            let normal = normalized(crossProduct(subtract(b,a), subtract(d,a)))
+            const edge = subtract(b,a), outward = [edge[1], -edge[0], 0]
+            if (dot(normal,outward) < 0) normal = normal.map(v => -v)
+            const v = [a,b,c,d].map(p => mesh.vertex(p, normal))
+            mesh.triangle(v[0],v[1],v[2],normal)
+            mesh.triangle(v[0],v[2],v[3],normal)
+        }
+    }
+    let faceOffset = 0
+    for (const [ring,normal] of [[rings[rings.length-1],[0,0,-1]], [rings[0],[0,0,1]]]) {
+        if (normal[2] > 0) faceOffset = mesh.indexes.length
+        const centre = mesh.vertex([0,0,ring[1]],normal)
+        for (let i = 0; i < outline.length; ++i) {
+            const a = mesh.vertex(point(ring,i),normal)
+            const b = mesh.vertex(point(ring,(i+1)%outline.length),normal)
+            if (normal[2] > 0) {
+                // The front's outline shrinks by the bevel, while its source
+                // remains the same full-cell tile, including its border.
+                const uv = p => [0.5 + p[0] / 2 * diameter / ring[0],
+                    0.5 + p[1] / 2 * diameter / ring[0]]
+                mesh.uv0s[a] = uv(mesh.positions[a])
+                mesh.uv0s[b] = uv(mesh.positions[b])
+            }
+            mesh.triangle(centre,a,b,normal)
+        }
+    }
+    return mesh.result({faceOffset: faceOffset, faceCount: mesh.indexes.length - faceOffset})
+}
+
 function shapeForLayout(layout, polygonSides) {
     const name = String(layout || "")
     if (name === "circular" || name === "ring")

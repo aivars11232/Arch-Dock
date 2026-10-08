@@ -3,6 +3,56 @@
 import pathlib
 import sys
 
+def instrument_preset_stage(stage):
+    """Capture only the disposable lifecycle session's actual applet scene."""
+    import json, os
+    stage = pathlib.Path(stage).resolve(strict=True)
+    assert stage.name == "stage" and stage.parent.parent == pathlib.Path("/tmp")
+    assert stage.parent.name.startswith("archdock-plasma-lifecycle.")
+    assert stage.stat().st_uid == os.getuid()
+    logs = stage.parent / "logs"
+    path = stage / "share/plasma/plasmoids/org.archdock.dock/contents/ui/main.qml"
+    source = path.read_text()
+    anchor = "id: panelScene"
+    assert source.count(anchor) == 1
+    observer = r'''
+                // ADREP-TASK-005: observer only; actions use public D-Bus.
+                Timer {
+                    interval: 100; running: true; repeat: true
+                    property string pending: ""
+                    property string captured: ""
+                    property int stableTicks: 0
+                    onTriggered: {
+                        if (!representation.authoritativeHost) return;
+                        const xhr = new XMLHttpRequest();
+                        xhr.open("GET", "file://" + LOGS + "/preset-capture-request.json", false);
+                        xhr.send();
+                        if (xhr.status !== 0 && xhr.status !== 200) return;
+                        let request;
+                        try { request = JSON.parse(xhr.responseText); } catch (error) { return; }
+                        if (request.panel !== root.panelId || request.label === captured) return;
+                        if (root.configuration.iconStyle !== request.style
+                            || Boolean(root.configuration.iconPedestalEnabled) !== request.pedestal
+                            || Number(root.configuration.animationSpeed) !== request.speed
+                            || presentationController.transitionState !== "idle") return;
+                        if (pending !== request.label) { pending = request.label; stableTicks = 0; }
+                        if (++stableTicks < 4) return;
+                        captured = request.label;
+                        const receipt = {saved: false, panel: root.panelId, label: request.label,
+                            style: request.style, pedestal: request.pedestal, speed: request.speed,
+                            entries: panelScene.entryCount, authoritative: representation.authoritativeHost,
+                            width: panelScene.width, height: panelScene.height,
+                            tier: panelScene.effectiveRendererTier, at: Date.now()};
+                        panelScene.grabToImage(result => {
+                            receipt.saved = result.saveToFile(LOGS + "/" + request.label + ".png");
+                            console.warn("ArchDockPresetCapture " + JSON.stringify(receipt));
+                        });
+                    }
+                }
+'''.replace("LOGS", json.dumps(str(logs)))
+    path.write_text(source.replace(anchor, anchor + observer))
+
+
 def instrument_interaction_stage(stage):
     """Observe the disposable applet's actual geometry, without changing input.
 
@@ -3333,6 +3383,10 @@ def run_interaction_matrix(free_panel):
 if len(sys.argv) == 3 and sys.argv[1] == "--instrument-interaction-stage":
     instrument_interaction_stage(sys.argv[2])
     raise SystemExit(0)
+if len(sys.argv) == 3 and sys.argv[1] == "--instrument-preset-stage":
+    instrument_preset_stage(sys.argv[2])
+    sys.exit(0)
+
 if len(sys.argv) == 3 and sys.argv[1] == "--interaction-matrix":
     run_interaction_matrix(sys.argv[2])
     raise SystemExit(0)

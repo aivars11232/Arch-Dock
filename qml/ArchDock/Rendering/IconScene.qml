@@ -18,7 +18,7 @@ Item {
     readonly property bool customTileActive: tileSettings.iconTileMode === "custom"
     property real logicalSize: 52
     property real visualScale: 1
-    property string tileShape: "rounded"
+    property string tileShape: "style-default"
     property string appearance: "glass"
     property bool showReflection: false
     property bool showIndicator: true
@@ -82,7 +82,7 @@ Item {
             minimized: minimized,
             running: running
         },
-        resolverEntry(), tileSettings)
+        resolverEntry(), styleSettings(), logicalSize)
     readonly property string visualState: resolvedIconStyle.stateId
     readonly property var styleState: resolvedIconStyle.state || ({})
     readonly property var styleInset:
@@ -110,8 +110,8 @@ Item {
         Boolean(resolvedIconStyle.renderStyledLayers) && !styleAssetsFailed
     readonly property bool styleGlyphTreatmentActive:
         Boolean(resolvedIconStyle.valid)
-        && String(resolvedIconStyle.styleId || "plain-original")
-            !== "plain-original"
+        && (Boolean(resolvedIconStyle.parametersActive)
+            || String(resolvedIconStyle.styleId || "plain-original") !== "plain-original")
         && !styleAssetsFailed
 
     // Effective glyph treatment, already compatibility-gated by the resolver.
@@ -179,6 +179,18 @@ Item {
 
     function alphaColor(color, alpha) {
         return Qt.rgba(color.r, color.g, color.b, alpha)
+    }
+
+    function styleSettings() {
+        const values = IconStyleResolver.copyMap(tileSettings)
+        if (values.iconShape === undefined)
+            values.iconShape = tileShape
+        return values
+    }
+
+    function tileValue(key, fallback, minimum, maximum) {
+        const value = Number(tileSettings[key] === undefined ? fallback : tileSettings[key])
+        return Math.max(minimum, Math.min(maximum, isFinite(value) ? value : fallback))
     }
 
     function tileRadius() {
@@ -390,6 +402,10 @@ Item {
                 styleDefinition: root.effectiveIconStyleDefinition
                 resolvedStyle: root.resolvedIconStyle
                 role: "base"
+                tileSettings: Object.assign({}, root.tileSettings, {
+                    iconTileThickness: root.meshVisualActive ? 0 : root.tileValue("iconTileThickness", 0, 0, 24),
+                    iconTileBevel: 0
+                })
                 logicalSize: root.logicalSize
                 roleOpacity: root.styleState.baseOpacity === undefined
                     ? 1 : Number(root.styleState.baseOpacity)
@@ -398,10 +414,18 @@ Item {
 
             IconTile {
                 objectName: "icon-custom-tile"
-                anchors.fill: parent
-                anchors.margins: Math.max(1, root.logicalSize * 0.04)
-                visible: root.tileRenderingEnabled && root.customTileActive
-                shape: root.tileShape
+                anchors.centerIn: parent
+                anchors.alignWhenCentered: false
+                width: Math.max(0, root.logicalSize - 2 * Math.max(1, root.logicalSize * 0.04))
+                    * Number(root.resolvedIconStyle.diameter || 1)
+                height: width
+                visible: root.tileRenderingEnabled && (root.customTileActive
+                    || (!root.styledLayersActive && (String(root.tileSettings.iconTileTexture || "none") !== "none"
+                        || root.tileValue("iconTileThickness", 0, 0, 24) > 0)))
+                texture: String(root.tileSettings.iconTileTexture || "none")
+                thickness: root.meshVisualActive ? 0 : root.tileValue("iconTileThickness", 0, 0, 24)
+                bevel: 0
+                shape: root.resolvedIconStyle.iconShape || root.tileShape
                 fillColor: String(root.tileSettings.iconTileColor || "#334155")
                 borderColor: String(root.tileSettings.iconTileBorderColor || "#94a3b8")
                 borderWidth: root.tileSettings.iconTileBorderWidth === undefined ? 1
@@ -506,6 +530,11 @@ Item {
                 id: glyph
 
                 anchors.centerIn: parent
+                anchors.alignWhenCentered: false
+                anchors.horizontalCenterOffset: root.tileRenderingEnabled
+                    ? root.tileValue("iconTileIconOffsetX", 0, -40, 40) : 0
+                anchors.verticalCenterOffset: root.tileRenderingEnabled
+                    ? root.tileValue("iconTileIconOffsetY", 0, -40, 40) : 0
                 width: root.styleGlyphTreatmentActive
                     ? root.logicalSize * Math.max(
                         0.1, 1 - Number(root.styleInset.left || 0)
@@ -517,6 +546,9 @@ Item {
                             - Number(root.styleInset.bottom || 0))
                     : width
                 source: root.resolvedIconSource
+                // PD-20: the owner chooses a continuous logo size. Native
+                // bucket rounding shrinks e.g. a 59 px logo to 48 px.
+                roundToIconSize: false
 
                 // Kirigami's native monochrome path: only ever reached for a
                 // glyph the resolver proved safe to recolor.
@@ -529,6 +561,7 @@ Item {
                                 ? 1 : root.styleState.glyphOpacity)
                 scale: Number(root.styleState.glyphScale === undefined
                               ? 1 : root.styleState.glyphScale)
+                    * (root.tileRenderingEnabled ? root.tileValue("iconTileIconScale", 100, 25, 150) / 100 : 1)
 
                 // MultiEffect is instantiated only when a tint is requested.
                 layer.enabled: root.glyphTreatment === "tinted"

@@ -10,8 +10,9 @@
   "recipe": "assets/source-samples/icon-styles/original-artwork-recipe.json",
   "authorizationEvidence": "APPROVED: IMPLEMENT TASK-0029 EXACTLY AS PLANNED.",
   "outputs": [
-    {"path": "archdock-icon-style.json", "sha256": "3f3b4b43af2f1adbe325951069749f01b28a18686d601a2421414ebdc2610dd5"}
+    {"path": "archdock-icon-style.json", "sha256": "9cbb33fdaba9455fc481f79086e77b5178b1d7a2ea9972de4ff0ea942523eda8"}
   ],
+  "repair": {"task": "ADREP-TASK-005", "productDecisions": ["PD-20"], "changes": "Package-declared shape-following layers and diamond signature default and outline-only front frame; original glyph colours retained without a pale overlay."},
   "parameters": {
     "family": "neon",
     "glyphPolicy": "original",

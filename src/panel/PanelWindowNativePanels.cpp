@@ -166,7 +166,8 @@ int PanelWindow::evaluatePlasmaScript(const QString &script) const
         return -1;
     }
 
-    const QDBusReply<QString> reply = shell.call(QStringLiteral("evaluateScript"), script);
+    const QDBusReply<QString> reply = PanelWindowHelpers::callPlasmaScript(
+        shell, script, m_nativePanelRecoveryActive);
     if (!reply.isValid())
     {
         qWarning() << "Plasma panel script failed:" << reply.error().message();
@@ -180,6 +181,13 @@ int PanelWindow::evaluatePlasmaScript(const QString &script) const
 
 std::optional<int> PanelWindow::evaluatePlasmaScriptResultOptional(const QString &script) const
 {
+    return evaluatePlasmaScriptResultOptional(script, true);
+}
+
+std::optional<int> PanelWindow::evaluatePlasmaScriptResultOptional(
+    const QString &script, bool dispatchRecoveryCalls,
+    const std::function<bool()> &stillCurrent) const
+{
     QDBusInterface shell(
         QStringLiteral("org.kde.plasmashell"),
         QStringLiteral("/PlasmaShell"),
@@ -190,7 +198,8 @@ std::optional<int> PanelWindow::evaluatePlasmaScriptResultOptional(const QString
         return std::nullopt;
     }
 
-    const QDBusReply<QString> reply = shell.call(QStringLiteral("evaluateScript"), script);
+    const QDBusReply<QString> reply = PanelWindowHelpers::callPlasmaScript(
+        shell, script, m_nativePanelRecoveryActive && dispatchRecoveryCalls, stillCurrent);
     if (!reply.isValid())
     {
         qWarning() << "Plasma panel script failed:" << reply.error().message();

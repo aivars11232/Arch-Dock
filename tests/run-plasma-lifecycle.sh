@@ -35,7 +35,7 @@ validate_lifecycle_stop_after() {
     [[ "$startup" == 1 || ( -z "${ARCHDOCK_STARTUP_INSTALL_ROOT:-}" && "$without_3d" == 0 ) ]] || return 2
     local matrix_group="${ARCHDOCK_PRESET_MATRIX_GROUP:-}"
     case "$matrix_group" in
-        ''|existing|temporary|icons|recovery|defaults) ;;
+        ''|existing|temporary|icons|icons-middle|icons-last|recovery|defaults) ;;
         *) printf 'Unsupported preset matrix group: %s\n' "$matrix_group" >&2; return 2 ;;
     esac
     local hardening_group="${ARCHDOCK_HARDENING_MATRIX_GROUP:-}"
@@ -3373,6 +3373,10 @@ run_outer() {
     if [[ -z "$installed_root" ]]; then
         cmake --install "$build_dir" --prefix "$stage_root"
     fi
+    if [[ "${ARCHDOCK_PRESET_MATRIX_GROUP:-}" == icons* ]]; then
+        [[ -z "$installed_root" ]] || return 2
+        python "$visibility_window_script" --instrument-preset-stage "$stage_root"
+    fi
     # A package's install runs the icon-cache hook on hicolor; a staged theme
     # without its index and cache is searched file by file on every lookup.
     if [[ -d "$stage_root/share/icons/hicolor" && ! -e "$stage_root/share/icons/hicolor/icon-theme.cache" ]]; then
@@ -3422,6 +3426,7 @@ run_outer() {
     # desktop-service route inside the disposable session only.
     env \
         QT_NO_XDG_DESKTOP_PORTAL=1 \
+        QML_XHR_ALLOW_FILE_READ=1 \
         ARCHDOCK_LIFECYCLE_STOP_AFTER="${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}" \
         ARCHDOCK_PRESET_MATRIX_GROUP="${ARCHDOCK_PRESET_MATRIX_GROUP:-}" \
         ARCHDOCK_PRESET_MATRIX_SCRIPT="$preset_script" \
@@ -3474,6 +3479,9 @@ run_outer() {
         local matrix_logs="$build_dir/preset-matrix-${ARCHDOCK_PRESET_MATRIX_GROUP}"
         mkdir -p "$matrix_logs"
         cp "$log_dir"/*.log "$matrix_logs/"
+        if [[ "${ARCHDOCK_PRESET_MATRIX_GROUP:-}" == icons* ]]; then
+            cp "$log_dir"/*.png "$log_dir"/*.json "$matrix_logs/" 2>/dev/null || true
+        fi
     fi
     if [[ -n "${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" ]]; then
         local profile_logs="$build_dir/profile-matrix-${ARCHDOCK_PROFILE_MATRIX_GROUP}"

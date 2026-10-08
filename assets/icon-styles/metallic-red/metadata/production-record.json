@@ -10,8 +10,9 @@
   "recipe": "assets/source-samples/icon-styles/original-artwork-recipe.json",
   "authorizationEvidence": "APPROVED: IMPLEMENT TASK-0029 EXACTLY AS PLANNED.",
   "outputs": [
-    {"path": "archdock-icon-style.json", "sha256": "b7033962d55d97786414332d7d074b9ffb0f1c4cd350f19200af981e7350b979"}
+    {"path": "archdock-icon-style.json", "sha256": "d7a727cbc17f1e24aa53558fd98db27698343cd3073064cbb55b243ab8c5c734"}
   ],
+  "repair": {"task": "ADREP-TASK-005", "productDecisions": ["PD-20"], "changes": "Package-declared shape-following layers and rounded signature default; original application glyph retained."},
   "parameters": {
     "family": "metallic",
     "glyphPolicy": "original",

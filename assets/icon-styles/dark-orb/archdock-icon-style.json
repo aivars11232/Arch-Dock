@@ -3,9 +3,9 @@
   "version": 1,
   "id": "dark-orb",
   "name": "Dark Orb",
-  "revision": 1,
+  "revision": 2,
   "author": "Arch Dock contributors",
-  "description": "A dark glass orb on a compact pedestal with a violet energy ring around the original application glyph.",
+  "description": "A dark glass orb with an optional pedestal and a violet energy ring around the original application glyph.",
   "license": {
     "spdx": "GPL-3.0-or-later",
     "redistribution": "allowed",
@@ -15,18 +15,18 @@
   "safeGlyphInset": {"left": 0.18, "top": 0.15, "right": 0.18, "bottom": 0.22},
   "layers": {
     "rear": [
-      {"id": "orb-shadow", "kind": "procedural", "shape": "orb", "color": "#020309", "secondaryColor": "#171d2a", "opacity": 0.72, "inset": 0.02, "radius": 1, "borderColor": "#30394c", "borderWidth": 0.025}
+      {"id": "orb-shadow", "kind": "procedural", "shape": "orb", "followsIconShape": true, "color": "#020309", "secondaryColor": "#171d2a", "opacity": 0.72, "inset": 0.02, "radius": 1, "borderColor": "#30394c", "borderWidth": 0.025}
     ],
     "base": [
-      {"id": "orb-pedestal", "kind": "procedural", "shape": "plate", "color": "#0a0d15", "secondaryColor": "#313a4c", "opacity": 0.96, "inset": 0.04, "radius": 0.46, "borderColor": "#6659c7", "borderWidth": 0.024},
-      {"id": "orb-glass", "kind": "procedural", "shape": "orb", "color": "#080b13", "secondaryColor": "#202b3b", "opacity": 0.92, "inset": 0.1, "radius": 1, "borderColor": "#8a79ff", "borderWidth": 0.028}
+      {"id": "orb-pedestal", "kind": "procedural", "shape": "plate", "option": "pedestal", "color": "#0a0d15", "secondaryColor": "#313a4c", "opacity": 0.96, "inset": 0.04, "radius": 0.46, "borderColor": "#6659c7", "borderWidth": 0.024},
+      {"id": "orb-glass", "kind": "procedural", "shape": "orb", "followsIconShape": true, "color": "#080b13", "secondaryColor": "#202b3b", "opacity": 0.92, "inset": 0.1, "radius": 1, "borderColor": "#8a79ff", "borderWidth": 0.028}
     ],
     "front": [
-      {"id": "orb-energy-ring", "kind": "procedural", "shape": "ring", "color": "transparent", "secondaryColor": "#e5e0ff", "opacity": 0.88, "inset": 0.085, "radius": 1, "borderColor": "#a79bff", "borderWidth": 0.034}
+      {"id": "orb-energy-ring", "kind": "procedural", "shape": "ring", "followsIconShape": true, "color": "transparent", "secondaryColor": "#e5e0ff", "opacity": 0.88, "inset": 0.085, "radius": 1, "borderColor": "#a79bff", "borderWidth": 0.034}
     ],
     "reflection": {"id": "orb-reflection", "kind": "procedural", "shape": "orb", "color": "#e5e0ff", "opacity": 0.18, "inset": 0.16, "radius": 1, "borderColor": "transparent", "borderWidth": 0},
-    "shadow": {"id": "pedestal-shadow", "kind": "procedural", "shape": "plate", "color": "#010207", "opacity": 0.78, "inset": 0.01, "radius": 0.48, "borderColor": "transparent", "borderWidth": 0},
-    "glow": {"id": "orb-glow", "kind": "procedural", "shape": "ring", "color": "#8a79ff", "opacity": 0.72, "inset": 0.025, "radius": 1, "borderColor": "#8a79ff", "borderWidth": 0.05}
+    "shadow": {"id": "pedestal-shadow", "kind": "procedural", "shape": "plate", "option": "pedestal", "color": "#010207", "opacity": 0.78, "inset": 0.01, "radius": 0.48, "borderColor": "transparent", "borderWidth": 0},
+    "glow": {"id": "orb-glow", "kind": "procedural", "shape": "ring", "followsIconShape": true, "color": "#8a79ff", "opacity": 0.72, "inset": 0.025, "radius": 1, "borderColor": "#8a79ff", "borderWidth": 0.05}
   },
   "states": [
     {"id": "normal", "rearOpacity": 0.52, "baseOpacity": 1, "frontOpacity": 0.7, "glyphOpacity": 1, "glyphScale": 0.84, "borderColor": "#8a79ff", "glowColor": "#8a79ff", "glowOpacity": 0.18, "reflectionOpacity": 0.13, "indicatorColor": "#a79bff", "indicatorOpacity": 0},
@@ -47,5 +47,6 @@
     "animationCapabilities": ["hover-scale", "press-scale", "glow-pulse", "urgent-pulse", "launching-pulse", "indicator-transition"],
     "supports3D": false
   },
+  "extensions": {"org.archdock.iconParameters": {"defaultShape": "circle"}},
   "preview": {"seed": "dark-orb-v1", "iconName": "preferences-system", "state": "active", "tileSize": 64}
 }

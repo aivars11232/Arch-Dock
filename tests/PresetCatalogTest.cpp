@@ -1138,7 +1138,8 @@ void PresetCatalogTest::overridesTheStyleValidatorRejects_data()
         << "invalid-value" << "/borderWidth";
     QTest::newRow("shape the renderer cannot draw")
         << "/icon/visualOverrides/orb-pedestal/shape"
-        << QVariant(QStringLiteral("hexagon")) << "invalid-enum" << "/shape";
+        // PD-20 adds Hexagon; Triangle remains outside the icon declaration.
+        << QVariant(QStringLiteral("triangle")) << "invalid-enum" << "/shape";
     QTest::newRow("glyph scale out of range")
         << "/icon/stateOverrides/normal/glyphScale" << QVariant(3)
         << "invalid-value" << "/glyphScale";
@@ -1667,7 +1668,11 @@ void PresetCatalogTest::builtInCatalogsAreExactAndValid()
                  QString::fromUtf8(expectedIconPresets[index].name));
         QVERIFY2(!preset->identity.description.isEmpty(), qPrintable(id));
         QVERIFY(preset->identity.builtIn);
-        QCOMPARE(preset->identity.revision, 1);
+        // PD-21: the revised Pedestal preset explicitly enables its plate.
+        const bool pedestalPreset = id == QStringLiteral("blue-pedestal") || id == QStringLiteral("red-pedestal");
+        QCOMPARE(preset->identity.revision, pedestalPreset ? 2 : 1);
+        QCOMPARE(preset->panelValues().value(QStringLiteral("iconPedestalEnabled")).toBool(),
+                 pedestalPreset);
         QVERIFY(preset->identity.derivedFromPresetId.isEmpty());
         // The real application glyph is the default glyph policy.
         QCOMPARE(preset->icon.glyphPolicy.mode, QStringLiteral("original"));

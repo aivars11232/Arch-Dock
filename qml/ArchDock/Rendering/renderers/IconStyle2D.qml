@@ -12,6 +12,7 @@ Item {
 
     property var styleDefinition: ({})
     property var resolvedStyle: ({})
+    property var tileSettings: ({})
     property string role: "base"
     property real logicalSize: Math.min(width, height)
     property real roleOpacity: 1
@@ -101,12 +102,16 @@ Item {
             readonly property bool diamond: layerShape === "diamond"
             readonly property bool plate: layerShape === "plate"
             readonly property bool reflection: root.role === "reflection"
+            readonly property bool adjustableTile: root.role === "base"
+                && Boolean(modelData.followsIconShape)
+                && String(modelData.option || "") !== "pedestal"
             readonly property real shapeWidth: diamond
-                ? Math.min(availableWidth, availableHeight) * 0.68
+                ? Math.min(availableWidth, availableHeight) * 0.96
                 : plate ? availableWidth * 0.92
                 : reflection ? availableWidth * 0.62 : availableWidth
             readonly property real shapeHeight: diamond
-                ? shapeWidth : plate ? availableHeight * 0.3
+                ? shapeWidth : plate ? availableHeight * root.clamped(
+                    modelData.heightFactor, 0.05, 0.5, 0.3)
                 : reflection ? availableHeight * 0.2 : availableHeight
             readonly property real shapeX:
                 (root.width - shapeWidth) / 2
@@ -121,7 +126,7 @@ Item {
                 * root.clamped(root.roleOpacity, 0, 1, 1)
             visible: opacity > 0.001
 
-            Rectangle {
+            IconTile {
                 id: proceduralShape
 
                 x: layerDelegate.shapeX
@@ -129,38 +134,25 @@ Item {
                     + (root.role === "shadow" ? root.logicalSize * 0.045 : 0)
                 width: layerDelegate.shapeWidth
                 height: layerDelegate.shapeHeight
-                rotation: layerDelegate.diamond ? 45 : 0
                 visible: layerDelegate.layerKind === "procedural"
-                radius: ["circle", "orb"].includes(
-                    layerDelegate.layerShape)
-                    ? Math.min(width, height) / 2
-                    : root.clamped(layerDelegate.modelData.radius,
-                                   0, 1, 0.22)
-                        * Math.min(width, height)
-                color: layerDelegate.layerShape === "ring"
+                texture: layerDelegate.adjustableTile ? String(root.tileSettings.iconTileTexture || "none") : "none"
+                thickness: layerDelegate.adjustableTile
+                    ? root.clamped(root.tileSettings.iconTileThickness, 0, 24, 0) : 0
+                bevel: layerDelegate.adjustableTile
+                    ? root.clamped(root.tileSettings.iconTileBevel, 0, 12, 0) : 0
+                shape: ["circle", "orb", "ring"].includes(layerDelegate.layerShape)
+                    ? "circle" : ["rounded-rect", "plate"].includes(layerDelegate.layerShape)
+                        ? "rounded" : layerDelegate.layerShape
+                radiusFactor: root.clamped(layerDelegate.modelData.radius, 0, 1, 0.22)
+                fillColor: layerDelegate.layerShape === "ring"
                     ? "transparent" : root.colorFor(layerDelegate.modelData)
-                border.width: Math.max(0,
+                borderWidth: Math.min(Math.min(width, height) / 2, Math.max(0,
                     root.clamped(layerDelegate.modelData.borderWidth,
-                                 0, 0.25, 0) * root.logicalSize)
-                border.color: root.borderFor(layerDelegate.modelData)
-
-                gradient: Gradient {
-                    orientation: Gradient.Vertical
-                    GradientStop {
-                        position: 0
-                        color: layerDelegate.layerShape === "ring"
-                            ? "transparent"
-                            : String(layerDelegate.modelData.secondaryColor
-                                     || root.colorFor(
-                                         layerDelegate.modelData))
-                    }
-                    GradientStop {
-                        position: 1
-                        color: layerDelegate.layerShape === "ring"
-                            ? "transparent"
-                            : root.colorFor(layerDelegate.modelData)
-                    }
-                }
+                                 0, 0.5, 0) * root.logicalSize))
+                borderColor: root.borderFor(layerDelegate.modelData)
+                secondaryColor: layerDelegate.layerShape === "ring"
+                    ? "transparent" : String(layerDelegate.modelData.secondaryColor
+                        || root.colorFor(layerDelegate.modelData))
             }
 
             Image {

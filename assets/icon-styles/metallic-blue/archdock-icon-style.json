@@ -3,7 +3,7 @@
   "version": 1,
   "id": "metallic-blue",
   "name": "Metallic Blue",
-  "revision": 1,
+  "revision": 2,
   "author": "Arch Dock contributors",
   "description": "A cool metallic tile with a cyan rim around the original application glyph.",
   "license": {
@@ -15,17 +15,17 @@
   "safeGlyphInset": {"left": 0.16, "top": 0.16, "right": 0.16, "bottom": 0.16},
   "layers": {
     "rear": [
-      {"id": "blue-aura", "kind": "procedural", "shape": "ring", "color": "#2e91b7", "secondaryColor": "#78e2ff", "opacity": 0.42, "inset": 0.01, "radius": 0.26, "borderColor": "#62d8ff", "borderWidth": 0.05}
+      {"id": "blue-aura", "kind": "procedural", "shape": "ring", "followsIconShape": true, "color": "#2e91b7", "secondaryColor": "#78e2ff", "opacity": 0.42, "inset": 0.01, "radius": 0.26, "borderColor": "#62d8ff", "borderWidth": 0.05}
     ],
     "base": [
-      {"id": "blue-metal", "kind": "procedural", "shape": "rounded-rect", "color": "#172534", "secondaryColor": "#395f7d", "opacity": 1, "inset": 0.06, "radius": 0.25, "borderColor": "#6fd8ff", "borderWidth": 0.025}
+      {"id": "blue-metal", "kind": "procedural", "shape": "rounded-rect", "followsIconShape": true, "color": "#172534", "secondaryColor": "#395f7d", "opacity": 1, "inset": 0.06, "radius": 0.25, "borderColor": "#6fd8ff", "borderWidth": 0.025}
     ],
     "front": [
-      {"id": "blue-bevel", "kind": "procedural", "shape": "ring", "color": "transparent", "secondaryColor": "#d9f5ff", "opacity": 0.82, "inset": 0.075, "radius": 0.25, "borderColor": "#b6efff", "borderWidth": 0.026}
+      {"id": "blue-bevel", "kind": "procedural", "shape": "ring", "followsIconShape": true, "color": "transparent", "secondaryColor": "#d9f5ff", "opacity": 0.82, "inset": 0.075, "radius": 0.25, "borderColor": "#b6efff", "borderWidth": 0.026}
     ],
     "reflection": {"id": "blue-reflection", "kind": "procedural", "shape": "rounded-rect", "color": "#d9f5ff", "opacity": 0.2, "inset": 0.12, "radius": 0.23, "borderColor": "transparent", "borderWidth": 0},
-    "shadow": {"id": "blue-shadow", "kind": "procedural", "shape": "rounded-rect", "color": "#05090f", "opacity": 0.55, "inset": 0.025, "radius": 0.27, "borderColor": "transparent", "borderWidth": 0},
-    "glow": {"id": "blue-glow", "kind": "procedural", "shape": "ring", "color": "#62d8ff", "opacity": 0.7, "inset": 0, "radius": 0.28, "borderColor": "#62d8ff", "borderWidth": 0.045}
+    "shadow": {"id": "blue-shadow", "kind": "procedural", "shape": "rounded-rect", "followsIconShape": true, "color": "#05090f", "opacity": 0.55, "inset": 0.025, "radius": 0.27, "borderColor": "transparent", "borderWidth": 0},
+    "glow": {"id": "blue-glow", "kind": "procedural", "shape": "ring", "followsIconShape": true, "color": "#62d8ff", "opacity": 0.7, "inset": 0, "radius": 0.28, "borderColor": "#62d8ff", "borderWidth": 0.045}
   },
   "states": [
     {"id": "normal", "rearOpacity": 0.45, "baseOpacity": 1, "frontOpacity": 0.68, "glyphOpacity": 1, "glyphScale": 0.86, "borderColor": "#6fd8ff", "glowColor": "#62d8ff", "glowOpacity": 0.16, "reflectionOpacity": 0.12, "indicatorColor": "#6fd8ff", "indicatorOpacity": 0},
@@ -46,5 +46,6 @@
     "animationCapabilities": ["hover-scale", "press-scale", "glow-pulse", "urgent-pulse", "launching-pulse", "indicator-transition"],
     "supports3D": false
   },
+  "extensions": {"org.archdock.iconParameters": {"defaultShape": "rounded"}},
   "preview": {"seed": "metallic-blue-v1", "iconName": "applications-internet", "state": "active", "tileSize": 64}
 }

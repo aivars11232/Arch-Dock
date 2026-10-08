@@ -473,6 +473,38 @@ run_private_session() {
     ARCHDOCK_RENDERING_KWIN_PID=$!
     wait_for_wayland_socket
 
+    if [[ "${ARCHDOCK_RENDERING_TILES:-}" == '1' ]]; then
+        printf 'Running ADREP-TASK-005 tile pixels, solid depth and upright orbit under private KWin.\n'
+        ARCHDOCK_TEST_RHI=1 ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \
+            "$ARCHDOCK_RENDERING_CAPABILITY_TEST" tileDepthMaterialsPlacementAndOrbitRenderUnderRhi \
+                >"$ARCHDOCK_RENDERING_LOG_DIR/tile-3d.log" 2>&1 || {
+                    tail -n 100 "$ARCHDOCK_RENDERING_LOG_DIR/tile-3d.log" >&2
+                    return 1
+                }
+        (
+            cd "$ARCHDOCK_RENDERING_LOG_DIR"
+            QML_XHR_ALLOW_FILE_READ=1 "$ARCHDOCK_RENDERING_QMLTESTRUNNER" \
+                -import "$QML_IMPORT_PATH" -input "$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_IconTiles.qml" \
+                >"$ARCHDOCK_RENDERING_LOG_DIR/tile-2d.log" 2>&1
+        ) || {
+            tail -n 100 "$ARCHDOCK_RENDERING_LOG_DIR/tile-2d.log" >&2
+            return 1
+        }
+        (
+            cd "$ARCHDOCK_RENDERING_LOG_DIR"
+            QML_XHR_ALLOW_FILE_READ=1 "$ARCHDOCK_RENDERING_QMLTESTRUNNER" \
+                -import "$QML_IMPORT_PATH" -input "$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_IconStyleVisual.qml" \
+                IconStyleVisual::test_realApplicationLogosRetainContrastAtNormalSize \
+                >"$ARCHDOCK_RENDERING_LOG_DIR/icon-readability.log" 2>&1
+        ) || {
+            tail -n 100 "$ARCHDOCK_RENDERING_LOG_DIR/icon-readability.log" >&2
+            return 1
+        }
+        sed -n '/^Totals:/p' "$ARCHDOCK_RENDERING_LOG_DIR/tile-3d.log" "$ARCHDOCK_RENDERING_LOG_DIR/tile-2d.log" \
+            "$ARCHDOCK_RENDERING_LOG_DIR/icon-readability.log"
+        return 0
+    fi
+
     if [[ "${ARCHDOCK_RENDERING_TRUTH_MATRIX:-}" == '1' ]]; then
         # ADREP-TASK-001: the Studio truth matrix drawn with this private
         # compositor's real graphics backend. The offscreen run draws with Qt

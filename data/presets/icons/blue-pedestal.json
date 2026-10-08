@@ -6,7 +6,7 @@
     "name": "Blue Pedestal",
     "description": "A blue glass orb standing on a lit blue pedestal around the application's own icon.",
     "builtIn": true,
-    "revision": 1
+    "revision": 2
   },
   "compatibility": {
     "rendererTiers": ["procedural2d"],
@@ -15,6 +15,7 @@
   },
   "icon": {
     "iconStyleId": "dark-orb",
+    "parameters": {"iconPedestalEnabled": true},
     "visualOverrides": {
       "orb-shadow": {"borderColor": "#24384f"},
       "orb-pedestal": {"color": "#07101d", "secondaryColor": "#27476b", "borderColor": "#3d9bff", "opacity": 1, "borderWidth": 0.03},

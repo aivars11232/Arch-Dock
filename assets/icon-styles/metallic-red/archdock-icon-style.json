@@ -3,7 +3,7 @@
   "version": 1,
   "id": "metallic-red",
   "name": "Metallic Red",
-  "revision": 1,
+  "revision": 2,
   "author": "Arch Dock contributors",
   "description": "A deep red metallic tile with a warm illuminated bevel around the original application glyph.",
   "license": {
@@ -15,17 +15,17 @@
   "safeGlyphInset": {"left": 0.16, "top": 0.16, "right": 0.16, "bottom": 0.16},
   "layers": {
     "rear": [
-      {"id": "red-aura", "kind": "procedural", "shape": "ring", "color": "#9b3040", "secondaryColor": "#ff8190", "opacity": 0.42, "inset": 0.01, "radius": 0.26, "borderColor": "#ff7180", "borderWidth": 0.05}
+      {"id": "red-aura", "kind": "procedural", "shape": "ring", "followsIconShape": true, "color": "#9b3040", "secondaryColor": "#ff8190", "opacity": 0.42, "inset": 0.01, "radius": 0.26, "borderColor": "#ff7180", "borderWidth": 0.05}
     ],
     "base": [
-      {"id": "red-metal", "kind": "procedural", "shape": "rounded-rect", "color": "#32191d", "secondaryColor": "#7b3038", "opacity": 1, "inset": 0.06, "radius": 0.25, "borderColor": "#ff7180", "borderWidth": 0.025}
+      {"id": "red-metal", "kind": "procedural", "shape": "rounded-rect", "followsIconShape": true, "color": "#32191d", "secondaryColor": "#7b3038", "opacity": 1, "inset": 0.06, "radius": 0.25, "borderColor": "#ff7180", "borderWidth": 0.025}
     ],
     "front": [
-      {"id": "red-bevel", "kind": "procedural", "shape": "ring", "color": "transparent", "secondaryColor": "#ffe1e4", "opacity": 0.82, "inset": 0.075, "radius": 0.25, "borderColor": "#ffc1c8", "borderWidth": 0.026}
+      {"id": "red-bevel", "kind": "procedural", "shape": "ring", "followsIconShape": true, "color": "transparent", "secondaryColor": "#ffe1e4", "opacity": 0.82, "inset": 0.075, "radius": 0.25, "borderColor": "#ffc1c8", "borderWidth": 0.026}
     ],
     "reflection": {"id": "red-reflection", "kind": "procedural", "shape": "rounded-rect", "color": "#ffe1e4", "opacity": 0.2, "inset": 0.12, "radius": 0.23, "borderColor": "transparent", "borderWidth": 0},
-    "shadow": {"id": "red-shadow", "kind": "procedural", "shape": "rounded-rect", "color": "#0e0507", "opacity": 0.55, "inset": 0.025, "radius": 0.27, "borderColor": "transparent", "borderWidth": 0},
-    "glow": {"id": "red-glow", "kind": "procedural", "shape": "ring", "color": "#ff6070", "opacity": 0.7, "inset": 0, "radius": 0.28, "borderColor": "#ff6070", "borderWidth": 0.045}
+    "shadow": {"id": "red-shadow", "kind": "procedural", "shape": "rounded-rect", "followsIconShape": true, "color": "#0e0507", "opacity": 0.55, "inset": 0.025, "radius": 0.27, "borderColor": "transparent", "borderWidth": 0},
+    "glow": {"id": "red-glow", "kind": "procedural", "shape": "ring", "followsIconShape": true, "color": "#ff6070", "opacity": 0.7, "inset": 0, "radius": 0.28, "borderColor": "#ff6070", "borderWidth": 0.045}
   },
   "states": [
     {"id": "normal", "rearOpacity": 0.45, "baseOpacity": 1, "frontOpacity": 0.68, "glyphOpacity": 1, "glyphScale": 0.86, "borderColor": "#ff7180", "glowColor": "#ff6070", "glowOpacity": 0.16, "reflectionOpacity": 0.12, "indicatorColor": "#ff7180", "indicatorOpacity": 0},
@@ -46,5 +46,6 @@
     "animationCapabilities": ["hover-scale", "press-scale", "glow-pulse", "urgent-pulse", "launching-pulse", "indicator-transition"],
     "supports3D": false
   },
+  "extensions": {"org.archdock.iconParameters": {"defaultShape": "rounded"}},
   "preview": {"seed": "metallic-red-v1", "iconName": "utilities-terminal", "state": "hover", "tileSize": 64}
 }

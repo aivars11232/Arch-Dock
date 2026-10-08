@@ -13,6 +13,7 @@ Model {
     required property var meshData
     required property var materialData
     property Texture surfaceTexture: null
+    property Material faceMaterial: null
     property real emissionScale: 1
     property var partDefinition: null
     property real openAmount: 1
@@ -55,6 +56,10 @@ Model {
     readonly property int rimCount: meshReady && rimOffset > 0
         && rimOffset + Number(meshData.rimCount || 0) === meshData.indexes.length
         ? Number(meshData.rimCount) : 0
+    readonly property int faceOffset: meshReady && faceMaterial !== null
+        && Number(meshData.faceOffset || 0) > 0
+        && Number(meshData.faceOffset) + Number(meshData.faceCount || 0) === meshData.indexes.length
+        ? Number(meshData.faceOffset) : 0
     function colours(values) {
         return (values || []).map(function(value) {
             return Qt.vector4d(value[0], value[1], value[2], value.length > 3 ? value[3] : 1)
@@ -70,17 +75,23 @@ Model {
         colors: root.vertexColoured ? root.colours(root.meshData.colors) : []
         indexes: root.meshReady ? root.meshData.indexes : []
         primitiveMode: ProceduralMesh.Triangles
-        subsets: root.rimCount > 0 ? [bodySubset, rimSubset] : []
+        subsets: root.faceOffset > 0 ? [bodySubset, faceSubset]
+            : root.rimCount > 0 ? [bodySubset, rimSubset] : []
     }
     readonly property ProceduralMeshSubset bodySubset: ProceduralMeshSubset {
         offset: 0
-        count: root.rimOffset
+        count: root.faceOffset > 0 ? root.faceOffset : root.rimOffset
     }
     readonly property ProceduralMeshSubset rimSubset: ProceduralMeshSubset {
         offset: root.rimOffset
         count: root.rimCount
     }
-    materials: rimCount > 0 ? [bodyMaterial, rimMaterial] : [bodyMaterial]
+    readonly property ProceduralMeshSubset faceSubset: ProceduralMeshSubset {
+        offset: root.faceOffset
+        count: root.faceOffset > 0 ? root.meshData.indexes.length - root.faceOffset : 0
+    }
+    materials: faceOffset > 0 ? [bodyMaterial, faceMaterial]
+        : rimCount > 0 ? [bodyMaterial, rimMaterial] : [bodyMaterial]
     readonly property PrincipledMaterial bodyMaterial: PrincipledMaterial {
         readonly property var values: root.materialData || ({})
         readonly property color emission: values.emissiveColor || "#000000"
@@ -91,7 +102,8 @@ Model {
         vertexColorsEnabled: root.vertexColoured
         opacity: Math.max(0, Math.min(1, Number(values.opacity === undefined ? 1 : values.opacity)))
         alphaMode: opacity < 1 ? PrincipledMaterial.Blend : PrincipledMaterial.Opaque
-        depthDrawMode: Material.AlwaysDepthDraw
+        depthDrawMode: root.faceOffset > 0 && opacity < 1
+            ? Material.OpaqueOnlyDepthDraw : Material.AlwaysDepthDraw
         metalness: Math.max(0, Math.min(1, Number(values.metalness || 0)))
         roughness: Math.max(0, Math.min(1, Number(values.roughness || 0)))
         emissiveFactor: Qt.vector3d(emission.r * strength,

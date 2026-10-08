@@ -505,10 +505,24 @@ Window {
     }
 
     function formatFieldValue(field, value) {
+        if (field.specialValueText && Number(value) === Number(field.from))
+            return field.specialValueText;
         const decimals = field.decimals === undefined ? 0 : field.decimals;
         const numeric = Number(value) * (field.displayScale === undefined ? 1 : field.displayScale);
         const text = decimals > 0 ? numeric.toFixed(decimals) : Math.round(numeric);
         return (field.prefix || "") + text + (field.suffix || "");
+    }
+
+    function parseFieldValue(field, text, fallback) {
+        let value = String(text).trim();
+        if (field.specialValueText && value === field.specialValueText)
+            return Number(field.from);
+        if (field.prefix && value.startsWith(field.prefix))
+            value = value.slice(field.prefix.length);
+        if (field.suffix && value.endsWith(field.suffix))
+            value = value.slice(0, -field.suffix.length);
+        const numeric = Number(value.trim());
+        return isFinite(numeric) && value.trim().length > 0 ? numeric : fallback;
     }
 
     function displayFieldValue(field) {
@@ -607,6 +621,8 @@ Window {
             row.decimals = Number(descriptor.decimals);
         if (descriptor.suffix !== undefined)
             row.suffix = descriptor.suffix;
+        if (descriptor.specialValueText !== undefined)
+            row.specialValueText = descriptor.specialValueText;
         return row;
     }
 
@@ -1002,16 +1018,35 @@ Window {
         };
     }
 
+    function iconAppearanceRows() {
+        const rows = schemaSectionRows("icons-appearance", qsTr("Appearance"),
+            qsTr("Style, shape and logo options for the selected panel."));
+        if (String(panelValue("iconTileMode", "style")) === "custom")
+            rows.push(notice(qsTr("Custom tile fill, border and opacity are on Icon Tiles. Diameter and Logo size still apply here.")));
+        else if (!fieldDescriptor("iconBodyColor", "panel"))
+            rows.push(notice(String(panelValue("iconStyle", "plain-original")) === "plain-original"
+                ? qsTr("Plain Original keeps the application glyph. Choose a Shape to add its shaped background, or turn tiles on in Icon Tiles.")
+                : qsTr("Turn tiles on in Icon Tiles to adjust the style's body colour.")));
+        if (!fieldDescriptor("iconPedestalEnabled", "panel"))
+            rows.push(notice(qsTr("Pedestal is available with styles that declare one, such as Dark Orb. The Pedestal presets turn it on.")));
+        else if (!Boolean(panelValue("iconPedestalEnabled", false)))
+            rows.push(notice(qsTr("Turn Pedestal on to adjust its height and colour.")));
+        rows.push({kind: "actions", label: qsTr("Style options"), actions: [
+            {label: qsTr("Reset style options"), icon: "edit-reset", action: "reset-icon-style-options"}]});
+        return rows;
+    }
+
     function iconTileRows() {
         const rows = schemaSectionRows("icon-tiles", qsTr("Icon Tiles"),
             qsTr("Tile backgrounds for this panel. Preview changes here, then Apply to save."));
         const custom = String(panelValue("iconTileMode", "style")) === "custom";
         // Fill, border and opacity belong to a custom tile. The shape is
         // offered whenever a tile is drawn with it, after the tile appearance.
-        const shape = rows.filter(function(row) { return row.key === "iconShape"; });
+        const shapeDescriptor = fieldDescriptor("iconShape", "panel");
+        const shape = shapeDescriptor ? [editorRow(shapeDescriptor)] : [];
         const filtered = rows.filter(function(row) {
-            return row.key !== "iconShape" && (!row.key || row.key === "iconTilesEnabled"
-                || row.key === "iconTileMode" || custom);
+            return row.key !== "iconShape" && (custom
+                || !["iconTileColor", "iconTileOpacity", "iconTileBorderColor", "iconTileBorderWidth"].includes(row.key));
         });
         for (let index = 0; index < filtered.length; ++index) {
             if (filtered[index].key === "iconTileMode") {
@@ -1027,6 +1062,9 @@ Window {
                 optionLabel("iconStyle", panelValue("iconStyle", "plain-original")),
                 qsTr("Tiles from the icon style follow the style chosen on Icons > Appearance.")));
         filtered.push(notice(qsTr("Individual icons can override the tile default in Icon Properties. Custom tiles preserve the icon glyph and use the same tile in 2D and 3D.")));
+        filtered.push(notice(qsTr("Thickness draws a bevel in 2D and solid depth in 3D. Icon offsets and scale place the glyph on its tile; both travel together and keep the panel's icon orientation.")));
+        filtered.push({kind: "actions", label: qsTr("Tile options"), actions: [
+            {label: qsTr("Reset tile options"), icon: "edit-reset", action: "reset-icon-tile-options"}]});
         return filtered;
     }
 
@@ -1125,7 +1163,7 @@ Window {
         }
         if (mainTabIndex === 2) {
             if (subTabIndex === 0)
-                return schemaSectionRows("icons-appearance", qsTr("Appearance"), qsTr("Icon appearance for the selected panel."));
+                return iconAppearanceRows();
             if (subTabIndex === 1)
                 return schemaSectionRows("icons-behavior", qsTr("Behavior"), qsTr("Icon motion and magnification."));
             if (subTabIndex === 2)
@@ -1242,6 +1280,28 @@ Window {
     }
 
     function performStudioAction(action, data) {
+        if (action === "reset-icon-tile-options") {
+            for (const key of ["iconTileTexture", "iconTileThickness", "iconTileIconOffsetX",
+                              "iconTileIconOffsetY", "iconTileIconScale", "iconTileBevel",
+                              "iconTileMaterial", "iconTileElevation"]) {
+                const descriptor = fieldDescriptor(key, "panel");
+                if (descriptor)
+                    editorSession = EditorModel.setPanelValue(editorSession, key, descriptor.defaultValue);
+            }
+            refreshProjection();
+            return;
+        }
+        if (action === "reset-icon-style-options") {
+            for (const key of ["iconDiameter", "iconLogoSize", "iconOutlineWidth", "iconBodyColor",
+                              "iconOutlineColor", "iconGlowColor", "iconPedestalEnabled",
+                              "iconPedestalHeight", "iconPedestalColor"]) {
+                const descriptor = fieldDescriptor(key, "panel");
+                if (descriptor)
+                    editorSession = EditorModel.setPanelValue(editorSession, key, descriptor.defaultValue);
+            }
+            refreshProjection();
+            return;
+        }
         if (action === "browse-3d-themes") {
             setSubTab(6);
             return;

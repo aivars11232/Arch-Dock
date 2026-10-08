@@ -6,7 +6,7 @@
     "For each host, representative layout and renderer tier, the test lists the fields Panel Studio shows and checks that",
     "(a) changing and applying each one changes the drawn panel or the documented runtime property named here,",
     "(b) no field forbidden for that host, layout or tier is shown or offered, and",
-    "(c) no setting is shown on two pages, and each one named under 'homes' is on its page."
+    "(c) no setting is shown on two pages except PD-20 / OF-40 Shape on Icons > Appearance and the original custom Icon Tiles page; each named home is checked."
   ],
   "combinations": [
     {
@@ -37,7 +37,9 @@
     {"id": "free-arc-true3d", "host": "free", "layout": "arc", "tier": "true3d", "theme": "arc-platform-orange"},
     {"id": "free-semicircle-procedural2d", "host": "free", "layout": "semicircle", "tier": "procedural2d", "theme": ""},
     {"id": "free-semicircle-baked2.5d", "host": "free", "layout": "semicircle", "tier": "baked2.5d", "theme": "arc-platform-orange"},
-    {"id": "free-grid-procedural2d", "host": "free", "layout": "grid", "tier": "procedural2d", "theme": ""}
+    {"id": "free-grid-procedural2d", "host": "free", "layout": "grid", "tier": "procedural2d", "theme": ""},
+    {"id": "free-circular-dark-orb", "host": "free", "layout": "circular", "tier": "procedural2d", "theme": "", "base": {"iconStyle": "dark-orb", "iconShape": "hexagon", "iconPedestalEnabled": true, "iconOutlineWidth": 2}},
+    {"id": "free-ring-solid-tiles", "host": "free", "layout": "ring", "tier": "true3d", "theme": "mesh-platform-cyan", "base": {"iconTileMode": "custom", "iconTileThickness": 8, "iconTileBevel": 1}}
   ],
   "base": {
     "edge": {"type": "hybrid", "presentationMode": "open", "collapseMechanism": "collapse-horizontal"},
@@ -221,6 +223,7 @@
     "openDelay": "1:9",
     "closeDelay": "1:9",
     "iconStyle": "2:0",
+    "iconShape": "2:0",
     "scene3DColor": "1:10",
     "scene3DMaterial": "1:10",
     "scene3DTexture": "1:10",
@@ -370,6 +373,23 @@
     "iconStyle": {"probe": "frame", "value": "metallic-blue", "alternate": "neon-green"},
     "showReflections": {"probe": "frame"},
     "iconShape": {"probe": "hoverFrame", "value": "circle", "alternate": "square"},
+    "iconDiameter": {"probe": "frame", "needsShaders": ["true3d"], "value": 70},
+    "iconLogoSize": {"probe": "frame", "needsShaders": ["true3d"], "value": 60},
+    "iconOutlineWidth": {"probe": "frame", "needsShaders": ["true3d"], "value": 6},
+    "iconBodyColor": {"probe": "frame", "needsShaders": ["true3d"], "value": "#d34e92"},
+    "iconOutlineColor": {"probe": "frame", "needsShaders": ["true3d"], "value": "#f9de31"},
+    "iconGlowColor": {"probe": "hoverFrame", "needsShaders": ["true3d"], "value": "#ff8040"},
+    "iconPedestalEnabled": {"probe": "frame", "needsShaders": ["true3d"]},
+    "iconPedestalHeight": {"probe": "frame", "needsShaders": ["true3d"], "value": 45},
+    "iconPedestalColor": {"probe": "frame", "needsShaders": ["true3d"], "value": "#d85121"},
+    "iconTileTexture": {"probe": "hoverFrame", "needsShaders": ["true3d"], "value": "organic"},
+    "iconTileThickness": {"probe": "hoverFrame", "needsShaders": ["true3d"], "value": 16},
+    "iconTileIconOffsetX": {"probe": "frame", "needsShaders": ["true3d"], "value": 12},
+    "iconTileIconOffsetY": {"probe": "frame", "needsShaders": ["true3d"], "value": -12},
+    "iconTileIconScale": {"probe": "frame", "needsShaders": ["true3d"], "value": 60},
+    "iconTileBevel": {"probe": "frame", "needsShaders": ["true3d"], "value": 4},
+    "iconTileMaterial": {"probe": "frame", "needsShaders": ["true3d"], "value": "metallic"},
+    "iconTileElevation": {"probe": "frame", "needsShaders": ["true3d"], "value": 24},
     "iconTilesEnabled": {"probe": "hoverFrame"},
     "iconTileMode": {"probe": "frame"},
     "iconTileColor": {"probe": "frame", "value": "#c83c3c", "alternate": "#3cc85a"},

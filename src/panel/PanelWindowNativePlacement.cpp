@@ -1040,10 +1040,18 @@ ArchDock::PlasmaPanelPlacementApplyResult PanelWindow::applyNativePanelPlacement
         return result;
     }
 
+    const bool backgroundRecovery = m_nativePanelRecoveryActive && !persistIntent;
+    const QVariantMap capturedIntent = definition->toPersistedMap();
+    const std::function<bool()> stillCurrent = backgroundRecovery
+        ? std::function<bool()>([this, panelId, capturedIntent] {
+              const auto current = runtimePanelDefinition(panelId);
+              return current && current->toPersistedMap() == capturedIntent;
+          })
+        : std::function<bool()>{};
     const ArchDock::PlasmaPanelAdapter adapter(
-        [this](const QString &script)
+        [this, backgroundRecovery, stillCurrent](const QString &script)
         {
-            return evaluatePlasmaScriptResultOptional(script);
+            return evaluatePlasmaScriptResultOptional(script, backgroundRecovery, stillCurrent);
         });
     ArchDock::PlasmaPanelPersistence persistence;
     if (persistIntent)
@@ -1053,12 +1061,24 @@ ArchDock::PlasmaPanelPlacementApplyResult PanelWindow::applyNativePanelPlacement
             return m_panelRegistry.updatePanelChecked(panelId, values);
         };
     }
-    result = adapter.applyPlacement(
-        containmentId,
-        panelId,
-        ownershipToken,
-        *normalized.placement,
-        std::move(persistence));
+    try
+    {
+        result = adapter.applyPlacement(
+            containmentId,
+            panelId,
+            ownershipToken,
+            *normalized.placement,
+            std::move(persistence));
+    }
+    catch (const PanelWindowHelpers::PlasmaScriptSuperseded &)
+    {
+        // The foreground operation already owns the newer state. Unwind the
+        // stale adapter before it can restore its old native-host snapshot.
+        result.status = QStringLiteral("superseded");
+        result.errorCode = QStringLiteral("native-placement-intent-changed");
+        result.savedIntent = nativePanelPlacementIntent(panelId);
+        return result;
+    }
     result.savedIntent = nativePanelPlacementIntent(panelId);
 
     for (const ArchDock::PlasmaPanelFieldResult &field : result.fields)
@@ -1179,6 +1199,13 @@ bool PanelWindow::applyNativePanelPlacement(const QString &panelId,
     if (errorCode)
     {
         *errorCode = result.errorCode;
+    }
+    if (result.status == QLatin1String("superseded"))
+    {
+        // Preserve the foreground result; a fresh pass reconciles current
+        // intent. The obsolete pass must not publish failure over that result.
+        scheduleNativePanelRecovery();
+        return true;
     }
     const bool success = result.success();
     recordNativePanelPlacementResult(panelId, std::move(result));

@@ -1292,6 +1292,8 @@ private slots:
     // own stands on a platform generated along its own layout, in its own
     // colours, with upright icons on pedestals. Every supported shape, the
     // owner's baked blue ring and the steel octagon, drawn by the real RHI.
+    void tileDepthMaterialsPlacementAndOrbitRenderUnderRhi();
+
     void generatedPlatformsFollowTheLayoutAndLook_data()
     {
         QTest::addColumn<QString>("layout");
@@ -1412,6 +1414,17 @@ private slots:
         QObject *content = renderer->findChild<QObject *>(QStringLiteral("mesh-scene-content"));
         QVERIFY(viewport && content);
         QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 6);
+        if (layout == QStringLiteral("circular")) {
+            // A static production scene must settle after projection, even
+            // when frame completion updates its input geometry.
+            QSignalSpy idleFrames(&window, &QQuickWindow::frameSwapped);
+            QTest::qWait(250);
+            idleFrames.clear();
+            QTest::qWait(1000);
+            qInfo() << "NATIVE_STATIC_FRAMES" << idleFrames.count() << "over 1000 ms";
+            QVERIFY2(idleFrames.count() <= 4,
+                     "A settled static 3D scene must not continuously request frames");
+        }
 
         // The platform is the generated one, of the layout's own shape.
         const QVariantMap platform = plainValue(renderer->property("generatedPlatform")).toMap();
@@ -2014,6 +2027,141 @@ private slots:
             engine.removeUrlInterceptor(&interceptor);
     }
 };
+
+void RendererCapabilityTest::tileDepthMaterialsPlacementAndOrbitRenderUnderRhi()
+{
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+        return; // Executed by the private KWin installed-module harness.
+    QQmlEngine engine;
+    engine.addImportPath(importRoot());
+    QStringList warnings;
+    connect(&engine, &QQmlEngine::warnings, &engine, [&](const QList<QQmlError> &errors) {
+        for (const auto &error : errors) warnings.append(error.toString());
+    });
+    QQmlComponent component(&engine);
+    component.setData(R"(
+        import QtQuick
+        import ArchDock.Rendering 1.0
+        PanelScene {
+            property var tileValues: ({})
+            panelDefinition: Object.assign({edge: "free", type: "launcher", rendererTier: "true3d",
+                layout: "circular", layoutRadius: 100, iconSize: 52, appearance: "minimal",
+                scene3DCameraPitch: 25, scene3DTransitions: false, scene3DQuality: "high",
+                iconShape: "circle", iconTilesEnabled: true, iconTileMode: "custom",
+                iconTileColor: "#7895b0", iconTileOpacity: 1, iconTileBorderWidth: 1,
+                pathOrientation: "upright", panelMotionTarget: "items"}, tileValues)
+            entryDelegateContext: ({hostKind: "free"})
+            hostCapabilities: ({rotation: {available: true}})
+            orderedEntries: [0,1,2,3].map(function(i) {
+                return {id:"app-"+i, iconName:"file:///usr/share/icons/hicolor/scalable/apps/firefox.svg"}
+            })
+        }
+    )", QUrl::fromLocalFile(importRoot() + "/TileDepthConsumer.qml"));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    const QVariantMap theme{{"format", "org.archdock.theme"}, {"version", 2}, {"valid", true},
+        {"id", "tile-test-platform"}, {"name", "Tile test platform"},
+        {"capabilities", QVariantMap{{"rendererTiers", QVariantList{"true3d", "procedural2d"}},
+            {"preferredRendererTier", "procedural2d"}, {"fallbackRendererTiers", QVariantList{"procedural2d"}}}},
+        {"scene3D", QVariantMap{{"generic", true}, {"generated", QVariantMap{}}, {"parts", QVariantList{}},
+            {"transitions", false}, {"fieldOfView", 40}, {"keyLightBrightness", 1.2}, {"fillLightBrightness", 0.45}}},
+        {"scene3DResources", QVariantMap{{"material", QVariantMap{{"format", "org.archdock.material"},
+            {"version", 1}, {"baseColor", "#406080"}, {"roughness", 0.45}, {"metalness", 0.3}}},
+            {"parts", QVariantList{}}, {"indexBudget", 262144}}}};
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({{"themeDefinition", theme}}));
+    QVERIFY2(object, qPrintable(component.errorString()));
+    auto *scene = qobject_cast<QQuickItem *>(object.get()); QVERIFY(scene);
+    QQuickWindow window;
+    scene->setParentItem(window.contentItem());
+    window.resize(qCeil(scene->width()), qCeil(scene->height()));
+    window.show(); QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(), QStringLiteral("true3d"), 5000);
+    auto *renderer = objectValue(scene->property("activeSurfaceRenderer")); QVERIFY(renderer);
+    auto *view = qobject_cast<QQuickItem *>(objectValue(renderer->property("viewport"))); QVERIFY(view);
+    const QString evidence = qEnvironmentVariable("ARCHDOCK_SCENE_EVIDENCE_DIR");
+    if (!evidence.isEmpty()) QVERIFY(QDir().mkpath(evidence + "/tiles"));
+    const auto capture = [&](const QString &name) {
+        QTest::qWait(100);
+        const auto grab = view->grabToImage();
+        if (!grab) return QImage{};
+        QSignalSpy ready(grab.get(), &QQuickItemGrabResult::ready);
+        if (!ready.wait(5000)) return QImage{};
+        const QImage image = grab->image();
+        if (!evidence.isEmpty() && !image.save(evidence + "/tiles/" + name + ".png")) return QImage{};
+        return image;
+    };
+    const auto changed = [](const QImage &a, const QImage &b) {
+        if (a.size() != b.size() || a.isNull() || b.isNull()) return -1;
+        int count = 0;
+        for (int y = 0; y < a.height(); ++y) for (int x = 0; x < a.width(); ++x) {
+            const QColor p = a.pixelColor(x,y), q = b.pixelColor(x,y);
+            if (qAbs(p.red()-q.red())+qAbs(p.green()-q.green())+qAbs(p.blue()-q.blue())
+                    +qAbs(p.alpha()-q.alpha()) > 12) ++count;
+        }
+        return count;
+    };
+    QTest::qWait(200);
+    const QImage flat = capture("flat"); QVERIFY(!flat.isNull());
+    QVariantMap values{{"iconTileThickness", 8.0}, {"iconTileBevel", 3.0}};
+    scene->setProperty("tileValues", values);
+    const QImage solid = capture("solid"); QVERIFY(changed(flat,solid) >= 20);
+    auto *tile = renderer->findChild<QObject *>("mesh-tile-solid-0"); QVERIFY(tile);
+    const auto mesh = plainValue(tile->property("meshData")).toMap();
+    double minimumZ = 0;
+    for (const QVariant &point : mesh.value("positions").toList())
+        minimumZ = qMin(minimumZ, point.toList().value(2).toDouble());
+    QVERIFY(qAbs(minimumZ * tile->property("scale").value<QVector3D>().z() + 8) < 0.001);
+    QVERIFY(renderer->property("geometryWithinBudget").toBool());
+    for (const QString &shape : {QStringLiteral("rounded"), QStringLiteral("square"), QStringLiteral("squircle"),
+            QStringLiteral("circle"), QStringLiteral("hexagon"), QStringLiteral("diamond")}) {
+        values.insert("iconShape", shape); scene->setProperty("tileValues", values);
+        QVERIFY(!capture("shape-" + shape).isNull());
+        QVERIFY(plainValue(tile->property("meshData")).toMap().value("indexes").toList().size() > 12);
+    }
+    values.insert("iconShape", "circle"); scene->setProperty("tileValues", values);
+    const QImage baseline = capture("baseline"); QVERIFY(!baseline.isNull());
+    for (const QString &look : {QStringLiteral("glass"), QStringLiteral("crystal"), QStringLiteral("neon"),
+            QStringLiteral("minimal"), QStringLiteral("plasma"), QStringLiteral("lime"), QStringLiteral("floating-glass"),
+            QStringLiteral("metallic"), QStringLiteral("futuristic"), QStringLiteral("organic"),
+            QStringLiteral("platform"), QStringLiteral("plate"), QStringLiteral("pedestal")}) {
+        values.insert("iconTileTexture", look); scene->setProperty("tileValues", values);
+        QVERIFY2(changed(baseline,capture("texture-"+look)) >= 20, qPrintable(look));
+        values.insert("iconTileTexture", "none"); values.insert("iconTileMaterial", look);
+        scene->setProperty("tileValues", values);
+        const auto image = capture("material-"+look); QVERIFY(!image.isNull());
+        if (look != "minimal") QVERIFY2(changed(baseline,image) >= 20, qPrintable(look));
+        values.insert("iconTileMaterial", "minimal");
+    }
+    scene->setProperty("tileValues", values);
+    QVector3D opacityWorld, opacityScreen;
+    QVERIFY(QMetaObject::invokeMethod(tile, "mapPositionToScene", Q_RETURN_ARG(QVector3D, opacityWorld),
+        Q_ARG(QVector3D, QVector3D(0.78f,0,0))));
+    QVERIFY(projectScenePoint(view, opacityWorld, opacityScreen));
+    const QPoint opacityPoint(qRound(opacityScreen.x()), qRound(opacityScreen.y()));
+    const auto opaque = capture("opacity-100");
+    QVERIFY(opaque.rect().contains(opacityPoint));
+    QVERIFY(opaque.pixelColor(opacityPoint).alpha() > 200);
+    values.insert("iconTileOpacity", 0.5); scene->setProperty("tileValues", values);
+    const auto half = capture("opacity-50"); QVERIFY(!half.isNull());
+    QVERIFY2(qAbs(half.pixelColor(opacityPoint).alpha() - 128) <= 15,
+        qPrintable(QStringLiteral("tile 50 percent alpha was %1").arg(half.pixelColor(opacityPoint).alpha())));
+    values.insert("iconTileOpacity", 0.0); scene->setProperty("tileValues", values);
+    const auto clear = capture("opacity-0"); QVERIFY(!clear.isNull());
+    QVERIFY(clear.pixelColor(opacityPoint).alpha() < 32);
+    values.insert("iconTileOpacity", 1.0); scene->setProperty("tileValues", values);
+    auto *entry = renderer->findChild<QObject *>("mesh-entry-0"); QVERIFY(entry);
+    const QVector3D before = entry->property("position").value<QVector3D>();
+    values.insert("iconTileElevation", 12.0); scene->setProperty("tileValues", values);
+    QVERIFY(changed(baseline,capture("elevated")) >= 20);
+    QVERIFY(qAbs(entry->property("position").value<QVector3D>().z() - before.z() - 12) < 0.001);
+    scene->setProperty("wheelTravel", 1.0);
+    const QImage travelled = capture("upright-orbit"); QVERIFY(!travelled.isNull());
+    QVERIFY((entry->property("position").value<QVector3D>() - before).length() > 50);
+    auto *glyph = renderer->findChild<QObject *>("mesh-glyph-0"); QVERIFY(glyph);
+    const auto orientation = glyph->property("sceneRotation");
+    scene->setProperty("wheelTravel", 2.0); QVERIFY(!capture("upright-orbit-2").isNull());
+    QCOMPARE(glyph->property("sceneRotation"), orientation);
+    QVERIFY2(warnings.isEmpty(), qPrintable(warnings.join('\n')));
+}
 
 QTEST_MAIN(RendererCapabilityTest)
 #include "RendererCapabilityTest.moc"

@@ -284,15 +284,34 @@ struct PanelIconStyleDefinition
 {
     QString styleReference = QStringLiteral("plain-original");
     QString themeId;
-    QString shape = QStringLiteral("rounded");
+    QString shape = QStringLiteral("style-default");
     int size = 52;
     qreal spacing = 8.0;
+    // ADREP-TASK-005: percentages keep the style inside its existing cell;
+    // an unset colour or -1 outline retains the package's own treatment.
+    int diameter = 100;
+    int logoSize = 95;
+    int outlineWidth = -1;
+    QString bodyColor;
+    QString outlineColor;
+    QString glowColor;
+    bool pedestalEnabled = false;
+    int pedestalHeight = 20;
+    QString pedestalColor;
     bool tilesEnabled = true;
     QString tileMode = QStringLiteral("style");
     QString tileColor = QStringLiteral("#334155");
     qreal tileOpacity = 0.8;
     QString tileBorderColor = QStringLiteral("#94a3b8");
     qreal tileBorderWidth = 1.0;
+    QString tileTexture = QStringLiteral("none");
+    qreal tileThickness = 0.0;
+    qreal tileIconOffsetX = 0.0;
+    qreal tileIconOffsetY = 0.0;
+    int tileIconScale = 100;
+    qreal tileBevel = 0.0;
+    QString tileMaterial = QStringLiteral("minimal");
+    qreal tileElevation = 0.0;
     QVariantMap globalDefaults;
     struct EntryOverride
     {

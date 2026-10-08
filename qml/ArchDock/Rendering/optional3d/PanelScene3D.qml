@@ -178,12 +178,50 @@ Item {
             const visual = entryVisuals[index] ? entryVisuals[index].meshVisualItem : null
             count += 2 // Glyph.
             if (visual && !visual.tileRenderingEnabled) continue
-            count += 2 // Tile.
+            count += tileMeshes[index] ? tileMeshes[index].indexes.length / 3 : 2
             if (bounded("iconElevation", 0.3, 0, 2) > 0)
                 count += pedestalTriangles + (generatedSpec ? 0 : iconResource.triangleCount)
             if (!visual || !visual.customTileActive) count += partTriangles(entryParts)
         }
         return count
+    }
+    readonly property var tileMeshes: entryVisuals.map(function(entry) {
+        const visual = entry ? entry.meshVisualItem : null
+        if (!visual || !visual.tileRenderingEnabled) return null
+        const values = visual.tileSettings || ({})
+        const logicalSize = Math.max(1, Number(visual.logicalSize || 52))
+        const thickness = Math.max(0, Math.min(24, root.number(values, "iconTileThickness", 0)))
+        if (thickness <= 0) return null
+        let diameter = 0.92 * Number(visual.resolvedIconStyle.diameter || 1)
+        if (!visual.customTileActive && visual.styledLayersActive) {
+            const layer = visual.styleBaseItem.roleLayers.find(function(layer) {
+                return layer.followsIconShape && layer.option !== "pedestal"
+            })
+            if (layer) diameter = (1 - 2 * Number(layer.inset || 0))
+                * (layer.shape === "diamond" ? 0.96 : 1)
+        }
+        return PlatformGeometry.tile({shape: visual.resolvedIconStyle.iconShape,
+            thickness: 2 * thickness / logicalSize,
+            bevel: 2 * Math.max(0, Math.min(12, root.number(values, "iconTileBevel", 0))) / logicalSize,
+            diameter: diameter})
+    })
+    function tileMaterial(visual) {
+        const values = visual ? visual.tileSettings || ({}) : ({})
+        const requested = String(values.iconTileMaterial || "minimal")
+        const look = materialNames.includes(requested) ? requested : "minimal"
+        const style = LayoutEngine.themeStyle(look, "", 52)
+        const palette = PlatformGeometry.paletteFromStyle(style)
+        const colour = Qt.rgba(palette.top[0],palette.top[1],palette.top[2],1)
+        return {format: "org.archdock.material", baseColor: look === "minimal"
+                ? String(values.iconTileColor || "#334155") : colour,
+            metalness: ["metallic", "platform", "plate", "pedestal", "futuristic"].includes(look) ? 0.85 : 0,
+            roughness: ["glass", "floating-glass", "crystal"].includes(look) ? 0.12
+                : ["organic", "minimal"].includes(look) ? 0.85 : 0.38,
+            opacity: style.alpha * (visual && visual.customTileActive
+                ? Math.max(0, Math.min(1, root.number(values, "iconTileOpacity", 0.8))) : 1),
+            surfaceOpacity: style.alpha, emissiveColor: colour,
+            emissiveStrength: ["neon", "plasma", "lime", "futuristic"].includes(look) ? 0.2 : 0,
+            look: look}
     }
     readonly property int triangleCount: platform.triangleCount
         + partTriangles(panelParts) + entryTriangleCount
@@ -610,15 +648,24 @@ Item {
             completedFrameObserved = true
     }
 
+    // Native frame updates belong to this scene. A Loader replacement may
+    // invalidate its QML context before an engine-wide callLater runs.
+    Timer {
+        id: frameUpdates
+        interval: 0
+        repeat: false
+        onTriggered: {
+            if (!root.completedFrameObserved)
+                root.observeCompletedFrame()
+            root.updateProjection()
+            if (root.editMode)
+                root.updateEndOnAxes()
+        }
+    }
+    Component.onDestruction: frameUpdates.stop()
     Connections {
         target: root.Window.window
-        function onFrameSwapped() {
-            if (!root.completedFrameObserved)
-                Qt.callLater(root.observeCompletedFrame)
-            Qt.callLater(root.updateProjection)
-            if (root.editMode)
-                Qt.callLater(root.updateEndOnAxes)
-        }
+        function onFrameSwapped() { frameUpdates.start() }
     }
 
     function bounded(key, fallback, minimum, maximum) {
@@ -841,6 +888,11 @@ Item {
                 // without one off the platform's top.
                 readonly property real pedestalHeight: size * elevation
                 readonly property real baseLift: size * 0.02
+                readonly property real tileLift: visual ? Math.max(-24, Math.min(96,
+                    root.number(visual.tileSettings, "iconTileElevation", 0)))
+                    * size / Math.max(1, Number(visual.logicalSize || 52)) : 0
+                readonly property var tileMesh: root.tileMeshes[index] || null
+                readonly property var tileMaterial: root.tileMaterial(visual)
                 readonly property bool tileShown: visual !== null && visual.tileRenderingEnabled
                 // Where the entry stands. On a generated platform the layout's
                 // own position, carried onto the platform's centre line: the
@@ -873,7 +925,7 @@ Item {
                 // track, on top of its pedestal. Motion offsets move it along.
                 position: Qt.vector3d(standPoint[0] + root.number(iconMotion, "x", 0),
                     standPoint[1] - root.number(iconMotion, "y", 0),
-                    standPoint[2] * root.bounded("thickness", 1, 0.1, 4) + pedestalHeight + baseLift)
+                    standPoint[2] * root.bounded("thickness", 1, 0.1, 4) + pedestalHeight + baseLift + tileLift)
                 opacity: root.number(iconMotion, "opacity", 1) * trackVisibility
 
                 // The pedestal: a solid column from the platform's top up to
@@ -883,10 +935,10 @@ Item {
                     meshData: root.pedestalMesh
                     materialData: root.platformMaterial
                     surfaceTexture: root.themeTexture
-                    visible: entryNode.tileShown && entryNode.elevation > 0
-                    z: -(entryNode.pedestalHeight + entryNode.baseLift)
+                    visible: entryNode.tileShown && (entryNode.elevation > 0 || entryNode.tileLift > 0)
+                    z: -(entryNode.pedestalHeight + entryNode.baseLift + entryNode.tileLift)
                     scale: Qt.vector3d(entryNode.size * 0.18, entryNode.size * 0.18,
-                        entryNode.pedestalHeight + entryNode.baseLift)
+                        Math.max(0, entryNode.pedestalHeight + entryNode.baseLift + entryNode.tileLift))
                 }
                 // A theme's own icon base, lying on the platform around the
                 // pedestal's foot.
@@ -896,7 +948,7 @@ Item {
                     materialData: iconResource.materialData
                     surfaceTexture: root.themeTexture
                     visible: !root.generatedSpec && entryNode.tileShown && entryNode.elevation > 0
-                    z: -(entryNode.pedestalHeight + entryNode.baseLift)
+                    z: -(entryNode.pedestalHeight + entryNode.baseLift + entryNode.tileLift)
                     scale: Qt.vector3d(entryNode.size * 0.3, entryNode.size * 0.3, entryNode.size * 0.15)
                     emissionScale: root.emissionScale * (1 + entryNode.glow)
                 }
@@ -906,7 +958,7 @@ Item {
                     objectName: "mesh-tile-parts-" + entryNode.index
                     visible: !entryNode.visual || (entryNode.visual.tileRenderingEnabled
                         && !entryNode.visual.customTileActive)
-                    z: -(entryNode.pedestalHeight + entryNode.baseLift)
+                    z: -(entryNode.pedestalHeight + entryNode.baseLift + entryNode.tileLift)
                     scale: Qt.vector3d(entryNode.size * 0.55, entryNode.size * 0.55, entryNode.size * 0.55)
                     Repeater3D {
                         model: root.entryParts.length
@@ -964,11 +1016,39 @@ Item {
                                 * root.number(entryNode.iconMotion, "scaleX", 1),
                             entryNode.hoverScale * root.number(entryNode.iconMotion, "scale", 1)
                                 * root.number(entryNode.iconMotion, "scaleY", 1), 1)
+                        PrincipledMaterial {
+                            id: tileFaceMaterial
+                            lighting: entryNode.tileMaterial.look === "minimal"
+                                ? PrincipledMaterial.NoLighting : PrincipledMaterial.FragmentLighting
+                            alphaMode: PrincipledMaterial.Blend
+                            baseColor: entryNode.tileMaterial.look === "minimal" ? "#ffffff" : entryNode.tileMaterial.baseColor
+                            baseColorMap: tileTexture
+                            metalness: entryNode.tileMaterial.metalness
+                            roughness: entryNode.tileMaterial.roughness
+                            opacity: entryNode.tileMaterial.surfaceOpacity
+                            cullMode: Material.NoCulling
+                        }
+                        IconStyle3D {
+                            objectName: "mesh-tile-solid-" + entryNode.index
+                            meshData: entryNode.tileMesh
+                            materialData: entryNode.tileMaterial
+                            faceMaterial: tileFaceMaterial
+                            visible: entryNode.tileShown && entryNode.tileMesh !== null && root.collapseProgress < 1
+                            position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
+                                entryNode.size / 2 - root.number(entryNode.tileMotion, "y", 0), -entryNode.size * 0.001)
+                            eulerRotation: Qt.vector3d(0, root.number(entryNode.tileMotion, "rotateY", 0),
+                                -root.number(entryNode.tileMotion, "rotateZ", 0))
+                            scale: Qt.vector3d(entryNode.size / 2 * root.number(entryNode.tileMotion, "scale", 1)
+                                    * root.number(entryNode.tileMotion, "scaleX", 1),
+                                entryNode.size / 2 * root.number(entryNode.tileMotion, "scale", 1)
+                                    * root.number(entryNode.tileMotion, "scaleY", 1), entryNode.size / 2)
+                            opacity: root.number(entryNode.tileMotion, "opacity", 1) * (1 - root.collapseProgress)
+                        }
                         Model {
                             objectName: "mesh-tile-" + entryNode.index
                             source: "#Rectangle"
                             pickable: false
-                            visible: entryNode.tileShown && root.collapseProgress < 1
+                            visible: entryNode.tileShown && entryNode.tileMesh === null && root.collapseProgress < 1
                             position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
                                 entryNode.size / 2 - root.number(entryNode.tileMotion, "y", 0), 0)
                             eulerRotation: Qt.vector3d(0, root.number(entryNode.tileMotion, "rotateY", 0),
@@ -978,12 +1058,7 @@ Item {
                                 entryNode.size / 100 * root.number(entryNode.tileMotion, "scale", 1)
                                     * root.number(entryNode.tileMotion, "scaleY", 1), 1)
                             opacity: root.number(entryNode.tileMotion, "opacity", 1) * (1 - root.collapseProgress)
-                            materials: PrincipledMaterial {
-                                lighting: PrincipledMaterial.NoLighting
-                                alphaMode: PrincipledMaterial.Blend
-                                baseColorMap: tileTexture
-                                cullMode: Material.NoCulling
-                            }
+                            materials: tileFaceMaterial
                         }
                         Model {
                             id: glyphModel

@@ -735,12 +735,38 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         QStringLiteral("iconSize"), definition.iconStyle.size).toInt();
     definition.iconStyle.spacing = normalized(
         QStringLiteral("spacing"), definition.iconStyle.spacing).toReal();
+    definition.iconStyle.diameter = normalized(
+        QStringLiteral("iconDiameter"), definition.iconStyle.diameter).toInt();
+    definition.iconStyle.logoSize = normalized(
+        QStringLiteral("iconLogoSize"), definition.iconStyle.logoSize).toInt();
+    definition.iconStyle.outlineWidth = normalized(
+        QStringLiteral("iconOutlineWidth"), definition.iconStyle.outlineWidth).toInt();
+    definition.iconStyle.bodyColor = normalized(
+        QStringLiteral("iconBodyColor"), definition.iconStyle.bodyColor).toString();
+    definition.iconStyle.outlineColor = normalized(
+        QStringLiteral("iconOutlineColor"), definition.iconStyle.outlineColor).toString();
+    definition.iconStyle.glowColor = normalized(
+        QStringLiteral("iconGlowColor"), definition.iconStyle.glowColor).toString();
+    definition.iconStyle.pedestalEnabled = normalized(
+        QStringLiteral("iconPedestalEnabled"), definition.iconStyle.pedestalEnabled).toBool();
+    definition.iconStyle.pedestalHeight = normalized(
+        QStringLiteral("iconPedestalHeight"), definition.iconStyle.pedestalHeight).toInt();
+    definition.iconStyle.pedestalColor = normalized(
+        QStringLiteral("iconPedestalColor"), definition.iconStyle.pedestalColor).toString();
     definition.iconStyle.tilesEnabled = normalized(QStringLiteral("iconTilesEnabled"), definition.iconStyle.tilesEnabled).toBool();
     definition.iconStyle.tileMode = normalized(QStringLiteral("iconTileMode"), definition.iconStyle.tileMode).toString();
     definition.iconStyle.tileColor = normalized(QStringLiteral("iconTileColor"), definition.iconStyle.tileColor).toString();
     definition.iconStyle.tileOpacity = normalized(QStringLiteral("iconTileOpacity"), definition.iconStyle.tileOpacity).toReal();
     definition.iconStyle.tileBorderColor = normalized(QStringLiteral("iconTileBorderColor"), definition.iconStyle.tileBorderColor).toString();
     definition.iconStyle.tileBorderWidth = normalized(QStringLiteral("iconTileBorderWidth"), definition.iconStyle.tileBorderWidth).toReal();
+    definition.iconStyle.tileTexture = normalized(QStringLiteral("iconTileTexture"), definition.iconStyle.tileTexture).toString();
+    definition.iconStyle.tileThickness = normalized(QStringLiteral("iconTileThickness"), definition.iconStyle.tileThickness).toReal();
+    definition.iconStyle.tileIconOffsetX = normalized(QStringLiteral("iconTileIconOffsetX"), definition.iconStyle.tileIconOffsetX).toReal();
+    definition.iconStyle.tileIconOffsetY = normalized(QStringLiteral("iconTileIconOffsetY"), definition.iconStyle.tileIconOffsetY).toReal();
+    definition.iconStyle.tileIconScale = normalized(QStringLiteral("iconTileIconScale"), definition.iconStyle.tileIconScale).toInt();
+    definition.iconStyle.tileBevel = normalized(QStringLiteral("iconTileBevel"), definition.iconStyle.tileBevel).toReal();
+    definition.iconStyle.tileMaterial = normalized(QStringLiteral("iconTileMaterial"), definition.iconStyle.tileMaterial).toString();
+    definition.iconStyle.tileElevation = normalized(QStringLiteral("iconTileElevation"), definition.iconStyle.tileElevation).toReal();
     definition.iconStyle.globalDefaults = record.value(
         QStringLiteral("iconGlobalDefaults")).toMap();
     const QVariant overridesValue = record.value(QStringLiteral("iconOverrides"));
@@ -1232,12 +1258,29 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("iconShape"), iconStyle.shape);
     record.insert(QStringLiteral("iconSize"), iconStyle.size);
     record.insert(QStringLiteral("spacing"), iconStyle.spacing);
+    record.insert(QStringLiteral("iconDiameter"), iconStyle.diameter);
+    record.insert(QStringLiteral("iconLogoSize"), iconStyle.logoSize);
+    record.insert(QStringLiteral("iconOutlineWidth"), iconStyle.outlineWidth);
+    record.insert(QStringLiteral("iconBodyColor"), iconStyle.bodyColor);
+    record.insert(QStringLiteral("iconOutlineColor"), iconStyle.outlineColor);
+    record.insert(QStringLiteral("iconGlowColor"), iconStyle.glowColor);
+    record.insert(QStringLiteral("iconPedestalEnabled"), iconStyle.pedestalEnabled);
+    record.insert(QStringLiteral("iconPedestalHeight"), iconStyle.pedestalHeight);
+    record.insert(QStringLiteral("iconPedestalColor"), iconStyle.pedestalColor);
     record.insert(QStringLiteral("iconTilesEnabled"), iconStyle.tilesEnabled);
     record.insert(QStringLiteral("iconTileMode"), iconStyle.tileMode);
     record.insert(QStringLiteral("iconTileColor"), iconStyle.tileColor);
     record.insert(QStringLiteral("iconTileOpacity"), iconStyle.tileOpacity);
     record.insert(QStringLiteral("iconTileBorderColor"), iconStyle.tileBorderColor);
     record.insert(QStringLiteral("iconTileBorderWidth"), iconStyle.tileBorderWidth);
+    record.insert(QStringLiteral("iconTileTexture"), iconStyle.tileTexture);
+    record.insert(QStringLiteral("iconTileThickness"), iconStyle.tileThickness);
+    record.insert(QStringLiteral("iconTileIconOffsetX"), iconStyle.tileIconOffsetX);
+    record.insert(QStringLiteral("iconTileIconOffsetY"), iconStyle.tileIconOffsetY);
+    record.insert(QStringLiteral("iconTileIconScale"), iconStyle.tileIconScale);
+    record.insert(QStringLiteral("iconTileBevel"), iconStyle.tileBevel);
+    record.insert(QStringLiteral("iconTileMaterial"), iconStyle.tileMaterial);
+    record.insert(QStringLiteral("iconTileElevation"), iconStyle.tileElevation);
     insertIfNotEmpty(
         &record,
         QStringLiteral("iconGlobalDefaults"),

@@ -43,6 +43,8 @@ private slots:
     void consumerProjectionCannotBroadenTransactionAuthority();
     void sceneQualityIsBoundedAndReversible();
     void materialsAndFlatLookRoundTrip();
+    void iconParametersRoundTripAndRespectBounds();
+    void tileParametersRoundTripAndRestoreWithTheFlatLook();
     void tiltScalarsPreserveParameterMaps();
     void sceneTransformFieldsAreBoundedAndReversible();
     void folderSettingsPreserveLegacyValues();
@@ -659,6 +661,102 @@ void PanelSettingsSchemaTest::consumerProjectionCannotBroadenTransactionAuthorit
     }
     QVERIFY(!PanelSettingsSchema::isTransactionPanelField(QStringLiteral("id")));
     QVERIFY(!PanelSettingsSchema::isTransactionPanelField(QStringLiteral("screenId")));
+}
+
+void PanelSettingsSchemaTest::tileParametersRoundTripAndRestoreWithTheFlatLook()
+{
+    // ADREP-TASK-005, OF-41/42: bounded durable settings consumed by both
+    // renderers; PD-17's complete flat-look restore includes these values.
+    const QVariantMap values{{"iconTileTexture", "organic"}, {"iconTileThickness", 8.0},
+        {"iconTileIconOffsetX", -7.0}, {"iconTileIconOffsetY", 5.0}, {"iconTileIconScale", 85},
+        {"iconTileBevel", 3.0}, {"iconTileMaterial", "metallic"}, {"iconTileElevation", 12.0}};
+    auto panel = ArchDock::PanelDefinition::defaults("tile-options", "Tile options", "free", false);
+    auto record = panel.toPersistedMap();
+    record.insert(values);
+    const auto restored = ArchDock::PanelDefinition::fromLegacyMap(record);
+    QVERIFY(restored);
+    const auto saved = restored->toPersistedMap();
+    const auto flat = PanelSettingsSchema::flatLookValues(saved);
+    for (auto it = values.cbegin(); it != values.cend(); ++it) {
+        QVERIFY2(PanelSettingsSchema::descriptor(ArchDock::PanelSettingsFieldScope::Panel, it.key()), qPrintable(it.key()));
+        QCOMPARE(saved.value(it.key()), it.value());
+        QCOMPARE(flat.value(it.key()), it.value());
+    }
+    record.insert("iconTileThickness", -9);
+    record.insert("iconTileIconOffsetX", -100);
+    record.insert("iconTileIconScale", 200);
+    record.insert("iconTileBevel", 99);
+    record.insert("iconTileElevation", 999);
+    record.insert("iconTileTexture", "unknown");
+    const auto bounded = ArchDock::PanelDefinition::fromLegacyMap(record);
+    QVERIFY(bounded);
+    const auto result = bounded->toPersistedMap();
+    QCOMPARE(result.value("iconTileThickness").toDouble(), 0.0);
+    QCOMPARE(result.value("iconTileIconOffsetX").toDouble(), -40.0);
+    QCOMPARE(result.value("iconTileIconScale").toInt(), 150);
+    QCOMPARE(result.value("iconTileBevel").toDouble(), 12.0);
+    QCOMPARE(result.value("iconTileElevation").toDouble(), 96.0);
+    QCOMPARE(result.value("iconTileTexture").toString(), QStringLiteral("none"));
+}
+
+void PanelSettingsSchemaTest::iconParametersRoundTripAndRespectBounds()
+{
+    // ADREP-TASK-005, PD-20/21: one durable panel record owns these controls,
+    // including explicit shapes which override the style's signature.
+    auto record = PanelDefinition::defaults(
+        QStringLiteral("icon-parameters"), QStringLiteral("Icon parameters"),
+        QStringLiteral("free"), false).toPersistedMap();
+    const QVariantMap values{
+        {QStringLiteral("iconShape"), QStringLiteral("diamond")},
+        {QStringLiteral("iconDiameter"), 72},
+        {QStringLiteral("iconLogoSize"), 88},
+        {QStringLiteral("iconOutlineWidth"), 4},
+        {QStringLiteral("iconBodyColor"), QStringLiteral("#114477")},
+        {QStringLiteral("iconOutlineColor"), QStringLiteral("#abcdef")},
+        {QStringLiteral("iconGlowColor"), QStringLiteral("#66ff22")},
+        {QStringLiteral("iconPedestalEnabled"), true},
+        {QStringLiteral("iconPedestalHeight"), 35},
+        {QStringLiteral("iconPedestalColor"), QStringLiteral("#445566")},
+    };
+    for (auto it = values.cbegin(); it != values.cend(); ++it)
+    {
+        QVERIFY(PanelSettingsSchema::isEditorField(PanelSettingsFieldScope::Panel, it.key()));
+        record.insert(it.key(), it.value());
+    }
+    const auto restored = PanelDefinition::fromLegacyMap(record);
+    QVERIFY(restored.has_value());
+    QCOMPARE(restored->iconStyle.shape, QStringLiteral("diamond"));
+    QCOMPARE(restored->iconStyle.diameter, 72);
+    QCOMPARE(restored->iconStyle.logoSize, 88);
+    QCOMPARE(restored->iconStyle.outlineWidth, 4);
+    QCOMPARE(restored->iconStyle.bodyColor, QStringLiteral("#114477"));
+    QCOMPARE(restored->iconStyle.outlineColor, QStringLiteral("#abcdef"));
+    QCOMPARE(restored->iconStyle.glowColor, QStringLiteral("#66ff22"));
+    QVERIFY(restored->iconStyle.pedestalEnabled);
+    QCOMPARE(restored->iconStyle.pedestalHeight, 35);
+    QCOMPARE(restored->iconStyle.pedestalColor, QStringLiteral("#445566"));
+    const QVariantMap saved = restored->toPersistedMap();
+    for (auto it = values.cbegin(); it != values.cend(); ++it)
+        QCOMPARE(saved.value(it.key()), it.value());
+    for (const QString &shape : {QStringLiteral("rounded"), QStringLiteral("circle")})
+    {
+        record.insert(QStringLiteral("iconShape"), shape);
+        const auto explicitChoice = PanelDefinition::fromLegacyMap(record);
+        QVERIFY(explicitChoice.has_value());
+        QCOMPARE(explicitChoice->iconStyle.shape, shape);
+    }
+    record.insert(QStringLiteral("iconDiameter"), 0);
+    record.insert(QStringLiteral("iconLogoSize"), 200);
+    record.insert(QStringLiteral("iconOutlineWidth"), 64);
+    record.insert(QStringLiteral("iconPedestalHeight"), -20);
+    record.insert(QStringLiteral("iconBodyColor"), QStringLiteral("invalid"));
+    const auto bounded = PanelDefinition::fromLegacyMap(record);
+    QVERIFY(bounded.has_value());
+    QCOMPARE(bounded->iconStyle.diameter, 40);
+    QCOMPARE(bounded->iconStyle.logoSize, 100);
+    QCOMPARE(bounded->iconStyle.outlineWidth, 12);
+    QCOMPARE(bounded->iconStyle.pedestalHeight, 5);
+    QCOMPARE(bounded->iconStyle.bodyColor, QString{});
 }
 
 QTEST_MAIN(PanelSettingsSchemaTest)

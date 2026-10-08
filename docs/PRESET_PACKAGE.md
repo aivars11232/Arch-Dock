@@ -12,7 +12,7 @@ another.
 | Type | What it is | Where it is edited |
 |---|---|---|
 | Panel theme / skin | How one panel surface looks | Panels → Panel Themes / Skins |
-| Icon style | A reusable icon appearance set | Icons → Icon Styles |
+| Icon style | A reusable icon appearance set | Icons → Appearance, Style |
 | **Panel Preset** | A complete one-panel starting configuration | Panels → Built-in / My Panel Presets |
 | **Icon Preset** | An icon style plus overrides and motion | Icons → Built-in / My Icon Presets |
 | Profile | A complete multi-panel desktop (TASK-0042) | Profiles |
@@ -116,6 +116,7 @@ Catalog-time checks beyond the schema:
 |---|---|
 | `compatibility` | `rendererTiers`, `requiredStyleCapabilities`, `reducedMotionSupport` |
 | `icon.iconStyleId` | An installed icon style |
+| `icon.parameters` | Optional bounded panel appearance values (ADREP-TASK-005) |
 | `icon.visualOverrides` | Layer id → `shape`, `color`, `secondaryColor`, `borderColor`, `opacity`, `inset`, `radius`, `borderWidth` |
 | `icon.stateOverrides` | Icon state id → state fields |
 | `icon.glyphPolicy` | The icon-style glyph policy |
@@ -128,6 +129,36 @@ is validated by the icon-style package parser, exactly as an installed style
 is. An override can therefore never produce a style the renderer has not been
 proven to draw. Five built-ins (`glass-tile`, `blue-pedestal`, `red-pedestal`,
 `holographic-tile`, `beveled-sci-fi`) are a shipped style plus such overrides.
+
+### Saved icon and tile parameters
+
+`icon.parameters` remains optional in schema version 1. It accepts only these
+24 appearance fields, with the panel schema's exact types, ranges, enums and
+colour syntax:
+
+- `iconShape`, `iconDiameter`, `iconLogoSize`, `iconOutlineWidth`,
+  `iconBodyColor`, `iconOutlineColor`, `iconGlowColor`, `iconPedestalEnabled`,
+  `iconPedestalHeight`, `iconPedestalColor`;
+- `iconTilesEnabled`, `iconTileMode`, `iconTileColor`, `iconTileOpacity`,
+  `iconTileBorderColor`, `iconTileBorderWidth`;
+- `iconTileTexture`, `iconTileThickness`, `iconTileIconOffsetX`,
+  `iconTileIconOffsetY`, `iconTileIconScale`, `iconTileBevel`,
+  `iconTileMaterial`, `iconTileElevation`.
+
+Absent values use schema defaults when applying the preset, so choosing a
+built-in restores its complete icon appearance rather than inheriting custom
+tile or colour settings. Blue Pedestal and Red Pedestal revision 2 declare
+`iconPedestalEnabled: true`; the other built-ins keep it off. A saved custom
+snapshot records all 24 values alongside its style, state and motion settings.
+Duplicate to My Presets retains the preset's declared settings and lineage;
+the copy appears in My Icon Presets and can be applied or used as a default.
+
+PD-20 permits Shape in this icon-only block; the legacy Panel Preset still
+stores it under `panel.layout`. Other panel geometry, content, ownership,
+icon size, spacing and per-entry overrides are outside this block and remain
+protected during icon-only Preview, Apply, Cancel and Revert. Empty colour
+values retain the package palette. Unknown fields and out-of-range values
+are rejected rather than silently corrected.
 
 ## Compatibility and fallback
 

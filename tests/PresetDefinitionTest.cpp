@@ -31,6 +31,7 @@ private slots:
     void panelPresetKeysAreEditableSchemaFields();
     void iconPresetExposesNormativeFields();
     void iconPresetRoundTrips();
+    void iconPresetParametersAreBoundedAndRoundTrip();
     void iconPresetRejects_data();
     void iconPresetRejects();
     void iconPresetPanelValuesStayInsideTheIconLayer();
@@ -421,6 +422,35 @@ void PresetDefinitionTest::iconPresetRoundTrips()
     QVERIFY(defaults->icon.perStateAnimationOverrides.isEmpty());
 }
 
+void PresetDefinitionTest::iconPresetParametersAreBoundedAndRoundTrip()
+{
+    // ADREP-TASK-005, PD-20/21/22: a preset carries icon/tile appearance,
+    // while its parameter block cannot mutate any panel or global setting.
+    const QVariantMap parameters{{"iconShape", "hexagon"}, {"iconDiameter", 70},
+        {"iconLogoSize", 88}, {"iconOutlineWidth", 4}, {"iconBodyColor", "#114477"},
+        {"iconPedestalEnabled", true}, {"iconPedestalHeight", 33},
+        {"iconTileMode", "custom"}, {"iconTileTexture", "organic"}, {"iconTileThickness", 8.0},
+        {"iconTileIconOffsetX", -8.0}, {"iconTileIconOffsetY", 6.0}, {"iconTileIconScale", 85},
+        {"iconTileBevel", 2.0}, {"iconTileMaterial", "metallic"}, {"iconTileElevation", 12.0}};
+    const auto object = withValue(iconPresetMap(), "/icon/parameters", parameters);
+    QVector<PresetValidationDiagnostic> diagnostics;
+    const auto preset = IconPresetDefinition::fromVariantMap(object, &diagnostics);
+    QVERIFY2(preset, qPrintable(describe(diagnostics)));
+    QCOMPARE(preset->toVariantMap().value("icon").toMap().value("parameters").toMap(), parameters);
+    const auto roundTrip = IconPresetDefinition::fromVariantMap(preset->toVariantMap(), &diagnostics);
+    QVERIFY(roundTrip); QCOMPARE(*roundTrip, *preset);
+    for (auto it = parameters.cbegin(); it != parameters.cend(); ++it)
+        QCOMPARE(preset->panelValues().value(it.key()), it.value());
+    for (const auto &invalid : {QVariantMap{{"layout", "circular"}}, QVariantMap{{"scene3DCameraPitch", 12}},
+             QVariantMap{{"iconLogoSize", 101}}, QVariantMap{{"iconPedestalEnabled", "yes"}},
+             QVariantMap{{"iconShape", "Hexagon"}}, QVariantMap{{"iconBodyColor", "#broken"}}}) {
+        diagnostics.clear();
+        QVERIFY(!IconPresetDefinition::fromVariantMap(withValue(object, "/icon/parameters", invalid), &diagnostics));
+        QVERIFY2(!diagnostics.isEmpty(), qPrintable(describe(diagnostics)));
+        QVERIFY(diagnostics.first().jsonPointer.startsWith("/icon/parameters/"));
+    }
+}
+
 void PresetDefinitionTest::iconPresetRejects_data()
 {
     QTest::addColumn<QString>("pointer");
@@ -550,6 +580,13 @@ void PresetDefinitionTest::iconPresetPanelValuesStayInsideTheIconLayer()
     {
         for (const QString &panelKey : PanelPresetDefinition::panelValueKeys(group))
         {
+            // PD-20 moves icon Shape into the style's saved parameters. The
+            // version-one panel preset format still carries its legacy copy
+            // in "layout"; that alias must not forbid an icon preset's Shape.
+            if (panelKey == QStringLiteral("iconShape")) {
+                QVERIFY(keys.contains(panelKey));
+                continue;
+            }
             QVERIFY2(!keys.contains(panelKey), qPrintable(panelKey));
         }
     }

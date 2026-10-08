@@ -366,6 +366,30 @@ TestCase {
         verify(!findChild(browser, "preset-apply-panel-a").enabled);
     }
 
+    function test_everyIconPresetRoutesExplicitActions_data() {
+        return ["original-clean", "glass-tile", "metallic-blue", "metallic-red", "neon-green",
+            "neon-orange", "dark-orb", "blue-pedestal", "red-pedestal", "holographic-tile",
+            "minimal-glow", "beveled-sci-fi", "metallic-blue-slow-turn", "neon-green-enlarge",
+            "dark-orb-spiral"].map(id => ({tag: id, presetId: id}));
+    }
+    function test_everyIconPresetRoutesExplicitActions(data) {
+        const id = data.presetId;
+        const browser = createBrowser({kind: "icon", presets: [iconCard(id)]});
+        const preview = spyOn(browser, "previewRequested");
+        const apply = spyOn(browser, "applyRequested");
+        const duplicate = spyOn(browser, "duplicateRequested");
+        mouseClick(findChild(browser, "preset-preview-" + id));
+        compare(preview.count, 1); compare(preview.signalArguments[0][0], id);
+        compare(apply.count, 0); compare(duplicate.count, 0);
+        mouseClick(findChild(browser, "preset-apply-" + id));
+        compare(apply.count, 1); compare(apply.signalArguments[0][0], id);
+        mouseClick(findChild(browser, "preset-duplicate-" + id));
+        compare(duplicate.count, 1); compare(duplicate.signalArguments[0][0], id);
+        compare(duplicate.signalArguments[0][1], "Icons " + id + " copy");
+        verify(!findChild(browser, "preset-rename-" + id).visible);
+        verify(!findChild(browser, "preset-delete-" + id).visible);
+    }
+
     function test_userCardsCanBeRenamedDuplicatedAndDeleted() {
         const browser = createBrowser({
             scope: "user",

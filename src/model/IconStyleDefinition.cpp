@@ -91,6 +91,14 @@ QVariantMap IconStyleLayerDefinition::toVariantMap() const
         {QStringLiteral("kind"), kind},
         {QStringLiteral("opacity"), opacity},
     };
+    if (followsIconShape)
+    {
+        result.insert(QStringLiteral("followsIconShape"), true);
+    }
+    if (!option.isEmpty())
+    {
+        result.insert(QStringLiteral("option"), option);
+    }
     if (kind == QStringLiteral("asset"))
     {
         result.insert(QStringLiteral("asset"), asset);

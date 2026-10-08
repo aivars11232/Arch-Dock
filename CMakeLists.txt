@@ -1320,7 +1320,8 @@ if(BUILD_TESTING)
     COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
             -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_IconTiles.qml)
-  set_tests_properties(icon-tiles-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+  set_tests_properties(icon-tiles-test PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QML_XHR_ALLOW_FILE_READ=1")
 
   add_test(
     NAME layout-engine-visual-test
@@ -1772,7 +1773,7 @@ if(BUILD_TESTING)
   endforeach()
 
   set(preset_matrix_previous preset-audition-test)
-  foreach(preset_matrix_group existing temporary icons recovery defaults)
+  foreach(preset_matrix_group existing temporary icons icons-middle icons-last recovery defaults)
     set(preset_matrix_name "preset-audition-matrix-${preset_matrix_group}")
     add_test(NAME ${preset_matrix_name}
       COMMAND ${CMAKE_COMMAND} -E env

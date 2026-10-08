@@ -64,6 +64,7 @@ private slots:
     void threeDReferenceAssetsAreNotDecodeProbed();
     void builtInCatalogMatchesPackages();
     void unknownSelectionFallsBackToPlainOriginal();
+    void shapeAndPedestalDeclarationsValidateAndProject();
 };
 
 void IconStylePackageTest::fixtures_data()
@@ -327,6 +328,89 @@ void IconStylePackageTest::threeDReferenceAssetsAreNotDecodeProbed()
     QVERIFY(QFileInfo(result.package->assetPath(
                           QStringLiteral("assets/tile.material")))
                 .isFile());
+}
+
+void IconStylePackageTest::shapeAndPedestalDeclarationsValidateAndProject()
+{
+    // ADREP-TASK-005, PD-20/21: optional package declarations reach the
+    // resolver without weakening manifest validation for old packages.
+    QFile source(repositoryFile(QStringLiteral(
+        "assets/icon-styles/neon-green/archdock-icon-style.json")));
+    QVERIFY(source.open(QIODevice::ReadOnly));
+    QJsonObject manifest = QJsonDocument::fromJson(source.readAll()).object();
+    QJsonObject layers = manifest.value(QStringLiteral("layers")).toObject();
+    QJsonArray base = layers.value(QStringLiteral("base")).toArray();
+    QVERIFY(!base.isEmpty());
+    QJsonObject layer = base.first().toObject();
+    layer.insert(QStringLiteral("followsIconShape"), true);
+    layer.insert(QStringLiteral("option"), QStringLiteral("pedestal"));
+    base.replace(0, layer);
+    layers.insert(QStringLiteral("base"), base);
+    manifest.insert(QStringLiteral("layers"), layers);
+    const QString parameterKey = QStringLiteral("org.archdock.iconParameters");
+    manifest.insert(QStringLiteral("extensions"), QJsonObject{
+        {parameterKey, QJsonObject{{QStringLiteral("defaultShape"),
+                                   QStringLiteral("diamond")}}}});
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString path = temporary.filePath(QStringLiteral("archdock-icon-style.json"));
+    const auto load = [&path](const QJsonObject &candidate)
+    {
+        if (!writeBytes(path, QJsonDocument(candidate).toJson()))
+        {
+            return ArchDock::IconStylePackageLoadResult{};
+        }
+        return IconStylePackage::load(path);
+    };
+    const auto valid = load(manifest);
+    QVERIFY2(valid.isValid(), qPrintable(valid.primaryMessage()));
+    QVERIFY(valid.package->definition().layers.base.first().followsIconShape);
+    QCOMPARE(valid.package->definition().layers.base.first().option,
+             QStringLiteral("pedestal"));
+    const QVariantMap projection = valid.package->runtimeProjection();
+    const QVariantMap projectedLayer = projection.value(QStringLiteral("layers"))
+        .toMap().value(QStringLiteral("base")).toList().first().toMap();
+    QVERIFY(projectedLayer.value(QStringLiteral("followsIconShape")).toBool());
+    QCOMPARE(projectedLayer.value(QStringLiteral("option")).toString(),
+             QStringLiteral("pedestal"));
+    QCOMPARE(projection.value(QStringLiteral("extensions")).toMap()
+        .value(parameterKey).toMap().value(QStringLiteral("defaultShape")).toString(),
+        QStringLiteral("diamond"));
+
+    for (const QJsonObject &invalidLayer : {
+             QJsonObject{{QStringLiteral("followsIconShape"), QStringLiteral("yes")}},
+             QJsonObject{{QStringLiteral("option"), QStringLiteral("unknown")}}})
+    {
+        QJsonObject candidate = manifest;
+        QJsonObject changed = layer;
+        for (auto it = invalidLayer.begin(); it != invalidLayer.end(); ++it)
+        {
+            changed.insert(it.key(), it.value());
+        }
+        QJsonArray changedBase = base;
+        changedBase.replace(0, changed);
+        QJsonObject changedLayers = layers;
+        changedLayers.insert(QStringLiteral("base"), changedBase);
+        candidate.insert(QStringLiteral("layers"), changedLayers);
+        const auto rejected = load(candidate);
+        QVERIFY(!rejected.isValid());
+        QVERIFY(!rejected.package.has_value());
+    }
+    for (const QJsonValue &parameters : {
+             QJsonValue(QStringLiteral("diamond")),
+             QJsonValue(QJsonObject{{QStringLiteral("defaultShape"),
+                                    QStringLiteral("triangle")}}),
+             QJsonValue(QJsonObject{{QStringLiteral("defaultShape"),
+                                    QStringLiteral("circle")},
+                                   {QStringLiteral("unknown"), true}})})
+    {
+        QJsonObject candidate = manifest;
+        candidate.insert(QStringLiteral("extensions"),
+                         QJsonObject{{parameterKey, parameters}});
+        const auto rejected = load(candidate);
+        QVERIFY(!rejected.isValid());
+        QVERIFY(!rejected.package.has_value());
+    }
 }
 
 QTEST_GUILESS_MAIN(IconStylePackageTest)

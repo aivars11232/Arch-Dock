@@ -48,9 +48,15 @@ TestCase {
         verify(!button(item, "default").enabled);
     }
 
-    function test_activeActionsAndAccessibility() {
+    function test_activeActionsAndAccessibility_data() {
+        return ["original-clean", "glass-tile", "metallic-blue", "metallic-red", "neon-green",
+            "neon-orange", "dark-orb", "blue-pedestal", "red-pedestal", "holographic-tile",
+            "minimal-glow", "beveled-sci-fi", "metallic-blue-slow-turn", "neon-green-enlarge",
+            "dark-orb-spiral"].map(id => ({tag: id, presetId: id}));
+    }
+    function test_activeActionsAndAccessibility(data) {
         const item = bar({ auditionStatus: { state: "ACTIVE", temporary: true },
-            presetId: "obsidian-dock", resourceAvailable: true });
+            presetId: data.presetId, resourceAvailable: true });
         const requests = spy(item);
         verify(findChild(item, "preset-audition-status").text.indexOf("temporary") >= 0);
         verify(findChild(item, "preset-audition-visibility").visible);

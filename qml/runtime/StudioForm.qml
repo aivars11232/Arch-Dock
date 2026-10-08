@@ -284,7 +284,15 @@ ScrollView {
                             to: rowDelegate.modelData.to === undefined ? 100 : rowDelegate.modelData.to
                             stepSize: rowDelegate.modelData.step === undefined ? 1 : rowDelegate.modelData.step
                             editable: true
+                            validator: null
                             value: Number(root.studio.fieldValue(rowDelegate.modelData))
+                            textFromValue: function(value, locale) {
+                                return root.studio.formatFieldValue(rowDelegate.modelData, value)
+                            }
+                            valueFromText: function(text, locale) {
+                                return root.studio.parseFieldValue(rowDelegate.modelData, text,
+                                    Number(root.studio.fieldValue(rowDelegate.modelData)))
+                            }
                             onValueModified: root.studio.setFieldValue(rowDelegate.modelData, value)
                         }
 
