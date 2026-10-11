@@ -2158,6 +2158,66 @@ bool PanelRegistry::removeDetachedFreePanel(const QString &panelId)
     return false;
 }
 
+bool PanelRegistry::beginFreePanelRehost(
+    const QString &panelId,
+    const QString &ownershipToken)
+{
+    const QVariantMap *panel = record(panelId);
+    const QString normalizedToken = ownershipToken.trimmed();
+    const auto association = freeHostAssociation(panelId);
+    // Only the detached, host-less record qualifies: a hosted or half-created
+    // panel keeps its own lifecycle.
+    if (!panel || panel->value(QStringLiteral("builtIn")).toBool() ||
+        panel->value(QStringLiteral("edge")).toString() != QStringLiteral("free") ||
+        normalizedToken.isEmpty() ||
+        normalizedToken.size() > kFreeHostOwnershipTokenMaximumLength ||
+        !association.has_value() || association->state != FreeHostState::Detached ||
+        association->desktopContainmentId >= 0 || association->dockAppletId >= 0 ||
+        !association->ownershipToken.trimmed().isEmpty())
+    {
+        return false;
+    }
+    // The same state a new panel has while its widget is being created.
+    return setPanelValuesChecked(
+        panelId,
+        {{QStringLiteral("freeOwnershipToken"), normalizedToken},
+         {QStringLiteral("freeHostState"), QStringLiteral("hosted-stale")},
+         {QStringLiteral("freeCreationState"),
+          QString::fromLatin1(kFreeCreationPending)},
+         {QStringLiteral("freeCreationError"), QString{}},
+         {QStringLiteral("freeRollbackError"), QString{}}});
+}
+
+bool PanelRegistry::abandonFreePanelRehost(
+    const QString &panelId,
+    const QString &ownershipToken,
+    const QString &errorCode)
+{
+    const QVariantMap *panel = record(panelId);
+    const QString normalizedToken = ownershipToken.trimmed();
+    if (!panel || panel->value(QStringLiteral("builtIn")).toBool() ||
+        panel->value(QStringLiteral("edge")).toString() != QStringLiteral("free") ||
+        normalizedToken.isEmpty() ||
+        panel->value(QStringLiteral("freeOwnershipToken")).toString() != normalizedToken ||
+        panel->value(QStringLiteral("freeCreationState")).toString() !=
+            QLatin1String(kFreeCreationPending))
+    {
+        return false;
+    }
+    return setPanelValuesChecked(
+        panelId,
+        {{QStringLiteral("freeDesktopContainmentId"), -1},
+         {QStringLiteral("freeDockAppletId"), -1},
+         {QStringLiteral("freeOwnershipToken"), QString{}},
+         {QStringLiteral("freeHostMode"), QStringLiteral("desktop")},
+         {QStringLiteral("freeHostState"), QStringLiteral("detached")},
+         {QStringLiteral("freeCreationState"),
+          QString::fromLatin1(kFreeCreationComplete)},
+         {QStringLiteral("freeCreationError"), errorCode.trimmed()},
+         {QStringLiteral("freeRollbackError"), QString{}},
+         {QStringLiteral("freeRecoveryError"), errorCode.trimmed()}});
+}
+
 bool PanelRegistry::commitVerifiedNativePanelAssociation(
     const QString &panelId,
     int containmentId,

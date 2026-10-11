@@ -252,9 +252,14 @@ PlasmoidItem {
     Plasmoid.title: qsTr("Arch Dock")
     Plasmoid.icon: "org.archdock.ArchDock"
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
+    // One dock per widget. With switch sizes set, Plasma chooses the
+    // representation by the widget's size, ignores this preference, and in
+    // its compact mode builds the full representation as well, for the
+    // expander popup: every free panel narrower than the switch width and
+    // every thin edge panel then held two complete docks, two 3D scenes and
+    // two sets of textures, one of them invisible. Without switch sizes the
+    // preference decides, and the dock is built once.
     preferredRepresentation: fullRepresentation
-    switchWidth: Kirigami.Units.gridUnit * 24
-    switchHeight: Kirigami.Units.gridUnit * 4
 
     function callDock(methodName, parameters, onResolved, onRejected) {
         const message = new PlasmaDBus.dbusMessage({
@@ -855,11 +860,14 @@ PlasmoidItem {
                 id: folderTrack
                 folderItem: folderIcon
                 folderLayout: representation.folderLayout
-                trackSamples: function(extra) {
-                    // One icon and a gap out of the dock, two thirds of the
-                    // way around it at most, centred on the folder.
+                trackSamples: function(extra, span) {
+                    // One icon and a gap out of the dock, centred on the
+                    // folder, `span` radians round it: two thirds of the way
+                    // unless the host asks for more.
+                    const turn = Number(span) || 2 * Math.PI / 3
                     return panelScene.folderTrackSamples(representation.folderEntryIndex,
-                        panelScene.layoutGeometry.iconSize + 16 + (Number(extra) || 0), 2 * Math.PI / 3, 91)
+                        panelScene.layoutGeometry.iconSize + 16 + (Number(extra) || 0), turn,
+                        Math.max(31, Math.round(91 * turn / (2 * Math.PI / 3))))
                 }
                 outwardNormal: representation.folderAnchorData
                     ? representation.folderAnchorData.outwardNormal : ({ x: 0, y: -1 })
@@ -1100,19 +1108,29 @@ PlasmoidItem {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: Kirigami.Units.iconSizes.medium
                     height: width
+                    // A widget added from Plasma's widget list has no panel
+                    // behind it and never gets one by itself (its bootstrap
+                    // is off); it must not invite drops.
+                    readonly property bool unbound: root.panelId.length === 0
+                        && !Plasmoid.configuration.bootstrapFreeDock
                     source: dockService.registered
-                        ? (root.requestFailed ? "data-error" : "list-add")
+                        ? (root.requestFailed ? "data-error" : unbound ? "dialog-information" : "list-add")
                         : "network-disconnect"
                 }
                 QQC2.Label {
                     anchors.horizontalCenter: parent.horizontalCenter
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    width: Math.min(implicitWidth, Math.max(120, parent.width - 2 * Kirigami.Units.largeSpacing))
                     text: !dockService.registered
                         ? qsTr("Arch Dock service is unavailable")
                         : root.requestFailed
                             ? qsTr("Could not load dock entries")
-                            : root.panelType === "empty"
-                                ? qsTr("Choose Launcher or Hybrid in Panel Studio to show dropped items")
-                                : qsTr("Drop applications or folders here")
+                            : root.panelId.length === 0 && !Plasmoid.configuration.bootstrapFreeDock
+                                ? qsTr("This widget has no panel. Create one in Panel Studio with \"+ Free panel\", or with Add Panel > Arch Dock Circular Free Dock; then remove this widget.")
+                                : root.panelType === "empty"
+                                    ? qsTr("Choose Launcher or Hybrid in Panel Studio to show dropped items")
+                                    : qsTr("Drop applications or folders here")
                 }
                 QQC2.Button {
                     anchors.horizontalCenter: parent.horizontalCenter

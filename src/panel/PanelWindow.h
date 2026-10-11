@@ -98,6 +98,10 @@ public slots:
     QVariantMap createFreePanel();
     QVariantMap createFreePanelFromTemplate(int containmentId, const QString &ownershipToken);
     QVariantMap adoptFreePanelApplet(int desktopContainmentId, int dockAppletId);
+    // Creates a new desktop widget for a detached free panel's record and
+    // moves it to the panel's saved position (Panel Studio's "Put back on the
+    // desktop").
+    QVariantMap rehostFreePanel(const QString &panelId);
     void saveFreePanelPosition(const QString &panelId, int x, int y);
     bool setNativePanelType(const QString &panelId, const QString &type);
     QVariantMap dockConfiguration(const QString &panelId) const;

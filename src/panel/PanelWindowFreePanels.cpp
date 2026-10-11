@@ -57,11 +57,22 @@ void PanelWindow::synchronizeFreePanels()
             continue;
         }
 
+        const auto before = m_panelRegistry.freeHostAssociation(panelId);
         const ArchDock::FreePanelLifecycleResult result = controller.synchronize(panelId);
         if (!result.success)
         {
             qWarning() << "Could not synchronize the free-panel Plasma host for"
                        << panelId << result.errorCode;
+        }
+        // A widget that is gone used to be forgotten in silence; the owner
+        // could only see settings of a panel that was nowhere.
+        else if (result.outcome == ArchDock::FreePanelLifecycleOutcome::Detached &&
+                 before.has_value() &&
+                 before->state != PanelRegistry::FreeHostState::Detached)
+        {
+            qWarning() << "The desktop widget of free panel" << panelId
+                       << "was not found in Plasma; the panel is now detached. Panel Studio"
+                       << "> Panels > General offers \"Put back on the desktop\".";
         }
     }
 }
@@ -137,6 +148,44 @@ QVariantMap PanelWindow::adoptFreePanelApplet(
         qWarning() << "Could not adopt the requesting free-panel desktop applet:"
                    << result.errorCode << result.failureStage
                    << result.rollbackErrorCode;
+    }
+    return result.toVariantMap();
+}
+
+QVariantMap PanelWindow::rehostFreePanel(const QString &panelId)
+{
+    if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
+
+    // The panel's saved screen where it still exists, else the dock's screen.
+    const QList<QScreen *> screens = QGuiApplication::screens();
+    const int savedScreen = m_panelRegistry.panelValue(panelId, QStringLiteral("screen")).toInt();
+    const int screenIndex = screens.isEmpty()
+        ? -1
+        : qBound(0, savedScreen >= 0 && savedScreen < screens.size() ? savedScreen : m_settings.monitorIndex(),
+                 screens.size() - 1);
+    ArchDock::FreePanelController controller(
+        m_panelRegistry, freePanelHostOperations());
+    const ArchDock::FreePanelCreationResult result = controller.rehost(panelId, screenIndex);
+    if (!result.success)
+    {
+        qWarning() << "Could not put the free panel back on the desktop:" << panelId
+                   << result.errorCode << result.failureStage << result.rollbackErrorCode;
+        return result.toVariantMap();
+    }
+    // Back where it stood: the record keeps the position and size the owner
+    // had. A refused move leaves the widget where Plasma placed it.
+    if (const auto definition = runtimePanelDefinition(panelId))
+    {
+        const QVariantMap legacy = definition->toLegacyMap();
+        const QVariantMap geometry{
+            {QStringLiteral("height"), legacy.value(QStringLiteral("height"), 420).toDouble()},
+            {QStringLiteral("width"), legacy.value(QStringLiteral("width"), 420).toDouble()},
+            {QStringLiteral("x"), legacy.value(QStringLiteral("x"), 0).toDouble()},
+            {QStringLiteral("y"), legacy.value(QStringLiteral("y"), 0).toDouble()}};
+        QString geometryError;
+        if (!setPresetFreeHostGeometry(*definition, geometry, &geometryError))
+            qWarning() << "The free panel is back on the desktop but not at its saved position:"
+                       << panelId << geometryError;
     }
     return result.toVariantMap();
 }

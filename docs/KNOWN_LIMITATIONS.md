@@ -36,6 +36,13 @@ KPipeWire is optional for live window thumbnails. Window actions and ordinary
 panel rendering remain separate from live-thumbnail availability. Reduced
 motion and fallback behavior remain applicable when optional rendering is off.
 
+Changing a 3D material or texture keeps the scene drawn with the previous
+texture until the new file has loaded; the first readiness of a scene still
+waits for every resource. A free panel's folder opened Along the dock on a
+tilted 3D platform follows the projected ring, and the curve widens round the
+dock as far as the children need; a folder with more children than fit still
+scrolls.
+
 ## Resource use
 
 The [full audit of 2026-10-06](audits/FULL_AUDIT_2026-10-06.md) measured the
@@ -61,6 +68,18 @@ Creating, placing or removing a panel, and some preset auditions, wait for
 Plasma's scripting interface or KWin to answer before the service continues.
 These waits happen only during those actions the user starts, never in
 steady use.
+
+The [full audit of 2026-10-11](audits/FULL_AUDIT_2026-10-11.md) measured the
+shell with one free panel in a private session (Debug build, pointer away):
+at rest about 2 % of one core for a flat panel, 3–4 % for the Cyan Mesh 3D
+theme and 3–15 % for Orange Arc 3D; whole-panel rotation 44–45 %, continuous
+item travel 58–61 %, the animated Plasma material 27–33 %. Continuous motion
+and animated materials redraw the scene while the panel is shown; they stop
+when it is hidden. A true-3D hit test ray-casts the platform's triangles in
+QML on each pointer event (memoised between changes), so a pointer moving over
+a 3D panel costs more than over a flat one. CPU figures measured through
+`tests/visibility-window.py` include the harness's own per-icon hit-test
+sampling, which is most of what it reports for a 3D panel.
 
 ## Panel Studio presentation
 
@@ -190,6 +209,11 @@ restore cannot bypass it. Recovery commands refuse a conflicting live service.
 Backups are bounded and exclude installed built-ins, generated caches,
 executable content and symbolic links. See
 [configuration recovery](INSTALL.md#configuration-recovery-and-upgrades).
+
+A free panel whose desktop widget has disappeared from Plasma keeps its
+settings; Panel Studio shows it as missing and can put it back on the desktop.
+Why widgets disappear from a desktop is not always recorded by Plasma; a
+desktop layout change or a removed widget are known causes.
 
 Package removal preserves user data and does not rewrite personal Plasma
 records. Cancel auditions and remove managed panels through their verified

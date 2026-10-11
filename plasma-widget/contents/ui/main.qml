@@ -132,7 +132,9 @@ PlasmoidItem {
             opacity: parent.enabled ? 1 : 0.42
         }
 
-        QQC2.ToolTip.visible: parent.containsMouse
+        // The tooltip is attached to this MouseArea; its parent (the compact
+        // container) has no containsMouse, which left the binding undefined.
+        QQC2.ToolTip.visible: containsMouse
         QQC2.ToolTip.text: dockService.registered
             ? qsTr("Configure Arch Dock")
             : qsTr("Start Arch Dock to configure it")

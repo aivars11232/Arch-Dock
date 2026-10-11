@@ -7,6 +7,24 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- Full audit corrections (2026-10-11, [audit record](docs/audits/FULL_AUDIT_2026-10-11.md)):
+  a free panel whose desktop widget is gone is shown as missing in Panel
+  Studio and can be put back on the desktop with its saved settings and
+  position (`rehostFreePanel`); the backend logs a warning when it notices a
+  widget is gone; Studio says when a shown edge panel is auto-hide; the
+  widget-list "Arch Dock" entry explains where panels are created; INSTALL.md
+  gains "Panels on the desktop"; the control widget's tooltip shows again.
+- The dock widget declares no compact-switch sizes any more: Plasma built
+  every dock twice (compact and full representation, one invisible) for
+  widgets below those sizes, with two 3D scenes and two sets of textures.
+- A 3D scene that has drawn once stays ready while a material or texture file
+  is replaced, instead of dropping to the flat renderer for the load time.
+- "Along the dock" folder contents on a 3D panel follow the drawn ring: the
+  curve is the projected icon track moved outward on screen, and it widens
+  round the dock while a shorter curve would hold only some of the children.
+- 3D hit tests are memoised and allocation-free; the 2D scene reuses each
+  entry's own geometry for hit tests; the 3D "frame rendered" flag no longer
+  re-evaluates on every frame.
 - ADREP-TASK-005: all six icon styles follow Rounded, Square, Squircle,
   Circle, Hexagon and Diamond through package declarations, retaining their
   signature defaults. Diameter, Logo size, outline and colours are saved beside

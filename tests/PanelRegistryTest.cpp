@@ -469,6 +469,7 @@ private slots:
     void reportsFreePanelRollbackFailures();
     void recoversFreePanelHostLifecycle();
     void removesFreePanelHostLifecycleSafely();
+    void rehostsDetachedFreePanel();
     void resolvesStableScreenIdentityBeforeFallbackIndex();
     void reservesAndOffsetsOnlySameScreenPanels();
     void concealsOnlyForRelevantActiveWindows();
@@ -2778,6 +2779,112 @@ void PanelRegistryTest::removesFreePanelHostLifecycleSafely()
         QCOMPARE(retained->desktopContainmentId, -1);
         QCOMPARE(retained->dockAppletId, -1);
         QCOMPARE(retained->ownershipToken, QString{});
+    }
+}
+
+// Keys a re-host is allowed to change; everything else is the owner's
+// settings and must come back unchanged.
+static QVariantMap freePanelSettingsWithoutHost(const PanelRegistry &registry, const QString &panelId)
+{
+    const auto definition = registry.panelDefinition(panelId);
+    QVariantMap values = definition ? definition->toLegacyMap() : QVariantMap{};
+    for (const QString &key : {QStringLiteral("freeDesktopContainmentId"), QStringLiteral("freeDockAppletId"),
+                               QStringLiteral("freeOwnershipToken"), QStringLiteral("freeHostState"),
+                               QStringLiteral("freeHostMode"), QStringLiteral("freeCreationState"),
+                               QStringLiteral("freeCreationError"), QStringLiteral("freeRollbackError"),
+                               QStringLiteral("freeRecoveryError"), QStringLiteral("screen"),
+                               QStringLiteral("screenId"), QStringLiteral("settingsRevision")})
+        values.remove(key);
+    return values;
+}
+
+void PanelRegistryTest::rehostsDetachedFreePanel()
+{
+    // A detached record (its widget gone) gets a new widget and keeps its
+    // settings and its id; nothing new is allocated.
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        FreePanelHostHarness harness;
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelCreationResult created = controller.create(studioFreePanelRequest());
+        QVERIFY2(created.success, qPrintable(created.errorCode));
+        const QString panelId = created.panelId;
+        const QString firstToken = registry.freeHostAssociation(panelId)->ownershipToken;
+        QVERIFY(registry.detachFreeHostAssociation(
+            panelId, firstToken, QStringLiteral("owned-host-not-found")));
+        const auto detached = registry.freeHostAssociation(panelId);
+        QVERIFY(detached.has_value());
+        QVERIFY(detached->state == PanelRegistry::FreeHostState::Detached);
+        QCOMPARE(detached->dockAppletId, -1);
+        QVERIFY(detached->ownershipToken.isEmpty());
+        const QVariantMap settingsBefore = freePanelSettingsWithoutHost(registry, panelId);
+        const QStringList idsBefore = registry.panelIds();
+
+        harness.createResult.host = {44, 75};
+        const ArchDock::FreePanelCreationResult rehosted = controller.rehost(panelId, 1);
+        QVERIFY2(rehosted.success, qPrintable(rehosted.errorCode + QLatin1Char(' ') + rehosted.failureStage));
+        QCOMPARE(rehosted.status, QStringLiteral("rehosted"));
+        QCOMPARE(rehosted.panelId, panelId);
+        QCOMPARE(rehosted.dockAppletId, 75);
+        QCOMPARE(harness.createCalls, 2);
+        const auto association = registry.freeHostAssociation(panelId);
+        QVERIFY(association.has_value());
+        QVERIFY(association->state == PanelRegistry::FreeHostState::HostedOwned);
+        QCOMPARE(association->desktopContainmentId, 44);
+        QCOMPARE(association->dockAppletId, 75);
+        QVERIFY(!association->ownershipToken.isEmpty());
+        QVERIFY(association->ownershipToken != firstToken);
+        QCOMPARE(registry.panelValue(panelId, QStringLiteral("freeCreationState")).toString(),
+                 QStringLiteral("complete"));
+        QCOMPARE(registry.panelIds(), idsBefore);
+        QCOMPARE(freePanelSettingsWithoutHost(registry, panelId), settingsBefore);
+        PanelRegistry reloaded;
+        const auto persisted = reloaded.freeHostAssociation(panelId);
+        QVERIFY(persisted.has_value());
+        QVERIFY(persisted->state == PanelRegistry::FreeHostState::HostedOwned);
+        QCOMPARE(persisted->dockAppletId, 75);
+    }
+    // A hosted panel is refused; a failed widget creation returns the record
+    // to its detached state with the reason, settings kept.
+    {
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        FreePanelHostHarness harness;
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelCreationResult created = controller.create(studioFreePanelRequest());
+        QVERIFY2(created.success, qPrintable(created.errorCode));
+        const QString panelId = created.panelId;
+        QCOMPARE(controller.rehost(panelId, 1).errorCode, QStringLiteral("free-panel-not-detached"));
+        const QString token = registry.freeHostAssociation(panelId)->ownershipToken;
+        QVERIFY(registry.detachFreeHostAssociation(panelId, token, QStringLiteral("owned-host-not-found")));
+        const QVariantMap settingsBefore = freePanelSettingsWithoutHost(registry, panelId);
+
+        harness.createResult.outcome = ArchDock::FreePanelHostMutationOutcome::NoHost;
+        harness.createResult.host = {};
+        const ArchDock::FreePanelCreationResult failed = controller.rehost(panelId, 1);
+        QVERIFY(!failed.success);
+        QCOMPARE(failed.errorCode, QStringLiteral("host-creation-failed"));
+        QCOMPARE(failed.status, QStringLiteral("rehost-failed"));
+        QVERIFY(!failed.rollbackAttempted);
+        QVERIFY(failed.recoverable);
+        const auto association = registry.freeHostAssociation(panelId);
+        QVERIFY(association.has_value());
+        QVERIFY(association->state == PanelRegistry::FreeHostState::Detached);
+        QVERIFY(association->ownershipToken.isEmpty());
+        QCOMPARE(association->dockAppletId, -1);
+        QCOMPARE(registry.panelValue(panelId, QStringLiteral("freeCreationState")).toString(),
+                 QStringLiteral("complete"));
+        QCOMPARE(registry.panelValue(panelId, QStringLiteral("freeCreationError")).toString(),
+                 QStringLiteral("host-creation-failed"));
+        QVERIFY(registry.panelIds().contains(panelId));
+        QCOMPARE(freePanelSettingsWithoutHost(registry, panelId), settingsBefore);
+        // The record is usable again: a second attempt that succeeds re-hosts it.
+        harness.createResult.outcome = ArchDock::FreePanelHostMutationOutcome::Verified;
+        harness.createResult.host = {46, 77};
+        const ArchDock::FreePanelCreationResult retried = controller.rehost(panelId, 1);
+        QVERIFY2(retried.success, qPrintable(retried.errorCode));
+        QCOMPARE(registry.freeHostAssociation(panelId)->dockAppletId, 77);
     }
 }
 

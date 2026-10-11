@@ -754,7 +754,10 @@ Item {
 
     function entryPointVisible(index, point) {
         if (index < 0 || index >= entryCount) return false
-        const geometry = entryGeometryAt(index)
+        // The entry's own item already holds this geometry; recomputing the
+        // placement for every hit test was the cost of every pointer move.
+        const item = entryItemAt(index)
+        const geometry = item && item.geometryOutput ? item.geometryOutput : entryGeometryAt(index)
         if (geometry.onTrack === false || Number(geometry.trackVisibility ?? 1) <= 0) return false
         if (surfaceLoader.true3DReady)
             return surfaceLoader.true3DItem.entryPointVisible(index, point)

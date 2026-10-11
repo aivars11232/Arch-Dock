@@ -120,20 +120,35 @@ PlasmaCore.Dialog {
             // The curve a step out of the dock, a little further where a
             // tilted or projected dock would bring a child onto one of its
             // icons: every place a child stands or passes keeps clear.
-            let layout = null
-            for (let extra = 0; extra <= 64; extra += 8) {
-                samples = trackSamples(extra).map(function(sample) {
-                    const point = scene.mapToGlobal(sample.x, sample.y)
-                    return { x: point.x, y: point.y, scale: sample.scale }
-                })
-                if (samples.length < 2) return false
-                layout = LayoutEngine.folderTrackLayout(samples, content.entries.length, content.pitch, 0)
-                const half = LayoutEngine.folderTrackLayout(samples, content.entries.length, content.pitch, 0.5)
-                const places = layout.entries.concat(half.entries).filter(function(placed) {
-                    return placed.visibility > 0
-                })
-                if (places.every(clear)) break
+            // The curve reaches as far round the dock as the children need:
+            // two thirds of the way at first, then further - up to all but
+            // a sixth on the far side - while a shorter curve would hold only
+            // some of them, as the foreshortened far side of a tilted
+            // platform does. A curve every child keeps clear of the icons on
+            // is preferred; the fullest attempt is used when none does.
+            let layout = null, chosen = null, cleared = null
+            spans: for (let span = 2 * Math.PI / 3; span <= 5 * Math.PI / 3 + 1e-9; span += Math.PI / 6) {
+                for (let extra = 0; extra <= 64; extra += 8) {
+                    samples = trackSamples(extra, span).map(function(sample) {
+                        const point = scene.mapToGlobal(sample.x, sample.y)
+                        return { x: point.x, y: point.y, scale: sample.scale }
+                    })
+                    if (samples.length < 2) return false
+                    layout = LayoutEngine.folderTrackLayout(samples, content.entries.length, content.pitch, 0)
+                    const half = LayoutEngine.folderTrackLayout(samples, content.entries.length, content.pitch, 0.5)
+                    const places = layout.entries.concat(half.entries).filter(function(placed) {
+                        return placed.visibility > 0
+                    })
+                    chosen = { samples: samples, layout: layout }
+                    if (!places.every(clear)) continue
+                    cleared = chosen
+                    if (!layout.windowed) break spans
+                    break
+                }
             }
+            chosen = cleared || chosen
+            samples = chosen.samples
+            layout = chosen.layout
             for (const placed of layout.entries.concat(layout.ends || [])) {
                 const scale = Math.max(0.35, Number(placed.scale) || 1)
                 rectangles.push({ x: placed.x - content.cellWidth * scale / 2,

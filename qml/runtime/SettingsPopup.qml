@@ -716,7 +716,31 @@ Window {
                 }
             ]
         });
+        // A free panel whose desktop widget is gone kept its settings but was
+        // shown like a live panel. Say so, and offer to put it back.
+        if (!isNativePanel() && !auditionActive) {
+            const hostState = String(panelRegistry.panelValue(selectedPanelId, "freeHostState") || "");
+            const detached = hostState === "detached";
+            if (detached) {
+                rows[1].actions.push({
+                    label: qsTr("Put back on the desktop"),
+                    icon: "view-restore",
+                    action: "rehost-free",
+                    available: !hasPendingChanges
+                });
+            }
+            rows.push(readOnlyRow(qsTr("Desktop widget"),
+                detached ? qsTr("Missing: this panel is not on the desktop")
+                    : hostState === "hosted-owned" ? qsTr("On the desktop")
+                    : hostState === "hosted-stale" ? qsTr("Being created or checked")
+                    : qsTr("Not on the desktop yet")));
+            if (detached)
+                rows.push(notice(qsTr("Its widget was removed from Plasma, or lost with a desktop layout change. Put back on the desktop creates a new widget with these settings at the saved position."), true));
+        }
         if (isNativePanel()) {
+            // Auto-hide looked like a panel that does nothing when switched on.
+            if (Boolean(panelValue("visible", true)) && String(panelValue("visibilityMode", "always")) === "auto-hide")
+                rows.push(notice(qsTr("Visibility is Auto-hide: the panel appears when the pointer touches its screen edge. Panels > Behavior > Visibility changes this."), false));
             rows.push(section(qsTr("Native placement result"), PlacementStatus.statusLabel(selectedPlacementResult.status)), readOnlyRow(qsTr("Saved intent"), PlacementStatus.savedIntentText(selectedPlacementResult)), readOnlyRow(qsTr("Actual Plasma host"), PlacementStatus.hostStateText(selectedPlacementResult)));
             if (PlacementStatus.isProblem(selectedPlacementResult)) {
                 rows.push(notice(qsTr("Placement detail: %1").arg(PlacementStatus.problemText(selectedPlacementResult)), true));
@@ -1368,6 +1392,13 @@ Window {
             } else {
                 studioError = qsTr("Could not create the free panel (%1).").arg(String(result && result.errorCode ? result.errorCode : "unknown-error"));
             }
+        } else if (action === "rehost-free") {
+            if (hasPendingChanges)
+                return;
+            const result = panelController.rehostFreePanel(selectedPanelId);
+            if (!(result && result.success === true))
+                studioError = qsTr("Could not put the free panel back on the desktop (%1).").arg(String(result && result.errorCode ? result.errorCode : "unknown-error"));
+            loadEditor(selectedPanelId);
         } else if (action === "remove-panel") {
             if (hasPendingChanges)
                 return;

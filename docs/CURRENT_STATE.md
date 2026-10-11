@@ -1,5 +1,45 @@
 # Arch Dock current state
 
+<!-- AUDIT_2026_10_11_BEGIN -->
+## Full audit corrections — 2026-10-11
+
+The [full audit of 2026-10-11](audits/FULL_AUDIT_2026-10-11.md) (read-only, on
+`fda8801` and the installed `0.1.1-13`) found that the owner's desktop hosted
+no Arch Dock panel at all: all 17 free panel records were detached from
+Plasma and the three edge panels were switched off, which explained every
+complaint. The product itself created, drew and kept both kinds of panel on a
+private copy of the owner's desktop. The corrections in the working tree:
+
+- A detached free panel is shown as **Desktop widget: Missing** in Panel
+  Studio and can be put back on the desktop with its saved settings and
+  position (`PanelRegistry::beginFreePanelRehost`/`abandonFreePanelRehost`,
+  `FreePanelController::rehost`, D-Bus `rehostFreePanel`); the backend warns
+  when it notices a widget is gone; Studio notes an auto-hide edge panel; the
+  widget-list entry explains where panels are created; INSTALL.md gains
+  "Panels on the desktop"; the control widget's tooltip shows again.
+- The dock widget declares no compact-switch sizes: Plasma built every dock
+  below those sizes twice (compact and full representation, one invisible).
+  One dock, one 3D scene and one set of textures per widget now.
+- A 3D scene that has drawn once stays ready while a material or texture is
+  replaced (no fallback to the flat renderer for the 140–340 ms load).
+- "Along the dock" folder contents on a 3D panel follow the drawn ring (the
+  projected icon track moved outward on screen); the curve widens round the
+  dock while a shorter one would hold only some of the children.
+- 3D hit tests are memoised and allocation-free; the 2D scene reuses each
+  entry's geometry; the "frame rendered" flag no longer binds to render
+  statistics.
+- The audit's three 3D findings (a core at rest, vanishing in motion, a
+  placeholder after a change) were withdrawn: they came from the harness's
+  per-icon sampling timer and its capture hook, not from Arch Dock. Resting
+  cost without that sampling: flat 2 %, Cyan Mesh 3D 3–4 %, Orange Arc 3D
+  3–15 % of a core (Debug build).
+
+Verification: Focused tests for the registry and controller changes (panel model, settings schema, panel registry with the new rehost test, window capability) passed on 2026-10-11; of the 27 targeted rendering, folder, registry and widget tests run serially on the final tree, 23 had passed (folder-anchor-smoke among them) and studio-truth-matrix-smoke, path-travel-smoke, bootstrap-coordinator-test and plasma-template-contract-test were still running when the owner paused the work; the complete suite has not yet run on this tree.
+
+Open: the cause of the lost widgets (A-01), the suite's two render races and
+one teardown timeout (B-01). The package was not rebuilt.
+<!-- AUDIT_2026_10_11_END -->
+
 <!-- ADREP_TASK_005_BEGIN -->
 ## ADREP-TASK-005 — Verified, installed and rechecked (2026-10-08)
 

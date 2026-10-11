@@ -83,7 +83,16 @@ Item {
             ? LayoutEngine.themeStyle(appearance, "", 48).material : ""
     readonly property url materialTextureSource: textureMaterial.length
         ? Qt.resolvedUrl("../materials/" + textureMaterial + ".svg") : ""
-    readonly property bool materialTextureReady: !textureMaterial.length || materialImage.status === Image.Ready
+    // A texture that is being replaced keeps the scene ready: while the new
+    // file loads, the platform keeps drawing (without that texture for a
+    // moment) instead of the whole panel falling back to its flat renderer,
+    // with the icons on the flat ring, and coming back once the file is in.
+    // Only a scene that has drawn complete once is kept this way; the first
+    // readiness still waits for every resource.
+    property bool shownOnce: false
+    readonly property bool materialTextureReady: !textureMaterial.length
+        || materialImage.status === Image.Ready
+        || (shownOnce && materialImage.status !== Image.Error)
     readonly property bool materialAnimationActive: effectiveMaterialLook !== "theme"
         && LayoutEngine.themeStyle(effectiveMaterialLook, "", 48).animated
         && motionAllowed && visible && !sceneConcealed && !reducedMotion
@@ -164,6 +173,7 @@ Item {
         && (generatedSpec !== null || (sceneResources.iconMesh !== undefined && iconResource.meshReady))
     readonly property bool textureRequired: Boolean(sceneDefinition && sceneDefinition.texture)
     readonly property bool textureReady: !textureRequired || textureImage.status === Image.Ready
+        || (shownOnce && textureImage.status !== Image.Error)
     readonly property bool geometryWithinBudget: triangleCount * 3 <= Math.min(262144,
         Number((sceneResources || ({})).indexBudget || 262144))
     readonly property bool rendererReady: resourcesReady && textureReady && materialTextureReady && geometryWithinBudget
@@ -229,9 +239,77 @@ Item {
         targetWidth: targetWidth, targetHeight: targetHeight,
         samples: effectiveQuality === "low" ? 1 : effectiveQuality === "high" ? 4 : 2 })
     readonly property var viewport: view
+    // Set once by observeCompletedFrame() after a real window frame; a binding
+    // to view.renderStats here re-evaluated on every rendered frame for nothing.
     readonly property bool frameRendered: completedFrameObserved
-        || view.renderStats.frameTime > 0
     property bool completedFrameObserved: false
+    // Hit tests are asked for far more often than the scene changes: every
+    // pointer move asks every entry's mask, and a test harness may sample
+    // them continuously. Their answers are kept in a memo that is dropped
+    // whenever anything they depend on changes, and the triangle test below
+    // runs on flat arrays rather than a vector object per triangle.
+    property int hitRevision: 0
+    property var hitMemo: ({ revision: -1, values: ({}), count: 0 })
+    // Flat corner coordinates of the meshes the hit tests walk, rebuilt only
+    // when a mesh changes (plain arrays: the JavaScript engine's typed arrays
+    // and weak maps stay out of this hot path).
+    readonly property var platformTriangles: flatTriangles(platformMesh)
+    function hitTestsChanged() { root.hitRevision++ }
+    onPlatformMeshChanged: hitTestsChanged()
+    onEntryGeometryChanged: hitTestsChanged()
+    onEntryVisualsChanged: hitTestsChanged()
+    onWidthChanged: hitTestsChanged()
+    onHeightChanged: hitTestsChanged()
+    onLayoutAngleChanged: hitTestsChanged()
+    onMotionAllowedChanged: hitTestsChanged()
+    onShownPitchChanged: hitTestsChanged()
+    onShownYawChanged: hitTestsChanged()
+    onShownRollChanged: hitTestsChanged()
+    onShownPositionChanged: hitTestsChanged()
+    onShownScaleChanged: hitTestsChanged()
+    onPlatformScaleChanged: hitTestsChanged()
+    onProjectedEntryGeometryChanged: hitTestsChanged()
+    onProjectedCentreChanged: hitTestsChanged()
+    onRendererReadyChanged: {
+        hitTestsChanged()
+        if (rendererReady) shownOnce = true
+    }
+    onCameraDistanceChanged: hitTestsChanged()
+    onMechanismChanged: hitTestsChanged()
+    onCollapseProgressChanged: hitTestsChanged()
+    function hitKey(prefix, point) {
+        return prefix + ":" + Math.round(point.x * 2) + ":" + Math.round(point.y * 2)
+    }
+    function hitMemoGet(key) {
+        const memo = root.hitMemo
+        if (memo.revision !== root.hitRevision) {
+            memo.revision = root.hitRevision
+            memo.values = ({})
+            memo.count = 0
+        }
+        return memo.values[key]
+    }
+    function hitMemoSet(key, value) {
+        const memo = root.hitMemo
+        if (memo.count >= 512) {
+            memo.values = ({})
+            memo.count = 0
+        }
+        memo.values[key] = value
+        memo.count++
+        return value
+    }
+    // A mesh's triangles as one flat array of corner coordinates.
+    function flatTriangles(mesh) {
+        if (!mesh || !mesh.positions || !mesh.indexes) return null
+        const positions = mesh.positions, indexes = mesh.indexes
+        const flat = []
+        for (let i = 0; i < indexes.length; ++i) {
+            const vertex = positions[indexes[i]]
+            flat.push(Number(vertex[0]), Number(vertex[1]), Number(vertex[2]))
+        }
+        return flat
+    }
     property var projectedEntryGeometry: []
     // Where the dock is centred on screen: the platform's middle at its top,
     // the dock a folder opens away from.
@@ -503,34 +581,50 @@ Item {
     // Qt 6.11 picks custom meshes against their bounding volume. Refine that
     // coarse hit against the same validated triangles the GPU draws, including
     // a bend, so holes and hidden rear entries do not receive clicks.
-    function meshHitDistance(model, mesh, point) {
+    function meshHitDistance(model, mesh, point, flat) {
         if (!model || !mesh || !mesh.positions || !mesh.indexes) return Infinity
+        const triangles = flat || flatTriangles(mesh)
+        if (!triangles) return Infinity
         const sceneOrigin = root.unprojectViewPoint(Qt.vector3d(point.x, point.y, 0))
         const origin = model.mapPositionFromScene(sceneOrigin)
         const far = model.mapPositionFromScene(root.unprojectViewPoint(Qt.vector3d(point.x, point.y, 1000)))
-        const direction = far.minus(origin).normalized()
-        const vertices = mesh.positions, indexes = mesh.indexes
-        let distance = Infinity
-        for (let i = 0; i < indexes.length; i += 3) {
-            const a = vertices[indexes[i]], b = vertices[indexes[i+1]], c = vertices[indexes[i+2]]
-            const ab = Qt.vector3d(b[0]-a[0], b[1]-a[1], b[2]-a[2])
-            const ac = Qt.vector3d(c[0]-a[0], c[1]-a[1], c[2]-a[2])
-            const cross = direction.crossProduct(ac), determinant = ab.dotProduct(cross)
+        let dx = far.x - origin.x, dy = far.y - origin.y, dz = far.z - origin.z
+        const length = Math.hypot(dx, dy, dz)
+        if (!(length > 1e-9)) return Infinity
+        dx /= length; dy /= length; dz /= length
+        const ox = origin.x, oy = origin.y, oz = origin.z
+        // Moeller-Trumbore against every triangle; the nearest hit along the
+        // ray is the nearest in the scene as well, since the model transform
+        // keeps the ray a straight line.
+        let nearest = Infinity
+        for (let i = 0; i < triangles.length; i += 9) {
+            const ax = triangles[i], ay = triangles[i + 1], az = triangles[i + 2]
+            const abx = triangles[i + 3] - ax, aby = triangles[i + 4] - ay, abz = triangles[i + 5] - az
+            const acx = triangles[i + 6] - ax, acy = triangles[i + 7] - ay, acz = triangles[i + 8] - az
+            const px = dy * acz - dz * acy, py = dz * acx - dx * acz, pz = dx * acy - dy * acx
+            const determinant = abx * px + aby * py + abz * pz
             if (Math.abs(determinant) < 1e-8) continue
-            const offset = origin.minus(Qt.vector3d(a[0], a[1], a[2]))
-            const u = offset.dotProduct(cross) / determinant
+            const tx = ox - ax, ty = oy - ay, tz = oz - az
+            const u = (tx * px + ty * py + tz * pz) / determinant
             if (u < 0 || u > 1) continue
-            const q = offset.crossProduct(ab), v = direction.dotProduct(q) / determinant
+            const qx = ty * abz - tz * aby, qy = tz * abx - tx * abz, qz = tx * aby - ty * abx
+            const v = (dx * qx + dy * qy + dz * qz) / determinant
             if (v < 0 || u + v > 1) continue
-            const t = ac.dotProduct(q) / determinant
-            if (t >= 0)
-                distance = Math.min(distance, model.mapPositionToScene(origin.plus(direction.times(t)))
-                    .minus(sceneOrigin).length())
+            const along = (acx * qx + acy * qy + acz * qz) / determinant
+            if (along >= 0 && along < nearest) nearest = along
         }
-        return distance
+        if (nearest === Infinity) return Infinity
+        const hit = model.mapPositionToScene(Qt.vector3d(ox + dx * nearest, oy + dy * nearest, oz + dz * nearest))
+        return hit.minus(sceneOrigin).length()
     }
 
     function entryPointVisible(index, point) {
+        const key = hitKey((editMode ? "E" : "e") + index, point)
+        const known = hitMemoGet(key)
+        if (known !== undefined) return known
+        return hitMemoSet(key, entryPointVisibleUncached(index, point))
+    }
+    function entryPointVisibleUncached(index, point) {
         if (!motionAllowed || !worldEntries.objectAt(index) || !worldEntries.objectAt(index).visible)
             return false
         const hits = view.pickAll(point.x, point.y)
@@ -542,7 +636,7 @@ Item {
         if (!glyph) return false
         const origin = root.unprojectViewPoint(Qt.vector3d(point.x, point.y, 0))
         const distance = glyph.scenePosition.minus(origin).length()
-        if (meshHitDistance(platform, platformMesh, point) < distance - 0.01) return false
+        if (meshHitDistance(platform, platformMesh, point, platformTriangles) < distance - 0.01) return false
         for (let i = 0; i < panelPartNodes.count; ++i) {
             const part = panelPartNodes.objectAt(i)
             if (part && part.visible && meshHitDistance(part, part.meshData, point) < distance - 0.01)
@@ -557,8 +651,14 @@ Item {
     }
 
     function containsInputPoint(point) {
+        const key = hitKey(editMode ? "C" : "c", point)
+        const known = hitMemoGet(key)
+        if (known !== undefined) return known
+        return hitMemoSet(key, containsInputPointUncached(point))
+    }
+    function containsInputPointUncached(point) {
         if (!motionAllowed) return false
-        if (Number.isFinite(meshHitDistance(platform, platformMesh, point))) return true
+        if (Number.isFinite(meshHitDistance(platform, platformMesh, point, platformTriangles))) return true
         const hits = view.pickAll(point.x, point.y)
         for (let i = 0; i < hits.length; ++i) {
             const name = hits[i].objectHit ? String(hits[i].objectHit.objectName) : ""
@@ -568,10 +668,10 @@ Item {
         }
         return false
     }
-    // "Along the dock": the platform's own icon track at the folder's height,
-    // moved `outward` screen pixels out of the dock and projected like the
-    // icons, as `count` samples spanning `span` radians around the folder.
-    // `scale` is the perspective size there relative to the folder's own.
+    // "Along the dock": the platform's own icon track, projected like the
+    // icons, then moved `outward` screen pixels out of the drawn dock, as
+    // `count` samples spanning `span` radians around the folder. `scale` is
+    // the perspective size there relative to the folder's own.
     // View3D's mapping overloads recalculate its shared render-camera
     // projection. Camera's normalized public methods read the projection
     // submitted by the renderer instead, without writing from the GUI thread.
@@ -589,29 +689,51 @@ Item {
         const anchor = node.inputAnchor
         // An icon stands toward the camera's up from where it stands on the
         // track, by the same offset for every icon: the icons' centres lie on
-        // the track moved by that offset, and so does the outer curve.
+        // the track moved by that offset.
         const foot = sceneContent.mapPositionFromScene(node.scenePosition)
         const local = sceneContent.mapPositionFromScene(anchor.scenePosition)
         const lift = local.minus(foot)
         const radius = Math.hypot(foot.x, foot.y)
         if (radius <= 0) return []
-        // How far a step out of the dock appears on screen at the folder:
-        // foreshortened where the platform tilts away from the viewer.
-        const here = root.projectScenePoint(anchor.scenePosition)
-        const step = radius * 0.05
-        const further = root.projectScenePoint(sceneContent.mapPositionToScene(Qt.vector3d(
-            foot.x * (radius + step) / radius, foot.y * (radius + step) / radius, foot.z).plus(lift)))
-        const pixelsPerUnit = Math.hypot(further.x - here.x, further.y - here.y) / step
-        const outer = radius + Math.max(0, outward) / Math.max(0.01, pixelsPerUnit)
         const angle = Math.atan2(foot.y, foot.x)
-        const depth = here.z
+        const depth = root.projectScenePoint(anchor.scenePosition).z
+        // The icons' track as drawn: `count` projected points spanning `span`
+        // around the folder, and one more past each end for the directions.
+        const step = span / (count - 1)
+        const drawn = []
+        for (let index = -1; index <= count; ++index) {
+            const turn = angle - span / 2 + step * index
+            drawn.push(root.projectScenePoint(sceneContent.mapPositionToScene(
+                Qt.vector3d(radius * Math.cos(turn), radius * Math.sin(turn), foot.z).plus(lift))))
+        }
+        // Each sample stands `outward` screen pixels outside the drawn track,
+        // across the track's own direction there and away from the dock's
+        // centre. A step out of the platform in its own units is a different
+        // distance on screen at every angle - a few pixels on the far side of
+        // a tilted platform - so a curve measured in those units at the folder
+        // would sweep far out of the dock everywhere else.
+        const centre = root.projectedCentre
+        const usable = point => Number.isFinite(point.x) && Number.isFinite(point.y) && point.z > 0
         const result = []
-        for (let index = 0; index < count; ++index) {
-            const turn = angle - span / 2 + span * index / (count - 1)
-            const point = root.projectScenePoint(sceneContent.mapPositionToScene(
-                Qt.vector3d(outer * Math.cos(turn), outer * Math.sin(turn), foot.z).plus(lift)))
-            if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || point.z <= 0) continue
-            result.push({ x: point.x, y: point.y, scale: depth / point.z })
+        for (let index = 1; index <= count; ++index) {
+            const point = drawn[index], before = drawn[index - 1], after = drawn[index + 1]
+            if (!usable(point) || !usable(before) || !usable(after)) continue
+            let acrossX = -(after.y - before.y), acrossY = after.x - before.x
+            let length = Math.hypot(acrossX, acrossY)
+            if (!(length > 1e-6)) {
+                acrossX = point.x - centre.x
+                acrossY = point.y - centre.y
+                length = Math.hypot(acrossX, acrossY)
+                if (!(length > 1e-6)) continue
+            }
+            acrossX /= length
+            acrossY /= length
+            if (acrossX * (point.x - centre.x) + acrossY * (point.y - centre.y) < 0) {
+                acrossX = -acrossX
+                acrossY = -acrossY
+            }
+            result.push({ x: point.x + acrossX * outward, y: point.y + acrossY * outward,
+                          scale: depth / point.z })
         }
         return result
     }
@@ -903,6 +1025,10 @@ Item {
                 readonly property real reachX: Number(rect.centerX) - root.width / 2
                 readonly property real reachY: root.height / 2 - Number(rect.centerY)
                 readonly property real reach: Math.hypot(reachX, reachY)
+                onIconMotionChanged: root.hitTestsChanged()
+                onGlyphMotionChanged: root.hitTestsChanged()
+                onHoverScaleChanged: root.hitTestsChanged()
+                onVisibleChanged: root.hitTestsChanged()
                 readonly property var baseStandPoint: root.generatedPlatform
                     ? PlatformGeometry.standPoint(reachX, reachY, root.layoutTrackRadius,
                                                   root.generatedPlatform.track)

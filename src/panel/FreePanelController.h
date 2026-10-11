@@ -171,6 +171,9 @@ public:
     [[nodiscard]] FreePanelCreationResult create(const FreePanelCreationRequest &request);
     [[nodiscard]] FreePanelLifecycleResult synchronize(const QString &panelId) const;
     [[nodiscard]] FreePanelLifecycleResult remove(const QString &panelId) const;
+    // Creates a new desktop widget for a detached record (its settings are
+    // kept). A failure returns the record to its detached state.
+    [[nodiscard]] FreePanelCreationResult rehost(const QString &panelId, int screenIndex) const;
 
 private:
     [[nodiscard]] FreePanelCreationResult failure(

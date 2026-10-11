@@ -168,6 +168,17 @@ public:
         const QString &ownershipToken,
         const QString &errorCode);
     [[nodiscard]] bool removeDetachedFreePanel(const QString &panelId);
+    // A detached free panel keeps its settings but has no desktop widget.
+    // Reserving a new ownership token on it lets a new widget be created for
+    // the same record; the creation then completes like a new panel's.
+    [[nodiscard]] bool beginFreePanelRehost(
+        const QString &panelId,
+        const QString &ownershipToken);
+    // A failed re-host returns the record to its detached state, settings kept.
+    [[nodiscard]] bool abandonFreePanelRehost(
+        const QString &panelId,
+        const QString &ownershipToken,
+        const QString &errorCode);
     [[nodiscard]] bool commitVerifiedNativePanelAssociation(
         const QString &panelId,
         int containmentId,

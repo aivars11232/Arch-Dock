@@ -33,6 +33,28 @@ run any code: it is treated as a crash, and the next activation request starts
 Arch Dock again. While it is stopped, on-demand activation is refused with
 `org.freedesktop.DBus.Error.Spawn.ChildExited` and exit status 75.
 
+## Panels on the desktop
+
+Arch Dock draws its panels inside Plasma widgets. Two kinds exist:
+
+- **Edge panels** (bottom, top, side) are Plasma panels of their own. Switch
+  one on in Panel Studio with **Show panel** on its General page. A panel
+  whose **Visibility** is Auto-hide stays out of sight until the pointer
+  touches its screen edge; Studio says so under its actions. Choose Always on
+  **Panels > Behavior** to keep it in view.
+- **Free panels** are desktop widgets. Create one with **+ Free panel** in
+  Panel Studio (it appears on the desktop and opens in Studio), or with the
+  desktop's **Add Panel > Arch Dock Circular Free Dock**. The "Arch Dock" entry
+  in Plasma's widget list is the same widget without a panel behind it; a
+  widget added from there explains where panels are created.
+
+A free panel keeps its settings when its widget disappears from Plasma (the
+widget was removed, or lost with a desktop layout change). Studio then shows
+**Desktop widget: Missing** on the panel's General page and offers **Put back
+on the desktop**, which creates a new widget with the saved settings at the
+saved position. Arch Dock logs a warning when it notices a widget is gone.
+**Remove panel** discards the record.
+
 In Panel Studio, select the panel and open **Icons > Appearance**. The single
 **Style** selector sits beside **Shape**, **Diameter** and **Logo size**.
 **Style default** keeps each style's signature shape; the six explicit choices
