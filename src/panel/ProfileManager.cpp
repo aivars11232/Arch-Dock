@@ -1,5 +1,6 @@
 // ProfileManager: profile storage, application and shortcuts.
 #include "ProfileManager.h"
+#include <algorithm>
 #include <QDir>
 #include <QFileInfo>
 #include <QUrl>
@@ -65,13 +66,55 @@ QVariantMap ProfileManager::finish(const std::optional<ProfileDefinition> &profi
     return {{QStringLiteral("success"), true}, {QStringLiteral("errorCode"), QString{}},
         {QStringLiteral("profileId"), profile->id}, {QStringLiteral("revision"), profile->revision}};
 }
+bool ProfileManager::onTheDesktop(const PanelDefinition &panel)
+{
+    if (panel.host.kind != PanelHostKind::FreeDesktop) return true;
+    // hosted-owned (verified), or hosted-stale (its last check against
+    // Plasma failed; the widget is most likely still there), with a
+    // complete host link. Detached and unhosted records have none.
+    const QString &state = panel.host.freeHostState;
+    return (state == QStringLiteral("hosted-owned") || state == QStringLiteral("hosted-stale")) &&
+        ProfileApplyTransaction::hosted(panel);
+}
+QList<PanelDefinition> ProfileManager::panelsOnTheDesktop(const QList<PanelDefinition> &panels)
+{
+    QList<PanelDefinition> result;
+    for (const auto &panel : panels)
+        if (onTheDesktop(panel)) result.append(panel);
+    return result;
+}
+int ProfileManager::freePanelsToCreate(const ProfileDefinition &profile, const QList<PanelDefinition> &desktop)
+{
+    int count = 0;
+    for (const auto &panel : profile.panels)
+    {
+        if (panel.host.kind != PanelHostKind::FreeDesktop || !panel.visibility.visible) continue;
+        const auto found = std::find_if(desktop.cbegin(), desktop.cend(),
+            [&](const auto &candidate) { return candidate.identity.id == panel.identity.id; });
+        const bool kept = found != desktop.cend() && ProfileApplyTransaction::hosted(*found) &&
+            found->host.kind == PanelHostKind::FreeDesktop && found->content.type == panel.content.type &&
+            found->host.screenIndex == panel.host.screenIndex;
+        if (!kept) ++count;
+    }
+    return count;
+}
 QVariantList ProfileManager::listProfiles() const
 {
     QVariantList result;
+    QString code;
+    const auto desktop = m_operations.snapshot ? m_operations.snapshot(&code) : QList<PanelDefinition>{};
+    const bool known = m_operations.snapshot && code.isEmpty();
     for (const auto &profile : m_store.profiles())
+    {
+        int freePanels = 0;
+        for (const auto &panel : profile.panels) freePanels += panel.host.kind == PanelHostKind::FreeDesktop;
         result.append(QVariantMap{{QStringLiteral("id"), profile.id}, {QStringLiteral("name"), profile.name},
             {QStringLiteral("revision"), profile.revision}, {QStringLiteral("panelCount"), profile.panels.size()},
+            {QStringLiteral("freePanelCount"), freePanels},
+            {QStringLiteral("freePanelsToCreate"), known ? freePanelsToCreate(profile, desktop) : -1},
+            {QStringLiteral("freePanelLimit"), MaximumFreePanelsCreatedPerApply},
             {QStringLiteral("screenPolicy"), profile.screenPolicy}, {QStringLiteral("metadata"), profile.metadata}});
+    }
     return result;
 }
 QVariantMap ProfileManager::createProfile(const QString &name)
@@ -81,7 +124,7 @@ QVariantMap ProfileManager::createProfile(const QString &name)
     QString code;
     const auto panels = m_operations.snapshot(&code);
     if (!code.isEmpty()) return failure(code);
-    const auto profile = m_store.create(name, panels, &code);
+    const auto profile = m_store.create(name, panelsOnTheDesktop(panels), &code);
     return finish(profile, code);
 }
 QVariantMap ProfileManager::saveProfile(const QString &id, int revision)
@@ -94,7 +137,7 @@ QVariantMap ProfileManager::saveProfile(const QString &id, int revision)
     if (!m_operations.snapshot) return failure(QStringLiteral("profile-host-operations-unavailable"));
     const auto panels = m_operations.snapshot(&code);
     if (!code.isEmpty()) return failure(code);
-    profile->panels = ProfileDefinition::capture(profile->name, panels).panels;
+    profile->panels = ProfileDefinition::capture(profile->name, panelsOnTheDesktop(panels)).panels;
     const auto saved = m_store.save(*profile, &code);
     return finish(saved, code);
 }
@@ -146,6 +189,19 @@ QVariantMap ProfileManager::applyProfile(const QString &id, int revision)
     QString code; const auto profile = m_store.load(id, &code);
     if (!profile) return failure(code);
     if (profile->revision != revision) return failure(QStringLiteral("stale-profile-revision"));
+    if (m_operations.snapshot)
+    {
+        QString snapshotCode;
+        const auto desktop = m_operations.snapshot(&snapshotCode);
+        const int creating = snapshotCode.isEmpty() ? freePanelsToCreate(*profile, desktop) : 0;
+        if (creating > MaximumFreePanelsCreatedPerApply)
+        {
+            auto result = failure(QStringLiteral("profile-creates-too-many-free-panels"));
+            result.insert(QStringLiteral("freePanelsToCreate"), creating);
+            result.insert(QStringLiteral("freePanelLimit"), MaximumFreePanelsCreatedPerApply);
+            return result;
+        }
+    }
     return m_transaction.apply(*profile);
 }
 QVariantMap ProfileManager::recoverInterruptedApply() { return m_transaction.recover(); }

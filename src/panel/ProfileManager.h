@@ -27,6 +27,23 @@ public:
     [[nodiscard]] QVariantMap status() const;
     [[nodiscard]] QVariantMap shortcutStatus() const;
     [[nodiscard]] std::optional<PanelDefinition> previewDefinition(const QString &id) const;
+    // A profile holds the panels that are on the desktop: native panels
+    // always, a free panel only while it has a complete host link
+    // (freeHostState hosted-owned, or hosted-stale after a failed check).
+    // A detached free panel keeps its record
+    // in the registry for "Put back on the desktop", but it is not part of
+    // the arrangement. On 2026-10-12 a profile had captured 21 detached
+    // records and one Apply created 13 desktop widgets before the owner
+    // killed the backend; Apply now refuses to create more free panels than
+    // MaximumFreePanelsCreatedPerApply at once.
+    static constexpr int MaximumFreePanelsCreatedPerApply = 4;
+    [[nodiscard]] static bool onTheDesktop(const PanelDefinition &panel);
+    [[nodiscard]] static QList<PanelDefinition> panelsOnTheDesktop(const QList<PanelDefinition> &panels);
+    // Free panels of the profile that an apply would create as new desktop
+    // widgets: visible, and without a hosted record of the same id, kind,
+    // content type and screen (the transaction's own rule).
+    [[nodiscard]] static int freePanelsToCreate(const ProfileDefinition &profile,
+        const QList<PanelDefinition> &desktop);
 public slots:
     QVariantList listProfiles() const;
     QVariantMap createProfile(const QString &name);

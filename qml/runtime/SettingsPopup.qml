@@ -1577,7 +1577,10 @@ Window {
         else if (action === "shortcut-clear") result = profilesService.clearProfileShortcut(profileId);
         else return;
         profileNoticeIsError = !(result && result.success === true);
-        profileNotice = profileNoticeIsError
+        if (profileNoticeIsError && result && result.errorCode === "profile-creates-too-many-free-panels")
+            profileNotice = qsTr("Not applied: this profile would create %1 free panels on the desktop, and Apply Profile creates at most %2 at once. Put only the panels you want on the desktop, then use Save Current to Profile: the profile then holds those panels only.")
+                .arg(Number(result.freePanelsToCreate)).arg(Number(result.freePanelLimit));
+        else profileNotice = profileNoticeIsError
             ? qsTr("Profile action failed (%1).%2").arg(String(result && result.errorCode || "unknown-error"))
                 .arg(result && result.rollbackStatus === "complete" ? qsTr(" The previous arrangement was restored.") : "")
             : action === "apply" ? qsTr("The profile arrangement was applied.")

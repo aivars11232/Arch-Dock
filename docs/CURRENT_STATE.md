@@ -31,6 +31,63 @@ apply matrix and preset audition (temporary panel) tests pass
 (`evening-tests-1.log` in the audit folder); the complete suite ran the
 same day on the tree before these two backend changes (116 of 120 with
 all reruns green).
+
+### One Apply created 13 free panels (0.1.1-19)
+
+With the read-back tolerant, the owner's next Apply of the profile "Plasma
+3D" created free panels one after another (the log of 21:14–21:15 shows
+`free-1` … `free-11` and `free-x555391f9` placed by Plasma) until the owner
+killed the backend. The profile, saved at 12:42, holds 24 panels: the three
+built-in edges and 21 free panels, because `createProfile` and
+`saveProfile` captured the registry's complete panel list, and the registry
+held 22 free records that were all `detached` (their widgets removed from
+the desktop over the day; a detached record stays for "Put back on the
+desktop"). `ProfileApplyTransaction::apply` creates a host for every
+profile panel without one, which is the wanted "put my saved arrangement
+back" behaviour for one panel and a flood for 21. Corrected:
+
+- `ProfileManager::panelsOnTheDesktop` filters the capture: native panels
+  always, free panels only with a complete host association
+  (`ProfileApplyTransaction::hosted`) in `freeHostState` `hosted-owned` or
+  `hosted-stale` (a failed check; the widget is most likely still there).
+- An apply replaces the registry's panel list with the profile's panels
+  (`PanelRegistry::persistPanelSetTransaction`), so a profile saved with
+  only the wanted panels on the desktop also drops the Missing records
+  the profile does not hold when it is applied.
+- `ProfileManager::freePanelsToCreate` counts the visible free panels of a
+  profile that have no hosted record of the same id, kind, content type and
+  screen (the transaction's own rule). `listProfiles` reports it as
+  `freePanelsToCreate` with `freePanelCount` and `freePanelLimit`;
+  `applyProfile` refuses with `profile-creates-too-many-free-panels` when
+  the count exceeds `MaximumFreePanelsCreatedPerApply` (4), before the
+  transaction starts.
+- The Profiles page shows "Apply creates N free panels on the desktop" in
+  the summary and a notice when the profile would exceed the limit; the
+  Studio explains the refusal in plain words with the way out: put the
+  wanted panels on the desktop, then Save Current to Profile.
+- The interrupted apply left `profile-apply-journal.json` in state
+  `APPLYING` with the 13 created hosts recorded. The transaction's existing
+  recovery (`Recover Interrupted Apply` on the Profiles page) rolls it
+  back: each created host is removed by its token and the journal cleared;
+  nothing in that path changed.
+
+Verification: `ProfileManagerTest::profilesHoldOnlyThePanelsOnTheDesktop`
+and `applyRefusesToCreateMoreFreePanelsThanTheLimit`;
+`tst_ProfilePage::test_freePanelsAnApplyWouldCreateAreAnnounced`. On the
+final tree the profile store, profile apply transaction, profile manager,
+profile page, panel registry, panel window capability and profile apply
+matrix tests pass (`evening-tests-2.log`, page and manager again after the
+last wording change in `evening-tests-3.log`), and the Studio scroll,
+truth matrix, preview contract and navigation tests pass
+(`evening-tests-4.log`).
+
+On the owner's PC the Plasma layout held no Arch Dock widget from 21:17
+(the extra panels were removed by hand), no backend was running, the
+registry was unchanged since 20:48, and the interrupted apply's journal
+was still pending. Recover Interrupted Apply removes an apply's created
+widgets by their tokens and treats a widget that is already gone as
+removed (`FreePanelRemovalOutcome::AlreadyAbsent`), so it is expected to
+clear that journal; it has not been run on the owner's PC.
 <!-- EVENING_2026_10_12_END -->
 
 <!-- AFTERNOON_2026_10_12_BEGIN -->

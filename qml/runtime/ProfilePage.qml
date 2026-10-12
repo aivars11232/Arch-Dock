@@ -64,8 +64,31 @@ ColumnLayout {
         Accessible.name: qsTr("Saved profile")
     }
     Label {
-        text: root.selected ? qsTr("%1 panels · revision %2").arg(root.selected.panelCount).arg(root.selected.revision)
-            : qsTr("Create a profile from your current panels, or import one.")
+        objectName: "profile-summary"
+        Layout.fillWidth: true
+        wrapMode: Text.Wrap
+        text: {
+            if (!root.selected) return qsTr("Create a profile from your current panels, or import one.");
+            let summary = qsTr("%1 panels · revision %2").arg(root.selected.panelCount).arg(root.selected.revision);
+            const creating = Number(root.selected.freePanelsToCreate);
+            if (creating === 1) summary += qsTr(" · Apply creates 1 free panel on the desktop");
+            else if (creating > 1) summary += qsTr(" · Apply creates %1 free panels on the desktop").arg(creating);
+            return summary;
+        }
+    }
+    Label {
+        // The owner (2026-10-12): one Apply created 13 free panels from a
+        // profile that had captured every dead record. The backend refuses
+        // more than its limit; this says so before the click.
+        objectName: "profile-free-panel-notice"
+        readonly property int creating: root.selected ? Number(root.selected.freePanelsToCreate) : 0
+        readonly property int limit: root.selected && !isNaN(Number(root.selected.freePanelLimit)) ? Number(root.selected.freePanelLimit) : 4
+        visible: creating > limit
+        Layout.fillWidth: true
+        wrapMode: Text.Wrap
+        color: "#ffc66d"
+        text: qsTr("This profile holds %1 free panels that are not on the desktop. Apply Profile creates at most %2 at once. Put only the panels you want on the desktop, then use Save Current to Profile: the profile then holds those panels only.").arg(creating).arg(limit)
+        Accessible.name: text
     }
     TextField {
         id: nameField
@@ -108,7 +131,7 @@ ColumnLayout {
         opacity: 0.8
         // The owner (2026-10-12): a saved arrangement must reach the desktop
         // even when its free panel is gone.
-        text: qsTr("Apply Profile puts the whole saved arrangement on the desktop: a free panel the profile holds that is not on the desktop is created again with its saved look. For one saved panel look, use Built-in or My Panel Presets with \"Preview on a new panel\".")
+        text: qsTr("A profile holds the panels that are on the desktop when it is saved. Apply Profile puts the whole saved arrangement back: a free panel the profile holds that is not on the desktop is created again with its saved look. For one saved panel look, use Built-in or My Panel Presets with \"Preview on a new panel\".")
         Accessible.name: text
     }
     RowLayout {

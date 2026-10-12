@@ -412,6 +412,13 @@ systemctl --user restart plasma-plasmashell.service
 Do not use `arch-dock --quit` for this: it keeps the backend stopped for the
 rest of the login session and refuses the widgets' activation until Arch Dock
 is started by hand. Cancel an active audition first.
+
+If the Profiles page then says "Profile recovery is required", an earlier
+Apply was interrupted: press Recover Interrupted Apply, which removes the
+panels that apply created and restores the arrangement from before it. A
+profile saved before 0.1.1-19 may hold free panels that are long gone from
+the desktop; with the panels you want on the desktop, press Save Current to
+Profile once, and the profile holds those panels only.
 Use the backup commands above before an owner-controlled upgrade. Start the
 installed service normally after upgrading. Destructive schema migration saves
 a validated configuration snapshot first; future schemas remain untouched.

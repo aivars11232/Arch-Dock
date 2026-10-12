@@ -7,6 +7,17 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- Profiles hold only the panels on the desktop (2026-10-12, owner's report
+  "with just one apply it kept on opening multiple docks and nearly crashed
+  my PC"): a profile had captured every free panel record in the registry,
+  21 of them long removed from the desktop and kept only for "Put back on
+  the desktop", and one Apply created 13 widgets before the backend was
+  killed. Create and Save now capture native panels and only the free panels
+  that are linked to a widget on the desktop. The Profiles page says how many free
+  panels an Apply would create, and Apply refuses to create more than four at
+  once, in plain words, with the way out (put the wanted panels on the
+  desktop, then Save Current to Profile). A profile that was saved before
+  this change still holds the dead records until it is saved again.
 - Profiles, presets and re-hosting on a desktop with panels (2026-10-12,
   owner's report "the panel shows up for a second and disappears"): Plasma
   keeps a free panel's widget out of a panel's own area and on the screen,

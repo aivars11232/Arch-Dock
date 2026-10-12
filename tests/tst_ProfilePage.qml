@@ -68,6 +68,22 @@ TestCase {
         item.actionsBlocked = true;
         verify(!button(item, "recover").enabled);
     }
+    function test_freePanelsAnApplyWouldCreateAreAnnounced() {
+        const item = page({profiles: [{id: "profile-first", name: "Desk", revision: 4, panelCount: 2}]});
+        verify(!findChild(item, "profile-free-panel-notice").visible);
+        verify(findChild(item, "profile-summary").text.indexOf("free panel") < 0);
+        item.profiles = [{id: "profile-first", name: "Desk", revision: 4, panelCount: 3,
+            freePanelCount: 1, freePanelsToCreate: 1, freePanelLimit: 4}];
+        verify(findChild(item, "profile-summary").text.indexOf("Apply creates 1 free panel on") >= 0);
+        verify(!findChild(item, "profile-free-panel-notice").visible);
+        item.profiles = [{id: "profile-first", name: "Desk", revision: 4, panelCount: 24,
+            freePanelCount: 21, freePanelsToCreate: 21, freePanelLimit: 4}];
+        verify(findChild(item, "profile-summary").text.indexOf("Apply creates 21 free panels on") >= 0);
+        verify(findChild(item, "profile-free-panel-notice").visible);
+        verify(findChild(item, "profile-free-panel-notice").text.indexOf("21") >= 0);
+        verify(findChild(item, "profile-free-panel-notice").text.indexOf("4") >= 0);
+        verify(button(item, "apply").enabled);
+    }
     function test_shortcutControlsAreExplicitAndConflictsAreVisible() {
         const item = page({shortcutsOnly: true,
             profiles: [{id: "profile-first", name: "Desk", revision: 4, panelCount: 2}]});

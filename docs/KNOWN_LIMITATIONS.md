@@ -237,6 +237,18 @@ Backups are bounded and exclude installed built-ins, generated caches,
 executable content and symbolic links. See
 [configuration recovery](INSTALL.md#configuration-recovery-and-upgrades).
 
+A profile holds the panels that are on the desktop when it is created or
+saved: native panels always, a free panel only while the backend has
+verified its widget. Detached free panel records are not captured. Apply
+Profile creates at most four free panels at once and refuses otherwise
+(`profile-creates-too-many-free-panels`); a profile saved before 0.1.1-19
+may hold every record the registry had and needs one Save Current to
+Profile with the wanted panels on the desktop. Detached records themselves
+stay in the registry (the Studio lists each as "Missing: this panel is not
+on the desktop") until Remove panel on its General page deletes it, or an
+Apply Profile of a profile that does not hold it: an apply keeps only the
+profile's panels.
+
 A free panel whose desktop widget has disappeared from Plasma keeps its
 settings; Panel Studio shows it as missing and can put it back on the desktop.
 Why widgets disappear from a desktop is not always recorded by Plasma; a
