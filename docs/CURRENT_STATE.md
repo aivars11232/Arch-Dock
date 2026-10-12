@@ -1,5 +1,100 @@
 # Arch Dock current state
 
+<!-- EDGE_2026_10_12_BEGIN -->
+## Edge panels — 2026-10-12
+
+The owner reported the horizontal and vertical (edge) panels "don't work".
+The investigation (the "Edge panels" section of the
+[audit record](audits/FULL_AUDIT_2026-10-11.md)) found the owner's three
+edge records switched off and without a Plasma panel, and on the owner's
+own layout a switched-on edge panel appearing as an empty "Drop applications
+or folders here" box drawn over the owner's own panels on the same edges;
+on the current code every edge draws, hovers, opens folders, takes skins,
+stands and thickness, and refuses 3D, baked and ring layouts with a reason.
+Corrected the same day:
+
+- The reveal strip of a collapsed edge panel lies on the panel's own edge,
+  the whole panel long and as thick as the Reveal zone setting
+  (`plasma-dock-widget` `revealZone`). Before, it took the scene's own
+  strip: the scene is thicker than the panel (magnification and motion
+  headroom) and centred in it, so the strip lay outside the window on every
+  edge and the Edge trigger could never reopen the panel (E-01).
+- Panel Studio > Panels > General offers **Add applications…** on launcher
+  and hybrid panels: desktop entries chosen in a file dialog are pinned
+  through `pinPanelUrls`, the call a drop uses; edge panels of one content
+  type share them, a free panel keeps its own. The empty panel's text names
+  the action (E-08).
+- Studio notes Plasma's same-edge rule under a shown edge panel's placement:
+  over an Auto-hide or Dodge windows panel the new panel is drawn at the
+  same edge, above an Always visible one it is stacked (E-09). INSTALL.md
+  "Panels on the desktop" says the same and what an edge panel can draw.
+- Documented as limits: the collapsed pill with its icons squeezed to a
+  sliver (E-04), four fan children at once with names (E-03), shared
+  entries per content type (E-05), the auto-hide reveal unverified in
+  private sessions (E-02).
+
+Verification: private-session runs on the working tree (`32-edge3..7.log`,
+`33-control1.log` in the audit folder): with the Edge trigger a collapsed
+panel opens on all four edges once the pointer is 3 px inside the panel
+window's edge (before the fix: never); hover opens it on all four; the
+replica of the owner's own layout (`34-replica-edges.log`) showed the
+empty box over the owner's panels that the Studio action and the notice
+address. Complete suite 119 of 120 in one serial run (2280 s,
+`edge-suite.log`); the one failure, a wheel turn of a 3D free panel in
+`runtime-ui-interaction-smoke`, passed alone (a render race of the
+known B-01 class).
+<!-- EDGE_2026_10_12_END -->
+
+<!-- PEDESTALS_2026_10_12_BEGIN -->
+## Pedestals — 2026-10-12
+
+The owner asked for the stands under the icons to be their own thing: a
+page in Panel Studio, shapes and forms, a texture separate from the panel's,
+size, floating between panel and icon, with their own animations, in 2D and
+3D. Implemented in the working tree:
+
+- Seven panel settings, stored beside the 3D parameters and bounded by the
+  schema (`PanelSettingsSchema`, editor section `pedestals`, capability
+  `pedestals`): `pedestalShape` (auto, none, column, plate, disc, ring,
+  saucer), `pedestalSize` 0.5–2, `pedestalLift` 0–1, `pedestalMaterial`
+  (panel or one of the thirteen looks), `pedestalColor`, `pedestalAnimation`
+  (none, bob, spin, pulse), `pedestalAnimationSpeed` 0.25–3. With no stand,
+  or with Auto on a flat panel, the other settings are kept but not shown;
+  the speed is shown only with an animation.
+- Panel Studio: a **Pedestals** section after Icon Tiles (Profiles moves to
+  the sixth section).
+- 3D (`PlatformGeometry.lathe`/`pedestalShape`, `PanelScene3D`): the shapes
+  are turned solids with texture coordinates and tangents; a column keeps
+  its height from Lift (Auto keeps Panels > 3D > Pedestal height); a plate,
+  disc, ring or saucer floats Lift icon-sizes above the platform with the
+  icon on top; the material is the platform's or the chosen look's own
+  texture and relief map; Bob, Spin and Pulse move each stand on the
+  scene's phase.
+- 2D (`IconScene`, layer `icon-layer-pedestal`): the stand is a horizontal
+  platform seen a little from above, with a top face and a side, painted
+  under the raised icon in the look's texture and tinted, so the icons
+  stand on their pedestals even with the panel at no opacity; the icon's
+  input bounds never move. Under a 3D scene the flat stand is not drawn.
+- Motion: a stand travels with its icon along the path, at the same tempo;
+  the icon's own animation moves the icon alone and the stand's animation
+  moves the stand alone.
+- Tests: `PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds`,
+  `tst_PlatformGeometry` (every shape closed, bounded, with tangents),
+  `tst_IconScene` (the layer follows the settings), `tst_StudioNavigation`.
+- Pictures: `sheet-pedestals-3d-3.png`, `sheet-pedestals-flat-4.png` in the
+  audit folder (`/mnt/F/archdock-audit-2026-10-08/evidence`).
+
+Verification: the complete suite, 120 of 120 in one serial run on the
+working tree (2237 s, `ped-suite.log` in the audit folder), after the
+renderer set (icon tiles, scene rotation, hit regions, materials, panel
+scene, parity, icon scene, dock entry) and the schema test had passed on
+their own; private-session pictures of every shape on a 3D platform and
+on a flat panel, hovered, lifted, in their own materials and animated.
+
+Not yet: theme packages cannot ship their own pedestal meshes (a "theme"
+shape); the flat stand is a painted platform, not a rendered solid.
+<!-- PEDESTALS_2026_10_12_END -->
+
 <!-- AUDIT_2026_10_11_BEGIN -->
 ## Full audit corrections — 2026-10-11
 
@@ -55,9 +150,8 @@ private copy of the owner's desktop. The corrections in the working tree:
 Verification: The complete suite passed 120 of 120 tests serially on this tree on 2026-10-12 (2231 s); the run before it, without the relief maps, passed 119 of 120, its one failure being the rendering smoke test's energy-theme selection racing a settings revision, which passed alone (135 s). Targeted rendering, folder, theme and registry tests passed 19 of 19. Private picture runs: the complete picture matrix (92 captures: every flat look, icon style, baked and 3D case drawn, motion present, no crash), every material look photographed on a generated platform in 3D and flat (`sheet-materials-3d-relief.png`, `sheet-materials-flat.png` in the audit folder), and the folder shapes on flat, both themes and the generated platform with the panel mid-screen.
 
 Open: the cause of the lost widgets (A-01), the suite's two render races and
-one teardown timeout (B-01), and the owner's request for a Pedestals page
-(shape, size, texture, animation, 2D and 3D), a new feature for the next
-task. The package was not rebuilt.
+one teardown timeout (B-01). The Pedestals page the owner asked for is the
+section above. Package 0.1.1-14 was built from 6608544 (recipe 459fb47).
 <!-- AUDIT_2026_10_11_END -->
 
 <!-- ADREP_TASK_005_BEGIN -->

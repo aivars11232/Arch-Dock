@@ -139,6 +139,82 @@ function pedestal(segments) {
     return mesh.result()
 }
 
+// A solid turned about the z axis from a profile of (radius, height)
+// points, bottom to top: a plate, a disc, a saucer. The first and last
+// points on the axis close the solid; a profile that starts and ends off
+// the axis (`closed`) is a loop, like a ring. Every vertex carries texture
+// coordinates (u once round, v along the profile) and tangents, so a
+// material's relief map lights it.
+function lathe(profile, segments, closed) {
+    const count = Math.max(8, Math.round(finite(segments, 32)))
+    const points = profile.slice()
+    if (closed) points.push(points[0])
+    const lengths = [0]
+    for (let index = 1; index < points.length; ++index)
+        lengths.push(lengths[index - 1] + Math.hypot(points[index][0] - points[index - 1][0],
+                                                     points[index][1] - points[index - 1][1]))
+    const total = Math.max(1e-6, lengths[lengths.length - 1])
+    const mesh = new MeshBuilder()
+    for (let step = 0; step + 1 < points.length; ++step) {
+        const a = points[step], b = points[step + 1]
+        const dr = b[0] - a[0], dz = b[1] - a[1]
+        const length = Math.hypot(dr, dz)
+        if (length < 1e-9) continue
+        // The profile's outward normal in the (r, z) plane.
+        const nr = dz / length, nz = -dr / length
+        for (let index = 0; index < count; ++index) {
+            const t0 = index / count * Math.PI * 2, t1 = (index + 1) / count * Math.PI * 2
+            const ring = []
+            for (const [turn, u] of [[t0, index / count], [t1, (index + 1) / count]]) {
+                const c = Math.cos(turn), s = Math.sin(turn)
+                const normal = [nr * c, nr * s, nz]
+                const tangent = [-s, c, 0]
+                ring.push(mesh.vertex([a[0] * c, a[0] * s, a[1]], normal, null, [u, 1 - lengths[step] / total], tangent))
+                ring.push(mesh.vertex([b[0] * c, b[0] * s, b[1]], normal, null, [u, 1 - lengths[step + 1] / total], tangent))
+            }
+            const middle = (t0 + t1) / 2
+            const facing = [nr * Math.cos(middle), nr * Math.sin(middle), nz]
+            // ring: [a0, b0, a1, b1]; degenerate points on the axis still
+            // wind consistently, as a triangle with two equal corners is
+            // simply dropped by the renderer.
+            if (a[0] > 1e-9) mesh.triangle(ring[0], ring[2], ring[3], facing)
+            if (b[0] > 1e-9) mesh.triangle(ring[0], ring[3], ring[1], facing)
+        }
+    }
+    return mesh.result()
+}
+
+// The stand under an icon, by shape: a column (the platform's own, radius 1,
+// height 1), or a solid that floats between the platform and the icon:
+// a plate, a thin bevelled disc, a ring, or a saucer with a dome. All
+// stand on z 0 with their widest reach within radius 1.4.
+var pedestalShapes = ["column", "plate", "disc", "ring", "saucer"]
+function pedestalShape(kind, segments) {
+    switch (String(kind || "column")) {
+    case "plate":
+        return lathe([[0, 0], [1, 0], [1, 0.22], [0.92, 0.26], [0, 0.26]], segments, false)
+    case "disc":
+        return lathe([[0, 0], [1.25, 0], [1.25, 0.08], [1.08, 0.16], [0, 0.16]], segments, false)
+    case "ring":
+        return lathe([[0.72, 0], [1.3, 0], [1.3, 0.2], [0.72, 0.2]], segments, true)
+    case "saucer":
+        return lathe([[0, 0], [0.55, 0], [1.4, 0.2], [0.6, 0.44], [0.3, 0.62], [0, 0.68]], segments, false)
+    default:
+        return pedestal(segments)
+    }
+}
+
+// How high a pedestal shape reaches, in its own units.
+function pedestalShapeHeight(kind) {
+    switch (String(kind || "column")) {
+    case "plate": return 0.26
+    case "disc": return 0.16
+    case "ring": return 0.2
+    case "saucer": return 0.68
+    default: return 1
+    }
+}
+
 // The platform's shape for a layout, or null when the layout has no exact 3D
 // platform. `aspect` is the layout's vertical squeeze, `sweep`/`start` an open
 // path in the layout's screen degrees (y down), `sides` a polygon's count.

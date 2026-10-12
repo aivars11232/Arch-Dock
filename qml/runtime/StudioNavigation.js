@@ -25,6 +25,12 @@ var sections = [
         subtabs: []
     },
     {
+        // The stands under the icons: shape, size, lift, material and
+        // motion, on flat and 3D panels (owner's request, 2026-10-12).
+        label: "Pedestals",
+        subtabs: []
+    },
+    {
         label: "Profiles",
         subtabs: ["Quick Profile", "Manage", "Shortcuts"]
     }

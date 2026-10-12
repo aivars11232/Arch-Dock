@@ -15,6 +15,7 @@ TestCase {
             "Panels",
             "Icons",
             "Icon Tiles",
+            "Pedestals",
             "Profiles"
         ])
     }
@@ -45,7 +46,8 @@ TestCase {
             "My Icon Presets"
         ])
         compareList(StudioNavigation.subtabsFor(3), [])
-        compareList(StudioNavigation.subtabsFor(4), [
+        compareList(StudioNavigation.subtabsFor(4), [])
+        compareList(StudioNavigation.subtabsFor(5), [
             "Quick Profile",
             "Manage",
             "Shortcuts"
@@ -55,7 +57,7 @@ TestCase {
     function test_clampsMainSectionIndices() {
         compare(StudioNavigation.clampSectionIndex(-4), 0)
         compare(StudioNavigation.clampSectionIndex(2), 2)
-        compare(StudioNavigation.clampSectionIndex(99), 4)
+        compare(StudioNavigation.clampSectionIndex(99), 5)
         compare(StudioNavigation.clampSectionIndex("invalid"), 0)
     }
 
@@ -65,7 +67,8 @@ TestCase {
         compare(StudioNavigation.clampSubtabIndex(2, 3), 3)
         compare(StudioNavigation.clampSubtabIndex(2, 99), 5)
         compare(StudioNavigation.clampSubtabIndex(3, 99), 0)
-        compare(StudioNavigation.clampSubtabIndex(4, 2.9), 2)
+        compare(StudioNavigation.clampSubtabIndex(4, 99), 0)
+        compare(StudioNavigation.clampSubtabIndex(5, 2.9), 2)
     }
 
     // The settings pages that existed before the preset pages keep their

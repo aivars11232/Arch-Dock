@@ -1430,7 +1430,11 @@ Item {
                     ["scene3DBand", "band"], ["scene3DBend", "bend"],
                     ["scene3DFold", "fold"],
                     ["scene3DColor", "color"], ["scene3DMaterial", "material"],
-                    ["scene3DTexture", "texture"]])
+                    ["scene3DTexture", "texture"],
+                    ["pedestalShape", "pedestalShape"], ["pedestalSize", "pedestalSize"],
+                    ["pedestalLift", "pedestalLift"], ["pedestalMaterial", "pedestalMaterial"],
+                    ["pedestalColor", "pedestalColor"], ["pedestalAnimation", "pedestalAnimation"],
+                    ["pedestalAnimationSpeed", "pedestalAnimationSpeed"]])
                 if (definition[key] !== undefined) parameters[parameter] = definition[key]
             return parameters
         }

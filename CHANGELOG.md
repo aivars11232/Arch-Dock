@@ -7,6 +7,28 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- Edge panels (2026-10-12, owner's report "they don't work",
+  [audit record](docs/audits/FULL_AUDIT_2026-10-11.md)): a collapsed edge
+  panel's reveal strip now lies on the panel's own edge inside its window;
+  it was placed at the outer edge of the thicker scene behind the panel,
+  outside the window, so with the Edge trigger a collapsed panel could never
+  be opened again. Panel Studio's General page gains **Add applications…**
+  for launcher and hybrid panels (an edge panel had no way to get launchers
+  but a drop), and an empty panel says where to add them. Studio notes
+  Plasma's same-edge rule (a panel is drawn over an Auto-hide or Dodge
+  windows panel, stacked above an Always visible one); INSTALL.md explains
+  edge panels' content, placement and limits.
+- Pedestals (2026-10-12, owner's request): a Panel Studio page of their own
+  for the stands under the icons, on flat and 3D panels alike. Shape (Auto,
+  None, Column, Plate, Disc, Ring, Saucer), Size, Lift (how high the stand
+  floats between the panel and the icon), Material (the panel's own or any
+  of the thirteen looks), Colour, Animation (None, Bob, Spin, Pulse) and
+  Animation speed. In 3D the shapes are turned solids with the look's
+  texture and relief; on a flat panel they are horizontal platforms painted
+  in the look's texture under the raised icon. A stand travels with its
+  icon; its animation and the icon's stay separate. Auto keeps each
+  renderer's own pedestal. The icon tile treats a texture already in the
+  image cache as loaded.
 - Full audit corrections (2026-10-11, [audit record](docs/audits/FULL_AUDIT_2026-10-11.md)):
   a free panel whose desktop widget is gone is shown as missing in Panel
   Studio and can be put back on the desktop with its saved settings and

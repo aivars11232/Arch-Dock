@@ -178,9 +178,66 @@ Item {
     // frame's own rotation undone, the camera's taken.
     readonly property quaternion iconFacing: entryFrame.sceneRotation.inverted()
         .times(camera.sceneRotation)
-    // The column every icon stands on; it takes the platform's material.
-    readonly property var pedestalMesh: PlatformGeometry.pedestal(24)
+    // The stand under every icon (the Pedestals page): "auto" is the
+    // platform's own column in its material; a chosen shape floats between
+    // the platform and the icon in its own material, size and motion.
+    readonly property var materialLooks: ["glass", "crystal", "neon", "minimal", "plasma", "lime",
+        "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"]
+    readonly property string pedestalShape: String((sceneDefinition || ({})).pedestalShape || "auto").toLowerCase()
+    readonly property string pedestalKind: pedestalShape === "auto" ? "column" : pedestalShape
+    readonly property bool pedestalDrawn: pedestalKind !== "none"
+    readonly property bool pedestalFloats: pedestalDrawn && pedestalKind !== "column"
+    readonly property real pedestalSize: bounded("pedestalSize", 1, 0.5, 2)
+    readonly property real pedestalLift: bounded("pedestalLift", 0.3, 0, 1)
+    readonly property string pedestalMaterialLook: String((sceneDefinition || ({})).pedestalMaterial || "panel").toLowerCase()
+    readonly property string pedestalColour: String((sceneDefinition || ({})).pedestalColor || "")
+    readonly property string pedestalAnimation: String((sceneDefinition || ({})).pedestalAnimation || "none").toLowerCase()
+    readonly property real pedestalAnimationSpeed: bounded("pedestalAnimationSpeed", 1, 0.25, 3)
+    readonly property bool pedestalOwnMaterial: pedestalDrawn && pedestalMaterialLook !== "panel"
+        && materialLooks.includes(pedestalMaterialLook)
+    readonly property var pedestalMesh: pedestalDrawn ? PlatformGeometry.pedestalShape(pedestalKind, 24) : PlatformGeometry.pedestal(24)
+    readonly property real pedestalShapeHeight: PlatformGeometry.pedestalShapeHeight(pedestalKind)
     readonly property int pedestalTriangles: pedestalMesh.indexes.length / 3
+    // Each shape's width across, in icon sizes, at pedestal size 1.
+    readonly property real pedestalShapeScale: ({ column: 0.18, plate: 0.46, disc: 0.42, ring: 0.42, saucer: 0.4 })[pedestalKind] || 0.18
+    readonly property var pedestalMaterialData: pedestalOwnMaterial
+        ? materialForLook(pedestalMaterialLook, pedestalColour) : platformMaterial
+    readonly property url pedestalTextureSource: pedestalOwnMaterial
+        ? Qt.resolvedUrl("../materials/" + pedestalMaterialLook + ".png") : ""
+    readonly property url pedestalNormalSource: pedestalOwnMaterial
+        ? Qt.resolvedUrl("../materials/" + pedestalMaterialLook + "-normal.png") : ""
+    readonly property Texture pedestalTexture: pedestalOwnMaterial
+        ? (pedestalImage.status === Image.Ready ? selectedPedestalTexture : null) : themeTexture
+    readonly property Texture pedestalNormalTexture: pedestalOwnMaterial
+        ? (pedestalNormalImage.status === Image.Ready ? selectedPedestalNormal : null) : themeNormalTexture
+    // The pedestals' motion: one phase for the scene, each entry a little
+    // behind the one before it.
+    readonly property bool pedestalMotionActive: pedestalDrawn && pedestalAnimation !== "none"
+        && motionAllowed && visible && !sceneConcealed && !reducedMotion
+    property real pedestalPhase: 0
+    NumberAnimation on pedestalPhase {
+        running: root.pedestalMotionActive
+        loops: Animation.Infinite
+        from: 0
+        to: 1
+        duration: Math.round(4000 / Math.max(0.25, root.pedestalAnimationSpeed))
+    }
+    // A look's material properties, as the platform takes them for a chosen
+    // look: metalness, roughness, opacity and an energy look's glow.
+    function materialForLook(look, colour) {
+        const material = ({})
+        material.baseColor = colour && colour.length ? colour : "#ffffff"
+        material.metalness = ["metallic", "platform", "plate", "pedestal", "futuristic"].includes(look) ? 0.85 : 0
+        material.roughness = ["glass", "floating-glass", "crystal"].includes(look) ? 0.12
+            : look === "organic" || look === "minimal" ? 0.85 : 0.38
+        material.opacity = LayoutEngine.themeStyle(look, "", 48).alpha
+        if (["neon", "plasma", "lime", "futuristic"].includes(look)) {
+            material.emissiveColor = colour && colour.length ? colour : LayoutEngine.themeStyle(look, "", 48).stroke
+            material.emissiveStrength = 0.35 + root.materialPulse * 0.45
+            material.emissiveThroughTexture = true
+        }
+        return material
+    }
     readonly property bool resourcesReady: sceneResources !== null
         && sceneResources.material !== undefined
         && sceneResources.material.format === "org.archdock.material"
@@ -885,6 +942,24 @@ Item {
     }
 
     Image {
+        id: pedestalImage
+        visible: false
+        source: root.pedestalTextureSource
+        sourceSize: Qt.size(512, 512)
+        asynchronous: true
+        cache: true
+    }
+
+    Image {
+        id: pedestalNormalImage
+        visible: false
+        source: root.pedestalNormalSource
+        sourceSize: Qt.size(512, 512)
+        asynchronous: true
+        cache: true
+    }
+
+    Image {
         id: materialNormalImage
         visible: false
         source: root.materialNormalSource
@@ -1029,6 +1104,24 @@ Item {
             positionU: root.flowOffset
         }
         Texture {
+            id: selectedPedestalTexture
+            sourceItem: root.Window.window && pedestalImage.Window.window === root.Window.window
+                ? pedestalImage : null
+            generateMipmaps: true
+            mipFilter: Texture.Linear
+            tilingModeHorizontal: Texture.Repeat
+            tilingModeVertical: Texture.Repeat
+        }
+        Texture {
+            id: selectedPedestalNormal
+            sourceItem: root.Window.window && pedestalNormalImage.Window.window === root.Window.window
+                ? pedestalNormalImage : null
+            generateMipmaps: true
+            mipFilter: Texture.Linear
+            tilingModeHorizontal: Texture.Repeat
+            tilingModeVertical: Texture.Repeat
+        }
+        Texture {
             id: selectedMaterialNormal
             sourceItem: root.Window.window && materialNormalImage.Window.window === root.Window.window
                 ? materialNormalImage : null
@@ -1090,9 +1183,24 @@ Item {
                 readonly property real size: Number(rect.width || 1)
                 readonly property real hoverScale: entry ? Number(entry.visualScale || 1) : 1
                 readonly property real elevation: root.bounded("iconElevation", 0.3, 0, 2)
-                // The pedestal's height, and the small gap that keeps an icon
-                // without one off the platform's top.
-                readonly property real pedestalHeight: size * elevation
+                // The pedestal stands on the platform at the icon's place.
+                // Its height under the icon: a column's own height (Auto
+                // keeps the 3D page's Pedestal height), or a shape's own
+                // thickness plus the gap the icon floats above it, Lift
+                // icon-sizes. The small gap keeps an icon without one off
+                // the platform's top.
+                readonly property real pedestalScale: size * root.pedestalShapeScale * root.pedestalSize
+                readonly property real pedestalGap: root.pedestalFloats ? size * root.pedestalLift * 0.5 : 0
+                readonly property real pedestalHeight: !root.pedestalDrawn ? 0
+                    : root.pedestalFloats ? root.pedestalShapeHeight * pedestalScale + pedestalGap
+                    : size * (root.pedestalShape === "auto" ? elevation : root.pedestalLift)
+                // This entry's motion: its own phase along the scene's.
+                readonly property real pedestalBeat: root.pedestalMotionActive
+                    ? Math.sin((root.pedestalPhase + index * 0.17) * 2 * Math.PI) : 0
+                readonly property real pedestalBob: root.pedestalAnimation === "bob" ? pedestalBeat * size * 0.06 : 0
+                readonly property real pedestalPulse: root.pedestalAnimation === "pulse" ? 1 + pedestalBeat * 0.06 : 1
+                readonly property real pedestalSpin: root.pedestalAnimation === "spin" && root.pedestalMotionActive
+                    ? root.pedestalPhase * 360 : 0
                 readonly property real baseLift: size * 0.02
                 readonly property real tileLift: visual ? Math.max(-24, Math.min(96,
                     root.number(visual.tileSettings, "iconTileElevation", 0)))
@@ -1133,23 +1241,34 @@ Item {
                 visible: trackVisibility > 0
                 // The entry's origin is where its icon stands: on the platform's
                 // track, on top of its pedestal. Motion offsets move it along.
-                position: Qt.vector3d(standPoint[0] + root.number(iconMotion, "x", 0),
-                    standPoint[1] - root.number(iconMotion, "y", 0),
+                // The entry's origin travels with the layout; the icon's own
+                // motion moves the icon alone (below) and the pedestal's
+                // motion moves the pedestal alone, so neither drags the other.
+                position: Qt.vector3d(standPoint[0], standPoint[1],
                     standPoint[2] * root.bounded("thickness", 1, 0.1, 4) + pedestalHeight + baseLift + tileLift)
                 opacity: root.number(iconMotion, "opacity", 1) * trackVisibility
 
-                // The pedestal: a solid column from the platform's top up to
-                // the icon, in the platform's own material.
+                // The pedestal: a column from the platform's top up to the
+                // icon, or a shape floating under it, in the platform's
+                // material or its own.
                 IconStyle3D {
                     objectName: "mesh-pedestal-" + entryNode.index
                     meshData: root.pedestalMesh
-                    materialData: root.platformMaterial
-                    surfaceTexture: root.themeTexture
-                    surfaceNormalTexture: root.themeNormalTexture
-                    visible: entryNode.tileShown && (entryNode.elevation > 0 || entryNode.tileLift > 0)
-                    z: -(entryNode.pedestalHeight + entryNode.baseLift + entryNode.tileLift)
-                    scale: Qt.vector3d(entryNode.size * 0.18, entryNode.size * 0.18,
-                        Math.max(0, entryNode.pedestalHeight + entryNode.baseLift + entryNode.tileLift))
+                    materialData: root.pedestalMaterialData
+                    surfaceTexture: root.pedestalTexture
+                    surfaceNormalTexture: root.pedestalNormalTexture
+                    visible: root.pedestalDrawn && (root.pedestalFloats
+                        || (entryNode.tileShown && (entryNode.pedestalHeight > 0 || entryNode.tileLift > 0)))
+                    // Its foot on the platform: the whole height under the
+                    // icon, so a shape's top is the gap below the icon; its
+                    // own bob moves it, not the icon.
+                    z: -(entryNode.pedestalHeight + entryNode.baseLift + entryNode.tileLift) + entryNode.pedestalBob
+                    scale: root.pedestalFloats
+                        ? Qt.vector3d(entryNode.pedestalScale * entryNode.pedestalPulse,
+                                      entryNode.pedestalScale * entryNode.pedestalPulse, entryNode.pedestalScale)
+                        : Qt.vector3d(entryNode.pedestalScale, entryNode.pedestalScale,
+                                      Math.max(0, entryNode.pedestalHeight + entryNode.baseLift + entryNode.tileLift))
+                    eulerRotation.z: entryNode.pedestalSpin
                 }
                 // A theme's own icon base, lying on the platform around the
                 // pedestal's foot.
@@ -1211,6 +1330,9 @@ Item {
                 Node {
                     objectName: "mesh-icon-" + entryNode.index
                     rotation: root.iconFacing
+                    // The icon's own motion offsets, on the icon alone.
+                    position: Qt.vector3d(root.number(entryNode.iconMotion, "x", 0),
+                                          -root.number(entryNode.iconMotion, "y", 0), 0)
                     // The icon's resting square, untouched by hover and motion:
                     // its projection is the entry's input rectangle, so the
                     // rectangle does not breathe under the pointer.

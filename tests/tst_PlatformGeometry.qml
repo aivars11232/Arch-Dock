@@ -95,6 +95,30 @@ TestCase {
         verify(mesh.colors === undefined, "a pedestal takes the platform's material")
     }
 
+    function test_pedestalShapesAreClosedSolidsWithRelief_data() {
+        return PlatformGeometry.pedestalShapes.map(function(kind) { return { tag: kind, kind: kind } })
+    }
+
+    function test_pedestalShapesAreClosedSolidsWithRelief(data) {
+        // The Pedestals page's shapes: each a turned solid that stands on
+        // z 0 within its reach, winds outward, carries texture coordinates
+        // once round and along its profile, and tangents for its relief map.
+        const mesh = PlatformGeometry.pedestalShape(data.kind, 24)
+        compare(mesh.format, "org.archdock.mesh")
+        compare(misWound(mesh), 0, data.kind + " winds outward")
+        if (data.kind !== "column")
+            compare(boundaryEdges(mesh).length, 0, data.kind + " is a closed surface")
+        const top = PlatformGeometry.pedestalShapeHeight(data.kind)
+        for (const point of mesh.positions) {
+            verify(point[2] >= -1e-9 && point[2] <= top + 1e-9, data.kind + " between its foot and its top")
+            verify(Math.hypot(point[0], point[1]) <= 1.4 + 1e-9, data.kind + " within its reach")
+        }
+        for (const uv of mesh.uv0s) verify(uv[0] >= 0 && uv[0] <= 1 && uv[1] >= 0 && uv[1] <= 1)
+        compare(mesh.tangents.length, mesh.positions.length, data.kind + " has a tangent per vertex")
+        compare(mesh.binormals.length, mesh.positions.length)
+        verify(mesh.indexes.length / 3 < 1000, data.kind + " stays within the shared scene budget")
+    }
+
     function test_layoutsWithAnExactPlatform_data() {
         return supportedLayouts.map(function(layout) { return { tag: layout, layout: layout } })
     }

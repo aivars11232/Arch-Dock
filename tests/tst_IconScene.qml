@@ -56,6 +56,38 @@ TestCase {
         return scene
     }
 
+    function test_pedestalLayerFollowsThePedestalSettings() {
+        // The Pedestals page on a flat panel: Auto and None draw no stand
+        // and leave the icon where it was; a shape draws the stand under
+        // the icon and raises the icon above it; the icon's input bounds
+        // never move.
+        const scene = createScene({ tileSettings: ({ pedestalShape: "auto" }) })
+        const layer = findChild(scene, "icon-layer-pedestal")
+        verify(layer !== null, "the stand has its own layer")
+        const visual = findChild(scene, "icon-visual-layer")
+        verify(!layer.visible, "Auto draws no stand on a flat panel")
+        compare(visual.anchors.verticalCenterOffset, 0)
+        scene.tileSettings = ({ pedestalShape: "none" })
+        verify(!layer.visible)
+        for (const shape of ["column", "plate", "disc", "ring", "saucer"]) {
+            scene.tileSettings = ({ pedestalShape: shape, pedestalLift: 0.5, pedestalSize: 1.2,
+                                    pedestalMaterial: "organic", pedestalColor: "#44aa66" })
+            wait(0)
+            verify(layer.visible, shape + " is drawn")
+            verify(layer.width > 0 && layer.height > 0, shape + " has a size")
+            verify(visual.anchors.verticalCenterOffset < 0, shape + " raises the icon")
+            verify(layer.y + layer.height / 2 > visual.y + visual.height / 2,
+                   shape + " stands below the icon's middle")
+        }
+        compare(scene.logicalInputRegion.width, 64, "the input bounds never follow the stand")
+        scene.tileSettings = ({ pedestalShape: "plate", pedestalAnimation: "bob", pedestalAnimationSpeed: 2 })
+        verify(!scene.pedestalMotionActive, "reduced motion keeps the stand still")
+        scene.reducedMotion = false
+        verify(scene.pedestalMotionActive, "a chosen animation moves the stand")
+        scene.tileSettings = ({ pedestalShape: "plate", pedestalAnimation: "none" })
+        verify(!scene.pedestalMotionActive)
+    }
+
     function test_namedLayersAndSlots() {
         const scene = createScene({
             running: true,

@@ -646,7 +646,14 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
           std::tuple{"scene3DFold", "fold", QVariant(0.0)},
           std::tuple{"scene3DColor", "color", QVariant(QString{})},
           std::tuple{"scene3DMaterial", "material", QVariant(QStringLiteral("theme"))},
-          std::tuple{"scene3DTexture", "texture", QVariant(QStringLiteral("theme"))}}) {
+          std::tuple{"scene3DTexture", "texture", QVariant(QStringLiteral("theme"))},
+          std::tuple{"pedestalShape", "pedestalShape", QVariant(QStringLiteral("auto"))},
+          std::tuple{"pedestalSize", "pedestalSize", QVariant(1.0)},
+          std::tuple{"pedestalLift", "pedestalLift", QVariant(0.3)},
+          std::tuple{"pedestalMaterial", "pedestalMaterial", QVariant(QStringLiteral("panel"))},
+          std::tuple{"pedestalColor", "pedestalColor", QVariant(QString{})},
+          std::tuple{"pedestalAnimation", "pedestalAnimation", QVariant(QStringLiteral("none"))},
+          std::tuple{"pedestalAnimationSpeed", "pedestalAnimationSpeed", QVariant(1.0)}}) {
         if (record.contains(QLatin1String(key)))
             definition.surface.parameters3D.insert(QLatin1String(parameter),
                 normalized(QLatin1String(key), fallback));
@@ -1219,7 +1226,14 @@ QVariantMap PanelDefinition::toLegacyMap() const
           std::pair{"scene3DFold", "fold"},
           std::pair{"scene3DColor", "color"},
           std::pair{"scene3DMaterial", "material"},
-          std::pair{"scene3DTexture", "texture"}}) {
+          std::pair{"scene3DTexture", "texture"},
+          std::pair{"pedestalShape", "pedestalShape"},
+          std::pair{"pedestalSize", "pedestalSize"},
+          std::pair{"pedestalLift", "pedestalLift"},
+          std::pair{"pedestalMaterial", "pedestalMaterial"},
+          std::pair{"pedestalColor", "pedestalColor"},
+          std::pair{"pedestalAnimation", "pedestalAnimation"},
+          std::pair{"pedestalAnimationSpeed", "pedestalAnimationSpeed"}}) {
         if (surface.parameters3D.contains(QLatin1String(parameter)))
             record.insert(QLatin1String(key), surface.parameters3D.value(QLatin1String(parameter)));
     }

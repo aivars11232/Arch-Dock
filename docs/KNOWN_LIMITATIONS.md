@@ -45,7 +45,11 @@ energy looks flow round the band, but they remain surfaces: blades of grass
 that sway or a plasma volume would be a new rendering feature with its own
 geometry and shaders. A generated platform
 wraps its texture round its band; the two bundled 3D themes keep their vector
-surfaces, since theme packages carry no raster files. A free panel's folder opened Along the dock on a
+surfaces, since theme packages carry no raster files.
+
+Pedestals (the Pedestals page) are turned solids in 3D and painted
+horizontal platforms on a flat panel; a theme package cannot yet provide its own pedestal mesh, and
+Auto keeps each renderer's own stand (a column in 3D, none in 2D). A free panel's folder opened Along the dock on a
 tilted 3D platform follows the projected ring, and the curve widens round the
 dock as far as the children need; a folder with more children than fit still
 scrolls.
@@ -138,6 +142,16 @@ layouts and each renderer tier they offer (21 panels). What follows from it:
   targets follow the exposed part of each icon; covered rear glyphs take no
   input. Physical desktop acceptance remains in the owner's checklist.
 - Edge panels have no wheel travel or rotation.
+- A collapsed edge panel keeps its full-size pill with the icons squeezed
+  into a sliver in the middle: a Plasma panel's geometry is unchanged by a
+  collapse, only the content clips.
+- Edge panels of one content type (Launcher, Hybrid, Tasks) show one shared
+  set of entries; only a free panel keeps its own.
+- A fan folder with names shows four children at once at the default 90°
+  opening (more as it opens wider); the rest arrive by scrolling.
+- Whether the pointer at the screen edge reveals an auto-hidden edge panel
+  could not be verified in private sessions: KWin's edge trigger ignores the
+  harness's virtual pointer. Always keeps a panel in view.
 - A free panel's folder Fan and Ring are drawn in the panel's flat look: its
   appearance's colour, line width and glow, or its custom colour. On a baked
   or 3D look they use that look's flat colours, not its artwork; a look whose

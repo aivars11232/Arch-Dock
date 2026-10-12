@@ -44,6 +44,7 @@ private slots:
     void sceneQualityIsBoundedAndReversible();
     void materialsAndFlatLookRoundTrip();
     void iconParametersRoundTripAndRespectBounds();
+    void pedestalParametersRoundTripAndRespectBounds();
     void tileParametersRoundTripAndRestoreWithTheFlatLook();
     void tiltScalarsPreserveParameterMaps();
     void sceneTransformFieldsAreBoundedAndReversible();
@@ -757,6 +758,67 @@ void PanelSettingsSchemaTest::iconParametersRoundTripAndRespectBounds()
     QCOMPARE(bounded->iconStyle.outlineWidth, 12);
     QCOMPARE(bounded->iconStyle.pedestalHeight, 5);
     QCOMPARE(bounded->iconStyle.bodyColor, QString{});
+}
+
+void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
+{
+    // Pedestals (2026-10-12): one page of their own, on every host and
+    // renderer, stored beside the 3D parameters and bounded like them.
+    const QVariantMap values{
+        {QStringLiteral("pedestalShape"), QStringLiteral("saucer")},
+        {QStringLiteral("pedestalSize"), 1.4},
+        {QStringLiteral("pedestalLift"), 0.55},
+        {QStringLiteral("pedestalMaterial"), QStringLiteral("organic")},
+        {QStringLiteral("pedestalColor"), QStringLiteral("#22aa66")},
+        {QStringLiteral("pedestalAnimation"), QStringLiteral("bob")},
+        {QStringLiteral("pedestalAnimationSpeed"), 1.75},
+    };
+    auto record = PanelDefinition::defaults(
+        QStringLiteral("pedestal-parameters"), QStringLiteral("Pedestal parameters"),
+        QStringLiteral("free"), false).toPersistedMap();
+    for (auto it = values.cbegin(); it != values.cend(); ++it)
+    {
+        const auto *descriptor = PanelSettingsSchema::panelDescriptor(it.key());
+        QVERIFY2(descriptor, qPrintable(it.key()));
+        QCOMPARE(descriptor->editor.section, QStringLiteral("pedestals"));
+        QCOMPARE(descriptor->editor.capability, QStringLiteral("pedestals"));
+        QVERIFY(PanelSettingsSchema::isEditorField(PanelSettingsFieldScope::Panel, it.key()));
+        QVERIFY(PanelSettingsSchema::isTransactionPanelField(it.key()));
+        record.insert(it.key(), it.value());
+    }
+    const auto restored = PanelDefinition::fromLegacyMap(record);
+    QVERIFY(restored.has_value());
+    for (auto it = values.cbegin(); it != values.cend(); ++it)
+        QCOMPARE(restored->surface.parameters3D.value(it.key()), it.value());
+    const QVariantMap saved = restored->toPersistedMap();
+    for (auto it = values.cbegin(); it != values.cend(); ++it)
+        QCOMPARE(saved.value(it.key()), it.value());
+    // Defaults: the renderers' own pedestals, no motion.
+    const auto defaults = PanelDefinition::defaults(
+        QStringLiteral("pedestal-defaults"), QStringLiteral("Pedestal defaults"),
+        QStringLiteral("free"), false);
+    QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("pedestalShape"))->defaultValue.toString(),
+             QStringLiteral("auto"));
+    QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("pedestalAnimation"))->defaultValue.toString(),
+             QStringLiteral("none"));
+    // A fresh panel persists no pedestal keys: the renderers apply the
+    // schema's defaults themselves, like the other 3D parameters.
+    QVERIFY(!defaults.toPersistedMap().contains(QStringLiteral("pedestalShape")));
+    // Bounds and choices.
+    record.insert(QStringLiteral("pedestalSize"), 9.0);
+    record.insert(QStringLiteral("pedestalLift"), -2.0);
+    record.insert(QStringLiteral("pedestalAnimationSpeed"), 0.0);
+    record.insert(QStringLiteral("pedestalShape"), QStringLiteral("Plate"));
+    record.insert(QStringLiteral("pedestalMaterial"), QStringLiteral("marble"));
+    record.insert(QStringLiteral("pedestalColor"), QStringLiteral("green"));
+    const auto bounded = PanelDefinition::fromLegacyMap(record);
+    QVERIFY(bounded.has_value());
+    QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("pedestalSize")).toDouble(), 2.0);
+    QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("pedestalLift")).toDouble(), 0.0);
+    QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("pedestalAnimationSpeed")).toDouble(), 0.25);
+    QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("pedestalShape")).toString(), QStringLiteral("plate"));
+    QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("pedestalMaterial")).toString(), QStringLiteral("panel"));
+    QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("pedestalColor")).toString(), QString{});
 }
 
 QTEST_MAIN(PanelSettingsSchemaTest)

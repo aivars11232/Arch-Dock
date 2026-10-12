@@ -1016,13 +1016,25 @@ PlasmoidItem {
             // edge-approach detector outside the widget is not something this
             // host can honestly provide, so the handle the user can actually
             // see is what opens the panel.
+            //
+            // The scene is thicker than a Plasma panel (room for magnification
+            // and motion) and centred in it, so the scene's own handle strip
+            // lies outside the panel window on every edge (audit E-01). The
+            // strip is laid along this item's own edge instead: the whole
+            // panel length, as thick as the Reveal zone setting.
             Item {
                 id: revealZone
 
-                x: Number(panelScene.revealHandle.x || 0)
-                y: Number(panelScene.revealHandle.y || 0)
-                width: Number(panelScene.revealHandle.width || 0)
-                height: Number(panelScene.revealHandle.height || 0)
+                readonly property string edge: root.freeSurface ? "bottom"
+                    : String(root.configuration.edge || "bottom")
+                readonly property bool alongWidth: edge === "top" || edge === "bottom"
+                readonly property real thickness: Math.max(1, Number(alongWidth
+                    ? panelScene.revealHandle.height : panelScene.revealHandle.width) || 8)
+
+                x: edge === "right" ? Math.max(0, parent.width - thickness) : 0
+                y: edge === "bottom" ? Math.max(0, parent.height - thickness) : 0
+                width: alongWidth ? parent.width : Math.min(thickness, parent.width)
+                height: alongWidth ? Math.min(thickness, parent.height) : parent.height
                 visible: root.presentationTrigger === "edge"
                     && presentationController.hostVisible
                     && panelScene.collapseProgress > 0
@@ -1134,7 +1146,7 @@ PlasmoidItem {
                                 ? qsTr("This widget has no panel. Create one in Panel Studio with \"+ Free panel\", or with Add Panel > Arch Dock Circular Free Dock; then remove this widget.")
                                 : root.panelType === "empty"
                                     ? qsTr("Choose Launcher or Hybrid in Panel Studio to show dropped items")
-                                    : qsTr("Drop applications or folders here")
+                                    : qsTr("Drop applications or folders here, or add them in Panel Studio: Panels > General > Add applications")
                 }
                 QQC2.Button {
                     anchors.horizontalCenter: parent.horizontalCenter

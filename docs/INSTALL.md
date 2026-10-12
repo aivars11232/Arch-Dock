@@ -33,6 +33,15 @@ run any code: it is treated as a crash, and the next activation request starts
 Arch Dock again. While it is stopped, on-demand activation is refused with
 `org.freedesktop.DBus.Error.Spawn.ChildExited` and exit status 75.
 
+## Pedestals
+
+The stands under the icons have their own page, **Pedestals**, in Panel
+Studio. Choose a **Shape** (Auto keeps each renderer's own stand; None
+removes it; Column, Plate, Disc, Ring or Saucer draws it on flat and 3D
+panels alike), its **Size** and **Lift** (how high it floats between the
+panel and the icon), a **Material** (the panel's own look or any other) and
+**Colour**, and an **Animation** (Bob, Spin or Pulse) with its speed.
+
 ## Panels on the desktop
 
 Arch Dock draws its panels inside Plasma widgets. Two kinds exist:
@@ -42,6 +51,15 @@ Arch Dock draws its panels inside Plasma widgets. Two kinds exist:
   whose **Visibility** is Auto-hide stays out of sight until the pointer
   touches its screen edge; Studio says so under its actions. Choose Always on
   **Panels > Behavior** to keep it in view.
+  A Launcher or Hybrid edge panel shows the applications dropped on it or
+  added with **Add applications…** on its General page, and (Hybrid, Tasks)
+  the running applications; until then it is an empty box inviting drops.
+  Edge panels of one content type share the same launchers. Plasma places
+  an edge panel on its edge: stacked above a panel that is Always visible,
+  but drawn over a panel that hides itself (Auto-hide or Dodge windows), so
+  give your own panel Always visible to stack them or use a free edge. An
+  edge panel draws the flat looks and the horizontal skins; 3D, baked
+  looks, ring and arc layouts and rotation belong to free panels.
 - **Free panels** are desktop widgets. Create one with **+ Free panel** in
   Panel Studio (it appears on the desktop and opens in Studio), or with the
   desktop's **Add Panel > Arch Dock Circular Free Dock**. The "Arch Dock" entry

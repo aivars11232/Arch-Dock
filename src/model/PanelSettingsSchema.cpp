@@ -796,6 +796,37 @@ const QVector<Descriptor> &schemaFields()
               {"theme", "none", "glass", "crystal", "neon", "minimal", "plasma", "lime",
                "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"},
               true, true, editor("panels-3d", "Texture", "combo", {"studio"}, "scene3d-quality")),
+        // Pedestals (owner's request, 2026-10-12): the stands under the icons,
+        // on flat and 3D panels alike. "auto" keeps each renderer's own
+        // pedestal (a column in the platform's material in 3D, none in 2D).
+        panel("pedestalShape", Access::Editor, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("auto"), "surface.parameters3D.pedestalShape", {}, {},
+              {"auto", "none", "column", "plate", "disc", "ring", "saucer"},
+              true, true, editor("pedestals", "Shape", "combo", {"studio"}, "pedestals")),
+        panel("pedestalSize", Access::Editor, Type::Real, Normalization::RealRange,
+              1.0, "surface.parameters3D.pedestalSize", 0.5, 2.0, {}, true, true,
+              editor("pedestals", "Size", "slider", {"studio"}, "pedestals",
+                     {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
+        panel("pedestalLift", Access::Editor, Type::Real, Normalization::RealRange,
+              0.3, "surface.parameters3D.pedestalLift", 0.0, 1.0, {}, true, true,
+              editor("pedestals", "Lift", "slider", {"studio"}, "pedestals",
+                     {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
+        panel("pedestalMaterial", Access::Editor, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("panel"), "surface.parameters3D.pedestalMaterial", {}, {},
+              {"panel", "glass", "crystal", "neon", "minimal", "plasma", "lime",
+               "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"},
+              true, true, editor("pedestals", "Material", "combo", {"studio"}, "pedestals")),
+        panel("pedestalColor", Access::Editor, Type::String, Normalization::HexColor,
+              QString{}, "surface.parameters3D.pedestalColor", {}, {}, {}, true, true,
+              editor("pedestals", "Colour", "color", {"studio"}, "pedestals")),
+        panel("pedestalAnimation", Access::Editor, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("none"), "surface.parameters3D.pedestalAnimation", {}, {},
+              {"none", "bob", "spin", "pulse"},
+              true, true, editor("pedestals", "Animation", "combo", {"studio"}, "pedestals")),
+        panel("pedestalAnimationSpeed", Access::Editor, Type::Real, Normalization::RealRange,
+              1.0, "surface.parameters3D.pedestalAnimationSpeed", 0.25, 3.0, {}, true, true,
+              editor("pedestals", "Animation speed", "slider", {"studio"}, "pedestals",
+                     {}, {{QStringLiteral("step"), 0.25}, {QStringLiteral("decimals"), 2}})),
         // PD-17: a platform remembers the flat surface and layout it replaced.
         // It is editor data so Preview/Cancel/Apply share the same transaction.
         panel("previousFlatLook", Access::Editor, Type::Map, Normalization::Map,
@@ -1204,6 +1235,7 @@ QString editorCapabilityName(EditorCapability capability)
     case EditorCapability::IconStateStyling: return QStringLiteral("icon-state-styling");
     case EditorCapability::TileShape: return QStringLiteral("tile-shape");
     case EditorCapability::GlobalRenderer: return QStringLiteral("global-renderer");
+    case EditorCapability::Pedestals: return QStringLiteral("pedestals");
     case EditorCapability::Count: break;
     }
     return QString{};

@@ -100,7 +100,12 @@ Item {
                 if (loadedSource.length && loadedSource !== source) unloadImage(loadedSource)
                 loadedSource = source
                 materialLoaded = !source.length || isImageLoaded(source)
-                if (source.length && !materialLoaded) loadImage(source)
+                if (source.length && !materialLoaded) {
+                    loadImage(source)
+                    // An image already in the engine's cache is ready at
+                    // once and sends no imageLoaded.
+                    materialLoaded = isImageLoaded(source)
+                }
                 requestPaint()
             }
             onAvailableChanged: if (available) loadMaterial()

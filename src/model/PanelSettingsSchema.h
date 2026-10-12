@@ -97,6 +97,7 @@ enum class EditorCapability
     IconStateStyling,
     TileShape,
     GlobalRenderer,
+    Pedestals,
     Count
 };
 

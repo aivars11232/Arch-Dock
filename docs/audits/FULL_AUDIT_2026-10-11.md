@@ -154,6 +154,43 @@ rest and for vanishing in motion. Both came from the audit's own tooling:
 - Tests: see the "Full audit corrections" section of
   [CURRENT_STATE.md](../CURRENT_STATE.md).
 
+
+## Edge panels, 2026-10-12 (the owner's "horizontal and vertical panels")
+
+Read-only investigation of why the owner's edge panels "don't work": the
+owner's three records (bottom auto-hide, top always, right side always,
+all three switched off and without a Plasma panel), the capability rules,
+a private session on the working tree that switched the panels on the way
+Studio does and drove the bottom record on all four edges, a control run,
+and a replica of the owner's own layout with the installed `0.1.1-13`.
+The full account is the "Edge panels, 2026-10-12" section of the report in
+the audit folder; evidence `32-edge3..5.log`, `33-control1.log`,
+`34-replica-edges.log`, `pictures-edge3..5/`, `replica/`.
+
+| ID | Finding | Severity |
+| --- | --- | --- |
+| E-01 | A collapsed edge panel's reveal handle lies outside the panel window on every edge (the scene is 154 px thick for a 76 px panel and centred in it; the handle strip is the scene's outer edge), so with the **Edge** trigger the panel can never be opened again; with **Hover** the panel itself opens it | High |
+| E-02 | Auto-hide reveal unverified: the virtual pointer never revealed a hidden panel, not even Plasma's own panel set to auto-hide by Plasma's script, so the harness cannot exercise KWin's edge trigger | Unverified |
+| E-03 | A fan folder with names shows four children at once at the default 90° opening; the fifth arrives only by scrolling and nothing says so | Low (design) |
+| E-04 | A collapsed edge panel keeps its full-size pill with the icons squeezed into a sliver in the middle (native geometry is unchanged by a collapse) | Medium |
+| E-05 | Every edge panel of one content type shows the same entries (content belongs to the type) | Design, undocumented |
+| E-06 | The backend accepts a rotation mode on an edge panel although nothing can turn and Studio hides the control | Low |
+| E-07 | The scene behind an edge panel is thicker than the panel and centred in it; anything beyond the panel's thickness is cut by the window | Low |
+| E-08 | On the owner's desktop a switched-on edge panel is an empty "Drop applications or folders here" box: no pinned launcher, no running application, and Studio has no place to add launchers to an edge panel | High |
+| E-09 | The Arch Dock edge panels are placed over the owner's own panels on the same edges (those are dodge-windows panels that reserve no space; Plasma stacks only above always-visible panels) | High (Plasma rule) |
+
+What works on the working tree, on all four edges: creation from Studio,
+the glass look with tiles, hover magnification, folder popups, the chassis
+and energy skins on horizontal panels (refused with a reason on the sides),
+pedestal stands, thickness and length changes, auto-hide hiding, collapse
+and reopen by hovering, and the refusals of 3D, baked and ring layouts.
+Fixed the same day on the owner's instruction: E-01 (the reveal strip
+lies on the panel's own edge inside its window), E-08 (**Add
+applications…** on Studio's General page; the empty panel says where to
+add them), E-09 (Studio notice and INSTALL.md). E-03, E-04 and E-05 are
+documented limits; E-02 stays unverified; E-06 and E-07 are left as they
+are.
+
 ## Left open
 
 - A-01: why the owner's widgets were lost. Backend restarts, Plasma restarts
@@ -166,5 +203,6 @@ rest and for vanishing in motion. Both came from the audit's own tooling:
   (plate, spaceship, …), a size, a texture and animations, floating between
   the panel and the icon in 2D and in 3D. Today the 3D pedestals are plain
   columns in the platform's material and only the Dark Orb icon style has a
-  2D pedestal. This is a new feature for the next task, not a repair.
+  2D pedestal. Built the same day as the "Pedestals" section of
+  CURRENT_STATE.md describes.
 - The package was not rebuilt; the owner installs packages.

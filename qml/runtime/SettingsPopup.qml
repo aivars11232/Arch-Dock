@@ -64,7 +64,7 @@ Window {
         const revision = profilesService ? profilesService.revision : 0;
         return profilesService ? profilesService.listProfiles() : [];
     }
-    readonly property bool currentProfilePage: mainTabIndex === 4 && subTabIndex < 3
+    readonly property bool currentProfilePage: mainTabIndex === 5 && subTabIndex < 3
 
     readonly property var auditionService: typeof presetAudition === "undefined" ? null : presetAudition
     readonly property var auditionStatus: {
@@ -716,6 +716,19 @@ Window {
                 }
             ]
         });
+        // A launcher or hybrid panel with nothing dropped on it is an empty
+        // box inviting drops; an edge panel had no other way to get its
+        // launchers (audit E-08). Applications are chosen from their desktop
+        // entries and pinned through the same call a drop uses.
+        const contentType = String(panelValue("type", "empty"));
+        if (contentType === "launcher" || contentType === "hybrid") {
+            rows[1].actions.push({
+                label: qsTr("Add applications…"),
+                icon: "list-add",
+                action: "pin-launchers",
+                available: !hasPendingChanges && !auditionActive
+            });
+        }
         // A free panel whose desktop widget is gone kept its settings but was
         // shown like a live panel. Say so, and offer to put it back.
         if (!isNativePanel() && !auditionActive) {
@@ -741,6 +754,11 @@ Window {
             // Auto-hide looked like a panel that does nothing when switched on.
             if (Boolean(panelValue("visible", true)) && String(panelValue("visibilityMode", "always")) === "auto-hide")
                 rows.push(notice(qsTr("Visibility is Auto-hide: the panel appears when the pointer touches its screen edge. Panels > Behavior > Visibility changes this."), false));
+            // Plasma stacks panels on one edge only above a panel that
+            // reserves space; over an Auto-hide or Dodge windows panel the
+            // new panel is drawn at the same edge, on top of it (audit E-09).
+            if (Boolean(panelValue("visible", true)))
+                rows.push(notice(qsTr("If another panel on this edge hides itself (Auto-hide or Dodge windows), Plasma draws this panel over it. Make that panel Always visible to stack them, or move this one to a free edge."), false));
             rows.push(section(qsTr("Native placement result"), PlacementStatus.statusLabel(selectedPlacementResult.status)), readOnlyRow(qsTr("Saved intent"), PlacementStatus.savedIntentText(selectedPlacementResult)), readOnlyRow(qsTr("Actual Plasma host"), PlacementStatus.hostStateText(selectedPlacementResult)));
             if (PlacementStatus.isProblem(selectedPlacementResult)) {
                 rows.push(notice(qsTr("Placement detail: %1").arg(PlacementStatus.problemText(selectedPlacementResult)), true));
@@ -1060,6 +1078,17 @@ Window {
         return rows;
     }
 
+    function pedestalRows() {
+        const rows = schemaSectionRows("pedestals", qsTr("Pedestals"),
+            qsTr("The stands under the icons, on flat and 3D panels: their shape, size, how high they float between the panel and the icon, their material and colour, and their motion."));
+        const shape = String(panelValue("pedestalShape", "auto"));
+        if (shape === "auto")
+            rows.push(notice(qsTr("Auto keeps each renderer's own pedestal: a column in the panel's material on a 3D panel, none on a flat panel. Choose a shape to draw pedestals everywhere; Panels > 3D > Pedestal height still applies to Auto."), false));
+        else if (shape === "none")
+            rows.push(notice(qsTr("No pedestals are drawn; the icons stand on the panel."), false));
+        return rows;
+    }
+
     function iconTileRows() {
         const rows = schemaSectionRows("icon-tiles", qsTr("Icon Tiles"),
             qsTr("Tile backgrounds for this panel. Preview changes here, then Apply to save."));
@@ -1202,6 +1231,8 @@ Window {
         }
         if (mainTabIndex === 3)
             return iconTileRows();
+        if (mainTabIndex === 4)
+            return pedestalRows();
         return unavailablePage(currentSubtabs.length > 0 ? currentSubtabs[subTabIndex] : qsTr("Profiles"), qsTr("Reusable profiles are outside the current settings contract."));
     }
 
@@ -1399,6 +1430,10 @@ Window {
             if (!(result && result.success === true))
                 studioError = qsTr("Could not put the free panel back on the desktop (%1).").arg(String(result && result.errorCode ? result.errorCode : "unknown-error"));
             loadEditor(selectedPanelId);
+        } else if (action === "pin-launchers") {
+            if (hasPendingChanges || auditionActive)
+                return;
+            launcherDialog.open();
         } else if (action === "remove-panel") {
             if (hasPendingChanges)
                 return;
@@ -2466,5 +2501,28 @@ Window {
             root.colorField = null;
         }
         onRejected: root.colorField = null
+    }
+
+    // Applications for a launcher or hybrid panel, chosen from their desktop
+    // entries and pinned the way a drop on the panel pins them. An edge
+    // panel shares these with every edge panel of its content type; a free
+    // panel keeps its own.
+    FileDialog {
+        id: launcherDialog
+
+        title: qsTr("Add applications to the panel")
+        fileMode: FileDialog.OpenFiles
+        currentFolder: "file:///usr/share/applications"
+        nameFilters: [qsTr("Applications (*.desktop)"), qsTr("All files (*)")]
+        onAccepted: {
+            const urls = [];
+            for (let index = 0; index < selectedFiles.length; ++index)
+                urls.push(String(selectedFiles[index]));
+            if (urls.length === 0)
+                return;
+            if (!panelController.pinPanelUrls(root.selectedPanelId, urls))
+                root.studioError = qsTr("Could not add the applications to the panel.");
+            root.loadEditor(root.selectedPanelId);
+        }
     }
 }

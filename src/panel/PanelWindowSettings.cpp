@@ -932,6 +932,25 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                         return layer.value(QStringLiteral("followsIconShape")).toBool();
                     }));
             break;
+        case ArchDock::EditorCapability::Pedestals:
+        {
+            // Pedestals stand under the icons on every host and renderer.
+            // With no pedestal, or with "auto" on a flat panel (which draws
+            // none), the other settings draw nothing and are kept unseen;
+            // the speed draws nothing without an animation.
+            available = true;
+            const QString shape = candidate.surface.parameters3D
+                .value(QStringLiteral("pedestalShape"), QStringLiteral("auto")).toString();
+            const QString motion = candidate.surface.parameters3D
+                .value(QStringLiteral("pedestalAnimation"), QStringLiteral("none")).toString();
+            const bool drawn = shape != QStringLiteral("none")
+                && (shape != QStringLiteral("auto") || tier == ArchDock::RendererTier::True3D);
+            if (key != QStringLiteral("pedestalShape"))
+                inactive = !drawn;
+            if (key == QStringLiteral("pedestalAnimationSpeed"))
+                inactive = inactive || motion == QStringLiteral("none");
+            break;
+        }
         case ArchDock::EditorCapability::GlobalRenderer:
             // Running-application indicators belong to edge panels whose
             // content shows running applications (OF-08, PD-06).
