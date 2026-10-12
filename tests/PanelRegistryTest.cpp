@@ -2511,6 +2511,38 @@ void PanelRegistryTest::recoversFreePanelHostLifecycle()
     }
 
     {
+        // A widget not found while the backend may not yet see Plasma's
+        // restored layout (2026-10-12): asked not to detach, the controller
+        // defers and leaves the record exactly as it was.
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-recovery-deferred");
+        const QString panelId = createOwnedFreePanelRecord(registry, token);
+        QVERIFY(!panelId.isEmpty());
+        const auto before = registry.freeHostAssociation(panelId);
+        QVERIFY(before.has_value());
+
+        FreePanelHostHarness harness;
+        harness.discoveryResult = {DiscoveryOutcome::Missing, {}, -1};
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelLifecycleResult deferred = controller.synchronize(panelId, false);
+        QVERIFY(deferred.success);
+        QCOMPARE(deferred.outcome, LifecycleOutcome::Deferred);
+        const auto after = registry.freeHostAssociation(panelId);
+        QVERIFY(after.has_value());
+        QCOMPARE(after->state, before->state);
+        QCOMPARE(after->desktopContainmentId, before->desktopContainmentId);
+        QCOMPARE(after->dockAppletId, before->dockAppletId);
+        QCOMPARE(after->ownershipToken, token);
+        QVERIFY(registry.panelValue(panelId, QStringLiteral("freeRecoveryError")).toString().isEmpty());
+
+        // Allowed to detach, the same miss detaches as before.
+        const ArchDock::FreePanelLifecycleResult decided = controller.synchronize(panelId);
+        QVERIFY(decided.success);
+        QCOMPARE(decided.outcome, LifecycleOutcome::Detached);
+    }
+
+    {
         clearPanelRegistrySettings();
         PanelRegistry registry;
         const QString token = QStringLiteral("archdock-free-recovery-conflict");

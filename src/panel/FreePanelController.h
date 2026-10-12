@@ -115,6 +115,9 @@ enum class FreePanelLifecycleOutcome
     Refused,
     QueryFailed,
     PersistenceFailed,
+    // The widget was not found but the caller asked for no detaching yet
+    // (the shell may still be restoring its layout); nothing changed.
+    Deferred,
 };
 
 struct FreePanelLifecycleResult
@@ -169,7 +172,8 @@ public:
     FreePanelController(PanelRegistry &registry, HostOperations operations);
 
     [[nodiscard]] FreePanelCreationResult create(const FreePanelCreationRequest &request);
-    [[nodiscard]] FreePanelLifecycleResult synchronize(const QString &panelId) const;
+    [[nodiscard]] FreePanelLifecycleResult synchronize(const QString &panelId,
+                                                       bool allowDetach = true) const;
     [[nodiscard]] FreePanelLifecycleResult remove(const QString &panelId) const;
     // Creates a new desktop widget for a detached record (its settings are
     // kept). A failure returns the record to its detached state.

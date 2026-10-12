@@ -926,7 +926,19 @@ var result = (function() {
 )JS").arg(host.freeDesktopContainmentId).arg(host.freeDockAppletId)
         .arg(plasmaScriptStringLiteral(definition.identity.id)).arg(plasmaScriptStringLiteral(host.freeOwnershipToken))
         .arg(plasmaScriptStringLiteral(payload)));
+    // Plasma's desktop keeps a widget out of a panel's own area and on the
+    // screen, so the position it settles at may differ from the one asked
+    // for (the owner's desktop, 2026-10-12: asked y 180, placed at 246 under
+    // a 66 px top panel); demanding the exact position rolled every profile
+    // apply, preset preview and re-host back. The size must match and the
+    // geometry must hold still; the position Plasma chose is accepted.
+    const auto number = [](const QVariantMap &map, const QString &key) { return map.value(key).toDouble(); };
+    const auto sameSize = [&](const QVariantMap &map) {
+        return std::abs(number(map, QStringLiteral("width")) - number(geometry, QStringLiteral("width"))) < 0.5 &&
+            std::abs(number(map, QStringLiteral("height")) - number(geometry, QStringLiteral("height"))) < 0.5;
+    };
     std::optional<QVariantMap> observed;
+    std::optional<QVariantMap> previous;
     int stableSamples = 0;
     for (int attempt = 0; applied == 1 && attempt < 80; ++attempt)
     {
@@ -934,9 +946,11 @@ var result = (function() {
         QTimer::singleShot(25, &wait, &QEventLoop::quit);
         wait.exec(QEventLoop::ExcludeUserInputEvents);
         observed = presetFreeHostGeometry(definition, errorCode);
-        stableSamples = observed && *observed == geometry ? stableSamples + 1 : 0;
-        // A single matching frame can precede Plasma's queued size-hint
-        // relayout. Require the exact owned geometry to remain stable.
+        // A single frame can precede Plasma's queued relayout: the right
+        // size must be seen unchanged three times in a row.
+        stableSamples = observed && sameSize(*observed)
+            ? (previous && *previous == *observed ? stableSamples + 1 : 1) : 0;
+        previous = observed;
         if (stableSamples >= 3) break;
     }
     // A command is not retained as active configuration. The recovery
@@ -954,13 +968,21 @@ var result = (function() {
 })(); print('ARCHDOCK_RESULT:' + String(result));
 )JS").arg(host.freeDesktopContainmentId).arg(host.freeDockAppletId)
         .arg(plasmaScriptStringLiteral(definition.identity.id)).arg(plasmaScriptStringLiteral(host.freeOwnershipToken)));
-    if (cleared != 1 || stableSamples < 3 || !observed || *observed != geometry)
+    if (cleared != 1 || stableSamples < 3 || !observed || !sameSize(*observed))
     {
         qWarning() << "Preset free geometry read-back failed:" << definition.identity.id
             << "script-result" << applied << "requested" << geometry
             << "observed" << observed.value_or(QVariantMap{});
         if (errorCode) *errorCode = QStringLiteral("preview-free-geometry-readback-failed");
         return false;
+    }
+    if (std::abs(number(*observed, QStringLiteral("x")) - number(geometry, QStringLiteral("x"))) >= 0.5 ||
+        std::abs(number(*observed, QStringLiteral("y")) - number(geometry, QStringLiteral("y"))) >= 0.5)
+    {
+        qInfo() << "Plasma placed free panel" << definition.identity.id << "at"
+            << number(*observed, QStringLiteral("x")) << number(*observed, QStringLiteral("y"))
+            << "instead of" << number(geometry, QStringLiteral("x")) << number(geometry, QStringLiteral("y"))
+            << "(a free panel keeps out of a panel's own area and on the screen)";
     }
     return true;
 }

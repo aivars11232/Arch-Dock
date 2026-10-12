@@ -1,5 +1,38 @@
 # Arch Dock current state
 
+<!-- EVENING_2026_10_12_BEGIN -->
+## Profiles on a desktop with panels — 2026-10-12 evening
+
+The owner applied a profile and the free panel appeared for a second and
+vanished. The backend's log showed the free host's geometry read-back
+failing: the saved position (240, 180) was placed by Plasma at (240, 246),
+under the owner's 66 px top panel, and the read-back demanded the exact
+position for three stable samples, so the transaction rolled back. The
+same check guards preset previews on a new panel and "Put back on the
+desktop". Corrected:
+
+- `PanelWindow::setPresetFreeHostGeometry` accepts the position Plasma
+  settles the widget at when the size matches and the geometry holds
+  still for three samples, and logs the difference at info level.
+- The log of the same evening showed Free panel 21 detached three seconds
+  after a shell restart, before plasmashell had restored its layout.
+  `FreePanelController::synchronize` takes `allowDetach`; for the
+  backend's first ninety seconds `PanelWindow::synchronizeFreePanels` asks
+  for no detaching, reports `Deferred` and checks again after 15 s
+  (`m_freeHostRetryTimer`).
+- INSTALL.md's upgrade steps: stop the backend with `pkill -x arch-dock`
+  and restart plasmashell; the panels' widgets start the backend again.
+  `arch-dock --quit` refuses that activation until a manual start.
+
+Verification: `PanelRegistryTest` covers the deferred synchronisation; on
+the final tree the registry, profile store, profile apply transaction,
+profile manager, free entry policy, session startup runtime, profile
+apply matrix and preset audition (temporary panel) tests pass
+(`evening-tests-1.log` in the audit folder); the complete suite ran the
+same day on the tree before these two backend changes (116 of 120 with
+all reruns green).
+<!-- EVENING_2026_10_12_END -->
+
 <!-- AFTERNOON_2026_10_12_BEGIN -->
 ## The owner's afternoon report — 2026-10-12
 

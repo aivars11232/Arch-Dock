@@ -276,6 +276,10 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     m_screenChangeTimer.setSingleShot(true);
     m_screenChangeTimer.setInterval(100);
     connect(&m_screenChangeTimer, &QTimer::timeout, this, &PanelWindow::handleScreensChanged);
+    m_freeHostGraceClock.start();
+    m_freeHostRetryTimer.setSingleShot(true);
+    m_freeHostRetryTimer.setInterval(15000);
+    connect(&m_freeHostRetryTimer, &QTimer::timeout, this, &PanelWindow::synchronizeFreePanels);
     if (auto *application = qobject_cast<QGuiApplication *>(QCoreApplication::instance()))
     {
         for (QScreen *screen : QGuiApplication::screens()) watchScreen(screen);

@@ -7,6 +7,17 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- Profiles, presets and re-hosting on a desktop with panels (2026-10-12,
+  owner's report "the panel shows up for a second and disappears"): Plasma
+  keeps a free panel's widget out of a panel's own area and on the screen,
+  so the widget settled lower than the saved position and the strict
+  geometry read-back rolled the whole profile apply back; the read-back
+  now accepts the position Plasma chose once the size is right and the
+  widget holds still, and logs the difference. The backend also no longer
+  detaches a free panel whose widget it cannot find during its first
+  ninety seconds; it checks again after 15 s, since plasmashell may still
+  be restoring its layout after a login or a restart (that is how a free
+  panel was lost on 2026-10-12).
 - The owner's afternoon report (2026-10-12, six screenshots): true 3D now
   defaults to **high** quality (full size, supersampled; medium is full size
   with multisampling, low three quarters without) and icon glyph textures

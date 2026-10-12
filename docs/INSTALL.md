@@ -400,11 +400,18 @@ the upgrade after candidate verification:
 sudo pacman -U arch-dock-0.1.1-11-x86_64.pkg.tar.zst
 ```
 
-Cancel an active audition and stop the backend before replacing its executable;
-installed applets must not reactivate it during offline configuration recovery.
-`arch-dock --quit` (or **Quit Arch Dock** in the application menu) stops it and
-keeps it stopped for the rest of the login session; starting Arch Dock again
-clears that.
+After the install, the backend that is already running and the panels in
+plasmashell keep the old code until they are restarted. Stop the backend and
+restart the shell; the panels' widgets start the new backend by themselves:
+
+```bash
+pkill -x arch-dock
+systemctl --user restart plasma-plasmashell.service
+```
+
+Do not use `arch-dock --quit` for this: it keeps the backend stopped for the
+rest of the login session and refuses the widgets' activation until Arch Dock
+is started by hand. Cancel an active audition first.
 Use the backup commands above before an owner-controlled upgrade. Start the
 installed service normally after upgrading. Destructive schema migration saves
 a validated configuration snapshot first; future schemas remain untouched.

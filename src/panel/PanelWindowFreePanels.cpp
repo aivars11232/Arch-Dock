@@ -49,6 +49,11 @@ void PanelWindow::synchronizeFreePanels()
 
     ArchDock::FreePanelController controller(
         m_panelRegistry, freePanelHostOperations());
+    // For the backend's first ninety seconds a widget that is not found is
+    // checked again later rather than detached: right after a login or a
+    // shell restart Plasma may not have restored its layout yet.
+    const bool grace = m_freeHostGraceClock.isValid() && m_freeHostGraceClock.elapsed() < 90000;
+    bool deferred = false;
     for (const QString &panelId : m_panelRegistry.panelIds())
     {
         if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() !=
@@ -58,7 +63,17 @@ void PanelWindow::synchronizeFreePanels()
         }
 
         const auto before = m_panelRegistry.freeHostAssociation(panelId);
-        const ArchDock::FreePanelLifecycleResult result = controller.synchronize(panelId);
+        const ArchDock::FreePanelLifecycleResult result = controller.synchronize(panelId, !grace);
+        if (result.success && result.outcome == ArchDock::FreePanelLifecycleOutcome::Deferred)
+        {
+            if (!deferred)
+            {
+                qInfo() << "The desktop widget of free panel" << panelId
+                        << "is not in Plasma's layout yet; checking again in 15 s before deciding.";
+            }
+            deferred = true;
+            continue;
+        }
         if (!result.success)
         {
             qWarning() << "Could not synchronize the free-panel Plasma host for"
@@ -74,6 +89,10 @@ void PanelWindow::synchronizeFreePanels()
                        << "was not found in Plasma; the panel is now detached. Panel Studio"
                        << "> Panels > General offers \"Put back on the desktop\".";
         }
+    }
+    if (deferred && !m_freeHostRetryTimer.isActive())
+    {
+        m_freeHostRetryTimer.start();
     }
 }
 

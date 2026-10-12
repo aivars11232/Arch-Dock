@@ -342,7 +342,8 @@ FreePanelCreationResult FreePanelController::rehost(const QString &panelId, int 
     return result;
 }
 
-FreePanelLifecycleResult FreePanelController::synchronize(const QString &panelId) const
+FreePanelLifecycleResult FreePanelController::synchronize(const QString &panelId,
+                                                          bool allowDetach) const
 {
     const auto association = m_registry.freeHostAssociation(panelId);
     if (!association.has_value())
@@ -394,6 +395,10 @@ FreePanelLifecycleResult FreePanelController::synchronize(const QString &panelId
     switch (discovery.outcome)
     {
     case FreePanelHostDiscoveryOutcome::Missing:
+        if (!allowDetach)
+        {
+            return {true, FreePanelLifecycleOutcome::Deferred, {}};
+        }
         if (!m_registry.detachFreeHostAssociation(
                 panelId, ownershipToken, QStringLiteral("owned-host-not-found")))
         {

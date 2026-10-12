@@ -1,11 +1,13 @@
 #pragma once
 
 #include <QDBusContext>
+#include <QElapsedTimer>
 #include <QDBusMessage>
 #include <QHash>
 #include <QObject>
 #include <QPointer>
 #include <QStringList>
+#include <QTimer>
 #include <QUrl>
 #include <QVariantList>
 #include <QVariantMap>
@@ -514,6 +516,11 @@ private:
     int m_screenRevision = 0;
     QTimer m_screenChangeTimer;
     bool m_screenChangePending = false;
+    // While the backend is young, a free panel whose widget is not found is
+    // checked again instead of detached: plasmashell may still be restoring
+    // its layout (the owner's Free panel 21 was lost that way, 2026-10-12).
+    QElapsedTimer m_freeHostGraceClock;
+    QTimer m_freeHostRetryTimer;
     int m_visibilityRevision = 0;
     QHash<QString, ArchDock::PanelVisibilityLocks> m_panelInteractionGuards;
     QHash<QString, QVariantMap> m_panelPresentationStates;
