@@ -934,17 +934,17 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             break;
         case ArchDock::EditorCapability::Pedestals:
         {
-            // Pedestals stand under the icons on every host and renderer.
-            // With no pedestal, or with "auto" on a flat panel (which draws
-            // none), the other settings draw nothing and are kept unseen;
+            // Pedestals stand under the icons on every host and renderer:
+            // Auto is a column on flat and 3D panels alike (the owner's
+            // 2026-10-12 report: a page whose settings did nothing). With no
+            // pedestal the other settings draw nothing and are kept unseen;
             // the speed draws nothing without an animation.
             available = true;
             const QString shape = candidate.surface.parameters3D
                 .value(QStringLiteral("pedestalShape"), QStringLiteral("auto")).toString();
             const QString motion = candidate.surface.parameters3D
                 .value(QStringLiteral("pedestalAnimation"), QStringLiteral("none")).toString();
-            const bool drawn = shape != QStringLiteral("none")
-                && (shape != QStringLiteral("auto") || tier == ArchDock::RendererTier::True3D);
+            const bool drawn = shape != QStringLiteral("none");
             if (key != QStringLiteral("pedestalShape"))
                 inactive = !drawn;
             if (key == QStringLiteral("pedestalAnimationSpeed"))

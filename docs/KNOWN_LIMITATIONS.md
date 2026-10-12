@@ -49,7 +49,7 @@ surfaces, since theme packages carry no raster files.
 
 Pedestals (the Pedestals page) are turned solids in 3D and painted
 horizontal platforms on a flat panel; a theme package cannot yet provide its own pedestal mesh, and
-Auto keeps each renderer's own stand (a column in 3D, none in 2D). A free panel's folder opened Along the dock on a
+Auto is a column stand on flat and 3D panels alike (an icon style with its own pedestal keeps it); None removes the stand. A free panel's folder opened Along the dock on a
 tilted 3D platform follows the projected ring, and the curve widens round the
 dock as far as the children need; a folder with more children than fit still
 scrolls.

@@ -63,6 +63,8 @@ Item {
     // colours: the palette sampled from its artwork when it is drawn from
     // artwork, or the colours its 2D surface is drawn with.
     property real layoutTrackRadius: 0
+    // The icon cell's size in the same pixels as the track radius.
+    property real iconCellSize: 52
     property string appearance: ""
     property string customColor: ""
     readonly property var materialNames: ["glass", "crystal", "neon", "minimal", "plasma", "lime",
@@ -71,15 +73,19 @@ Item {
         ? String(sceneDefinition.materialLook) : "theme"
     readonly property string materialColour: PlatformGeometry.parseColour(sceneDefinition.materialColor)
         ? String(sceneDefinition.materialColor) : ""
+    // Theme on a generated platform is the flat look's own surface: its
+    // translucency, metal, roughness, glow and texture, so that turning 3D on
+    // keeps the design made flat (the owner's 2026-10-12 report); a look's
+    // sampled palette only colours it.
     readonly property string effectiveMaterialLook: materialLook !== "theme" ? materialLook
-        : generatedSpec && !generatedSpec.palette && !textureRequired
+        : generatedSpec && !textureRequired
             ? LayoutEngine.themeStyle(appearance, "", 48).material : "theme"
     readonly property string textureChoice: ["theme", "none"].concat(materialNames)
         .includes(String(sceneDefinition.materialTexture)) ? String(sceneDefinition.materialTexture) : "theme"
     readonly property string textureMaterial: textureChoice === "none" ? ""
         : textureChoice !== "theme" ? textureChoice
         : materialLook !== "theme" ? materialLook
-        : generatedSpec && !generatedSpec.palette && !textureRequired
+        : generatedSpec && !textureRequired
             ? LayoutEngine.themeStyle(appearance, "", 48).material : ""
     readonly property url materialTextureSource: textureMaterial.length
         ? Qt.resolvedUrl("../materials/" + textureMaterial + ".png") : ""
@@ -125,9 +131,30 @@ Item {
     // The platform is rebuilt only when what it is built from changes: a
     // string compares by value, so an edit elsewhere in the scene's
     // definition leaves the mesh, and the GPU buffers made from it, alone.
+    // Platform width: 0 (Auto, the default) makes the band as wide as the
+    // flat look's line at the panel's own radius, and the platform as deep in
+    // proportion, so the ring turned 3D is the ring that was designed flat.
+    readonly property real bandSetting: bounded("band", 0, 0, PlatformGeometry.maximumBand)
+    readonly property bool bandAuto: bandSetting < PlatformGeometry.minimumBand
+    readonly property real flatLineBand: {
+        const style = LayoutEngine.themeStyle(appearance, customColor, 48)
+        const radius = layoutTrackRadius > 0 ? layoutTrackRadius : 120
+        // Never narrower than a column stand's footprint, mapped onto the
+        // platform the way the icons' stand points are (px -> track units).
+        const footprint = 0.18 * iconCellSize * pedestalSize / radius * PlatformGeometry.trackRadius * 1.1
+        // A polygon's mitred corners hold a stand only on a wider band: the
+        // old default for a triangle or a square, a little less for a
+        // pentagon; a ring or an ellipse is as thin as its line allows.
+        const sides = generatedShape && generatedShape.kind === "polygon" ? Number(generatedShape.sides || 6) : 0
+        const corners = sides > 0 && sides <= 4 ? 0.11 : sides === 5 ? 0.09 : 0
+        return Math.max(PlatformGeometry.minimumBand, footprint, corners, Math.min(PlatformGeometry.maximumBand,
+            (Number(style.lineWidth) || 12) / 2 / radius))
+    }
+    readonly property real resolvedBand: bandAuto ? flatLineBand : bandSetting
+    readonly property real platformThickness: bounded("thickness", 1, 0.1, 4)
+        * (bandAuto ? Math.max(0.4, Math.min(1, resolvedBand / 0.11)) : 1)
     readonly property string generatedKey: generatedShape ? JSON.stringify({
-        shape: generatedShape, band: bounded("band", 0.11, PlatformGeometry.minimumBand,
-                                             PlatformGeometry.maximumBand),
+        shape: generatedShape, band: resolvedBand,
         bend: bounded("bend", 0, -1, 1), palette: generatedPalette }) : ""
     readonly property var generatedPlatform: generatedKey.length > 0
         ? PlatformGeometry.platform(JSON.parse(generatedKey)) : null
@@ -391,10 +418,10 @@ Item {
     readonly property real platformReachX: generatedPlatform ? generatedPlatform.reachX : 1
     readonly property real platformReachY: generatedPlatform ? generatedPlatform.reachY : 1
     readonly property real platformScale: Math.min(width / platformReachX, height / platformReachY) * 0.40
-        / (1 + Math.abs(platformFold) * bounded("thickness", 1, 0.1, 4) * 0.4)
+        / (1 + Math.abs(platformFold) * platformThickness * 0.4)
     // Where the icons stand: a generated platform's flat top is level along
     // its centre line even when bent; a theme's top is its highest point.
-    readonly property real platformTop: baseTopHeight * platformScale * bounded("thickness", 1, 0.1, 4)
+    readonly property real platformTop: baseTopHeight * platformScale * platformThickness
     // The ring the icons stand on: the middle of the platform's flat top.
     readonly property real entryTrackRadius: platformScale * (generatedPlatform
         ? generatedPlatform.track : bounded("entryRadius", 0.84, 0.1, 1))
@@ -1245,7 +1272,7 @@ Item {
                 // motion moves the icon alone (below) and the pedestal's
                 // motion moves the pedestal alone, so neither drags the other.
                 position: Qt.vector3d(standPoint[0], standPoint[1],
-                    standPoint[2] * root.bounded("thickness", 1, 0.1, 4) + pedestalHeight + baseLift + tileLift)
+                    standPoint[2] * root.platformThickness + pedestalHeight + baseLift + tileLift)
                 opacity: root.number(iconMotion, "opacity", 1) * trackVisibility
 
                 // The pedestal: a column from the platform's top up to the
@@ -1428,7 +1455,7 @@ Item {
             objectName: "mesh-platform-motion"
             eulerRotation.z: -root.layoutAngle
             scale: Qt.vector3d(root.platformScale, root.platformScale,
-                               root.platformScale * root.bounded("thickness", 1, 0.1, 4))
+                               root.platformScale * root.platformThickness)
             IconStyle3D {
                 id: platform
                 objectName: "mesh-platform"

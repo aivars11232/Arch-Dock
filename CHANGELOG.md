@@ -7,6 +7,20 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- Flat design kept in 3D (2026-10-12, owner's report "turning 3D on changes
+  everything"): a look designed flat and switched to true 3D keeps its ring.
+  Platform width 0 (Auto, the new default) makes the generated platform's
+  band as wide as the flat look's line at the panel's radius, and as deep in
+  proportion; Material and Texture on Theme take the flat look's own surface
+  (translucency, metal, glow, texture) even for a look with a sampled
+  palette. Colour, layout, tiles and opacity were already kept. Panel Studio
+  says so on Panels > 3D; the Pedestals section gets its own icon in the
+  side list (Profiles had lost its own).
+- Pedestals, Auto on a flat panel (2026-10-12, owner's report "none of the
+  pedestal settings work"): Auto now draws a column stand on flat panels as
+  it does in 3D (an icon style with its own pedestal keeps it), so the
+  page's size, lift, material, colour and animation apply at once instead
+  of waiting for a shape to be chosen; None still removes the stand.
 - Edge panels (2026-10-12, owner's report "they don't work",
   [audit record](docs/audits/FULL_AUDIT_2026-10-11.md)): a collapsed edge
   panel's reveal strip now lies on the panel's own edge inside its window;

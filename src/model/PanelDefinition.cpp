@@ -641,7 +641,7 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
           std::tuple{"scene3DFillLight", "fillLightBrightness", QVariant(0.4)},
           std::tuple{"scene3DTransitions", "transitions", QVariant(true)},
           std::tuple{"scene3DFloat", "float", QVariant(false)},
-          std::tuple{"scene3DBand", "band", QVariant(0.11)},
+          std::tuple{"scene3DBand", "band", QVariant(0.0)},
           std::tuple{"scene3DBend", "bend", QVariant(0.0)},
           std::tuple{"scene3DFold", "fold", QVariant(0.0)},
           std::tuple{"scene3DColor", "color", QVariant(QString{})},

@@ -256,7 +256,7 @@ TestCase {
             const scene = createTemporaryObject(iconSceneComponent,
                 shapeCaptureWindow.contentItem, {
                     iconStyleDefinition: style,
-                    tileSettings: {iconShape: shape},
+                    tileSettings: {iconShape: shape, pedestalShape: "none"},
                     entry: {id: "firefox", iconName:
                         "file:///usr/share/icons/hicolor/scalable/apps/firefox.svg"}
                 })
@@ -347,7 +347,7 @@ TestCase {
                     const scene = createTemporaryObject(iconSceneComponent,
                         shapeCaptureWindow.contentItem, {
                             logicalSize: 52, showIndicator: false, showReflection: false,
-                            iconStyleDefinition: style, tileSettings: {iconShape: shape},
+                            iconStyleDefinition: style, tileSettings: {iconShape: shape, pedestalShape: "none"},
                             entry: {id: app, iconName:
                                 "file:///usr/share/icons/hicolor/scalable/apps/" + app + ".svg"}
                         })

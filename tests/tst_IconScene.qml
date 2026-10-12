@@ -57,18 +57,23 @@ TestCase {
     }
 
     function test_pedestalLayerFollowsThePedestalSettings() {
-        // The Pedestals page on a flat panel: Auto and None draw no stand
-        // and leave the icon where it was; a shape draws the stand under
+        // The Pedestals page on a flat panel: Auto is a column, as in 3D,
+        // unless the icon style draws its own pedestal; None draws no stand
+        // and leaves the icon where it was; a shape draws the stand under
         // the icon and raises the icon above it; the icon's input bounds
         // never move.
         const scene = createScene({ tileSettings: ({ pedestalShape: "auto" }) })
         const layer = findChild(scene, "icon-layer-pedestal")
         verify(layer !== null, "the stand has its own layer")
         const visual = findChild(scene, "icon-visual-layer")
-        verify(!layer.visible, "Auto draws no stand on a flat panel")
-        compare(visual.anchors.verticalCenterOffset, 0)
+        verify(layer.visible, "Auto draws a column on a flat panel")
+        compare(scene.pedestalKind, "column")
+        verify(visual.anchors.verticalCenterOffset < 0, "Auto raises the icon above its column")
+        scene.tileSettings = ({ pedestalShape: "auto", iconPedestalEnabled: true })
+        verify(!layer.visible, "an icon style with its own pedestal keeps it under Auto")
         scene.tileSettings = ({ pedestalShape: "none" })
         verify(!layer.visible)
+        compare(visual.anchors.verticalCenterOffset, 0)
         for (const shape of ["column", "plate", "disc", "ring", "saucer"]) {
             scene.tileSettings = ({ pedestalShape: shape, pedestalLift: 0.5, pedestalSize: 1.2,
                                     pedestalMaterial: "organic", pedestalColor: "#44aa66" })

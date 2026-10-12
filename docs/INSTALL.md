@@ -33,12 +33,20 @@ run any code: it is treated as a crash, and the next activation request starts
 Arch Dock again. While it is stopped, on-demand activation is refused with
 `org.freedesktop.DBus.Error.Spawn.ChildExited` and exit status 75.
 
+## Flat looks in 3D
+
+Turning **Platform presentation** on (Panels > 3D) keeps the design made
+flat: the generated platform follows the Dock layout, with the look's
+colours, opacity and tiles, and with **Platform width** at 0 (Auto) its
+band is as wide as the flat look's line and as deep in proportion. Set a
+width to make the band wider; choose a Material or Texture to replace the
+look's own surface.
+
 ## Pedestals
 
 The stands under the icons have their own page, **Pedestals**, in Panel
-Studio. Choose a **Shape** (Auto keeps each renderer's own stand; None
-removes it; Column, Plate, Disc, Ring or Saucer draws it on flat and 3D
-panels alike), its **Size** and **Lift** (how high it floats between the
+Studio. Choose a **Shape** (Auto is a column on flat and 3D panels alike;
+None removes it; Column, Plate, Disc, Ring or Saucer draws that shape), its **Size** and **Lift** (how high it floats between the
 panel and the icon), a **Material** (the panel's own look or any other) and
 **Colour**, and an **Animation** (Bob, Spin or Pulse) with its speed.
 

@@ -23,7 +23,9 @@ var reach = 1.05
 // How far the band's edges reach past its flat top.
 var innerBevel = 0.03
 var outerBevel = 0.05
-// Half the flat top's width: never narrower than a pedestal is wide.
+// Half the flat top's width, of the outer radius: never narrower than a
+// pedestal's footprint, so every icon stands on the top. The scene's Auto
+// width (0) follows the flat look's line down to this floor.
 var minimumBand = 0.06
 var maximumBand = 0.16
 // The top face's height and the underside's, as in the shipped theme meshes.

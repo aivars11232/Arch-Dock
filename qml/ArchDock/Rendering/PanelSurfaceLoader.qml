@@ -232,6 +232,7 @@ Item {
             }),
             entryGeometry: Qt.binding(function() { return root.entryGeometry }),
             layoutTrackRadius: Qt.binding(function() { return Number(root.geometry.radius || 0) }),
+            iconCellSize: Qt.binding(function() { return Number(root.geometry.iconSize || 52) }),
             appearance: Qt.binding(function() { return root.appearance }),
             customColor: Qt.binding(function() { return root.customColor }),
             entryVisuals: Qt.binding(function() { return root.entryVisuals }),

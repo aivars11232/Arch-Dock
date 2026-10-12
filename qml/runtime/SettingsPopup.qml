@@ -183,7 +183,8 @@ Window {
     }
     readonly property var currentSubtabs: StudioNavigation.subtabsFor(mainTabIndex)
     readonly property var mainTabLabels: StudioNavigation.mainLabels()
-    readonly property var mainTabIcons: ["view-dashboard", "preferences-desktop-display", "preferences-desktop-icons", "draw-rectangle", "document-save"]
+    // One icon per section of StudioNavigation.sections, in order.
+    readonly property var mainTabIcons: ["view-dashboard", "preferences-desktop-display", "preferences-desktop-icons", "draw-rectangle", "draw-ellipse", "document-save"]
 
     function titleCase(value) {
         const text = String(value || "").replace(/-/g, " ");
@@ -883,8 +884,10 @@ Window {
         rows.push(section(qsTr("Shape"), generatedScene
             ? qsTr("The platform follows the Dock layout on the Layout page, so every icon stands on it. Arcs, semicircles and fans stay flat.")
             : qsTr("This theme keeps its own outline. Bend folds its rear half.")));
-        if (generatedScene)
+        if (generatedScene) {
             rows.push.apply(rows, pick(["scene3DBand", "scene3DBend"]));
+            rows.push(notice(qsTr("Platform width 0 is Auto: the band is as wide as the flat look's line and as deep in proportion, so the design made flat is kept when 3D is on. Material and Texture on Theme take the flat look's own surface.")));
+        }
         rows.push.apply(rows, pick(["scene3DFold"]));
         rows.push(notice(qsTr("Bend folds the rear half up or down by up to 90 degrees. Its icons stay anchored on the folded surface.")));
         rows.push(section(qsTr("View and surface"), qsTr("Icon spacing is set on Icons > Appearance.")));

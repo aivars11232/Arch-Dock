@@ -757,7 +757,7 @@ const QVector<Descriptor> &schemaFields()
         // top is, as half its width in the platform's radius, and how far its
         // top tilts up or down outward of the icons' line.
         panel("scene3DBand", Access::Editor, Type::Real, Normalization::RealRange,
-              0.11, "surface.parameters3D.band", 0.06, 0.16, {}, true, true,
+              0.0, "surface.parameters3D.band", 0.0, 0.16, {}, true, true,
               editor("panels-3d", "Platform width", "slider", {"studio"}, "scene3d-shape",
                      {}, {{QStringLiteral("step"), 0.01}, {QStringLiteral("decimals"), 2}})),
         panel("scene3DBend", Access::Editor, Type::Real, Normalization::RealRange,

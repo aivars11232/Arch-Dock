@@ -1,5 +1,37 @@
 # Arch Dock current state
 
+<!-- FLAT_TO_3D_2026_10_12_BEGIN -->
+## Flat design kept in 3D — 2026-10-12
+
+The owner designed a panel flat, switched 3D on, and saw "everything"
+change. Pictures of three designs flat and then in true 3D
+(`sheet-tier-switch.png` in the audit folder) showed what changed: the
+colours, layout, tiles and opacity were kept, but the thin flat ring became
+a wide, deep band with its texture dominating, under the default camera.
+Corrected:
+
+- Platform width (`scene3DBand`) defaults to 0, Auto: the generated
+  platform's band is as wide as the flat look's line at the panel's own
+  radius (`PanelScene3D.flatLineBand`), never narrower than a column
+  stand's footprint or than `PlatformGeometry.minimumBand` (0.06, half the
+  old default), and wider at a triangle's, square's or pentagon's mitred
+  corners so every stand still lands on the top; the platform is as deep in
+  proportion (`platformThickness`). A set width behaves as before.
+- Theme material and texture on a generated platform are the flat look's
+  own surface even when the look has a sampled palette (the palette only
+  colours it).
+- Studio's Panels > 3D page says what Auto means; the Pedestals section
+  has its own icon in the side list.
+
+Verification: private-session pictures of three designs flat and then in
+true 3D before and after (`sheet-tier-switch.png`, `sheet-tier-switch-2.png`
+in the audit folder); complete suite 120 of 120 in one serial run on the
+final tree (2349 s, `flat3d-suite-2.log`), after a first run had found
+three tests that assumed a centred glyph or the old band (the tile
+offset and logo contrast tests now measure without a stand; the renderer
+test's pedestal footprint and polygon corners set the Auto band's floors).
+<!-- FLAT_TO_3D_2026_10_12_END -->
+
 <!-- EDGE_2026_10_12_BEGIN -->
 ## Edge panels — 2026-10-12
 
@@ -58,9 +90,11 @@ size, floating between panel and icon, with their own animations, in 2D and
   `pedestals`): `pedestalShape` (auto, none, column, plate, disc, ring,
   saucer), `pedestalSize` 0.5–2, `pedestalLift` 0–1, `pedestalMaterial`
   (panel or one of the thirteen looks), `pedestalColor`, `pedestalAnimation`
-  (none, bob, spin, pulse), `pedestalAnimationSpeed` 0.25–3. With no stand,
-  or with Auto on a flat panel, the other settings are kept but not shown;
-  the speed is shown only with an animation.
+  (none, bob, spin, pulse), `pedestalAnimationSpeed` 0.25–3. Auto is a
+  column on flat and 3D panels alike (an icon style with its own pedestal
+  keeps it), so every setting on the page draws something; with None the
+  other settings are kept but not shown; the speed is shown only with an
+  animation.
 - Panel Studio: a **Pedestals** section after Icon Tiles (Profiles moves to
   the sixth section).
 - 3D (`PlatformGeometry.lathe`/`pedestalShape`, `PanelScene3D`): the shapes

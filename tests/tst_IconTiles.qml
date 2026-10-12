@@ -89,13 +89,15 @@ TestCase {
     function test_iconPlacementPreservesTheInputRectangle() {
         const icon = createTemporaryObject(iconComponent, captureWindow.contentItem,
             {iconSource: "file:///usr/share/icons/hicolor/scalable/apps/firefox.svg",
-             tileSettings: {iconTileMode: "custom", iconTilesEnabled: true}})
+             tileSettings: {iconTileMode: "custom", iconTilesEnabled: true, pedestalShape: "none"}})
         verify(waitForRendering(icon))
         tryVerify(function() { return icon.glyphItem.paintedWidth > 0 })
         const input = JSON.stringify(icon.logicalInputRegion)
         const before = icon.glyphItem.mapToItem(icon, 0, 0)
         const scale = icon.glyphItem.scale
-        icon.tileSettings = {iconTileMode: "custom", iconTilesEnabled: true,
+        // No stand here: Auto draws a column under the icon and raises it,
+        // which is the Pedestals page's business, not the tile offset's.
+        icon.tileSettings = {iconTileMode: "custom", iconTilesEnabled: true, pedestalShape: "none",
             iconTileIconOffsetX: 9, iconTileIconOffsetY: -6, iconTileIconScale: 75}
         const after = icon.glyphItem.mapToItem(icon, 0, 0)
         fuzzyCompare(icon.glyphItem.scale, scale * 0.75, 0.001)
