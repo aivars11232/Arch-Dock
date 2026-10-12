@@ -29,9 +29,10 @@ through a see-through hover tile in a folder opening.
 - `PanelScene3D.qml`: the stand's foot's middle sits on the band at the
   icon's place; it is turned in the viewer's frame by `pedestalAxis`: the
   platform's normal as seen (lying on the panel, in step with its tilt and
-  turn) or level at the View angle, by Stand facing (Auto: lying where the
-  viewer is 40° or less above the panel's plane, level from 60°, blended
-  between). `PlatformGeometry.pedestalExtents` gives the turned stand's
+  turn) or level at the View angle, by Stand facing: Panel, the default
+  after the owner marked the stands lying on a ring tilted to 60° as the
+  only right ones; Auto (lying where the viewer is 40° or less above the
+  panel's plane, level from 60°, blended between); Viewer (level). `PlatformGeometry.pedestalExtents` gives the turned stand's
   reach up the screen, its top's middle and how far it would reach below
   the plane; the icon's body and input anchor float its Float height above
   the stand's top, centred over it; stand and icon move straight toward

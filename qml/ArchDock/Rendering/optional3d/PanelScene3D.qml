@@ -298,11 +298,12 @@ Item {
     readonly property vector3d iconUp: iconFacing.times(Qt.vector3d(0, 1, 0))
     readonly property vector3d iconForward: iconFacing.times(Qt.vector3d(0, 0, 1))
     // How a stand turns (Stand facing): lying on the panel, in step with
-    // its tilt and turn, or level and facing the viewer, seen View angle
-    // degrees from above. Auto lies on a panel seen from 40 degrees or less
-    // above its plane (tilted back, the owner's own pitch of 60) and stays
-    // level on one seen from 60 degrees up (face-on), blending between.
-    readonly property string pedestalFacing: String((sceneDefinition || ({})).pedestalFacing || "auto").toLowerCase()
+    // its tilt and turn, in the panel's own proportion (Panel, the default:
+    // the owner, 2026-10-13), or level and facing the viewer, seen View
+    // angle degrees from above (Viewer). Auto lies on a panel seen from 40
+    // degrees or less above its plane and stays level on one seen from 60
+    // degrees up, blending between.
+    readonly property string pedestalFacing: String((sceneDefinition || ({})).pedestalFacing || "panel").toLowerCase()
     readonly property real pedestalViewAngle: bounded("pedestalViewAngle", 20, 0, 60)
     readonly property real panelElevation: Math.asin(Math.max(0, Math.min(1, Math.abs(iconForward.z)))) * 180 / Math.PI
     readonly property real pedestalPanelShare: pedestalFacing === "panel" ? 1

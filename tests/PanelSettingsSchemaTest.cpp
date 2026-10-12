@@ -771,7 +771,7 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
         {QStringLiteral("pedestalSize"), 2.6},
         {QStringLiteral("pedestalThickness"), 1.8},
         {QStringLiteral("pedestalLift"), 1.4},
-        {QStringLiteral("pedestalFacing"), QStringLiteral("panel")},
+        {QStringLiteral("pedestalFacing"), QStringLiteral("viewer")},
         {QStringLiteral("pedestalViewAngle"), 35.0},
         {QStringLiteral("pedestalMaterial"), QStringLiteral("organic")},
         {QStringLiteral("pedestalTexture"), QStringLiteral("neon")},
@@ -830,7 +830,7 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
     QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("folderPedestalOwnStyle"))->defaultValue.toBool(),
              false);
     QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("pedestalFacing"))->defaultValue.toString(),
-             QStringLiteral("auto"));
+             QStringLiteral("panel"));
     QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("pedestalViewAngle"))->defaultValue.toDouble(), 20.0);
     // A fresh panel persists no pedestal keys: the renderers apply the
     // schema's defaults themselves, like the other 3D parameters.
@@ -882,7 +882,7 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
     QCOMPARE(result.value(QStringLiteral("pedestalTexture")).toString(), QStringLiteral("material"));
     QCOMPARE(result.value(QStringLiteral("pedestalColor")).toString(), QString{});
     QCOMPARE(result.value(QStringLiteral("pedestalAnimation")).toString(), QStringLiteral("none"));
-    QCOMPARE(result.value(QStringLiteral("pedestalFacing")).toString(), QStringLiteral("auto"));
+    QCOMPARE(result.value(QStringLiteral("pedestalFacing")).toString(), QStringLiteral("panel"));
     QCOMPARE(result.value(QStringLiteral("pedestalViewAngle")).toDouble(), 60.0);
 }
 

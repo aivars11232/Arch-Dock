@@ -651,7 +651,7 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
           std::tuple{"pedestalSize", "pedestalSize", QVariant(1.0)},
           std::tuple{"pedestalThickness", "pedestalThickness", QVariant(1.0)},
           std::tuple{"pedestalLift", "pedestalLift", QVariant(0.3)},
-          std::tuple{"pedestalFacing", "pedestalFacing", QVariant(QStringLiteral("auto"))},
+          std::tuple{"pedestalFacing", "pedestalFacing", QVariant(QStringLiteral("panel"))},
           std::tuple{"pedestalViewAngle", "pedestalViewAngle", QVariant(20.0)},
           std::tuple{"pedestalMaterial", "pedestalMaterial", QVariant(QStringLiteral("panel"))},
           std::tuple{"pedestalTexture", "pedestalTexture", QVariant(QStringLiteral("material"))},

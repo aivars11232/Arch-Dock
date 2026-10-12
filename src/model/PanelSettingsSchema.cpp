@@ -817,13 +817,15 @@ const QVector<Descriptor> &schemaFields()
               0.3, "surface.parameters3D.pedestalLift", 0.0, 2.0, {}, true, true,
               editor("pedestals", "Float height", "slider", {"studio"}, "pedestals",
                      {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
-        // How a stand turns (owner, 2026-10-12): Auto lies on a 3D panel
+        // How a stand turns (owner, 2026-10-13: the plates must lie in the
+        // panel's own proportion, as on a panel tilted back): Panel, the
+        // default, lies on the panel at every tilt; Auto lies on a panel
         // tilted back and stays level, facing the viewer, on one seen
-        // face-on; Viewer always level; Panel always on the panel. View
-        // angle is how far from above a level stand is seen (0 side on).
+        // face-on; Viewer always level. View angle is how far from above a
+        // level stand is seen (0 side on).
         panel("pedestalFacing", Access::Editor, Type::String, Normalization::ChoiceLower,
-              QStringLiteral("auto"), "surface.parameters3D.pedestalFacing", {}, {},
-              {"auto", "viewer", "panel"},
+              QStringLiteral("panel"), "surface.parameters3D.pedestalFacing", {}, {},
+              {"panel", "auto", "viewer"},
               true, true, editor("pedestals", "Stand facing", "combo", {"studio"}, "pedestals")),
         panel("pedestalViewAngle", Access::Editor, Type::Real, Normalization::RealRange,
               20.0, "surface.parameters3D.pedestalViewAngle", 0.0, 60.0, {}, true, true,
