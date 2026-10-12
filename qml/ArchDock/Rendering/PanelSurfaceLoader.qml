@@ -207,7 +207,8 @@ Item {
                 for (const key of ["cameraYaw", "thickness", "iconElevation", "roll", "positionX",
                         "positionY", "positionZ", "scale", "fieldOfView", "keyLightBrightness",
                         "fillLightBrightness", "band", "bend", "fold",
-                        "pedestalSize", "pedestalLift", "pedestalAnimationSpeed"])
+                        "pedestalSize", "pedestalLift", "pedestalAnimationSpeed", "pedestalThickness",
+                        "pedestalOpacity", "pedestalGlow", "pedestalViewAngle"])
                     if (parameters[key] !== undefined && parameters[key] !== null
                             && Number.isFinite(Number(parameters[key])))
                         merged[key] = Number(parameters[key])
@@ -218,6 +219,8 @@ Item {
                                             ["pedestalShape", "pedestalShape"],
                                             ["pedestalMaterial", "pedestalMaterial"],
                                             ["pedestalColor", "pedestalColor"],
+                                            ["pedestalTexture", "pedestalTexture"],
+                                            ["pedestalFacing", "pedestalFacing"],
                                             ["pedestalAnimation", "pedestalAnimation"]])
                     if (typeof parameters[key] === "string") merged[target] = parameters[key]
                 if (isFinite(root.cameraPitch)) merged.cameraPitch = Math.max(-60, Math.min(60, root.cameraPitch))

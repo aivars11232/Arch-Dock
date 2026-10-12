@@ -7,6 +7,30 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- Stands face the viewer, new panels have none, and the Pedestals page
+  has far more to choose (2026-10-12 night, the owner's report with five
+  screenshots and "the pedestals, plates and other stuff should be
+  orientated properly, horizontal not flat from my perspective, and items
+  on them centered while floating on top of them", "positioned right
+  accordingly to the panel's position in 3D and 2D space", "why are they
+  outside the dock"): a stand stands on the panel at its icon's place, on a
+  free panel's path and on a 3D platform's band, the icon centred over it
+  and floating its Float height above the stand's top. On a 3D panel, Stand
+  facing turns the stands: Auto lies them on a panel tilted back, in step
+  with its tilt and turn, and keeps them level and facing the viewer on a
+  panel seen face-on; Viewer and Panel fix one or the other; View angle is
+  how far from above a level stand is seen. Stand and icon move toward the
+  viewer just enough never to sink into the platform at any camera angle,
+  and a flat free panel grows to hold an icon raised over its stand. Flat
+  panels and opened folders paint the same shapes, shaded and textured, an
+  item's name below its stand. A new panel has no stands (Auto stays a
+  column). Twenty shapes; Size and Float height reach further;
+  Thickness, Texture, Opacity and Glow are new; Sway, Wobble, Glow and
+  Float motions; Folder item stands gain Own settings with their own size,
+  thickness, float height, material, texture, colour, opacity, glow and
+  motion. The 3D page's Pedestal height shows only where it draws
+  something. The Profiles page counts the panels a profile shows, not the
+  hidden built-in edge panels every arrangement keeps.
 - Profiles hold only the panels on the desktop (2026-10-12, owner's report
   "with just one apply it kept on opening multiple docks and nearly crashed
   my PC"): a profile had captured every free panel record in the registry,

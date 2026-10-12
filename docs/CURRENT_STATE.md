@@ -1,5 +1,76 @@
 # Arch Dock current state
 
+<!-- NIGHT_2026_10_12_BEGIN -->
+## Stands that face the viewer — 2026-10-12 night
+
+The owner's report with five screenshots of Free panel 22 (six folders on a
+circular true-3D platform, plate stands, saucer folder stands): folders half
+hidden "as if in another dimension", folder openings the same, a profile
+showing "4 panels" for one, stands on every new panel, and too few stand
+settings. Then, on the replica's pictures: "the pedestals, plates and other
+stuff should be orientated properly, horizontal not flat from my
+perspective, and items on them centered while floating on top of them",
+"pedestals should be positioned right accordingly to panels position in 3D
+and 2D space", and "the size is disproportionate to the panel size, that's
+why I need those kind of settings".
+
+Found with an owner-panel replica in the audit harness
+(`ARCHDOCK_AUDIT_OWNER22`, pictures `pictures-owner22a`…): a 3D stand lay
+flat on the platform, so seen face-on it was a full disc behind the icon's
+lower half; the upright icon could lean into the platform where the camera
+looked across it; a flat stand sat behind the icon's lower part and showed
+through a see-through hover tile in a folder opening.
+
+- `PlatformGeometry.js`: twenty stand shapes from one table
+  (`pedestalSpecs`: turned, faceted (`facetedLathe`) and a star plate
+  (`starPrism`)), each closed and wound outward; `pedestalOutline` (a
+  stand's reach above and below its foot seen from a tilt) and
+  `pedestalLayout` (a flat stand's measures).
+- `PanelScene3D.qml`: the stand's foot's middle sits on the band at the
+  icon's place; it is turned in the viewer's frame by `pedestalAxis`: the
+  platform's normal as seen (lying on the panel, in step with its tilt and
+  turn) or level at the View angle, by Stand facing (Auto: lying where the
+  viewer is 40° or less above the panel's plane, level from 60°, blended
+  between). `PlatformGeometry.pedestalExtents` gives the turned stand's
+  reach up the screen, its top's middle and how far it would reach below
+  the plane; the icon's body and input anchor float its Float height above
+  the stand's top, centred over it; stand and icon move straight toward
+  the viewer (`clearanceTravel`, which keeps them in place on the screen)
+  until nothing of them, the magnified icon included, is below the
+  platform's top. `standRise` takes off the platform only what a tall stand
+  would push out of the panel. Thickness, texture, opacity, glow and the
+  Sway, Wobble, Glow and Float motions. `entryPointBehindPlatform` lets the
+  renderer test prove no glyph is ever hidden in the platform.
+- Flat free panels: `PanelScene.pedestalOnPath` stands the stand on the
+  path, the icon above it, and `pedestalHeadroom` grows the scene's effect
+  margins so the free panel's widget holds the raised icons; edge rows keep
+  the pair centred in the row.
+- `IconScene.qml`: the same shapes painted by projecting their faces, far
+  ones first, shaded, then multiplied by the texture and colour inside the
+  silhouette; an optional glow; the icon floats over the stand and grows
+  about its foot. `FolderTrack.qml`: a folder item's cell makes room above
+  and below for its stand, its name under the stand.
+- Schema: `pedestalShape` defaults to `none` (Auto stays a column); wider
+  `pedestalSize`/`pedestalLift`/`pedestalAnimationSpeed` ranges; new
+  `pedestalThickness`, `pedestalTexture`, `pedestalOpacity`, `pedestalGlow`;
+  folder item stands in their own section (`pedestals-folder`) with
+  `folderPedestalOwnStyle` and their own size, thickness, float height,
+  material, texture, colour, opacity, glow and motion.
+- The 3D page's Pedestal height is unseen unless the shape is Auto. The
+  Profiles page counts `shownPanelCount`, not the hidden built-in edge
+  panels.
+
+Verification (audit folder): `night-tests-7.log` 35 of 35 (schema,
+geometry, icon scene, tiles, styles, folders, profiles, Studio, renderer
+capability with the GPU path, panel window capability, rendering import,
+folder interaction and anchor, runtime UI, profile apply matrix),
+`night-tests-6.log` Studio truth matrix; replica pictures
+`pictures-owner22e`…`pictures-owner22g` (final: stands on the band at
+pitches 0 to 60, lying on the ring at 60, on the flat ring's line, folder
+openings with saucer stands). The complete suite was not rerun.
+
+<!-- NIGHT_2026_10_12_END -->
+
 <!-- EVENING_2026_10_12_BEGIN -->
 ## Profiles on a desktop with panels — 2026-10-12 evening
 

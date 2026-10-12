@@ -248,6 +248,7 @@ Item {
             iconStyleDefinition: root.iconStyleDefinition
             logicalSize: Number(parent.sceneGeometry.iconSize || width)
             tileSettings: root.resolvedPanelDefinition
+            pedestalOnPath: panelScene.pedestalOnPath
             tileShape: String(root.iconValue(
                 "shape", "iconShape", "rounded"))
             appearance: String(root.iconValue(

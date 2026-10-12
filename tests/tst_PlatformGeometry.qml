@@ -106,17 +106,71 @@ TestCase {
         const mesh = PlatformGeometry.pedestalShape(data.kind, 24)
         compare(mesh.format, "org.archdock.mesh")
         compare(misWound(mesh), 0, data.kind + " winds outward")
-        if (data.kind !== "column")
-            compare(boundaryEdges(mesh).length, 0, data.kind + " is a closed surface")
+        // Every stand is seen from a little above now, its foot included.
+        compare(boundaryEdges(mesh).length, 0, data.kind + " is a closed surface")
         const top = PlatformGeometry.pedestalShapeHeight(data.kind)
+        const reach = PlatformGeometry.pedestalShapeReach(data.kind)
+        verify(reach > 0 && reach <= 1.4 + 1e-9, data.kind + " reaches no further than the widest stand")
+        verify(PlatformGeometry.pedestalShapeScale(data.kind) > 0, data.kind + " has a width per unit")
         for (const point of mesh.positions) {
             verify(point[2] >= -1e-9 && point[2] <= top + 1e-9, data.kind + " between its foot and its top")
-            verify(Math.hypot(point[0], point[1]) <= 1.4 + 1e-9, data.kind + " within its reach")
+            verify(Math.hypot(point[0], point[1]) <= reach + 1e-9, data.kind + " within its reach")
         }
+        // Seen from above, its outline reaches above its foot and a little
+        // below it; a thicker one reaches higher.
+        const outline = PlatformGeometry.pedestalOutline(data.kind, 1, 20)
+        verify(outline.top > 0 && outline.bottom <= 0, data.kind + " has an outline above and below its foot")
+        verify(PlatformGeometry.pedestalOutline(data.kind, 3, 20).top > outline.top, data.kind + " grows with thickness")
         for (const uv of mesh.uv0s) verify(uv[0] >= 0 && uv[0] <= 1 && uv[1] >= 0 && uv[1] <= 1)
         compare(mesh.tangents.length, mesh.positions.length, data.kind + " has a tangent per vertex")
         compare(mesh.binormals.length, mesh.positions.length)
         verify(mesh.indexes.length / 3 < 1000, data.kind + " stays within the shared scene budget")
+    }
+
+    function test_flatStandLayoutFloatsTheIconOverItsStand() {
+        // The flat painter's and a folder opening's measures: nothing for
+        // None or a style's own pedestal under Auto; otherwise a stand under
+        // the icon, the Lift gap between them, the pair centred on the cell.
+        compare(PlatformGeometry.pedestalLayout({}, 52).drawn, false, "new panels have no stands")
+        compare(PlatformGeometry.pedestalLayout({ pedestalShape: "auto", iconPedestalEnabled: true }, 52).drawn, false)
+        for (const shape of PlatformGeometry.pedestalShapes) {
+            const layout = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalLift: 0.4 }, 52)
+            verify(layout.drawn, shape)
+            verify(layout.height > 0 && layout.width > 0, shape + " has a size")
+            verify(layout.gap > 0, shape + " floats the icon")
+            fuzzyCompare(layout.above, layout.below, 0.01, shape + " is centred on the cell with its icon")
+            const higher = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalLift: 1.6 }, 52)
+            verify(higher.gap > layout.gap && higher.raise > layout.raise, shape + " floats higher with Lift")
+            // On a free panel's path the stand's middle is on the path and
+            // the icon floats above it (the owner: "why are they outside
+            // the dock").
+            const onPath = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalLift: 0.4 }, 52, true)
+            fuzzyCompare(onPath.standCentre, 0, 0.01, shape + " stands on the path")
+            verify(onPath.raise > layout.raise, shape + " lifts the icon above its stand on the path")
+            // A larger view angle shows more of the stand's top.
+            const steep = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalViewAngle: 50 }, 52)
+            const side = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalViewAngle: 0 }, 52)
+            compare(steep.tilt, 50)
+            compare(side.tilt, 0)
+        }
+    }
+
+    function test_turnedStandExtents() {
+        // A stand lying on a panel seen from 30 degrees above its plane
+        // reaches nothing below the plane; one standing level in front of a
+        // panel seen face-on would reach behind it, which the scene lifts
+        // it out of.
+        const t = 30 * Math.PI / 180
+        const lying = PlatformGeometry.pedestalExtents("plate", 1, [0, Math.cos(t), Math.sin(t)],
+                                                       0, Math.cos(t), Math.sin(t))
+        verify(Math.abs(lying.lowest) < 1e-6, "a stand on the panel stays on it")
+        verify(lying.top > 0 && lying.bottom < 0)
+        const v = 20 * Math.PI / 180
+        const level = PlatformGeometry.pedestalExtents("plate", 1, [0, Math.cos(v), Math.sin(v)], 0, 0, 1)
+        verify(level.lowest < -0.5, "a level stand before a face-on panel would reach into it")
+        fuzzyCompare(level.topX, 0, 1e-9, "a stand without a lean has its top over its foot")
+        const leaning = PlatformGeometry.pedestalExtents("plate", 1, [0.3, 0.9, 0.3], 0, 0, 1)
+        verify(leaning.topX > 0, "a leaning stand's top moves across the screen")
     }
 
     function test_layoutsWithAnExactPlatform_data() {

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import ArchDock.Rendering 1.0
+import "PlatformGeometry.js" as PlatformGeometry
 
 // The shared panel renderer. Given a panel's definition, its runtime state,
 // its entries and what the host and theme allow, it lays the entries out
@@ -167,6 +168,19 @@ Item {
         verticalLayout ? "vertical"
         : ["horizontal", "adaptive"].includes(layoutPath)
             ? "horizontal" : "free"
+    // On a free panel's path a stand stands on the path at its icon's place
+    // and the icon floats above it; in an edge panel's row icon and stand are
+    // centred together in the row (the Pedestals page, 2026-10-12).
+    readonly property bool pedestalOnPath: themeOrientation === "free"
+    // A flat scene leaves room above and below its layout for an icon that
+    // floats over its stand, and its growth about its foot when magnified.
+    readonly property var pedestalHeadroom: {
+        const layout = PlatformGeometry.pedestalLayout(panelDefinition,
+            Number(definitionValue("iconStyle", "size", "iconSize", 52)) || 52, pedestalOnPath)
+        if (!layout.drawn || effectiveRendererTier === "true3d")
+            return ({ top: 0, bottom: 0 })
+        return ({ top: Math.ceil(layout.above + layout.height * 0.1), bottom: Math.ceil(layout.below + 4) })
+    }
     // Free-panel motion (ADREP-TASK-002). The entries travel along the
     // panel's own path, the whole scene turns, or both, as "Continuous motion
     // moves" says, and the wheel and a drag move the same thing. Travel is a
@@ -950,9 +964,9 @@ Item {
                 contentX: 0,
                 contentY: 0,
                 effectLeft: effectMargin,
-                effectTop: effectMargin,
+                effectTop: effectMargin + pedestalHeadroom.top,
                 effectRight: effectMargin,
-                effectBottom: effectMargin,
+                effectBottom: effectMargin + pedestalHeadroom.bottom,
                 handleExtent: 0
             }
         }
@@ -1435,6 +1449,9 @@ Item {
                     ["pedestalLift", "pedestalLift"], ["pedestalMaterial", "pedestalMaterial"],
                     ["pedestalColor", "pedestalColor"], ["pedestalAnimation", "pedestalAnimation"],
                     ["pedestalAnimationSpeed", "pedestalAnimationSpeed"],
+                    ["pedestalThickness", "pedestalThickness"], ["pedestalTexture", "pedestalTexture"],
+                    ["pedestalOpacity", "pedestalOpacity"], ["pedestalGlow", "pedestalGlow"],
+                    ["pedestalFacing", "pedestalFacing"], ["pedestalViewAngle", "pedestalViewAngle"],
                     ["folderPedestalShape", "folderPedestalShape"]])
                 if (definition[key] !== undefined) parameters[parameter] = definition[key]
             return parameters
@@ -1672,6 +1689,7 @@ Item {
             entry: parent.sceneEntry
             iconStyleDefinition: parent.sceneIconStyleDefinition
             tileSettings: root.panelDefinition
+            pedestalOnPath: root.pedestalOnPath
             logicalSize: Number(parent.sceneGeometry.iconSize || width)
             tileShape: root.iconShape
             appearance: root.appearance

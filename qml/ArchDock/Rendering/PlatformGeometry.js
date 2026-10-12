@@ -196,35 +196,302 @@ function lathe(profile, segments, closed) {
     return mesh.result()
 }
 
-// The stand under an icon, by shape: a column (the platform's own, radius 1,
-// height 1), or a solid that floats between the platform and the icon:
-// a plate, a thin bevelled disc, a ring, or a saucer with a dome. All
-// stand on z 0 with their widest reach within radius 1.4.
-var pedestalShapes = ["column", "plate", "disc", "ring", "saucer"]
-function pedestalShape(kind, segments) {
-    switch (String(kind || "column")) {
-    case "plate":
-        return lathe([[0, 0], [1, 0], [1, 0.22], [0.92, 0.26], [0, 0.26]], segments, false)
-    case "disc":
-        return lathe([[0, 0], [1.25, 0], [1.25, 0.08], [1.08, 0.16], [0, 0.16]], segments, false)
-    case "ring":
-        return lathe([[0.72, 0], [1.3, 0], [1.3, 0.2], [0.72, 0.2]], segments, true)
-    case "saucer":
-        return lathe([[0, 0], [0.55, 0], [1.4, 0.2], [0.6, 0.44], [0.3, 0.62], [0, 0.68]], segments, false)
-    default:
-        return pedestal(segments)
+// A faceted solid turned about the z axis: `sides` flat faces round, each
+// profile step a flat band, so a cube, a hexagonal plate, a pyramid or a
+// crystal keeps sharp edges. The profile runs bottom to top like `lathe`'s;
+// `start` turns the first corner (radians). Every face carries its own
+// vertices with the face's normal, texture coordinates and a tangent.
+function facetedLathe(profile, sides, start) {
+    const count = Math.max(3, Math.round(finite(sides, 6)))
+    const first = finite(start, 0)
+    const points = profile.slice()
+    const lengths = [0]
+    for (let index = 1; index < points.length; ++index)
+        lengths.push(lengths[index - 1] + Math.hypot(points[index][0] - points[index - 1][0],
+                                                     points[index][1] - points[index - 1][1]))
+    const total = Math.max(1e-6, lengths[lengths.length - 1])
+    const reachRadius = Math.max(1e-6, ...points.map(function(point) { return point[0] }))
+    const mesh = new MeshBuilder()
+    for (let step = 0; step + 1 < points.length; ++step) {
+        const a = points[step], b = points[step + 1]
+        if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 1e-9) continue
+        const cap = a[0] <= 1e-9 || b[0] <= 1e-9
+        for (let index = 0; index < count; ++index) {
+            const t0 = first + index / count * Math.PI * 2
+            const t1 = first + (index + 1) / count * Math.PI * 2
+            const corner = function(point, turn) {
+                return [point[0] * Math.cos(turn), point[0] * Math.sin(turn), point[1]]
+            }
+            const a0 = corner(a, t0), a1 = corner(a, t1), b0 = corner(b, t0), b1 = corner(b, t1)
+            const middle = (t0 + t1) / 2
+            const dr = b[0] - a[0], dz = b[1] - a[1]
+            const length = Math.hypot(dr, dz)
+            const outward = [dz / length * Math.cos(middle), dz / length * Math.sin(middle), -dr / length]
+            // The face's own normal: across its horizontal edge and up its
+            // profile edge, turned outward.
+            const across = subtract(a[0] > 1e-9 ? a1 : b1, a[0] > 1e-9 ? a0 : b0)
+            const up = subtract(a[0] > 1e-9 ? b0 : b1, a[0] > 1e-9 ? a0 : a1)
+            let normal = normalized(crossProduct(across, up))
+            if (dot(normal, outward) < 0) normal = normal.map(function(v) { return -v })
+            const tangent = cap ? [1, 0, 0] : normalized(across)
+            const uv = function(point, turn, along) {
+                return cap ? [0.5 + point[0] * Math.cos(turn) / (2 * reachRadius),
+                              0.5 + point[0] * Math.sin(turn) / (2 * reachRadius)]
+                    : [index / count + (turn === t1 ? 1 / count : 0), 1 - along / total]
+            }
+            const va0 = mesh.vertex(a0, normal, null, uv(a, t0, lengths[step]), tangent)
+            const va1 = mesh.vertex(a1, normal, null, uv(a, t1, lengths[step]), tangent)
+            const vb0 = mesh.vertex(b0, normal, null, uv(b, t0, lengths[step + 1]), tangent)
+            const vb1 = mesh.vertex(b1, normal, null, uv(b, t1, lengths[step + 1]), tangent)
+            if (a[0] > 1e-9) mesh.triangle(va0, va1, vb1, normal)
+            if (b[0] > 1e-9) mesh.triangle(va0, vb1, vb0, normal)
+        }
     }
+    return mesh.result()
+}
+
+// A star-shaped plate: `points` tips at `outer`, notches at `inner`, from
+// z 0 to `height`, with flat top and bottom and a flat face per edge.
+function starPrism(outer, inner, points, height) {
+    const tips = Math.max(3, Math.round(finite(points, 5)))
+    const outline = []
+    for (let index = 0; index < tips * 2; ++index) {
+        const turn = -Math.PI / 2 + index * Math.PI / tips
+        const radius = index % 2 === 0 ? outer : inner
+        outline.push([radius * Math.cos(turn), radius * Math.sin(turn)])
+    }
+    const mesh = new MeshBuilder()
+    const flatUv = function(x, y) { return [0.5 + x / (2 * outer), 0.5 + y / (2 * outer)] }
+    for (const level of [0, height]) {
+        const facing = level > 0 ? [0, 0, 1] : [0, 0, -1]
+        for (let index = 0; index < outline.length; ++index) {
+            const p = outline[index], q = outline[(index + 1) % outline.length]
+            const c = mesh.vertex([0, 0, level], facing, null, flatUv(0, 0), [1, 0, 0])
+            const v0 = mesh.vertex([p[0], p[1], level], facing, null, flatUv(p[0], p[1]), [1, 0, 0])
+            const v1 = mesh.vertex([q[0], q[1], level], facing, null, flatUv(q[0], q[1]), [1, 0, 0])
+            mesh.triangle(c, v0, v1, facing)
+        }
+    }
+    let travelled = 0
+    let perimeter = 0
+    for (let index = 0; index < outline.length; ++index) {
+        const p = outline[index], q = outline[(index + 1) % outline.length]
+        perimeter += Math.hypot(q[0] - p[0], q[1] - p[1])
+    }
+    for (let index = 0; index < outline.length; ++index) {
+        const p = outline[index], q = outline[(index + 1) % outline.length]
+        const edge = [q[0] - p[0], q[1] - p[1], 0]
+        const edgeLength = Math.hypot(edge[0], edge[1])
+        // The outline runs counter-clockwise, so the outside is to the right.
+        const normal = normalized([edge[1], -edge[0], 0])
+        const u0 = travelled / perimeter, u1 = (travelled + edgeLength) / perimeter
+        travelled += edgeLength
+        const a = mesh.vertex([p[0], p[1], 0], normal, null, [u0, 1], edge)
+        const b = mesh.vertex([q[0], q[1], 0], normal, null, [u1, 1], edge)
+        const c = mesh.vertex([q[0], q[1], height], normal, null, [u1, 0], edge)
+        const d = mesh.vertex([p[0], p[1], height], normal, null, [u0, 0], edge)
+        mesh.triangle(a, b, c, normal)
+        mesh.triangle(a, c, d, normal)
+    }
+    return mesh.result()
+}
+
+// The stands under an icon (the Pedestals page), one table for the 3D scene
+// and the flat painter alike. Each is a solid about its own axis, z up from
+// its foot at 0, in units where its widest reach is `reach`:
+// - `profile`: (radius, height) points, bottom to top, for a turned solid;
+//   `loop` when the profile is a closed loop off the axis (a ring, a halo);
+// - `sides`: a faceted solid with that many flat faces round (0: smooth);
+// - `star`: a star plate instead of a profile;
+// - `scale`: how many icon sizes one unit is at Size 1, so each shape's
+//   width under an icon looks right.
+// A column is the 3D page's own pedestal: radius 1, height 1, stretched to
+// the height it is given.
+var pedestalSpecs = (function() {
+    const dome = [[0, 0], [1, 0]]
+    for (let step = 1; step <= 8; ++step) {
+        const turn = step / 8 * Math.PI / 2
+        dome.push([Math.cos(turn), 0.62 * Math.sin(turn)])
+    }
+    dome[dome.length - 1] = [0, 0.62]
+    const orb = [[0, 0]]
+    for (let step = 1; step < 12; ++step) {
+        const turn = step / 12 * Math.PI
+        orb.push([Math.sin(turn), 1 - Math.cos(turn)])
+    }
+    orb.push([0, 2])
+    const halo = []
+    for (let step = 0; step < 12; ++step) {
+        const turn = -Math.PI / 2 + step / 12 * Math.PI * 2
+        halo.push([1 + 0.08 * Math.cos(turn), 0.08 + 0.08 * Math.sin(turn)])
+    }
+    return {
+        column: { profile: [[0, 0], [1, 0], [1, 1], [0, 1]], scale: 0.18 },
+        plate: { profile: [[0, 0], [1, 0], [1, 0.22], [0.92, 0.26], [0, 0.26]], scale: 0.46 },
+        disc: { profile: [[0, 0], [1.25, 0], [1.25, 0.08], [1.08, 0.16], [0, 0.16]], scale: 0.42 },
+        ring: { profile: [[0.72, 0], [1.3, 0], [1.3, 0.2], [0.72, 0.2]], loop: true, scale: 0.42 },
+        saucer: { profile: [[0, 0], [0.55, 0], [1.4, 0.2], [0.6, 0.44], [0.3, 0.62], [0, 0.68]], scale: 0.4 },
+        cube: { profile: [[0, 0], [1, 0], [1, 0.75], [0, 0.75]], sides: 4, scale: 0.44 },
+        hexagon: { profile: [[0, 0], [1, 0], [1, 0.28], [0, 0.28]], sides: 6, scale: 0.48 },
+        octagon: { profile: [[0, 0], [1, 0], [1, 0.24], [0.9, 0.3], [0, 0.3]], sides: 8, scale: 0.48 },
+        star: { star: { outer: 1.2, inner: 0.58, points: 5 }, height: 0.22, scale: 0.42 },
+        cone: { profile: [[0, 0], [1.1, 0], [0.42, 0.62], [0, 0.62]], scale: 0.42 },
+        pyramid: { profile: [[0, 0], [1.2, 0], [0.45, 0.6], [0, 0.6]], sides: 4, scale: 0.42 },
+        dome: { profile: dome, scale: 0.46 },
+        orb: { profile: orb, scale: 0.26 },
+        bowl: { profile: [[0, 0], [0.42, 0], [0.85, 0.1], [1.12, 0.28], [1.2, 0.38], [0, 0.38]], scale: 0.42 },
+        pillar: { profile: [[0, 0], [1, 0], [1, 0.1], [0.72, 0.16], [0.55, 0.2], [0.5, 0.82], [0.62, 0.88],
+                            [0.95, 0.94], [1, 1.02], [0, 1.02]], scale: 0.36 },
+        tiered: { profile: [[0, 0], [1.2, 0], [1.2, 0.12], [0.92, 0.12], [0.92, 0.24], [0.64, 0.24],
+                            [0.64, 0.36], [0, 0.36]], scale: 0.42 },
+        goblet: { profile: [[0, 0], [0.72, 0], [0.72, 0.05], [0.24, 0.1], [0.14, 0.3], [0.14, 0.42],
+                            [0.45, 0.52], [0.92, 0.72], [1, 0.82], [0, 0.82]], scale: 0.42 },
+        hourglass: { profile: [[0, 0], [0.9, 0], [0.9, 0.08], [0.32, 0.42], [0.9, 0.76], [0.9, 0.84],
+                               [0, 0.84]], scale: 0.48 },
+        crystal: { profile: [[0, 0], [0.62, 0.3], [0.8, 0.5], [0.55, 0.7], [0, 0.74]], sides: 6, scale: 0.5 },
+        halo: { profile: halo, loop: true, scale: 0.42 }
+    }
+})()
+var pedestalShapes = Object.keys(pedestalSpecs)
+
+function pedestalSpec(kind) {
+    return pedestalSpecs[String(kind || "column")] || pedestalSpecs.column
+}
+
+// The stand under an icon, by shape. A faceted shape turns a flat face to
+// the front (-y), the side the scene shows the viewer.
+function pedestalShape(kind, segments) {
+    const spec = pedestalSpec(kind)
+    if (spec.star)
+        return starPrism(spec.star.outer, spec.star.inner, spec.star.points, spec.height)
+    if (spec.sides)
+        return facetedLathe(spec.profile, spec.sides, -Math.PI / 2 - Math.PI / spec.sides)
+    return lathe(spec.profile, segments, spec.loop === true)
 }
 
 // How high a pedestal shape reaches, in its own units.
 function pedestalShapeHeight(kind) {
-    switch (String(kind || "column")) {
-    case "plate": return 0.26
-    case "disc": return 0.16
-    case "ring": return 0.2
-    case "saucer": return 0.68
-    default: return 1
+    const spec = pedestalSpec(kind)
+    if (spec.star) return spec.height
+    return Math.max(...spec.profile.map(function(point) { return point[1] }))
+}
+
+// How far a shape reaches from its axis, in its own units.
+function pedestalShapeReach(kind) {
+    const spec = pedestalSpec(kind)
+    if (spec.star) return spec.star.outer
+    return Math.max(...spec.profile.map(function(point) { return point[0] }))
+}
+
+// How many icon sizes one unit of a shape is, at Size 1.
+function pedestalShapeScale(kind) {
+    return pedestalSpec(kind).scale
+}
+
+// The stand seen a little from above (`tilt` degrees, its top toward the
+// viewer), `thickness` stretching its height: how far its outline reaches
+// above its foot and below it, in its own units, on the screen's vertical.
+// The icon floats above `top`, so no part of the stand covers it.
+function pedestalOutline(kind, thickness, tilt) {
+    const spec = pedestalSpec(kind)
+    const stretch = Math.max(0.01, finite(thickness, 1))
+    const turn = finite(tilt, 20) * Math.PI / 180
+    const points = spec.star
+        ? [[spec.star.outer, 0], [spec.star.outer, spec.height]]
+        : spec.profile
+    let top = -Infinity, bottom = Infinity
+    for (const point of points) {
+        const z = point[1] * stretch * Math.cos(turn)
+        const across = point[0] * Math.sin(turn)
+        top = Math.max(top, z + across)
+        bottom = Math.min(bottom, z - across)
     }
+    return { top: top, bottom: bottom, reach: spec.star ? spec.star.outer
+        : Math.max(...spec.profile.map(function(point) { return point[0] })) }
+}
+
+// A flat stand's measures in pixels for an icon of `size` (the flat
+// painter's and a folder opening's): the stand seen `pedestalViewAngle`
+// degrees from above (default `pedestalTilt2D`), the icon floating its Lift
+// above the stand's top, never over it. `onPath` (a free panel's path): the
+// stand stands on the path at the icon's place and the icon floats above
+// it; otherwise (an edge panel's row, a folder's items) icon and stand are
+// centred together on the icon's cell. `raise` is how far the icon rises
+// above its cell's middle, `standCentre` where the stand's middle is below
+// it, `above`/`below` how far the pair reaches past the cell's top and
+// bottom. `values` are the panel's (or a folder's) pedestal settings; an
+// icon style's own pedestal keeps Auto.
+var pedestalTilt2D = 20
+function pedestalLayout(values, size, onPath) {
+    const v = values || ({})
+    const icon = Math.max(1, finite(size, 52))
+    const shape = String(v.pedestalShape || "none").toLowerCase()
+    const kind = shape === "auto" ? "column" : pedestalShapes.indexOf(shape) >= 0 ? shape : "none"
+    const drawn = kind !== "none" && !(shape === "auto" && v.iconPedestalEnabled === true)
+    const number = function(key, fallback, minimum, maximum) {
+        return clamp(finite(v[key], fallback), minimum, maximum)
+    }
+    const scale = number("pedestalSize", 1, 0.2, 4)
+    const thickness = number("pedestalThickness", 1, 0.2, 4)
+    const lift = number("pedestalLift", 0.3, 0, 2)
+    const tilt = number("pedestalViewAngle", pedestalTilt2D, 0, 60)
+    const unit = icon * pedestalShapeScale(kind === "none" ? "column" : kind) * scale
+    const depth = shape === "auto" ? icon * 0.3
+        : kind === "column" ? icon * 0.4 * scale * thickness : unit * thickness
+    const outline = pedestalOutline(kind === "none" ? "column" : kind, depth / Math.max(1e-6, unit), tilt)
+    if (!drawn)
+        return { shape: shape, kind: kind, drawn: false, unit: unit, depth: depth, outline: outline, tilt: tilt,
+                 height: 0, width: 0, gap: 0, raise: 0, standCentre: 0, above: 0, below: 0 }
+    const height = (outline.top - outline.bottom) * unit
+    const gap = shape === "auto" ? icon * 0.02 : icon * (0.03 + lift * 0.3)
+    // The icon's visible foot sits 0.07 icon sizes inside its cell's foot.
+    const raise = onPath === true ? height / 2 + gap + 0.43 * icon
+        : Math.max(0, (gap + height) / 2 - icon * 0.035)
+    // The stand's middle, below the cell's middle.
+    const standCentre = 0.43 * icon - raise + gap + height / 2
+    const below = Math.max(0, standCentre + height / 2 - 0.5 * icon)
+    return { shape: shape, kind: kind, drawn: true, unit: unit, depth: depth, outline: outline, tilt: tilt,
+             height: height, width: 2 * outline.reach * unit, gap: gap, raise: raise,
+             standCentre: standCentre, above: raise, below: below }
+}
+
+// A stand turned so its axis is `axis` (a unit vector in the viewer's
+// frame: x right, y up the screen, z toward the viewer), `stretch` times
+// as tall as its unit width: how far its outline reaches up and down the
+// screen, where its top's middle is across it, and how far any of it
+// reaches below its foot along a direction given by that frame's own z
+// components (`rightZ`, `upZ`, `forwardZ`: how much each of the viewer's
+// axes rises off the platform). All in units of its width per unit.
+function pedestalExtents(kind, stretch, axis, rightZ, upZ, forwardZ) {
+    const spec = pedestalSpec(kind)
+    const height = pedestalShapeHeight(kind)
+    const a = normalized([finite(axis[0], 0), finite(axis[1], 1), finite(axis[2], 0)])
+    // Two directions across the axis.
+    let u = crossProduct(a, [0, 0, 1])
+    if (Math.hypot(u[0], u[1], u[2]) < 1e-6) u = [1, 0, 0]
+    u = normalized(u)
+    const w = normalized(crossProduct(a, u))
+    const points = spec.star
+        ? [[spec.star.outer, 0], [spec.star.outer, spec.height]]
+        : spec.profile
+    const stretchValue = Math.max(0.01, finite(stretch, 1))
+    let top = -Infinity, bottom = Infinity, lowest = Infinity
+    for (const point of points) {
+        for (let step = 0; step < 16; ++step) {
+            const turn = step / 16 * Math.PI * 2
+            const across = [u[0] * Math.cos(turn) + w[0] * Math.sin(turn),
+                            u[1] * Math.cos(turn) + w[1] * Math.sin(turn),
+                            u[2] * Math.cos(turn) + w[2] * Math.sin(turn)]
+            const p = [a[0] * point[1] * stretchValue + across[0] * point[0],
+                       a[1] * point[1] * stretchValue + across[1] * point[0],
+                       a[2] * point[1] * stretchValue + across[2] * point[0]]
+            top = Math.max(top, p[1])
+            bottom = Math.min(bottom, p[1])
+            lowest = Math.min(lowest, p[0] * finite(rightZ, 0) + p[1] * finite(upZ, 0) + p[2] * finite(forwardZ, 1))
+        }
+    }
+    return { top: top, bottom: bottom, topX: a[0] * height * stretchValue,
+             topY: a[1] * height * stretchValue, lowest: lowest }
 }
 
 // The platform's shape for a layout, or null when the layout has no exact 3D

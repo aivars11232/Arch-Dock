@@ -763,16 +763,36 @@ void PanelSettingsSchemaTest::iconParametersRoundTripAndRespectBounds()
 void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
 {
     // Pedestals (2026-10-12): one page of their own, on every host and
-    // renderer, stored beside the 3D parameters and bounded like them.
+    // renderer, stored beside the 3D parameters and bounded like them; the
+    // icon stands in one section, the folder item stands in another, with
+    // their own settings behind Own settings.
     const QVariantMap values{
-        {QStringLiteral("pedestalShape"), QStringLiteral("saucer")},
-        {QStringLiteral("pedestalSize"), 1.4},
-        {QStringLiteral("pedestalLift"), 0.55},
+        {QStringLiteral("pedestalShape"), QStringLiteral("goblet")},
+        {QStringLiteral("pedestalSize"), 2.6},
+        {QStringLiteral("pedestalThickness"), 1.8},
+        {QStringLiteral("pedestalLift"), 1.4},
+        {QStringLiteral("pedestalFacing"), QStringLiteral("panel")},
+        {QStringLiteral("pedestalViewAngle"), 35.0},
         {QStringLiteral("pedestalMaterial"), QStringLiteral("organic")},
+        {QStringLiteral("pedestalTexture"), QStringLiteral("neon")},
         {QStringLiteral("pedestalColor"), QStringLiteral("#22aa66")},
-        {QStringLiteral("pedestalAnimation"), QStringLiteral("bob")},
-        {QStringLiteral("pedestalAnimationSpeed"), 1.75},
-        {QStringLiteral("folderPedestalShape"), QStringLiteral("disc")},
+        {QStringLiteral("pedestalOpacity"), 0.6},
+        {QStringLiteral("pedestalGlow"), 0.45},
+        {QStringLiteral("pedestalAnimation"), QStringLiteral("sway")},
+        {QStringLiteral("pedestalAnimationSpeed"), 4.5},
+        {QStringLiteral("folderPedestalShape"), QStringLiteral("crystal")},
+        {QStringLiteral("folderPedestalOwnStyle"), true},
+        {QStringLiteral("folderPedestalSize"), 0.4},
+        {QStringLiteral("folderPedestalThickness"), 3.0},
+        {QStringLiteral("folderPedestalLift"), 0.9},
+        {QStringLiteral("folderPedestalViewAngle"), 5.0},
+        {QStringLiteral("folderPedestalMaterial"), QStringLiteral("metallic")},
+        {QStringLiteral("folderPedestalTexture"), QStringLiteral("none")},
+        {QStringLiteral("folderPedestalColor"), QStringLiteral("#ff8800")},
+        {QStringLiteral("folderPedestalOpacity"), 0.35},
+        {QStringLiteral("folderPedestalGlow"), 1.0},
+        {QStringLiteral("folderPedestalAnimation"), QStringLiteral("float")},
+        {QStringLiteral("folderPedestalAnimationSpeed"), 0.2},
     };
     auto record = PanelDefinition::defaults(
         QStringLiteral("pedestal-parameters"), QStringLiteral("Pedestal parameters"),
@@ -781,7 +801,8 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
     {
         const auto *descriptor = PanelSettingsSchema::panelDescriptor(it.key());
         QVERIFY2(descriptor, qPrintable(it.key()));
-        QCOMPARE(descriptor->editor.section, QStringLiteral("pedestals"));
+        QCOMPARE(descriptor->editor.section, it.key().startsWith(QStringLiteral("folder"))
+            ? QStringLiteral("pedestals-folder") : QStringLiteral("pedestals"));
         QCOMPARE(descriptor->editor.capability, QStringLiteral("pedestals"));
         QVERIFY(PanelSettingsSchema::isEditorField(PanelSettingsFieldScope::Panel, it.key()));
         QVERIFY(PanelSettingsSchema::isTransactionPanelField(it.key()));
@@ -794,34 +815,75 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
     const QVariantMap saved = restored->toPersistedMap();
     for (auto it = values.cbegin(); it != values.cend(); ++it)
         QCOMPARE(saved.value(it.key()), it.value());
-    // Defaults: the renderers' own pedestals, no motion.
+    // Defaults: a new panel has no stands (the owner, 2026-10-12: "by
+    // default when I make new panel, there shouldn't be any pedestals"),
+    // no motion, folder items like the icons.
     const auto defaults = PanelDefinition::defaults(
         QStringLiteral("pedestal-defaults"), QStringLiteral("Pedestal defaults"),
         QStringLiteral("free"), false);
     QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("pedestalShape"))->defaultValue.toString(),
-             QStringLiteral("auto"));
+             QStringLiteral("none"));
     QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("pedestalAnimation"))->defaultValue.toString(),
              QStringLiteral("none"));
+    QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("folderPedestalShape"))->defaultValue.toString(),
+             QStringLiteral("same"));
+    QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("folderPedestalOwnStyle"))->defaultValue.toBool(),
+             false);
+    QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("pedestalFacing"))->defaultValue.toString(),
+             QStringLiteral("auto"));
+    QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("pedestalViewAngle"))->defaultValue.toDouble(), 20.0);
     // A fresh panel persists no pedestal keys: the renderers apply the
     // schema's defaults themselves, like the other 3D parameters.
     QVERIFY(!defaults.toPersistedMap().contains(QStringLiteral("pedestalShape")));
+    // Every shape the renderers draw is a choice, for the icons and the
+    // folder items alike.
+    const QStringList shapes{QStringLiteral("column"), QStringLiteral("plate"), QStringLiteral("disc"),
+        QStringLiteral("ring"), QStringLiteral("saucer"), QStringLiteral("cube"), QStringLiteral("hexagon"),
+        QStringLiteral("octagon"), QStringLiteral("star"), QStringLiteral("cone"), QStringLiteral("pyramid"),
+        QStringLiteral("dome"), QStringLiteral("orb"), QStringLiteral("bowl"), QStringLiteral("pillar"),
+        QStringLiteral("tiered"), QStringLiteral("goblet"), QStringLiteral("hourglass"),
+        QStringLiteral("crystal"), QStringLiteral("halo")};
+    for (const QString &shape : shapes)
+    {
+        QVERIFY2(PanelSettingsSchema::panelDescriptor(QStringLiteral("pedestalShape"))->choices.contains(shape),
+                 qPrintable(shape));
+        QVERIFY2(PanelSettingsSchema::panelDescriptor(QStringLiteral("folderPedestalShape"))->choices.contains(shape),
+                 qPrintable(shape));
+    }
     // Bounds and choices.
     record.insert(QStringLiteral("pedestalSize"), 9.0);
+    record.insert(QStringLiteral("pedestalThickness"), 0.0);
     record.insert(QStringLiteral("pedestalLift"), -2.0);
+    record.insert(QStringLiteral("pedestalOpacity"), 0.0);
+    record.insert(QStringLiteral("pedestalGlow"), 5.0);
     record.insert(QStringLiteral("pedestalAnimationSpeed"), 0.0);
     record.insert(QStringLiteral("pedestalShape"), QStringLiteral("Plate"));
     record.insert(QStringLiteral("pedestalMaterial"), QStringLiteral("marble"));
+    record.insert(QStringLiteral("pedestalTexture"), QStringLiteral("wood"));
     record.insert(QStringLiteral("pedestalColor"), QStringLiteral("green"));
+    record.insert(QStringLiteral("pedestalAnimation"), QStringLiteral("dance"));
     record.insert(QStringLiteral("folderPedestalShape"), QStringLiteral("spaceship"));
+    record.insert(QStringLiteral("folderPedestalSize"), 0.01);
+    record.insert(QStringLiteral("pedestalFacing"), QStringLiteral("upside-down"));
+    record.insert(QStringLiteral("pedestalViewAngle"), 120.0);
     const auto bounded = PanelDefinition::fromLegacyMap(record);
     QVERIFY(bounded.has_value());
-    QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("folderPedestalShape")).toString(), QStringLiteral("same"));
-    QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("pedestalSize")).toDouble(), 2.0);
-    QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("pedestalLift")).toDouble(), 0.0);
-    QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("pedestalAnimationSpeed")).toDouble(), 0.25);
-    QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("pedestalShape")).toString(), QStringLiteral("plate"));
-    QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("pedestalMaterial")).toString(), QStringLiteral("panel"));
-    QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("pedestalColor")).toString(), QString{});
+    const QVariantMap &result = bounded->surface.parameters3D;
+    QCOMPARE(result.value(QStringLiteral("folderPedestalShape")).toString(), QStringLiteral("same"));
+    QCOMPARE(result.value(QStringLiteral("folderPedestalSize")).toDouble(), 0.2);
+    QCOMPARE(result.value(QStringLiteral("pedestalSize")).toDouble(), 4.0);
+    QCOMPARE(result.value(QStringLiteral("pedestalThickness")).toDouble(), 0.2);
+    QCOMPARE(result.value(QStringLiteral("pedestalLift")).toDouble(), 0.0);
+    QCOMPARE(result.value(QStringLiteral("pedestalOpacity")).toDouble(), 0.1);
+    QCOMPARE(result.value(QStringLiteral("pedestalGlow")).toDouble(), 1.0);
+    QCOMPARE(result.value(QStringLiteral("pedestalAnimationSpeed")).toDouble(), 0.1);
+    QCOMPARE(result.value(QStringLiteral("pedestalShape")).toString(), QStringLiteral("plate"));
+    QCOMPARE(result.value(QStringLiteral("pedestalMaterial")).toString(), QStringLiteral("panel"));
+    QCOMPARE(result.value(QStringLiteral("pedestalTexture")).toString(), QStringLiteral("material"));
+    QCOMPARE(result.value(QStringLiteral("pedestalColor")).toString(), QString{});
+    QCOMPARE(result.value(QStringLiteral("pedestalAnimation")).toString(), QStringLiteral("none"));
+    QCOMPARE(result.value(QStringLiteral("pedestalFacing")).toString(), QStringLiteral("auto"));
+    QCOMPARE(result.value(QStringLiteral("pedestalViewAngle")).toDouble(), 60.0);
 }
 
 QTEST_MAIN(PanelSettingsSchemaTest)

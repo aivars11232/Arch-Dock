@@ -1971,9 +1971,12 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
         }
         for (const QString &key : {"scene3DCameraPitch", "scene3DCameraYaw", "scene3DRoll",
                  "scene3DPositionX", "scene3DPositionY", "scene3DPositionZ", "scene3DScale",
-                 "scene3DFieldOfView", "scene3DThickness", "scene3DIconElevation", "scene3DQuality",
+                 "scene3DFieldOfView", "scene3DThickness", "scene3DQuality",
                  "scene3DKeyLight", "scene3DFillLight", "scene3DTransitions", "scene3DFloat"})
             QVERIFY2(keys.contains(key), qPrintable(key));
+        // Pedestal height is Auto's column height: a new panel has no stands
+        // (the owner, 2026-10-12), so it is kept unseen until Auto is chosen.
+        QVERIFY(!keys.contains("scene3DIconElevation"));
         // ADFIX UF-06: the blue ring stands on a generated platform, so the
         // platform's width and its bend are offered.
         for (const QString &key : {"scene3DBand", "scene3DBend"})

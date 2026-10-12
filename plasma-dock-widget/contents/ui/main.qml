@@ -92,15 +92,22 @@ PlasmoidItem {
     readonly property var scenePanelDefinition: buildScenePanelDefinition()
     // The stands under an opened folder's items: the panel's pedestal
     // settings, their shape chosen on the Pedestals page ("same" keeps the
-    // panel's own shape).
+    // panel's own shape); with "Own settings" on, the folder items' own
+    // size, thickness, lift, material, texture, colour, opacity, glow and
+    // motion (the owner, 2026-10-12).
     readonly property var folderPedestalSettings: {
         const source = configuration || ({})
         const settings = {}
-        for (const key of ["pedestalShape", "pedestalSize", "pedestalLift", "pedestalMaterial",
-                           "pedestalColor", "pedestalAnimation", "pedestalAnimationSpeed"])
+        const keys = ["Size", "Thickness", "Lift", "ViewAngle", "Material", "Texture", "Color", "Opacity",
+                      "Glow", "Animation", "AnimationSpeed"]
+        for (const key of ["pedestalShape"].concat(keys.map(name => "pedestal" + name)))
             if (source[key] !== undefined) settings[key] = source[key]
         const folderShape = String(source.folderPedestalShape || "same").toLowerCase()
         if (folderShape !== "same") settings.pedestalShape = folderShape
+        if (source.folderPedestalOwnStyle === true)
+            for (const name of keys)
+                if (source["folderPedestal" + name] !== undefined)
+                    settings["pedestal" + name] = source["folderPedestal" + name]
         return settings
     }
     // The runtime state the scene draws from. Until TASK-0032 Phase D the
@@ -1215,6 +1222,7 @@ PlasmoidItem {
             hoveredIndex: root.hoveredIndex
             tileShape: root.configuration.iconShape
             tileSettings: root.configuration
+            pedestalOnPath: panelScene.pedestalOnPath
             appearance: root.configuration.appearance
             showReflection: root.configuration.showReflections
             showIndicator: root.configuration.showIndicators

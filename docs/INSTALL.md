@@ -45,13 +45,29 @@ look's own surface.
 ## Pedestals
 
 The stands under the icons have their own page, **Pedestals**, in Panel
-Studio. Choose a **Shape** (Auto is a column on flat and 3D panels alike;
-None removes it; Column, Plate, Disc, Ring or Saucer draws that shape), its **Size** and **Lift** (how high it floats between the
-panel and the icon), a **Material** (the panel's own look or any other) and
-**Colour**, and an **Animation** (Bob, Spin or Pulse) with its speed.
-**Folder item stands** gives the items of an opened folder the panel's own
-stand shape, none, or a shape of their own, in the same material, size and
-motion.
+Studio. A new panel has none. Under **Icon stands**, choose a **Shape**:
+None, Auto (a column in the panel's own material; on a 3D panel as tall as
+Panels > 3D > Pedestal height), or one of Column, Plate, Disc, Ring, Saucer,
+Cube, Hexagon, Octagon, Star, Cone, Pyramid, Dome, Orb, Bowl, Pillar,
+Tiered, Goblet, Hourglass, Crystal and Halo. Then its **Size** and
+**Thickness**, its **Float height** (the gap the icon floats above it), a
+**Material** (the panel's own look or any other), a **Texture** (the
+material's own, none, or any look's), **Colour**, **Opacity**, **Glow**, and
+an **Animation** (Bob, Spin, Pulse, Sway, Wobble, Glow or Float) with its
+speed. The icon is centred over its stand and floats above its top. On a
+free panel's path the stand stands on the path at its icon's place; in an
+edge panel's row the two are centred in the row. **View angle** is how far
+from above a level stand is seen (0 is side on). On a 3D panel, **Stand
+facing** turns the stands: Auto lies them on a panel tilted back and keeps
+them level, facing you, on a panel seen face-on; Viewer always level;
+Panel always on the panel, in step with its tilt and turn. No stand or icon
+sinks into a 3D platform at any camera angle.
+
+**Folder item stands** gives the items of an opened folder the icons' own
+stand (Same), none, or a shape of their own. With **Own settings** on they
+take their own size, thickness, float height, view angle, material,
+texture, colour, opacity, glow and motion; with it off they follow the icon
+stands.
 
 ## Panels on the desktop
 

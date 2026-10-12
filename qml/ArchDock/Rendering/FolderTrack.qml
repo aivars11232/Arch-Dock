@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls as QQC2
 import "MotionChannels.js" as MotionChannels
+import "PlatformGeometry.js" as PlatformGeometry
 
 // A free panel's folder contents on a path (ADREP-TASK-003): "Along the dock",
 // where the dock's own track continues outside it, or the fan, arc, stack and
@@ -58,12 +59,18 @@ Item {
     property string selectedChildId: ""
     property bool keyboardSelection: false
     readonly property var entries: (snapshot.entries || []).slice(0, 48)
-    readonly property real cellWidth: showNames ? 108 : iconSize
-    readonly property real cellHeight: iconSize + (showNames ? nameMetrics.height * 2 + 4 : 0)
+    // The stands under the children reach above and below an icon's cell:
+    // the icon floats over its stand (the Pedestals page), and its name
+    // stays clear under the stand.
+    readonly property var standLayout: PlatformGeometry.pedestalLayout(pedestalSettings, iconSize)
+    readonly property real cellWidth: Math.max(showNames ? 108 : iconSize, standLayout.width)
+    readonly property real cellHeight: iconSize + standLayout.above + standLayout.below
+        + (showNames ? nameMetrics.height * 2 + 4 : 0)
     // Neighbours along the dock's curve: a name's width apart, or an icon
     // and a gap.
     readonly property real pitch: pathPitch > 0 ? pathPitch
-        : showNames ? cellWidth + 6 : iconSize + 14
+        : showNames ? cellWidth + 6 : Math.max(iconSize, standLayout.width) + 14
+            + standLayout.above + standLayout.below
     // How far the wheel or keys have moved the children along the path, in
     // slots, and where a wheel step is taking them; never saved.
     property real trackOffset: 0
@@ -345,7 +352,8 @@ Item {
             readonly property real centreY: root.expansionOrigin.y
                 + (placed.y - root.expansionOrigin.y) * root.openingProgress
             x: centreX - width / 2
-            y: centreY - root.iconSize * drawnScale / 2
+            // The icon's cell centred on its place; the raised icon above it.
+            y: centreY - (root.iconSize / 2 + root.standLayout.above) * drawnScale
             width: root.cellWidth * drawnScale
             height: root.cellHeight * drawnScale
             opacity: placed.visibility * Math.max(0, Math.min(1, root.openingProgress * 1.5))
@@ -362,6 +370,7 @@ Item {
             }
             IconScene {
                 x: (parent.width - width) / 2
+                y: root.standLayout.above * child.drawnScale
                 width: root.iconSize * child.drawnScale
                 height: width
                 entry: child.modelData
@@ -378,7 +387,7 @@ Item {
             }
             QQC2.Label {
                 objectName: "folder-name-" + child.index
-                y: root.iconSize * child.drawnScale + 4
+                y: (root.iconSize + root.standLayout.above + root.standLayout.below) * child.drawnScale + 4
                 width: parent.width
                 visible: root.showNames
                 text: String(child.modelData.displayName || child.modelData.name || "")

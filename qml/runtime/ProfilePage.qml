@@ -69,7 +69,13 @@ ColumnLayout {
         wrapMode: Text.Wrap
         text: {
             if (!root.selected) return qsTr("Create a profile from your current panels, or import one.");
-            let summary = qsTr("%1 panels · revision %2").arg(root.selected.panelCount).arg(root.selected.revision);
+            // What is shown on the desktop: the hidden built-in edge panels
+            // every arrangement keeps are not counted (the owner, 2026-10-12:
+            // "it shows as if I saved 4 panels, when it's just 1").
+            const shown = root.selected.shownPanelCount === undefined
+                ? Number(root.selected.panelCount) : Number(root.selected.shownPanelCount);
+            let summary = (shown === 1 ? qsTr("1 panel") : qsTr("%1 panels").arg(shown))
+                + qsTr(" · revision %1").arg(root.selected.revision);
             const creating = Number(root.selected.freePanelsToCreate);
             if (creating === 1) summary += qsTr(" · Apply creates 1 free panel on the desktop");
             else if (creating > 1) summary += qsTr(" · Apply creates %1 free panels on the desktop").arg(creating);

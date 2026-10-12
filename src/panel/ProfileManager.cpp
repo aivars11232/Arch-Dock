@@ -107,9 +107,17 @@ QVariantList ProfileManager::listProfiles() const
     for (const auto &profile : m_store.profiles())
     {
         int freePanels = 0;
-        for (const auto &panel : profile.panels) freePanels += panel.host.kind == PanelHostKind::FreeDesktop;
+        int shownPanels = 0;
+        for (const auto &panel : profile.panels)
+        {
+            freePanels += panel.host.kind == PanelHostKind::FreeDesktop;
+            // The hidden built-in edge panels are kept in every arrangement
+            // but are not on the desktop: the page counts what is shown.
+            shownPanels += panel.visibility.visible;
+        }
         result.append(QVariantMap{{QStringLiteral("id"), profile.id}, {QStringLiteral("name"), profile.name},
             {QStringLiteral("revision"), profile.revision}, {QStringLiteral("panelCount"), profile.panels.size()},
+            {QStringLiteral("shownPanelCount"), shownPanels},
             {QStringLiteral("freePanelCount"), freePanels},
             {QStringLiteral("freePanelsToCreate"), known ? freePanelsToCreate(profile, desktop) : -1},
             {QStringLiteral("freePanelLimit"), MaximumFreePanelsCreatedPerApply},

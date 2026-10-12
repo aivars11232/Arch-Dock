@@ -57,15 +57,19 @@ TestCase {
     }
 
     function test_pedestalLayerFollowsThePedestalSettings() {
-        // The Pedestals page on a flat panel: Auto is a column, as in 3D,
-        // unless the icon style draws its own pedestal; None draws no stand
-        // and leaves the icon where it was; a shape draws the stand under
-        // the icon and raises the icon above it; the icon's input bounds
-        // never move.
-        const scene = createScene({ tileSettings: ({ pedestalShape: "auto" }) })
+        // The Pedestals page on a flat panel: no stand by default; Auto is a
+        // column, as in 3D, unless the icon style draws its own pedestal;
+        // every shape draws a horizontal stand under the icon, centred, and
+        // the icon floats above the stand's top, so no part of the stand is
+        // behind or over the icon (the owner, 2026-10-12); the icon's input
+        // bounds never move.
+        const scene = createScene({ tileSettings: ({}) })
         const layer = findChild(scene, "icon-layer-pedestal")
         verify(layer !== null, "the stand has its own layer")
         const visual = findChild(scene, "icon-visual-layer")
+        verify(!layer.visible, "a new panel's icons have no stand")
+        compare(visual.anchors.verticalCenterOffset, 0)
+        scene.tileSettings = ({ pedestalShape: "auto" })
         verify(layer.visible, "Auto draws a column on a flat panel")
         compare(scene.pedestalKind, "column")
         verify(visual.anchors.verticalCenterOffset < 0, "Auto raises the icon above its column")
@@ -74,21 +78,56 @@ TestCase {
         scene.tileSettings = ({ pedestalShape: "none" })
         verify(!layer.visible)
         compare(visual.anchors.verticalCenterOffset, 0)
-        for (const shape of ["column", "plate", "disc", "ring", "saucer"]) {
-            scene.tileSettings = ({ pedestalShape: shape, pedestalLift: 0.5, pedestalSize: 1.2,
-                                    pedestalMaterial: "organic", pedestalColor: "#44aa66" })
-            wait(0)
-            verify(layer.visible, shape + " is drawn")
-            verify(layer.width > 0 && layer.height > 0, shape + " has a size")
-            verify(visual.anchors.verticalCenterOffset < 0, shape + " raises the icon")
-            verify(layer.y + layer.height / 2 > visual.y + visual.height / 2,
-                   shape + " stands below the icon's middle")
+        const shapes = ["column", "plate", "disc", "ring", "saucer", "cube", "hexagon", "octagon", "star",
+                        "cone", "pyramid", "dome", "orb", "bowl", "pillar", "tiered", "goblet", "hourglass",
+                        "crystal", "halo"]
+        for (const shape of shapes) {
+            for (const lift of [0, 0.5, 2]) {
+                scene.tileSettings = ({ pedestalShape: shape, pedestalLift: lift, pedestalSize: 1.2,
+                                        pedestalThickness: 1.5, pedestalMaterial: "organic",
+                                        pedestalColor: "#44aa66" })
+                wait(0)
+                verify(layer.visible, shape + " is drawn")
+                verify(layer.width > 0 && layer.height > 0, shape + " has a size")
+                verify(visual.anchors.verticalCenterOffset < 0, shape + " raises the icon")
+                compare(layer.x + layer.width / 2, scene.width / 2, shape + " is centred under the icon")
+                // The stand's top (inside its glow margin) is below the
+                // icon's visible foot by the Lift gap.
+                const standTop = layer.y + (layer.height - scene.pedestalLayout.height) / 2
+                const foot = visual.y + visual.height - scene.logicalSize * 0.07
+                verify(standTop > foot, shape + " lift " + lift + " floats the icon above its stand")
+                fuzzyCompare(standTop - foot, scene.pedestalLayout.gap, 0.5, shape + " keeps its Lift gap")
+            }
         }
+        // On a free panel's path the stand stands on the path (the cell's
+        // middle) and the icon floats above it.
+        scene.pedestalOnPath = true
+        scene.tileSettings = ({ pedestalShape: "plate", pedestalLift: 0.3 })
+        wait(0)
+        const pathStandMiddle = layer.y + layer.height / 2
+        fuzzyCompare(pathStandMiddle, scene.height / 2, 1, "the stand's middle is on the path")
+        verify(visual.y + visual.height < pathStandMiddle, "the icon is above its stand")
+        scene.pedestalOnPath = false
+        // A thicker stand is taller; a bigger one is wider.
+        scene.tileSettings = ({ pedestalShape: "plate", pedestalThickness: 1 })
+        const thin = scene.pedestalLayout.height
+        scene.tileSettings = ({ pedestalShape: "plate", pedestalThickness: 4 })
+        verify(scene.pedestalLayout.height > thin * 1.5, "Thickness makes the stand taller")
+        scene.tileSettings = ({ pedestalShape: "plate", pedestalSize: 1 })
+        const narrow = scene.pedestalLayout.width
+        scene.tileSettings = ({ pedestalShape: "plate", pedestalSize: 3 })
+        verify(scene.pedestalLayout.width > narrow * 2.5, "Size makes the stand wider")
+        scene.tileSettings = ({ pedestalShape: "plate", pedestalOpacity: 0.4 })
+        compare(layer.opacity, 0.4, "the stand takes its opacity")
         compare(scene.logicalInputRegion.width, 64, "the input bounds never follow the stand")
         scene.tileSettings = ({ pedestalShape: "plate", pedestalAnimation: "bob", pedestalAnimationSpeed: 2 })
         verify(!scene.pedestalMotionActive, "reduced motion keeps the stand still")
         scene.reducedMotion = false
         verify(scene.pedestalMotionActive, "a chosen animation moves the stand")
+        for (const motion of ["spin", "pulse", "sway", "wobble", "glow", "float"]) {
+            scene.tileSettings = ({ pedestalShape: "hexagon", pedestalAnimation: motion })
+            verify(scene.pedestalMotionActive, motion + " moves the stand")
+        }
         scene.tileSettings = ({ pedestalShape: "plate", pedestalAnimation: "none" })
         verify(!scene.pedestalMotionActive)
     }

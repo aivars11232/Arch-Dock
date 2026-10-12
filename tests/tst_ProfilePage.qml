@@ -68,6 +68,18 @@ TestCase {
         item.actionsBlocked = true;
         verify(!button(item, "recover").enabled);
     }
+    function test_summaryCountsTheShownPanels() {
+        // The owner (2026-10-12): one free panel saved showed "4 panels",
+        // counting the hidden built-in edge panels every arrangement keeps.
+        const item = page({profiles: [{id: "profile-first", name: "Desk", revision: 1, panelCount: 4,
+            shownPanelCount: 1}]});
+        compare(findChild(item, "profile-summary").text.indexOf("1 panel · revision 1"), 0);
+        item.profiles = [{id: "profile-first", name: "Desk", revision: 2, panelCount: 5, shownPanelCount: 2}];
+        compare(findChild(item, "profile-summary").text.indexOf("2 panels · revision 2"), 0);
+        item.profiles = [{id: "profile-first", name: "Desk", revision: 3, panelCount: 3}];
+        compare(findChild(item, "profile-summary").text.indexOf("3 panels · revision 3"), 0,
+                "a profile listed without the shown count keeps its panel count");
+    }
     function test_freePanelsAnApplyWouldCreateAreAnnounced() {
         const item = page({profiles: [{id: "profile-first", name: "Desk", revision: 4, panelCount: 2}]});
         verify(!findChild(item, "profile-free-panel-notice").visible);

@@ -218,9 +218,10 @@ private slots:
         const int meshTriangles = theme.value("scene3DResources").toMap()
             .value("mesh").toMap().value("indexes").toList().size() / 3;
         // The platform and its two declared panel parts, and per entry: a
-        // glyph and a tile quad (2 + 2), a 72-triangle pedestal, the theme's
-        // icon base and its declared entry part (one platform mesh each).
-        const int expectedTriangles = meshTriangles * 7 + 2 * (2 + 2 + 72);
+        // glyph and a tile quad (2 + 2), the theme's icon base and its
+        // declared entry part (one platform mesh each). A new panel has no
+        // stands (the owner, 2026-10-12).
+        const int expectedTriangles = meshTriangles * 7 + 2 * (2 + 2);
         QCOMPARE(renderer->property("triangleCount").toInt(), expectedTriangles);
         QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 2);
         const QVariant geometry = plainValue(scene->property("entryRects"));
@@ -1674,7 +1675,7 @@ private slots:
         QTRY_VERIFY(!scene->property("travelStepping").toBool());
         scene->setProperty("wheelTravel", 0.0); scene->setProperty("wheelTravelTarget", 0.0);
         if (layout == QStringLiteral("circular") || !themeId.isEmpty()) {
-            bool hidden = false, visible = false;
+            bool behind = false, visible = false;
             const double period = plainValue(scene->property("trackWindow")).toMap().value("loop").toDouble();
             scene->setProperty("thickness", 4.0);
             for (double pitch : {45.0, -60.0}) {
@@ -1694,14 +1695,18 @@ private slots:
                         const auto rect = projected[i].toMap();
                         const QPointF point(rect.value("centerX").toDouble(), rect.value("centerY").toDouble());
                         if (point.x() < 0 || point.y() < 0 || point.x() >= picture.width() || point.y() >= picture.height()) continue;
-                        QVariant accepted;
+                        QVariant accepted, covered;
                         QVERIFY(QMetaObject::invokeMethod(renderer, "entryPointVisible", Q_RETURN_ARG(QVariant, accepted),
                             Q_ARG(QVariant, i), Q_ARG(QVariant, QVariant(point))));
-                        hidden |= !accepted.toBool(); visible |= accepted.toBool();
+                        QVERIFY(QMetaObject::invokeMethod(renderer, "entryPointBehindPlatform", Q_RETURN_ARG(QVariant, covered),
+                            Q_ARG(QVariant, i), Q_ARG(QVariant, QVariant(point))));
+                        behind |= covered.toBool(); visible |= accepted.toBool();
                     }
                 }
             }
-            QVERIFY2(hidden && visible, qPrintable(tag + " must expose front glyphs and exclude rear ones"));
+            // Icons rise clear of the platform at every camera angle, a thick
+            // one included: none is ever hidden in it.
+            QVERIFY2(!behind && visible, qPrintable(tag + " must show every glyph clear of the platform"));
         }
     }
 
@@ -2139,11 +2144,14 @@ void RendererCapabilityTest::tileDepthMaterialsPlacementAndOrbitRenderUnderRhi()
     const QPoint opacityPoint(qRound(opacityScreen.x()), qRound(opacityScreen.y()));
     const auto opaque = capture("opacity-100");
     QVERIFY(opaque.rect().contains(opacityPoint));
-    QVERIFY(opaque.pixelColor(opacityPoint).alpha() > 200);
+    // The point lies near the tile's bevel, where a pixel may be only partly
+    // covered; half the opacity is half of whatever the full tile gives there.
+    const int full = opaque.pixelColor(opacityPoint).alpha();
+    QVERIFY2(full > 150, qPrintable(QStringLiteral("opaque tile alpha was %1").arg(full)));
     values.insert("iconTileOpacity", 0.5); scene->setProperty("tileValues", values);
     const auto half = capture("opacity-50"); QVERIFY(!half.isNull());
-    QVERIFY2(qAbs(half.pixelColor(opacityPoint).alpha() - 128) <= 15,
-        qPrintable(QStringLiteral("tile 50 percent alpha was %1").arg(half.pixelColor(opacityPoint).alpha())));
+    QVERIFY2(qAbs(half.pixelColor(opacityPoint).alpha() - full / 2) <= 15,
+        qPrintable(QStringLiteral("tile 50 percent alpha was %1 of %2").arg(half.pixelColor(opacityPoint).alpha()).arg(full)));
     values.insert("iconTileOpacity", 0.0); scene->setProperty("tileValues", values);
     const auto clear = capture("opacity-0"); QVERIFY(!clear.isNull());
     QVERIFY(clear.pixelColor(opacityPoint).alpha() < 32);

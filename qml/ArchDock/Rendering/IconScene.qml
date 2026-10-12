@@ -3,6 +3,7 @@ import QtQuick.Effects
 import org.kde.kirigami as Kirigami
 import "MotionChannels.js" as MotionChannels
 import "LayoutEngine.js" as LayoutEngine
+import "PlatformGeometry.js" as PlatformGeometry
 
 // One dock icon, drawn in layers: rear effects, the icon style's base and
 // tile, the application's glyph, front treatments, the running indicator,
@@ -17,26 +18,39 @@ Item {
     property var iconStyleDefinition: ({})
     property var tileSettings: ({})
     readonly property bool customTileActive: tileSettings.iconTileMode === "custom"
-    // The Pedestals page: a stand under the icon on a flat panel. Auto is a
-    // column, as in 3D, unless the icon style draws its own pedestal; None
-    // draws nothing; a chosen shape floats between the panel and the icon
-    // in its own material, size and motion.
-    readonly property string pedestalShape: String(tileSettings.pedestalShape || "auto").toLowerCase()
-    readonly property string pedestalKind: pedestalShape === "auto" ? "column" : pedestalShape
+    // The Pedestals page: a stand under the icon on a flat panel and under
+    // an opened folder's items, painted from the 3D scene's own shapes: a
+    // horizontal stand seen a little from above, the icon centred over it
+    // and floating its Lift above the stand's top, so no part of the stand
+    // shows through the icon (the owner, 2026-10-12). Auto is a column, as
+    // in 3D, unless the icon style draws its own pedestal; None, the
+    // default, draws nothing.
+    // On a free panel's path the stand stands on the path at the icon's
+    // place and the icon floats above it (the owner, 2026-10-12: "why are
+    // they outside the dock"); in an edge panel's row and a folder opening
+    // icon and stand are centred together on the cell.
+    property bool pedestalOnPath: false
+    readonly property var pedestalLayout: PlatformGeometry.pedestalLayout(tileSettings, logicalSize, pedestalOnPath)
+    readonly property string pedestalShape: pedestalLayout.shape
+    readonly property string pedestalKind: pedestalLayout.kind === "none" ? "column" : pedestalLayout.kind
     readonly property bool styleDrawsPedestal: Boolean(tileSettings.iconPedestalEnabled)
     // Drawn here on a flat panel only: a 3D scene draws its own pedestals
     // and takes this scene's glyph and tile as textures.
-    readonly property bool pedestalDrawn: pedestalShape !== "none" && !meshVisualActive
-        && !(pedestalShape === "auto" && styleDrawsPedestal)
-    readonly property real pedestalSize: tileValue("pedestalSize", 1, 0.5, 2)
-    readonly property real pedestalLift: tileValue("pedestalLift", 0.3, 0, 1)
+    readonly property bool pedestalDrawn: pedestalLayout.drawn && !meshVisualActive
+    readonly property real pedestalSize: tileValue("pedestalSize", 1, 0.2, 4)
+    readonly property real pedestalThickness: tileValue("pedestalThickness", 1, 0.2, 4)
+    readonly property real pedestalLift: tileValue("pedestalLift", 0.3, 0, 2)
+    readonly property real pedestalOpacity: tileValue("pedestalOpacity", 1, 0.1, 1)
+    readonly property real pedestalGlow: tileValue("pedestalGlow", 0, 0, 1)
     readonly property string pedestalMaterial: String(tileSettings.pedestalMaterial || "panel").toLowerCase()
+    readonly property string pedestalTexture: String(tileSettings.pedestalTexture || "material").toLowerCase()
     readonly property string pedestalColor: String(tileSettings.pedestalColor || "")
     readonly property string pedestalAnimation: String(tileSettings.pedestalAnimation || "none").toLowerCase()
-    readonly property real pedestalAnimationSpeed: tileValue("pedestalAnimationSpeed", 1, 0.25, 3)
-    // How far the icon rises above its cell's middle to leave room for the
-    // stand and the gap under it.
-    readonly property real pedestalLiftPx: pedestalDrawn ? logicalSize * (0.06 + pedestalLift * 0.28) : 0
+    readonly property real pedestalAnimationSpeed: tileValue("pedestalAnimationSpeed", 1, 0.1, 5)
+    // How far the icon rises above its cell's middle, and where its visible
+    // foot is in this scene: the stand's top is the Lift gap below it.
+    readonly property real pedestalLiftPx: pedestalDrawn ? pedestalLayout.raise : 0
+    readonly property real pedestalFootY: height / 2 + logicalSize * 0.43 - pedestalLiftPx
     readonly property bool pedestalMotionActive: pedestalDrawn && pedestalAnimation !== "none"
         && !reducedMotion && visible
     property real pedestalPhase: 0
@@ -45,7 +59,7 @@ Item {
         loops: Animation.Infinite
         from: 0
         to: 1
-        duration: Math.round(4000 / Math.max(0.25, root.pedestalAnimationSpeed))
+        duration: Math.round(4000 / Math.max(0.1, root.pedestalAnimationSpeed))
     }
     property real logicalSize: 52
     property real visualScale: 1
@@ -280,161 +294,200 @@ Item {
         textureSize: glyphTexture.textureSize
     }
 
-    // The stand under the icon on a flat panel (the Pedestals page): a
-    // horizontal platform seen a little from above, with a top face and a
-    // side, painted in a material texture and tinted, so that an icon
-    // stands on it even with the panel itself drawn at no opacity. The
-    // stand has a little motion of its own.
+    // The stand under the icon: the shape's own solid, projected as the 3D
+    // scene shows it, each face shaded by its angle to the light, in the
+    // material's texture and the stand's colour, with an optional glow
+    // behind it. Its own motion moves it, not the icon.
     Item {
         id: pedestalLayer
         objectName: "icon-layer-pedestal"
         visible: root.pedestalDrawn
-        anchors.horizontalCenter: parent.horizontalCenter
-        // Its top face's middle just under the raised icon's foot (the glyph
-        // keeps a small margin inside its cell).
-        readonly property real topHeight: height * (root.pedestalKind === "column" ? 0.3 : 0.42)
-        y: root.height / 2 + root.logicalSize / 2 - root.pedestalLiftPx - root.logicalSize * 0.07 - topHeight / 2
-            + (root.pedestalAnimation === "bob" ? Math.sin(root.pedestalPhase * 2 * Math.PI) * root.logicalSize * 0.04 : 0)
-        width: root.logicalSize * ({ column: 0.46, plate: 1.0, disc: 1.06, ring: 1.06, saucer: 1.1 }[root.pedestalKind] || 1.0)
-            * root.pedestalSize
-        height: width * ({ column: 0.9, plate: 0.42, disc: 0.34, ring: 0.36, saucer: 0.55 }[root.pedestalKind] || 0.42)
-        opacity: root.pedestalAnimation === "pulse"
-            ? 0.72 + 0.28 * (0.5 + 0.5 * Math.sin(root.pedestalPhase * 2 * Math.PI)) : 1
-        scale: Math.max(0, root.visualScale)
+        readonly property real beat: root.pedestalMotionActive
+            ? Math.sin(root.pedestalPhase * 2 * Math.PI) : 0
+        readonly property real margin: Math.max(2, root.logicalSize * 0.22 * root.pedestalGlow)
+        readonly property real standWidth: root.pedestalLayout.width
+        readonly property real standHeight: root.pedestalLayout.height
+        width: standWidth + 2 * margin
+        height: standHeight + 2 * margin
+        x: (root.width - width) / 2
+        // Its top the Lift gap under the icon's foot.
+        y: root.pedestalFootY + root.pedestalLayout.gap - margin
+            + (root.pedestalAnimation === "bob" ? beat * root.logicalSize * 0.04
+               : root.pedestalAnimation === "float" ? beat * root.logicalSize * 0.03 : 0)
+        opacity: root.pedestalOpacity
+        scale: root.pedestalAnimation === "pulse" ? 1 + beat * 0.06 : 1
+        rotation: root.pedestalAnimation === "sway" ? beat * 8 : 0
+        transformOrigin: Item.Bottom
         readonly property string look: root.pedestalMaterial === "panel" ? root.appearance : root.pedestalMaterial
-        readonly property url textureSource: Qt.resolvedUrl("materials/" + look + ".png")
+        readonly property string textureLook: root.pedestalTexture === "material" ? look : root.pedestalTexture
+        readonly property url textureSource: textureLook === "none" ? ""
+            : Qt.resolvedUrl("materials/" + textureLook + ".png")
         readonly property string tint: root.pedestalColor.length ? root.pedestalColor
             : String(LayoutEngine.themeStyle(look, "", 48).stroke || "#b5d3e0")
-        readonly property real spin: root.pedestalAnimation === "spin" ? root.pedestalPhase * 2 * Math.PI : 0
+        readonly property real spin: !root.pedestalMotionActive ? 0
+            : root.pedestalAnimation === "spin" ? root.pedestalPhase * 2 * Math.PI
+            : root.pedestalAnimation === "float" ? root.pedestalPhase * Math.PI / 2 : 0
+        readonly property real wobble: root.pedestalAnimation === "wobble" ? beat * 10 : 0
+        readonly property var mesh: root.pedestalDrawn ? PlatformGeometry.pedestalShape(root.pedestalKind, 16) : null
+        // Everything a repaint depends on, in one value.
+        readonly property string paintKey: [root.pedestalKind, root.pedestalLayout.unit, root.pedestalLayout.depth,
+            root.pedestalLayout.tilt, tint, textureSource, width, height, root.pedestalGlow, visible].join("|")
 
+        // The stand's silhouette and faces, seen from `tilt` degrees above,
+        // turned `spin` about its axis: canvas points, nearest faces last.
+        function project(tilt, spinAngle) {
+            const layout = root.pedestalLayout
+            const unit = layout.unit
+            const stretch = layout.depth / Math.max(1e-6, unit)
+            const t = tilt * Math.PI / 180
+            const ct = Math.cos(t), st = Math.sin(t)
+            const cs = Math.cos(spinAngle), sn = Math.sin(spinAngle)
+            const cx = width / 2
+            const baseY = margin + layout.outline.top * unit
+            const positions = mesh ? mesh.positions : []
+            const points = [], turned = []
+            for (const p of positions) {
+                const x = p[0] * cs - p[1] * sn, y = p[0] * sn + p[1] * cs, z = p[2] * stretch
+                turned.push([x, y, z])
+                points.push([cx + x * unit, baseY - (z * ct + y * st) * unit])
+            }
+            const light = [-0.42, -0.5, 0.76]
+            const faces = []
+            const indexes = mesh ? mesh.indexes : []
+            for (let i = 0; i < indexes.length; i += 3) {
+                const a = turned[indexes[i]], b = turned[indexes[i + 1]], c = turned[indexes[i + 2]]
+                const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
+                const w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]
+                const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]]
+                const length = Math.hypot(n[0], n[1], n[2])
+                if (length < 1e-12) continue
+                // Facing the viewer, who looks from the front (-y) and above.
+                if (n[1] * -ct + n[2] * st <= 0) continue
+                const lambert = Math.max(0, (n[0] * light[0] + n[1] * light[1] + n[2] * light[2]) / length)
+                const depth = (-(a[1] + b[1] + c[1]) * ct + (a[2] + b[2] + c[2]) * st) / 3
+                faces.push({ corners: [points[indexes[i]], points[indexes[i + 1]], points[indexes[i + 2]]],
+                             shade: 0.42 + 0.58 * lambert, shine: Math.max(0, lambert - 0.82) * 2.2, depth: depth })
+            }
+            faces.sort(function(first, second) { return first.depth - second.depth })
+            return faces
+        }
+        function trace(context, faces) {
+            context.beginPath()
+            for (const face of faces) {
+                context.moveTo(face.corners[0][0], face.corners[0][1])
+                context.lineTo(face.corners[1][0], face.corners[1][1])
+                context.lineTo(face.corners[2][0], face.corners[2][1])
+                context.closePath()
+            }
+        }
+
+        // The glow: the stand's silhouette, blurred, in its colour.
+        Canvas {
+            id: pedestalGlowCanvas
+            anchors.fill: parent
+            visible: root.pedestalGlow > 0 || root.pedestalAnimation === "glow"
+            opacity: root.pedestalAnimation === "glow" ? 0.55 + 0.45 * pedestalLayer.beat : 1
+            onPaint: {
+                const context = getContext("2d")
+                context.reset()
+                if (!visible || !pedestalLayer.mesh) return
+                const strength = Math.max(root.pedestalGlow, root.pedestalAnimation === "glow" ? 0.5 : 0)
+                const faces = pedestalLayer.project(root.pedestalLayout.tilt, 0)
+                context.save()
+                context.shadowColor = pedestalLayer.tint
+                context.shadowBlur = pedestalLayer.margin * 1.6
+                context.globalAlpha = Math.min(1, 0.35 + strength * 0.65)
+                context.fillStyle = pedestalLayer.tint
+                pedestalLayer.trace(context, faces)
+                context.fill()
+                context.restore()
+            }
+            Connections {
+                target: pedestalLayer
+                function onPaintKeyChanged() { pedestalGlowCanvas.requestPaint() }
+            }
+            onVisibleChanged: requestPaint()
+            onAvailableChanged: if (available) requestPaint()
+        }
         Canvas {
             id: pedestalCanvas
             anchors.fill: parent
             property bool textureLoaded: false
             function loadTexture() {
-                if (!isImageLoaded(pedestalLayer.textureSource)) loadImage(pedestalLayer.textureSource)
-                textureLoaded = isImageLoaded(pedestalLayer.textureSource)
+                const source = String(pedestalLayer.textureSource)
+                if (source.length && !isImageLoaded(source)) loadImage(source)
+                textureLoaded = source.length > 0 && isImageLoaded(source)
                 requestPaint()
             }
-            onImageLoaded: { textureLoaded = isImageLoaded(pedestalLayer.textureSource); requestPaint() }
+            onImageLoaded: { textureLoaded = String(pedestalLayer.textureSource).length > 0
+                && isImageLoaded(String(pedestalLayer.textureSource)); requestPaint() }
             Component.onCompleted: loadTexture()
+            onVisibleChanged: if (visible) requestPaint()
+            onAvailableChanged: if (available) requestPaint()
             Connections {
                 target: pedestalLayer
                 function onTextureSourceChanged() { pedestalCanvas.loadTexture() }
-                function onTintChanged() { pedestalCanvas.requestPaint() }
+                function onPaintKeyChanged() { pedestalCanvas.requestPaint() }
                 function onSpinChanged() { pedestalCanvas.requestPaint() }
-                function onWidthChanged() { pedestalCanvas.requestPaint() }
-                function onHeightChanged() { pedestalCanvas.requestPaint() }
-            }
-            Connections {
-                target: root
-                function onPedestalShapeChanged() { pedestalCanvas.requestPaint() }
-            }
-            // The top face: an ellipse (a ring for the ring shape) seen from
-            // above at the dock's angle; `inset` shrinks it.
-            function traceTop(context, kind, w, top, inset) {
-                context.beginPath()
-                const x = inset, y = inset, tw = w - 2 * inset, th = Math.max(1, top - 2 * inset)
-                if (kind === "ring") {
-                    context.ellipse(x, y, tw, th)
-                    context.ellipse(x + tw * 0.3, y + th * 0.3, tw * 0.4, th * 0.4)
-                } else {
-                    context.ellipse(x, y, tw, th)
-                }
-                context.closePath()
-            }
-            // The lower half of an ellipse, left to right or back, as curves.
-            function lowerHalf(context, cx, cy, rx, ry, leftToRight) {
-                const k = 0.5523
-                if (leftToRight) {
-                    context.bezierCurveTo(cx - rx, cy + ry * k, cx - rx * k, cy + ry, cx, cy + ry)
-                    context.bezierCurveTo(cx + rx * k, cy + ry, cx + rx, cy + ry * k, cx + rx, cy)
-                } else {
-                    context.bezierCurveTo(cx + rx, cy + ry * k, cx + rx * k, cy + ry, cx, cy + ry)
-                    context.bezierCurveTo(cx - rx * k, cy + ry, cx - rx, cy + ry * k, cx - rx, cy)
-                }
-            }
-            // The side: the band between the top face's lower rim and the
-            // foot's lower rim.
-            function traceSide(context, kind, w, h, top, outerInset) {
-                const x = outerInset, tw = w - 2 * outerInset
-                const rx = tw / 2, ry = top / 2, cx = x + rx
-                const topY = ry, footY = h - ry
-                context.beginPath()
-                context.moveTo(x, topY)
-                context.lineTo(x, footY)
-                lowerHalf(context, cx, footY, rx, ry, true)
-                context.lineTo(x + tw, topY)
-                lowerHalf(context, cx, topY, rx, ry, false)
-                context.closePath()
-            }
-            function fillTextured(context, w, h, alpha) {
-                if (textureLoaded) {
-                    context.save()
-                    context.translate(w / 2, h / 2)
-                    context.rotate(pedestalLayer.spin)
-                    const s = Math.max(w, h) / 512 * 1.1
-                    context.scale(s, s)
-                    context.fillStyle = context.createPattern(String(pedestalLayer.textureSource), "repeat")
-                    context.fillRect(-512, -512, 1024, 1024)
-                    context.restore()
-                    context.globalCompositeOperation = "qt-multiply"
-                }
-                context.globalAlpha = alpha
-                context.fillStyle = pedestalLayer.tint
-                context.fillRect(0, 0, w, h)
-                context.globalAlpha = 1
-                context.globalCompositeOperation = "source-over"
+                function onWobbleChanged() { pedestalCanvas.requestPaint() }
             }
             onPaint: {
                 const context = getContext("2d")
                 context.reset()
-                const w = width, h = height
-                if (!(w > 0 && h > 0)) return
-                const kind = root.pedestalKind
-                const top = pedestalLayer.topHeight
-                // The ground shadow under the foot.
-                context.save()
-                context.beginPath()
-                context.ellipse(w * 0.06, h - top * 0.55, w * 0.88, top * 0.6)
-                context.fillStyle = "rgba(0,0,0,0.3)"
-                context.fill()
-                context.restore()
-                // The side, darker, then the top face.
-                context.save()
-                traceSide(context, kind, w, h, top, kind === "saucer" ? w * 0.12 : 0)
-                context.clip()
-                fillTextured(context, w, h, 1)
-                context.fillStyle = "rgba(0,0,0,0.38)"
-                context.fillRect(0, 0, w, h)
-                context.restore()
-                context.save()
-                traceTop(context, kind, w, top, 0)
-                context.clip("evenodd")
-                fillTextured(context, w, h, 1)
-                context.restore()
-                if (kind === "saucer") {
-                    // The dome on top, in the same material.
-                    context.save()
+                if (!pedestalLayer.mesh || !(width > 0 && height > 0)) return
+                const faces = pedestalLayer.project(root.pedestalLayout.tilt + pedestalLayer.wobble,
+                                                    pedestalLayer.spin)
+                if (!faces.length) return
+                // Each face in its shade of grey, far ones first; a hairline
+                // in the same grey closes the seams between neighbours.
+                context.lineWidth = 0.8
+                context.lineJoin = "round"
+                for (const face of faces) {
+                    const grey = Math.round(255 * Math.min(1, face.shade))
+                    const colour = "rgb(" + grey + "," + grey + "," + grey + ")"
+                    context.fillStyle = colour
+                    context.strokeStyle = colour
                     context.beginPath()
-                    context.ellipse(w * 0.3, top * 0.05, w * 0.4, top * 0.7)
-                    context.clip()
-                    fillTextured(context, w, h, 1)
-                    context.fillStyle = "rgba(255,255,255,0.14)"
-                    context.fillRect(0, 0, w, h)
-                    context.restore()
-                }
-                if (kind === "disc") {
-                    context.beginPath()
-                    context.ellipse(w * 0.2, top * 0.25, w * 0.6, top * 0.5)
-                    context.strokeStyle = "rgba(255,255,255,0.3)"
+                    context.moveTo(face.corners[0][0], face.corners[0][1])
+                    context.lineTo(face.corners[1][0], face.corners[1][1])
+                    context.lineTo(face.corners[2][0], face.corners[2][1])
+                    context.closePath()
+                    context.fill()
                     context.stroke()
                 }
-                // Polished rims.
-                context.lineWidth = 1
-                context.strokeStyle = "rgba(255,255,255,0.45)"
-                traceTop(context, kind, w, top, 0)
-                context.stroke()
+                // The material's texture and the stand's colour, multiplied
+                // into the shading inside the silhouette.
+                context.save()
+                pedestalLayer.trace(context, faces)
+                context.clip()
+                context.globalCompositeOperation = "qt-multiply"
+                if (textureLoaded) {
+                    context.save()
+                    context.translate(width / 2, height / 2)
+                    context.rotate(pedestalLayer.spin)
+                    const s = Math.max(width, height) / 512 * 1.1
+                    context.scale(s, s)
+                    context.fillStyle = context.createPattern(String(pedestalLayer.textureSource), "repeat")
+                    context.fillRect(-512, -512, 1024, 1024)
+                    context.restore()
+                }
+                context.fillStyle = pedestalLayer.tint
+                context.fillRect(0, 0, width, height)
+                context.restore()
+                // A little shine on the faces turned to the light.
+                context.save()
+                for (const face of faces) {
+                    if (face.shine <= 0) continue
+                    context.globalAlpha = Math.min(0.5, face.shine)
+                    context.fillStyle = "#ffffff"
+                    context.beginPath()
+                    context.moveTo(face.corners[0][0], face.corners[0][1])
+                    context.lineTo(face.corners[1][0], face.corners[1][1])
+                    context.lineTo(face.corners[2][0], face.corners[2][1])
+                    context.closePath()
+                    context.fill()
+                }
+                context.restore()
             }
         }
     }
@@ -448,6 +501,8 @@ Item {
         width: root.logicalSize
         height: root.logicalSize
         scale: Math.max(0, root.visualScale)
+        // Over a stand it grows about its foot, so it never sinks into it.
+        transformOrigin: root.pedestalDrawn ? Item.Bottom : Item.Center
 
         Item {
             id: rearLayer

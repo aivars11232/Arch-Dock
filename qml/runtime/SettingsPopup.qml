@@ -1082,13 +1082,21 @@ Window {
     }
 
     function pedestalRows() {
-        const rows = schemaSectionRows("pedestals", qsTr("Pedestals"),
-            qsTr("The stands under the icons, on flat and 3D panels: their shape, size, how high they float between the panel and the icon, their material and colour, and their motion."));
-        const shape = String(panelValue("pedestalShape", "auto"));
+        const rows = schemaSectionRows("pedestals", qsTr("Icon stands"),
+            qsTr("A stand under each icon, on flat and 3D panels: a horizontal stand seen a little from above, the icon centred over it and floating its float height above it. Its shape, size, thickness, material, texture, colour, opacity, glow and motion."));
+        const shape = String(panelValue("pedestalShape", "none"));
         if (shape === "auto")
-            rows.push(notice(qsTr("Auto keeps each renderer's own pedestal: a column in the panel's material on a 3D panel, none on a flat panel. Choose a shape to draw pedestals everywhere; Panels > 3D > Pedestal height still applies to Auto."), false));
+            rows.push(notice(qsTr("Auto is a column in the panel's own material under each icon; on a 3D panel its height is Panels > 3D > Pedestal height."), false));
         else if (shape === "none")
-            rows.push(notice(qsTr("No pedestals are drawn; the icons stand on the panel."), false));
+            rows.push(notice(qsTr("No stands are drawn; new panels start this way. Choose a shape to put a stand under every icon."), false));
+        rows.push(section(qsTr("Folder item stands"),
+            qsTr("The stands under the items of an opened folder: the icons' own (Same), none, or a shape of their own. With Own settings on, they take their own size, thickness, float height, material, texture, colour, opacity, glow and motion.")));
+        const fields = fieldsForSection("pedestals-folder");
+        for (let index = 0; index < fields.length; ++index)
+            rows.push(fields[index]);
+        const folderShape = String(panelValue("folderPedestalShape", "same"));
+        if ((folderShape === "same" && shape === "none") || folderShape === "none")
+            rows.push(notice(qsTr("An opened folder's items have no stands."), false));
         return rows;
     }
 

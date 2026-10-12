@@ -53,9 +53,15 @@ the screen, so a free panel put on the desktop from a profile, a preset or
 the backend accepts that placement.
 True 3D defaults to high quality, which supersamples the scene: on a weak
 graphics chip choose Medium or Low on Panels > 3D.
-Pedestals (the Pedestals page) are turned solids in 3D and painted
-horizontal platforms on a flat panel; a theme package cannot yet provide its own pedestal mesh, and
-Auto is a column stand on flat and 3D panels alike (an icon style with its own pedestal keeps it); None removes the stand. A free panel's folder opened Along the dock on a
+Pedestals (the Pedestals page) are solids that face the viewer with their
+icon in 3D, and the same shapes painted with flat shading on a flat panel
+and in an opened folder; a theme package cannot yet provide its own pedestal
+mesh. New panels have none; Auto is a column stand on flat and 3D panels
+alike (an icon style with its own pedestal keeps it). A stand and its icon
+take more height than the icon alone: on a thin edge panel a tall stand at
+a large Size can reach past the panel's edge. The flat painter draws
+twenty to a few hundred small faces per stand; a Spin, Wobble or Float
+motion repaints them every frame. A free panel's folder opened Along the dock on a
 tilted 3D platform follows the projected ring, and the curve widens round the
 dock as far as the children need; a folder with more children than fit still
 scrolls.

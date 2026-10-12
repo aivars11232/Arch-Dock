@@ -211,6 +211,8 @@ private slots:
         const QString id = created.value("profileId").toString();
         QCOMPARE(ids(ProfileStore(root).load(id)->panels), QStringList({"bottom", "free-1", "free-6"}));
         QCOMPARE(first(manager).value("panelCount").toInt(), 3);
+        // The hidden built-in bottom panel is kept but not shown.
+        QCOMPARE(first(manager).value("shownPanelCount").toInt(), 2);
         QCOMPARE(first(manager).value("freePanelCount").toInt(), 2);
         QCOMPARE(first(manager).value("freePanelsToCreate").toInt(), 0);
         QCOMPARE(first(manager).value("freePanelLimit").toInt(), ProfileManager::MaximumFreePanelsCreatedPerApply);

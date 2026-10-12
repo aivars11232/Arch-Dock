@@ -884,6 +884,12 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 if (available && *capability == ArchDock::EditorCapability::Scene3DShape)
                     available = theme->value(QStringLiteral("scene3D")).toMap()
                         .contains(QStringLiteral("generated"));
+                // Pedestal height is Auto's column height; with another stand
+                // choice it changes nothing, so it is kept unseen.
+                if (available && key == QStringLiteral("scene3DIconElevation")
+                    && candidate.surface.parameters3D.value(QStringLiteral("pedestalShape"),
+                           QStringLiteral("none")).toString() != QStringLiteral("auto"))
+                    inactive = true;
             }
             break;
         }
@@ -935,20 +941,39 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         case ArchDock::EditorCapability::Pedestals:
         {
             // Pedestals stand under the icons on every host and renderer:
-            // Auto is a column on flat and 3D panels alike (the owner's
-            // 2026-10-12 report: a page whose settings did nothing). With no
-            // pedestal the other settings draw nothing and are kept unseen;
-            // the speed draws nothing without an animation.
+            // Auto is a column on flat and 3D panels alike; new panels have
+            // none. A setting that draws nothing is kept unseen: the panel's
+            // stand settings without a shape, the speed without a motion,
+            // the folder items' settings without stands under them or
+            // without Own settings (the owner's 2026-10-12 requests).
             available = true;
-            const QString shape = candidate.surface.parameters3D
-                .value(QStringLiteral("pedestalShape"), QStringLiteral("auto")).toString();
-            const QString motion = candidate.surface.parameters3D
-                .value(QStringLiteral("pedestalAnimation"), QStringLiteral("none")).toString();
+            const QVariantMap &values = candidate.surface.parameters3D;
+            const QString shape = values.value(QStringLiteral("pedestalShape"), QStringLiteral("none")).toString();
+            const QString folderShape = values.value(QStringLiteral("folderPedestalShape"), QStringLiteral("same")).toString();
             const bool drawn = shape != QStringLiteral("none");
-            if (key != QStringLiteral("pedestalShape") && key != QStringLiteral("folderPedestalShape"))
+            const bool folderDrawn = folderShape == QStringLiteral("same") ? drawn : folderShape != QStringLiteral("none");
+            const bool folderOwn = values.value(QStringLiteral("folderPedestalOwnStyle"), false).toBool();
+            if (key.startsWith(QStringLiteral("folderPedestal")))
+            {
+                if (key == QStringLiteral("folderPedestalOwnStyle"))
+                    inactive = !folderDrawn;
+                else if (key != QStringLiteral("folderPedestalShape"))
+                    inactive = !folderDrawn || !folderOwn;
+                if (key == QStringLiteral("folderPedestalAnimationSpeed"))
+                    inactive = inactive || values.value(QStringLiteral("folderPedestalAnimation"),
+                        QStringLiteral("none")).toString() == QStringLiteral("none");
+            }
+            else if (key != QStringLiteral("pedestalShape"))
+            {
                 inactive = !drawn;
-            if (key == QStringLiteral("pedestalAnimationSpeed"))
-                inactive = inactive || motion == QStringLiteral("none");
+                // Stand facing turns a 3D panel's stands; a flat panel's are
+                // always level.
+                if (key == QStringLiteral("pedestalFacing"))
+                    inactive = inactive || resolution.renderer.effectiveTier != ArchDock::RendererTier::True3D;
+                if (key == QStringLiteral("pedestalAnimationSpeed"))
+                    inactive = inactive || values.value(QStringLiteral("pedestalAnimation"),
+                        QStringLiteral("none")).toString() == QStringLiteral("none");
+            }
             break;
         }
         case ArchDock::EditorCapability::GlobalRenderer:

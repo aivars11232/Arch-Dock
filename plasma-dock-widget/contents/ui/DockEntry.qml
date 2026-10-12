@@ -21,6 +21,8 @@ Item {
     required property int hoveredIndex
     required property string tileShape
     property var tileSettings: ({})
+    // A free panel's path: the stand on the path, the icon above it.
+    property bool pedestalOnPath: false
     required property string appearance
     required property bool showReflection
     required property bool showIndicator
@@ -374,6 +376,7 @@ Item {
                 logicalSize: root.baseSize
                 tileShape: root.tileShape
                 tileSettings: root.tileSettings
+                pedestalOnPath: root.pedestalOnPath
                 appearance: root.appearance
                 vertical: root.vertical
                 hovered: hoverArea.containsMouse
