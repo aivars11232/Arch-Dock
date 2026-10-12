@@ -86,11 +86,50 @@ Item {
     readonly property var surfaceStyle: LayoutEngine.themeStyle(
         appearance, customColor, Number(geometry.iconSize || 40))
     readonly property url materialSource: Qt.resolvedUrl(
-        "../materials/" + surfaceStyle.material + ".svg")
+        "../materials/" + surfaceStyle.material + ".png")
     readonly property bool materialReady: canvas.materialLoaded
     readonly property bool materialAnimationActive: visible && !sceneConcealed
         && !reducedMotion && surfaceStyle.animated && motionOpacity > 0 && panelOpacity > 0
     property real energyPhase: 0
+
+    // The material wraps along the track the way a label wraps round a tin:
+    // each piece of the path is painted in its own frame, the texture turned
+    // to the path's direction there, its height the track's width and its
+    // phase the distance travelled along the path, so it runs on from piece
+    // to piece and a ring closes on whole repeats without a seam.
+    function paintWrappedMaterial(context) {
+        const points = surfacePath.points
+        const count = points.length
+        if (count < 2) return
+        const closed = surfacePath.closed === true
+        const last = closed ? count : count - 1
+        const lengths = [0]
+        for (let i = 1; i <= last; ++i) {
+            const a = points[i - 1], b = points[i % count]
+            lengths.push(lengths[i - 1] + Math.hypot(b.x - a.x, b.y - a.y))
+        }
+        const total = lengths[last]
+        const width = surfaceStyle.lineWidth
+        if (!(total > 0) || !(width > 0)) return
+        const texture = 512
+        const repeats = Math.max(1, Math.round(total / width))
+        const scaleX = (closed ? total / repeats : width) / texture
+        const scaleY = width / texture
+        const pattern = context.createPattern(String(materialSource), "repeat")
+        for (let i = 1; i <= last; ++i) {
+            const a = points[i - 1], b = points[i % count]
+            const length = lengths[i] - lengths[i - 1]
+            if (!(length > 0)) continue
+            context.save()
+            context.translate(a.x, a.y)
+            context.rotate(Math.atan2(b.y - a.y, b.x - a.x))
+            context.translate(-lengths[i - 1], -width / 2)
+            context.scale(scaleX, scaleY)
+            context.fillStyle = pattern
+            context.fillRect(lengths[i - 1] / scaleX - 1, 0, length / scaleX + 2, texture)
+            context.restore()
+        }
+    }
 
     function trace(context) {
         context.beginPath()
@@ -194,10 +233,12 @@ Item {
             context.stroke()
             context.shadowBlur = 0
             context.shadowColor = "transparent"
-            context.strokeStyle = materialLoaded
-                ? context.createPattern(String(root.materialSource), "repeat")
-                : root.surfaceStyle.stroke
-            context.stroke()
+            if (materialLoaded) {
+                root.paintWrappedMaterial(context)
+            } else {
+                context.strokeStyle = root.surfaceStyle.stroke
+                context.stroke()
+            }
             // Multiply preserves the map's grain and facets under every tint.
             context.shadowBlur = 0
             context.shadowColor = "transparent"

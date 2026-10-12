@@ -1212,6 +1212,17 @@ Item {
         return result
     }
 
+    // Where a folder's shape opens from on a true-3D panel: the platform's
+    // edge beside the folder and the way out of the platform there, as
+    // drawn ({ start, direction } in scene coordinates), or null where the
+    // shape opens from the folder icon itself (flat and baked panels).
+    function folderOutwardRay(folderIndex, margin) {
+        if (!freeHost || folderIndex < 0 || folderIndex >= entryCount) return null
+        const mesh = surfaceLoader.true3DReady ? surfaceLoader.true3DItem : null
+        if (!mesh || !mesh.folderOutwardRay) return null
+        return mesh.folderOutwardRay(folderIndex, margin)
+    }
+
     // Popups open away from the dock as it is drawn: a tilted, turned or
     // projected platform faces out of its drawn centre.
     function buildPopupAnchors() {

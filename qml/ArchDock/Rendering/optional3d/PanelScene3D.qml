@@ -82,7 +82,18 @@ Item {
         : generatedSpec && !generatedSpec.palette && !textureRequired
             ? LayoutEngine.themeStyle(appearance, "", 48).material : ""
     readonly property url materialTextureSource: textureMaterial.length
-        ? Qt.resolvedUrl("../materials/" + textureMaterial + ".svg") : ""
+        ? Qt.resolvedUrl("../materials/" + textureMaterial + ".png") : ""
+    readonly property url materialNormalSource: textureMaterial.length
+        ? Qt.resolvedUrl("../materials/" + textureMaterial + "-normal.png") : ""
+    // The energy looks flow round the band while the scene is animated.
+    property real flowOffset: 0
+    NumberAnimation on flowOffset {
+        running: root.materialAnimationActive
+        loops: Animation.Infinite
+        from: 0
+        to: 1
+        duration: 9000
+    }
     // A texture that is being replaced keeps the scene ready: while the new
     // file loads, the platform keeps drawing (without that texture for a
     // moment) instead of the whole panel falling back to its flat renderer,
@@ -148,7 +159,8 @@ Item {
             material.opacity = LayoutEngine.themeStyle(look, "", 48).alpha
             if (["neon", "plasma", "lime", "futuristic"].includes(look)) {
                 material.emissiveColor = materialColour || LayoutEngine.themeStyle(look, "", 48).stroke
-                material.emissiveStrength = 0.2 + root.materialPulse * 0.35
+                material.emissiveStrength = 0.35 + root.materialPulse * 0.45
+                material.emissiveThroughTexture = true
             }
         }
         return material
@@ -159,6 +171,9 @@ Item {
     readonly property Texture themeTexture: textureChoice === "none" ? null
         : textureMaterial.length ? (materialTextureReady ? selectedMaterialTexture : null)
         : textureRequired && textureReady ? surfaceTexture : null
+    // The material's relief map, for meshes that can be lit with it.
+    readonly property Texture themeNormalTexture: textureChoice !== "none" && textureMaterial.length
+        && materialTextureReady && materialNormalImage.status === Image.Ready ? selectedMaterialNormal : null
     // Turns an icon, from inside the entries' frame, to face the camera: the
     // frame's own rotation undone, the camera's taken.
     readonly property quaternion iconFacing: entryFrame.sceneRotation.inverted()
@@ -737,6 +752,48 @@ Item {
         }
         return result
     }
+    // The platform's edge beside the entry and the way out of the platform
+    // there, as drawn: where a folder's fan, arc, stack or ring opens from on
+    // a 3D panel. `start` lies `margin` screen pixels outside the platform's
+    // rim on the entry's own radial line, `direction` is that line as the
+    // camera sees it; both in view pixels.
+    function folderOutwardRay(entryIndex, margin) {
+        const node = worldEntries.objectAt(entryIndex)
+        if (!rendererReady || !node || !node.inputAnchor) return null
+        const foot = sceneContent.mapPositionFromScene(node.scenePosition)
+        const radius = Math.hypot(foot.x, foot.y)
+        if (!(radius > 0)) return null
+        const ux = foot.x / radius, uy = foot.y / radius
+        // The rim along this direction, in the scene's units: an ellipse's
+        // reach for a generated platform, the farthest vertex near this
+        // angle for a theme's mesh (the mesh turns with the layout).
+        let rim = radius
+        if (generatedPlatform) {
+            const rx = Math.max(0.01, platformReachX), ry = Math.max(0.01, platformReachY)
+            rim = platformScale / Math.hypot(ux / rx, uy / ry)
+        } else if (platformMesh && platformMesh.positions) {
+            const turn = Math.atan2(uy, ux) + layoutAngle * Math.PI / 180
+            let farthest = 0
+            for (const vertex of platformMesh.positions) {
+                const x = Number(vertex[0]), y = Number(vertex[1])
+                const along = x * Math.cos(turn) + y * Math.sin(turn)
+                const across = -x * Math.sin(turn) + y * Math.cos(turn)
+                if (along > 0 && Math.abs(across) <= along * 0.27) farthest = Math.max(farthest, along)
+            }
+            rim = farthest > 0 ? farthest * platformScale : radius
+        }
+        const edge = Math.max(radius, rim)
+        const usable = point => Number.isFinite(point.x) && Number.isFinite(point.y) && point.z > 0
+        const at = distance => root.projectScenePoint(sceneContent.mapPositionToScene(
+            Qt.vector3d(ux * distance, uy * distance, foot.z)))
+        const start = at(edge), further = at(edge + Math.max(1, radius) * 0.25)
+        if (!usable(start) || !usable(further)) return null
+        const dx = further.x - start.x, dy = further.y - start.y, length = Math.hypot(dx, dy)
+        if (!(length > 1e-6)) return null
+        const gap = Math.max(0, Number(margin) || 0)
+        return { start: { x: start.x + dx / length * gap, y: start.y + dy / length * gap },
+                 direction: { x: dx / length, y: dy / length } }
+    }
     function updateProjection() {
         if (!rendererReady || width <= 0 || height <= 0) return
         const result = []
@@ -822,6 +879,15 @@ Item {
         id: materialImage
         visible: false
         source: root.materialTextureSource
+        sourceSize: Qt.size(512, 512)
+        asynchronous: true
+        cache: true
+    }
+
+    Image {
+        id: materialNormalImage
+        visible: false
+        source: root.materialNormalSource
         sourceSize: Qt.size(512, 512)
         asynchronous: true
         cache: true
@@ -954,6 +1020,24 @@ Item {
                 ? materialImage : null
             generateMipmaps: true
             mipFilter: Texture.Linear
+            // A generated platform wraps the texture round its band, as
+            // many times along it as keep the texture's scale the same both
+            // ways; a theme's mesh maps its texture as the theme authored it.
+            scaleU: root.generatedPlatform ? Number(root.generatedPlatform.textureRepeats || 1) : 1
+            tilingModeHorizontal: Texture.Repeat
+            tilingModeVertical: Texture.Repeat
+            positionU: root.flowOffset
+        }
+        Texture {
+            id: selectedMaterialNormal
+            sourceItem: root.Window.window && materialNormalImage.Window.window === root.Window.window
+                ? materialNormalImage : null
+            generateMipmaps: true
+            mipFilter: Texture.Linear
+            scaleU: selectedMaterialTexture.scaleU
+            tilingModeHorizontal: Texture.Repeat
+            tilingModeVertical: Texture.Repeat
+            positionU: root.flowOffset
         }
         Texture {
             id: surfaceTexture
@@ -1061,6 +1145,7 @@ Item {
                     meshData: root.pedestalMesh
                     materialData: root.platformMaterial
                     surfaceTexture: root.themeTexture
+                    surfaceNormalTexture: root.themeNormalTexture
                     visible: entryNode.tileShown && (entryNode.elevation > 0 || entryNode.tileLift > 0)
                     z: -(entryNode.pedestalHeight + entryNode.baseLift + entryNode.tileLift)
                     scale: Qt.vector3d(entryNode.size * 0.18, entryNode.size * 0.18,
@@ -1073,6 +1158,7 @@ Item {
                     meshData: iconResource.meshData
                     materialData: iconResource.materialData
                     surfaceTexture: root.themeTexture
+                    surfaceNormalTexture: root.themeNormalTexture
                     visible: !root.generatedSpec && entryNode.tileShown && entryNode.elevation > 0
                     z: -(entryNode.pedestalHeight + entryNode.baseLift + entryNode.tileLift)
                     scale: Qt.vector3d(entryNode.size * 0.3, entryNode.size * 0.3, entryNode.size * 0.15)
@@ -1096,6 +1182,7 @@ Item {
                             meshData: root.entryParts[index].resources.mesh || null
                             materialData: root.entryParts[index].resources.material || ({})
                             surfaceTexture: root.themeTexture
+                            surfaceNormalTexture: root.themeNormalTexture
                             openAmount: root.partOpenAmount(partDefinition)
                             emissionScale: root.emissionScale * (1 + entryNode.glow)
                         }
@@ -1227,6 +1314,7 @@ Item {
                 meshData: root.platformMesh
                 materialData: root.platformMaterial
                 surfaceTexture: root.themeTexture
+                surfaceNormalTexture: root.themeNormalTexture
                 emissionScale: root.emissionScale
             }
             Repeater3D {
@@ -1241,6 +1329,7 @@ Item {
                         root.platformFold, root.baseTopHeight)
                     materialData: root.panelParts[index].resources.material || ({})
                     surfaceTexture: root.themeTexture
+                    surfaceNormalTexture: root.themeNormalTexture
                     openAmount: root.partOpenAmount(partDefinition)
                     emissionScale: root.emissionScale
                 }

@@ -874,6 +874,10 @@ PlasmoidItem {
                 obstacles: function() {
                     return panelScene.folderObstacles(representation.folderEntryIndex)
                 }
+                outwardRay: function() {
+                    // The shape opens from the platform's rim itself.
+                    return panelScene.folderOutwardRay(representation.folderEntryIndex, 0)
+                }
                 // A ring the size of the panel needs a dock with a radius.
                 dockCentre: function() {
                     return LayoutEngine.supportsWholeSceneRotation(panelScene.layoutPath)

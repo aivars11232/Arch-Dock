@@ -1685,11 +1685,15 @@ function folderShape(shape, options) {
     // touch whichever way the curve runs; icons alone keep the dock's pitch.
     const curvePitch = named ? Math.hypot(cellWidth, cellHeight) + gap : size + 14;
     const obstacleSize = Math.max(0, finite(value.obstacleSize, size));
-    const obstacles = [{ x: folder.x, y: folder.y }];
+    const obstacles = value.fromEdge === true ? [] : [{ x: folder.x, y: folder.y }];
     for (const point of value.obstacles || [])
         if (point && isFinite(point.x) && isFinite(point.y))
             obstacles.push({ x: Number(point.x), y: Number(point.y) });
     const outlineMargin = Math.max(0, finite(value.outlineMargin, 0));
+    // `folder` is already an edge the shape opens from (a 3D platform's
+    // rim), not the folder icon's centre: a fan's apex and a stack's first
+    // child stand on it rather than a square's reach beyond it.
+    const fromEdge = value.fromEdge === true;
     // The screen, less the margin the window keeps round the shape.
     const inset = Math.max(0, finite(value.screenMargin, 0));
     const screen = value.screen && finite(value.screen.width, 0) > 2 * inset
@@ -1758,7 +1762,8 @@ function folderShape(shape, options) {
                          pitch: curvePitch, capacity: 0, outline: null };
         if (kind === "fan") {
             const opening = clamp(finite(value.fanOpening, 90), 40, 160) * Math.PI / 180;
-            const apex = along(folder, direction, squareReach(size, direction) + 6);
+            const apex = fromEdge ? { x: folder.x, y: folder.y }
+                : along(folder, direction, squareReach(size, direction) + 6);
             // A small panel: a few children at once, more the wider it opens.
             const shown = Math.max(2, Math.min(count, clamp(Math.round(
                 opening / (Math.PI / 2) * (named ? 4 : 6)), 3, 12)) - fewer);
@@ -1767,7 +1772,9 @@ function folderShape(shape, options) {
                 radius += 4;
             const arc = arcSamples(apex, direction, radius, opening, 48);
             result.samples = arc;
-            result.outline = { closed: true, points: [apex].concat(arc) };
+            // The sector's two straight edges are only the faint fill's border;
+            // the stroke follows the arc the children stand on.
+            result.outline = { closed: true, points: [apex].concat(arc), strokeFrom: 1 };
             result.apex = apex;
             result.radius = radius;
             result.opening = opening * 180 / Math.PI;
@@ -1787,7 +1794,7 @@ function folderShape(shape, options) {
                                    cellHeight / Math.max(Math.abs(direction.y), 1e-6)) + gap;
             const length = clamp(Math.round(finite(value.stackLength, 5)), 2, 12);
             const slots = Math.max(1, Math.min(count, length) - fewer);
-            let distance = squareReach(size, direction);
+            let distance = fromEdge ? 0 : squareReach(size, direction);
             while (distance < largest && !allClear([along(folder, direction, distance)]))
                 distance += 2;
             const line = [];

@@ -38,7 +38,14 @@ motion and fallback behavior remain applicable when optional rendering is off.
 
 Changing a 3D material or texture keeps the scene drawn with the previous
 texture until the new file has loaded; the first readiness of a scene still
-waits for every resource. A free panel's folder opened Along the dock on a
+waits for every resource. The material textures are generated raster
+images that depict their names (grass, plasma, marble, metal, stone), not
+photographs. In 3D they are lit as relief (a normal map per look) and the
+energy looks flow round the band, but they remain surfaces: blades of grass
+that sway or a plasma volume would be a new rendering feature with its own
+geometry and shaders. A generated platform
+wraps its texture round its band; the two bundled 3D themes keep their vector
+surfaces, since theme packages carry no raster files. A free panel's folder opened Along the dock on a
 tilted 3D platform follows the projected ring, and the curve widens round the
 dock as far as the children need; a folder with more children than fit still
 scrolls.

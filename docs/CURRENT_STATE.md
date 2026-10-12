@@ -28,16 +28,36 @@ private copy of the owner's desktop. The corrections in the working tree:
 - 3D hit tests are memoised and allocation-free; the 2D scene reuses each
   entry's geometry; the "frame rendered" flag no longer binds to render
   statistics.
+- 2026-10-12, from the owner's screenshots: on a 3D panel a folder's fan
+  opens from the platform's rim beside the folder, an arc and a ring are
+  centred there, and a stack lies along the rim beside the folder
+  (`PanelScene3D.folderOutwardRay` through `PanelScene` to
+  `FolderTrackHost.outwardRay`, `LayoutEngine.folderShape` `fromEdge`); the
+  fan's straight edges are no longer stroked. The thirteen material looks
+  are 512 px raster textures that depict their names, generated
+  deterministically by `tools/generate-material-textures.py --raster`; the
+  texture wraps round the panel in 3D (`PlatformGeometry` texture
+  coordinates round the band on every face, `textureRepeats`) and in 2D
+  (`PanelProcedural2D.paintWrappedMaterial` paints it along the track);
+  in 3D each look has a relief map lit as bumps (generated meshes carry
+  tangents, `IconStyle3D` `surfaceNormalTexture`), energy looks glow through
+  their texture (`emissiveThroughTexture`) and flow round the band
+  (`flowOffset`); theme packages keep their vector surfaces by the
+  provenance rule. The crash reports the
+  owner saw on 2026-10-12 were KDE replaying old dumps of the audit's
+  private test sessions at login, not the live Arch Dock.
 - The audit's three 3D findings (a core at rest, vanishing in motion, a
   placeholder after a change) were withdrawn: they came from the harness's
   per-icon sampling timer and its capture hook, not from Arch Dock. Resting
   cost without that sampling: flat 2 %, Cyan Mesh 3D 3–4 %, Orange Arc 3D
   3–15 % of a core (Debug build).
 
-Verification: Focused tests for the registry and controller changes (panel model, settings schema, panel registry with the new rehost test, window capability) passed on 2026-10-11; of the 27 targeted rendering, folder, registry and widget tests run serially on the final tree, 23 had passed (folder-anchor-smoke among them) and studio-truth-matrix-smoke, path-travel-smoke, bootstrap-coordinator-test and plasma-template-contract-test were still running when the owner paused the work; the complete suite has not yet run on this tree.
+Verification: The complete suite passed 120 of 120 tests serially on this tree on 2026-10-12 (2231 s); the run before it, without the relief maps, passed 119 of 120, its one failure being the rendering smoke test's energy-theme selection racing a settings revision, which passed alone (135 s). Targeted rendering, folder, theme and registry tests passed 19 of 19. Private picture runs: the complete picture matrix (92 captures: every flat look, icon style, baked and 3D case drawn, motion present, no crash), every material look photographed on a generated platform in 3D and flat (`sheet-materials-3d-relief.png`, `sheet-materials-flat.png` in the audit folder), and the folder shapes on flat, both themes and the generated platform with the panel mid-screen.
 
 Open: the cause of the lost widgets (A-01), the suite's two render races and
-one teardown timeout (B-01). The package was not rebuilt.
+one teardown timeout (B-01), and the owner's request for a Pedestals page
+(shape, size, texture, animation, 2D and 3D), a new feature for the next
+task. The package was not rebuilt.
 <!-- AUDIT_2026_10_11_END -->
 
 <!-- ADREP_TASK_005_BEGIN -->

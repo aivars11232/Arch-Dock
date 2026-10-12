@@ -291,6 +291,15 @@ Item {
                 context.fill()
                 context.restore()
             }
+            // A shape may stroke only part of its outline (a fan's arc):
+            // the rest is the faint fill's border alone.
+            const first = Math.max(0, Math.floor(Number(root.outline.strokeFrom) || 0))
+            if (first > 0 && first < points.length - 1) {
+                context.beginPath()
+                context.moveTo(points[first].x, points[first].y)
+                for (let index = first + 1; index < points.length; ++index)
+                    context.lineTo(points[index].x, points[index].y)
+            }
             context.shadowColor = style.shadow
             context.shadowBlur = style.blur
             context.stroke()

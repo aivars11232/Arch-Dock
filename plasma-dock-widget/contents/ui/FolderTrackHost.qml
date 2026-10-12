@@ -44,6 +44,11 @@ PlasmaCore.Dialog {
     property var outwardNormal: ({ x: 0, y: -1 })
     property var trackSamples: null
     property var obstacles: null
+    // A function returning where a shape opens from on a 3D panel, { start,
+    // direction } in the icon's parent's coordinates: the platform's edge
+    // beside the folder and the way out of the platform there; null opens
+    // the shape from the folder icon.
+    property var outwardRay: null
     property bool requested: false
     property bool interactionAllowed: true
     // Measured when the folder opens, in screen coordinates.
@@ -164,8 +169,37 @@ PlasmaCore.Dialog {
             const middle = typeof dockCentre === "function" ? dockCentre() : null
             const dock = middle ? scene.mapToGlobal(middle.x, middle.y) : null
             const panelRadius = dock ? Math.hypot(centre.x - dock.x, centre.y - dock.y) : 0
+            // On a 3D panel the shape opens from the platform's edge beside
+            // the folder, the way out of the platform there; elsewhere from
+            // the folder icon, the way it faces out of the dock.
+            let origin = { x: centre.x, y: centre.y }
+            let facing = outwardNormal || ({ x: 0, y: -1 })
+            let fromEdge = false
+            const ray = typeof outwardRay === "function" ? outwardRay() : null
+            if (ray && ray.start && ray.direction) {
+                const from = scene.mapToGlobal(ray.start.x, ray.start.y)
+                const to = scene.mapToGlobal(ray.start.x + ray.direction.x, ray.start.y + ray.direction.y)
+                const length = Math.hypot(to.x - from.x, to.y - from.y)
+                if (length > 1e-6) {
+                    origin = { x: from.x, y: from.y }
+                    facing = { x: (to.x - from.x) / length, y: (to.y - from.y) / length }
+                    fromEdge = true
+                    if (folderLayout === "stack") {
+                        // A stack lies along the platform's edge beside the
+                        // folder, one cell out from the rim, running the way
+                        // that has more of the screen.
+                        const reach = Math.min(content.cellWidth / 2 / Math.max(Math.abs(facing.x), 1e-6),
+                                               content.cellHeight / 2 / Math.max(Math.abs(facing.y), 1e-6))
+                        origin = { x: origin.x + facing.x * (reach + 4), y: origin.y + facing.y * (reach + 4) }
+                        let edge = { x: -facing.y, y: facing.x }
+                        const middle = { x: area.x + area.width / 2 - origin.x, y: area.y + area.height / 2 - origin.y }
+                        if (edge.x * middle.x + edge.y * middle.y < 0) edge = { x: -edge.x, y: -edge.y }
+                        facing = edge
+                    }
+                }
+            }
             shape = LayoutEngine.folderShape(folderLayout, {
-                folder: { x: centre.x, y: centre.y }, outward: outwardNormal || ({ x: 0, y: -1 }),
+                folder: origin, outward: facing, fromEdge: fromEdge,
                 iconSize: iconSize, cellWidth: content.cellWidth, cellHeight: content.cellHeight,
                 gap: 6, count: content.entries.length, fanOpening: fanOpening,
                 stackLength: stackLength, ringSize: ringSize, panelRadius: panelRadius,
@@ -243,6 +277,7 @@ PlasmaCore.Dialog {
         pathCapacity: root.screenShape !== null ? Number(root.screenShape.capacity || 0) : 0
         pathPitch: root.screenShape !== null ? Number(root.screenShape.pitch || 0) : 0
         outline: root.screenOutline ? ({ closed: root.screenOutline.closed === true,
+            strokeFrom: Number(root.screenOutline.strokeFrom) || 0,
             points: root.screenOutline.points.map(root.local) }) : null
         outlineFilled: root.folderLayout === "fan"
         outlineStyle: root.outlineStyle

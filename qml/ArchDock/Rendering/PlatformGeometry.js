@@ -48,14 +48,24 @@ function MeshBuilder() {
     this.uv0s = []
     this.colors = []
     this.indexes = []
+    // Where the texture's u runs on the surface, per vertex, and the
+    // across direction with it: a relief map needs both to light its bumps.
+    this.tangents = []
+    this.binormals = []
 }
 
-MeshBuilder.prototype.vertex = function(point, normal, color) {
+MeshBuilder.prototype.vertex = function(point, normal, color, uv, tangent) {
     this.positions.push([point[0], point[1], point[2]])
-    this.normals.push(normalized(normal))
-    // Planar, seen from above: a texture drawn as the platform's top view
-    // lands where it is drawn.
-    this.uv0s.push([0.5 + point[0] / 2, 0.5 + point[1] / 2])
+    const n = normalized(normal)
+    this.normals.push(n)
+    // Given texture coordinates, or planar ones seen from above, where a
+    // texture drawn as the top view lands where it is drawn.
+    this.uv0s.push(uv ? [uv[0], uv[1]] : [0.5 + point[0] / 2, 0.5 + point[1] / 2])
+    if (tangent) {
+        const along = normalized(tangent)
+        this.tangents.push(along)
+        this.binormals.push(normalized(crossProduct(n, along)))
+    }
     if (color)
         this.colors.push([color[0], color[1], color[2], color.length > 3 ? color[3] : 1])
     return this.positions.length - 1
@@ -82,6 +92,10 @@ MeshBuilder.prototype.result = function(extra) {
     }
     if (this.colors.length === this.positions.length && this.colors.length > 0)
         mesh.colors = this.colors
+    if (this.tangents.length === this.positions.length && this.tangents.length > 0) {
+        mesh.tangents = this.tangents
+        mesh.binormals = this.binormals
+    }
     const keys = Object.keys(extra || ({}))
     for (let index = 0; index < keys.length; ++index)
         mesh[keys[index]] = extra[keys[index]]
@@ -109,15 +123,17 @@ function pedestal(segments) {
         const b = (index + 1) / count * Math.PI * 2
         const na = [Math.cos(a), Math.sin(a), 0], nb = [Math.cos(b), Math.sin(b), 0]
         const middle = [Math.cos((a + b) / 2), Math.sin((a + b) / 2), 0]
-        const v0 = mesh.vertex([na[0], na[1], 0], na)
-        const v1 = mesh.vertex([nb[0], nb[1], 0], nb)
-        const v2 = mesh.vertex([nb[0], nb[1], 1], nb)
-        const v3 = mesh.vertex([na[0], na[1], 1], na)
+        const ua = index / count, ub = (index + 1) / count
+        const ta = [-Math.sin(a), Math.cos(a), 0], tb = [-Math.sin(b), Math.cos(b), 0]
+        const v0 = mesh.vertex([na[0], na[1], 0], na, null, [ua, 1], ta)
+        const v1 = mesh.vertex([nb[0], nb[1], 0], nb, null, [ub, 1], tb)
+        const v2 = mesh.vertex([nb[0], nb[1], 1], nb, null, [ub, 0], tb)
+        const v3 = mesh.vertex([na[0], na[1], 1], na, null, [ua, 0], ta)
         mesh.triangle(v0, v1, v2, middle)
         mesh.triangle(v0, v2, v3, middle)
-        const centre = mesh.vertex([0, 0, 1], [0, 0, 1])
-        const t0 = mesh.vertex([na[0], na[1], 1], [0, 0, 1])
-        const t1 = mesh.vertex([nb[0], nb[1], 1], [0, 0, 1])
+        const centre = mesh.vertex([0, 0, 1], [0, 0, 1], null, null, [1, 0, 0])
+        const t0 = mesh.vertex([na[0], na[1], 1], [0, 0, 1], null, null, [1, 0, 0])
+        const t1 = mesh.vertex([nb[0], nb[1], 1], [0, 0, 1], null, null, [1, 0, 0])
         mesh.triangle(centre, t0, t1, [0, 0, 1])
     }
     return mesh.result()
@@ -326,6 +342,35 @@ function platform(spec) {
     const runs = centreLine(shape, options.segments, track, half + outerBevel)
     const body = new MeshBuilder()
     const rimFaces = []
+    // Texture coordinates: the texture wraps round the band the way a label
+    // wraps round a tin. Across the band, v runs along the cross-section
+    // from the inner wall's foot (0) over the top to the outer wall's foot
+    // (1), so every face carries the texture, with its middle on the top.
+    // Along the band, u runs 0..1 over each run; the mesh's `textureRepeats`
+    // says how many whole repeats of the texture that is (as many as keep
+    // its scale the same both ways, so a ring closes without a seam), for
+    // the texture's own horizontal scale.
+    const sectionLengths = [0]
+    for (let index = 1; index < section.length; ++index)
+        sectionLengths.push(sectionLengths[index - 1]
+            + Math.hypot(section[index][0] - section[index - 1][0], section[index][1] - section[index - 1][1]))
+    const sectionLength = Math.max(1e-6, sectionLengths[sectionLengths.length - 1])
+    const across = function(pointIndex) { return sectionLengths[pointIndex] / sectionLength }
+    const runLengths = function(run) {
+        const lengths = [0]
+        for (let index = 1; index < run.samples.length; ++index) {
+            const a = run.samples[index - 1].c, b = run.samples[index].c
+            lengths.push(lengths[index - 1] + Math.hypot(b[0] - a[0], b[1] - a[1]))
+        }
+        return lengths
+    }
+    const runRepeats = function(run) {
+        const lengths = runLengths(run)
+        return Math.max(1, Math.round(Math.max(1e-6, lengths[lengths.length - 1]) / sectionLength))
+    }
+    let textureRepeats = 1
+    for (const run of runs)
+        textureRepeats = Math.max(textureRepeats, runRepeats(run))
     const addFace = function(mesh, run, face) {
         const from = section[face.from], to = section[face.to]
         // The section runs clockwise (up the inner wall, over the top, down
@@ -334,14 +379,28 @@ function platform(spec) {
         const along = [to[0] - from[0], to[1] - from[1]]
         const sectionNormal = normalized([-along[1], along[0], 0])
         const color = colour(options.palette, face.part)
+        // The underside runs back from the outer foot to the inner one.
+        const vFrom = face.part === "under" ? 1 : across(face.from)
+        const vTo = face.part === "under" ? 0 : across(face.to)
+        const lengths = runLengths(run)
+        const total = Math.max(1e-6, lengths[lengths.length - 1])
+        // A shorter run (a polygon's side) uses that share of the repeats.
+        const share = runRepeats(run) / textureRepeats
         const strip = []
-        for (let index = 0; index < run.samples.length; ++index) {
+        const count = run.samples.length
+        for (let index = 0; index < count; ++index) {
             const sample = run.samples[index]
             const normal = [sample.n[0] * sectionNormal[0], sample.n[1] * sectionNormal[0], sectionNormal[1]]
             const point = function(p) {
                 return [sample.c[0] + sample.m[0] * p[0], sample.c[1] + sample.m[1] * p[0], p[1]]
             }
-            strip.push([mesh.vertex(point(from), normal, color), mesh.vertex(point(to), normal, color), normal])
+            const u = lengths[index] / total * share
+            // The path's direction here, where the texture's u runs.
+            const before = run.samples[index > 0 ? index - 1 : (run.closed ? count - 2 : 0)]
+            const after = run.samples[index + 1 < count ? index + 1 : (run.closed ? 1 : count - 1)]
+            const tangent = [after.c[0] - before.c[0], after.c[1] - before.c[1], 0]
+            strip.push([mesh.vertex(point(from), normal, color, [u, vFrom], tangent),
+                        mesh.vertex(point(to), normal, color, [u, vTo], tangent), normal])
         }
         for (let index = 0; index + 1 < strip.length; ++index) {
             const a = strip[index], b = strip[index + 1]
@@ -366,7 +425,8 @@ function platform(spec) {
             const color = colour(options.palette, "wall")
             const points = section.map(function(p) {
                 return body.vertex([end.sample.c[0] + end.sample.m[0] * p[0],
-                                    end.sample.c[1] + end.sample.m[1] * p[0], p[1]], facing, color)
+                                    end.sample.c[1] + end.sample.m[1] * p[0], p[1]], facing, color,
+                                   null, [end.sample.m[0], end.sample.m[1], 0])
             })
             for (let index = 1; index + 1 < points.length; ++index)
                 body.triangle(points[0], points[index], points[index + 1], facing)
@@ -387,7 +447,8 @@ function platform(spec) {
         rimCount: body.indexes.length - rimOffset,
         shape: shape.kind,
         band: half,
-        track: track
+        track: track,
+        textureRepeats: textureRepeats
     })
 }
 
@@ -412,12 +473,20 @@ function foldPoint(point, fold, hingeHeight) {
             hinge + point[1] * Math.sin(turn) + z * Math.cos(turn)]
 }
 
+function foldVector(vector, atPoint, fold) {
+    const turn = clamp(finite(fold, 0), -1, 1) * Math.PI / 2
+    if (atPoint[1] <= 0 || Math.abs(turn) < 1e-9) return vector.slice()
+    return [vector[0], vector[1] * Math.cos(turn) - vector[2] * Math.sin(turn),
+            vector[1] * Math.sin(turn) + vector[2] * Math.cos(turn)]
+}
+
 function foldMesh(mesh, fold, hingeHeight) {
     if (!mesh || !mesh.positions || !mesh.indexes) return null
     if (Math.abs(clamp(finite(fold, 0), -1, 1)) < 1e-9) return mesh
     if (mesh.indexes.length > 262144) return null
     const result = Object.assign({}, mesh, {positions: [], normals: [], uv0s: [], indexes: []})
     if (mesh.colors) result.colors = []
+    if (mesh.tangents) { result.tangents = []; result.binormals = [] }
     // Each face keeps its winding and gets its actual deformed normal. This
     // also gives the crease a hard edge instead of an interpolated false one.
     for (let i = 0; i < mesh.indexes.length; i += 3) {
@@ -429,6 +498,11 @@ function foldMesh(mesh, fold, hingeHeight) {
             result.normals.push(normal.slice())
             result.uv0s.push((mesh.uv0s[ids[j]] || [0, 0]).slice())
             if (mesh.colors) result.colors.push(mesh.colors[ids[j]].slice())
+            if (mesh.tangents) {
+                const tangent = normalized(foldVector(mesh.tangents[ids[j]], mesh.positions[ids[j]], fold))
+                result.tangents.push(tangent)
+                result.binormals.push(normalized(crossProduct(normal, tangent)))
+            }
             result.indexes.push(result.indexes.length)
         }
     }

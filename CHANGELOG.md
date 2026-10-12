@@ -25,6 +25,25 @@ The proposed `v0.1.1` tag and publication need separate authorization.
 - 3D hit tests are memoised and allocation-free; the 2D scene reuses each
   entry's own geometry for hit tests; the 3D "frame rendered" flag no longer
   re-evaluates on every frame.
+- Folder shapes on a 3D panel (2026-10-12): a fan opens from the platform's
+  rim beside the folder, an arc and a ring are centred there, and a stack
+  lies along the rim beside the folder, running the way that has more of the
+  screen; all follow the platform's plane as drawn. A fan's two straight
+  edges are only its faint fill's border; the stroke follows the arc.
+- Real textures (2026-10-12): the thirteen material looks are 512 px raster
+  textures that depict their names (grass for Organic, flowing plasma for
+  Plasma, marble for Pedestal, a lime's peel for Lime, brushed metal,
+  riveted plate, stone, frost, circuits, tubes), generated deterministically
+  from the vector swatches by `tools/generate-material-textures.py --raster`;
+  the flat looks, icon tiles and the 3D platform load them. The texture
+  wraps round the panel: a generated 3D platform maps it round its band on
+  every face, inner wall, top and outer wall, with whole repeats along the
+  ring, and a flat panel paints it along its track, turned to the track's
+  direction, so a ring closes without a seam. In 3D each look also has a
+  relief map (`<look>-normal.png`, from the texture's brightness) that the
+  scene lights as a real surface on the platform and the pedestals, the
+  energy looks glow through their texture and flow round the band. Theme
+  packages keep their vector surfaces.
 - ADREP-TASK-005: all six icon styles follow Rounded, Square, Squircle,
   Circle, Hexagon and Diamond through package declarations, retaining their
   signature defaults. Diameter, Logo size, outline and colours are saved beside

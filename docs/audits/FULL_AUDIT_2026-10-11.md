@@ -111,6 +111,28 @@ rest and for vanishing in motion. Both came from the audit's own tooling:
   also widens the curve (two thirds of the way round the dock, then further,
   up to all but a sixth) while a shorter curve would hold only some of the
   children, which the foreshortened far side of a tilted platform does.
+- **F-07 (2026-10-12, owner's screenshots)** — on a 3D panel a folder's fan,
+  arc, stack or ring opened from the folder icon's centre, flat on screen,
+  so a stack ran straight away from the ring and a fan started on the
+  platform. Now a fan opens from the platform's rim beside the folder, an
+  arc and a ring are centred there, and a stack lies along the rim beside
+  the folder (the owner's red lines), running the way that has more of the
+  screen; the fan's two straight edges are only its faint fill's border.
+- **F-08 (2026-10-12, owner's screenshots)** — every texture was a small
+  vector gradient, so a "textured" platform showed a colour mix, projected
+  from above over the whole platform. The thirteen material looks are now
+  512 px raster textures that depict their names (grass, flowing plasma,
+  marble, brushed metal, riveted plate, stone, frost, circuits, tubes),
+  generated deterministically from the vector swatches
+  (`tools/generate-material-textures.py --raster`), and a generated platform
+  wraps its texture round its band on every face. Theme packages keep their
+  vector surfaces (the provenance rule allows no raster file in them).
+- **Crash reports on 2026-10-12** — the eight tray icons and the
+  "kwin_wayland closed unexpectedly" notice were KDE replaying, at the owner's
+  login, old dumps from the audit's private test sessions (the picture-sheet
+  tool, a test portal, a test shell, test compositors from 10-05 and 10-07);
+  the live Arch Dock did not crash. The audit's tooling now runs with core
+  dumps disabled.
 - **Hit testing** — the 3D hit test keeps its answers in a memo dropped when
   anything it depends on changes, walks the platform's triangles as one flat
   array built once per mesh, and the 2D scene reuses the entry item's own
@@ -139,4 +161,10 @@ rest and for vanishing in motion. Both came from the audit's own tooling:
   the 17 panels back from Studio.
 - B-01: the two render races in the suite (truth matrix, preset card) and the
   teardown timeout are unchanged.
+- Pedestals (owner's request, 2026-10-12): a Panel Studio page of their own
+  where the small stands under the icons can be given a shape or theme
+  (plate, spaceship, …), a size, a texture and animations, floating between
+  the panel and the icon in 2D and in 3D. Today the 3D pedestals are plain
+  columns in the platform's material and only the Dark Orb icon style has a
+  2D pedestal. This is a new feature for the next task, not a repair.
 - The package was not rebuilt; the owner installs packages.

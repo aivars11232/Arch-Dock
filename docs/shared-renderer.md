@@ -518,13 +518,26 @@ host and does not call the Arch Dock service.
 
 ## Textured procedural materials — ADREP-TASK-004
 
-The thirteen retained procedural looks use original bundled SVG maps in
+The thirteen retained procedural looks use original bundled texture maps in
 `qml/ArchDock/Rendering/materials`, generated deterministically by
-`tools/generate-material-textures.py`. Their licence and provenance are in
-[packaging/LICENSING.md](../packaging/LICENSING.md). The existing threaded
-Canvas paints them along the shared layout path; a multiply tint preserves
-the material's detail, including with the software scene graph. There is no
-runtime download or replacement rendering framework.
+`tools/generate-material-textures.py` in two stages: an SVG swatch per look
+that defines its colours and pattern, and the 512 px PNG the renderers load,
+which is that swatch rendered and given the surface its name says (grass
+blades, flowing plasma, marble veins, brushed streaks, stone speckle, frost
+or a soft shimmer) from tileable value noise and strokes on fixed seeds. A
+generated 3D platform wraps the texture round its band on every face, with
+whole repeats along the ring (`PlatformGeometry` texture coordinates and the
+mesh's `textureRepeats`); a flat panel's Canvas paints the texture along its
+track in pieces turned to the track's direction, with whole repeats on a
+ring (`paintWrappedMaterial`). Each look also ships a relief map
+(`<look>-normal.png`, a tangent-space normal map from the texture's
+brightness); the generated meshes carry tangents and binormals, so the 3D
+scene lights the surface as bumps, and the energy looks glow through their
+texture and flow round the band. Theme packages keep their vector surfaces.
+Their licence and provenance are in
+[packaging/LICENSING.md](../packaging/LICENSING.md). A multiply tint
+preserves the material's detail, including with the software scene graph.
+There is no runtime download or replacement rendering framework.
 
 Glass has a translucent body, light frost, a refraction-like gradient and a
 fine edge highlight; Floating Glass adds elevation and a cast shadow. Crystal

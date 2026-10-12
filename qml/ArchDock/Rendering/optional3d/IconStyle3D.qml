@@ -13,6 +13,10 @@ Model {
     required property var meshData
     required property var materialData
     property Texture surfaceTexture: null
+    // The surface's relief map, lit as bumps when the mesh carries tangents.
+    property Texture surfaceNormalTexture: null
+    readonly property bool reliefReady: surfaceNormalTexture !== null && meshReady
+        && Array.isArray(meshData.tangents) && meshData.tangents.length === meshData.positions.length
     property Material faceMaterial: null
     property real emissionScale: 1
     property var partDefinition: null
@@ -72,6 +76,8 @@ Model {
         positions: root.meshReady ? root.vectors(root.meshData.positions, 3) : []
         normals: root.meshReady ? root.vectors(root.meshData.normals, 3) : []
         uv0s: root.meshReady ? root.vectors(root.meshData.uv0s, 2) : []
+        tangents: root.reliefReady ? root.vectors(root.meshData.tangents, 3) : []
+        binormals: root.reliefReady ? root.vectors(root.meshData.binormals, 3) : []
         colors: root.vertexColoured ? root.colours(root.meshData.colors) : []
         indexes: root.meshReady ? root.meshData.indexes : []
         primitiveMode: ProceduralMesh.Triangles
@@ -99,6 +105,11 @@ Model {
             Number(values.emissiveStrength || 0) * root.emissionScale))
         baseColor: root.vertexColoured ? "#ffffff" : values.baseColor || "#ffffff"
         baseColorMap: root.surfaceTexture
+        // An energy look glows through its texture: the bright filaments
+        // and tubes shine, the dark ground between them does not.
+        emissiveMap: values.emissiveThroughTexture === true ? root.surfaceTexture : null
+        normalMap: root.reliefReady ? root.surfaceNormalTexture : null
+        normalStrength: Math.max(0, Math.min(1, Number(values.normalStrength === undefined ? 1 : values.normalStrength)))
         vertexColorsEnabled: root.vertexColoured
         opacity: Math.max(0, Math.min(1, Number(values.opacity === undefined ? 1 : values.opacity)))
         alphaMode: opacity < 1 ? PrincipledMaterial.Blend : PrincipledMaterial.Opaque

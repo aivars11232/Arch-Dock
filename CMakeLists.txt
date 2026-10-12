@@ -110,7 +110,8 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     renderers/PanelBaked25D.qml)
 foreach(material glass crystal neon minimal plasma lime floating-glass metallic
                  futuristic organic platform plate pedestal)
-  list(APPEND ARCHDOCK_RENDERING_MODULE_FILES materials/${material}.svg)
+  list(APPEND ARCHDOCK_RENDERING_MODULE_FILES materials/${material}.svg materials/${material}.png
+              materials/${material}-normal.png)
 endforeach()
 set(ARCHDOCK_RENDERING_MODULE_SOURCES)
 set(ARCHDOCK_OPTIONAL_RENDERING_FILES

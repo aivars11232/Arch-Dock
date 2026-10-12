@@ -1373,14 +1373,23 @@ def run_interaction_matrix(free_panel):
                 problems = []
                 if info["turn"] != 0:
                     problems.append("the shape turned although the screen has room")
-                if facing < 0.95:
+                # A true-3D panel opens its shapes from the platform's rim
+                # beside the folder, the way out of the platform as drawn;
+                # its stack lies along the rim. Flat and baked panels open
+                # from the folder icon along its outward direction.
+                edge = tier == "true3d"
+                if edge and layout == "stack":
+                    if abs(facing) > 0.5:
+                        problems.append("the stack does not lie along the platform's edge")
+                elif facing < (0.6 if edge else 0.95):
                     problems.append("the shape does not open along the folder's outward direction")
+                near = icon_size * 2 + 24 if edge else icon_size * 0.75 + 12
                 if layout == "fan":
                     apex = on_screen(info["apex"])
                     radii = [distance(c, apex) for c in children]
                     row["apexFromFolder"] = round(distance(apex, folder), 1)
                     row["radii"] = [round(r, 1) for r in radii]
-                    if distance(apex, folder) > icon_size * 0.75 + 12:
+                    if distance(apex, folder) > near:
                         problems.append("the fan's apex is not at the folder")
                     if max(radii) - min(radii) > 1.5:
                         problems.append("the children do not stand on the fan's arc")
@@ -1398,7 +1407,7 @@ def run_interaction_matrix(free_panel):
                     radii = [distance(c, middle) for c in children]
                     row["centreFromFolder"] = round(distance(middle, folder), 1)
                     row["radii"] = [round(r, 1) for r in radii]
-                    if distance(middle, folder) > 6:
+                    if distance(middle, folder) > (near if edge else 6):
                         problems.append("the arc is not centred on the folder")
                     if max(radii) - min(radii) > 1.5:
                         problems.append("the children are not at one distance from the folder")
@@ -1407,13 +1416,19 @@ def run_interaction_matrix(free_panel):
                     if (mean[0] * way[0] + mean[1] * way[1]) / (math.hypot(*mean) or 1) < 0.98:
                         problems.append("the arc is not symmetric about the folder's outward direction")
                 elif layout == "stack":
-                    aside = [abs((c[0] - folder[0]) * -way[1] + (c[1] - folder[1]) * way[0]) for c in children]
-                    along = [(c[0] - folder[0]) * way[0] + (c[1] - folder[1]) * way[1] for c in children]
+                    # Beside the folder on a 3D panel, from the folder elsewhere.
+                    base = children[0] if edge else folder
+                    aside = [abs((c[0] - base[0]) * -way[1] + (c[1] - base[1]) * way[0]) for c in children]
+                    along = [(c[0] - base[0]) * way[0] + (c[1] - base[1]) * way[1] for c in children]
                     row["aside"] = [round(a, 1) for a in aside]
                     if max(aside) > 4:
                         problems.append("the stack is not a straight line from the folder")
-                    if any(b <= a for a, b in zip(along, along[1:])) or along[0] <= 0:
+                    if any(b <= a for a, b in zip(along, along[1:])) or (not edge and along[0] <= 0):
                         problems.append("the stack does not run outward from the folder")
+                    # Beside the folder, allowing for the slide along the edge
+                    # that keeps the stack clear of the folder's neighbours.
+                    if edge and distance(children[0], folder) > icon_size * 5 + 24:
+                        problems.append("the stack does not start beside the folder")
                 else:
                     middle = on_screen(info["centre"])
                     radii = [distance(c, middle) for c in children]
