@@ -1434,7 +1434,8 @@ Item {
                     ["pedestalShape", "pedestalShape"], ["pedestalSize", "pedestalSize"],
                     ["pedestalLift", "pedestalLift"], ["pedestalMaterial", "pedestalMaterial"],
                     ["pedestalColor", "pedestalColor"], ["pedestalAnimation", "pedestalAnimation"],
-                    ["pedestalAnimationSpeed", "pedestalAnimationSpeed"]])
+                    ["pedestalAnimationSpeed", "pedestalAnimationSpeed"],
+                    ["folderPedestalShape", "folderPedestalShape"]])
                 if (definition[key] !== undefined) parameters[parameter] = definition[key]
             return parameters
         }

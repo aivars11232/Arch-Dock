@@ -20,7 +20,7 @@ Item {
     property url textureSource: ""
     property var entryGeometry: []
     property var entryVisuals: []
-    property string quality: "medium"
+    property string quality: "high"
     property real panelOpacity: 1
     property bool sceneConcealed: false
     property real layoutAngle: 0
@@ -48,10 +48,13 @@ Item {
         })
     }
 
+    // Quality: low draws at three quarters of the size without smoothing;
+    // medium at full size with multisampling; high (the default) at full
+    // size, supersampled, so edges, textures and the stands are not pixelly
+    // (the owner's 2026-10-12 report).
     readonly property string effectiveQuality:
-        ["low", "medium", "high"].includes(quality) ? quality : "medium"
-    readonly property real resolutionScale: effectiveQuality === "low" ? 0.5
-        : effectiveQuality === "high" ? 1 : 0.75
+        ["low", "medium", "high"].includes(quality) ? quality : "high"
+    readonly property real resolutionScale: effectiveQuality === "low" ? 0.75 : 1
     readonly property int textureLimit: effectiveQuality === "low" ? 1024
         : effectiveQuality === "high" ? 2048 : 1536
     readonly property real boundedScale: Math.min(resolutionScale,
@@ -227,6 +230,12 @@ Item {
     readonly property int pedestalTriangles: pedestalMesh.indexes.length / 3
     // Each shape's width across, in icon sizes, at pedestal size 1.
     readonly property real pedestalShapeScale: ({ column: 0.18, plate: 0.46, disc: 0.42, ring: 0.42, saucer: 0.4 })[pedestalKind] || 0.18
+    // How far each shape reaches from its axis, in its own units.
+    readonly property real pedestalShapeReach: ({ column: 1, plate: 1, disc: 1.25, ring: 1.3, saucer: 1.4 })[pedestalKind] || 1
+    // Bend tilts a generated band's top across its width (0.9 per unit of
+    // bend), so a flat stand on the centre line would sink into the rim on
+    // the high side: the band's rise under the stand's footprint.
+    readonly property real platformBendSlope: generatedSpec ? Math.abs(bounded("bend", 0, -1, 1)) * 0.9 : 0
     readonly property var pedestalMaterialData: pedestalOwnMaterial
         ? materialForLook(pedestalMaterialLook, pedestalColour) : platformMaterial
     readonly property url pedestalTextureSource: pedestalOwnMaterial
@@ -1111,10 +1120,10 @@ Item {
         camera: camera
         environment: SceneEnvironment {
             backgroundMode: SceneEnvironment.Transparent
-            antialiasingMode: root.effectiveQuality === "low"
-                ? SceneEnvironment.NoAA : SceneEnvironment.MSAA
+            antialiasingMode: root.effectiveQuality === "low" ? SceneEnvironment.NoAA
+                : root.effectiveQuality === "high" ? SceneEnvironment.SSAA : SceneEnvironment.MSAA
             antialiasingQuality: root.effectiveQuality === "high"
-                ? SceneEnvironment.High : SceneEnvironment.Medium
+                ? SceneEnvironment.VeryHigh : SceneEnvironment.High
         }
         Texture {
             id: selectedMaterialTexture
@@ -1229,6 +1238,13 @@ Item {
                 readonly property real pedestalSpin: root.pedestalAnimation === "spin" && root.pedestalMotionActive
                     ? root.pedestalPhase * 360 : 0
                 readonly property real baseLift: size * 0.02
+                // On a bent band the stand and its icon rise to the band's
+                // highest point beneath the stand (the owner's 2026-10-12
+                // picture: front discs cut by the rim at Bend -1).
+                readonly property real bendRise: root.platformBendSlope > 0 && root.pedestalDrawn
+                    ? root.platformBendSlope * Math.min(pedestalScale * root.pedestalShapeReach / Math.max(1e-6, root.platformScale),
+                        root.resolvedBand + PlatformGeometry.outerBevel) * root.platformScale * root.platformThickness
+                    : 0
                 readonly property real tileLift: visual ? Math.max(-24, Math.min(96,
                     root.number(visual.tileSettings, "iconTileElevation", 0)))
                     * size / Math.max(1, Number(visual.logicalSize || 52)) : 0
@@ -1272,7 +1288,7 @@ Item {
                 // motion moves the icon alone (below) and the pedestal's
                 // motion moves the pedestal alone, so neither drags the other.
                 position: Qt.vector3d(standPoint[0], standPoint[1],
-                    standPoint[2] * root.platformThickness + pedestalHeight + baseLift + tileLift)
+                    standPoint[2] * root.platformThickness + bendRise + pedestalHeight + baseLift + tileLift)
                 opacity: root.number(iconMotion, "opacity", 1) * trackVisibility
 
                 // The pedestal: a column from the platform's top up to the
@@ -1371,9 +1387,13 @@ Item {
                     Node {
                         objectName: "mesh-icon-body-" + entryNode.index
                         // Hover magnification and icon motion grow the icon about
-                        // its foot, so it stays standing on the pedestal.
-                        eulerRotation: Qt.vector3d(0, root.number(entryNode.iconMotion, "rotateY", 0),
-                            -root.number(entryNode.iconMotion, "rotateZ", 0) - Number(entryNode.rect.rotation || 0))
+                        // its foot, so it stays standing on the pedestal. A turn
+                        // in the icon's plane (Spin, Wobble, Swing) becomes a turn
+                        // about the vertical axis here, the way a stand spins,
+                        // instead of a roll of the picture (owner, 2026-10-12).
+                        eulerRotation: Qt.vector3d(0, root.number(entryNode.iconMotion, "rotateY", 0)
+                            + root.number(entryNode.iconMotion, "rotateZ", 0),
+                            -Number(entryNode.rect.rotation || 0))
                         scale: Qt.vector3d(entryNode.hoverScale * root.number(entryNode.iconMotion, "scale", 1)
                                 * root.number(entryNode.iconMotion, "scaleX", 1),
                             entryNode.hoverScale * root.number(entryNode.iconMotion, "scale", 1)
@@ -1398,8 +1418,8 @@ Item {
                             visible: entryNode.tileShown && entryNode.tileMesh !== null && root.collapseProgress < 1
                             position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
                                 entryNode.size / 2 - root.number(entryNode.tileMotion, "y", 0), -entryNode.size * 0.001)
-                            eulerRotation: Qt.vector3d(0, root.number(entryNode.tileMotion, "rotateY", 0),
-                                -root.number(entryNode.tileMotion, "rotateZ", 0))
+                            eulerRotation: Qt.vector3d(0, root.number(entryNode.tileMotion, "rotateY", 0)
+                                + root.number(entryNode.tileMotion, "rotateZ", 0), 0)
                             scale: Qt.vector3d(entryNode.size / 2 * root.number(entryNode.tileMotion, "scale", 1)
                                     * root.number(entryNode.tileMotion, "scaleX", 1),
                                 entryNode.size / 2 * root.number(entryNode.tileMotion, "scale", 1)
@@ -1413,8 +1433,8 @@ Item {
                             visible: entryNode.tileShown && entryNode.tileMesh === null && root.collapseProgress < 1
                             position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
                                 entryNode.size / 2 - root.number(entryNode.tileMotion, "y", 0), 0)
-                            eulerRotation: Qt.vector3d(0, root.number(entryNode.tileMotion, "rotateY", 0),
-                                -root.number(entryNode.tileMotion, "rotateZ", 0))
+                            eulerRotation: Qt.vector3d(0, root.number(entryNode.tileMotion, "rotateY", 0)
+                                + root.number(entryNode.tileMotion, "rotateZ", 0), 0)
                             scale: Qt.vector3d(entryNode.size / 100 * root.number(entryNode.tileMotion, "scale", 1)
                                     * root.number(entryNode.tileMotion, "scaleX", 1),
                                 entryNode.size / 100 * root.number(entryNode.tileMotion, "scale", 1)
@@ -1432,8 +1452,8 @@ Item {
                             position: Qt.vector3d(root.number(entryNode.glyphMotion, "x", 0),
                                 entryNode.size / 2 - root.number(entryNode.glyphMotion, "y", 0),
                                 entryNode.size * 0.01)
-                            eulerRotation: Qt.vector3d(0, root.number(entryNode.glyphMotion, "rotateY", 0),
-                                -root.number(entryNode.glyphMotion, "rotateZ", 0))
+                            eulerRotation: Qt.vector3d(0, root.number(entryNode.glyphMotion, "rotateY", 0)
+                                + root.number(entryNode.glyphMotion, "rotateZ", 0), 0)
                             scale: Qt.vector3d(entryNode.size / 100 * root.number(entryNode.glyphMotion, "scale", 1)
                                     * root.number(entryNode.glyphMotion, "scaleX", 1),
                                 entryNode.size / 100 * root.number(entryNode.glyphMotion, "scale", 1)

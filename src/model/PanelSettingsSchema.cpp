@@ -710,7 +710,7 @@ const QVector<Descriptor> &schemaFields()
         // fraction of the room the panel has around the platform, so a value
         // stays valid whatever size the panel is drawn at.
         panel("scene3DQuality", Access::Editor, Type::String, Normalization::ChoiceLower,
-              QStringLiteral("medium"), "surface.parameters3D.quality", {}, {},
+              QStringLiteral("high"), "surface.parameters3D.quality", {}, {},
               {"low", "medium", "high"}, true, true,
               editor("panels-3d", "Render quality", "combo", {"studio"}, "scene3d-quality")),
         panel("scene3DCameraPitch", Access::Editor, Type::Real, Normalization::RealRange,
@@ -827,6 +827,12 @@ const QVector<Descriptor> &schemaFields()
               1.0, "surface.parameters3D.pedestalAnimationSpeed", 0.25, 3.0, {}, true, true,
               editor("pedestals", "Animation speed", "slider", {"studio"}, "pedestals",
                      {}, {{QStringLiteral("step"), 0.25}, {QStringLiteral("decimals"), 2}})),
+        // The stands under the items of an opened folder: the panel's own, or
+        // a shape of their own, or none (owner's request, 2026-10-12).
+        panel("folderPedestalShape", Access::Editor, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("same"), "surface.parameters3D.folderPedestalShape", {}, {},
+              {"same", "none", "column", "plate", "disc", "ring", "saucer"},
+              true, true, editor("pedestals", "Folder item stands", "combo", {"studio"}, "pedestals")),
         // PD-17: a platform remembers the flat surface and layout it replaced.
         // It is editor data so Preview/Cancel/Apply share the same transaction.
         panel("previousFlatLook", Access::Editor, Type::Map, Normalization::Map,

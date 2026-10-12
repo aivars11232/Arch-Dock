@@ -1709,8 +1709,10 @@ void PanelWindowCapabilityTest::rendererSwitchRetainsOnlyUnchangedInactiveFields
         .contains(QStringLiteral("scene3DQuality")));
     const auto revision = registry->panelDefinition(panelId)->settingsRevision;
     const auto before = registry->panelDefinition(panelId)->toPersistedMap();
+    // A value other than the default (high since 2026-10-12): the default
+    // is no change and passes without touching the field.
     QCOMPARE(window.applyPanelSettingsTransaction(panelId, revision,
-        {{QStringLiteral("scene3DQuality"), QStringLiteral("high")}}, {})
+        {{QStringLiteral("scene3DQuality"), QStringLiteral("low")}}, {})
         .value(QStringLiteral("errorCode")).toString(), QStringLiteral("unavailable-panel-field"));
     QCOMPARE(registry->panelDefinition(panelId)->toPersistedMap(), before);
     values = snapshot.value(QStringLiteral("panelValues")).toMap();
@@ -1816,7 +1818,7 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
     {
         const auto rejected = window.applyPanelSettingsTransaction(panelId,
             registry->panelDefinition(panelId)->settingsRevision,
-            {{QStringLiteral("scene3DQuality"), QStringLiteral("high")}}, {});
+            {{QStringLiteral("scene3DQuality"), QStringLiteral("low")}}, {});
         QVERIFY(!rejected.value(QStringLiteral("success")).toBool());
     }
     if (qEnvironmentVariableIsEmpty("ARCHDOCK_PRIVATE_INTERACTION_TEST"))

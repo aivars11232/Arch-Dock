@@ -22,6 +22,8 @@ PlasmaCore.Dialog {
     property bool reducedMotion: false
     property bool showNames: true
     property var iconStyleDefinition: ({})
+    // The stands under the children (the panel's pedestal settings).
+    property var pedestalSettings: ({})
     property int iconSize: 48
     property int fanOpening: 90
     property int stackLength: 5
@@ -175,6 +177,7 @@ PlasmaCore.Dialog {
             let origin = { x: centre.x, y: centre.y }
             let facing = outwardNormal || ({ x: 0, y: -1 })
             let fromEdge = false
+            let stackSpan = 0
             const ray = typeof outwardRay === "function" ? outwardRay() : null
             if (ray && ray.start && ray.direction) {
                 const from = scene.mapToGlobal(ray.start.x, ray.start.y)
@@ -184,27 +187,73 @@ PlasmaCore.Dialog {
                     origin = { x: from.x, y: from.y }
                     facing = { x: (to.x - from.x) / length, y: (to.y - from.y) / length }
                     fromEdge = true
-                    if (folderLayout === "stack") {
-                        // A stack lies along the platform's edge beside the
-                        // folder, one cell out from the rim, running the way
-                        // that has more of the screen.
-                        const reach = Math.min(content.cellWidth / 2 / Math.max(Math.abs(facing.x), 1e-6),
-                                               content.cellHeight / 2 / Math.max(Math.abs(facing.y), 1e-6))
-                        origin = { x: origin.x + facing.x * (reach + 4), y: origin.y + facing.y * (reach + 4) }
-                        let edge = { x: -facing.y, y: facing.x }
-                        const middle = { x: area.x + area.width / 2 - origin.x, y: area.y + area.height / 2 - origin.y }
-                        if (edge.x * middle.x + edge.y * middle.y < 0) edge = { x: -edge.x, y: -edge.y }
-                        facing = edge
-                    }
                 }
             }
-            shape = LayoutEngine.folderShape(folderLayout, {
-                folder: origin, outward: facing, fromEdge: fromEdge,
-                iconSize: iconSize, cellWidth: content.cellWidth, cellHeight: content.cellHeight,
-                gap: 6, count: content.entries.length, fanOpening: fanOpening,
-                stackLength: stackLength, ringSize: ringSize, panelRadius: panelRadius,
-                obstacles: others, obstacleSize: iconSize, screen: area, screenMargin: margin,
-                outlineMargin: outlineStyle.lineWidth / 2 + outlineStyle.blur })
+            // A stack lies against the dock's side nearest the folder: upright
+            // beside its left or right side, level above or below it, centred
+            // on the dock and no longer than it, one cell out (the owner's
+            // rule, 2026-10-12). The dock's box on the screen is its icons'
+            // box, the same on every tier; where the chosen side would leave
+            // the screen, the opposite side is used.
+            if (folderLayout === "stack" && dock && others.length >= 2) {
+                let box = { left: centre.x, right: centre.x, top: centre.y, bottom: centre.y }
+                for (const point of others)
+                    box = { left: Math.min(box.left, point.x), right: Math.max(box.right, point.x),
+                            top: Math.min(box.top, point.y), bottom: Math.max(box.bottom, point.y) }
+                box = { left: box.left - iconSize / 2, right: box.right + iconSize / 2,
+                        top: box.top - iconSize / 2, bottom: box.bottom + iconSize / 2 }
+                const half = { x: content.cellWidth / 2 + 4, y: content.cellHeight / 2 + 4 }
+                const sides = [
+                    { id: "left", gap: Math.abs(centre.x - box.left), vertical: true,
+                      x: box.left - half.x, fits: box.left - 2 * half.x >= area.x + margin },
+                    { id: "right", gap: Math.abs(box.right - centre.x), vertical: true,
+                      x: box.right + half.x, fits: box.right + 2 * half.x <= area.x + area.width - margin },
+                    { id: "top", gap: Math.abs(centre.y - box.top), vertical: false,
+                      y: box.top - half.y, fits: box.top - 2 * half.y >= area.y + margin },
+                    { id: "bottom", gap: Math.abs(box.bottom - centre.y), vertical: false,
+                      y: box.bottom + half.y, fits: box.bottom + 2 * half.y <= area.y + area.height - margin }]
+                sides.sort(function(a, b) { return a.gap - b.gap })
+                const side = sides.find(function(candidate) { return candidate.fits }) || sides[0]
+                if (side.vertical) {
+                    origin = { x: side.x, y: box.top }
+                    facing = { x: 0, y: 1 }
+                    stackSpan = box.bottom - box.top
+                } else {
+                    origin = { x: box.left, y: side.y }
+                    facing = { x: 1, y: 0 }
+                    stackSpan = box.right - box.left
+                }
+                fromEdge = true
+            }
+            // A ring opens beside the dock on the side with more of the
+            // screen: to the right of a dock on the left half, to the left of
+            // one on the right half, from the dock's rim there (the owner's
+            // rule, 2026-10-12). Where it would leave the screen above or
+            // below, it is lowered or raised to fit.
+            if (folderLayout === "ring" && dock && panelRadius > 0) {
+                const sideways = dock.x <= area.x + area.width / 2 ? 1 : -1
+                origin = { x: dock.x + sideways * panelRadius, y: dock.y }
+                facing = { x: sideways, y: 0 }
+                fromEdge = true
+            }
+            const build = function(from) {
+                return LayoutEngine.folderShape(folderLayout, {
+                    folder: from, outward: facing, fromEdge: fromEdge,
+                    iconSize: iconSize, cellWidth: content.cellWidth, cellHeight: content.cellHeight,
+                    gap: 6, count: content.entries.length, fanOpening: fanOpening,
+                    stackLength: stackLength, stackSpan: stackSpan, ringSize: ringSize, panelRadius: panelRadius,
+                    obstacles: others, obstacleSize: iconSize, screen: area, screenMargin: margin,
+                    outlineMargin: outlineStyle.lineWidth / 2 + outlineStyle.blur })
+            }
+            shape = build(origin)
+            if (folderLayout === "ring" && dock && panelRadius > 0) {
+                const below = shape.bounds.y + shape.bounds.height + margin - (area.y + area.height)
+                const above = area.y + margin - shape.bounds.y
+                if (below > 0 || above > 0) {
+                    const lift = below > 0 ? -below : above
+                    shape = build({ x: origin.x, y: origin.y + lift })
+                }
+            }
             samples = shape.samples.map(function(point) { return { x: point.x, y: point.y, scale: 1 } })
             rectangles.push(shape.bounds)
         }
@@ -263,6 +312,7 @@ PlasmaCore.Dialog {
         reducedMotion: root.reducedMotion
         showNames: root.showNames
         iconStyleDefinition: root.iconStyleDefinition
+        pedestalSettings: root.pedestalSettings
         iconSize: root.iconSize
         scrollSensitivity: root.scrollSensitivity
         opened: root.visible

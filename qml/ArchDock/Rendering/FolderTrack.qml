@@ -21,6 +21,9 @@ Item {
     property bool opened: false
     property bool showNames: true
     property var iconStyleDefinition: ({})
+    // The stands under the children: the panel's pedestal settings, with the
+    // Pedestals page's "Folder item stands" choice as their shape.
+    property var pedestalSettings: ({})
     property int iconSize: 48
     // The path as { x, y, scale } samples - an open path's children stand
     // centred on its middle sample, which the folder faces, or from its first
@@ -364,6 +367,7 @@ Item {
                 entry: child.modelData
                 logicalSize: root.iconSize
                 iconStyleDefinition: root.iconStyleDefinition
+                tileSettings: root.pedestalSettings
                 showIndicator: false
                 disabled: child.modelData.selectable !== true
                 hovered: pointer.containsMouse || (root.keyboardSelection

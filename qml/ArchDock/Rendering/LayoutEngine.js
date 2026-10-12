@@ -1793,14 +1793,23 @@ function folderShape(shape, options) {
             const pitch = Math.min(cellWidth / Math.max(Math.abs(direction.x), 1e-6),
                                    cellHeight / Math.max(Math.abs(direction.y), 1e-6)) + gap;
             const length = clamp(Math.round(finite(value.stackLength, 5)), 2, 12);
-            const slots = Math.max(1, Math.min(count, length) - fewer);
-            let distance = fromEdge ? 0 : squareReach(size, direction);
-            while (distance < largest && !allClear([along(folder, direction, distance)]))
+            // Never longer than the dock's diameter beside which it lies (the
+            // owner's rule, 2026-10-12): the rest of the children scroll in.
+            // Against a dock's side (`stackSpan`: the side's length, from
+            // `folder` along `direction`), the slots are centred within it
+            // and never outnumber what fits (the owner's rule, 2026-10-12:
+            // a stack no longer than the dock); the rest scroll in.
+            const span = Math.max(0, finite(value.stackSpan, 0));
+            const fitting = span > 0 ? Math.max(2, Math.floor(span / pitch) + 1) : length;
+            const slots = Math.max(1, Math.min(count, length, fitting) - fewer);
+            let distance = span > 0 ? Math.max(0, (span - (Math.max(2, slots) - 1) * pitch) / 2)
+                : fromEdge ? 0 : squareReach(size, direction);
+            while (span <= 0 && distance < largest && !allClear([along(folder, direction, distance)]))
                 distance += 2;
             const line = [];
             for (let index = 0; index < Math.max(2, slots); ++index)
                 line.push(along(folder, direction, distance + index * pitch));
-            while (distance < largest && !allClear(line)) {
+            while (span <= 0 && distance < largest && !allClear(line)) {
                 distance += 4;
                 for (let index = 0; index < line.length; ++index)
                     line[index] = along(folder, direction, distance + index * pitch);

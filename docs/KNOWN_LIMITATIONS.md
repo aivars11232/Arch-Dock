@@ -47,6 +47,8 @@ geometry and shaders. A generated platform
 wraps its texture round its band; the two bundled 3D themes keep their vector
 surfaces, since theme packages carry no raster files.
 
+True 3D defaults to high quality, which supersamples the scene: on a weak
+graphics chip choose Medium or Low on Panels > 3D.
 Pedestals (the Pedestals page) are turned solids in 3D and painted
 horizontal platforms on a flat panel; a theme package cannot yet provide its own pedestal mesh, and
 Auto is a column stand on flat and 3D panels alike (an icon style with its own pedestal keeps it); None removes the stand. A free panel's folder opened Along the dock on a

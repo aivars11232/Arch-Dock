@@ -1,5 +1,56 @@
 # Arch Dock current state
 
+<!-- AFTERNOON_2026_10_12_BEGIN -->
+## The owner's afternoon report — 2026-10-12
+
+Six screenshots of Free panel 21 (futuristic look, true 3D at pitch 39,
+disc stands in plasma tinted orange, ring folders, medium quality):
+
+- **Pixelly platform, stands and colours:** `scene3DQuality` defaults to
+  high; high draws at full size with supersampling (`SceneEnvironment.SSAA`,
+  VeryHigh), medium at full size with multisampling, low at three quarters
+  without; the icon glyph and tile textures are four times the icon's size
+  (`IconScene` `glyphTexture`, up to 1024 px).
+- **Icon spin in 3D:** `PanelScene3D` applies an icon's `rotate-z` motion
+  (Spin, Idle rotate, Swing, Wobble, Wiggle, Shake, Shake tangent) as a turn
+  about the vertical axis, like a stand's spin, for the icon body, the tile
+  and the glyph; `rotate-y` keeps its meaning.
+- **Stands under opened folder items:** `folderPedestalShape` (same, none,
+  column, plate, disc, ring, saucer; default same) on the Pedestals page;
+  the applet hands the panel's pedestal settings with that shape to
+  `FolderTrackHost` and `FolderTrack`, whose child `IconScene`s draw them.
+- **Stack placement and length:** a stack lies against the dock's side
+  nearest the folder, upright beside its left or right side or level above
+  or below it, centred on the dock, one cell out of the dock's icons' box,
+  and no longer than that side (`FolderTrackHost`, `stackSpan`;
+  `LayoutEngine.folderShape` centres the slots within it); more children
+  scroll in; the opposite side is used where the chosen one would leave the
+  screen.
+- **Stands cut by a bent band:** Bend tilts the band's top across its
+  width, so the rim on one side rises above the centre line where a
+  stand's foot stood and cut into the stand; the foot now rises by the
+  band's rise under the stand's footprint (`PanelScene3D` `bendRise`), so
+  the stand and its icon sit on the highest point of the band beneath them.
+- **Disc stands drawn as rings:** a turned stand's flat top and bottom now
+  take the texture flat across them (`PlatformGeometry.lathe`); wound to a
+  point, a swirling texture made a dark eye in the middle.
+- **Ring placement:** `FolderTrackHost` opens a ring from the dock's rim on
+  the side with more of the screen (right of a dock on the left half, left
+  of one on the right half) and lowers or raises it to fit the screen.
+
+Verification: the owner's Free panel 21 look rebuilt in private sessions
+before and after (`36-owner21d..f.log`, `pictures-owner21d..f/` in the
+audit folder): solid discs on the bent band, the ring to the right of a
+dock on the left half, stacks level or upright beside the dock; complete
+suite 116 of 120 in one serial run (`afternoon-suite-1.log`), the four
+failures being two tests that assumed the old quality default and the
+uncapped stack (corrected) and two private-session startups (passed
+alone), with all ten reruns green on the final tree
+(`afternoon-tests-2.log`: capability, geometry, materials, scene, folder
+expansion, icon scene, renderer smoke, folder anchors, profile matrix,
+preset audition).
+<!-- AFTERNOON_2026_10_12_END -->
+
 <!-- FLAT_TO_3D_2026_10_12_BEGIN -->
 ## Flat design kept in 3D — 2026-10-12
 

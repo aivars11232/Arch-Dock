@@ -7,6 +7,22 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- The owner's afternoon report (2026-10-12, six screenshots): true 3D now
+  defaults to **high** quality (full size, supersampled; medium is full size
+  with multisampling, low three quarters without) and icon glyph textures
+  are four times the icon's size, against pixelly platforms and stands. An
+  icon's in-plane turn (Spin, Wobble, Swing, Shake) in 3D turns the icon
+  about the vertical axis, the way a stand spins, instead of rolling the
+  picture. The Pedestals page gains **Folder item stands** (the panel's own
+  shape, none, or a shape of their own) for the items of an opened folder.
+  A stack folder lies against the dock's side nearest the folder, upright
+  or level, centred on the dock and no longer than it (the rest scroll
+  in). A ring folder opens beside the dock on the side with more of the
+  screen, from the dock's rim there, lowered or raised to stay on the
+  screen. A turned stand's flat top takes its texture flat, so a disc in a
+  swirling material no longer looks like a ring, and on a bent band a
+  stand rises by the band's rise under its footprint instead of sinking
+  into the rim.
 - Flat design kept in 3D (2026-10-12, owner's report "turning 3D on changes
   everything"): a look designed flat and switched to true 3D keeps its ring.
   Platform width 0 (Auto, the new default) makes the generated platform's

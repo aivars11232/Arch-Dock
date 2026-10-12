@@ -174,7 +174,7 @@ void PanelSettingsSchemaTest::sceneQualityIsBoundedAndReversible()
     const auto normalized = PanelDefinition::fromLegacyMap(values);
     QVERIFY(normalized.has_value());
     QCOMPARE(normalized->surface.parameters3D
-                 .value(QStringLiteral("quality")).toString(), QStringLiteral("medium"));
+                 .value(QStringLiteral("quality")).toString(), QStringLiteral("high"));
 }
 
 void PanelSettingsSchemaTest::materialsAndFlatLookRoundTrip()
@@ -772,6 +772,7 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
         {QStringLiteral("pedestalColor"), QStringLiteral("#22aa66")},
         {QStringLiteral("pedestalAnimation"), QStringLiteral("bob")},
         {QStringLiteral("pedestalAnimationSpeed"), 1.75},
+        {QStringLiteral("folderPedestalShape"), QStringLiteral("disc")},
     };
     auto record = PanelDefinition::defaults(
         QStringLiteral("pedestal-parameters"), QStringLiteral("Pedestal parameters"),
@@ -811,8 +812,10 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
     record.insert(QStringLiteral("pedestalShape"), QStringLiteral("Plate"));
     record.insert(QStringLiteral("pedestalMaterial"), QStringLiteral("marble"));
     record.insert(QStringLiteral("pedestalColor"), QStringLiteral("green"));
+    record.insert(QStringLiteral("folderPedestalShape"), QStringLiteral("spaceship"));
     const auto bounded = PanelDefinition::fromLegacyMap(record);
     QVERIFY(bounded.has_value());
+    QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("folderPedestalShape")).toString(), QStringLiteral("same"));
     QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("pedestalSize")).toDouble(), 2.0);
     QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("pedestalLift")).toDouble(), 0.0);
     QCOMPARE(bounded->surface.parameters3D.value(QStringLiteral("pedestalAnimationSpeed")).toDouble(), 0.25);

@@ -49,6 +49,9 @@ Studio. Choose a **Shape** (Auto is a column on flat and 3D panels alike;
 None removes it; Column, Plate, Disc, Ring or Saucer draws that shape), its **Size** and **Lift** (how high it floats between the
 panel and the icon), a **Material** (the panel's own look or any other) and
 **Colour**, and an **Animation** (Bob, Spin or Pulse) with its speed.
+**Folder item stands** gives the items of an opened folder the panel's own
+stand shape, none, or a shape of their own, in the same material, size and
+motion.
 
 ## Panels on the desktop
 
@@ -549,6 +552,11 @@ icons. Where the screen leaves no room in the outward direction, a fan, an
 arc, a stack or a small ring first holds fewer children at once, then a shape
 turns towards the side that has room.
 
+A ring folder on a free panel opens beside the dock on the side with more
+of the screen, from the dock's rim there, and is lowered or raised to stay
+on the screen; a stack lies against the dock's side nearest the folder,
+upright or level, centred on the dock and no longer than it, the rest of its
+items scrolling in.
 An edge panel's folders open in a popup beside the folder, as before, and
 scroll one child or one row per notch; in a popup you can also hold the left
 mouse button and drag the contents, and releasing that drag opens nothing.

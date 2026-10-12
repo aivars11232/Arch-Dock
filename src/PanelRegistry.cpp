@@ -1461,7 +1461,7 @@ std::optional<QVariantMap> PanelRegistry::genericScene3D(
         {QStringLiteral("cameraYaw"), 10},
         {QStringLiteral("keyLightBrightness"), 1.2},
         {QStringLiteral("fillLightBrightness"), 0.45},
-        {QStringLiteral("defaultQuality"), QStringLiteral("medium")},
+        {QStringLiteral("defaultQuality"), QStringLiteral("high")},
         {QStringLiteral("parts"), QVariantList{}}};
     QVariantMap material = genericSceneMaterial(colour, appearance, definition.surface.glowIntensity);
     // The body is lit, not lit up: only its rim glows.

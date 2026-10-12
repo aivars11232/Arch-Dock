@@ -90,6 +90,19 @@ PlasmoidItem {
             ? baseCellSize * Math.max(0, magnification - 1) : 0)
         + motionHeadroom
     readonly property var scenePanelDefinition: buildScenePanelDefinition()
+    // The stands under an opened folder's items: the panel's pedestal
+    // settings, their shape chosen on the Pedestals page ("same" keeps the
+    // panel's own shape).
+    readonly property var folderPedestalSettings: {
+        const source = configuration || ({})
+        const settings = {}
+        for (const key of ["pedestalShape", "pedestalSize", "pedestalLift", "pedestalMaterial",
+                           "pedestalColor", "pedestalAnimation", "pedestalAnimationSpeed"])
+            if (source[key] !== undefined) settings[key] = source[key]
+        const folderShape = String(source.folderPedestalShape || "same").toLowerCase()
+        if (folderShape !== "same") settings.pedestalShape = folderShape
+        return settings
+    }
     // The runtime state the scene draws from. Until TASK-0032 Phase D the
     // presentation controller existed but nothing read it, so the live surface
     // was permanently "open" however the panel was configured. These three
@@ -897,6 +910,7 @@ PlasmoidItem {
                 reducedMotion: Boolean(root.configuration.reducedMotion)
                 showNames: root.configuration.folderShowNames !== false
                 iconStyleDefinition: root.configuration.iconStyleDefinition || ({})
+                pedestalSettings: root.folderPedestalSettings
                 interactionAllowed: folderExpansion.interactionAllowed
                 onInteractionAllowedChanged: if (!interactionAllowed) representation.hideFolderExpansion()
                 onChildSelected: childId => root.callDock("openPanelFolderChild",

@@ -266,8 +266,10 @@ Item {
         hideSource: root.meshVisualActive
         live: root.meshVisualActive
         visible: false
-        textureSize: Qt.size(Math.min(512, Math.max(1, root.logicalSize * 2)),
-                             Math.min(512, Math.max(1, root.logicalSize * 2)))
+        // Four times the icon's size: a glyph seen large on the near side
+        // of a tilted platform stays crisp.
+        textureSize: Qt.size(Math.min(1024, Math.max(1, root.logicalSize * 4)),
+                             Math.min(1024, Math.max(1, root.logicalSize * 4)))
     }
     ShaderEffectSource {
         id: tileTexture

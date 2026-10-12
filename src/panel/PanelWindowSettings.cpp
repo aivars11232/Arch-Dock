@@ -945,7 +945,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             const QString motion = candidate.surface.parameters3D
                 .value(QStringLiteral("pedestalAnimation"), QStringLiteral("none")).toString();
             const bool drawn = shape != QStringLiteral("none");
-            if (key != QStringLiteral("pedestalShape"))
+            if (key != QStringLiteral("pedestalShape") && key != QStringLiteral("folderPedestalShape"))
                 inactive = !drawn;
             if (key == QStringLiteral("pedestalAnimationSpeed"))
                 inactive = inactive || motion == QStringLiteral("none");

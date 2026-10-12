@@ -101,6 +101,16 @@ ColumnLayout {
             Accessible.name: text
         }
     }
+    Label {
+        Layout.fillWidth: true
+        wrapMode: Text.WordWrap
+        font.pixelSize: 12
+        opacity: 0.8
+        // The owner (2026-10-12): a saved arrangement must reach the desktop
+        // even when its free panel is gone.
+        text: qsTr("Apply Profile puts the whole saved arrangement on the desktop: a free panel the profile holds that is not on the desktop is created again with its saved look. For one saved panel look, use Built-in or My Panel Presets with \"Preview on a new panel\".")
+        Accessible.name: text
+    }
     RowLayout {
         visible: !root.shortcutsOnly
         Repeater {

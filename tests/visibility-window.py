@@ -1378,10 +1378,7 @@ def run_interaction_matrix(free_panel):
                 # its stack lies along the rim. Flat and baked panels open
                 # from the folder icon along its outward direction.
                 edge = tier == "true3d"
-                if edge and layout == "stack":
-                    if abs(facing) > 0.5:
-                        problems.append("the stack does not lie along the platform's edge")
-                elif facing < (0.6 if edge else 0.95):
+                if layout not in ("ring", "stack") and facing < (0.6 if edge else 0.95):
                     problems.append("the shape does not open along the folder's outward direction")
                 near = icon_size * 2 + 24 if edge else icon_size * 0.75 + 12
                 if layout == "fan":
@@ -1416,27 +1413,50 @@ def run_interaction_matrix(free_panel):
                     if (mean[0] * way[0] + mean[1] * way[1]) / (math.hypot(*mean) or 1) < 0.98:
                         problems.append("the arc is not symmetric about the folder's outward direction")
                 elif layout == "stack":
-                    # Beside the folder on a 3D panel, from the folder elsewhere.
-                    base = children[0] if edge else folder
+                    # Against the dock's side nearest the folder (2026-10-12):
+                    # a straight, axis-aligned line outside the dock, centred
+                    # on it and no longer than the dock.
+                    base = children[0]
                     aside = [abs((c[0] - base[0]) * -way[1] + (c[1] - base[1]) * way[0]) for c in children]
                     along = [(c[0] - base[0]) * way[0] + (c[1] - base[1]) * way[1] for c in children]
                     row["aside"] = [round(a, 1) for a in aside]
                     if max(aside) > 4:
-                        problems.append("the stack is not a straight line from the folder")
-                    if any(b <= a for a, b in zip(along, along[1:])) or (not edge and along[0] <= 0):
-                        problems.append("the stack does not run outward from the folder")
-                    # Beside the folder, allowing for the slide along the edge
-                    # that keeps the stack clear of the folder's neighbours.
-                    if edge and distance(children[0], folder) > icon_size * 5 + 24:
-                        problems.append("the stack does not start beside the folder")
+                        problems.append("the stack is not a straight line")
+                    if any(b <= a for a, b in zip(along, along[1:])):
+                        problems.append("the stack does not run one way")
+                    if min(abs(way[0]), abs(way[1])) > 0.05:
+                        problems.append("the stack is not upright or level against the dock")
+                    # The dock's box on the screen: its icons' box.
+                    box_points = icons + [folder]
+                    box = (min(p[0] for p in box_points) - icon_size / 2, min(p[1] for p in box_points) - icon_size / 2,
+                           max(p[0] for p in box_points) + icon_size / 2, max(p[1] for p in box_points) + icon_size / 2)
+                    level = abs(way[0]) > abs(way[1])
+                    across = [c[1] for c in children] if level else [c[0] for c in children]
+                    low, high = (box[1], box[3]) if level else (box[0], box[2])
+                    if not (max(across) < low + 4 or min(across) > high - 4):
+                        problems.append("the stack is not outside the dock")
+                    extent = (box[2] - box[0]) if level else (box[3] - box[1])
+                    if along[-1] - along[0] > extent + icon_size + 24:
+                        problems.append("the stack is longer than the dock")
+                    # Centred on the dock along its side.
+                    mid = (children[0][0] + children[-1][0]) / 2 if level else (children[0][1] + children[-1][1]) / 2
+                    box_mid = (box[0] + box[2]) / 2 if level else (box[1] + box[3]) / 2
+                    if abs(mid - box_mid) > icon_size * 1.5:
+                        problems.append("the stack is not centred on the dock")
                 else:
                     middle = on_screen(info["centre"])
                     radii = [distance(c, middle) for c in children]
                     row["radii"] = [round(r, 1) for r in radii]
                     if max(radii) - min(radii) > 1.5:
                         problems.append("the children are not on one circle")
-                    if (middle[0] - folder[0]) * way[0] + (middle[1] - folder[1]) * way[1] <= info["radius"]:
-                        problems.append("the ring does not stand beside the folder, outside the dock")
+                    # A ring opens beside the dock on the side with more of
+                    # the screen, from the dock's rim there (2026-10-12).
+                    dock_radius = distance(folder, centre)
+                    if distance(middle, centre) <= dock_radius + info["radius"] - 6:
+                        problems.append("the ring does not stand outside the dock")
+                    roomy = 1 if centre[0] <= screen_width / 2 else -1
+                    if (middle[0] - centre[0]) * roomy <= 0:
+                        problems.append("the ring does not open on the side of the dock with more of the screen")
                     if not state.get("outlineDrawn"):
                         problems.append("the ring is not drawn")
                 if clearance < icon_size * 0.9:

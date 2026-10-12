@@ -156,6 +156,7 @@ function lathe(profile, segments, closed) {
         lengths.push(lengths[index - 1] + Math.hypot(points[index][0] - points[index - 1][0],
                                                      points[index][1] - points[index - 1][1]))
     const total = Math.max(1e-6, lengths[lengths.length - 1])
+    const reach = Math.max(1e-6, ...points.map(function(point) { return point[0] }))
     const mesh = new MeshBuilder()
     for (let step = 0; step + 1 < points.length; ++step) {
         const a = points[step], b = points[step + 1]
@@ -164,15 +165,24 @@ function lathe(profile, segments, closed) {
         if (length < 1e-9) continue
         // The profile's outward normal in the (r, z) plane.
         const nr = dz / length, nz = -dr / length
+        // A flat top or bottom (a segment reaching the axis) takes the
+        // texture flat across it, like a label laid on a lid, instead of
+        // wound to a point at its middle, which pinched a swirling texture
+        // into a dark eye (the owner's "donut" discs, 2026-10-12).
+        const cap = a[0] <= 1e-9 || b[0] <= 1e-9
         for (let index = 0; index < count; ++index) {
             const t0 = index / count * Math.PI * 2, t1 = (index + 1) / count * Math.PI * 2
             const ring = []
             for (const [turn, u] of [[t0, index / count], [t1, (index + 1) / count]]) {
                 const c = Math.cos(turn), s = Math.sin(turn)
                 const normal = [nr * c, nr * s, nz]
-                const tangent = [-s, c, 0]
-                ring.push(mesh.vertex([a[0] * c, a[0] * s, a[1]], normal, null, [u, 1 - lengths[step] / total], tangent))
-                ring.push(mesh.vertex([b[0] * c, b[0] * s, b[1]], normal, null, [u, 1 - lengths[step + 1] / total], tangent))
+                const tangent = cap ? [1, 0, 0] : [-s, c, 0]
+                const uvA = cap ? [0.5 + a[0] * c / (2 * reach), 0.5 + a[0] * s / (2 * reach)]
+                    : [u, 1 - lengths[step] / total]
+                const uvB = cap ? [0.5 + b[0] * c / (2 * reach), 0.5 + b[0] * s / (2 * reach)]
+                    : [u, 1 - lengths[step + 1] / total]
+                ring.push(mesh.vertex([a[0] * c, a[0] * s, a[1]], normal, null, uvA, tangent))
+                ring.push(mesh.vertex([b[0] * c, b[0] * s, b[1]], normal, null, uvB, tangent))
             }
             const middle = (t0 + t1) / 2
             const facing = [nr * Math.cos(middle), nr * Math.sin(middle), nz]
