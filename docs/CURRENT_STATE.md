@@ -1,5 +1,70 @@
 # Arch Dock current state
 
+<!-- MORNING_2026_10_13_BEGIN -->
+## Panel Studio follows the picked panel — 2026-10-13 morning
+
+The owner's report: "no matter which panel I click, it's always same free
+panel, but if I click on free panel 20 or the horizontal panel then that
+panel should appear", then "the button should also change to that panel",
+"it should just show that panel's name", the preview's own controls "do
+nothing", "an empty panel should be empty", "why isn't there continuous
+color?", and a settings page that froze for a moment and jumped back to
+its top, losing a change made low on the page.
+
+Found on a private replica of the owner's desktop (the installed 0.1.1-20
+with copies of the owner's files; audit `tools/studio-replica.sh`): moving
+the Studio from Free panel 20 or 22 (true 3D, six folders) to the Top or
+Side panel killed Arch Dock (SIGSEGV in `QSGRhiLayer::grab`). With Qt's
+debug symbols: Qt Quick 3D's `QQuick3DTexture` refreshes a texture taken
+from a texture provider after every sync (`afterSynchronizing`), guarded
+only by its own source pointer. The Loader that drops the 3D scene turns
+the scene's bindings off and deletes it a moment later; the icons leaving
+the window in that moment release their `ShaderEffectSource` layers, whose
+source nodes are freed, while the dead bindings never cleared the 3D
+textures' sources. The next frame read the freed node.
+
+- `PanelScene3D.qml`: each 3D entry clears its glyph and tile textures'
+  sources in `Component.onDestruction`, which Qt announces while a Loader
+  or repeater turns the bindings off, before deletion and before any frame.
+- `RendererCapabilityTest::previewSwitchFromTrue3DToAnEdgePanel`: a 3D
+  preview switched to an edge panel in every order the Studio's bindings
+  may use, a 3D panel losing every entry, and a whole preview unloaded. The
+  freed layer is only read, so it runs in its own pass of the rendering
+  smoke with `MALLOC_PERTURB_` and glibc's per-thread cache off; without the
+  fix it crashes at the same instruction as the owner-replica crash. The
+  smoke's private session has 180 s (CTest 240 s).
+- `SettingsPopup.qml`: the button beside the panel list carries the picked
+  panel's name (`pickedPanelPresence`) and adds that panel to the desktop:
+  `setPanelVisible` for a hidden edge panel, `rehost-free` for a detached
+  free panel; a check mark when it is already there. New free panels come
+  from General > Add free panel. A refused switch puts the list back on
+  the kept panel. The preview card shows only the panel (orientation, icon
+  state and open/collapsed controls removed); an edge panel with no
+  entries is drawn bare (`LivePanelPreview.showBarePanel`: three empty,
+  invisible places, so the track has a length). A slider's change goes
+  into the draft at once and the backend's check of the draft
+  (`resolvePanelSettingsEditorDraft`, about 0.1 s with 1.25 MB of theme
+  data) runs once a drag pauses for 150 ms; Apply runs a pending check
+  first.
+- `StudioForm.qml`: the rows live in a `ListModel` keyed by what each row
+  edits; a new list of rows updates the rows in place and builds or drops
+  only the rows that come or go, so the page keeps its place and the
+  control in use. A combo box gets a new option list only when its options
+  change. Another page (`pageKey`) starts at its top.
+- `PanelProcedural2D.qml`: the material runs once along the whole track
+  (a closed track: round its first half and back, mirrored, round its
+  second), a 2-texel margin keeping the pieces' overlap inside the picture.
+
+Verification (audit folder): renderer capability with the GPU path
+(`crash-probe-*`), `studio-quick-2.log` and `rendering-quick-1.log` (27
+tests), `studio-window-2.log` (panel window capability, 346 s),
+`rendering-smoke-21c.log` (rendering import smoke, 142 s),
+`studio-truth-21.log` (Studio truth matrix, 344 s); replica pictures
+`studio-replica-final` (no crash on any switch, one backend start).
+The complete suite was not rerun.
+
+<!-- MORNING_2026_10_13_END -->
+
 <!-- NIGHT_2026_10_12_BEGIN -->
 ## Stands that face the viewer — 2026-10-12 night
 

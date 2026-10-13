@@ -160,6 +160,12 @@ Window {
     readonly property var selectedResolvedThemes: editorSession.themes || []
     readonly property var selectedRendererCandidate:
         EditorModel.rendererCandidate(editorSession)
+    // A panel along an edge takes its length from what is on it: with no
+    // applications yet it had nothing to draw, and the preview of a hidden
+    // Bottom panel stayed empty (the owner, 2026-10-13). It is shown bare.
+    readonly property bool previewShowsBarePanel: !presetPreviewActive && previewMode !== "free"
+        && selectedRendererCandidate.segmentEntries !== undefined
+        && selectedRendererCandidate.segmentEntries.length === 0
     readonly property var selectedPreviewTheme:
         rendererPreviewTheme(selectedRendererCandidate)
     readonly property string scene3DOffTier:
@@ -271,6 +277,7 @@ Window {
             loadedSnapshotText = "";
             return false;
         }
+        projectionTimer.stop();
         const snapshot = prefetched || panelController.panelSettingsEditorSnapshot(normalizedPanelId, "studio");
         loadedSnapshotText = prefetchedText || JSON.stringify(snapshot);
         const loaded = EditorModel.load(snapshot);
@@ -385,7 +392,51 @@ Window {
             || panelValue("edge", "bottom")) !== "free";
     }
 
+    // Whether the picked panel is on the desktop, as saved, and how the
+    // button beside the panel list adds it there: a hidden edge panel is
+    // shown, a free panel whose widget is gone is put back. The button used
+    // to add a new empty free panel whichever panel was picked; it carries
+    // the picked panel's name now (the owner, 2026-10-13). New free panels
+    // come from General > Add free panel.
+    function pickedPanelPresence() {
+        const revision = panelRevision + nativeVisibilityRevision;
+        const name = panelRegistry.panelName(selectedPanelId);
+        let presence = { shown: false, action: "" };
+        if (String(panelRegistry.panelValue(selectedPanelId, "edge") || "bottom") !== "free") {
+            presence = Boolean(panelRegistry.panelValue(selectedPanelId, "visible"))
+                ? { shown: true, action: "" } : { shown: false, action: "show-native" };
+        } else {
+            const hostState = String(panelRegistry.panelValue(selectedPanelId, "freeHostState") || "");
+            if (hostState === "detached")
+                presence = { shown: false, action: "rehost-free" };
+            else if (hostState === "hosted-owned" || hostState === "hosted-stale")
+                presence = { shown: true, action: "" };
+        }
+        presence.name = name;
+        presence.description = presence.shown ? qsTr("%1 is on the desktop").arg(name)
+            : presence.action.length > 0 ? qsTr("Add %1 to the desktop").arg(name)
+            : qsTr("%1 is not on the desktop yet").arg(name);
+        return presence;
+    }
+
+    // A slider sends a value for every step of a drag. The draft takes each
+    // value at once and the preview follows it; the backend's check of the
+    // draft runs when the drag pauses. Each check takes about a tenth of a
+    // second, and run on every step it stalled the window (the owner,
+    // 2026-10-13). Apply runs a pending check first.
+    Timer {
+        id: projectionTimer
+        interval: 150
+        onTriggered: root.refreshProjection()
+    }
+
+    function flushProjection() {
+        if (projectionTimer.running)
+            refreshProjection();
+    }
+
     function refreshProjection() {
+        projectionTimer.stop();
         if (!editorSession.loaded)
             return false;
         if (auditionBusy) {
@@ -498,7 +549,10 @@ Window {
                 }
             }
         }
-        refreshProjection();
+        if (field.kind === "slider")
+            projectionTimer.restart();
+        else
+            refreshProjection();
     }
 
     function fieldOptionIndex(field) {
@@ -1286,6 +1340,7 @@ Window {
     }
 
     function discardStudioChanges() {
+        projectionTimer.stop();
         editorSession = EditorModel.cancel(editorSession);
         resetRendererPreview(EditorModel.rendererCandidate(editorSession));
         artifactDraft = {};
@@ -1296,6 +1351,7 @@ Window {
     }
 
     function applyStudioChanges() {
+        flushProjection();
         if (auditionBusy) {
             studioError = qsTr("Use Apply as Active or Cancel for the desktop preview.");
             return false;
@@ -1440,6 +1496,19 @@ Window {
             const result = panelController.rehostFreePanel(selectedPanelId);
             if (!(result && result.success === true))
                 studioError = qsTr("Could not put the free panel back on the desktop (%1).").arg(String(result && result.errorCode ? result.errorCode : "unknown-error"));
+            loadEditor(selectedPanelId);
+        } else if (action === "add-picked-panel") {
+            const presence = pickedPanelPresence();
+            if (hasPendingChanges || auditionBusy || presence.action.length === 0)
+                return;
+            if (presence.action === "rehost-free") {
+                performStudioAction("rehost-free", {});
+                return;
+            }
+            // The same call that shows an edge panel from D-Bus: it brings
+            // back a Plasma panel that was removed, and saves the change.
+            if (!panelController.setPanelVisible(selectedPanelId, true))
+                studioError = qsTr("Could not add %1 to the desktop.").arg(panelRegistry.panelName(selectedPanelId));
             loadEditor(selectedPanelId);
         } else if (action === "pin-launchers") {
             if (hasPendingChanges || auditionActive)
@@ -1970,15 +2039,27 @@ Window {
                     }
                     onActivated: {
                         focus = false;
-                        root.selectPanel(currentText);
+                        // A refused switch (changes not applied yet) keeps the
+                        // panel; the list shows it again, not the one picked.
+                        if (!root.selectPanel(currentText))
+                            currentIndex = Qt.binding(function() {
+                                return Math.max(0, panelSelector.model.indexOf(root.selectedPanelId));
+                            });
                     }
                 }
 
                 Button {
-                    icon.name: "list-add"
-                    text: qsTr("Free panel")
-                    enabled: !root.hasPendingChanges
-                    onClicked: root.performStudioAction("create-free", {})
+                    id: addPickedPanelButton
+                    objectName: "studio-add-picked-panel"
+                    readonly property var presence: root.pickedPanelPresence()
+                    icon.name: presence.shown ? "checkmark" : "list-add"
+                    text: presence.name
+                    enabled: presence.action.length > 0 && !root.hasPendingChanges && !root.auditionBusy
+                    Accessible.name: presence.description
+                    ToolTip.visible: hovered
+                    ToolTip.text: presence.description
+                    ToolTip.delay: 600
+                    onClicked: root.performStudioAction("add-picked-panel", {})
                 }
 
                 ToolButton {
@@ -2006,91 +2087,19 @@ Window {
                     anchors.margins: 8
                     spacing: 6
 
-                    GridLayout {
-                        columns: root.compactStudio ? 1 : 5
+                    // The picked panel and nothing else: the preview's own
+                    // orientation, icon state and open/collapsed controls
+                    // changed only this picture and were taken out (the
+                    // owner, 2026-10-13). The picture follows the panel.
+                    Label {
+                        objectName: "panel-studio-preview-title"
                         Layout.fillWidth: true
-                        rowSpacing: 8
-                        columnSpacing: 8
-
-                        Label {
-                            objectName: "panel-studio-preview-title"
-                            text: root.auditionActive ? qsTr("Desktop preview active — saved settings unchanged") : root.presetPreviewActive
-                                ? qsTr("Preset preview — %1").arg(String(root.selectedPresetCard.name || ""))
-                                : qsTr("Live renderer preview")
-                            color: "#e9f5fa"
-                            font.weight: Font.DemiBold
-                            elide: Text.ElideRight
-                            Layout.maximumWidth: 320
-                        }
-
-                        Item {
-                            Layout.fillWidth: true
-                        }
-
-                        ComboBox {
-                            wheelEnabled: false
-                            id: previewModeSelector
-                            Accessible.name: qsTr("Preview orientation")
-
-                            Layout.preferredWidth: 154
-                            model: [
-                                {
-                                    label: qsTr("Horizontal native"),
-                                    value: "horizontal"
-                                },
-                                {
-                                    label: qsTr("Vertical native"),
-                                    value: "vertical"
-                                },
-                                {
-                                    label: qsTr("Free"),
-                                    value: "free"
-                                }
-                            ]
-                            textRole: "label"
-                            valueRole: "value"
-                            // A preset is previewed in the mode it declares.
-                            enabled: !root.presetPreviewActive
-                            currentIndex: root.optionIndex(
-                                model, root.presetPreviewActive
-                                    ? root.selectedPresetPreviewMode
-                                    : root.previewMode)
-                            onActivated: root.previewMode = currentValue
-                        }
-
-                        ComboBox {
-                            wheelEnabled: false
-                            id: previewIconStateSelector
-                            Accessible.name: qsTr("Preview icon state")
-
-                            Layout.preferredWidth: 118
-                            model: [
-                                { label: qsTr("Normal"), value: "normal" },
-                                { label: qsTr("Hover"), value: "hover" },
-                                { label: qsTr("Pressed"), value: "pressed" },
-                                { label: qsTr("Active"), value: "active" },
-                                { label: qsTr("Running"), value: "running" },
-                                { label: qsTr("Minimized"), value: "minimized" },
-                                { label: qsTr("Urgent"), value: "urgent" },
-                                { label: qsTr("Drop"), value: "drop" },
-                                { label: qsTr("Edit"), value: "edit" }
-                            ]
-                            textRole: "label"
-                            valueRole: "value"
-                            currentIndex: root.optionIndex(
-                                model, root.previewIconState)
-                            onActivated:
-                                root.previewIconState = currentValue
-                        }
-
-                        Button {
-                            text: checked ? qsTr("Collapsed") : qsTr("Open")
-                            checkable: true
-                            checked: root.previewPresentationState
-                                === "collapsed"
-                            onClicked: root.previewPresentationState = checked
-                                ? "collapsed" : "open"
-                        }
+                        text: root.auditionActive ? qsTr("Desktop preview active — saved settings unchanged") : root.presetPreviewActive
+                            ? qsTr("Preset preview — %1").arg(String(root.selectedPresetCard.name || ""))
+                            : qsTr("Live renderer preview")
+                        color: "#e9f5fa"
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
                     }
 
                     LivePanelPreview {
@@ -2103,6 +2112,7 @@ Window {
                         panelDefinition: root.selectedRendererCandidate
                         orderedEntries: root.selectedRendererCandidate.segmentEntries || []
                         useProvidedEntries: root.selectedRendererCandidate.segmentEntries !== undefined
+                        showBarePanel: root.previewShowsBarePanel
                         hostCapabilities:
                             root.selectedCapabilityResolution
                         themeDefinition: root.selectedPreviewTheme
@@ -2317,6 +2327,7 @@ Window {
                 Layout.minimumHeight: 240
                 studio: root
                 rows: root.rowsForCurrentPage()
+                pageKey: root.mainTabIndex + "/" + root.subTabIndex + "/" + root.selectedPanelId
             }
 
             ProfilePage {

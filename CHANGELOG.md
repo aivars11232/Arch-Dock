@@ -7,6 +7,26 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- Panel Studio follows the panel you pick, and no longer crashes on it
+  (2026-10-13, the owner's report "no matter which panel I click, it's
+  always same free panel"): picking the Top or Side panel while a 3D free
+  panel was previewed killed Arch Dock, and the Studio came back on the
+  same free panel. The 3D preview's icon textures now let go of the icons
+  as soon as the scene or an entry is told it is going, before Qt Quick 3D
+  can refresh a freed layer. The button beside the panel list carries the
+  picked panel's name and adds that panel to the desktop (a hidden edge
+  panel is shown, a free panel whose widget is gone is put back, a panel
+  already there shows a check mark) instead of adding a new empty free
+  panel each time; a refused switch shows the panel that stays. The
+  preview card holds only the panel: its orientation, icon-state and
+  open/collapsed controls are gone, and an edge panel with nothing on it is
+  drawn bare instead of not at all. A flat panel's material runs once along
+  the whole panel, as one continuous colour, instead of repeating in
+  sections (a ring mirrors it so its ends meet without a seam). Settings
+  pages keep their rows when a value changes: the page no longer jumps to
+  its top and the control in use is no longer rebuilt under the pointer
+  (a drag low on the page was lost), and a slider's drag checks the draft
+  once it pauses instead of on every step.
 - Stands face the viewer, new panels have none, and the Pedestals page
   has far more to choose (2026-10-12 night, the owner's report with five
   screenshots and "the pedestals, plates and other stuff should be

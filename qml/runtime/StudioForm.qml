@@ -14,6 +14,64 @@ ScrollView {
 
     required property var studio
     property var rows: []
+    // The page the rows belong to: another page starts at its top.
+    property string pageKey: ""
+    property var rowsByKey: ({})
+    readonly property ListModel rowModel: ListModel {}
+
+    // Every change in the Studio hands the form a new list of rows. With the
+    // list as the model every row was built again each time: the page jumped
+    // back to its top, the control in use was destroyed under the pointer, so
+    // a drag or an edit low on the page was lost, and every row (with every
+    // theme card's live preview) was rebuilt (the owner, 2026-10-13). Each row
+    // keeps its place under a key now: a changed value updates its row, and
+    // only rows that come or go are built or dropped.
+    function rowKey(row) {
+        const kind = String(row.kind || "value");
+        if (row.key !== undefined || row.segmentIndex !== undefined)
+            return [kind, row.scope || "", row.key || "", row.segmentIndex === undefined ? "" : row.segmentIndex,
+                row.segmentKey || "", row.entryId === undefined ? "" : row.entryId].join("|");
+        if (kind === "action")
+            return [kind, row.action || "", row.label || ""].join("|");
+        return [kind, String(row.label || row.text || "")].join("|");
+    }
+
+    function synchronizeRows() {
+        const source = rows || [];
+        const keys = [];
+        const byKey = ({});
+        const repeats = ({});
+        for (let index = 0; index < source.length; ++index) {
+            let key = rowKey(source[index]);
+            repeats[key] = (repeats[key] || 0) + 1;
+            if (repeats[key] > 1)
+                key += "#" + repeats[key];
+            keys.push(key);
+            byKey[key] = source[index];
+        }
+        rowsByKey = byKey;
+        for (let index = rowModel.count - 1; index >= 0; --index) {
+            if (byKey[rowModel.get(index).rowKey] === undefined)
+                rowModel.remove(index);
+        }
+        for (let index = 0; index < keys.length; ++index) {
+            if (index < rowModel.count && rowModel.get(index).rowKey === keys[index])
+                continue;
+            let found = -1;
+            for (let later = index + 1; later < rowModel.count && found < 0; ++later) {
+                if (rowModel.get(later).rowKey === keys[index])
+                    found = later;
+            }
+            if (found >= 0)
+                rowModel.move(found, index, 1);
+            else
+                rowModel.insert(index, { rowKey: keys[index] });
+        }
+    }
+
+    onRowsChanged: synchronizeRows()
+    onPageKeyChanged: contentItem.contentY = 0
+    Component.onCompleted: synchronizeRows()
 
     clip: true
     implicitWidth: 0 // The containing layout supplies width; avoid the KDE contentWidth loop.
@@ -24,12 +82,13 @@ ScrollView {
         spacing: 10
 
         Repeater {
-            model: root.rows
+            model: root.rowModel
 
             delegate: ColumnLayout {
                 id: rowDelegate
 
-                required property var modelData
+                required property string rowKey
+                readonly property var modelData: root.rowsByKey[rowKey] || ({})
                 readonly property string kind: modelData.kind || "value"
                 readonly property bool sampleCards: kind === "themeSamples"
 
@@ -96,11 +155,12 @@ ScrollView {
                         wrapMode: Text.Wrap
                     }
                     Repeater {
-                        model: rowDelegate.modelData.themes || []
+                        model: (rowDelegate.modelData.themes || []).length
                         delegate: Rectangle {
                             id: themeSample
 
-                            required property var modelData
+                            required property int index
+                            readonly property var modelData: (rowDelegate.modelData.themes || [])[index] || ({})
                             Layout.fillWidth: true
                             // A theme is drawn at the height of a preset card.
                             implicitHeight: 188
@@ -262,12 +322,16 @@ ScrollView {
                         }
 
                         ComboBox {
+                            // A new model moves the box to its first option; the
+                            // options are handed over again only when they change.
+                            readonly property string optionsKey: JSON.stringify(rowDelegate.modelData.options || [])
+
                             wheelEnabled: false
                             objectName: "studio-combo-" + String(rowDelegate.modelData.key || "")
                             Accessible.name: rowDelegate.modelData.label || ""
                             visible: rowDelegate.kind === "combo"
                             Layout.preferredWidth: 270
-                            model: rowDelegate.modelData.options || []
+                            model: JSON.parse(optionsKey)
                             textRole: "label"
                             valueRole: "value"
                             currentIndex: root.studio.fieldOptionIndex(rowDelegate.modelData)

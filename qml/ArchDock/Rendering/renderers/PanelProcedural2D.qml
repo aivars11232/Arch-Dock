@@ -96,7 +96,11 @@ Item {
     // each piece of the path is painted in its own frame, the texture turned
     // to the path's direction there, its height the track's width and its
     // phase the distance travelled along the path, so it runs on from piece
-    // to piece and a ring closes on whole repeats without a seam.
+    // to piece. It runs once along the whole track: repeated every track
+    // width, its picture showed as sections along the panel instead of one
+    // continuous colour (the owner, 2026-10-13). A closed track carries it
+    // round its first half and back, mirrored, round its second, so the two
+    // ends meet without a seam.
     function paintWrappedMaterial(context) {
         const points = surfacePath.points
         const count = points.length
@@ -112,22 +116,38 @@ Item {
         const width = surfaceStyle.lineWidth
         if (!(total > 0) || !(width > 0)) return
         const texture = 512
-        const repeats = Math.max(1, Math.round(total / width))
-        const scaleX = (closed ? total / repeats : width) / texture
+        // Pieces overlap by `margin` texels so no hairline shows between
+        // them; the run keeps that far inside the picture, so an overlap at
+        // either end never wraps round to its other edge.
+        const margin = 2
+        const half = closed ? total / 2 : total
+        const scaleX = half / (texture - margin * 2)
         const scaleY = width / texture
         const pattern = context.createPattern(String(materialSource), "repeat")
-        for (let i = 1; i <= last; ++i) {
-            const a = points[i - 1], b = points[i % count]
-            const length = lengths[i] - lengths[i - 1]
-            if (!(length > 0)) continue
+        // One stretch of the path [from, to] of the piece that starts at
+        // `start`: the texture runs on with the distance travelled, or back
+        // from the far end when mirrored.
+        function paintStretch(a, angle, start, from, to, mirrored) {
+            if (!(to > from)) return
             context.save()
             context.translate(a.x, a.y)
-            context.rotate(Math.atan2(b.y - a.y, b.x - a.x))
-            context.translate(-lengths[i - 1], -width / 2)
-            context.scale(scaleX, scaleY)
+            context.rotate(angle)
+            context.translate(mirrored ? total - start + margin * scaleX : -start - margin * scaleX,
+                              -width / 2)
+            context.scale(mirrored ? -scaleX : scaleX, scaleY)
             context.fillStyle = pattern
-            context.fillRect(lengths[i - 1] / scaleX - 1, 0, length / scaleX + 2, texture)
+            const near = (mirrored ? total - to : from) / scaleX
+            context.fillRect(near, 0, (to - from) / scaleX + margin * 2, texture)
             context.restore()
+        }
+        for (let i = 1; i <= last; ++i) {
+            const a = points[i - 1], b = points[i % count]
+            const start = lengths[i - 1], end = lengths[i]
+            if (!(end > start)) continue
+            const angle = Math.atan2(b.y - a.y, b.x - a.x)
+            paintStretch(a, angle, start, start, Math.min(end, half), false)
+            if (closed)
+                paintStretch(a, angle, start, Math.max(start, half), end, true)
         }
     }
 

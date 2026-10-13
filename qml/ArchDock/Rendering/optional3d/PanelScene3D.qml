@@ -1588,6 +1588,19 @@ Item {
                         && candidateSource.Window.window === root.Window.window
                         && entryNode.visual.meshVisualActive ? candidateSource : null
                 }
+                // Qt Quick 3D refreshes a texture taken from an icon's layer
+                // after every frame until the texture is deleted. The Loader
+                // that drops this scene, or the repeater that drops this
+                // entry, first turns the bindings above off and deletes the
+                // node a moment later; an icon leaving the window in that
+                // moment left a texture refreshing a freed layer, and Arch
+                // Dock crashed when Panel Studio went from a 3D free panel to
+                // the Top or Side panel (2026-10-13). Destruction is
+                // announced while the bindings still run: let go here.
+                Component.onDestruction: {
+                    glyphTexture.sourceItem = null
+                    tileTexture.sourceItem = null
+                }
                 // The icon faces the viewer at every pitch, yaw and roll, so it
                 // keeps the application's own glyph readable instead of lying
                 // flat on the platform; it stands on its pedestal.

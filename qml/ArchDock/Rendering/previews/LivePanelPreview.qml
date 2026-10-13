@@ -34,8 +34,18 @@ Item {
         definitionForMode(panelDefinition, previewMode)
     readonly property var previewRuntimeState:
         runtimeForPreview(runtimeState)
-    readonly property var effectiveEntries:
-        useProvidedEntries || (orderedEntries && orderedEntries.length > 0)
+    // A panel along an edge is drawn as a track from its first entry to its
+    // last, so one with nothing on it drew nothing at all. Panel Studio shows
+    // such a panel bare: laid out over a few empty places, with no icon in
+    // them (the owner, 2026-10-13).
+    property bool showBarePanel: false
+    readonly property var barePanelEntries: [
+        { id: "bare-place-1", placeholder: true },
+        { id: "bare-place-2", placeholder: true },
+        { id: "bare-place-3", placeholder: true }
+    ]
+    readonly property var effectiveEntries: showBarePanel ? barePanelEntries
+        : useProvidedEntries || (orderedEntries && orderedEntries.length > 0)
         ? orderedEntries : defaultEntries
     readonly property string activeRendererTier:
         panelScene.effectiveRendererTier
@@ -244,6 +254,7 @@ Item {
             readonly property int previewIndex: parent.sceneIndex
 
             anchors.fill: parent
+            visible: !Boolean(previewEntry.placeholder)
             entry: previewEntry
             iconStyleDefinition: root.iconStyleDefinition
             logicalSize: Number(parent.sceneGeometry.iconSize || width)

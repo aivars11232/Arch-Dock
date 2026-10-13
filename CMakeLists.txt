@@ -1609,9 +1609,10 @@ if(BUILD_TESTING)
             bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
   set_tests_properties(
     rendering-import-smoke
-    # The private session is limited to 150 s (the real-RHI generated
-    # platform rows of ADFIX-TASK-002 take about 15 s of it).
-    PROPERTIES DEPENDS rendering-module-import-test TIMEOUT 210)
+    # The private session is limited to 180 s (the real-RHI generated
+    # platform rows of ADFIX-TASK-002 take about 15 s of it, the 3D preview
+    # switch with freed memory overwritten about 8 s).
+    PROPERTIES DEPENDS rendering-module-import-test TIMEOUT 240)
 
   add_test(
     NAME window-interaction-smoke

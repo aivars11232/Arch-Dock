@@ -117,6 +117,13 @@ On a small screen Panel Studio switches to a compact single-column layout so
 that every page stays reachable. It is a fallback for limited space, not a
 designed responsive mode.
 
+A change in Panel Studio shows in its own preview at once and reaches the
+panel on the desktop with Apply or OK; Cancel drops it. Only a preset's
+desktop preview and Panels > 3D's desktop editing show a draft on the
+desktop panel itself. The owner asked on 2026-10-13 for every change to show
+on the desktop panel at once, kept with Apply or OK; that is the next piece
+of work, not part of this candidate.
+
 Some source files are still large (`PanelRegistry.cpp`, `SettingsPopup.qml`,
 `LayoutEngine.js`). `PanelWindow.cpp` has been split by topic into the
 `src/panel/PanelWindow*.cpp` files (see the list in `PanelWindow.h`), moving

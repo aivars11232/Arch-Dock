@@ -551,6 +551,14 @@ run_private_session() {
     ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \
         "$ARCHDOCK_RENDERING_CAPABILITY_TEST"
 
+    # A 3D texture reading an icon layer that was already freed only crashes
+    # once the memory is reused; glibc overwrites freed memory here (and
+    # skips its per-thread cache, which would not), so it always does.
+    printf 'Checking that a 3D preview lets go of its icons when it switches or goes.\n'
+    ARCHDOCK_TEST_RHI=1 MALLOC_PERTURB_=165 GLIBC_TUNABLES=glibc.malloc.tcache_count=0 \
+    ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \
+        "$ARCHDOCK_RENDERING_CAPABILITY_TEST" previewSwitchFromTrue3DToAnEdgePanel
+
     printf 'Checking grouped windows through the live KWin watcher and action bridge.\n'
     ARCHDOCK_PRIVATE_INTERACTION_TEST=1 \
         "$ARCHDOCK_RENDERING_ICON_PROPERTIES_INTERACTION_TEST" \
@@ -1526,7 +1534,7 @@ run_outer() {
     # The private session's own limit; the Studio truth matrix draws every
     # field of 21 panels and the travel matrix (ADREP-TASK-002) twelve
     # layouts step by step, so they need longer.
-    local session_seconds=150
+    local session_seconds=180
     if [[ "${ARCHDOCK_RENDERING_TRUTH_MATRIX:-}" == '1' ]]; then
         session_seconds=900
     elif [[ "${ARCHDOCK_RENDERING_TRAVEL:-}" == '1' ]]; then

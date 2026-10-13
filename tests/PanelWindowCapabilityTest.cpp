@@ -348,6 +348,7 @@ private slots:
     void closedStudioIsReleased();
     void studioArtworkPersistenceFailure_data();
     void studioArtworkPersistenceFailure();
+    void studioAddButtonFollowsThePickedPanel();
     void ownersFreeCircleOffersOnlyWhatWorks();
     void studioTruthMatrixHarnessIsTheApplet();
     void studioTruthMatrix_data();
@@ -1436,6 +1437,63 @@ void PanelWindowCapabilityTest::studioArtworkPersistenceFailure()
     QVERIFY(!studio->isVisible());
     QVERIFY(!popup->property("hasPendingChanges").toBool());
     if (action == "clear") QVERIFY(registry->panelValue("bottom", "themePackageManifest").toString().isEmpty());
+}
+
+// The owner, 2026-10-13: the button beside the Studio's panel list added a
+// new empty free panel whichever panel was picked. It carries the picked
+// panel's name now and adds that panel to the desktop: a hidden edge panel is
+// shown, a free panel whose widget is gone is put back, a panel already on
+// the desktop has nothing to add. An edge panel with nothing on it yet
+// is previewed bare instead of as an empty card, and a refused switch keeps
+// the panel and the list on it.
+void PanelWindowCapabilityTest::studioAddButtonFollowsThePickedPanel()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    registry->setPanelValue("bottom", "visible", true);
+    registry->setPanelValue("top", "visible", false);
+    const QString detached = registry->addFreePanel();
+    registry->setPanelValue(detached, "freeHostState", "detached");
+    QCOMPARE(registry->panelValue(detached, "freeHostState").toString(), QStringLiteral("detached"));
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> popup(component.createWithInitialProperties({{"selectedPanelId", "top"}}));
+    QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
+    auto *studio = qobject_cast<QQuickWindow *>(popup.get()); QVERIFY(studio);
+    studio->show(); QVERIFY(QTest::qWaitForWindowExposed(studio));
+    QVERIFY(QQuickTest::qWaitForPolish(studio));
+    auto *button = visibleItem(studio, QStringLiteral("studio-add-picked-panel"));
+    QVERIFY(button);
+    QCOMPARE(button->property("text").toString(), registry->panelName("top"));
+    QCOMPARE(button->property("presence").value<QJSValue>().property("description").toString(),
+        QStringLiteral("Add %1 to the desktop").arg(registry->panelName("top")));
+    QVERIFY(button->isEnabled());
+    QVERIFY(popup->property("previewShowsBarePanel").toBool());
+    auto *preview = visibleItem(studio, QStringLiteral("panel-studio-live-renderer-preview"));
+    QVERIFY(preview);
+    const QJSValue bare = preview->property("effectiveEntries").value<QJSValue>();
+    QCOMPARE(bare.property("length").toInt(), 3);
+    QVERIFY(bare.property(0).property("placeholder").toBool());
+    popup->setProperty("selectedPanelId", "bottom");
+    QTRY_COMPARE(button->property("text").toString(), registry->panelName("bottom"));
+    QCOMPARE(button->property("presence").value<QJSValue>().property("shown").toBool(), true);
+    QVERIFY(!button->isEnabled());
+    popup->setProperty("selectedPanelId", detached);
+    QTRY_COMPARE(button->property("text").toString(), registry->panelName(detached));
+    QVERIFY(button->isEnabled());
+    QVERIFY(!popup->property("previewShowsBarePanel").toBool());
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue",
+        Q_ARG(QVariant, (QVariantMap{{"key", "opacity"}, {"scope", "panel"}})), Q_ARG(QVariant, 0.61)));
+    QVERIFY(popup->property("hasPendingChanges").toBool());
+    QVERIFY(!button->isEnabled());
+    QVariant switched;
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "selectPanel", Q_RETURN_ARG(QVariant, switched),
+        Q_ARG(QVariant, QStringLiteral("bottom"))));
+    QVERIFY(!switched.toBool());
+    QCOMPARE(popup->property("selectedPanelId").toString(), detached);
 }
 
 void PanelWindowCapabilityTest::screenSignalsCoalesceAndUtilityWindowFitsWorkArea()

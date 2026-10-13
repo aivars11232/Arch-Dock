@@ -1285,6 +1285,136 @@ private slots:
         QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
     }
 
+    // The owner's Panel Studio, 2026-10-13: picking the Top or Side panel
+    // while a 3D free panel was previewed killed Arch Dock (SIGSEGV in
+    // QSGRhiLayer::grab, called from QQuick3DTexture's afterSynchronizing
+    // update of an icon texture whose source had already left the window).
+    // One event turn swaps the preview's panel, look, entries and mode, as
+    // the Studio's panel switch does; the process lives through the frames
+    // after it, both ways, several times. A 3D panel losing every entry and
+    // a whole preview being unloaded take the same way out. The freed layer
+    // is only read, so a run shows the crash reliably with freed memory
+    // overwritten (MALLOC_PERTURB_, see run-rendering-import-smoke.sh).
+    void previewSwitchFromTrue3DToAnEdgePanel()
+    {
+        if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+            return; // The private RHI invocation is the real scene gate.
+        if (!qEnvironmentVariableIsSet("MALLOC_PERTURB_"))
+            QSKIP("Runs in its own invocation, with freed memory overwritten.");
+        const QString themeRoot = qEnvironmentVariable("ARCHDOCK_RENDERING_STAGED_THEME_ROOT",
+            QStringLiteral(ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT));
+        const auto package = ArchDock::ThemePackage::load(themeRoot
+            + QStringLiteral("/mesh-platform-cyan/archdock-theme.json"));
+        QVERIFY2(package.isValid(), qPrintable(package.primaryCode()));
+        const QVariantMap theme = package.package->runtimeProjection();
+        const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
+        QVERIFY(!glyphFixture.isEmpty());
+        const QString glyph = QUrl::fromLocalFile(glyphFixture).toString();
+        QQmlEngine engine;
+        engine.addImportPath(importRoot());
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import ArchDock.Rendering 1.0
+            Item {
+                property alias previewActive: loader.active
+                readonly property Item preview: loader.item
+                width: 760
+                height: 190
+                Loader {
+                    id: loader
+                    anchors.fill: parent
+                    sourceComponent: LivePanelPreview {
+                        contentMargin: 6
+                        animationProfiles: ({reducedMotion: true})
+                    }
+                }
+            }
+        )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/PreviewConsumer.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        const QVariantList entries{
+            QVariantMap{{"id", "one"}, {"displayName", "One"}, {"iconName", glyph}},
+            QVariantMap{{"id", "two"}, {"displayName", "Two"}, {"iconName", glyph}},
+            QVariantMap{{"id", "three"}, {"displayName", "Three"}, {"iconName", glyph}}};
+        const QVariantMap free{{"edge", "free"}, {"type", "launcher"}, {"layout", "ring"},
+            {"layoutRadius", 120}, {"iconSize", 40}, {"layoutPadding", 10},
+            {"rendererTier", "true3d"}, {"scene3DQuality", "low"},
+            {"panelThemeId", theme.value(QStringLiteral("id"))}};
+        const auto edge = [](const QString &side) {
+            return QVariantMap{{"edge", side}, {"type", "hybrid"}, {"layout", "adaptive"},
+                {"dynamic", true}, {"width", 720}, {"height", 76}, {"iconSize", 52},
+                {"rendererTier", "procedural2d"}, {"visible", false}};
+        };
+        QQuickWindow window;
+        std::unique_ptr<QObject> object(component.create());
+        QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+        auto *host = qobject_cast<QQuickItem *>(object.get());
+        QVERIFY(host);
+        host->setParentItem(window.contentItem());
+        QObject *preview = nullptr;
+        const auto showFreePanel = [&]() {
+            preview = objectValue(host->property("preview"));
+            if (!preview) return false;
+            preview->setProperty("useProvidedEntries", true);
+            preview->setProperty("panelDefinition", free);
+            preview->setProperty("themeDefinition", theme);
+            preview->setProperty("orderedEntries", entries);
+            preview->setProperty("previewMode", QStringLiteral("free"));
+            return true;
+        };
+        QVERIFY(showFreePanel());
+        window.resize(760, 190);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        // Every order the Studio's bindings may hand the changes over in.
+        const QList<QByteArrayList> orders{
+            {"panelDefinition", "themeDefinition", "orderedEntries", "previewMode"},
+            {"orderedEntries", "panelDefinition", "themeDefinition", "previewMode"},
+            {"themeDefinition", "orderedEntries", "panelDefinition", "previewMode"},
+            {"previewMode", "orderedEntries", "themeDefinition", "panelDefinition"},
+            {"orderedEntries", "themeDefinition", "previewMode", "panelDefinition"},
+            {"themeDefinition", "panelDefinition", "previewMode", "orderedEntries"}};
+        for (int round = 0; round < orders.size(); ++round)
+        {
+            QTRY_COMPARE_WITH_TIMEOUT(preview->property("activeRendererTier").toString(),
+                                     QStringLiteral("true3d"), 5000);
+            QTest::qWait(250);
+            const bool side = round % 2 == 1;
+            const QVariantMap changes{
+                {"panelDefinition", edge(side ? QStringLiteral("right") : QStringLiteral("top"))},
+                {"themeDefinition", QVariantMap{}}, {"orderedEntries", QVariantList{}},
+                {"previewMode", side ? QStringLiteral("vertical") : QStringLiteral("horizontal")}};
+            for (const QByteArray &name : orders.at(round))
+                preview->setProperty(name.constData(), changes.value(QString::fromLatin1(name)));
+            QTest::qWait(300);
+            QCOMPARE(preview->property("activeRendererTier").toString(), QStringLiteral("procedural2d"));
+            QVERIFY(showFreePanel());
+        }
+        // The 3D panel keeps its scene and loses every entry, then gets them back.
+        for (int round = 0; round < 2; ++round)
+        {
+            QTRY_COMPARE_WITH_TIMEOUT(preview->property("activeRendererTier").toString(),
+                                     QStringLiteral("true3d"), 5000);
+            QTest::qWait(250);
+            preview->setProperty("orderedEntries", QVariantList{});
+            QTest::qWait(300);
+            preview->setProperty("orderedEntries", entries);
+        }
+        // The whole preview goes, as the Studio's preset preview does, and comes back.
+        for (int round = 0; round < 2; ++round)
+        {
+            QTRY_COMPARE_WITH_TIMEOUT(preview->property("activeRendererTier").toString(),
+                                     QStringLiteral("true3d"), 5000);
+            QTest::qWait(250);
+            host->setProperty("previewActive", false);
+            QTest::qWait(300);
+            host->setProperty("previewActive", true);
+            QVERIFY(showFreePanel());
+        }
+        QTRY_COMPARE_WITH_TIMEOUT(preview->property("activeRendererTier").toString(),
+                                 QStringLiteral("true3d"), 5000);
+    }
+
     // AD3D-TASK-002: on the desktop the panel's own handles edit its 3D
     // transform with the mouse. Each finished drag is reported once; a
     // cancelled drag leaves the scene and reports nothing; outside edit mode

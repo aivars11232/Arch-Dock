@@ -64,6 +64,53 @@ TestCase {
         compare(item.contentItem.contentY, end)
     }
 
+    function rowsWith(extra) {
+        const rows = []
+        for (let i = 0; i < 20; ++i)
+            rows.push({key: "field" + i, kind: i === 0 ? "spin" : i === 1 ? "combo" : i === 19 ? "slider" : "readonly",
+                       label: "Field " + i, options: [{label: "First", value: 1}, {label: "Second", value: 2}]})
+        if (extra)
+            rows.splice(10, 0, {key: "extra", kind: "spin", label: "Extra"})
+        return rows
+    }
+
+    // The owner, 2026-10-13: a change low on the page threw it back to its
+    // top and dropped the control in use, so the change had to be made again.
+    // The Studio hands the form new rows on every change: the same settings
+    // keep their controls and the place on the page, a row that comes is the
+    // only one built, and another page starts at its top.
+    function test_newRowsKeepControlsAndThePlaceOnThePage() {
+        const item = createTemporaryObject(formComponent, testCase,
+            {studio: studio, rows: rowsWith(false), pageKey: "panels/size"})
+        verify(item !== null)
+        verify(waitForRendering(item))
+        wait(100)
+        const spin = findChild(item, "studio-spin-field0")
+        const combo = findChild(item, "studio-combo-field1")
+        const slider = findChild(item, "studio-slider-field19")
+        verify(spin !== null && combo !== null && slider !== null)
+        item.contentItem.contentY = item.contentItem.contentHeight - item.contentItem.height
+        const bottom = item.contentItem.contentY
+        verify(bottom > 0)
+        item.rows = rowsWith(false)
+        wait(50)
+        compare(findChild(item, "studio-slider-field19"), slider)
+        compare(item.contentItem.contentY, bottom)
+        item.rows = rowsWith(true)
+        wait(50)
+        compare(findChild(item, "studio-spin-field0"), spin)
+        compare(findChild(item, "studio-combo-field1"), combo)
+        compare(findChild(item, "studio-slider-field19"), slider)
+        verify(findChild(item, "studio-spin-extra") !== null)
+        verify(item.contentItem.contentY >= bottom)
+        item.rows = rowsWith(false)
+        wait(50)
+        compare(findChild(item, "studio-spin-extra"), null)
+        compare(findChild(item, "studio-slider-field19"), slider)
+        item.pageKey = "panels/layout"
+        compare(item.contentItem.contentY, 0)
+    }
+
     Component {
         id: pageComponent
         Item {
