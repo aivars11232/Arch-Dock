@@ -147,11 +147,18 @@ TestCase {
             const onPath = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalLift: 0.4 }, 52, true)
             fuzzyCompare(onPath.standCentre, 0, 0.01, shape + " stands on the path")
             verify(onPath.raise > layout.raise, shape + " lifts the icon above its stand on the path")
-            // A larger view angle shows more of the stand's top.
-            const steep = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalViewAngle: 50 }, 52)
-            const side = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalViewAngle: 0 }, 52)
+            // A level stand (Stand facing: Viewer) is seen View angle degrees
+            // from above; one that is part of the panel (Panel, the default)
+            // is seen straight on, as the flat panel is.
+            const steep = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalFacing: "viewer",
+                                                            pedestalViewAngle: 50 }, 52)
+            const side = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalFacing: "viewer",
+                                                           pedestalViewAngle: 0 }, 52)
             compare(steep.tilt, 50)
             compare(side.tilt, 0)
+            const flat = PlatformGeometry.pedestalLayout({ pedestalShape: shape }, 52)
+            compare(flat.tilt, 90, shape + " lies in the flat panel's plane")
+            fuzzyCompare(flat.height, flat.width, 1e-6, shape + " seen straight on is as tall as it is wide")
         }
     }
 

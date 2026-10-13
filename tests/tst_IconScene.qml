@@ -108,11 +108,15 @@ TestCase {
         fuzzyCompare(pathStandMiddle, scene.height / 2, 1, "the stand's middle is on the path")
         verify(visual.y + visual.height < pathStandMiddle, "the icon is above its stand")
         scene.pedestalOnPath = false
-        // A thicker stand is taller; a bigger one is wider.
-        scene.tileSettings = ({ pedestalShape: "plate", pedestalThickness: 1 })
+        // A thicker level stand is taller; a bigger one is wider. (A stand in
+        // the panel's own plane, the default, is seen straight on.)
+        scene.tileSettings = ({ pedestalShape: "plate", pedestalFacing: "viewer", pedestalThickness: 1 })
         const thin = scene.pedestalLayout.height
-        scene.tileSettings = ({ pedestalShape: "plate", pedestalThickness: 4 })
+        scene.tileSettings = ({ pedestalShape: "plate", pedestalFacing: "viewer", pedestalThickness: 4 })
         verify(scene.pedestalLayout.height > thin * 1.5, "Thickness makes the stand taller")
+        scene.tileSettings = ({ pedestalShape: "plate" })
+        fuzzyCompare(scene.pedestalLayout.height, scene.pedestalLayout.width, 1e-6,
+                     "a stand in the panel's plane is seen straight on")
         scene.tileSettings = ({ pedestalShape: "plate", pedestalSize: 1 })
         const narrow = scene.pedestalLayout.width
         scene.tileSettings = ({ pedestalShape: "plate", pedestalSize: 3 })

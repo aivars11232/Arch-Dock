@@ -319,6 +319,25 @@ Item {
         const mixed = level.times(1 - share).plus(lying.length() > 1e-6 ? lying.normalized().times(share) : level.times(share))
         return mixed.length() > 1e-6 ? mixed.normalized() : level
     }
+    // Panel: each stand is fixed to the panel at its icon's place, as if it
+    // were one more layer of the panel in pieces (the owner's picture of
+    // it, 2026-10-13), so every tilt, turn, move and rotation of the panel
+    // carries it. It stays a stand, not a panel.
+    readonly property bool pedestalOnPanel: pedestalDrawn && pedestalPanelShare >= 0.999
+    // The camera and the point it looks at, in the entries' frame. A stand
+    // fixed to the panel is turned by the small angle between the camera's
+    // line to the panel's centre and its line to the stand, so every stand
+    // round the ring shows the panel's own orientation rather than each a
+    // slightly different side of itself (the owner, 2026-10-13: "slight
+    // dimensional orientations in each direction that are not aligned").
+    function toEntryFrame(point) {
+        const offset = point.minus(sceneContent.position).times(1 / Math.max(1e-6, sceneContent.scale.x))
+        const turn = root.layoutAngle * Math.PI / 180
+        return Qt.vector3d(offset.x * Math.cos(turn) - offset.y * Math.sin(turn),
+                           offset.x * Math.sin(turn) + offset.y * Math.cos(turn), offset.z)
+    }
+    readonly property vector3d cameraInEntries: toEntryFrame(camera.scenePosition)
+    readonly property vector3d sightCentreInEntries: toEntryFrame(Qt.vector3d(0, 0, 0))
     readonly property real pedestalAxisTilt: Math.asin(Math.max(-1, Math.min(1, pedestalAxis.z))) * 180 / Math.PI
     readonly property real pedestalAxisLean: Math.atan2(pedestalAxis.x, pedestalAxis.y) * 180 / Math.PI
     // How tall a stand is per unit of its width, and its outline for its
@@ -1409,6 +1428,38 @@ Item {
                                                   root.generatedPlatform.track)
                     : [(reach > 0.001 ? reachX / reach : 0) * root.entryTrackRadius / root.platformScale,
                        (reach > 0.001 ? reachY / reach : 1) * root.entryTrackRadius / root.platformScale]
+                // The path's direction at the icon's place, degrees from x.
+                readonly property real pathAngle: Math.atan2(baseStandPoint[1], baseStandPoint[0]) * 180 / Math.PI
+                // A stand fixed to the panel: its turn so that it shows the
+                // panel's orientation as seen at the panel's centre, and the
+                // lift that keeps its tilted foot on the platform.
+                readonly property real panelStandTilt: {
+                    if (!root.pedestalOnPanel) return 0
+                    const centre = root.cameraInEntries.minus(root.sightCentreInEntries).normalized()
+                    const own = root.cameraInEntries.minus(position).normalized()
+                    return Math.atan2(centre.crossProduct(own).length(), centre.dotProduct(own))
+                }
+                readonly property quaternion panelStandRotation: {
+                    const half = function(angle) { return angle / 2 }
+                    let view = Qt.quaternion(1, 0, 0, 0)
+                    if (root.pedestalOnPanel) {
+                        const centre = root.cameraInEntries.minus(root.sightCentreInEntries).normalized()
+                        const own = root.cameraInEntries.minus(position).normalized()
+                        const axis = centre.crossProduct(own)
+                        const length = axis.length()
+                        if (length > 1e-9) {
+                            const angle = Math.atan2(length, centre.dotProduct(own))
+                            const unit = axis.times(1 / length)
+                            view = Qt.quaternion(Math.cos(half(angle)), unit.x * Math.sin(half(angle)),
+                                                 unit.y * Math.sin(half(angle)), unit.z * Math.sin(half(angle)))
+                        }
+                    }
+                    const along = (pathAngle + 90 + pedestalSpin) * Math.PI / 180
+                    const sway = pedestalSway * Math.PI / 180, wobble = pedestalWobble * Math.PI / 180
+                    return view.times(Qt.quaternion(Math.cos(along / 2), 0, 0, Math.sin(along / 2)))
+                        .times(Qt.quaternion(Math.cos(sway / 2), Math.sin(sway / 2), 0, 0))
+                        .times(Qt.quaternion(Math.cos(wobble / 2), 0, Math.sin(wobble / 2), 0))
+                }
                 readonly property var standPoint: PlatformGeometry.foldPoint(
                     [baseStandPoint[0], baseStandPoint[1], root.baseTopHeight],
                     root.platformFold, root.baseTopHeight).map(v => v * root.platformScale)
@@ -1435,11 +1486,32 @@ Item {
                 // place, turned by Stand facing, in the platform's material or
                 // its own. Its own motion moves it, not the icon. It and the
                 // icon share the move toward the viewer.
+                // Panel: the stand lies on the platform at the icon's place,
+                // part of the panel, turned with its path there, its foot on
+                // the platform's top whatever moves the icon.
+                Node {
+                    objectName: "mesh-stand-panel-" + entryNode.index
+                    visible: root.pedestalOnPanel
+                    z: -(entryNode.baseLift + entryNode.tileLift) + entryNode.pedestalBob
+                        + entryNode.pedestalScale * root.pedestalShapeReach * Math.sin(entryNode.panelStandTilt)
+                    rotation: entryNode.panelStandRotation
+                    IconStyle3D {
+                        objectName: "mesh-pedestal-" + entryNode.index
+                        meshData: root.pedestalMesh
+                        materialData: root.pedestalMaterialData
+                        surfaceTexture: root.pedestalTexture
+                        surfaceNormalTexture: root.pedestalNormalTexture
+                        emissionScale: root.emissionScale * entryNode.pedestalShine * (1 + entryNode.glow)
+                        scale: Qt.vector3d(entryNode.pedestalScale * entryNode.pedestalPulse,
+                                           entryNode.pedestalScale * entryNode.pedestalPulse,
+                                           Math.max(1e-3, entryNode.pedestalDepth))
+                    }
+                }
                 Node {
                     objectName: "mesh-stand-frame-" + entryNode.index
                     position: root.iconForward.times(entryNode.clearanceTravel)
                     rotation: root.iconFacing
-                    visible: root.pedestalDrawn
+                    visible: root.pedestalDrawn && !root.pedestalOnPanel
                     Node {
                         position: Qt.vector3d(root.pedestalAxis.x * entryNode.pedestalBob,
                                               root.pedestalAxis.y * entryNode.pedestalBob,
@@ -1448,7 +1520,7 @@ Item {
                         Node {
                             eulerRotation.x: -90 + root.pedestalAxisTilt + entryNode.pedestalWobble
                             IconStyle3D {
-                                objectName: "mesh-pedestal-" + entryNode.index
+                                objectName: "mesh-pedestal-facing-" + entryNode.index
                                 meshData: root.pedestalMesh
                                 materialData: root.pedestalMaterialData
                                 surfaceTexture: root.pedestalTexture

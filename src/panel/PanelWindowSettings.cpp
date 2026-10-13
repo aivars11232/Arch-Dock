@@ -966,10 +966,11 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             else if (key != QStringLiteral("pedestalShape"))
             {
                 inactive = !drawn;
-                // Stand facing turns a 3D panel's stands; a flat panel's are
-                // always level.
-                if (key == QStringLiteral("pedestalFacing"))
-                    inactive = inactive || resolution.renderer.effectiveTier != ArchDock::RendererTier::True3D;
+                // View angle is a level stand's; a stand that is part of the
+                // panel (Stand facing: Panel) takes the panel's own view.
+                if (key == QStringLiteral("pedestalViewAngle"))
+                    inactive = inactive || values.value(QStringLiteral("pedestalFacing"),
+                        QStringLiteral("panel")).toString() == QStringLiteral("panel");
                 if (key == QStringLiteral("pedestalAnimationSpeed"))
                     inactive = inactive || values.value(QStringLiteral("pedestalAnimation"),
                         QStringLiteral("none")).toString() == QStringLiteral("none");

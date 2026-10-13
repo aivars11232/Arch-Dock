@@ -31,8 +31,23 @@ through a see-through hover tile in a folder opening.
   platform's normal as seen (lying on the panel, in step with its tilt and
   turn) or level at the View angle, by Stand facing: Panel, the default
   after the owner marked the stands lying on a ring tilted to 60° as the
-  only right ones; Auto (lying where the viewer is 40° or less above the
-  panel's plane, level from 60°, blended between); Viewer (level). `PlatformGeometry.pedestalExtents` gives the turned stand's
+  only right ones and explained the alignment as if the stands were one
+  more layer on the panel, in pieces (an analogy, not a new panel): the
+  stand is then a child of
+  its entry in the platform's frame (`mesh-stand-panel-N`), lying on the
+  platform's top, turned with the path at its place, so the panel's tilt,
+  turn, position, scale and rotation carry it and the icon alone moves
+  toward the viewer when it must. Each such stand is also turned by the
+  small angle between the camera's line to the panel's centre and its
+  line to the stand (`panelStandRotation`, lifted by `panelStandTilt` so
+  its rim stays on the platform): the owner's arrows on the replica showed
+  the camera's perspective making each stand round the ring look tilted a
+  little differently; corrected, every stand shows the ring's own
+  orientation. Auto (lying where the viewer is 40° or less above the
+  panel's plane, level from 60°, blended between) and Viewer (level) use
+  the viewer-frame stand (`mesh-stand-frame-N`). A flat
+  panel in Panel draws the stand in its own plane (`pedestalLayout` tilt
+  90°); an opened folder's stands stand level (`pedestalFacing` viewer). `PlatformGeometry.pedestalExtents` gives the turned stand's
   reach up the screen, its top's middle and how far it would reach below
   the plane; the icon's body and input anchor float its Float height above
   the stand's top, centred over it; stand and icon move straight toward

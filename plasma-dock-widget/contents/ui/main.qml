@@ -108,6 +108,9 @@ PlasmoidItem {
             for (const name of keys)
                 if (source["folderPedestal" + name] !== undefined)
                     settings["pedestal" + name] = source["folderPedestal" + name]
+        // An opened folder is no panel: its items' stands stand level, seen
+        // View angle degrees from above.
+        settings.pedestalFacing = "viewer"
         return settings
     }
     // The runtime state the scene draws from. Until TASK-0032 Phase D the

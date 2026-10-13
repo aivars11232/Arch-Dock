@@ -16,11 +16,14 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   outside the dock"): a stand stands on the panel at its icon's place, on a
   free panel's path and on a 3D platform's band, the icon centred over it
   and floating its Float height above the stand's top. On a 3D panel, Stand
-  facing turns the stands: Panel, the default (the owner, 2026-10-13: the
-  only right one), lies them on the panel in its own proportion, in step
-  with its tilt and turn; Auto lies them on a panel tilted back and keeps
-  them level on one seen face-on; Viewer keeps them level and facing the
-  viewer; View angle is how far from above a level stand is seen. Stand and icon move toward the
+  facing turns the stands: Panel, the default (the owner's picture of it,
+  2026-10-13: as if the stands were one more layer on the panel, in
+  pieces), fixes each stand to the panel at its icon's place, lying on a
+  3D ring and carried by its every tilt, turn, move and rotation, and drawn
+  in a flat panel's own plane; Auto lies them on a panel tilted back
+  and keeps them level on one seen face-on; Viewer keeps them level and
+  facing the viewer; View angle is how far from above a level stand is
+  seen. Stand and icon move toward the
   viewer just enough never to sink into the platform at any camera angle,
   and a flat free panel grows to hold an icon raised over its stand. Flat
   panels and opened folders paint the same shapes, shaded and textured, an

@@ -434,7 +434,12 @@ function pedestalLayout(values, size, onPath) {
     const scale = number("pedestalSize", 1, 0.2, 4)
     const thickness = number("pedestalThickness", 1, 0.2, 4)
     const lift = number("pedestalLift", 0.3, 0, 2)
-    const tilt = number("pedestalViewAngle", pedestalTilt2D, 0, 60)
+    // Stand facing: Panel (the default) draws the stand in the panel's own
+    // plane, seen straight on as a flat panel is, fixed to the panel at the
+    // icon's place (the owner, 2026-10-13); Viewer and Auto draw it level,
+    // View angle degrees from above.
+    const facing = String(v.pedestalFacing || "panel").toLowerCase()
+    const tilt = facing === "panel" ? 90 : number("pedestalViewAngle", pedestalTilt2D, 0, 60)
     const unit = icon * pedestalShapeScale(kind === "none" ? "column" : kind) * scale
     const depth = shape === "auto" ? icon * 0.3
         : kind === "column" ? icon * 0.4 * scale * thickness : unit * thickness

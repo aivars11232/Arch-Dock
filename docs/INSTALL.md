@@ -57,12 +57,14 @@ an **Animation** (Bob, Spin, Pulse, Sway, Wobble, Glow or Float) with its
 speed. The icon is centred over its stand and floats above its top. On a
 free panel's path the stand stands on the path at its icon's place; in an
 edge panel's row the two are centred in the row. **View angle** is how far
-from above a level stand is seen (0 is side on). On a 3D panel, **Stand
-facing** turns the stands: Panel, the default, lies them on the panel in
-its own proportion, in step with its tilt and turn; Auto lies them on a
-panel tilted back and keeps them level, facing you, on a panel seen
-face-on; Viewer always level. No stand or icon sinks into a 3D platform at
-any camera angle.
+from above a level stand is seen (0 is side on). **Stand facing** turns
+the stands. Panel, the default, fixes each stand to the panel at its
+icon's place: on a 3D panel it lies on the ring and every tilt, turn, move
+and rotation of the panel carries it; on a flat panel it is drawn in the
+panel's own plane, seen straight on as the panel is. Viewer keeps the stands level, facing you, at the View angle; Auto,
+on a 3D panel, lies them on a panel tilted back and keeps them level on
+one seen face-on. No stand or icon sinks into a 3D platform at any camera
+angle.
 
 **Folder item stands** gives the items of an opened folder the icons' own
 stand (Same), none, or a shape of their own. With **Own settings** on they
