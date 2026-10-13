@@ -5,8 +5,10 @@
 
 var sections = [
     {
+        // What is applied to the selected panel; Icon Tiles and Pedestals
+        // only when the panel draws them (the owner, 2026-10-13).
         label: "Overview",
-        subtabs: ["Panel", "Icons"]
+        subtabs: ["Panel", "Icons", "Icon Tiles", "Pedestals"]
     },
     {
         label: "Panels",

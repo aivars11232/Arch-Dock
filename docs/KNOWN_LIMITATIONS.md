@@ -121,8 +121,8 @@ A free panel removed from the desktop with its right-click menu keeps its
 settings: it stays in Panel Studio's panel list, not on the desktop, and the
 button with its name beside the list adds it back. Panel Studio has no
 button that deletes a panel's settings. An edge panel is taken off the
-desktop with General > Hide panel; one removed through Plasma's own menu
-while meant to be shown is rebuilt.
+desktop with Panels > Behavior > Visible; one removed through Plasma's own
+menu while meant to be shown is rebuilt.
 
 A change in Panel Studio shows in its own preview at once and reaches the
 panel on the desktop with Apply or OK; Cancel drops it. Only a preset's

@@ -349,6 +349,7 @@ private slots:
     void studioArtworkPersistenceFailure_data();
     void studioArtworkPersistenceFailure();
     void studioAddButtonFollowsThePickedPanel();
+    void studioShowsEachSettingOnce();
     void ownersFreeCircleOffersOnlyWhatWorks();
     void studioTruthMatrixHarnessIsTheApplet();
     void studioTruthMatrix_data();
@@ -738,9 +739,16 @@ void PanelWindowCapabilityTest::studioPanelMotionControls()
     const auto candidate = popup->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap();
     QCOMPARE(candidate.value("presentationMode").toString(), QStringLiteral("collapsed"));
     QCOMPARE(candidate.value("collapseMechanism").toString(), QStringLiteral("collapse-horizontal"));
+    // The panel's preview is on Overview (the owner, 2026-10-13).
+    QVERIFY(!item(popup.get(), "panel-studio-live-renderer-preview"));
+    popup->setProperty("mainTabIndex", 0);
+    QVERIFY(QQuickTest::qWaitForPolish(window));
     auto *preview = item(popup.get(), "panel-studio-live-renderer-preview");
     QVERIFY(preview);
     QTRY_COMPARE(preview->property("collapseProgress").toDouble(), 1.0);
+    popup->setProperty("mainTabIndex", 1);
+    popup->setProperty("subTabIndex", 9);
+    QVERIFY(QQuickTest::qWaitForPolish(window));
     press(popup.get(), "studio-apply");
     QVERIFY(QQuickTest::qWaitForPolish(window));
     QCOMPARE(popup->property("studioError").toString(), QString{});
@@ -1461,10 +1469,19 @@ void PanelWindowCapabilityTest::studioAddButtonFollowsThePickedPanel()
     QCOMPARE(registry->panelValue(detached, "freeHostState").toString(), QStringLiteral("detached"));
     QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
-    std::unique_ptr<QObject> popup(component.createWithInitialProperties({{"selectedPanelId", "top"}}));
+    std::unique_ptr<QObject> popup(component.createWithInitialProperties({{"selectedPanelId", "top"},
+        {"mainTabIndex", 1}, {"subTabIndex", 0}}));
     QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
     auto *studio = qobject_cast<QQuickWindow *>(popup.get()); QVERIFY(studio);
     studio->show(); QVERIFY(QTest::qWaitForWindowExposed(studio));
+    QVERIFY(QQuickTest::qWaitForPolish(studio));
+    // The panel list and its button are in Panels, the preview on Overview.
+    QVERIFY(!visibleItem(studio, QStringLiteral("panel-studio-live-renderer-preview")));
+    popup->setProperty("mainTabIndex", 0);
+    QVERIFY(QQuickTest::qWaitForPolish(studio));
+    QVERIFY(!visibleItem(studio, QStringLiteral("studio-add-picked-panel")));
+    QVERIFY(visibleItem(studio, QStringLiteral("panel-studio-live-renderer-preview")));
+    popup->setProperty("mainTabIndex", 1);
     QVERIFY(QQuickTest::qWaitForPolish(studio));
     auto *button = visibleItem(studio, QStringLiteral("studio-add-picked-panel"));
     QVERIFY(button);
@@ -1473,7 +1490,7 @@ void PanelWindowCapabilityTest::studioAddButtonFollowsThePickedPanel()
         QStringLiteral("Add %1 to the desktop").arg(registry->panelName("top")));
     QVERIFY(button->isEnabled());
     QVERIFY(popup->property("previewShowsBarePanel").toBool());
-    auto *preview = visibleItem(studio, QStringLiteral("panel-studio-live-renderer-preview"));
+    auto *preview = popup->findChild<QQuickItem *>(QStringLiteral("panel-studio-live-renderer-preview"));
     QVERIFY(preview);
     const QJSValue bare = preview->property("effectiveEntries").value<QJSValue>();
     QCOMPARE(bare.property("length").toInt(), 3);
@@ -1526,6 +1543,89 @@ void PanelWindowCapabilityTest::studioAddButtonFollowsThePickedPanel()
         Q_ARG(QVariant, QStringLiteral("new-free-panel"))));
     QVERIFY(!picked.toBool());
     QVERIFY(!popup->property("newFreePanelPicked").toBool());
+}
+
+// The owner, 2026-10-13: "make sure there aren't any duplicate settings";
+// icon settings belong to Icons, tile settings to Icon Tiles and stand
+// settings to Pedestals. Every page offered for a free and an edge panel: no
+// setting is on two pages, the tile shape and the hover names are where they
+// belong, and Overview lists tiles and stands only when they are drawn.
+void PanelWindowCapabilityTest::studioShowsEachSettingOnce()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString free = registry->addFreePanel();
+    registry->setPanelValue(free, "type", "launcher");
+    registry->setPanelValue("bottom", "visible", true);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    for (const QString &panel : {free, QStringLiteral("bottom")})
+    {
+        registry->setPanelValue(panel, "iconTilesEnabled", false);
+        registry->setPanelValue(panel, "pedestalShape", "none");
+        std::unique_ptr<QObject> popup(component.createWithInitialProperties({{"selectedPanelId", panel}}));
+        QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
+        const auto offered = [&](int section, int subtab) {
+            QVariant result;
+            return QMetaObject::invokeMethod(popup.get(), "subtabAvailable", Q_RETURN_ARG(QVariant, result),
+                       Q_ARG(QVariant, section), Q_ARG(QVariant, subtab)) && result.toBool();
+        };
+        QHash<QString, QString> pages;
+        for (int section = 1; section <= 4; ++section)
+        {
+            popup->setProperty("mainTabIndex", section);
+            const int count = qMax(1, int(popup->property("currentSubtabs").value<QJSValue>().property("length").toInt()));
+            for (int subtab = 0; subtab < count; ++subtab)
+            {
+                if (!offered(section, subtab)) continue;
+                popup->setProperty("subTabIndex", subtab);
+                QVariant rows;
+                QVERIFY(QMetaObject::invokeMethod(popup.get(), "rowsForCurrentPage", Q_RETURN_ARG(QVariant, rows)));
+                const QString page = QStringLiteral("%1:%2").arg(section).arg(subtab);
+                QSet<QString> here;
+                for (const QVariant &value : rows.value<QJSValue>().toVariant().toList())
+                {
+                    const QVariantMap row = value.toMap();
+                    const QString key = row.value("key").toString();
+                    if (key.isEmpty() || row.value("kind").toString() == "readonly" || row.contains("segmentIndex"))
+                        continue;
+                    const QString id = row.value("scope").toString() + ":" + key;
+                    if (here.contains(id)) continue;
+                    here.insert(id);
+                    QVERIFY2(!pages.contains(id), qPrintable(QStringLiteral("%1 on %2 and %3 (%4)")
+                        .arg(id, pages.value(id), page, panel)));
+                    pages.insert(id, page);
+                }
+            }
+        }
+        QCOMPARE(pages.value("settings:showTooltips"), QStringLiteral("2:1"));
+        QVERIFY(!offered(0, 2));
+        QVERIFY(!offered(0, 3));
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue",
+            Q_ARG(QVariant, (QVariantMap{{"key", "iconTilesEnabled"}, {"scope", "panel"}})), Q_ARG(QVariant, true)));
+        QVERIFY(offered(0, 2));
+        // The shape under the icons is offered while tiles are drawn, on Icon
+        // Tiles alone.
+        const auto pageKeys = [&](int section, int subtab) {
+            popup->setProperty("mainTabIndex", section);
+            popup->setProperty("subTabIndex", subtab);
+            QVariant rows;
+            QMetaObject::invokeMethod(popup.get(), "rowsForCurrentPage", Q_RETURN_ARG(QVariant, rows));
+            QStringList keys;
+            for (const QVariant &value : rows.value<QJSValue>().toVariant().toList())
+                keys.append(value.toMap().value("key").toString());
+            return keys;
+        };
+        QCOMPARE(pageKeys(3, 0).count("iconShape"), 1);
+        QCOMPARE(pageKeys(2, 0).count("iconShape"), 0);
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue",
+            Q_ARG(QVariant, (QVariantMap{{"key", "pedestalShape"}, {"scope", "panel"}})), Q_ARG(QVariant, QStringLiteral("plate"))));
+        QVERIFY(offered(0, 3));
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "discardStudioChanges"));
+    }
 }
 
 void PanelWindowCapabilityTest::screenSignalsCoalesceAndUtilityWindowFitsWorkArea()
@@ -4309,17 +4409,31 @@ void PanelWindowCapabilityTest::studioIconAppearanceOptionsAreTransactional()
     QTest::keyClick(window, Qt::Key_Return);
     QCOMPARE(draft(popup.get()).value("iconDiameter").toInt(), 74);
 
+    // The style's own pedestal is on Pedestals, the shape under the icons on
+    // Icon Tiles (one page per setting, the owner, 2026-10-13).
+    popup->setProperty("mainTabIndex", 4);
+    popup->setProperty("subTabIndex", 0);
+    QVERIFY(QQuickTest::qWaitForPolish(window));
     auto *pedestal = visibleItem(window, "studio-switch-iconPedestalEnabled"); QVERIFY(pedestal);
     pedestal->forceActiveFocus();
     QTest::keyClick(window, Qt::Key_Space);
     QTRY_VERIFY(draft(popup.get()).value("iconPedestalEnabled").toBool());
+    const auto rowFor = [&](const QString &key) {
+        for (const auto &[section, subtab] : {std::pair{2, 0}, std::pair{3, 0}, std::pair{4, 0}}) {
+            popup->setProperty("mainTabIndex", section);
+            popup->setProperty("subTabIndex", subtab);
+            const QVariant row = fieldByKey(rows(popup.get()), key);
+            if (!row.toMap().isEmpty()) return row;
+        }
+        return QVariant{};
+    };
 
     const QVariantMap values{{"iconShape", "hexagon"}, {"iconLogoSize", 88},
         {"iconOutlineWidth", 3}, {"iconBodyColor", "#162a39"},
         {"iconOutlineColor", "#90b7dc"}, {"iconGlowColor", "#28d6af"},
         {"iconPedestalEnabled", true}, {"iconPedestalHeight", 32}, {"iconPedestalColor", "#39597e"}};
     for (auto it = values.cbegin(); it != values.cend(); ++it) {
-        const QVariant row = fieldByKey(rows(popup.get()), it.key());
+        const QVariant row = rowFor(it.key());
         QVERIFY2(!row.toMap().isEmpty(), qPrintable(it.key()));
         QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue", Q_ARG(QVariant, row), Q_ARG(QVariant, it.value())));
     }
@@ -4691,7 +4805,9 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
         QCOMPARE(popup->property("selectedPresetId").toString(), QString{});
         QVERIFY(!popup->property("presetPreviewActive").toBool());
         QVERIFY(!findVisible(presetPreview));
-        QVERIFY(findVisible(QStringLiteral("panel-studio-live-renderer-preview")));
+        // The panel's own preview is on the pages that show the panel, not
+        // in Panels (the owner, 2026-10-13).
+        QCOMPARE(findVisible(QStringLiteral("panel-studio-live-renderer-preview")) != nullptr, page.section != 1);
 
         const QVariantList listed = cards();
         for (int index = 0; index < listed.size(); ++index)
@@ -4737,6 +4853,8 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
     QCOMPARE(popup->property("selectedPresetId").toString(), QString{});
     QVERIFY(!findVisible(browser));
     QVERIFY(!findVisible(presetPreview));
+    QVERIFY(!findVisible(QStringLiteral("panel-studio-live-renderer-preview")));
+    QVERIFY(openPage(0, 0));
     QVERIFY(findVisible(QStringLiteral("panel-studio-live-renderer-preview")));
 
     // Themes have a page of their own and are not presets. The icon style is
@@ -5225,21 +5343,22 @@ void PanelWindowCapabilityTest::studioTruthMatrix()
         }
         return keys;
     };
-    for (int section = 1; section <= 3; ++section) {
-        const int subtabs = section == 3 ? 1 : (section == 1 ? 11 : 6);
+    // Panels, Icons and Icon Tiles; Pedestals for the page checks only (its
+    // settings have no frame probes here).
+    QHash<QString, QString> standPageOf;
+    for (int section = 1; section <= 4; ++section) {
+        const int subtabs = section >= 3 ? 1 : (section == 1 ? 11 : 6);
         for (int subtab = 0; subtab < subtabs; ++subtab) {
             const QString page = QStringLiteral("%1:%2").arg(section).arg(subtab);
             for (const QString &key : pageKeys(section, subtab)) {
-                // (c) No setting is shown on two pages.
-                if (pageOf.contains(key) && pageOf.value(key) != page) {
-                    // PD-20 / OF-40: only Shape has the two required homes.
-                    const bool sharedShape = key == QStringLiteral("iconShape")
-                        && QSet<QString>{pageOf.value(key), page}
-                            == QSet<QString>{QStringLiteral("2:0"), QStringLiteral("3:0")};
-                    if (sharedShape) continue; // Appearance remains its canonical home.
-                    failures.append(QStringLiteral("%1 is on %2 and %3").arg(key, pageOf.value(key), page));
-                }
-                pageOf.insert(key, page);
+                // (c) No setting is shown on two pages; the shape under the
+                // icons, once on Icons > Appearance as well, is on Icon Tiles
+                // alone (the owner, 2026-10-13).
+                const QString earlier = pageOf.value(key, standPageOf.value(key));
+                if (!earlier.isEmpty() && earlier != page)
+                    failures.append(QStringLiteral("%1 is on %2 and %3").arg(key, earlier, page));
+                if (section == 4) standPageOf.insert(key, page);
+                else pageOf.insert(key, page);
             }
         }
     }
@@ -5257,9 +5376,11 @@ void PanelWindowCapabilityTest::studioTruthMatrix()
     }
     // (c) Each setting named under homes is on its page.
     const QVariantMap homes = fixture.value(QStringLiteral("homes")).toMap();
-    for (auto it = homes.cbegin(); it != homes.cend(); ++it)
-        if (it.key() != QStringLiteral("why") && pageOf.contains(it.key()) && pageOf.value(it.key()) != it.value().toString())
-            failures.append(QStringLiteral("%1 is on %2, not on %3").arg(it.key(), pageOf.value(it.key()), it.value().toString()));
+    for (auto it = homes.cbegin(); it != homes.cend(); ++it) {
+        const QString page = pageOf.value(it.key(), standPageOf.value(it.key()));
+        if (it.key() != QStringLiteral("why") && !page.isEmpty() && page != it.value().toString())
+            failures.append(QStringLiteral("%1 is on %2, not on %3").arg(it.key(), page, it.value().toString()));
+    }
     // (b) Nothing forbidden for this host, layout or renderer is offered.
     const QVariantMap forbidden = fixture.value(QStringLiteral("forbidden")).toMap();
     QStringList refused = forbidden.value(QStringLiteral("everywhere")).toMap().value(QStringLiteral("fields")).toStringList();

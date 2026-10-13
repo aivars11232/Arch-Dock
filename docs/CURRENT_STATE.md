@@ -70,10 +70,25 @@ ends with "New free panel" (`newFreePanelEntry`, `pickPanelEntry`). Picked,
 it shows the bare new panel (`newFreePanelPreviewLoader`: the default
 panel preset's look when one for free panels is set, else the circular
 ring a new free panel gets) and hides the tabs and pages until the panel
-exists; the button beside the list adds it (`create-free`). The General
-row keeps only Add applications… and, for an edge panel on the desktop,
-Hide panel: an edge panel gone from Plasma while meant to be shown is
-rebuilt, so right-click removal does not hide it.
+exists; the button beside the list adds it (`create-free`).
+
+Then the Studio was reorganized on the owner's remarks ("make sure there
+aren't any duplicate settings", "icon settings belong to icons, same goes
+for tiles and pedestals", "option to add and select panel belongs to the
+panels section", "missing pedestals overview and icon tiles overview, but if
+none of them are applied there shouldn't be any"): the panel list and its
+button show in Panels only (`previewSection`, the preview in Overview,
+Icons, Icon Tiles and Pedestals, and in Panels only for a new panel or a
+preset); Overview has Panel, Icons, Icon Tiles (`tilesApplied`) and
+Pedestals (`standsApplied`) summaries built from the settings offered on
+the panel (`summaryRow`); `iconShape` is on Icon Tiles alone,
+`showTooltips` on Icons > Behavior as "Show names on hover", the icon
+style's pedestal and `scene3DIconElevation` on Pedestals. General lost its
+button row and the add-applications file dialog (drops pin applications,
+Behavior > Visible hides an edge panel). `studioShowsEachSettingOnce`
+walks every page of a free and an edge panel and fails on a setting shown
+twice; the truth matrix's homes moved with the settings and its scan covers
+Pedestals for the page checks.
 
 <!-- MORNING_2026_10_13_END -->
 

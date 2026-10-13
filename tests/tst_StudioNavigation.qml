@@ -21,7 +21,7 @@ TestCase {
     }
 
     function test_exposesExactDirectSubtabs() {
-        compareList(StudioNavigation.subtabsFor(0), ["Panel", "Icons"])
+        compareList(StudioNavigation.subtabsFor(0), ["Panel", "Icons", "Icon Tiles", "Pedestals"])
         compareList(StudioNavigation.subtabsFor(1), [
             "General",
             "Size",

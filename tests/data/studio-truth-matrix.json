@@ -208,7 +208,7 @@
     }
   },
   "homes": {
-    "why": "OF-04, OF-07, OF-10, CF-04, CF-05, CF-14, PD-05, PD-08: rotation and opening and closing only on Animations, one icon style selector on Icons > Appearance.",
+    "why": "OF-04, OF-07, OF-10, CF-04, CF-05, CF-14, PD-05, PD-08: rotation and opening and closing only on Animations, one icon style selector on Icons > Appearance. One page per setting (the owner, 2026-10-13): the shape under the icons on Icon Tiles, names on hover on Icons > Behavior, every stand setting on Pedestals.",
     "panelRotationMode": "1:9",
     "panelRotationSpeed": "1:9",
     "panelRotationTrigger": "1:9",
@@ -223,7 +223,12 @@
     "openDelay": "1:9",
     "closeDelay": "1:9",
     "iconStyle": "2:0",
-    "iconShape": "2:0",
+    "iconShape": "3:0",
+    "showTooltips": "2:1",
+    "iconPedestalEnabled": "4:0",
+    "iconPedestalHeight": "4:0",
+    "iconPedestalColor": "4:0",
+    "scene3DIconElevation": "4:0",
     "scene3DColor": "1:10",
     "scene3DMaterial": "1:10",
     "scene3DTexture": "1:10",

@@ -167,6 +167,13 @@ Window {
     // place (the owner, 2026-10-13).
     readonly property string newFreePanelEntry: "new-free-panel"
     property bool newFreePanelPicked: false
+    // The panel list and its button belong to Panels; the preview to the
+    // pages that show the panel (the owner, 2026-10-13): Overview, Icons,
+    // Icon Tiles and Pedestals. In Panels it shows only the new panel being
+    // added or a preset being previewed.
+    readonly property bool previewSection: mainTabIndex === 0 || mainTabIndex === 2
+        || mainTabIndex === 3 || mainTabIndex === 4
+        || (mainTabIndex === 1 && (newFreePanelPicked || presetPreviewActive))
     readonly property var newFreePanelCard: {
         const revision = presetLibrary.revision;
         const presetId = String(auditionDefaults.panelPresetId || "");
@@ -368,6 +375,10 @@ Window {
         const sectionNumber = Number(sectionIndex);
         const subtabNumber = Number(subtabIndex);
         const presetPage = StudioNavigation.presetPage(sectionNumber, subtabNumber);
+        if (sectionNumber === 0 && subtabNumber === 2)
+            return tilesApplied;
+        if (sectionNumber === 0 && subtabNumber === 3)
+            return standsApplied;
         if (presetPage) {
             // Your own catalog appears once it holds a preset for this panel.
             return presetPage.scope !== "user"
@@ -408,7 +419,12 @@ Window {
         }
     }
     onEditorSessionChanged: Qt.callLater(root.ensureOfferedSubtab)
-    onMainTabIndexChanged: Qt.callLater(root.ensureOfferedSubtab)
+    onMainTabIndexChanged: {
+        // The new free panel is picked in Panels and left there.
+        if (mainTabIndex !== 1)
+            newFreePanelPicked = false;
+        Qt.callLater(root.ensureOfferedSubtab);
+    }
     onSubTabIndexChanged: Qt.callLater(root.ensureOfferedSubtab)
 
     function setMainTab(index) {
@@ -790,47 +806,106 @@ Window {
         return rows;
     }
 
+    // Whether the selected panel draws icon tiles, or stands under its icons
+    // (its own, its folder items' or the icon style's).
+    readonly property bool tilesApplied: Boolean(panelValue("iconTilesEnabled", false))
+    readonly property bool standsApplied: String(panelValue("pedestalShape", "none")) !== "none"
+        || !["same", "none"].includes(String(panelValue("folderPedestalShape", "same")))
+        || Boolean(panelValue("iconPedestalEnabled", false))
+
+    // A setting offered on this panel as one Overview line: its label and its
+    // value as the setting shows it; nothing for a setting that does not act.
+    function summaryRow(key, scope) {
+        const descriptor = fieldDescriptor(key, scope || "panel");
+        if (!descriptor || descriptor.inactive === true)
+            return null;
+        const row = editorRow(descriptor);
+        const value = row.scope === "settings" ? globalValue(key, row.fallback) : panelValue(key, row.fallback);
+        let text = String(value);
+        if (row.kind === "switch")
+            text = Boolean(value) ? qsTr("On") : qsTr("Off");
+        else if (row.kind === "combo") {
+            // A choice without a label of its own reads as its words.
+            text = optionLabel(key, value, scope || "panel");
+            if (text === String(value))
+                text = titleCase(String(value));
+        }
+        else if (row.kind === "color")
+            text = String(value || "").trim().length > 0 ? String(value) : qsTr("Theme default");
+        else if (row.kind === "spin" || row.kind === "slider")
+            text = formatFieldValue(row, value);
+        return readOnlyRow(row.label, text);
+    }
+
+    function summaryRows(keys, scope) {
+        return keys.map(function(key) { return root.summaryRow(key, scope); })
+            .filter(function(row) { return row !== null; });
+    }
+
     function overviewPanelRows() {
         const color = String(panelValue("color", "")).trim();
-        return [section(qsTr("Panel"), qsTr("Settings currently applied to the selected panel."), true), readOnlyRow(qsTr("Name"), panelRegistry.panelName(selectedPanelId)), readOnlyRow(qsTr("Type"), optionLabel("type", panelValue("type", "empty"))), readOnlyRow(qsTr("Position"), optionLabel("edge", panelValue("edge", "bottom"))), readOnlyRow(qsTr("Layout"), optionLabel("layout", panelValue("layout", "adaptive"))), readOnlyRow(qsTr("Theme"), optionLabel("appearance", panelValue("appearance", "glass"))), readOnlyRow(qsTr("Color"), color.length > 0 ? color : qsTr("Theme default")), readOnlyRow(qsTr("Opacity"), Math.round(Number(panelValue("opacity", 0.9)) * 100) + "%")];
+        const free = !isNativePanel();
+        const themeId = String(panelValue("completeThemeId", "") || panelValue("panelThemeId", ""));
+        const look = themeId.length > 0 && String((selectedPreviewTheme || {}).id || "") === themeId
+            && String(selectedPreviewTheme.name || "").length > 0
+            ? String(selectedPreviewTheme.name) : optionLabel("appearance", panelValue("appearance", "glass"));
+        return [section(qsTr("Panel"), qsTr("Settings currently applied to the selected panel."), true),
+            readOnlyRow(qsTr("Name"), panelRegistry.panelName(selectedPanelId)),
+            readOnlyRow(qsTr("Type"), optionLabel("type", panelValue("type", "empty"))),
+            readOnlyRow(qsTr("Position"), free
+                ? qsTr("Free, at %1, %2").arg(Math.round(Number(panelValue("x", 0)))).arg(Math.round(Number(panelValue("y", 0))))
+                : optionLabel("edge", panelValue("edge", "bottom"))),
+            readOnlyRow(qsTr("Layout"), optionLabel("layout", panelValue("layout", "adaptive"))),
+            readOnlyRow(qsTr("Look"), look),
+            readOnlyRow(qsTr("Color"), color.length > 0 ? color : qsTr("Theme default")),
+            readOnlyRow(qsTr("Opacity"), Math.round(Number(panelValue("opacity", 0.9)) * 100) + "%")];
     }
 
     function overviewIconRows() {
-        return [section(qsTr("Icons"), qsTr("Settings currently applied to icons in the selected panel."), true), readOnlyRow(qsTr("Style"), optionLabel("iconStyle", panelValue("iconStyle", "plain-original"))), readOnlyRow(qsTr("Size"), panelValue("iconSize", 52) + qsTr(" px")), readOnlyRow(qsTr("Spacing"), Math.round(Number(panelValue("spacing", 8))) + qsTr(" px")), readOnlyRow(qsTr("Tile shape"), optionLabel("iconShape", panelValue("iconShape", "rounded"))), readOnlyRow(qsTr("Animation"), optionLabel("iconAnimation", panelValue("iconAnimation", "scale"))), readOnlyRow(qsTr("Magnification"), globalValue("magnificationEnabled", true) ? Number(globalValue("magnification", 1.65)).toFixed(2) + "×" : qsTr("Off"))];
+        return [section(qsTr("Icons"), qsTr("Settings currently applied to icons in the selected panel."), true),
+            readOnlyRow(qsTr("Style"), optionLabel("iconStyle", panelValue("iconStyle", "plain-original"))),
+            readOnlyRow(qsTr("Size"), panelValue("iconSize", 52) + qsTr(" px")),
+            readOnlyRow(qsTr("Spacing"), Math.round(Number(panelValue("spacing", 8))) + qsTr(" px")),
+            readOnlyRow(qsTr("Animation"), optionLabel("iconAnimation", panelValue("iconAnimation", "scale"))),
+            readOnlyRow(qsTr("Magnification"), globalValue("magnificationEnabled", true) ? Number(globalValue("magnification", 1.65)).toFixed(2) + "×" : qsTr("Off"))];
+    }
+
+    function overviewTileRows() {
+        const custom = String(panelValue("iconTileMode", "style")) === "custom";
+        const rows = [section(qsTr("Icon Tiles"), qsTr("Tiles currently applied to icons in the selected panel."), true),
+            readOnlyRow(qsTr("Tile appearance"), custom ? qsTr("Custom tile") : qsTr("From icon style"))];
+        const keys = ["iconShape"].concat(custom ? ["iconTileColor", "iconTileOpacity", "iconTileBorderColor",
+            "iconTileBorderWidth"] : []).concat(["iconTileTexture", "iconTileThickness", "iconTileIconOffsetX",
+            "iconTileIconOffsetY", "iconTileIconScale", "iconTileMaterial", "iconTileElevation"]);
+        return rows.concat(summaryRows(keys));
+    }
+
+    function overviewPedestalRows() {
+        let rows = [section(qsTr("Pedestals"), qsTr("Stands currently applied to icons in the selected panel."), true)];
+        if (String(panelValue("pedestalShape", "none")) !== "none")
+            rows = rows.concat(summaryRows(["pedestalShape", "pedestalSize", "pedestalThickness", "pedestalLift",
+                "pedestalFacing", "pedestalViewAngle", "pedestalMaterial", "pedestalTexture", "pedestalColor",
+                "pedestalOpacity", "pedestalGlow", "pedestalAnimation", "pedestalAnimationSpeed"]));
+        if (!["same", "none"].includes(String(panelValue("folderPedestalShape", "same")))) {
+            rows.push(section(qsTr("Folder item stands"), ""));
+            rows = rows.concat(summaryRows(["folderPedestalShape", "folderPedestalOwnStyle", "folderPedestalSize",
+                "folderPedestalThickness", "folderPedestalLift", "folderPedestalMaterial", "folderPedestalTexture",
+                "folderPedestalColor", "folderPedestalOpacity", "folderPedestalGlow", "folderPedestalAnimation"]));
+        }
+        if (Boolean(panelValue("iconPedestalEnabled", false))) {
+            rows.push(section(qsTr("Icon style pedestal"), ""));
+            rows = rows.concat(summaryRows(["iconPedestalHeight", "iconPedestalColor"]));
+        }
+        return rows;
     }
 
     function panelGeneralRows() {
         const rows = schemaSectionRows("panels-general", qsTr("General"), qsTr("Identity and placement of the selected panel."));
-        // A panel is added to the desktop with the button beside the panel
-        // list and removed with its own right-click menu; this row repeated
-        // both (the owner, 2026-10-13). An edge panel on the desktop keeps
-        // Hide panel: Arch Dock rebuilds an edge panel that is gone from
-        // Plasma while it is meant to be shown.
-        const actions = [];
-        if (panelRegistry.isBuiltIn(selectedPanelId) && Boolean(panelRegistry.panelValue(selectedPanelId, "visible"))) {
-            const hiding = !Boolean(panelValue("visible", true));
-            actions.push({
-                label: hiding ? qsTr("Show panel") : qsTr("Hide panel"),
-                icon: hiding ? "view-visible" : "view-hidden",
-                action: "toggle-panel-visibility",
-                available: true
-            });
-        }
-        // A launcher or hybrid panel with nothing dropped on it is an empty
-        // box inviting drops; an edge panel had no other way to get its
-        // launchers (audit E-08). Applications are chosen from their desktop
-        // entries and pinned through the same call a drop uses.
-        const contentType = String(panelValue("type", "empty"));
-        if (contentType === "launcher" || contentType === "hybrid") {
-            actions.push({
-                label: qsTr("Add applications…"),
-                icon: "list-add",
-                action: "pin-launchers",
-                available: !hasPendingChanges && !auditionActive
-            });
-        }
-        if (actions.length > 0)
-            rows.splice(1, 0, { kind: "actions", label: qsTr("Panel"), actions: actions });
+        // General has no buttons (the owner, 2026-10-13): a panel is added
+        // with the button beside the panel list and removed with its own
+        // right-click menu, an edge panel is hidden with Behavior > Visible,
+        // and applications are added by dropping them on the panel from the
+        // application menu, as on Plasma's own panels.
         // A free panel whose desktop widget is gone kept its settings but was
         // shown like a live panel. Say so.
         if (!isNativePanel() && !auditionActive) {
@@ -984,8 +1059,7 @@ Window {
         rows.push.apply(rows, pick(["scene3DFold"]));
         rows.push(notice(qsTr("Bend folds the rear half up or down by up to 90 degrees. Its icons stay anchored on the folded surface.")));
         rows.push(section(qsTr("View and surface"), qsTr("Icon spacing is set on Icons > Appearance.")));
-        rows.push.apply(rows, pick(["scene3DFieldOfView", "scene3DThickness", "scene3DIconElevation",
-            "scene3DQuality"]));
+        rows.push.apply(rows, pick(["scene3DFieldOfView", "scene3DThickness", "scene3DQuality"]));
         rows.push(section(qsTr("Material"), qsTr("Colour tints the texture. Theme uses this look's own material and artwork.")));
         rows.push.apply(rows, pick(["scene3DColor", "scene3DMaterial", "scene3DTexture"]));
         rows.push({kind: "actions", label: qsTr("Surface"), actions: [{label: qsTr("Reset material"),
@@ -1053,11 +1127,12 @@ Window {
                     }
                 ]
             }
-        ];
+        ].filter(function(row) { return row.kind !== "themeSamples" || row.themes.length > 0; });
     }
 
     function panelBehaviorRows() {
-        const rows = schemaSectionRows("panels-behavior", qsTr("Behavior"), qsTr("Visibility and interaction rules."));
+        const rows = schemaSectionRows("panels-behavior", qsTr("Behavior"), qsTr("Visibility and interaction rules."))
+            .filter(function(row) { return row.key !== "showTooltips"; });
         if (isNativePanel()) {
             rows.push(readOnlyRow(qsTr("Native host result"), VisibilityStatus.statusLabel(selectedVisibilityResult.status), qsTr("The last ownership-verified Plasma result")));
             if (VisibilityStatus.isProblem(selectedVisibilityResult)) {
@@ -1157,18 +1232,18 @@ Window {
     }
 
     function iconAppearanceRows() {
+        // One place per setting (the owner, 2026-10-13): the shape under the
+        // icon is on Icon Tiles, the style's own pedestal on Pedestals.
         const rows = schemaSectionRows("icons-appearance", qsTr("Appearance"),
-            qsTr("Style, shape and logo options for the selected panel."));
+            qsTr("Style, size and logo options for the selected panel.")).filter(function(row) {
+                return !["iconShape", "iconPedestalEnabled", "iconPedestalHeight", "iconPedestalColor"].includes(row.key);
+            });
         if (String(panelValue("iconTileMode", "style")) === "custom")
             rows.push(notice(qsTr("Custom tile fill, border and opacity are on Icon Tiles. Diameter and Logo size still apply here.")));
         else if (!fieldDescriptor("iconBodyColor", "panel"))
             rows.push(notice(String(panelValue("iconStyle", "plain-original")) === "plain-original"
-                ? qsTr("Plain Original keeps the application glyph. Choose a Shape to add its shaped background, or turn tiles on in Icon Tiles.")
+                ? qsTr("Plain Original keeps the application glyph. Its shaped background and tiles are on Icon Tiles.")
                 : qsTr("Turn tiles on in Icon Tiles to adjust the style's body colour.")));
-        if (!fieldDescriptor("iconPedestalEnabled", "panel"))
-            rows.push(notice(qsTr("Pedestal is available with styles that declare one, such as Dark Orb. The Pedestal presets turn it on.")));
-        else if (!Boolean(panelValue("iconPedestalEnabled", false)))
-            rows.push(notice(qsTr("Turn Pedestal on to adjust its height and colour.")));
         rows.push({kind: "actions", label: qsTr("Style options"), actions: [
             {label: qsTr("Reset style options"), icon: "edit-reset", action: "reset-icon-style-options"}]});
         return rows;
@@ -1178,9 +1253,12 @@ Window {
         const rows = schemaSectionRows("pedestals", qsTr("Icon stands"),
             qsTr("A stand under each icon, on flat and 3D panels: a horizontal stand seen a little from above, the icon centred over it and floating its float height above it. Its shape, size, thickness, material, texture, colour, opacity, glow and motion."));
         const shape = String(panelValue("pedestalShape", "none"));
-        if (shape === "auto")
-            rows.push(notice(qsTr("Auto is a column in the panel's own material under each icon; on a 3D panel its height is Panels > 3D > Pedestal height."), false));
-        else if (shape === "none")
+        const autoHeight = fieldsForSection("panels-3d").find(function(row) { return row.key === "scene3DIconElevation"; });
+        if (shape === "auto") {
+            rows.push(notice(qsTr("Auto is a column in the panel's own material under each icon."), false));
+            if (autoHeight)
+                rows.push(autoHeight);
+        } else if (shape === "none")
             rows.push(notice(qsTr("No stands are drawn; new panels start this way. Choose a shape to put a stand under every icon."), false));
         rows.push(section(qsTr("Folder item stands"),
             qsTr("The stands under the items of an opened folder: the icons' own (Same), none, or a shape of their own. With Own settings on, they take their own size, thickness, float height, material, texture, colour, opacity, glow and motion.")));
@@ -1190,6 +1268,18 @@ Window {
         const folderShape = String(panelValue("folderPedestalShape", "same"));
         if ((folderShape === "same" && shape === "none") || folderShape === "none")
             rows.push(notice(qsTr("An opened folder's items have no stands."), false));
+        // The pedestal an icon style draws under its icons, such as Dark Orb's.
+        const styleRows = ["iconPedestalEnabled", "iconPedestalHeight", "iconPedestalColor"].map(function(key) {
+            return root.fieldDescriptor(key, "panel");
+        }).filter(function(descriptor) {
+            return descriptor && descriptor.inactive !== true;
+        }).map(editorRow);
+        if (styleRows.length > 0) {
+            rows.push(section(qsTr("Icon style pedestal"),
+                qsTr("The pedestal the chosen icon style draws under each icon.")));
+            for (const row of styleRows)
+                rows.push(row);
+        }
         return rows;
     }
 
@@ -1298,7 +1388,8 @@ Window {
         if (currentPresetPage)
             return [];
         if (mainTabIndex === 0)
-            return subTabIndex === 0 ? overviewPanelRows() : overviewIconRows();
+            return subTabIndex === 0 ? overviewPanelRows() : subTabIndex === 1 ? overviewIconRows()
+                : subTabIndex === 2 ? overviewTileRows() : overviewPedestalRows();
         if (mainTabIndex === 1) {
             if (subTabIndex === 0)
                 return panelGeneralRows();
@@ -1321,8 +1412,19 @@ Window {
         if (mainTabIndex === 2) {
             if (subTabIndex === 0)
                 return iconAppearanceRows();
-            if (subTabIndex === 1)
-                return schemaSectionRows("icons-behavior", qsTr("Behavior"), qsTr("Icon motion and magnification."));
+            if (subTabIndex === 1) {
+                const rows = schemaSectionRows("icons-behavior", qsTr("Behavior"), qsTr("Icon motion and magnification."));
+                // A label on hovering an icon (and the window previews of an
+                // application with windows): an icon's behaviour, so here.
+                const tooltips = fieldDescriptor("showTooltips", "settings");
+                if (tooltips && tooltips.inactive !== true) {
+                    const row = editorRow(tooltips);
+                    row.label = qsTr("Show names on hover");
+                    row.description = qsTr("Resting the pointer on an icon shows the application's name, and the previews of its windows when it has any. Applies to all Arch Dock panels.");
+                    rows.push(row);
+                }
+                return rows;
+            }
             if (subTabIndex === 2)
                 return schemaSectionRows("icons-indicators", qsTr("Indicators"), qsTr("Running and attention markers."));
             if (subTabIndex === 3) {
@@ -1494,7 +1596,7 @@ Window {
                 studioError = qsTr("The panel could not accept the presentation request.");
             return;
         }
-        if (auditionBusy && ["create-free", "remove-panel", "import-theme", "render-theme", "clear-theme"].includes(action)) {
+        if (auditionBusy && ["create-free", "import-theme", "render-theme", "clear-theme"].includes(action)) {
             studioError = qsTr("Apply or cancel desktop audition before changing panels or artwork.");
             return;
         }
@@ -1554,21 +1656,6 @@ Window {
             if (!panelController.setPanelVisible(selectedPanelId, true))
                 studioError = qsTr("Could not add %1 to the desktop.").arg(panelRegistry.panelName(selectedPanelId));
             loadEditor(selectedPanelId);
-        } else if (action === "pin-launchers") {
-            if (hasPendingChanges || auditionActive)
-                return;
-            launcherDialog.open();
-        } else if (action === "remove-panel") {
-            if (hasPendingChanges)
-                return;
-            panelController.removePanel(selectedPanelId);
-            internalPanelSelection = true;
-            selectedPanelId = panelRegistry.activePanelId;
-            internalPanelSelection = false;
-            loadEditor(selectedPanelId);
-        } else if (action === "toggle-panel-visibility") {
-            editorSession = EditorModel.setPanelValue(editorSession, "visible", !Boolean(panelValue("visible", true)));
-            refreshProjection();
         } else if (action === "load-built-in-theme") {
             const candidate = auditionActive
                 ? (auditionStatus.editorProjection.themeCandidates || {})[String(data.themeId || "")]
@@ -2060,16 +2147,19 @@ Window {
             spacing: 8
 
             RowLayout {
+                visible: root.mainTabIndex === 1 || (root.compactStudio && root.previewSection)
                 Layout.fillWidth: true
                 spacing: 8
 
                 Label {
+                    visible: root.mainTabIndex === 1
                     text: qsTr("Panel")
                     color: "#91a8b5"
                 }
 
                 ComboBox {
                     id: panelSelector
+                    visible: root.mainTabIndex === 1
                     wheelEnabled: false
                     Accessible.name: qsTr("Panel")
 
@@ -2101,6 +2191,7 @@ Window {
                 Button {
                     id: addPickedPanelButton
                     objectName: "studio-add-picked-panel"
+                    visible: root.mainTabIndex === 1
                     readonly property var presence: root.pickedPanelPresence()
                     icon.name: presence.shown ? "checkmark" : "list-add"
                     text: presence.name
@@ -2112,8 +2203,13 @@ Window {
                     onClicked: root.performStudioAction("add-picked-panel", {})
                 }
 
+                Item {
+                    visible: root.mainTabIndex !== 1
+                    Layout.fillWidth: true
+                }
+
                 ToolButton {
-                    visible: root.compactStudio
+                    visible: root.compactStudio && root.previewSection
                     text: qsTr("Preview")
                     checkable: true
                     checked: root.expandedCompactPreview
@@ -2122,7 +2218,7 @@ Window {
             }
 
             Rectangle {
-                visible: !root.compactStudio || root.expandedCompactPreview
+                visible: (!root.compactStudio || root.expandedCompactPreview) && root.previewSection
                 id: rendererPreviewCard
 
                 Layout.fillWidth: true
@@ -2605,28 +2701,5 @@ Window {
             root.colorField = null;
         }
         onRejected: root.colorField = null
-    }
-
-    // Applications for a launcher or hybrid panel, chosen from their desktop
-    // entries and pinned the way a drop on the panel pins them. An edge
-    // panel shares these with every edge panel of its content type; a free
-    // panel keeps its own.
-    FileDialog {
-        id: launcherDialog
-
-        title: qsTr("Add applications to the panel")
-        fileMode: FileDialog.OpenFiles
-        currentFolder: "file:///usr/share/applications"
-        nameFilters: [qsTr("Applications (*.desktop)"), qsTr("All files (*)")]
-        onAccepted: {
-            const urls = [];
-            for (let index = 0; index < selectedFiles.length; ++index)
-                urls.push(String(selectedFiles[index]));
-            if (urls.length === 0)
-                return;
-            if (!panelController.pinPanelUrls(root.selectedPanelId, urls))
-                root.studioError = qsTr("Could not add the applications to the panel.");
-            root.loadEditor(root.selectedPanelId);
-        }
     }
 }

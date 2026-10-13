@@ -7,15 +7,22 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
-- A panel is added in one place (2026-10-13, the owner: "the option to add
-  a panel should be only in one place, which is above the preview", and
-  "the remove panel button also should be removed, since I can remove a
-  panel with right click on the panel"): "New free panel" is the last entry
-  of Panel Studio's panel list; picking it shows the bare new panel in the
-  preview (in the default panel preset's look when one for free panels is
-  set) and the button beside the list adds it. General no longer offers
-  Add free panel, Put back on the desktop, Show panel or Remove panel; an
-  edge panel on the desktop keeps Hide panel.
+- Panel Studio is organized by what it edits, one page per setting
+  (2026-10-13, the owner: "the option to add a panel should be only in one
+  place", "make sure there aren't any duplicate settings", "icon settings
+  belong to icons, same goes for tiles and pedestals", "option to add and
+  select panel belongs to the panels section, not overview"). Overview
+  shows the panel's preview and what is applied to it: Panel, Icons, and
+  Icon Tiles and Pedestals only when the panel draws them. Panels holds the
+  panel list, whose last entry "New free panel" shows the bare new panel
+  that the button beside the list adds, and the panel's settings, with no
+  preview of its own. The shape under the icons is on Icon Tiles alone;
+  Show tooltips is "Show names on hover" on Icons > Behavior; the icon
+  style's pedestal and the Auto stand's height are on Pedestals. General
+  has no buttons: a panel is removed with its right-click menu, an edge
+  panel hidden with Behavior > Visible, and applications are added by
+  dropping them on the panel from the application menu. A group of looks
+  with none for the panel is not shown.
 - Panel Studio follows the panel you pick, and no longer crashes on it
   (2026-10-13, the owner's report "no matter which panel I click, it's
   always same free panel"): picking the Top or Side panel while a 3D free
