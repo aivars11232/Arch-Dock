@@ -104,14 +104,29 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     previews/WindowPreviewPopup.qml
     renderers/IconStyle2D.qml
     renderers/IconTile.qml
+    renderers/GlowEffect.qml
     renderers/PanelProcedural2D.qml
     renderers/PanelSkin2D.qml
     renderers/PanelSkinLayer2D.qml
     renderers/PanelBaked25D.qml)
 foreach(material glass crystal neon minimal plasma lime floating-glass metallic
-                 futuristic organic platform plate pedestal)
+                 futuristic organic platform plate pedestal lightning aurora)
   list(APPEND ARCHDOCK_RENDERING_MODULE_FILES materials/${material}.svg materials/${material}.png
               materials/${material}-normal.png)
+endforeach()
+# The clear-ground looks' other palettes share their look's relief map.
+foreach(palette ice crimson toxic solar arcane void aurora rainbow)
+  list(APPEND ARCHDOCK_RENDERING_MODULE_FILES materials/lightning-${palette}.png)
+endforeach()
+foreach(look plasma neon futuristic)
+  list(APPEND ARCHDOCK_RENDERING_MODULE_FILES materials/${look}-rainbow.png)
+endforeach()
+foreach(look metallic plate)
+  list(APPEND ARCHDOCK_RENDERING_MODULE_FILES materials/${look}-chameleon.png
+              materials/${look}-iridescent.png)
+endforeach()
+foreach(palette emerald australis cosmic solar rainbow)
+  list(APPEND ARCHDOCK_RENDERING_MODULE_FILES materials/aurora-${palette}.png)
 endforeach()
 set(ARCHDOCK_RENDERING_MODULE_SOURCES)
 set(ARCHDOCK_OPTIONAL_RENDERING_FILES

@@ -99,7 +99,7 @@ PlasmoidItem {
         const source = configuration || ({})
         const settings = {}
         const keys = ["Size", "Thickness", "Lift", "ViewAngle", "Material", "Texture", "Color", "Opacity",
-                      "Glow", "Animation", "AnimationSpeed"]
+                      "Glow", "GlowReach", "Animation", "AnimationSpeed"]
         for (const key of ["pedestalShape"].concat(keys.map(name => "pedestal" + name)))
             if (source[key] !== undefined) settings[key] = source[key]
         const folderShape = String(source.folderPedestalShape || "same").toLowerCase()
@@ -801,10 +801,15 @@ PlasmoidItem {
             // curved one can open them on its own curve, "Along the dock",
             // and any free panel as a fan, an arc, a stack or a ring
             // (ADREP-TASK-003). Grid, and every edge panel, open a popup.
-            readonly property string folderLayout: String(root.configuration.folderLayout || "fan")
+            // Along the dock kept from a curved shape opens as a fan once the
+            // panel's shape has no curve (a straight row), never as a popup
+            // that cannot draw it (the owner, 2026-10-13: "when I change
+            // panel shapes, folder openings go crazy").
+            readonly property string savedFolderLayout: String(root.configuration.folderLayout || "fan")
+            readonly property string folderLayout: savedFolderLayout === "track" && root.freeSurface
+                && !LayoutEngine.curvedLayout(panelScene.layoutPath) ? "fan" : savedFolderLayout
             readonly property bool folderOnPath: root.freeSurface
-                && (folderLayout === "track" ? LayoutEngine.curvedLayout(panelScene.layoutPath)
-                    : ["fan", "arc", "stack", "ring"].includes(folderLayout))
+                && ["track", "fan", "arc", "stack", "ring"].includes(folderLayout)
             onFolderEntryIndexChanged: if (folderEntryIndex < 0) hideFolderExpansion()
 
             function hideFolderExpansion() {
@@ -862,7 +867,7 @@ PlasmoidItem {
                 id: folderExpansion
                 folderItem: folderIcon
                 folderTitle: String(representation.folderEntry.displayName || "")
-                folderLayout: String(root.configuration.folderLayout || "fan")
+                folderLayout: representation.folderLayout
                 folderSpeed: Number(root.configuration.folderSpeed || 260)
                 folderEasing: String(root.configuration.folderEasing || "outBack")
                 reducedMotion: Boolean(root.configuration.reducedMotion)
@@ -984,6 +989,25 @@ PlasmoidItem {
                 ? sceneEffectHeight : panelScene.height
             Layout.minimumWidth: implicitWidth
             Layout.minimumHeight: implicitHeight
+
+            // A free panel has no edge of its own (the owner, 2026-10-13:
+            // "the only edge is edge of the screen"): its 3D scene is drawn
+            // out of the widget's box as far as it reaches. The pointer over
+            // what is drawn there is over the panel, and presses, the wheel
+            // and drops reach it; the empty desktop around it stays the
+            // desktop's. The widget's own size stays the box's, so Plasma
+            // keeps it where it was put.
+            containmentMask: root.freeSurface ? drawnArea : null
+            QtObject {
+                id: drawnArea
+                function contains(point: point): bool {
+                    if (point.x >= 0 && point.y >= 0
+                            && point.x <= representation.width && point.y <= representation.height)
+                        return true
+                    const local = representation.mapToItem(panelScene, point.x, point.y)
+                    return panelScene.containsInputPoint(Qt.point(local.x, local.y))
+                }
+            }
 
             // The panel is concealed when its own item is hidden or fully
             // transparent, or when the window holding it is not on screen -
@@ -1167,10 +1191,10 @@ PlasmoidItem {
                         : root.requestFailed
                             ? qsTr("Could not load dock entries")
                             : root.panelId.length === 0 && !Plasmoid.configuration.bootstrapFreeDock
-                                ? qsTr("This widget has no panel. Create one in Panel Studio with \"+ Free panel\", or with Add Panel > Arch Dock Circular Free Dock; then remove this widget.")
+                                ? qsTr("This widget has no panel. Create one in Panel Studio: Panels, then New free panel at the end of the panel list, or with Add Panel > Arch Dock Circular Free Dock; then remove this widget.")
                                 : root.panelType === "empty"
                                     ? qsTr("Choose Launcher or Hybrid in Panel Studio to show dropped items")
-                                    : qsTr("Drop applications or folders here, or add them in Panel Studio: Panels > General > Add applications")
+                                    : qsTr("Drop applications or folders here, from the application menu or a file manager")
                 }
                 QQC2.Button {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -1184,6 +1208,7 @@ PlasmoidItem {
                 id: panelDropArea
 
                 anchors.fill: parent
+                containmentMask: root.freeSurface ? drawnArea : null
                 enabled: Boolean(root.configuration.acceptDrops) && !root.plasmaEditMode
                     && root.sceneInputEnabled && ["launcher", "hybrid"].includes(root.panelType)
                 keys: ["text/uri-list"]
@@ -1225,7 +1250,10 @@ PlasmoidItem {
             hoveredIndex: root.hoveredIndex
             tileShape: root.configuration.iconShape
             tileSettings: root.configuration
-            pedestalOnPath: panelScene.pedestalOnPath
+            // Given by the scene: this delegate is made outside the
+            // representation, where `panelScene` is not in reach (it read as
+            // undefined, and a free panel's stands stood as in a row).
+            pedestalOnPath: parent.scenePedestalOnPath === true
             appearance: root.configuration.appearance
             showReflection: root.configuration.showReflections
             showIndicator: root.configuration.showIndicators

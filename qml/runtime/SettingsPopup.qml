@@ -795,14 +795,20 @@ Window {
         return result;
     }
 
+    // A section's glow settings under their own heading, or nothing where
+    // its glow cannot show (the owner, 2026-10-13: each of the panel, its
+    // icons, its tiles and its stands has its own glow, and a setting that
+    // cannot apply is not shown).
+    function glowRows(sectionId, description) {
+        const fields = fieldsForSection(sectionId);
+        return fields.length === 0 ? [] : [section(qsTr("Glow"), description)].concat(fields);
+    }
+
     function schemaSectionRows(sectionId, label, description) {
         const rows = [section(label, description, true)];
         const fields = fieldsForSection(sectionId);
         for (let index = 0; index < fields.length; ++index)
             rows.push(fields[index]);
-        if (fields.length === 0) {
-            rows.push(notice(qsTr("No settings in this section are available for the resolved panel capabilities.")));
-        }
         return rows;
     }
 
@@ -858,7 +864,9 @@ Window {
             readOnlyRow(qsTr("Layout"), optionLabel("layout", panelValue("layout", "adaptive"))),
             readOnlyRow(qsTr("Look"), look),
             readOnlyRow(qsTr("Color"), color.length > 0 ? color : qsTr("Theme default")),
-            readOnlyRow(qsTr("Opacity"), Math.round(Number(panelValue("opacity", 0.9)) * 100) + "%")];
+            readOnlyRow(qsTr("Opacity"), Math.round(Number(panelValue("opacity", 0.9)) * 100) + "%")]
+            .concat(Number(panelValue("panelGlow", 0)) > 0
+                ? summaryRows(["panelGlow", "panelGlowReach", "panelGlowColor"]) : []);
     }
 
     function overviewIconRows() {
@@ -867,7 +875,9 @@ Window {
             readOnlyRow(qsTr("Size"), panelValue("iconSize", 52) + qsTr(" px")),
             readOnlyRow(qsTr("Spacing"), Math.round(Number(panelValue("spacing", 8))) + qsTr(" px")),
             readOnlyRow(qsTr("Animation"), optionLabel("iconAnimation", panelValue("iconAnimation", "scale"))),
-            readOnlyRow(qsTr("Magnification"), globalValue("magnificationEnabled", true) ? Number(globalValue("magnification", 1.65)).toFixed(2) + "×" : qsTr("Off"))];
+            readOnlyRow(qsTr("Magnification"), globalValue("magnificationEnabled", true) ? Number(globalValue("magnification", 1.65)).toFixed(2) + "×" : qsTr("Off"))]
+            .concat(Number(panelValue("iconGlow", 0)) > 0
+                ? summaryRows(["iconGlow", "iconGlowReach", "iconGlowColor"]) : []);
     }
 
     function overviewTileRows() {
@@ -876,7 +886,9 @@ Window {
             readOnlyRow(qsTr("Tile appearance"), custom ? qsTr("Custom tile") : qsTr("From icon style"))];
         const keys = ["iconShape"].concat(custom ? ["iconTileColor", "iconTileOpacity", "iconTileBorderColor",
             "iconTileBorderWidth"] : []).concat(["iconTileTexture", "iconTileThickness", "iconTileIconOffsetX",
-            "iconTileIconOffsetY", "iconTileIconScale", "iconTileMaterial", "iconTileElevation"]);
+            "iconTileIconOffsetY", "iconTileIconScale", "iconTileMaterial", "iconTileElevation"])
+            .concat(Number(panelValue("iconTileGlow", 0)) > 0
+                ? ["iconTileGlow", "iconTileGlowReach", "iconTileGlowColor"] : []);
         return rows.concat(summaryRows(keys));
     }
 
@@ -885,12 +897,15 @@ Window {
         if (String(panelValue("pedestalShape", "none")) !== "none")
             rows = rows.concat(summaryRows(["pedestalShape", "pedestalSize", "pedestalThickness", "pedestalLift",
                 "pedestalFacing", "pedestalViewAngle", "pedestalMaterial", "pedestalTexture", "pedestalColor",
-                "pedestalOpacity", "pedestalGlow", "pedestalAnimation", "pedestalAnimationSpeed"]));
+                "pedestalOpacity", "pedestalLookBackground", "pedestalLookColour",
+                "pedestalGlow", "pedestalGlowReach", "pedestalGlowColor", "pedestalAnimation",
+                "pedestalAnimationSpeed"]));
         if (!["same", "none"].includes(String(panelValue("folderPedestalShape", "same")))) {
             rows.push(section(qsTr("Folder item stands"), ""));
             rows = rows.concat(summaryRows(["folderPedestalShape", "folderPedestalOwnStyle", "folderPedestalSize",
                 "folderPedestalThickness", "folderPedestalLift", "folderPedestalMaterial", "folderPedestalTexture",
-                "folderPedestalColor", "folderPedestalOpacity", "folderPedestalGlow", "folderPedestalAnimation"]));
+                "folderPedestalColor", "folderPedestalOpacity", "folderPedestalGlow", "folderPedestalGlowReach",
+                "folderPedestalAnimation"]));
         }
         if (Boolean(panelValue("iconPedestalEnabled", false))) {
             rows.push(section(qsTr("Icon style pedestal"), ""));
@@ -919,26 +934,17 @@ Window {
             if (detached)
                 rows.push(notice(qsTr("Its widget was removed from Plasma, or lost with a desktop layout change. The button with its name beside the panel list adds it back with these settings at its saved position."), true));
         }
-        if (isNativePanel()) {
-            // Auto-hide looked like a panel that does nothing when switched on.
-            if (Boolean(panelValue("visible", true)) && String(panelValue("visibilityMode", "always")) === "auto-hide")
-                rows.push(notice(qsTr("Visibility is Auto-hide: the panel appears when the pointer touches its screen edge. Panels > Behavior > Visibility changes this."), false));
-            // Plasma stacks panels on one edge only above a panel that
-            // reserves space; over an Auto-hide or Dodge windows panel the
-            // new panel is drawn at the same edge, on top of it (audit E-09).
-            if (Boolean(panelValue("visible", true)))
-                rows.push(notice(qsTr("If another panel on this edge hides itself (Auto-hide or Dodge windows), Plasma draws this panel over it. Make that panel Always visible to stack them, or move this one to a free edge."), false));
-            rows.push(section(qsTr("Native placement result"), PlacementStatus.statusLabel(selectedPlacementResult.status)), readOnlyRow(qsTr("Saved intent"), PlacementStatus.savedIntentText(selectedPlacementResult)), readOnlyRow(qsTr("Actual Plasma host"), PlacementStatus.hostStateText(selectedPlacementResult)));
-            if (PlacementStatus.isProblem(selectedPlacementResult)) {
-                rows.push(notice(qsTr("Placement detail: %1").arg(PlacementStatus.problemText(selectedPlacementResult)), true));
-            }
-        }
+        // Only a placement Plasma refused is reported here; the notes and the
+        // raw placement result went (the owner, 2026-10-13: "these green
+        // things can be removed, they serve no purpose").
+        if (isNativePanel() && PlacementStatus.isProblem(selectedPlacementResult))
+            rows.push(notice(qsTr("Placement detail: %1").arg(PlacementStatus.problemText(selectedPlacementResult)), true));
         return rows;
     }
 
     // A size control is offered only where it changes what is drawn. A free
-    // panel is drawn from its layout, so it has no Size page and its Layout
-    // page says what sets its size (ADREP-TASK-001, PD-02).
+    // panel is drawn from its layout, so it has no Size page: Radius and
+    // Layout scale on its Layout page set its size (ADREP-TASK-001, PD-02).
     function panelLayoutRows() {
         const rows = schemaSectionRows("panels-layout", qsTr("Layout"),
             qsTr("Shape geometry and content placement."));
@@ -946,25 +952,13 @@ Window {
         const direction = angleIndex >= 0 ? directionRow(rows[angleIndex]) : null;
         if (direction)
             rows.splice(angleIndex, 0, direction);
-        // A look made for one layout, or whose artwork places the icons,
-        // offers no Dock layout to choose.
-        const layoutField = fieldDescriptor("layout", "panel");
-        if (!isNativePanel() && (!layoutField || layoutField.inactive === true))
-            rows.splice(1, 0, notice(qsTr("This look sets the layout (%1). Looks with other layouts are on Panel Themes / Skins.")
-                .arg(optionLabel("layout", panelValue("layout", "")))));
-        if (fieldsForSection("panels-size").length === 0)
-            rows.splice(1, 0, notice(fieldDescriptor("layoutRadius", "panel")
-                ? qsTr("Radius and Layout scale set this panel's size.")
-                : qsTr("This panel is as large as its icons: Layout scale here, and Size and Spacing on Icons > Appearance.")));
         return rows;
     }
 
     function panelAppearanceRows() {
         const rows = schemaSectionRows("panels-appearance", qsTr("Appearance"), qsTr("Surface styling for the selected panel."));
-        if (!fieldDescriptor("appearance", "panel"))
-            rows.push(notice(qsTr("This look supplies its own material. Flat materials are on Panel Themes / Skins; switch Platform presentation off on the 3D page to restore your previous flat look.")));
-        if (scene3DQualityVisible)
-            rows.push(notice(qsTr("Platform colour, material and texture are on Panels > 3D.")));
+        rows.push.apply(rows, glowRows("panels-glow",
+            qsTr("Light round the panel's shape: how strong, how far it reaches out of the panel, and its colour (the look's own when empty).")));
         if (subtabAvailable(1, 10))
             rows.push({ kind: "actions", label: qsTr("3D"),
                 description: qsTr("Drawing this panel in 3D, and every 3D setting, is on the 3D page."),
@@ -972,7 +966,6 @@ Window {
                             available: true }] });
         else
             rows.push.apply(rows, scene3DUnavailableRows());
-        rows.push(notice(qsTr("Built-in themes and imported artwork are on the Panel Themes / Skins page.")));
         return rows;
     }
 
@@ -989,7 +982,7 @@ Window {
                     return String(panelValue(key, "")).trim().length > 0;
                 })
             });
-        const rows = [notice(blocker ? blocker.text : qsTr("3D is not available for this panel."))];
+        const rows = [];
         if (blocker && (blocker.code === "layout" || blocker.code === "look"))
             rows.push({ kind: "actions", label: qsTr("Themes with their own 3D platform"), actions: [{
                 label: qsTr("Browse themes"), icon: "preferences-desktop-theme",
@@ -1013,18 +1006,14 @@ Window {
             rows.push.apply(rows, scene3DUnavailableRows());
             return rows;
         }
-        if (!platform) {
-            rows.push(notice(qsTr("Turn Platform presentation on to edit this look in 3D, or load a look from the Platform looks group.")));
+        if (!platform)
             return rows;
-        }
         if (scene3DOffTier === "baked2.5d")
             rows.push({ kind: "switch", key: "rendererTier", scope: "panel", rendererToggle: true,
                 label: qsTr("Use true 3D"),
                 description: qsTr("Off uses this platform's perspective artwork. Platform presentation off restores the previous flat look.") });
-        if (!scene3DQualityVisible) {
-            rows.push(notice(qsTr("Perspective artwork has a fixed shape and cannot bend. Use true 3D to edit a numerical platform's material and bend.")));
+        if (!scene3DQualityVisible)
             return rows;
-        }
         const fields = fieldsForSection("panels-3d");
         const pick = function(keys) {
             return keys.map(function(key) {
@@ -1041,9 +1030,6 @@ Window {
             available: true }, {
             label: qsTr("Edit on desktop"), icon: "transform-move", action: "edit-3d-on-desktop",
             available: !sceneEditing && !auditionBusy && !hasPendingChanges }] });
-        rows.push(notice(sceneEditing
-            ? qsTr("Editing on the desktop: drag the platform itself to tilt and turn it, or its handles to move, rotate and scale it. Apply as Active saves the result; Cancel restores the panel.")
-            : qsTr("Edit on desktop lets you drag the panel itself to tilt and turn it, and shows move, rotate and scale handles on it, like a 3D editor. Apply or cancel other changes first.")));
         // The platform's shape. A look without a 3D platform of its own stands
         // on one generated along the panel's layout, chosen on the Layout page
         // (one place per setting, ADREP-TASK-001); its width and bend are set
@@ -1054,21 +1040,19 @@ Window {
             : qsTr("This theme keeps its own outline. Bend folds its rear half.")));
         if (generatedScene) {
             rows.push.apply(rows, pick(["scene3DBand", "scene3DBend"]));
-            rows.push(notice(qsTr("Platform width 0 is Auto: the band is as wide as the flat look's line and as deep in proportion, so the design made flat is kept when 3D is on. Material and Texture on Theme take the flat look's own surface.")));
         }
         rows.push.apply(rows, pick(["scene3DFold"]));
-        rows.push(notice(qsTr("Bend folds the rear half up or down by up to 90 degrees. Its icons stay anchored on the folded surface.")));
         rows.push(section(qsTr("View and surface"), qsTr("Icon spacing is set on Icons > Appearance.")));
         rows.push.apply(rows, pick(["scene3DFieldOfView", "scene3DThickness", "scene3DQuality"]));
         rows.push(section(qsTr("Material"), qsTr("Colour tints the texture. Theme uses this look's own material and artwork.")));
-        rows.push.apply(rows, pick(["scene3DColor", "scene3DMaterial", "scene3DTexture"]));
+        rows.push.apply(rows, pick(["scene3DColor", "scene3DMaterial", "scene3DTexture", "panelLookBackground",
+            "panelLookColour", "lookMotionSpeed"]));
         rows.push({kind: "actions", label: qsTr("Surface"), actions: [{label: qsTr("Reset material"),
             icon: "edit-reset", action: "reset-3d-material", available: true}]});
         rows.push(section(qsTr("Lighting"), ""));
         rows.push.apply(rows, pick(["scene3DKeyLight", "scene3DFillLight"]));
         rows.push(section(qsTr("Motion"), ""));
         rows.push.apply(rows, pick(["scene3DTransitions", "scene3DFloat"]));
-        rows.push(notice(qsTr("Whole-panel rotation works in 2D and 3D and is on the Animations page. Reduced motion stops the float and the animated changes.")));
         return rows;
     }
 
@@ -1086,8 +1070,24 @@ Window {
 
     // Panel themes and skins are their own resource type, separate from
     // Panel Presets: a theme restyles this panel, it is not a whole panel.
+    // A free panel lists the looks made for free docks and an edge panel the
+    // looks of its own orientation (the owner, 2026-10-13: the horizontal
+    // chassis skins offered on a free panel are "unrelated to free docks").
+    // A look that names no orientation, a built-in flat look, fits any panel.
+    // A free panel laid out as a bar takes the bar looks too.
+    function themeFitsSelectedPanel(theme) {
+        const edge = String(panelValue("edge", "bottom"));
+        const layout = String(panelValue("layout", ""));
+        const wanted = !isNativePanel()
+            ? ["free"].concat(layout === "horizontal" || layout === "vertical" ? [layout] : [])
+            : [edge === "left" || edge === "right" ? "vertical" : "horizontal"];
+        const orientations = (theme.capabilities || {}).orientations;
+        return !Array.isArray(orientations) || orientations.length === 0
+            || orientations.some(function(orientation) { return wanted.includes(orientation); });
+    }
     function panelThemeRows() {
-        const available = CapabilityModel.availableItems(selectedResolvedThemes);
+        const available = CapabilityModel.availableItems(selectedResolvedThemes)
+            .filter(themeFitsSelectedPanel);
         const platform = function(theme) {
             return EditorModel.platformTier((theme.panelStyle || {}).rendererTier
                 || (theme.capabilities || {}).preferredRendererTier);
@@ -1133,17 +1133,14 @@ Window {
     function panelBehaviorRows() {
         const rows = schemaSectionRows("panels-behavior", qsTr("Behavior"), qsTr("Visibility and interaction rules."))
             .filter(function(row) { return row.key !== "showTooltips"; });
-        if (isNativePanel()) {
-            rows.push(readOnlyRow(qsTr("Native host result"), VisibilityStatus.statusLabel(selectedVisibilityResult.status), qsTr("The last ownership-verified Plasma result")));
-            if (VisibilityStatus.isProblem(selectedVisibilityResult)) {
-                rows.push(notice(qsTr("Visibility detail: %1").arg(VisibilityStatus.problemText(selectedVisibilityResult)), true));
-            }
-        }
+        // Only a visibility Plasma refused is reported, not the raw result.
+        if (isNativePanel() && VisibilityStatus.isProblem(selectedVisibilityResult))
+            rows.push(notice(qsTr("Visibility detail: %1").arg(VisibilityStatus.problemText(selectedVisibilityResult)), true));
         return rows;
     }
 
     function unavailablePage(label, description) {
-        return [section(label, description, true), notice(qsTr("This page remains unavailable until its renderer and persistence path are implemented."))];
+        return [section(label, description, true)];
     }
 
     // The panel's own motion. Opening and closing belong to edge panels whose
@@ -1180,21 +1177,6 @@ Window {
                 qsTr("Choose what the wheel, dragging and continuous motion move, how fast, and when it runs."),
                 rows.length === 0));
             rows.push.apply(rows, rotation);
-            const target = String(panelValue("panelMotionTarget", "items"));
-            const moves = !fieldDescriptor("panelMotionTarget", "panel")
-                || fieldDescriptor("panelMotionTarget", "panel").inactive === true
-                ? "items" : target;
-            rows.push(notice(moves === "panel"
-                ? qsTr("Scroll over the panel to turn it: up turns it clockwise, down turns it back. Dragging it turns it too.")
-                : moves === "both"
-                ? qsTr("Scroll over the panel to move its icons along its path and turn it at the same time: up is clockwise, down is back. Dragging it does the same.")
-                : qsTr("Scroll over the panel to move its icons along its path while the panel stays still: up moves them clockwise, down moves them back. Dragging it moves them too. On an open path an icon that leaves one end comes back at the other.")));
-            // One sensitivity for the panel and its folders (PD-16).
-            if (rotation.some(function(row) { return row.key === "scrollSensitivity"; }))
-                rows.push(notice(qsTr("Scroll sensitivity also sets how far one wheel notch moves the contents of an open folder.")));
-            if (String(panelValue("panelRotationMode", "none")) !== "none"
-                    && String(panelValue("panelRotationTrigger", "idle")) === "hover")
-                rows.push(notice(qsTr("Hover the preview to try the continuous motion.")));
         }
         return rows;
     }
@@ -1238,12 +1220,8 @@ Window {
             qsTr("Style, size and logo options for the selected panel.")).filter(function(row) {
                 return !["iconShape", "iconPedestalEnabled", "iconPedestalHeight", "iconPedestalColor"].includes(row.key);
             });
-        if (String(panelValue("iconTileMode", "style")) === "custom")
-            rows.push(notice(qsTr("Custom tile fill, border and opacity are on Icon Tiles. Diameter and Logo size still apply here.")));
-        else if (!fieldDescriptor("iconBodyColor", "panel"))
-            rows.push(notice(String(panelValue("iconStyle", "plain-original")) === "plain-original"
-                ? qsTr("Plain Original keeps the application glyph. Its shaped background and tiles are on Icon Tiles.")
-                : qsTr("Turn tiles on in Icon Tiles to adjust the style's body colour.")));
+        rows.push.apply(rows, glowRows("icons-glow",
+            qsTr("Light round each icon's picture: how strong, how far it reaches, and its colour.")));
         rows.push({kind: "actions", label: qsTr("Style options"), actions: [
             {label: qsTr("Reset style options"), icon: "edit-reset", action: "reset-icon-style-options"}]});
         return rows;
@@ -1251,23 +1229,18 @@ Window {
 
     function pedestalRows() {
         const rows = schemaSectionRows("pedestals", qsTr("Icon stands"),
-            qsTr("A stand under each icon, on flat and 3D panels: a horizontal stand seen a little from above, the icon centred over it and floating its float height above it. Its shape, size, thickness, material, texture, colour, opacity, glow and motion."));
+            qsTr("A stand under each icon, on flat and 3D panels: a horizontal stand seen a little from above, the icon centred over it and floating its float height above it. Its shape, size, thickness, material, texture, colour, opacity, motion, and its glow: light round the stand, how strong and how far it reaches."));
         const shape = String(panelValue("pedestalShape", "none"));
         const autoHeight = fieldsForSection("panels-3d").find(function(row) { return row.key === "scene3DIconElevation"; });
-        if (shape === "auto") {
-            rows.push(notice(qsTr("Auto is a column in the panel's own material under each icon."), false));
-            if (autoHeight)
-                rows.push(autoHeight);
-        } else if (shape === "none")
-            rows.push(notice(qsTr("No stands are drawn; new panels start this way. Choose a shape to put a stand under every icon."), false));
+        if (shape === "auto" && autoHeight)
+            rows.push(autoHeight);
+        rows.push.apply(rows, glowRows("pedestals-glow",
+            qsTr("Light round each stand: how strong, how far it reaches, and its colour (the stand's when empty).")));
         rows.push(section(qsTr("Folder item stands"),
             qsTr("The stands under the items of an opened folder: the icons' own (Same), none, or a shape of their own. With Own settings on, they take their own size, thickness, float height, material, texture, colour, opacity, glow and motion.")));
         const fields = fieldsForSection("pedestals-folder");
         for (let index = 0; index < fields.length; ++index)
             rows.push(fields[index]);
-        const folderShape = String(panelValue("folderPedestalShape", "same"));
-        if ((folderShape === "same" && shape === "none") || folderShape === "none")
-            rows.push(notice(qsTr("An opened folder's items have no stands."), false));
         // The pedestal an icon style draws under its icons, such as Dark Orb's.
         const styleRows = ["iconPedestalEnabled", "iconPedestalHeight", "iconPedestalColor"].map(function(key) {
             return root.fieldDescriptor(key, "panel");
@@ -1308,8 +1281,8 @@ Window {
             filtered.push(readOnlyRow(qsTr("Icon style"),
                 optionLabel("iconStyle", panelValue("iconStyle", "plain-original")),
                 qsTr("Tiles from the icon style follow the style chosen on Icons > Appearance.")));
-        filtered.push(notice(qsTr("Individual icons can override the tile default in Icon Properties. Custom tiles preserve the icon glyph and use the same tile in 2D and 3D.")));
-        filtered.push(notice(qsTr("Thickness draws a bevel in 2D and solid depth in 3D. Icon offsets and scale place the glyph on its tile; both travel together and keep the panel's icon orientation.")));
+        filtered.push.apply(filtered, glowRows("icon-tiles-glow",
+            qsTr("Light round each tile: how strong, how far it reaches, and its colour (the border's when empty).")));
         filtered.push({kind: "actions", label: qsTr("Tile options"), actions: [
             {label: qsTr("Reset tile options"), icon: "edit-reset", action: "reset-icon-tile-options"}]});
         return filtered;
@@ -1318,10 +1291,8 @@ Window {
     function panelSegmentRows() {
         const descriptor = fieldDescriptor("segments", "panel");
         const rows = [section(qsTr("Segments"), qsTr("Independent content groups. Changes apply together when you press Apply."), true)];
-        if (!descriptor) {
-            rows.push(notice(qsTr("Segments require a horizontal or vertical panel with a procedural surface.")));
+        if (!descriptor)
             return rows;
-        }
         const capabilities = descriptor.segmentCapabilities || {};
         const segments = panelValue("segments", []);
         const entries = descriptor.availableEntries || [];
@@ -1361,16 +1332,11 @@ Window {
                 const selectable = entries.filter(function(entry) {
                     return (entry.isStatus === true) === (segment.source === "status");
                 });
-                if (segment.source === "status")
-                    rows.push(notice(qsTr("Choose readings for this segment. With no selection, all available readings are shown.")));
                 for (const entry of selectable) {
                     rows.push({ kind: "switch", scope: "panel", key: "segments", segmentIndex: index,
                         entryId: String(entry.appId), label: String(entry.displayName || entry.appId),
                         description: qsTr("Assign exclusively to this segment."), fallback: false });
                 }
-                if (!selectable.length) rows.push(notice(segment.source === "status"
-                    ? qsTr("No system readings are currently available.")
-                    : qsTr("Add content to this panel before assigning entries.")));
             }
             rows.push({ kind: "actions", label: qsTr("Order"), actions: [
                 { action: "segment-up", segmentIndex: index, label: qsTr("Move up"), available: index > 0 },
@@ -1430,7 +1396,6 @@ Window {
             if (subTabIndex === 3) {
                 const rows = schemaSectionRows("icons-notifications", qsTr("Notifications"),
                     qsTr("What applications can show on their icons in this panel."));
-                rows.push(notice(qsTr("Desktop notifications, sound and Bluetooth stay with Plasma's own widgets.")));
                 return rows;
             }
             return [];

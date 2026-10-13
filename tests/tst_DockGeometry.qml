@@ -1348,9 +1348,12 @@ TestCase {
         fuzzy(round.entries[19].y, rest.entries[0].y, "the last child stands where the first did")
         compare(LayoutEngine.folderTrackLayout([], 5, 70, 0).entries.length, 0)
         compare(LayoutEngine.folderTrackLayout(curve(200, 200, 181), 0, 70, 0).entries.length, 0)
+        // A star is curved too: its folders open along the curve round the
+        // dock (the owner, 2026-10-13: "when I change panel shapes, folder
+        // openings go crazy"); a straight row and a spiral are not.
         verify(LayoutEngine.curvedLayout("ring") && LayoutEngine.curvedLayout("arc")
-               && LayoutEngine.curvedLayout("hexagon") && !LayoutEngine.curvedLayout("horizontal")
-               && !LayoutEngine.curvedLayout("star"))
+               && LayoutEngine.curvedLayout("hexagon") && LayoutEngine.curvedLayout("star")
+               && !LayoutEngine.curvedLayout("horizontal") && !LayoutEngine.curvedLayout("spiral"))
     }
 
     function test_folderWithoutASideKeepsItsFrame() {

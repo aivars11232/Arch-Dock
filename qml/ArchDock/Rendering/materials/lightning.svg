@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<!-- Original Arch Dock vector material. GPL-3.0-or-later. -->
+<defs><linearGradient id="sheen" x2="0.8" y2="1"><stop stop-color="#f8f8f8"/><stop offset=".36" stop-color="#777"/><stop offset=".62" stop-color="#d8d8d8"/><stop offset="1" stop-color="#4d4d4d"/></linearGradient></defs>
+<rect x="0" y="0" width="128" height="128" fill="#343434" opacity="1"/>
+<path d="M0 0 C32 -20 64 24 96 0 S128 -20 160 0" fill="none" stroke="#888" stroke-width="8" opacity="1"/>
+<path d="M0 0 C32 -20 64 24 96 0 S128 -20 160 0" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<path d="M0 17 C32 -3 64 41 96 17 S128 -3 160 17" fill="none" stroke="#888" stroke-width="8" opacity="1"/>
+<path d="M0 17 C32 -3 64 41 96 17 S128 -3 160 17" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<path d="M0 34 C32 14 64 58 96 34 S128 14 160 34" fill="none" stroke="#888" stroke-width="8" opacity="1"/>
+<path d="M0 34 C32 14 64 58 96 34 S128 14 160 34" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<path d="M0 51 C32 31 64 75 96 51 S128 31 160 51" fill="none" stroke="#888" stroke-width="8" opacity="1"/>
+<path d="M0 51 C32 31 64 75 96 51 S128 31 160 51" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<path d="M0 68 C32 48 64 92 96 68 S128 48 160 68" fill="none" stroke="#888" stroke-width="8" opacity="1"/>
+<path d="M0 68 C32 48 64 92 96 68 S128 48 160 68" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<path d="M0 85 C32 65 64 109 96 85 S128 65 160 85" fill="none" stroke="#888" stroke-width="8" opacity="1"/>
+<path d="M0 85 C32 65 64 109 96 85 S128 65 160 85" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<path d="M0 102 C32 82 64 126 96 102 S128 82 160 102" fill="none" stroke="#888" stroke-width="8" opacity="1"/>
+<path d="M0 102 C32 82 64 126 96 102 S128 82 160 102" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<path d="M0 119 C32 99 64 143 96 119 S128 99 160 119" fill="none" stroke="#888" stroke-width="8" opacity="1"/>
+<path d="M0 119 C32 99 64 143 96 119 S128 99 160 119" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<path d="M0 136 C32 116 64 160 96 136 S128 116 160 136" fill="none" stroke="#888" stroke-width="8" opacity="1"/>
+<path d="M0 136 C32 116 64 160 96 136 S128 116 160 136" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+<path d="M0 153 C32 133 64 177 96 153 S128 133 160 153" fill="none" stroke="#888" stroke-width="8" opacity="1"/>
+<path d="M0 153 C32 133 64 177 96 153 S128 133 160 153" fill="none" stroke="#eee" stroke-width="2" opacity="1"/>
+</svg>

@@ -1,5 +1,112 @@
 # Arch Dock current state
 
+<!-- AFTERNOON_2026_10_13_BEGIN -->
+## No box, real glow, glowing looks — 2026-10-13 afternoon
+
+The owner's report and its follow-ups: "the invisible box issue is still
+unresolved", "there shouldn't be any edge, same as there isn't for KDE
+native panels, the only edge is edge of the screen", "when I change panel
+shapes, folder openings go crazy", "there are still some settings
+unrelated to free docks, like presets", "the glow isn't really glow, it's
+just intense color", then, looking at picture sheets: "make it better
+quality", "settings on glow intensity and how far off the parent it goes",
+"settings for each section", the plasma that "looks more like static
+lightning", a lightning look "together with animations", "not some randomly
+drawn zigzag lines", its background "totally transparent, or with option",
+its colours "lightning naturally colors", an Aurora look, rainbow "where it
+can practically be applied", lime that "should look like lime", metal's
+"faint rainbow colors", and every setting that cannot apply kept unseen.
+
+- No box: `PanelScene3D` measures after each frame in which something
+  moved how far the drawn scene reaches out of the panel's box (platform
+  and part corners, each picture and stand, the handles), grows the View3D
+  by that much on opposite sides in 32 px steps (one to spare, given back
+  only when two are free, at most the screen's size) and widens the
+  camera's field of view by as much; `drawnBounds` reports the area.
+  Projection and unprojection go through the camera's own frame; the
+  camera's far plane moves by a hair with the view so Qt's picking renews
+  its projection. `PanelScene.drawnBounds`, a free widget's
+  `containmentMask` and its DropArea let the pointer, wheel and drops reach
+  what is drawn out there; the widget's own size stays the box's.
+  `LivePanelPreview` fits the whole drawing.
+- Glow: `ExtendedSceneEnvironment` bloom only while something glows,
+  levels 1 to 3-7 by Glow reach, bicubic; glow shells (a stand's and a
+  tile's mesh a little larger seen from inside, the platform pushed out
+  along its normals, an icon's picture behind it) in light brighter than
+  white; flat items draw `GlowEffect` (MultiEffect shadow) as their layer.
+  New settings: panelGlow/Reach/Color (Panels > Appearance), iconGlow/Reach
+  with iconGlowColor (Icons > Appearance), iconTileGlow/Reach/Color (Icon
+  Tiles), pedestalGlowReach/Color beside pedestalGlow (Pedestals), stored
+  with the 3D parameters; capability `glow`, hidden on organic, pedestal
+  and lime looks, reach and colour hidden while the intensity is 0.
+- Looks: textures from `tools/generate-material-textures.py` without Qt
+  (`--plasma`, `--lightning`, `--aurora`, `--lime`, `--rainbows`); plasma
+  is domain-warped noise; lightning is midpoint-displaced bolts with forks
+  on a clear ground (palettes storm, ice, crimson, toxic, solar, arcane,
+  void, aurora, rainbow); aurora is ray-streaked curtains (borealis,
+  emerald, australis, cosmic, solar, rainbow); neon and futuristic have a
+  rainbow, metallic and plate a chameleon finish; lime is a peel. The old
+  plasma painter's lines were kept briefly as the first lightning, then
+  replaced. Settings: panelLookBackground, panelLookColour, lookMotionSpeed
+  and the stand's pedestalLookBackground and pedestalLookColour,
+  capability `lightning`; glowIntensity is named for the look (Lightning,
+  Plasma, Neon, Circuit, Aurora glow) and offered on flat panels with such
+  a look. Lightning strikes at random (flash past white, the bolts jumping
+  along the band), flickers between, keeps still under reduced motion.
+- Folders: the star is a curved layout (QML and backend); Along the dock on
+  a shape with no curve opens as a fan in the track host; the popup no
+  longer prints "This saved layout uses Fan."
+- Panel Themes / Skins: a look's declared orientations must include the
+  picked panel's (free, plus horizontal or vertical for a free panel laid
+  out as a bar; the edge's own); a look naming none fits all.
+- The desktop's icon delegate read `panelScene.pedestalOnPath` from outside
+  the representation (a ReferenceError, so free panels' flat stands were
+  placed as in a row); the scene now hands it over as
+  `scenePedestalOnPath`. Found in the staged smoke's plasmashell log.
+- Audit, first items: the icon's motion settings with Animation None; the
+  icon glow colour while the icon glow shines. Next: magnification with
+  Magnification off (needs the draft's global values in the field
+  builder), the look's own glow on a skin without glow art.
+- Seen on a private copy of the owner's desktop: a ring that fits its box
+  with Panel glow on had its light cut in a straight line along the box
+  (the margin grew only for a shape reaching out of the box), and the glow
+  shell showed through the lightning look's clear ground (the band turned
+  white). The margin now takes the glow's reach whenever something glows
+  (none while nothing reaches out and nothing glows); shells blend after
+  what they wrap, which is drawn first (`IconStyle3D.underGlow`: a depth
+  bias and depth writes even where it is see-through). From 75 % up the
+  panel glow lays its light over the platform's faces (a copy of the mesh
+  without its rim faces, `panelGlowWash`, at 1.15 times white), white-hot
+  at 100 % with the edge still showing; the owner ticked the levels.
+- 3D icons are hit through the camera's own frame (`pictureHits`, each
+  picture's quad against the ray, like the platform's), not
+  `View3D.pickAll`, whose projection lags a view that changed shape until
+  it renders again: the runtime smoke's wheel over a glowing (or turned)
+  panel's icon did nothing, the cached answer kept. Qt's picking is left
+  to the editing handles.
+- Studio: the green (information) notes and the raw native placement and
+  visibility results are gone (the owner: "these green things can be
+  removed, they serve no purpose"); warnings stay (placement or visibility
+  refused, a free panel's missing widget).
+- KDE widgets in Arch Dock panels (the owner's question): an edge panel is
+  a KDE panel, so KDE's Add Widgets puts the clock, the launcher or Panel
+  Colorizer in it, sized to the panel, beside Arch Dock's own look on
+  KDE's panel background; a free panel holds none (a widget dropped there
+  is a separate desktop widget). Seen on the private desktop copy; a later
+  phase is proposed. Also seen: an empty vertical edge panel's hint is
+  wider than the panel (120 px minimum, 76 px panel).
+- Tests: `sceneDrawsPastItsBoxWithoutMovingAnything`,
+  `standGlowShinesRoundTheStand`, `lightningLookStrikesAndKeepsStill`,
+  `panelGlowShinesRoundThePanelNotThroughIt` (the generated platform,
+  glow 50 / 80 / 100 %: no step across the view's border, the look kept
+  at the middle, white-hot at full), `wheelTurnsAPanelDrawnPastItsBox`
+  (also straight after the view grows); the renderer tests project through
+  the renderer and crop the view's picture to the panel's box; the travel
+  check proves an entry out of the box is still drawn and answering (it
+  used to count clipped entries as covered); the schema test covers every
+  new setting; the look list test; the Studio tests find no green notes.
+<!-- AFTERNOON_2026_10_13_END -->
+
 <!-- MORNING_2026_10_13_BEGIN -->
 ## Panel Studio follows the picked panel — 2026-10-13 morning
 

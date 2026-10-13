@@ -18,6 +18,13 @@ Model {
     readonly property bool reliefReady: surfaceNormalTexture !== null && meshReady
         && Array.isArray(meshData.tangents) && meshData.tangents.length === meshData.positions.length
     property Material faceMaterial: null
+    // A glow shell (PanelScene3D) draws the whole mesh in this one material.
+    property Material shellMaterial: null
+    // A glow shell wraps this model: it is drawn before the shell and writes
+    // depth even where it is see-through, so the shell's light shows round
+    // it and never through it (a lightning band turned white).
+    property bool underGlow: false
+    depthBias: underGlow ? 10 : 0
     property real emissionScale: 1
     property var partDefinition: null
     property real openAmount: 1
@@ -81,7 +88,7 @@ Model {
         colors: root.vertexColoured ? root.colours(root.meshData.colors) : []
         indexes: root.meshReady ? root.meshData.indexes : []
         primitiveMode: ProceduralMesh.Triangles
-        subsets: root.faceOffset > 0 ? [bodySubset, faceSubset]
+        subsets: root.shellMaterial ? [] : root.faceOffset > 0 ? [bodySubset, faceSubset]
             : root.rimCount > 0 ? [bodySubset, rimSubset] : []
     }
     readonly property ProceduralMeshSubset bodySubset: ProceduralMeshSubset {
@@ -96,24 +103,25 @@ Model {
         offset: root.faceOffset
         count: root.faceOffset > 0 ? root.meshData.indexes.length - root.faceOffset : 0
     }
-    materials: faceOffset > 0 ? [bodyMaterial, faceMaterial]
+    materials: shellMaterial ? [shellMaterial] : faceOffset > 0 ? [bodyMaterial, faceMaterial]
         : rimCount > 0 ? [bodyMaterial, rimMaterial] : [bodyMaterial]
     readonly property PrincipledMaterial bodyMaterial: PrincipledMaterial {
         readonly property var values: root.materialData || ({})
         readonly property color emission: values.emissiveColor || "#000000"
         readonly property real strength: Math.max(0, Math.min(2,
             Number(values.emissiveStrength || 0) * root.emissionScale))
-        baseColor: root.vertexColoured ? "#ffffff" : values.baseColor || "#ffffff"
+        baseColor: root.vertexColoured && values.vertexColours !== false ? "#ffffff" : values.baseColor || "#ffffff"
         baseColorMap: root.surfaceTexture
         // An energy look glows through its texture: the bright filaments
         // and tubes shine, the dark ground between them does not.
         emissiveMap: values.emissiveThroughTexture === true ? root.surfaceTexture : null
         normalMap: root.reliefReady ? root.surfaceNormalTexture : null
         normalStrength: Math.max(0, Math.min(1, Number(values.normalStrength === undefined ? 1 : values.normalStrength)))
-        vertexColorsEnabled: root.vertexColoured
+        vertexColorsEnabled: root.vertexColoured && values.vertexColours !== false
         opacity: Math.max(0, Math.min(1, Number(values.opacity === undefined ? 1 : values.opacity)))
-        alphaMode: opacity < 1 ? PrincipledMaterial.Blend : PrincipledMaterial.Opaque
-        depthDrawMode: root.faceOffset > 0 && opacity < 1
+        // A surface whose texture is partly clear (lightning) blends.
+        alphaMode: opacity < 1 || values.alphaBlend === true ? PrincipledMaterial.Blend : PrincipledMaterial.Opaque
+        depthDrawMode: root.faceOffset > 0 && opacity < 1 && !root.underGlow
             ? Material.OpaqueOnlyDepthDraw : Material.AlwaysDepthDraw
         metalness: Math.max(0, Math.min(1, Number(values.metalness || 0)))
         roughness: Math.max(0, Math.min(1, Number(values.roughness || 0)))
@@ -134,6 +142,10 @@ Model {
         roughness: Math.max(0, Math.min(1, Number(values.roughness || 0)))
         emissiveFactor: Qt.vector3d(emission.r * strength,
                                    emission.g * strength, emission.b * strength)
+        // A lightning platform's rim shows as much as its storm does.
+        opacity: Math.max(0, Math.min(1, Number(values.rimOpacity === undefined ? 1 : values.rimOpacity)))
+        alphaMode: opacity < 1 ? PrincipledMaterial.Blend : PrincipledMaterial.Opaque
+        depthDrawMode: root.underGlow ? Material.AlwaysDepthDraw : Material.OpaqueOnlyDepthDraw
         cullMode: Material.BackFaceCulling
     }
 }

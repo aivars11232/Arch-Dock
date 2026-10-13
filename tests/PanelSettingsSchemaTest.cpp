@@ -778,6 +778,7 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
         {QStringLiteral("pedestalColor"), QStringLiteral("#22aa66")},
         {QStringLiteral("pedestalOpacity"), 0.6},
         {QStringLiteral("pedestalGlow"), 0.45},
+        {QStringLiteral("pedestalGlowReach"), 0.3},
         {QStringLiteral("pedestalAnimation"), QStringLiteral("sway")},
         {QStringLiteral("pedestalAnimationSpeed"), 4.5},
         {QStringLiteral("folderPedestalShape"), QStringLiteral("crystal")},
@@ -791,6 +792,7 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
         {QStringLiteral("folderPedestalColor"), QStringLiteral("#ff8800")},
         {QStringLiteral("folderPedestalOpacity"), 0.35},
         {QStringLiteral("folderPedestalGlow"), 1.0},
+        {QStringLiteral("folderPedestalGlowReach"), 0.9},
         {QStringLiteral("folderPedestalAnimation"), QStringLiteral("float")},
         {QStringLiteral("folderPedestalAnimationSpeed"), 0.2},
     };
@@ -801,8 +803,11 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
     {
         const auto *descriptor = PanelSettingsSchema::panelDescriptor(it.key());
         QVERIFY2(descriptor, qPrintable(it.key()));
+        // The stands' glow is grouped on the page as Glow (2026-10-13).
         QCOMPARE(descriptor->editor.section, it.key().startsWith(QStringLiteral("folder"))
-            ? QStringLiteral("pedestals-folder") : QStringLiteral("pedestals"));
+            ? QStringLiteral("pedestals-folder")
+            : it.key().startsWith(QStringLiteral("pedestalGlow")) ? QStringLiteral("pedestals-glow")
+            : QStringLiteral("pedestals"));
         QCOMPARE(descriptor->editor.capability, QStringLiteral("pedestals"));
         QVERIFY(PanelSettingsSchema::isEditorField(PanelSettingsFieldScope::Panel, it.key()));
         QVERIFY(PanelSettingsSchema::isTransactionPanelField(it.key()));
@@ -856,6 +861,7 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
     record.insert(QStringLiteral("pedestalLift"), -2.0);
     record.insert(QStringLiteral("pedestalOpacity"), 0.0);
     record.insert(QStringLiteral("pedestalGlow"), 5.0);
+    record.insert(QStringLiteral("pedestalGlowReach"), -1.0);
     record.insert(QStringLiteral("pedestalAnimationSpeed"), 0.0);
     record.insert(QStringLiteral("pedestalShape"), QStringLiteral("Plate"));
     record.insert(QStringLiteral("pedestalMaterial"), QStringLiteral("marble"));
@@ -876,6 +882,46 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
     QCOMPARE(result.value(QStringLiteral("pedestalLift")).toDouble(), 0.0);
     QCOMPARE(result.value(QStringLiteral("pedestalOpacity")).toDouble(), 0.1);
     QCOMPARE(result.value(QStringLiteral("pedestalGlow")).toDouble(), 1.0);
+    QCOMPARE(result.value(QStringLiteral("pedestalGlowReach")).toDouble(), 0.0);
+    // A glow reaches as far as the owner's pick by default (2026-10-13).
+    QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("pedestalGlowReach"))->defaultValue.toDouble(), 0.75);
+    QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("folderPedestalGlowReach"))->defaultValue.toDouble(), 0.75);
+    // Each of the panel, its icons, its tiles and its stands has its own
+    // glow, grouped as Glow on its own page, stored beside the 3D parameters
+    // like the stands' and kept through a save.
+    const QList<std::tuple<QString, QString, QVariant>> glows{
+        {QStringLiteral("panelGlow"), QStringLiteral("panels-glow"), 0.4},
+        {QStringLiteral("panelGlowReach"), QStringLiteral("panels-glow"), 0.2},
+        {QStringLiteral("panelGlowColor"), QStringLiteral("panels-glow"), QStringLiteral("#11aaff")},
+        {QStringLiteral("iconGlow"), QStringLiteral("icons-glow"), 0.6},
+        {QStringLiteral("iconGlowReach"), QStringLiteral("icons-glow"), 0.9},
+        {QStringLiteral("iconTileGlow"), QStringLiteral("icon-tiles-glow"), 0.3},
+        {QStringLiteral("iconTileGlowReach"), QStringLiteral("icon-tiles-glow"), 0.1},
+        {QStringLiteral("iconTileGlowColor"), QStringLiteral("icon-tiles-glow"), QStringLiteral("#ff22aa")},
+        {QStringLiteral("pedestalGlowColor"), QStringLiteral("pedestals-glow"), QStringLiteral("#22ff88")},
+        // A glowing look's background, colour and pace (the same day).
+        {QStringLiteral("panelLookBackground"), QStringLiteral("panels-appearance"), 0.2},
+        {QStringLiteral("panelLookColour"), QStringLiteral("panels-appearance"), QStringLiteral("rainbow")},
+        {QStringLiteral("lookMotionSpeed"), QStringLiteral("panels-appearance"), 2.5},
+        {QStringLiteral("pedestalLookBackground"), QStringLiteral("pedestals"), 0.9},
+        {QStringLiteral("pedestalLookColour"), QStringLiteral("pedestals"), QStringLiteral("crimson")}};
+    for (const auto &[key, section, value] : glows)
+    {
+        const auto *descriptor = PanelSettingsSchema::panelDescriptor(key);
+        QVERIFY2(descriptor, qPrintable(key));
+        QCOMPARE(descriptor->editor.section, section);
+        record.insert(key, value);
+    }
+    QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("iconGlowColor"))->editor.section,
+             QStringLiteral("icons-glow"));
+    const auto glowing = PanelDefinition::fromLegacyMap(record);
+    QVERIFY(glowing.has_value());
+    const QVariantMap glowSaved = glowing->toPersistedMap();
+    for (const auto &[key, section, value] : glows)
+    {
+        QCOMPARE(glowing->surface.parameters3D.value(key), value);
+        QCOMPARE(glowSaved.value(key), value);
+    }
     QCOMPARE(result.value(QStringLiteral("pedestalAnimationSpeed")).toDouble(), 0.1);
     QCOMPARE(result.value(QStringLiteral("pedestalShape")).toString(), QStringLiteral("plate"));
     QCOMPARE(result.value(QStringLiteral("pedestalMaterial")).toString(), QStringLiteral("panel"));

@@ -28,16 +28,84 @@ using PanelWindowHelpers::panelTypeNeedsDockApplet;
 namespace
 {
 // Layouts whose entries stand on a curved track, as LayoutEngine.curvedLayout()
-// in the shared renderer decides: closed shapes and the open sweep paths.
+// in the shared renderer decides: closed shapes, the star among them, and the
+// open sweep paths.
 bool curvedLayout(const QString &pathType)
 {
     static const QStringList curved = {
         QStringLiteral("circular"), QStringLiteral("ring"), QStringLiteral("ellipse"),
         QStringLiteral("polygon"), QStringLiteral("triangle"), QStringLiteral("square"),
         QStringLiteral("pentagon"), QStringLiteral("hexagon"), QStringLiteral("octagon"),
-        QStringLiteral("arc"), QStringLiteral("semicircle"), QStringLiteral("fan"),
-        QStringLiteral("radial")};
+        QStringLiteral("star"), QStringLiteral("arc"), QStringLiteral("semicircle"),
+        QStringLiteral("fan"), QStringLiteral("radial")};
     return curved.contains(pathType);
+}
+
+// Whether light round a surface of this look makes sense: not round grass
+// (Organic), marble (Pedestal) or a lime's peel, the natural materials (the
+// owner, 2026-10-13: "where glow wouldn't really be practical, that setting
+// ... should be invisible"). Glass, energy, circuitry and the tech metals
+// glow.
+bool glowFitsLook(const QString &look)
+{
+    const QString name = look.trimmed().toLower();
+    return name != QStringLiteral("organic") && name != QStringLiteral("pedestal")
+        && name != QStringLiteral("lime");
+}
+
+// The looks a panel's surface is drawn in, its material and its texture
+// ("none" for no texture): its flat look, or in 3D its platform's material
+// and texture, "theme" being the flat look on a generated platform.
+QStringList panelLooks(const ArchDock::PanelDefinition &candidate,
+                       const std::optional<ArchDock::RendererTier> &tier)
+{
+    const QString flat = candidate.surface.appearance;
+    if (tier != ArchDock::RendererTier::True3D)
+        return {flat, flat};
+    const QVariantMap &values = candidate.surface.parameters3D;
+    const QString material = values.value(QStringLiteral("material"), QStringLiteral("theme")).toString();
+    const QString texture = values.value(QStringLiteral("texture"), QStringLiteral("theme")).toString();
+    const QString surface = material == QStringLiteral("theme") ? flat : material;
+    return {surface, texture == QStringLiteral("theme") ? surface : texture};
+}
+
+// The same for a stand: its own material or the panel's, and its texture,
+// the material's own, none, or a look's.
+QStringList standLooks(const ArchDock::PanelDefinition &candidate,
+                       const std::optional<ArchDock::RendererTier> &tier,
+                       const QString &prefix)
+{
+    const QVariantMap &values = candidate.surface.parameters3D;
+    const QString material = values.value(prefix + QStringLiteral("Material"), QStringLiteral("panel")).toString();
+    const QString texture = values.value(prefix + QStringLiteral("Texture"), QStringLiteral("material")).toString();
+    const QString surface = material == QStringLiteral("panel") ? panelLooks(candidate, tier).first() : material;
+    return {surface, texture == QStringLiteral("material") ? surface : texture};
+}
+
+bool looksGlow(const QStringList &looks)
+{
+    return glowFitsLook(looks.first()) && (looks.last() == QStringLiteral("none") || glowFitsLook(looks.last()));
+}
+
+// Whether the panel's surface takes light round it. Skins and baked
+// artwork glow round their shape.
+bool panelGlowFits(const ArchDock::PanelDefinition &candidate,
+                   const std::optional<ArchDock::RendererTier> &tier)
+{
+    if (tier == ArchDock::RendererTier::Skinned2D || tier == ArchDock::RendererTier::Baked2_5D)
+        return true;
+    return looksGlow(panelLooks(candidate, tier));
+}
+
+bool standGlowFits(const ArchDock::PanelDefinition &candidate,
+                   const std::optional<ArchDock::RendererTier> &tier,
+                   const QString &prefix)
+{
+    const QVariantMap &values = candidate.surface.parameters3D;
+    const QString material = values.value(prefix + QStringLiteral("Material"), QStringLiteral("panel")).toString();
+    if (material == QStringLiteral("panel") && !panelGlowFits(candidate, tier))
+        return false;
+    return looksGlow(standLooks(candidate, tier, prefix));
 }
 
 // D-Bus variants preserve compound values as QDBusArgument. Decode only the
@@ -559,6 +627,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         // shown, but kept and accepted, since it acts once the state changes
         // (a mechanism is chosen, the renderer changes) or a look needs it.
         bool inactive = false;
+        QString lookOriginalLabel;
         switch (*capability)
         {
         case ArchDock::EditorCapability::ScreenPlacement:
@@ -662,6 +731,12 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         case ArchDock::EditorCapability::IconStateStyling:
         {
             available = controlAvailable(descriptor->editor.capability);
+            // An icon's motion settings with no motion chosen move nothing,
+            // so they are unseen until it has one (the owner, 2026-10-13: a
+            // setting that cannot apply is gone).
+            if (available && (key == QStringLiteral("animationTrigger") || key == QStringLiteral("animationSpeed")
+                              || key == QStringLiteral("animationIntensity")))
+                inactive = candidate.motion.iconProfile == QStringLiteral("none");
             const bool tileParameter = key == QStringLiteral("iconTileTexture")
                 || key == QStringLiteral("iconTileThickness") || key == QStringLiteral("iconTileIconOffsetX")
                 || key == QStringLiteral("iconTileIconOffsetY") || key == QStringLiteral("iconTileIconScale")
@@ -692,6 +767,11 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 const auto &style = iconStyleProjection();
                 available = style && style->value(QStringLiteral("extensions")).toMap()
                     .contains(QStringLiteral("org.archdock.iconParameters"));
+                // The colour of the light round every icon (Icons > Glow) is
+                // this one too: offered while that glow shines, whatever the
+                // style (the owner, 2026-10-13).
+                const bool iconHalo = candidate.surface.parameters3D.value(QStringLiteral("iconGlow"), 0.0)
+                    .toDouble() > 0.0;
                 if (available && key.startsWith(QStringLiteral("iconPedestal")))
                 {
                     available = drawsTiles && candidate.iconStyle.tileMode != QStringLiteral("custom")
@@ -708,11 +788,11 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                             && layer.value(QStringLiteral("option")).toString() != QStringLiteral("pedestal");
                     }, true);
                 }
-                else if (available && key == QStringLiteral("iconGlowColor"))
+                else if (key == QStringLiteral("iconGlowColor"))
                 {
-                    available = hasIconLayer([](const QVariantMap &layer) {
+                    available = iconHalo || (available && hasIconLayer([](const QVariantMap &layer) {
                         return layer.value(QStringLiteral("role")).toString() == QStringLiteral("glow");
-                    }, true);
+                    }, true));
                 }
                 else if (available && (key == QStringLiteral("iconOutlineWidth")
                          || key == QStringLiteral("iconOutlineColor")))
@@ -733,10 +813,32 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 && controlAvailable(descriptor->editor.capability);
             break;
         case ArchDock::EditorCapability::DynamicGlow:
-            // The plain 2D surface draws no glow for this to scale.
-            available = controlAvailable(descriptor->editor.capability) &&
-                tier.has_value() && *tier != ArchDock::RendererTier::Procedural2D;
+        {
+            // The look's own light: a skin's or baked platform's glow art,
+            // and the bright parts of an energy look - bolts, gas, tubes,
+            // circuitry - in 2D and 3D, named for the look (the owner,
+            // 2026-10-13: "a settings on lightning glow too, same for other
+            // themes where there can be practical settings"). A look with no
+            // light of its own has nothing for it to scale.
+            const QString look = panelLooks(candidate, tier).first().trimmed().toLower();
+            const QString texture = panelLooks(candidate, tier).last().trimmed().toLower();
+            static const QHash<QString, QString> names{
+                {QStringLiteral("lightning"), QStringLiteral("Lightning glow")},
+                {QStringLiteral("plasma"), QStringLiteral("Plasma glow")},
+                {QStringLiteral("neon"), QStringLiteral("Neon glow")},
+                {QStringLiteral("futuristic"), QStringLiteral("Circuit glow")},
+                {QStringLiteral("aurora"), QStringLiteral("Aurora glow")}};
+            const QString energy = names.contains(texture) ? texture : look;
+            // A 3D platform's rim glows in every look; a flat surface has
+            // light of its own only in an energy look.
+            const bool lit = tier == ArchDock::RendererTier::Skinned2D
+                || tier == ArchDock::RendererTier::Baked2_5D || tier == ArchDock::RendererTier::True3D;
+            available = tier.has_value() && (lit ? controlAvailable(descriptor->editor.capability)
+                                                 : names.contains(energy));
+            if (available && names.contains(energy))
+                field.insert(QStringLiteral("label"), names.value(energy));
             break;
+        }
         case ArchDock::EditorCapability::PresentationMechanism:
         {
             // Only mechanisms this panel's host and theme both declare may be
@@ -962,6 +1064,22 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 if (key == QStringLiteral("folderPedestalAnimationSpeed"))
                     inactive = inactive || values.value(QStringLiteral("folderPedestalAnimation"),
                         QStringLiteral("none")).toString() == QStringLiteral("none");
+                // Glow where light round the stand makes sense; its reach
+                // only while it shines.
+                if (key.startsWith(QStringLiteral("folderPedestalGlow")))
+                    inactive = inactive || !standGlowFits(candidate, tier,
+                        folderOwn ? QStringLiteral("folderPedestal") : QStringLiteral("pedestal"));
+                if (key == QStringLiteral("folderPedestalGlowReach"))
+                    inactive = inactive || (values.value(QStringLiteral("folderPedestalGlow"), 0.0).toDouble() <= 0.0
+                        && values.value(QStringLiteral("folderPedestalAnimation"),
+                               QStringLiteral("none")).toString() != QStringLiteral("glow"));
+                if (key == QStringLiteral("folderPedestalAnimation")
+                    && !standGlowFits(candidate, tier, QStringLiteral("folderPedestal")))
+                {
+                    QStringList choices = field.value(QStringLiteral("choices")).toStringList();
+                    choices.removeAll(QStringLiteral("glow"));
+                    field.insert(QStringLiteral("choices"), choices);
+                }
             }
             else if (key != QStringLiteral("pedestalShape"))
             {
@@ -974,7 +1092,130 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 if (key == QStringLiteral("pedestalAnimationSpeed"))
                     inactive = inactive || values.value(QStringLiteral("pedestalAnimation"),
                         QStringLiteral("none")).toString() == QStringLiteral("none");
+                // Glow where light round the stand makes sense; its reach and
+                // colour only while it shines; no glowing motion without it.
+                const bool glowFits = standGlowFits(candidate, tier, QStringLiteral("pedestal"));
+                const bool shining = values.value(QStringLiteral("pedestalGlow"), 0.0).toDouble() > 0.0
+                    || values.value(QStringLiteral("pedestalAnimation"), QStringLiteral("none")).toString()
+                        == QStringLiteral("glow");
+                if (key.startsWith(QStringLiteral("pedestalGlow")))
+                    inactive = inactive || !glowFits;
+                if (key == QStringLiteral("pedestalGlowReach") || key == QStringLiteral("pedestalGlowColor"))
+                    inactive = inactive || !shining;
+                if (key == QStringLiteral("pedestalAnimation") && !glowFits)
+                {
+                    QStringList choices = field.value(QStringLiteral("choices")).toStringList();
+                    choices.removeAll(QStringLiteral("glow"));
+                    field.insert(QStringLiteral("choices"), choices);
+                }
             }
+            break;
+        }
+        case ArchDock::EditorCapability::Glow:
+        {
+            // Light round the panel, its icons or its tiles, each with its
+            // own settings on its own Appearance (the owner, 2026-10-13):
+            // where light round the look makes sense, and the reach and
+            // colour only while it shines. An icon's picture glows in any
+            // look; a tile glows where tiles are drawn.
+            available = true;
+            const QVariantMap &values = candidate.surface.parameters3D;
+            const auto shining = [&values](const QString &intensity) {
+                return values.value(intensity, 0.0).toDouble() > 0.0;
+            };
+            if (key.startsWith(QStringLiteral("panelGlow")))
+            {
+                inactive = !panelGlowFits(candidate, tier)
+                    || (key != QStringLiteral("panelGlow") && !shining(QStringLiteral("panelGlow")));
+            }
+            else if (key.startsWith(QStringLiteral("iconTileGlow")))
+            {
+                // Only a tile that is drawn can glow: a custom tile, or the
+                // icon style's own base under the icon.
+                const bool tileDrawn = drawsTiles && (candidate.iconStyle.tileMode == QStringLiteral("custom")
+                    || hasIconLayer([](const QVariantMap &layer) {
+                        return layer.value(QStringLiteral("role")).toString() == QStringLiteral("base")
+                            && layer.value(QStringLiteral("option")).toString() != QStringLiteral("pedestal");
+                    }, true));
+                inactive = !tileDrawn
+                    || !glowFitsLook(candidate.iconStyle.tileMaterial)
+                    || (candidate.iconStyle.tileTexture != QStringLiteral("none")
+                        && !glowFitsLook(candidate.iconStyle.tileTexture))
+                    || (key != QStringLiteral("iconTileGlow") && !shining(QStringLiteral("iconTileGlow")));
+            }
+            else if (key.startsWith(QStringLiteral("iconGlow")))
+            {
+                inactive = key != QStringLiteral("iconGlow") && !shining(QStringLiteral("iconGlow"));
+            }
+            break;
+        }
+        case ArchDock::EditorCapability::Lightning:
+        {
+            // How much of the dark storm shows behind a lightning look's
+            // bolts, only where something is drawn in lightning; on a 3D
+            // panel beside its material on the 3D page.
+            available = true;
+            const bool stand = key.startsWith(QStringLiteral("pedestal"));
+            const bool drawn = candidate.surface.parameters3D.value(QStringLiteral("pedestalShape"),
+                QStringLiteral("none")).toString() != QStringLiteral("none");
+            const QStringList looks = stand ? standLooks(candidate, tier, QStringLiteral("pedestal"))
+                                            : panelLooks(candidate, tier);
+            const bool lightning = looks.contains(QStringLiteral("lightning"));
+            const bool aurora = looks.contains(QStringLiteral("aurora"));
+            if (key.endsWith(QStringLiteral("LookBackground")))
+            {
+                // The dark sky behind a clear-ground look's light.
+                inactive = !lightning && !aurora;
+                field.insert(QStringLiteral("label"), lightning ? QStringLiteral("Lightning background")
+                                                                : QStringLiteral("Aurora background"));
+            }
+            else if (key.endsWith(QStringLiteral("LookColour")))
+            {
+                // A glowing look's palettes, its own first under its name.
+                struct Palettes { const char *name; const char *original; QStringList others; };
+                static const QList<std::pair<QString, Palettes>> palettes{
+                    {QStringLiteral("lightning"), {"Lightning colour", "Storm",
+                        {QStringLiteral("ice"), QStringLiteral("crimson"), QStringLiteral("toxic"),
+                         QStringLiteral("solar"), QStringLiteral("arcane"), QStringLiteral("void"),
+                         QStringLiteral("aurora"), QStringLiteral("rainbow")}}},
+                    {QStringLiteral("aurora"), {"Aurora colour", "Borealis",
+                        {QStringLiteral("emerald"), QStringLiteral("australis"), QStringLiteral("cosmic"),
+                         QStringLiteral("solar"), QStringLiteral("rainbow")}}},
+                    {QStringLiteral("plasma"), {"Plasma colour", "Violet", {QStringLiteral("rainbow")}}},
+                    {QStringLiteral("neon"), {"Neon colour", "Cyan", {QStringLiteral("rainbow")}}},
+                    {QStringLiteral("futuristic"), {"Circuit colour", "Original", {QStringLiteral("rainbow")}}},
+                    // Polished metal's faint rainbow; a lime stays a lime
+                    // (the owner, 2026-10-13: a colour that changes what a
+                    // look is "defeats the purpose").
+                    {QStringLiteral("metallic"), {"Metal finish", "Steel",
+                        {QStringLiteral("chameleon"), QStringLiteral("iridescent")}}},
+                    {QStringLiteral("plate"), {"Metal finish", "Steel",
+                        {QStringLiteral("chameleon"), QStringLiteral("iridescent")}}}};
+                const auto found = std::find_if(palettes.cbegin(), palettes.cend(), [&](const auto &entry) {
+                    return looks.last() == entry.first || looks.first() == entry.first;
+                });
+                inactive = found == palettes.cend();
+                if (!inactive)
+                {
+                    field.insert(QStringLiteral("label"), QString::fromLatin1(found->second.name));
+                    field.insert(QStringLiteral("choices"),
+                                 QStringList{QStringLiteral("original")} + found->second.others);
+                    lookOriginalLabel = QString::fromLatin1(found->second.original);
+                }
+            }
+            else if (key == QStringLiteral("lookMotionSpeed"))
+            {
+                // Only an animated look moves: lightning strikes, plasma,
+                // circuitry and aurora flow; reduced motion keeps them still.
+                inactive = !lightning && !aurora && !looks.contains(QStringLiteral("plasma"))
+                    && !looks.contains(QStringLiteral("futuristic"));
+                field.insert(QStringLiteral("label"), lightning ? QStringLiteral("Strike rate")
+                                                                : QStringLiteral("Flow speed"));
+            }
+            if (stand)
+                inactive = inactive || !drawn;
+            else if (tier == ArchDock::RendererTier::True3D)
+                field.insert(QStringLiteral("section"), QStringLiteral("panels-3d"));
             break;
         }
         case ArchDock::EditorCapability::GlobalRenderer:
@@ -1129,8 +1370,14 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                   {QStringLiteral("both"), QT_TR_NOOP("Both")}}},
             };
             const char *label = labels.value(key).value(choice, nullptr);
+            QString text = label ? tr(label) : choice;
+            // A glowing look's own palette under its own name, the others
+            // capitalised.
+            if (key.endsWith(QStringLiteral("LookColour")))
+                text = choice == QStringLiteral("original") && !lookOriginalLabel.isEmpty()
+                    ? lookOriginalLabel : choice.left(1).toUpper() + choice.mid(1);
             options.append(QVariantMap{
-                {QStringLiteral("label"), label ? tr(label) : choice},
+                {QStringLiteral("label"), text},
                 {QStringLiteral("value"), choice},
             });
         }

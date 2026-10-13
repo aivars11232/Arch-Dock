@@ -15,7 +15,7 @@ Item {
     property string texture: "none"
     property real thickness: 0
     property real bevel: 0
-    readonly property url textureSource: ["glass", "crystal", "neon", "minimal", "plasma", "lime",
+    readonly property url textureSource: ["glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
         "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"].includes(texture)
         ? Qt.resolvedUrl("../materials/" + texture + ".png") : ""
     readonly property bool extraSurface: String(textureSource).length > 0 || thickness > 0 || bevel > 0
@@ -156,7 +156,15 @@ Item {
                     context.fill()
                 }
                 trace(context, stroke / 2 + edge)
-                if (String(root.textureSource).length && materialLoaded) {
+                if ((root.texture === "lightning" || root.texture === "aurora") && materialLoaded) {
+                    // Lightning, aurora: the tile's own fill, then their light
+                    // over it as it is, light on the tile rather than
+                    // multiplied into it; the tile's opacity is its background.
+                    context.fillStyle = root.fillColor
+                    context.fill()
+                    context.fillStyle = context.createPattern(String(root.textureSource), "repeat")
+                    context.fill()
+                } else if (String(root.textureSource).length && materialLoaded) {
                     context.fillStyle = context.createPattern(String(root.textureSource), "repeat")
                     context.fill()
                     context.globalCompositeOperation = "qt-multiply"

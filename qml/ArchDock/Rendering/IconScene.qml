@@ -42,6 +42,21 @@ Item {
     readonly property real pedestalLift: tileValue("pedestalLift", 0.3, 0, 2)
     readonly property real pedestalOpacity: tileValue("pedestalOpacity", 1, 0.1, 1)
     readonly property real pedestalGlow: tileValue("pedestalGlow", 0, 0, 1)
+    // Light round the icon's picture and round its tile, each with its own
+    // strength, reach and colour (the owner, 2026-10-13). A 3D panel draws
+    // these itself, so its flat icons, which are the 3D icons' pictures,
+    // draw none.
+    readonly property real iconGlow: tileValue("iconGlow", 0, 0, 1)
+    readonly property real iconGlowReach: tileValue("iconGlowReach", 0.75, 0, 1)
+    readonly property string iconGlowColour: String(tileSettings.iconGlowColor || "").length
+        ? String(tileSettings.iconGlowColor) : "#a8dcff"
+    readonly property bool iconGlowActive: iconGlow > 0 && !meshVisualActive
+    readonly property real tileGlow: tileValue("iconTileGlow", 0, 0, 1)
+    readonly property real tileGlowReach: tileValue("iconTileGlowReach", 0.75, 0, 1)
+    readonly property string tileGlowColour: String(tileSettings.iconTileGlowColor || "").length
+        ? String(tileSettings.iconTileGlowColor)
+        : String(tileSettings.iconTileBorderColor || "#94a3b8")
+    readonly property bool tileGlowActive: tileGlow > 0 && tileRenderingEnabled && !meshVisualActive
     readonly property string pedestalMaterial: String(tileSettings.pedestalMaterial || "panel").toLowerCase()
     readonly property string pedestalTexture: String(tileSettings.pedestalTexture || "material").toLowerCase()
     readonly property string pedestalColor: String(tileSettings.pedestalColor || "")
@@ -304,7 +319,15 @@ Item {
         visible: root.pedestalDrawn
         readonly property real beat: root.pedestalMotionActive
             ? Math.sin(root.pedestalPhase * 2 * Math.PI) : 0
-        readonly property real margin: Math.max(2, root.logicalSize * 0.22 * root.pedestalGlow)
+        // The glow: light round the stand, not only a brighter stand (the
+        // owner, 2026-10-13) - Glow intensity is how strong, Glow reach how
+        // far out of the stand, from a tenth of an icon to a whole icon. The
+        // halo takes that much room round the stand.
+        readonly property real glowStrength: root.pedestalAnimation === "glow"
+            ? Math.max(0.5, root.pedestalGlow) : root.pedestalGlow
+        readonly property real glowReach: root.tileValue("pedestalGlowReach", 0.75, 0, 1)
+        readonly property real margin: Math.max(2, glowStrength > 0
+            ? root.logicalSize * (0.1 + 0.9 * glowReach) : 0)
         readonly property real standWidth: root.pedestalLayout.width
         readonly property real standHeight: root.pedestalLayout.height
         width: standWidth + 2 * margin
@@ -320,10 +343,15 @@ Item {
         transformOrigin: Item.Bottom
         readonly property string look: root.pedestalMaterial === "panel" ? root.appearance : root.pedestalMaterial
         readonly property string textureLook: root.pedestalTexture === "material" ? look : root.pedestalTexture
+        // A glowing look in the stands' palette.
+        readonly property string lookPalette: String(root.tileSettings.pedestalLookColour || "")
         readonly property url textureSource: textureLook === "none" ? ""
-            : Qt.resolvedUrl("materials/" + textureLook + ".png")
+            : Qt.resolvedUrl("materials/" + LayoutEngine.lookTexture(textureLook, lookPalette) + ".png")
         readonly property string tint: root.pedestalColor.length ? root.pedestalColor
             : String(LayoutEngine.themeStyle(look, "", 48).stroke || "#b5d3e0")
+        // The glow's own colour, or the stand's.
+        readonly property string glowTint: String(root.tileSettings.pedestalGlowColor || "").length
+            ? String(root.tileSettings.pedestalGlowColor) : tint
         readonly property real spin: !root.pedestalMotionActive ? 0
             : root.pedestalAnimation === "spin" ? root.pedestalPhase * 2 * Math.PI
             : root.pedestalAnimation === "float" ? root.pedestalPhase * Math.PI / 2 : 0
@@ -331,7 +359,8 @@ Item {
         readonly property var mesh: root.pedestalDrawn ? PlatformGeometry.pedestalShape(root.pedestalKind, 16) : null
         // Everything a repaint depends on, in one value.
         readonly property string paintKey: [root.pedestalKind, root.pedestalLayout.unit, root.pedestalLayout.depth,
-            root.pedestalLayout.tilt, tint, textureSource, width, height, root.pedestalGlow, visible].join("|")
+            root.pedestalLayout.tilt, tint, glowTint, textureSource, width, height, glowStrength,
+            lightningBackground, visible].join("|")
 
         // The stand's silhouette and faces, seen from `tilt` degrees above,
         // turned `spin` about its axis: canvas points, nearest faces last.
@@ -371,6 +400,50 @@ Item {
             faces.sort(function(first, second) { return first.depth - second.depth })
             return faces
         }
+        // A lightning stand: its faces in the dark storm, as strong as its
+        // Lightning background asks (half by default, the owner's pick; none
+        // shows only the bolts), the bolts over them as light, tinted by the
+        // stand's colour.
+        readonly property real lightningBackground: root.tileValue("pedestalLookBackground", 0.5, 0, 1)
+        function paintLightning(context, faces, textureLoaded, width, height) {
+            context.lineWidth = 0.8
+            context.lineJoin = "round"
+            const sky = String(LayoutEngine.themeStyle(textureLook, "", 48).skyColour || "12, 10, 31")
+                .split(",").map(Number)
+            for (const face of faces) {
+                const shade = Math.min(1, face.shade)
+                const colour = "rgba(" + Math.round(sky[0] * shade) + "," + Math.round(sky[1] * shade) + ","
+                    + Math.round(sky[2] * shade) + "," + lightningBackground + ")"
+                context.fillStyle = colour
+                context.strokeStyle = colour
+                context.beginPath()
+                context.moveTo(face.corners[0][0], face.corners[0][1])
+                context.lineTo(face.corners[1][0], face.corners[1][1])
+                context.lineTo(face.corners[2][0], face.corners[2][1])
+                context.closePath()
+                context.fill()
+                context.stroke()
+            }
+            if (!textureLoaded) return
+            context.save()
+            trace(context, faces)
+            context.clip()
+            context.translate(width / 2, height / 2)
+            context.rotate(spin)
+            const s = Math.max(width, height) / 512 * 1.1
+            context.scale(s, s)
+            context.fillStyle = context.createPattern(String(textureSource), "repeat")
+            context.fillRect(-512, -512, 1024, 1024)
+            context.restore()
+            if (root.pedestalColor.length) {
+                context.save()
+                context.globalCompositeOperation = "source-atop"
+                context.globalAlpha = 0.5
+                context.fillStyle = tint
+                context.fillRect(0, 0, width, height)
+                context.restore()
+            }
+        }
         function trace(context, faces) {
             context.beginPath()
             for (const face of faces) {
@@ -385,21 +458,27 @@ Item {
         Canvas {
             id: pedestalGlowCanvas
             anchors.fill: parent
-            visible: root.pedestalGlow > 0 || root.pedestalAnimation === "glow"
+            visible: pedestalLayer.glowStrength > 0
             opacity: root.pedestalAnimation === "glow" ? 0.55 + 0.45 * pedestalLayer.beat : 1
             onPaint: {
                 const context = getContext("2d")
                 context.reset()
                 if (!visible || !pedestalLayer.mesh) return
-                const strength = Math.max(root.pedestalGlow, root.pedestalAnimation === "glow" ? 0.5 : 0)
+                const strength = pedestalLayer.glowStrength
                 const faces = pedestalLayer.project(root.pedestalLayout.tilt, 0)
+                // A wide soft halo, then a tighter bright one, both in the
+                // stand's colour, each laid on the other as light adds up.
                 context.save()
-                context.shadowColor = pedestalLayer.tint
-                context.shadowBlur = pedestalLayer.margin * 1.6
-                context.globalAlpha = Math.min(1, 0.35 + strength * 0.65)
-                context.fillStyle = pedestalLayer.tint
-                pedestalLayer.trace(context, faces)
-                context.fill()
+                context.globalCompositeOperation = "lighter"
+                context.fillStyle = pedestalLayer.glowTint
+                context.shadowColor = pedestalLayer.glowTint
+                for (const pass of [{ blur: 1.0, alpha: 0.35 + strength * 0.45 },
+                                    { blur: 0.45, alpha: 0.25 + strength * 0.5 }]) {
+                    context.shadowBlur = pedestalLayer.margin * pass.blur
+                    context.globalAlpha = Math.min(1, pass.alpha)
+                    pedestalLayer.trace(context, faces)
+                    context.fill()
+                }
                 context.restore()
             }
             Connections {
@@ -438,6 +517,10 @@ Item {
                 const faces = pedestalLayer.project(root.pedestalLayout.tilt + pedestalLayer.wobble,
                                                     pedestalLayer.spin)
                 if (!faces.length) return
+                if (pedestalLayer.textureLook === "lightning" || pedestalLayer.textureLook === "aurora") {
+                    pedestalLayer.paintLightning(context, faces, textureLoaded, width, height)
+                    return
+                }
                 // Each face in its shade of grey, far ones first; a hairline
                 // in the same grey closes the seams between neighbours.
                 context.lineWidth = 0.8
@@ -608,133 +691,148 @@ Item {
             }
         }
 
+        // The tile's glow: light round the tile's shape (Icon Tiles >
+        // Glow), on a frame of its own so the style's mask, which shapes the
+        // tile, does not cut the halo off. A 3D panel draws its own.
         Item {
-            id: baseLayer
-
-            objectName: "icon-layer-base"
+            id: tileGlowFrame
+            objectName: "icon-tile-glow"
             anchors.fill: parent
-            opacity: root.resolvedTileMotion.opacity
-            transform: [
-                Scale {
-                    origin.x: baseLayer.width / 2
-                    origin.y: baseLayer.height / 2
-                    xScale: root.resolvedTileMotion.scale
-                        * root.resolvedTileMotion.scaleX
-                    yScale: root.resolvedTileMotion.scale
-                        * root.resolvedTileMotion.scaleY
-                },
-                Rotation {
-                    origin.x: baseLayer.width / 2
-                    origin.y: baseLayer.height / 2
-                    angle: root.resolvedTileMotion.rotateZ
-                },
-                Translate {
-                    x: root.resolvedTileMotion.x
-                    y: root.resolvedTileMotion.y
-                }
-            ]
-
-            // MultiEffect is instantiated only when a mask is actually
-            // declared and its source loaded.
-            layer.enabled: root.styleMaskActive
-                && styleMaskImage.status === Image.Ready
-            layer.effect: MultiEffect {
-                maskEnabled: true
-                maskSource: styleMaskImage
-            }
-
-            IconStyle2D {
-                id: styleBase
-
-                anchors.fill: parent
-                styleDefinition: root.effectiveIconStyleDefinition
-                resolvedStyle: root.resolvedIconStyle
-                role: "base"
-                tileSettings: Object.assign({}, root.tileSettings, {
-                    iconTileThickness: root.meshVisualActive ? 0 : root.tileValue("iconTileThickness", 0, 0, 24),
-                    iconTileBevel: 0
-                })
-                logicalSize: root.logicalSize
-                roleOpacity: root.styleState.baseOpacity === undefined
-                    ? 1 : Number(root.styleState.baseOpacity)
-                visible: root.styledLayersActive
-            }
-
-            IconTile {
-                objectName: "icon-custom-tile"
-                anchors.centerIn: parent
-                anchors.alignWhenCentered: false
-                width: Math.max(0, root.logicalSize - 2 * Math.max(1, root.logicalSize * 0.04))
-                    * Number(root.resolvedIconStyle.diameter || 1)
-                height: width
-                visible: root.tileRenderingEnabled && (root.customTileActive
-                    || (!root.styledLayersActive && (String(root.tileSettings.iconTileTexture || "none") !== "none"
-                        || root.tileValue("iconTileThickness", 0, 0, 24) > 0)))
-                texture: String(root.tileSettings.iconTileTexture || "none")
-                thickness: root.meshVisualActive ? 0 : root.tileValue("iconTileThickness", 0, 0, 24)
-                bevel: 0
-                shape: root.resolvedIconStyle.iconShape || root.tileShape
-                fillColor: String(root.tileSettings.iconTileColor || "#334155")
-                borderColor: String(root.tileSettings.iconTileBorderColor || "#94a3b8")
-                borderWidth: root.tileSettings.iconTileBorderWidth === undefined ? 1
-                    : Math.max(0, Math.min(8, Number(root.tileSettings.iconTileBorderWidth)))
-                opacity: root.tileSettings.iconTileOpacity === undefined ? 0.8
-                    : Math.max(0, Math.min(1, Number(root.tileSettings.iconTileOpacity)))
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                anchors.margins: Math.max(1, root.logicalSize * 0.04)
-                radius: root.tileRadius()
-                visible: root.tileRenderingEnabled && !root.customTileActive && !root.styledLayersActive
-                    && (root.appearance === "plate"
-                        || root.appearance === "platform"
-                        || root.appearance === "floating-glass"
-                        || root.hovered || root.active || root.dropTarget)
-                color: root.active
-                    ? root.alphaColor(Kirigami.Theme.highlightColor, 0.28)
-                    : root.dropTarget
-                        ? root.alphaColor(
-                            Kirigami.Theme.positiveTextColor, 0.22)
-                        : root.alphaColor(
-                            Kirigami.Theme.backgroundColor,
-                            root.hovered ? 0.42 : 0.22)
-                border.width: 1
-                border.color: root.alphaColor(
-                    Kirigami.Theme.textColor, root.hovered ? 0.28 : 0.12)
-                scale: root.pressed ? 0.92 : 1
+            layer.enabled: root.tileGlowActive
+            layer.effect: GlowEffect {
+                glowColor: root.tileGlowColour
+                intensity: root.tileGlow
+                reach: root.tileGlowReach
             }
 
             Item {
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.bottom: parent.bottom
-                width: parent.width * 0.92
-                height: parent.height * 0.32
-                visible: root.tileRenderingEnabled && !root.customTileActive && !root.styledLayersActive
-                    && root.appearance === "pedestal"
+                id: baseLayer
 
-                Rectangle {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottom: parent.bottom
-                    width: parent.width
-                    height: parent.height * 0.52
-                    radius: height / 2
-                    color: root.alphaColor(
-                        Kirigami.Theme.backgroundColor, 0.72)
-                    border.width: 1
-                    border.color: root.alphaColor(
-                        Kirigami.Theme.textColor, 0.28)
+                objectName: "icon-layer-base"
+                anchors.fill: parent
+                opacity: root.resolvedTileMotion.opacity
+                transform: [
+                    Scale {
+                        origin.x: baseLayer.width / 2
+                        origin.y: baseLayer.height / 2
+                        xScale: root.resolvedTileMotion.scale
+                            * root.resolvedTileMotion.scaleX
+                        yScale: root.resolvedTileMotion.scale
+                            * root.resolvedTileMotion.scaleY
+                    },
+                    Rotation {
+                        origin.x: baseLayer.width / 2
+                        origin.y: baseLayer.height / 2
+                        angle: root.resolvedTileMotion.rotateZ
+                    },
+                    Translate {
+                        x: root.resolvedTileMotion.x
+                        y: root.resolvedTileMotion.y
+                    }
+                ]
+
+                // MultiEffect is instantiated only when a mask is actually
+                // declared and its source loaded.
+                layer.enabled: root.styleMaskActive
+                    && styleMaskImage.status === Image.Ready
+                layer.effect: MultiEffect {
+                    maskEnabled: true
+                    maskSource: styleMaskImage
+                }
+
+                IconStyle2D {
+                    id: styleBase
+
+                    anchors.fill: parent
+                    styleDefinition: root.effectiveIconStyleDefinition
+                    resolvedStyle: root.resolvedIconStyle
+                    role: "base"
+                    tileSettings: Object.assign({}, root.tileSettings, {
+                        iconTileThickness: root.meshVisualActive ? 0 : root.tileValue("iconTileThickness", 0, 0, 24),
+                        iconTileBevel: 0
+                    })
+                    logicalSize: root.logicalSize
+                    roleOpacity: root.styleState.baseOpacity === undefined
+                        ? 1 : Number(root.styleState.baseOpacity)
+                    visible: root.styledLayersActive
+                }
+
+                IconTile {
+                    objectName: "icon-custom-tile"
+                    anchors.centerIn: parent
+                    anchors.alignWhenCentered: false
+                    width: Math.max(0, root.logicalSize - 2 * Math.max(1, root.logicalSize * 0.04))
+                        * Number(root.resolvedIconStyle.diameter || 1)
+                    height: width
+                    visible: root.tileRenderingEnabled && (root.customTileActive
+                        || (!root.styledLayersActive && (String(root.tileSettings.iconTileTexture || "none") !== "none"
+                            || root.tileValue("iconTileThickness", 0, 0, 24) > 0)))
+                    texture: String(root.tileSettings.iconTileTexture || "none")
+                    thickness: root.meshVisualActive ? 0 : root.tileValue("iconTileThickness", 0, 0, 24)
+                    bevel: 0
+                    shape: root.resolvedIconStyle.iconShape || root.tileShape
+                    fillColor: String(root.tileSettings.iconTileColor || "#334155")
+                    borderColor: String(root.tileSettings.iconTileBorderColor || "#94a3b8")
+                    borderWidth: root.tileSettings.iconTileBorderWidth === undefined ? 1
+                        : Math.max(0, Math.min(8, Number(root.tileSettings.iconTileBorderWidth)))
+                    opacity: root.tileSettings.iconTileOpacity === undefined ? 0.8
+                        : Math.max(0, Math.min(1, Number(root.tileSettings.iconTileOpacity)))
                 }
 
                 Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: Math.max(1, root.logicalSize * 0.04)
+                    radius: root.tileRadius()
+                    visible: root.tileRenderingEnabled && !root.customTileActive && !root.styledLayersActive
+                        && (root.appearance === "plate"
+                            || root.appearance === "platform"
+                            || root.appearance === "floating-glass"
+                            || root.hovered || root.active || root.dropTarget)
+                    color: root.active
+                        ? root.alphaColor(Kirigami.Theme.highlightColor, 0.28)
+                        : root.dropTarget
+                            ? root.alphaColor(
+                                Kirigami.Theme.positiveTextColor, 0.22)
+                            : root.alphaColor(
+                                Kirigami.Theme.backgroundColor,
+                                root.hovered ? 0.42 : 0.22)
+                    border.width: 1
+                    border.color: root.alphaColor(
+                        Kirigami.Theme.textColor, root.hovered ? 0.28 : 0.12)
+                    scale: root.pressed ? 0.92 : 1
+                }
+
+                Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: parent.bottom
-                    anchors.bottomMargin: parent.height * 0.34
-                    width: parent.width * 0.38
-                    height: parent.height * 0.56
-                    radius: width * 0.22
-                    color: root.alphaColor(
-                        Kirigami.Theme.backgroundColor, 0.62)
+                    width: parent.width * 0.92
+                    height: parent.height * 0.32
+                    visible: root.tileRenderingEnabled && !root.customTileActive && !root.styledLayersActive
+                        && root.appearance === "pedestal"
+
+                    Rectangle {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.bottom: parent.bottom
+                        width: parent.width
+                        height: parent.height * 0.52
+                        radius: height / 2
+                        color: root.alphaColor(
+                            Kirigami.Theme.backgroundColor, 0.72)
+                        border.width: 1
+                        border.color: root.alphaColor(
+                            Kirigami.Theme.textColor, 0.28)
+                    }
+
+                    Rectangle {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: parent.height * 0.34
+                        width: parent.width * 0.38
+                        height: parent.height * 0.56
+                        radius: width * 0.22
+                        color: root.alphaColor(
+                            Kirigami.Theme.backgroundColor, 0.62)
+                    }
                 }
             }
         }
@@ -744,6 +842,14 @@ Item {
 
             objectName: "icon-layer-glyph"
             anchors.fill: parent
+            // The icon's glow: light round its picture (Icons > Glow). A 3D
+            // panel draws its own round the picture it shows.
+            layer.enabled: root.iconGlowActive
+            layer.effect: GlowEffect {
+                glowColor: root.iconGlowColour
+                intensity: root.iconGlow
+                reach: root.iconGlowReach
+            }
             opacity: root.resolvedGlyphMotion.opacity
             transform: [
                 // The turn comes first so scale, spin and displacement act on

@@ -239,15 +239,6 @@ QQC2.Pane {
             styleColor: root.palette.base
         }
         QQC2.Label {
-            id: layoutNotice
-            width: parent.width
-            visible: root.geometry.fallbackApplied
-            text: qsTr("This saved layout uses Fan.")
-            wrapMode: Text.Wrap
-            style: Text.Outline
-            styleColor: root.palette.base
-        }
-        QQC2.Label {
             id: emptyNotice
             width: parent.width
             visible: root.entries.length === 0
@@ -266,7 +257,7 @@ QQC2.Pane {
                 ? Math.min(parent.width, root.geometry.width) : parent.width
             height: root.entries.length ? Math.min(root.geometry.height,
                 Math.max(56, root.maximumHeight - 20
-                    - [heading, layoutNotice, emptyNotice, currentName, pageNotice]
+                    - [heading, emptyNotice, currentName, pageNotice]
                         .reduce(function(total, label) {
                             return total + (label.visible ? label.implicitHeight + column.spacing : 0)
                         }, 0))) : 0

@@ -34,10 +34,11 @@ and the remaining publication and physical boundaries.
   defaults for future panels. Installed built-ins remain immutable.
 - Procedural and skinned 2D, baked 2.5D on supported free hosts, and optional
   true 3D with capability checks and a safe fallback.
-- Thirteen textured panel materials with tint and opacity. Studio lists flat
-  and platform looks separately; Platform presentation off restores the saved
-  flat look. Native 3D platforms offer material editing and bending, with icons
-  anchored to the surface and input limited by visible depth.
+- Fifteen textured panel materials with tint and opacity, the glowing looks
+  with palettes of their own. Studio lists flat and platform looks
+  separately; Platform presentation off restores the saved flat look. Native
+  3D platforms offer material editing and bending, with icons anchored to the
+  surface and input limited by visible depth.
 - Six icon styles with six selectable shapes, adjustable diameter and logo
   size, outline and colours, and an optional Dark Orb pedestal. Original
   application glyphs are retained. Built-in and My Icon Presets save their

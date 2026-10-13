@@ -218,12 +218,13 @@ function curvedTrack(resolvedLayout, geometry, polygonSides) {
 
 // Whole-scene rotation is offered only where a turning scene is meaningful:
 // the radial layouts. A straight row has no centre to turn about.
-// Layouts whose entries stand on a curved track: closed shapes and the open
-// paths of the sweep table. A folder on one can open along the dock.
+// Layouts whose entries stand on a curved track: closed shapes, the star
+// among them, and the open paths of the sweep table. A folder on one can
+// open along the dock, on the curve round the dock through the folder.
 function curvedLayout(layout) {
     const name = String(layout || "");
     return ["circular", "ring", "ellipse", "polygon", "triangle", "square",
-            "pentagon", "hexagon", "octagon"].includes(name)
+            "pentagon", "hexagon", "octagon", "star"].includes(name)
         || pathSweep(name) !== null;
 }
 
@@ -1155,6 +1156,27 @@ function surface(layout, rawGeometry, rawAngle, polygonSides) {
     return { points: points, closed: closed };
 }
 
+// The texture a look is drawn with in a palette: the glowing looks come in
+// palettes of their own (materials/<look>-<palette>.png); "original", or a
+// palette the look does not have, is the look's own file.
+function lookTexture(look, palette) {
+    const name = String(look || "");
+    const chosen = String(palette || "");
+    const palettes = {
+        "lightning": ["ice", "crimson", "toxic", "solar", "arcane", "void", "aurora", "rainbow"],
+        "aurora": ["emerald", "australis", "cosmic", "solar", "rainbow"],
+        "plasma": ["rainbow"],
+        "neon": ["rainbow"],
+        "futuristic": ["rainbow"],
+        // Polished, heat-tinted metal shows a faint rainbow (the owner,
+        // 2026-10-13: "chameleon"); lime stays a lime.
+        "metallic": ["chameleon", "iridescent"],
+        "plate": ["chameleon", "iridescent"]
+    };
+    const list = palettes[name];
+    return list && list.indexOf(chosen) >= 0 ? name + "-" + chosen : name;
+}
+
 function themeStyle(appearance, customColor, iconSize) {
     const preset = appearance || "glass";
     const styles = {
@@ -1176,8 +1198,19 @@ function themeStyle(appearance, customColor, iconSize) {
         "plasma": {
             stroke: "#895cff", shadow: "#d94cff", width: 0.40, blur: 23
         },
+        // Bolts in a dark storm: a white-blue light, flickering and striking
+        // anew (the owner, 2026-10-13).
+        "lightning": {
+            stroke: "#c4d0ff", shadow: "#7d8cff", width: 0.32, blur: 26
+        },
+        // Curtains of polar light in a night sky (the owner, 2026-10-13).
+        "aurora": {
+            stroke: "#68ffb0", shadow: "#7a5cff", width: 0.36, blur: 24
+        },
+        // A lime's peel: a natural citrus green, lit, not glowing (the owner,
+        // 2026-10-13: lime is named for the fruit).
         "lime": {
-            stroke: "#7dff58", shadow: "#7dff58", width: 0.30, blur: 22
+            stroke: "#86c93b", shadow: "rgba(38, 82, 16, 0.45)", width: 0.30, blur: 12
         },
         "floating-glass": {
             stroke: "#caeafb",
@@ -1219,7 +1252,14 @@ function themeStyle(appearance, customColor, iconSize) {
         alpha: preset === "glass" ? 0.56 : preset === "floating-glass" ? 0.50 : 1,
         depth: preset === "pedestal" ? 9 : preset === "platform" ? 6
             : preset === "plate" ? 3 : preset === "floating-glass" ? 5 : 0,
-        animated: preset === "futuristic" || preset === "plasma",
+        animated: preset === "futuristic" || preset === "plasma" || preset === "lightning"
+            || preset === "aurora",
+        // Lightning flickers and strikes instead of flowing.
+        flicker: preset === "lightning",
+        // Light on a clear ground, the look's dark sky drawn behind it at
+        // the chosen strength: lightning and aurora.
+        clearGround: preset === "lightning" || preset === "aurora",
+        skyColour: preset === "aurora" ? "6, 10, 20" : "12, 10, 31",
         sparkle: preset === "crystal" || preset === "plasma"
     };
 }

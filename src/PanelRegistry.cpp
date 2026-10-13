@@ -75,6 +75,7 @@ QVariantMap genericSceneMaterial(const QString &colourName, const QString &appea
     }
     else if (appearance == QStringLiteral("neon") || appearance == QStringLiteral("futuristic") ||
              appearance == QStringLiteral("plasma") || appearance == QStringLiteral("lime") ||
+             appearance == QStringLiteral("lightning") || appearance == QStringLiteral("aurora") ||
              appearance == QStringLiteral("holographic"))
     {
         metalness = 0.3;

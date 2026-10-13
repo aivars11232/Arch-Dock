@@ -7,6 +7,59 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- A free panel has no box of its own (2026-10-13, the owner: "the only
+  edge is edge of the screen"): a 3D panel scaled, tilted or moved, an
+  icon magnified at its edge, the editing handles, are drawn as far past
+  the widget's box as they reach - the 3D view grows round the box with
+  its field of view widened by as much, so nothing moves on the screen -
+  and the pointer, the wheel and drops reach them there. The Studio's
+  preview fits the whole drawing. Picking and input map through the
+  camera's own frame: Qt's viewport mapping kept a projection from before
+  the view last changed shape.
+- Glow is light (the owner: "the glow isn't really glow, it's just intense
+  color"): a 3D panel spreads what is brighter than white round it over
+  the desktop - a real bloom, smooth at every quality (the look the owner
+  ticked) - and a flat item draws its own shape blurred in the glow's
+  colour behind it. The panel, its icons, its tiles and its stands each
+  have their own Glow (intensity, reach, colour) on their own page, shown
+  only where light round the look makes sense - not on grass, marble or a
+  lime - with its reach and colour only while it shines. The view keeps
+  room for the light even round a shape that fits its box (on the desktop
+  it ended in a straight line along the box), and a glow's light shows
+  round what it wraps, never through a see-through look (a lightning ring
+  had turned white). The panel's glow keeps its look up to the middle of
+  its range and, from three quarters up, lays its light over the shape's
+  faces, white-hot at full intensity with the edge still showing (the
+  owner's rule: white "on max brightness", not "closer to mid"; the four
+  levels ticked).
+- In 3D an icon under the pointer is found through the camera's own frame,
+  not Qt's picking, whose projection lags a view that has just changed
+  shape until it renders again: the wheel over the icons of a panel whose
+  view had grown round it did nothing.
+- Panel Studio shows no green notes and no raw placement results (the
+  owner: "these green things can be removed, they serve no purpose"); a
+  placement or visibility Plasma refused, and a free panel's missing
+  widget, are still reported.
+- Looks: Plasma is glowing gas instead of jagged lines; Lightning is a look
+  of its own, bolts grown as a discharge crackles, striking at random and
+  flickering, on a clear ground with its storm as strong as chosen
+  (half by default); Aurora is new, curtains of light in the night sky.
+  Lightning comes in eight palettes and Aurora in six, Plasma, Neon and
+  Circuit in a rainbow, the metals in a faint Chameleon or a stronger
+  Iridescent finish; Lime is a lime's peel. A glowing look's own light, its motion and its colours are
+  named for it on the page (Lightning glow, Strike rate, Aurora colour).
+- Folders open along the dock on a star too, and a panel whose shape has
+  no curve opens Along the dock as a fan instead of a popup saying "This
+  saved layout uses Fan." Panel Themes / Skins lists only the looks made
+  for the picked panel: no horizontal chassis skins on a free panel.
+- A setting that cannot apply is not shown (the owner's rule for every
+  setting): the new ones carry their rules, an icon's motion settings are
+  unseen with no motion chosen, and the icon's glow colour is offered
+  whenever its glow shines; the rest is the next audit.
+- A free panel's flat stands stand on its path again on the desktop: the
+  desktop icons read the setting from out of their reach and drew the
+  stands as in an edge panel's row (since the stands redesign).
+
 - Panel Studio is organized by what it edits, one page per setting
   (2026-10-13, the owner: "the option to add a panel should be only in one
   place", "make sure there aren't any duplicate settings", "icon settings

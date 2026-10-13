@@ -29,6 +29,18 @@ Item {
     readonly property real canvasTurn: turnsAsDrawn ? layoutAngle - restingAngle : 0
     property int polygonSides: 6
     property string appearance: "glass"
+    // Lightning's bolts are drawn on a clear band; this much of the dark
+    // storm shows behind them (Lightning background, the owner 2026-10-13).
+    property real lightningBackground: 0
+    // An energy look's own light (its Lightning, Plasma, Neon, Lime or
+    // Circuit glow): 1 as the look is drawn, 0 none, 2 twice as much; and how
+    // fast it moves.
+    property real glowIntensity: 1
+    property real lookMotionSpeed: 1
+    readonly property bool energyLook: ["neon", "plasma", "lightning", "aurora", "futuristic"]
+        .includes(String(surfaceStyle.material))
+    readonly property real lookGlow: energyLook ? Math.max(0, Math.min(2, glowIntensity)) : 1
+    readonly property real motionPace: Math.max(0.1, Math.min(3, lookMotionSpeed))
     property string customColor: ""
     property real panelOpacity: 0.9
     property real sparkleIntensity: 0
@@ -85,8 +97,10 @@ Item {
         layout, geometry, drawnAngle, polygonSides)
     readonly property var surfaceStyle: LayoutEngine.themeStyle(
         appearance, customColor, Number(geometry.iconSize || 40))
+    // A clear-ground look (lightning, aurora) in its chosen palette.
+    property string lookPalette: ""
     readonly property url materialSource: Qt.resolvedUrl(
-        "../materials/" + surfaceStyle.material + ".png")
+        "../materials/" + LayoutEngine.lookTexture(surfaceStyle.material, lookPalette) + ".png")
     readonly property bool materialReady: canvas.materialLoaded
     readonly property bool materialAnimationActive: visible && !sceneConcealed
         && !reducedMotion && surfaceStyle.animated && motionOpacity > 0 && panelOpacity > 0
@@ -161,12 +175,82 @@ Item {
     }
 
     Timer {
-        interval: 125
+        interval: Math.round(125 / root.motionPace)
         repeat: true
-        running: root.materialAnimationActive
+        running: root.materialAnimationActive && !root.surfaceStyle.flicker
         onTriggered: {
             root.energyPhase = (root.energyPhase + 0.025) % 1
             energy.requestPaint()
+        }
+    }
+    // Lightning (the owner, 2026-10-13): at random moments a bolt strikes
+    // along part of the panel and dies away in a fifth of a second; between
+    // strikes it flickers faintly. Each strike has its own shape (its seed),
+    // kept while it fades.
+    property real lightningFlash: 0
+    property int lightningSeed: 1
+    onLightningFlashChanged: if (root.surfaceStyle.flicker) energy.requestPaint()
+    Timer {
+        interval: 120
+        repeat: true
+        running: root.materialAnimationActive && root.surfaceStyle.flicker === true
+        onTriggered: {
+            interval = Math.round((60 + Math.random() * 520) / root.motionPace)
+            if (Math.random() < 0.28) {
+                root.lightningSeed = 1 + Math.floor(Math.random() * 2147483646)
+                lightningFade.stop()
+                root.lightningFlash = 0.75 + Math.random() * 0.25
+                lightningFade.start()
+            } else if (!lightningFade.running) {
+                root.lightningFlash = Math.random() * 0.25
+            }
+        }
+        onRunningChanged: if (!running) { lightningFade.stop(); root.lightningFlash = 0 }
+    }
+    NumberAnimation {
+        id: lightningFade
+        target: root
+        property: "lightningFlash"
+        to: 0
+        duration: Math.round(200 / Math.sqrt(root.motionPace))
+        easing.type: Easing.OutQuad
+    }
+    // A bolt along `span` points of the track from `start`: the track's own
+    // line, pushed across it by a jagged amount at every point.
+    function paintLightning(context, points) {
+        const flash = Math.min(1, root.lightningFlash * root.lookGlow)
+        if (flash <= 0.01 || points.length < 3) return
+        let seed = root.lightningSeed
+        const random = function() {
+            seed = (seed * 48271) % 2147483647
+            return seed / 2147483647
+        }
+        const count = points.length
+        const span = Math.max(3, Math.round(count * (0.2 + 0.35 * random())))
+        const start = Math.floor(random() * count)
+        const across = root.surfaceStyle.lineWidth * 0.45
+        const path = []
+        for (let k = 0; k <= span; ++k) {
+            const at = start + k
+            if (!root.surfacePath.closed && at >= count) break
+            const point = points[at % count], before = points[(at - 1 + count) % count]
+            const after = points[(at + 1) % count]
+            const dx = after.x - before.x, dy = after.y - before.y
+            const length = Math.hypot(dx, dy) || 1
+            const offset = (random() - 0.5) * 2 * across * Math.sin(Math.PI * k / span)
+            path.push({ x: point.x - dy / length * offset, y: point.y + dx / length * offset })
+        }
+        context.lineCap = "round"
+        context.lineJoin = "round"
+        context.shadowColor = "rgba(125, 140, 255, 0.9)"
+        context.shadowBlur = 14 * root.lookGlow
+        for (const pass of [{ width: 4.5, alpha: 0.32 }, { width: 1.6, alpha: 1 }]) {
+            context.lineWidth = pass.width
+            context.strokeStyle = "rgba(228, 234, 255," + (pass.alpha * flash) + ")"
+            context.beginPath()
+            context.moveTo(path[0].x, path[0].y)
+            for (let k = 1; k < path.length; ++k) context.lineTo(path[k].x, path[k].y)
+            context.stroke()
         }
     }
 
@@ -234,8 +318,8 @@ Item {
 
             context.lineWidth = root.surfaceStyle.lineWidth
             context.strokeStyle = root.surfaceStyle.stroke
-            context.shadowColor = root.surfaceStyle.shadow
-            context.shadowBlur = root.surfaceStyle.blur
+            context.shadowColor = root.lookGlow > 0 ? root.surfaceStyle.shadow : "transparent"
+            context.shadowBlur = root.surfaceStyle.blur * root.lookGlow
             context.lineCap = "round"
             context.lineJoin = "round"
             if (root.surfaceStyle.depth > 0) {
@@ -248,6 +332,18 @@ Item {
                 context.restore()
             }
             root.trace(context)
+            if (root.surfaceStyle.clearGround) {
+                // Lightning, aurora: their dark sky as strong as chosen, then
+                // their light over it as it is, neither tinted nor edged.
+                context.shadowBlur = 0
+                context.shadowColor = "transparent"
+                context.strokeStyle = "rgba(" + root.surfaceStyle.skyColour + ", "
+                    + Math.max(0, Math.min(1, root.lightningBackground)) + ")"
+                context.stroke()
+                if (materialLoaded)
+                    root.paintWrappedMaterial(context)
+                return
+            }
             // Keep the cast shadow separate from the textured, tinted body.
             context.strokeStyle = root.surfaceStyle.stroke
             context.stroke()
@@ -331,12 +427,18 @@ Item {
             context.reset()
             const points = root.surfacePath.points
             if (points.length < 2) return
+            if (root.surfaceStyle.flicker) {
+                root.paintLightning(context, points)
+                return
+            }
+            // Aurora's light is all in its curtains.
+            if (root.surfaceStyle.clearGround) return
             context.lineWidth = root.appearance === "plasma" ? 3 : 1.6
             for (let i = 1; i < points.length; ++i) {
                 const wave = (i / points.length - root.energyPhase + 1) % 1
-                context.strokeStyle = "rgba(225,250,255," +
+                context.strokeStyle = "rgba(225,250,255," + Math.min(1, root.lookGlow *
                     (root.appearance === "plasma" ? Math.max(0, 1 - wave * 4)
-                        : 0.2 + 0.4 * (1 + Math.sin(wave * Math.PI * 6))) + ")"
+                        : 0.2 + 0.4 * (1 + Math.sin(wave * Math.PI * 6)))) + ")"
                 context.beginPath()
                 context.moveTo(points[i-1].x, points[i-1].y)
                 context.lineTo(points[i].x, points[i].y)

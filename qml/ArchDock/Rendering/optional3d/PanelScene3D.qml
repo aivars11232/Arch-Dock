@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import QtQuick3D
+import QtQuick3D.Helpers
 import "../GizmoMath.js" as GizmoMath
 import "../LayoutEngine.js" as LayoutEngine
 import "../PlatformGeometry.js" as PlatformGeometry
@@ -58,9 +59,31 @@ Item {
     readonly property int textureLimit: effectiveQuality === "low" ? 1024
         : effectiveQuality === "high" ? 2048 : 1536
     readonly property real boundedScale: Math.min(resolutionScale,
-        textureLimit / Math.max(1, width, height))
-    readonly property int targetWidth: Math.max(1, Math.ceil(width * boundedScale))
-    readonly property int targetHeight: Math.max(1, Math.ceil(height * boundedScale))
+        textureLimit / Math.max(1, viewWidth, viewHeight))
+    readonly property int targetWidth: Math.max(1, Math.ceil(viewWidth * boundedScale))
+    readonly property int targetHeight: Math.max(1, Math.ceil(viewHeight * boundedScale))
+    // No box (the owner, 2026-10-13: "there shouldn't be any edge, same as
+    // there isn't for KDE native panels, the only edge is edge of the
+    // screen"). The view is drawn past the panel's own box by as far as the
+    // scene reaches out of it - scaled, tilted, moved, an icon magnified, the
+    // handles while editing - by the same amount on opposite sides, so the
+    // camera stays on the panel's centre, and its field of view widens by as
+    // much, so nothing moves on the screen. The reach is measured after each
+    // frame in which something moved (updateOverflow); the margin grows in
+    // steps with one to spare and gives back only when two are free, so a
+    // turning or scaling scene does not make a new picture every frame. It
+    // stops at the screen's size: past that nothing could be seen.
+    property real overflowX: 0
+    property real overflowY: 0
+    readonly property real viewWidth: width + 2 * overflowX
+    readonly property real viewHeight: height + 2 * overflowY
+    // Where the scene is drawn, in the panel's own coordinates.
+    readonly property rect drawnBounds: Qt.rect(-overflowX, -overflowY, viewWidth, viewHeight)
+    // The panel's field of view, and the camera's, which shows the panel's
+    // box through that field with the margins around it.
+    readonly property real panelFieldOfView: bounded("fieldOfView", 40, 20, 70)
+    readonly property real viewFieldOfView: Math.atan(Math.tan(panelFieldOfView * Math.PI / 360)
+        * viewHeight / Math.max(1, height)) * 360 / Math.PI
     // A look whose theme ships no 3D mesh stands on a platform generated from
     // the panel's own layout (`sceneDefinition.generated`), in the look's own
     // colours: the palette sampled from its artwork when it is drawn from
@@ -70,7 +93,7 @@ Item {
     property real iconCellSize: 52
     property string appearance: ""
     property string customColor: ""
-    readonly property var materialNames: ["glass", "crystal", "neon", "minimal", "plasma", "lime",
+    readonly property var materialNames: ["glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
         "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"]
     readonly property string materialLook: materialNames.includes(String(sceneDefinition.materialLook))
         ? String(sceneDefinition.materialLook) : "theme"
@@ -91,17 +114,20 @@ Item {
         : generatedSpec && !textureRequired
             ? LayoutEngine.themeStyle(appearance, "", 48).material : ""
     readonly property url materialTextureSource: textureMaterial.length
-        ? Qt.resolvedUrl("../materials/" + textureMaterial + ".png") : ""
+        ? Qt.resolvedUrl("../materials/" + LayoutEngine.lookTexture(textureMaterial, lookPalette(textureMaterial, "panel"))
+                         + ".png") : ""
     readonly property url materialNormalSource: textureMaterial.length
         ? Qt.resolvedUrl("../materials/" + textureMaterial + "-normal.png") : ""
     // The energy looks flow round the band while the scene is animated.
     property real flowOffset: 0
+    // How fast an animated look moves (its Flow speed or Strike rate).
+    readonly property real motionPace: bounded("lookMotionSpeed", 1, 0.1, 3)
     NumberAnimation on flowOffset {
         running: root.materialAnimationActive
         loops: Animation.Infinite
         from: 0
         to: 1
-        duration: 9000
+        duration: Math.round(9000 / root.motionPace)
     }
     // A texture that is being replaced keeps the scene ready: while the new
     // file loads, the platform keeps drawing (without that texture for a
@@ -111,7 +137,7 @@ Item {
     // readiness still waits for every resource.
     property bool shownOnce: false
     readonly property bool materialTextureReady: !textureMaterial.length
-        || materialImage.status === Image.Ready
+        || (clearLooks.includes(textureMaterial) ? panelLightning.ready : materialImage.status === Image.Ready)
         || (shownOnce && materialImage.status !== Image.Error)
     readonly property bool materialAnimationActive: effectiveMaterialLook !== "theme"
         && LayoutEngine.themeStyle(effectiveMaterialLook, "", 48).animated
@@ -120,8 +146,50 @@ Item {
     SequentialAnimation on materialPulse {
         running: root.materialAnimationActive
         loops: Animation.Infinite
-        NumberAnimation { to: 1; duration: 2400; easing.type: Easing.InOutSine }
-        NumberAnimation { to: 0; duration: 2400; easing.type: Easing.InOutSine }
+        NumberAnimation { to: 1; duration: Math.round(2400 / root.motionPace); easing.type: Easing.InOutSine }
+        NumberAnimation { to: 0; duration: Math.round(2400 / root.motionPace); easing.type: Easing.InOutSine }
+    }
+    // An energy look's light: the energy looks breathe; lightning flickers
+    // and flashes brighter than white when it strikes, which a glow spreads.
+    function energyStrength(look) {
+        return look === "lightning" ? 0.22 + 1.5 * lightningFlash : 0.35 + materialPulse * 0.45
+    }
+    // Lightning (the owner, 2026-10-13: "some lightning option also add,
+    // together with animations"): at random moments it strikes - a flash
+    // that dies away in a fifth of a second, its bolts jumping to another
+    // place along the band - or flickers faintly between strikes. Off under
+    // reduced motion and while the panel is hidden.
+    readonly property bool lightningInScene: [effectiveMaterialLook, textureMaterial,
+        pedestalDrawn ? pedestalMaterialLook : "", pedestalDrawn ? pedestalTextureLook : ""].includes("lightning")
+    readonly property bool lightningActive: lightningInScene && motionAllowed && visible
+        && !sceneConcealed && !reducedMotion
+    property real lightningFlash: 0
+    property real lightningShift: 0
+    onLightningActiveChanged: if (!lightningActive) { flashFade.stop(); lightningFlash = 0 }
+    Timer {
+        id: lightningTimer
+        interval: 120
+        repeat: true
+        running: root.lightningActive
+        onTriggered: {
+            interval = Math.round((60 + Math.random() * 520) / root.motionPace)
+            if (Math.random() < 0.28) {
+                root.lightningShift = Math.random()
+                flashFade.stop()
+                root.lightningFlash = 0.75 + Math.random() * 0.25
+                flashFade.start()
+            } else if (!flashFade.running) {
+                root.lightningFlash = Math.random() * 0.3
+            }
+        }
+    }
+    NumberAnimation {
+        id: flashFade
+        target: root
+        property: "lightningFlash"
+        to: 0
+        duration: 200
+        easing.type: Easing.OutQuad
     }
     readonly property var generatedSpec: (sceneDefinition || ({})).generated || null
     readonly property var generatedShape: generatedSpec
@@ -187,10 +255,19 @@ Item {
             material.roughness = ["glass", "floating-glass", "crystal"].includes(look) ? 0.12
                 : look === "organic" || look === "minimal" ? 0.85 : 0.38
             material.opacity = LayoutEngine.themeStyle(look, "", 48).alpha
-            if (["neon", "plasma", "lime", "futuristic"].includes(look)) {
+            if (["neon", "plasma", "lightning", "aurora", "futuristic"].includes(look)) {
                 material.emissiveColor = materialColour || LayoutEngine.themeStyle(look, "", 48).stroke
-                material.emissiveStrength = 0.35 + root.materialPulse * 0.45
+                material.emissiveStrength = root.energyStrength(look)
                 material.emissiveThroughTexture = true
+            }
+            // A clear-ground look shows its texture's own colours on a clear
+            // ground: no tint, no vertex shades, its rim as strong as its sky.
+            if (clearLooks.includes(look) || clearLooks.includes(textureMaterial) || panelRepainted) {
+                material.alphaBlend = clearLooks.includes(look) || clearLooks.includes(textureMaterial)
+                if (material.alphaBlend) material.rimOpacity = root.panelLookBackground
+                material.vertexColours = false
+                material.baseColor = materialColour || "#ffffff"
+                material.emissiveColor = materialColour || "#ffffff"
             }
         }
         return material
@@ -216,7 +293,7 @@ Item {
     // while floating on top of them"). "auto" is a column in the platform's
     // material, the 3D page's Pedestal height tall, the icon on its top;
     // "none", the default, draws none.
-    readonly property var materialLooks: ["glass", "crystal", "neon", "minimal", "plasma", "lime",
+    readonly property var materialLooks: ["glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
         "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"]
     readonly property string pedestalShape: String((sceneDefinition || ({})).pedestalShape || "none").toLowerCase()
     readonly property string pedestalKind: pedestalShape === "auto" ? "column"
@@ -258,23 +335,150 @@ Item {
             ? materialForLook(pedestalMaterialLook, pedestalColour) : platformMaterial || ({}))
         if (!pedestalOwnMaterial && pedestalColour.length) base.baseColor = pedestalColour
         base.opacity = Math.min(Number(base.opacity === undefined ? 1 : base.opacity), pedestalOpacity)
-        const glow = pedestalAnimation === "glow" ? Math.max(0.5, pedestalGlow) : pedestalGlow
-        if (glow > 0) {
-            base.emissiveColor = pedestalColour.length ? pedestalColour
-                : base.emissiveColor || LayoutEngine.themeStyle(pedestalOwnMaterial ? pedestalMaterialLook : appearance, "", 48).stroke
-            base.emissiveStrength = Math.max(Number(base.emissiveStrength || 0), glow * 1.4)
+        // A palette of its own paints the stand's look in its own colours.
+        if (LayoutEngine.lookTexture(pedestalTextureLook, pedestalPalette) !== pedestalTextureLook) {
+            base.baseColor = pedestalColour.length ? pedestalColour : "#ffffff"
+            base.emissiveColor = base.baseColor
+        }
+        // A glowing stand is only lit a little from within; its light shines
+        // round it from its glow shell (standGlowMaterial), instead of the
+        // stand turning one bright colour (the owner, 2026-10-13).
+        if (pedestalGlowAmount > 0) {
+            base.emissiveColor = Qt.rgba(pedestalGlowRgb[0], pedestalGlowRgb[1], pedestalGlowRgb[2], 1)
+            base.emissiveStrength = Math.max(Number(base.emissiveStrength || 0), pedestalGlowAmount * 0.3)
             base.emissiveThroughTexture = false
         }
         return base
     }
+    // The stands' glow: how strong, in what colour (the stand's own, or its
+    // look's line colour), and the light of its shell - brighter than white
+    // by as much as the glow is strong, since the view spreads what is
+    // brighter than white round it. The shell stands a little out of the
+    // stand on every side, centred on it, and is seen only from inside, so
+    // it shows round the stand's edges and never over its faces.
+    readonly property real pedestalGlowAmount: !pedestalDrawn ? 0
+        : pedestalAnimation === "glow" ? Math.max(0.5, pedestalGlow) : pedestalGlow
+    readonly property string pedestalGlowColour: String((sceneDefinition || ({})).pedestalGlowColor || "")
+    readonly property var pedestalGlowRgb: PlatformGeometry.parseColour(pedestalGlowColour.length
+        ? pedestalGlowColour : pedestalColour.length ? pedestalColour
+        : LayoutEngine.themeStyle(pedestalOwnMaterial ? pedestalMaterialLook : appearance, "", 48).stroke)
+        || [0.6, 0.85, 1, 1]
+    // A glow's light: its colour brighter than white, by as much as the glow
+    // is strong; only the colour's strongest part goes past white, so the
+    // halo keeps the colour instead of burning white.
+    function glowLight(rgb, amount) {
+        const light = (1.35 + 1.3 * amount) / Math.max(0.05, rgb[0], rgb[1], rgb[2])
+        return Qt.vector3d(rgb[0] * light, rgb[1] * light, rgb[2] * light)
+    }
+    readonly property vector3d pedestalGlowLight: glowLight(pedestalGlowRgb, pedestalGlowAmount)
+    // The panel's own glow, light round its shape: in its colour or its
+    // look's line colour, from a shell of the platform pushed out along its
+    // surface, so a ring glows on its inner and outer edges alike.
+    readonly property real panelGlowAmount: bounded("panelGlow", 0, 0, 1)
+    readonly property var panelGlowRgb: PlatformGeometry.parseColour(
+        String((sceneDefinition || ({})).panelGlowColor || "").length
+            ? String(sceneDefinition.panelGlowColor) : materialColour.length ? materialColour
+            : LayoutEngine.themeStyle(effectiveMaterialLook !== "theme" ? effectiveMaterialLook : appearance,
+                                      customColor, 48).stroke) || [0.6, 0.85, 1, 1]
+    readonly property vector3d panelGlowLight: glowLight(panelGlowRgb, panelGlowAmount)
+    function extrudedMesh(mesh, distance) {
+        if (!mesh || !mesh.positions || !mesh.normals || mesh.normals.length !== mesh.positions.length)
+            return null
+        return { format: mesh.format, indexes: mesh.indexes, normals: mesh.normals,
+                 positions: mesh.positions.map(function(point, index) {
+                     const normal = mesh.normals[index]
+                     return [Number(point[0]) + Number(normal[0]) * distance,
+                             Number(point[1]) + Number(normal[1]) * distance,
+                             Number(point[2]) + Number(normal[2]) * distance]
+                 }) }
+    }
+    readonly property var platformGlowMesh: panelGlowAmount > 0
+        ? extrudedMesh(platformMesh, 0.02 + 0.04 * panelGlowReach) : null
+    // At the top of its range the panel's glow lights the shape itself as
+    // well, white-hot at full intensity; below that the look stays and the
+    // light is round it (the owner, 2026-10-13, on a ring its glow had
+    // turned white: "if it's on max brightness or glow then it's okay, but
+    // if that's closer to mid, then it's not okay").
+    readonly property real panelGlowWash: panelGlowAmount > 0.75
+        ? Math.pow((panelGlowAmount - 0.75) / 0.25, 2) : 0
+    // Just past white: the shape looks white-hot without pouring more light
+    // round it than its glow's reach leaves room for.
+    readonly property vector3d panelWashLight: {
+        const rgb = panelGlowRgb
+        const light = 1.15 / Math.max(0.05, rgb[0], rgb[1], rgb[2])
+        return Qt.vector3d(rgb[0] * light, rgb[1] * light, rgb[2] * light)
+    }
+    // Over its faces, not its rim: at full glow the shape still shows its
+    // edge (the owner, 2026-10-13: "they can show some edge, even if it's
+    // faint ... I mean the panel edge").
+    readonly property var platformWashMesh: {
+        if (panelGlowWash <= 0)
+            return null
+        const mesh = extrudedMesh(platformMesh, 0.004)
+        const rim = Number((platformMesh || ({})).rimOffset || 0)
+        if (mesh && rim > 0)
+            mesh.indexes = mesh.indexes.slice(0, rim)
+        return mesh
+    }
+    // Light round each icon's picture: its shape, a little larger, brighter
+    // than white behind it.
+    readonly property real iconGlowAmount: bounded("iconGlow", 0, 0, 1)
+    readonly property real iconGlowReach: bounded("iconGlowReach", 0.75, 0, 1)
+    readonly property var iconGlowRgb: PlatformGeometry.parseColour(String((sceneDefinition || ({})).iconGlowColor || ""))
+        || [0.66, 0.86, 1, 1]
+    readonly property vector3d iconGlowLight: glowLight(iconGlowRgb, iconGlowAmount)
+    readonly property real iconGlowSpread: 1.04 + 0.1 * iconGlowReach
+    // Light round each tile, from a shell of the tile.
+    readonly property real tileGlowAmount: bounded("iconTileGlow", 0, 0, 1)
+    readonly property real tileGlowReach: bounded("iconTileGlowReach", 0.75, 0, 1)
+    readonly property var tileGlowRgb: PlatformGeometry.parseColour(String((sceneDefinition || ({})).iconTileGlowColor || ""))
+        || [0.5, 0.83, 1, 1]
+    readonly property vector3d tileGlowLight: glowLight(tileGlowRgb, tileGlowAmount)
+    readonly property real tileGlowSpread: 1.04 + 0.08 * tileGlowReach
+    readonly property real pedestalGlowSpread: 1.06 + 0.08 * pedestalGlowReach
+    readonly property vector3d pedestalGlowShift: {
+        const box = pedestalBox || [0, 0, 0, 0, 0, 0]
+        const share = pedestalGlowSpread - 1
+        return Qt.vector3d(-(box[0] + box[3]) / 2 * share, -(box[1] + box[4]) / 2 * share,
+                           -(box[2] + box[5]) / 2 * share)
+    }
+    // A real glow (the owner, 2026-10-13: "the glow isn't really glow, it's
+    // just intense color"): the view spreads the light of what is brighter
+    // than white round it, over the desktop as well - a glowing stand's
+    // shell, and the panel's glowing rim or energy look when Glow intensity
+    // is turned past 1. Only while something glows: the glow costs a few
+    // passes of every frame. Its halo reaches about this far.
+    readonly property bool panelGlowing: glowIntensity > 1.001
+        && (Number(platformMaterial.rimEmissiveStrength || 0) > 0
+            || Number(platformMaterial.emissiveStrength || 0) > 0)
+    readonly property bool bloomWanted: pedestalGlowAmount > 0 || panelGlowing || panelGlowAmount > 0
+        || iconGlowAmount > 0 || tileGlowAmount > 0
+    // How far a glow reaches out of what glows (Glow reach, 0 to 1): the
+    // stands' and the panel's own. A view has one glow, so it reaches as far
+    // as the farthest that is lit. Each further halving of the blur doubles
+    // the reach: three halvings at none, seven at the full reach, six at the
+    // default the owner picked (2026-10-13). The halo reaches about the
+    // margin given here past what glows.
+    readonly property real pedestalGlowReach: bounded("pedestalGlowReach", 0.75, 0, 1)
+    readonly property real panelGlowReach: bounded("panelGlowReach", 0.75, 0, 1)
+    readonly property real bloomReach: Math.max(pedestalGlowAmount > 0 ? pedestalGlowReach : 0,
+                                                panelGlowing || panelGlowAmount > 0 ? panelGlowReach : 0,
+                                                iconGlowAmount > 0 ? iconGlowReach : 0,
+                                                tileGlowAmount > 0 ? tileGlowReach : 0)
+    readonly property int bloomLevels: 3 + Math.round(4 * bloomReach)
+    readonly property real glowReach: bloomWanted ? 12 * Math.pow(2, bloomLevels - 2) : 0
     readonly property bool pedestalOwnTexture: pedestalDrawn && pedestalTextureLook !== "panel"
         && pedestalTextureLook !== "none"
     readonly property url pedestalTextureSource: pedestalOwnTexture
-        ? Qt.resolvedUrl("../materials/" + pedestalTextureLook + ".png") : ""
+        ? Qt.resolvedUrl("../materials/" + LayoutEngine.lookTexture(pedestalTextureLook,
+                                                                    lookPalette(pedestalTextureLook, "pedestal")) + ".png")
+        : ""
     readonly property url pedestalNormalSource: pedestalOwnTexture
         ? Qt.resolvedUrl("../materials/" + pedestalTextureLook + "-normal.png") : ""
     readonly property Texture pedestalTexture: pedestalTextureLook === "none" ? null
-        : pedestalOwnTexture ? (pedestalImage.status === Image.Ready ? selectedPedestalTexture : null) : themeTexture
+        : pedestalOwnTexture ? ((clearLooks.includes(pedestalTextureLook) ? standLightning.ready
+                                 : pedestalImage.status === Image.Ready) ? selectedPedestalTexture : null)
+        : themeTexture
     readonly property Texture pedestalNormalTexture: pedestalTextureLook === "none" ? null
         : pedestalOwnTexture ? (pedestalNormalImage.status === Image.Ready ? selectedPedestalNormal : null)
         : themeNormalTexture
@@ -357,10 +561,14 @@ Item {
         material.roughness = ["glass", "floating-glass", "crystal"].includes(look) ? 0.12
             : look === "organic" || look === "minimal" ? 0.85 : 0.38
         material.opacity = LayoutEngine.themeStyle(look, "", 48).alpha
-        if (["neon", "plasma", "lime", "futuristic"].includes(look)) {
+        if (["neon", "plasma", "lightning", "aurora", "futuristic"].includes(look)) {
             material.emissiveColor = colour && colour.length ? colour : LayoutEngine.themeStyle(look, "", 48).stroke
-            material.emissiveStrength = 0.35 + root.materialPulse * 0.45
+            material.emissiveStrength = root.energyStrength(look)
             material.emissiveThroughTexture = true
+        }
+        if (clearLooks.includes(look)) {
+            material.alphaBlend = true
+            material.emissiveColor = colour && colour.length ? colour : "#ffffff"
         }
         return material
     }
@@ -428,7 +636,7 @@ Item {
             opacity: style.alpha * (visual && visual.customTileActive
                 ? Math.max(0, Math.min(1, root.number(values, "iconTileOpacity", 0.8))) : 1),
             surfaceOpacity: style.alpha, emissiveColor: colour,
-            emissiveStrength: ["neon", "plasma", "lime", "futuristic"].includes(look) ? 0.2 : 0,
+            emissiveStrength: ["neon", "plasma", "lightning", "aurora", "futuristic"].includes(look) ? 0.2 : 0,
             look: look}
     }
     readonly property int triangleCount: platform.triangleCount
@@ -585,7 +793,7 @@ Item {
         }
     }
     function gizmoHandleAt(x, y) {
-        const hits = view.pickAll(x, y)
+        const hits = pickAllAt(x, y)
         for (let index = 0; index < hits.length; ++index) {
             const name = hits[index].objectHit ? String(hits[index].objectHit.objectName) : ""
             const match = /^gizmo-(move|rotate|scale)-(x|y|z|view)/.exec(name)
@@ -710,7 +918,7 @@ Item {
     readonly property bool transitionsEnabled: !reducedMotion && !gizmoDragging
         && (sceneDefinition || ({})).transitions !== false
     readonly property real cameraDistance: Math.max(1, height)
-        / (2 * Math.tan(bounded("fieldOfView", 40, 20, 70) * Math.PI / 360))
+        / (2 * Math.tan(panelFieldOfView * Math.PI / 360))
     // The platform and its icons reach a little past the platform's radius.
     readonly property real sceneExtentX: platformScale * platformReachX * 1.05
     readonly property real sceneExtentY: platformScale * platformReachY * 1.05
@@ -833,6 +1041,26 @@ Item {
         return hit.minus(sceneOrigin).length()
     }
 
+    // Each icon's picture, a #Rectangle in its own units, as two triangles.
+    readonly property var pictureQuad: ({ positions: [[-50, -50, 0], [50, -50, 0], [50, 50, 0], [-50, 50, 0]],
+                                          indexes: [0, 1, 2, 0, 2, 3] })
+    readonly property var pictureTriangles: flatTriangles(pictureQuad)
+    // The icons' pictures under a point, nearest first, through the camera's
+    // own frame like the platform's. Qt's picking (View3D.pickAll) answers
+    // with the projection from before the view last changed shape until it
+    // renders again, and a static scene keeps that answer: on the desktop a
+    // panel whose view had just grown round it took no wheel over its icons.
+    function pictureHits(point) {
+        const hits = []
+        for (let index = 0; index < worldEntries.count; ++index) {
+            const node = worldEntries.objectAt(index)
+            if (!node || !node.visible || !node.glyphModel || !node.glyphModel.visible) continue
+            const distance = meshHitDistance(node.glyphModel, pictureQuad, point, pictureTriangles)
+            if (Number.isFinite(distance)) hits.push({ index: index, distance: distance })
+        }
+        hits.sort(function(a, b) { return a.distance - b.distance })
+        return hits
+    }
     function entryPointVisible(index, point) {
         const key = hitKey((editMode ? "E" : "e") + index, point)
         const known = hitMemoGet(key)
@@ -842,15 +1070,10 @@ Item {
     function entryPointVisibleUncached(index, point) {
         if (!motionAllowed || !worldEntries.objectAt(index) || !worldEntries.objectAt(index).visible)
             return false
-        const hits = view.pickAll(point.x, point.y)
-        let glyph = null
-        for (let i = 0; i < hits.length; ++i)
-            if (hits[i].objectHit && String(hits[i].objectHit.objectName) === "mesh-glyph-" + index) {
-                glyph = hits[i]; break
-            }
-        if (!glyph) return false
-        const origin = root.unprojectViewPoint(Qt.vector3d(point.x, point.y, 0))
-        const distance = glyph.scenePosition.minus(origin).length()
+        const hits = pictureHits(point)
+        const own = hits.find(function(hit) { return hit.index === index })
+        if (!own) return false
+        const distance = own.distance
         if (meshHitDistance(platform, platformMesh, point, platformTriangles) < distance - 0.01) return false
         for (let i = 0; i < panelPartNodes.count; ++i) {
             const part = panelPartNodes.objectAt(i)
@@ -858,11 +1081,7 @@ Item {
                 return false
         }
         // Overlapping entries are picked in the same near-to-far order as drawn.
-        for (let i = 0; i < hits.length; ++i) {
-            const name = hits[i].objectHit ? String(hits[i].objectHit.objectName) : ""
-            if (/^mesh-glyph-\d+$/.test(name)) return name === "mesh-glyph-" + index
-        }
-        return false
+        return hits[0].index === index
     }
 
     // Whether the platform or one of its parts is nearer than this entry's
@@ -870,15 +1089,9 @@ Item {
     // none is ever hidden in it (the owner, 2026-10-12: "half of it goes
     // into another dimension"); the renderer test proves it.
     function entryPointBehindPlatform(index, point) {
-        const hits = view.pickAll(point.x, point.y)
-        let glyph = null
-        for (let i = 0; i < hits.length; ++i)
-            if (hits[i].objectHit && String(hits[i].objectHit.objectName) === "mesh-glyph-" + index) {
-                glyph = hits[i]; break
-            }
-        if (!glyph) return false
-        const origin = root.unprojectViewPoint(Qt.vector3d(point.x, point.y, 0))
-        const distance = glyph.scenePosition.minus(origin).length()
+        const own = pictureHits(point).find(function(hit) { return hit.index === index })
+        if (!own) return false
+        const distance = own.distance
         if (meshHitDistance(platform, platformMesh, point, platformTriangles) < distance - 0.01) return true
         for (let i = 0; i < panelPartNodes.count; ++i) {
             const part = panelPartNodes.objectAt(i)
@@ -897,12 +1110,13 @@ Item {
     function containsInputPointUncached(point) {
         if (!motionAllowed) return false
         if (Number.isFinite(meshHitDistance(platform, platformMesh, point, platformTriangles))) return true
-        const hits = view.pickAll(point.x, point.y)
-        for (let i = 0; i < hits.length; ++i) {
-            const name = hits[i].objectHit ? String(hits[i].objectHit.objectName) : ""
-            const entry = /^mesh-glyph-(\d+)$/.exec(name)
-            if (entry && entryPointVisible(Number(entry[1]), point)) return true
-            if (editMode && name.startsWith("gizmo-")) return true
+        for (const hit of pictureHits(point))
+            if (entryPointVisible(hit.index, point)) return true
+        // The handles while editing: Qt's picking, only while a session runs.
+        if (editMode) {
+            const hits = pickAllAt(point.x, point.y)
+            for (let i = 0; i < hits.length; ++i)
+                if (hits[i].objectHit && String(hits[i].objectHit.objectName).startsWith("gizmo-")) return true
         }
         return false
     }
@@ -910,17 +1124,29 @@ Item {
     // icons, then moved `outward` screen pixels out of the drawn dock, as
     // `count` samples spanning `span` radians around the folder. `scale` is
     // the perspective size there relative to the folder's own.
-    // View3D's mapping overloads recalculate its shared render-camera
-    // projection. Camera's normalized public methods read the projection
-    // submitted by the renderer instead, without writing from the GUI thread.
+    // Scene positions to the panel's own pixels and back, through the
+    // camera's own frame: one scene unit is one pixel at the depth of the
+    // camera's target, wherever the view's margins stand, and z is the depth
+    // from the near plane, as the camera's viewport mapping gives it. No
+    // projection matrix is read: View3D's mapping overloads recalculate the
+    // render camera's shared projection from the GUI thread, and the one the
+    // renderer submitted lags a frame behind a view that has just grown.
     function projectScenePoint(point) {
-        const normalized = camera.mapToViewport(point)
-        return Qt.vector3d(normalized.x * view.width, normalized.y * view.height, normalized.z)
+        const local = camera.mapPositionFromScene(point)
+        const depth = -local.z
+        if (!(depth > 1e-6)) return Qt.vector3d(NaN, NaN, depth - camera.clipNear)
+        const factor = cameraDistance / depth
+        return Qt.vector3d(width / 2 + local.x * factor, height / 2 - local.y * factor,
+                           depth - camera.clipNear)
     }
     function unprojectViewPoint(point) {
-        return camera.mapFromViewport(Qt.vector3d(point.x / Math.max(1, view.width),
-            point.y / Math.max(1, view.height), point.z))
+        const depth = camera.clipNear + point.z
+        const factor = depth / Math.max(1e-6, cameraDistance)
+        return camera.mapPositionToScene(Qt.vector3d((point.x - width / 2) * factor,
+            (height / 2 - point.y) * factor, -depth))
     }
+    // The view's own picking, at a point in the panel's coordinates.
+    function pickAllAt(x, y) { return view.pickAll(x + overflowX, y + overflowY) }
     function folderTrackSamples(entryIndex, outward, span, count) {
         const node = worldEntries.objectAt(entryIndex)
         if (!rendererReady || !node || !node.inputAnchor || count < 2) return []
@@ -1043,6 +1269,95 @@ Item {
             projectedCentre = Qt.point(centre.x, centre.y)
     }
 
+    // The box round a mesh's corners in its own units, [least x, y, z,
+    // greatest x, y, z], or null without a mesh.
+    function meshBox(mesh) {
+        const positions = mesh && mesh.positions
+        if (!positions || !positions.length) return null
+        const box = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]
+        for (const vertex of positions)
+            for (let axis = 0; axis < 3; ++axis) {
+                const value = Number(vertex[axis])
+                if (value < box[axis]) box[axis] = value
+                if (value > box[axis + 3]) box[axis + 3] = value
+            }
+        return box.every(Number.isFinite) ? box : null
+    }
+    readonly property var platformBox: meshBox(platformMesh)
+    readonly property var pedestalBox: meshBox(pedestalMesh)
+    // An icon's picture, a #Rectangle, in its own units.
+    readonly property var pictureBox: [-50, -50, 0, 50, 50, 0]
+    // Kept round what reaches out of the box: the glow's halo, and a little
+    // for antialiasing and a stand's own motion.
+    readonly property real overflowPadding: 12 + glowReach
+    readonly property real overflowStep: 32
+    property int overflowRevision: -1
+    onOverflowXChanged: hitTestsChanged()
+    onOverflowYChanged: hitTestsChanged()
+    // How far the drawn scene reaches out of the panel's box, measured on the
+    // corners of the platform and its parts, of every icon's picture with its
+    // magnification and motion, of every stand, and of the handles while
+    // editing, as the camera sees them now.
+    function updateOverflow() {
+        if (!rendererReady || width <= 0 || height <= 0) return
+        const revision = hitRevision * 2 + (editMode ? 1 : 0)
+        if (revision === overflowRevision) return
+        overflowRevision = revision
+        let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity, lost = false
+        const take = function(point) {
+            if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+                lost = true
+                return
+            }
+            left = Math.min(left, point.x)
+            right = Math.max(right, point.x)
+            top = Math.min(top, point.y)
+            bottom = Math.max(bottom, point.y)
+        }
+        const takeBox = function(node, box) {
+            if (!node || !box || !node.visible) return
+            for (let corner = 0; corner < 8; ++corner)
+                take(projectScenePoint(node.mapPositionToScene(Qt.vector3d(
+                    box[corner & 1 ? 3 : 0], box[corner & 2 ? 4 : 1], box[corner & 4 ? 5 : 2]))))
+        }
+        takeBox(platform, platformBox)
+        for (let index = 0; index < panelPartNodes.count; ++index) {
+            const part = panelPartNodes.objectAt(index)
+            if (part) takeBox(part, part.meshBox)
+        }
+        for (let index = 0; index < worldEntries.count; ++index) {
+            const node = worldEntries.objectAt(index)
+            if (!node || !node.visible) continue
+            takeBox(node.glyphModel, pictureBox)
+            if (pedestalDrawn)
+                takeBox(pedestalOnPanel ? node.standOnPanel : node.standFacing, pedestalBox)
+        }
+        if (editMode) {
+            const origin = gizmo.scenePosition, reach = gizmoLength * 1.25
+            for (const direction of [Qt.vector3d(1, 0, 0), Qt.vector3d(0, 1, 0), Qt.vector3d(0, 0, 1),
+                                     camera.right, camera.up])
+                for (const sign of [-1, 1])
+                    take(projectScenePoint(origin.plus(direction.times(sign * reach))))
+        }
+        // A scene that reaches behind the camera fills all it can. Otherwise
+        // the reach is how far the scene reaches out of the box, less than
+        // nothing while it stays inside: a ring that fits its box still
+        // needs room for its glow's light (the owner's desktop, 2026-10-13:
+        // the light ended in a straight line along the box).
+        const limitX = Math.max(width, Screen.width), limitY = Math.max(height, Screen.height)
+        overflowX = steppedOverflow(overflowX, lost ? limitX : Math.min(limitX, Math.max(-left, right - width)))
+        overflowY = steppedOverflow(overflowY, lost ? limitY : Math.min(limitY, Math.max(-top, bottom - height)))
+    }
+    // A margin with room for `reach` and the padding round it: none while
+    // nothing reaches out and nothing glows (a larger view costs every frame
+    // its pixels), room for the light as soon as something glows, grown in
+    // steps with one to spare, given back only once two are free.
+    function steppedOverflow(current, reach) {
+        const needed = reach > 0.5 || glowReach > 0 ? reach + overflowPadding : 0
+        const stepped = needed > 0.5 ? (Math.ceil(needed / overflowStep) + 1) * overflowStep : 0
+        return needed > current || needed <= current - 2 * overflowStep ? stepped : current
+    }
+
     // RenderStats throttles change notifications. A static scene can stop
     // before that interval, so also inspect it after an actual window frame.
     function observeCompletedFrame() {
@@ -1060,6 +1375,7 @@ Item {
             if (!root.completedFrameObserved)
                 root.observeCompletedFrame()
             root.updateProjection()
+            root.updateOverflow()
             if (root.editMode)
                 root.updateEndOnAxes()
         }
@@ -1096,6 +1412,78 @@ Item {
     function number(object, key, fallback) {
         const value = Number((object || ({}))[key])
         return Number.isFinite(value) ? value : fallback
+    }
+
+    // Lightning's bolts over the dark storm, as strong as each Lightning
+    // background asks, for the 3D surfaces drawn in lightning: the
+    // platform's and the stands'. Drawn only into their textures.
+    // A clear-ground look - lightning, aurora - in its palette over its dark
+    // sky, as strong as the Background asks.
+    component LookComposite: Item {
+        // Whether a surface is drawn in this look: only then is it loaded.
+        property bool active: false
+        property string look: "lightning"
+        property string lookPalette: ""
+        property real background: 0
+        readonly property bool ready: light.status === Image.Ready
+        visible: active
+        width: 512
+        height: 512
+        Rectangle {
+            anchors.fill: parent
+            color: "rgb(" + LayoutEngine.themeStyle(parent.look, "", 48).skyColour + ")"
+            opacity: Math.max(0, Math.min(1, parent.background))
+        }
+        Image {
+            id: light
+            anchors.fill: parent
+            // Only a surface drawn in a clear-ground look loads its light.
+            source: parent.active && parent.look.length
+                ? Qt.resolvedUrl("../materials/" + LayoutEngine.lookTexture(parent.look, parent.lookPalette) + ".png") : ""
+            sourceSize: Qt.size(512, 512)
+            asynchronous: true
+            cache: true
+        }
+    }
+    readonly property var clearLooks: ["lightning", "aurora"]
+    function lookPalette(look, prefix) {
+        return String((sceneDefinition || ({}))[prefix + "LookColour"] || "")
+    }
+    readonly property string panelPalette: lookPalette(textureMaterial, "panel")
+    readonly property string pedestalPalette: lookPalette(pedestalTextureLook, "pedestal")
+    // A palette of its own replaces the look's colours, so nothing tints it.
+    readonly property bool panelRepainted: LayoutEngine.lookTexture(textureMaterial, panelPalette) !== textureMaterial
+    readonly property real panelLookBackground: bounded("panelLookBackground", 0.5, 0, 1)
+    readonly property real pedestalLookBackground: bounded("pedestalLookBackground", 0.5, 0, 1)
+    LookComposite {
+        id: panelLightning
+        active: root.clearLooks.includes(root.textureMaterial)
+        look: root.textureMaterial
+        lookPalette: root.lookPalette(root.textureMaterial, "panel")
+        background: root.panelLookBackground
+    }
+    ShaderEffectSource {
+        id: panelLightningTexture
+        sourceItem: panelLightning.active ? panelLightning : null
+        hideSource: true
+        live: true
+        visible: false
+        textureSize: Qt.size(512, 512)
+    }
+    LookComposite {
+        id: standLightning
+        active: root.clearLooks.includes(root.pedestalTextureLook)
+        look: root.pedestalTextureLook
+        lookPalette: root.lookPalette(root.pedestalTextureLook, "pedestal")
+        background: root.pedestalLookBackground
+    }
+    ShaderEffectSource {
+        id: standLightningTexture
+        sourceItem: standLightning.active ? standLightning : null
+        hideSource: true
+        live: true
+        visible: false
+        textureSize: Qt.size(512, 512)
     }
 
     Image {
@@ -1201,35 +1589,45 @@ Item {
 
     MouseArea {
         objectName: "mesh-gizmo-input"
-        anchors.fill: parent
+        // Wherever the scene is drawn, the handles included.
+        x: view.x
+        y: view.y
+        width: view.width
+        height: view.height
         z: 2
         // While editing, the whole panel belongs to the handles: a press that
         // misses them does nothing, so no application starts by accident.
+        // Outside the panel's box such a press is left to the desktop.
         enabled: root.editMode && root.rendererReady
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         preventStealing: true
         onPressed: function(mouse) {
+            const x = mouse.x + view.x, y = mouse.y + view.y
+            const outside = x < 0 || y < 0 || x > root.width || y > root.height
             if (mouse.button === Qt.RightButton) {
+                if (outside && !root.dragStart) mouse.accepted = false
                 root.cancelGizmoDrag()
                 return
             }
             // A handle first; otherwise a press on the platform or its icons
             // takes the body, to tilt and turn it.
-            const handle = root.gizmoHandleAt(mouse.x, mouse.y)
+            const handle = root.gizmoHandleAt(x, y)
             if (handle)
-                root.beginGizmoDrag(handle, mouse.x, mouse.y)
-            else if (root.containsInputPoint(Qt.point(mouse.x, mouse.y)))
-                root.beginGizmoDrag({ mode: "orbit", axis: "body" }, mouse.x, mouse.y)
+                root.beginGizmoDrag(handle, x, y)
+            else if (root.containsInputPoint(Qt.point(x, y)))
+                root.beginGizmoDrag({ mode: "orbit", axis: "body" }, x, y)
+            else if (outside)
+                mouse.accepted = false
         }
         onPositionChanged: function(mouse) {
             if (root.dragStart)
-                root.updateGizmoDrag(mouse.x, mouse.y, mouse.modifiers)
+                root.updateGizmoDrag(mouse.x + view.x, mouse.y + view.y, mouse.modifiers)
         }
         onReleased: function(mouse) {
             if (mouse.button !== Qt.LeftButton || !root.dragStart)
                 return
             // The keys held when the button is let go decide the result.
-            root.updateGizmoDrag(mouse.x, mouse.y, mouse.modifiers)
+            root.updateGizmoDrag(mouse.x + view.x, mouse.y + view.y, mouse.modifiers)
             root.finishGizmoDrag()
         }
         onCanceled: root.cancelGizmoDrag()
@@ -1242,23 +1640,94 @@ Item {
 
     View3D {
         id: view
-        anchors.fill: parent
+        x: -root.overflowX
+        y: -root.overflowY
+        width: root.viewWidth
+        height: root.viewHeight
         visible: root.rendererReady && !root.sceneConcealed
         opacity: root.panelOpacity
         explicitTextureWidth: root.targetWidth
         explicitTextureHeight: root.targetHeight
         camera: camera
-        environment: SceneEnvironment {
+        environment: root.bloomWanted ? glowEnvironment : plainEnvironment
+        SceneEnvironment {
+            id: plainEnvironment
             backgroundMode: SceneEnvironment.Transparent
             antialiasingMode: root.effectiveQuality === "low" ? SceneEnvironment.NoAA
                 : root.effectiveQuality === "high" ? SceneEnvironment.SSAA : SceneEnvironment.MSAA
             antialiasingQuality: root.effectiveQuality === "high"
                 ? SceneEnvironment.VeryHigh : SceneEnvironment.High
         }
+        ExtendedSceneEnvironment {
+            id: glowEnvironment
+            backgroundMode: SceneEnvironment.Transparent
+            antialiasingMode: plainEnvironment.antialiasingMode
+            antialiasingQuality: plainEnvironment.antialiasingQuality
+            // Every halving of the blur up to the reach (bloomLevels), each
+            // scaled up again smoothly (bicubic): a round halo with a soft
+            // edge at every quality - bilinear steps drew it square (the
+            // owner, 2026-10-13: "make it better quality"; this strength and
+            // intensity are the look the owner ticked).
+            glowEnabled: true
+            glowQualityHigh: root.effectiveQuality !== "low"
+            glowUseBicubicUpscale: true
+            glowStrength: 0.9
+            glowIntensity: 1.6
+            glowBloom: 0
+            glowHDRMinimumValue: 1
+            glowBlendMode: ExtendedSceneEnvironment.GlowBlendMode.Additive
+            glowLevel: (1 << root.bloomLevels) - 1
+        }
+        PrincipledMaterial {
+            id: standGlowMaterial
+            baseColor: "#000000"
+            roughness: 1
+            specularAmount: 0
+            emissiveFactor: root.pedestalGlowLight
+            // Drawn with the see-through objects, after what it wraps
+            // (underGlow), which hides its inside.
+            alphaMode: PrincipledMaterial.Blend
+            cullMode: Material.FrontFaceCulling
+        }
+        PrincipledMaterial {
+            id: platformGlowMaterial
+            baseColor: "#000000"
+            roughness: 1
+            specularAmount: 0
+            emissiveFactor: root.panelGlowLight
+            // Drawn with the see-through objects, after what it wraps
+            // (underGlow), which hides its inside.
+            alphaMode: PrincipledMaterial.Blend
+            cullMode: Material.FrontFaceCulling
+        }
+        // The glow over the shape itself at the top of its range: its light
+        // laid on the platform's surface, as much as panelGlowWash.
+        PrincipledMaterial {
+            id: platformWashMaterial
+            baseColor: "#000000"
+            roughness: 1
+            specularAmount: 0
+            emissiveFactor: root.panelWashLight
+            alphaMode: PrincipledMaterial.Blend
+            cullMode: Material.BackFaceCulling
+        }
+        PrincipledMaterial {
+            id: tileGlowMaterial
+            baseColor: "#000000"
+            roughness: 1
+            specularAmount: 0
+            emissiveFactor: root.tileGlowLight
+            // Drawn with the see-through objects, after what it wraps
+            // (underGlow), which hides its inside.
+            alphaMode: PrincipledMaterial.Blend
+            cullMode: Material.FrontFaceCulling
+        }
         Texture {
             id: selectedMaterialTexture
-            sourceItem: root.Window.window && materialImage.Window.window === root.Window.window
-                ? materialImage : null
+            sourceItem: !root.Window.window ? null
+                : root.clearLooks.includes(root.textureMaterial)
+                    ? (panelLightningTexture.Window.window === root.Window.window ? panelLightningTexture : null)
+                : materialImage.Window.window === root.Window.window ? materialImage : null
             generateMipmaps: true
             mipFilter: Texture.Linear
             // A generated platform wraps the texture round its band, as
@@ -1267,16 +1736,19 @@ Item {
             scaleU: root.generatedPlatform ? Number(root.generatedPlatform.textureRepeats || 1) : 1
             tilingModeHorizontal: Texture.Repeat
             tilingModeVertical: Texture.Repeat
-            positionU: root.flowOffset
+            positionU: root.flowOffset + (root.textureMaterial === "lightning" ? root.lightningShift : 0)
         }
         Texture {
             id: selectedPedestalTexture
-            sourceItem: root.Window.window && pedestalImage.Window.window === root.Window.window
-                ? pedestalImage : null
+            sourceItem: !root.Window.window ? null
+                : root.clearLooks.includes(root.pedestalTextureLook)
+                    ? (standLightningTexture.Window.window === root.Window.window ? standLightningTexture : null)
+                : pedestalImage.Window.window === root.Window.window ? pedestalImage : null
             generateMipmaps: true
             mipFilter: Texture.Linear
             tilingModeHorizontal: Texture.Repeat
             tilingModeVertical: Texture.Repeat
+            positionU: root.pedestalTextureLook === "lightning" ? root.lightningShift : 0
         }
         Texture {
             id: selectedPedestalNormal
@@ -1286,6 +1758,7 @@ Item {
             mipFilter: Texture.Linear
             tilingModeHorizontal: Texture.Repeat
             tilingModeVertical: Texture.Repeat
+            positionU: selectedPedestalTexture.positionU
         }
         Texture {
             id: selectedMaterialNormal
@@ -1296,7 +1769,7 @@ Item {
             scaleU: selectedMaterialTexture.scaleU
             tilingModeHorizontal: Texture.Repeat
             tilingModeVertical: Texture.Repeat
-            positionU: root.flowOffset
+            positionU: root.flowOffset + (root.textureMaterial === "lightning" ? root.lightningShift : 0)
         }
         Texture {
             id: surfaceTexture
@@ -1311,11 +1784,17 @@ Item {
             eulerRotation.y: root.shownYaw
             PerspectiveCamera {
                 id: camera
-                fieldOfView: root.bounded("fieldOfView", 40, 20, 70)
+                fieldOfView: root.viewFieldOfView
                 z: root.cameraDistance
                 eulerRotation.z: root.shownRoll
                 clipNear: 1
-                clipFar: Math.max(100, z * 5)
+                // Picking (View3D.pickAll) and Qt's viewport mapping use a
+                // projection the camera keeps from its last change, which a
+                // view that only changes shape - a margin growing across the
+                // panel - leaves behind, so picks missed what is drawn. The
+                // far plane moves by a hair with the view's size, so every
+                // new shape renews that projection too.
+                clipFar: Math.max(100, z * 5) + (root.viewWidth + root.viewHeight) * 1e-4
                 // Camera-local coordinates preserve the logical pixel centers
                 // without querying viewport matrices during scene construction.
 
@@ -1465,6 +1944,8 @@ Item {
                     root.platformFold, root.baseTopHeight).map(v => v * root.platformScale)
                 property alias glyphModel: glyphModel
                 property alias inputAnchor: inputAnchor
+                property alias standOnPanel: standOnPanel
+                property alias standFacing: standFacing
                 readonly property real glow: Math.max(root.number(iconMotion, "glow", 0),
                     root.number(glyphMotion, "glow", 0), root.number(tileMotion, "glow", 0))
                 // An entry off its path is not drawn, and one leaving or coming
@@ -1496,7 +1977,9 @@ Item {
                         + entryNode.pedestalScale * root.pedestalShapeReach * Math.sin(entryNode.panelStandTilt)
                     rotation: entryNode.panelStandRotation
                     IconStyle3D {
+                        id: standOnPanel
                         objectName: "mesh-pedestal-" + entryNode.index
+                        underGlow: root.pedestalGlowAmount > 0
                         meshData: root.pedestalMesh
                         materialData: root.pedestalMaterialData
                         surfaceTexture: root.pedestalTexture
@@ -1505,6 +1988,16 @@ Item {
                         scale: Qt.vector3d(entryNode.pedestalScale * entryNode.pedestalPulse,
                                            entryNode.pedestalScale * entryNode.pedestalPulse,
                                            Math.max(1e-3, entryNode.pedestalDepth))
+                        IconStyle3D {
+                            objectName: "mesh-pedestal-glow-" + entryNode.index
+                            visible: root.pedestalGlowAmount > 0
+                            meshData: root.pedestalMesh
+                            materialData: ({})
+                            shellMaterial: standGlowMaterial
+                            opacity: entryNode.pedestalShine
+                            position: root.pedestalGlowShift
+                            scale: Qt.vector3d(root.pedestalGlowSpread, root.pedestalGlowSpread, root.pedestalGlowSpread)
+                        }
                     }
                 }
                 Node {
@@ -1520,7 +2013,9 @@ Item {
                         Node {
                             eulerRotation.x: -90 + root.pedestalAxisTilt + entryNode.pedestalWobble
                             IconStyle3D {
+                                id: standFacing
                                 objectName: "mesh-pedestal-facing-" + entryNode.index
+                                underGlow: root.pedestalGlowAmount > 0
                                 meshData: root.pedestalMesh
                                 materialData: root.pedestalMaterialData
                                 surfaceTexture: root.pedestalTexture
@@ -1530,6 +2025,17 @@ Item {
                                 scale: Qt.vector3d(entryNode.pedestalScale * entryNode.pedestalPulse,
                                                    entryNode.pedestalScale * entryNode.pedestalPulse,
                                                    Math.max(1e-3, entryNode.pedestalDepth))
+                                IconStyle3D {
+                                    objectName: "mesh-pedestal-facing-glow-" + entryNode.index
+                                    visible: root.pedestalGlowAmount > 0
+                                    meshData: root.pedestalMesh
+                                    materialData: ({})
+                                    shellMaterial: standGlowMaterial
+                                    opacity: entryNode.pedestalShine
+                                    position: root.pedestalGlowShift
+                                    scale: Qt.vector3d(root.pedestalGlowSpread, root.pedestalGlowSpread,
+                                                       root.pedestalGlowSpread)
+                                }
                             }
                         }
                     }
@@ -1648,13 +2154,26 @@ Item {
                             metalness: entryNode.tileMaterial.metalness
                             roughness: entryNode.tileMaterial.roughness
                             opacity: entryNode.tileMaterial.surfaceOpacity
+                            depthDrawMode: root.tileGlowAmount > 0 ? Material.AlwaysDepthDraw
+                                : Material.OpaqueOnlyDepthDraw
                             cullMode: Material.NoCulling
                         }
                         IconStyle3D {
                             objectName: "mesh-tile-solid-" + entryNode.index
+                            underGlow: root.tileGlowAmount > 0
                             meshData: entryNode.tileMesh
                             materialData: entryNode.tileMaterial
                             faceMaterial: tileFaceMaterial
+                            // The tile's glow (Icon Tiles > Glow): a shell of the
+                            // tile, a little larger, seen only from inside.
+                            IconStyle3D {
+                                objectName: "mesh-tile-glow-" + entryNode.index
+                                visible: root.tileGlowAmount > 0
+                                meshData: entryNode.tileMesh
+                                materialData: ({})
+                                shellMaterial: tileGlowMaterial
+                                scale: Qt.vector3d(root.tileGlowSpread, root.tileGlowSpread, root.tileGlowSpread)
+                            }
                             visible: entryNode.tileShown && entryNode.tileMesh !== null && root.collapseProgress < 1
                             position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
                                 entryNode.size / 2 - root.number(entryNode.tileMotion, "y", 0), -entryNode.size * 0.001)
@@ -1665,6 +2184,27 @@ Item {
                                 entryNode.size / 2 * root.number(entryNode.tileMotion, "scale", 1)
                                     * root.number(entryNode.tileMotion, "scaleY", 1), entryNode.size / 2)
                             opacity: root.number(entryNode.tileMotion, "opacity", 1) * (1 - root.collapseProgress)
+                        }
+                        Model {
+                            objectName: "mesh-tile-glow-flat-" + entryNode.index
+                            source: "#Rectangle"
+                            pickable: false
+                            visible: root.tileGlowAmount > 0 && entryNode.tileShown && entryNode.tileMesh === null
+                                && root.collapseProgress < 1
+                            position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
+                                entryNode.size / 2 - root.number(entryNode.tileMotion, "y", 0), -entryNode.size * 0.004)
+                            scale: Qt.vector3d(entryNode.size / 100 * root.tileGlowSpread,
+                                               entryNode.size / 100 * root.tileGlowSpread, 1)
+                            materials: PrincipledMaterial {
+                                baseColor: "#000000"
+                                roughness: 1
+                                specularAmount: 0
+                                emissiveFactor: root.tileGlowLight
+                                opacityMap: tileTexture
+                                opacityChannel: Material.A
+                                alphaMode: PrincipledMaterial.Blend
+                                cullMode: Material.NoCulling
+                            }
                         }
                         Model {
                             objectName: "mesh-tile-" + entryNode.index
@@ -1706,6 +2246,30 @@ Item {
                                 cullMode: Material.NoCulling
                             }
                         }
+                        // The icon's glow (Icons > Glow): its picture's shape, a
+                        // little larger, just behind it and brighter than white,
+                        // which the view spreads round the picture.
+                        Model {
+                            objectName: "mesh-glyph-glow-" + entryNode.index
+                            source: "#Rectangle"
+                            pickable: false
+                            visible: root.iconGlowAmount > 0 && glyphModel.visible
+                            position: Qt.vector3d(glyphModel.position.x, glyphModel.position.y, entryNode.size * 0.006)
+                            eulerRotation: glyphModel.eulerRotation
+                            scale: Qt.vector3d(glyphModel.scale.x * root.iconGlowSpread,
+                                               glyphModel.scale.y * root.iconGlowSpread, 1)
+                            opacity: glyphModel.opacity
+                            materials: PrincipledMaterial {
+                                baseColor: "#000000"
+                                roughness: 1
+                                specularAmount: 0
+                                emissiveFactor: root.iconGlowLight
+                                opacityMap: glyphTexture
+                                opacityChannel: Material.A
+                                alphaMode: PrincipledMaterial.Blend
+                                cullMode: Material.NoCulling
+                            }
+                        }
                     }
                 }
             }
@@ -1720,17 +2284,34 @@ Item {
                 id: platform
                 objectName: "mesh-platform"
                 pickable: true
+                underGlow: root.platformGlowMesh !== null
                 meshData: root.platformMesh
                 materialData: root.platformMaterial
                 surfaceTexture: root.themeTexture
                 surfaceNormalTexture: root.themeNormalTexture
                 emissionScale: root.emissionScale
+                IconStyle3D {
+                    objectName: "mesh-platform-glow"
+                    visible: root.platformGlowMesh !== null
+                    meshData: root.platformGlowMesh
+                    materialData: ({})
+                    shellMaterial: platformGlowMaterial
+                }
+                IconStyle3D {
+                    objectName: "mesh-platform-glow-wash"
+                    visible: root.platformWashMesh !== null
+                    meshData: root.platformWashMesh
+                    materialData: ({})
+                    shellMaterial: platformWashMaterial
+                    opacity: root.panelGlowWash
+                }
             }
             Repeater3D {
                 id: panelPartNodes
                 model: root.panelParts.length
                 delegate: IconStyle3D {
                     required property int index
+                    readonly property var meshBox: root.meshBox(meshData)
                     objectName: "mesh-panel-part-" + index
                     partDefinition: root.panelParts[index].definition
                     visible: partDefinition.mechanism === root.mechanism

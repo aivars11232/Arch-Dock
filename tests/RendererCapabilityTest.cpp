@@ -24,6 +24,7 @@
 #include <QVector3D>
 #include <QWheelEvent>
 #include <QtTest>
+#include <QElapsedTimer>
 
 #include <memory>
 
@@ -57,15 +58,41 @@ QObject *objectValue(const QVariant &value)
 // Keep the native pixel/geometry oracle independent of the QML helper. The
 // public Camera overload reads the renderer's projection; View3D's overload
 // writes that shared projection while the threaded renderer can be using it.
+// A scene position in the panel's own coordinates, as the renderer maps it
+// for input (PanelScene3D.projectScenePoint): through the camera's own frame.
+// Qt's camera viewport mapping keeps a projection from before the view last
+// changed shape, and the view is drawn past the panel's box by margins that
+// change as the scene does; the pixel checks below compare this mapping
+// with what is drawn.
 bool projectScenePoint(QObject *view, const QVector3D &position, QVector3D &point)
 {
-    auto *camera = view ? objectValue(view->property("camera")) : nullptr;
-    QVector3D normalized;
-    if (!camera || !QMetaObject::invokeMethod(camera, "mapToViewport",
-        Q_RETURN_ARG(QVector3D, normalized), Q_ARG(QVector3D, position))) return false;
-    point = normalized * QVector3D(view->property("width").toFloat(),
-                                  view->property("height").toFloat(), 1);
-    return true;
+    auto *item = qobject_cast<QQuickItem *>(view);
+    QObject *renderer = item ? item->parentItem() : nullptr;
+    QVariant mapped;
+    if (!renderer || !QMetaObject::invokeMethod(renderer, "projectScenePoint",
+        Q_RETURN_ARG(QVariant, mapped), Q_ARG(QVariant, QVariant::fromValue(position)))) return false;
+    point = mapped.value<QVector3D>();
+    return std::isfinite(point.x()) && std::isfinite(point.y());
+}
+
+// The 3D view's picture, cropped to the panel's box: the view is drawn past
+// the box by its margins (PanelScene3D.drawnBounds), and the tests measure in
+// the panel's own coordinates.
+QImage panelPixels(QQuickItem *view)
+{
+    const auto grab = view ? view->grabToImage() : nullptr;
+    if (!grab)
+        return {};
+    QSignalSpy ready(grab.get(), &QQuickItemGrabResult::ready);
+    if (!ready.wait(5000))
+        return {};
+    const QImage image = grab->image();
+    auto *panel = view->parentItem();
+    if (!panel)
+        return image;
+    const double scale = image.width() / std::max(1.0, view->width());
+    return image.copy(qRound(-view->x() * scale), qRound(-view->y() * scale),
+                      qRound(panel->width() * scale), qRound(panel->height() * scale));
 }
 
 // Each missing-module case runs in a separate process: another engine cannot
@@ -249,15 +276,7 @@ private slots:
             if (!renderer)
                 return {};
             auto *viewport = qobject_cast<QQuickItem *>(objectValue(renderer->property("viewport")));
-            if (!viewport)
-                return {};
-            const auto grab = viewport->grabToImage();
-            if (!grab)
-                return {};
-            QSignalSpy ready(grab.get(), &QQuickItemGrabResult::ready);
-            if (!ready.wait(5000))
-                return {};
-            return grab->image();
+            return viewport ? panelPixels(viewport) : QImage();
         };
         QTest::qWait(200); // Allow the asynchronous icon source to reach the mesh texture.
         const QImage first = pixels();
@@ -466,7 +485,13 @@ private slots:
             edited.insert("scene3DIconElevation", 0.0);
             edited.insert("scene3DThickness", 4.0);
             edited.insert("panelMotionTarget", "items");
-            bool covered = false, exposed = false;
+            // With no box round the panel (the owner, 2026-10-13: "the only
+            // edge is edge of the screen") an entry that travels out of the
+            // panel's box is still drawn and still answers there; each
+            // entry answers exactly when nothing of the platform is in front
+            // of it. (Before, entries out of the box were cut off and read
+            // as covered.)
+            bool exposed = false, exposedOutside = false;
             const double period = plainValue(scene->property("trackWindow")).toMap().value("loop").toDouble();
             QVERIFY(period > 0);
             for (double pitch : {-60.0, -35.0, 35.0, 60.0}) {
@@ -550,14 +575,26 @@ private slots:
                         QVERIFY(QMetaObject::invokeMethod(renderer, "entryPointVisible", Q_RETURN_ARG(QVariant, visible),
                             Q_ARG(QVariant, index), Q_ARG(QVariant, QVariant(QPointF(rect.value("centerX").toDouble(),
                                                                                 rect.value("centerY").toDouble())))));
-                        covered |= !visible.toBool(); exposed |= visible.toBool();
+                        QVariant behind;
+                        QVERIFY(QMetaObject::invokeMethod(renderer, "entryPointBehindPlatform",
+                            Q_RETURN_ARG(QVariant, behind), Q_ARG(QVariant, index),
+                            Q_ARG(QVariant, QVariant(QPointF(rect.value("centerX").toDouble(),
+                                                             rect.value("centerY").toDouble())))));
+                        QVERIFY2(visible.toBool() == !behind.toBool(), qPrintable(QStringLiteral(
+                            "entry %1 at pitch %2 step %3 answers %4 behind %5").arg(index).arg(pitch).arg(step)
+                            .arg(visible.toBool()).arg(behind.toBool())));
+                        exposed |= visible.toBool();
+                        const double x = rect.value("centerX").toDouble(), y = rect.value("centerY").toDouble();
+                        exposedOutside |= visible.toBool()
+                            && (x < 0 || y < 0 || x > scene->width() || y > scene->height());
                     }
                     if (!evidence.isEmpty() && pitch == -60)
                         QVERIFY(travelled.save(QDir(evidence).filePath(QStringLiteral("travel-occlusion-%1.png").arg(step))));
                     QCOMPARE(scene->property("effectiveLayoutAngle").toDouble(), 0.0);
                 }
             }
-            QVERIFY2(covered && exposed, "native platform travel must expose front entries and exclude covered rear entries");
+            QVERIFY2(exposed && exposedOutside,
+                     "native platform travel must keep its entries drawn and answering, out of its box too");
             edited.insert("panelRotationMode", "clockwise");
             edited.insert("panelRotationTrigger", "idle");
             edited.insert("panelTravelSpeed", 2.0);
@@ -1255,7 +1292,16 @@ private slots:
         scene->setProperty("sceneKeyLight", 2.0);
         QObject *camera = objectValue(viewport->property("camera"));
         QVERIFY(camera);
-        QTRY_COMPARE(camera->property("fieldOfView").toDouble(), 60.0);
+        QTRY_COMPARE(renderer->property("panelFieldOfView").toDouble(), 60.0);
+        // The camera shows the panel's box through that field, widened by as
+        // much as the view reaches past the box.
+        const auto viewField = [&]() {
+            return qRadiansToDegrees(2 * std::atan(std::tan(qDegreesToRadians(30.0))
+                * viewport->property("height").toDouble() / scene->height()));
+        };
+        QTRY_VERIFY2(qAbs(camera->property("fieldOfView").toDouble() - viewField()) < 1e-3,
+                     qPrintable(QStringLiteral("%1 for %2").arg(camera->property("fieldOfView").toDouble())
+                                    .arg(viewField())));
         QTRY_COMPARE(renderer->findChild<QObject *>(QStringLiteral("mesh-key-light"))
                          ->property("brightness").toDouble(), 2.0);
         QTRY_VERIFY(projectionMatches());
@@ -1607,11 +1653,7 @@ private slots:
         }
 
         const auto pixels = [&]() -> QImage {
-            auto *view = qobject_cast<QQuickItem *>(viewport);
-            const auto grab = view ? view->grabToImage() : nullptr;
-            if (!grab) return {};
-            QSignalSpy ready(grab.get(), &QQuickItemGrabResult::ready);
-            return ready.wait(5000) ? grab->image() : QImage();
+            return panelPixels(qobject_cast<QQuickItem *>(viewport));
         };
         // A point of the platform's own frame (units of its scale) as drawn.
         const auto drawn = [&](double x, double y) {
@@ -2061,6 +2103,662 @@ private slots:
         QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
     }
 
+    // The owner, 2026-10-13: a scaled, tilted or moved 3D panel was cut off at
+    // an invisible box, its widget's size - "there shouldn't be any edge ...
+    // the only edge is edge of the screen". The view reaches past the box as
+    // far as the scene does, nothing on the screen moves when it grows, and
+    // what is drawn out there is drawn and answers the pointer. The handles of
+    // a small platform moved to the right of its box reach past the box.
+    void sceneDrawsPastItsBoxWithoutMovingAnything()
+    {
+        if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+            return; // Needs the private RHI session, like the scene gates above.
+        const QString themeRoot = qEnvironmentVariable("ARCHDOCK_RENDERING_STAGED_THEME_ROOT",
+            QStringLiteral(ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT));
+        const auto package = ArchDock::ThemePackage::load(
+            themeRoot + QStringLiteral("/mesh-platform-cyan/archdock-theme.json"));
+        QVERIFY2(package.isValid(), qPrintable(package.primaryCode()));
+        const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
+        QQmlEngine engine;
+        QStringList unexpectedWarnings;
+        connect(&engine, &QQmlEngine::warnings, &engine, [&](const QList<QQmlError> &warnings) {
+            for (const auto &warning : warnings)
+                unexpectedWarnings.append(warning.toString());
+        });
+        engine.addImportPath(importRoot());
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import ArchDock.Rendering 1.0
+            PanelScene {
+                required property string glyphFixture
+                property bool editing: false
+                property real glow: 0
+                panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
+                                   scene3DQuality: "low", iconSize: 40, spacing: 8, layoutPadding: 10,
+                                   scene3DScale: 0.5, scene3DPositionX: 1, scene3DTransitions: false,
+                                   scene3DCameraPitch: 25, scene3DCameraYaw: 0,
+                                   pedestalShape: "disc", pedestalGlow: glow})
+                sceneEditActive: editing
+                entryDelegateContext: ({hostKind: "free"})
+                hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [
+                    {id: "open", available: true}]})
+                orderedEntries: [0, 1, 2, 3, 4, 5].map(function(index) {
+                    return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphFixture}
+                })
+            }
+        )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/NoBoxConsumer.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QQuickWindow window;
+        window.setColor(Qt::black);
+        std::unique_ptr<QObject> object(component.createWithInitialProperties({
+            {QStringLiteral("themeDefinition"), package.package->runtimeProjection()},
+            {QStringLiteral("glyphFixture"), QUrl::fromLocalFile(glyphFixture).toString()}}));
+        QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+        auto *scene = qobject_cast<QQuickItem *>(object.get());
+        QVERIFY(scene);
+        scene->setParentItem(window.contentItem());
+        // Room round the panel's box, as a desktop has.
+        scene->setPosition(QPointF(scene->width(), scene->height() / 2));
+        window.resize(qCeil(scene->width() * 3), qCeil(scene->height() * 2));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(),
+                                 QStringLiteral("true3d"), 5000);
+        auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+        QObject *viewport = renderer ? objectValue(renderer->property("viewport")) : nullptr;
+        QVERIFY(renderer && viewport);
+        QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 6);
+        QTest::qWait(250);
+        const auto centres = [&]() {
+            QList<QPointF> result;
+            for (const QVariant &rect : plainValue(renderer->property("projectedEntryGeometry")).toList())
+                result.append(QPointF(rect.toMap().value("centerX").toDouble(),
+                                      rect.toMap().value("centerY").toDouble()));
+            return result;
+        };
+        const auto drag = [&](const QPoint &from, const QPoint &to) {
+            QTest::mousePress(&window, Qt::LeftButton, {}, from);
+            for (int step = 1; step <= 5; ++step)
+                QTest::mouseMove(&window, from + (to - from) * step / 5);
+            QTest::mouseRelease(&window, Qt::LeftButton, {}, to);
+        };
+        const QList<QPointF> resting = centres();
+        const double restingMargin = renderer->property("overflowX").toDouble();
+        QSignalSpy edits(scene, SIGNAL(sceneTransformEdited(QVariant)));
+        QVERIFY(edits.isValid());
+
+        // A glow round the stands needs room past the box: the view grows
+        // round it, on both sides alike, the panel reports where it is
+        // drawn, and nothing moves on the screen.
+        scene->setProperty("glow", 0.6);
+        QTRY_VERIFY2(renderer->property("overflowX").toDouble() > restingMargin,
+                     qPrintable(QStringLiteral("margin %1, was %2")
+                                    .arg(renderer->property("overflowX").toDouble()).arg(restingMargin)));
+        const double glowMargin = renderer->property("overflowX").toDouble();
+        QCOMPARE(viewport->property("x").toDouble(), -glowMargin);
+        QCOMPARE(viewport->property("width").toDouble(), scene->width() + 2 * glowMargin);
+        const QRectF drawn = scene->property("drawnBounds").toRectF();
+        QVERIFY2(drawn.left() <= -glowMargin + 0.5 && drawn.right() >= scene->width() + glowMargin - 0.5,
+                 qPrintable(QStringLiteral("drawn %1..%2").arg(drawn.left()).arg(drawn.right())));
+        QTest::qWait(250);
+        const QList<QPointF> glowing = centres();
+        QCOMPARE(glowing.size(), resting.size());
+        for (int index = 0; index < resting.size(); ++index)
+            QVERIFY2(QLineF(resting[index], glowing[index]).length() < 0.75,
+                     qPrintable(QStringLiteral("entry %1 moved from %2,%3 to %4,%5").arg(index)
+                                    .arg(resting[index].x()).arg(resting[index].y())
+                                    .arg(glowing[index].x()).arg(glowing[index].y())));
+        scene->setProperty("glow", 0.0);
+
+        // The handles reach past the box, and the view takes them in.
+        scene->setProperty("editing", true);
+        QTRY_VERIFY(renderer->property("editMode").toBool());
+        QTest::qWait(300);
+        const double margin = renderer->property("overflowX").toDouble();
+        QVERIFY(margin > 0);
+
+        // The view ring stands past the box's right edge, and is drawn there.
+        renderer->setProperty("gizmoMode", QStringLiteral("rotate"));
+        QTest::qWait(300);
+        QObject *ring = renderer->findChild<QObject *>(QStringLiteral("gizmo-rotate-view-0"));
+        QObject *gizmo = renderer->findChild<QObject *>(QStringLiteral("mesh-gizmo"));
+        QVERIFY(ring && gizmo);
+        QVector3D onRing, middle;
+        QVERIFY(projectScenePoint(viewport, ring->property("scenePosition").value<QVector3D>(), onRing));
+        QVERIFY(projectScenePoint(viewport, gizmo->property("scenePosition").value<QVector3D>(), middle));
+        QVERIFY2(onRing.x() > scene->width() + 2 && onRing.x() < scene->width() + margin,
+                 qPrintable(QStringLiteral("ring at %1 of %2, margin %3").arg(onRing.x())
+                                .arg(scene->width()).arg(margin)));
+        const QImage frame = window.grabWindow();
+        const qreal ratio = frame.devicePixelRatio();
+        const int left = qCeil((scene->x() + scene->width() + 1) * ratio);
+        const int right = qMin(frame.width(), qFloor((scene->x() + scene->width() + margin) * ratio));
+        int lit = 0;
+        for (int y = 0; y < frame.height(); ++y)
+            for (int x = left; x < right; ++x)
+                if (qGray(frame.pixel(x, y)) > 60)
+                    ++lit;
+        QVERIFY2(lit > 20, qPrintable(QStringLiteral("%1 lit pixels past the box").arg(lit)));
+
+        // A drag on it out there turns the view.
+        const QPointF centre = scene->mapToScene(QPointF(middle.x(), middle.y()));
+        const QPoint from = scene->mapToScene(QPointF(onRing.x(), onRing.y())).toPoint();
+        const QPointF radius = QPointF(from) - centre;
+        const double turn = qDegreesToRadians(25.0);
+        const QPointF turned(radius.x() * qCos(turn) - radius.y() * qSin(turn),
+                             radius.x() * qSin(turn) + radius.y() * qCos(turn));
+        drag(from, (centre + turned).toPoint());
+        QTRY_COMPARE(edits.count(), 1);
+        const QVariant value = edits.at(0).at(0);
+        const QVariantMap values = value.metaType() == QMetaType::fromType<QJSValue>()
+            ? value.value<QJSValue>().toVariant().toMap() : value.toMap();
+        QVERIFY2(qAbs(values.value(QStringLiteral("scene3DRoll")).toDouble()) > 10,
+                 qPrintable(QStringLiteral("roll %1").arg(values.value(QStringLiteral("scene3DRoll")).toDouble())));
+        scene->setProperty("editing", false);
+        QTRY_VERIFY(!renderer->property("editMode").toBool());
+        QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
+    }
+
+    // The owner, 2026-10-13: a stand's glow "isn't really glow, it's just
+    // intense color". A glowing stand sheds light round it, over whatever is
+    // behind the panel, as far as its Glow reach; without glow the view runs
+    // no glow at all.
+    void standGlowShinesRoundTheStand()
+    {
+        if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+            return; // Needs the private RHI session, like the scene gates above.
+        const QString themeRoot = qEnvironmentVariable("ARCHDOCK_RENDERING_STAGED_THEME_ROOT",
+            QStringLiteral(ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT));
+        const auto package = ArchDock::ThemePackage::load(
+            themeRoot + QStringLiteral("/mesh-platform-cyan/archdock-theme.json"));
+        QVERIFY2(package.isValid(), qPrintable(package.primaryCode()));
+        const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
+        QQmlEngine engine;
+        QStringList unexpectedWarnings;
+        connect(&engine, &QQmlEngine::warnings, &engine, [&](const QList<QQmlError> &warnings) {
+            for (const auto &warning : warnings)
+                unexpectedWarnings.append(warning.toString());
+        });
+        engine.addImportPath(importRoot());
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import ArchDock.Rendering 1.0
+            PanelScene {
+                required property string glyphFixture
+                required property string standColour
+                property real glow: 0
+                property real reach: 0.75
+                panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
+                                   scene3DQuality: "medium", iconSize: 40, spacing: 8, layoutPadding: 10,
+                                   scene3DTransitions: false, pedestalShape: "disc",
+                                   pedestalColor: standColour, pedestalGlow: glow, pedestalGlowReach: reach})
+                entryDelegateContext: ({hostKind: "free"})
+                hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [
+                    {id: "open", available: true}]})
+                orderedEntries: [0, 1, 2, 3, 4, 5].map(function(index) {
+                    return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphFixture}
+                })
+            }
+        )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/GlowConsumer.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QQuickWindow window;
+        window.setColor(Qt::black);
+        // The owner's green (a colour written in the QML above stops moc).
+        std::unique_ptr<QObject> object(component.createWithInitialProperties({
+            {QStringLiteral("themeDefinition"), package.package->runtimeProjection()},
+            {QStringLiteral("standColour"), QStringLiteral("#07fd28")},
+            {QStringLiteral("glyphFixture"), QUrl::fromLocalFile(glyphFixture).toString()}}));
+        QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+        auto *scene = qobject_cast<QQuickItem *>(object.get());
+        QVERIFY(scene);
+        scene->setParentItem(window.contentItem());
+        scene->setPosition(QPointF(scene->width() / 2, scene->height() / 2));
+        window.resize(qCeil(scene->width() * 2), qCeil(scene->height() * 2));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(),
+                                 QStringLiteral("true3d"), 5000);
+        auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+        QObject *viewport = renderer ? objectValue(renderer->property("viewport")) : nullptr;
+        QVERIFY(renderer && viewport);
+        QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 6);
+        // Green light on the black behind the panel: the stands, and the
+        // light round them. The cyan platform is not counted.
+        const auto greenLight = [&]() {
+            const QImage frame = window.grabWindow();
+            int count = 0;
+            for (int y = 0; y < frame.height(); ++y)
+                for (int x = 0; x < frame.width(); ++x) {
+                    const QRgb pixel = frame.pixel(x, y);
+                    if (qGreen(pixel) > 12 && qGreen(pixel) > qRed(pixel) + 8 && qGreen(pixel) > qBlue(pixel) + 8)
+                        ++count;
+                }
+            return count;
+        };
+        QTest::qWait(400);
+        QVERIFY(!renderer->property("bloomWanted").toBool());
+        QVERIFY(!objectValue(viewport->property("environment"))->property("glowEnabled").toBool());
+        const int unlit = greenLight();
+        QVERIFY2(unlit > 50, qPrintable(QStringLiteral("%1 stand pixels").arg(unlit)));
+
+        scene->setProperty("glow", 0.8);
+        QTRY_VERIFY(renderer->property("bloomWanted").toBool());
+        QTRY_VERIFY(objectValue(viewport->property("environment"))->property("glowEnabled").toBool());
+        QCOMPARE(renderer->property("bloomLevels").toInt(), 6);
+        QTest::qWait(500);
+        const int lit = greenLight();
+        QVERIFY2(lit > unlit * 1.3 + 300,
+                 qPrintable(QStringLiteral("%1 lit pixels with glow, %2 without").arg(lit).arg(unlit)));
+
+        // Its reach: from three halvings of the blur to seven, the light
+        // reaching further out of the stands, and the view leaving room.
+        scene->setProperty("reach", 0.0);
+        QTRY_COMPARE(renderer->property("bloomLevels").toInt(), 3);
+        QTest::qWait(500);
+        const int near = greenLight();
+        scene->setProperty("reach", 1.0);
+        QTRY_COMPARE(renderer->property("bloomLevels").toInt(), 7);
+        QTest::qWait(500);
+        const int far = greenLight();
+        QVERIFY2(far > near * 1.2,
+                 qPrintable(QStringLiteral("%1 lit pixels at full reach, %2 at none").arg(far).arg(near)));
+        QVERIFY(renderer->property("glowReach").toDouble() >= 12 * 32);
+
+        scene->setProperty("glow", 0.0);
+        QTRY_VERIFY(!objectValue(viewport->property("environment"))->property("glowEnabled").toBool());
+        QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
+    }
+
+    // The owner, 2026-10-13: lightning, a look of its own that looks like
+    // lightning, "together with animations", on a background from clear to
+    // dark storm. In 3D it strikes at random - a flash past white, the bolts
+    // jumping along the band - between faint flickers, and keeps still under
+    // reduced motion.
+    void lightningLookStrikesAndKeepsStill()
+    {
+        if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+            return; // Needs the private RHI session, like the scene gates above.
+        const QString themeRoot = qEnvironmentVariable("ARCHDOCK_RENDERING_STAGED_THEME_ROOT",
+            QStringLiteral(ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT));
+        const auto package = ArchDock::ThemePackage::load(
+            themeRoot + QStringLiteral("/mesh-platform-cyan/archdock-theme.json"));
+        QVERIFY2(package.isValid(), qPrintable(package.primaryCode()));
+        const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
+        QQmlEngine engine;
+        QStringList unexpectedWarnings;
+        connect(&engine, &QQmlEngine::warnings, &engine, [&](const QList<QQmlError> &warnings) {
+            for (const auto &warning : warnings)
+                unexpectedWarnings.append(warning.toString());
+        });
+        engine.addImportPath(importRoot());
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import ArchDock.Rendering 1.0
+            PanelScene {
+                required property string glyphFixture
+                property bool reduced: false
+                property real background: 0.5
+                panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
+                                   scene3DQuality: "low", iconSize: 40, spacing: 8, layoutPadding: 10,
+                                   scene3DTransitions: false, scene3DMaterial: "lightning",
+                                   panelLookBackground: background, lookMotionSpeed: 3})
+                animationProfiles: ({reducedMotion: reduced})
+                entryDelegateContext: ({hostKind: "free"})
+                hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [
+                    {id: "open", available: true}]})
+                orderedEntries: [0, 1, 2, 3].map(function(index) {
+                    return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphFixture}
+                })
+            }
+        )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/LightningConsumer.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QQuickWindow window;
+        std::unique_ptr<QObject> object(component.createWithInitialProperties({
+            {QStringLiteral("themeDefinition"), package.package->runtimeProjection()},
+            {QStringLiteral("glyphFixture"), QUrl::fromLocalFile(glyphFixture).toString()}}));
+        QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+        auto *scene = qobject_cast<QQuickItem *>(object.get());
+        QVERIFY(scene);
+        scene->setParentItem(window.contentItem());
+        window.resize(qCeil(scene->width()), qCeil(scene->height()));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(),
+                                 QStringLiteral("true3d"), 5000);
+        auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+        QVERIFY(renderer);
+        QCOMPARE(renderer->property("textureMaterial").toString(), QStringLiteral("lightning"));
+        QTRY_VERIFY(renderer->property("materialTextureReady").toBool());
+        QTRY_VERIFY(renderer->property("lightningActive").toBool());
+        QCOMPARE(renderer->property("panelLookBackground").toDouble(), 0.5);
+
+        // It strikes: a flash, and the bolts somewhere else.
+        const double firstShift = renderer->property("lightningShift").toDouble();
+        bool flashed = false, moved = false;
+        QElapsedTimer clock;
+        clock.start();
+        while (clock.elapsed() < 8000 && !(flashed && moved)) {
+            QTest::qWait(15);
+            flashed = flashed || renderer->property("lightningFlash").toDouble() > 0.5;
+            moved = moved || renderer->property("lightningShift").toDouble() != firstShift;
+        }
+        QVERIFY2(flashed && moved, qPrintable(QStringLiteral("flashed %1, moved %2").arg(flashed).arg(moved)));
+
+        // A clear background is clear: the surface blends.
+        scene->setProperty("background", 0.0);
+        QTRY_COMPARE(renderer->property("panelLookBackground").toDouble(), 0.0);
+
+        // Reduced motion keeps it still and dark.
+        scene->setProperty("reduced", true);
+        QTRY_VERIFY(!renderer->property("lightningActive").toBool());
+        QTRY_COMPARE(renderer->property("lightningFlash").toDouble(), 0.0);
+        const double stillShift = renderer->property("lightningShift").toDouble();
+        QTest::qWait(700);
+        QCOMPARE(renderer->property("lightningShift").toDouble(), stillShift);
+        QCOMPARE(renderer->property("lightningFlash").toDouble(), 0.0);
+        QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
+    }
+
+    // The wheel over an icon turns a panel whose view reaches past its box
+    // (the room kept round a glow), as it does one drawn inside it, even
+    // straight after the view grew: icons are hit through the camera's own
+    // frame, not Qt's picking, whose projection lags a view that changed
+    // shape until it renders again.
+    void wheelTurnsAPanelDrawnPastItsBox()
+    {
+        if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+            return; // Needs the private RHI session, like the scene gates above.
+        const QString themeRoot = qEnvironmentVariable("ARCHDOCK_RENDERING_STAGED_THEME_ROOT",
+            QStringLiteral(ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT));
+        const auto package = ArchDock::ThemePackage::load(
+            themeRoot + QStringLiteral("/mesh-platform-cyan/archdock-theme.json"));
+        QVERIFY2(package.isValid(), qPrintable(package.primaryCode()));
+        const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
+        QQmlEngine engine;
+        engine.addImportPath(importRoot());
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import ArchDock.Rendering 1.0
+            PanelScene {
+                required property string glyphFixture
+                property real glow: 0
+                panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
+                                   scene3DQuality: "low", iconSize: 40, spacing: 8, layoutPadding: 10,
+                                   scene3DTransitions: false, panelMotionTarget: "panel",
+                                   panelRotationMode: "none", panelGlow: glow, panelGlowReach: 0.7})
+                entryDelegateContext: ({hostKind: "free"})
+                hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [
+                    {id: "open", available: true}]})
+                orderedEntries: [0, 1, 2, 3, 4].map(function(index) {
+                    return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphFixture}
+                })
+            }
+        )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/WheelConsumer.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QQuickWindow window;
+        std::unique_ptr<QObject> object(component.createWithInitialProperties({
+            {QStringLiteral("themeDefinition"), package.package->runtimeProjection()},
+            {QStringLiteral("glyphFixture"), QUrl::fromLocalFile(glyphFixture).toString()}}));
+        QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+        auto *scene = qobject_cast<QQuickItem *>(object.get());
+        QVERIFY(scene);
+        scene->setParentItem(window.contentItem());
+        scene->setPosition(QPointF(scene->width(), scene->height()));
+        window.resize(qCeil(scene->width() * 3), qCeil(scene->height() * 3));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(),
+                                 QStringLiteral("true3d"), 5000);
+        auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+        QVERIFY(renderer);
+        QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 5);
+        QTRY_VERIFY(scene->property("wheelRotationAvailable").toBool());
+        const auto turnOnce = [&](const QString &when) {
+            QSignalSpy frame(&window, &QQuickWindow::frameSwapped);
+            window.update();
+            QVERIFY(frame.wait(5000));
+            QTest::qWait(150);
+            const auto rect = plainValue(renderer->property("projectedEntryGeometry")).toList().value(1).toMap();
+            const QPointF point = scene->mapToScene(QPointF(rect.value("centerX").toDouble(),
+                                                            rect.value("centerY").toDouble()));
+            const double before = scene->property("wheelRotationTarget").toDouble();
+            const double angle = scene->property("sceneRotationAngle").toDouble();
+            QTest::mouseMove(&window, point.toPoint());
+            QWheelEvent wheel(point, window.mapToGlobal(point.toPoint()), QPoint(), QPoint(0, 120),
+                Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+            QCoreApplication::sendEvent(&window, &wheel);
+            QTRY_VERIFY2(qAbs(scene->property("wheelRotationTarget").toDouble() - before - 15) < 0.01,
+                         qPrintable(QStringLiteral("%1: margin %2, rotation target %3 from %4")
+                                        .arg(when).arg(renderer->property("overflowX").toDouble())
+                                        .arg(scene->property("wheelRotationTarget").toDouble()).arg(before)));
+            // The panel itself turns there, as a desktop sees it.
+            QTRY_VERIFY2(qAbs(std::fmod(scene->property("sceneRotationAngle").toDouble() - angle - 15 + 720, 360)) < 0.01,
+                         qPrintable(QStringLiteral("%1: margin %2, angle %3 from %4")
+                                        .arg(when).arg(renderer->property("overflowX").toDouble())
+                                        .arg(scene->property("sceneRotationAngle").toDouble()).arg(angle)));
+        };
+        qInfo("resting margin %.0f", renderer->property("overflowX").toDouble());
+        turnOnce(QStringLiteral("at rest"));
+        if (QTest::currentTestFailed())
+            return;
+        scene->setProperty("glow", 0.6);
+        QTRY_VERIFY(renderer->property("overflowX").toDouble() >= renderer->property("glowReach").toDouble());
+        turnOnce(QStringLiteral("glowing"));
+        if (QTest::currentTestFailed())
+            return;
+        // Straight after the view grows again, before it renders.
+        const double glowRoom = renderer->property("glowReach").toDouble();
+        scene->setProperty("glow", 0.0);
+        QTRY_VERIFY(renderer->property("overflowX").toDouble() < glowRoom);
+        QTest::qWait(300);
+        const auto rect = plainValue(renderer->property("projectedEntryGeometry")).toList().value(2).toMap();
+        const QPointF point = scene->mapToScene(QPointF(rect.value("centerX").toDouble(),
+                                                        rect.value("centerY").toDouble()));
+        QTest::mouseMove(&window, point.toPoint());
+        scene->setProperty("glow", 0.6);
+        QTRY_VERIFY(renderer->property("overflowX").toDouble() >= glowRoom);
+        const double before = scene->property("wheelRotationTarget").toDouble();
+        QWheelEvent wheel(point, window.mapToGlobal(point.toPoint()), QPoint(), QPoint(0, 120),
+            Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+        QCoreApplication::sendEvent(&window, &wheel);
+        QTRY_VERIFY2(qAbs(scene->property("wheelRotationTarget").toDouble() - before - 15) < 0.01,
+                     qPrintable(QStringLiteral("straight after the view grew: target %1 from %2")
+                                    .arg(scene->property("wheelRotationTarget").toDouble()).arg(before)));
+    }
+
+    // The owner's desktop, 2026-10-13: a ring that fits its box, lightning
+    // look, Panel glow on. Its light was cut along the box in a straight
+    // line (the view only grew for a shape reaching out of the box), and the
+    // glow's shell showed through the see-through band, so the ring was
+    // white. The light fades out before the view ends, and the band keeps
+    // its look.
+    void panelGlowShinesRoundThePanelNotThroughIt()
+    {
+        if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+            return; // Needs the private RHI session, like the scene gates above.
+        const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
+        // The generated platform of a free panel without a 3D theme, as
+        // PanelRegistry::genericScene3D projects it, at its own camera.
+        QVariantMap theme{
+            {QStringLiteral("format"), QStringLiteral("org.archdock.theme")},
+            {QStringLiteral("version"), 2}, {QStringLiteral("valid"), true},
+            {QStringLiteral("id"), QStringLiteral("procedural-look")},
+            {QStringLiteral("name"), QStringLiteral("Procedural look")},
+            {QStringLiteral("capabilities"), QVariantMap{
+                {QStringLiteral("rendererTiers"), QVariantList{QStringLiteral("true3d"), QStringLiteral("procedural2d")}},
+                {QStringLiteral("preferredRendererTier"), QStringLiteral("procedural2d")},
+                {QStringLiteral("fallbackRendererTiers"), QVariantList{QStringLiteral("procedural2d")}}}}};
+        theme.insert(QStringLiteral("scene3D"), QVariantMap{
+            {QStringLiteral("generic"), true}, {QStringLiteral("generated"), QVariantMap{}},
+            {QStringLiteral("fieldOfView"), 40}, {QStringLiteral("cameraPitch"), 25},
+            {QStringLiteral("cameraYaw"), 10}, {QStringLiteral("keyLightBrightness"), 1.2},
+            {QStringLiteral("fillLightBrightness"), 0.45},
+            {QStringLiteral("defaultQuality"), QStringLiteral("high")},
+            {QStringLiteral("transitions"), false}, {QStringLiteral("parts"), QVariantList{}}});
+        theme.insert(QStringLiteral("scene3DResources"), QVariantMap{
+            {QStringLiteral("material"), QVariantMap{
+                {QStringLiteral("format"), QStringLiteral("org.archdock.material")},
+                {QStringLiteral("version"), 1}, {QStringLiteral("baseColor"), QStringLiteral("#406080")},
+                {QStringLiteral("emissiveColor"), QStringLiteral("#000000")},
+                {QStringLiteral("emissiveStrength"), 0.0}, {QStringLiteral("metalness"), 0.3},
+                {QStringLiteral("roughness"), 0.45}}},
+            {QStringLiteral("parts"), QVariantList{}}, {QStringLiteral("indexBudget"), 262144}});
+        QQmlEngine engine;
+        QStringList unexpectedWarnings;
+        connect(&engine, &QQmlEngine::warnings, &engine, [&](const QList<QQmlError> &warnings) {
+            for (const auto &warning : warnings)
+                unexpectedWarnings.append(warning.toString());
+        });
+        engine.addImportPath(importRoot());
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import ArchDock.Rendering 1.0
+            PanelScene {
+                required property string glyphFixture
+                property real glow: 0
+                property string look: "lightning"
+                panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
+                                   scene3DQuality: "low", iconSize: 40, spacing: 8, layoutPadding: 10,
+                                   scene3DTransitions: false, scene3DMaterial: look, scene3DTexture: look,
+                                   panelLookBackground: 0.5, panelGlow: glow, panelGlowReach: 0.7})
+                animationProfiles: ({reducedMotion: true})
+                entryDelegateContext: ({hostKind: "free"})
+                hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [
+                    {id: "open", available: true}]})
+                orderedEntries: [0, 1, 2, 3].map(function(index) {
+                    return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphFixture}
+                })
+            }
+        )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/PanelGlowConsumer.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QQuickWindow window;
+        // A grey desktop: light over it and anything darker both show.
+        window.setColor(QColor(48, 48, 48));
+        std::unique_ptr<QObject> object(component.createWithInitialProperties({
+            {QStringLiteral("themeDefinition"), theme},
+            {QStringLiteral("glyphFixture"), QUrl::fromLocalFile(glyphFixture).toString()}}));
+        QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+        auto *scene = qobject_cast<QQuickItem *>(object.get());
+        QVERIFY(scene);
+        scene->setParentItem(window.contentItem());
+        scene->setPosition(QPointF(scene->width() * 1.5, scene->height() * 1.5));
+        window.resize(qCeil(scene->width() * 4), qCeil(scene->height() * 4));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(),
+                                 QStringLiteral("true3d"), 5000);
+        auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+        QVERIFY(renderer);
+        QTRY_VERIFY(renderer->property("materialTextureReady").toBool());
+        QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 4);
+        QTest::qWait(400);
+        // The ring fits its box: without its light the view keeps less room
+        // round it than the glow below needs.
+        const double restingMargin = renderer->property("overflowX").toDouble();
+        QVERIFY2(restingMargin < 12 * 16, qPrintable(QStringLiteral("resting margin %1").arg(restingMargin)));
+        const QString frames = qEnvironmentVariable("ARCHDOCK_TEST_FRAME_DIR");
+        const auto grab = [&](const QString &name) {
+            const QImage frame = window.grabWindow();
+            if (!frames.isEmpty())
+                frame.save(frames + QLatin1Char('/') + name + QStringLiteral(".png"));
+            return frame;
+        };
+        // The band: the ring between its inner and outer edge, in the box.
+        const QRectF box = scene->mapRectToScene(QRectF(0, 0, scene->width(), scene->height()));
+        const auto bandWhite = [&](const QImage &frame) {
+            const qreal ratio = frame.devicePixelRatio();
+            int white = 0, band = 0;
+            for (int y = qCeil(box.top() * ratio); y < qFloor(box.bottom() * ratio); ++y)
+                for (int x = qCeil(box.left() * ratio); x < qFloor(box.right() * ratio); ++x) {
+                    const QRgb pixel = frame.pixel(x, y);
+                    if (qAbs(qRed(pixel) - 48) + qAbs(qGreen(pixel) - 48) + qAbs(qBlue(pixel) - 48) < 12)
+                        continue; // the desktop
+                    ++band;
+                    if (qMin(qRed(pixel), qMin(qGreen(pixel), qBlue(pixel))) > 225)
+                        ++white;
+                }
+            return std::pair<int, int>(white, band);
+        };
+        const auto [unlitWhite, unlitBand] = bandWhite(grab(QStringLiteral("panel-glow-off")));
+        QVERIFY2(unlitBand > 2000, qPrintable(QStringLiteral("%1 band pixels").arg(unlitBand)));
+        auto *view = qobject_cast<QQuickItem *>(renderer);
+        QVERIFY(view);
+
+        // One glow intensity: its frame, how white the band is, the light
+        // just past the box, and the largest step across the 3D view's
+        // border (how much brighter it is inside).
+        struct Lit { int white; double pastBox; double step; double margin; };
+        const auto glowAt = [&](double amount, const QString &name) {
+            scene->setProperty("glow", amount);
+            QTest::qWait(900);
+            const QImage lit = grab(name);
+            const qreal ratio = lit.devicePixelRatio();
+            const auto brightness = [&](qreal x, qreal y) {
+                const QRgb pixel = lit.pixel(qBound(0, qRound(x * ratio), lit.width() - 1),
+                                             qBound(0, qRound(y * ratio), lit.height() - 1));
+                return (qRed(pixel) + qGreen(pixel) + qBlue(pixel)) / 3.0;
+            };
+            const QRectF drawn = view->mapRectToScene(renderer->property("drawnBounds").toRectF());
+            double step = 0;
+            for (int along = 0; along <= 20; ++along) {
+                const qreal x = drawn.left() + drawn.width() * along / 20.0;
+                const qreal y = drawn.top() + drawn.height() * along / 20.0;
+                step = qMax(step, qAbs(brightness(drawn.left() + 2, y) - brightness(drawn.left() - 2, y)));
+                step = qMax(step, qAbs(brightness(drawn.right() - 2, y) - brightness(drawn.right() + 2, y)));
+                step = qMax(step, qAbs(brightness(x, drawn.top() + 2) - brightness(x, drawn.top() - 2)));
+                step = qMax(step, qAbs(brightness(x, drawn.bottom() - 2) - brightness(x, drawn.bottom() + 2)));
+            }
+            const Lit result{bandWhite(lit).first, brightness(box.left() - 6, box.center().y()), step,
+                             renderer->property("overflowX").toDouble()};
+            qInfo("glow %.2f: margin %.0f for a reach of %.0f; band %d px, white %d (%d without glow); "
+                  "%.1f just left of the box; drawn %.0f,%.0f %.0fx%.0f, step across its border %.1f",
+                  amount, result.margin, renderer->property("glowReach").toDouble(), unlitBand, result.white,
+                  unlitWhite, result.pastBox, drawn.x(), drawn.y(), drawn.width(), drawn.height(), step);
+            return result;
+        };
+        const auto noEdge = [&](const Lit &lit, double amount) {
+            // Room for the light round the ring, light past the box over the
+            // desktop, and no edge in it: across the 3D view's border the
+            // desktop brightens by no more than a trace.
+            QVERIFY2(lit.margin >= renderer->property("glowReach").toDouble(),
+                     qPrintable(QStringLiteral("glow %1: margin %2").arg(amount).arg(lit.margin)));
+            QVERIFY2(lit.pastBox > 48 + 1,
+                     qPrintable(QStringLiteral("glow %1: %2 just left of the box").arg(amount).arg(lit.pastBox)));
+            QVERIFY2(lit.step <= 3,
+                     qPrintable(QStringLiteral("glow %1: a step of %2 across the border").arg(amount).arg(lit.step)));
+        };
+
+        // At the middle of its range the look stays under its glow, the
+        // band does not turn white (the owner, 2026-10-13: white "closer to
+        // mid ... not okay"); further up the light spreads over it.
+        for (const double amount : {0.5, 0.8}) {
+            const Lit lit = glowAt(amount, amount < 0.6 ? QStringLiteral("panel-glow-mid")
+                                                        : QStringLiteral("panel-glow-on"));
+            QVERIFY(renderer->property("bloomWanted").toBool());
+            if (amount < 0.6)
+                QVERIFY2(lit.white < unlitWhite + unlitBand / 4,
+                         qPrintable(QStringLiteral("glow %1: %2 white band pixels, %3 without glow, of %4")
+                                        .arg(amount).arg(lit.white).arg(unlitWhite).arg(unlitBand)));
+            noEdge(lit, amount);
+            if (QTest::currentTestFailed())
+                return;
+        }
+        // At full intensity the light covers the shape itself, white-hot
+        // ("if it's on max brightness or glow then it's okay").
+        const Lit full = glowAt(1.0, QStringLiteral("panel-glow-max"));
+        QVERIFY2(full.white > unlitBand / 2,
+                 qPrintable(QStringLiteral("full glow: %1 white band pixels of %2").arg(full.white).arg(unlitBand)));
+        noEdge(full, 1.0);
+        if (QTest::currentTestFailed())
+            return;
+        QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
+    }
+
     void packagedBuildFacts()
     {
         const QString module = importRoot() + QStringLiteral("/ArchDock/Rendering/");
@@ -2216,11 +2914,8 @@ void RendererCapabilityTest::tileDepthMaterialsPlacementAndOrbitRenderUnderRhi()
     if (!evidence.isEmpty()) QVERIFY(QDir().mkpath(evidence + "/tiles"));
     const auto capture = [&](const QString &name) {
         QTest::qWait(100);
-        const auto grab = view->grabToImage();
-        if (!grab) return QImage{};
-        QSignalSpy ready(grab.get(), &QQuickItemGrabResult::ready);
-        if (!ready.wait(5000)) return QImage{};
-        const QImage image = grab->image();
+        const QImage image = panelPixels(view);
+        if (image.isNull()) return QImage{};
         if (!evidence.isEmpty() && !image.save(evidence + "/tiles/" + name + ".png")) return QImage{};
         return image;
     };

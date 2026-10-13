@@ -8,7 +8,7 @@ reference pixels, downloaded artwork or fonts:
    define each look's colours and pattern.
 2. The raster textures the renderers use (`<look>.png`, 512 px): each
    swatch rendered and given real surface detail - brushed streaks, grass
-   blades, flowing plasma, marble veins, stone speckle, frost or a soft
+   blades, glowing plasma gas, marble veins, stone speckle, frost or a soft
    shimmer - from tileable value noise and strokes on fixed seeds, and a
    relief map beside it (`<look>-normal.png`, a tangent-space normal map
    from the texture's brightness) that the 3D renderer lights as a real
@@ -73,13 +73,17 @@ def swatch(name):
             parts.append(path(f"M0 {y+8} h20 l8 8 h36 l8 -8 h56", "#ececec", 2))
             parts.append(rect(19, y+6, 5, 5, "#fff"))
         parts.append(path("M80 0 V40 L104 64 V128", "#aaa", 1))
-    elif name in ("neon", "plasma", "lime"):
+    elif name == "aurora":
+        parts.append(rect(0, 0, 128, 128, "#202020"))
+        for x in range(0, 128, 6):
+            parts.append(path(f"M{x} 96 C{x+2} 70 {x-2} 48 {x+1} 24", "#bbb", 3, .5))
+    elif name in ("neon", "plasma", "lightning", "lime"):
         parts.append(rect(0, 0, 128, 128, "#555" if name == "neon" else "#343434"))
         for y in range(0, 160, 24 if name == "neon" else 17):
             if name == "neon":
                 d = f"M0 {y} H128"
                 parts.extend([path(d, "#999", 9), path(d, "#eee", 4), path(d, "#fff", 1)])
-            elif name == "plasma":
+            elif name in ("plasma", "lightning"):
                 d = f"M0 {y} C32 {y-20} 64 {y+24} 96 {y} S128 {y-20} 160 {y}"
                 parts.extend([path(d, "#888", 8), path(d, "#eee", 2)])
             else:
@@ -118,7 +122,7 @@ def swatch(name):
 
 MATERIALS = ("glass", "crystal", "neon", "minimal", "plasma", "lime",
              "floating-glass", "metallic", "futuristic", "organic",
-             "platform", "plate", "pedestal")
+             "platform", "plate", "pedestal", "lightning", "aurora")
 SIZE = 512
 REPO = Path(__file__).resolve().parents[1]
 
@@ -262,48 +266,536 @@ def grass(painter, size, rng):
                              QPointF(x + dx + math.cos(angle) * length, y + dy + math.sin(angle) * length))
 
 
-def plasma(painter, size, rng):
-    """Contained plasma: bright filaments flowing along the band inside dark
-    borders, each with a wide violet glow and a white-pink core; the drawing
-    wraps at its left and right edges so it runs round a ring without a seam."""
-    from PySide6.QtCore import QPointF
-    from PySide6.QtGui import QColor, QLinearGradient, QPainterPath, QPen
-    painter.fillRect(0, 0, size, size, QColor(10, 3, 20))
-    band = QLinearGradient(0, 0, 0, size)
-    band.setColorAt(0, QColor(10, 3, 20)); band.setColorAt(0.18, QColor(52, 14, 92)); band.setColorAt(0.5, QColor(90, 28, 150))
-    band.setColorAt(0.82, QColor(52, 14, 92)); band.setColorAt(1, QColor(10, 3, 20))
-    painter.fillRect(0, 0, size, size, band)
-    painter.setRenderHint(painter.RenderHint.Antialiasing, True)
-    wobble = octaves(77, [8, 16])
-    for index in range(26):
-        lane = size * rng.uniform(0.16, 0.84)
-        sway = size * rng.uniform(0.04, 0.11)
-        points = []
-        steps = 64
-        for step in range(steps + 1):
-            x = step / steps * size
-            # Periodic in x: the same offset at both ends.
-            phase = step / steps * 2 * math.pi
-            y = lane + sway * (math.sin(phase * rng.choice((1, 2, 3)) + index) * 0.5
-                               + (wobble[0].at(step / 5 + index * 3, index) - 0.5) * 1.6
-                               + (wobble[1].at(step / 2.5 + index * 7, index) - 0.5) * 0.8)
-            points.append((x, y))
-        # Close the wrap: ease the last points back onto the first.
-        for step in range(steps - 6, steps + 1):
-            share = (step - (steps - 6)) / 6
-            points[step] = (points[step][0], points[step][1] * (1 - share) + points[0][1] * share)
-        for dx in (-size, 0, size):
-            path = QPainterPath(QPointF(points[0][0] + dx, points[0][1]))
-            for x, y in points[1:]:
-                path.lineTo(QPointF(x + dx, y))
-            for width, colour in ((16, QColor(140, 60, 220, 60)), (7, QColor(190, 110, 255, 120)), (2.2, QColor(255, 225, 255, 235))):
-                pen = QPen(colour, width); pen.setCapStyle(pen.capStyle().RoundCap); pen.setJoinStyle(pen.joinStyle().RoundJoin)
-                painter.setPen(pen); painter.drawPath(path)
-    # Dark borders: the plasma stays within the band.
-    edge = QLinearGradient(0, 0, 0, size)
-    edge.setColorAt(0, QColor(10, 3, 20, 255)); edge.setColorAt(0.1, QColor(10, 3, 20, 0))
-    edge.setColorAt(0.9, QColor(10, 3, 20, 0)); edge.setColorAt(1, QColor(10, 3, 20, 255))
-    painter.fillRect(0, 0, size, size, edge)
+def lightning_field(size, seed):
+    """Lightning that looks like lightning (the owner, 2026-10-13: "not some
+    randomly drawn zigzag lines"): bolts grown the way a discharge crackles,
+    by splitting each stroke at its middle and pushing the middle aside,
+    again and again, so the path wanders at every scale; thinner forks leave
+    the bolts and die away. Each stroke is a white-hot core inside a blue and
+    violet glow, the light adding up where strokes meet, on a clear ground
+    (the panel draws the background, see below), fading out toward the
+    band's edges. The bolts run left to right and
+    meet themselves at the edges, so the texture wraps round a ring without
+    a seam. Returns rows of RGBA bytes; needs no Qt."""
+    rng = random.Random(seed)
+    core = [0.0] * (size * size)
+    glow = [0.0] * (size * size)
+
+    def bolt(x0, y0, x1, y1, roughness, depth):
+        points = [(x0, y0), (x1, y1)]
+        spread = roughness * math.hypot(x1 - x0, y1 - y0)
+        for _ in range(depth):
+            grown = [points[0]]
+            for (ax, ay), (bx, by) in zip(points, points[1:]):
+                mx, my = (ax + bx) / 2, (ay + by) / 2
+                length = math.hypot(bx - ax, by - ay) or 1
+                offset = rng.gauss(0, spread)
+                # Pushed across the stroke, not along it.
+                grown.append((mx - (by - ay) / length * offset, my + (bx - ax) / length * offset))
+                grown.append((bx, by))
+            points = grown
+            spread *= 0.55
+        return points
+
+    def stroke(points, width, light):
+        reach = width * 7
+        for (ax, ay), (bx, by) in zip(points, points[1:]):
+            dx, dy = bx - ax, by - ay
+            length2 = dx * dx + dy * dy or 1e-9
+            left, right = int(math.floor(min(ax, bx) - reach)), int(math.ceil(max(ax, bx) + reach))
+            top, bottom = int(math.floor(min(ay, by) - reach)), int(math.ceil(max(ay, by) + reach))
+            for py in range(max(0, top), min(size, bottom + 1)):
+                for px in range(left, right + 1):
+                    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / length2))
+                    ex, ey = px - (ax + dx * t), py - (ay + dy * t)
+                    d2 = ex * ex + ey * ey
+                    if d2 > reach * reach:
+                        continue
+                    index = py * size + (px % size)
+                    core[index] += light * math.exp(-d2 / (width * width * 0.5))
+                    glow[index] += light * 0.22 * math.exp(-math.sqrt(d2) / (width * 2.2))
+
+    for index in range(5):
+        y = size * rng.uniform(0.26, 0.74)
+        # Wraps: the bolt ends where it starts, one width further on.
+        main = bolt(0, y, size, y, 0.11, 8)
+        brightness = rng.uniform(0.75, 1.0) if index < 3 else rng.uniform(0.35, 0.55)
+        width = rng.uniform(1.1, 1.6) if index < 3 else rng.uniform(0.7, 1.0)
+        stroke(main, width, brightness)
+        # Forks leave the bolt at a slant and die away.
+        for _ in range(rng.randint(4, 7)):
+            at = rng.randrange(8, len(main) - 8)
+            ax, ay = main[at]
+            heading = rng.choice((-1, 1)) * rng.uniform(0.35, 1.0)
+            reach = size * rng.uniform(0.06, 0.16)
+            bx, by = ax + reach, ay + heading * reach
+            fork = bolt(ax, ay, bx, by, 0.16, 6)
+            stroke(fork, width * 0.55, brightness * 0.55)
+            if rng.random() < 0.5:
+                at = rng.randrange(4, len(fork) - 4)
+                cx, cy = fork[at]
+                twig = bolt(cx, cy, cx + reach * 0.5, cy + heading * reach * rng.uniform(0.2, 0.8), 0.18, 5)
+                stroke(twig, width * 0.35, brightness * 0.35)
+    return core, glow
+
+
+# Lightning in colour (the owner, 2026-10-13: "not just mere colors but
+# lightning naturally colors, even if in nature we don't have such colors"):
+# each palette is a white-hot core and the colour of the glow round it.
+LIGHTNING_PALETTES = {
+    "storm": ((1.0, 0.95, 1.0), (0.53, 0.32, 1.0)),
+    "ice": ((0.92, 1.0, 1.0), (0.22, 0.78, 1.0)),
+    "crimson": ((1.0, 0.92, 0.9), (1.0, 0.16, 0.2)),
+    "toxic": ((0.95, 1.0, 0.9), (0.36, 1.0, 0.22)),
+    "solar": ((1.0, 0.98, 0.86), (1.0, 0.6, 0.1)),
+    "arcane": ((1.0, 0.92, 1.0), (1.0, 0.24, 0.88)),
+    "void": ((0.88, 0.78, 1.0), (0.46, 0.1, 1.0)),
+    "aurora": ((0.9, 1.0, 0.97), (0.18, 1.0, 0.72)),
+    # Every colour along the band (the owner, 2026-10-13: rainbow wherever
+    # it can be practically applied).
+    "rainbow": None,
+}
+
+
+def lightning_rows(fields, palette):
+    """The bolts in a palette's colours on a clear ground: the light they give
+    is the colour, its strongest part how much of the pixel they cover, so
+    the storm behind is clear and the panel draws its own background under
+    them at the strength chosen (the owner, 2026-10-13: "make the background
+    for lightning totally transparent, or with option to change
+    transparency"). Over black it is exactly the light of the bolts."""
+    core, glow = fields
+    colours = LIGHTNING_PALETTES[palette]
+    size = int(math.isqrt(len(core)))
+
+    def smooth(edge0, edge1, value):
+        t = min(1.0, max(0.0, (value - edge0) / (edge1 - edge0)))
+        return t * t * (3 - 2 * t)
+
+    rows = []
+    for py in range(size):
+        envelope = smooth(0.0, 0.16, py / size) * smooth(1.0, 0.84, py / size)
+        row = bytearray()
+        for px in range(size):
+            index = py * size + px
+            heat, halo = core[index] * envelope, glow[index] * envelope
+            if colours is None:
+                gr, gg, gb = rainbow(px / size + 0.06 * math.sin(2 * math.pi * px / size))
+                cr, cg, cb = 0.85 + 0.15 * gr, 0.85 + 0.15 * gg, 0.85 + 0.15 * gb
+            else:
+                (cr, cg, cb), (gr, gg, gb) = colours
+            light = (255 * (1 - math.exp(-(heat * 1.15 * cr + halo * 1.7 * gr))),
+                     255 * (1 - math.exp(-(heat * 1.15 * cg + halo * 1.7 * gg))),
+                     255 * (1 - math.exp(-(heat * 1.15 * cb + halo * 1.7 * gb))))
+            cover = max(light) / 255
+            if cover < 1 / 255:
+                row += bytes((0, 0, 0, 0))
+                continue
+            row += bytes((clamp(light[0] / cover), clamp(light[1] / cover), clamp(light[2] / cover),
+                          clamp(cover * 255)))
+        rows.append(bytes(row))
+    return rows
+
+
+def write_lightning(directory=ROOT, seed=233):
+    """lightning.png (Storm) and lightning-<palette>.png, one bolt drawing in
+    every palette, and their one relief map."""
+    fields = lightning_field(SIZE, seed)
+    for palette in LIGHTNING_PALETTES:
+        rows = lightning_rows(fields, palette)
+        name = "lightning.png" if palette == "storm" else f"lightning-{palette}.png"
+        write_png(Path(directory) / name, rows)
+        if palette == "storm":
+            write_png(Path(directory) / "lightning-normal.png", relief_rows(rows, RELIEF["lightning"]))
+    print("lightning written to", directory)
+
+
+# Aurora's colours: the bright lower edge of its curtains and the crown they
+# fade into, from the polar lights to a few no sky has shown.
+AURORA_PALETTES = {
+    "borealis": ((0.25, 1.0, 0.55), (0.55, 0.3, 1.0)),
+    "emerald": ((0.15, 1.0, 0.45), (0.15, 0.8, 1.0)),
+    "australis": ((1.0, 0.3, 0.55), (0.6, 0.25, 1.0)),
+    "cosmic": ((0.45, 0.45, 1.0), (1.0, 0.3, 0.85)),
+    "solar": ((1.0, 0.8, 0.25), (1.0, 0.3, 0.2)),
+    # Every colour along the band, shifting as the curtains rise (the
+    # owner, 2026-10-13: "for aurora, include rainbow color too").
+    "rainbow": None,
+}
+
+
+def rainbow(hue):
+    """A bright spectral colour for a hue from 0 to 1, round the wheel."""
+    import colorsys
+    return colorsys.hsv_to_rgb(hue % 1.0, 0.85, 1.0)
+
+
+def aurora_rows(size, seed, palette):
+    """Aurora (the owner, 2026-10-13: a look of its own, like lightning and
+    plasma): curtains of light hanging from a wavy lower edge, folding as
+    they run along the band, streaked by rays rising from the edge and fading
+    with height from the edge's colour to the crown's - two curtains, one
+    behind the other - on a clear ground like lightning's, fading toward the
+    band's edges. The waves and noise repeat across the width, so it wraps
+    round a ring without a seam. Returns rows of RGBA bytes; needs no Qt."""
+    rng = random.Random(seed)
+    colours = AURORA_PALETTES[palette]
+    curtains = []
+    for index in range(2):
+        curtains.append({
+            "base": rng.uniform(0.6, 0.7) - index * 0.08,
+            "waves": [(rng.choice((1, 2)), rng.uniform(0.04, 0.07), rng.random()),
+                      (rng.choice((3, 4, 5)), rng.uniform(0.015, 0.03), rng.random())],
+            "drift": Noise(6, seed + 11 + index * 101),
+            "fold": Noise(5, seed + 23 + index * 101),
+            "rays": Noise(96, seed + 37 + index * 101),
+            "height": rng.uniform(0.32, 0.42) - index * 0.06,
+            "weight": 1.0 if index == 0 else 0.6,
+        })
+
+    def smooth(edge0, edge1, value):
+        t = min(1.0, max(0.0, (value - edge0) / (edge1 - edge0)))
+        return t * t * (3 - 2 * t)
+
+    rows = []
+    for py in range(size):
+        v = py / size
+        envelope = smooth(0.0, 0.12, v) * smooth(1.0, 0.88, v)
+        row = bytearray()
+        for px in range(size):
+            u = px / size
+            if colours is None:
+                # Once round the wheel across the width, so the edges meet.
+                hue = u + 0.06 * math.sin(2 * math.pi * u)
+                (er, eg, eb), (cr, cg, cb) = rainbow(hue), rainbow(hue + 0.18)
+            else:
+                (er, eg, eb), (cr, cg, cb) = colours
+            lr = lg = lb = 0.0
+            for curtain in curtains:
+                edge = curtain["base"] + (curtain["drift"].at(u * 6, 0.5) - 0.5) * 0.06
+                for count, amplitude, phase in curtain["waves"]:
+                    edge += amplitude * math.sin(2 * math.pi * (count * u + phase))
+                above = edge - v
+                height = curtain["height"]
+                if above < 0:
+                    light = math.exp(above / 0.018)
+                else:
+                    light = math.exp(-above / (height * 0.45)) * (1 - smooth(height * 0.75, height, above))
+                if light < 1e-3:
+                    continue
+                # Rays rise from the edge: streaks across the width, leaning a
+                # little with height; folds brighten parts of the curtain.
+                ray = curtain["rays"].at(u * 96 + above * 9, 0.5)
+                rays = 0.35 + 0.65 * ray * ray
+                fold = 0.55 + 0.45 * curtain["fold"].at(u * 5, 1.5)
+                strength = light * rays * fold * curtain["weight"]
+                t = min(1.0, max(0.0, above / height)) ** 0.8
+                lr += strength * (er + (cr - er) * t)
+                lg += strength * (eg + (cg - eg) * t)
+                lb += strength * (eb + (cb - eb) * t)
+            light = (255 * (1 - math.exp(-lr * 1.7 * envelope)), 255 * (1 - math.exp(-lg * 1.7 * envelope)),
+                     255 * (1 - math.exp(-lb * 1.7 * envelope)))
+            cover = max(light) / 255
+            if cover < 1 / 255:
+                row += bytes((0, 0, 0, 0))
+                continue
+            row += bytes((clamp(light[0] / cover), clamp(light[1] / cover), clamp(light[2] / cover),
+                          clamp(cover * 255)))
+        rows.append(bytes(row))
+    return rows
+
+
+def write_aurora(directory=ROOT, seed=307):
+    """aurora.png (Borealis) and aurora-<palette>.png, and one relief map."""
+    for palette in AURORA_PALETTES:
+        rows = aurora_rows(SIZE, seed, palette)
+        name = "aurora.png" if palette == "borealis" else f"aurora-{palette}.png"
+        write_png(Path(directory) / name, rows)
+        if palette == "borealis":
+            write_png(Path(directory) / "aurora-normal.png", relief_rows(rows, RELIEF["aurora"]))
+    print("aurora written to", directory)
+
+
+def plasma_field(size, seed, warp=0.85, heat=1.0, palette="original"):
+    """Plasma as glowing gas, not lines (the owner, 2026-10-13: the old
+    filaments "don't really look like plasma, more like static lightning"):
+    tileable value noise warped through itself twice, so it curls and flows
+    like ionized gas, with soft bright tendrils where a ridged layer peaks,
+    coloured from deep violet through magenta to a pink-white heart, and
+    kept inside the band by dark borders above and below. It wraps left to
+    right, so it runs round a ring without a seam. Returns rows of RGBA
+    bytes; needs no Qt."""
+    def layer(offset, periods):
+        return [Noise(period, seed + offset + index * 101) for index, period in enumerate(periods)]
+    warp_a, warp_b = layer(1, (3, 6, 12)), layer(2, (3, 6, 12))
+    warp_c, warp_d = layer(3, (4, 8, 16)), layer(4, (4, 8, 16))
+    body, tendril = layer(5, (4, 8, 16, 32)), layer(6, (3, 6, 12, 24))
+    tint = layer(7, (2, 4))
+
+    def fbm(noises, x, y):
+        total, amplitude, weight = 0.0, 1.0, 0.0
+        for noise in noises:
+            total += amplitude * noise.at(x * noise.period, y * noise.period)
+            weight += amplitude
+            amplitude *= 0.5
+        return total / weight
+
+    def smooth(edge0, edge1, value):
+        t = min(1.0, max(0.0, (value - edge0) / (edge1 - edge0)))
+        return t * t * (3 - 2 * t)
+
+    stops = ((0.0, (6, 1, 16)), (0.28, (40, 8, 86)), (0.5, (104, 26, 184)),
+             (0.68, (176, 58, 246)), (0.82, (236, 112, 255)), (0.93, (255, 188, 252)),
+             (1.0, (255, 240, 255)))
+
+    def colour(t):
+        t = min(1.0, max(0.0, t))
+        for (a, ca), (b, cb) in zip(stops, stops[1:]):
+            if t <= b:
+                s = (t - a) / (b - a)
+                return [ca[i] + (cb[i] - ca[i]) * s for i in range(3)]
+        return list(stops[-1][1])
+
+    rows = []
+    for py in range(size):
+        v = py / size
+        # Dark above and below, brightest along the middle of the band.
+        envelope = smooth(0.02, 0.24, v) * smooth(0.98, 0.76, v)
+        row = bytearray()
+        for px in range(size):
+            u = px / size
+            # The gas flows along the band: stretched across it.
+            y = v * 1.5
+            qx, qy = fbm(warp_a, u, y), fbm(warp_b, u + 0.37, y + 0.11)
+            rx = fbm(warp_c, u + warp * qx, y + warp * qy)
+            ry = fbm(warp_d, u + warp * qx + 0.17, y + warp * qy + 0.29)
+            gas = fbm(body, u + 0.7 * rx, y + 0.7 * ry)
+            ridge = 1 - abs(2 * fbm(tendril, u + 0.55 * rx, y + 0.55 * ry) - 1)
+            glow = ridge ** 5
+            t = (0.18 + 0.62 * smooth(0.32, 0.78, gas) + 0.55 * glow) * heat * envelope
+            if palette == "rainbow":
+                # The gas in every colour along the band, its hottest parts
+                # paling toward white.
+                hr, hg, hb = rainbow(u + 0.06 * math.sin(2 * math.pi * u) + 0.12 * gas)
+                pale = smooth(0.7, 1.0, t)
+                level = 255 * min(1.0, max(0.0, t) * 1.15)
+                r, g, b = ((hr + (1 - hr) * pale) * level, (hg + (1 - hg) * pale) * level,
+                           (hb + (1 - hb) * pale) * level)
+            else:
+                r, g, b = colour(t)
+                # A cooler blue through some of the gas, as plasma shifts colour.
+                cool = smooth(0.55, 0.8, fbm(tint, u, y)) * 0.35 * envelope
+                r, g, b = r * (1 - cool) + 70 * cool, g * (1 - cool) + 80 * cool, b * (1 - cool) + 255 * cool
+            row += bytes((clamp(r), clamp(g), clamp(b), 255))
+        rows.append(bytes(row))
+    return rows
+
+
+def relief_rows(rows, strength):
+    """relief() for raw RGBA rows: the same tangent-space normal map."""
+    size = len(rows)
+    height = [[(row[x * 4] * 0.3 + row[x * 4 + 1] * 0.59 + row[x * 4 + 2] * 0.11) / 255
+               for x in range(size)] for row in rows]
+    scale = 2.5 * strength
+    out = []
+    for y in range(size):
+        up, down, row = height[(y - 1) % size], height[(y + 1) % size], height[y]
+        line = bytearray()
+        for x in range(size):
+            dx = (row[(x + 1) % size] - row[(x - 1) % size]) * scale
+            dy = (down[x] - up[x]) * scale
+            length = math.sqrt(dx * dx + dy * dy + 1)
+            line += bytes((clamp((-dx / length * 0.5 + 0.5) * 255), clamp((-dy / length * 0.5 + 0.5) * 255),
+                           clamp((1 / length * 0.5 + 0.5) * 255), 255))
+        out.append(bytes(line))
+    return out
+
+
+def write_png(target, rows):
+    """A plain RGBA PNG from rows of bytes, without Qt."""
+    import struct
+    import zlib
+
+    def chunk(tag, data):
+        return (struct.pack(">I", len(data)) + tag + data
+                + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
+    width, height = len(rows[0]) // 4, len(rows)
+    raw = b"".join(b"\x00" + row for row in rows)
+    Path(target).write_bytes(b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+
+
+def write_plasma(directory=ROOT, seed=171):
+    rows = plasma_field(SIZE, seed)
+    write_png(Path(directory) / "plasma.png", rows)
+    write_png(Path(directory) / "plasma-normal.png", relief_rows(rows, RELIEF["plasma"]))
+    write_png(Path(directory) / "plasma-rainbow.png", plasma_field(SIZE, seed, palette="rainbow"))
+    print("plasma written to", directory)
+
+
+def read_png(source):
+    """Rows of RGBA bytes from an 8-bit, non-interlaced RGB or RGBA PNG."""
+    import struct
+    import zlib
+    data = Path(source).read_bytes()
+    position, compressed = 8, b""
+    while position < len(data):
+        length = struct.unpack(">I", data[position:position + 4])[0]
+        tag, body = data[position + 4:position + 8], data[position + 8:position + 8 + length]
+        if tag == b"IHDR":
+            width, height, depth, kind = struct.unpack(">IIBB", body[:10])
+            assert depth == 8 and kind in (2, 6) and body[12] == 0, "unsupported PNG"
+        elif tag == b"IDAT":
+            compressed += body
+        position += 12 + length
+    raw = zlib.decompress(compressed)
+    step = 4 if kind == 6 else 3
+    stride = width * step
+    rows, previous, offset = [], bytearray(stride), 0
+    for _ in range(height):
+        kind_of_filter = raw[offset]
+        line = bytearray(raw[offset + 1:offset + 1 + stride])
+        offset += 1 + stride
+        for x in range(stride):
+            left = line[x - step] if x >= step else 0
+            up = previous[x]
+            corner = previous[x - step] if x >= step else 0
+            if kind_of_filter == 1:
+                line[x] = (line[x] + left) & 255
+            elif kind_of_filter == 2:
+                line[x] = (line[x] + up) & 255
+            elif kind_of_filter == 3:
+                line[x] = (line[x] + (left + up) // 2) & 255
+            elif kind_of_filter == 4:
+                guess = left + up - corner
+                pa, pb, pc = abs(guess - left), abs(guess - up), abs(guess - corner)
+                line[x] = (line[x] + (left if pa <= pb and pa <= pc else up if pb <= pc else corner)) & 255
+        previous = line
+        if step == 3:
+            rows.append(b"".join(bytes(line[i:i + 3]) + b"\xff" for i in range(0, stride, 3)))
+        else:
+            rows.append(bytes(line))
+    return rows
+
+
+def rainbow_rows(rows):
+    """A look in every colour along the band: each pixel's light kept, its
+    colour turned to the rainbow's at its place across the width, its
+    brightest parts paling toward white; it still wraps without a seam."""
+    size = len(rows[0]) // 4
+    out = []
+    for row in rows:
+        line = bytearray()
+        for x in range(size):
+            r, g, b, a = row[x * 4], row[x * 4 + 1], row[x * 4 + 2], row[x * 4 + 3]
+            light = (r * 0.3 + g * 0.59 + b * 0.11) / 255
+            hr, hg, hb = rainbow(x / size + 0.06 * math.sin(2 * math.pi * x / size))
+            pale = max(0.0, min(1.0, (light - 0.8) / 0.2)) * 0.5
+            level = 255 * min(1.0, light * 1.25)
+            line += bytes((clamp((hr + (1 - hr) * pale) * level), clamp((hg + (1 - hg) * pale) * level),
+                           clamp((hb + (1 - hb) * pale) * level), a))
+        out.append(bytes(line))
+    return out
+
+
+def lime_rows(size, seed):
+    """A lime's peel (the owner, 2026-10-13: "we named lime color after fruit
+    called lime, and there should be also the texture of lime not just
+    color"): a juicy citrus green, deeper in patches and yellowing in
+    others, its skin finely grained and dimpled all over by small oil
+    glands, each a soft hollow lit from one side, from cellular noise that
+    repeats across the tile. Returns rows of RGBA bytes; needs no Qt."""
+    rng = random.Random(seed)
+    cells = 92
+    points = [[(rng.random(), rng.random()) for _ in range(cells)] for _ in range(cells)]
+    tone = [Noise(period, seed + 7 + index * 101) for index, period in enumerate((3, 6, 12))]
+    blush = [Noise(period, seed + 19 + index * 101) for index, period in enumerate((2, 4))]
+    grain = Noise(128, seed + 29)
+    rows = []
+    for py in range(size):
+        row = bytearray()
+        for px in range(size):
+            u, v = px / size, py / size
+            # The nearest oil gland, round the tile's edges as well, and the
+            # side of the gland this point lies on.
+            cx, cy = u * cells, v * cells
+            ix, iy = int(cx), int(cy)
+            nearest, toward = 9.0, (0.0, 0.0)
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    fx, fy = points[(iy + dy) % cells][(ix + dx) % cells]
+                    ox, oy = cx - (ix + dx + fx), cy - (iy + dy + fy)
+                    distance = math.hypot(ox, oy)
+                    if distance < nearest:
+                        nearest, toward = distance, (ox, oy)
+            hollow = math.exp(-(nearest / 0.22) ** 2)
+            # A hollow is dark on the side away from the light, bright on the
+            # side facing it (light from the upper left).
+            facing = (-(toward[0]) - toward[1]) / max(1e-6, nearest) if nearest > 1e-6 else 0
+            relief = -0.16 * hollow + 0.1 * hollow * facing
+            shade = sum(noise.at(u * noise.period, v * noise.period) * weight
+                        for noise, weight in zip(tone, (0.55, 0.3, 0.15)))
+            yellow = sum(noise.at(u * noise.period, v * noise.period) * weight
+                         for noise, weight in zip(blush, (0.65, 0.35)))
+            mix = min(1.0, max(0.0, (shade - 0.3) * 1.5))
+            ripe = max(0.0, yellow - 0.5) * 2
+            r = 70 + 70 * mix + 70 * ripe
+            g = 150 + 60 * mix + 25 * ripe
+            b = 24 + 26 * mix
+            light = 1.0 + relief + (grain.at(u * 128, v * 128) - 0.5) * 0.08
+            row += bytes((clamp(r * light), clamp(g * light), clamp(b * light), 255))
+        rows.append(bytes(row))
+    return rows
+
+
+def write_lime(directory=ROOT, seed=401):
+    rows = lime_rows(SIZE, seed)
+    write_png(Path(directory) / "lime.png", rows)
+    write_png(Path(directory) / "lime-normal.png", relief_rows(rows, RELIEF["lime"]))
+    print("lime written to", directory)
+
+
+def chameleon_rows(rows, seed, strength=0.0):
+    """Polished, heat-tinted metal (the owner, 2026-10-13: "metal can have
+    faint rainbow colors ... we usually call that chameleon"): the metal's
+    own grain and shine, with a faint thin-film sheen drifting through
+    purple, blue, gold and green across it, a little stronger in the light.
+    Repeats across the tile like the metal itself."""
+    size = len(rows[0]) // 4
+    film = [Noise(period, seed + index * 101) for index, period in enumerate((2, 4, 8))]
+    out = []
+    for py, row in enumerate(rows):
+        line = bytearray()
+        v = py / size
+        for x in range(size):
+            u = x / size
+            r, g, b, a = row[x * 4], row[x * 4 + 1], row[x * 4 + 2], row[x * 4 + 3]
+            light = (r * 0.3 + g * 0.59 + b * 0.11) / 255
+            drift = sum(noise.at(u * noise.period, v * noise.period) * weight
+                        for noise, weight in zip(film, (0.6, 0.28, 0.12)))
+            hue = 0.7 + 0.75 * drift + 0.05 * math.sin(2 * math.pi * (u + v))
+            hr, hg, hb = rainbow(hue)
+            # Faint: a sheen over the metal, not paint; Iridescent is the
+            # stronger film the owner ticked as well.
+            share = (0.08 + 0.12 * light) * (1 - strength) + (0.22 + 0.2 * light) * strength
+            line += bytes((clamp(r * (1 - share) + hr * light * 255 * share),
+                           clamp(g * (1 - share) + hg * light * 255 * share),
+                           clamp(b * (1 - share) + hb * light * 255 * share), a))
+        out.append(bytes(line))
+    return out
+
+
+def write_rainbows(directory=ROOT):
+    """neon and futuristic in every colour, and the metals' chameleon
+    finish, from their own textures."""
+    for name in ("neon", "futuristic"):
+        write_png(Path(directory) / f"{name}-rainbow.png", rainbow_rows(read_png(ROOT / f"{name}.png")))
+    for index, name in enumerate(("metallic", "plate")):
+        source = read_png(ROOT / f"{name}.png")
+        write_png(Path(directory) / f"{name}-chameleon.png", chameleon_rows(source, 509 + index * 17))
+        write_png(Path(directory) / f"{name}-iridescent.png", chameleon_rows(source, 509 + index * 17, 1.0))
+    print("rainbow and chameleon looks written to", directory)
 
 
 def marble(seed):
@@ -343,9 +835,13 @@ RECIPES = {
     "platform": (stone(8, 0.35), 0.5),
     "pedestal": (marble(9), 0.9),
     "organic": (painted(grass), 0),
-    "lime": (peel(11), 0.5),
+    # Computed, not painted: lime_rows(), written by write_lime().
+    "lime": (None, 0),
     "neon": (shimmer(12, 0.3), 0.5),
-    "plasma": (painted(plasma), 0),
+    # Computed, not painted: plasma_field(), written by write_plasma().
+    "plasma": (None, 0),
+    "lightning": (None, 0),
+    "aurora": (None, 0),
 }
 
 
@@ -394,7 +890,7 @@ def build(base, detail, strength, seed=0):
 RELIEF = {
     "glass": 0.25, "floating-glass": 0.2, "crystal": 0.9, "metallic": 0.5, "plate": 0.9,
     "futuristic": 0.8, "minimal": 0.2, "platform": 1.0, "pedestal": 0.7, "organic": 1.0,
-    "lime": 0.8, "neon": 0.6, "plasma": 0.5,
+    "lime": 0.8, "neon": 0.6, "plasma": 0.5, "lightning": 0.5, "aurora": 0.35,
 }
 
 
@@ -429,12 +925,26 @@ def write_rasters():
     from PySide6.QtGui import QGuiApplication
     app = QGuiApplication(sys.argv[:1])
     for index, (name, (detail, strength)) in enumerate(RECIPES.items()):
+        if name == "plasma":
+            write_plasma()
+            continue
+        if name == "lightning":
+            write_lightning()
+            continue
+        if name == "aurora":
+            write_aurora()
+            continue
+        if name == "lime":
+            write_lime()
+            continue
         target = ROOT / f"{name}.png"
         image = build(render_svg(ROOT / f"{name}.svg"), detail, strength, seed=100 + index)
         image.save(str(target), "PNG")
         bumps = ROOT / f"{name}-normal.png"
         relief(image, RELIEF.get(name, 0.5)).save(str(bumps), "PNG")
         print(name, target.stat().st_size, "bytes; relief", bumps.stat().st_size, "bytes")
+    # The rainbow versions of the painted looks, from the textures just made.
+    write_rainbows()
     del app
 
 
@@ -444,3 +954,15 @@ if __name__ == "__main__":
         write_swatches()
     if stage in ("--raster", "--all"):
         write_rasters()
+    # Plasma alone, without Qt: `--plasma [directory]`. The raster stage
+    # draws it the same way.
+    if stage == "--plasma":
+        write_plasma(sys.argv[2] if len(sys.argv) > 2 else ROOT)
+    if stage == "--lightning":
+        write_lightning(sys.argv[2] if len(sys.argv) > 2 else ROOT)
+    if stage == "--aurora":
+        write_aurora(sys.argv[2] if len(sys.argv) > 2 else ROOT)
+    if stage == "--lime":
+        write_lime(sys.argv[2] if len(sys.argv) > 2 else ROOT)
+    if stage == "--rainbows":
+        write_rainbows(sys.argv[2] if len(sys.argv) > 2 else ROOT)

@@ -20,6 +20,16 @@ Item {
     property bool hovered: false
     property color tintColor: "#78e9f4"
     property real glowIntensity: 1
+    // The panel's own glow, light round its shape (Panels > Appearance >
+    // Glow): a flat panel's renderer draws it as its layer effect, a 3D
+    // scene as light the view spreads (PanelScene3D).
+    property real panelGlow: 0
+    property real panelGlowReach: 0.75
+    property string panelGlowColour: "#a8dcff"
+    property real lightningBackground: 0
+    property real lookMotionSpeed: 1
+    property string lookPalette: ""
+    readonly property bool flatGlowActive: panelGlow > 0 && !true3DReady
     property bool reducedMotion: false
     property var geometry: ({})
     property real layoutAngle: 0
@@ -208,7 +218,10 @@ Item {
                         "positionY", "positionZ", "scale", "fieldOfView", "keyLightBrightness",
                         "fillLightBrightness", "band", "bend", "fold",
                         "pedestalSize", "pedestalLift", "pedestalAnimationSpeed", "pedestalThickness",
-                        "pedestalOpacity", "pedestalGlow", "pedestalViewAngle"])
+                        "pedestalOpacity", "pedestalGlow", "pedestalGlowReach", "pedestalViewAngle",
+                        "panelGlow", "panelGlowReach", "iconGlow", "iconGlowReach", "iconTileGlow",
+                        "iconTileGlowReach", "panelLookBackground", "pedestalLookBackground",
+                        "lookMotionSpeed"])
                     if (parameters[key] !== undefined && parameters[key] !== null
                             && Number.isFinite(Number(parameters[key])))
                         merged[key] = Number(parameters[key])
@@ -221,7 +234,13 @@ Item {
                                             ["pedestalColor", "pedestalColor"],
                                             ["pedestalTexture", "pedestalTexture"],
                                             ["pedestalFacing", "pedestalFacing"],
-                                            ["pedestalAnimation", "pedestalAnimation"]])
+                                            ["pedestalAnimation", "pedestalAnimation"],
+                                            ["pedestalGlowColor", "pedestalGlowColor"],
+                                            ["panelGlowColor", "panelGlowColor"],
+                                            ["iconGlowColor", "iconGlowColor"],
+                                            ["iconTileGlowColor", "iconTileGlowColor"],
+                                            ["panelLookColour", "panelLookColour"],
+                                            ["pedestalLookColour", "pedestalLookColour"]])
                     if (typeof parameters[key] === "string") merged[target] = parameters[key]
                 if (isFinite(root.cameraPitch)) merged.cameraPitch = Math.max(-60, Math.min(60, root.cameraPitch))
                 return merged
@@ -261,6 +280,12 @@ Item {
         anchors.fill: parent
         sourceComponent: proceduralComponent
         visible: !root.skinnedReady && !root.bakedReady && !root.true3DReady
+        layer.enabled: root.flatGlowActive && visible
+        layer.effect: GlowEffect {
+            glowColor: root.panelGlowColour
+            intensity: root.panelGlow
+            reach: root.panelGlowReach
+        }
     }
 
     Loader {
@@ -270,6 +295,12 @@ Item {
         active: root.skinnedRequested && root.themeUsable
         sourceComponent: skinnedComponent
         visible: root.skinnedReady
+        layer.enabled: root.flatGlowActive && visible
+        layer.effect: GlowEffect {
+            glowColor: root.panelGlowColour
+            intensity: root.panelGlow
+            reach: root.panelGlowReach
+        }
     }
 
     Loader {
@@ -287,6 +318,12 @@ Item {
         active: root.bakedRequested && root.themeUsable
         sourceComponent: bakedComponent
         visible: root.bakedReady
+        layer.enabled: root.flatGlowActive && visible
+        layer.effect: GlowEffect {
+            glowColor: root.panelGlowColour
+            intensity: root.panelGlow
+            reach: root.panelGlowReach
+        }
     }
 
     Component {
@@ -300,6 +337,10 @@ Item {
             polygonSides: root.polygonSides
             appearance: root.appearance
             customColor: root.customColor
+            lightningBackground: root.lightningBackground
+            glowIntensity: root.glowIntensity
+            lookMotionSpeed: root.lookMotionSpeed
+            lookPalette: root.lookPalette
             panelOpacity: root.panelOpacity
             motionTracks: root.motionTracks
             sparkleIntensity: root.sparkleIntensity

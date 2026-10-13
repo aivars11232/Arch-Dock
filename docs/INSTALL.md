@@ -76,13 +76,14 @@ stands.
 
 Arch Dock draws its panels inside Plasma widgets. Two kinds exist:
 
-- **Edge panels** (bottom, top, side) are Plasma panels of their own. Switch
-  one on in Panel Studio with **Show panel** on its General page. A panel
+- **Edge panels** (bottom, top, side) are Plasma panels of their own. Pick
+  one in Panel Studio's panel list (Panels) and press the button beside the
+  list, which carries its name, to show it. A panel
   whose **Visibility** is Auto-hide stays out of sight until the pointer
   touches its screen edge; Studio says so under its actions. Choose Always on
   **Panels > Behavior** to keep it in view.
-  A Launcher or Hybrid edge panel shows the applications dropped on it or
-  added with **Add applications…** on its General page, and (Hybrid, Tasks)
+  A Launcher or Hybrid edge panel shows the applications dropped on it from
+  the application menu or a file manager, and (Hybrid, Tasks)
   the running applications; until then it is an empty box inviting drops.
   Edge panels of one content type share the same launchers. Plasma places
   an edge panel on its edge: stacked above a panel that is Always visible,
@@ -90,8 +91,9 @@ Arch Dock draws its panels inside Plasma widgets. Two kinds exist:
   give your own panel Always visible to stack them or use a free edge. An
   edge panel draws the flat looks and the horizontal skins; 3D, baked
   looks, ring and arc layouts and rotation belong to free panels.
-- **Free panels** are desktop widgets. Create one with **+ Free panel** in
-  Panel Studio (it appears on the desktop and opens in Studio), or with the
+- **Free panels** are desktop widgets. Create one in Panel Studio: Panels,
+  then **New free panel** at the end of the panel list and the button beside
+  it (it appears on the desktop), or with the
   desktop's **Add Panel > Arch Dock Circular Free Dock**. The "Arch Dock" entry
   in Plasma's widget list is the same widget without a panel behind it; a
   widget added from there explains where panels are created.

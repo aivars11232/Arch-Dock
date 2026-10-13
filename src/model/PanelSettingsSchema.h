@@ -98,6 +98,11 @@ enum class EditorCapability
     TileShape,
     GlobalRenderer,
     Pedestals,
+    // A halo round a panel, its icons or its tiles: offered where light round
+    // the look makes sense (PanelWindowSettings.cpp).
+    Glow,
+    // How much of the storm shows behind a lightning look's bolts.
+    Lightning,
     Count
 };
 

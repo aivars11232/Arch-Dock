@@ -328,7 +328,7 @@ private slots:
     void studioIconTiles();
     void studioFolderItemNames_data();
     void studioFolderItemNames();
-    void studioPlainSurfaceExplains3D();
+    void studioPlainSurfaceOffers3DWhereItWorks();
     void wholePanelRotationFieldsAreGatedByTheResolver();
     void studioMotionAndDirectionRows();
     void studioIconAppearanceOptionsAreTransactional();
@@ -471,7 +471,7 @@ void PanelWindowCapabilityTest::studioFolderItemNames()
     }
 }
 
-void PanelWindowCapabilityTest::studioPlainSurfaceExplains3D()
+void PanelWindowCapabilityTest::studioPlainSurfaceOffers3DWhereItWorks()
 {
     QQmlApplicationEngine engine;
     engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
@@ -494,7 +494,9 @@ void PanelWindowCapabilityTest::studioPlainSurfaceExplains3D()
     // Appearance no longer sends people to the themes for 3D: it points to
     // the one 3D page where 3D works. Contract change, ADREP-TASK-001 (owner,
     // 2026-10-07: "If the tab is empty, there's no need for that tab"): a
-    // session that cannot draw 3D has no 3D page, and Appearance says why.
+    // session that cannot draw 3D has no 3D page, and no note about it
+    // either (the owner, 2026-10-13: "these green things can be removed,
+    // they serve no purpose").
     QVariant rows;
     QVERIFY(QMetaObject::invokeMethod(popup.get(), "panelAppearanceRows", Q_RETURN_ARG(QVariant, rows)));
     const auto actionsOf = [](const QVariant &list) {
@@ -516,7 +518,7 @@ void PanelWindowCapabilityTest::studioPlainSurfaceExplains3D()
     QCOMPARE(offered.toBool(), session3D);
     QCOMPARE(actionsOf(rows).contains("open-3d-page"), session3D);
     QVERIFY(!actionsOf(rows).contains("browse-3d-themes"));
-    QCOMPARE(explains(rows), !session3D);
+    QVERIFY(!explains(rows));
     if (session3D) {
         QVERIFY(QMetaObject::invokeMethod(popup.get(), "performStudioAction",
             Q_ARG(QVariant, "open-3d-page"), Q_ARG(QVariant, QVariantMap{})));
@@ -1118,6 +1120,15 @@ void PanelWindowCapabilityTest::themeCardsResolveEachThemesOwnRenderer()
         for (auto it = themes.cbegin(); it != themes.cend(); ++it) {
             const QString id = it.key();
             QQuickItem *card = nullptr;
+            // A free panel lists the looks made for free docks (the owner,
+            // 2026-10-13): the horizontal skins resolve but have no card.
+            const QStringList orientations = it.value().value("capabilities").toMap()
+                .value("orientations").toStringList();
+            if (!orientations.isEmpty() && !orientations.contains(QStringLiteral("free"))) {
+                QQuickItem *hidden = visibleItem(window, "theme-live-preview-" + id);
+                QVERIFY2(hidden == nullptr, qPrintable(id + QStringLiteral(" listed on a free panel")));
+                continue;
+            }
             QTRY_VERIFY2((card = visibleItem(window, "theme-live-preview-" + id)) != nullptr, qPrintable(id));
             const QString resolved = rendererOf(it.value()).value("effectiveTier").toString();
             // The offscreen consumer has no mesh backend; its truthful
@@ -4255,8 +4266,9 @@ void PanelWindowCapabilityTest::studioMotionAndDirectionRows()
         auto studio = open(); QVERIFY(studio);
         const QVariantList animations = rows(studio.get(), 9);
         QCOMPARE(keys(animations), QStringList({"panelRotationMode", "panelMotionTarget", "scrollSensitivity"}));
-        QVERIFY2(notices(animations).contains(QStringLiteral("icons along its path while the panel stays still")),
-                 qPrintable(notices(animations)));
+        // No notes on the page (the owner, 2026-10-13: "these green things
+        // can be removed, they serve no purpose").
+        QVERIFY2(notices(animations).isEmpty(), qPrintable(notices(animations)));
     }
     QVERIFY(set({{"panelRotationMode", "clockwise"}}));
     {
@@ -4270,7 +4282,7 @@ void PanelWindowCapabilityTest::studioMotionAndDirectionRows()
         const QVariantList animations = rows(studio.get(), 9);
         QCOMPARE(keys(animations), QStringList({"panelRotationMode", "panelMotionTarget",
             "panelTravelSpeed", "panelRotationSpeed", "panelRotationTrigger", "scrollSensitivity"}));
-        QVERIFY(notices(animations).contains(QStringLiteral("turn it at the same time")));
+        QVERIFY2(notices(animations).isEmpty(), qPrintable(notices(animations)));
     }
     QVERIFY(set({{"panelMotionTarget", "items"}, {"panelRotationMode", "none"}}));
 
@@ -4972,6 +4984,44 @@ void PanelWindowCapabilityTest::studioPresetListsMatchTheSelectedPanel()
     const QStringList icons = listed(freePanel, 2, 4);
     QCOMPARE(icons.size(), 15);
     QCOMPARE(listed(QStringLiteral("bottom"), 2, 4), icons);
+
+    // Panel Themes / Skins likewise (the owner, 2026-10-13: the horizontal
+    // chassis skins on a free panel are "unrelated to free docks"): a free
+    // panel lists the looks made for free docks, an edge panel those of its
+    // orientation; a built-in flat look fits both.
+    const auto looks = [&](const QString &panel) {
+        const std::unique_ptr<QObject> popup(component.createWithInitialProperties({
+            {QStringLiteral("selectedPanelId"), panel}, {QStringLiteral("mainTabIndex"), 1}}));
+        QStringList ids;
+        QVariant rows;
+        if (!popup || !QMetaObject::invokeMethod(popup.get(), "panelThemeRows", Q_RETURN_ARG(QVariant, rows)))
+            return ids;
+        const QVariantList list = rows.metaType() == QMetaType::fromType<QJSValue>()
+            ? rows.value<QJSValue>().toVariant().toList() : rows.toList();
+        for (const QVariant &row : list)
+            for (const QVariant &theme : row.toMap().value(QStringLiteral("themes")).toList())
+                ids.append(theme.toMap().value(QStringLiteral("id")).toString());
+        return ids;
+    };
+    const QStringList freeLooks = looks(freePanel);
+    // The side panel (moved to the left edge above) takes no horizontal
+    // skin; back at the bottom it does.
+    const QStringList sideLooks = looks(QStringLiteral("bottom"));
+    registry->setPanelValue(QStringLiteral("bottom"), QStringLiteral("edge"), QStringLiteral("bottom"));
+    const QStringList edgeLooks = looks(QStringLiteral("bottom"));
+    QVERIFY2(!freeLooks.isEmpty() && !edgeLooks.isEmpty(), "both panels list looks");
+    for (const QString &skin : {QStringLiteral("sci-fi-chassis-dark"), QStringLiteral("sci-fi-chassis-red"),
+                                QStringLiteral("sci-fi-chassis-blue"), QStringLiteral("energy-frame-cyan")}) {
+        QVERIFY2(!freeLooks.contains(skin), qPrintable(skin + QStringLiteral(" on a free panel")));
+        QVERIFY2(!sideLooks.contains(skin), qPrintable(skin + QStringLiteral(" on the left edge")));
+        QVERIFY2(edgeLooks.contains(skin), qPrintable(skin + QStringLiteral(" missing on the bottom panel: ")
+                                                      + edgeLooks.join(QLatin1Char(','))));
+    }
+    QVERIFY2(freeLooks.contains(QStringLiteral("ring-platform-blue")), qPrintable(freeLooks.join(QLatin1Char(','))));
+    QVERIFY(!edgeLooks.contains(QStringLiteral("ring-platform-blue")));
+    QVERIFY2(std::any_of(freeLooks.cbegin(), freeLooks.cend(),
+                         [&](const QString &look) { return edgeLooks.contains(look); }),
+             "a flat look that names no orientation fits both panels");
 }
 
 void PanelWindowCapabilityTest::presetAuditionGuardsAndInvalidRequestsLeaveNoWrites()
@@ -5169,14 +5219,16 @@ void PanelWindowCapabilityTest::ownersFreeCircleOffersOnlyWhatWorks()
     QVERIFY(controls("panels-general").contains("x") && controls("panels-general").contains("y"));
     // OF-03, PD-02: no Width or Height that does nothing. A tab with nothing
     // to change is not shown (the owner, 2026-10-07: "If the tab is empty,
-    // there's no need for that tab"), so the Layout page says what sets a
-    // radius-driven circle's size.
+    // there's no need for that tab"): a radius-driven circle's size is its
+    // Radius on the Layout page, which carries no notes (the owner,
+    // 2026-10-13: "these green things can be removed").
     QVERIFY(!offeredByPage.value("panels-size"));
-    bool sizeExplained = false;
-    for (const QVariant &value : rowsByPage.value("panels-layout"))
-        sizeExplained |= value.toMap().value("kind").toString() == "notice"
-            && value.toMap().value("text").toString().contains("Radius");
-    QVERIFY2(sizeExplained, "the Layout page does not say what sets this panel's size");
+    QVERIFY(controls("panels-layout").contains("layoutRadius"));
+    for (const QString &page : rowsByPage.keys())
+        for (const QVariant &value : rowsByPage.value(page))
+            QVERIFY2(value.toMap().value("kind").toString() != "notice"
+                         || value.toMap().value("warning").toBool(),
+                     qPrintable(page + ": " + value.toMap().value("text").toString()));
     // OF-05, PD-04: Appearance has no Shape.
     QVERIFY(!controls("panels-appearance").contains("shape"));
     // OF-06, OF-07, PD-01: Behavior has no Dynamic and no opening or closing.

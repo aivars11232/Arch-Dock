@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<!-- Original Arch Dock vector material. GPL-3.0-or-later. -->
+<defs><linearGradient id="sheen" x2="0.8" y2="1"><stop stop-color="#f8f8f8"/><stop offset=".36" stop-color="#777"/><stop offset=".62" stop-color="#d8d8d8"/><stop offset="1" stop-color="#4d4d4d"/></linearGradient></defs>
+<rect x="0" y="0" width="128" height="128" fill="#202020" opacity="1"/>
+<path d="M0 96 C2 70 -2 48 1 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M6 96 C8 70 4 48 7 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M12 96 C14 70 10 48 13 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M18 96 C20 70 16 48 19 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M24 96 C26 70 22 48 25 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M30 96 C32 70 28 48 31 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M36 96 C38 70 34 48 37 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M42 96 C44 70 40 48 43 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M48 96 C50 70 46 48 49 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M54 96 C56 70 52 48 55 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M60 96 C62 70 58 48 61 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M66 96 C68 70 64 48 67 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M72 96 C74 70 70 48 73 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M78 96 C80 70 76 48 79 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M84 96 C86 70 82 48 85 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M90 96 C92 70 88 48 91 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M96 96 C98 70 94 48 97 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M102 96 C104 70 100 48 103 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M108 96 C110 70 106 48 109 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M114 96 C116 70 112 48 115 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M120 96 C122 70 118 48 121 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+<path d="M126 96 C128 70 124 48 127 24" fill="none" stroke="#bbb" stroke-width="3" opacity="0.5"/>
+</svg>

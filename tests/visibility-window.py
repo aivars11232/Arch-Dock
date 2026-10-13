@@ -207,9 +207,11 @@ def instrument_interaction_stage(stage):
                             for (let degrees = 5; degrees < 360 && !result.surface; degrees += 10) {
                                 const turn = degrees * Math.PI / 180;
                                 let p;
-                                if (mesh && mesh.viewport) {
+                                if (mesh && mesh.projectScenePoint) {
+                                    // In the panel's own coordinates: the view is drawn past the
+                                    // panel's box by margins (PanelScene3D.drawnBounds).
                                     const radius = Number(mesh.entryTrackRadius || mesh.platformScale * 0.84);
-                                    const v = mesh.viewport.mapFrom3DScene(Qt.vector3d(
+                                    const v = mesh.projectScenePoint(Qt.vector3d(
                                         radius * Math.cos(turn), radius * Math.sin(turn), mesh.platformTop));
                                     p = Qt.point(v.x, v.y);
                                 } else if (track) {
@@ -230,8 +232,8 @@ def instrument_interaction_stage(stage):
                             const track = panelScene.activeTrackMetrics;
                             let p = track && track.center ? Qt.point(track.center.x, track.center.y)
                                 : Qt.point(panelScene.width / 2, panelScene.height / 2);
-                            if (mesh && mesh.viewport) {
-                                const v = mesh.viewport.mapFrom3DScene(Qt.vector3d(0, 0, mesh.platformTop));
+                            if (mesh && mesh.projectScenePoint) {
+                                const v = mesh.projectScenePoint(Qt.vector3d(0, 0, mesh.platformTop));
                                 p = Qt.point(v.x, v.y);
                             }
                             const mapped = panelScene.mapToItem(null, p.x, p.y);
@@ -2417,7 +2419,7 @@ def run_interaction_matrix(free_panel):
                            QT_NO_XDG_DESKTOP_PORTAL="1", XDG_DATA_HOME=str(root / "ui-data"))
         with (root / "logs/icon-tiles-native.log").open("w") as tile_log:
             tiles = subprocess.run([str(pathlib.Path(os.environ["ARCHDOCK_BUILD_DIR"]) / "panel-window-capability-test"),
-                                    "studioIconTiles", "studioFolderItemNames", "studioPlainSurfaceExplains3D", "studioPanelMotionControls", "tiltEditorsFollowTheSelectedRenderer"],
+                                    "studioIconTiles", "studioFolderItemNames", "studioPlainSurfaceOffers3DWhereItWorks", "studioPanelMotionControls", "tiltEditorsFollowTheSelectedRenderer"],
                                    env=environment, stdout=tile_log, stderr=subprocess.STDOUT, timeout=60)
             assert tiles.returncode == 0, ("native Icon Tiles edit/Cancel/Apply/persistence failed\n"
                 + (root / "logs/icon-tiles-native.log").read_text())

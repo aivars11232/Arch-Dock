@@ -645,6 +645,21 @@ Item {
         height: surfaceMetrics.height + surfaceMetrics.effectTop
             + surfaceMetrics.effectBottom
     })
+    // Where the panel is drawn, in its own coordinates: its box with the
+    // effects' margins, and as far as a 3D scene reaches out of the box -
+    // scaled, tilted or moved, nothing of it is cut at the box (the owner,
+    // 2026-10-13: "the only edge is edge of the screen"). The host lets
+    // input reach it there; the widget's own size stays the box's.
+    readonly property rect drawnBounds: {
+        const effect = effectBounds
+        const scene = surfaceLoader.true3DReady && surfaceLoader.true3DItem
+            ? surfaceLoader.true3DItem.drawnBounds : null
+        if (!scene) return Qt.rect(effect.x, effect.y, effect.width, effect.height)
+        const left = Math.min(effect.x, scene.x), top = Math.min(effect.y, scene.y)
+        return Qt.rect(left, top,
+                       Math.max(effect.x + effect.width, scene.x + scene.width) - left,
+                       Math.max(effect.y + effect.height, scene.y + scene.height) - top)
+    }
     readonly property var inputRegion: ({
         x: 0,
         y: 0,
@@ -736,8 +751,10 @@ Item {
     // through, while an icon standing proud of the rim stays clickable.
     readonly property bool bakedInputActive:
         bakedMetadataUsable && surfaceLoader.inputMaskItem !== null
+    // A true-3D free scene answers for itself whatever its layout, so input
+    // reaches it wherever it is drawn, out of the box too.
     readonly property bool geometryHitRegionActive:
-        freeHost && (bakedInputActive
+        freeHost && (bakedInputActive || surfaceLoader.true3DReady
                      || (!surfaceLoader.inputMaskItem
                          && LayoutEngine.supportsWholeSceneRotation(layoutPath)))
     readonly property string activeInputRegionKind:
@@ -1328,21 +1345,26 @@ Item {
     }
 
     MouseArea {
-        anchors.fill: parent
+        // Wherever the panel is drawn, out of its box too.
+        x: root.drawnBounds.x
+        y: root.drawnBounds.y
+        width: root.drawnBounds.width
+        height: root.drawnBounds.height
         z: 0.5 // Entry delegates remain above this background gesture.
         enabled: (root.wheelRotationAvailable || root.wheelTravelAvailable) && !root.sceneEditActive
         acceptedButtons: Qt.LeftButton
         property real previousAngle: 0
         onPressed: mouse => {
-            if (!root.containsInputPoint(Qt.point(mouse.x, mouse.y))) { mouse.accepted = false; return }
+            const point = Qt.point(mouse.x + x, mouse.y + y)
+            if (!root.containsInputPoint(point)) { mouse.accepted = false; return }
             const centre = root.travelCentre()
-            previousAngle = Math.atan2(mouse.y - centre.y, mouse.x - centre.x)
+            previousAngle = Math.atan2(point.y - centre.y, point.x - centre.x)
             root.rotationDragActive = true
         }
         onPositionChanged: mouse => {
             if (!pressed || !root.rotationDragActive) return
             const centre = root.travelCentre()
-            const angle = Math.atan2(mouse.y - centre.y, mouse.x - centre.x)
+            const angle = Math.atan2(mouse.y + y - centre.y, mouse.x + x - centre.x)
             const delta = Math.atan2(Math.sin(angle-previousAngle), Math.cos(angle-previousAngle))
             previousAngle = angle
             root.dragMotion(delta * 180 / Math.PI)
@@ -1405,6 +1427,16 @@ Item {
         hovered: root.panelHovered
         tintColor: root.tintColor
         glowIntensity: root.glowIntensity
+        // Light round the panel's shape, in its own colour or its look's.
+        panelGlow: Math.max(0, Math.min(1, Number(root.panelDefinition.panelGlow || 0)))
+        panelGlowReach: Math.max(0, Math.min(1, Number(root.panelDefinition.panelGlowReach === undefined
+            ? 0.75 : root.panelDefinition.panelGlowReach)))
+        panelGlowColour: String(root.panelDefinition.panelGlowColor || "").length
+            ? String(root.panelDefinition.panelGlowColor) : String(root.rendererStyle.stroke || "#a8dcff")
+        lightningBackground: Math.max(0, Math.min(1, Number(root.panelDefinition.panelLookBackground === undefined
+            ? 0.5 : root.panelDefinition.panelLookBackground)))
+        lookMotionSpeed: Math.max(0.1, Math.min(3, Number(root.panelDefinition.lookMotionSpeed || 1)))
+        lookPalette: String(root.panelDefinition.panelLookColour || "")
         reducedMotion: root.reducedMotion
         geometry: root.rendererGeometry
         layoutAngle: root.effectiveLayoutAngle
@@ -1451,6 +1483,16 @@ Item {
                     ["pedestalAnimationSpeed", "pedestalAnimationSpeed"],
                     ["pedestalThickness", "pedestalThickness"], ["pedestalTexture", "pedestalTexture"],
                     ["pedestalOpacity", "pedestalOpacity"], ["pedestalGlow", "pedestalGlow"],
+                    ["pedestalGlowReach", "pedestalGlowReach"], ["pedestalGlowColor", "pedestalGlowColor"],
+                    ["panelGlow", "panelGlow"], ["panelGlowReach", "panelGlowReach"],
+                    ["panelGlowColor", "panelGlowColor"], ["iconGlow", "iconGlow"],
+                    ["iconGlowReach", "iconGlowReach"], ["iconGlowColor", "iconGlowColor"],
+                    ["iconTileGlow", "iconTileGlow"], ["iconTileGlowReach", "iconTileGlowReach"],
+                    ["iconTileGlowColor", "iconTileGlowColor"],
+                    ["panelLookBackground", "panelLookBackground"],
+                    ["pedestalLookBackground", "pedestalLookBackground"],
+                    ["lookMotionSpeed", "lookMotionSpeed"],
+                    ["panelLookColour", "panelLookColour"], ["pedestalLookColour", "pedestalLookColour"],
                     ["pedestalFacing", "pedestalFacing"], ["pedestalViewAngle", "pedestalViewAngle"],
                     ["folderPedestalShape", "folderPedestalShape"]])
                 if (definition[key] !== undefined) parameters[parameter] = definition[key]
@@ -1666,6 +1708,9 @@ Item {
                     entryItem.sceneIconStyleDefinition
                 readonly property var sceneContext: entryItem.sceneContext
                 readonly property bool sceneMeshActive: surfaceLoader.true3DReady
+                // Whether a stand stands on the path at its icon's place (a
+                // free panel's) or with its icon in the row (an edge panel's).
+                readonly property bool scenePedestalOnPath: root.pedestalOnPath
                 readonly property string sceneMotionContextKey: root.motionContextKey
                 readonly property var sceneGlyphMotion: entryItem.glyphMotion
                 readonly property var sceneTileMotion: entryItem.tileMotion

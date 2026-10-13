@@ -24,6 +24,12 @@ geometry/recovery integration. Plasma controls the host; Arch Dock renders
 and animates within it. Ownership tokens and unrelated-panel/widget safeguards
 apply to both native and free hosts.
 
+KDE's own widgets (the clock, the application launcher, Panel Colorizer)
+can be added to an edge panel with Plasma's Add Widgets, since it is a
+Plasma panel: Plasma sizes them to the panel, beside Arch Dock's widget and
+on Plasma's panel background, outside Arch Dock's drawn look. A free panel
+holds no other widget: one dropped on it becomes a separate desktop widget.
+
 ## Optional rendering and previews
 
 Qt Quick 3D is an optional runtime dependency. The build's `AUTO`, `OFF` and
@@ -39,8 +45,13 @@ motion and fallback behavior remain applicable when optional rendering is off.
 Changing a 3D material or texture keeps the scene drawn with the previous
 texture until the new file has loaded; the first readiness of a scene still
 waits for every resource. The material textures are generated raster
-images that depict their names (grass, plasma, marble, metal, stone), not
-photographs. In 3D they are lit as relief (a normal map per look) and the
+images that depict their names (grass, plasma gas, lightning, aurora,
+marble, metal, a lime's peel), not photographs; each glowing look's
+palettes are separate files. A real glow (bloom) runs only while something
+glows and costs a few passes of every frame; one 3D panel has one glow, so
+it reaches as far as the farthest Glow reach lit in it. A flat panel's
+lightning strikes along the track, a flat stand's or tile's lightning and
+aurora are still; in 3D they move. In 3D they are lit as relief (a normal map per look) and the
 energy looks flow round the band, but they remain surfaces: blades of grass
 that sway or a plasma volume would be a new rendering feature with its own
 geometry and shaders. A generated platform
@@ -222,7 +233,12 @@ Dragging the platform itself turns it (across) and tilts it (up and down). An
 arrow seen end-on cannot follow the pointer, so it moves with vertical drags
 and the gizmo says so.
 Scene position moves the platform within the panel's own area, which is sized
-for the platform, so the room to move is small at full scale.
+for the platform, so the room to move is small at full scale; scale still
+stops at 1.25 and pitch at 60 degrees until the free transform work (the
+owner's next phase). Nothing drawn is cut at the panel's box any more: the
+3D view grows past it as far as the scene reaches, up to the screen's size,
+at the cost of rendering the larger area; beyond about 2048 pixels across
+it is drawn at a lower resolution and scaled.
 
 ## Hardware evidence
 

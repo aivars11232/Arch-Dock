@@ -63,10 +63,21 @@ Item {
         panelScene.presentationTrackForm
     readonly property string mechanismFallbackReason:
         panelScene.mechanismFallbackReason
+    // A 3D scene drawn out of its box (scaled, tilted, moved) is fitted
+    // whole, as the desktop shows it: its reach about the box's centre.
+    readonly property var sceneDrawnBounds: panelScene.activeSurfaceRenderer
+        && panelScene.activeSurfaceRenderer.drawnBounds !== undefined
+        ? panelScene.activeSurfaceRenderer.drawnBounds : null
+    readonly property real sceneSpanX: sceneDrawnBounds ? Math.max(panelScene.width,
+        2 * Math.max(panelScene.width / 2 - sceneDrawnBounds.x,
+                     sceneDrawnBounds.x + sceneDrawnBounds.width - panelScene.width / 2)) : panelScene.width
+    readonly property real sceneSpanY: sceneDrawnBounds ? Math.max(panelScene.height,
+        2 * Math.max(panelScene.height / 2 - sceneDrawnBounds.y,
+                     sceneDrawnBounds.y + sceneDrawnBounds.height - panelScene.height / 2)) : panelScene.height
     readonly property real sceneFitScale: Math.max(0, Math.min(
         1,
-        (width - contentMargin * 2) / Math.max(1, panelScene.width),
-        (height - contentMargin * 2) / Math.max(1, panelScene.height)))
+        (width - contentMargin * 2) / Math.max(1, sceneSpanX),
+        (height - contentMargin * 2) / Math.max(1, sceneSpanY)))
     readonly property alias panelSceneItem: panelScene
     readonly property alias sceneLayerItem: sceneLayer
 
