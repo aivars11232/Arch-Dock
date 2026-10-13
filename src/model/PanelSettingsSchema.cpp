@@ -447,7 +447,7 @@ const QVector<Descriptor> &schemaFields()
               editor("panels-behavior", "Fan opening", "spin", {"studio"}, "folder-content", {},
                      {{QStringLiteral("step"), 5}, {QStringLiteral("suffix"), QStringLiteral("°")}})),
         panel("folderStackLength", Access::Editor, Type::Integer,
-              Normalization::IntegerRange, 5, "content.folderStackLength", 2, 12, {}, false, true,
+              Normalization::IntegerRange, 3, "content.folderStackLength", 2, 12, {}, false, true,
               editor("panels-behavior", "Stack length", "spin", {"studio"}, "folder-content")),
         panel("folderRingSize", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("small"), "content.folderRingSize",

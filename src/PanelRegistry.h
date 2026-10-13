@@ -91,12 +91,17 @@ public:
     [[nodiscard]] std::optional<QVariantMap> themeRuntimeProjection(
         const ArchDock::PanelDefinition &definition,
         QString *errorCode = nullptr) const;
+    // Which of `layouts` the panel's look could draw in 3D: every one, when
+    // the look has a 3D scene of its own, or those with a generated platform.
+    // The same rule the renderer choice uses (themeCapabilityProfile()).
+    [[nodiscard]] QStringList layoutsDrawnIn3D(const ArchDock::PanelDefinition &definition,
+                                               const QStringList &layouts) const;
     [[nodiscard]] std::optional<QVariantMap> builtInThemeRuntimeProjection(
         const QString &themeId,
         QString *errorCode = nullptr) const;
     // A free panel whose look ships no 3D scene of its own can still be drawn
     // in 3D when its layout has an exact generated platform (a circle,
-    // ellipse, regular polygon or the radial arc): the renderer generates the
+    // ellipse, regular polygon, star or the radial arc): the renderer generates the
     // platform along the layout's path, in the look's own colours (sampled
     // from `lookProjection`'s artwork when it has some). Returns {scene3D,
     // scene3DResources}, or nothing when the panel or its look cannot be
@@ -168,17 +173,6 @@ public:
         const QString &ownershipToken,
         const QString &errorCode);
     [[nodiscard]] bool removeDetachedFreePanel(const QString &panelId);
-    // A detached free panel keeps its settings but has no desktop widget.
-    // Reserving a new ownership token on it lets a new widget be created for
-    // the same record; the creation then completes like a new panel's.
-    [[nodiscard]] bool beginFreePanelRehost(
-        const QString &panelId,
-        const QString &ownershipToken);
-    // A failed re-host returns the record to its detached state, settings kept.
-    [[nodiscard]] bool abandonFreePanelRehost(
-        const QString &panelId,
-        const QString &ownershipToken,
-        const QString &errorCode);
     [[nodiscard]] bool commitVerifiedNativePanelAssociation(
         const QString &panelId,
         int containmentId,

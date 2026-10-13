@@ -22,6 +22,24 @@ PlasmoidItem {
 
     DropBackend { id: dropBackend }
 
+    // Plasma tells a widget when its owner removes it, or the Plasma panel it
+    // sits in, and again if the removal is undone. Arch Dock removes the
+    // panel entirely once Plasma has deleted it; a profile keeps its own
+    // copy.
+    function reportRemoval(removing) {
+        if (panelId.length > 0)
+            callDock("panelRemovalRequested", [panelId, removing]);
+    }
+    Connections {
+        target: Plasmoid
+        function onDestroyedChanged(destroyed) { root.reportRemoval(destroyed) }
+    }
+    Connections {
+        target: root.freeSurface ? null : Plasmoid.containment
+        ignoreUnknownSignals: true
+        function onDestroyedChanged(destroyed) { root.reportRemoval(destroyed) }
+    }
+
     readonly property bool renderingModuleReady: RenderingModuleProbe.ready
     readonly property string panelId: Plasmoid.configuration.panelId || ""
     readonly property string configuredPanelType: Plasmoid.configuration.panelType || "hybrid"
@@ -108,10 +126,17 @@ PlasmoidItem {
             for (const name of keys)
                 if (source["folderPedestal" + name] !== undefined)
                     settings["pedestal" + name] = source["folderPedestal" + name]
-        // An opened folder is no panel: its items' stands stand level, seen
-        // View angle degrees from above.
+        // An opened folder is no panel: its items face the viewer, their
+        // stands level, seen View angle degrees from above.
         settings.pedestalFacing = "viewer"
         return settings
+    }
+    // The folder's stands as drawn: on a panel drawn in 3D they are seen
+    // `angle` degrees from above, the way the panel's own stands are
+    // (PanelScene.standSeenAngle), so the two match; NaN keeps View angle.
+    function folderStandsSeenAt(angle) {
+        if (!Number.isFinite(angle)) return folderPedestalSettings
+        return Object.assign({}, folderPedestalSettings, { pedestalSeenAngle: angle })
     }
     // The runtime state the scene draws from. Until TASK-0032 Phase D the
     // presentation controller existed but nothing read it, so the live surface
@@ -767,6 +792,15 @@ PlasmoidItem {
         onTriggered: root.openPanelStudio()
     }
 
+    // A new free panel, or one on a screen edge, from Panel Studio's page
+    // for new panels.
+    PlasmaCore.Action {
+        id: addPanelAction
+        text: qsTr("Add panel…")
+        icon.name: "list-add"
+        onTriggered: root.callDock("showNewPanelPage", [])
+    }
+
     Component {
         id: dockRepresentation
 
@@ -890,9 +924,9 @@ PlasmoidItem {
                 folderLayout: representation.folderLayout
                 trackSamples: function(extra, span) {
                     // One icon and a gap out of the dock, centred on the
-                    // folder, `span` radians round it: two thirds of the way
+                    // folder, `span` radians round it: a quarter of the way
                     // unless the host asks for more.
-                    const turn = Number(span) || 2 * Math.PI / 3
+                    const turn = Number(span) || Math.PI / 2
                     return panelScene.folderTrackSamples(representation.folderEntryIndex,
                         panelScene.layoutGeometry.iconSize + 16 + (Number(extra) || 0), turn,
                         Math.max(31, Math.round(91 * turn / (2 * Math.PI / 3))))
@@ -906,13 +940,19 @@ PlasmoidItem {
                     // The shape opens from the platform's rim itself.
                     return panelScene.folderOutwardRay(representation.folderEntryIndex, 0)
                 }
+                // On a 3D panel the shape lies on the panel's own plane.
+                folderPlane: function() {
+                    return panelScene.folderPlane(representation.folderEntryIndex)
+                }
+                // What its contents keep clear of on a 3D panel.
+                keepOut: function() { return panelScene.folderKeepOut() }
                 // A ring the size of the panel needs a dock with a radius.
                 dockCentre: function() {
                     return LayoutEngine.supportsWholeSceneRotation(panelScene.layoutPath)
                         ? panelScene.dockCentre() : null
                 }
                 fanOpening: Number(root.configuration.folderFanOpening || 90)
-                stackLength: Number(root.configuration.folderStackLength || 5)
+                stackLength: Number(root.configuration.folderStackLength || 3)
                 ringSize: String(root.configuration.folderRingSize || "small")
                 appearance: panelScene.appearance
                 customColor: panelScene.customColor
@@ -925,7 +965,7 @@ PlasmoidItem {
                 reducedMotion: Boolean(root.configuration.reducedMotion)
                 showNames: root.configuration.folderShowNames !== false
                 iconStyleDefinition: root.configuration.iconStyleDefinition || ({})
-                pedestalSettings: root.folderPedestalSettings
+                pedestalSettings: root.folderStandsSeenAt(panelScene.standSeenAngle)
                 interactionAllowed: folderExpansion.interactionAllowed
                 onInteractionAllowedChanged: if (!interactionAllowed) representation.hideFolderExpansion()
                 onChildSelected: childId => root.callDock("openPanelFolderChild",
@@ -1357,6 +1397,8 @@ PlasmoidItem {
             root.consumePresentationRequest();
         }
     }
+
+    Plasmoid.contextualActions: [addPanelAction]
 
     Component.onCompleted: {
         Plasmoid.setInternalAction("configure", configurePanelStudioAction);

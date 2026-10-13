@@ -7,6 +7,42 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- Folders open at once and stay smooth (2026-10-13, the owner: "Folder
+  opening on any option is super glitchy, opens with huge delay and freezes
+  Arch Dock while it opens"): the stands' glow and a fan's outline are blurred
+  on the graphics card instead of Plasma's main thread, a spinning stand is
+  drawn once for each step of its turn and shared by every icon with the same
+  stand, and the curve "Along the dock" is worked out once per opening. A
+  folder that took more than five seconds to appear now shows within a tenth
+  of a second. Stands in a glowing look are light, as on a 3D panel: green
+  stars instead of black ones.
+- A star on a 3D panel (the owner's "Draft validation failed" with Layout:
+  star): 3D panels draw a star platform, and their Layout list offers only
+  layouts their look can draw in 3D.
+- A removed panel is gone (the owner: "right click on panel and select remove
+  panel, that should remove panel entirely, except the ones saved in
+  Profiles"): once Plasma has deleted a removed panel (Undo is no longer
+  possible), Arch Dock removes its settings too; panels left behind earlier
+  are cleared. Put back on the desktop and the orange note about missing
+  widgets are gone; profiles keep their own copies.
+- Panel Studio edits one panel at a time, as Plasma does: the one opened with
+  "Configure Arch Dock…"; Configure on another panel moves the window there,
+  asking first about changes not applied yet. Opened on its own, or with a
+  panel's new "Add panel…", it adds a panel - a free one, or one on a screen
+  edge where no panel stands yet - and then edits it.
+- On a tilted 3D panel the icons keep facing you, the panel's own and an
+  opened folder's (the owner: "the icons should allways face the user ... no
+  icon would be squeshed"); the far ones are only smaller. The folder's
+  stands are seen at the panel's angle, like the stands on the panel,
+  instead of from a little above.
+- Arrow keys in an open folder keep their selection while the pointer rests
+  over the folder.
+- On a 3D panel a folder opens on the panel's own plane, tilted with it, and
+  never covers or touches the panel; along the dock it reaches a quarter to
+  three quarters of the way round. Fan, arc and stack open at their
+  smallest, three at a time; a ring holds six and grows a second circle
+  round the first for more, the two leaning opposite ways on a 3D panel.
+
 - A 3D panel turns freely all the way round (2026-10-13, the owner: "freely
   in 360 every direction"): Pitch goes past its edge and over, like Yaw and
   Roll, in Panel Studio and on the desktop's handles; tilted 90 degrees it

@@ -80,6 +80,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     LayoutEngine.js
     GizmoMath.js
     PlatformGeometry.js
+    StandFrames.js
     IconStyleResolver.js
     AnimationProfileRuntime.js
     MotionChannels.js

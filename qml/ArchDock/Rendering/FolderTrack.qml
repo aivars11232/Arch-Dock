@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls as QQC2
+import QtQuick.Effects
 import "MotionChannels.js" as MotionChannels
 import "PlatformGeometry.js" as PlatformGeometry
 
@@ -31,6 +32,9 @@ Item {
     // when they start at the folder - and the folder icon's centre: the
     // children unfold from there.
     property var samples: []
+    // A ring folder's second circle round the first, as samples like
+    // `samples`: the children the ring cannot hold go on round it.
+    property var rings: []
     property bool closedPath: false
     property bool startAtFolder: false
     // At most this many children on the path at once (a stack's length); 0
@@ -58,6 +62,8 @@ Item {
     property bool closing: false
     property string selectedChildId: ""
     property bool keyboardSelection: false
+    // Where the pointer last moved over a child, in the window.
+    property point pointerAt: Qt.point(-1, -1)
     readonly property var entries: (snapshot.entries || []).slice(0, 48)
     // The stands under the children reach above and below an icon's cell:
     // the icon floats over its stand (the Pedestals page), and its name
@@ -79,7 +85,7 @@ Item {
     property real wheelRemainder: 0
     readonly property var track: LayoutEngine.folderTrackLayout(
         samples, entries.length, pitch, trackOffset,
-        { closed: closedPath, start: startAtFolder ? "start" : "centre", capacity: pathCapacity })
+        { closed: closedPath, start: startAtFolder ? "start" : "centre", capacity: pathCapacity, rings: rings })
     // What the popup reports about its layout, for the same consumers.
     readonly property var geometry: ({ layout: shape, side: "track" })
     signal childSelected(string childId)
@@ -234,7 +240,9 @@ Item {
     }
     // Whether a point is on the small panel drawn under the children.
     function onOutline(x, y) {
-        const points = outline && outline.closed ? outline.points || [] : []
+        const loops = outline && outline.closed ? outline.loops || [] : []
+        const points = loops.length ? loops[loops.length - 1]
+            : outline && outline.closed ? outline.points || [] : []
         let inside = false
         for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
             const a = points[i], b = points[j]
@@ -265,6 +273,44 @@ Item {
     }
     // The fan's sector or the second ring, in the panel's own look: its
     // track's colour, width and glow. It grows from the folder as it opens.
+    // The faint fill and the line are separate canvases, so only the line
+    // glows. The glow is blurred on the graphics card; a Canvas shadow blur
+    // over a window-sized canvas runs on the main thread and took about half
+    // a second at every opening.
+    Canvas {
+        id: outlineFill
+        objectName: "folderOutlineFill"
+        anchors.fill: parent
+        visible: outlineCanvas.visible && root.outlineFilled
+        opacity: outlineCanvas.opacity
+        transform: Scale {
+            origin.x: root.expansionOrigin.x
+            origin.y: root.expansionOrigin.y
+            xScale: Math.max(0, root.openingProgress)
+            yScale: Math.max(0, root.openingProgress)
+        }
+        onPaint: {
+            const context = getContext("2d")
+            context.reset()
+            const points = root.outline ? root.outline.points || [] : []
+            const style = root.outlineStyle
+            if (points.length < 3 || !style || !root.outlineFilled) return
+            root.traceOutline(context, points, 0)
+            if (root.outline.closed) context.closePath()
+            context.globalAlpha = 0.18
+            context.fillStyle = style.stroke
+            context.fill()
+        }
+        onVisibleChanged: if (visible) requestPaint()
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+        Connections {
+            target: root
+            function onOutlineChanged() { outlineFill.requestPaint() }
+            function onOutlineStyleChanged() { outlineFill.requestPaint() }
+            function onOutlineFilledChanged() { outlineFill.requestPaint() }
+        }
+    }
     Canvas {
         id: outlineCanvas
         objectName: "folderOutline"
@@ -279,6 +325,19 @@ Item {
             xScale: Math.max(0, root.openingProgress)
             yScale: Math.max(0, root.openingProgress)
         }
+        // The panel's track glow: its colour, as far as its blur reached.
+        readonly property real glowBlur: root.outlineStyle ? Number(root.outlineStyle.blur) || 0 : 0
+        layer.enabled: visible && glowBlur > 0
+        layer.effect: MultiEffect {
+            shadowEnabled: true
+            shadowColor: root.outlineStyle ? root.outlineStyle.shadow : "transparent"
+            shadowOpacity: 1
+            shadowBlur: 1
+            blurMax: Math.max(2, Math.round(1.5 * outlineCanvas.glowBlur))
+            shadowHorizontalOffset: 0
+            shadowVerticalOffset: 0
+            autoPaddingEnabled: true
+        }
         onPaint: {
             const context = getContext("2d")
             context.reset()
@@ -289,30 +348,20 @@ Item {
             context.strokeStyle = style.stroke
             context.lineCap = "round"
             context.lineJoin = "round"
-            context.beginPath()
-            context.moveTo(points[0].x, points[0].y)
-            for (let index = 1; index < points.length; ++index)
-                context.lineTo(points[index].x, points[index].y)
-            if (root.outline.closed) context.closePath()
-            if (root.outlineFilled) {
-                context.save()
-                context.globalAlpha = 0.18
-                context.fillStyle = style.stroke
-                context.fill()
-                context.restore()
-            }
             // A shape may stroke only part of its outline (a fan's arc):
             // the rest is the faint fill's border alone.
             const first = Math.max(0, Math.floor(Number(root.outline.strokeFrom) || 0))
-            if (first > 0 && first < points.length - 1) {
-                context.beginPath()
-                context.moveTo(points[first].x, points[first].y)
-                for (let index = first + 1; index < points.length; ++index)
-                    context.lineTo(points[index].x, points[index].y)
-            }
-            context.shadowColor = style.shadow
-            context.shadowBlur = style.blur
+            const partial = first > 0 && first < points.length - 1
+            root.traceOutline(context, points, partial ? first : 0)
+            if (!partial && root.outline.closed) context.closePath()
             context.stroke()
+            // A ring's second circle round the first.
+            for (const loop of root.outline.loops || []) {
+                if (loop.length < 3) continue
+                root.traceOutline(context, loop, 0)
+                context.closePath()
+                context.stroke()
+            }
         }
         onVisibleChanged: if (visible) requestPaint()
         onWidthChanged: requestPaint()
@@ -321,8 +370,13 @@ Item {
             target: root
             function onOutlineChanged() { outlineCanvas.requestPaint() }
             function onOutlineStyleChanged() { outlineCanvas.requestPaint() }
-            function onOutlineFilledChanged() { outlineCanvas.requestPaint() }
         }
+    }
+    function traceOutline(context, points, from) {
+        context.beginPath()
+        context.moveTo(points[from].x, points[from].y)
+        for (let index = from + 1; index < points.length; ++index)
+            context.lineTo(points[index].x, points[index].y)
     }
     QQC2.Label {
         objectName: "folderTrackNotice"
@@ -407,7 +461,13 @@ Item {
                 enabled: root.opened && !root.openingInProgress && child.placed.onTrack === true
                 hoverEnabled: true
                 onEntered: if (!root.keyboardSelection) root.selectedChildId = String(child.modelData.id)
-                onPositionChanged: {
+                onPositionChanged: mouse => {
+                    // A child moving under a pointer that stays still is no
+                    // move of the pointer: the keys keep their selection.
+                    const at = pointer.mapToItem(null, mouse.x, mouse.y)
+                    const still = Math.abs(at.x - root.pointerAt.x) < 0.5 && Math.abs(at.y - root.pointerAt.y) < 0.5
+                    root.pointerAt = at
+                    if (still && root.keyboardSelection) return
                     root.keyboardSelection = false
                     root.selectedChildId = String(child.modelData.id)
                 }

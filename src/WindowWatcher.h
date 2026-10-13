@@ -26,6 +26,10 @@ public:
                            QObject *parent = nullptr);
     [[nodiscard]] bool available() const;
     [[nodiscard]] QVariantMap nativePanelState(const QRectF &bounds) const;
+    // Where every dock window KWin reports stands - Plasma's panels, Arch
+    // Dock's own and any other dock's - in screen coordinates; hidden ones
+    // are left out.
+    [[nodiscard]] QList<QRectF> dockWindowBounds() const;
     // Unloads every KWin watcher instance. The watcher reports each window
     // event to Arch Dock, and a report to a stopped backend activates it.
     static void releaseKWinScripts();

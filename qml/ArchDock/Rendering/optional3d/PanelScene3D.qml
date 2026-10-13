@@ -1170,67 +1170,214 @@ Item {
     }
     // The view's own picking, at a point in the panel's coordinates.
     function pickAllAt(x, y) { return view.pickAll(x + overflowX, y + overflowY) }
+    // The curve a folder's contents follow ("Along the dock"): the dock's
+    // own track round the folder, `outward` pixels further out on the
+    // platform's own plane, so the curve keeps the panel's tilt - a step out
+    // on the far side of a tilted panel looks as short as the panel makes it
+    // - and each child stands on it as the dock's icons stand on theirs.
+    // `count` samples span `span` radians, centred on the folder; `scale` is
+    // how large a child is drawn there, 1 at the folder's depth. A folder
+    // tries its curve at several distances out of the dock: the track is
+    // traced once per opening, and each distance is only arithmetic on it.
+    property var folderTrackMemo: null
+    function forgetFolderTrack() { folderTrackMemo = null }
     function folderTrackSamples(entryIndex, outward, span, count) {
+        const key = [entryIndex, span, count, width, height].join("|")
+        let base = folderTrackMemo && folderTrackMemo.key === key ? folderTrackMemo.base : null
+        if (!base) {
+            base = folderTrackBase(entryIndex, span, count)
+            folderTrackMemo = { key: key, base: base }
+            Qt.callLater(root.forgetFolderTrack)
+        }
+        const distance = Number(outward) || 0
+        const result = []
+        for (const sample of base.samples) {
+            // The child's middle in the camera's frame, projected as
+            // projectScenePoint() does.
+            const depth = -(sample.at.z + sample.out.z * distance)
+            if (!(depth > camera.clipNear + 1e-6)) continue
+            const factor = cameraDistance / depth
+            result.push({ x: width / 2 + (sample.at.x + sample.out.x * distance) * factor,
+                          y: height / 2 - (sample.at.y + sample.out.y * distance) * factor,
+                          scale: base.depth / (depth - camera.clipNear) })
+        }
+        return result
+    }
+    // The dock's track round the folder in the camera's frame: at each
+    // sample where a child's middle is half an icon inside the platform's
+    // rim, and how it moves for each pixel further out.
+    function folderTrackBase(entryIndex, span, count) {
+        const empty = { samples: [], depth: 1 }
         const node = worldEntries.objectAt(entryIndex)
-        if (!rendererReady || !node || !node.inputAnchor || count < 2) return []
+        if (!rendererReady || !node || !node.inputAnchor || count < 2) return empty
         const anchor = node.inputAnchor
-        // An icon stands toward the camera's up from where it stands on the
-        // track, by the same offset for every icon: the icons' centres lie on
-        // the track moved by that offset.
+        // A child stands toward the camera's up from where it stands, by the
+        // same offset as the folder's own icon.
         const foot = sceneContent.mapPositionFromScene(node.scenePosition)
-        const local = sceneContent.mapPositionFromScene(anchor.scenePosition)
-        const lift = local.minus(foot)
+        const lift = sceneContent.mapPositionFromScene(anchor.scenePosition).minus(foot)
         // The track in the panel's own frame, unstretched: a circle there is
         // the stretched dock's ellipse once stretched back.
         const own = entryFrame.mapPositionFromScene(node.scenePosition)
         const unstretched = Qt.vector3d(own.x / Math.max(1e-6, shownScaleX), own.y / Math.max(1e-6, shownScaleY), own.z)
         const radius = Math.hypot(unstretched.x, unstretched.y)
-        if (radius <= 0) return []
+        if (radius <= 0) return empty
         const angle = Math.atan2(unstretched.y, unstretched.x)
-        const trackPoint = function(turn) {
-            const point = entryFrame.mapPositionToScene(Qt.vector3d(radius * Math.cos(turn) * shownScaleX,
-                                                                   radius * Math.sin(turn) * shownScaleY, own.z))
-            return sceneContent.mapPositionFromScene(point)
+        // A child a step out stands that far beyond the platform's rim, not
+        // the icons' line on it: the curve starts half an icon inside the
+        // rim along the folder's own direction (the rim measured on the
+        // stretched platform, carried back to the unstretched track).
+        const reach = Math.hypot(foot.x, foot.y)
+        const rim = reach > 0 ? root.folderRimDistance(foot.x / reach, foot.y / reach, reach) * radius / reach : radius
+        const start = Math.max(radius, rim - node.size / 2)
+        const frame = root.cameraMap(function(x, y) {
+            return sceneContent.mapPositionFromScene(entryFrame.mapPositionToScene(Qt.vector3d(x, y, own.z))).plus(lift)
+        })
+        const samples = []
+        for (let index = 0; index < count; ++index) {
+            const turn = angle - span / 2 + span * index / (count - 1)
+            const x = Math.cos(turn) * shownScaleX, y = Math.sin(turn) * shownScaleY
+            samples.push({ at: frame.at(start * x, start * y), out: frame.step(x, y) })
         }
-        const depth = root.projectScenePoint(anchor.scenePosition).z
-        // The icons' track as drawn: `count` projected points spanning `span`
-        // around the folder, and one more past each end for the directions.
-        const step = span / (count - 1)
-        const drawn = []
-        for (let index = -1; index <= count; ++index) {
-            const turn = angle - span / 2 + step * index
-            drawn.push(root.projectScenePoint(sceneContent.mapPositionToScene(trackPoint(turn).plus(lift))))
+        return { samples: samples, depth: root.projectScenePoint(anchor.scenePosition).z }
+    }
+    // Points on a plane in the camera's frame, from `place(x, y)` giving
+    // their places in the scene's content: the whole way there is affine,
+    // so three points give every other one, as plain numbers. `at(x, y)` is
+    // a point, `step(dx, dy)` how a point moves for that change.
+    function cameraMap(place) {
+        const seen = function(x, y) {
+            const point = camera.mapPositionFromScene(sceneContent.mapPositionToScene(place(x, y)))
+            return { x: point.x, y: point.y, z: point.z }
         }
-        // Each sample stands `outward` screen pixels outside the drawn track,
-        // across the track's own direction there and away from the dock's
-        // centre. A step out of the platform in its own units is a different
-        // distance on screen at every angle - a few pixels on the far side of
-        // a tilted platform - so a curve measured in those units at the folder
-        // would sweep far out of the dock everywhere else.
-        const centre = root.projectedCentre
-        const usable = point => Number.isFinite(point.x) && Number.isFinite(point.y) && point.z > 0
-        const result = []
-        for (let index = 1; index <= count; ++index) {
-            const point = drawn[index], before = drawn[index - 1], after = drawn[index + 1]
-            if (!usable(point) || !usable(before) || !usable(after)) continue
-            let acrossX = -(after.y - before.y), acrossY = after.x - before.x
-            let length = Math.hypot(acrossX, acrossY)
-            if (!(length > 1e-6)) {
-                acrossX = point.x - centre.x
-                acrossY = point.y - centre.y
-                length = Math.hypot(acrossX, acrossY)
-                if (!(length > 1e-6)) continue
+        const origin = seen(0, 0), ex = seen(1, 0), ey = seen(0, 1)
+        const xx = ex.x - origin.x, xy = ex.y - origin.y, xz = ex.z - origin.z
+        const yx = ey.x - origin.x, yy = ey.y - origin.y, yz = ey.z - origin.z
+        return {
+            at: function(x, y) {
+                return { x: origin.x + xx * x + yx * y, y: origin.y + xy * x + yy * y, z: origin.z + xz * x + yz * y }
+            },
+            step: function(dx, dy) {
+                return { x: xx * dx + yx * dy, y: xy * dx + yy * dy, z: xz * dx + yz * dy }
             }
-            acrossX /= length
-            acrossY /= length
-            if (acrossX * (point.x - centre.x) + acrossY * (point.y - centre.y) < 0) {
-                acrossX = -acrossX
-                acrossY = -acrossY
-            }
-            result.push({ x: point.x + acrossX * outward, y: point.y + acrossY * outward,
-                          scale: depth / point.z })
         }
-        return result
+    }
+    // The platform's plane round an opened folder, for a fan, arc, stack or
+    // ring that lies on it: the scene's own x and y, in the panel's pixels,
+    // with the dock's middle at the origin. `origin` is the rim beside the
+    // folder, `outward` the way out of the dock there, `radius` the rim's
+    // distance there. `toView(x, y)` is where a child standing at that point
+    // has its middle in this item's pixels, and how large it is drawn there
+    // (1 at the folder's depth), or null behind the camera: children stand
+    // on the plane as the dock's icons stand on the platform. `rimAt(turn)`
+    // is the rim's distance in any direction, `icons` where the dock's icons
+    // stand on the plane.
+    function folderPlane(entryIndex) {
+        const node = worldEntries.objectAt(entryIndex)
+        if (!rendererReady || !node || !node.inputAnchor) return null
+        const foot = sceneContent.mapPositionFromScene(node.scenePosition)
+        const lift = sceneContent.mapPositionFromScene(node.inputAnchor.scenePosition).minus(foot)
+        const radius = Math.hypot(foot.x, foot.y)
+        if (!(radius > 0)) return null
+        const ux = foot.x / radius, uy = foot.y / radius
+        const edge = Math.max(radius, folderRimDistance(ux, uy, radius))
+        const depth = root.projectScenePoint(node.inputAnchor.scenePosition).z
+        const frame = root.cameraMap(function(x, y) { return Qt.vector3d(x, y, foot.z).plus(lift) })
+        const near = camera.clipNear, distance = cameraDistance, middleX = width / 2, middleY = height / 2
+        const view = function(x, y) {
+            const point = frame.at(x, y)
+            const ahead = -point.z
+            if (!(ahead > near + 1e-6)) return null
+            const factor = distance / ahead
+            return { x: middleX + point.x * factor, y: middleY - point.y * factor, scale: depth / (ahead - near) }
+        }
+        // Where every icon of the dock, the folder's own among them, stands.
+        const icons = []
+        for (let index = 0; index < worldEntries.count; ++index) {
+            const entry = worldEntries.objectAt(index)
+            if (!entry) continue
+            const base = sceneContent.mapPositionFromScene(entry.scenePosition)
+            icons.push({ x: base.x, y: base.y })
+        }
+        return {
+            origin: { x: ux * edge, y: uy * edge }, outward: { x: ux, y: uy }, radius: edge, icons: icons,
+            // The rim's distance the way `turn` radians point on the plane.
+            rimAt: function(turn) {
+                return Math.max(radius, root.folderRimDistance(Math.cos(turn), Math.sin(turn), radius))
+            },
+            // Projected as projectScenePoint() does.
+            toView: view,
+            // The plane about (ox, oy) as the panel's middle is seen: a shape
+            // beside the dock keeps the panel's own tilt and proportions
+            // instead of turning with the perspective far out to one side,
+            // placed and sized as seen at that point; each child keeps the
+            // size its own place gives it.
+            alignedAt: function(ox, oy) {
+                const centre = view(0, 0), atX = view(1, 0), atY = view(0, 1), origin = view(ox, oy)
+                if (!centre || !atX || !atY || !origin) return null
+                const k = origin.scale / centre.scale
+                const xx = (atX.x - centre.x) * k, xy = (atX.y - centre.y) * k
+                const yx = (atY.x - centre.x) * k, yy = (atY.y - centre.y) * k
+                return function(x, y) {
+                    const own = view(x, y)
+                    if (!own) return null
+                    const dx = x - ox, dy = y - oy
+                    return { x: origin.x + xx * dx + yx * dy, y: origin.y + xy * dx + yy * dy, scale: own.scale }
+                }
+            }
+        }
+    }
+    // What an opened folder's children keep clear of, in this item's
+    // pixels: the platform as drawn (`hull`, the convex outline round its
+    // mesh as the camera sees it) and every icon with the stand under it
+    // (`rects`). The mesh's corners go through one affine map to the
+    // camera, so even a large platform is only arithmetic.
+    function folderKeepOut() {
+        if (!rendererReady) return null
+        const points = []
+        const mesh = platform.visible && platformMesh && platformMesh.positions ? platformMesh.positions : []
+        if (mesh.length) {
+            const seen = function(x, y, z) {
+                const point = camera.mapPositionFromScene(platform.mapPositionToScene(Qt.vector3d(x, y, z)))
+                return { x: point.x, y: point.y, z: point.z }
+            }
+            const o = seen(0, 0, 0), ex = seen(1, 0, 0), ey = seen(0, 1, 0), ez = seen(0, 0, 1)
+            const stride = Math.max(1, Math.floor(mesh.length / 1500))
+            for (let index = 0; index < mesh.length; index += stride) {
+                const x = Number(mesh[index][0]), y = Number(mesh[index][1]), z = Number(mesh[index][2])
+                const ahead = -(o.z + (ex.z - o.z) * x + (ey.z - o.z) * y + (ez.z - o.z) * z)
+                if (!(ahead > camera.clipNear + 1e-6)) continue
+                const factor = cameraDistance / ahead
+                points.push({ x: width / 2 + (o.x + (ex.x - o.x) * x + (ey.x - o.x) * y + (ez.x - o.x) * z) * factor,
+                              y: height / 2 - (o.y + (ex.y - o.y) * x + (ey.y - o.y) * y + (ez.y - o.y) * z) * factor })
+            }
+        }
+        // An icon's square, and its stand below it.
+        const rects = (projectedEntryGeometry || []).map(function(rect) {
+            return { x: rect.x - rect.width * 0.1, y: rect.y, width: rect.width * 1.2, height: rect.height * 1.5 }
+        })
+        return { hull: LayoutEngine.convexHull(points), rects: rects }
+    }
+    // How far the platform's rim is from the dock's middle along (ux, uy),
+    // in the scene's units: an ellipse's reach for a generated platform, the
+    // farthest vertex near that direction for a theme's mesh (the mesh turns
+    // with the layout); `fallback` without a platform to measure.
+    function folderRimDistance(ux, uy, fallback) {
+        if (generatedPlatform) {
+            const rx = Math.max(0.01, platformReachX), ry = Math.max(0.01, platformReachY)
+            return platformScale / Math.hypot(ux / rx, uy / ry)
+        }
+        if (platformMesh && platformMesh.positions) {
+            const turn = Math.atan2(uy, ux) + layoutAngle * Math.PI / 180
+            let farthest = 0
+            for (const vertex of platformMesh.positions) {
+                const x = Number(vertex[0]), y = Number(vertex[1])
+                const along = x * Math.cos(turn) + y * Math.sin(turn)
+                const across = -x * Math.sin(turn) + y * Math.cos(turn)
+                if (along > 0 && Math.abs(across) <= along * 0.27) farthest = Math.max(farthest, along)
+            }
+            if (farthest > 0) return farthest * platformScale
+        }
+        return fallback
     }
     // The platform's edge beside the entry and the way out of the platform
     // there, as drawn: where a folder's fan, arc, stack or ring opens from on
@@ -1244,25 +1391,7 @@ Item {
         const radius = Math.hypot(foot.x, foot.y)
         if (!(radius > 0)) return null
         const ux = foot.x / radius, uy = foot.y / radius
-        // The rim along this direction, in the scene's units: an ellipse's
-        // reach for a generated platform, the farthest vertex near this
-        // angle for a theme's mesh (the mesh turns with the layout).
-        let rim = radius
-        if (generatedPlatform) {
-            const rx = Math.max(0.01, platformReachX), ry = Math.max(0.01, platformReachY)
-            rim = platformScale / Math.hypot(ux / rx, uy / ry)
-        } else if (platformMesh && platformMesh.positions) {
-            const turn = Math.atan2(uy, ux) + layoutAngle * Math.PI / 180
-            let farthest = 0
-            for (const vertex of platformMesh.positions) {
-                const x = Number(vertex[0]), y = Number(vertex[1])
-                const along = x * Math.cos(turn) + y * Math.sin(turn)
-                const across = -x * Math.sin(turn) + y * Math.cos(turn)
-                if (along > 0 && Math.abs(across) <= along * 0.27) farthest = Math.max(farthest, along)
-            }
-            rim = farthest > 0 ? farthest * platformScale : radius
-        }
-        const edge = Math.max(radius, rim)
+        const edge = Math.max(radius, folderRimDistance(ux, uy, radius))
         const usable = point => Number.isFinite(point.x) && Number.isFinite(point.y) && point.z > 0
         const at = distance => root.projectScenePoint(sceneContent.mapPositionToScene(
             Qt.vector3d(ux * distance, uy * distance, foot.z)))

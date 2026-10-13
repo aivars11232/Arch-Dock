@@ -10,7 +10,7 @@ TestCase {
     name: "PlatformGeometry"
 
     readonly property var supportedLayouts: ["circular", "ring", "ellipse", "radial", "polygon",
-        "triangle", "square", "pentagon", "hexagon", "octagon"]
+        "triangle", "square", "pentagon", "hexagon", "octagon", "star"]
 
     function key(point) {
         return point.map(function(value) { return Math.round(value * 1e5) }).join(",")
@@ -159,6 +159,20 @@ TestCase {
             const flat = PlatformGeometry.pedestalLayout({ pedestalShape: shape }, 52)
             compare(flat.tilt, 90, shape + " lies in the flat panel's plane")
             fuzzyCompare(flat.height, flat.width, 1e-6, shape + " seen straight on is as tall as it is wide")
+            // A folder of a 3D panel draws its stands at the angle the
+            // panel's own are seen at, over its own facing and View angle,
+            // up to straight on; without that angle nothing changes.
+            const seen = function(angle) {
+                return PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalFacing: "viewer",
+                                                        pedestalViewAngle: 20, pedestalSeenAngle: angle }, 52)
+            }
+            compare(seen(34).tilt, 34, shape + " takes the 3D panel's angle")
+            compare(seen(75).tilt, 75, shape + " takes an angle past View angle's 60")
+            compare(seen(120).tilt, 90)
+            compare(seen(-5).tilt, 0)
+            compare(seen(null).tilt, 20, shape + " keeps View angle with no 3D angle")
+            compare(seen(undefined).tilt, 20)
+            compare(seen(NaN).tilt, 20)
         }
     }
 
@@ -248,6 +262,23 @@ TestCase {
         }
     }
 
+    // A star with any number of points, from three to twelve, is one closed
+    // band within the scene's reach, its tips ending in points.
+    function test_starsOfEveryPointCount() {
+        for (let points = 3; points <= 12; ++points) {
+            const shape = PlatformGeometry.shapeForLayout("star", points)
+            compare(shape.points, points)
+            const mesh = PlatformGeometry.platform({ shape: shape, band: 0.1, bend: 0 })
+            compare(boundaryEdges(mesh).length, 0, points + " points: a closed surface")
+            compare(misWound(mesh), 0, points + " points: faces outward everywhere")
+            let farthest = 0
+            for (const point of mesh.positions)
+                farthest = Math.max(farthest, Math.hypot(point[0], point[1]))
+            verify(farthest <= PlatformGeometry.reach + 1e-9, points + " points: within reach")
+            verify(farthest > PlatformGeometry.reach - 1e-6, points + " points: the tips reach the edge")
+        }
+    }
+
     function test_aBendTiltsTheTopAboutTheIconsLine() {
         const shape = PlatformGeometry.shapeForLayout("ring")
         const flat = PlatformGeometry.platform({ shape: shape, band: 0.1, bend: 0 })
@@ -281,8 +312,11 @@ TestCase {
                 compare(misWound(folded), 0, layout + " faces its deformed normals")
                 compare(folded.rimOffset, flat.rimOffset)
                 compare(folded.rimCount, flat.rimCount)
+                // As far as the rear icon stands from the hinge: a star's
+                // track lies further in than a circle's, to leave room for
+                // its points.
                 const foot = PlatformGeometry.foldPoint([0, flat.track, PlatformGeometry.topHeight], bend)
-                verify(Math.abs(foot[2] - PlatformGeometry.topHeight) > 0.5,
+                verify(Math.abs(foot[2] - PlatformGeometry.topHeight) > 0.5 * flat.track / PlatformGeometry.trackRadius,
                     "the rear icon's foot follows the folded half")
                 const front = [0, -flat.track, PlatformGeometry.topHeight]
                 compare(PlatformGeometry.foldPoint(front, bend), front, "the front half stays still")
@@ -295,7 +329,7 @@ TestCase {
     }
 
     function test_layoutsWithoutAnExactPlatform_data() {
-        return ["arc", "semicircle", "fan", "horizontal", "vertical", "star", "spiral", ""]
+        return ["arc", "semicircle", "fan", "horizontal", "vertical", "spiral", ""]
             .map(function(layout) { return { tag: layout || "empty", layout: layout } })
     }
 

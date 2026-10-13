@@ -324,6 +324,7 @@ private slots:
     void themeCardsResolveEachThemesOwnRenderer();
     void sceneEditAuditionsOnlyAFree3DPanel();
     void settingsLatencyOnTheOwners3DPanel();
+    void threeDPanelTakesEveryLayout();
     void studioIconTiles_data();
     void studioIconTiles();
     void studioFolderItemNames_data();
@@ -349,7 +350,7 @@ private slots:
     void closedStudioIsReleased();
     void studioArtworkPersistenceFailure_data();
     void studioArtworkPersistenceFailure();
-    void studioAddButtonFollowsThePickedPanel();
+    void studioEditsOnePanelAtATime();
     void studioShowsEachSettingOnce();
     void ownersFreeCircleOffersOnlyWhatWorks();
     void studioTruthMatrixHarnessIsTheApplet();
@@ -927,6 +928,89 @@ void PanelWindowCapabilityTest::sceneEditAuditionsOnlyAFree3DPanel()
 // tilted to 60 degrees. Each operation is timed several times; with
 // ARCHDOCK_BENCHMARK_DIR set, p50 and p95 and the theme packages read from
 // disk are written there as settings-latency.json.
+// Every Dock layout the Layout page offers a 3D panel can be picked there.
+// A layout the 3D look could not draw used to be offered anyway, and picking
+// it failed with "Draft validation failed: validation-failed
+// (no-safe-renderer-fallback)". Both kinds of 3D look are checked: the
+// generated platform in a glowing look, and a theme's own mesh.
+void PanelWindowCapabilityTest::threeDPanelTakesEveryLayout()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString generated = registry->addFreePanel();
+    QVERIFY(backend.applyPanelSettingsTransaction(generated, registry->panelDefinition(generated)->settingsRevision,
+        {{"type", "launcher"}, {"layout", "circular"}, {"rendererTier", "true3d"},
+         {"scene3DMaterial", "plasma"}, {"scene3DTexture", "plasma"}}).value("success").toBool());
+    const QString mesh = registry->addFreePanel();
+    const auto cyan = registry->themeCandidate(mesh, "mesh-platform-cyan", "complete");
+    QVERIFY(cyan.value("success").toBool());
+    QVariantMap cyanValues = cyan.value("values").toMap();
+    cyanValues.insert("layout", "ring");
+    cyanValues.insert("rendererTier", "true3d");
+    const auto cyanResult = backend.applyPanelSettingsTransaction(mesh, registry->panelDefinition(mesh)->settingsRevision, cyanValues);
+    QVERIFY2(cyanResult.value("success").toBool(), qPrintable(cyanResult.value("errorCode").toString()));
+    QStringList refused;
+    for (const QString &panel : {generated, mesh}) {
+        // The layouts the Layout page offers, as Panel Studio lists them.
+        const QVariantMap snapshot = backend.panelSettingsEditorSnapshot(panel, "studio");
+        QStringList offered;
+        bool shown = false;
+        for (const QVariant &field : snapshot.value("panelFields").toList()) {
+            const QVariantMap map = field.toMap();
+            if (map.value("key").toString() != "layout") continue;
+            shown = !map.value("inactive").toBool();
+            offered = map.value("choices").toStringList();
+        }
+        QVERIFY2(!offered.isEmpty(), qPrintable(panel + " lists no layouts"));
+        for (const QString &layout : std::as_const(offered)) {
+            const QVariantMap resolved = backend.resolvePanelSettingsEditorDraft(panel,
+                registry->panelDefinition(panel)->settingsRevision, {{"layout", layout}}, {}, "studio");
+            if (!resolved.value("success").toBool()) {
+                const QVariantMap capability = resolved.value("capabilityResolution").toMap();
+                QString layoutReason;
+                for (const QVariant &decision : capability.value("layouts").toList())
+                    if (decision.toMap().value("id").toString() == layout)
+                        layoutReason = decision.toMap().value("reasonCode").toString();
+                refused << QStringLiteral("%1 %2: %3 (%4; layout %5)").arg(panel, layout,
+                    resolved.value("errorCode").toString(), capability.value("reasonCode").toString(), layoutReason);
+            }
+        }
+        qInfo().noquote() << panel << (shown ? "offers" : "keeps (one choice, not shown)") << offered.join(QLatin1Char(' '));
+        // What is offered stands on a 3D platform: none of it turns the
+        // panel flat.
+        for (const QString &layout : std::as_const(offered)) {
+            const QVariantMap resolved = backend.resolvePanelSettingsEditorDraft(panel,
+                registry->panelDefinition(panel)->settingsRevision, {{"layout", layout}}, {}, "studio");
+            const QString tier = resolved.value("capabilityResolution").toMap()
+                .value("renderer").toMap().value("effectiveTier").toString();
+            if (resolved.value("success").toBool() && tier != QStringLiteral("true3d"))
+                refused << QStringLiteral("%1 %2: drawn %3, not in 3D").arg(panel, layout, tier);
+        }
+    }
+    QVERIFY2(refused.isEmpty(), qPrintable(refused.join(QStringLiteral("; "))));
+
+    // A star is offered on the generated platform.
+    const QVariantMap generatedSnapshot = backend.panelSettingsEditorSnapshot(generated, "studio");
+    QStringList generatedLayouts;
+    for (const QVariant &field : generatedSnapshot.value("panelFields").toList())
+        if (field.toMap().value("key").toString() == "layout")
+            generatedLayouts = field.toMap().value("choices").toStringList();
+    QVERIFY2(generatedLayouts.contains("star"), qPrintable(generatedLayouts.join(QLatin1Char(' '))));
+    QVERIFY(!generatedLayouts.contains("fan"));
+
+    // A layout with no 3D platform, saved before the Studio hid it or sent
+    // from elsewhere, is drawn flat by the look's own renderer, not refused.
+    const QVariantMap fan = backend.resolvePanelSettingsEditorDraft(generated,
+        registry->panelDefinition(generated)->settingsRevision, {{"layout", "fan"}}, {}, "studio");
+    QVERIFY2(fan.value("success").toBool(), qPrintable(fan.value("errorCode").toString()));
+    QCOMPARE(fan.value("capabilityResolution").toMap().value("renderer").toMap()
+                 .value("effectiveTier").toString(), QStringLiteral("procedural2d"));
+}
+
 void PanelWindowCapabilityTest::settingsLatencyOnTheOwners3DPanel()
 {
     QQmlApplicationEngine engine;
@@ -1459,15 +1543,16 @@ void PanelWindowCapabilityTest::studioArtworkPersistenceFailure()
     if (action == "clear") QVERIFY(registry->panelValue("bottom", "themePackageManifest").toString().isEmpty());
 }
 
-// The owner, 2026-10-13: the button beside the Studio's panel list added a
-// new empty free panel whichever panel was picked. It carries the picked
-// panel's name now and adds that panel to the desktop: a hidden edge panel is
-// shown, a free panel whose widget is gone is put back, a panel already on
-// the desktop has nothing to add, and "New free panel" at the end of the list
-// is the one way to add a new one. The General page adds and removes none. An edge panel with nothing on it yet
-// is previewed bare instead of as an empty card, and a refused switch keeps
-// the panel and the list on it.
-void PanelWindowCapabilityTest::studioAddButtonFollowsThePickedPanel()
+// Panel Studio edits one panel, as Plasma's own panel settings do: the one
+// whose "Configure Arch Dock…" opened it. Opened on its own, or from a
+// panel's "Add panel…", it shows the page for a new panel - a free panel or
+// one on any screen edge - with its bare preview and the button that adds
+// it. While a panel is edited, its place is shown, locked. Configure on
+// another panel moves the window there; with changes not applied yet, the
+// user is asked first and the panel stays. The General page adds and
+// removes no panel. An edge panel with nothing on it yet is previewed bare
+// instead of as an empty card.
+void PanelWindowCapabilityTest::studioEditsOnePanelAtATime()
 {
     QQmlApplicationEngine engine;
     engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
@@ -1476,9 +1561,8 @@ void PanelWindowCapabilityTest::studioAddButtonFollowsThePickedPanel()
     QVERIFY(registry);
     registry->setPanelValue("bottom", "visible", true);
     registry->setPanelValue("top", "visible", false);
-    const QString detached = registry->addFreePanel();
-    registry->setPanelValue(detached, "freeHostState", "detached");
-    QCOMPARE(registry->panelValue(detached, "freeHostState").toString(), QStringLiteral("detached"));
+    // A free panel with no desktop widget (tests run without Plasma).
+    const QString unhosted = registry->addFreePanel();
     QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> popup(component.createWithInitialProperties({{"selectedPanelId", "top"},
@@ -1487,74 +1571,95 @@ void PanelWindowCapabilityTest::studioAddButtonFollowsThePickedPanel()
     auto *studio = qobject_cast<QQuickWindow *>(popup.get()); QVERIFY(studio);
     studio->show(); QVERIFY(QTest::qWaitForWindowExposed(studio));
     QVERIFY(QQuickTest::qWaitForPolish(studio));
-    // The panel list and its button are in Panels, the preview on Overview.
+    // No list of panels anywhere: the window edits Top, whose place is shown
+    // locked, and nothing is added from here.
+    QVERIFY(!popup->findChild<QQuickItem *>(QStringLiteral("studio-add-picked-panel")));
+    const auto place = [&](const QString &kind) {
+        return visibleItem(studio, QStringLiteral("studio-new-panel-") + kind);
+    };
+    QVERIFY(place("top"));
+    QVERIFY(!place("top")->isEnabled());
+    QVERIFY(place("top")->property("checked").toBool());
+    QVERIFY(!place("free")->property("checked").toBool());
+    QVERIFY(!visibleItem(studio, QStringLiteral("studio-add-new-panel")));
+    // The preview of the panel itself is on Overview; an edge panel with
+    // nothing on it is drawn bare there.
     QVERIFY(!visibleItem(studio, QStringLiteral("panel-studio-live-renderer-preview")));
     popup->setProperty("mainTabIndex", 0);
     QVERIFY(QQuickTest::qWaitForPolish(studio));
-    QVERIFY(!visibleItem(studio, QStringLiteral("studio-add-picked-panel")));
     QVERIFY(visibleItem(studio, QStringLiteral("panel-studio-live-renderer-preview")));
-    popup->setProperty("mainTabIndex", 1);
-    QVERIFY(QQuickTest::qWaitForPolish(studio));
-    auto *button = visibleItem(studio, QStringLiteral("studio-add-picked-panel"));
-    QVERIFY(button);
-    QCOMPARE(button->property("text").toString(), registry->panelName("top"));
-    QCOMPARE(button->property("presence").value<QJSValue>().property("description").toString(),
-        QStringLiteral("Add %1 to the desktop").arg(registry->panelName("top")));
-    QVERIFY(button->isEnabled());
     QVERIFY(popup->property("previewShowsBarePanel").toBool());
     auto *preview = popup->findChild<QQuickItem *>(QStringLiteral("panel-studio-live-renderer-preview"));
     QVERIFY(preview);
     const QJSValue bare = preview->property("effectiveEntries").value<QJSValue>();
     QCOMPARE(bare.property("length").toInt(), 3);
     QVERIFY(bare.property(0).property("placeholder").toBool());
-    popup->setProperty("selectedPanelId", "bottom");
-    QTRY_COMPARE(button->property("text").toString(), registry->panelName("bottom"));
-    QCOMPARE(button->property("presence").value<QJSValue>().property("shown").toBool(), true);
-    QVERIFY(!button->isEnabled());
-    popup->setProperty("selectedPanelId", detached);
-    QTRY_COMPARE(button->property("text").toString(), registry->panelName(detached));
-    QVERIFY(button->isEnabled());
-    QVERIFY(!popup->property("previewShowsBarePanel").toBool());
-    // The General page adds and removes no panel: the button does the one,
-    // the panel's own right-click menu the other.
+    // The General page adds and removes no panel.
     QVariant general;
     QVERIFY(QMetaObject::invokeMethod(popup.get(), "panelGeneralRows", Q_RETURN_ARG(QVariant, general)));
-    const QStringList addOrRemove{"create-free", "remove-panel", "rehost-free"};
+    const QStringList addOrRemove{"create-free", "create-edge", "add-new-panel", "remove-panel"};
     for (const QVariant &row : general.value<QJSValue>().toVariant().toList())
         for (const QVariant &action : row.toMap().value("actions").toList())
         {
             const QString name = action.toMap().value("action").toString();
             QVERIFY2(!addOrRemove.contains(name), qPrintable(name));
         }
-    // "New free panel" at the end of the list: the bare panel in the preview,
-    // the button adds it, nothing to edit until it exists.
-    QVariant picked;
-    QVERIFY(QMetaObject::invokeMethod(popup.get(), "pickPanelEntry", Q_RETURN_ARG(QVariant, picked),
-        Q_ARG(QVariant, QStringLiteral("new-free-panel"))));
-    QVERIFY(picked.toBool());
-    QTRY_COMPARE(button->property("text").toString(), QStringLiteral("New free panel"));
-    QVERIFY(button->isEnabled());
-    QCOMPARE(button->property("presence").value<QJSValue>().property("action").toString(), QStringLiteral("create-free"));
-    QTRY_VERIFY(visibleItem(studio, QStringLiteral("panel-studio-new-free-panel-preview")));
-    QVERIFY(!visibleItem(studio, QStringLiteral("studio-page-form")));
-    QVERIFY(QMetaObject::invokeMethod(popup.get(), "pickPanelEntry", Q_RETURN_ARG(QVariant, picked),
-        Q_ARG(QVariant, detached)));
-    QVERIFY(picked.toBool());
-    QVERIFY(!popup->property("newFreePanelPicked").toBool());
-    QTRY_COMPARE(button->property("text").toString(), registry->panelName(detached));
+    // The new panel page, for each place: the bare panel in the preview, the
+    // button adds it, nothing to edit until it exists. One panel to an edge:
+    // the bottom edge has one already, so it cannot be picked, and asking
+    // for it opens the page on a free panel.
+    QVariant opened;
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "openNewPanelPage", Q_RETURN_ARG(QVariant, opened),
+        Q_ARG(QVariant, QStringLiteral("bottom"))));
+    QVERIFY(opened.toBool());
+    QCOMPARE(popup->property("newPanelEdge").toString(), QStringLiteral("free"));
+    QTRY_VERIFY(place("bottom") && !place("bottom")->isEnabled());
+    for (const QString &kind : {QStringLiteral("free"), QStringLiteral("top"),
+                                QStringLiteral("left"), QStringLiteral("right")})
+    {
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "openNewPanelPage", Q_RETURN_ARG(QVariant, opened),
+            Q_ARG(QVariant, kind)));
+        QVERIFY(opened.toBool());
+        QTRY_COMPARE(popup->property("newPanelEdge").toString(), kind);
+        QCOMPARE(popup->property("mainTabIndex").toInt(), 1);
+        QTRY_VERIFY(place(kind) && place(kind)->isEnabled() && place(kind)->property("checked").toBool());
+        auto *add = visibleItem(studio, QStringLiteral("studio-add-new-panel"));
+        QVERIFY(add);
+        QVERIFY(add->isEnabled());
+        QTRY_VERIFY(visibleItem(studio, QStringLiteral("panel-studio-new-panel-preview")));
+        QVERIFY(!visibleItem(studio, QStringLiteral("studio-page-form")));
+    }
+    // Configure on a panel: the window edits it, its place locked.
+    QVariant moved;
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "editPanel", Q_RETURN_ARG(QVariant, moved),
+        Q_ARG(QVariant, QStringLiteral("bottom"))));
+    QVERIFY(moved.toBool());
+    QCOMPARE(popup->property("selectedPanelId").toString(), QStringLiteral("bottom"));
+    QVERIFY(!popup->property("newPanelPicked").toBool());
+    QTRY_VERIFY(place("bottom") && !place("bottom")->isEnabled() && place("bottom")->property("checked").toBool());
+    QVERIFY(!visibleItem(studio, QStringLiteral("studio-add-new-panel")));
+    // With a change not applied, Configure on another panel asks first, and
+    // the window stays on this panel; so does Add panel….
     QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue",
         Q_ARG(QVariant, (QVariantMap{{"key", "opacity"}, {"scope", "panel"}})), Q_ARG(QVariant, 0.61)));
     QVERIFY(popup->property("hasPendingChanges").toBool());
-    QVERIFY(!button->isEnabled());
-    QVariant switched;
-    QVERIFY(QMetaObject::invokeMethod(popup.get(), "selectPanel", Q_RETURN_ARG(QVariant, switched),
-        Q_ARG(QVariant, QStringLiteral("bottom"))));
-    QVERIFY(!switched.toBool());
-    QCOMPARE(popup->property("selectedPanelId").toString(), detached);
-    QVERIFY(QMetaObject::invokeMethod(popup.get(), "pickPanelEntry", Q_RETURN_ARG(QVariant, picked),
-        Q_ARG(QVariant, QStringLiteral("new-free-panel"))));
-    QVERIFY(!picked.toBool());
-    QVERIFY(!popup->property("newFreePanelPicked").toBool());
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "editPanel", Q_RETURN_ARG(QVariant, moved),
+        Q_ARG(QVariant, unhosted)));
+    QVERIFY(!moved.toBool());
+    QCOMPARE(popup->property("selectedPanelId").toString(), QStringLiteral("bottom"));
+    QCOMPARE(popup->property("pendingSwitch").toString(), unhosted);
+    auto *question = popup->findChild<QObject *>(QStringLiteral("unappliedChangesDialog"));
+    QVERIFY(question);
+    QTRY_VERIFY(question->property("visible").toBool());
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "openNewPanelPage", Q_RETURN_ARG(QVariant, opened),
+        Q_ARG(QVariant, QStringLiteral("free"))));
+    QVERIFY(!opened.toBool());
+    QVERIFY(!popup->property("newPanelPicked").toBool());
+    // Discarded, the window moves on to the panel asked for.
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "discardStudioChanges"));
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "continueSwitch", Q_ARG(QVariant, unhosted)));
+    QCOMPARE(popup->property("selectedPanelId").toString(), unhosted);
+    QTRY_VERIFY(place("free") && place("free")->property("checked").toBool());
 }
 
 // The owner, 2026-10-13: "make sure there aren't any duplicate settings";

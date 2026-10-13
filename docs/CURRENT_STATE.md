@@ -1,5 +1,104 @@
 # Arch Dock current state
 
+<!-- LIST_PIECE_1_BEGIN -->
+## The owner's list, piece 1: folders open at once, the 3D star, panels that stay removed, one panel to a Studio window — 2026-10-13 late evening
+
+Run the way the ADREP repairs ran (the owner chose "ADREP-style"): report
+`docs/repairs/OWNER-LIST-PIECE-1.md`, commit, push, a fresh-clone recheck
+built with one job. Every runtime claim below comes from a private session
+on a plain Plasma desktop - the owner's Plasma layout is not read or copied
+any more ("My current plasma layout don't touch, work only with Arch Dock").
+
+- Folder opening (the owner: "super glitchy, opens with huge delay and
+  freezes Arch Dock while it opens"). Measured: the first opening of a
+  26-item folder held Plasma's main thread for 5.5 s - every child's stand
+  glow was a Canvas `shadowBlur` (CPU) - and every frame repainted 26
+  spinning stands (about 50 ms). A fan's outline blur took about 0.5 s at
+  every opening. Now: the stand glows through `GlowEffect` (the icons' and
+  tiles' MultiEffect halo) on the stand canvas; a moving stand repaints only
+  when its step changes (120 a turn, half-degree wobble) and each step is
+  painted once for every stand drawn alike (`StandFrames.js`, shared
+  `CanvasImageData`); the outline's fill and line are two canvases and only
+  the line glows, on the GPU. `PanelScene3D.folderTrackSamples` projects the
+  track once per opening (`folderTrackMemo`) and `FolderTrackHost` maps the
+  curve to the screen with one affine map (`screenMapping`). Measured in
+  plasmashell: first frame 80 ms (was 5523 ms), each opening's path search
+  37-48 ms (was 105), free-1's fan 18-44 ms (was 510-560).
+- Folder stands in a glowing look (plasma, neon, futuristic) are drawn as
+  light (`IconScene` `paintLight`): faces in the stand's colour, the look's
+  texture screened over them. Multiplied in, the plasma texture turned the
+  owner's green stars black - in the installed 0.1.1-24 as well.
+- A star on a 3D panel (the owner's Layout picture: "Draft validation
+  failed: validation-failed (no-safe-renderer-fallback)"): the generated
+  platform has a star (`PlatformGeometry` `shapeForLayout("star")`,
+  `starCorners`, mitred corners; `starInnerRadius` 0.46 as in
+  `LayoutEngine.starPoint`), `PanelRegistry::genericScene3D` lists it, and
+  the Layout page of a 3D panel offers only layouts its look can draw in 3D
+  (`PanelRegistry::layoutsDrawnIn3D`, the renderer choice's own rule). A
+  record set to 3D with a layout that has no 3D platform is drawn flat by
+  its look's own renderer instead of being refused.
+- Panels that are removed stay removed (the owner: the old off-desktop
+  panels "are useless, it defeats the purpose of saving current panel in
+  Profiles"; "right click on panel and select remove panel, that should
+  remove panel entirely, except the ones saved in Profiles"). The widget
+  reports Plasma's `destroyedChanged` (its own, or its Plasma panel's) as
+  `panelRemovalRequested`; once Plasma has deleted it (after Undo is no
+  longer possible) the record is removed - a built-in edge panel is hidden.
+  A free panel whose widget is missing on checks at least 30 s apart (after
+  the 90 s start grace) is removed too; old detached records are removed at
+  the first check. Put back (`rehostFreePanel`, `FreePanelController::rehost`,
+  `PanelRegistry::beginFreePanelRehost`/`abandonFreePanelRehost`) and the
+  orange "widget was removed" box are gone. Profiles are not touched.
+- Panel Studio edits one panel (the owner: "one panel studio window that
+  coresponds to one panel"): no panel list; Configure on another panel moves
+  the window there (`editPanel`), asking Apply / Discard / Keep editing when
+  the draft has unapplied changes; opened on its own (`showSettings`) or from
+  a panel's "Add panel…" (`showNewPanelPage`) it shows the new panel page:
+  Free panel, Top, Bottom, Left or Right edge, its bare preview, Add to
+  desktop. The places are locked, showing the panel's own, while a panel is
+  edited. One panel to an edge (the owner: "only on sides were there isn't
+  any panel yet u could add it"): `PanelWindow::occupiedScreenEdges` (KWin's
+  dock windows, Plasma's panels, Arch Dock's own) disables taken edges. A new
+  edge panel is a dock (`launcher`): an edge panel of type "empty" is a plain
+  Plasma panel and is not offered.
+- Icons on a tilted 3D panel (the owner: "Icon tilt is not in sync with
+  panels tilt in here", on free-2 with a folder open; then "the icons should
+  allways face the user, so when panel is tilted, the icons should just
+  appier as further ... no icon would be squeshed"). The panel's icons and a
+  folder's items keep facing the viewer; perspective alone makes the far
+  ones smaller (a folder item's size follows its depth, `folderTrackBase`).
+  What was out of step were the folder's stands: drawn at the 20 degree View
+  angle next to the ring's stars seen at about 60. They are now drawn at the
+  angle the panel's own stands are seen at (`PanelScene.standSeenAngle`,
+  whole degrees, passed as `pedestalSeenAngle` to
+  `PlatformGeometry.pedestalLayout`). Icons lying in the panel's plane were
+  tried first (the owner's answer to a question) and dropped after the
+  picture: at the owner's tilts they were thin slivers.
+- Folder openings on a 3D panel follow its tilt (the owner: "The tilt is
+  still wrong, it's not in sync with panels tilt in both cases"; paused
+  2026-10-14 with this work committed, the complete suite and the recheck
+  still to come). Along the dock lies on the panel's plane from the rim and
+  keeps clear of the panel as drawn (`PanelScene3D.folderKeepOut`,
+  `LayoutEngine.rectTouchesKeepOut`), spanning 90 to 270 degrees; fan, arc,
+  stack and ring are built on the plane (`folderPlane`, `folderShape`
+  `project`, `alignedAt`) at their smallest; a ring with more than six
+  children has a second circle (`ringedTrackLayout`), the two leaning 10
+  degrees opposite ways, the inner 30 pixels inside the outer. See the
+  report's "Paused" section.
+- Keyboard selection in an open folder holds while the pointer rests over
+  it: Qt Quick delivers hover again when items move under a pointer that
+  does not move, which handed the selection back to the item under the
+  pointer after an arrow key had moved it. `FolderTrack` ignores hover with
+  no pointer movement while keys select (`pointerAt`). A complete suite run
+  showed it (`tst_FolderExpansion`, depending on where an earlier test left
+  the pointer).
+- Tests: `threeDPanelTakesEveryLayout`, `studioEditsOnePanelAtATime`,
+  `removesFreePanelWhoseWidgetIsGone`, `tst_PlatformGeometry` stars (3 to 12
+  points closed, outward, within reach, every icon on the top) and the seen
+  angle of a 3D panel's folder stands, `tst_FolderExpansion`
+  `keysKeepTheirSelectionUnderAStillPointer`.
+<!-- LIST_PIECE_1_END -->
+
 <!-- EVENING_2026_10_13_BEGIN -->
 ## Free turning and scaling (Phase 2), one Look per surface — 2026-10-13 evening
 

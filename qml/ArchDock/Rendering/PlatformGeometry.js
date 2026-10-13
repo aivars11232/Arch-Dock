@@ -8,8 +8,8 @@
 // - `pedestal()`: the column an icon stands on.
 // - `platform(spec)`: the platform a look is drawn on when its theme ships no
 //   3D mesh of its own. It follows the panel's layout path exactly, so every
-//   icon stands on it: a circle, an ellipse, a regular polygon or the open
-//   300-degree radial arc.
+//   icon stands on it: a circle, an ellipse, a regular polygon, a star or
+//   the open 300-degree radial arc.
 //
 // Frame: x right, y up (screen up), z out of the platform's top. The layout's
 // track becomes the platform's centre line at `trackRadius` (0.84, where the
@@ -28,6 +28,9 @@ var outerBevel = 0.05
 // width (0) follows the flat look's line down to this floor.
 var minimumBand = 0.06
 var maximumBand = 0.16
+// A star's notches lie at this share of its tips' radius. The flat layout
+// places its icons on the same star (LayoutEngine.js, starInnerRadius).
+var starInnerRadius = 0.46
 // The top face's height and the underside's, as in the shipped theme meshes.
 var topHeight = 0.1
 var bottomHeight = -0.08
@@ -412,7 +415,8 @@ function pedestalOutline(kind, thickness, tilt) {
 
 // A flat stand's measures in pixels for an icon of `size` (the flat
 // painter's and a folder opening's): the stand seen `pedestalViewAngle`
-// degrees from above (default `pedestalTilt2D`), the icon floating its Lift
+// degrees from above (default `pedestalTilt2D`), or `pedestalSeenAngle`
+// degrees when a folder of a 3D panel gives it, the icon floating its Lift
 // above the stand's top, never over it. `onPath` (a free panel's path): the
 // stand stands on the path at the icon's place and the icon floats above
 // it; otherwise (an edge panel's row, a folder's items) icon and stand are
@@ -436,10 +440,14 @@ function pedestalLayout(values, size, onPath) {
     const lift = number("pedestalLift", 0.3, 0, 2)
     // Stand facing: Panel (the default) draws the stand in the panel's own
     // plane, seen straight on as a flat panel is, fixed to the panel at the
-    // icon's place (the owner, 2026-10-13); Viewer and Auto draw it level,
-    // View angle degrees from above.
+    // icon's place; Viewer and Auto draw it level, View angle degrees from
+    // above. A folder opened from a true 3D panel passes the angle its
+    // panel's own stands are seen at instead (`pedestalSeenAngle`, not a
+    // setting), so its items' stands look like the ones on the panel.
     const facing = String(v.pedestalFacing || "panel").toLowerCase()
-    const tilt = facing === "panel" ? 90 : number("pedestalViewAngle", pedestalTilt2D, 0, 60)
+    const seen = typeof v.pedestalSeenAngle === "number" ? finite(v.pedestalSeenAngle, NaN) : NaN
+    const tilt = Number.isFinite(seen) ? clamp(seen, 0, 90)
+        : facing === "panel" ? 90 : number("pedestalViewAngle", pedestalTilt2D, 0, 60)
     const unit = icon * pedestalShapeScale(kind === "none" ? "column" : kind) * scale
     const depth = shape === "auto" ? icon * 0.3
         : kind === "column" ? icon * 0.4 * scale * thickness : unit * thickness
@@ -588,13 +596,51 @@ function shapeForLayout(layout, polygonSides) {
         return { kind: "polygon", sides: sides }
     if (name === "polygon")
         return { kind: "polygon", sides: clamp(Math.round(finite(polygonSides, 6)), 3, 12) }
+    if (name === "star")
+        return { kind: "star", points: clamp(Math.round(finite(polygonSides, 6)), 3, 12) }
     return null
+}
+
+// A star's corners on the unit circle, tips and notches in turn, the first
+// tip straight up, in the order the layout walks them. Each corner carries
+// the outward normals of the edges before and after it, and its mitre `m`:
+// a band edge `d` out from the centre line meets its neighbour at c + m * d.
+// At a sharp tip the mitre is long, so the band ends in a point there, as the
+// star's own outline does.
+function starCorners(points) {
+    const count = 2 * clamp(Math.round(finite(points, 6)), 3, 12)
+    const corners = []
+    for (let k = 0; k < count; ++k) {
+        const screen = -Math.PI / 2 + k * Math.PI * 2 / count
+        const radius = k % 2 === 0 ? 1 : starInnerRadius
+        corners.push({ c: [Math.cos(screen) * radius, -Math.sin(screen) * radius] })
+    }
+    // An edge's outward normal: across the edge, away from the star's middle,
+    // which every edge of a star faces.
+    const edgeNormal = function(a, b) {
+        const n = normalized([b[1] - a[1], a[0] - b[0], 0])
+        return n[0] * (a[0] + b[0]) + n[1] * (a[1] + b[1]) >= 0 ? n : [-n[0], -n[1], 0]
+    }
+    for (let k = 0; k < count; ++k) {
+        const before = corners[(k + count - 1) % count].c, here = corners[k].c
+        const after = corners[(k + 1) % count].c
+        const n0 = edgeNormal(before, here), n1 = edgeNormal(here, after)
+        const join = 1 + n0[0] * n1[0] + n0[1] * n1[1]
+        corners[k].m = [(n0[0] + n1[0]) / join, (n0[1] + n1[1]) / join]
+        corners[k].after = n1
+    }
+    return corners
 }
 
 // The radius of a shape's centre line. A polygon's band edges are mitred, so
 // its corners reach further out than its edges; a polygon with few sides
 // draws its centre line closer in to keep those corners within reach.
 function shapeTrackRadius(shape, half) {
+    if (shape && shape.kind === "star") {
+        // The tips' mitred points reach furthest out.
+        const tip = starCorners(shape.points)[0]
+        return Math.min(trackRadius, reach - (half + outerBevel) * Math.hypot(tip.m[0], tip.m[1]))
+    }
     if (!shape || shape.kind !== "polygon")
         return trackRadius
     const sides = clamp(Math.round(finite(shape.sides, 6)), 3, 12)
@@ -634,6 +680,16 @@ function centreLine(shape, segments, radius, overhang) {
             runs.push({ closed: false, edge: true, samples: [
                 { c: [v0[0] * r, v0[1] * r], m: [v0[0] * mitre, v0[1] * mitre], n: n },
                 { c: [v1[0] * r, v1[1] * r], m: [v1[0] * mitre, v1[1] * mitre], n: n }] })
+        }
+    } else if (shape.kind === "star") {
+        // One straight run per edge, as for a polygon; neighbouring runs share
+        // the corner between them, so the band stays one closed surface.
+        const corners = starCorners(shape.points)
+        for (let k = 0; k < corners.length; ++k) {
+            const from = corners[k], to = corners[(k + 1) % corners.length]
+            runs.push({ closed: false, edge: true, samples: [
+                { c: [from.c[0] * r, from.c[1] * r], m: from.m, n: from.after },
+                { c: [to.c[0] * r, to.c[1] * r], m: to.m, n: from.after }] })
         }
     } else if (shape.kind === "arc") {
         // An open path's first and last icons stand on its ends: the platform
@@ -694,7 +750,7 @@ function colour(palette, part) {
 function platform(spec) {
     const options = spec || ({})
     const shape = options.shape
-    if (!shape || ["ring", "polygon", "arc"].indexOf(shape.kind) < 0)
+    if (!shape || ["ring", "polygon", "star", "arc"].indexOf(shape.kind) < 0)
         return null
     const half = clamp(finite(options.band, 0.11), minimumBand, maximumBand)
     const section = profile(half, options.bend)

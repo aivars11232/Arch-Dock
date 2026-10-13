@@ -21,6 +21,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QScreen>
 #include <QSet>
 #include <QStandardPaths>
 #include <QSettings>
@@ -1140,6 +1141,65 @@ bool PanelWindow::removeNativeKdePanel(const QString &panelId)
 
     clearNativeAssociation();
     return true;
+}
+
+QStringList PanelWindow::occupiedScreenEdges() const
+{
+    QSet<QString> occupied;
+    const QList<QScreen *> screens = QGuiApplication::screens();
+    const int screenIndex = screens.isEmpty()
+        ? -1 : qBound(0, m_settings.monitorIndex(), screens.size() - 1);
+    // Arch Dock's own edge panels shown there.
+    for (const ArchDock::EdgePanel &panel : edgePanels())
+    {
+        if (panel.visible && panel.screenIndex == screenIndex)
+            occupied.insert(panel.edge);
+    }
+    if (screenIndex >= 0)
+    {
+        // Every dock window KWin reports on that screen, by the edge it lies
+        // along: a long window across the top or bottom half, or a tall one
+        // down the left or right half.
+        const QRectF screen = screens.at(screenIndex)->geometry();
+        for (const QRectF &bounds : m_windowWatcher.dockWindowBounds())
+        {
+            if (!bounds.intersects(screen) || bounds.isEmpty())
+                continue;
+            if (bounds.width() >= bounds.height())
+                occupied.insert(bounds.center().y() < screen.center().y()
+                    ? QStringLiteral("top") : QStringLiteral("bottom"));
+            else
+                occupied.insert(bounds.center().x() < screen.center().x()
+                    ? QStringLiteral("left") : QStringLiteral("right"));
+        }
+        // Plasma's own panels, which are known even while KWin's report is
+        // not available.
+        QDBusInterface shell(
+            QStringLiteral("org.kde.plasmashell"),
+            QStringLiteral("/PlasmaShell"),
+            QStringLiteral("org.kde.PlasmaShell"),
+            QDBusConnection::sessionBus());
+        if (shell.isValid())
+        {
+            const QDBusReply<QString> reply = shell.call(
+                QStringLiteral("evaluateScript"),
+                QStringLiteral("const out = []; for (const p of panels()) "
+                               "if (Number(p.screen) === %1) out.push(String(p.location)); "
+                               "print('ARCHDOCK_EDGES:' + out.join(','));").arg(screenIndex));
+            const QString text = reply.isValid() ? reply.value().trimmed() : QString{};
+            if (text.startsWith(QStringLiteral("ARCHDOCK_EDGES:")))
+            {
+                for (const QString &edge : text.mid(15).split(QLatin1Char(','), Qt::SkipEmptyParts))
+                {
+                    if (isNativeDockPanelEdge(edge))
+                        occupied.insert(edge);
+                }
+            }
+        }
+    }
+    QStringList edges(occupied.cbegin(), occupied.cend());
+    edges.sort();
+    return edges;
 }
 
 void PanelWindow::removePanel(const QString &panelId)

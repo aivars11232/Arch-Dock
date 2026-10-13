@@ -4,6 +4,7 @@ import org.kde.kirigami as Kirigami
 import "MotionChannels.js" as MotionChannels
 import "LayoutEngine.js" as LayoutEngine
 import "PlatformGeometry.js" as PlatformGeometry
+import "StandFrames.js" as StandFrames
 
 // One dock icon, drawn in layers: rear effects, the icon style's base and
 // tile, the application's glyph, front treatments, the running indicator,
@@ -312,22 +313,24 @@ Item {
     // The stand under the icon: the shape's own solid, projected as the 3D
     // scene shows it, each face shaded by its angle to the light, in the
     // material's texture and the stand's colour, with an optional glow
-    // behind it. Its own motion moves it, not the icon.
+    // round it. Its own motion moves it, not the icon.
     Item {
         id: pedestalLayer
         objectName: "icon-layer-pedestal"
         visible: root.pedestalDrawn
         readonly property real beat: root.pedestalMotionActive
             ? Math.sin(root.pedestalPhase * 2 * Math.PI) : 0
-        // The glow: light round the stand, not only a brighter stand (the
-        // owner, 2026-10-13) - Glow intensity is how strong, Glow reach how
-        // far out of the stand, from a tenth of an icon to a whole icon. The
-        // halo takes that much room round the stand.
+        // The glow is a halo of light round the stand: Glow intensity sets how
+        // strong it is, Glow reach how far it spreads. It is the same
+        // GlowEffect the icons and tiles use, blurred on the graphics card.
+        // A Canvas shadow blur runs on the main thread instead, and for the
+        // stands of one open folder it took several seconds. The halo gets
+        // its room from the layer's own padding, so the canvas keeps only a
+        // small margin for its edges.
         readonly property real glowStrength: root.pedestalAnimation === "glow"
             ? Math.max(0.5, root.pedestalGlow) : root.pedestalGlow
         readonly property real glowReach: root.tileValue("pedestalGlowReach", 0.75, 0, 1)
-        readonly property real margin: Math.max(2, glowStrength > 0
-            ? root.logicalSize * (0.1 + 0.9 * glowReach) : 0)
+        readonly property real margin: 2
         readonly property real standWidth: root.pedestalLayout.width
         readonly property real standHeight: root.pedestalLayout.height
         width: standWidth + 2 * margin
@@ -356,10 +359,18 @@ Item {
             : root.pedestalAnimation === "spin" ? root.pedestalPhase * 2 * Math.PI
             : root.pedestalAnimation === "float" ? root.pedestalPhase * Math.PI / 2 : 0
         readonly property real wobble: root.pedestalAnimation === "wobble" ? beat * 10 : 0
+        // The motion as drawn: 120 steps a turn and half-degree steps of a
+        // wobble. A stand is painted again only when its step changes, and
+        // each step is painted once for every stand drawn the same way
+        // (StandFrames.js).
+        readonly property int spinStep: Math.round(spin / (2 * Math.PI) * 120) % 120
+        readonly property int wobbleStep: Math.round(wobble * 2)
+        readonly property real drawnSpin: spinStep * 2 * Math.PI / 120
+        readonly property real drawnWobble: wobbleStep / 2
         readonly property var mesh: root.pedestalDrawn ? PlatformGeometry.pedestalShape(root.pedestalKind, 16) : null
         // Everything a repaint depends on, in one value.
         readonly property string paintKey: [root.pedestalKind, root.pedestalLayout.unit, root.pedestalLayout.depth,
-            root.pedestalLayout.tilt, tint, glowTint, textureSource, width, height, glowStrength,
+            root.pedestalLayout.tilt, tint, textureSource, textureLook, root.pedestalColor, width, height,
             lightningBackground, visible].join("|")
 
         // The stand's silhouette and faces, seen from `tilt` degrees above,
@@ -405,6 +416,37 @@ Item {
         // shows only the bolts), the bolts over them as light, tinted by the
         // stand's colour.
         readonly property real lightningBackground: root.tileValue("pedestalLookBackground", 0.5, 0, 1)
+        // A glowing look is light, the way the 3D scene draws it: the faces
+        // in the stand's own colour, the look's texture laid over them as
+        // more light. Multiplied in like a paint, its dark texture turned a
+        // coloured stand nearly black.
+        readonly property bool glowingLook: ["plasma", "neon", "futuristic"].includes(textureLook)
+        function paintLight(context, faces, textureLoaded, width, height) {
+            const colour = Qt.color(tint);
+            context.lineWidth = 0.8;
+            context.lineJoin = "round";
+            for (const face of faces) {
+                const shade = Math.min(1, face.shade);
+                const fill = "rgb(" + Math.round(255 * colour.r * shade) + "," + Math.round(255 * colour.g * shade)
+                    + "," + Math.round(255 * colour.b * shade) + ")";
+                context.fillStyle = fill;
+                context.strokeStyle = fill;
+                context.beginPath();
+                context.moveTo(face.corners[0][0], face.corners[0][1]);
+                context.lineTo(face.corners[1][0], face.corners[1][1]);
+                context.lineTo(face.corners[2][0], face.corners[2][1]);
+                context.closePath();
+                context.fill();
+                context.stroke();
+            }
+            if (!textureLoaded) return;
+            context.save();
+            trace(context, faces);
+            context.clip();
+            context.globalCompositeOperation = "qt-screen";
+            fillTexture(context, width, height);
+            context.restore();
+        }
         function paintLightning(context, faces, textureLoaded, width, height) {
             context.lineWidth = 0.8
             context.lineJoin = "round"
@@ -428,12 +470,7 @@ Item {
             context.save()
             trace(context, faces)
             context.clip()
-            context.translate(width / 2, height / 2)
-            context.rotate(spin)
-            const s = Math.max(width, height) / 512 * 1.1
-            context.scale(s, s)
-            context.fillStyle = context.createPattern(String(textureSource), "repeat")
-            context.fillRect(-512, -512, 1024, 1024)
+            fillTexture(context, width, height)
             context.restore()
             if (root.pedestalColor.length) {
                 context.save()
@@ -443,6 +480,18 @@ Item {
                 context.fillRect(0, 0, width, height)
                 context.restore()
             }
+        }
+        // The look's texture over the whole canvas, turned with the stand,
+        // at the size it has on a stand without a glow. Only the canvas is
+        // filled, not the texture's whole square.
+        function fillTexture(context, width, height) {
+            context.translate(width / 2, height / 2)
+            context.rotate(drawnSpin)
+            const s = Math.max(width, height) / 512 * 1.1
+            context.scale(s, s)
+            const reach = Math.ceil(Math.hypot(width, height) / 2 / s) + 2
+            context.fillStyle = context.createPattern(String(textureSource), "repeat")
+            context.fillRect(-reach, -reach, 2 * reach, 2 * reach)
         }
         function trace(context, faces) {
             context.beginPath()
@@ -454,43 +503,18 @@ Item {
             }
         }
 
-        // The glow: the stand's silhouette, blurred, in its colour.
-        Canvas {
-            id: pedestalGlowCanvas
-            anchors.fill: parent
-            visible: pedestalLayer.glowStrength > 0
-            opacity: root.pedestalAnimation === "glow" ? 0.55 + 0.45 * pedestalLayer.beat : 1
-            onPaint: {
-                const context = getContext("2d")
-                context.reset()
-                if (!visible || !pedestalLayer.mesh) return
-                const strength = pedestalLayer.glowStrength
-                const faces = pedestalLayer.project(root.pedestalLayout.tilt, 0)
-                // A wide soft halo, then a tighter bright one, both in the
-                // stand's colour, each laid on the other as light adds up.
-                context.save()
-                context.globalCompositeOperation = "lighter"
-                context.fillStyle = pedestalLayer.glowTint
-                context.shadowColor = pedestalLayer.glowTint
-                for (const pass of [{ blur: 1.0, alpha: 0.35 + strength * 0.45 },
-                                    { blur: 0.45, alpha: 0.25 + strength * 0.5 }]) {
-                    context.shadowBlur = pedestalLayer.margin * pass.blur
-                    context.globalAlpha = Math.min(1, pass.alpha)
-                    pedestalLayer.trace(context, faces)
-                    context.fill()
-                }
-                context.restore()
-            }
-            Connections {
-                target: pedestalLayer
-                function onPaintKeyChanged() { pedestalGlowCanvas.requestPaint() }
-            }
-            onVisibleChanged: requestPaint()
-            onAvailableChanged: if (available) requestPaint()
-        }
         Canvas {
             id: pedestalCanvas
+            objectName: "icon-pedestal-canvas"
             anchors.fill: parent
+            // The glow pulses with the Glow motion.
+            layer.enabled: pedestalLayer.glowStrength > 0
+            layer.effect: GlowEffect {
+                glowColor: pedestalLayer.glowTint
+                intensity: pedestalLayer.glowStrength
+                    * (root.pedestalAnimation === "glow" ? 0.55 + 0.45 * pedestalLayer.beat : 1)
+                reach: pedestalLayer.glowReach
+            }
             property bool textureLoaded: false
             function loadTexture() {
                 const source = String(pedestalLayer.textureSource)
@@ -507,18 +531,38 @@ Item {
                 target: pedestalLayer
                 function onTextureSourceChanged() { pedestalCanvas.loadTexture() }
                 function onPaintKeyChanged() { pedestalCanvas.requestPaint() }
-                function onSpinChanged() { pedestalCanvas.requestPaint() }
-                function onWobbleChanged() { pedestalCanvas.requestPaint() }
+                function onSpinStepChanged() { pedestalCanvas.requestPaint() }
+                function onWobbleStepChanged() { pedestalCanvas.requestPaint() }
             }
             onPaint: {
                 const context = getContext("2d")
                 context.reset()
                 if (!pedestalLayer.mesh || !(width > 0 && height > 0)) return
-                const faces = pedestalLayer.project(root.pedestalLayout.tilt + pedestalLayer.wobble,
-                                                    pedestalLayer.spin)
+                // A moving stand's step painted before, here or under
+                // another icon with the same stand, is copied.
+                const moving = root.pedestalMotionActive
+                const key = moving ? [pedestalLayer.paintKey, textureLoaded, pedestalLayer.spinStep,
+                                      pedestalLayer.wobbleStep].join("|") : ""
+                const painted = moving ? StandFrames.frame(key) : null
+                if (painted) {
+                    context.drawImage(painted, 0, 0)
+                    return
+                }
+                paintStand(context)
+                if (moving)
+                    StandFrames.keep(key, context.getImageData(0, 0, width, height))
+            }
+            function paintStand(context) {
+                const faces = pedestalLayer.project(root.pedestalLayout.tilt + pedestalLayer.drawnWobble,
+                                                    pedestalLayer.drawnSpin)
                 if (!faces.length) return
                 if (pedestalLayer.textureLook === "lightning" || pedestalLayer.textureLook === "aurora") {
                     pedestalLayer.paintLightning(context, faces, textureLoaded, width, height)
+                    return
+                }
+                if (pedestalLayer.glowingLook) {
+                    pedestalLayer.paintLight(context, faces, textureLoaded, width, height)
+                    paintShine(context, faces)
                     return
                 }
                 // Each face in its shade of grey, far ones first; a hairline
@@ -546,18 +590,16 @@ Item {
                 context.globalCompositeOperation = "qt-multiply"
                 if (textureLoaded) {
                     context.save()
-                    context.translate(width / 2, height / 2)
-                    context.rotate(pedestalLayer.spin)
-                    const s = Math.max(width, height) / 512 * 1.1
-                    context.scale(s, s)
-                    context.fillStyle = context.createPattern(String(pedestalLayer.textureSource), "repeat")
-                    context.fillRect(-512, -512, 1024, 1024)
+                    pedestalLayer.fillTexture(context, width, height)
                     context.restore()
                 }
                 context.fillStyle = pedestalLayer.tint
                 context.fillRect(0, 0, width, height)
                 context.restore()
-                // A little shine on the faces turned to the light.
+                paintShine(context, faces)
+            }
+            // A little shine on the faces turned to the light.
+            function paintShine(context, faces) {
                 context.save()
                 for (const face of faces) {
                     if (face.shine <= 0) continue

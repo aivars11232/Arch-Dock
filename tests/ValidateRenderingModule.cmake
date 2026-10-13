@@ -7,6 +7,7 @@ set(rendering_sources
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/IconStyleResolver.js"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/GizmoMath.js"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/PlatformGeometry.js"
+    "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/StandFrames.js"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/AnimationProfileRuntime.js"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/MotionChannels.js"
     "${ARCHDOCK_SOURCE_DIR}/qml/ArchDock/Rendering/PresentationStates.js"

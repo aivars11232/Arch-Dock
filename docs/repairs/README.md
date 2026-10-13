@@ -30,6 +30,15 @@ Each completed report has two formal sections:
 The detailed logs, captures and measurements behind each statement stay in the
 untracked evidence folder `build-codex-adrep/evidence/ADREP-TASK-00N/`.
 
+The owner's list of 2026-10-13 (bugs, Studio fixes, UI themes, Phases 3 to
+5) is done the same way, one report per piece:
+
+| File | Piece |
+|---|---|
+| `OWNER-LIST-PIECE-1.md` | Folders open at once, the 3D star, panels that stay removed, one panel to a Studio window |
+
+Their evidence is in `build-codex-adrep/evidence/OWNER-LIST-PIECE-N/`.
+
 These files are operational records, like `docs/CURRENT_STATE.md`:
 `tools/prepare-arch-source.py` leaves everything under `docs/repairs/` out of
 the source export and the package, and `source-exporter-test` checks that.

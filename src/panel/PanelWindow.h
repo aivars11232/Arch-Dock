@@ -4,6 +4,7 @@
 #include <QElapsedTimer>
 #include <QDBusMessage>
 #include <QHash>
+#include <QSet>
 #include <QObject>
 #include <QPointer>
 #include <QStringList>
@@ -96,14 +97,21 @@ public slots:
     // The supported way to stop Arch Dock: `arch-dock --quit` calls this.
     QVariantMap quit();
     void showPanelSettings(const QString &panelId);
+    // A panel's "Add panel…": the Studio's page for a new free or edge panel.
+    void showNewPanelPage();
+    // The edges of the screen new panels go to where a panel already
+    // stands: Arch Dock's, Plasma's own or another dock's. An edge panel is
+    // only added where none does; there is one panel to an edge.
+    QStringList occupiedScreenEdges() const;
     QString createNativePanel(const QString &edge, const QString &type);
     QVariantMap createFreePanel();
     QVariantMap createFreePanelFromTemplate(int containmentId, const QString &ownershipToken);
     QVariantMap adoptFreePanelApplet(int desktopContainmentId, int dockAppletId);
-    // Creates a new desktop widget for a detached free panel's record and
-    // moves it to the panel's saved position (Panel Studio's "Put back on the
-    // desktop").
-    QVariantMap rehostFreePanel(const QString &panelId);
+    // A panel's widget reports that its owner removed it from Plasma, or
+    // the Plasma panel it sits in (`removing`), or that the removal was
+    // undone. Once Plasma has deleted it, the panel is removed entirely; a
+    // built-in edge panel is hidden instead. Profiles keep their own copies.
+    void panelRemovalRequested(const QString &panelId, bool removing);
     void saveFreePanelPosition(const QString &panelId, int x, int y);
     bool setNativePanelType(const QString &panelId, const QString &type);
     QVariantMap dockConfiguration(const QString &panelId) const;
@@ -521,6 +529,13 @@ private:
     // its layout (the owner's Free panel 21 was lost that way, 2026-10-12).
     QElapsedTimer m_freeHostGraceClock;
     QTimer m_freeHostRetryTimer;
+    // Free panels whose desktop widget was not found, and since when.
+    QHash<QString, QElapsedTimer> m_missingFreeHosts;
+    // Panels their owner removed in Plasma, waiting for Plasma to delete
+    // them (a removal can be undone until then), and the check that waits.
+    QSet<QString> m_removalRequested;
+    QTimer m_removalCheckTimer;
+    void checkRequestedRemovals();
     int m_visibilityRevision = 0;
     QHash<QString, ArchDock::PanelVisibilityLocks> m_panelInteractionGuards;
     QHash<QString, QVariantMap> m_panelPresentationStates;

@@ -1283,9 +1283,18 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             const QString current = candidate.layout.pathType;
             QSet<QString> drawings{drawing(current)};
             QStringList availableChoices;
+            // A panel set to 3D is offered the layouts its look can stand on
+            // a 3D platform; any other one would turn the panel flat.
+            const bool threeD = candidate.surface.rendererTier == QStringLiteral("true3d");
+            const QStringList drawnIn3D = threeD
+                ? m_panelRegistry.layoutsDrawnIn3D(candidate, choices) : QStringList{};
             for (const QString &choice : choices)
             {
                 if (!layoutAvailable(choice))
+                {
+                    continue;
+                }
+                if (threeD && choice != current && !drawnIn3D.contains(choice))
                 {
                     continue;
                 }
@@ -1305,6 +1314,17 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             if (choices.size() < 2)
             {
                 inactive = true;
+            }
+            field.insert(QStringLiteral("choices"), choices);
+        }
+        else if (key == QStringLiteral("type") && !freeHost)
+        {
+            // An edge panel of the "empty" type is a plain Plasma panel with
+            // no Arch Dock in it; the Studio only makes Arch Dock panels. The
+            // current type stays listed so the field shows it.
+            if (candidate.content.type != QStringLiteral("empty"))
+            {
+                choices.removeAll(QStringLiteral("empty"));
             }
             field.insert(QStringLiteral("choices"), choices);
         }

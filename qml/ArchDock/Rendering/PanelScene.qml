@@ -1205,6 +1205,17 @@ Item {
         })
     }
 
+    // How far from above a true 3D panel's own stands are seen, in whole
+    // degrees (90 straight on), or NaN on any other panel. An opened
+    // folder draws its items' stands at this angle so they match the ones
+    // on the panel; whole degrees, so a moving camera does not repaint the
+    // folder's stands at every frame.
+    readonly property real standSeenAngle: {
+        const mesh = surfaceLoader.true3DReady ? surfaceLoader.true3DItem : null
+        const angle = mesh ? Number(mesh.pedestalAxisTilt) : NaN
+        return Number.isFinite(angle) ? Math.round(angle) : NaN
+    }
+
     // "Along the dock": the curve a folder's contents follow, `outward`
     // pixels out of the dock, as `count` scene-coordinate samples spanning
     // `span` radians around the folder at `folderIndex`. True 3D projects the
@@ -1247,6 +1258,39 @@ Item {
     // edge beside the folder and the way out of the platform there, as
     // drawn ({ start, direction } in scene coordinates), or null where the
     // shape opens from the folder icon itself (flat and baked panels).
+    // A 3D panel's plane round the folder at `folderIndex`, for a folder's
+    // fan, arc, stack or ring to lie on (PanelScene3D.folderPlane), with a
+    // child's scale relative to a flat icon, as along the dock. Null on any
+    // other panel.
+    function folderPlane(folderIndex) {
+        if (!freeHost || folderIndex < 0 || folderIndex >= entryCount) return null
+        const mesh = surfaceLoader.true3DReady ? surfaceLoader.true3DItem : null
+        const plane = mesh && mesh.folderPlane ? mesh.folderPlane(folderIndex) : null
+        if (!plane) return null
+        const drawn = mesh.projectedEntryGeometry ? mesh.projectedEntryGeometry[folderIndex] : null
+        const size = drawn ? drawn.height / Math.max(1, layoutGeometry.iconSize) : 1
+        const sized = function(map) {
+            return function(x, y) {
+                const view = map(x, y)
+                return view ? { x: view.x, y: view.y, scale: view.scale * size } : null
+            }
+        }
+        return { origin: plane.origin, outward: plane.outward, radius: plane.radius, rimAt: plane.rimAt,
+                 icons: plane.icons, toView: sized(plane.toView),
+                 alignedAt: function(ox, oy) {
+                     const map = plane.alignedAt(ox, oy)
+                     return map ? sized(map) : null
+                 } }
+    }
+
+    // What a 3D panel's opened folder keeps clear of - the platform as
+    // drawn and its icons with their stands (PanelScene3D.folderKeepOut) -
+    // or null on any other panel.
+    function folderKeepOut() {
+        const mesh = surfaceLoader.true3DReady ? surfaceLoader.true3DItem : null
+        return freeHost && mesh && mesh.folderKeepOut ? mesh.folderKeepOut() : null
+    }
+
     function folderOutwardRay(folderIndex, margin) {
         if (!freeHost || folderIndex < 0 || folderIndex >= entryCount) return null
         const mesh = surfaceLoader.true3DReady ? surfaceLoader.true3DItem : null

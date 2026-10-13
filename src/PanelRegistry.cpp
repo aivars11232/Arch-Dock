@@ -990,19 +990,55 @@ PanelRegistry::themeCapabilityProfile(
     {
         return profile;
     }
-    if (!genericScene3D(definition, catalogTheme(themeIdFor(definition)), {}).has_value())
+    const bool generic =
+        genericScene3D(definition, catalogTheme(themeIdFor(definition)), {}).has_value();
+    if (!generic && definition.surface.rendererTier != QStringLiteral("true3d"))
     {
         return profile;
     }
     // The generic scene is one more renderer for the same look. If it cannot
-    // be drawn, the look's own renderer takes over, not a plainer one.
-    profile->rendererTiers.append(ArchDock::RendererTier::True3D);
+    // be drawn, the look's own renderer takes over, not a plainer one. A
+    // panel set to 3D whose layout has no generated platform is drawn the
+    // same way, flat, instead of being refused for want of a renderer.
+    if (generic)
+    {
+        profile->rendererTiers.append(ArchDock::RendererTier::True3D);
+    }
     if (profile->preferredRendererTier.has_value() &&
         !profile->fallbackRendererTiers.contains(*profile->preferredRendererTier))
     {
         profile->fallbackRendererTiers.prepend(*profile->preferredRendererTier);
     }
     return profile;
+}
+
+QStringList PanelRegistry::layoutsDrawnIn3D(const ArchDock::PanelDefinition &definition,
+                                            const QStringList &layouts) const
+{
+    // themeCapabilityProfile()'s rule for each layout, with the look read
+    // once: its own 3D scene draws every layout it declares, and a look
+    // without one is drawn on a generated platform where the layout has one.
+    const std::optional<ArchDock::ThemeCapabilityProfile> look = lookCapabilityProfile(definition, nullptr);
+    if (!look.has_value())
+    {
+        return {};
+    }
+    if (look->rendererTiers.contains(ArchDock::RendererTier::True3D))
+    {
+        return layouts;
+    }
+    const QVariantMap catalog = catalogTheme(themeIdFor(definition));
+    QStringList drawn;
+    ArchDock::PanelDefinition candidate = definition;
+    for (const QString &layout : layouts)
+    {
+        candidate.layout.pathType = layout;
+        if (genericScene3D(candidate, catalog, {}).has_value())
+        {
+            drawn.append(layout);
+        }
+    }
+    return drawn;
 }
 
 std::optional<ArchDock::ThemeCapabilityProfile>
@@ -1402,15 +1438,15 @@ std::optional<QVariantMap> PanelRegistry::genericScene3D(
     const QVariantMap &lookProjection) const
 {
     // Layouts with an exact generated platform (PlatformGeometry.js): closed
-    // circles, ellipses and regular polygons, and the 300-degree radial arc,
-    // each drawn along the layout's own path so every icon stands on it.
-    // Arcs, semicircles and fans curve about a centre below their panel's
-    // middle, which a centred platform cannot follow; they stay flat.
+    // circles, ellipses, regular polygons and stars, and the 300-degree
+    // radial arc, each drawn along the layout's own path so every icon stands
+    // on it. Arcs, semicircles and fans curve about a centre below their
+    // panel's middle, which a centred platform cannot follow; they stay flat.
     static const QStringList platformLayouts{
         QStringLiteral("circular"), QStringLiteral("ring"), QStringLiteral("ellipse"),
         QStringLiteral("radial"), QStringLiteral("polygon"), QStringLiteral("triangle"),
         QStringLiteral("square"), QStringLiteral("pentagon"), QStringLiteral("hexagon"),
-        QStringLiteral("octagon")};
+        QStringLiteral("octagon"), QStringLiteral("star")};
     if (definition.host.kind != ArchDock::PanelHostKind::FreeDesktop ||
         !platformLayouts.contains(definition.layout.pathType) ||
         look.contains(QStringLiteral("scene3D")) ||
@@ -2157,66 +2193,6 @@ bool PanelRegistry::removeDetachedFreePanel(const QString &panelId)
         return true;
     }
     return false;
-}
-
-bool PanelRegistry::beginFreePanelRehost(
-    const QString &panelId,
-    const QString &ownershipToken)
-{
-    const QVariantMap *panel = record(panelId);
-    const QString normalizedToken = ownershipToken.trimmed();
-    const auto association = freeHostAssociation(panelId);
-    // Only the detached, host-less record qualifies: a hosted or half-created
-    // panel keeps its own lifecycle.
-    if (!panel || panel->value(QStringLiteral("builtIn")).toBool() ||
-        panel->value(QStringLiteral("edge")).toString() != QStringLiteral("free") ||
-        normalizedToken.isEmpty() ||
-        normalizedToken.size() > kFreeHostOwnershipTokenMaximumLength ||
-        !association.has_value() || association->state != FreeHostState::Detached ||
-        association->desktopContainmentId >= 0 || association->dockAppletId >= 0 ||
-        !association->ownershipToken.trimmed().isEmpty())
-    {
-        return false;
-    }
-    // The same state a new panel has while its widget is being created.
-    return setPanelValuesChecked(
-        panelId,
-        {{QStringLiteral("freeOwnershipToken"), normalizedToken},
-         {QStringLiteral("freeHostState"), QStringLiteral("hosted-stale")},
-         {QStringLiteral("freeCreationState"),
-          QString::fromLatin1(kFreeCreationPending)},
-         {QStringLiteral("freeCreationError"), QString{}},
-         {QStringLiteral("freeRollbackError"), QString{}}});
-}
-
-bool PanelRegistry::abandonFreePanelRehost(
-    const QString &panelId,
-    const QString &ownershipToken,
-    const QString &errorCode)
-{
-    const QVariantMap *panel = record(panelId);
-    const QString normalizedToken = ownershipToken.trimmed();
-    if (!panel || panel->value(QStringLiteral("builtIn")).toBool() ||
-        panel->value(QStringLiteral("edge")).toString() != QStringLiteral("free") ||
-        normalizedToken.isEmpty() ||
-        panel->value(QStringLiteral("freeOwnershipToken")).toString() != normalizedToken ||
-        panel->value(QStringLiteral("freeCreationState")).toString() !=
-            QLatin1String(kFreeCreationPending))
-    {
-        return false;
-    }
-    return setPanelValuesChecked(
-        panelId,
-        {{QStringLiteral("freeDesktopContainmentId"), -1},
-         {QStringLiteral("freeDockAppletId"), -1},
-         {QStringLiteral("freeOwnershipToken"), QString{}},
-         {QStringLiteral("freeHostMode"), QStringLiteral("desktop")},
-         {QStringLiteral("freeHostState"), QStringLiteral("detached")},
-         {QStringLiteral("freeCreationState"),
-          QString::fromLatin1(kFreeCreationComplete)},
-         {QStringLiteral("freeCreationError"), errorCode.trimmed()},
-         {QStringLiteral("freeRollbackError"), QString{}},
-         {QStringLiteral("freeRecoveryError"), errorCode.trimmed()}});
 }
 
 bool PanelRegistry::commitVerifiedNativePanelAssociation(

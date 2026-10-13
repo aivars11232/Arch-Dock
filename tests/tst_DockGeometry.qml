@@ -1356,6 +1356,52 @@ TestCase {
                && !LayoutEngine.curvedLayout("horizontal") && !LayoutEngine.curvedLayout("spiral"))
     }
 
+    // A ring folder with a second circle round it: the children fill the
+    // ring, then the circle, each spread evenly round its own; travel moves
+    // them on round both, and past what both hold the rest come in where
+    // the ring starts.
+    function test_ringFolderFillsItsSecondCircle() {
+        function circle(radius) {
+            const points = []
+            for (let k = 0; k < 96; ++k)
+                points.push({ x: 400 + radius * Math.cos(2 * Math.PI * k / 96),
+                              y: 300 + radius * Math.sin(2 * Math.PI * k / 96), scale: 1 })
+            return points
+        }
+        const radiusOf = entry => Math.hypot(entry.x - 400, entry.y - 300)
+        // Ten children 60 apart round a circle of 100, twenty round 200.
+        const twenty = LayoutEngine.folderTrackLayout(circle(100), 20, 60, 0,
+                                                      { closed: true, rings: [circle(200)] })
+        compare(twenty.rings, 2)
+        compare(twenty.capacity, 20)
+        verify(!twenty.windowed, "both circles hold the folder")
+        for (let index = 0; index < 20; ++index) {
+            const entry = twenty.entries[index]
+            verify(entry.onTrack && entry.visibility === 1, "child " + index + " shows")
+            verify(Math.abs(radiusOf(entry) - (index < 10 ? 100 : 200)) < 1, "child " + index + " is on its circle")
+        }
+        // Spread evenly round the outer circle: neighbours a tenth of it apart.
+        const turn = (a, b) => Math.abs(Math.atan2(b.y - 300, b.x - 400) - Math.atan2(a.y - 300, a.x - 400))
+        const step = turn(twenty.entries[10], twenty.entries[11])
+        fuzzyCompare(Math.min(step, 2 * Math.PI - step), 2 * Math.PI / 10, 0.02)
+        // Half a step on: the inner ring's last child crosses straight over
+        // to where the second circle starts.
+        const half = LayoutEngine.folderTrackLayout(circle(100), 20, 60, 0.5,
+                                                    { closed: true, rings: [circle(200)] })
+        const crossing = radiusOf(half.entries[9])
+        verify(crossing > 100 && crossing < 200, "between the circles: " + crossing)
+        // Forty: thirty at once, the others coming round.
+        const forty = LayoutEngine.folderTrackLayout(circle(100), 40, 60, 0,
+                                                     { closed: true, rings: [circle(200)] })
+        compare(forty.capacity, 30)
+        verify(forty.windowed)
+        compare(forty.maximumOffset, 10)
+        for (let index = 30; index < 40; ++index)
+            compare(forty.entries[index].visibility, 0, "child " + index + " waits")
+        // A ring without a second circle is laid out as before.
+        compare(LayoutEngine.folderTrackLayout(circle(100), 20, 60, 0, { closed: true }).capacity, 10)
+    }
+
     function test_folderWithoutASideKeepsItsFrame() {
         const options = { maximumWidth: 620, maximumHeight: 400, labelWidth: 108,
                           labelHeight: 36.65625, compactPath: true }

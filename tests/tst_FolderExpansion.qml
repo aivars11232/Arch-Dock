@@ -640,7 +640,7 @@ TestCase {
     }
     function layoutOf(shape, count, travel) {
         return LayoutEngine.folderTrackLayout(shape.samples, count, shape.pitch, travel || 0,
-            { closed: shape.closed, start: shape.start, capacity: shape.capacity })
+            { closed: shape.closed, start: shape.start, capacity: shape.capacity, rings: shape.rings || [] })
     }
     // Degrees from `from` to `to`, both directions, clockwise on the screen.
     function turnBetween(from, to) {
@@ -652,6 +652,148 @@ TestCase {
         const width = names ? 108 : 48, height = names ? 82 : 48, reach = 24
         return point.x - width / 2 < obstacle.x + reach && point.x + width / 2 > obstacle.x - reach
             && point.y - 24 < obstacle.y + reach && point.y - 24 + height > obstacle.y - reach
+    }
+    // On a 3D panel a shape lies on the panel's own plane. Here the plane is
+    // seen from 30 degrees above - its depth, y, foreshortened by half - and
+    // a child is drawn smaller the farther up it stands. Every child stands
+    // on the shape as projected, at the scale there, and the outline and the
+    // room the shape needs are the projected ones.
+    function test_folderShapesLieOnATiltedPlane_data() {
+        return ["fan", "arc", "stack", "ring"].map(function(kind) { return { tag: kind, kind: kind } })
+    }
+    function test_folderShapesLieOnATiltedPlane(data) {
+        const centre = { x: 1920, y: 1500 }
+        const project = function(point) {
+            return { x: centre.x + point.x, y: centre.y + point.y * 0.5, scale: 1 + point.y / 2000 }
+        }
+        const back = function(point) { return { x: point.x - centre.x, y: (point.y - centre.y) / 0.5 } }
+        // A ring of six has one circle, which lies on the plane unleaned
+        // (two circles lean: test_ringCirclesLeanLikeAGimbal).
+        const shape = LayoutEngine.folderShape(data.kind, {
+            folder: { x: 0, y: -300 }, outward: { x: 0, y: -1 }, fromEdge: true, iconSize: 48,
+            cellWidth: 108, cellHeight: 82, gap: 6, count: data.kind === "ring" ? 6 : 8, fanOpening: 90, stackLength: 5,
+            ringSize: "small", panelRadius: 300, obstacles: [], obstacleSize: 48,
+            screen: { x: 0, y: 0, width: 3840, height: 2160 }, outlineMargin: 20, project: project })
+        verify(!shape.hidden)
+        verify(shape.samples.length >= 2)
+        // Where the samples are on the plane: the flat shape's geometry.
+        const onPlane = shape.samples.map(back)
+        const folder = { x: 0, y: -300 }
+        for (let index = 0; index < shape.samples.length; ++index) {
+            const sample = shape.samples[index], point = onPlane[index]
+            fuzzyCompare(sample.scale, Math.max(0.35, 1 + point.y / 2000), 1e-6, "each child's own scale")
+            if (data.kind === "fan")
+                fuzzyCompare(Math.hypot(point.x - folder.x, point.y - folder.y), shape.radius, 0.01,
+                             "the fan's arc lies on the plane round its apex")
+            else if (data.kind === "arc")
+                fuzzyCompare(Math.hypot(point.x - folder.x, point.y - folder.y), shape.radius, 0.01,
+                             "the arc lies on the plane round the folder")
+            else if (data.kind === "ring") {
+                const middle = back(shape.centre)
+                fuzzyCompare(Math.hypot(point.x - middle.x, point.y - middle.y), shape.radius, 0.01,
+                             "the ring lies on the plane")
+            }
+        }
+        if (data.kind === "stack") {
+            // A straight line on the plane is one on the screen too, its
+            // steps shortened by the tilt.
+            const first = shape.samples[0], second = shape.samples[1]
+            for (const sample of shape.samples.slice(2)) {
+                const cross = (second.x - first.x) * (sample.y - first.y) - (second.y - first.y) * (sample.x - first.x)
+                verify(Math.abs(cross) < 0.01 * Math.hypot(sample.x - first.x, sample.y - first.y) * 100,
+                       "the stack is a straight line")
+            }
+            fuzzyCompare(Math.hypot(onPlane[1].x - onPlane[0].x, onPlane[1].y - onPlane[0].y), shape.pitch, 0.01,
+                         "a pitch apart on the plane")
+        }
+        if (data.kind === "fan") {
+            fuzzyCompare(shape.apex.x, project(folder).x, 0.01, "the apex is the folder's rim, as seen")
+            fuzzyCompare(shape.apex.y, project(folder).y, 0.01)
+            compare(shape.outline.points[0].x, shape.apex.x)
+        }
+        // The room it needs holds every child's cell at its scale.
+        for (const sample of shape.samples) {
+            verify(sample.x - 54 * sample.scale >= shape.bounds.x - 0.5
+                   && sample.x + 54 * sample.scale <= shape.bounds.x + shape.bounds.width + 0.5, "inside the bounds")
+            verify(sample.y - 24 * sample.scale >= shape.bounds.y - 0.5, "inside the bounds")
+        }
+        // A plane out of sight gives no shape to draw.
+        verify(LayoutEngine.folderShape(data.kind, {
+            folder: folder, outward: { x: 0, y: -1 }, fromEdge: true, iconSize: 48, count: 8,
+            project: function() { return null } }).hidden)
+    }
+    // A small ring at its smallest holds six named children; a folder with
+    // more has a second circle round it, a child's cell further out, for the
+    // rest - drawn too, and taken into the room the shape needs.
+    function test_ringGrowsASecondCircle() {
+        const one = shapeOf("ring", { x: 0, y: -1 }, 5, true)
+        verify(!one.rings, "five fit one circle")
+        compare(one.capacity, 5)
+        const two = shapeOf("ring", { x: 0, y: -1 }, 24, true)
+        compare(two.rings.length, 1)
+        compare(two.outline.loops.length, 1)
+        compare(two.ringCapacities[0], 6)
+        verify(two.ringCapacities[1] >= 11, "the second circle holds more: " + two.ringCapacities[1])
+        fuzzyCompare(two.outerRadius - two.radius, 108 + 6, 0.01, "a child's cell further out")
+        for (const point of two.rings[0])
+            fuzzyCompare(Math.hypot(point.x - two.centre.x, point.y - two.centre.y), two.outerRadius, 0.01)
+        for (const point of two.rings[0])
+            verify(point.y >= two.bounds.y - 0.5 && point.y <= two.bounds.y + two.bounds.height + 0.5,
+                   "the second circle is inside the room the shape needs")
+        // Laid out: six on the ring, the next ones round the second circle.
+        const layout = LayoutEngine.folderTrackLayout(two.samples, 24, two.pitch, 0,
+            { closed: true, rings: two.rings })
+        compare(layout.rings, 2)
+        for (let index = 0; index < 6; ++index)
+            fuzzyCompare(Math.hypot(layout.entries[index].x - two.centre.x, layout.entries[index].y - two.centre.y),
+                         two.radius, 1)
+        fuzzyCompare(Math.hypot(layout.entries[6].x - two.centre.x, layout.entries[6].y - two.centre.y),
+                     two.outerRadius, 1)
+    }
+    // On a tilted plane a ring's two circles lean opposite ways, 10 degrees
+    // each, like the rings of a gimbal, the first well inside the second; a
+    // ring with one circle keeps the plane's own tilt.
+    function test_ringCirclesLeanLikeAGimbal() {
+        const project = function(point) { return { x: 1920 + point.x, y: 1200 + point.y * 0.5, scale: 1 } }
+        const options = { folder: { x: 0, y: -300 }, outward: { x: 0, y: -1 }, fromEdge: true, iconSize: 48,
+            cellWidth: 108, cellHeight: 82, gap: 6, count: 24, ringSize: "small", obstacles: [],
+            screen: { x: 0, y: 0, width: 3840, height: 2160 }, project: project }
+        // The point farthest from the middle lies on a circle's long axis.
+        function axis(points, middle) {
+            let far = points[0], best = 0
+            for (const point of points) {
+                const distance = Math.hypot(point.x - middle.x, point.y - middle.y)
+                if (distance > best) { best = distance; far = point }
+            }
+            let angle = Math.atan2(far.y - middle.y, far.x - middle.x) * 180 / Math.PI
+            if (angle > 90) angle -= 180
+            if (angle < -90) angle += 180
+            return angle
+        }
+        const two = LayoutEngine.folderShape("ring", options)
+        compare(two.rings.length, 1)
+        fuzzyCompare(axis(two.samples, two.centre), -10, 2.5, "the inner circle leans one way")
+        fuzzyCompare(axis(two.rings[0], two.centre), 10, 2.5, "the outer circle the other")
+        fuzzyCompare(axis(two.outline.loops[0], two.centre), 10, 2.5, "and is drawn so")
+        // Every point of the inner circle, a clear gap further out, is still
+        // inside the outer one.
+        function within(point, polygon) {
+            let inside = false
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                const a = polygon[i], b = polygon[j]
+                if ((a.y > point.y) !== (b.y > point.y) && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x)
+                    inside = !inside
+            }
+            return inside
+        }
+        for (const point of two.samples) {
+            const dx = point.x - two.centre.x, dy = point.y - two.centre.y, length = Math.hypot(dx, dy)
+            verify(within({ x: point.x + dx / length * 24, y: point.y + dy / length * 24 }, two.rings[0]),
+                   "the inner circle stays well inside the outer one")
+        }
+        const one = LayoutEngine.folderShape("ring", Object.assign({}, options, { count: 5 }))
+        verify(!one.rings)
+        fuzzyCompare(axis(one.samples, one.centre), 0, 2.5, "one circle keeps the plane's tilt")
     }
     function test_folderShapes_data() {
         const rows = []
@@ -764,16 +906,21 @@ TestCase {
             compare(layoutOf(shapeOf("stack", up, 24, false, { stackLength: length }), 24).capacity, length)
         compare(layoutOf(shapeOf("stack", up, 3, false, { stackLength: 12 }), 3).capacity, 3)
         compare(shapeOf("stack", up, 24, false, { stackLength: 40 }).capacity, 12)
-        // Ring size: fits the children, or has the dock's radius.
+        // Ring size: small - at its smallest six children, a second circle
+        // round it for more - or the dock's radius, one circle.
         const small = shapeOf("ring", up, 8, false)
         compare(small.ringSize, "small")
-        // Just wide enough that neighbours stand a pitch apart in a straight line.
-        fuzzyCompare(small.radius, 62 / (2 * Math.sin(Math.PI / 8)), 0.01)
+        // Just wide enough that six neighbours stand a pitch apart in a
+        // straight line; the other two go round the second circle.
+        fuzzyCompare(small.radius, 62 / (2 * Math.sin(Math.PI / 6)), 0.01)
+        compare(small.rings.length, 1)
         const spread = layoutOf(small, 8).entries
         fuzzyCompare(Math.hypot(spread[1].x - spread[0].x, spread[1].y - spread[0].y), 62, 0.5)
+        compare(layoutOf(small, 8).capacity, 8, "both circles hold the eight")
         const panel = shapeOf("ring", up, 8, false, { ringSize: "panel" })
         compare(panel.ringSize, "panel")
         compare(panel.radius, 150)
+        verify(!panel.rings, "a ring the size of the panel has one circle")
         compare(layoutOf(panel, 8).capacity, 8)
         const noRadius = shapeOf("ring", up, 8, false, { ringSize: "panel", panelRadius: 0 })
         compare(noRadius.ringSize, "small", "a dock without a radius keeps the small ring")
@@ -785,10 +932,12 @@ TestCase {
         const roomy = shapeOf("fan", { x: 0, y: -1 }, 24, true, options)
         compare(roomy.turn, 0)
         compare(roomy.fewer, 0)
+        // A fan at its smallest, three named children at once, needs about
+        // 240 pixels above the folder; with 200 it gives way.
         const tight = shapeOf("fan", { x: 0, y: -1 }, 24, true,
-                              { screen: { x: 0, y: 1080 - 260, width: 3840, height: 1000 } })
+                              { screen: { x: 0, y: 1080 - 200, width: 3840, height: 1000 } })
         verify(tight.fewer > 0 || tight.turn !== 0, "the fan gave way to the screen")
-        verify(tight.bounds.y >= 1080 - 260 - 0.5, "and fits: " + JSON.stringify(tight.bounds))
+        verify(tight.bounds.y >= 1080 - 200 - 0.5, "and fits: " + JSON.stringify(tight.bounds))
         // A ring with no room above but room beside the folder turns
         // towards a side, not over the dock.
         const ring = shapeOf("ring", { x: 0, y: -1 }, 8, true,
@@ -796,13 +945,22 @@ TestCase {
         verify(ring.turn !== 0, "a ring that does not fit above turns to where it does")
         verify(Math.abs(ring.turn) <= 90, "towards a side before the other way: " + ring.turn)
         verify(ring.bounds.y >= 1080 - 260 - 0.5)
-        // A small ring short of room holds fewer children at once, still
-        // beside the folder; the others come round as it turns.
+        // A small ring short of room straight out keeps its second circle by
+        // turning towards a side where both circles fit.
         const shortRing = shapeOf("ring", { x: 0, y: -1 }, 24, true,
                                   { screen: { x: 0, y: 1080 - 620, width: 3840, height: 2000 } })
-        compare(shortRing.turn, 0)
-        verify(shortRing.fewer > 0, "fewer children at once")
-        verify(layoutOf(shortRing, 24).capacity < 24 && layoutOf(shortRing, 24).capacity >= 3)
+        compare(shortRing.fewer, 0)
+        compare(shortRing.rings.length, 1, "both circles")
+        verify(Math.abs(shortRing.turn) <= 90, "towards a side: " + shortRing.turn)
+        verify(shortRing.bounds.y >= 1080 - 620 - 0.5)
+        // Where not even a side has room for both, it does without the second
+        // circle and holds fewer children at once; the others come round
+        // with the wheel.
+        const tightRing = shapeOf("ring", { x: 0, y: -1 }, 24, true,
+                                  { screen: { x: 1920 - 420, y: 1080 - 420, width: 840, height: 840 } })
+        verify(tightRing.fewer > 0, "fewer children at once")
+        verify(!tightRing.rings, "one circle")
+        verify(layoutOf(tightRing, 24).capacity < 24 && layoutOf(tightRing, 24).capacity >= 3)
         // A stack too long for the room shows fewer children, still outward.
         const stack = shapeOf("stack", { x: 1, y: 0 }, 24, true,
                               { stackLength: 12, screen: { x: 0, y: 0, width: 1920 + 700, height: 2160 } })
@@ -932,6 +1090,23 @@ TestCase {
         small.takeWheel(120, 0)
         verify(small.track.entries[2].onTrack, "and came back at the start")
         compare(selection.count, 0, "browsing never opens a child")
+    }
+    // A pointer resting on the fan while the keys move the children along:
+    // the children sliding under it do not take the selection back.
+    function test_keysKeepTheirSelectionUnderAStillPointer() {
+        const view = fanView(12, true)
+        const item = view.item
+        verify(waitForRendering(item))
+        const shown = item.track.entries.filter(function(entry) { return entry.onTrack })
+        mouseMove(item, shown[1].x, shown[1].y)
+        tryCompare(item, "selectedChildId", "child-" + shown[1].index)
+        item.forceActiveFocus()
+        for (let step = 1; step <= 8; ++step) {
+            keyClick(Qt.Key_Right)
+            // A few frames: hover is checked again as the children move.
+            wait(80)
+            compare(item.selectedChildId, "child-" + (shown[1].index + step), "after " + step + " keys")
+        }
     }
     function test_fanDrawsItsPanelAndKeepsPressesOnIt() {
         const view = fanView(8, true)

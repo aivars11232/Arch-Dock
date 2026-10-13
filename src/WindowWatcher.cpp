@@ -209,6 +209,17 @@ QVariantMap WindowWatcher::nativePanelState(const QRectF &bounds) const
         : QVariantMap{{QStringLiteral("available"), false}};
 }
 
+QList<QRectF> WindowWatcher::dockWindowBounds() const
+{
+    QList<QRectF> bounds;
+    for (const QVariantMap &panel : m_nativePanels)
+    {
+        if (!panel.value(QStringLiteral("hidden")).toBool())
+            bounds.append(panel.value(QStringLiteral("bounds")).toRectF());
+    }
+    return bounds;
+}
+
 void WindowWatcher::observeNativePanel(const QString &internalId, const QJsonObject &state)
 {
     if (!state.value(QStringLiteral("dock")).toBool()

@@ -129,7 +129,7 @@ void PanelSettingsSchemaTest::folderSettingsPreserveLegacyValues()
     // ADREP-TASK-003: a free panel's folder shapes. A saved panel without
     // them opens a 90 degree fan, a stack of five and a small ring.
     QCOMPARE(legacy->content.folderFanOpening, 90);
-    QCOMPARE(legacy->content.folderStackLength, 5);
+    QCOMPARE(legacy->content.folderStackLength, 3);
     QCOMPARE(legacy->content.folderRingSize, QStringLiteral("small"));
     const auto shapes = PanelDefinition::fromLegacyMap({
         {QStringLiteral("id"), QStringLiteral("folder-shapes")},

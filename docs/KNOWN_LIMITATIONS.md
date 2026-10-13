@@ -78,11 +78,12 @@ mesh. New panels have none; Auto is a column stand on flat and 3D panels
 alike (an icon style with its own pedestal keeps it). A stand and its icon
 take more height than the icon alone: on a thin edge panel a tall stand at
 a large Size can reach past the panel's edge. The flat painter draws
-twenty to a few hundred small faces per stand; a Spin, Wobble or Float
-motion repaints them every frame. A free panel's folder opened Along the dock on a
-tilted 3D platform follows the projected ring, and the curve widens round the
-dock as far as the children need; a folder with more children than fit still
-scrolls.
+twenty to a few hundred small faces per stand; a Spin, Float or Wobble
+repaints a stand at each step of its turn (120 a turn) or wobble, once for
+all the stands drawn alike, and a Bob, Pulse or Sway moves the painted
+stand. A free panel's folder opened Along the dock on a tilted 3D platform
+follows the projected ring, and the curve widens round the dock as far as
+the children need; a folder with more children than fit still scrolls.
 
 ## Resource use
 
@@ -157,6 +158,23 @@ changes no behaviour.
 
 ## What Panel Studio offers
 
+- One panel to a screen edge: Panel Studio adds an edge panel only where no
+  panel stands yet (Arch Dock's, Plasma's or another dock's, as KWin and
+  Plasma report them). Plasma lets panels on one edge cover each other, and
+  places a centred panel without its offset, so Arch Dock does not stand two
+  panels side by side on one edge.
+- An edge panel of the "empty" type is a plain Plasma panel with no Arch Dock
+  in it; Panel Studio does not create or offer it, though records from older
+  versions keep it.
+- A removed panel's settings go once Plasma has deleted it; a session that
+  ends while Plasma's Undo is still possible leaves the decision to the next
+  start (a panel whose widget stays missing is removed then).
+- A folder's items are created when it opens: about a tenth of a second for
+  two dozen items on the owner's PC, the one pause left in an opening.
+- Stands in a glowing look are drawn as light in 2D (the look's texture
+  screened over the stand's colour), which approaches the 3D scene's emissive
+  stands but is not the same rendering.
+
 Panel Studio shows a setting only where it changes the selected panel, and a
 tab only when it has something to change (ADREP-TASK-001). The Studio truth
 matrix test checks this on edge and free panels, for ten representative
@@ -191,8 +209,17 @@ layouts and each renderer tier they offer (21 panels). What follows from it:
   collapse, only the content clips.
 - Edge panels of one content type (Launcher, Hybrid, Tasks) show one shared
   set of entries; only a free panel keeps its own.
-- A fan folder with names shows four children at once at the default 90°
-  opening (more as it opens wider); the rest arrive by scrolling.
+- Folder openings start at their smallest: a fan with names shows three
+  children at once at the default 90° opening (more as it opens wider), an
+  arc three, a new panel's stack three; the rest arrive by scrolling. A small
+  ring holds six and grows a second circle round the first for more; with
+  names on a 3D panel drawn large there may be no room on the screen for
+  two circles, and it keeps one.
+- On a 3D panel a folder opening lies on the panel's own plane and keeps
+  clear of the panel as drawn (its outline and icons, 6 pixels apart). The
+  Grid opening is still a flat popup; it does not take the tilt yet.
+- A folder opening knows its own panel only: it may open over another
+  panel standing beside it.
 - Whether the pointer at the screen edge reveals an auto-hidden edge panel
   could not be verified in private sessions: KWin's edge trigger ignores the
   harness's virtual pointer. Always keeps a panel in view.

@@ -280,6 +280,8 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     m_freeHostRetryTimer.setSingleShot(true);
     m_freeHostRetryTimer.setInterval(15000);
     connect(&m_freeHostRetryTimer, &QTimer::timeout, this, &PanelWindow::synchronizeFreePanels);
+    m_removalCheckTimer.setInterval(5000);
+    connect(&m_removalCheckTimer, &QTimer::timeout, this, &PanelWindow::checkRequestedRemovals);
     if (auto *application = qobject_cast<QGuiApplication *>(QCoreApplication::instance()))
     {
         for (QScreen *screen : QGuiApplication::screens()) watchScreen(screen);
@@ -585,11 +587,10 @@ QWindow *PanelWindow::settingsWindow()
 
 void PanelWindow::showSettings()
 {
-    QWindow *studio = settingsWindow();
-    const QString selected = studio
-        ? studio->property("selectedPanelId").toString() : QString{};
-    presentUtilityWindow(studio,
-                         selected.isEmpty() ? m_panelRegistry.activePanelId() : selected);
+    // Opened on its own, not from a panel, the Studio starts on its page for
+    // a new panel; a panel's own settings open from its "Configure Arch
+    // Dock…".
+    showNewPanelPage();
 }
 
 void PanelWindow::showPanelSettings(const QString &panelId)
@@ -600,14 +601,29 @@ void PanelWindow::showPanelSettings(const QString &panelId)
     }
 
     m_panelRegistry.setActivePanelId(panelId);
+    // The Studio edits one panel at a time, the one it was opened from; one
+    // already open moves to this panel (asking first about changes that
+    // are not applied yet).
     QWindow *studio = settingsWindow();
     if (studio)
     {
-        studio->setProperty("selectedPanelId", panelId);
-        studio->setProperty("mainTabIndex", 1);
-        studio->setProperty("subTabIndex", 0);
+        QVariant moved;
+        QMetaObject::invokeMethod(studio, "editPanel", Q_RETURN_ARG(QVariant, moved),
+                                  Q_ARG(QVariant, panelId));
     }
     presentUtilityWindow(studio, panelId);
+}
+
+void PanelWindow::showNewPanelPage()
+{
+    QWindow *studio = settingsWindow();
+    if (studio)
+    {
+        QVariant opened;
+        QMetaObject::invokeMethod(studio, "openNewPanelPage", Q_RETURN_ARG(QVariant, opened),
+                                  Q_ARG(QVariant, QStringLiteral("free")));
+    }
+    presentUtilityWindow(studio, m_panelRegistry.activePanelId());
 }
 
 bool PanelWindow::openKdeWidgetPreview(const QString &panelId, const QString &appletId)

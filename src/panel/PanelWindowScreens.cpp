@@ -510,7 +510,8 @@ void PanelWindow::recoverNativePanels(bool allowMissingHostRecovery)
     {
         if (m_presetAudition && m_presetAudition->previewDefinition(panelId)) continue;
         const QString edge = m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString();
-        if (edge == QStringLiteral("free"))
+        // A panel being removed in Plasma is left to Plasma, never rebuilt.
+        if (edge == QStringLiteral("free") || m_removalRequested.contains(panelId))
         {
             continue;
         }

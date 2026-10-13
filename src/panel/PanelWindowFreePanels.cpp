@@ -49,11 +49,15 @@ void PanelWindow::synchronizeFreePanels()
 
     ArchDock::FreePanelController controller(
         m_panelRegistry, freePanelHostOperations());
-    // For the backend's first ninety seconds a widget that is not found is
-    // checked again later rather than detached: right after a login or a
-    // shell restart Plasma may not have restored its layout yet.
+    // A free panel whose desktop widget is gone is removed entirely, the way
+    // removing it from its right-click menu is meant; a profile keeps its
+    // own copy. Before that, the widget has to be missing on checks at least
+    // half a minute apart: a removal undone in Plasma brings it back in that
+    // time. For the backend's first ninety seconds nothing is removed at
+    // all, since right after a login or a shell restart Plasma may not have
+    // restored its layout yet.
     const bool grace = m_freeHostGraceClock.isValid() && m_freeHostGraceClock.elapsed() < 90000;
-    bool deferred = false;
+    bool recheck = false;
     for (const QString &panelId : m_panelRegistry.panelIds())
     {
         if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() !=
@@ -62,38 +66,120 @@ void PanelWindow::synchronizeFreePanels()
             continue;
         }
 
-        const auto before = m_panelRegistry.freeHostAssociation(panelId);
-        const ArchDock::FreePanelLifecycleResult result = controller.synchronize(panelId, !grace);
+        const auto missing = m_missingFreeHosts.constFind(panelId);
+        const bool confirmed = !grace && missing != m_missingFreeHosts.constEnd() &&
+            missing->elapsed() >= 30000;
+        const ArchDock::FreePanelLifecycleResult result =
+            controller.synchronize(panelId, confirmed);
         if (result.success && result.outcome == ArchDock::FreePanelLifecycleOutcome::Deferred)
         {
-            if (!deferred)
+            if (missing == m_missingFreeHosts.constEnd())
             {
+                QElapsedTimer since;
+                since.start();
+                m_missingFreeHosts.insert(panelId, since);
                 qInfo() << "The desktop widget of free panel" << panelId
-                        << "is not in Plasma's layout yet; checking again in 15 s before deciding.";
+                        << "is not in Plasma's layout; checking again before removing the panel.";
             }
-            deferred = true;
+            recheck = true;
             continue;
         }
+        m_missingFreeHosts.remove(panelId);
         if (!result.success)
         {
             qWarning() << "Could not synchronize the free-panel Plasma host for"
                        << panelId << result.errorCode;
         }
-        // A widget that is gone used to be forgotten in silence; the owner
-        // could only see settings of a panel that was nowhere.
-        else if (result.outcome == ArchDock::FreePanelLifecycleOutcome::Detached &&
-                 before.has_value() &&
-                 before->state != PanelRegistry::FreeHostState::Detached)
+        // Detached: gone now, or left behind by an older version that kept
+        // such panels.
+        else if (result.outcome == ArchDock::FreePanelLifecycleOutcome::Detached)
         {
-            qWarning() << "The desktop widget of free panel" << panelId
-                       << "was not found in Plasma; the panel is now detached. Panel Studio"
-                       << "> Panels > General offers \"Put back on the desktop\".";
+            if (m_panelRegistry.removeDetachedFreePanel(panelId))
+                qInfo() << "Free panel" << panelId << "is removed: its desktop widget is gone.";
+            else
+                qWarning() << "Could not remove free panel" << panelId
+                           << "whose desktop widget is gone.";
         }
     }
-    if (deferred && !m_freeHostRetryTimer.isActive())
+    if (recheck && !m_freeHostRetryTimer.isActive())
     {
         m_freeHostRetryTimer.start();
     }
+}
+
+void PanelWindow::panelRemovalRequested(const QString &panelId, bool removing)
+{
+    if (!m_panelRegistry.panelIds().contains(panelId))
+    {
+        return;
+    }
+    if (!removing)
+    {
+        m_removalRequested.remove(panelId);
+        return;
+    }
+    m_removalRequested.insert(panelId);
+    if (!m_removalCheckTimer.isActive())
+    {
+        m_removalCheckTimer.start();
+    }
+}
+
+void PanelWindow::checkRequestedRemovals()
+{
+    if (profileBusy()) return;
+
+    ArchDock::FreePanelController controller(
+        m_panelRegistry, freePanelHostOperations());
+    const QStringList requested(m_removalRequested.cbegin(), m_removalRequested.cend());
+    for (const QString &panelId : requested)
+    {
+        if (!m_panelRegistry.panelIds().contains(panelId))
+        {
+            m_removalRequested.remove(panelId);
+            continue;
+        }
+        // Gone means deleted by Plasma: while a removal can still be undone,
+        // the widget or the Plasma panel is still there.
+        if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() ==
+            QStringLiteral("free"))
+        {
+            const ArchDock::FreePanelLifecycleResult result = controller.synchronize(panelId, true);
+            if (!result.success || result.outcome != ArchDock::FreePanelLifecycleOutcome::Detached)
+            {
+                continue;
+            }
+            m_removalRequested.remove(panelId);
+            m_missingFreeHosts.remove(panelId);
+            if (m_panelRegistry.removeDetachedFreePanel(panelId))
+                qInfo() << "Free panel" << panelId << "is removed with its desktop widget.";
+            else
+                qWarning() << "Could not remove free panel" << panelId << "after its widget was removed.";
+            continue;
+        }
+        const std::optional<bool> exists = nativePanelExistence(nativePanelId(panelId));
+        if (!exists.has_value() || *exists)
+        {
+            continue;
+        }
+        m_removalRequested.remove(panelId);
+        if (m_panelRegistry.isBuiltIn(panelId))
+        {
+            // Bottom, Top and Side stay in the panel list, hidden.
+            if (!m_panelRegistry.updatePanelChecked(panelId, {{QStringLiteral("visible"), false}}))
+                qWarning() << "Could not hide edge panel" << panelId << "after its Plasma panel was removed.";
+        }
+        else
+        {
+            m_panelRegistry.removePanel(panelId);
+            qInfo() << "Edge panel" << panelId << "is removed with its Plasma panel.";
+        }
+    }
+    if (m_removalRequested.isEmpty())
+    {
+        m_removalCheckTimer.stop();
+    }
+    updateDesktopSuite();
 }
 
 QVariantMap PanelWindow::createFreePanel()
@@ -167,44 +253,6 @@ QVariantMap PanelWindow::adoptFreePanelApplet(
         qWarning() << "Could not adopt the requesting free-panel desktop applet:"
                    << result.errorCode << result.failureStage
                    << result.rollbackErrorCode;
-    }
-    return result.toVariantMap();
-}
-
-QVariantMap PanelWindow::rehostFreePanel(const QString &panelId)
-{
-    if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
-
-    // The panel's saved screen where it still exists, else the dock's screen.
-    const QList<QScreen *> screens = QGuiApplication::screens();
-    const int savedScreen = m_panelRegistry.panelValue(panelId, QStringLiteral("screen")).toInt();
-    const int screenIndex = screens.isEmpty()
-        ? -1
-        : qBound(0, savedScreen >= 0 && savedScreen < screens.size() ? savedScreen : m_settings.monitorIndex(),
-                 screens.size() - 1);
-    ArchDock::FreePanelController controller(
-        m_panelRegistry, freePanelHostOperations());
-    const ArchDock::FreePanelCreationResult result = controller.rehost(panelId, screenIndex);
-    if (!result.success)
-    {
-        qWarning() << "Could not put the free panel back on the desktop:" << panelId
-                   << result.errorCode << result.failureStage << result.rollbackErrorCode;
-        return result.toVariantMap();
-    }
-    // Back where it stood: the record keeps the position and size the owner
-    // had. A refused move leaves the widget where Plasma placed it.
-    if (const auto definition = runtimePanelDefinition(panelId))
-    {
-        const QVariantMap legacy = definition->toLegacyMap();
-        const QVariantMap geometry{
-            {QStringLiteral("height"), legacy.value(QStringLiteral("height"), 420).toDouble()},
-            {QStringLiteral("width"), legacy.value(QStringLiteral("width"), 420).toDouble()},
-            {QStringLiteral("x"), legacy.value(QStringLiteral("x"), 0).toDouble()},
-            {QStringLiteral("y"), legacy.value(QStringLiteral("y"), 0).toDouble()}};
-        QString geometryError;
-        if (!setPresetFreeHostGeometry(*definition, geometry, &geometryError))
-            qWarning() << "The free panel is back on the desktop but not at its saved position:"
-                       << panelId << geometryError;
     }
     return result.toVariantMap();
 }
