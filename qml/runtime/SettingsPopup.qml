@@ -591,6 +591,9 @@ Window {
             editorSession = EditorModel.setGlobalValue(editorSession, field.key, value);
         } else {
             editorSession = EditorModel.setPanelValue(editorSession, field.key, value);
+            const pair = lookPairs[field.key];
+            if (pair !== undefined)
+                editorSession = EditorModel.setPanelValue(editorSession, pair.key, pair.value(value));
             if (field.key === "presentationMode") {
                 if (value === "collapsed" && panelValue("collapseMechanism", "open") === "open") {
                     const preferred = previewMode === "vertical" ? "collapse-vertical" : "collapse-horizontal";
@@ -708,6 +711,23 @@ Window {
         };
     }
 
+    // One Look for each surface (the owner, 2026-10-13: material and texture
+    // "are exactly the same thing ... it's enough with just one of them ...
+    // that includes pedestals and other stuff too"). The first key is shown
+    // as Look; setting it sets its pair, which is not shown.
+    readonly property var lookPairs: ({
+        scene3DMaterial: { key: "scene3DTexture", value: function(look) { return look; } },
+        pedestalMaterial: { key: "pedestalTexture", value: function(look) { return "material"; } },
+        folderPedestalMaterial: { key: "folderPedestalTexture", value: function(look) { return "material"; } },
+        iconTileTexture: { key: "iconTileMaterial", value: function(look) { return look === "none" ? "minimal" : look; } }
+    })
+    readonly property var lookPairedKeys: ["scene3DTexture", "pedestalTexture", "folderPedestalTexture", "iconTileMaterial"]
+    function lookLabel(value) {
+        const names = { theme: qsTr("Theme's own look"), panel: qsTr("The panel's look"), none: qsTr("None"),
+                        "floating-glass": qsTr("Floating glass") };
+        return names[value] !== undefined ? names[value] : titleCase(value);
+    }
+
     function choicesToOptions(choices) {
         const result = [];
         const source = choices || [];
@@ -731,6 +751,12 @@ Window {
             options: descriptor.options && descriptor.options.length > 0 ? descriptor.options : choicesToOptions(descriptor.choices),
             description: descriptor.scope === "global" ? qsTr("Applies to all Arch Dock panels") : ""
         };
+        if (lookPairs[descriptor.key] !== undefined) {
+            row.label = qsTr("Look");
+            row.options = (row.options || []).map(function(option) {
+                return { label: lookLabel(option.value), value: option.value };
+            });
+        }
         if (descriptor.minimumValue !== undefined && descriptor.minimumValue !== null)
             row.from = Number(descriptor.minimumValue);
         if (descriptor.maximumValue !== undefined && descriptor.maximumValue !== null)
@@ -739,6 +765,10 @@ Window {
             row.step = Number(descriptor.step);
         if (descriptor.decimals !== undefined)
             row.decimals = Number(descriptor.decimals);
+        // A wide range (a scale from 0.05 to 20) is slid in equal steps of
+        // its ratio: each doubling takes the same distance.
+        if (descriptor.logarithmic === true)
+            row.logarithmic = true;
         if (descriptor.suffix !== undefined)
             row.suffix = descriptor.suffix;
         if (descriptor.specialValueText !== undefined)
@@ -757,6 +787,8 @@ Window {
                 // A setting that draws nothing in the panel's present state
                 // is kept by the backend but not shown (ADREP-TASK-001).
                 if (source[index].inactive === true)
+                    continue;
+                if (lookPairedKeys.includes(String(source[index].key)))
                     continue;
                 if (String(source[index].key).indexOf("scene3D") === 0 && !scene3DQualityVisible)
                     continue;
@@ -955,8 +987,38 @@ Window {
         return rows;
     }
 
+    // A 3D platform's look - its material and texture (neon, lightning,
+    // aurora...), colour, and the look's own background, colours and
+    // motion - on Appearance with the rest of the panel's look (the owner,
+    // 2026-10-13, on a 3D panel's Appearance page: "no neons settings, no
+    // lightning, nothing is there"). The 3D page keeps where and how the
+    // platform stands.
+    function scene3DLookRows() {
+        if (!scene3DQualityVisible)
+            return [];
+        const fields = fieldsForSection("panels-3d");
+        const picked = ["scene3DMaterial", "scene3DColor", "panelLookBackground",
+                        "panelLookColour", "lookMotionSpeed"].map(function(key) {
+            return fields.find(function(row) { return row.key === key; });
+        }).filter(function(row) { return row !== undefined; });
+        if (picked.length === 0)
+            return [];
+        return [section(qsTr("Look"), qsTr("Colour tints the texture. Theme uses this look's own material and artwork."))]
+            .concat(picked, [{kind: "actions", label: qsTr("Surface"), actions: [{label: qsTr("Reset material"),
+                icon: "edit-reset", action: "reset-3d-material", available: true}]}]);
+    }
+
     function panelAppearanceRows() {
         const rows = schemaSectionRows("panels-appearance", qsTr("Appearance"), qsTr("Surface styling for the selected panel."));
+        // The look first, then how much of it shows and its own glow, then
+        // the light round it.
+        const look = scene3DLookRows();
+        if (look.length > 0) {
+            const heading = rows.shift();
+            const reset = look.pop();
+            rows.unshift.apply(rows, [heading].concat(look));
+            rows.push(reset);
+        }
         rows.push.apply(rows, glowRows("panels-glow",
             qsTr("Light round the panel's shape: how strong, how far it reaches out of the panel, and its colour (the look's own when empty).")));
         if (subtabAvailable(1, 10))
@@ -1020,10 +1082,12 @@ Window {
                 return fields.find(function(row) { return row.key === key; });
             }).filter(function(row) { return row !== undefined; });
         };
-        rows.push(section(qsTr("Orientation and position"),
-            qsTr("Pitch, yaw and roll turn the platform. Scene position moves it inside the panel's own area; where the panel sits on the desktop is set on the General page.")));
-        rows.push.apply(rows, pick(["scene3DCameraPitch", "scene3DCameraYaw", "scene3DRoll",
-            "scene3DPositionX", "scene3DPositionY", "scene3DPositionZ", "scene3DScale"]));
+        // Moving and scaling are done by hand, on the desktop (the owner,
+        // 2026-10-13: "those controls I don't really need, since I can do it
+        // physically on my desktop"); the exact turn stays here.
+        rows.push(section(qsTr("Orientation"),
+            qsTr("Pitch, yaw and roll turn the platform. Edit on desktop moves, turns and scales it by hand.")));
+        rows.push.apply(rows, pick(["scene3DCameraPitch", "scene3DCameraYaw", "scene3DRoll"]));
         const sceneEditing = auditionActive && auditionKind === "scene3d";
         rows.push({ kind: "actions", label: qsTr("Transform"), actions: [{
             label: qsTr("Reset 3D transform"), icon: "edit-reset", action: "reset-3d-transform",
@@ -1044,11 +1108,6 @@ Window {
         rows.push.apply(rows, pick(["scene3DFold"]));
         rows.push(section(qsTr("View and surface"), qsTr("Icon spacing is set on Icons > Appearance.")));
         rows.push.apply(rows, pick(["scene3DFieldOfView", "scene3DThickness", "scene3DQuality"]));
-        rows.push(section(qsTr("Material"), qsTr("Colour tints the texture. Theme uses this look's own material and artwork.")));
-        rows.push.apply(rows, pick(["scene3DColor", "scene3DMaterial", "scene3DTexture", "panelLookBackground",
-            "panelLookColour", "lookMotionSpeed"]));
-        rows.push({kind: "actions", label: qsTr("Surface"), actions: [{label: qsTr("Reset material"),
-            icon: "edit-reset", action: "reset-3d-material", available: true}]});
         rows.push(section(qsTr("Lighting"), ""));
         rows.push.apply(rows, pick(["scene3DKeyLight", "scene3DFillLight"]));
         rows.push(section(qsTr("Motion"), ""));
@@ -1060,7 +1119,8 @@ Window {
     // viewing angle.
     function reset3DTransform() {
         for (const key of ["scene3DCameraPitch", "scene3DCameraYaw", "scene3DRoll",
-                           "scene3DPositionX", "scene3DPositionY", "scene3DPositionZ", "scene3DScale"]) {
+                           "scene3DPositionX", "scene3DPositionY", "scene3DPositionZ", "scene3DScale",
+                           "scene3DScaleX", "scene3DScaleY"]) {
             const descriptor = fieldDescriptor(key, "panel");
             if (descriptor)
                 editorSession = EditorModel.setPanelValue(editorSession, key, descriptor.defaultValue);
@@ -1925,10 +1985,13 @@ Window {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 8
 
+            // Arch Dock's own logo (the owner, 2026-10-13: "there should be
+            // Arch Dock logo"); the generic icon only where it is not installed.
             Kirigami.Icon {
                 width: 18
                 height: 18
-                source: "preferences-desktop-theme-global"
+                source: "org.archdock.ArchDock"
+                fallback: "preferences-desktop-theme-global"
             }
 
             Label {

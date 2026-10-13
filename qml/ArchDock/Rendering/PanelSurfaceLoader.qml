@@ -215,7 +215,7 @@ Item {
                     merged.generated = Object.assign({}, scene.generated,
                         { layout: root.layout, polygonSides: root.polygonSides })
                 for (const key of ["cameraYaw", "thickness", "iconElevation", "roll", "positionX",
-                        "positionY", "positionZ", "scale", "fieldOfView", "keyLightBrightness",
+                        "positionY", "positionZ", "scale", "scaleX", "scaleY", "fieldOfView", "keyLightBrightness",
                         "fillLightBrightness", "band", "bend", "fold",
                         "pedestalSize", "pedestalLift", "pedestalAnimationSpeed", "pedestalThickness",
                         "pedestalOpacity", "pedestalGlow", "pedestalGlowReach", "pedestalViewAngle",
@@ -242,7 +242,8 @@ Item {
                                             ["panelLookColour", "panelLookColour"],
                                             ["pedestalLookColour", "pedestalLookColour"]])
                     if (typeof parameters[key] === "string") merged[target] = parameters[key]
-                if (isFinite(root.cameraPitch)) merged.cameraPitch = Math.max(-60, Math.min(60, root.cameraPitch))
+                // All the way round (the owner, 2026-10-13: "freely in 360 every direction").
+                if (isFinite(root.cameraPitch)) merged.cameraPitch = Math.max(-180, Math.min(180, root.cameraPitch))
                 return merged
             }),
             sceneResources: Qt.binding(function() {

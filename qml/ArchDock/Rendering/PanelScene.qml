@@ -1470,7 +1470,7 @@ Item {
                     ["scene3DThickness", "thickness"], ["scene3DIconElevation", "iconElevation"],
                     ["scene3DRoll", "roll"], ["scene3DPositionX", "positionX"],
                     ["scene3DPositionY", "positionY"], ["scene3DPositionZ", "positionZ"],
-                    ["scene3DScale", "scale"], ["scene3DFieldOfView", "fieldOfView"],
+                    ["scene3DScale", "scale"], ["scene3DScaleX", "scaleX"], ["scene3DScaleY", "scaleY"], ["scene3DFieldOfView", "fieldOfView"],
                     ["scene3DKeyLight", "keyLightBrightness"], ["scene3DFillLight", "fillLightBrightness"],
                     ["scene3DTransitions", "transitions"], ["scene3DFloat", "float"],
                     ["scene3DBand", "band"], ["scene3DBend", "bend"],

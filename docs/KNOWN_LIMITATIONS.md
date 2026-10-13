@@ -58,6 +58,13 @@ geometry and shaders. A generated platform
 wraps its texture round its band; the two bundled 3D themes keep their vector
 surfaces, since theme packages carry no raster files.
 
+A 3D panel turns all the way round and scales from 0.05 to 20 times, all
+ways or sideways and up and down on its own; its view stops at the screen's
+size, so a panel scaled past the screen is drawn up to the screen's edge.
+Turned past its edge it shows its underside, drawn in the platform's
+underside colour, with the icons that stand on top behind it. Moving and
+scaling are set by hand (Edit on desktop); Panel Studio keeps the exact turn.
+
 Plasma keeps a free panel's widget out of a Plasma panel's own area and on
 the screen, so a free panel put on the desktop from a profile, a preset or
 "Put back on the desktop" may settle a little away from its saved position;

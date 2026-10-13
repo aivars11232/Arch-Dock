@@ -59,9 +59,20 @@ TestCase {
         turned = GizmoMath.orbit(25, 10, Qt.point(13, 9), true)
         compare(turned.yaw % 15, 0)
         compare(turned.pitch % 15, 0)
-        // Pitch stays within its range; yaw wraps the short way round.
-        compare(GizmoMath.orbit(25, 0, Qt.point(0, -400), false).pitch, 60)
+        // Both turn all the way round (the owner, 2026-10-13: "freely in
+        // 360 every direction"): past the top the tilt goes on over, and both
+        // wrap the short way round.
+        fuzzyCompare(GizmoMath.orbit(25, 0, Qt.point(0, -400), false).pitch, 125, 1e-9)
+        fuzzyCompare(GizmoMath.orbit(170, 0, Qt.point(0, -80), false).pitch, -170, 1e-9)
         fuzzyCompare(GizmoMath.orbit(25, 170, Qt.point(80, 0), false).yaw, -170, 1e-9)
+    }
+
+    // The cube in the middle scales all ways: up or right enlarges.
+    function test_theMiddleCubeScalesAllWays() {
+        fuzzyCompare(GizmoMath.uniformScaleRatio(Qt.point(0, -160)), 2, 1e-9)
+        fuzzyCompare(GizmoMath.uniformScaleRatio(Qt.point(160, 0)), 2, 1e-9)
+        fuzzyCompare(GizmoMath.uniformScaleRatio(Qt.point(0, 160)), 0.5, 1e-9)
+        compare(GizmoMath.uniformScaleRatio(Qt.point(0, 0)), 1)
     }
 
     // ADFIX AUD-04: an arrow seen end-on is not a silent handle.

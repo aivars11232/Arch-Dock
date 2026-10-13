@@ -7,6 +7,34 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- A 3D panel turns freely all the way round (2026-10-13, the owner: "freely
+  in 360 every direction"): Pitch goes past its edge and over, like Yaw and
+  Roll, in Panel Studio and on the desktop's handles; tilted 90 degrees it
+  lies level whatever its turn (the panel is tilted, then turned about the
+  view's up: "I still should be able to tilt 3D panel fully horizontal").
+  A key light from behind lights its underside.
+- Scaling has no practical limit and works each way (the owner: "for
+  scaling there shouldn't be a limit", "scale it also sideways or top or
+  down"): Scale from 0.05 to 20 times, and Scale sideways and Scale up and
+  down on their own, which stretch the platform and where its icons stand,
+  never the icons; Platform thickness, the third way, as far. On the
+  desktop the red and green scale arms stretch their own way, the blue one
+  the thickness, and the white cube in the middle scales all ways; wide
+  sliders move through the ratio, 1 in the middle.
+- Moving and scaling are done by hand (Edit on desktop); the 3D page keeps
+  the exact turn (Pitch, Yaw, Roll) and Reset 3D transform (the owner:
+  "those controls I don't really need, since I can do it physically on my
+  desktop").
+- One Look for each surface (the owner: material and texture "are exactly
+  the same thing ... it's enough with just one of them ... pedestals and
+  other stuff too"): the 3D platform, the stands, the folder stands and the
+  icon tiles each have one Look that sets both, with names instead of raw
+  words. A 3D panel's look - Look, Platform colour, and the look's own
+  background, colours and motion - is on Appearance (the owner: "no neons
+  settings, no lightning, nothing is there"); the 3D page keeps where and
+  how the platform stands.
+- Panel Studio's title shows the Arch Dock logo (the owner: "there should
+  be Arch Dock logo").
 - A free panel has no box of its own (2026-10-13, the owner: "the only
   edge is edge of the screen"): a 3D panel scaled, tilted or moved, an
   icon magnified at its edge, the editing handles, are drawn as far past

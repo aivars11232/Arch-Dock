@@ -38,6 +38,12 @@ function scaleRatio(centre, start, current) {
     return Math.hypot(current.x - centre.x, current.y - centre.y) / from
 }
 
+// The cube in the middle scales all ways: dragging up or right enlarges,
+// down or left shrinks, doubling or halving every 160 pixels.
+function uniformScaleRatio(delta) {
+    return Math.pow(2, (delta.x - delta.y) / 160)
+}
+
 function snapped(value, step) {
     return step > 0 ? Math.round(value / step) * step : value
 }
@@ -61,7 +67,9 @@ function orbit(startPitch, startYaw, delta, snap) {
         pitch = snapped(pitch, 15)
         yaw = snapped(yaw, 15)
     }
-    return { pitch: clamp(pitch, -60, 60), yaw: ((yaw + 180) % 360 + 360) % 360 - 180 }
+    // All the way round both ways (the owner, 2026-10-13: "freely in 360
+    // every direction").
+    return { pitch: ((pitch + 180) % 360 + 360) % 360 - 180, yaw: ((yaw + 180) % 360 + 360) % 360 - 180 }
 }
 
 // A move arrow shorter than this on screen points (nearly) at the viewer: it

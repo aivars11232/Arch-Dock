@@ -2012,7 +2012,8 @@ private slots:
         QVERIFY2(qAbs(qAbs(roll) - 30) < 6, qPrintable(QString::number(roll)));
         QTest::qWait(150);
 
-        // Scale: dragging a cube handle outward enlarges the platform.
+        // Scale: dragging the red arm's cube outward stretches the platform
+        // sideways only (the owner: "scale it also sideways or top or down").
         renderer->setProperty("gizmoMode", QStringLiteral("scale"));
         QTest::qWait(150);
         const QPoint cube = screenPoint(QStringLiteral("gizmo-scale-x-tip"));
@@ -2020,7 +2021,9 @@ private slots:
         const QPointF outward = QPointF(cube - scaleCentre) / std::max(1.0, QLineF(scaleCentre, cube).length());
         drag(cube, cube + (outward * 20).toPoint());
         QTRY_COMPARE(edits.count(), 4);
-        QVERIFY(editedValues(3).value("scene3DScale").toDouble() > 0.9);
+        QVERIFY2(editedValues(3).value("scene3DScaleX").toDouble() > 1.0, qPrintable(QString::number(
+            editedValues(3).value("scene3DScaleX").toDouble())));
+        QVERIFY(!editedValues(3).contains("scene3DScale"));
         QTest::qWait(150);
 
         // A right button cancels the drag in progress: nothing is reported
@@ -2459,6 +2462,204 @@ private slots:
         QTest::qWait(700);
         QCOMPARE(renderer->property("lightningShift").toDouble(), stillShift);
         QCOMPARE(renderer->property("lightningFlash").toDouble(), 0.0);
+        QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
+    }
+
+    // Phase 2 (the owner, 2026-10-13): "freely in 360 every direction", "for
+    // scaling there shouldn't be a limit", "scale it also sideways or top or
+    // down". The panel tilts all the way over and stays drawn and placed;
+    // sideways and up and down stretch the platform and where its icons
+    // stand, never the icons; a large scale draws past the box.
+    void panelTurnsAllTheWayAndStretchesEachWay()
+    {
+        if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+            return; // Needs the private RHI session, like the scene gates above.
+        const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
+        QVariantMap theme{
+            {QStringLiteral("format"), QStringLiteral("org.archdock.theme")},
+            {QStringLiteral("version"), 2}, {QStringLiteral("valid"), true},
+            {QStringLiteral("id"), QStringLiteral("procedural-look")},
+            {QStringLiteral("name"), QStringLiteral("Procedural look")},
+            {QStringLiteral("capabilities"), QVariantMap{
+                {QStringLiteral("rendererTiers"), QVariantList{QStringLiteral("true3d"), QStringLiteral("procedural2d")}},
+                {QStringLiteral("preferredRendererTier"), QStringLiteral("procedural2d")},
+                {QStringLiteral("fallbackRendererTiers"), QVariantList{QStringLiteral("procedural2d")}}}}};
+        theme.insert(QStringLiteral("scene3D"), QVariantMap{
+            {QStringLiteral("generic"), true}, {QStringLiteral("generated"), QVariantMap{}},
+            {QStringLiteral("fieldOfView"), 40}, {QStringLiteral("cameraPitch"), 25},
+            {QStringLiteral("cameraYaw"), 10}, {QStringLiteral("keyLightBrightness"), 1.2},
+            {QStringLiteral("fillLightBrightness"), 0.45},
+            {QStringLiteral("defaultQuality"), QStringLiteral("high")},
+            {QStringLiteral("transitions"), false}, {QStringLiteral("parts"), QVariantList{}}});
+        theme.insert(QStringLiteral("scene3DResources"), QVariantMap{
+            {QStringLiteral("material"), QVariantMap{
+                {QStringLiteral("format"), QStringLiteral("org.archdock.material")},
+                {QStringLiteral("version"), 1}, {QStringLiteral("baseColor"), QStringLiteral("#406080")},
+                {QStringLiteral("emissiveColor"), QStringLiteral("#000000")},
+                {QStringLiteral("emissiveStrength"), 0.0}, {QStringLiteral("metalness"), 0.3},
+                {QStringLiteral("roughness"), 0.45}}},
+            {QStringLiteral("parts"), QVariantList{}}, {QStringLiteral("indexBudget"), 262144}});
+        QQmlEngine engine;
+        QStringList unexpectedWarnings;
+        connect(&engine, &QQmlEngine::warnings, &engine, [&](const QList<QQmlError> &warnings) {
+            for (const auto &warning : warnings)
+                unexpectedWarnings.append(warning.toString());
+        });
+        engine.addImportPath(importRoot());
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import ArchDock.Rendering 1.0
+            PanelScene {
+                required property string glyphFixture
+                property real pitch: 25
+                property real roll: 0
+                property real scaleAll: 1
+                property real scaleX: 1
+                property real scaleY: 1
+                panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
+                                   scene3DQuality: "low", iconSize: 40, spacing: 8, layoutPadding: 10,
+                                   scene3DTransitions: false, scene3DMaterial: "neon", scene3DTexture: "neon",
+                                   scene3DCameraPitch: pitch, scene3DRoll: roll, scene3DScale: scaleAll,
+                                   scene3DScaleX: scaleX, scene3DScaleY: scaleY})
+                animationProfiles: ({reducedMotion: true})
+                entryDelegateContext: ({hostKind: "free"})
+                hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [
+                    {id: "open", available: true}]})
+                orderedEntries: [0, 1, 2, 3, 4, 5].map(function(index) {
+                    return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphFixture}
+                })
+            }
+        )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/FreeTransformConsumer.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QQuickWindow window;
+        window.setColor(QColor(30, 34, 40));
+        std::unique_ptr<QObject> object(component.createWithInitialProperties({
+            {QStringLiteral("themeDefinition"), theme},
+            {QStringLiteral("glyphFixture"), QUrl::fromLocalFile(glyphFixture).toString()}}));
+        QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+        auto *scene = qobject_cast<QQuickItem *>(object.get());
+        QVERIFY(scene);
+        scene->setParentItem(window.contentItem());
+        scene->setPosition(QPointF(scene->width() * 1.5, scene->height() * 1.5));
+        window.resize(qCeil(scene->width() * 4), qCeil(scene->height() * 4));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(),
+                                 QStringLiteral("true3d"), 5000);
+        auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+        QVERIFY(renderer);
+        QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 6);
+        const QString frames = qEnvironmentVariable("ARCHDOCK_TEST_FRAME_DIR");
+        const auto settle = [&](const QString &name) {
+            QTest::qWait(500);
+            const QImage frame = window.grabWindow();
+            if (!frames.isEmpty())
+                frame.save(frames + QLatin1Char('/') + name + QStringLiteral(".png"));
+            return frame;
+        };
+        const auto entries = [&]() {
+            QList<QRectF> result;
+            for (const QVariant &rect : plainValue(renderer->property("projectedEntryGeometry")).toList()) {
+                const QVariantMap map = rect.toMap();
+                result.append(QRectF(map.value("x").toDouble(), map.value("y").toDouble(),
+                                     map.value("width").toDouble(), map.value("height").toDouble()));
+            }
+            return result;
+        };
+        const auto spread = [](const QList<QRectF> &rects) {
+            double left = 1e9, right = -1e9, top = 1e9, bottom = -1e9;
+            for (const QRectF &rect : rects) {
+                left = qMin(left, rect.center().x()); right = qMax(right, rect.center().x());
+                top = qMin(top, rect.center().y()); bottom = qMax(bottom, rect.center().y());
+            }
+            return QSizeF(right - left, bottom - top);
+        };
+        const auto drawnPixels = [&](const QImage &frame) {
+            int count = 0;
+            for (int y = 0; y < frame.height(); y += 2)
+                for (int x = 0; x < frame.width(); x += 2) {
+                    const QRgb pixel = frame.pixel(x, y);
+                    if (qAbs(qRed(pixel) - 30) + qAbs(qGreen(pixel) - 34) + qAbs(qBlue(pixel) - 40) > 24)
+                        ++count;
+                }
+            return count;
+        };
+        settle(QStringLiteral("turn-25"));
+        const QList<QRectF> resting = entries();
+        const QSizeF restingSpread = spread(resting);
+
+        // All the way over: tilted on edge, past it and upside down, the
+        // panel is still drawn and its icons still placed on the screen.
+        for (const double pitch : {90.0, 150.0, 180.0, -120.0}) {
+            scene->setProperty("pitch", pitch);
+            QTRY_COMPARE(renderer->property("targetPitch").toDouble(), pitch);
+            const QImage frame = settle(QStringLiteral("turn-%1").arg(pitch));
+            QVERIFY2(drawnPixels(frame) > 300, qPrintable(QStringLiteral("pitch %1: %2 drawn pixels")
+                                                            .arg(pitch).arg(drawnPixels(frame))));
+            for (const QRectF &rect : entries())
+                QVERIFY2(std::isfinite(rect.center().x()) && std::isfinite(rect.center().y()),
+                         qPrintable(QStringLiteral("pitch %1: an entry has no place").arg(pitch)));
+            // Tilted fully horizontal it lies level, whatever its turn (the
+            // owner: "I still should be able to tilt 3D panel fully
+            // horizontal"): the icons stand on one level line.
+            // The two ends of the dock stand at one height (nearer icons
+            // stand higher in perspective, the ends are equally near).
+            if (pitch == 90.0) {
+                const QList<QRectF> edge = entries();
+                QPointF leftmost(1e9, 0), rightmost(-1e9, 0);
+                for (const QRectF &rect : edge) {
+                    if (rect.center().x() < leftmost.x()) leftmost = rect.center();
+                    if (rect.center().x() > rightmost.x()) rightmost = rect.center();
+                }
+                const double across = rightmost.x() - leftmost.x();
+                qInfo("tilted 90: ends %.0f apart, %.1f apart up and down", across, rightmost.y() - leftmost.y());
+                QVERIFY2(qAbs(rightmost.y() - leftmost.y()) < across * 0.02,
+                         qPrintable(QStringLiteral("tilted 90 the ends differ by %1 over %2 across")
+                                        .arg(rightmost.y() - leftmost.y()).arg(across)));
+            }
+        }
+        scene->setProperty("pitch", 25.0);
+        QTRY_COMPARE(renderer->property("targetPitch").toDouble(), 25.0);
+        settle(QStringLiteral("turn-back"));
+
+        // Sideways: twice as wide, as tall as before, every icon its own size.
+        scene->setProperty("scaleX", 2.0);
+        QTRY_COMPARE(renderer->property("shownScaleX").toDouble(), 2.0);
+        settle(QStringLiteral("stretch-sideways-2"));
+        const QList<QRectF> wide = entries();
+        const QSizeF wideSpread = spread(wide);
+        qInfo("spread %.0fx%.0f, sideways x2 %.0fx%.0f", restingSpread.width(), restingSpread.height(),
+              wideSpread.width(), wideSpread.height());
+        QVERIFY2(wideSpread.width() > restingSpread.width() * 1.7,
+                 qPrintable(QStringLiteral("%1 wide, %2 before").arg(wideSpread.width()).arg(restingSpread.width())));
+        QVERIFY2(qAbs(wideSpread.height() - restingSpread.height()) < restingSpread.height() * 0.2,
+                 qPrintable(QStringLiteral("%1 tall, %2 before").arg(wideSpread.height()).arg(restingSpread.height())));
+        for (int index = 0; index < resting.size(); ++index)
+            QVERIFY2(qAbs(wide[index].width() - resting[index].width()) < resting[index].width() * 0.25,
+                     qPrintable(QStringLiteral("icon %1 %2 wide, %3 before").arg(index)
+                                    .arg(wide[index].width()).arg(resting[index].width())));
+        // Up and down: half as tall.
+        scene->setProperty("scaleX", 1.0);
+        scene->setProperty("scaleY", 0.5);
+        QTRY_COMPARE(renderer->property("shownScaleY").toDouble(), 0.5);
+        settle(QStringLiteral("stretch-up-down-0.5"));
+        const QSizeF flat = spread(entries());
+        qInfo("up and down x0.5 %.0fx%.0f", flat.width(), flat.height());
+        QVERIFY2(flat.height() < restingSpread.height() * 0.65,
+                 qPrintable(QStringLiteral("%1 tall, %2 before").arg(flat.height()).arg(restingSpread.height())));
+        scene->setProperty("scaleY", 1.0);
+
+        // All ways, three times: past the box, the view grown round it.
+        scene->setProperty("scaleAll", 3.0);
+        QTRY_COMPARE(renderer->property("shownScale").toDouble(), 3.0);
+        settle(QStringLiteral("scale-3"));
+        const QSizeF large = spread(entries());
+        qInfo("all ways x3 %.0fx%.0f, margin %.0f", large.width(), large.height(),
+              renderer->property("overflowX").toDouble());
+        QVERIFY2(large.width() > restingSpread.width() * 2.2,
+                 qPrintable(QStringLiteral("%1 wide, %2 before").arg(large.width()).arg(restingSpread.width())));
+        QVERIFY(renderer->property("overflowX").toDouble() > 0);
         QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
     }
 

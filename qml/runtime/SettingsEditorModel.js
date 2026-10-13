@@ -381,7 +381,8 @@ function rendererThemeCandidate(session, theme) {
         "rendererTier", "layoutRadius", "bakedTilt", "scene3DCameraPitch",
         "scene3DCameraYaw", "scene3DThickness", "scene3DIconElevation",
         "scene3DRoll", "scene3DPositionX", "scene3DPositionY", "scene3DPositionZ",
-        "scene3DScale", "scene3DFieldOfView", "scene3DKeyLight", "scene3DFillLight",
+        "scene3DScale", "scene3DScaleX", "scene3DScaleY", "scene3DFieldOfView", "scene3DKeyLight",
+        "scene3DFillLight",
         "scene3DTransitions", "scene3DFloat", "scene3DBand", "scene3DBend", "scene3DFold",
         "scene3DColor", "scene3DMaterial", "scene3DTexture", "sparkleIntensity"
     ];

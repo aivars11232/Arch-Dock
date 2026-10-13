@@ -213,9 +213,9 @@ void PanelSettingsSchemaTest::tiltScalarsPreserveParameterMaps()
         {"surface3D", QVariantMap{{"futureData", 7}}},
         {"surface2_5D", QVariantMap{{"futureData", 9}}}});
     QVERIFY(definition);
-    QCOMPARE(definition->surface.parameters3D.value("cameraPitch").toDouble(), 60.0);
+    QCOMPARE(definition->surface.parameters3D.value("cameraPitch").toDouble(), 180.0);
     QCOMPARE(definition->surface.parameters3D.value("cameraYaw").toDouble(), 180.0);
-    QCOMPARE(definition->surface.parameters3D.value("thickness").toDouble(), 4.0);
+    QCOMPARE(definition->surface.parameters3D.value("thickness").toDouble(), 20.0);
     QCOMPARE(definition->surface.parameters3D.value("iconElevation").toDouble(), 0.0);
     QCOMPARE(definition->surface.parameters2_5D.value("tilt").toDouble(), -60.0);
     auto values = definition->toPersistedMap();
@@ -250,7 +250,13 @@ void PanelSettingsSchemaTest::sceneTransformFieldsAreBoundedAndReversible()
         {"scene3DPositionX", "positionX", -1.0, 1.0, 0.0},
         {"scene3DPositionY", "positionY", -1.0, 1.0, 0.0},
         {"scene3DPositionZ", "positionZ", -1.0, 1.0, 0.0},
-        {"scene3DScale", "scale", 0.5, 1.25, 1.0},
+        // All the way round, and scales with no practical limit, all ways or
+        // sideways and up and down on their own (the owner, 2026-10-13).
+        {"scene3DCameraPitch", "cameraPitch", -180.0, 180.0, 25.0},
+        {"scene3DScale", "scale", 0.05, 20.0, 1.0},
+        {"scene3DScaleX", "scaleX", 0.05, 20.0, 1.0},
+        {"scene3DScaleY", "scaleY", 0.05, 20.0, 1.0},
+        {"scene3DThickness", "thickness", 0.05, 20.0, 1.0},
         {"scene3DFieldOfView", "fieldOfView", 20.0, 70.0, 40.0},
         {"scene3DKeyLight", "keyLightBrightness", 0.0, 4.0, 1.0},
         {"scene3DFillLight", "fillLightBrightness", 0.0, 2.0, 0.4}};
@@ -280,7 +286,8 @@ void PanelSettingsSchemaTest::sceneTransformFieldsAreBoundedAndReversible()
     // Values inside the ranges and both switches survive a save and reload.
     QVariantMap values{{"id", "transform-test"}, {"scene3DRoll", -12.5},
         {"scene3DPositionX", 0.25}, {"scene3DPositionY", -0.5}, {"scene3DPositionZ", 0.1},
-        {"scene3DScale", 0.85}, {"scene3DFieldOfView", 55.0}, {"scene3DKeyLight", 2.5},
+        {"scene3DScale", 0.85}, {"scene3DScaleX", 3.5}, {"scene3DScaleY", 0.4},
+        {"scene3DCameraPitch", 150.0}, {"scene3DFieldOfView", 55.0}, {"scene3DKeyLight", 2.5},
         {"scene3DFillLight", 0.75}, {"scene3DTransitions", false}, {"scene3DFloat", true}};
     const auto saved = PanelDefinition::fromLegacyMap(values);
     QVERIFY(saved);
@@ -299,7 +306,9 @@ void PanelSettingsSchemaTest::sceneTransformFieldsAreBoundedAndReversible()
         {"scene3DCameraPitch", 30.0}});
     QVERIFY(legacy);
     for (const auto &[key, parameter, minimum, maximum, fallback] : ranges)
-        QVERIFY2(!legacy->surface.parameters3D.contains(parameter), qPrintable(parameter));
+        if (parameter != QStringLiteral("cameraPitch")) // the one it was saved with
+            QVERIFY2(!legacy->surface.parameters3D.contains(parameter), qPrintable(parameter));
+    QCOMPARE(legacy->surface.parameters3D.value("cameraPitch").toDouble(), 30.0);
 
     for (const QString &key : {QStringLiteral("scene3DQuality"), QStringLiteral("scene3DCameraPitch"),
              QStringLiteral("scene3DCameraYaw"), QStringLiteral("scene3DThickness"),

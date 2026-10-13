@@ -331,6 +331,7 @@ private slots:
     void studioPlainSurfaceOffers3DWhereItWorks();
     void wholePanelRotationFieldsAreGatedByTheResolver();
     void studioMotionAndDirectionRows();
+    void studioPagePictures();
     void studioIconAppearanceOptionsAreTransactional();
     void studioTileParametersAreTransactional();
     void studioFolderShapeRows();
@@ -2171,10 +2172,16 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
                 actions.append(action.toMap().value("action").toString());
         }
         for (const QString &key : {"scene3DCameraPitch", "scene3DCameraYaw", "scene3DRoll",
-                 "scene3DPositionX", "scene3DPositionY", "scene3DPositionZ", "scene3DScale",
                  "scene3DFieldOfView", "scene3DThickness", "scene3DQuality",
                  "scene3DKeyLight", "scene3DFillLight", "scene3DTransitions", "scene3DFloat"})
             QVERIFY2(keys.contains(key), qPrintable(key));
+        // Moving and scaling are done by hand on the desktop (the owner,
+        // 2026-10-13: "those controls I don't really need"): Edit on desktop
+        // and Reset stay, the sliders went.
+        for (const QString &key : {"scene3DPositionX", "scene3DPositionY", "scene3DPositionZ", "scene3DScale",
+                 "scene3DScaleX", "scene3DScaleY"})
+            QVERIFY2(!keys.contains(key), qPrintable(key));
+        QVERIFY(actions.contains("edit-3d-on-desktop") && actions.contains("reset-3d-transform"));
         // Pedestal height is Auto's column height: a new panel has no stands
         // (the owner, 2026-10-12), so it is kept unseen until Auto is chosen.
         QVERIFY(!keys.contains("scene3DIconElevation"));
@@ -4217,6 +4224,59 @@ void PanelWindowCapabilityTest::wholePanelRotationFieldsAreGatedByTheResolver()
 // ADREP-TASK-002: Animations lists free-panel motion in the order it is
 // decided and says what the wheel moves; Layout offers Direction for the open
 // shapes as presets of the layout angle, which stays below it (PD-24, PD-25).
+// Not a check: pictures of Panel Studio's real pages for design reviews
+// (the owner, 2026-10-13: "show me the design"), saved only when
+// ARCHDOCK_STUDIO_SNAPSHOT_DIR names a folder.
+void PanelWindowCapabilityTest::studioPagePictures()
+{
+    const QString folder = qEnvironmentVariable("ARCHDOCK_STUDIO_SNAPSHOT_DIR");
+    if (folder.isEmpty())
+        QSKIP("Studio pictures only on request");
+    QVERIFY(QDir().mkpath(folder));
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"type", "launcher"}, {"layout", "ring"}, {"panelGlow", 0.5}}).value("success").toBool());
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    struct Page { int section; int page; const char *name; };
+    for (const Page &page : {Page{1, 0, "panels-general"}, Page{1, 2, "panels-appearance"},
+                             Page{1, 4, "panels-layout"}, Page{2, 0, "icons-appearance"},
+                             Page{4, 0, "pedestals"}}) {
+        std::unique_ptr<QObject> studio(component.createWithInitialProperties({
+            {"selectedPanelId", panel}, {"mainTabIndex", page.section}, {"subTabIndex", page.page}}));
+        auto *window = qobject_cast<QQuickWindow *>(studio.get());
+        QVERIFY(window);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QTest::qWait(1200);
+        QVERIFY(window->grabWindow().save(folder + QLatin1Char('/') + QLatin1String(page.name) + ".png"));
+        window->close();
+    }
+    // A 3D panel's Appearance and 3D pages: its look, and how it stands.
+    const QString platformPanel = registry->addFreePanel();
+    QVERIFY(backend.applyPanelSettingsTransaction(platformPanel,
+        registry->panelDefinition(platformPanel)->settingsRevision,
+        {{"type", "launcher"}, {"layout", "ring"}, {"rendererTier", "true3d"},
+         {"scene3DMaterial", "lightning"}, {"scene3DTexture", "lightning"}}).value("success").toBool());
+    for (const Page &page : {Page{1, 2, "panels-appearance-3d"}, Page{1, 10, "panels-3d"}}) {
+        std::unique_ptr<QObject> studio(component.createWithInitialProperties({
+            {"selectedPanelId", platformPanel}, {"mainTabIndex", page.section}, {"subTabIndex", page.page}}));
+        auto *window = qobject_cast<QQuickWindow *>(studio.get());
+        QVERIFY(window);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QTest::qWait(1500);
+        QVERIFY(window->grabWindow().save(folder + QLatin1Char('/') + QLatin1String(page.name) + ".png"));
+        window->close();
+    }
+}
+
 void PanelWindowCapabilityTest::studioMotionAndDirectionRows()
 {
     QQmlApplicationEngine engine;

@@ -222,7 +222,7 @@ Item {
             (Number(style.lineWidth) || 12) / 2 / radius))
     }
     readonly property real resolvedBand: bandAuto ? flatLineBand : bandSetting
-    readonly property real platformThickness: bounded("thickness", 1, 0.1, 4)
+    readonly property real platformThickness: transformValue("thickness", 1, 0.05, 20)
         * (bandAuto ? Math.max(0.4, Math.min(1, resolvedBand / 0.11)) : 1)
     readonly property string generatedKey: generatedShape ? JSON.stringify({
         shape: generatedShape, band: resolvedBand,
@@ -776,7 +776,7 @@ Item {
     readonly property var transformKeys: ({
         cameraPitch: "scene3DCameraPitch", cameraYaw: "scene3DCameraYaw", roll: "scene3DRoll",
         positionX: "scene3DPositionX", positionY: "scene3DPositionY", positionZ: "scene3DPositionZ",
-        scale: "scene3DScale"
+        scale: "scene3DScale", scaleX: "scene3DScaleX", scaleY: "scene3DScaleY", thickness: "scene3DThickness"
     })
     function transformValue(key, fallback, minimum, maximum) {
         const override = dragOverride && dragOverride[key] !== undefined ? Number(dragOverride[key]) : NaN
@@ -786,17 +786,18 @@ Item {
     function wrapDegrees(value) { return ((value + 180) % 360 + 360) % 360 - 180 }
     function savedTransform() {
         return {
-            cameraPitch: bounded("cameraPitch", 25, -60, 60), cameraYaw: bounded("cameraYaw", 0, -180, 180),
+            cameraPitch: bounded("cameraPitch", 25, -180, 180), cameraYaw: bounded("cameraYaw", 0, -180, 180),
             roll: bounded("roll", 0, -180, 180), positionX: bounded("positionX", 0, -1, 1),
             positionY: bounded("positionY", 0, -1, 1), positionZ: bounded("positionZ", 0, -1, 1),
-            scale: bounded("scale", 1, 0.5, 1.25)
+            scale: bounded("scale", 1, 0.05, 20), scaleX: bounded("scaleX", 1, 0.05, 20),
+            scaleY: bounded("scaleY", 1, 0.05, 20), thickness: bounded("thickness", 1, 0.05, 20)
         }
     }
     function gizmoHandleAt(x, y) {
         const hits = pickAllAt(x, y)
         for (let index = 0; index < hits.length; ++index) {
             const name = hits[index].objectHit ? String(hits[index].objectHit.objectName) : ""
-            const match = /^gizmo-(move|rotate|scale)-(x|y|z|view)/.exec(name)
+            const match = /^gizmo-(move|rotate|scale)-(x|y|z|view|all)/.exec(name)
             if (match && match[1] === gizmoMode)
                 return { mode: match[1], axis: match[2] }
         }
@@ -866,7 +867,7 @@ Item {
             if (start.axis === "x") {
                 let pitch = start.values.cameraPitch - delta.y * 0.25
                 if (settings.snap) pitch = GizmoMath.snapped(pitch, 15)
-                next.cameraPitch = GizmoMath.clamp(pitch, -60, 60)
+                next.cameraPitch = wrapDegrees(pitch)
             } else {
                 let angle = start.axis === "y"
                     ? start.values.cameraYaw + delta.x * 0.25
@@ -875,9 +876,14 @@ Item {
                 next[start.axis === "y" ? "cameraYaw" : "roll"] = wrapDegrees(angle)
             }
         } else {
-            let scale = start.values.scale * GizmoMath.scaleRatio(start.centre, start.pointer, pointer)
+            // The arms scale their own way - sideways, up and down, the
+            // platform's thickness - and the cube in the middle all ways.
+            const key = start.axis === "x" ? "scaleX" : start.axis === "y" ? "scaleY"
+                : start.axis === "z" ? "thickness" : "scale"
+            let scale = start.values[key] * (start.axis === "all" ? GizmoMath.uniformScaleRatio(delta)
+                : GizmoMath.scaleRatio(start.centre, start.pointer, pointer))
             if (settings.snap) scale = GizmoMath.snapped(scale, 0.05)
-            next.scale = GizmoMath.clamp(scale, 0.5, 1.25)
+            next[key] = GizmoMath.clamp(scale, 0.05, 20)
         }
         dragOverride = next
     }
@@ -920,9 +926,14 @@ Item {
     readonly property real cameraDistance: Math.max(1, height)
         / (2 * Math.tan(panelFieldOfView * Math.PI / 360))
     // The platform and its icons reach a little past the platform's radius.
-    readonly property real sceneExtentX: platformScale * platformReachX * 1.05
-    readonly property real sceneExtentY: platformScale * platformReachY * 1.05
-    readonly property real targetScale: transformValue("scale", 1, 0.5, 1.25)
+    readonly property real sceneExtentX: platformScale * platformReachX * 1.05 * targetScaleX
+    readonly property real sceneExtentY: platformScale * platformReachY * 1.05 * targetScaleY
+    readonly property real targetScale: transformValue("scale", 1, 0.05, 20)
+    // Sideways and up and down on its own, in the panel's own frame: the
+    // platform and where its icons stand stretch, the icons keep their
+    // shape (the owner: "scale it also sideways or top or down").
+    readonly property real targetScaleX: transformValue("scaleX", 1, 0.05, 20)
+    readonly property real targetScaleY: transformValue("scaleY", 1, 0.05, 20)
     readonly property real fitLimit: Math.min(width / 2 / Math.max(1, sceneExtentX),
                                               height / 2 / Math.max(1, sceneExtentY))
     // Nearer is larger: depth stops where the platform would outgrow the panel.
@@ -936,7 +947,7 @@ Item {
         transformValue("positionX", 0, -1, 1) * roomX * (cameraDistance - targetDepth) / cameraDistance,
         transformValue("positionY", 0, -1, 1) * roomY * (cameraDistance - targetDepth) / cameraDistance,
         targetDepth)
-    readonly property real targetPitch: transformValue("cameraPitch", 25, -60, 60)
+    readonly property real targetPitch: transformValue("cameraPitch", 25, -180, 180)
     readonly property real targetYaw: transformValue("cameraYaw", 0, -180, 180)
     readonly property real targetRoll: transformValue("roll", 0, -180, 180)
     // What is drawn. It eases toward the targets when transitions are on and
@@ -948,9 +959,12 @@ Item {
     property real shownRoll: 0
     property vector3d shownPosition: Qt.vector3d(0, 0, 0)
     property real shownScale: 1
+    property real shownScaleX: 1
+    property real shownScaleY: 1
     // Exact: the easing lands each value on its target, then stops.
     readonly property bool transformSettled: shownPitch === targetPitch
         && shownYaw === targetYaw && shownRoll === targetRoll && shownScale === targetScale
+        && shownScaleX === targetScaleX && shownScaleY === targetScaleY
         && shownPosition.x === targetPosition.x && shownPosition.y === targetPosition.y
         && shownPosition.z === targetPosition.z
     function angleStep(from, to) { return ((to - from) % 360 + 540) % 360 - 180 }
@@ -960,6 +974,8 @@ Item {
         shownRoll = targetRoll
         shownPosition = targetPosition
         shownScale = targetScale
+        shownScaleX = targetScaleX
+        shownScaleY = targetScaleY
     }
     function followTransform() { if (!transitionsEnabled) settleTransform() }
     function stepTransform(seconds) {
@@ -969,19 +985,26 @@ Item {
         const toward = function(from, to, step, epsilon) {
             return Math.abs(step) < epsilon ? to : from + step * share
         }
-        shownPitch = toward(shownPitch, targetPitch, targetPitch - shownPitch, 1e-3)
+        shownPitch = toward(shownPitch, targetPitch, angleStep(shownPitch, targetPitch), 1e-3)
         shownYaw = toward(shownYaw, targetYaw, angleStep(shownYaw, targetYaw), 1e-3)
         shownRoll = toward(shownRoll, targetRoll, angleStep(shownRoll, targetRoll), 1e-3)
         const offset = targetPosition.minus(shownPosition)
         shownPosition = offset.length() < 1e-3 ? targetPosition
             : shownPosition.plus(offset.times(share))
         shownScale = toward(shownScale, targetScale, targetScale - shownScale, 1e-4)
+        shownScaleX = toward(shownScaleX, targetScaleX, targetScaleX - shownScaleX, 1e-4)
+        shownScaleY = toward(shownScaleY, targetScaleY, targetScaleY - shownScaleY, 1e-4)
     }
     onTargetPitchChanged: followTransform()
     onTargetYawChanged: followTransform()
     onTargetRollChanged: followTransform()
     onTargetPositionChanged: followTransform()
     onTargetScaleChanged: followTransform()
+    // Later, not inside the scene's extent being worked out from them.
+    onTargetScaleXChanged: Qt.callLater(root.followTransform)
+    onTargetScaleYChanged: Qt.callLater(root.followTransform)
+    onShownScaleXChanged: hitTestsChanged()
+    onShownScaleYChanged: hitTestsChanged()
     onTransitionsEnabledChanged: followTransform()
     Component.onCompleted: settleTransform()
     FrameAnimation {
@@ -1157,9 +1180,18 @@ Item {
         const foot = sceneContent.mapPositionFromScene(node.scenePosition)
         const local = sceneContent.mapPositionFromScene(anchor.scenePosition)
         const lift = local.minus(foot)
-        const radius = Math.hypot(foot.x, foot.y)
+        // The track in the panel's own frame, unstretched: a circle there is
+        // the stretched dock's ellipse once stretched back.
+        const own = entryFrame.mapPositionFromScene(node.scenePosition)
+        const unstretched = Qt.vector3d(own.x / Math.max(1e-6, shownScaleX), own.y / Math.max(1e-6, shownScaleY), own.z)
+        const radius = Math.hypot(unstretched.x, unstretched.y)
         if (radius <= 0) return []
-        const angle = Math.atan2(foot.y, foot.x)
+        const angle = Math.atan2(unstretched.y, unstretched.x)
+        const trackPoint = function(turn) {
+            const point = entryFrame.mapPositionToScene(Qt.vector3d(radius * Math.cos(turn) * shownScaleX,
+                                                                   radius * Math.sin(turn) * shownScaleY, own.z))
+            return sceneContent.mapPositionFromScene(point)
+        }
         const depth = root.projectScenePoint(anchor.scenePosition).z
         // The icons' track as drawn: `count` projected points spanning `span`
         // around the folder, and one more past each end for the directions.
@@ -1167,8 +1199,7 @@ Item {
         const drawn = []
         for (let index = -1; index <= count; ++index) {
             const turn = angle - span / 2 + step * index
-            drawn.push(root.projectScenePoint(sceneContent.mapPositionToScene(
-                Qt.vector3d(radius * Math.cos(turn), radius * Math.sin(turn), foot.z).plus(lift))))
+            drawn.push(root.projectScenePoint(sceneContent.mapPositionToScene(trackPoint(turn).plus(lift))))
         }
         // Each sample stands `outward` screen pixels outside the drawn track,
         // across the track's own direction there and away from the dock's
@@ -1778,9 +1809,16 @@ Item {
             generateMipmaps: true
             mipFilter: Texture.Linear
         }
+        // Tilt first, then turn about the tilted view's own up: tilted 90
+        // degrees the panel lies level whatever its turn, which then spins
+        // it like a turntable (the owner, 2026-10-13: "I still should be able
+        // to tilt 3D panel fully horizontal"; one node's Euler angles apply
+        // the turn after the tilt, which at 90 degrees leaned it sideways).
         Node {
             objectName: "mesh-camera-rig"
             eulerRotation.x: root.shownPitch
+            Node {
+            objectName: "mesh-camera-turn"
             eulerRotation.y: root.shownYaw
             PerspectiveCamera {
                 id: camera
@@ -1798,6 +1836,7 @@ Item {
                 // Camera-local coordinates preserve the logical pixel centers
                 // without querying viewport matrices during scene construction.
 
+            }
             }
         }
         Node {
@@ -1939,9 +1978,12 @@ Item {
                         .times(Qt.quaternion(Math.cos(sway / 2), Math.sin(sway / 2), 0, 0))
                         .times(Qt.quaternion(Math.cos(wobble / 2), 0, Math.sin(wobble / 2), 0))
                 }
-                readonly property var standPoint: PlatformGeometry.foldPoint(
-                    [baseStandPoint[0], baseStandPoint[1], root.baseTopHeight],
-                    root.platformFold, root.baseTopHeight).map(v => v * root.platformScale)
+                readonly property var standPoint: {
+                    const point = PlatformGeometry.foldPoint(
+                        [baseStandPoint[0], baseStandPoint[1], root.baseTopHeight],
+                        root.platformFold, root.baseTopHeight).map(v => v * root.platformScale)
+                    return [point[0] * root.shownScaleX, point[1] * root.shownScaleY, point[2]]
+                }
                 property alias glyphModel: glyphModel
                 property alias inputAnchor: inputAnchor
                 property alias standOnPanel: standOnPanel
@@ -2278,7 +2320,7 @@ Item {
         Node {
             objectName: "mesh-platform-motion"
             eulerRotation.z: -root.layoutAngle
-            scale: Qt.vector3d(root.platformScale, root.platformScale,
+            scale: Qt.vector3d(root.platformScale * root.shownScaleX, root.platformScale * root.shownScaleY,
                                root.platformScale * root.platformThickness)
             IconStyle3D {
                 id: platform
@@ -2332,6 +2374,22 @@ Item {
             visible: root.editMode
             position: Qt.vector3d(root.shownPosition.x, root.shownPosition.y,
                 root.shownPosition.z + root.floatOffset + root.platformTop * root.shownScale)
+            // In the middle, while scaling: the cube that scales all ways.
+            Model {
+                objectName: "gizmo-scale-all-tip"
+                visible: root.gizmoMode === "scale"
+                source: "#Cube"
+                pickable: true
+                scale: Qt.vector3d(root.gizmoLength * 0.0024, root.gizmoLength * 0.0024, root.gizmoLength * 0.0024)
+                materials: PrincipledMaterial {
+                    lighting: PrincipledMaterial.NoLighting
+                    baseColor: "#f4f8fb"
+                }
+            }
+            // Arrows to move, along the scene's own directions; the scale
+            // arms turn with the panel, the ways its own stretch goes.
+            Node {
+            eulerRotation.z: root.gizmoMode === "scale" ? -root.layoutAngle : 0
             Repeater3D {
                 // Arrows to move, cube-tipped arms to scale.
                 model: [
@@ -2370,6 +2428,7 @@ Item {
                         }
                     }
                 }
+            }
             }
             Repeater3D {
                 // Rings to turn: pitch about X, yaw about Y, roll about the view.
@@ -2419,6 +2478,16 @@ Item {
             eulerRotation: Qt.vector3d(25, 140, 0)
             brightness: root.bounded("fillLightBrightness", 0.4, 0, 2)
             color: "#78c8ff"
+        }
+        // The key light's twin from behind: a panel turned past its edge shows
+        // its underside lit as its face is (the owner, 2026-10-13: turned
+        // "freely in 360 every direction"). It only reaches surfaces facing
+        // away from the front, so the face keeps its look.
+        DirectionalLight {
+            objectName: "mesh-back-light"
+            eulerRotation: Qt.vector3d(-35, 145, 0)
+            brightness: root.bounded("keyLightBrightness", 1, 0, 4) * 0.85
+            ambientColor: "#000000"
         }
         // The shared geometry is retained even with no entries. Its readiness
         // participates in the whole scene's safe fallback decision.

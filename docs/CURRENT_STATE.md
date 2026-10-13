@@ -1,5 +1,55 @@
 # Arch Dock current state
 
+<!-- EVENING_2026_10_13_BEGIN -->
+## Free turning and scaling (Phase 2), one Look per surface — 2026-10-13 evening
+
+The owner's words (from the big request): "the rotation, tilting - i should
+be able to do that freely in 360 every direction, and for scaling there
+shouldn't be a limit, and i should be able to scale it also sideways or top
+or down"; later, on the pictures: "I still should be able to tilt 3D panel
+fully horizontal", "2D panels need no tilt", material and texture "are
+exactly the same thing", position and scale "controls I don't really need,
+since I can do it physically on my desktop", "no neons settings, no
+lightning" on a 3D panel's Appearance page, "there should be Arch Dock
+logo".
+
+- Schema: `scene3DCameraPitch` -180..180 (was -60..60); `scene3DScale`
+  0.05..20 (was 0.5..1.25); new `scene3DScaleX`, `scene3DScaleY`
+  (`surface.parameters3D.scaleX/scaleY`, 0.05..20, default 1);
+  `scene3DThickness` 0.05..20 (was 0.1..4). The scales carry the editor
+  property `logarithmic`: the Studio's slider moves through the ratio, its
+  value rounded to the row's decimals.
+- `PanelScene3D`: the camera rig tilts (outer node, x) and then turns
+  (inner node `mesh-camera-turn`, y): one node's Euler angles (ZXY) applied
+  the turn after the tilt, so at 90 degrees the default 10 degree turn
+  leaned the panel sideways. Pitch eases the short way round. The stretch is
+  in the panel's own frame: `mesh-platform-motion` scales by it and every
+  entry's stand point is stretched; folder tracks follow the ellipse. The
+  scale arms turn with the panel; `gizmo-scale-all-tip` (white cube) scales
+  all ways (`GizmoMath.uniformScaleRatio`: up or right doubles every 160
+  px); x and y arms set `scaleX`/`scaleY`, z the thickness; the rotate ring
+  and the body's orbit no longer clamp the tilt. `PanelSurfaceLoader` passes
+  `scaleX`/`scaleY` and no longer clamps the pitch. A back key light
+  (`mesh-back-light`). The stretch targets' change handlers run after the
+  extent they feed (`Qt.callLater`), which had made a binding loop.
+- Studio: the 3D page shows Pitch, Yaw and Roll (Orientation), Edit on
+  desktop and Reset 3D transform; position and scale are set by hand. The
+  3D look moved to Appearance (Look). `lookPairs` in SettingsPopup: the
+  Look rows (`scene3DMaterial`, `pedestalMaterial`, `folderPedestalMaterial`,
+  `iconTileTexture`) set their pairs (`scene3DTexture`, the stands'
+  "material", `iconTileMaterial`), which are not shown. The title strip uses
+  the `org.archdock.ArchDock` icon.
+- Flat panels have no tilt control; baked 2.5D artwork keeps its own
+  Perspective tilt on Layout.
+- Tests: `panelTurnsAllTheWayAndStretchesEachWay` (drawn and placed at 90,
+  150, 180 and -120 degrees, level at 90, sideways x2 twice as wide with the
+  icons their own size, up and down x0.5 half as tall, x3 past the box),
+  the gizmo arm stretches sideways, `GizmoMath` orbit and middle cube,
+  schema ranges and round trips, the 3D page test and the truth matrix's
+  homes. `studioPagePictures` (skipped unless asked) saves the real Studio's
+  pages for design reviews.
+<!-- EVENING_2026_10_13_END -->
+
 <!-- AFTERNOON_2026_10_13_BEGIN -->
 ## No box, real glow, glowing looks — 2026-10-13 afternoon
 

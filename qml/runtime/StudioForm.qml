@@ -366,15 +366,34 @@ ScrollView {
                             spacing: 8
 
                             Slider {
+                                id: fieldSlider
                                 wheelEnabled: false
                                 objectName: "studio-slider-" + String(rowDelegate.modelData.key || "")
                                 Accessible.name: rowDelegate.modelData.label || ""
                                 Layout.fillWidth: true
-                                from: rowDelegate.modelData.from === undefined ? 0 : rowDelegate.modelData.from
-                                to: rowDelegate.modelData.to === undefined ? 1 : rowDelegate.modelData.to
-                                stepSize: rowDelegate.modelData.step === undefined ? 0.05 : rowDelegate.modelData.step
-                                value: Number(root.studio.fieldValue(rowDelegate.modelData))
-                                onMoved: root.studio.setFieldValue(rowDelegate.modelData, value)
+                                readonly property real low: rowDelegate.modelData.from === undefined ? 0 : rowDelegate.modelData.from
+                                readonly property real high: rowDelegate.modelData.to === undefined ? 1 : rowDelegate.modelData.to
+                                // On a logarithmic row the slider moves through the
+                                // ratio from `low` to `high`, and the value it sets
+                                // is rounded to the row's decimals.
+                                readonly property bool logarithmic: rowDelegate.modelData.logarithmic === true
+                                    && low > 0 && high > low
+                                readonly property real fieldNumber: Number(root.studio.fieldValue(rowDelegate.modelData))
+                                from: logarithmic ? 0 : low
+                                to: logarithmic ? 1 : high
+                                stepSize: logarithmic ? 0 : rowDelegate.modelData.step === undefined ? 0.05 : rowDelegate.modelData.step
+                                value: logarithmic
+                                    ? Math.log(Math.max(low, Math.min(high, fieldNumber)) / low) / Math.log(high / low)
+                                    : fieldNumber
+                                onMoved: {
+                                    if (!logarithmic) {
+                                        root.studio.setFieldValue(rowDelegate.modelData, value)
+                                        return
+                                    }
+                                    const decimals = rowDelegate.modelData.decimals === undefined ? 2 : rowDelegate.modelData.decimals
+                                    const exact = low * Math.pow(high / low, value)
+                                    root.studio.setFieldValue(rowDelegate.modelData, Number(exact.toFixed(decimals)))
+                                }
                             }
 
                             Label {
