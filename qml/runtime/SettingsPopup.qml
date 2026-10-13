@@ -148,7 +148,8 @@ Window {
     readonly property bool presetPreviewActive:
         EditorModel.presetState(selectedPresetCard) !== "incompatible"
     readonly property LivePanelPreview activeRendererPreview:
-        (presetPreviewLoader.item as LivePanelPreview) || embeddedRendererPreview
+        (presetPreviewLoader.item as LivePanelPreview)
+        || (newFreePanelPreviewLoader.item as LivePanelPreview) || embeddedRendererPreview
 
     readonly property int panelRevision: panelRegistry.revision
     readonly property int placementRevision: panelController.nativePlacementRevision
@@ -160,6 +161,30 @@ Window {
     readonly property var selectedResolvedThemes: editorSession.themes || []
     readonly property var selectedRendererCandidate:
         EditorModel.rendererCandidate(editorSession)
+    // "New free panel", last in the panel list: the preview shows the bare
+    // panel the button beside the list adds, in the default panel preset's
+    // look when one for free panels is set. A panel is added in this one
+    // place (the owner, 2026-10-13).
+    readonly property string newFreePanelEntry: "new-free-panel"
+    property bool newFreePanelPicked: false
+    readonly property var newFreePanelCard: {
+        const revision = presetLibrary.revision;
+        const presetId = String(auditionDefaults.panelPresetId || "");
+        if (presetId.length === 0)
+            return null;
+        const cards = Array.from(presetLibrary.panelPresets("builtin"))
+            .concat(Array.from(presetLibrary.panelPresets("user")));
+        return cards.find(function(card) {
+            return String(card.id) === presetId
+                && String((EditorModel.presetRendererCandidate(card, true) || {}).edge || "") === "free";
+        }) || null;
+    }
+    readonly property var newFreePanelDefinition: newFreePanelCard
+        ? EditorModel.presetRendererCandidate(newFreePanelCard, true)
+        : ({ edge: "free", type: "empty", layout: "circular", layoutRadius: 145,
+             width: 420, height: 420, rendererTier: "procedural2d" })
+    readonly property var newFreePanelTheme: newFreePanelCard
+        ? EditorModel.presetPreviewTheme(newFreePanelCard) : ({})
     // A panel along an edge takes its length from what is on it: with no
     // applications yet it had nothing to draw, and the preview of a hidden
     // Bottom panel stayed empty (the owner, 2026-10-13). It is shown bare.
@@ -292,6 +317,26 @@ Window {
         return true;
     }
 
+    // The panel list's choice: a panel, or the new free panel the button adds.
+    function pickPanelEntry(entry) {
+        if (String(entry) === newFreePanelEntry) {
+            if (newFreePanelPicked)
+                return true;
+            if (auditionBusy || hasPendingChanges) {
+                studioError = qsTr("Apply or cancel the current draft before switching panels.");
+                return false;
+            }
+            newFreePanelPicked = true;
+            studioError = "";
+            return true;
+        }
+        if (newFreePanelPicked && String(entry) === selectedPanelId) {
+            newFreePanelPicked = false;
+            return true;
+        }
+        return selectPanel(entry);
+    }
+
     function selectPanel(panelId) {
         const normalizedPanelId = String(panelId || "");
         if (normalizedPanelId.length === 0 || normalizedPanelId === selectedPanelId)
@@ -300,6 +345,7 @@ Window {
             studioError = qsTr("Apply or cancel the current draft before switching panels.");
             return false;
         }
+        newFreePanelPicked = false;
         internalPanelSelection = true;
         selectedPanelId = normalizedPanelId;
         internalPanelSelection = false;
@@ -399,6 +445,9 @@ Window {
     // the picked panel's name now (the owner, 2026-10-13). New free panels
     // come from General > Add free panel.
     function pickedPanelPresence() {
+        if (newFreePanelPicked)
+            return { shown: false, action: "create-free", name: qsTr("New free panel"),
+                     description: qsTr("Add a new free panel to the desktop") };
         const revision = panelRevision + nativeVisibilityRevision;
         const name = panelRegistry.panelName(selectedPanelId);
         let presence = { shown: false, action: "" };
@@ -752,58 +801,48 @@ Window {
 
     function panelGeneralRows() {
         const rows = schemaSectionRows("panels-general", qsTr("General"), qsTr("Identity and placement of the selected panel."));
-        const builtIn = panelRegistry.isBuiltIn(selectedPanelId);
-        rows.splice(1, 0, {
-            kind: "actions",
-            label: qsTr("Panel"),
-            actions: [
-                {
-                    label: qsTr("Add free panel"),
-                    icon: "list-add",
-                    action: "create-free",
-                    available: !hasPendingChanges
-                },
-                {
-                    label: builtIn ? (Boolean(panelValue("visible", true)) ? qsTr("Hide panel") : qsTr("Show panel")) : qsTr("Remove panel"),
-                    icon: builtIn ? (Boolean(panelValue("visible", true)) ? "view-hidden" : "view-visible") : "edit-delete",
-                    action: builtIn ? "toggle-panel-visibility" : "remove-panel",
-                    available: builtIn || !hasPendingChanges
-                }
-            ]
-        });
+        // A panel is added to the desktop with the button beside the panel
+        // list and removed with its own right-click menu; this row repeated
+        // both (the owner, 2026-10-13). An edge panel on the desktop keeps
+        // Hide panel: Arch Dock rebuilds an edge panel that is gone from
+        // Plasma while it is meant to be shown.
+        const actions = [];
+        if (panelRegistry.isBuiltIn(selectedPanelId) && Boolean(panelRegistry.panelValue(selectedPanelId, "visible"))) {
+            const hiding = !Boolean(panelValue("visible", true));
+            actions.push({
+                label: hiding ? qsTr("Show panel") : qsTr("Hide panel"),
+                icon: hiding ? "view-visible" : "view-hidden",
+                action: "toggle-panel-visibility",
+                available: true
+            });
+        }
         // A launcher or hybrid panel with nothing dropped on it is an empty
         // box inviting drops; an edge panel had no other way to get its
         // launchers (audit E-08). Applications are chosen from their desktop
         // entries and pinned through the same call a drop uses.
         const contentType = String(panelValue("type", "empty"));
         if (contentType === "launcher" || contentType === "hybrid") {
-            rows[1].actions.push({
+            actions.push({
                 label: qsTr("Add applications…"),
                 icon: "list-add",
                 action: "pin-launchers",
                 available: !hasPendingChanges && !auditionActive
             });
         }
+        if (actions.length > 0)
+            rows.splice(1, 0, { kind: "actions", label: qsTr("Panel"), actions: actions });
         // A free panel whose desktop widget is gone kept its settings but was
-        // shown like a live panel. Say so, and offer to put it back.
+        // shown like a live panel. Say so.
         if (!isNativePanel() && !auditionActive) {
             const hostState = String(panelRegistry.panelValue(selectedPanelId, "freeHostState") || "");
             const detached = hostState === "detached";
-            if (detached) {
-                rows[1].actions.push({
-                    label: qsTr("Put back on the desktop"),
-                    icon: "view-restore",
-                    action: "rehost-free",
-                    available: !hasPendingChanges
-                });
-            }
             rows.push(readOnlyRow(qsTr("Desktop widget"),
                 detached ? qsTr("Missing: this panel is not on the desktop")
                     : hostState === "hosted-owned" ? qsTr("On the desktop")
                     : hostState === "hosted-stale" ? qsTr("Being created or checked")
                     : qsTr("Not on the desktop yet")));
             if (detached)
-                rows.push(notice(qsTr("Its widget was removed from Plasma, or lost with a desktop layout change. Put back on the desktop creates a new widget with these settings at the saved position."), true));
+                rows.push(notice(qsTr("Its widget was removed from Plasma, or lost with a desktop layout change. The button with its name beside the panel list adds it back with these settings at its saved position."), true));
         }
         if (isNativePanel()) {
             // Auto-hide looked like a panel that does nothing when switched on.
@@ -1341,6 +1380,7 @@ Window {
 
     function discardStudioChanges() {
         projectionTimer.stop();
+        newFreePanelPicked = false;
         editorSession = EditorModel.cancel(editorSession);
         resetRendererPreview(EditorModel.rendererCandidate(editorSession));
         artifactDraft = {};
@@ -1498,6 +1538,10 @@ Window {
                 studioError = qsTr("Could not put the free panel back on the desktop (%1).").arg(String(result && result.errorCode ? result.errorCode : "unknown-error"));
             loadEditor(selectedPanelId);
         } else if (action === "add-picked-panel") {
+            if (newFreePanelPicked) {
+                performStudioAction("create-free", {});
+                return;
+            }
             const presence = pickedPanelPresence();
             if (hasPendingChanges || auditionBusy || presence.action.length === 0)
                 return;
@@ -1707,6 +1751,7 @@ Window {
     onSelectedPanelIdChanged: {
         if (internalPanelSelection)
             return;
+        newFreePanelPicked = false;
         if (auditionBusy || (editorSession.loaded && editorSession.panelId !== selectedPanelId && hasPendingChanges)) {
             const previousPanelId = auditionOriginalPanelId || editorSession.panelId;
             studioError = qsTr("Apply or cancel the current draft before switching panels.");
@@ -1865,7 +1910,8 @@ Window {
             width: Math.min(implicitWidth, Math.max(0, parent.width - 2 * (12
                 + Math.max(titleLead.x + titleLead.width,
                            parent.width - closeButton.x))))
-            text: panelRegistry.panelName(root.selectedPanelId) || qsTr("Panel Editor")
+            text: root.newFreePanelPicked ? qsTr("New free panel")
+                : panelRegistry.panelName(root.selectedPanelId) || qsTr("Panel Editor")
             color: "#d5e5ed"
             font.pixelSize: 12
             horizontalAlignment: Text.AlignHCenter
@@ -2028,22 +2074,26 @@ Window {
                     Accessible.name: qsTr("Panel")
 
                     Layout.fillWidth: true
-                    model: panelRegistry.panelIds
-                    currentIndex: Math.max(0, model.indexOf(root.selectedPanelId))
-                    displayText: panelRegistry.panelName(currentText)
+                    model: Array.from(panelRegistry.panelIds).concat([root.newFreePanelEntry])
+                    currentIndex: root.newFreePanelPicked ? model.length - 1
+                        : Math.max(0, model.indexOf(root.selectedPanelId))
+                    displayText: currentText === root.newFreePanelEntry
+                        ? qsTr("New free panel") : panelRegistry.panelName(currentText)
                     delegate: ItemDelegate {
                         required property string modelData
 
                         width: panelSelector.width
-                        text: panelRegistry.panelName(modelData)
+                        text: modelData === root.newFreePanelEntry
+                            ? qsTr("New free panel") : panelRegistry.panelName(modelData)
                     }
                     onActivated: {
                         focus = false;
                         // A refused switch (changes not applied yet) keeps the
                         // panel; the list shows it again, not the one picked.
-                        if (!root.selectPanel(currentText))
+                        if (!root.pickPanelEntry(currentText))
                             currentIndex = Qt.binding(function() {
-                                return Math.max(0, panelSelector.model.indexOf(root.selectedPanelId));
+                                return root.newFreePanelPicked ? panelSelector.model.length - 1
+                                    : Math.max(0, panelSelector.model.indexOf(root.selectedPanelId));
                             });
                     }
                 }
@@ -2102,11 +2152,32 @@ Window {
                         elide: Text.ElideRight
                     }
 
+                    // The bare new free panel, as the button beside the list
+                    // adds it: no icons yet.
+                    Loader {
+                        id: newFreePanelPreviewLoader
+
+                        objectName: "panel-studio-new-free-panel-preview"
+                        visible: active
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        active: root.newFreePanelPicked && !root.presetPreviewActive
+                        sourceComponent: LivePanelPreview {
+                            panelDefinition: root.newFreePanelDefinition
+                            themeDefinition: root.newFreePanelTheme
+                            orderedEntries: []
+                            useProvidedEntries: true
+                            previewMode: "free"
+                            animationProfiles: ({ reducedMotion: true })
+                            contentMargin: 6
+                        }
+                    }
+
                     LivePanelPreview {
                         id: embeddedRendererPreview
 
                         objectName: "panel-studio-live-renderer-preview"
-                        visible: !root.presetPreviewActive
+                        visible: !root.presetPreviewActive && !root.newFreePanelPicked
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         panelDefinition: root.selectedRendererCandidate
@@ -2205,7 +2276,7 @@ Window {
             RowLayout {
                 id: studioTabNavigation
                 objectName: "studio-tabs-navigation"
-                visible: root.currentSubtabs.length > 0
+                visible: root.currentSubtabs.length > 0 && !root.newFreePanelPicked
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
                 // KDE reserves this space in its padding; overlay styles
@@ -2299,7 +2370,7 @@ Window {
             }
 
             RowLayout {
-                visible: root.currentPresetPage !== null && root.currentPresetPage.kind === "panel"
+                visible: root.currentPresetPage !== null && root.currentPresetPage.kind === "panel" && !root.newFreePanelPicked
                 Layout.fillWidth: true
                 CheckBox {
                     objectName: "preset-audition-new-panel"
@@ -2317,10 +2388,18 @@ Window {
                 }
             }
 
+            // The pages are hidden while a new free panel is picked; this
+            // keeps the list and the preview at the top.
+            Item {
+                visible: root.newFreePanelPicked
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+            }
+
             StudioForm {
                 id: studioForm
                 objectName: "studio-page-form"
-                visible: root.currentPresetPage === null && !root.currentProfilePage
+                visible: root.currentPresetPage === null && !root.currentProfilePage && !root.newFreePanelPicked
                 enabled: !root.profilesService || !root.profilesService.active
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -2332,7 +2411,7 @@ Window {
 
             ProfilePage {
                 objectName: "panel-studio-profile-page"
-                visible: root.currentProfilePage
+                visible: root.currentProfilePage && !root.newFreePanelPicked
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: 320
@@ -2351,7 +2430,7 @@ Window {
             PresetBrowser {
                 id: presetBrowser
                 objectName: "panel-studio-preset-browser"
-                visible: root.currentPresetPage !== null
+                visible: root.currentPresetPage !== null && !root.newFreePanelPicked
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: 360

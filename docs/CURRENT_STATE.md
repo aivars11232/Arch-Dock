@@ -61,7 +61,19 @@ tests), `studio-window-2.log` (panel window capability, 346 s),
 `rendering-smoke-21c.log` (rendering import smoke, 142 s),
 `studio-truth-21.log` (Studio truth matrix, 344 s); replica pictures
 `studio-replica-final` (no crash on any switch, one backend start).
-The complete suite was not rerun.
+The complete suite was not rerun. Packaged as 0.1.1-21.
+
+Then, on the owner's next two remarks ("the option to add a panel should be
+only in one place, above the preview"; "the remove panel button also should
+be removed, since I can remove a panel with right click"): the panel list
+ends with "New free panel" (`newFreePanelEntry`, `pickPanelEntry`). Picked,
+it shows the bare new panel (`newFreePanelPreviewLoader`: the default
+panel preset's look when one for free panels is set, else the circular
+ring a new free panel gets) and hides the tabs and pages until the panel
+exists; the button beside the list adds it (`create-free`). The General
+row keeps only Add applications… and, for an edge panel on the desktop,
+Hide panel: an edge panel gone from Plasma while meant to be shown is
+rebuilt, so right-click removal does not hide it.
 
 <!-- MORNING_2026_10_13_END -->
 

@@ -1443,7 +1443,8 @@ void PanelWindowCapabilityTest::studioArtworkPersistenceFailure()
 // new empty free panel whichever panel was picked. It carries the picked
 // panel's name now and adds that panel to the desktop: a hidden edge panel is
 // shown, a free panel whose widget is gone is put back, a panel already on
-// the desktop has nothing to add. An edge panel with nothing on it yet
+// the desktop has nothing to add, and "New free panel" at the end of the list
+// is the one way to add a new one. The General page adds and removes none. An edge panel with nothing on it yet
 // is previewed bare instead of as an empty card, and a refused switch keeps
 // the panel and the list on it.
 void PanelWindowCapabilityTest::studioAddButtonFollowsThePickedPanel()
@@ -1485,6 +1486,33 @@ void PanelWindowCapabilityTest::studioAddButtonFollowsThePickedPanel()
     QTRY_COMPARE(button->property("text").toString(), registry->panelName(detached));
     QVERIFY(button->isEnabled());
     QVERIFY(!popup->property("previewShowsBarePanel").toBool());
+    // The General page adds and removes no panel: the button does the one,
+    // the panel's own right-click menu the other.
+    QVariant general;
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "panelGeneralRows", Q_RETURN_ARG(QVariant, general)));
+    const QStringList addOrRemove{"create-free", "remove-panel", "rehost-free"};
+    for (const QVariant &row : general.value<QJSValue>().toVariant().toList())
+        for (const QVariant &action : row.toMap().value("actions").toList())
+        {
+            const QString name = action.toMap().value("action").toString();
+            QVERIFY2(!addOrRemove.contains(name), qPrintable(name));
+        }
+    // "New free panel" at the end of the list: the bare panel in the preview,
+    // the button adds it, nothing to edit until it exists.
+    QVariant picked;
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "pickPanelEntry", Q_RETURN_ARG(QVariant, picked),
+        Q_ARG(QVariant, QStringLiteral("new-free-panel"))));
+    QVERIFY(picked.toBool());
+    QTRY_COMPARE(button->property("text").toString(), QStringLiteral("New free panel"));
+    QVERIFY(button->isEnabled());
+    QCOMPARE(button->property("presence").value<QJSValue>().property("action").toString(), QStringLiteral("create-free"));
+    QTRY_VERIFY(visibleItem(studio, QStringLiteral("panel-studio-new-free-panel-preview")));
+    QVERIFY(!visibleItem(studio, QStringLiteral("studio-page-form")));
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "pickPanelEntry", Q_RETURN_ARG(QVariant, picked),
+        Q_ARG(QVariant, detached)));
+    QVERIFY(picked.toBool());
+    QVERIFY(!popup->property("newFreePanelPicked").toBool());
+    QTRY_COMPARE(button->property("text").toString(), registry->panelName(detached));
     QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue",
         Q_ARG(QVariant, (QVariantMap{{"key", "opacity"}, {"scope", "panel"}})), Q_ARG(QVariant, 0.61)));
     QVERIFY(popup->property("hasPendingChanges").toBool());
@@ -1494,6 +1522,10 @@ void PanelWindowCapabilityTest::studioAddButtonFollowsThePickedPanel()
         Q_ARG(QVariant, QStringLiteral("bottom"))));
     QVERIFY(!switched.toBool());
     QCOMPARE(popup->property("selectedPanelId").toString(), detached);
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "pickPanelEntry", Q_RETURN_ARG(QVariant, picked),
+        Q_ARG(QVariant, QStringLiteral("new-free-panel"))));
+    QVERIFY(!picked.toBool());
+    QVERIFY(!popup->property("newFreePanelPicked").toBool());
 }
 
 void PanelWindowCapabilityTest::screenSignalsCoalesceAndUtilityWindowFitsWorkArea()
