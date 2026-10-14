@@ -42,6 +42,16 @@ Item {
     property int pathCapacity: 0
     // The distance between neighbours on the path; 0 keeps the dock's pitch.
     property real pathPitch: 0
+    // A shape on a 3D panel's plane: its children are drawn at their
+    // samples' scale, and neighbours stand a pitch apart at that size.
+    property bool measureAsDrawn: false
+    // At most this many at once on each of a ring's circles; 0 is as many
+    // as fit.
+    property var ringLimits: []
+    // A grid's cells in this item's coordinates ({ columns, rows, cells },
+    // LayoutEngine.gridTrackLayout()); null for a path. The wheel moves a
+    // grid a row at a time.
+    property var gridCells: null
     // The small panel under the children, { points, closed } in this item's
     // coordinates, drawn in the panel's look (LayoutEngine.themeStyle()).
     property var outline: null
@@ -83,9 +93,11 @@ Item {
     property real travelTarget: 0
     // Wheel input not yet worth a whole step.
     property real wheelRemainder: 0
-    readonly property var track: LayoutEngine.folderTrackLayout(
+    readonly property var track: gridCells ? LayoutEngine.gridTrackLayout(gridCells, entries.length, trackOffset)
+        : LayoutEngine.folderTrackLayout(
         samples, entries.length, pitch, trackOffset,
-        { closed: closedPath, start: startAtFolder ? "start" : "centre", capacity: pathCapacity, rings: rings })
+        { closed: closedPath, start: startAtFolder ? "start" : "centre", capacity: pathCapacity, rings: rings,
+          unscaled: measureAsDrawn, ringLimits: ringLimits })
     // What the popup reports about its layout, for the same consumers.
     readonly property var geometry: ({ layout: shape, side: "track" })
     signal childSelected(string childId)

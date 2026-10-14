@@ -49,39 +49,46 @@ void PanelWindow::synchronizeFreePanels()
 
     ArchDock::FreePanelController controller(
         m_panelRegistry, freePanelHostOperations());
-    // A free panel whose desktop widget is gone is removed entirely, the way
-    // removing it from its right-click menu is meant; a profile keeps its
-    // own copy. Before that, the widget has to be missing on checks at least
-    // half a minute apart: a removal undone in Plasma brings it back in that
-    // time. For the backend's first ninety seconds nothing is removed at
-    // all, since right after a login or a shell restart Plasma may not have
-    // restored its layout yet.
+    // A free panel goes away only when its owner removes its widget (see
+    // checkRequestedRemovals); a profile keeps its own copy. A widget that is
+    // simply gone - Plasma lost it, say over a restart - is put back at the
+    // panel's place with its current settings, once it has been missing on
+    // checks at least half a minute apart. For ninety seconds after the
+    // backend or Plasma starts nothing is put back, since Plasma may not
+    // have restored its layout yet.
     const bool grace = m_freeHostGraceClock.isValid() && m_freeHostGraceClock.elapsed() < 90000;
     bool recheck = false;
     for (const QString &panelId : m_panelRegistry.panelIds())
     {
         if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() !=
-            QStringLiteral("free"))
+                QStringLiteral("free") ||
+            m_removalRequested.contains(panelId))
         {
             continue;
         }
 
-        const auto missing = m_missingFreeHosts.constFind(panelId);
-        const bool confirmed = !grace && missing != m_missingFreeHosts.constEnd() &&
-            missing->elapsed() >= 30000;
-        const ArchDock::FreePanelLifecycleResult result =
-            controller.synchronize(panelId, confirmed);
+        const ArchDock::FreePanelLifecycleResult result = controller.synchronize(panelId, false);
         if (result.success && result.outcome == ArchDock::FreePanelLifecycleOutcome::Deferred)
         {
+            const auto missing = m_missingFreeHosts.constFind(panelId);
             if (missing == m_missingFreeHosts.constEnd())
             {
                 QElapsedTimer since;
                 since.start();
                 m_missingFreeHosts.insert(panelId, since);
                 qInfo() << "The desktop widget of free panel" << panelId
-                        << "is not in Plasma's layout; checking again before removing the panel.";
+                        << "is not in Plasma's layout; checking again before putting it back.";
+                recheck = true;
             }
-            recheck = true;
+            else if (grace || missing->elapsed() < 30000)
+            {
+                recheck = true;
+            }
+            else if (!m_restoredFreeHosts.contains(panelId))
+            {
+                m_restoredFreeHosts.insert(panelId);
+                restoreFreePanelHost(controller, panelId);
+            }
             continue;
         }
         m_missingFreeHosts.remove(panelId);
@@ -90,20 +97,57 @@ void PanelWindow::synchronizeFreePanels()
             qWarning() << "Could not synchronize the free-panel Plasma host for"
                        << panelId << result.errorCode;
         }
-        // Detached: gone now, or left behind by an older version that kept
-        // such panels.
+        // Detached: left behind by an older version, which kept a panel
+        // whose widget was gone.
         else if (result.outcome == ArchDock::FreePanelLifecycleOutcome::Detached)
         {
             if (m_panelRegistry.removeDetachedFreePanel(panelId))
-                qInfo() << "Free panel" << panelId << "is removed: its desktop widget is gone.";
+                qInfo() << "Free panel" << panelId << "is removed: an older version left it off the desktop.";
             else
                 qWarning() << "Could not remove free panel" << panelId
-                           << "whose desktop widget is gone.";
+                           << "that an older version left off the desktop.";
         }
     }
     if (recheck && !m_freeHostRetryTimer.isActive())
     {
         m_freeHostRetryTimer.start();
+    }
+}
+
+void PanelWindow::restoreFreePanelHost(const ArchDock::FreePanelController &controller,
+                                       const QString &panelId)
+{
+    // The panel's saved screen where it still exists, else the dock's screen.
+    const QList<QScreen *> screens = QGuiApplication::screens();
+    const int savedScreen = m_panelRegistry.panelValue(panelId, QStringLiteral("screen")).toInt();
+    const int screenIndex = screens.isEmpty()
+        ? -1
+        : qBound(0, savedScreen >= 0 && savedScreen < screens.size() ? savedScreen : m_settings.monitorIndex(),
+                 screens.size() - 1);
+    const ArchDock::FreePanelCreationResult result = controller.restore(panelId, screenIndex);
+    if (!result.success)
+    {
+        qWarning() << "Could not put free panel" << panelId << "back on the desktop:"
+                   << result.errorCode << result.failureStage << result.rollbackErrorCode;
+        return;
+    }
+    m_missingFreeHosts.remove(panelId);
+    qInfo() << "The desktop widget of free panel" << panelId
+            << "was gone from Plasma; the panel is back on the desktop.";
+    // Where it stood, at its size. A refused move leaves the widget where
+    // Plasma placed it.
+    if (const auto definition = runtimePanelDefinition(panelId))
+    {
+        const QVariantMap legacy = definition->toLegacyMap();
+        const QVariantMap geometry{
+            {QStringLiteral("height"), legacy.value(QStringLiteral("height"), 420).toDouble()},
+            {QStringLiteral("width"), legacy.value(QStringLiteral("width"), 420).toDouble()},
+            {QStringLiteral("x"), legacy.value(QStringLiteral("x"), 0).toDouble()},
+            {QStringLiteral("y"), legacy.value(QStringLiteral("y"), 0).toDouble()}};
+        QString geometryError;
+        if (!setPresetFreeHostGeometry(*definition, geometry, &geometryError))
+            qWarning() << "Free panel" << panelId << "is back on the desktop but not at its place:"
+                       << geometryError;
     }
 }
 
@@ -318,6 +362,10 @@ ArchDock::FreePanelController::HostOperations PanelWindow::freePanelHostOperatio
     {
         return freePanelHostMatchCount(panelId, token);
     };
+    operations.panelHostCount = [this](const QString &panelId)
+    {
+        return freePanelWidgetCount(panelId);
+    };
     operations.discoverOwnedHost = [this](const QString &panelId, const QString &token)
     {
         return discoverOwnedFreePanelHost(panelId, token);
@@ -451,6 +499,39 @@ print("ARCHDOCK_RESULT:" + String(matches));
 )JS")
                                .arg(plasmaScriptStringLiteral(panelId))
                                .arg(plasmaScriptStringLiteral(ownershipToken));
+    const std::optional<int> result = evaluatePlasmaScriptResultOptional(script);
+    return result.has_value() && *result >= 0 ? result : std::nullopt;
+}
+
+// Every Arch Dock widget on a desktop that shows this panel, whatever its
+// owner token: a panel is never given a second widget.
+std::optional<int> PanelWindow::freePanelWidgetCount(const QString &panelId) const
+{
+    if (panelId.isEmpty())
+    {
+        return std::nullopt;
+    }
+
+    const QString script = QStringLiteral(R"JS(
+let matches = 0;
+const allDesktops = desktops();
+for (let desktopIndex = 0; desktopIndex < allDesktops.length; ++desktopIndex) {
+    const desktop = desktopById(Number(allDesktops[desktopIndex].id));
+    if (!desktop)
+        continue;
+    const docks = desktop.widgets("org.archdock.dock");
+    for (let dockIndex = 0; dockIndex < docks.length; ++dockIndex) {
+        const dock = desktop.widgetById(Number(docks[dockIndex].id));
+        if (!dock || dock.type !== "org.archdock.dock")
+            continue;
+        dock.currentConfigGroup = ["General"];
+        if (String(dock.readConfig("panelId", "")) === %1)
+            ++matches;
+    }
+}
+print("ARCHDOCK_RESULT:" + String(matches));
+)JS")
+                               .arg(plasmaScriptStringLiteral(panelId));
     const std::optional<int> result = evaluatePlasmaScriptResultOptional(script);
     return result.has_value() && *result >= 0 ? result : std::nullopt;
 }

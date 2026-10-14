@@ -4782,7 +4782,8 @@ void PanelWindowCapabilityTest::studioFolderShapeRows()
     const QVariantMap length = fieldByKey(fields, QStringLiteral("folderStackLength"));
     QCOMPARE(length.value(QStringLiteral("minimumValue")).toInt(), 2);
     QCOMPARE(length.value(QStringLiteral("maximumValue")).toInt(), 12);
-    QCOMPARE(length.value(QStringLiteral("defaultValue")).toInt(), 5);
+    // A stack opens at its smallest: three at once.
+    QCOMPARE(length.value(QStringLiteral("defaultValue")).toInt(), 3);
     // The values reach the applet.
     QVERIFY(set({{"folderFanOpening", 120}, {"folderStackLength", 9}, {"folderRingSize", "panel"}}));
     const QVariantMap configuration = backend.panelRendererConfiguration(panel);

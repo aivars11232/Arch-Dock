@@ -172,9 +172,11 @@ session tests with the private bus and the test Python on `PATH`.
 
 After installing the final package (only once the whole list is done): open
 a folder on each panel; remove a panel from its right-click menu and see it
-gone from the Studio; Add panel… on an empty edge and on a taken one. Save
-any panel you want to keep to a Profile first: a free panel whose widget is
-not on the desktop is removed two minutes after Arch Dock starts.
+gone from the Studio; Add panel… on an empty edge and on a taken one. The 24
+free panels the earlier versions had left off the desktop are removed at the
+first start (the owner chose "Delete all 24"); Profiles keep their copies. A
+free panel still on the desktop comes back by itself if Plasma loses it at a
+login.
 
 ## Paused - 2026-10-14, at the owner's word
 
@@ -217,15 +219,124 @@ circles, nesting), `tst_DockGeometry` 560/560 (two-circle layout),
 `panel-settings-schema-test` 22/22 (Stack length default 3); the private
 replica `tilt-plane`, `two-circles`, `gimbal` runs (owner files unchanged).
 
-### Still open for piece 1
+The open points this section listed are done below.
 
-- The fan on free-2 still stands too far from the panel ("The marked one is
-  too far"): with names its children are large at this panel's size, and
-  they must clear the panel whole.
-- The Grid opening does not take the tilt yet; a Möbius strip opening is the
-  owner's idea for later.
-- The complete serial suite on this code, Report 1 final, the fresh-clone
-  recheck built with one job, Report 2.
+## Resumed - 2026-10-14
+
+### Free panels lost at a Plasma start
+
+- Finding: after the morning's login the owner's free-1 and free-2 were gone
+  from Plasma (asked, the owner: "No, both are gone"). The installed 0.1.1-24
+  looked for free-1's widget for 90 s, found it nowhere and marked both
+  detached at 08:40:27; Arch Dock's own log shows the same after the Plasma
+  restarts of the day before (14:20 for free-1 and free-2, 18:13 for free-4).
+  All 24 free records in the owner's settings were detached that way
+  (`owned-host-not-found`). The owner's Plasma layout is not read, so the
+  cause there stays unknown; a private plain Plasma keeps the widget through
+  a graceful restart and Arch Dock finds it again 4 s later, with this build
+  (`60-restart-this-build-*`) and with the installed version after Put back
+  (`61-restart-installed-putback-steps.log`).
+- The code committed in a2adecb would have turned that into a loss: it
+  deleted a free panel whose widget stayed missing (90 s after the backend's
+  start, 30 s apart), and the grace did not start again when Plasma did.
+- Now (the owner accepted "Arch Dock puts such a panel back by itself"): a
+  missing widget never removes or detaches a panel. After the grace - 90 s
+  from the backend's start, or from Plasma's return on the bus - and 30 s of
+  being missing, `FreePanelController::restore` gives the panel a new widget
+  with its own token, at its place and size, once per Plasma start; it never
+  adds one while any widget still shows the panel (`freePanelWidgetCount`).
+  Only the owner's own removal deletes a free panel. The 24 detached records
+  are deleted at the first start (the owner: "Delete all 24", Profiles keep
+  the copies).
+- Proof, private plain Plasma (`62-lost-panel-*`): the 24 old records went
+  at the start; a new panel's widget was dropped from the private layout
+  while Plasma was down; 91 s after Plasma came back it was there again,
+  same place, size and token; removed with Plasma's own removal it stayed
+  gone. `PanelRegistryTest::restoresFreePanelPlasmaLost`: put back with the
+  settings kept, refused while a widget shows the panel, a failed try leaves
+  the record as it was, a detached record is not put back.
+
+### Folder openings on a 3D panel
+
+The pictures last night and this morning (`70-openings-before.png`) showed
+three faults besides "too far": a fan with three named children showed two,
+the stack one fewer than its length, and the inner circle of two was crowded.
+On a tilted plane the track spaced children in flat units along a path drawn
+in perspective. Changes, each checked on pictures of last night's free-2:
+
+- Children on a plane are a pitch apart at the size each is drawn
+  (`trackRun`, the track's `unscaled`), and every shape is as large as its
+  smallest count needs that way: three named children on a fan, an arc and a
+  stack, six on a ring (`71-*`). A shape holds fewer only where none fits the
+  screen; then it stands as close to the panel as it can. The room a child
+  fading past an end passes through no longer counts against the screen.
+- No child is drawn larger than the folder's own icon (`largestScale`): ones
+  opening towards the viewer had grown to twice its size, labels too.
+- Two circles: the small one inside the big one with 16 pixels between their
+  lines as drawn, a glow not counted (`outlineWidth`); where the screen is
+  short the first circle holds four, then three, before the ring keeps one
+  circle. Their sizes are worked out once per opening: 174 ms instead of
+  1.1 s (`71-two-circles.png`).
+- Grid on the plane: two rows of three, moving a row at a time
+  (`gridTrackLayout`); first drawn on a light board, which the owner crossed
+  out ("Grid layout should not have any visible borders, meaning don't box
+  it in"): no border now (`73-grid-no-border.png`).
+- Stack: the owner drew "−0" crossed and "|0" ticked - "the stack goes up and
+  down ... bottom - right and left, sides up and down". It lies along the
+  panel's side nearest the folder, centred on it and no longer than it, a
+  little way out of the rim (`sideOut`); the flat panels' rule.
+- Fan: the owner drew a line round free-2's right side ("it needs to hug it a
+  bit"). The fan follows the rim round the folder, each point just clear of
+  the panel as drawn, as long as its children need and at most half way
+  round (`hug`); a band along the children, nothing filled
+  (`72-fan-hugs-stack-along-side.png`).
+- Timings in plasmashell (path search, then first frame): fan 16-29 ms /
+  41-59, stack 9-11 / 18-38, grid 67-88 / 36-86, two circles 156-177 /
+  35-61, ring with names 452-548 / 25-46.
+
+Tests: `tst_FolderExpansion` 197/197 (`folderShapesLieOnATiltedPlane` with
+the grid and the drawn spacing, `ringCirclesLeanLikeAGimbal` with the gap
+all round, `planeShapesFollowThePanel`, `gridMovesRowByRow`),
+`tst_DockGeometry` 560/560, `PanelRegistryTest` 72/72.
+
+Complete suite, serially, on this code (`80-full-suite.log`): 118 of 120 in
+2337 s. The two failures were both of piece 1 itself, never run since the
+folder work of the night before:
+
+- `panel-window-capability-test` `studioFolderShapeRows` still expected Stack
+  length 5 by default; a new panel's stack is 3 since that night. The test
+  now expects 3.
+- `folder-anchor-smoke`: on the baked ring Along the dock opened 150 px from
+  the folder (allowed: about 105). The night's change let the curve step out
+  by up to four icons on every panel, and start at a quarter of the way
+  round; that was meant for a tilted 3D panel. Flat and baked panels again
+  step out at most 64 pixels and start at a third of the way round (within
+  the owner's quarter to three quarters), as before. The matrix's 3D rows
+  still measured the shapes as if they were drawn flat on the screen -
+  circles, equal distances, the shape's own direction taken as a screen
+  direction - none of which holds on a tilted plane. They now check what is
+  seen there: no child over the dock or on one of its icons, the shape
+  beside the folder and away from the dock, the fan following the rim with
+  its band, the stack a straight line, the grid with no border and at most
+  two rows of three, the ring drawn beside the dock on the side with more of
+  the screen (either side for a dock in the middle), and Along the dock
+  starting a little further out where it keeps clear of the drawn panel. A
+  stack along a short side holds two at least, as on a flat panel.
+
+Reruns on the fixed code: `panel-window-capability-test` passed
+(`81-rerun-two-fixed.log`); `folder-anchor-smoke` passed, all 90 openings
+(`84-rerun-anchor.log`); `folder-interaction-smoke`, `tst_FolderExpansion`,
+`tst_DockGeometry`, `tst_PlatformGeometry` and `tst_FolderEasing` passed
+again after the last changes (`85-rerun-folder-tests.log`).
+
+### Still open
+
+- The ring with names takes about half a second to open on free-2.
+- An opening may still lie over another Arch Dock panel beside its own
+  (asked the owner whether openings should keep clear of other panels).
+- Why the owner's Plasma drops Arch Dock's widgets at a start.
 - Next after piece 1: the owner's icon limit by panel size (a 16 pixel gap
-  measured on the owner's top panel; nothing cut off when resized).
+  measured on the owner's top panel; nothing cut off when resized), a Möbius
+  strip opening, editing a saved profile (the owner: "not only profiles but
+  also editing it" - "Edit a saved profile").
 

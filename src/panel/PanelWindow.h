@@ -350,6 +350,7 @@ private:
     void scheduleNativePanelRecovery();
     void recoverNativePanels(bool allowMissingHostRecovery);
     void synchronizeFreePanels();
+    void restoreFreePanelHost(const ArchDock::FreePanelController &controller, const QString &panelId);
     [[nodiscard]] ArchDock::FreePanelCreationResult createFreePanelTransaction(
         const ArchDock::FreePanelCreationRequest &request);
     [[nodiscard]] ArchDock::FreePanelController::HostOperations freePanelHostOperations() const;
@@ -359,6 +360,7 @@ private:
     [[nodiscard]] std::optional<int> freePanelHostMatchCount(
         const QString &panelId,
         const QString &ownershipToken) const;
+    [[nodiscard]] std::optional<int> freePanelWidgetCount(const QString &panelId) const;
     [[nodiscard]] ArchDock::FreePanelHostDiscoveryResult discoverOwnedFreePanelHost(
         const QString &panelId,
         const QString &ownershipToken) const;
@@ -524,13 +526,16 @@ private:
     int m_screenRevision = 0;
     QTimer m_screenChangeTimer;
     bool m_screenChangePending = false;
-    // While the backend is young, a free panel whose widget is not found is
-    // checked again instead of detached: plasmashell may still be restoring
-    // its layout (the owner's Free panel 21 was lost that way, 2026-10-12).
+    // Right after the backend or Plasma starts, a free panel whose widget is
+    // not found is only checked again: Plasma may still be restoring its
+    // layout.
     QElapsedTimer m_freeHostGraceClock;
     QTimer m_freeHostRetryTimer;
     // Free panels whose desktop widget was not found, and since when.
     QHash<QString, QElapsedTimer> m_missingFreeHosts;
+    // Free panels already put back on the desktop since Plasma last started:
+    // one try each, so a refusing Plasma is not asked again and again.
+    QSet<QString> m_restoredFreeHosts;
     // Panels their owner removed in Plasma, waiting for Plasma to delete
     // them (a removal can be undone until then), and the check that waits.
     QSet<QString> m_removalRequested;

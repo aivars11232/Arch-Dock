@@ -172,6 +172,10 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
                 {
                     return;
                 }
+                // A free panel's widget is looked for afresh once Plasma is
+                // back, after the same wait as at the backend's start.
+                m_freeHostGraceClock.restart();
+                m_missingFreeHosts.clear();
                 if (newOwner.isEmpty())
                 {
                     ++m_nativePanelRecoveryGeneration;
@@ -181,6 +185,7 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
                     return;
                 }
                 m_nativePanelVisibilityStateCache.clear();
+                m_restoredFreeHosts.clear();
                 scheduleNativePanelRecovery();
             });
 

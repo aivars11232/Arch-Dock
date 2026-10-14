@@ -192,6 +192,9 @@ Item {
     readonly property bool freeHost:
         String(entryDelegateContext && entryDelegateContext.hostKind
                ? entryDelegateContext.hostKind : "") === "free"
+    // A free panel drawn in 3D, whose folders open on its own plane
+    // (folderPlane()).
+    readonly property bool folderPlaneReady: freeHost && surfaceLoader.true3DReady
     readonly property bool rotationCapabilityAvailable:
         Boolean(hostCapabilities && hostCapabilities.rotation
                 && typeof hostCapabilities.rotation === "object"

@@ -60,7 +60,7 @@ PlasmaCore.Dialog {
     // the icon's parent's coordinates; null elsewhere.
     property var keepOut: null
     // How far the contents stay from the panel as drawn.
-    readonly property real keepOutMargin: 6
+    readonly property real keepOutMargin: 4
     property bool requested: false
     property bool interactionAllowed: true
     // Measured when the folder opens, in screen coordinates.
@@ -162,14 +162,57 @@ PlasmaCore.Dialog {
         // children clear of the panel as drawn.
         const aligned = plane.alignedAt(origin.x, origin.y)
         if (aligned) project = onScreen(aligned)
-        const shape = LayoutEngine.folderShape(folderLayout, {
-            folder: origin, outward: facing, fromEdge: true,
-            iconSize: iconSize, cellWidth: content.cellWidth, cellHeight: content.cellHeight,
-            gap: 6, count: content.entries.length, fanOpening: fanOpening,
-            stackLength: stackLength, stackSpan: 0, ringSize: ringSize, panelRadius: plane.radius,
-            obstacles: others, planeObstacles: plane.icons || [], obstacleSize: iconSize,
-            keepOut: keep, keepOutMargin: keepOutMargin, screen: area, screenMargin: margin,
-            outlineMargin: outlineStyle.lineWidth / 2 + outlineStyle.blur, project: project })
+        // The folder's own icon there: no child is drawn larger.
+        const folderSeen = project(origin)
+        const build = function(from, way, extra) {
+            const options = {
+                folder: from, outward: way, fromEdge: true,
+                iconSize: iconSize, cellWidth: content.cellWidth, cellHeight: content.cellHeight,
+                gap: 6, count: content.entries.length, fanOpening: fanOpening,
+                stackLength: stackLength, stackSpan: 0, ringSize: ringSize, panelRadius: plane.radius,
+                obstacles: others, planeObstacles: plane.icons || [], obstacleSize: iconSize,
+                keepOut: keep, keepOutMargin: keepOutMargin, screen: area, screenMargin: margin,
+                outlineMargin: outlineStyle.lineWidth / 2 + outlineStyle.blur, outlineWidth: outlineStyle.lineWidth,
+                largestScale: folderSeen ? folderSeen.scale : 0,
+                project: project }
+            for (const key in extra || {}) options[key] = extra[key]
+            return LayoutEngine.folderShape(folderLayout, options)
+        }
+        // A fan hugs the panel: its children follow the rim round the folder.
+        if (folderLayout === "fan") {
+            const shape = build(origin, facing, { hug: { rimAt: plane.rimAt, turn: Math.atan2(origin.y, origin.x) } })
+            return shape && !shape.hidden ? shape : null
+        }
+        // A stack lies along the panel's side nearest the folder: up and
+        // down beside its left or right side, across along its near or far
+        // side, centred on that side and no longer than it, a little way out
+        // of the rim; where it is not seen whole there, along the next
+        // nearest side.
+        if (folderLayout === "stack" && (plane.icons || []).length >= 2) {
+            let box = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity }
+            for (const point of plane.icons)
+                box = { left: Math.min(box.left, point.x), right: Math.max(box.right, point.x),
+                        top: Math.min(box.top, point.y), bottom: Math.max(box.bottom, point.y) }
+            const sides = [
+                { gap: Math.abs(origin.x - box.left), from: { x: -plane.rimAt(Math.PI), y: box.top },
+                  way: { x: 0, y: 1 }, span: box.bottom - box.top, out: { x: -1, y: 0 } },
+                { gap: Math.abs(box.right - origin.x), from: { x: plane.rimAt(0), y: box.top },
+                  way: { x: 0, y: 1 }, span: box.bottom - box.top, out: { x: 1, y: 0 } },
+                { gap: Math.abs(origin.y - box.top), from: { x: box.left, y: -plane.rimAt(-Math.PI / 2) },
+                  way: { x: 1, y: 0 }, span: box.right - box.left, out: { x: 0, y: -1 } },
+                { gap: Math.abs(box.bottom - origin.y), from: { x: box.left, y: plane.rimAt(Math.PI / 2) },
+                  way: { x: 1, y: 0 }, span: box.right - box.left, out: { x: 0, y: 1 } }]
+            sides.sort(function(a, b) { return a.gap - b.gap })
+            let fallback = null
+            for (const side of sides) {
+                const shape = build(side.from, side.way, { stackSpan: side.span, sideOut: side.out })
+                if (!shape || shape.hidden) continue
+                if (!(shape.overflow > 0.5)) return shape
+                if (!fallback || shape.overflow < fallback.overflow) fallback = shape
+            }
+            return fallback
+        }
+        const shape = build(origin, facing)
         return shape && !shape.hidden ? shape : null
     }
     function openFolder() {
@@ -228,13 +271,15 @@ PlasmaCore.Dialog {
             // of the panel as drawn, so the curve may move out by up to six
             // icons.
             // The curve reaches as far round the dock as the children need:
-            // a quarter of the way at first, then further, up to three
-            // quarters; the rest scroll in with the wheel. A curve every
-            // child keeps clear of the icons on is preferred; the fullest
-            // attempt is used when none does.
-            const reach = (keep ? 6 : 4) * iconSize, stride = Math.max(4, iconSize / 4)
+            // a quarter of the way at first on a 3D panel, a third on a flat
+            // or baked one, then further, up to three quarters; the rest
+            // scroll in with the wheel. A curve every child keeps clear of the
+            // icons on is preferred; the fullest attempt is used when none
+            // does.
+            const reach = keep ? 6 * iconSize : 64, stride = keep ? Math.max(4, iconSize / 4) : 8
             let layout = null, chosen = null, cleared = null
-            spans: for (let span = Math.PI / 2; span <= 3 * Math.PI / 2 + 1e-9; span += Math.PI / 6) {
+            spans: for (let span = keep ? Math.PI / 2 : 2 * Math.PI / 3; span <= 3 * Math.PI / 2 + 1e-9;
+                        span += Math.PI / 6) {
                 for (let extra = 0; extra <= reach + 1e-9; extra += stride) {
                     samples = trackSamples(extra, span).map(function(sample) {
                         const point = toScreen(sample.x, sample.y)
@@ -298,10 +343,10 @@ PlasmaCore.Dialog {
                 }
                 // A stack lies against the dock's side nearest the folder: upright
                 // beside its left or right side, level above or below it, centred
-                // on the dock and no longer than it, one cell out (the owner's
-                // rule, 2026-10-12). The dock's box on the screen is its icons'
-                // box, the same on every tier; where the chosen side would leave
-                // the screen, the opposite side is used.
+                // on the dock and no longer than it, one cell out. The dock's box
+                // on the screen is its icons' box, the same on every tier; where
+                // the chosen side would leave the screen, the opposite side is
+                // used.
                 if (folderLayout === "stack" && dock && others.length >= 2) {
                     let box = { left: centre.x, right: centre.x, top: centre.y, bottom: centre.y }
                     for (const point of others)
@@ -334,9 +379,8 @@ PlasmaCore.Dialog {
                 }
                 // A ring opens beside the dock on the side with more of the
                 // screen: to the right of a dock on the left half, to the left of
-                // one on the right half, from the dock's rim there (the owner's
-                // rule, 2026-10-12). Where it would leave the screen above or
-                // below, it is lowered or raised to fit.
+                // one on the right half, from the dock's rim there. Where it would
+                // leave the screen above or below, it is lowered or raised to fit.
                 if (folderLayout === "ring" && dock && panelRadius > 0) {
                     const sideways = dock.x <= area.x + area.width / 2 ? 1 : -1
                     origin = { x: dock.x + sideways * panelRadius, y: dock.y }
@@ -434,6 +478,17 @@ PlasmaCore.Dialog {
         startAtFolder: root.screenShape !== null && root.screenShape.start === "start"
         pathCapacity: root.screenShape !== null ? Number(root.screenShape.capacity || 0) : 0
         pathPitch: root.screenShape !== null ? Number(root.screenShape.pitch || 0) : 0
+        measureAsDrawn: root.screenShape !== null && root.screenShape.projected === true
+        ringLimits: root.screenShape !== null && root.screenShape.ringCapacities ? root.screenShape.ringCapacities : []
+        gridCells: root.screenShape !== null && root.screenShape.grid ? ({
+            columns: root.screenShape.grid.columns, rows: root.screenShape.grid.rows,
+            cells: root.screenShape.grid.cells.map(function(line) {
+                return line.map(function(cell) {
+                    if (!cell) return null
+                    const point = root.local(cell)
+                    return { x: point.x, y: point.y, scale: Number(cell.scale) || 1 }
+                })
+            }) }) : null
         outline: root.screenOutline ? ({ closed: root.screenOutline.closed === true,
             strokeFrom: Number(root.screenOutline.strokeFrom) || 0,
             points: root.screenOutline.points.map(root.local),
@@ -444,7 +499,7 @@ PlasmaCore.Dialog {
                 return { x: point.x, y: point.y, scale: Number(sample.scale) || 1 }
             })
         }) : []
-        outlineFilled: root.folderLayout === "fan"
+        outlineFilled: root.folderLayout === "fan" && root.screenOutline !== null && root.screenOutline.closed === true
         outlineStyle: root.outlineStyle
         outlineOpacity: root.panelOpacity
         shapeInfo: {

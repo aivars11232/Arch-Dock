@@ -659,7 +659,7 @@ TestCase {
     // on the shape as projected, at the scale there, and the outline and the
     // room the shape needs are the projected ones.
     function test_folderShapesLieOnATiltedPlane_data() {
-        return ["fan", "arc", "stack", "ring"].map(function(kind) { return { tag: kind, kind: kind } })
+        return ["fan", "arc", "stack", "ring", "grid"].map(function(kind) { return { tag: kind, kind: kind } })
     }
     function test_folderShapesLieOnATiltedPlane(data) {
         const centre = { x: 1920, y: 1500 }
@@ -703,8 +703,39 @@ TestCase {
                 verify(Math.abs(cross) < 0.01 * Math.hypot(sample.x - first.x, sample.y - first.y) * 100,
                        "the stack is a straight line")
             }
-            fuzzyCompare(Math.hypot(onPlane[1].x - onPlane[0].x, onPlane[1].y - onPlane[0].y), shape.pitch, 0.01,
-                         "a pitch apart on the plane")
+            // Neighbours a pitch apart at the size they are drawn, near or far.
+            fuzzyCompare(Math.hypot(second.x - first.x, second.y - first.y) / ((first.scale + second.scale) / 2),
+                         shape.pitch, 0.03 * shape.pitch, "a pitch apart as drawn")
+        }
+        // Laid out at the size each child is drawn there, the shape holds its
+        // smallest count at once: three named children on a fan or an arc,
+        // the stack's length, the ring's six.
+        verify(shape.projected, "drawn on a plane")
+        const laid = data.kind === "grid" ? LayoutEngine.gridTrackLayout(shape.grid, 8, 0)
+            : LayoutEngine.folderTrackLayout(shape.samples, data.kind === "ring" ? 6 : 8, shape.pitch, 0,
+                { closed: shape.closed === true, start: shape.start, capacity: shape.capacity || 0, unscaled: true })
+        compare(laid.capacity, data.kind === "ring" ? 6 : data.kind === "stack" ? 5 : data.kind === "grid" ? 2 : 3)
+        if (data.kind === "grid") {
+            // Two rows of three on the plane, rows running out from the folder
+            // and their columns along the rim; neighbours a pitch apart as
+            // drawn, the nearest pair at least.
+            compare(shape.grid.columns, 3)
+            compare(shape.grid.rows, 2)
+            compare(shape.grid.cells.length, 4)
+            compare(shape.outline, null, "no border round a grid")
+            const cells = shape.grid.cells.map(function(line) { return line.map(back) })
+            for (const line of cells)
+                for (const point of line)
+                    fuzzyCompare(point.y, line[0].y, 0.01, "a row runs along the rim")
+            verify(cells[1][0].y > cells[2][0].y && cells[2][0].y > cells[3][0].y, "rows run out from the folder")
+            const drawn = function(a, b) { return Math.hypot(b.x - a.x, b.y - a.y) / ((a.scale + b.scale) / 2) }
+            const seen = shape.grid.cells
+            for (let row = 1; row <= 2; ++row)
+                for (let column = 0; column < 3; ++column) {
+                    if (column < 2)
+                        verify(drawn(seen[row][column], seen[row][column + 1]) >= shape.pitch * 0.97, "apart in a row")
+                    verify(drawn(seen[row][column], seen[row + 1][column]) >= shape.pitch * 0.97, "apart between rows")
+                }
         }
         if (data.kind === "fan") {
             fuzzyCompare(shape.apex.x, project(folder).x, 0.01, "the apex is the folder's rim, as seen")
@@ -721,6 +752,105 @@ TestCase {
         verify(LayoutEngine.folderShape(data.kind, {
             folder: folder, outward: { x: 0, y: -1 }, fromEdge: true, iconSize: 48, count: 8,
             project: function() { return null } }).hidden)
+    }
+    // On a 3D panel's plane a fan hugs the panel: its children stand along
+    // the rim round the folder, just clear of the panel as drawn. A stack
+    // lies along the panel's side, centred on it and a little way out.
+    // Neither turns away from the panel.
+    function test_planeShapesFollowThePanel() {
+        const centre = { x: 1920, y: 1200 }
+        const project = function(point) { return { x: centre.x + point.x, y: centre.y + point.y * 0.5, scale: 1 } }
+        const back = function(point) { return { x: point.x - centre.x, y: (point.y - centre.y) / 0.5 } }
+        const rim = 300
+        const outline = []
+        for (let index = 0; index < 64; ++index) {
+            const turn = 2 * Math.PI * index / 64
+            outline.push(project({ x: rim * Math.cos(turn), y: rim * Math.sin(turn) }))
+        }
+        const keepOut = { hull: LayoutEngine.convexHull(outline), rects: [] }
+        const clearOf = function(sample) {
+            return !LayoutEngine.rectTouchesKeepOut({ x: sample.x - 24, y: sample.y - 24, width: 48, height: 48 },
+                                                    keepOut, 0)
+        }
+        const options = { iconSize: 48, cellWidth: 48, cellHeight: 48, gap: 6, count: 8, fromEdge: true,
+            screen: { x: 0, y: 0, width: 3840, height: 2160 }, project: project, keepOut: keepOut, keepOutMargin: 4 }
+        const fan = LayoutEngine.folderShape("fan", Object.assign({}, options, {
+            folder: { x: rim, y: 0 }, outward: { x: 1, y: 0 }, fanOpening: 90,
+            hug: { rimAt: function() { return rim }, turn: 0 } }))
+        verify(fan.hugs)
+        compare(fan.turn, 0)
+        compare(fan.outline.closed, false, "a band along the children, nothing filled")
+        const curve = fan.samples.map(back)
+        for (const point of curve)
+            verify(Math.hypot(point.x, point.y) >= rim - 0.5, "outside the rim")
+        fuzzyCompare(Math.atan2(curve[0].y, curve[0].x), -Math.atan2(curve[48].y, curve[48].x), 0.01,
+                     "round the folder")
+        for (const sample of fan.samples)
+            verify(clearOf(sample), "clear of the panel as drawn")
+        const nearest = Math.hypot(curve[24].x, curve[24].y) - rim
+        verify(nearest <= 40, "just clear of the rim at the folder: " + nearest)
+        // Four children without names at once, a pitch apart as drawn.
+        compare(LayoutEngine.folderTrackLayout(fan.samples, 8, fan.pitch, 0, { unscaled: true }).capacity, 4)
+
+        // The stack beside the right side: up and down along it, centred.
+        const stack = LayoutEngine.folderShape("stack", Object.assign({}, options, {
+            folder: { x: rim, y: -rim }, outward: { x: 0, y: 1 }, stackLength: 3, stackSpan: 2 * rim,
+            sideOut: { x: 1, y: 0 } }))
+        compare(stack.turn, 0)
+        compare(stack.capacity, 3)
+        const line = stack.samples.map(back)
+        for (const point of line)
+            fuzzyCompare(point.x, line[0].x, 0.01, "a line along the side")
+        verify(line[0].x > rim, "out of the rim")
+        fuzzyCompare((line[0].y + line[2].y) / 2, 0, 0.5, "centred on the side")
+        for (const sample of stack.samples.slice(0, 3))
+            verify(clearOf(sample), "clear of the panel as drawn")
+        fuzzyCompare(Math.hypot(stack.samples[1].x - stack.samples[0].x, stack.samples[1].y - stack.samples[0].y),
+                     stack.pitch, 0.5, "a pitch apart as drawn")
+    }
+    // A grid holds two rows of three at once; the wheel moves its children a
+    // row at a time, each straight on to its place in the next row, the last
+    // row's fading out past it and the next ones coming in before the first.
+    function test_gridMovesRowByRow() {
+        const shape = shapeOf("grid", { x: 0, y: -1 }, 8, false)
+        compare(shape.grid.columns, 3)
+        compare(shape.grid.rows, 2)
+        compare(shape.capacity, 6)
+        const cells = shape.grid.cells
+        const resting = LayoutEngine.gridTrackLayout(shape.grid, 8, 0)
+        compare(resting.capacity, 2)
+        verify(resting.windowed)
+        compare(resting.maximumOffset, 1)
+        for (let index = 0; index < 6; ++index) {
+            const place = cells[1 + Math.floor(index / 3)][index % 3]
+            fuzzyCompare(resting.entries[index].x, place.x, 0.01)
+            fuzzyCompare(resting.entries[index].y, place.y, 0.01)
+            verify(resting.entries[index].onTrack)
+            compare(resting.entries[index].visibility, 1)
+        }
+        compare(resting.entries[6].visibility, 0, "waiting for its turn")
+        // Half way through one row of travel.
+        const half = LayoutEngine.gridTrackLayout(shape.grid, 8, 0.5)
+        fuzzyCompare(half.entries[0].x, (cells[1][0].x + cells[2][0].x) / 2, 0.01, "straight on to the next row")
+        fuzzyCompare(half.entries[0].y, (cells[1][0].y + cells[2][0].y) / 2, 0.01)
+        fuzzyCompare(half.entries[3].visibility, 0.5, 1e-6, "the last row going out")
+        fuzzyCompare(half.entries[6].visibility, 0.5, 1e-6, "the next row coming in")
+        fuzzyCompare(half.entries[6].y, (cells[0][0].y + cells[1][0].y) / 2, 0.01, "before the first row")
+        // A whole row on: the next ones stand in the first row.
+        const moved = LayoutEngine.gridTrackLayout(shape.grid, 8, 1)
+        fuzzyCompare(moved.entries[6].x, cells[1][0].x, 0.01)
+        fuzzyCompare(moved.entries[6].y, cells[1][0].y, 0.01)
+        fuzzyCompare(moved.entries[0].y, cells[2][0].y, 0.01)
+        compare(moved.entries[3].visibility, 0)
+        // A key on a child out of sight brings its row in.
+        verify(LayoutEngine.folderTravelTo(resting, 7, 0) !== 0)
+        compare(LayoutEngine.folderTravelTo(resting, 2, 0), 0)
+        // Fewer children than the grid holds stand in its first cells.
+        const few = LayoutEngine.gridTrackLayout(LayoutEngine.folderShape("grid", {
+            folder: { x: 400, y: 400 }, outward: { x: 0, y: -1 }, iconSize: 48, count: 2,
+            screen: { x: 0, y: 0, width: 1600, height: 1200 } }).grid, 2, 0)
+        verify(!few.windowed)
+        verify(few.entries.every(function(entry) { return entry.onTrack && entry.visibility === 1 }))
     }
     // A small ring at its smallest holds six named children; a folder with
     // more has a second circle round it, a child's cell further out, for the
@@ -786,11 +916,30 @@ TestCase {
             }
             return inside
         }
-        for (const point of two.samples) {
-            const dx = point.x - two.centre.x, dy = point.y - two.centre.y, length = Math.hypot(dx, dy)
-            verify(within({ x: point.x + dx / length * 24, y: point.y + dy / length * 24 }, two.rings[0]),
-                   "the inner circle stays well inside the outer one")
+        // Inside it, with a clear gap all round as drawn: 16 pixels between
+        // the two circles' bands (none here).
+        function gap(point, polygon) {
+            let nearest = Infinity
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                const a = polygon[j], b = polygon[i], dx = b.x - a.x, dy = b.y - a.y
+                const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / (dx * dx + dy * dy)))
+                nearest = Math.min(nearest, Math.hypot(a.x + dx * t - point.x, a.y + dy * t - point.y))
+            }
+            return nearest
         }
+        for (const point of two.samples) {
+            verify(within(point, two.rings[0]), "the inner circle stays inside the outer one")
+            verify(gap(point, two.rings[0]) >= 16 - 0.5, "a clear gap all round: " + gap(point, two.rings[0]))
+        }
+        // As drawn, the inner circle holds its six at once and the outer one
+        // the next ones, each a pitch apart at its size.
+        const laid = LayoutEngine.folderTrackLayout(two.samples, 24, two.pitch, 0,
+            { closed: true, rings: two.rings, unscaled: true, ringLimits: two.ringCapacities })
+        compare(laid.rings, 2)
+        for (let index = 0; index < 6; ++index)
+            verify(within(laid.entries[index], two.rings[0]) && gap(laid.entries[index], two.rings[0]) > 1,
+                   "the first six on the inner circle")
+        verify(gap(laid.entries[6], two.rings[0]) < 1, "the seventh on the outer circle")
         const one = LayoutEngine.folderShape("ring", Object.assign({}, options, { count: 5 }))
         verify(!one.rings)
         fuzzyCompare(axis(one.samples, one.centre), 0, 2.5, "one circle keeps the plane's tilt")

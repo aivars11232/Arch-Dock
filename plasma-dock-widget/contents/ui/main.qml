@@ -837,13 +837,14 @@ PlasmoidItem {
             // (ADREP-TASK-003). Grid, and every edge panel, open a popup.
             // Along the dock kept from a curved shape opens as a fan once the
             // panel's shape has no curve (a straight row), never as a popup
-            // that cannot draw it (the owner, 2026-10-13: "when I change
-            // panel shapes, folder openings go crazy").
+            // that cannot draw it.
             readonly property string savedFolderLayout: String(root.configuration.folderLayout || "fan")
             readonly property string folderLayout: savedFolderLayout === "track" && root.freeSurface
                 && !LayoutEngine.curvedLayout(panelScene.layoutPath) ? "fan" : savedFolderLayout
+            // A grid lies on a 3D panel's plane too; elsewhere it is a popup.
             readonly property bool folderOnPath: root.freeSurface
-                && ["track", "fan", "arc", "stack", "ring"].includes(folderLayout)
+                && (["track", "fan", "arc", "stack", "ring"].includes(folderLayout)
+                    || (folderLayout === "grid" && panelScene.folderPlaneReady))
             onFolderEntryIndexChanged: if (folderEntryIndex < 0) hideFolderExpansion()
 
             function hideFolderExpansion() {

@@ -100,6 +100,7 @@ struct FreePanelHostHarness
 {
     std::optional<int> bridgeScreen = 1;
     std::optional<int> matchingCount = 0;
+    std::optional<int> panelCount = 0;
     ArchDock::FreePanelHostDiscoveryResult discoveryResult{
         ArchDock::FreePanelHostDiscoveryOutcome::Unique,
         {42, 73},
@@ -127,6 +128,7 @@ struct FreePanelHostHarness
     std::function<void()> onCreate;
     int bridgeScreenCalls = 0;
     int matchingCountCalls = 0;
+    int panelCountCalls = 0;
     int discoverCalls = 0;
     int createCalls = 0;
     int adoptCalls = 0;
@@ -152,6 +154,11 @@ struct FreePanelHostHarness
         {
             ++matchingCountCalls;
             return matchingCount;
+        };
+        result.panelHostCount = [this](const QString &)
+        {
+            ++panelCountCalls;
+            return panelCount;
         };
         result.discoverOwnedHost = [this](const QString &panelId, const QString &token)
         {
@@ -469,7 +476,8 @@ private slots:
     void reportsFreePanelRollbackFailures();
     void recoversFreePanelHostLifecycle();
     void removesFreePanelHostLifecycleSafely();
-    void removesFreePanelWhoseWidgetIsGone();
+    void removesFreePanelItsOwnerRemoved();
+    void restoresFreePanelPlasmaLost();
     void resolvesStableScreenIdentityBeforeFallbackIndex();
     void reservesAndOffsetsOnlySameScreenPanels();
     void concealsOnlyForRelevantActiveWindows();
@@ -2512,8 +2520,8 @@ void PanelRegistryTest::recoversFreePanelHostLifecycle()
 
     {
         // A widget not found while the backend may not yet see Plasma's
-        // restored layout (2026-10-12): asked not to detach, the controller
-        // defers and leaves the record exactly as it was.
+        // restored layout: asked not to detach, the controller defers and
+        // leaves the record exactly as it was.
         clearPanelRegistrySettings();
         PanelRegistry registry;
         const QString token = QStringLiteral("archdock-free-recovery-deferred");
@@ -2814,11 +2822,11 @@ void PanelRegistryTest::removesFreePanelHostLifecycleSafely()
     }
 }
 
-void PanelRegistryTest::removesFreePanelWhoseWidgetIsGone()
+void PanelRegistryTest::removesFreePanelItsOwnerRemoved()
 {
-    // A free panel whose desktop widget is not found is kept while the
-    // check is unconfirmed: the backend checks again before deciding, so a
-    // removal undone in Plasma, or a layout still loading, keeps it.
+    // A free panel whose desktop widget is not found is kept while nothing
+    // is decided: a removal undone in Plasma, or a layout still loading,
+    // keeps it.
     clearPanelRegistrySettings();
     PanelRegistry registry;
     FreePanelHostHarness harness;
@@ -2832,8 +2840,9 @@ void PanelRegistryTest::removesFreePanelWhoseWidgetIsGone()
     QCOMPARE(unconfirmed.outcome, ArchDock::FreePanelLifecycleOutcome::Deferred);
     QVERIFY(registry.freeHostAssociation(panelId)->state == PanelRegistry::FreeHostState::HostedOwned);
 
-    // Confirmed, the panel is detached from the widget that is gone, and then
-    // removed entirely: nothing of it is kept, here or after a restart.
+    // Once its owner's removal is final in Plasma, the panel is detached from
+    // the widget that is gone and removed entirely: nothing of it is kept,
+    // here or after a restart.
     const ArchDock::FreePanelLifecycleResult confirmed = controller.synchronize(panelId, true);
     QVERIFY(confirmed.success);
     QCOMPARE(confirmed.outcome, ArchDock::FreePanelLifecycleOutcome::Detached);
@@ -2855,6 +2864,98 @@ void PanelRegistryTest::removesFreePanelWhoseWidgetIsGone()
     QCOMPARE(leftOver.outcome, ArchDock::FreePanelLifecycleOutcome::Detached);
     QVERIFY(registry.removeDetachedFreePanel(older.panelId));
     QVERIFY(!registry.panelIds().contains(older.panelId));
+}
+
+void PanelRegistryTest::restoresFreePanelPlasmaLost()
+{
+    using CreationOutcome = ArchDock::FreePanelHostMutationOutcome;
+
+    {
+        // Plasma lost the widget: a new one with the panel's own token, and
+        // the record keeps its settings.
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-restore-plain");
+        const QString panelId = createOwnedFreePanelRecord(registry, token, 42, 73, 1);
+        QVERIFY(!panelId.isEmpty());
+        QVERIFY(registry.updatePanelChecked(panelId, {{QStringLiteral("name"), QStringLiteral("Kept name")},
+                                                      {QStringLiteral("folderLayout"), QStringLiteral("ring")}}));
+        FreePanelHostHarness harness;
+        harness.createResult = {CreationOutcome::Verified, {55, 66}, 1};
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelCreationResult restored = controller.restore(panelId, 1);
+        QVERIFY2(restored.success, qPrintable(restored.errorCode));
+        QCOMPARE(restored.status, QStringLiteral("restored"));
+        QCOMPARE(harness.matchingCountCalls, 1);
+        QCOMPARE(harness.panelCountCalls, 1);
+        QCOMPARE(harness.createCalls, 1);
+        const auto association = registry.freeHostAssociation(panelId);
+        QVERIFY(association.has_value());
+        QCOMPARE(association->state, PanelRegistry::FreeHostState::HostedOwned);
+        QCOMPARE(association->desktopContainmentId, 55);
+        QCOMPARE(association->dockAppletId, 66);
+        QCOMPARE(association->ownershipToken, token);
+        QCOMPARE(registry.panelValue(panelId, QStringLiteral("name")).toString(), QStringLiteral("Kept name"));
+        QCOMPARE(registry.panelValue(panelId, QStringLiteral("folderLayout")).toString(), QStringLiteral("ring"));
+    }
+
+    {
+        // A widget still shows the panel under another token: no second one.
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-restore-shown");
+        const QString panelId = createOwnedFreePanelRecord(registry, token, 42, 73, 1);
+        QVERIFY(!panelId.isEmpty());
+        FreePanelHostHarness harness;
+        harness.panelCount = 1;
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelCreationResult refused = controller.restore(panelId, 1);
+        QVERIFY(!refused.success);
+        QCOMPARE(refused.errorCode, QStringLiteral("host-identity-conflict"));
+        QCOMPARE(harness.createCalls, 0);
+        QCOMPARE(registry.freeHostAssociation(panelId)->dockAppletId, 73);
+        QCOMPARE(registry.freeHostAssociation(panelId)->ownershipToken, token);
+    }
+
+    {
+        // Plasma made a widget it cannot vouch for: that widget is taken away
+        // and the record stays exactly as it was, for a later try.
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-restore-unverified");
+        const QString panelId = createOwnedFreePanelRecord(registry, token, 42, 73, 1);
+        QVERIFY(!panelId.isEmpty());
+        FreePanelHostHarness harness;
+        harness.createResult = {CreationOutcome::CandidateUnverified, {55, 66}, 1};
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelCreationResult failed = controller.restore(panelId, 1);
+        QVERIFY(!failed.success);
+        QCOMPARE(failed.errorCode, QStringLiteral("host-creation-unverified"));
+        QVERIFY(failed.rollbackAttempted);
+        QCOMPARE(harness.exactRemovalCalls, 1);
+        QCOMPARE(harness.removedHost.dockAppletId, 66);
+        QCOMPARE(harness.removedToken, token);
+        const auto association = registry.freeHostAssociation(panelId);
+        QCOMPARE(association->state, PanelRegistry::FreeHostState::HostedOwned);
+        QCOMPARE(association->dockAppletId, 73);
+        QCOMPARE(association->ownershipToken, token);
+    }
+
+    {
+        // A record an older version left detached is not put back.
+        clearPanelRegistrySettings();
+        PanelRegistry registry;
+        const QString token = QStringLiteral("archdock-free-restore-detached");
+        const QString panelId = createOwnedFreePanelRecord(registry, token, 42, 73, 1);
+        QVERIFY(!panelId.isEmpty());
+        QVERIFY(registry.detachFreeHostAssociation(panelId, token, QStringLiteral("owned-host-not-found")));
+        FreePanelHostHarness harness;
+        ArchDock::FreePanelController controller(registry, harness.operations());
+        const ArchDock::FreePanelCreationResult refused = controller.restore(panelId, 1);
+        QVERIFY(!refused.success);
+        QCOMPARE(refused.errorCode, QStringLiteral("free-panel-not-hosted"));
+        QCOMPARE(harness.createCalls, 0);
+    }
 }
 
 void PanelRegistryTest::resolvesStableScreenIdentityBeforeFallbackIndex()

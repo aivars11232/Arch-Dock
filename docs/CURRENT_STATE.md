@@ -44,11 +44,29 @@ any more ("My current plasma layout don't touch, work only with Arch Dock").
   reports Plasma's `destroyedChanged` (its own, or its Plasma panel's) as
   `panelRemovalRequested`; once Plasma has deleted it (after Undo is no
   longer possible) the record is removed - a built-in edge panel is hidden.
-  A free panel whose widget is missing on checks at least 30 s apart (after
-  the 90 s start grace) is removed too; old detached records are removed at
-  the first check. Put back (`rehostFreePanel`, `FreePanelController::rehost`,
+  Old detached records are removed at the first check. Put back
+  (`rehostFreePanel`, `FreePanelController::rehost`,
   `PanelRegistry::beginFreePanelRehost`/`abandonFreePanelRehost`) and the
   orange "widget was removed" box are gone. Profiles are not touched.
+- A free panel Plasma loses is put back (2026-10-14). After a login the
+  owner's free-1 and free-2 were gone from Plasma (the owner: "No, both are
+  gone"); the installed 0.1.1-24 had marked them detached at 08:40 after 90 s
+  of not finding them, as after the Plasma restarts at 14:20 and 18:13 the
+  day before - every one of the owner's 24 free records was detached that
+  way. A private plain Plasma keeps the widget through a restart, with this
+  build and with the installed one after Put back (`restart-test`,
+  `restart-installed`), so the loss happens only on the owner's own desktop,
+  whose layout is not read. A missing widget no longer removes or detaches
+  a panel: after the grace (90 s from the backend's start or from Plasma's
+  return on the bus) and 30 s of being missing, `FreePanelController::restore`
+  makes a new widget with the panel's own token at its saved place and size,
+  once per Plasma start, and never while a widget still shows the panel
+  under any token (`freePanelWidgetCount`). Only the owner's removal
+  (`panelRemovalRequested`) deletes a free panel. The 24 detached records go
+  at the first start (the owner: "Delete all 24"). Replica `lost-panel`: the
+  widget dropped from the private layout came back 91 s after Plasma's
+  restart, same place, size and token; removed with Plasma's own removal, the
+  panel stayed gone.
 - Panel Studio edits one panel (the owner: "one panel studio window that
   coresponds to one panel"): no panel list; Configure on another panel moves
   the window there (`editPanel`), asking Apply / Discard / Keep editing when
@@ -75,16 +93,27 @@ any more ("My current plasma layout don't touch, work only with Arch Dock").
   tried first (the owner's answer to a question) and dropped after the
   picture: at the owner's tilts they were thin slivers.
 - Folder openings on a 3D panel follow its tilt (the owner: "The tilt is
-  still wrong, it's not in sync with panels tilt in both cases"; paused
-  2026-10-14 with this work committed, the complete suite and the recheck
-  still to come). Along the dock lies on the panel's plane from the rim and
-  keeps clear of the panel as drawn (`PanelScene3D.folderKeepOut`,
-  `LayoutEngine.rectTouchesKeepOut`), spanning 90 to 270 degrees; fan, arc,
-  stack and ring are built on the plane (`folderPlane`, `folderShape`
-  `project`, `alignedAt`) at their smallest; a ring with more than six
-  children has a second circle (`ringedTrackLayout`), the two leaning 10
-  degrees opposite ways, the inner 30 pixels inside the outer. See the
-  report's "Paused" section.
+  still wrong, it's not in sync with panels tilt in both cases"). Along the
+  dock lies on the panel's plane from the rim and keeps clear of the panel
+  as drawn (`PanelScene3D.folderKeepOut`, `LayoutEngine.rectTouchesKeepOut`),
+  spanning 90 to 270 degrees; the other openings are built on the plane
+  (`folderPlane`, `folderShape` `project`, `alignedAt`). On the plane a path
+  is measured at the size each child is drawn (`trackRun`, the track's
+  `unscaled`), so neighbours are a pitch apart near or far, and each shape
+  is as large as its smallest count needs that way: three named children on
+  a fan, an arc or a stack, two rows of three in a grid, six on a ring. A
+  shape holds fewer only where none fits the screen, then stands as close to
+  the panel as it can. No child is drawn larger than the folder's icon
+  (`largestScale`). The fan follows the rim round the folder, each point
+  just clear of the panel (`hug`); a stack lies along the panel's side
+  nearest the folder (`sideOut`, the side's length), up and down beside a
+  side, left and right under or over the panel (the owner's "|0 ... bottom -
+  right and left, sides up and down"); the grid lies on the plane with no
+  border (the owner: "don't box it in") and moves a row at a time
+  (`gridTrackLayout`). A ring with more children has a second circle
+  (`ringedTrackLayout`), the two leaning 10 degrees opposite ways with 16
+  pixels between their lines as drawn; where the screen is short its first
+  circle holds four, then three, before it does without the second.
 - Keyboard selection in an open folder holds while the pointer rests over
   it: Qt Quick delivers hover again when items move under a pointer that
   does not move, which handed the selection back to the item under the
@@ -93,10 +122,12 @@ any more ("My current plasma layout don't touch, work only with Arch Dock").
   showed it (`tst_FolderExpansion`, depending on where an earlier test left
   the pointer).
 - Tests: `threeDPanelTakesEveryLayout`, `studioEditsOnePanelAtATime`,
-  `removesFreePanelWhoseWidgetIsGone`, `tst_PlatformGeometry` stars (3 to 12
-  points closed, outward, within reach, every icon on the top) and the seen
-  angle of a 3D panel's folder stands, `tst_FolderExpansion`
-  `keysKeepTheirSelectionUnderAStillPointer`.
+  `removesFreePanelItsOwnerRemoved`, `restoresFreePanelPlasmaLost`,
+  `tst_PlatformGeometry` stars (3 to 12 points closed, outward, within
+  reach, every icon on the top) and the seen angle of a 3D panel's folder
+  stands, `tst_FolderExpansion` `keysKeepTheirSelectionUnderAStillPointer`,
+  `folderShapesLieOnATiltedPlane` (grid too), `ringCirclesLeanLikeAGimbal`
+  (the gap all round), `planeShapesFollowThePanel`, `gridMovesRowByRow`.
 <!-- LIST_PIECE_1_END -->
 
 <!-- EVENING_2026_10_13_BEGIN -->

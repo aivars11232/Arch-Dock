@@ -211,15 +211,24 @@ layouts and each renderer tier they offer (21 panels). What follows from it:
   set of entries; only a free panel keeps its own.
 - Folder openings start at their smallest: a fan with names shows three
   children at once at the default 90° opening (more as it opens wider), an
-  arc three, a new panel's stack three; the rest arrive by scrolling. A small
-  ring holds six and grows a second circle round the first for more; with
-  names on a 3D panel drawn large there may be no room on the screen for
-  two circles, and it keeps one.
+  arc three, a new panel's stack three, a grid on a 3D panel two rows of
+  three; the rest arrive by scrolling. A small ring holds six and grows a
+  second circle round the first for more. On a 3D panel drawn large there
+  may be no room on the screen for that: a shape then holds fewer at once,
+  and a ring's first circle holds four or three before it keeps one circle.
 - On a 3D panel a folder opening lies on the panel's own plane and keeps
-  clear of the panel as drawn (its outline and icons, 6 pixels apart). The
-  Grid opening is still a flat popup; it does not take the tilt yet.
+  clear of the panel as drawn (its outline and icons, 4 pixels apart); a
+  fan's band starts at the rim beside the folder. Its children are drawn no
+  larger than the folder's icon, so ones nearer than the panel stay that
+  size. A grid there moves a row at a time; on a flat panel it keeps its
+  popup.
 - A folder opening knows its own panel only: it may open over another
   panel standing beside it.
+- A free panel Plasma has lost (over a login or a restart) comes back about a
+  minute and a half after Plasma starts, not at once: until then Plasma may
+  still be restoring its layout. Why the owner's Plasma drops Arch Dock's
+  desktop widgets at a start was not found; a private plain Plasma keeps
+  them.
 - Whether the pointer at the screen edge reveals an auto-hidden edge panel
   could not be verified in private sessions: KWin's edge trigger ignores the
   harness's virtual pointer. Always keeps a panel in view.
@@ -234,11 +243,11 @@ layouts and each renderer tier they offer (21 panels). What follows from it:
 - Folder scrolling follows Scroll sensitivity on free panels with a curved
   layout, where Panel Studio offers it; elsewhere one notch moves one child or
   one row. Edge-panel folders keep their popup shapes (PD-23).
-- Grid keeps its popup beside the folder. On a tilted baked or 3D ring a
-  neighbouring icon can stand on that side and the popup covers it; the
-  anchoring test records it (one of five positions on the baked ring). Along
-  the dock steps a little further out of a tilted dock where a child would
-  otherwise stand on one of its icons.
+- On a flat or baked free panel Grid keeps its popup beside the folder. On a
+  tilted baked ring a neighbouring icon can stand on that side and the popup
+  covers it; the anchoring test records it (one of five positions on the
+  baked ring). Along the dock steps a little further out of a tilted dock
+  where a child would otherwise stand on one of its icons.
 - Badges and task progress appear only where the session reports them.
 
 ## 3D editing

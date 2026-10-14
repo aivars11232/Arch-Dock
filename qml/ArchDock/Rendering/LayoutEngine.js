@@ -1525,16 +1525,23 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
     };
 }
 
-// A free panel's folder contents stand on a path (ADREP-TASK-003): "Along
-// the dock" is the dock's own curve beside the folder, the other shapes come
-// from folderShape(). `samples` trace the path on screen, in order, as
+// How far apart two samples of a folder's path are: on the screen, or with
+// `unscaled` as if drawn at scale 1 (their scales' mean).
+function trackRun(a, b, unscaled) {
+    const run = Math.hypot(b.x - a.x, b.y - a.y);
+    return unscaled ? run / Math.max(0.05, (finite(a.scale, 1) + finite(b.scale, 1)) / 2) : run;
+}
+
+// A free panel's folder contents stand on a path: "Along the dock" is the
+// dock's own curve beside the folder, the other shapes come from
+// folderShape(). `samples` trace the path on screen, in order, as
 // { x, y, scale }. Neighbours keep `pitch` pixels apart along it.
 //
 // An open path holds as many slots as fit, at most `options.capacity`,
 // centred on its middle sample - the folder faces it - or, with
 // `options.start` "start", from its first sample. Fewer children than slots
 // stand centred among them. `offset` moves every child along the path by
-// that many slots (PD-10): the wheel and keys set it; it is never saved. The
+// that many slots: the wheel and keys set it; it is never saved. The
 // path is a loop one slot longer than it is, or as long as the folder, so a
 // child that leaves one end fades out a pitch past it and comes back at the
 // other end, whether or not every child fits.
@@ -1548,14 +1555,20 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
 //
 // A closed path may have further circles round it (`options.rings`, a ring
 // folder's second circle; see ringedTrackLayout()).
+//
+// With `options.unscaled` (a shape on a 3D panel's plane, whose children are
+// drawn at their samples' scale) the path is measured as if drawn at scale
+// 1: neighbours stand a pitch apart at the size each is drawn, near or far.
 function folderTrackLayout(samples, count, pitch, offset, options) {
     const settings = options || {};
     const closed = settings.closed === true;
+    const unscaled = settings.unscaled === true;
     const rings = closed ? Array.from(settings.rings || []).filter(function(ring) {
         return ring && ring.length >= 3;
     }) : [];
     if (rings.length > 0)
-        return ringedTrackLayout([samples].concat(rings), count, pitch, offset);
+        return ringedTrackLayout([samples].concat(rings), count, pitch, offset,
+                                 { unscaled: unscaled, limits: settings.ringLimits });
     // A list read back from a QML property is indexable but not an Array.
     const points = [];
     const source = samples || [];
@@ -1573,8 +1586,7 @@ function folderTrackLayout(samples, count, pitch, offset, options) {
         points.push(points[0]);
     const lengths = [0];
     for (let index = 1; index < points.length; ++index)
-        lengths.push(lengths[index - 1] + Math.hypot(points[index].x - points[index - 1].x,
-                                                     points[index].y - points[index - 1].y));
+        lengths.push(lengths[index - 1] + trackRun(points[index - 1], points[index], unscaled));
     const length = lengths[lengths.length - 1];
     if (!(length > 0))
         return empty;
@@ -1628,7 +1640,9 @@ function folderTrackLayout(samples, count, pitch, offset, options) {
                  maximumOffset: Math.max(0, total - capacity), spacing: step, entries: entries };
     }
     const fromStart = settings.start === "start";
-    const middle = fromStart ? 0 : lengths[Math.floor((points.length - 1) / 2)];
+    // Centred on the middle sample, or on a plane on the middle of the path
+    // as drawn, whose two halves perspective makes unequal.
+    const middle = fromStart ? 0 : unscaled ? length / 2 : lengths[Math.floor((points.length - 1) / 2)];
     const usable = fromStart ? length : 2 * Math.min(middle, length - middle);
     let capacity = Math.floor(usable / spacing + 0.01) + 1;
     if (limit > 0)
@@ -1675,10 +1689,14 @@ function folderTrackLayout(samples, count, pitch, offset, options) {
 // across to the next circle and from the last back to the ring's start. A
 // folder longer than the circles hold shows that many at once, and the
 // others come in where the ring starts as one leaves there, as on one ring.
-function ringedTrackLayout(loops, count, pitch, offset) {
+function ringedTrackLayout(loops, count, pitch, offset, options) {
     const total = clamp(Math.floor(finite(count, 0)), 0, 48);
     const spacing = Math.max(1, finite(pitch, 1));
     const travel = finite(offset, 0);
+    const settings = options || {};
+    const unscaled = settings.unscaled === true;
+    // At most this many at once on each circle, where the shape says so.
+    const limits = Array.from(settings.limits || []);
     const circles = [];
     for (const source of loops) {
         const points = [];
@@ -1692,12 +1710,13 @@ function ringedTrackLayout(loops, count, pitch, offset) {
         points.push(points[0]);
         const lengths = [0];
         for (let index = 1; index < points.length; ++index)
-            lengths.push(lengths[index - 1] + Math.hypot(points[index].x - points[index - 1].x,
-                                                         points[index].y - points[index - 1].y));
+            lengths.push(lengths[index - 1] + trackRun(points[index - 1], points[index], unscaled));
         const length = lengths[lengths.length - 1];
+        const limit = Math.floor(finite(limits[circles.length], 0));
+        const fit = Math.max(1, Math.floor(length / spacing + 0.01));
         if (length > 0)
             circles.push({ points: points, lengths: lengths, length: length,
-                           fit: Math.max(1, Math.floor(length / spacing + 0.01)) });
+                           fit: limit > 0 ? Math.min(fit, limit) : fit });
     }
     if (!circles.length || total === 0)
         return { capacity: 0, loop: 0, closed: true, windowed: false, maximumOffset: 0, entries: [], rings: 0 };
@@ -1770,6 +1789,75 @@ function ringedTrackLayout(loops, count, pitch, offset) {
     return { capacity: slots, loop: total, closed: true, windowed: total > slots,
              maximumOffset: Math.max(0, total - slots), spacing: spacing, entries: entries,
              rings: shares.length };
+}
+
+// folderTrackLayout() for a folder laid out as a grid (`grid`, from
+// folderShape(): its columns, its rows and its cells as drawn, with a row
+// more before the first and after the last): the children fill it row by
+// row. Travel moves them a row at a time, each straight on to its place in
+// the next row; the last row's go out past it, fading, and new ones come in
+// before the first. `capacity` and `position` count rows, for
+// folderTravelTo().
+function gridTrackLayout(grid, count, offset) {
+    const total = clamp(Math.floor(finite(count, 0)), 0, 48);
+    const columns = Math.max(1, Math.floor(finite(grid && grid.columns, 1)));
+    const rows = Math.max(1, Math.floor(finite(grid && grid.rows, 1)));
+    const cells = grid && grid.cells ? Array.from(grid.cells) : [];
+    const empty = { capacity: 0, loop: 0, closed: false, windowed: false, maximumOffset: 0, entries: [] };
+    if (total === 0 || cells.length < rows + 2)
+        return empty;
+    // A cell, or where one is out of sight the nearest in its column.
+    function cellAt(row, column) {
+        for (let step = 0; step <= rows + 1; ++step) {
+            for (const near of [row - step, row + step]) {
+                const line = cells[clamp(near, -1, rows) + 1];
+                const point = line ? line[Math.min(column, line.length - 1)] : null;
+                if (point && isFinite(point.x) && isFinite(point.y))
+                    return point;
+            }
+        }
+        return null;
+    }
+    function at(row, column) {
+        const lower = clamp(Math.floor(row), -1, rows), upper = Math.min(rows, lower + 1);
+        const t = clamp(row - lower, 0, 1);
+        const a = cellAt(lower, column), b = cellAt(upper, column);
+        if (!a || !b)
+            return null;
+        const scaleA = finite(a.scale, 1), scaleB = finite(b.scale, 1);
+        return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, scale: scaleA + (scaleB - scaleA) * t };
+    }
+    const travel = finite(offset, 0);
+    const totalRows = Math.ceil(total / columns);
+    const loop = Math.max(totalRows, rows + 1);
+    const entries = [];
+    for (let index = 0; index < total; ++index) {
+        const column = index % columns;
+        const position = wrapped(Math.floor(index / columns) + travel, loop);
+        let row = position;
+        let visibility = 1;
+        if (position > rows - 1) {
+            if (position < rows) {
+                // Going out past the last row, fading out.
+                visibility = rows - position;
+            } else if (position > loop - 1) {
+                // Coming in before the first row, fading in.
+                row = position - loop;
+                visibility = 1 - (loop - position);
+            } else {
+                // Waiting for its turn: not drawn, kept at the last row.
+                row = rows - 1;
+                visibility = 0;
+            }
+        }
+        const point = at(row, column) || { x: 0, y: 0, scale: 1 };
+        entries.push({ index: index, x: point.x, y: point.y, scale: point.scale, slot: row * columns + column,
+                       position: position, onTrack: position <= rows - 1 + 1e-9,
+                       visibility: clamp(visibility, 0, 1) });
+    }
+    return { capacity: rows, loop: loop, closed: false, windowed: totalRows > rows,
+             maximumOffset: Math.max(0, totalRows - rows), spacing: 0, entries: entries,
+             rows: rows, columns: columns };
 }
 
 // The travel that brings child `index` onto the path with the least motion:
@@ -1913,7 +2001,7 @@ function unitedBounds(rectangles) {
 // screen, so the shape keeps the panel's tilt.
 function folderShape(shape, options) {
     const value = options || {};
-    const kind = ["fan", "arc", "stack", "ring"].includes(shape) ? shape : "fan";
+    const kind = ["fan", "arc", "stack", "ring", "grid"].includes(shape) ? shape : "fan";
     const folder = { x: finite(value.folder && value.folder.x, 0),
                      y: finite(value.folder && value.folder.y, 0) };
     const facing = { x: finite(value.outward && value.outward.x, 0),
@@ -1936,6 +2024,8 @@ function folderShape(shape, options) {
         if (point && isFinite(point.x) && isFinite(point.y))
             obstacles.push({ x: Number(point.x), y: Number(point.y) });
     const outlineMargin = Math.max(0, finite(value.outlineMargin, 0));
+    // The outline's own line, without the glow round it.
+    const outlineWidth = Math.max(0, finite(value.outlineWidth, 2 * outlineMargin));
     // `folder` is already an edge the shape opens from (a 3D platform's
     // rim), not the folder icon's centre: a fan's apex and a stack's first
     // child stand on it rather than a square's reach beyond it.
@@ -1949,6 +2039,9 @@ function folderShape(shape, options) {
         : null;
 
     const project = typeof value.project === "function" ? value.project : null;
+    // On a plane a child nearer than the folder is drawn no larger than the
+    // folder's own icon (`largestScale`); one farther away, smaller.
+    const largestScale = finite(value.largestScale, 0) > 0.35 ? finite(value.largestScale, 0) : Infinity;
     // Where a point is seen on the screen, and how large a child is drawn
     // there; a flat shape is its own picture, at size 1.
     function seen(point) {
@@ -1957,7 +2050,8 @@ function folderShape(shape, options) {
         const shown = project(point);
         if (!shown || !isFinite(shown.x) || !isFinite(shown.y))
             return null;
-        const at = { x: Number(shown.x), y: Number(shown.y), scale: Math.max(0.35, finite(shown.scale, 1)) };
+        const at = { x: Number(shown.x), y: Number(shown.y),
+                     scale: Math.min(largestScale, Math.max(0.35, finite(shown.scale, 1))) };
         // A ring's two circles lean opposite ways on the screen, about their
         // middle, and cross like the rings of a gimbal.
         if (point.lean && point.about) {
@@ -2035,20 +2129,94 @@ function folderShape(shape, options) {
             if (!clear(point)) return false;
         return true;
     }
+
+    // How long a path on the plane is as drawn, measured at scale 1 (see
+    // trackRun()); 0 where part of it is out of sight.
+    function drawnLength(points) {
+        let total = 0;
+        let previous = null;
+        for (const point of points) {
+            const shown = seen(point);
+            if (!shown)
+                return 0;
+            if (previous)
+                total += trackRun(previous, shown, true);
+            previous = shown;
+        }
+        return total;
+    }
+    // The least distance out, to 2 pixels, at which `fits(distance)` holds:
+    // coarse steps, then halving between the last miss and the first fit.
+    // `largest` when nothing up to it fits.
+    function leastOut(fits) {
+        if (fits(0))
+            return 0;
+        let miss = 0, hit = -1;
+        for (let out = 16; out <= largest; out += 16) {
+            if (fits(out)) {
+                hit = out;
+                break;
+            }
+            miss = out;
+        }
+        if (hit < 0)
+            return largest;
+        while (hit - miss > 2) {
+            const middle = (hit + miss) / 2;
+            if (fits(middle))
+                hit = middle;
+            else
+                miss = middle;
+        }
+        return hit;
+    }
     const largest = 640;
+    // The least size from `from` up to `limit`, to 2 pixels, at which
+    // `fits(size)` holds, for a test that keeps holding once it does:
+    // doubling steps, then halving between the last miss and the first fit.
+    // `limit` when nothing up to it fits.
+    function leastSize(from, limit, fits) {
+        if (from >= limit || fits(from))
+            return Math.min(from, limit);
+        let miss = from, hit = -1;
+        for (let step = 8; ; step *= 2) {
+            const size = Math.min(limit, from + step);
+            if (fits(size)) {
+                hit = size;
+                break;
+            }
+            miss = size;
+            if (size >= limit)
+                return limit;
+        }
+        while (hit - miss > 2) {
+            const middle = (hit + miss) / 2;
+            if (fits(middle))
+                hit = middle;
+            else
+                miss = middle;
+        }
+        return hit;
+    }
+    // A ring's circles do not depend on which way it opens: worked out once
+    // for each number of children it holds.
+    const ringSizes = {};
     // How far each circle of a two-circle ring leans on a plane.
     const gimbalLean = 10 * Math.PI / 180;
     // A small ring at its smallest holds six children; a folder with more
     // has a second circle round it, a child's cell further out, for the
-    // rest (only the ring does). Where the screen is short it first does
-    // without the second circle, then holds four, then three; the others
+    // rest (only the ring does). Where the screen is short the first circle
+    // holds four, then three, still inside a second one; then the ring does
+    // without the second circle and holds six, four, then three; the others
     // come round with the wheel. A ring the size of the panel keeps its
     // radius and one circle.
     const ringSteps = [];
     if (kind === "ring" && value.ringSize !== "panel") {
         const inner = Math.min(count, 6);
         if (count > inner)
-            ringSteps.push({ shown: inner, second: true });
+            for (const shown of [inner, 4, 3])
+                if (shown <= inner && !ringSteps.some(function(step) { return step.shown === shown; }))
+                    ringSteps.push({ shown: shown, second: true });
         for (const shown of [inner, 4, 3]) {
             const held = Math.max(Math.min(count, 3), Math.min(inner, shown));
             if (!ringSteps.some(function(step) { return !step.second && step.shown === held; }))
@@ -2071,40 +2239,118 @@ function folderShape(shape, options) {
             // the rest come in with the wheel.
             const shown = Math.max(2, Math.min(count, clamp(Math.round(
                 opening / (Math.PI / 2) * (named ? 3 : 4)), 2, 12)) - fewer);
-            // On a plane the fan is as small as its children need along the
-            // arc, and its tip stays at the panel's rim: the whole fan moves
-            // out only as far as keeps every child clear of the panel.
-            let radius = project ? Math.max(1.2 * size, (shown - 1) * curvePitch / opening)
-                : Math.max(curvePitch, 1.2 * size, (shown - 1) * curvePitch / opening);
-            let apexAt = apex;
-            for (let out = 0; project && out < largest
-                     && !allClear(arcSamples(apexAt, direction, radius, opening, 32));) {
-                out += 4;
-                apexAt = along(apex, direction, out);
+            const hug = project && value.hug && typeof value.hug.rimAt === "function" ? value.hug : null;
+            if (hug) {
+                // On a plane the fan hugs the panel: its children stand on a
+                // curve a little way out of the rim, bending as the rim does
+                // round the folder, as long as holds them a pitch apart as
+                // drawn and at most half way round. It moves out only as far
+                // as keeps every child clear of the panel.
+                const middle = finite(hug.turn, 0);
+                const rimAt = function(turn) { return Math.max(0, finite(hug.rimAt(turn), 0)); };
+                const pointAt = function(turn, out) {
+                    const reach = rimAt(turn) + out;
+                    return { x: reach * Math.cos(turn), y: reach * Math.sin(turn) };
+                };
+                // How far out of the rim a child keeps clear of the panel as
+                // drawn, every 2 degrees up to half way round either side, a
+                // little more where a neighbour needs more so the curve stays
+                // smooth.
+                const grid = 2 * Math.PI / 180, half = 45;
+                const needed = [];
+                for (let index = -half; index <= half; ++index)
+                    needed.push(leastOut(function(distance) {
+                        return clear(pointAt(middle + index * grid, distance));
+                    }));
+                const smooth = needed.map(function(value, index) {
+                    let most = value;
+                    for (let near = Math.max(0, index - 2); near <= Math.min(needed.length - 1, index + 2); ++near)
+                        most = Math.max(most, needed[near]);
+                    return most;
+                });
+                const outAt = function(turn) {
+                    const at = clamp((turn - middle) / grid + half, 0, 2 * half);
+                    const low = Math.floor(at), high = Math.min(2 * half, low + 1);
+                    return smooth[low] + (smooth[high] - smooth[low]) * (at - low);
+                };
+                const curveAt = function(wide) {
+                    const points = [];
+                    for (let index = 0; index <= 48; ++index) {
+                        const turn = middle - wide / 2 + wide * index / 48;
+                        points.push(pointAt(turn, outAt(turn)));
+                    }
+                    return points;
+                };
+                const need = (shown - 1) * curvePitch;
+                let low = 0, high = Math.PI;
+                if (drawnLength(curveAt(high)) >= need - 0.5) {
+                    for (let round = 0; round < 14; ++round) {
+                        const wide = (low + high) / 2;
+                        if (drawnLength(curveAt(wide)) >= need - 0.5)
+                            high = wide;
+                        else
+                            low = wide;
+                    }
+                }
+                const wide = high;
+                const curve = curveAt(wide);
+                const out = outAt(middle);
+                result.samples = curve;
+                result.out = out;
+                result.outline = { closed: false, points: curve };
+                result.radius = Math.max(0, finite(hug.rimAt(middle), 0)) + out;
+                result.opening = wide * 180 / Math.PI;
+                result.hugs = true;
+            } else {
+                // On a plane the fan is as small as its children need along the
+                // arc, and its tip stays at the panel's rim: the whole fan moves
+                // out only as far as keeps every child clear of the panel.
+                let radius = project ? Math.max(1.2 * size, (shown - 1) * curvePitch / opening)
+                    : Math.max(curvePitch, 1.2 * size, (shown - 1) * curvePitch / opening);
+                // On a plane the children along the arc stand a pitch apart at
+                // the size each is drawn there.
+                const roomy = function(tip, around) {
+                    return !project
+                        || drawnLength(arcSamples(tip, direction, around, opening, 48)) >= (shown - 1) * curvePitch - 0.5;
+                };
+                if (project)
+                    radius = leastSize(radius, largest, function(around) { return roomy(apex, around); });
+                const out = project ? leastOut(function(distance) {
+                    return allClear(arcSamples(along(apex, direction, distance), direction, radius, opening, 32));
+                }) : 0;
+                const apexAt = along(apex, direction, out);
+                result.out = out;
+                while (radius < largest && (!allClear(arcSamples(apexAt, direction, radius, opening, 32))
+                                            || !roomy(apexAt, radius)))
+                    radius += 4;
+                const arc = arcSamples(apexAt, direction, radius, opening, 48);
+                result.samples = arc;
+                // The sector's two straight edges are only the faint fill's border;
+                // the stroke follows the arc the children stand on.
+                result.outline = { closed: true, points: [apexAt].concat(arc), strokeFrom: 1 };
+                result.apex = apexAt;
+                result.radius = radius;
+                result.opening = opening * 180 / Math.PI;
             }
-            while (radius < largest && !allClear(arcSamples(apexAt, direction, radius, opening, 32)))
-                radius += 4;
-            const arc = arcSamples(apexAt, direction, radius, opening, 48);
-            result.samples = arc;
-            // The sector's two straight edges are only the faint fill's border;
-            // the stroke follows the arc the children stand on.
-            result.outline = { closed: true, points: [apexAt].concat(arc), strokeFrom: 1 };
-            result.apex = apexAt;
-            result.radius = radius;
-            result.opening = opening * 180 / Math.PI;
         } else if (kind === "arc") {
             const span = 150 * Math.PI / 180;
             // At its smallest: three children at once, the rest by the wheel.
             const shown = Math.max(2, Math.min(count, 3) - fewer);
             let radius = Math.max(1.6 * size, (shown - 1) * curvePitch / span);
+            const roomy = function(centre, around) {
+                return !project
+                    || drawnLength(arcSamples(centre, direction, around, span, 48)) >= (shown - 1) * curvePitch - 0.5;
+            };
+            if (project)
+                radius = leastSize(radius, largest, function(around) { return roomy(folder, around); });
             // On a tilted plane the arc moves out first, at its own size.
-            let centreAt = folder;
-            for (let out = 0; project && out < largest
-                     && !allClear(arcSamples(centreAt, direction, radius, span, 32));) {
-                out += 8;
-                centreAt = along(folder, direction, out);
-            }
-            while (radius < largest && !allClear(arcSamples(centreAt, direction, radius, span, 32)))
+            const out = project ? leastOut(function(distance) {
+                return allClear(arcSamples(along(folder, direction, distance), direction, radius, span, 32));
+            }) : 0;
+            const centreAt = along(folder, direction, out);
+            result.out = out;
+            while (radius < largest && (!allClear(arcSamples(centreAt, direction, radius, span, 32))
+                                        || !roomy(centreAt, radius)))
                 radius += 4;
             result.samples = arcSamples(centreAt, direction, radius, span, 48);
             result.centre = centreAt;
@@ -2116,34 +2362,164 @@ function folderShape(shape, options) {
             // diagonal apart.
             const pitch = project ? curvePitch : Math.min(cellWidth / Math.max(Math.abs(direction.x), 1e-6),
                                    cellHeight / Math.max(Math.abs(direction.y), 1e-6)) + gap;
+            // On a plane, the step along the line from `at` that keeps two
+            // neighbours a pitch apart at the size each is drawn there.
+            const stepFrom = function(at) {
+                let step = pitch;
+                for (let round = 0; project && round < 3; ++round) {
+                    const drawn = drawnLength([along(folder, direction, at), along(folder, direction, at + step)]);
+                    if (!(drawn > 1e-6))
+                        break;
+                    step *= pitch / drawn;
+                }
+                return step;
+            };
             const length = clamp(Math.round(finite(value.stackLength, 3)), 2, 12);
-            // Never longer than the dock's diameter beside which it lies (the
-            // owner's rule, 2026-10-12): the rest of the children scroll in.
             // Against a dock's side (`stackSpan`: the side's length, from
             // `folder` along `direction`), the slots are centred within it
-            // and never outnumber what fits (the owner's rule, 2026-10-12:
-            // a stack no longer than the dock); the rest scroll in.
+            // and never outnumber what fits, so the stack is never longer
+            // than the dock beside it; the rest of the children scroll in.
             const span = Math.max(0, finite(value.stackSpan, 0));
-            const fitting = span > 0 ? Math.max(2, Math.floor(span / pitch) + 1) : length;
+            // On a plane against the panel's side, the way out of the panel
+            // there (`sideOut`): the line runs along the side and moves out
+            // from it only as far as keeps every child clear.
+            const sideOut = project && span > 0 && value.sideOut ? (function() {
+                const x = finite(value.sideOut.x, 0), y = finite(value.sideOut.y, 0), l = Math.hypot(x, y);
+                return l > 1e-6 ? { x: x / l, y: y / l } : null;
+            })() : null;
+            // The side, `out` from where it lies, finely.
+            const sideAt = function(out) {
+                const points = [];
+                for (let index = 0; index <= 32; ++index)
+                    points.push(along(along(folder, direction, span * index / 32), sideOut, out));
+                return points;
+            };
+            const fitting = sideOut ? Math.max(2, Math.floor(drawnLength(sideAt(0)) / pitch + 0.01) + 1)
+                : span > 0 ? Math.max(2, Math.floor(span / pitch) + 1) : length;
             const slots = Math.max(1, Math.min(count, length, fitting) - fewer);
+            // The slots centred on the side as drawn, a pitch apart; a slot
+            // more past the last for a stack of one, which the path needs.
+            const sideSlots = function(out) {
+                const points = sideAt(out);
+                const runs = [0];
+                for (let index = 1; index < points.length; ++index)
+                    runs.push(runs[index - 1] + drawnLength([points[index - 1], points[index]]));
+                const total = runs[runs.length - 1];
+                const first = total / 2 - (slots - 1) * pitch / 2;
+                const placed = [];
+                for (let index = 0; index < Math.max(2, slots); ++index) {
+                    const target = first + index * pitch;
+                    let segment = 0;
+                    while (segment < runs.length - 2 && runs[segment + 1] < target)
+                        ++segment;
+                    const a = points[segment], b = points[segment + 1];
+                    const piece = runs[segment + 1] - runs[segment];
+                    const t = piece > 1e-9 ? (target - runs[segment]) / piece : 0;
+                    placed.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+                }
+                return placed;
+            };
             let distance = span > 0 ? Math.max(0, (span - (Math.max(2, slots) - 1) * pitch) / 2)
                 : fromEdge ? 0 : squareReach(size, direction);
-            while (span <= 0 && distance < largest && !allClear([along(folder, direction, distance)]))
-                distance += 2;
-            const line = [];
-            for (let index = 0; index < Math.max(2, slots); ++index)
-                line.push(along(folder, direction, distance + index * pitch));
-            while (span <= 0 && distance < largest && !allClear(line)) {
-                distance += 4;
-                for (let index = 0; index < line.length; ++index)
-                    line[index] = along(folder, direction, distance + index * pitch);
+            const lineAt = function(from) {
+                const points = [along(folder, direction, from)];
+                let at = from;
+                for (let index = 1; index < Math.max(2, slots); ++index) {
+                    at += stepFrom(at);
+                    points.push(along(folder, direction, at));
+                }
+                return points;
+            };
+            let line;
+            if (sideOut) {
+                const out = leastOut(function(distance) { return allClear(sideSlots(distance).slice(0, slots)); });
+                line = sideSlots(out);
+                distance = out;
+            } else if (project && span <= 0) {
+                // On a plane the whole line moves out only as far as keeps
+                // every child clear of the panel.
+                const from = distance;
+                distance = from + leastOut(function(out) { return allClear(lineAt(from + out)); });
+                line = lineAt(distance);
+            } else {
+                while (span <= 0 && distance < largest && !allClear([along(folder, direction, distance)]))
+                    distance += 2;
+                while (span <= 0 && distance < largest && !allClear(lineAt(distance)))
+                    distance += 4;
+                line = lineAt(distance);
             }
             result.samples = line;
+            result.out = distance;
             result.start = "start";
             result.pitch = pitch;
+            result.planePitch = Math.hypot(line[1].x - line[0].x, line[1].y - line[0].y);
             result.capacity = slots;
             result.stackLength = length;
             result.first = line[0];
+        } else if (kind === "grid") {
+            // At its smallest a grid holds two rows of three; the others come
+            // in a row at a time with the wheel. Where the screen is short it
+            // holds one row of three, then of two.
+            const sizes = [{ columns: 3, rows: 2 }, { columns: 3, rows: 1 }, { columns: 2, rows: 1 }];
+            const fitted = sizes[Math.min(fewer, sizes.length - 1)];
+            const columns = Math.max(1, Math.min(fitted.columns, count));
+            const rows = Math.max(1, Math.min(fitted.rows, Math.ceil(count / columns)));
+            // Rows run out from the folder, its columns along the panel's rim.
+            const across = turned(direction, Math.PI / 2);
+            // The grid with its first row `from` out: neighbours in a row and
+            // between rows a pitch apart, on a plane at the size each is drawn
+            // there; with a row more on either side, where a row coming in or
+            // going out passes.
+            function gridAt(from) {
+                let columnStep = curvePitch, rowStep = curvePitch;
+                const place = function(row, column) {
+                    return along(along(folder, direction, from + row * rowStep), across,
+                                 (column - (columns - 1) / 2) * columnStep);
+                };
+                for (let round = 0; project && round < 3; ++round) {
+                    let nearestAcross = Infinity, nearestOut = Infinity;
+                    for (let row = 0; row < rows; ++row) {
+                        for (let column = 0; column < columns; ++column) {
+                            const here = place(row, column);
+                            if (column + 1 < columns)
+                                nearestAcross = Math.min(nearestAcross,
+                                                         drawnLength([here, place(row, column + 1)]) || Infinity);
+                            nearestOut = Math.min(nearestOut, drawnLength([here, place(row + 1, column)]) || Infinity);
+                        }
+                    }
+                    if (isFinite(nearestAcross) && nearestAcross > 1e-6)
+                        columnStep *= curvePitch / nearestAcross;
+                    if (isFinite(nearestOut) && nearestOut > 1e-6)
+                        rowStep *= curvePitch / nearestOut;
+                }
+                const cells = [];
+                for (let row = -1; row <= rows; ++row) {
+                    const line = [];
+                    for (let column = 0; column < columns; ++column)
+                        line.push(place(row, column));
+                    cells.push(line);
+                }
+                return { cells: cells, columnStep: columnStep, rowStep: rowStep };
+            }
+            // The cells children rest in, row by row.
+            const resting = function(grid) {
+                const points = [];
+                for (let row = 1; row <= rows; ++row)
+                    for (const point of grid.cells[row])
+                        points.push(point);
+                return points;
+            };
+            // It moves out only as far as keeps every child clear of the panel.
+            const from = fromEdge ? 0 : squareReach(size, direction) + gap;
+            const out = leastOut(function(distance) { return allClear(resting(gridAt(from + distance))); });
+            const grid = gridAt(from + out);
+            result.out = out;
+            result.samples = resting(grid);
+            result.start = "start";
+            result.pitch = curvePitch;
+            result.capacity = columns * rows;
+            // No border round it: the children alone.
+            result.grid = { columns: columns, rows: rows, cells: grid.cells };
         } else {
             const panelRadius = Math.max(0, finite(value.panelRadius, 0));
             // Neighbours on a circle stand a chord apart, a little less than
@@ -2153,9 +2529,8 @@ function folderShape(shape, options) {
             const step = ringSteps[Math.min(fewer, ringSteps.length - 1)];
             const fitting = Math.max(1.2 * size, step.shown >= 2
                 ? curvePitch / (2 * Math.sin(Math.PI / step.shown)) : 0);
-            const radius = Math.min(largest / 2, value.ringSize === "panel" && panelRadius > 0
+            let radius = Math.min(largest / 2, value.ringSize === "panel" && panelRadius > 0
                 ? Math.max(1.2 * size, panelRadius) : fitting);
-            let outerRadius = step.second ? radius + Math.max(cellWidth, cellHeight) + gap : 0;
             // A circle of `around` from its point nearest the folder, clockwise.
             function circle(centre, around) {
                 const back = { x: -direction.x, y: -direction.y };
@@ -2172,10 +2547,26 @@ function folderShape(shape, options) {
                     return { x: point.x, y: point.y, lean: lean, about: centre };
                 });
             }
-            // The first circle stays well inside the second, as drawn: every
-            // point of it, a clear gap of 30 pixels further out, is still
-            // within the second. Leaning opposite ways would otherwise bring
-            // the ends of the first circle against the second.
+            // On a plane the small ring is as wide as holds its children a
+            // pitch apart at the size each is drawn there.
+            const loopLength = function(around, lean) {
+                const points = leaning(circle(folder, around), folder, lean);
+                return drawnLength(points.concat([points[0]]));
+            };
+            const known = ringSizes[fewer];
+            if (known) {
+                radius = known.radius;
+            } else if (project && value.ringSize !== "panel") {
+                radius = leastSize(radius, largest / 2, function(around) {
+                    return loopLength(around, -1) >= step.shown * curvePitch - 0.5;
+                });
+            }
+            let outerRadius = known ? known.outerRadius
+                : step.second ? radius + Math.max(cellWidth, cellHeight) + gap : 0;
+            // The first circle stays inside the second with a clear gap all
+            // round, as drawn: 16 pixels between the two circles' lines.
+            // Leaning opposite ways would otherwise bring the ends of the
+            // first circle against the second.
             function inside(point, polygon) {
                 let within = false;
                 for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -2186,47 +2577,65 @@ function folderShape(shape, options) {
                 }
                 return within;
             }
+            function gapTo(point, polygon) {
+                let nearest = Infinity;
+                for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                    const a = polygon[j], b = polygon[i];
+                    const dx = b.x - a.x, dy = b.y - a.y;
+                    const t = clamp(((point.x - a.x) * dx + (point.y - a.y) * dy)
+                                    / Math.max(1e-9, dx * dx + dy * dy), 0, 1);
+                    nearest = Math.min(nearest, Math.hypot(a.x + dx * t - point.x, a.y + dy * t - point.y));
+                }
+                return nearest;
+            }
             function nested(around) {
-                const middle = seen(folder);
                 const first = leaning(circle(folder, radius), folder, -1).map(seen);
                 const second = leaning(circle(folder, around), folder, 1).map(seen);
-                if (!middle || first.some(function(point) { return !point; })
+                if (first.some(function(point) { return !point; })
                         || second.some(function(point) { return !point; }))
                     return true;
-                const margin = 30;
                 return first.every(function(point) {
-                    const dx = point.x - middle.x, dy = point.y - middle.y, length = Math.hypot(dx, dy) || 1;
-                    return inside({ x: point.x + dx / length * margin, y: point.y + dy / length * margin }, second);
+                    return inside(point, second) && gapTo(point, second) >= outlineWidth + 16;
                 });
             }
-            while (project && step.second && outerRadius < 4 * radius && !nested(outerRadius))
-                outerRadius += 8;
+            if (!known && project && step.second)
+                outerRadius = leastSize(outerRadius, 4 * radius, nested);
+            ringSizes[fewer] = { radius: radius, outerRadius: outerRadius };
             const reach = Math.max(radius, outerRadius);
             function rings(distance) {
                 const centre = along(folder, direction, distance);
                 return { centre: centre, points: leaning(circle(centre, radius), centre, -1),
                          outer: step.second ? leaning(circle(centre, outerRadius), centre, 1) : null };
             }
+            // A child's cell is wider than a third of the circle's steps, so
+            // every third point tells whether the circles keep clear.
+            const thinned = function(points) {
+                return project ? points.filter(function(point, index) { return index % 3 === 0; }) : points;
+            };
             const clearRings = function(set) {
-                return allClear(set.points) && (!set.outer || allClear(set.outer));
+                return allClear(thinned(set.points)) && (!set.outer || allClear(thinned(set.outer)));
             };
             let distance = squareReach(size, direction) + gap + reach;
-            let ring = rings(distance);
-            while (distance < largest + reach && !clearRings(ring)) {
-                distance += project ? 12 : 4;
-                ring = rings(distance);
+            if (project) {
+                const from = distance;
+                distance = from + leastOut(function(out) { return clearRings(rings(from + out)); });
+            } else {
+                while (distance < largest + reach && !clearRings(rings(distance)))
+                    distance += 4;
             }
+            const ring = rings(distance);
             result.samples = ring.points;
             result.closed = true;
             // As many children at once as keep a chord of a pitch apart.
             const chordFit = function(around) {
                 return Math.max(1, Math.floor(Math.PI / Math.asin(Math.min(1, curvePitch / (2 * around))) + 1e-6));
             };
-            result.capacity = chordFit(radius);
+            result.capacity = project && value.ringSize !== "panel" ? step.shown : chordFit(radius);
             result.outline = { closed: true, points: ring.points, loops: ring.outer ? [ring.outer] : [] };
             if (ring.outer) {
                 result.rings = [ring.outer];
-                result.ringCapacities = [result.capacity, chordFit(outerRadius)];
+                // The second circle holds as many as fit there as drawn.
+                result.ringCapacities = [result.capacity, project ? 0 : chordFit(outerRadius)];
                 result.outerRadius = outerRadius;
             }
             result.centre = ring.centre;
@@ -2239,13 +2648,22 @@ function folderShape(shape, options) {
         for (const loop of result.rings || [])
             for (const point of loop)
                 places.push(point);
-        if (!result.closed) {
+        // On a plane a child fading out past an end is drawn where the
+        // screen has room there, but takes no room from the shape at rest.
+        const passing = [];
+        if (result.grid) {
+            const coming = result.grid.cells[0], going = result.grid.cells[result.grid.cells.length - 1];
+            for (const point of coming.concat(going))
+                (project ? passing : places).push(point);
+        } else if (!result.closed) {
             const s = result.samples;
             const head = { x: s[0].x - s[1].x, y: s[0].y - s[1].y };
             const tail = { x: s[s.length - 1].x - s[s.length - 2].x, y: s[s.length - 1].y - s[s.length - 2].y };
             const headLength = Math.hypot(head.x, head.y) || 1, tailLength = Math.hypot(tail.x, tail.y) || 1;
-            places.push(along(s[0], { x: head.x / headLength, y: head.y / headLength }, result.pitch));
-            places.push(along(s[s.length - 1], { x: tail.x / tailLength, y: tail.y / tailLength }, result.pitch));
+            const past = result.planePitch || result.pitch;
+            const ends = project ? passing : places;
+            ends.push(along(s[0], { x: head.x / headLength, y: head.y / headLength }, past));
+            ends.push(along(s[s.length - 1], { x: tail.x / tailLength, y: tail.y / tailLength }, past));
         }
         const rectangles = places.map(cell);
         const outline = result.outline ? result.outline.points.map(seen) : [];
@@ -2261,14 +2679,19 @@ function folderShape(shape, options) {
         // A shape that reaches out of sight cannot be drawn.
         result.hidden = rectangles.some(function(rectangle) { return rectangle === null; })
             || outline.concat(...loops).some(function(point) { return point === null; });
-        result.bounds = unitedBounds(rectangles.filter(Boolean));
+        result.restBounds = unitedBounds(rectangles.filter(Boolean));
+        result.bounds = unitedBounds(rectangles.filter(Boolean).concat(passing.map(cell).filter(Boolean)));
         if (project && !result.hidden) {
+            result.projected = true;
             result.samples = result.samples.map(seen);
             if (result.outline)
                 result.outline = { closed: result.outline.closed, points: outline, loops: loops,
                                    strokeFrom: result.outline.strokeFrom };
             if (result.rings)
                 result.rings = result.rings.map(function(loop) { return loop.map(seen); });
+            if (result.grid)
+                result.grid = { columns: result.grid.columns, rows: result.grid.rows,
+                                cells: result.grid.cells.map(function(line) { return line.map(seen); }) };
             for (const key of ["apex", "centre", "first"])
                 if (result[key])
                     result[key] = seen(result[key]);
@@ -2282,11 +2705,17 @@ function folderShape(shape, options) {
         candidate.fewer = fewer;
         candidate.overflow = candidate.hidden ? Infinity : 0;
         if (screen && !candidate.hidden) {
-            const b = candidate.bounds;
+            const b = candidate.restBounds;
             const inside = Math.max(0, Math.min(b.x + b.width, screen.x + screen.width) - Math.max(b.x, screen.x))
                 * Math.max(0, Math.min(b.y + b.height, screen.y + screen.height) - Math.max(b.y, screen.y));
             candidate.overflow = b.width * b.height - inside;
         }
+        // Every way tried, for whoever wants to see why a shape opened where
+        // it did.
+        if (typeof value.tried === "function")
+            value.tried({ turn: degrees, fewer: fewer, hidden: candidate.hidden === true,
+                          overflow: candidate.overflow, out: finite(candidate.out, 0),
+                          radius: candidate.radius || 0, bounds: candidate.restBounds || null });
         return candidate;
     }
     // Along the outward direction where the screen has room: a fan, an arc
@@ -2296,6 +2725,7 @@ function folderShape(shape, options) {
     const shrinks = [0];
     const fewest = kind === "fan" || kind === "arc" ? 4
         : kind === "stack" ? clamp(Math.round(finite(value.stackLength, 3)), 2, 12) - 2
+        : kind === "grid" ? 2
         : ringSteps.length - 1;
     for (let fewer = 1; fewer <= fewest; ++fewer)
         shrinks.push(fewer);
@@ -2303,17 +2733,51 @@ function folderShape(shape, options) {
     // On a plane a shape never opens back across the panel: it stays on the
     // folder's side, turned at most a right angle, where it is drawn the
     // size its own place gives it.
-    const turns = [0, 15, -15, 30, -30, 45, -45, 60, -60, 75, -75, 90, -90].concat(project ? [] : [180]);
+    const follows = project && ((kind === "fan" && value.hug && typeof value.hug.rimAt === "function")
+                                || (kind === "stack" && value.sideOut && finite(value.stackSpan, 0) > 0));
+    // A fan hugging the rim, or a stack along the panel's side, follows the
+    // panel and does not turn.
+    const turns = follows ? [0]
+        : [0, 15, -15, 30, -30, 45, -45, 60, -60, 75, -75, 90, -90].concat(project ? [] : [180]);
     // A ring with a second circle first turns towards a side where both
-    // circles fit; only then does it hold fewer, or open the other way.
+    // circles fit, then makes its first circle smaller; only then does it
+    // do without the second circle, or open the other way.
     if (kind === "ring" && ringSteps[0].second) {
-        for (const degrees of turns.filter(function(turn) { return Math.abs(turn) <= 90; })) {
-            const candidate = placed(degrees, 0);
-            if (candidate.overflow <= 0.5)
-                return candidate;
-            if (!best || candidate.overflow < best.overflow - 0.5)
-                best = candidate;
+        for (let fewer = 0; fewer < ringSteps.length && ringSteps[fewer].second; ++fewer) {
+            for (const degrees of turns.filter(function(turn) { return Math.abs(turn) <= 90; })) {
+                const candidate = placed(degrees, fewer);
+                if (candidate.overflow <= 0.5)
+                    return candidate;
+                if (!best || candidate.overflow < best.overflow - 0.5)
+                    best = candidate;
+            }
         }
+    }
+    // On a plane a fan, an arc or a stack holds the children its smallest
+    // size shows at once, and stands as close to the panel as it can: of
+    // every way it fits the screen, the one that moved out least (then the
+    // one turned least). It holds fewer only where none fits.
+    if (project && kind !== "ring") {
+        for (const fewer of shrinks) {
+            let closest = null;
+            for (const degrees of turns) {
+                const candidate = placed(degrees, fewer);
+                if (!best || candidate.overflow < best.overflow - 0.5)
+                    best = candidate;
+                if (candidate.overflow > 0.5)
+                    continue;
+                const out = finite(candidate.out, 0);
+                if (!closest || out < closest.out - 0.5)
+                    closest = { candidate: candidate, out: out };
+                // Turned no more than needed: nothing stands nearer than
+                // right at the rim.
+                if (out <= 0.5)
+                    break;
+            }
+            if (closest)
+                return closest.candidate;
+        }
+        return best;
     }
     for (const degrees of turns) {
         for (const fewer of shrinks) {

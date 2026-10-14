@@ -153,6 +153,8 @@ public:
         std::function<std::optional<int>(int, const QString &)> verifiedBridgeScreen;
         std::function<std::optional<int>(const QString &, const QString &)>
             matchingHostCount;
+        // Widgets that show the panel, whatever their token.
+        std::function<std::optional<int>(const QString &)> panelHostCount;
         std::function<FreePanelHostDiscoveryResult(const QString &, const QString &)>
             discoverOwnedHost;
         std::function<FreePanelHostMutationResult(int, const QString &, const QString &)>
@@ -175,6 +177,10 @@ public:
     [[nodiscard]] FreePanelLifecycleResult synchronize(const QString &panelId,
                                                        bool allowDetach = true) const;
     [[nodiscard]] FreePanelLifecycleResult remove(const QString &panelId) const;
+    // A panel whose widget is gone though its owner did not remove it (Plasma
+    // lost it, say over a restart) gets a new widget with the panel's own
+    // token. The record and its settings stay; only the host changes.
+    [[nodiscard]] FreePanelCreationResult restore(const QString &panelId, int screenIndex) const;
 
 private:
     [[nodiscard]] FreePanelCreationResult failure(

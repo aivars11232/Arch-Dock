@@ -25,6 +25,15 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   possible), Arch Dock removes its settings too; panels left behind earlier
   are cleared. Put back on the desktop and the orange note about missing
   widgets are gone; profiles keep their own copies.
+- A free panel stays on the desktop until you remove it (2026-10-14: after a
+  login the owner's two free panels were gone from Plasma, as after each
+  Plasma restart the day before): when Plasma has lost a free panel's widget
+  without its owner removing it, Arch Dock puts the panel back at its place,
+  with all its settings, about a minute and a half after Plasma starts. It
+  never adds a second widget for a panel that still has one, and a panel you
+  remove from its right-click menu stays removed. The 24 panels earlier
+  versions had left off the desktop are cleared at the first start (the
+  owner: "Delete all 24").
 - Panel Studio edits one panel at a time, as Plasma does: the one opened with
   "Configure Arch Dock…"; Configure on another panel moves the window there,
   asking first about changes not applied yet. Opened on its own, or with a
@@ -39,9 +48,16 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   over the folder.
 - On a 3D panel a folder opens on the panel's own plane, tilted with it, and
   never covers or touches the panel; along the dock it reaches a quarter to
-  three quarters of the way round. Fan, arc and stack open at their
-  smallest, three at a time; a ring holds six and grows a second circle
-  round the first for more, the two leaning opposite ways on a 3D panel.
+  three quarters of the way round. Every opening holds its smallest number
+  at once, the rest come in with the wheel: three named children on a fan,
+  an arc or a stack, two rows of three in a grid, six in a ring. Children
+  are spaced at the size they are drawn, far ones smaller, and none larger
+  than the folder's own icon. The fan follows the panel's rim round the
+  folder; a stack lies along the panel's side nearest the folder, up and
+  down beside a side, left and right under or over the panel; the grid lies
+  on the plane too, with no border round it. A ring with more children grows
+  a second circle round the first, the small one inside the big one with a
+  clear gap all round, the two leaning opposite ways.
 
 - A 3D panel turns freely all the way round (2026-10-13, the owner: "freely
   in 360 every direction"): Pitch goes past its edge and over, like Yaw and

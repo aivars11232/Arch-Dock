@@ -513,6 +513,123 @@ FreePanelLifecycleResult FreePanelController::remove(const QString &panelId) con
         QStringLiteral("owned-host-removal-query-failed"));
 }
 
+FreePanelCreationResult FreePanelController::restore(const QString &panelId, int screenIndex) const
+{
+    const auto association = m_registry.freeHostAssociation(panelId);
+    const QString ownershipToken = association.has_value()
+        ? association->ownershipToken.trimmed()
+        : QString{};
+    if (!association.has_value() || ownershipToken.isEmpty() ||
+        (association->state != PanelRegistry::FreeHostState::HostedOwned &&
+         association->state != PanelRegistry::FreeHostState::HostedStale))
+    {
+        return failure(QStringLiteral("free-panel-not-hosted"), QStringLiteral("intent-selection"));
+    }
+    if (screenIndex < 0 || !m_operations.matchingHostCount || !m_operations.panelHostCount ||
+        !m_operations.createConfiguredHost || !m_operations.verifyHost)
+    {
+        return failure(QStringLiteral("operation-unavailable"), QStringLiteral("host-creation"));
+    }
+
+    // Whatever goes wrong, the record stays as it was, so a later Plasma
+    // start can try again; only a widget this attempt may have made is
+    // taken away.
+    const auto abandon = [this, &panelId, &ownershipToken](
+                             const QString &errorCode,
+                             const QString &failureStage,
+                             const FreePanelHost &host,
+                             bool hostMayExist,
+                             bool removeByIdentity)
+    {
+        FreePanelCreationResult result = failure(errorCode, failureStage);
+        result.panelId = panelId;
+        result.status = QStringLiteral("restore-failed");
+        result.recoverable = true;
+        if (hostMayExist)
+        {
+            result.rollbackAttempted = true;
+            FreePanelRemovalOutcome removal = FreePanelRemovalOutcome::QueryFailed;
+            if (removeByIdentity)
+            {
+                if (m_operations.removeOwnedHostByIdentity)
+                    removal = m_operations.removeOwnedHostByIdentity(panelId, ownershipToken);
+            }
+            else if (validHost(host) && m_operations.removeOwnedHost)
+            {
+                removal = m_operations.removeOwnedHost(
+                    host.desktopContainmentId, host.dockAppletId, panelId, ownershipToken);
+            }
+            result.rollbackSucceeded = removalCompleted(removal);
+            result.rollbackErrorCode = removalErrorCode(removal);
+        }
+        return result;
+    };
+
+    // Never a second widget for one panel: none may carry its token, nor
+    // show it under another token.
+    const std::optional<int> owned = m_operations.matchingHostCount(panelId, ownershipToken);
+    const std::optional<int> shown = m_operations.panelHostCount(panelId);
+    if (!owned.has_value() || !shown.has_value())
+        return abandon(QStringLiteral("host-preflight-query-failed"), QStringLiteral("host-preflight"), {}, false, false);
+    if (*owned != 0 || *shown != 0)
+        return abandon(QStringLiteral("host-identity-conflict"), QStringLiteral("host-preflight"), {}, false, false);
+
+    const FreePanelHostMutationResult mutation = m_operations.createConfiguredHost(
+        screenIndex, panelId, ownershipToken);
+    if (mutation.outcome != FreePanelHostMutationOutcome::Verified || !validHost(mutation.host))
+    {
+        QString mutationError = QStringLiteral("host-creation-failed");
+        bool hostMayExist = false;
+        if (mutation.outcome == FreePanelHostMutationOutcome::CandidateUnverified)
+        {
+            mutationError = QStringLiteral("host-creation-unverified");
+            hostMayExist = true;
+        }
+        else if (mutation.outcome == FreePanelHostMutationOutcome::Indeterminate)
+        {
+            mutationError = QStringLiteral("host-creation-indeterminate");
+            hostMayExist = true;
+        }
+        return abandon(mutationError, QStringLiteral("host-creation"), mutation.host,
+                       hostMayExist, !validHost(mutation.host));
+    }
+
+    const FreePanelHost host = mutation.host;
+    const FreePanelHostVerificationOutcome verification = m_operations.verifyHost(
+        host.desktopContainmentId, host.dockAppletId, panelId, ownershipToken);
+    if (verification != FreePanelHostVerificationOutcome::Owned)
+    {
+        const bool definitelyMissing = verification == FreePanelHostVerificationOutcome::Missing;
+        return abandon(
+            verification == FreePanelHostVerificationOutcome::QueryFailed
+                ? QStringLiteral("host-verification-query-failed")
+                : definitelyMissing ? QStringLiteral("host-verification-missing")
+                                    : QStringLiteral("host-verification-refused"),
+            QStringLiteral("host-verification"), host, !definitelyMissing, false);
+    }
+
+    const int hostScreenIndex = mutation.screenIndex >= 0 ? mutation.screenIndex : screenIndex;
+    const QString screenId = m_operations.screenIdForIndex
+        ? m_operations.screenIdForIndex(hostScreenIndex)
+        : association->screenId;
+    if (!m_registry.rebindRecoveredFreeHostAssociation(
+            panelId, host.desktopContainmentId, host.dockAppletId, ownershipToken,
+            hostScreenIndex, screenId))
+    {
+        return abandon(QStringLiteral("association-persist-failed"),
+                       QStringLiteral("association-persistence"), host, true, false);
+    }
+
+    FreePanelCreationResult result;
+    result.success = true;
+    result.status = QStringLiteral("restored");
+    result.panelId = panelId;
+    result.desktopContainmentId = host.desktopContainmentId;
+    result.dockAppletId = host.dockAppletId;
+    result.ownershipVerified = true;
+    return result;
+}
+
 FreePanelCreationResult FreePanelController::create(const FreePanelCreationRequest &request)
 {
     const bool validRequest = requestIsValid(request);
