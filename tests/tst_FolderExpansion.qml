@@ -808,6 +808,65 @@ TestCase {
         fuzzyCompare(Math.hypot(stack.samples[1].x - stack.samples[0].x, stack.samples[1].y - stack.samples[0].y),
                      stack.pitch, 0.5, "a pitch apart as drawn")
     }
+    // No child of an opening covers another free panel as drawn: a shape
+    // gives way to it, flat or on a plane.
+    function test_openingsKeepClearOfOtherPanels() {
+        const overlaps = function(a, b) {
+            return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+        }
+        const cellAt = function(sample, size) {
+            const scale = Number(sample.scale) || 1
+            return { x: sample.x - size * scale / 2, y: sample.y - size * scale / 2,
+                     width: size * scale, height: size * scale }
+        }
+        for (const kind of ["fan", "arc", "stack", "ring", "grid"]) {
+            const plain = shapeOf(kind, { x: 0, y: -1 }, 8, false)
+            // Another panel right where the shape would open.
+            const where = LayoutEngine.unitedBounds(plain.samples.map(function(sample) { return cellAt(sample, 48) }))
+            const other = { x: where.x - 10, y: where.y - 10, width: where.width + 20, height: where.height + 20 }
+            const shape = shapeOf(kind, { x: 0, y: -1 }, 8, false, { avoid: [other] })
+            verify(!shape.hidden, kind)
+            const laid = kind === "grid" ? LayoutEngine.gridTrackLayout(shape.grid, 8, 0)
+                : LayoutEngine.folderTrackLayout(shape.samples, 8, shape.pitch, 0,
+                    { closed: shape.closed, start: shape.start, capacity: shape.capacity, rings: shape.rings || [] })
+            for (const entry of laid.entries)
+                if (entry.onTrack)
+                    verify(!overlaps(cellAt(entry, 48), other), kind + ": a child covers the other panel")
+        }
+    }
+    // A free panel dropped too close to another moves straight away from it,
+    // just far enough, and stays on the screen; one standing clear stays.
+    function test_freePanelsKeepApart() {
+        const gapBetween = function(a, b) {
+            const dx = Math.max(0, b.x - (a.x + a.width), a.x - (b.x + b.width))
+            const dy = Math.max(0, b.y - (a.y + a.height), a.y - (b.y + b.height))
+            return Math.hypot(dx, dy)
+        }
+        const other = { x: 400, y: 400, width: 300, height: 200, gap: 120 }
+        const screen = { x: 0, y: 0, width: 1920, height: 1080 }
+        // Side by side, 30 px apart: moved right along the line between them.
+        const near = { x: 730, y: 400, width: 300, height: 200 }
+        const move = LayoutEngine.keepApart(near, [other], screen)
+        fuzzyCompare(move.y, 0, 0.01, "straight away")
+        fuzzyCompare(gapBetween({ x: near.x + move.x, y: near.y + move.y, width: 300, height: 200 }, other),
+                     120, 0.2, "just far enough")
+        // Diagonal: away along the line between their middles.
+        const diagonal = { x: 720, y: 620, width: 200, height: 200 }
+        const away = LayoutEngine.keepApart(diagonal, [other], screen)
+        const ux = diagonal.x + 100 - 550, uy = diagonal.y + 100 - 500
+        fuzzyCompare(away.x * uy - away.y * ux, 0, 0.5, "along the line between the middles")
+        verify(away.x > 0 && away.y > 0)
+        verify(gapBetween({ x: diagonal.x + away.x, y: diagonal.y + away.y, width: 200, height: 200 }, other)
+               >= 120 - 0.2)
+        // Clear already: nothing moves.
+        const clear = LayoutEngine.keepApart({ x: 900, y: 400, width: 100, height: 100 }, [other], screen)
+        compare(clear.x, 0)
+        compare(clear.y, 0)
+        // Never off the screen.
+        const edge = LayoutEngine.keepApart({ x: 1700, y: 400, width: 200, height: 200 },
+                                            [{ x: 1500, y: 400, width: 150, height: 200, gap: 300 }], screen)
+        verify(1700 + edge.x + 200 <= 1920 + 0.01, "kept on the screen")
+    }
     // A grid holds two rows of three at once; the wheel moves its children a
     // row at a time, each straight on to its place in the next row, the last
     // row's fading out past it and the next ones coming in before the first.

@@ -9,6 +9,7 @@
 #include "ScreenIdentity.h"
 #include "WindowModel.h"
 
+#include <limits>
 #include <QDir>
 #include <QDBusConnection>
 #include <QElapsedTimer>
@@ -317,6 +318,7 @@ private slots:
     void presentationProfileIsPublishedForLaterPresets();
     void freePanelContentFollowsItsRecordAndOrdersItsOwnEntries();
     void freeFolderIconsUseNativeMetadata();
+    void freePanelAreasAreShared();
     void studioPageWheelInput();
     void studioPanelMotionControls();
     void tiltEditorsFollowTheSelectedRenderer();
@@ -398,6 +400,48 @@ void PanelWindowCapabilityTest::freeFolderIconsUseNativeMetadata()
     }
     PanelRegistry reloaded;
     QCOMPARE(reloaded.panelDefinition(panel)->content.urls.size(), icons.size());
+}
+
+void PanelWindowCapabilityTest::freePanelAreasAreShared()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString first = registry->addFreePanel();
+    const QString second = registry->addFreePanel();
+    QVERIFY(!first.isEmpty() && !second.isEmpty() && first != second);
+    // Each free panel's widget reports where it is drawn and the room its
+    // folder's smallest opening needs; the others see it, it does not.
+    QVERIFY(backend.reportFreePanelArea(first, 100, 200, 300, 150, 120));
+    QVERIFY(backend.reportFreePanelArea(second, 700, 200, 250, 250, 180));
+    const QVariantList seenByFirst = backend.freePanelAreas(first);
+    QCOMPARE(seenByFirst.size(), 1);
+    const QVariantMap other = seenByFirst.first().toMap();
+    QCOMPARE(other.value("panelId").toString(), second);
+    QCOMPARE(other.value("x").toDouble(), 700.0);
+    QCOMPARE(other.value("width").toDouble(), 250.0);
+    QCOMPARE(other.value("room").toDouble(), 180.0);
+    QCOMPARE(backend.freePanelAreas(QString{}).size(), 2);
+    // A later report replaces the earlier one.
+    QVERIFY(backend.reportFreePanelArea(second, 720, 210, 250, 250, 180));
+    QCOMPARE(backend.freePanelAreas(first).first().toMap().value("x").toDouble(), 720.0);
+    // Only free panels, and only sane numbers.
+    QVERIFY(!backend.reportFreePanelArea(QStringLiteral("bottom"), 0, 0, 100, 100, 50));
+    QVERIFY(!backend.reportFreePanelArea(QStringLiteral("free-none"), 0, 0, 100, 100, 50));
+    QVERIFY(!backend.reportFreePanelArea(first, 0, 0, 0, 100, 50));
+    QVERIFY(!backend.reportFreePanelArea(first, 0, 0, 100, 100, -1));
+    QVERIFY(!backend.reportFreePanelArea(first, std::numeric_limits<double>::quiet_NaN(), 0, 100, 100, 50));
+    // A folder's contents carry the other panels' areas.
+    const QVariantMap snapshot = backend.panelFolderSnapshot(first, QStringLiteral("free-url:file:///nowhere"));
+    const QVariantList areas = snapshot.value("freePanelAreas").toList();
+    QCOMPARE(areas.size(), 1);
+    QCOMPARE(areas.first().toMap().value("panelId").toString(), second);
+    // A removed panel is gone from what the others see.
+    registry->removePanel(second);
+    QVERIFY(!registry->panelIds().contains(second));
+    QVERIFY(backend.freePanelAreas(first).isEmpty());
 }
 
 void PanelWindowCapabilityTest::studioIconTiles_data()

@@ -891,7 +891,7 @@ var value = (function() {
 }
 
 bool PanelWindow::setPresetFreeHostGeometry(const ArchDock::PanelDefinition &definition,
-    const QVariantMap &geometry, QString *errorCode) const
+    const QVariantMap &geometry, QString *errorCode, bool keepApart) const
 {
     const auto current = presetFreeHostGeometry(definition, errorCode);
     if (!current || geometry.keys() != current->keys()) return false;
@@ -907,6 +907,7 @@ bool PanelWindow::setPresetFreeHostGeometry(const ArchDock::PanelDefinition &def
     auto command = geometry;
     command.insert(QStringLiteral("panelId"), definition.identity.id);
     command.insert(QStringLiteral("ownerToken"), host.freeOwnershipToken);
+    command.insert(QStringLiteral("keepApart"), keepApart);
     const QString payload = QString::fromUtf8(QJsonDocument::fromVariant(command).toJson(QJsonDocument::Compact));
     const int applied = evaluatePlasmaScriptResult(QStringLiteral(R"JS(
 var result = (function() {

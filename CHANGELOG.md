@@ -34,6 +34,14 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   remove from its right-click menu stays removed. The 24 panels earlier
   versions had left off the desktop are cleared at the first start (the
   owner: "Delete all 24").
+- Free panels keep apart (the owner: "Folder openings should not overlay
+  other free docks, so there should be minimal aloud distance between free
+  docks depending on their size"). A folder opening keeps clear of every
+  other free panel as drawn, not only its own. A free panel moved closer to
+  another than the room the smallest folder opening needs - one child at the
+  bigger panel's drawn size, and 8 pixels - moves straight away from it,
+  just far enough, once the move ends; on the desktop, in Panel Studio or
+  with the 3D handles. Starting up, a profile or a preview moves nothing.
 - Panel Studio edits one panel at a time, as Plasma does: the one opened with
   "Configure Arch Dock…"; Configure on another panel moves the window there,
   asking first about changes not applied yet. Opened on its own, or with a

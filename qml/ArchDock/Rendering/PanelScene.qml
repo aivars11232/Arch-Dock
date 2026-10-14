@@ -663,6 +663,39 @@ Item {
                        Math.max(effect.x + effect.width, scene.x + scene.width) - left,
                        Math.max(effect.y + effect.height, scene.y + scene.height) - top)
     }
+    // Where the panel is seen, in its own coordinates: on a 3D panel the
+    // scene alone, which may stand away from the widget's box; elsewhere
+    // the box with its effects.
+    readonly property rect visibleBounds: {
+        const scene = surfaceLoader.true3DReady && surfaceLoader.true3DItem
+            ? surfaceLoader.true3DItem.drawnBounds : null
+        return scene && scene.width > 0 && scene.height > 0
+            ? Qt.rect(scene.x, scene.y, scene.width, scene.height) : drawnBounds
+    }
+    // The panel as drawn, in its own coordinates: on a 3D panel the box
+    // round its platform and icons as drawn (folderKeepOut()), which may
+    // stand away from the widget's box; elsewhere the box with its effects.
+    function seenBounds() {
+        const keep = surfaceLoader.true3DReady ? folderKeepOut() : null
+        if (keep) {
+            const parts = (keep.hull || []).map(function(point) {
+                return { x: point.x, y: point.y, width: 0, height: 0 }
+            }).concat(keep.rects || [])
+            const box = parts.length ? LayoutEngine.unitedBounds(parts) : null
+            if (box && box.width > 0 && box.height > 0) return box
+        }
+        return { x: drawnBounds.x, y: drawnBounds.y, width: drawnBounds.width, height: drawnBounds.height }
+    }
+    // How large the panel's icons are drawn against their own size: on a 3D
+    // panel the nearest one's, elsewhere 1.
+    function drawnIconScale() {
+        const mesh = surfaceLoader.true3DReady ? surfaceLoader.true3DItem : null
+        const drawn = mesh && mesh.projectedEntryGeometry ? mesh.projectedEntryGeometry : []
+        let largest = 0
+        for (let index = 0; index < drawn.length; ++index)
+            if (drawn[index]) largest = Math.max(largest, Number(drawn[index].height) || 0)
+        return largest > 0 ? largest / Math.max(1, layoutGeometry.iconSize) : 1
+    }
     readonly property var inputRegion: ({
         x: 0,
         y: 0,

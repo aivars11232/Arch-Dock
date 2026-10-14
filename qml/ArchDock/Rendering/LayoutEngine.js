@@ -1525,6 +1525,69 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
     };
 }
 
+// How far to move a free panel drawn at `rect` on the screen so that it
+// stands at least `gap` from every other panel's drawn rectangle in `others`
+// ({ x, y, width, height, gap }): straight away from the one it is most too
+// close to, no further than that needs, again for the next one, and kept on
+// `screen` where given. Returns the move { x, y }; nothing to do is 0, 0.
+function keepApart(rect, others, screen) {
+    const box = { x: finite(rect && rect.x, 0), y: finite(rect && rect.y, 0),
+                  width: Math.max(0, finite(rect && rect.width, 0)),
+                  height: Math.max(0, finite(rect && rect.height, 0)) };
+    const near = (others || []).filter(function(other) {
+        return other && isFinite(other.x) && isFinite(other.y) && finite(other.width, 0) > 0
+            && finite(other.height, 0) > 0 && finite(other.gap, 0) > 0;
+    });
+    // The distance between two rectangles' nearest edges, 0 where they meet.
+    function apart(a, b) {
+        const dx = Math.max(0, b.x - (a.x + a.width), a.x - (b.x + b.width));
+        const dy = Math.max(0, b.y - (a.y + a.height), a.y - (b.y + b.height));
+        return Math.hypot(dx, dy);
+    }
+    function onScreen(move) {
+        if (!screen || !(finite(screen.width, 0) > box.width) || !(finite(screen.height, 0) > box.height))
+            return move;
+        return { x: clamp(box.x + move.x, screen.x, screen.x + screen.width - box.width) - box.x,
+                 y: clamp(box.y + move.y, screen.y, screen.y + screen.height - box.height) - box.y };
+    }
+    let move = { x: 0, y: 0 };
+    for (let round = 0; round < 4; ++round) {
+        const at = { x: box.x + move.x, y: box.y + move.y, width: box.width, height: box.height };
+        let worst = null;
+        for (const other of near) {
+            const short = finite(other.gap, 0) - apart(at, other);
+            if (short > 0.5 && (!worst || short > worst.short))
+                worst = { other: other, short: short };
+        }
+        if (!worst)
+            break;
+        const other = worst.other;
+        let ux = at.x + at.width / 2 - (other.x + other.width / 2);
+        let uy = at.y + at.height / 2 - (other.y + other.height / 2);
+        const length = Math.hypot(ux, uy);
+        if (length < 1e-6) {
+            ux = 1;
+            uy = 0;
+        } else {
+            ux /= length;
+            uy /= length;
+        }
+        // Moving straight away keeps adding distance: the least that is
+        // enough, to a tenth of a pixel.
+        let low = 0, high = other.gap + Math.hypot(at.width, at.height) + Math.hypot(other.width, other.height);
+        for (let step = 0; step < 32 && high - low > 0.1; ++step) {
+            const middle = (low + high) / 2;
+            if (apart({ x: at.x + ux * middle, y: at.y + uy * middle, width: at.width, height: at.height }, other)
+                    >= other.gap)
+                high = middle;
+            else
+                low = middle;
+        }
+        move = onScreen({ x: move.x + ux * high, y: move.y + uy * high });
+    }
+    return move;
+}
+
 // How far apart two samples of a folder's path are: on the screen, or with
 // `unscaled` as if drawn at scale 1 (their scales' mean).
 function trackRun(a, b, unscaled) {
@@ -2082,10 +2145,25 @@ function folderShape(shape, options) {
     // rectTouchesKeepOut()), which no child may cover or touch.
     const keepOut = project && value.keepOut ? value.keepOut : null;
     const keepOutMargin = Math.max(0, finite(value.keepOutMargin, 8));
+    // Other free panels as drawn on the screen (`avoid`): no child covers
+    // one, on a plane or flat.
+    const avoid = (value.avoid || []).filter(function(rect) {
+        return rect && isFinite(rect.x) && isFinite(rect.y) && finite(rect.width, 0) > 0
+            && finite(rect.height, 0) > 0;
+    });
+    function overOther(rect) {
+        for (const other of avoid)
+            if (rect.x < other.x + other.width && rect.x + rect.width > other.x
+                    && rect.y < other.y + other.height && rect.y + rect.height > other.y)
+                return true;
+        return false;
+    }
     // Whether a child standing at `point` keeps clear of every dock icon.
     function clear(point) {
         if (project) {
             if (!seen(point))
+                return false;
+            if (overOther(cell(point)))
                 return false;
             if (keepOut)
                 return !rectTouchesKeepOut(cell(point), keepOut, keepOutMargin);
@@ -2095,7 +2173,7 @@ function folderShape(shape, options) {
             return true;
         }
         const child = cell(point);
-        if (!child)
+        if (!child || overOther(child))
             return false;
         const reach = obstacleSize / 2 + 4;
         for (const obstacle of obstacles) {

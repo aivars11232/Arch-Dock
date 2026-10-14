@@ -67,6 +67,27 @@ any more ("My current plasma layout don't touch, work only with Arch Dock").
   widget dropped from the private layout came back 91 s after Plasma's
   restart, same place, size and token; removed with Plasma's own removal, the
   panel stayed gone.
+- Free panels keep apart (2026-10-14; the owner chose "Push it out" and
+  "Room for an opening"). Each free panel's widget reports where it is seen
+  on the screen - on a 3D panel the box round its platform and icons as
+  drawn (`PanelScene.seenBounds`, from `folderKeepOut`), which can stand
+  away from the widget's box - and the room its folder's smallest opening
+  needs there (one child's cell at its nearest icon's drawn size,
+  `FolderTrackHost.childExtent` x `PanelScene.drawnIconScale`) with
+  `reportFreePanelArea`; the backend keeps them in memory
+  (`freePanelAreas`) and hands the others to every folder snapshot
+  (`freePanelAreas` in `panelFolderSnapshot`). Every opening's children keep
+  clear of them (`folderShape` `avoid`, Along the dock too); a ring tries the
+  other side of the dock, a stack the next side. After its owner moved it -
+  the widget's desktop container moved, or a Studio change of place
+  (`setPresetFreeHostGeometry` `keepApart`), or its 3D place or scale
+  changed - a panel standing closer to another than the larger room and 8
+  pixels moves straight away from it, just far enough
+  (`LayoutEngine.keepApart`), within the screen. A profile, a preview, a
+  panel put back or the first seconds after starting move nothing. Replica
+  `apart-4`: free-1 97 px from free-2 at the start (too close, untouched);
+  moved by Studio to 10 px from free-2, it stood 157.2 px away (minimum
+  157.1) half a second later.
 - Panel Studio edits one panel (the owner: "one panel studio window that
   coresponds to one panel"): no panel list; Configure on another panel moves
   the window there (`editPanel`), asking Apply / Discard / Keep editing when

@@ -19,6 +19,7 @@
 #include <QTimer>
 
 #include <array>
+#include <cmath>
 
 using PanelWindowHelpers::fitUtilityWindow;
 
@@ -223,6 +224,45 @@ bool PanelWindow::reportPanelInteractionGuards(const QString &panelId,
     ++m_visibilityRevision;
     emit visibilityRevisionChanged();
     return true;
+}
+
+bool PanelWindow::reportFreePanelArea(const QString &panelId, double x, double y,
+                                      double width, double height, double room)
+{
+    if (!m_panelRegistry.panelIds().contains(panelId) ||
+        m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() != QStringLiteral("free"))
+    {
+        return false;
+    }
+    const auto sane = [](double value, double limit) { return std::isfinite(value) && std::abs(value) <= limit; };
+    if (!sane(x, 1000000) || !sane(y, 1000000) || !sane(width, 100000) || !sane(height, 100000) ||
+        width <= 0 || height <= 0 || !sane(room, 10000) || room < 0)
+    {
+        return false;
+    }
+    m_freePanelAreas.insert(panelId, {{QStringLiteral("panelId"), panelId},
+                                      {QStringLiteral("x"), x},
+                                      {QStringLiteral("y"), y},
+                                      {QStringLiteral("width"), width},
+                                      {QStringLiteral("height"), height},
+                                      {QStringLiteral("room"), room}});
+    return true;
+}
+
+QVariantList PanelWindow::freePanelAreas(const QString &exceptPanelId) const
+{
+    QVariantList areas;
+    for (auto it = m_freePanelAreas.cbegin(); it != m_freePanelAreas.cend(); ++it)
+    {
+        // Only free panels that are still there.
+        if (it.key() == exceptPanelId || !m_panelRegistry.panelIds().contains(it.key()) ||
+            m_panelRegistry.panelValue(it.key(), QStringLiteral("edge")).toString() != QStringLiteral("free"))
+        {
+            continue;
+        }
+        areas.append(it.value());
+    }
+    return areas;
 }
 
 QVariantMap PanelWindow::panelInteractionGuards(const QString &panelId) const

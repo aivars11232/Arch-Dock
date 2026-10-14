@@ -219,6 +219,13 @@ public slots:
     // can conceal a panel under an open context menu.
     bool reportPanelInteractionGuards(const QString &panelId,
                                       const QVariantMap &guards);
+    // Where a free panel is drawn on the screen and how much room its
+    // smallest folder opening needs there, as its widget last reported:
+    // other panels' folders keep clear of it, and free panels keep that far
+    // apart. Nothing of it is saved.
+    bool reportFreePanelArea(const QString &panelId, double x, double y,
+                             double width, double height, double room);
+    [[nodiscard]] QVariantList freePanelAreas(const QString &exceptPanelId) const;
     [[nodiscard]] QVariantMap panelInteractionGuards(const QString &panelId) const;
     // The applet reports the resting surface state and host phase its
     // presentation controller has reached. This is runtime state, never
@@ -318,8 +325,11 @@ private:
                                                 const QString &themeId) const;
     [[nodiscard]] std::optional<QVariantMap> presetFreeHostGeometry(
         const ArchDock::PanelDefinition &definition, QString *errorCode) const;
+    // `keepApart`: the widget moves on afterwards if it then stands too close
+    // to another free panel, as when its owner moved it; a profile, a preview
+    // or a panel put back keeps the place it is given.
     bool setPresetFreeHostGeometry(const ArchDock::PanelDefinition &definition,
-        const QVariantMap &geometry, QString *errorCode) const;
+        const QVariantMap &geometry, QString *errorCode, bool keepApart = false) const;
     bool capturePresetPreviewHost(ArchDock::PresetPreviewRecord &record, QString *errorCode) const;
     bool restorePresetPreviewHost(const ArchDock::PresetPreviewRecord &record, QString *errorCode,
         bool profileTransaction = false) const;
@@ -543,6 +553,9 @@ private:
     void checkRequestedRemovals();
     int m_visibilityRevision = 0;
     QHash<QString, ArchDock::PanelVisibilityLocks> m_panelInteractionGuards;
+    // Free panels as drawn on the screen, with the room each one's folder
+    // opening needs (reportFreePanelArea).
+    QHash<QString, QVariantMap> m_freePanelAreas;
     QHash<QString, QVariantMap> m_panelPresentationStates;
     QHash<QString, QString> m_pendingPresentationRequests;
     qulonglong m_presentationRequestRevision = 0;

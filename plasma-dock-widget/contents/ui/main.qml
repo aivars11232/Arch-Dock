@@ -393,6 +393,11 @@ PlasmoidItem {
     // Plasma 6's scripting geometry setter is a no-op. Restore only our own
     // desktop container, after the backend has removed its preview projection.
     property var pendingAuditionGeometry: null
+    // A move the backend asked for is under way, and whether the panel then
+    // keeps its distance from the other free panels (a change of place in
+    // Panel Studio does; a profile or a preview keeps the place it gives).
+    property bool commandedMove: false
+    property bool commandedMoveKeepsApart: false
     Timer {
         id: auditionGeometryMove
         interval: 25
@@ -441,6 +446,8 @@ PlasmoidItem {
                 // Plasma can reposition a managed container when its size
                 // hints grow. Finish resizing before setting the requested
                 // position, so that relayout cannot replace the move.
+                root.commandedMove = true;
+                root.commandedMoveKeepsApart = requested.keepApart === true;
                 container.width = requested.width + container.leftPadding + container.rightPadding;
                 container.height = requested.height + container.topPadding + container.bottomPadding;
                 root.pendingAuditionGeometry = {raw: raw, requested: requested, container: container};
@@ -806,6 +813,115 @@ PlasmoidItem {
 
         Item {
             id: representation
+
+            // Where this free panel is drawn on the screen, and the room its
+            // folder's smallest opening needs there, for the other free
+            // panels: their folders keep clear of it, and free panels keep
+            // that far apart. Once its owner has moved it - on the desktop,
+            // in Panel Studio or with the 3D handles - and it stands too
+            // close to another, it moves straight away from it, just far
+            // enough. Starting up, a profile or a preview moves nothing.
+            property var reportedArea: null
+            property double reportedSince: 0
+            property bool keepApartArmed: false
+            property bool movingItself: false
+            property Item placedContainer: null
+            property string placeKey: ""
+            function seenArea() {
+                const bounds = panelScene.seenBounds()
+                const a = panelScene.mapToGlobal(bounds.x, bounds.y)
+                const b = panelScene.mapToGlobal(bounds.x + bounds.width, bounds.y + bounds.height)
+                return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y),
+                         width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) }
+            }
+            // The desktop's container holding this widget.
+            function placedItem() {
+                let container = root.parent
+                while (container && !(container.applet && container.layout && container.applet.plasmoid
+                       && container.applet.plasmoid.id === Plasmoid.id))
+                    container = container.parent
+                return container
+            }
+            // A change of place: one its owner made arms the distance check,
+            // once the panel has stood still a few seconds after starting.
+            function placeChanged() {
+                const settled = reportedArea !== null && Date.now() - reportedSince > 3000
+                if (root.commandedMove)
+                    keepApartArmed = keepApartArmed || (settled && root.commandedMoveKeepsApart)
+                else if (settled && !movingItself)
+                    keepApartArmed = true
+                areaReport.restart()
+            }
+            function reportArea() {
+                if (!root.freeSurface || root.panelId.length === 0 || !dockService.registered) return
+                if (!placedContainer) placedContainer = placedItem()
+                const area = seenArea()
+                if (!(area.width > 0 && area.height > 0)) return
+                const room = folderTrack.childExtent * panelScene.drawnIconScale()
+                root.callDock("reportFreePanelArea", [root.panelId, area.x, area.y, area.width, area.height, room])
+                if (reportedArea === null) reportedSince = Date.now()
+                reportedArea = area
+                movingItself = false
+                root.commandedMove = false
+                if (keepApartArmed) {
+                    keepApartArmed = false
+                    keepApart(area, room)
+                }
+            }
+            function keepApart(area, room) {
+                root.callDock("freePanelAreas", [root.panelId], function(reply) {
+                    const value = root.normalizeReply(reply)
+                    const others = (Array.isArray(value) ? value : []).map(function(other) {
+                        return { x: Number(other.x), y: Number(other.y), width: Number(other.width),
+                                 height: Number(other.height),
+                                 gap: Math.max(room, Number(other.room) || 0) + 8 }
+                    })
+                    const screen = { x: representation.Screen.virtualX, y: representation.Screen.virtualY,
+                                     width: representation.Screen.width, height: representation.Screen.height }
+                    const move = LayoutEngine.keepApart(area, others, screen)
+                    if (Math.hypot(move.x, move.y) < 0.5) return
+                    const container = placedContainer || placedItem()
+                    if (!container || !container.layout || typeof container.layout.save !== "function") return
+                    movingItself = true
+                    container.x += move.x
+                    container.y += move.y
+                    container.layout.save()
+                })
+            }
+            Timer {
+                id: areaReport
+                interval: 400
+                onTriggered: representation.reportArea()
+            }
+            Connections {
+                target: panelScene
+                function onVisibleBoundsChanged() { areaReport.restart() }
+            }
+            Connections {
+                target: representation.placedContainer
+                ignoreUnknownSignals: true
+                function onXChanged() { representation.placeChanged() }
+                function onYChanged() { representation.placeChanged() }
+                function onWidthChanged() { representation.placeChanged() }
+                function onHeightChanged() { representation.placeChanged() }
+            }
+            Connections {
+                target: dockService
+                function onRegisteredChanged() { areaReport.restart() }
+            }
+            // A 3D panel moved or scaled with its handles or in Panel Studio.
+            Connections {
+                target: root
+                function onConfigurationChanged() {
+                    const c = root.configuration || {}
+                    const key = [c.scene3DPositionX, c.scene3DPositionY, c.scene3DPositionZ, c.scene3DScale,
+                                 c.scene3DScaleX, c.scene3DScaleY].join(",")
+                    if (key === representation.placeKey) return
+                    const first = representation.placeKey.length === 0
+                    representation.placeKey = key
+                    if (!first) representation.placeChanged()
+                }
+            }
 
             property string previewAppId: ""
             readonly property int previewEntryIndex: {

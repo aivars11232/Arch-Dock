@@ -71,6 +71,9 @@ PlasmaCore.Dialog {
     property size windowSize: Qt.size(1, 1)
     readonly property real margin: 12
     readonly property var outlineStyle: LayoutEngine.themeStyle(appearance, customColor, iconSize)
+    // How much room one child needs at the folder's own size: what the
+    // smallest opening needs beside the panel.
+    readonly property real childExtent: Math.max(content.cellWidth, content.cellHeight)
     signal childSelected(string childId)
     objectName: "folderTrackHost"
     type: PlasmaCore.Dialog.AppletPopup
@@ -122,11 +125,11 @@ PlasmaCore.Dialog {
             return { x: point.x, y: point.y }
         }
     }
-    // A fan, arc, stack or ring lying on a 3D panel's plane round the folder
-    // (`plane`, from folderPlane), on the screen: `others` are the dock's
-    // other icons there and `area` the screen. Null when no such shape can
-    // be seen whole.
-    function planeShape(plane, others, toScreen, area, keep) {
+    // A fan, arc, stack, grid or ring lying on a 3D panel's plane round the
+    // folder (`plane`, from folderPlane), on the screen: `others` are the
+    // dock's other icons there, `area` the screen and `avoid` the other free
+    // panels as drawn. Null when no such shape can be seen whole.
+    function planeShape(plane, others, toScreen, area, keep, avoid) {
         const onScreen = function(map) {
             return function(point) {
                 const view = map(point.x, point.y)
@@ -135,52 +138,76 @@ PlasmaCore.Dialog {
                 return { x: at.x, y: at.y, scale: view.scale }
             }
         }
-        let project = onScreen(plane.toView)
-        let origin = plane.origin, facing = plane.outward
-        // A ring opens beside the dock on the side of the screen with more
-        // room - to the right of a dock on the left half, to the left of one
-        // on the right half - from the rim there.
-        const middle = folderLayout === "ring" ? project({ x: 0, y: 0 }) : null
-        if (middle) {
-            const sideways = middle.x <= area.x + area.width / 2 ? 1 : -1
-            let best = null
-            for (let degrees = 0; degrees < 360; degrees += 5) {
-                const turn = degrees * Math.PI / 180
-                const rim = plane.rimAt(turn)
-                const point = { x: rim * Math.cos(turn), y: rim * Math.sin(turn) }
-                const at = project(point)
-                if (at && (!best || sideways * at.x > sideways * best.at.x))
-                    best = { at: at, point: point, turn: turn }
-            }
-            if (best) {
-                origin = best.point
-                facing = { x: Math.cos(best.turn), y: Math.sin(best.turn) }
-            }
-        }
+        const viewed = onScreen(plane.toView)
         // Drawn as the panel's middle is seen, about where the shape opens.
-        // The shape opens from the rim; it moves out only as far as keeps its
-        // children clear of the panel as drawn.
-        const aligned = plane.alignedAt(origin.x, origin.y)
-        if (aligned) project = onScreen(aligned)
+        const alignedFrom = function(from) {
+            const aligned = plane.alignedAt(from.x, from.y)
+            return aligned ? onScreen(aligned) : viewed
+        }
         // The folder's own icon there: no child is drawn larger.
-        const folderSeen = project(origin)
-        const build = function(from, way, extra) {
+        const folderSeen = alignedFrom(plane.origin)(plane.origin)
+        // The shape opens from the rim; it moves out only as far as keeps its
+        // children clear of the panel as drawn and of the other panels.
+        const build = function(from, way, project, extra) {
             const options = {
                 folder: from, outward: way, fromEdge: true,
                 iconSize: iconSize, cellWidth: content.cellWidth, cellHeight: content.cellHeight,
                 gap: 6, count: content.entries.length, fanOpening: fanOpening,
                 stackLength: stackLength, stackSpan: 0, ringSize: ringSize, panelRadius: plane.radius,
                 obstacles: others, planeObstacles: plane.icons || [], obstacleSize: iconSize,
-                keepOut: keep, keepOutMargin: keepOutMargin, screen: area, screenMargin: margin,
+                keepOut: keep, keepOutMargin: keepOutMargin, avoid: avoid, screen: area, screenMargin: margin,
                 outlineMargin: outlineStyle.lineWidth / 2 + outlineStyle.blur, outlineWidth: outlineStyle.lineWidth,
                 largestScale: folderSeen ? folderSeen.scale : 0,
                 project: project }
             for (const key in extra || {}) options[key] = extra[key]
             return LayoutEngine.folderShape(folderLayout, options)
         }
+        // The first of the shapes `tries` gives that is seen whole and fits
+        // the screen, else the one that leaves it least.
+        const firstFitting = function(tries) {
+            let fallback = null
+            for (const tryShape of tries) {
+                const shape = tryShape()
+                if (!shape || shape.hidden) continue
+                if (!(shape.overflow > 0.5)) return shape
+                if (!fallback || shape.overflow < fallback.overflow) fallback = shape
+            }
+            return fallback
+        }
+        const atFolder = alignedFrom(plane.origin)
+        // A ring opens beside the dock on the side of the screen with more
+        // room - to the right of a dock on the left half, to the left of one
+        // on the right half - from the rim there; where another panel stands
+        // on that side, on the other side.
+        const middle = folderLayout === "ring" ? viewed({ x: 0, y: 0 }) : null
+        if (middle) {
+            const sideStart = function(sideways) {
+                let best = null
+                for (let degrees = 0; degrees < 360; degrees += 5) {
+                    const turn = degrees * Math.PI / 180
+                    const rim = plane.rimAt(turn)
+                    const point = { x: rim * Math.cos(turn), y: rim * Math.sin(turn) }
+                    const at = viewed(point)
+                    if (at && (!best || sideways * at.x > sideways * best.at.x))
+                        best = { at: at, point: point, turn: turn }
+                }
+                return best
+            }
+            const preferred = middle.x <= area.x + area.width / 2 ? 1 : -1
+            const sides = avoid.length ? [preferred, -preferred] : [preferred]
+            return firstFitting(sides.map(function(sideways) {
+                return function() {
+                    const start = sideStart(sideways)
+                    return start ? build(start.point, { x: Math.cos(start.turn), y: Math.sin(start.turn) },
+                                         alignedFrom(start.point)) : null
+                }
+            }))
+        }
+        const origin = plane.origin, facing = plane.outward
         // A fan hugs the panel: its children follow the rim round the folder.
         if (folderLayout === "fan") {
-            const shape = build(origin, facing, { hug: { rimAt: plane.rimAt, turn: Math.atan2(origin.y, origin.x) } })
+            const shape = build(origin, facing, atFolder,
+                                { hug: { rimAt: plane.rimAt, turn: Math.atan2(origin.y, origin.x) } })
             return shape && !shape.hidden ? shape : null
         }
         // A stack lies along the panel's side nearest the folder: up and
@@ -203,16 +230,22 @@ PlasmaCore.Dialog {
                 { gap: Math.abs(box.bottom - origin.y), from: { x: box.left, y: plane.rimAt(Math.PI / 2) },
                   way: { x: 1, y: 0 }, span: box.right - box.left, out: { x: 0, y: 1 } }]
             sides.sort(function(a, b) { return a.gap - b.gap })
-            let fallback = null
+            // A side where another panel would push the stack far out is
+            // passed over for the next one; failing all, the stack that
+            // stands nearest.
+            const near = 2 * Math.max(content.cellWidth, content.cellHeight)
+            let nearest = null
             for (const side of sides) {
-                const shape = build(side.from, side.way, { stackSpan: side.span, sideOut: side.out })
-                if (!shape || shape.hidden) continue
-                if (!(shape.overflow > 0.5)) return shape
-                if (!fallback || shape.overflow < fallback.overflow) fallback = shape
+                const shape = build(side.from, side.way, atFolder, { stackSpan: side.span, sideOut: side.out })
+                if (!shape || shape.hidden || shape.overflow > 0.5) continue
+                if (!(Number(shape.out) > near)) return shape
+                if (!nearest || shape.out < nearest.out) nearest = shape
             }
-            return fallback
+            return nearest || firstFitting(sides.map(function(side) {
+                return function() { return build(side.from, side.way, atFolder, { stackSpan: side.span, sideOut: side.out }) }
+            }))
         }
-        const shape = build(origin, facing)
+        const shape = build(origin, facing, atFolder)
         return shape && !shape.hidden ? shape : null
     }
     function openFolder() {
@@ -238,6 +271,19 @@ PlasmaCore.Dialog {
         } : null
         const rectangles = [{ x: centre.x - iconSize, y: centre.y - iconSize,
                               width: 2 * iconSize, height: 2 * iconSize }]
+        // The other free panels as drawn, which no child covers or touches.
+        const avoid = ((snapshot && snapshot.freePanelAreas) || []).filter(function(other) {
+            return other && Number(other.width) > 0 && Number(other.height) > 0
+        }).map(function(other) {
+            return { x: Number(other.x) - keepOutMargin, y: Number(other.y) - keepOutMargin,
+                     width: Number(other.width) + 2 * keepOutMargin, height: Number(other.height) + 2 * keepOutMargin }
+        })
+        const overOther = function(rect) {
+            return avoid.some(function(other) {
+                return rect.x < other.x + other.width && rect.x + rect.width > other.x
+                    && rect.y < other.y + other.height && rect.y + rect.height > other.y
+            })
+        }
         if (folderLayout === "track") {
             if (typeof trackSamples !== "function") return false
             // The dock's own pitch, not the one a shape opened with before.
@@ -256,6 +302,8 @@ PlasmaCore.Dialog {
                 const onScreen = left >= area.x && left + content.cellWidth * scale <= area.x + area.width
                     && top >= area.y && top + content.cellHeight * scale <= area.y + area.height
                 if (!onScreen) return false
+                if (overOther({ x: left, y: top, width: content.cellWidth * scale,
+                                height: content.cellHeight * scale })) return false
                 if (keep) return !LayoutEngine.rectTouchesKeepOut({ x: left, y: top,
                     width: content.cellWidth * scale, height: content.cellHeight * scale }, keep, keepOutMargin)
                 return others.every(function(icon) {
@@ -315,7 +363,7 @@ PlasmaCore.Dialog {
             // folder, tilted as the panel is; one that cannot be seen whole
             // there is built flat on the screen instead.
             const plane = typeof folderPlane === "function" ? folderPlane() : null
-            shape = plane ? planeShape(plane, others, toScreen, area, keep) : null
+            shape = plane ? planeShape(plane, others, toScreen, area, keep, avoid) : null
             if (shape) {
                 samples = shape.samples
             } else {
@@ -393,7 +441,7 @@ PlasmaCore.Dialog {
                         iconSize: iconSize, cellWidth: content.cellWidth, cellHeight: content.cellHeight,
                         gap: 6, count: content.entries.length, fanOpening: fanOpening,
                         stackLength: stackLength, stackSpan: stackSpan, ringSize: ringSize, panelRadius: panelRadius,
-                        obstacles: others, obstacleSize: iconSize, screen: area, screenMargin: margin,
+                        obstacles: others, obstacleSize: iconSize, avoid: avoid, screen: area, screenMargin: margin,
                         outlineMargin: outlineStyle.lineWidth / 2 + outlineStyle.blur })
                 }
                 shape = build(origin)

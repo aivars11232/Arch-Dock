@@ -943,6 +943,9 @@ QVariantMap PanelWindow::panelFolderSnapshot(const QString &panelId, const QStri
         result[QStringLiteral("errorCode")] = QStringLiteral("folder-entry-unavailable");
     result.insert(QStringLiteral("panelId"), panelId);
     result.insert(QStringLiteral("appId"), appId);
+    // Where the other free panels are drawn: the folder's opening keeps
+    // clear of them.
+    result.insert(QStringLiteral("freePanelAreas"), freePanelAreas(panelId));
     return result;
 }
 

@@ -329,11 +329,49 @@ Reruns on the fixed code: `panel-window-capability-test` passed
 `tst_DockGeometry`, `tst_PlatformGeometry` and `tst_FolderEasing` passed
 again after the last changes (`85-rerun-folder-tests.log`).
 
+### Free panels keep apart
+
+The owner, after openings from free-2 lay over free-1: "Folder openings
+should not overlay other free docks, so there should be minimal aloud
+distance between free docks depending on their size". Asked, the owner
+chose "Push it out" (a panel dropped too close moves straight away from the
+other, just far enough) and "Room for an opening" (one folder child - icon,
+stand, name - at the bigger panel's drawn size, plus a small gap).
+
+- Each free panel's widget reports where it is seen and the room its
+  smallest opening needs (`reportFreePanelArea`); the backend hands the
+  other panels' areas to every folder snapshot. On a 3D panel the area is
+  the box round the platform and icons as drawn (`PanelScene.seenBounds`):
+  the 3D view itself covered most of the screen (1024 x 640 and 1320 x 1000
+  in the first try, `apart-2`).
+- Every opening keeps its children clear of the other panels (`avoid`); a
+  ring tries the dock's other side, a stack the next side when another
+  panel would push it far out.
+- After the owner moves a panel - on the desktop, in Panel Studio, with the
+  3D handles - it checks the distance once the move has settled and moves
+  straight away from the panel it is too close to (`LayoutEngine.keepApart`),
+  within the screen. Profiles, previews, a panel put back and the first
+  seconds after starting move nothing.
+- Proof (`apart-4`, private plain Plasma, last night's free-1 and free-2):
+  97 px apart at the start, left as they were; free-1 moved in Panel Studio
+  to 10 px from free-2 stood 157.2 px away half a second later (minimum
+  157.1: free-2's room 149 and 8 px). Openings from free-2 - two circles,
+  fan, stack, grid - cleared free-1 (`87-keep-apart.png`).
+- Tests: `tst_FolderExpansion` `openingsKeepClearOfOtherPanels` (every shape
+  gives way to a panel where it would open), `freePanelsKeepApart` (straight
+  away, just far enough, on the screen, nothing for a panel standing clear);
+  `PanelWindowCapabilityTest::freePanelAreasAreShared`; the focused run
+  `86-apart-focused.log` 7/7.
+- Complete suite, serially, on this code (`88-full-suite-keep-apart.log`):
+  119 of 120 in 2385 s. `preset-audition-matrix-defaults` failed in its
+  restart step as in the first run ("Timed out stopping the private Arch
+  Dock service", the harness's old process number gone after the private bus
+  had started a new instance); alone it passed in 55.9 s
+  (`89-rerun-preset-defaults.log`).
+
 ### Still open
 
 - The ring with names takes about half a second to open on free-2.
-- An opening may still lie over another Arch Dock panel beside its own
-  (asked the owner whether openings should keep clear of other panels).
 - Why the owner's Plasma drops Arch Dock's widgets at a start.
 - Next after piece 1: the owner's icon limit by panel size (a 16 pixel gap
   measured on the owner's top panel; nothing cut off when resized), a Möbius

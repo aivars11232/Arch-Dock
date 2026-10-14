@@ -222,8 +222,14 @@ layouts and each renderer tier they offer (21 panels). What follows from it:
   larger than the folder's icon, so ones nearer than the panel stay that
   size. A grid there moves a row at a time; on a flat panel it keeps its
   popup.
-- A folder opening knows its own panel only: it may open over another
-  panel standing beside it.
+- A folder opening keeps clear of the other free panels as drawn, not of
+  Plasma's own panels or windows. Where free panels stand closer than the
+  minimum - as they may from before, since nothing moves at login - an
+  opening that finds no clear place shows the fullest one it found.
+- A free panel moved too close to another is pushed out once the move ends,
+  not held back while it is dragged. The private sessions drove the move
+  from Panel Studio; a drag on the desktop goes through the same check (the
+  widget's container moves) but could not be driven there.
 - A free panel Plasma has lost (over a login or a restart) comes back about a
   minute and a half after Plasma starts, not at once: until then Plasma may
   still be restoring its layout. Why the owner's Plasma drops Arch Dock's

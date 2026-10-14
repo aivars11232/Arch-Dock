@@ -2115,7 +2115,7 @@ QList<ArchDock::PanelSettingsHostResult> PanelWindow::applyPanelSettingsHosts(
     if (freePlacement.required)
     {
         freePlacement.success = setPresetFreeHostGeometry(draft.candidatePanel,
-            draft.candidateFreeHostGeometry, &freePlacement.errorCode);
+            draft.candidateFreeHostGeometry, &freePlacement.errorCode, true);
         freePlacement.status = freePlacement.success ? QStringLiteral("applied") : QStringLiteral("failed");
         freePlacement.details = {{QStringLiteral("requested"), draft.candidateFreeHostGeometry}};
     }
