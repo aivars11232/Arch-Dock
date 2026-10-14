@@ -354,8 +354,11 @@ const QVector<Descriptor> &schemaFields()
               "presetOrigin", {}, {}, {}, true),
         panel("id", Access::Protected, Type::String, Normalization::TrimmedString, QString{},
               "identity.id"),
-        panel("name", Access::Protected, Type::String, Normalization::None, QString{},
-              "identity.name"),
+        // What the panel is called in Panel Studio and its menus. Left as
+        // Arch Dock names it, it follows the panel's shape or edge.
+        panel("name", Access::Editor, Type::String, Normalization::TrimmedString, QString{},
+              "identity.name", {}, {}, {}, true, false,
+              editor("panels-general", "Name", "text", {"studio"}, "identity")),
         panel("builtIn", Access::Protected, Type::Boolean, Normalization::Boolean, false,
               "identity.builtIn"),
         panel("hostKind", Access::Protected, Type::String, Normalization::ChoiceLower,
@@ -1422,6 +1425,7 @@ QString editorCapabilityName(EditorCapability capability)
     case EditorCapability::Pedestals: return QStringLiteral("pedestals");
     case EditorCapability::Glow: return QStringLiteral("glow");
     case EditorCapability::Lightning: return QStringLiteral("lightning");
+    case EditorCapability::Identity: return QStringLiteral("identity");
     case EditorCapability::Count: break;
     }
     return QString{};

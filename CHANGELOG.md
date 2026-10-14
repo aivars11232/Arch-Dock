@@ -7,6 +7,28 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- Every change made in Panel Studio shows on the desktop panel at once
+  (the owner's request of 2026-10-13): its look, shape, size, glow and
+  icons, the settings shared by all panels, an edge panel's Plasma size and
+  place, a free panel's position. Apply or OK keeps it; Cancel or closing the
+  window puts the saved panel back as it was, with its size and place.
+  Nothing is saved before Apply. A change Apply would refuse is not drawn,
+  and Panel Studio says why. A panel moved by hand meanwhile keeps the
+  Studio's changes.
+- Saved profiles can be edited (the owner: "And not only profiles but also
+  editing it"): Profiles lists the panels a profile shows; each can be
+  renamed, removed (a built-in edge panel hidden) or edited with Edit…,
+  which opens Panel Studio's own pages on the profile's copy. Apply saves the
+  profile; the desktop changes when the profile is applied.
+- Panels have proper names (the owner: "names shouldn't be just free panel
+  1,2, etc."): a panel is named for what it is, "Ring panel", "Möbius strip
+  panel", "Top panel", numbered when the name is taken, and follows its shape
+  until it is given a name in Panels > General > Name. The old "Free panel N"
+  names are renamed that way once.
+- Panel Themes / Skins and Built-in Panel Presets are one Presets tab (the
+  owner: "Presets and panel themes are same thing, so they can be merged"),
+  and its previews show the bare panel, without icons ("the preview there
+  shouldn't be any icons, only bare panel").
 - Folders open at once and stay smooth (2026-10-13, the owner: "Folder
   opening on any option is super glitchy, opens with huge delay and freezes
   Arch Dock while it opens"): the stands' glow and a fan's outline are blurred

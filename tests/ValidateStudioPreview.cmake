@@ -5,6 +5,7 @@ endif()
 file(READ "${SOURCE_DIR}/qml/runtime/SettingsEditorModel.js" editor_model)
 file(READ "${SOURCE_DIR}/qml/runtime/SettingsPopup.qml" settings_popup)
 file(READ "${SOURCE_DIR}/qml/runtime/StudioForm.qml" studio_form)
+file(READ "${SOURCE_DIR}/qml/runtime/ThemeSampleCard.qml" theme_card)
 file(READ "${SOURCE_DIR}/qml/runtime/PresetCard.qml" preset_card)
 file(READ "${SOURCE_DIR}/qml/runtime/PresetBrowser.qml" preset_browser)
 file(READ "${SOURCE_DIR}/qml/runtime/PresetAuditionBar.qml" preset_audition_bar)
@@ -42,11 +43,11 @@ endforeach()
 
 foreach(required_theme_card_contract
         "LivePanelPreview {"
-        "root.studio.themeRendererCandidate(modelData)"
-        "themeSample.rendererCandidate"
+        "studio.themeRendererCandidate(theme)"
+        "panelDefinition: root.rendererCandidate"
         ".iconStyleDefinition || ({})"
         "themePreview.rendererStatusText")
-  string(FIND "${studio_form}" "${required_theme_card_contract}"
+  string(FIND "${theme_card}" "${required_theme_card_contract}"
          theme_card_contract_position)
   if(theme_card_contract_position EQUAL -1)
     message(FATAL_ERROR
@@ -61,7 +62,7 @@ foreach(forbidden_parallel_preview
         "model: 6"
         "themeSample.panelStyle"
         "themeSample.iconStyle")
-  string(FIND "${settings_popup}${studio_form}"
+  string(FIND "${settings_popup}${studio_form}${theme_card}"
          "${forbidden_parallel_preview}" parallel_preview_position)
   if(NOT parallel_preview_position EQUAL -1)
     message(FATAL_ERROR

@@ -1,5 +1,44 @@
 # Arch Dock current state
 
+<!-- LIST_PIECE_3_BEGIN -->
+## The owner's list, piece 3: one Presets page, panel names, live desktop preview, editing profiles — 2026-10-14
+
+Report `docs/repairs/OWNER-LIST-PIECE-3.md`; Panel Studio pictures from a
+private KWin, desktop pictures from a private Plasma desktop with copies of
+Arch Dock's own settings.
+
+- Panels > Presets holds the panel presets made for the panel (built-in,
+  then "My presets") and the looks; Panel Themes / Skins and the separate
+  preset tabs are gone. Preset and look cards draw the bare panel
+  (`LivePanelPreview.showBarePanel`), the look cards in `ThemeSampleCard.qml`.
+- Panel names (`model/PanelNaming`): a panel nobody named goes by its shape
+  or edge, "Ring panel", "Möbius strip panel", "Top panel", numbered when
+  taken, and follows it (`PanelRegistry::followShapeName`, for transactions
+  and direct updates alike); old "Free panel N" names are renamed once on
+  load; Panels > General > Name keeps a given name. The name is not a value
+  the desktop draws.
+- Live desktop preview: each Studio change runs
+  `PanelWindow::previewPanelSettingsEditorDraft`, the backend's full check of
+  the draft, and the panel is drawn with that draft
+  (`runtimePanelDefinition`) while the saved revision it was made on is
+  current; shared settings are drawn with the draft's
+  (`drawnGlobalSettings`). An edge panel's Plasma placement and a free
+  panel's position follow 120 ms later; a free widget's place and size are
+  noted before the first draft and put back by
+  `clearPanelSettingsPreview` (Cancel, closing Panel Studio, quitting). Only
+  the Studio's own Apply of that draft drops it as saved. A change Apply
+  would refuse is not drawn (`previewRefusal`). Settings changed elsewhere
+  while the Studio has changes are merged (`SettingsEditorModel.rebase`, the
+  newer value of a setting changed on both sides stands).
+- Profile editing: Profiles lists a profile's shown panels
+  (`ProfileManager::profilePanels`) with rename, Edit… and Remove (a
+  built-in edge panel is hidden); Edit opens Panel Studio in profile mode on
+  the profile's copy (`profilePanelEditorSnapshot`,
+  `resolveProfilePanelEditorDraft`, `applyProfilePanelSettings`), guarded by
+  the profile's revision; presets, artwork, the desktop 3D handles and
+  shared settings are not offered there.
+<!-- LIST_PIECE_3_END -->
+
 <!-- LIST_PIECE_2_BEGIN -->
 ## The owner's list, piece 2: a panel holds what its size has room for, the Möbius strip opening — 2026-10-14
 

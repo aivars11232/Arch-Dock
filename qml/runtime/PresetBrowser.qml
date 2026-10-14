@@ -6,17 +6,24 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
 // One preset catalog page. Every piece of data arrives through a property and
-// every request leaves through a signal, so one component serves the four
-// preset pages and none of them can reach a panel or the desktop.
+// every request leaves through a signal, so one component serves the preset
+// pages and none of them can reach a panel or the desktop. Panels > Presets
+// lists the panel presets, built-in and the user's own, and the built-in
+// looks, each drawn as a bare panel with no icons.
 Item {
     id: root
     readonly property alias scrollFlickable: list
 
     // "panel" or "icon". The two catalogs are separate and never mixed.
     property string kind: "panel"
-    // "builtin" or "user".
+    // "builtin", "user" or "all" (both, then the looks).
     property string scope: "builtin"
     property var presets: []
+    // Panel Studio's look rows (SettingsPopup.panelThemeRows): sample looks
+    // under their headings, and the artwork actions. The looks are drawn by
+    // `studio`, which also loads them.
+    property var themeRows: []
+    property var studio: null
     property var catalogStatus: ({ valid: true, errorCode: "" })
     property string selectedPresetId: ""
     // The outcome of the last store action, and whether it failed.
@@ -32,12 +39,36 @@ Item {
 
     readonly property bool panelKind: kind === "panel"
     readonly property bool builtInScope: scope === "builtin"
+    readonly property bool allScope: scope === "all"
     readonly property bool catalogValid: catalogStatus && catalogStatus.valid === true
     readonly property alias listView: list
-    readonly property string title: builtInScope
+    // Presets and looks in one list: each item names its kind and the
+    // heading it sits under.
+    readonly property var items: {
+        const result = [];
+        if (catalogValid)
+            for (const preset of presets || [])
+                result.push({ type: "preset", preset: preset, group: !allScope ? ""
+                    : preset.builtIn === true ? qsTr("Built-in presets") : qsTr("My presets") });
+        for (const row of themeRows || [])
+            if (row.kind === "themeSamples")
+                for (const theme of row.themes || [])
+                    result.push({ type: "theme", theme: theme, group: String(row.label || "") });
+        return result;
+    }
+    readonly property var artworkRow: (themeRows || []).find(function(row) { return row.kind === "actions"; }) || null
+    // Only looks, no presets (a profile's panel): the page is its looks.
+    readonly property bool looksOnly: allScope && (presets || []).length === 0 && (themeRows || []).length > 0
+    readonly property string title: looksOnly ? qsTr("Looks")
+        : allScope ? qsTr("Presets")
+        : builtInScope
         ? (panelKind ? qsTr("Built-in Panel Presets") : qsTr("Built-in Icon Presets"))
         : (panelKind ? qsTr("My Panel Presets") : qsTr("My Icon Presets"))
-    readonly property string description: builtInScope
+    readonly property string description: looksOnly
+        ? qsTr("Looks for this panel. Load puts one on it; Apply saves it.")
+        : allScope
+        ? qsTr("Complete starting configurations for this panel and looks for it. Built-in presets are read-only: duplicate one to make it yours. Load puts a look on this panel; Apply saves it.")
+        : builtInScope
         ? (panelKind
             ? qsTr("Complete one-panel starting configurations installed with Arch Dock. They are read-only: duplicate one to make it yours.")
             : qsTr("Reusable icon appearance and motion sets installed with Arch Dock. They are read-only: duplicate one to make it yours."))
@@ -52,6 +83,8 @@ Item {
     signal previewRequested(string presetId)
     signal applyRequested(string presetId)
     signal auditionActionRequested(string action, string name)
+    // An artwork action of the look rows (import, re-render, clear).
+    signal studioActionRequested(string action)
 
     function selectedResourceAvailable() {
         for (let index = 0; index < presets.length; ++index) {
@@ -107,7 +140,8 @@ Item {
             return;
         list.currentIndex = index;
         list.positionViewAtIndex(index, ListView.Contain);
-        const card = list.itemAtIndex(index);
+        const entry = list.itemAtIndex(index);
+        const card = entry && entry.item ? entry.item : entry;
         if (card)
             card.forceActiveFocus();
     }
@@ -141,6 +175,7 @@ Item {
             }
 
             Label {
+                visible: !root.looksOnly
                 Layout.fillWidth: true
                 text: qsTr("Selecting a preset shows it in the preview above. It does not change any panel.")
                 color: "#728995"
@@ -245,7 +280,7 @@ Item {
 
         Label {
             objectName: "preset-empty-state"
-            visible: root.catalogValid && list.count === 0
+            visible: root.catalogValid && list.count === 0 && !root.allScope
             Layout.fillWidth: true
             Layout.topMargin: 12
             horizontalAlignment: Text.AlignHCenter
@@ -269,35 +304,103 @@ Item {
             // Only the cards near the viewport exist, so a long catalog does
             // not keep one renderer scene per preset alive.
             cacheBuffer: 240
-            model: root.catalogValid ? root.presets : []
+            model: root.items
             boundsBehavior: Flickable.StopAtBounds
             Accessible.role: Accessible.List
             Accessible.name: root.title
 
             ScrollBar.vertical: ScrollBar {}
 
-            delegate: PresetCard {
-                id: card
+            section.property: "group"
+            section.delegate: Label {
+                required property string section
+
+                visible: section.length > 0
+                height: visible ? implicitHeight + 10 : 0
+                topPadding: 6
+                text: section
+                color: "#f3f8fb"
+                font.pixelSize: 14
+                font.weight: Font.DemiBold
+                Accessible.role: Accessible.Heading
+            }
+
+            delegate: Loader {
+                id: entry
 
                 required property var modelData
                 required property int index
 
                 width: ListView.view.width - 12
-                preset: modelData
-                actionsEnabled: root.actionsEnabled
-                selected: presetId.length > 0 && presetId === root.selectedPresetId
-                onSelectRequested: {
-                    list.currentIndex = index;
-                    root.presetSelected(presetId);
+                sourceComponent: modelData.type === "theme" ? themeCard : presetCard
+
+                Component {
+                    id: presetCard
+
+                    PresetCard {
+                        preset: entry.modelData.preset
+                        // A panel preset shows the bare panel, no icons;
+                        // an icon preset shows its icons.
+                        barePreview: root.panelKind
+                        actionsEnabled: root.actionsEnabled
+                        selected: presetId.length > 0 && presetId === root.selectedPresetId
+                        onSelectRequested: {
+                            list.currentIndex = entry.index;
+                            root.presetSelected(presetId);
+                        }
+                        onDuplicateRequested: root.duplicateRequested(
+                            presetId, qsTr("%1 copy").arg(String(entry.modelData.preset.name || "")))
+                        onRenameRequested: root.beginRename(entry.modelData.preset)
+                        onRemoveRequested: root.beginRemove(entry.modelData.preset)
+                        onPreviewRequested: root.previewRequested(presetId)
+                        onApplyRequested: root.applyRequested(presetId)
+                        Keys.onDownPressed: root.focusCard(entry.index + 1)
+                        Keys.onUpPressed: root.focusCard(entry.index - 1)
+                    }
                 }
-                onDuplicateRequested: root.duplicateRequested(
-                    presetId, qsTr("%1 copy").arg(String(modelData.name || "")))
-                onRenameRequested: root.beginRename(modelData)
-                onRemoveRequested: root.beginRemove(modelData)
-                onPreviewRequested: root.previewRequested(presetId)
-                onApplyRequested: root.applyRequested(presetId)
-                Keys.onDownPressed: root.focusCard(index + 1)
-                Keys.onUpPressed: root.focusCard(index - 1)
+                Component {
+                    id: themeCard
+
+                    ThemeSampleCard {
+                        studio: root.studio
+                        theme: entry.modelData.theme
+                    }
+                }
+            }
+
+            footer: ColumnLayout {
+                width: ListView.view.width - 12
+                visible: root.artworkRow !== null
+                spacing: 6
+
+                Label {
+                    Layout.topMargin: 12
+                    text: root.artworkRow ? String(root.artworkRow.label || "") : ""
+                    color: "#f3f8fb"
+                    font.pixelSize: 14
+                    font.weight: Font.DemiBold
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: root.artworkRow ? String(root.artworkRow.description || "") : ""
+                    color: "#91a8b5"
+                    font.pixelSize: 11
+                    wrapMode: Text.Wrap
+                }
+                RowLayout {
+                    spacing: 8
+                    Repeater {
+                        model: root.artworkRow ? root.artworkRow.actions || [] : []
+                        delegate: Button {
+                            required property var modelData
+
+                            text: String(modelData.label || "")
+                            icon.name: String(modelData.icon || "")
+                            enabled: modelData.available !== false
+                            onClicked: root.studioActionRequested(String(modelData.action || ""))
+                        }
+                    }
+                }
             }
         }
     }

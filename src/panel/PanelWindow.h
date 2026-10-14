@@ -136,6 +136,34 @@ public slots:
         const QVariantMap &panelValues,
         const QVariantMap &globalValues,
         const QString &consumer) const;
+    // Panel Studio's draft of the panel it edits, shown on the desktop as it
+    // is edited so that every change is seen at once: the panel is drawn
+    // with it, an edge panel's Plasma panel takes its size and place, and a
+    // free panel moves to its position. Nothing is saved until the draft is
+    // applied. Clearing it (Cancel, closing Panel Studio) shows the saved
+    // panel again, where it stood. A change Apply would refuse is not shown;
+    // the answer says why ("previewRefusal").
+    QVariantMap previewPanelSettingsEditorDraft(
+        const QString &panelId,
+        qulonglong expectedRevision,
+        const QVariantMap &panelValues,
+        const QVariantMap &globalValues,
+        const QString &consumer);
+    void clearPanelSettingsPreview();
+    // Panel Studio editing a panel of a saved profile: the same pages and
+    // checks as a panel on the desktop, on the profile's own copy of it.
+    // Its revision is the profile's. Apply saves the profile; nothing on the
+    // desktop changes until the profile is applied. Shared settings belong
+    // to Arch Dock, not to a profile, so none are offered.
+    QVariantMap profilePanelEditorSnapshot(const QString &profileId, const QString &panelId,
+                                           const QString &consumer) const;
+    QVariantMap resolveProfilePanelEditorDraft(const QString &profileId, const QString &panelId,
+                                               qulonglong expectedRevision, const QVariantMap &panelValues,
+                                               const QString &consumer) const;
+    QVariantMap applyProfilePanelSettings(const QString &profileId, const QString &panelId,
+                                          qulonglong expectedRevision, const QVariantMap &panelValues);
+    QVariantMap profilePanelThemeCandidate(const QString &profileId, const QString &panelId,
+                                           const QString &themeId) const;
     QVariantMap applyPanelSettingsTransaction(
         const QString &panelId,
         qulonglong expectedRevision,
@@ -319,6 +347,42 @@ private:
         ArchDock::PanelSettingsTransactionOutcome outcome);
     [[nodiscard]] std::optional<ArchDock::PanelDefinition> runtimePanelDefinition(
         const QString &panelId) const;
+    // The editor's work on a panel definition, whether it is on the desktop
+    // or a copy in a profile (takenNames: the names a new automatic name
+    // must not repeat; the registry's when null).
+    [[nodiscard]] std::optional<ArchDock::PanelSettingsTransactionDraft>
+    preparePanelSettingsDraftOn(
+        const ArchDock::PanelDefinition &current,
+        qulonglong expectedRevision,
+        const QVariantMap &panelValues,
+        const QVariantMap &globalValues,
+        ArchDock::PanelSettingsTransactionOutcome *outcome,
+        const QStringList *takenNames = nullptr) const;
+    [[nodiscard]] QVariantMap panelSettingsEditorSnapshotOf(
+        const ArchDock::PanelDefinition &panel, const QString &consumer) const;
+    [[nodiscard]] std::optional<ArchDock::PanelDefinition> capabilityCandidateDefinitionOn(
+        const ArchDock::PanelDefinition &current, const QVariantMap &candidateValues) const;
+    [[nodiscard]] QVariantList resolvedThemeDefinitionsOn(
+        const ArchDock::PanelDefinition &current, const QVariantMap &candidateValues = {}) const;
+    [[nodiscard]] QVariantMap panelSettingsEditorProjection(
+        const ArchDock::PanelSettingsTransactionDraft &draft,
+        qulonglong expectedRevision,
+        const QVariantMap &panelValues,
+        const QString &consumer) const;
+    // Whether a change leaves the panel's icons less room than they need,
+    // measured against the panel as it is drawn now.
+    [[nodiscard]] std::optional<QString> draftIconRoomRefusal(
+        const ArchDock::PanelSettingsTransactionDraft &draft) const;
+    // The global values panels are drawn with: the saved ones, with Panel
+    // Studio's draft of them.
+    [[nodiscard]] QVariantMap drawnGlobalSettings() const;
+    // A profile's copy of a panel and the draft of a change to it, checked
+    // against the profile's revision.
+    [[nodiscard]] std::optional<ArchDock::PanelSettingsTransactionDraft> profilePanelDraft(
+        const QString &profileId, const QString &panelId, qulonglong expectedRevision,
+        const QVariantMap &panelValues, ArchDock::PanelSettingsTransactionOutcome *outcome) const;
+    void showStudioDraftHost();
+    void restoreStudioDraftHosts();
     bool convertPresetPreviewHost(const ArchDock::PresetPreviewRecord &record,
         ArchDock::PanelDefinition &candidate, QString *errorCode) const;
     [[nodiscard]] ArchDock::PresetPreviewSession::Operations presetAuditionOperations();
@@ -530,6 +594,30 @@ private:
     ArchDock::PresetLibrary m_presetLibrary;
     ArchDock::PresetPreviewSession *m_presetAudition = nullptr;
     ArchDock::ProfileManager *m_profileManager = nullptr;
+    // Panel Studio's draft as the desktop shows it: the panel drawn with
+    // it, the saved revision it was made on, and the global values it
+    // changes.
+    struct StudioDraft
+    {
+        ArchDock::PanelDefinition panel;
+        qulonglong baseRevision = 0;
+        QVariantMap globals;
+    };
+    std::optional<StudioDraft> m_studioDraft;
+    // What a draft changed in Plasma, to put back when it is dropped: the
+    // edge placement shown last, and where a free panel stood before the
+    // draft first moved it.
+    struct StudioDraftHost
+    {
+        QString panelId;
+        QVariantMap placement;
+        std::optional<QVariantMap> freeGeometry;
+        std::optional<std::pair<int, int>> freePosition;
+    };
+    StudioDraftHost m_studioDraftHost;
+    QList<StudioDraftHost> m_studioDraftRestores;
+    QTimer m_studioDraftHostTimer;
+    bool m_studioDraftHostBusy = false;
     SystemStatus m_systemStatus;
     ArchDock::OverlayModel m_overlayModel;
     QTimer m_contentTimer;

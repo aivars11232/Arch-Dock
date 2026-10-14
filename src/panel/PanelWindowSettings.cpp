@@ -28,6 +28,36 @@ using PanelWindowHelpers::panelTypeNeedsDockApplet;
 
 namespace
 {
+// The settings an edge panel's Plasma panel itself carries: its edge,
+// screen, size and place along the edge.
+const QStringList &nativePlacementKeys()
+{
+    static const QStringList keys{
+        QStringLiteral("edge"),
+        QStringLiteral("screen"),
+        QStringLiteral("screenId"),
+        QStringLiteral("alignment"),
+        QStringLiteral("dynamic"),
+        QStringLiteral("width"),
+        QStringLiteral("height"),
+        QStringLiteral("floatingMargin"),
+        QStringLiteral("thickness"),
+        QStringLiteral("lengthMode"),
+        QStringLiteral("minimumLength"),
+        QStringLiteral("maximumLength"),
+    };
+    return keys;
+}
+
+QVariantMap nativePlacementValues(const ArchDock::PanelDefinition &panel)
+{
+    const QVariantMap values = panel.toLegacyMap();
+    QVariantMap placement;
+    for (const QString &key : nativePlacementKeys())
+        if (values.contains(key)) placement.insert(key, values.value(key));
+    return placement;
+}
+
 // Layouts whose entries stand on a curved track, as LayoutEngine.curvedLayout()
 // in the shared renderer decides: closed shapes, the star among them, and the
 // open sweep paths.
@@ -196,7 +226,20 @@ std::optional<ArchDock::PanelDefinition> PanelWindow::runtimePanelDefinition(
         const auto preview = m_presetAudition->previewDefinition(panelId);
         if (preview) return preview;
     }
-    return m_panelRegistry.panelDefinition(panelId);
+    auto stored = m_panelRegistry.panelDefinition(panelId);
+    // A draft made on settings that have since changed elsewhere waits for
+    // Panel Studio to make it again on the new ones.
+    if (stored && m_studioDraft && m_studioDraft->panel.identity.id == panelId &&
+        m_studioDraft->baseRevision == stored->settingsRevision)
+        return m_studioDraft->panel;
+    return stored;
+}
+
+QVariantMap PanelWindow::drawnGlobalSettings() const
+{
+    QVariantMap globals = m_settings.transactionSnapshot();
+    if (m_studioDraft) globals.insert(m_studioDraft->globals);
+    return globals;
 }
 
 QVariantMap PanelWindow::panelRendererConfiguration(const QString &panelId) const
@@ -210,7 +253,7 @@ QVariantMap PanelWindow::panelRendererConfiguration(const QString &panelId) cons
 
     QVariantMap configuration = ArchDock::PanelSettingsSchema::runtimeValues(
         ArchDock::PanelSettingsFieldScope::Global,
-        m_settings.transactionSnapshot());
+        drawnGlobalSettings());
     const QVariantMap panelValues = ArchDock::PanelSettingsSchema::runtimeValues(
         ArchDock::PanelSettingsFieldScope::Panel,
         definition->toLegacyMap());
@@ -321,14 +364,21 @@ PanelWindow::capabilityCandidateDefinition(
     const QString &panelId,
     const QVariantMap &candidateValues) const
 {
-    QString definitionError;
     const std::optional<ArchDock::PanelDefinition> current =
-        m_panelRegistry.panelDefinition(panelId, &definitionError);
+        m_panelRegistry.panelDefinition(panelId);
     if (!current.has_value())
     {
         return std::nullopt;
     }
+    return capabilityCandidateDefinitionOn(*current, candidateValues);
+}
 
+std::optional<ArchDock::PanelDefinition>
+PanelWindow::capabilityCandidateDefinitionOn(
+    const ArchDock::PanelDefinition &current,
+    const QVariantMap &candidateValues) const
+{
+    QString definitionError;
     for (auto iterator = candidateValues.cbegin();
          iterator != candidateValues.cend();
          ++iterator)
@@ -340,7 +390,7 @@ PanelWindow::capabilityCandidateDefinition(
         }
     }
 
-    QVariantMap candidateRecord = current->toLegacyMap();
+    QVariantMap candidateRecord = current.toLegacyMap();
     for (auto iterator = candidateValues.cbegin();
          iterator != candidateValues.cend();
          ++iterator)
@@ -363,7 +413,7 @@ PanelWindow::capabilityCandidateDefinition(
     }
     candidateRecord.insert(
         QStringLiteral("settingsRevision"),
-        QString::number(current->settingsRevision));
+        QString::number(current.settingsRevision));
     const std::optional<ArchDock::PanelDefinition> candidate =
         ArchDock::PanelDefinition::fromLegacyMap(
             candidateRecord, &definitionError);
@@ -390,8 +440,17 @@ QVariantList PanelWindow::resolvedThemeDefinitions(
     const QString &panelId,
     const QVariantMap &candidateValues) const
 {
+    const std::optional<ArchDock::PanelDefinition> current =
+        m_panelRegistry.panelDefinition(panelId);
+    return current ? resolvedThemeDefinitionsOn(*current, candidateValues) : QVariantList{};
+}
+
+QVariantList PanelWindow::resolvedThemeDefinitionsOn(
+    const ArchDock::PanelDefinition &current,
+    const QVariantMap &candidateValues) const
+{
     const std::optional<ArchDock::PanelDefinition> candidate =
-        capabilityCandidateDefinition(panelId, candidateValues);
+        capabilityCandidateDefinitionOn(current, candidateValues);
     if (!candidate.has_value())
     {
         return {};
@@ -1041,6 +1100,9 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                         return layer.value(QStringLiteral("followsIconShape")).toBool();
                     }));
             break;
+        case ArchDock::EditorCapability::Identity:
+            available = true;
+            break;
         case ArchDock::EditorCapability::Pedestals:
         {
             // Pedestals stand under the icons on every host and renderer:
@@ -1505,30 +1567,45 @@ PanelWindow::preparePanelSettingsDraft(
     const QVariantMap &globalValues,
     ArchDock::PanelSettingsTransactionOutcome *outcome) const
 {
-    if (outcome)
-    {
-        *outcome = {};
-        outcome->panelId = panelId;
-        outcome->expectedRevision = expectedRevision;
-    }
-
     QString snapshotError;
-    const std::optional<ArchDock::PanelDefinition> currentPanel =
+    const std::optional<ArchDock::PanelDefinition> current =
         m_panelRegistry.panelDefinition(panelId, &snapshotError);
-    if (!currentPanel.has_value())
+    if (!current.has_value())
     {
         if (outcome)
         {
+            *outcome = {};
+            outcome->panelId = panelId;
+            outcome->expectedRevision = expectedRevision;
             outcome->status = ArchDock::PanelSettingsTransactionStatus::ValidationFailed;
             outcome->errorCode = QStringLiteral("panel-not-found");
             outcome->errorMessage = snapshotError;
         }
         return std::nullopt;
     }
+    return preparePanelSettingsDraftOn(*current, expectedRevision, panelValues, globalValues, outcome);
+}
+
+std::optional<ArchDock::PanelSettingsTransactionDraft>
+PanelWindow::preparePanelSettingsDraftOn(
+    const ArchDock::PanelDefinition &currentPanel,
+    qulonglong expectedRevision,
+    const QVariantMap &panelValues,
+    const QVariantMap &globalValues,
+    ArchDock::PanelSettingsTransactionOutcome *outcome,
+    const QStringList *takenNames) const
+{
+    const QString panelId = currentPanel.identity.id;
     if (outcome)
     {
-        outcome->previousRevision = currentPanel->settingsRevision;
-        outcome->revision = currentPanel->settingsRevision;
+        *outcome = {};
+        outcome->panelId = panelId;
+        outcome->expectedRevision = expectedRevision;
+    }
+    if (outcome)
+    {
+        outcome->previousRevision = currentPanel.settingsRevision;
+        outcome->revision = currentPanel.settingsRevision;
     }
 
     const QVariantMap currentGlobals = m_settings.transactionSnapshot();
@@ -1555,7 +1632,7 @@ PanelWindow::preparePanelSettingsDraft(
     request.globalValues = globalValues;
     std::optional<ArchDock::PanelSettingsTransactionDraft> draft =
         ArchDock::PanelSettingsTransaction::prepare(
-            *currentPanel,
+            currentPanel,
             currentGlobals,
             candidateGlobals,
             request,
@@ -1569,7 +1646,7 @@ PanelWindow::preparePanelSettingsDraft(
         return std::nullopt;
     }
 
-    if (draft->candidatePanel.segments != currentPanel->segments)
+    if (draft->candidatePanel.segments != currentPanel.segments)
     {
         QVariantList entries = draft->candidatePanel.host.kind == ArchDock::PanelHostKind::FreeDesktop
             ? freePanelEntries(draft->candidatePanel)
@@ -1584,7 +1661,7 @@ PanelWindow::preparePanelSettingsDraft(
             if (outcome)
             {
                 outcome->status = ArchDock::PanelSettingsTransactionStatus::ValidationFailed;
-                outcome->revision = currentPanel->settingsRevision;
+                outcome->revision = currentPanel.settingsRevision;
                 outcome->errorCode = QStringLiteral("invalid-segment-ownership");
                 outcome->errorMessage = segmentError;
             }
@@ -1601,7 +1678,7 @@ PanelWindow::preparePanelSettingsDraft(
             if (outcome)
             {
                 outcome->status = ArchDock::PanelSettingsTransactionStatus::ValidationFailed;
-                outcome->revision = currentPanel->settingsRevision;
+                outcome->revision = currentPanel.settingsRevision;
                 outcome->errorCode = QStringLiteral("screen-out-of-range");
                 outcome->errorMessage = QStringLiteral(
                     "the requested screen is not available");
@@ -1612,6 +1689,9 @@ PanelWindow::preparePanelSettingsDraft(
         draft->candidatePanel.host.screenId = ArchDock::persistentScreenId(
             screens.at(requestedScreen));
     }
+
+    // A panel nobody named goes by what it is, given another shape or edge.
+    m_panelRegistry.followShapeName(currentPanel, draft->candidatePanel, takenNames);
 
     const ArchDock::CapabilityResolution resolution =
         m_panelRegistry.resolvePanelCapabilities(draft->candidatePanel);
@@ -1627,7 +1707,7 @@ PanelWindow::preparePanelSettingsDraft(
         for (const auto &segment : draft->candidatePanel.segments)
         {
             const bool retainedStatus = segment.source == QStringLiteral("status")
-                && std::any_of(currentPanel->segments.cbegin(), currentPanel->segments.cend(),
+                && std::any_of(currentPanel.segments.cbegin(), currentPanel.segments.cend(),
                     [&segment](const auto &old) { return old == segment; });
             if ((!retainedStatus && !segmentCapabilities.value(QStringLiteral("sources")).toStringList().contains(segment.source)) ||
                 !segmentCapabilities.value(QStringLiteral("motionProfiles")).toStringList().contains(segment.motionProfile))
@@ -1641,7 +1721,7 @@ PanelWindow::preparePanelSettingsDraft(
         if (outcome)
         {
             outcome->status = ArchDock::PanelSettingsTransactionStatus::ValidationFailed;
-            outcome->revision = currentPanel->settingsRevision;
+            outcome->revision = currentPanel.settingsRevision;
             outcome->errorCode = QStringLiteral("unavailable-segment-feature");
             outcome->errorMessage = segmentError;
         }
@@ -1662,7 +1742,7 @@ PanelWindow::preparePanelSettingsDraft(
         if (value.toMap().value(QStringLiteral("key")).toString() == QStringLiteral("bakedTilt"))
             tiltEditor = value.toMap();
     }
-    const QVariantMap currentValues = currentPanel->toLegacyMap();
+    const QVariantMap currentValues = currentPanel.toLegacyMap();
     const QVariantMap candidateValues = draft->candidatePanel.toLegacyMap();
     if (!tiltEditor.isEmpty() && panelValues.contains(QStringLiteral("bakedTilt"))
         && candidateValues.value(QStringLiteral("bakedTilt")) != currentValues.value(QStringLiteral("bakedTilt")))
@@ -1700,7 +1780,7 @@ PanelWindow::preparePanelSettingsDraft(
             // PD-17 restores the exact saved look, including material values
             // whose controls disappear in the flat tier. Only values equal
             // to this panel's durable snapshot can use this exception.
-            const auto remembered = currentPanel->surface.parameters2D
+            const auto remembered = currentPanel.surface.parameters2D
                 .value(QStringLiteral("previousFlatLook")).toMap();
             const auto restoredTier = draft->candidatePanel.surface.rendererTier;
             if (panelValues.contains(QStringLiteral("previousFlatLook"))
@@ -1714,7 +1794,7 @@ PanelWindow::preparePanelSettingsDraft(
             if (outcome)
             {
                 outcome->status = ArchDock::PanelSettingsTransactionStatus::ValidationFailed;
-                outcome->revision = currentPanel->settingsRevision;
+                outcome->revision = currentPanel.settingsRevision;
                 outcome->errorCode = QStringLiteral("unavailable-panel-field");
                 outcome->errorMessage = QStringLiteral(
                     "the field '%1' is unavailable for the resolved candidate")
@@ -1730,7 +1810,7 @@ PanelWindow::preparePanelSettingsDraft(
         if (outcome)
         {
             outcome->status = ArchDock::PanelSettingsTransactionStatus::ValidationFailed;
-            outcome->revision = currentPanel->settingsRevision;
+            outcome->revision = currentPanel.settingsRevision;
             outcome->errorCode = QStringLiteral("invalid-panel-definition");
             outcome->errorMessage = validationError;
         }
@@ -1754,17 +1834,24 @@ QVariantMap PanelWindow::panelSettingsEditorSnapshot(
             {QStringLiteral("panelId"), panelId},
         };
     }
+    return panelSettingsEditorSnapshotOf(*definition, consumer);
+}
 
+QVariantMap PanelWindow::panelSettingsEditorSnapshotOf(
+    const ArchDock::PanelDefinition &panel,
+    const QString &consumer) const
+{
+    const QString panelId = panel.identity.id;
     const QString normalizedConsumer = consumer.trimmed().toLower() ==
             QStringLiteral("studio")
         ? QStringLiteral("studio")
         : QStringLiteral("native");
     const ArchDock::CapabilityResolution resolution =
-        m_panelRegistry.resolvePanelCapabilities(*definition);
+        m_panelRegistry.resolvePanelCapabilities(panel);
     const QVariantList panelFields = panelSettingsEditorFields(
-        *definition, resolution, normalizedConsumer);
+        panel, resolution, normalizedConsumer);
     const QVariantList globalFields = panelSettingsEditorFields(
-        *definition, resolution, normalizedConsumer, ArchDock::PanelSettingsFieldScope::Global);
+        panel, resolution, normalizedConsumer, ArchDock::PanelSettingsFieldScope::Global);
     QSet<QString> globalKeys;
     for (const QVariant &value : globalFields)
     {
@@ -1779,11 +1866,11 @@ QVariantMap PanelWindow::panelSettingsEditorSnapshot(
     QString themeProjectionError;
     const std::optional<QVariantMap> themeProjection =
         m_panelRegistry.themeRuntimeProjection(
-            *definition, &themeProjectionError);
+            panel, &themeProjectionError);
     QString iconStyleProjectionError;
     const std::optional<QVariantMap> iconStyleProjection =
         m_panelRegistry.iconStyleRuntimeProjection(
-            *definition, &iconStyleProjectionError);
+            panel, &iconStyleProjectionError);
 
     return {
         {QStringLiteral("success"), true},
@@ -1792,12 +1879,12 @@ QVariantMap PanelWindow::panelSettingsEditorSnapshot(
         {QStringLiteral("schemaVersion"), ArchDock::PanelSettingsSchema::CurrentVersion},
         {QStringLiteral("panelId"), panelId},
         {QStringLiteral("revision"),
-         QVariant::fromValue<qulonglong>(definition->settingsRevision)},
+         QVariant::fromValue<qulonglong>(panel.settingsRevision)},
         {QStringLiteral("consumer"), normalizedConsumer},
         {QStringLiteral("panelValues"),
-         panelSettingsEditorValues(*definition, panelFields)},
+         panelSettingsEditorValues(panel, panelFields)},
         {QStringLiteral("flatLookValues"),
-         ArchDock::PanelSettingsSchema::flatLookValues(definition->toLegacyMap())},
+         ArchDock::PanelSettingsSchema::flatLookValues(panel.toLegacyMap())},
         {QStringLiteral("globalValues"), globalValues},
         {QStringLiteral("panelFields"), panelFields},
         {QStringLiteral("globalFields"), globalFields},
@@ -1820,7 +1907,7 @@ QVariantMap PanelWindow::panelSettingsEditorSnapshot(
         {QStringLiteral("iconStyles"), m_panelRegistry.iconStyleDefinitions()},
         {QStringLiteral("animationProfiles"),
          m_panelRegistry.animationProfileDefinitions()},
-        {QStringLiteral("themes"), resolvedThemeDefinitions(panelId)},
+        {QStringLiteral("themes"), resolvedThemeDefinitionsOn(panel)},
     };
 }
 
@@ -1843,17 +1930,26 @@ QVariantMap PanelWindow::resolvePanelSettingsEditorDraft(
     {
         return outcome.toVariantMap();
     }
+    return panelSettingsEditorProjection(*draft, expectedRevision, panelValues, consumer);
+}
 
+QVariantMap PanelWindow::panelSettingsEditorProjection(
+    const ArchDock::PanelSettingsTransactionDraft &draft,
+    qulonglong expectedRevision,
+    const QVariantMap &panelValues,
+    const QString &consumer) const
+{
+    const QString panelId = draft.candidatePanel.identity.id;
     const QString normalizedConsumer = consumer.trimmed().toLower() ==
             QStringLiteral("studio")
         ? QStringLiteral("studio")
         : QStringLiteral("native");
     const ArchDock::CapabilityResolution resolution =
-        m_panelRegistry.resolvePanelCapabilities(draft->candidatePanel);
+        m_panelRegistry.resolvePanelCapabilities(draft.candidatePanel);
     const QVariantList panelFields = panelSettingsEditorFields(
-        draft->candidatePanel, resolution, normalizedConsumer);
+        draft.candidatePanel, resolution, normalizedConsumer);
     const QVariantList globalFields = panelSettingsEditorFields(
-        draft->candidatePanel, resolution, normalizedConsumer,
+        draft.candidatePanel, resolution, normalizedConsumer,
         ArchDock::PanelSettingsFieldScope::Global);
     QSet<QString> globalKeys;
     for (const QVariant &value : globalFields)
@@ -1863,16 +1959,16 @@ QVariantMap PanelWindow::resolvePanelSettingsEditorDraft(
     QVariantMap projectedGlobals;
     for (const QString &key : std::as_const(globalKeys))
     {
-        projectedGlobals.insert(key, draft->candidateGlobals.value(key));
+        projectedGlobals.insert(key, draft.candidateGlobals.value(key));
     }
     QString themeProjectionError;
     const std::optional<QVariantMap> themeProjection =
         m_panelRegistry.themeRuntimeProjection(
-            draft->candidatePanel, &themeProjectionError);
+            draft.candidatePanel, &themeProjectionError);
     QString iconStyleProjectionError;
     const std::optional<QVariantMap> iconStyleProjection =
         m_panelRegistry.iconStyleRuntimeProjection(
-            draft->candidatePanel, &iconStyleProjectionError);
+            draft.candidatePanel, &iconStyleProjectionError);
 
     return {
         {QStringLiteral("success"), true},
@@ -1882,12 +1978,12 @@ QVariantMap PanelWindow::resolvePanelSettingsEditorDraft(
         {QStringLiteral("panelId"), panelId},
         {QStringLiteral("revision"), QVariant::fromValue<qulonglong>(expectedRevision)},
         {QStringLiteral("candidateRevision"),
-         QVariant::fromValue<qulonglong>(draft->candidatePanel.settingsRevision)},
+         QVariant::fromValue<qulonglong>(draft.candidatePanel.settingsRevision)},
         {QStringLiteral("consumer"), normalizedConsumer},
         {QStringLiteral("panelValues"),
-         panelSettingsEditorValues(draft->candidatePanel, panelFields)},
+         panelSettingsEditorValues(draft.candidatePanel, panelFields)},
         {QStringLiteral("flatLookValues"),
-         ArchDock::PanelSettingsSchema::flatLookValues(draft->candidatePanel.toLegacyMap())},
+         ArchDock::PanelSettingsSchema::flatLookValues(draft.candidatePanel.toLegacyMap())},
         {QStringLiteral("globalValues"), projectedGlobals},
         {QStringLiteral("panelFields"), panelFields},
         {QStringLiteral("globalFields"), globalFields},
@@ -1911,8 +2007,327 @@ QVariantMap PanelWindow::resolvePanelSettingsEditorDraft(
         {QStringLiteral("animationProfiles"),
          m_panelRegistry.animationProfileDefinitions()},
         {QStringLiteral("themes"),
-         resolvedThemeDefinitions(panelId, panelValues)},
+         resolvedThemeDefinitionsOn(draft.previousPanel, panelValues)},
     };
+}
+
+QVariantMap PanelWindow::previewPanelSettingsEditorDraft(
+    const QString &panelId,
+    qulonglong expectedRevision,
+    const QVariantMap &panelValues,
+    const QVariantMap &globalValues,
+    const QString &consumer)
+{
+    ArchDock::PanelSettingsTransactionOutcome outcome;
+    const std::optional<ArchDock::PanelSettingsTransactionDraft> draft =
+        preparePanelSettingsDraft(panelId, expectedRevision, panelValues, globalValues, &outcome);
+    if (!draft.has_value())
+    {
+        return outcome.toVariantMap();
+    }
+    QVariantMap projection = panelSettingsEditorProjection(*draft, expectedRevision, panelValues, consumer);
+    // A desktop preview or a profile already shows this panel its own way;
+    // Panel Studio leaves it to them.
+    const bool previewed = profileBusy() ||
+        (m_presetAudition && m_presetAudition->previewDefinition(panelId));
+    const auto refusal = draftIconRoomRefusal(*draft);
+    if (refusal)
+    {
+        projection.insert(QStringLiteral("previewRefusal"), *refusal);
+    }
+    else if (!previewed)
+    {
+        StudioDraft shown;
+        shown.panel = draft->candidatePanel;
+        // Visibility, as in a desktop preview, changes on Apply: a panel
+        // being edited stays in view.
+        shown.panel.visibility = draft->previousPanel.visibility;
+        shown.baseRevision = draft->previousPanel.settingsRevision;
+        for (auto it = draft->candidateGlobals.cbegin(); it != draft->candidateGlobals.cend(); ++it)
+        {
+            if (draft->previousGlobals.value(it.key()) != it.value())
+            {
+                shown.globals.insert(it.key(), it.value());
+            }
+        }
+        if (m_studioDraft && m_studioDraft->panel.identity.id != panelId)
+        {
+            clearPanelSettingsPreview();
+        }
+        // Where a free panel stands and how big its widget is before the
+        // first draft is drawn: a draft can grow the widget (a Möbius strip
+        // reaches further than a ring), and Cancel puts both back.
+        if (m_studioDraftHost.panelId != panelId)
+        {
+            m_studioDraftHost = {panelId, nativePlacementValues(draft->previousPanel), std::nullopt, std::nullopt};
+            if (draft->previousPanel.host.kind == ArchDock::PanelHostKind::FreeDesktop)
+            {
+                QString geometryError;
+                m_studioDraftHost.freeGeometry = presetFreeHostGeometry(draft->previousPanel, &geometryError);
+            }
+        }
+        auto unchanged = draft->candidatePanel;
+        unchanged.settingsRevision = draft->previousPanel.settingsRevision;
+        if (unchanged == draft->previousPanel && shown.globals.isEmpty())
+        {
+            clearPanelSettingsPreview();
+        }
+        else
+        {
+            m_studioDraft = std::move(shown);
+            notifyDockRevision();
+            notifyDockEntriesRevision();
+            // Plasma follows a moment later, outside this call: its scripts
+            // wait for the panel to settle.
+            m_studioDraftHostTimer.start();
+        }
+    }
+    projection.insert(QStringLiteral("previewShown"), m_studioDraft.has_value() &&
+        m_studioDraft->panel.identity.id == panelId && !refusal);
+    return projection;
+}
+
+void PanelWindow::clearPanelSettingsPreview()
+{
+    m_studioDraftHostTimer.stop();
+    const bool shown = m_studioDraft.has_value();
+    m_studioDraft.reset();
+    if (!m_studioDraftHost.panelId.isEmpty())
+    {
+        m_studioDraftRestores.append(m_studioDraftHost);
+        m_studioDraftHost = {};
+        // Once the widget draws the saved panel again.
+        QTimer::singleShot(400, this, &PanelWindow::restoreStudioDraftHosts);
+    }
+    if (shown)
+    {
+        notifyDockRevision();
+        notifyDockEntriesRevision();
+    }
+}
+
+void PanelWindow::showStudioDraftHost()
+{
+    if (m_studioDraftHostBusy || !m_studioDraft || profileBusy())
+    {
+        return;
+    }
+    const ArchDock::PanelDefinition panel = m_studioDraft->panel;
+    const QString panelId = panel.identity.id;
+    const auto stored = m_panelRegistry.panelDefinition(panelId);
+    if (!stored || stored->settingsRevision != m_studioDraft->baseRevision)
+    {
+        return;
+    }
+    if (m_studioDraftHost.panelId != panelId)
+    {
+        m_studioDraftHost = {panelId, nativePlacementValues(*stored), std::nullopt, std::nullopt};
+    }
+    m_studioDraftHostBusy = true;
+    if (panel.host.kind == ArchDock::PanelHostKind::NativeEdge)
+    {
+        // The edge panel's Plasma panel is placed from the panel as it is
+        // drawn, the draft.
+        const QVariantMap placement = nativePlacementValues(panel);
+        if (placement != m_studioDraftHost.placement && synchronizeNativePanelPlacement(panelId) &&
+            m_studioDraftHost.panelId == panelId)
+        {
+            m_studioDraftHost.placement = placement;
+        }
+    }
+    else
+    {
+        const std::pair<int, int> wanted{panel.placement.x, panel.placement.y};
+        const std::pair<int, int> standing = m_studioDraftHost.freePosition.value_or(
+            std::pair<int, int>{stored->placement.x, stored->placement.y});
+        QString error;
+        auto geometry = wanted != standing ? presetFreeHostGeometry(*stored, &error) : std::nullopt;
+        if (geometry)
+        {
+            // Where it stood first, to go back to: the place Plasma gives
+            // it, which a move by hand changes and the saved settings do not.
+            if (!m_studioDraftHost.freeGeometry)
+            {
+                m_studioDraftHost.freeGeometry = geometry;
+            }
+            geometry->insert(QStringLiteral("x"), wanted.first);
+            geometry->insert(QStringLiteral("y"), wanted.second);
+            if (setPresetFreeHostGeometry(*stored, *geometry, &error, true) &&
+                m_studioDraftHost.panelId == panelId)
+            {
+                m_studioDraftHost.freePosition = wanted;
+            }
+        }
+    }
+    m_studioDraftHostBusy = false;
+    // A change made while Plasma was busy is shown next; a draft dropped
+    // meanwhile is put back.
+    if (m_studioDraft && m_studioDraft->panel != panel)
+    {
+        m_studioDraftHostTimer.start();
+    }
+    if (!m_studioDraftRestores.isEmpty())
+    {
+        QTimer::singleShot(0, this, &PanelWindow::restoreStudioDraftHosts);
+    }
+}
+
+void PanelWindow::restoreStudioDraftHosts()
+{
+    while (!m_studioDraftHostBusy && !m_studioDraftRestores.isEmpty())
+    {
+        const StudioDraftHost host = m_studioDraftRestores.takeFirst();
+        const auto stored = m_panelRegistry.panelDefinition(host.panelId);
+        if (!stored)
+        {
+            continue;
+        }
+        m_studioDraftHostBusy = true;
+        if (stored->host.kind == ArchDock::PanelHostKind::NativeEdge)
+        {
+            if (host.placement != nativePlacementValues(*stored) && !synchronizeNativePanelPlacement(host.panelId))
+            {
+                qWarning() << "Could not put the Plasma panel of" << host.panelId << "back after Panel Studio's draft";
+            }
+        }
+        else if (host.freeGeometry)
+        {
+            QString error;
+            const auto standing = presetFreeHostGeometry(*stored, &error);
+            if (standing && *standing != *host.freeGeometry &&
+                !setPresetFreeHostGeometry(*stored, *host.freeGeometry, &error, false))
+            {
+                qWarning() << "Could not put free panel" << host.panelId << "back after Panel Studio's draft:" << error;
+            }
+        }
+        m_studioDraftHostBusy = false;
+    }
+}
+
+std::optional<QString> PanelWindow::draftIconRoomRefusal(
+    const ArchDock::PanelSettingsTransactionDraft &draft) const
+{
+    // The room a free 3D panel's icons get is measured on the panel as it
+    // is drawn, which is Panel Studio's draft or a desktop preview while
+    // one is shown.
+    const ArchDock::PanelDefinition drawn =
+        runtimePanelDefinition(draft.previousPanel.identity.id).value_or(draft.previousPanel);
+    return ArchDock::panelIconRoomRefusal(draft.previousPanel, draft.candidatePanel,
+                                          seenRoomFactor(draft.previousPanel),
+                                          predictedSeenRoom(draft.candidatePanel, &drawn));
+}
+
+std::optional<ArchDock::PanelSettingsTransactionDraft> PanelWindow::profilePanelDraft(
+    const QString &profileId, const QString &panelId, qulonglong expectedRevision,
+    const QVariantMap &panelValues, ArchDock::PanelSettingsTransactionOutcome *outcome) const
+{
+    const auto fail = [&](const QString &code) -> std::optional<ArchDock::PanelSettingsTransactionDraft> {
+        if (outcome)
+        {
+            *outcome = {};
+            outcome->panelId = panelId;
+            outcome->expectedRevision = expectedRevision;
+            outcome->status = code == QStringLiteral("stale-profile-revision")
+                ? ArchDock::PanelSettingsTransactionStatus::RevisionConflict
+                : ArchDock::PanelSettingsTransactionStatus::ValidationFailed;
+            outcome->errorCode = code;
+        }
+        return std::nullopt;
+    };
+    if (!m_profileManager) return fail(QStringLiteral("profile-panel-not-found"));
+    QString error;
+    int revision = 0;
+    const auto panel = m_profileManager->profilePanel(profileId, panelId, &revision, &error);
+    if (!panel) return fail(error.isEmpty() ? QStringLiteral("profile-panel-not-found") : error);
+    if (static_cast<qulonglong>(revision) != expectedRevision) return fail(QStringLiteral("stale-profile-revision"));
+    // A new automatic name is unique among the profile's panels: they are
+    // the arrangement the profile puts on the desktop.
+    const QStringList taken = m_profileManager->profilePanelNames(profileId, panelId);
+    auto draft = preparePanelSettingsDraftOn(*panel, panel->settingsRevision, panelValues, {}, outcome, &taken);
+    if (outcome)
+    {
+        outcome->expectedRevision = outcome->previousRevision = outcome->revision = expectedRevision;
+    }
+    return draft;
+}
+
+QVariantMap PanelWindow::profilePanelEditorSnapshot(const QString &profileId, const QString &panelId,
+                                                    const QString &consumer) const
+{
+    QString error;
+    int revision = 0;
+    const auto panel = m_profileManager
+        ? m_profileManager->profilePanel(profileId, panelId, &revision, &error) : std::nullopt;
+    if (!panel)
+    {
+        return {{QStringLiteral("success"), false},
+                {QStringLiteral("status"), QStringLiteral("validation-failed")},
+                {QStringLiteral("errorCode"), error.isEmpty() ? QStringLiteral("profile-panel-not-found") : error},
+                {QStringLiteral("panelId"), panelId}};
+    }
+    QVariantMap snapshot = panelSettingsEditorSnapshotOf(*panel, consumer);
+    snapshot.insert(QStringLiteral("revision"), QVariant::fromValue<qulonglong>(revision));
+    snapshot.insert(QStringLiteral("globalFields"), QVariantList{});
+    snapshot.insert(QStringLiteral("globalValues"), QVariantMap{});
+    snapshot.insert(QStringLiteral("profileId"), profileId);
+    return snapshot;
+}
+
+QVariantMap PanelWindow::resolveProfilePanelEditorDraft(const QString &profileId, const QString &panelId,
+                                                        qulonglong expectedRevision, const QVariantMap &panelValues,
+                                                        const QString &consumer) const
+{
+    ArchDock::PanelSettingsTransactionOutcome outcome;
+    const auto draft = profilePanelDraft(profileId, panelId, expectedRevision, panelValues, &outcome);
+    if (!draft) return outcome.toVariantMap();
+    QVariantMap projection = panelSettingsEditorProjection(*draft, expectedRevision, panelValues, consumer);
+    projection.insert(QStringLiteral("globalFields"), QVariantList{});
+    projection.insert(QStringLiteral("globalValues"), QVariantMap{});
+    projection.insert(QStringLiteral("profileId"), profileId);
+    return projection;
+}
+
+QVariantMap PanelWindow::applyProfilePanelSettings(const QString &profileId, const QString &panelId,
+                                                   qulonglong expectedRevision, const QVariantMap &panelValues)
+{
+    ArchDock::PanelSettingsTransactionOutcome outcome;
+    auto draft = profilePanelDraft(profileId, panelId, expectedRevision, panelValues, &outcome);
+    if (!draft) return outcome.toVariantMap();
+    // The room its icons get is the room they had on the desktop, where
+    // the profile puts the panel.
+    if (const auto refusal = ArchDock::panelIconRoomRefusal(draft->previousPanel, draft->candidatePanel,
+            seenRoomFactor(draft->previousPanel), predictedSeenRoom(draft->candidatePanel, &draft->previousPanel)))
+    {
+        outcome.status = ArchDock::PanelSettingsTransactionStatus::ValidationFailed;
+        outcome.errorCode = QStringLiteral("panel-too-small");
+        outcome.errorMessage = *refusal;
+        return outcome.toVariantMap();
+    }
+    ArchDock::PresetApplication::markCustomized(draft->previousPanel, &draft->candidatePanel);
+    const QVariantMap saved = m_profileManager->replaceProfilePanel(profileId,
+        static_cast<int>(expectedRevision), draft->candidatePanel);
+    if (!saved.value(QStringLiteral("success")).toBool())
+    {
+        const QString code = saved.value(QStringLiteral("errorCode")).toString();
+        outcome.status = code == QStringLiteral("stale-profile-revision")
+            ? ArchDock::PanelSettingsTransactionStatus::RevisionConflict
+            : ArchDock::PanelSettingsTransactionStatus::PersistenceFailed;
+        outcome.errorCode = code;
+        return outcome.toVariantMap();
+    }
+    outcome.status = ArchDock::PanelSettingsTransactionStatus::Succeeded;
+    outcome.revision = saved.value(QStringLiteral("revision")).toULongLong();
+    return outcome.toVariantMap();
+}
+
+QVariantMap PanelWindow::profilePanelThemeCandidate(const QString &profileId, const QString &panelId,
+                                                    const QString &themeId) const
+{
+    const auto panel = m_profileManager ? m_profileManager->profilePanel(profileId, panelId) : std::nullopt;
+    if (!panel)
+        return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-panel-not-found")},
+                {QStringLiteral("values"), QVariantMap{}}};
+    return themeCandidateFor(*panel, themeId);
 }
 
 QVariantMap PanelWindow::applyPanelSettingsTransaction(
@@ -1935,10 +2350,7 @@ QVariantMap PanelWindow::applyPanelSettingsTransaction(
     }
     // A change made in Panel Studio never leaves a panel's icons less room
     // than they need.
-    if (const auto refusal = ArchDock::panelIconRoomRefusal(draft->previousPanel, draft->candidatePanel,
-                                                            seenRoomFactor(draft->previousPanel),
-                                                            predictedSeenRoom(draft->candidatePanel,
-                                                                              &draft->previousPanel)))
+    if (const auto refusal = draftIconRoomRefusal(*draft))
     {
         outcome.status = ArchDock::PanelSettingsTransactionStatus::ValidationFailed;
         outcome.errorCode = QStringLiteral("panel-too-small");
@@ -1955,6 +2367,16 @@ QVariantMap PanelWindow::commitPanelSettingsDraft(
 {
     if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
 
+    // Panel Studio's Apply commits the draft the desktop shows. Another
+    // change to the panel leaves that draft for Panel Studio to make again
+    // on the new settings.
+    bool studioApply = false;
+    if (m_studioDraft && m_studioDraft->panel.identity.id == draft.candidatePanel.identity.id)
+    {
+        auto committed = draft.candidatePanel;
+        committed.visibility = m_studioDraft->panel.visibility;
+        studioApply = committed == m_studioDraft->panel;
+    }
     ArchDock::PresetApplication::markCustomized(draft.previousPanel, &draft.candidatePanel);
     const auto &freeHost = draft.candidatePanel.host;
     const bool freePositionChanged = freeHost.kind == ArchDock::PanelHostKind::FreeDesktop
@@ -2010,6 +2432,14 @@ QVariantMap PanelWindow::commitPanelSettingsDraft(
         outcome.hostResults.append(renderer);
         outcome.status = ArchDock::PanelSettingsTransactionStatus::Succeeded;
         outcome.revision = draft.candidatePanel.settingsRevision;
+        // Panel Studio's draft of this panel is now its saved settings, and
+        // Plasma already shows them.
+        if (studioApply)
+        {
+            m_studioDraftHostTimer.stop();
+            m_studioDraft.reset();
+            m_studioDraftHost = {};
+        }
         m_panelRegistry.notifyPanelSettingsTransactionAdopted(
             panelSettingsTopologyChanged(
                 draft.previousPanel, draft.candidatePanel));
@@ -2108,39 +2538,17 @@ QList<ArchDock::PanelSettingsHostResult> PanelWindow::applyPanelSettingsHosts(
         return false;
     };
 
-    static const QStringList placementKeys{
-        QStringLiteral("edge"),
-        QStringLiteral("screen"),
-        QStringLiteral("screenId"),
-        QStringLiteral("alignment"),
-        QStringLiteral("dynamic"),
-        QStringLiteral("width"),
-        QStringLiteral("height"),
-        QStringLiteral("floatingMargin"),
-        QStringLiteral("thickness"),
-        QStringLiteral("lengthMode"),
-        QStringLiteral("minimumLength"),
-        QStringLiteral("maximumLength"),
-    };
     ArchDock::PanelSettingsHostResult placement;
     placement.component = QStringLiteral("native-placement");
-    placement.required = ownedHost && anyChanged(placementKeys);
+    placement.required = ownedHost && anyChanged(nativePlacementKeys());
     if (placement.required)
     {
-        QVariantMap placementValues;
-        for (const QString &key : placementKeys)
-        {
-            if (candidate.contains(key))
-            {
-                placementValues.insert(key, candidate.value(key));
-            }
-        }
         ArchDock::PlasmaPanelPlacementApplyResult applied =
             applyNativePanelPlacementTransaction(
                 panelId,
                 draft.candidatePanel.host.nativePanelId,
                 draft.candidatePanel.host.nativeOwnershipToken,
-                placementValues,
+                nativePlacementValues(draft.candidatePanel),
                 false);
         placement.success = applied.success();
         placement.status = applied.status;

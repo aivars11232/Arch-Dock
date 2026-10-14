@@ -252,6 +252,14 @@
       "proof names the real-session test that shows the drawn result where this test cannot.",
       "needsShaders lists the renderer tiers on which the drawn effect comes from a shader. Qt Quick's software renderer (the offscreen run) draws no shaders; there the field is left to studio-truth-matrix-smoke, which draws with the real graphics backend and requires the change."
     ],
+    "name": {
+      "probe": "runtime",
+      "source": "dock",
+      "value": "Matrix panel",
+      "consumers": [
+        ["qml/runtime/SettingsPopup.qml", ": String(root.panelValue(\"name\", \"\")) || panelRegistry.panelName(root.selectedPanelId)"]
+      ]
+    },
     "type": {
       "probe": "runtime",
       "value": "launcher",

@@ -18,6 +18,8 @@ Rectangle {
     // A card is a still picture of its preset. The selected preset's motion
     // plays in Panel Studio's large preview.
     property bool motionEnabled: false
+    // Drawn as the bare panel, with no icons, so the panel's look shows.
+    property bool barePreview: false
     property bool actionsEnabled: true
 
     readonly property string presetId: String(preset.id || "")
@@ -322,6 +324,7 @@ Rectangle {
                     presentationState: "open"
                     stateEntry: 1
                     iconState: "hover"
+                    showBarePanel: root.barePreview
                     contentMargin: 4
                 }
             }

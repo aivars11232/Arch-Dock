@@ -27,6 +27,17 @@ TestCase {
         SignalSpy {}
     }
 
+    // What a look card asks of Panel Studio: the look drawn on a plain dock.
+    Component {
+        id: fakeStudioComponent
+
+        QtObject {
+            function themeRendererCandidate(theme) { return testCase.drawableRecord(); }
+            function rendererPreviewMode(candidate) { return "horizontal"; }
+            function performStudioAction(action, data) {}
+        }
+    }
+
     // The record a card draws from: a plain procedural dock, which the shared
     // renderer draws without any installed theme or icon style.
     function drawableRecord() {
@@ -195,8 +206,9 @@ TestCase {
         compare(findChild(browser, "preset-browser-title").text, "Built-in Panel Presets");
         const first = card(browser, "panel-a");
         const second = card(browser, "panel-b");
-        verify(first.y < second.y);
-        verify(second.y < card(browser, "panel-c").y);
+        const top = function(item) { return item.mapToItem(browser, 0, 0).y; };
+        verify(top(first) < top(second));
+        verify(top(second) < top(card(browser, "panel-c")));
         verify(!findChild(browser, "preset-empty-state").visible);
         verify(!findChild(browser, "preset-catalog-error").visible);
         verify(!findChild(browser, "preset-notice").visible);
@@ -226,6 +238,50 @@ TestCase {
         const empty = findChild(browser, "preset-empty-state");
         verify(empty.visible);
         verify(empty.text.indexOf("Duplicate to My Presets") >= 0);
+    }
+
+    // Panels > Presets: the panel presets, built-in then your own, and the
+    // looks, under their headings, every panel drawn bare, with no icons;
+    // the artwork actions at the end.
+    function test_presetsPageListsPresetsAndLooks() {
+        const studio = createTemporaryObject(fakeStudioComponent, testCase);
+        const look = { id: "look-a", name: "Look A", category: "flat", previewConfiguration: {} };
+        const browser = createBrowser({
+            kind: "panel",
+            scope: "all",
+            studio: studio,
+            presets: [panelCard("panel-a"), userCard("mine-b")],
+            themeRows: [
+                { kind: "themeSamples", label: "Flat looks", themes: [look] },
+                { kind: "actions", label: "Artwork", description: "Your own artwork.",
+                  actions: [{ label: "Import", icon: "document-import", action: "import-theme" }] }
+            ]
+        });
+        compare(findChild(browser, "preset-browser-title").text, "Presets");
+        compare(browser.listView.count, 3);
+        compare(browser.items.map(function(item) { return item.group; }),
+                ["Built-in presets", "My presets", "Flat looks"]);
+        verify(card(browser, "panel-a").livePreview.showBarePanel);
+        verify(card(browser, "mine-b").livePreview.showBarePanel);
+        const lookPreview = findChild(browser, "theme-live-preview-look-a");
+        verify(lookPreview !== null);
+        verify(lookPreview.showBarePanel);
+        verify(!findChild(browser, "preset-empty-state").visible);
+        const requested = spyOn(browser, "studioActionRequested");
+        const importButton = visibleButtons(browser).find(function(button) { return button.text === "Import"; });
+        browser.listView.positionViewAtEnd();
+        verify(waitForRendering(browser));
+        verify(importButton !== undefined);
+        mouseClick(importButton);
+        compare(requested.count, 1);
+        compare(requested.signalArguments[0][0], "import-theme");
+        // An icon preset shows its icons.
+        browser.kind = "icon";
+        browser.scope = "builtin";
+        browser.themeRows = [];
+        browser.presets = [iconCard("icons-a")];
+        verify(waitForRendering(browser));
+        verify(!card(browser, "icons-a").livePreview.showBarePanel);
     }
 
     function test_cardsShowHostRendererBehaviourAndMotion() {

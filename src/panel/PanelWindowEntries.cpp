@@ -199,9 +199,12 @@ QVariantList PanelWindow::dockEntriesForPanel(const QString &panelId,
     }
     else
     {
-        const bool auditioning = m_presetAudition &&
-            m_presetAudition->previewDefinition(panelId).has_value();
-        entries = m_dockModel.panelEntries(auditioning ? definition->content.type : panelType);
+        // A desktop preview, or Panel Studio's draft, may show other content
+        // than the panel's Plasma widget was set up with.
+        const bool previewed = (m_presetAudition &&
+            m_presetAudition->previewDefinition(panelId).has_value()) ||
+            (m_studioDraft && m_studioDraft->panel.identity.id == panelId);
+        entries = m_dockModel.panelEntries(previewed && definition ? definition->content.type : panelType);
     }
 
     if (!definition.has_value())

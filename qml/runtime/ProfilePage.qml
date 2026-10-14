@@ -6,8 +6,9 @@ import QtQuick.Dialogs
 import QtQuick.Layouts
 
 // Panel Studio's Profiles page: the saved sets of panels, with create,
-// rename, duplicate, delete, import, export and apply, and the global
-// shortcuts that apply them.
+// rename, duplicate, delete, import, export and apply, the panels each one
+// holds (renamed, edited in Panel Studio or removed, in the profile only),
+// and the global shortcuts that apply them.
 ColumnLayout {
     id: root
     property var profiles: []
@@ -15,6 +16,8 @@ ColumnLayout {
     property bool shortcutsOnly: false
     property var shortcutStatus: ({enabled: false, bindings: []})
     property bool actionsBlocked: false
+    // The profile service the panel list is read from.
+    property var service: null
     property string notice: ""
     property bool noticeIsError: false
     property string selectedId: ""
@@ -31,13 +34,36 @@ ColumnLayout {
         return null;
     }
     signal actionRequested(string action, string profileId, int revision, string value)
+    signal panelActionRequested(string action, string profileId, int revision, string panelId, string value)
 
     function request(action, value) {
         actionRequested(action, selected ? selected.id : "", selected ? selected.revision : 0, value || "");
     }
+    function panelRequest(action, panelId, value) {
+        panelActionRequested(action, selected ? selected.id : "", selected ? selected.revision : 0,
+            String(panelId || ""), value || "");
+    }
+    // The panels the selected profile shows on the desktop; the hidden
+    // built-in edge panels every arrangement keeps are not listed.
+    readonly property var selectedPanels: {
+        const changed = root.profiles;
+        if (!root.service || !root.selected)
+            return [];
+        return Array.from(root.service.profilePanels(root.selected.id) || [])
+            .filter(function(panel) { return panel.shown === true; });
+    }
+    function panelPlace(panel) {
+        const edge = String(panel.edge || "");
+        return edge === "free" ? qsTr("Free panel")
+            : edge === "top" ? qsTr("Top edge")
+            : edge === "bottom" ? qsTr("Bottom edge")
+            : edge === "left" ? qsTr("Left edge")
+            : edge === "right" ? qsTr("Right edge") : edge;
+    }
 
     Label {
         Layout.fillWidth: true
+        color: "#d8e5ec"
         text: root.shortcutsOnly
             ? qsTr("Enable profile shortcuts to apply saved arrangements through KDE. Conflicting shortcuts stay with their current owner.")
             : qsTr("A profile saves your complete managed panel arrangement. Apply replaces that arrangement after a verified backup.")
@@ -46,6 +72,7 @@ ColumnLayout {
     Label {
         visible: root.actionsBlocked
         Layout.fillWidth: true
+        color: "#90a7b4"
         text: qsTr("Apply or cancel your settings draft and finish any desktop preview before managing profiles.")
         wrapMode: Text.Wrap
     }
@@ -66,6 +93,7 @@ ColumnLayout {
     Label {
         objectName: "profile-summary"
         Layout.fillWidth: true
+        color: "#90a7b4"
         wrapMode: Text.Wrap
         text: {
             if (!root.selected) return qsTr("Create a profile from your current panels, or import one.");
@@ -95,6 +123,63 @@ ColumnLayout {
         color: "#ffc66d"
         text: qsTr("This profile holds %1 free panels that are not on the desktop. Apply Profile creates at most %2 at once. Put only the panels you want on the desktop, then use Save Current to Profile: the profile then holds those panels only.").arg(creating).arg(limit)
         Accessible.name: text
+    }
+    Label {
+        objectName: "profile-panels-heading"
+        visible: !root.shortcutsOnly && root.selected !== null && root.selectedPanels.length > 0
+        Layout.fillWidth: true
+        Layout.topMargin: 4
+        text: qsTr("Panels in this profile")
+        color: "#d8e5ec"
+        font.weight: Font.DemiBold
+    }
+    Repeater {
+        model: root.shortcutsOnly ? [] : root.selectedPanels
+        delegate: RowLayout {
+            id: panelRow
+            required property var modelData
+            Layout.fillWidth: true
+            spacing: 8
+
+            TextField {
+                objectName: "profile-panel-name-" + panelRow.modelData.id
+                Layout.fillWidth: true
+                text: panelRow.modelData.name
+                maximumLength: 120
+                enabled: root.canManage
+                Accessible.name: qsTr("Name of %1 in this profile").arg(panelRow.modelData.name)
+                onEditingFinished: {
+                    const name = text.trim();
+                    if (name.length > 0 && name !== panelRow.modelData.name)
+                        root.panelRequest("rename", panelRow.modelData.id, name);
+                    else
+                        text = panelRow.modelData.name;
+                }
+            }
+            Label {
+                text: root.panelPlace(panelRow.modelData)
+                color: "#90a7b4"
+            }
+            Button {
+                objectName: "profile-panel-edit-" + panelRow.modelData.id
+                text: qsTr("Edit…")
+                icon.name: "document-edit"
+                enabled: root.canManage
+                onClicked: root.panelRequest("edit", panelRow.modelData.id)
+                Accessible.name: qsTr("Edit %1 in this profile").arg(panelRow.modelData.name)
+            }
+            Button {
+                objectName: "profile-panel-remove-" + panelRow.modelData.id
+                text: panelRow.modelData.builtIn ? qsTr("Hide") : qsTr("Remove")
+                icon.name: "list-remove"
+                enabled: root.canManage
+                onClicked: {
+                    removeQuestion.panel = panelRow.modelData;
+                    removeQuestion.open();
+                }
+                Accessible.name: qsTr("%1 %2 in this profile").arg(text).arg(panelRow.modelData.name)
+            }
+        }
     }
     TextField {
         id: nameField
@@ -134,10 +219,10 @@ ColumnLayout {
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
         font.pixelSize: 12
-        opacity: 0.8
+        color: "#90a7b4"
         // The owner (2026-10-12): a saved arrangement must reach the desktop
         // even when its free panel is gone.
-        text: qsTr("A profile holds the panels that are on the desktop when it is saved. Apply Profile puts the whole saved arrangement back: a free panel the profile holds that is not on the desktop is created again with its saved look. For one saved panel look, use Built-in or My Panel Presets with \"Preview on a new panel\".")
+        text: qsTr("A profile holds the panels that are on the desktop when it is saved. Apply Profile puts the whole saved arrangement back: a free panel the profile holds that is not on the desktop is created again with its saved look. For one saved panel look, use Panels > Presets with \"Preview on a new panel\".")
         Accessible.name: text
     }
     RowLayout {
@@ -215,6 +300,7 @@ ColumnLayout {
         objectName: "profile-shortcut-registration"
         visible: root.shortcutsOnly
         Layout.fillWidth: true
+        color: "#90a7b4"
         text: root.selectedBinding && (root.selectedBinding.registeredKeys || []).length
             ? qsTr("Registered: %1").arg(root.selectedBinding.registeredKeys.join(", "))
             : qsTr("No active shortcut for this profile. Saved assignments register only while the feature is enabled.")
@@ -241,6 +327,7 @@ ColumnLayout {
     Label {
         objectName: "profile-recovery-status"
         Layout.fillWidth: true
+        color: "#90a7b4"
         visible: root.busy
         text: root.applyStatus.recoveryRequired
             ? qsTr("Profile recovery is required (%1). Your backup and ownership record have been retained.")
@@ -258,6 +345,24 @@ ColumnLayout {
     }
     Item { Layout.fillHeight: true }
 
+    MessageDialog {
+        id: removeQuestion
+        objectName: "profile-panel-remove-question"
+        property var panel: null
+        title: panel && panel.builtIn ? qsTr("Hide in the profile") : qsTr("Remove from the profile")
+        text: !panel || !root.selected ? ""
+            : panel.builtIn ? qsTr("Hide “%1” in the profile “%2”?").arg(panel.name).arg(root.selected.name)
+            : qsTr("Remove “%1” from the profile “%2”?").arg(panel.name).arg(root.selected.name)
+        informativeText: panel && panel.builtIn
+            ? qsTr("Applying the profile then hides this edge panel. The panels on your desktop do not change now.")
+            : qsTr("Applying the profile then leaves this panel out. The panels on your desktop do not change now.")
+        buttons: MessageDialog.Ok | MessageDialog.Cancel
+        onButtonClicked: function(button, role) {
+            if (button === MessageDialog.Ok && panel)
+                root.panelRequest("remove", panel.id);
+            panel = null;
+        }
+    }
     FileDialog {
         id: importDialog
         title: qsTr("Import a Profile")

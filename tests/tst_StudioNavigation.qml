@@ -29,7 +29,7 @@ TestCase {
             "Behavior",
             "Layout",
             "Segments",
-            "Panel Themes / Skins",
+            "Presets",
             "Built-in Panel Presets",
             "My Panel Presets",
             "Animations",
@@ -86,19 +86,22 @@ TestCase {
         compare(StudioNavigation.subtabsFor(2).indexOf("Icon Styles"), -1)
     }
 
+    // Panels > Presets holds the panel presets, built-in and your own, with
+    // the looks; the two panel preset tabs after it are no pages of their
+    // own.
     function test_presetPagesNameSeparateCatalogs() {
-        compareList(StudioNavigation.presetPage(1, 7), { kind: "panel", scope: "builtin" })
-        compareList(StudioNavigation.presetPage(1, 8), { kind: "panel", scope: "user" })
+        compareList(StudioNavigation.presetPage(1, 6), { kind: "panel", scope: "all" })
+        compare(StudioNavigation.presetPage(1, 7), null)
+        compare(StudioNavigation.presetPage(1, 8), null)
         compareList(StudioNavigation.presetPage(2, 4), { kind: "icon", scope: "builtin" })
         compareList(StudioNavigation.presetPage(2, 5), { kind: "icon", scope: "user" })
-        compare(StudioNavigation.subtabsFor(1)[7], "Built-in Panel Presets")
-        compare(StudioNavigation.subtabsFor(1)[8], "My Panel Presets")
+        compare(StudioNavigation.subtabsFor(1)[6], "Presets")
         compare(StudioNavigation.subtabsFor(2)[4], "Built-in Icon Presets")
         compare(StudioNavigation.subtabsFor(2)[5], "My Icon Presets")
     }
 
-    // Themes, the icon settings pages and profiles are not presets.
-    function test_onlyTheFourPresetPagesArePresetPages() {
+    // The icon settings pages and profiles are not presets.
+    function test_onlyTheThreePresetPagesArePresetPages() {
         let presetPages = 0;
         for (let section = 0; section < StudioNavigation.mainLabels().length; ++section) {
             const count = Math.max(1, StudioNavigation.subtabsFor(section).length);
@@ -107,18 +110,17 @@ TestCase {
                     ++presetPages
             }
         }
-        compare(presetPages, 4)
-        compare(StudioNavigation.subtabsFor(1)[6], "Panel Themes / Skins")
-        compare(StudioNavigation.presetPage(1, 6), null)
+        compare(presetPages, 3)
+        compare(StudioNavigation.presetPage(1, 5), null)
         compare(StudioNavigation.presetPage(2, 3), null)
         compare(StudioNavigation.presetPage(4, 0), null)
         compare(StudioNavigation.presetPage(3, 0), null)
         // An out-of-range index clamps to the last page of its section.
         compare(StudioNavigation.presetPage(1, 99), null)
         // The lookup hands out copies, never its own table.
-        const page = StudioNavigation.presetPage(1, 7);
+        const page = StudioNavigation.presetPage(1, 6);
         page.kind = "icon"
-        compare(StudioNavigation.presetPage(1, 7).kind, "panel")
+        compare(StudioNavigation.presetPage(1, 6).kind, "panel")
     }
 
     function test_genericClampHandlesEmptyAndInvalidRanges() {

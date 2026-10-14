@@ -143,12 +143,25 @@ button that deletes a panel's settings. An edge panel is taken off the
 desktop with Panels > Behavior > Visible; one removed through Plasma's own
 menu while meant to be shown is rebuilt.
 
-A change in Panel Studio shows in its own preview at once and reaches the
-panel on the desktop with Apply or OK; Cancel drops it. Only a preset's
-desktop preview and Panels > 3D's desktop editing show a draft on the
-desktop panel itself. The owner asked on 2026-10-13 for every change to show
-on the desktop panel at once, kept with Apply or OK; that is the next piece
-of work, not part of this candidate.
+A change in Panel Studio shows on the panel on the desktop at once; Apply or
+OK keeps it and Cancel or closing the window drops it. Some changes still
+wait for Apply: whether the panel is shown or hidden and how it hides
+(as in a preset's desktop preview, a panel being edited stays in view), and
+importing, re-rendering or clearing a panel's artwork, which are file
+operations. A free panel given a new position keeps its distance from the
+other free panels, so it may stand a little away from the place asked for.
+A change Apply would refuse is not drawn; the desktop keeps the last change
+it could show. While a preset's desktop preview runs, it is what the panel
+shows. Pictures of this from the private test desktop are made with the same
+backend calls Panel Studio makes on each change: there, nothing can click
+inside Panel Studio; the Studio's own path is covered by its tests.
+
+A saved profile's panel is edited with Panel Studio's pages on the profile's
+copy. Presets (tried on the desktop), artwork, the desktop's 3D handles and
+the settings shared by all panels are not offered there: shared settings
+belong to Arch Dock, not to a profile. A profile's panels are listed and
+edited one profile at a time; panels cannot be added to a profile there
+(Save Current to Profile does that).
 
 Some source files are still large (`PanelRegistry.cpp`, `SettingsPopup.qml`,
 `LayoutEngine.js`). `PanelWindow.cpp` has been split by topic into the

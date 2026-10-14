@@ -287,6 +287,10 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     connect(&m_freeHostRetryTimer, &QTimer::timeout, this, &PanelWindow::synchronizeFreePanels);
     m_removalCheckTimer.setInterval(5000);
     connect(&m_removalCheckTimer, &QTimer::timeout, this, &PanelWindow::checkRequestedRemovals);
+    // Plasma shows Panel Studio's draft once its changes pause.
+    m_studioDraftHostTimer.setSingleShot(true);
+    m_studioDraftHostTimer.setInterval(120);
+    connect(&m_studioDraftHostTimer, &QTimer::timeout, this, &PanelWindow::showStudioDraftHost);
     if (auto *application = qobject_cast<QGuiApplication *>(QCoreApplication::instance()))
     {
         for (QScreen *screen : QGuiApplication::screens()) watchScreen(screen);
@@ -484,6 +488,9 @@ QVariantMap PanelWindow::stopIntentionally(const QString &reason)
     {
         m_presetAudition->cancel();
     }
+    // Panel Studio's draft is dropped and Plasma put back before the quit.
+    clearPanelSettingsPreview();
+    restoreStudioDraftHosts();
     WindowWatcher::releaseKWinScripts();
     QMetaObject::invokeMethod(QCoreApplication::instance(), &QCoreApplication::quit,
                               Qt::QueuedConnection);
@@ -583,6 +590,8 @@ QWindow *PanelWindow::settingsWindow()
                         // deletion builds a new window instead of this one.
                         m_settingsWindow = nullptr;
                         window->deleteLater();
+                        // Its draft goes with it, as Cancel takes it.
+                        clearPanelSettingsPreview();
                     }
                     updateContentDemand();
                 });

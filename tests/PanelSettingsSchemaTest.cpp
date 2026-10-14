@@ -335,7 +335,9 @@ void PanelSettingsSchemaTest::descriptorsAreUniqueAndComplete()
         if (field.access == PanelSettingsFieldAccess::Editor &&
             field.editor.isPresented())
         {
-            QVERIFY2(field.runtimeConsumer,
+            // A panel's name is who it is, shown by Panel Studio and the
+            // Profiles page; nothing on the desktop draws it.
+            QVERIFY2(field.runtimeConsumer || field.key == QStringLiteral("name"),
                      qPrintable(QStringLiteral("presented field has no runtime consumer: %1")
                                     .arg(identity)));
             QVERIFY(!field.editor.consumers.isEmpty());

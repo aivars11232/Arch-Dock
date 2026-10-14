@@ -211,7 +211,7 @@ qt_add_library(archdock-profile-backend STATIC
   src/panel/ProfileApplyTransaction.h src/panel/ProfileApplyTransaction.cpp
   src/panel/ProfileManager.h src/panel/ProfileManager.cpp
   src/integration/ProfileShortcutManager.h src/integration/ProfileShortcutManager.cpp
-  src/model/PanelDefinition.cpp src/model/PanelIconCapacity.cpp src/model/PanelSettingsSchema.cpp
+  src/model/PanelDefinition.cpp src/model/PanelIconCapacity.cpp src/model/PanelNaming.cpp src/model/PanelSettingsSchema.cpp
   src/model/PanelRuntimeState.cpp src/model/SettingsMigration.cpp
   src/model/ThemeDefinition.cpp src/themes/ThemePackage.cpp)
 target_include_directories(archdock-profile-backend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -270,6 +270,7 @@ qt_add_executable(
   src/model/PanelDefinition.h
   src/model/PanelDefinition.cpp
   src/model/PanelIconCapacity.cpp
+  src/model/PanelNaming.cpp
   src/model/IconEntryIdentity.h
   src/model/IconEntryIdentity.cpp
   src/model/PanelSettingsSchema.h
@@ -339,6 +340,7 @@ set(ARCHDOCK_APPLICATION_QML_FILES
   qml/runtime/VisibilityStatus.js
   qml/runtime/StudioForm.qml
   qml/runtime/StudioNavigation.js
+  qml/runtime/ThemeSampleCard.qml
   qml/runtime/SettingsPopup.qml)
 qt_add_qml_module(
   arch-dock
@@ -429,6 +431,7 @@ if(BUILD_TESTING)
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
     src/model/PanelIconCapacity.cpp
+    src/model/PanelNaming.cpp
     src/model/PanelSettingsSchema.h
     src/model/PanelSettingsSchema.cpp
     src/model/PanelRuntimeState.h
@@ -468,6 +471,7 @@ if(BUILD_TESTING)
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
     src/model/PanelIconCapacity.cpp
+    src/model/PanelNaming.cpp
     src/model/PanelSettingsSchema.h
     src/model/PanelSettingsSchema.cpp
     src/model/PanelCapabilityResolver.h
@@ -511,6 +515,7 @@ if(BUILD_TESTING)
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
     src/model/PanelIconCapacity.cpp
+    src/model/PanelNaming.cpp
     src/model/PanelSettingsSchema.h
     src/model/PanelSettingsSchema.cpp
     src/model/PanelCapabilityResolver.h
@@ -597,6 +602,7 @@ if(BUILD_TESTING)
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
     src/model/PanelIconCapacity.cpp
+    src/model/PanelNaming.cpp
     src/model/PanelSettingsSchema.h
     src/model/PanelSettingsSchema.cpp
     src/model/PanelCapabilityResolver.h
@@ -805,6 +811,7 @@ if(BUILD_TESTING)
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
     src/model/PanelIconCapacity.cpp
+    src/model/PanelNaming.cpp
     src/model/PanelSettingsSchema.h
     src/model/PanelSettingsSchema.cpp
     src/model/PanelRuntimeState.h
@@ -832,6 +839,7 @@ if(BUILD_TESTING)
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
     src/model/PanelIconCapacity.cpp
+    src/model/PanelNaming.cpp
     src/model/PanelSettingsSchema.h
     src/model/PanelSettingsSchema.cpp
     src/model/PanelRuntimeState.h
@@ -873,6 +881,7 @@ if(BUILD_TESTING)
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
     src/model/PanelIconCapacity.cpp
+    src/model/PanelNaming.cpp
     src/model/PanelSettingsSchema.h
     src/model/PanelSettingsSchema.cpp
     src/model/PanelCapabilityResolver.h
@@ -898,6 +907,7 @@ if(BUILD_TESTING)
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
     src/model/PanelIconCapacity.cpp
+    src/model/PanelNaming.cpp
     src/model/PanelSettingsSchema.h
     src/model/PanelSettingsSchema.cpp
     src/model/PanelCapabilityResolver.h
@@ -923,6 +933,7 @@ if(BUILD_TESTING)
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
     src/model/PanelIconCapacity.cpp
+    src/model/PanelNaming.cpp
     src/model/PanelSettingsSchema.h
     src/model/PanelSettingsSchema.cpp
     src/model/PanelRuntimeState.h
@@ -948,6 +959,7 @@ if(BUILD_TESTING)
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
     src/model/PanelIconCapacity.cpp
+    src/model/PanelNaming.cpp
     src/model/PanelSettingsSchema.h
     src/model/PanelSettingsSchema.cpp
     src/model/PanelRuntimeState.h
@@ -1000,6 +1012,7 @@ if(BUILD_TESTING)
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
     src/model/PanelIconCapacity.cpp
+    src/model/PanelNaming.cpp
     src/model/PanelSettingsSchema.h
     src/model/PanelSettingsSchema.cpp
     src/model/PanelCapabilityResolver.h
@@ -1128,6 +1141,7 @@ if(BUILD_TESTING)
     src/model/PanelDefinition.h
     src/model/PanelDefinition.cpp
     src/model/PanelIconCapacity.cpp
+    src/model/PanelNaming.cpp
     src/model/PanelSettingsSchema.h
     src/model/PanelSettingsSchema.cpp
     src/model/PanelCapabilityResolver.h

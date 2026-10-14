@@ -543,6 +543,37 @@ function adoptResult(session, result, refreshedSnapshot) {
     return refreshed;
 }
 
+// The panel's settings changed outside the editor (another settings change,
+// a profile, its owner's hand) while the editor's changes were not applied:
+// start again from the new settings and keep each change made here, except
+// where the outside change set the same value itself; there, the newer one
+// stands.
+function rebase(session, snapshot) {
+    const rebased = load(snapshot);
+    if (!session || !session.loaded)
+        return rebased.loaded ? rebased : session;
+    // Another panel's settings, or ones that did not load, leave the draft.
+    if (!rebased.loaded || rebased.panelId !== session.panelId)
+        return session;
+    const keep = function(changes, oldBaseline, baseline) {
+        let kept = {};
+        for (const key of Object.keys(changes || {})) {
+            if (hasOwn(baseline, key) && !equivalent(oldBaseline[key], baseline[key]))
+                continue;
+            if (!hasOwn(baseline, key))
+                baseline[key] = copyValue(oldBaseline[key]);
+            kept = changedValue(kept, baseline, key, changes[key]);
+        }
+        return kept;
+    };
+    rebased.panelChanges = keep(session.panelChanges, session.panelBaseline, rebased.panelBaseline);
+    rebased.globalChanges = keep(session.globalChanges, session.globalBaseline, rebased.globalBaseline);
+    rebased.flatLookValues = copyValue(session.flatLookValues || {});
+    rebased.restoredLookKeys = (session.restoredLookKeys || []).slice();
+    rebased.status = dirty(rebased) ? "editing" : "loaded";
+    return rebased;
+}
+
 // Refresh runtime feedback without turning changing source availability into a
 // user edit, or dropping an unsaved preference when its source disappears.
 function withContentFeedback(session, snapshot) {

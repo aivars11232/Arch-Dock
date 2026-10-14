@@ -10,6 +10,7 @@
 #include "WindowModel.h"
 #include "panel/IconOverrideTransaction.h"
 #include "model/IconEntryIdentity.h"
+#include "model/PanelNaming.h"
 #include "model/SettingsMigration.h"
 #include "persistence/ConfigurationBackup.h"
 #include "presets/PresetCapabilityResolver.h"
@@ -448,6 +449,7 @@ private slots:
     void provisionsPanelFamiliesAndNativeBridgeState();
     void migratesLegacyBottomPanelSettings();
     void preservesFreePanelForFreeSurface();
+    void namesPanelsByWhatTheyAre();
     void normalizesFreeHostAssociationStates();
     void migratesLegacyFreeHostAssociationWithoutDataLoss();
     void backsUpFlatRecordsBeforeStableMigration();
@@ -727,6 +729,53 @@ void PanelRegistryTest::preservesFreePanelForFreeSurface()
              QStringLiteral("free"));
     QCOMPARE(registry.panelValue(QStringLiteral("free"), QStringLiteral("type")).toString(),
              QStringLiteral("launcher"));
+}
+
+// A panel nobody named goes by what it is, with a number when another has
+// that name; what an older version called every new panel ("Free panel 3",
+// "Panel 2") turns into such a name once, and a name its owner chose stays.
+void PanelRegistryTest::namesPanelsByWhatTheyAre()
+{
+    QCOMPARE(ArchDock::panelBaseName(QStringLiteral("free"), QStringLiteral("mobius")),
+             QStringLiteral("Möbius strip panel"));
+    QCOMPARE(ArchDock::panelBaseName(QStringLiteral("left"), QString()), QStringLiteral("Left panel"));
+    QVERIFY(ArchDock::panelNameIsAutomatic(QStringLiteral("Ring panel 2")));
+    QVERIFY(ArchDock::panelNameIsAutomatic(QStringLiteral("Free panel 3")));
+    QVERIFY(ArchDock::panelNameIsOldDefault(QStringLiteral("Panel 2")));
+    QVERIFY(!ArchDock::panelNameIsOldDefault(QStringLiteral("Ring panel")));
+    QVERIFY(!ArchDock::panelNameIsAutomatic(QStringLiteral("My dock")));
+    QCOMPARE(ArchDock::uniquePanelName(QStringLiteral("Ring panel"),
+                 {QStringLiteral("Ring panel"), QStringLiteral("Ring panel 2")}),
+             QStringLiteral("Ring panel 3"));
+    {
+        PanelRegistry registry;
+        const QString first = registry.addFreePanel();
+        const QString second = registry.addFreePanel();
+        QCOMPARE(registry.panelName(first), QStringLiteral("Circle panel"));
+        QCOMPARE(registry.panelName(second), QStringLiteral("Circle panel 2"));
+        QCOMPARE(registry.panelName(registry.addPanel(QStringLiteral("left"), QStringLiteral("launcher"))),
+                 QStringLiteral("Left panel"));
+    }
+    QJsonArray panels;
+    const auto stored = [&panels](const QString &id, const QString &name, const QString &edge,
+                                  const QString &layout) {
+        panels.append(QJsonObject::fromVariantMap(
+            {{QStringLiteral("id"), id}, {QStringLiteral("name"), name}, {QStringLiteral("visible"), true},
+             {QStringLiteral("edge"), edge}, {QStringLiteral("type"), QStringLiteral("launcher")},
+             {QStringLiteral("layout"), layout}}));
+    };
+    stored(QStringLiteral("free-3"), QStringLiteral("Free panel 3"), QStringLiteral("free"), QStringLiteral("ring"));
+    stored(QStringLiteral("free-4"), QStringLiteral("My dock"), QStringLiteral("free"), QStringLiteral("star"));
+    stored(QStringLiteral("free-5"), QStringLiteral("Free panel 5"), QStringLiteral("free"), QStringLiteral("ring"));
+    stored(QStringLiteral("panel-2"), QStringLiteral("Panel 2"), QStringLiteral("left"), QStringLiteral("adaptive"));
+    QSettings settings;
+    settings.setValue(QStringLiteral("dock/panels"), QJsonDocument(panels).toJson(QJsonDocument::Compact));
+    settings.sync();
+    PanelRegistry registry;
+    QCOMPARE(registry.panelName(QStringLiteral("free-3")), QStringLiteral("Ring panel"));
+    QCOMPARE(registry.panelName(QStringLiteral("free-4")), QStringLiteral("My dock"));
+    QCOMPARE(registry.panelName(QStringLiteral("free-5")), QStringLiteral("Ring panel 2"));
+    QCOMPARE(registry.panelName(QStringLiteral("panel-2")), QStringLiteral("Left panel"));
 }
 
 void PanelRegistryTest::normalizesFreeHostAssociationStates()

@@ -76,6 +76,35 @@ TestCase {
         compare(EditorModel.panelCandidate(EditorModel.cancel(refreshed)).showBadges, true);
     }
 
+    // Settings changed outside the editor while it had changes: its changes
+    // stay on the new settings, except one the outside change made too.
+    function test_rebaseKeepsTheEditorsChangesOnNewSettings() {
+        let draft = EditorModel.load(snapshot("free-1", 4));
+        draft = EditorModel.setPanelValue(draft, "opacity", 0.4);
+        draft = EditorModel.setPanelValue(draft, "layout", "ring");
+        draft = EditorModel.setGlobalValue(draft, "showTooltips", false);
+        const outside = snapshot("free-1", 5);
+        outside.panelValues.layout = "mobius";
+        outside.panelValues.visible = false;
+        const rebased = EditorModel.rebase(draft, outside);
+        compare(rebased.revision, 5);
+        verify(EditorModel.dirty(rebased));
+        const values = EditorModel.panelCandidate(rebased);
+        compare(values.opacity, 0.4);
+        compare(values.layout, "mobius");
+        compare(values.visible, false);
+        compare(EditorModel.globalCandidate(rebased).showTooltips, false);
+        verify(!("layout" in rebased.panelChanges));
+        // Cancel goes back to the new settings, not the old ones.
+        compare(EditorModel.panelCandidate(EditorModel.cancel(rebased)).opacity, 0.9);
+        compare(EditorModel.panelCandidate(EditorModel.cancel(rebased)).layout, "mobius");
+        // Another panel's settings never replace this one's draft.
+        const other = EditorModel.rebase(draft, snapshot("free-2", 1));
+        compare(other.panelId, "free-1");
+        compare(other.revision, 4);
+        compare(EditorModel.panelCandidate(other).opacity, 0.4);
+    }
+
     function test_segmentDraftsAreIndependentAndReversible() {
         const source = snapshot("free-1", 9)
         source.panelValues.segments = [{ id: "main", order: 0, source: "inherited", entryIds: [] }]

@@ -103,6 +103,8 @@ enum class EditorCapability
     Glow,
     // How much of the storm shows behind a lightning look's bolts.
     Lightning,
+    // What the panel is called: every panel has a name.
+    Identity,
     Count
 };
 

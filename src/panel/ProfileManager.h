@@ -44,7 +44,22 @@ public:
     // content type and screen (the transaction's own rule).
     [[nodiscard]] static int freePanelsToCreate(const ProfileDefinition &profile,
         const QList<PanelDefinition> &desktop);
+    // A saved profile's own copy of one of its panels, which Panel Studio
+    // edits there; editing a profile changes only the saved profile, the
+    // desktop changes when it is applied.
+    [[nodiscard]] std::optional<PanelDefinition> profilePanel(const QString &id, const QString &panelId,
+        int *revision = nullptr, QString *errorCode = nullptr) const;
+    // The names of the profile's other panels.
+    [[nodiscard]] QStringList profilePanelNames(const QString &id, const QString &exceptPanelId) const;
+    QVariantMap replaceProfilePanel(const QString &id, int expectedRevision, const PanelDefinition &panel);
 public slots:
+    // The panels a profile holds, for the Profiles page.
+    QVariantList profilePanels(const QString &id) const;
+    QVariantMap renameProfilePanel(const QString &id, int expectedRevision, const QString &panelId,
+        const QString &name);
+    // A panel of its own leaves the profile; a built-in edge panel, which
+    // every arrangement keeps, is hidden in it instead.
+    QVariantMap removeProfilePanel(const QString &id, int expectedRevision, const QString &panelId);
     QVariantList listProfiles() const;
     QVariantMap createProfile(const QString &name);
     QVariantMap saveProfile(const QString &id, int expectedRevision);

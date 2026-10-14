@@ -5,6 +5,7 @@
 #include "PanelRegistry.h"
 #include "DockSettings.h"
 #include "model/PanelDefinition.h"
+#include "model/PanelNaming.h"
 #include "model/IconEntryIdentity.h"
 #include "model/PanelSettingsSchema.h"
 #include "model/SettingsMigration.h"
@@ -1865,7 +1866,8 @@ QString PanelRegistry::beginFreePanelCreation(const QString &ownershipToken)
 
     QVariantMap panel = makePanel(
         id,
-        tr("Free panel %1").arg(sequence - 1),
+        ArchDock::uniquePanelName(ArchDock::panelBaseName(QStringLiteral("free"), QStringLiteral("circular")),
+                                  panelNames()),
         QStringLiteral("bottom"),
         false);
     panel.insert(QStringLiteral("edge"), QStringLiteral("free"));
@@ -2758,7 +2760,7 @@ QString PanelRegistry::addPanel(const QString &edge, const QString &type)
 
     QVariantMap panel = makePanel(
         id,
-        tr("Panel %1").arg(sequence - 1),
+        ArchDock::uniquePanelName(ArchDock::panelBaseName(normalizedEdge, QString()), panelNames()),
         normalizedEdge,
         false);
     panel.insert(QStringLiteral("visible"), true);
@@ -2786,7 +2788,9 @@ QString PanelRegistry::addFreePanel()
         id = QStringLiteral("free-%1").arg(sequence++);
     } while (record(id));
 
-    QVariantMap panel = makePanel(id, tr("Free panel %1").arg(sequence - 1),
+    QVariantMap panel = makePanel(id, ArchDock::uniquePanelName(
+                                      ArchDock::panelBaseName(QStringLiteral("free"), QStringLiteral("circular")),
+                                      panelNames()),
                                   QStringLiteral("bottom"), false);
     panel.insert(QStringLiteral("edge"), QStringLiteral("free"));
     panel.insert(QStringLiteral("visible"), true);
@@ -3184,6 +3188,43 @@ const QVariantMap *PanelRegistry::record(const QString &panelId) const
     return nullptr;
 }
 
+QStringList PanelRegistry::panelNames(const QString &exceptId) const
+{
+    QStringList names;
+    for (const QVariantMap &panel : m_panels)
+        if (panel.value(QStringLiteral("id")).toString() != exceptId)
+            names.append(panel.value(QStringLiteral("name")).toString().trimmed());
+    return names;
+}
+
+QString PanelRegistry::automaticPanelName(const ArchDock::PanelDefinition &panel,
+                                         const QStringList *taken) const
+{
+    return ArchDock::uniquePanelName(
+        ArchDock::panelBaseName(panel.host.kind == ArchDock::PanelHostKind::FreeDesktop
+                                    ? QStringLiteral("free") : panel.placement.edge,
+                                panel.layout.pathType),
+        taken ? *taken : panelNames(panel.identity.id));
+}
+
+void PanelRegistry::followShapeName(const ArchDock::PanelDefinition &current,
+                                    ArchDock::PanelDefinition &candidate,
+                                    const QStringList *taken) const
+{
+    auto &name = candidate.identity.name;
+    name = name.trimmed();
+    if (candidate.identity.builtIn)
+    {
+        if (name.isEmpty()) name = current.identity.name;
+        return;
+    }
+    const bool reshaped = candidate.layout.pathType != current.layout.pathType ||
+        candidate.placement.edge != current.placement.edge || candidate.host.kind != current.host.kind;
+    if (name.isEmpty() || (reshaped && name == current.identity.name.trimmed() &&
+                           ArchDock::panelNameIsAutomatic(name)))
+        name = automaticPanelName(candidate, taken);
+}
+
 QVariantMap PanelRegistry::makePanel(const QString &id,
                                      const QString &name,
                                      const QString &edge,
@@ -3373,12 +3414,19 @@ bool PanelRegistry::setPanelValuesChecked(const QString &panelId, const QVariant
     }
 
     QString definitionError;
-    const std::optional<ArchDock::PanelDefinition> definition =
+    std::optional<ArchDock::PanelDefinition> definition =
         ArchDock::PanelDefinition::fromLegacyMap(candidate, &definitionError);
     if (!definition.has_value())
     {
         qWarning().noquote() << "Panel update rejected:" << definitionError;
         return false;
+    }
+    // A change of shape renames a panel nobody named, whichever way it
+    // comes; a name given with the change stands.
+    if (!values.contains(QStringLiteral("name")))
+    {
+        if (const auto previous = ArchDock::PanelDefinition::fromLegacyMap(previousValues))
+            followShapeName(*previous, *definition);
     }
 
     candidate = definition->toLegacyMap();
@@ -3657,6 +3705,8 @@ void PanelRegistry::load()
             const auto source = sourceRecords.at(index).toObject();
             needsBackup = normalizeFreeHostRecord(&probe) || needsBackup;
             needsBackup = migrateLegacyThemePackage(&probe) || needsBackup;
+            needsBackup = (!probe.value(QStringLiteral("builtIn")).toBool() &&
+                ArchDock::panelNameIsOldDefault(probe.value(QStringLiteral("name")).toString())) || needsBackup;
             needsBackup = !source.contains(QStringLiteral("screen")) ||
                 !source.contains(QStringLiteral("visibilityMode")) ||
                 !source.contains(QStringLiteral("panelMotionTarget")) || needsBackup;
@@ -3721,6 +3771,18 @@ void PanelRegistry::load()
                 return;
             }
             m_panels.append(normalized->toLegacyMap());
+        }
+        // A panel an older version named "Free panel 3" or "Panel 2" goes by
+        // what it is instead; a name its owner chose stays.
+        for (QVariantMap &panel : m_panels)
+        {
+            if (panel.value(QStringLiteral("builtIn")).toBool() ||
+                !ArchDock::panelNameIsOldDefault(panel.value(QStringLiteral("name")).toString()))
+                continue;
+            const auto definition = ArchDock::PanelDefinition::fromLegacyMap(panel);
+            if (!definition) continue;
+            panel.insert(QStringLiteral("name"), automaticPanelName(*definition));
+            compatibilityRewriteRequired = true;
         }
 
         if (m_panels.isEmpty())

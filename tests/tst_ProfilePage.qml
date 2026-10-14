@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Dialogs
 import QtTest
 import "../qml/runtime" as Runtime
 
@@ -23,6 +24,47 @@ TestCase {
         verify(value.valid);
         return value;
     }
+    // The panels a profile shows: each renamed, edited or removed in the
+    // profile, a built-in edge panel hidden instead; removing asks first.
+    function test_profilePanelsAreRenamedEditedAndRemovedInTheProfile() {
+        const service = { profilePanels: function(id) { return id !== "profile-first" ? [] : [
+            {id: "free-1", name: "Ring panel", edge: "free", builtIn: false, shown: true},
+            {id: "bottom", name: "Bottom panel", edge: "bottom", builtIn: true, shown: true},
+            {id: "top", name: "Top panel", edge: "top", builtIn: true, shown: false}]; } };
+        const item = page({profiles: [{id: "profile-first", name: "Desk", revision: 3, panelCount: 3}],
+                           service: service});
+        const requests = createTemporaryObject(spyComponent, testCase,
+            {target: item, signalName: "panelActionRequested"});
+        verify(requests.valid);
+        verify(findChild(item, "profile-panel-name-free-1") !== null);
+        verify(findChild(item, "profile-panel-name-bottom") !== null);
+        verify(findChild(item, "profile-panel-name-top") === null);
+        mouseClick(findChild(item, "profile-panel-edit-free-1"));
+        const sent = function(index) { return Array.prototype.slice.call(requests.signalArguments[index]); };
+        compare(sent(0), ["edit", "profile-first", 3, "free-1", ""]);
+        const name = findChild(item, "profile-panel-name-free-1");
+        name.text = "  Work dock ";
+        name.editingFinished();
+        compare(sent(1), ["rename", "profile-first", 3, "free-1", "Work dock"]);
+        // An unchanged or empty name renames nothing.
+        name.text = "  ";
+        name.editingFinished();
+        compare(requests.count, 2);
+        compare(name.text, "Ring panel");
+        compare(findChild(item, "profile-panel-remove-bottom").text, "Hide");
+        mouseClick(findChild(item, "profile-panel-remove-free-1"));
+        compare(requests.count, 2);
+        const question = findChild(item, "profile-panel-remove-question");
+        verify(question !== null);
+        verify(question.text.indexOf("Ring panel") >= 0 && question.text.indexOf("Desk") >= 0);
+        question.buttonClicked(MessageDialog.Ok, MessageDialog.AcceptRole);
+        compare(sent(2), ["remove", "profile-first", 3, "free-1", ""]);
+        // Blocked while Panel Studio holds changes.
+        item.actionsBlocked = true;
+        verify(!findChild(item, "profile-panel-edit-free-1").enabled);
+        verify(!findChild(item, "profile-panel-remove-free-1").enabled);
+    }
+
     function test_emptyStoreCannotApplyAndSelectionDoesNotApply() {
         const item = page();
         const requests = spy(item);

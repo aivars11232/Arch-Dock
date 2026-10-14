@@ -11,9 +11,12 @@ var sections = [
         subtabs: ["Panel", "Icons", "Icon Tiles", "Pedestals"]
     },
     {
+        // Presets holds the panel presets, built-in and your own, and the
+        // looks: both restyle the panel. The two tabs after it are never
+        // offered; their places keep the later tabs' numbers.
         label: "Panels",
         subtabs: ["General", "Size", "Appearance", "Behavior", "Layout", "Segments",
-            "Panel Themes / Skins", "Built-in Panel Presets", "My Panel Presets", "Animations", "3D"]
+            "Presets", "Built-in Panel Presets", "My Panel Presets", "Animations", "3D"]
     },
     {
         // The icon style is chosen in one place, Icons > Appearance
@@ -39,10 +42,10 @@ var sections = [
 ]
 
 // The pages that browse a preset catalog, by "section:subtab". Panel Presets
-// and Icon Presets are separate catalogs, each with a built-in and a user page.
+// and Icon Presets are separate catalogs: the panel presets on one page with
+// the looks, the icon presets on a built-in and a user page.
 var presetPages = {
-    "1:7": { kind: "panel", scope: "builtin" },
-    "1:8": { kind: "panel", scope: "user" },
+    "1:6": { kind: "panel", scope: "all" },
     "2:4": { kind: "icon", scope: "builtin" },
     "2:5": { kind: "icon", scope: "user" }
 }

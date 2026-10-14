@@ -69,6 +69,17 @@ public:
     Q_INVOKABLE QVariantMap panelSnapshot(const QString &panelId) const;
     Q_INVOKABLE QString panelName(const QString &panelId) const;
     Q_INVOKABLE bool isBuiltIn(const QString &panelId) const;
+    // The name `panel` goes by until its owner names it (PanelNaming): what
+    // it is, with a number when another panel has that name.
+    [[nodiscard]] QString automaticPanelName(const ArchDock::PanelDefinition &panel,
+                                             const QStringList *taken = nullptr) const;
+    // The name a panel goes by after a change (PanelNaming): one nobody
+    // chose follows the panel to another shape or edge, an emptied one is
+    // the automatic one again, and a name its owner gives stays. A built-in
+    // panel keeps its own name.
+    // `taken`: the names it must not repeat, the registry's when null.
+    void followShapeName(const ArchDock::PanelDefinition &current, ArchDock::PanelDefinition &candidate,
+                         const QStringList *taken = nullptr) const;
     void setPanelValue(const QString &panelId, const QString &key, const QVariant &value);
     void updatePanel(const QString &panelId, const QVariantMap &values);
     [[nodiscard]] bool updatePanelChecked(const QString &panelId, const QVariantMap &values);
@@ -269,6 +280,8 @@ private:
     [[nodiscard]] QVariantMap *record(const QString &panelId);
     [[nodiscard]] const QVariantMap *record(const QString &panelId) const;
     [[nodiscard]] QVariantMap makePanel(const QString &id, const QString &name, const QString &edge, bool builtIn) const;
+    // Every panel's name but `exceptId`'s.
+    [[nodiscard]] QStringList panelNames(const QString &exceptId = {}) const;
     [[nodiscard]] QVariant normalizeValue(const QString &key, const QVariant &value) const;
     [[nodiscard]] RenderRequest makeRenderRequest(const QString &panelId, int width, int height, qreal devicePixelRatio) const;
     [[nodiscard]] bool renderWithQt(RenderRequest *request, QString *errorMessage) const;

@@ -213,4 +213,96 @@ QVariantMap ProfileManager::applyProfile(const QString &id, int revision)
     return m_transaction.apply(*profile);
 }
 QVariantMap ProfileManager::recoverInterruptedApply() { return m_transaction.recover(); }
+
+std::optional<PanelDefinition> ProfileManager::profilePanel(const QString &id, const QString &panelId,
+    int *revision, QString *errorCode) const
+{
+    QString code;
+    const auto profile = m_store.load(id, &code);
+    if (!profile)
+    {
+        if (errorCode) *errorCode = code;
+        return std::nullopt;
+    }
+    if (revision) *revision = profile->revision;
+    for (const auto &panel : profile->panels)
+        if (panel.identity.id == panelId) return panel;
+    if (errorCode) *errorCode = QStringLiteral("profile-panel-not-found");
+    return std::nullopt;
+}
+
+QStringList ProfileManager::profilePanelNames(const QString &id, const QString &exceptPanelId) const
+{
+    QStringList names;
+    if (const auto profile = m_store.load(id))
+        for (const auto &panel : profile->panels)
+            if (panel.identity.id != exceptPanelId) names.append(panel.identity.name);
+    return names;
+}
+
+QVariantMap ProfileManager::replaceProfilePanel(const QString &id, int expectedRevision, const PanelDefinition &panel)
+{
+    const auto guarded = guard(); if (!guarded.isEmpty()) return failure(guarded);
+    QString code;
+    auto profile = m_store.load(id, &code);
+    if (!profile) return failure(code);
+    if (profile->revision != expectedRevision) return failure(QStringLiteral("stale-profile-revision"));
+    const auto found = std::find_if(profile->panels.begin(), profile->panels.end(),
+        [&](const auto &candidate) { return candidate.identity.id == panel.identity.id; });
+    if (found == profile->panels.end()) return failure(QStringLiteral("profile-panel-not-found"));
+    *found = ProfileDefinition::portablePanel(panel);
+    const auto saved = m_store.save(*profile, &code);
+    return finish(saved, code);
+}
+
+QVariantList ProfileManager::profilePanels(const QString &id) const
+{
+    QVariantList result;
+    const auto profile = m_store.load(id);
+    if (!profile) return result;
+    for (const auto &panel : profile->panels)
+    {
+        const bool free = panel.host.kind == PanelHostKind::FreeDesktop;
+        result.append(QVariantMap{{QStringLiteral("id"), panel.identity.id},
+            {QStringLiteral("name"), panel.identity.name},
+            {QStringLiteral("builtIn"), panel.identity.builtIn},
+            {QStringLiteral("edge"), free ? QStringLiteral("free") : panel.placement.edge},
+            {QStringLiteral("layout"), panel.layout.pathType},
+            {QStringLiteral("look"), panel.surface.completeThemeId.isEmpty()
+                ? panel.surface.appearance : panel.surface.completeThemeId},
+            {QStringLiteral("rendererTier"), panel.surface.rendererTier},
+            {QStringLiteral("shown"), panel.visibility.visible},
+            {QStringLiteral("panelRevision"), QVariant::fromValue<qulonglong>(panel.settingsRevision)}});
+    }
+    return result;
+}
+
+QVariantMap ProfileManager::renameProfilePanel(const QString &id, int expectedRevision, const QString &panelId,
+    const QString &name)
+{
+    if (name.trimmed().isEmpty()) return failure(QStringLiteral("panel-name-required"));
+    QString code;
+    int revision = 0;
+    auto panel = profilePanel(id, panelId, &revision, &code);
+    if (!panel) return failure(code);
+    if (revision != expectedRevision) return failure(QStringLiteral("stale-profile-revision"));
+    panel->identity.name = name.trimmed();
+    return replaceProfilePanel(id, expectedRevision, *panel);
+}
+
+QVariantMap ProfileManager::removeProfilePanel(const QString &id, int expectedRevision, const QString &panelId)
+{
+    const auto guarded = guard(); if (!guarded.isEmpty()) return failure(guarded);
+    QString code;
+    auto profile = m_store.load(id, &code);
+    if (!profile) return failure(code);
+    if (profile->revision != expectedRevision) return failure(QStringLiteral("stale-profile-revision"));
+    const auto found = std::find_if(profile->panels.begin(), profile->panels.end(),
+        [&](const auto &candidate) { return candidate.identity.id == panelId; });
+    if (found == profile->panels.end()) return failure(QStringLiteral("profile-panel-not-found"));
+    if (found->identity.builtIn) found->visibility.visible = false;
+    else profile->panels.erase(found);
+    const auto saved = m_store.save(*profile, &code);
+    return finish(saved, code);
+}
 }

@@ -8,7 +8,8 @@ import org.kde.kirigami as Kirigami
 
 // Draws one Panel Studio page from its rows: section titles, notices,
 // controls for settings (switches, sliders, spin boxes, combo boxes, colour
-// and file fields), action buttons, and theme and preset sample cards.
+// and file fields) and action buttons. Presets and looks are cards in the
+// preset browser (PresetBrowser, ThemeSampleCard).
 ScrollView {
     id: root
 
@@ -90,7 +91,6 @@ ScrollView {
                 required property string rowKey
                 readonly property var modelData: root.rowsByKey[rowKey] || ({})
                 readonly property string kind: modelData.kind || "value"
-                readonly property bool sampleCards: kind === "themeSamples"
 
                 visible: modelData.available === undefined || modelData.available
                 Layout.fillWidth: true
@@ -133,131 +133,8 @@ ScrollView {
                     type: rowDelegate.modelData.warning ? Kirigami.MessageType.Warning : Kirigami.MessageType.Information
                 }
 
-                // Sample cards: the built-in themes, each drawn on this panel.
-                ColumnLayout {
-                    id: sampleRow
-
-                    visible: rowDelegate.sampleCards
-                    Layout.fillWidth: true
-                    spacing: 8
-
-                    Label {
-                        text: rowDelegate.modelData.label || ""
-                        color: "#f3f8fb"
-                        font.pixelSize: 16
-                        font.weight: Font.DemiBold
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        text: rowDelegate.modelData.description || ""
-                        color: "#91a8b5"
-                        font.pixelSize: 11
-                        wrapMode: Text.Wrap
-                    }
-                    Repeater {
-                        model: (rowDelegate.modelData.themes || []).length
-                        delegate: Rectangle {
-                            id: themeSample
-
-                            required property int index
-                            readonly property var modelData: (rowDelegate.modelData.themes || [])[index] || ({})
-                            Layout.fillWidth: true
-                            // A theme is drawn at the height of a preset card.
-                            implicitHeight: 188
-                            radius: 8
-                            color: "#1b2831"
-                            border.width: 1
-                            border.color: "#3a5868"
-                            readonly property var rendererCandidate:
-                                root.studio.themeRendererCandidate(modelData)
-                            // The theme the card is drawn on.
-                            readonly property var sampleTheme: modelData
-                            readonly property var previewConfiguration:
-                                modelData.previewConfiguration || ({})
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: 10
-                                spacing: 12
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    Label {
-                                        text: themeSample.modelData.name
-                                        color: "#edf7fa"
-                                        font.weight: Font.DemiBold
-                                    }
-                                    Label {
-                                        text: qsTr("Built-in · %1").arg(themeSample.modelData.category
-                                            || "theme")
-                                        color: "#90a7b4"
-                                        font.pixelSize: 11
-                                    }
-
-                                    LivePanelPreview {
-                                        id: themePreview
-
-                                        objectName: "theme-live-preview-" + themeSample.modelData.id
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: 110
-                                        panelDefinition:
-                                            themeSample.rendererCandidate
-                                        hostCapabilities:
-                                            themeSample.rendererCandidate
-                                                .capabilityResolution || ({})
-                                        themeDefinition:
-                                            themeSample.sampleTheme
-                                        iconStyleDefinition:
-                                            themeSample.rendererCandidate
-                                                .iconStyleDefinition || ({})
-                                        indicatorStyleDefinition:
-                                            themeSample.sampleTheme
-                                                .indicatorStyle || ({})
-                                        animationProfiles:
-                                            themeSample.rendererCandidate
-                                        previewMode:
-                                            String(themeSample
-                                                .previewConfiguration.mode
-                                                || root.studio
-                                                    .rendererPreviewMode(
-                                                        themeSample
-                                                            .rendererCandidate))
-                                        presentationState:
-                                            String(themeSample
-                                                .previewConfiguration
-                                                    .presentationState
-                                                || "open")
-                                        stateEntry: Number(themeSample
-                                            .previewConfiguration.stateEntry
-                                            === undefined ? 1
-                                            : themeSample.previewConfiguration
-                                                .stateEntry)
-                                        iconState: String(themeSample
-                                            .previewConfiguration.iconState
-                                            || "hover")
-                                        contentMargin: 4
-                                    }
-
-                                    Label {
-                                        text: themePreview.rendererStatusText
-                                        color: themePreview.fallbackApplied
-                                            ? "#ffc66d" : "#72909f"
-                                        font.pixelSize: 9
-                                    }
-                                }
-                                Button {
-                                    text: qsTr("Load")
-                                    icon.name: "dialog-ok-apply"
-                                    onClicked: root.studio.performStudioAction("load-built-in-theme", {
-                                        themeId: themeSample.modelData.id
-                                    })
-                                }
-                            }
-                        }
-                    }
-                }
-
                 Rectangle {
-                    visible: rowDelegate.kind !== "section" && rowDelegate.kind !== "notice" && !rowDelegate.sampleCards
+                    visible: rowDelegate.kind !== "section" && rowDelegate.kind !== "notice"
                     Layout.fillWidth: true
                     implicitHeight: fieldRow.implicitHeight + 22
                     radius: 7

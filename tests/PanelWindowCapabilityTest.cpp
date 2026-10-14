@@ -322,6 +322,11 @@ private slots:
     void freePanelAreasAreShared();
     void panelsHoldTheIconsTheirShapeHasRoomFor();
     void studioOffersTheMobiusStrip();
+    void panelsNobodyNamedFollowTheirShape();
+    void studioDraftsShowOnTheDesktopAtOnce();
+    void studioChangesShowOnTheDesktopAtOnce();
+    void profilePanelsAreEditedInTheProfileOnly();
+    void studioEditsAProfilesPanel();
     void studioPageWheelInput();
     void studioPanelMotionControls();
     void tiltEditorsFollowTheSelectedRenderer();
@@ -549,6 +554,383 @@ void PanelWindowCapabilityTest::studioOffersTheMobiusStrip()
     QCOMPARE(registry->panelDefinition(panel)->layout.pathType, QStringLiteral("mobius"));
     const QVariantList edge = backend.panelSettingsEditorSnapshot("bottom", "studio").value("panelFields").toList();
     QVERIFY(labelOf(fieldByKey(edge, "folderLayout"), "mobius").isEmpty());
+}
+
+// A panel nobody named goes by what it is: given another shape it takes
+// that one's name, a name its owner gives stays through any change, and an
+// emptied name is the automatic one again. Panel Studio offers the name.
+void PanelWindowCapabilityTest::panelsNobodyNamedFollowTheirShape()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    QCOMPARE(registry->panelName(panel), QStringLiteral("Circle panel"));
+    const auto apply = [&](const QVariantMap &values) {
+        return backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+            values).value("success").toBool();
+    };
+    QVERIFY(apply({{"layout", "mobius"}}));
+    QCOMPARE(registry->panelName(panel), QStringLiteral("Möbius strip panel"));
+    QVERIFY(apply({{"name", "  My dock  "}}));
+    QCOMPARE(registry->panelName(panel), QStringLiteral("My dock"));
+    QVERIFY(apply({{"layout", "star"}}));
+    QCOMPARE(registry->panelName(panel), QStringLiteral("My dock"));
+    QVERIFY(apply({{"name", ""}}));
+    QCOMPARE(registry->panelName(panel), QStringLiteral("Star panel"));
+    // Another panel of that shape takes the next number.
+    const QString other = registry->addFreePanel();
+    QVERIFY(backend.applyPanelSettingsTransaction(other, registry->panelDefinition(other)->settingsRevision,
+        {{"layout", "star"}}).value("success").toBool());
+    QCOMPARE(registry->panelName(other), QStringLiteral("Star panel 2"));
+    // A built-in panel keeps its own name when emptied.
+    QVERIFY(backend.applyPanelSettingsTransaction("bottom", registry->panelDefinition("bottom")->settingsRevision,
+        {{"name", ""}}).value("success").toBool());
+    QCOMPARE(registry->panelName("bottom"), QStringLiteral("Bottom panel"));
+    const QVariantMap field = fieldByKey(backend.panelSettingsEditorSnapshot(panel, "studio")
+        .value("panelFields").toList(), QStringLiteral("name"));
+    QCOMPARE(field.value("control").toString(), QStringLiteral("text"));
+    QCOMPARE(field.value("section").toString(), QStringLiteral("panels-general"));
+}
+
+// Panel Studio's draft of a panel is drawn on the desktop as it is made;
+// its saved settings change only on Apply, and dropping the draft draws them
+// again. A draft Apply would refuse is not drawn, and one made on settings
+// that changed since waits until Panel Studio makes it again.
+void PanelWindowCapabilityTest::studioDraftsShowOnTheDesktopAtOnce()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    const auto revision = [&] { return registry->panelDefinition(panel)->settingsRevision; };
+    const auto apply = [&](const QVariantMap &values) {
+        return backend.applyPanelSettingsTransaction(panel, revision(), values).value("success").toBool();
+    };
+    const auto preview = [&](const QVariantMap &values, const QVariantMap &globals = {}) {
+        return backend.previewPanelSettingsEditorDraft(panel, revision(), values, globals, "studio");
+    };
+    const auto drawn = [&](const QString &key) { return backend.panelRendererConfiguration(panel).value(key); };
+    QVERIFY(apply({{"type", "launcher"}, {"layout", "circular"}, {"layoutRadius", 60}, {"iconSize", 52},
+                   {"panelRotationMode", "none"}, {"panelGlow", 0.2}}));
+    const QVariant savedLayout = drawn("layout");
+    const QVariant savedGlow = drawn("panelGlow");
+
+    const qulonglong before = backend.dockRevision();
+    QVariantMap shown = preview({{"panelGlow", 0.8}, {"layout", "mobius"}});
+    QVERIFY(shown.value("success").toBool());
+    QVERIFY(shown.value("previewShown").toBool());
+    QVERIFY(backend.dockRevision() > before);
+    QCOMPARE(drawn("panelGlow").toDouble(), 0.8);
+    QCOMPARE(drawn("layout").toString(), QStringLiteral("mobius"));
+    // Nothing is saved, and other panels are drawn as saved.
+    QCOMPARE(registry->panelDefinition(panel)->layout.pathType, QStringLiteral("circular"));
+    PanelRegistry reloaded;
+    QCOMPARE(reloaded.panelDefinition(panel)->layout.pathType, QStringLiteral("circular"));
+    QCOMPARE(backend.panelRendererConfiguration("bottom").value("layout").toString(),
+             registry->panelValue("bottom", "layout").toString());
+    backend.clearPanelSettingsPreview();
+    QCOMPARE(drawn("panelGlow"), savedGlow);
+    QCOMPARE(drawn("layout"), savedLayout);
+
+    // Five icons fill the ring; a smaller ring is not drawn, and the answer
+    // says why.
+    QTemporaryDir files;
+    QVERIFY(files.isValid());
+    QStringList urls;
+    for (int index = 0; index < 5; ++index) {
+        const QString folder = files.filePath("Folder " + QString::number(index));
+        QVERIFY(QDir().mkpath(folder));
+        urls.append(QUrl::fromLocalFile(folder).toString());
+    }
+    QVERIFY(backend.addPanelEntries(panel, urls));
+    shown = preview({{"layoutRadius", 48}});
+    QVERIFY(shown.value("success").toBool());
+    QVERIFY(!shown.value("previewShown").toBool());
+    QVERIFY2(shown.value("previewRefusal").toString().contains(QStringLiteral("fit only")),
+             qPrintable(shown.value("previewRefusal").toString()));
+    QCOMPARE(drawn("layoutRadius").toInt(), 60);
+
+    // Applied, the draft is the saved settings and stays drawn so.
+    QVERIFY(preview({{"panelGlow", 0.6}}).value("previewShown").toBool());
+    QVERIFY(apply({{"panelGlow", 0.6}}));
+    QCOMPARE(drawn("panelGlow").toDouble(), 0.6);
+    backend.clearPanelSettingsPreview();
+    QCOMPARE(drawn("panelGlow").toDouble(), 0.6);
+
+    // Another change to the panel leaves the draft until Panel Studio makes
+    // it again on the new settings.
+    QVERIFY(preview({{"panelGlow", 0.9}}).value("previewShown").toBool());
+    QVERIFY(apply({{"layoutRadius", 70}}));
+    QCOMPARE(drawn("panelGlow").toDouble(), 0.6);
+    QCOMPARE(drawn("layoutRadius").toInt(), 70);
+    QVERIFY(preview({{"panelGlow", 0.9}}).value("previewShown").toBool());
+    QCOMPARE(drawn("panelGlow").toDouble(), 0.9);
+    QCOMPARE(drawn("layoutRadius").toInt(), 70);
+    // Back to the saved values, there is nothing left to show.
+    QVERIFY(!preview({{"panelGlow", 0.6}}).value("previewShown").toBool());
+    QCOMPARE(drawn("panelGlow").toDouble(), 0.6);
+
+    // A shared setting's draft is drawn on every panel.
+    const double magnification = backend.panelRendererConfiguration("bottom").value("magnification").toDouble();
+    QVERIFY(preview({}, {{"magnification", 2.0}}).value("previewShown").toBool());
+    QCOMPARE(backend.panelRendererConfiguration("bottom").value("magnification").toDouble(), 2.0);
+    QCOMPARE(drawn("magnification").toDouble(), 2.0);
+    backend.clearPanelSettingsPreview();
+    QCOMPARE(backend.panelRendererConfiguration("bottom").value("magnification").toDouble(), magnification);
+}
+
+// Panel Studio shows each change on the desktop panel as it is made: Cancel,
+// or closing the window, draws the saved panel again and Apply saves the
+// change. Changed elsewhere meanwhile, the panel keeps Panel Studio's
+// changes on top of the new settings.
+void PanelWindowCapabilityTest::studioChangesShowOnTheDesktopAtOnce()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    const auto revision = [&] { return registry->panelDefinition(panel)->settingsRevision; };
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, revision(),
+        {{"type", "launcher"}, {"layout", "circular"}, {"panelGlow", 0.2}}).value("success").toBool());
+    const auto drawn = [&](const QString &key) { return backend.panelRendererConfiguration(panel).value(key); };
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    const auto open = [&]() {
+        std::unique_ptr<QObject> popup(component.createWithInitialProperties({{"selectedPanelId", panel}}));
+        if (auto *studio = qobject_cast<QQuickWindow *>(popup.get())) {
+            studio->show();
+            if (!QTest::qWaitForWindowExposed(studio)) popup.reset();
+        }
+        return popup;
+    };
+    const auto set = [](QObject *popup, const QString &key, const QVariant &value) {
+        return QMetaObject::invokeMethod(popup, "setFieldValue",
+            Q_ARG(QVariant, (QVariantMap{{"key", key}, {"scope", "panel"}})), Q_ARG(QVariant, value));
+    };
+
+    {
+        auto popup = open();
+        QVERIFY(popup);
+        QVERIFY(set(popup.get(), "panelGlow", 0.55));
+        QCOMPARE(drawn("panelGlow").toDouble(), 0.55);
+        QVERIFY(popup->property("hasPendingChanges").toBool());
+        QCOMPARE(PanelRegistry().panelValue(panel, "panelGlow").toDouble(), 0.2);
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "cancelStudioChanges"));
+        QCOMPARE(drawn("panelGlow").toDouble(), 0.2);
+    }
+    {
+        auto popup = open();
+        QVERIFY(popup);
+        QVERIFY(set(popup.get(), "panelGlow", 0.7));
+        QCOMPARE(drawn("panelGlow").toDouble(), 0.7);
+        QVERIFY(backend.applyPanelSettingsTransaction(panel, revision(), {{"layoutRadius", 150}})
+            .value("success").toBool());
+        QCOMPARE(drawn("layoutRadius").toInt(), 150);
+        QTRY_COMPARE(drawn("panelGlow").toDouble(), 0.7);
+        QVERIFY(popup->property("hasPendingChanges").toBool());
+        QVariant applied;
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "applyStudioChanges", Q_RETURN_ARG(QVariant, applied)));
+        QVERIFY2(applied.toBool(), qPrintable(popup->property("studioError").toString()));
+        PanelRegistry saved;
+        QCOMPARE(saved.panelValue(panel, "panelGlow").toDouble(), 0.7);
+        QCOMPARE(saved.panelValue(panel, "layoutRadius").toInt(), 150);
+        QCOMPARE(drawn("panelGlow").toDouble(), 0.7);
+        QVERIFY(!popup->property("hasPendingChanges").toBool());
+    }
+    {
+        auto popup = open();
+        QVERIFY(popup);
+        QVERIFY(set(popup.get(), "panelGlow", 0.3));
+        QCOMPARE(drawn("panelGlow").toDouble(), 0.3);
+        qobject_cast<QQuickWindow *>(popup.get())->close();
+        QCOMPARE(drawn("panelGlow").toDouble(), 0.7);
+    }
+}
+
+namespace
+{
+// One panel of a saved profile, as the profile store has it now.
+std::optional<ArchDock::PanelDefinition> storedProfilePanel(const QString &profileId, const QString &panelId)
+{
+    const auto profile = ArchDock::ProfileStore().load(profileId);
+    if (!profile) return std::nullopt;
+    for (const auto &panel : profile->panels)
+        if (panel.identity.id == panelId) return panel;
+    return std::nullopt;
+}
+}
+
+// A saved profile's panels are changed in the profile only: renamed, edited
+// with Panel Studio's own checks, removed. The panels on the desktop stay as
+// they are until the profile is applied.
+void PanelWindowCapabilityTest::profilePanelsAreEditedInTheProfileOnly()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    auto *profiles = qobject_cast<ArchDock::ProfileManager *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("profileManager")).value<QObject *>());
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("panelRegistry")).value<QObject *>());
+    QVERIFY(profiles);
+    QVERIFY(registry);
+    const QString free = registry->addFreePanel();
+    QVERIFY(window.applyPanelSettingsTransaction(free, registry->panelDefinition(free)->settingsRevision,
+        {{"type", "launcher"}, {"layout", "circular"}, {"panelGlow", 0.2}}).value("success").toBool());
+    QString error;
+    const auto stored = ArchDock::ProfileStore().create(QStringLiteral("Work"),
+        {*registry->panelDefinition(free), *registry->panelDefinition(QStringLiteral("bottom"))}, &error);
+    QVERIFY2(stored, qPrintable(error));
+    const QString id = stored->id;
+    const auto removeProfile = qScopeGuard([&] {
+        if (const auto left = ArchDock::ProfileStore().load(id))
+            QVERIFY(ArchDock::ProfileStore().remove(id, left->revision));
+    });
+    const ArchDock::PanelDefinition desktop = *registry->panelDefinition(free);
+
+    QVariantMap listed;
+    for (const QVariant &value : profiles->profilePanels(id))
+        if (value.toMap().value("id").toString() == free) listed = value.toMap();
+    QCOMPARE(listed.value("name").toString(), QStringLiteral("Circle panel"));
+    QCOMPARE(listed.value("edge").toString(), QStringLiteral("free"));
+    QVERIFY(listed.value("shown").toBool());
+
+    // Panel Studio's pages on the profile's copy, with the profile's revision
+    // and no shared settings.
+    const QVariantMap snapshot = window.profilePanelEditorSnapshot(id, free, "studio");
+    QVERIFY2(snapshot.value("success").toBool(), qPrintable(snapshot.value("errorCode").toString()));
+    QCOMPARE(snapshot.value("revision").toInt(), stored->revision);
+    QVERIFY(snapshot.value("globalFields").toList().isEmpty());
+    QVERIFY(!fieldByKey(snapshot.value("panelFields").toList(), QStringLiteral("layout")).isEmpty());
+    QVERIFY(window.resolveProfilePanelEditorDraft(id, free, stored->revision, {{"panelGlow", 0.9}}, "studio")
+        .value("success").toBool());
+    QVERIFY(window.profilePanelThemeCandidate(id, free, QStringLiteral("obsidian-glass")).value("success").toBool());
+
+    const QVariantMap applied = window.applyProfilePanelSettings(id, free, stored->revision,
+        {{"panelGlow", 0.9}, {"layout", "mobius"}});
+    QVERIFY2(applied.value("success").toBool(), qPrintable(applied.value("errorCode").toString()));
+    const auto edited = storedProfilePanel(id, free);
+    QVERIFY(edited);
+    QCOMPARE(edited->toLegacyMap().value("panelGlow").toDouble(), 0.9);
+    QCOMPARE(edited->layout.pathType, QStringLiteral("mobius"));
+    QCOMPARE(edited->identity.name, QStringLiteral("Möbius strip panel"));
+    QCOMPARE(ArchDock::ProfileStore().load(id)->revision, stored->revision + 1);
+    QCOMPARE(*registry->panelDefinition(free), desktop);
+    // A profile changed since is not overwritten.
+    QCOMPARE(window.applyProfilePanelSettings(id, free, stored->revision, {{"panelGlow", 0.5}})
+        .value("errorCode").toString(), QStringLiteral("stale-profile-revision"));
+
+    int revision = ArchDock::ProfileStore().load(id)->revision;
+    QVERIFY(profiles->renameProfilePanel(id, revision, free, QStringLiteral("  Work dock ")).value("success").toBool());
+    QCOMPARE(storedProfilePanel(id, free)->identity.name, QStringLiteral("Work dock"));
+    QCOMPARE(registry->panelName(free), desktop.identity.name);
+    revision = ArchDock::ProfileStore().load(id)->revision;
+    QCOMPARE(profiles->renameProfilePanel(id, revision, free, QStringLiteral(" ")).value("errorCode").toString(),
+             QStringLiteral("panel-name-required"));
+    // A built-in edge panel stays in every arrangement, hidden; a panel of
+    // its own leaves the profile.
+    QVERIFY(profiles->removeProfilePanel(id, revision, QStringLiteral("bottom")).value("success").toBool());
+    QVERIFY(storedProfilePanel(id, QStringLiteral("bottom")));
+    QVERIFY(!storedProfilePanel(id, QStringLiteral("bottom"))->visibility.visible);
+    revision = ArchDock::ProfileStore().load(id)->revision;
+    QVERIFY(profiles->removeProfilePanel(id, revision, free).value("success").toBool());
+    QVERIFY(!storedProfilePanel(id, free));
+    QCOMPARE(*registry->panelDefinition(free), desktop);
+    QVERIFY(registry->panelDefinition(QStringLiteral("bottom"))->visibility.visible);
+}
+
+// Panel Studio edits a profile's panel with its own pages, opened from the
+// Profiles page: Apply saves the profile, the desktop panel stays as it is,
+// and Back returns to the Profiles page.
+void PanelWindowCapabilityTest::studioEditsAProfilesPanel()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString free = registry->addFreePanel();
+    QVERIFY(backend.applyPanelSettingsTransaction(free, registry->panelDefinition(free)->settingsRevision,
+        {{"type", "launcher"}, {"layout", "circular"}, {"panelGlow", 0.2}}).value("success").toBool());
+    QString error;
+    const auto stored = ArchDock::ProfileStore().create(QStringLiteral("Work"), {*registry->panelDefinition(free)}, &error);
+    QVERIFY2(stored, qPrintable(error));
+    const QString id = stored->id;
+    const auto removeProfile = qScopeGuard([&] {
+        if (const auto left = ArchDock::ProfileStore().load(id))
+            QVERIFY(ArchDock::ProfileStore().remove(id, left->revision));
+    });
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> popup(component.createWithInitialProperties({{"selectedPanelId", free},
+        {"mainTabIndex", 5}, {"subTabIndex", 0}}));
+    auto *studio = qobject_cast<QQuickWindow *>(popup.get());
+    QVERIFY(studio);
+    studio->show();
+    QVERIFY(QTest::qWaitForWindowExposed(studio));
+
+    QVariant opened;
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "editProfilePanel", Q_RETURN_ARG(QVariant, opened),
+        Q_ARG(QVariant, id), Q_ARG(QVariant, free)));
+    QVERIFY(opened.toBool());
+    QVERIFY(popup->property("profileMode").toBool());
+    QCOMPARE(popup->property("mainTabIndex").toInt(), 1);
+    QCOMPARE(popup->property("editedPanelName").toString(), QStringLiteral("Circle panel"));
+    QTRY_VERIFY(visibleItem(studio, QStringLiteral("studio-profile-edit")));
+    // Presets are tried on the desktop: a profile's panel gets the looks only.
+    const auto offered = [&](int section, int page) {
+        QVariant available;
+        QMetaObject::invokeMethod(popup.get(), "subtabAvailable", Q_RETURN_ARG(QVariant, available),
+                                  Q_ARG(QVariant, section), Q_ARG(QVariant, page));
+        return available.toBool();
+    };
+    QVERIFY(offered(1, 6));
+    QVERIFY(!offered(2, 4));
+    QVERIFY(!offered(2, 5));
+
+    // Overview names the profile's copy, renamed there, not the desktop panel.
+    QVERIFY(ArchDock::ProfileStore().load(id));
+    QVERIFY(qobject_cast<ArchDock::ProfileManager *>(engine.rootContext()->contextProperty("profileManager")
+        .value<QObject *>())->renameProfilePanel(id, ArchDock::ProfileStore().load(id)->revision, free,
+            QStringLiteral("Work dock")).value("success").toBool());
+    QTRY_COMPARE(popup->property("editedPanelName").toString(), QStringLiteral("Work dock"));
+    QVariant overview;
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "overviewPanelRows", Q_RETURN_ARG(QVariant, overview)));
+    QString overviewName;
+    for (const QVariant &row : overview.toList())
+        if (row.toMap().value("label").toString() == QStringLiteral("Name"))
+            overviewName = row.toMap().value("value").toString();
+    QCOMPARE(overviewName, QStringLiteral("Work dock"));
+    QCOMPARE(registry->panelName(free), QStringLiteral("Circle panel"));
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue",
+        Q_ARG(QVariant, (QVariantMap{{"key", "panelGlow"}, {"scope", "panel"}})), Q_ARG(QVariant, 0.8)));
+    QVERIFY(popup->property("hasPendingChanges").toBool());
+    // Nothing on the desktop changes.
+    QCOMPARE(backend.panelRendererConfiguration(free).value("panelGlow").toDouble(), 0.2);
+    QVariant applied;
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "applyStudioChanges", Q_RETURN_ARG(QVariant, applied)));
+    QVERIFY2(applied.toBool(), qPrintable(popup->property("studioError").toString()));
+    QCOMPARE(storedProfilePanel(id, free)->toLegacyMap().value("panelGlow").toDouble(), 0.8);
+    QCOMPARE(registry->panelValue(free, "panelGlow").toDouble(), 0.2);
+    QCOMPARE(backend.panelRendererConfiguration(free).value("panelGlow").toDouble(), 0.2);
+    QVERIFY(!popup->property("hasPendingChanges").toBool());
+
+    // Back to the desktop's panels, on the Profiles page.
+    QVariant left;
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "leaveProfileMode", Q_RETURN_ARG(QVariant, left)));
+    QVERIFY(left.toBool());
+    QVERIFY(!popup->property("profileMode").toBool());
+    QCOMPARE(popup->property("mainTabIndex").toInt(), 5);
+    QCOMPARE(popup->property("selectedPanelId").toString(), free);
+    QVERIFY(!visibleItem(studio, QStringLiteral("studio-profile-edit")));
 }
 
 void PanelWindowCapabilityTest::studioIconTiles_data()
@@ -1355,8 +1737,20 @@ void PanelWindowCapabilityTest::themeCardsResolveEachThemesOwnRenderer()
         window->show();
         QVERIFY(QTest::qWaitForWindowExposed(window));
         QVERIFY(QQuickTest::qWaitForPolish(window));
+        // Panels > Presets lists the looks after the presets; only the cards
+        // near the view exist, so each look is scrolled into view.
+        const auto showLook = [&](const QString &id) {
+            QQuickItem *list = visibleItem(window, "panel-studio-preset-browser");
+            if (!list) return;
+            const QVariantList items = list->property("items").value<QJSValue>().toVariant().toList();
+            for (int index = 0; index < items.size(); ++index)
+                if (items.at(index).toMap().value("theme").toMap().value("id").toString() == id)
+                    QMetaObject::invokeMethod(list->property("listView").value<QQuickItem *>(),
+                        "positionViewAtIndex", Q_ARG(int, index), Q_ARG(int, 1));
+        };
         for (auto it = themes.cbegin(); it != themes.cend(); ++it) {
             const QString id = it.key();
+            showLook(id);
             QQuickItem *card = nullptr;
             // A free panel lists the looks made for free docks (the owner,
             // 2026-10-13): the horizontal skins resolve but have no card.
@@ -1377,7 +1771,7 @@ void PanelWindowCapabilityTest::themeCardsResolveEachThemesOwnRenderer()
                     qPrintable(id + ": " + card->property("rendererStatusText").toString()));
             }
             // Readable at card size: the preview is as tall as a preset
-            // card's and the drawn icons are not specks.
+            // card's and the panel's places for icons are not specks.
             QVERIFY2(card->height() >= 110, qPrintable(id));
             auto *scene = card->property("panelSceneItem").value<QQuickItem *>();
             QVERIFY2(scene, qPrintable(id));
@@ -4504,8 +4898,8 @@ void PanelWindowCapabilityTest::studioPagePictures()
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     struct Page { int section; int page; const char *name; };
     for (const Page &page : {Page{1, 0, "panels-general"}, Page{1, 2, "panels-appearance"},
-                             Page{1, 4, "panels-layout"}, Page{2, 0, "icons-appearance"},
-                             Page{4, 0, "pedestals"}}) {
+                             Page{1, 4, "panels-layout"}, Page{1, 6, "panels-presets"},
+                             Page{2, 0, "icons-appearance"}, Page{4, 0, "pedestals"}}) {
         std::unique_ptr<QObject> studio(component.createWithInitialProperties({
             {"selectedPanelId", panel}, {"mainTabIndex", page.section}, {"subTabIndex", page.page}}));
         auto *window = qobject_cast<QQuickWindow *>(studio.get());
@@ -4514,6 +4908,58 @@ void PanelWindowCapabilityTest::studioPagePictures()
         QVERIFY(QTest::qWaitForWindowExposed(window));
         QTest::qWait(1200);
         QVERIFY(window->grabWindow().save(folder + QLatin1Char('/') + QLatin1String(page.name) + ".png"));
+        if (QLatin1String(page.name) == QLatin1String("panels-presets")) {
+            // Further down the same page: where the presets end and the
+            // looks begin.
+            QQuickItem *list = visibleItem(window, "panel-studio-preset-browser");
+            QVERIFY(list);
+            const QVariantList items = list->property("items").value<QJSValue>().toVariant().toList();
+            int firstLook = -1;
+            for (int index = 0; index < items.size() && firstLook < 0; ++index)
+                if (items.at(index).toMap().contains("theme")) firstLook = index;
+            QVERIFY(firstLook > 0);
+            QVERIFY(QMetaObject::invokeMethod(list->property("listView").value<QQuickItem *>(),
+                "positionViewAtIndex", Q_ARG(int, firstLook), Q_ARG(int, 1)));
+            QTest::qWait(1200);
+            QVERIFY(window->grabWindow().save(folder + "/panels-presets-looks.png"));
+            QVERIFY(QMetaObject::invokeMethod(list->property("listView").value<QQuickItem *>(),
+                "positionViewAtIndex", Q_ARG(int, firstLook), Q_ARG(int, 0)));
+            QTest::qWait(1200);
+            QVERIFY(window->grabWindow().save(folder + "/panels-presets-looks-2.png"));
+        }
+        window->close();
+    }
+    // The Profiles page with a saved profile, and that profile's panel open
+    // in Panel Studio.
+    {
+        QString error;
+        const auto profile = ArchDock::ProfileStore().create(QStringLiteral("Work"),
+            {*registry->panelDefinition(panel), *registry->panelDefinition(QStringLiteral("bottom"))}, &error);
+        QVERIFY2(profile, qPrintable(error));
+        const auto removeProfile = qScopeGuard([&] {
+            if (const auto left = ArchDock::ProfileStore().load(profile->id))
+                QVERIFY(ArchDock::ProfileStore().remove(profile->id, left->revision));
+        });
+        std::unique_ptr<QObject> studio(component.createWithInitialProperties({
+            {"selectedPanelId", panel}, {"mainTabIndex", 5}, {"subTabIndex", 0}}));
+        auto *window = qobject_cast<QQuickWindow *>(studio.get());
+        QVERIFY(window);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QTest::qWait(1200);
+        QVERIFY(window->grabWindow().save(folder + "/profiles.png"));
+        QVariant opened;
+        QVERIFY(QMetaObject::invokeMethod(studio.get(), "editProfilePanel", Q_RETURN_ARG(QVariant, opened),
+            Q_ARG(QVariant, profile->id), Q_ARG(QVariant, panel)));
+        QVERIFY(opened.toBool());
+        QTest::qWait(1200);
+        QVERIFY(window->grabWindow().save(folder + "/profile-panel-general.png"));
+        studio->setProperty("subTabIndex", 2);
+        QTest::qWait(1200);
+        QVERIFY(window->grabWindow().save(folder + "/profile-panel-appearance.png"));
+        studio->setProperty("subTabIndex", 6);
+        QTest::qWait(1500);
+        QVERIFY(window->grabWindow().save(folder + "/profile-panel-looks.png"));
         window->close();
     }
     // A 3D panel's Appearance and 3D pages: its look, and how it stands.
@@ -5069,7 +5515,7 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     std::unique_ptr<QObject> popup(component.createWithInitialProperties({
         {QStringLiteral("selectedPanelId"), panelId}, {QStringLiteral("mainTabIndex"), 1},
-        {QStringLiteral("subTabIndex"), 7}}));
+        {QStringLiteral("subTabIndex"), 6}}));
     QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
     auto *studio = qobject_cast<QQuickWindow *>(popup.get());
     QVERIFY(studio);
@@ -5109,17 +5555,21 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
     // 2026-10-07: "if I make free panel why would I need to see horizontal
     // and vertical panel presets"); and a catalog of your own with nothing
     // in it has no tab (owner: "If the tab is empty, there's no need for that
-    // tab").
+    // tab"). The panel presets, built-in and your own, are on one page,
+    // Panels > Presets, with the looks; the two panel preset tabs after it
+    // are never offered.
     const auto offered = [&](int section, int subtab) {
         QVariant result;
         return QMetaObject::invokeMethod(popup.get(), "subtabAvailable",
                    Q_RETURN_ARG(QVariant, result), Q_ARG(QVariant, section),
                    Q_ARG(QVariant, subtab)) && result.toBool();
     };
+    QVERIFY(offered(1, 6));
+    QVERIFY(!offered(1, 7));
     QVERIFY(!offered(1, 8));
     QVERIFY(!offered(2, 5));
     struct Page { int section; int subtab; QString kind; QString scope; int count; };
-    for (const Page &page : {Page{1, 7, QStringLiteral("panel"), QStringLiteral("builtin"), 11},
+    for (const Page &page : {Page{1, 6, QStringLiteral("panel"), QStringLiteral("all"), 11},
                              Page{2, 4, QStringLiteral("icon"), QStringLiteral("builtin"), 15}})
     {
         QVERIFY(openPage(page.section, page.subtab));
@@ -5188,15 +5638,29 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
     QVERIFY(openPage(0, 0));
     QVERIFY(findVisible(QStringLiteral("panel-studio-live-renderer-preview")));
 
-    // Themes have a page of their own and are not presets. The icon style is
-    // chosen in one place, the Icon style choice on Icons > Appearance; the
-    // Icon Styles tab that repeated it is gone (PD-05).
+    // The looks are on Presets with the panel presets, nowhere else. The icon
+    // style is chosen in one place, the Icon style choice on Icons >
+    // Appearance; the Icon Styles tab that repeated it is gone (PD-05).
     QVERIFY(openPage(1, 2));
     QVERIFY(!findVisible(QStringLiteral("theme-live-preview-obsidian-glass")));
     QVERIFY(openPage(1, 6));
-    QVERIFY(plain(popup->property("currentPresetPage")).isNull());
+    QCOMPARE(plain(popup->property("currentPresetPage")).toMap().value(QStringLiteral("scope")).toString(),
+             QStringLiteral("all"));
+    QVERIFY(findVisible(browser));
+    {
+        // Only the cards near the view exist: the look is scrolled into view.
+        QQuickItem *list = findVisible(browser);
+        const QVariantList items = plain(list->property("items")).toList();
+        int at = -1;
+        for (int index = 0; index < items.size(); ++index)
+            if (items.at(index).toMap().value(QStringLiteral("theme")).toMap()
+                    .value(QStringLiteral("id")).toString() == QStringLiteral("obsidian-glass"))
+                at = index;
+        QVERIFY(at >= 0);
+        QVERIFY(QMetaObject::invokeMethod(list->property("listView").value<QQuickItem *>(),
+            "positionViewAtIndex", Q_ARG(int, at), Q_ARG(int, 1)));
+    }
     QTRY_VERIFY(findVisible(QStringLiteral("theme-live-preview-obsidian-glass")));
-    QVERIFY(!findVisible(browser));
     QVERIFY(openPage(2, 0));
     QVERIFY(!plain(popup->property("currentSubtabs")).toStringList()
                  .contains(QStringLiteral("Icon Styles")));
@@ -5210,28 +5674,25 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
             Q_ARG(QVariant, action), Q_ARG(QVariant, id), Q_ARG(QVariant, name));
     };
     // The copy is of a preset made for this edge panel, so it is listed for
-    // it, and its tab appears.
-    QVERIFY(openPage(1, 7));
+    // it, after the built-in ones.
+    QVERIFY(openPage(1, 6));
     QVERIFY(presetAction(QStringLiteral("duplicate"), QStringLiteral("obsidian-glass-dock"),
                          QStringLiteral("My Ring")));
     QVERIFY(!popup->property("presetNoticeIsError").toBool());
-    QVERIFY(popup->property("presetNoticeText").toString().contains(QStringLiteral("My Panel Presets")));
+    QVERIFY(popup->property("presetNoticeText").toString().contains(QStringLiteral("My presets")));
     QCOMPARE(library->property("revision").toInt(), 1);
-    QCOMPARE(cards().size(), 11);
+    QTRY_COMPARE(cards().size(), 12);
     QVERIFY(QFileInfo(presetStore).isDir());
-    QVERIFY(offered(1, 8));
-    QVERIFY(openPage(1, 8));
-    QTRY_COMPARE(cards().size(), 1);
-    const QString userId = cards().first().toMap().value(QStringLiteral("id")).toString();
+    QVERIFY(!offered(1, 8));
+    const auto userCard = [&]() { return cards().last().toMap(); };
+    const QString userId = userCard().value(QStringLiteral("id")).toString();
     QVERIFY(userId.startsWith(QStringLiteral("user-")));
-    QVERIFY(!cards().first().toMap().value(QStringLiteral("builtIn")).toBool());
-    QCOMPARE(popup->property("presetNoticeText").toString(), QString{});
+    QVERIFY(!userCard().value(QStringLiteral("builtIn")).toBool());
     popup->setProperty("selectedPresetId", userId);
     QTRY_VERIFY(findVisible(presetPreview));
     QVERIFY(presetAction(QStringLiteral("rename"), userId, QStringLiteral("Desk Ring")));
     QVERIFY(!popup->property("presetNoticeIsError").toBool());
-    QTRY_COMPARE(cards().first().toMap().value(QStringLiteral("name")).toString(),
-                 QStringLiteral("Desk Ring"));
+    QTRY_COMPARE(userCard().value(QStringLiteral("name")).toString(), QStringLiteral("Desk Ring"));
     QCOMPARE(popup->property("selectedPresetId").toString(), userId);
     // A built-in cannot be renamed or deleted, and the refusal is reported.
     QVERIFY(presetAction(QStringLiteral("rename"), QStringLiteral("obsidian-glass-dock"),
@@ -5241,14 +5702,10 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
     QCOMPARE(library->property("revision").toInt(), 2);
     QVERIFY(presetAction(QStringLiteral("remove"), userId, QString{}));
     QVERIFY(!popup->property("presetNoticeIsError").toBool());
-    QTRY_COMPARE(cards().size(), 0);
+    QTRY_COMPARE(cards().size(), 11);
     QCOMPARE(popup->property("selectedPresetId").toString(), QString{});
     QVERIFY(!findVisible(presetPreview));
-    // The last preset of your own is gone, and so are its tab and page.
-    QVERIFY(!offered(1, 8));
-    QTRY_VERIFY(popup->property("subTabIndex").toInt() != 8);
-    QVERIFY(openPage(1, 7));
-    QCOMPARE(cards().size(), 11);
+    QCOMPARE(popup->property("subTabIndex").toInt(), 6);
 
     QVERIFY(nothingChanged());
     QVERIFY2(studioWarnings.isEmpty(), qPrintable(studioWarnings.join(QLatin1Char('\n'))));
@@ -5287,10 +5744,10 @@ void PanelWindowCapabilityTest::studioPresetListsMatchTheSelectedPanel()
         ids.sort();
         return ids;
     };
-    QCOMPARE(listed(freePanel, 1, 7),
+    QCOMPARE(listed(freePanel, 1, 6),
              QStringList({QStringLiteral("circular-blue-ring"), QStringLiteral("holographic-semicircle"),
                           QStringLiteral("octagonal-platform"), QStringLiteral("orange-arc-dock")}));
-    QCOMPARE(listed(QStringLiteral("bottom"), 1, 7),
+    QCOMPARE(listed(QStringLiteral("bottom"), 1, 6),
              QStringList({QStringLiteral("energy-frame-cyan"), QStringLiteral("energy-frame-green"),
                           QStringLiteral("energy-frame-orange"), QStringLiteral("energy-frame-purple"),
                           QStringLiteral("mechanical-collapsible-rail"), QStringLiteral("metallic-shelf-dock"),
@@ -5298,7 +5755,7 @@ void PanelWindowCapabilityTest::studioPresetListsMatchTheSelectedPanel()
                           QStringLiteral("sci-fi-chassis-blue"), QStringLiteral("sci-fi-chassis-dark"),
                           QStringLiteral("sci-fi-chassis-red")}));
     registry->setPanelValue(QStringLiteral("bottom"), QStringLiteral("edge"), QStringLiteral("left"));
-    QCOMPARE(listed(QStringLiteral("bottom"), 1, 7),
+    QCOMPARE(listed(QStringLiteral("bottom"), 1, 6),
              QStringList({QStringLiteral("minimal-neon-rail"), QStringLiteral("obsidian-glass-dock")}));
     const QStringList icons = listed(freePanel, 2, 4);
     QCOMPARE(icons.size(), 15);
@@ -5909,7 +6366,9 @@ void PanelWindowCapabilityTest::studioTruthMatrix()
         QStringList differing;
         for (const QString &name : QSet<QString>(now.keyBegin(), now.keyEnd()) + QSet<QString>(then.keyBegin(), then.keyEnd()))
             if (!sameValue(now.value(name), then.value(name)))
-                differing.append(name);
+                differing.append(name + QLatin1Char('=') + QString::fromUtf8(QJsonDocument(QJsonArray{
+                    QJsonValue::fromVariant(then.value(name)), QJsonValue::fromVariant(now.value(name))})
+                    .toJson(QJsonDocument::Compact)));
         QVERIFY2(differing.isEmpty(), qPrintable(key + QStringLiteral(" did not restore the panel: ") + differing.join(QLatin1Char(' '))));
     }
 

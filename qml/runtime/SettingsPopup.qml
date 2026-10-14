@@ -65,6 +65,25 @@ Window {
         return profilesService ? profilesService.listProfiles() : [];
     }
     readonly property bool currentProfilePage: mainTabIndex === 5 && subTabIndex < 3
+    // Panel Studio edits a panel of a saved profile, not the desktop, while
+    // this names the profile: the same pages, on the profile's own copy of
+    // the panel. Apply saves the profile; the desktop changes when the
+    // profile is applied.
+    property string profileId: ""
+    readonly property bool profileMode: profileId.length > 0
+    // The desktop panel to come back to from a profile.
+    property string profileReturnPanelId: ""
+    // Where the profile's panel is: "free", or its edge. A free panel's
+    // editor values do not name it.
+    property string profilePanelEdge: ""
+    readonly property var editedProfile: {
+        for (const profile of profiles)
+            if (profile.id === profileId) return profile;
+        return null;
+    }
+    // The edited panel's name as it is drafted.
+    readonly property string editedPanelName: profileMode ? String(panelValue("name", ""))
+        : String(root.panelValue("name", "")) || panelRegistry.panelName(root.selectedPanelId)
 
     readonly property var auditionService: typeof presetAudition === "undefined" ? null : presetAudition
     readonly property var auditionStatus: {
@@ -104,7 +123,7 @@ Window {
         const revision = presetLibrary.revision;
         const auditionRevision = auditionService ? auditionService.revision : 0;
         const page = currentPresetPage;
-        if (!page)
+        if (!page || profileMode)
             return [];
         return presetsForSelectedPanel(page.kind, page.scope);
     }
@@ -122,7 +141,10 @@ Window {
         const edge = String(panelValue("edge", "bottom"));
         const orientation = free ? "free"
             : edge === "left" || edge === "right" ? "vertical" : "horizontal";
-        return presetLibrary.panelPresets(scope).filter(function(card) {
+        const cards = scope === "all"
+            ? Array.from(presetLibrary.panelPresets("builtin")).concat(Array.from(presetLibrary.panelPresets("user")))
+            : presetLibrary.panelPresets(scope);
+        return cards.filter(function(card) {
             const freePreset = String(card.hostKind || "") === "free-desktop";
             return free ? freePreset
                 : !freePreset && (card.orientations || []).includes(orientation);
@@ -182,7 +204,7 @@ Window {
     // The place of the panel the window edits, as the new panel page names it.
     readonly property string selectedPanelKind: {
         const revision = panelRevision;
-        const edge = String(panelRegistry.panelValue(selectedPanelId, "edge") || "");
+        const edge = String((profileMode ? panelValue("edge", profilePanelEdge) : panelRegistry.panelValue(selectedPanelId, "edge")) || "");
         return newPanelKinds.includes(edge) ? edge : "";
     }
     function newPanelKindName(edge) {
@@ -251,13 +273,14 @@ Window {
     readonly property var scenePresentationMechanisms:
         CapabilityModel.scenePresentationMechanisms(selectedCapabilityResolution,
             selectedPreviewTheme, embeddedRendererPreview.panelSceneItem.effectiveRendererTier)
+    // Plasma's own state of the panel: a profile's copy has none.
     readonly property var selectedPlacementResult: {
         const revision = placementRevision;
-        return panelController.nativePanelPlacementStatus(selectedPanelId);
+        return profileMode ? ({}) : panelController.nativePanelPlacementStatus(selectedPanelId);
     }
     readonly property var selectedVisibilityResult: {
         const revision = nativeVisibilityRevision;
-        return panelController.nativePanelVisibilityStatus(selectedPanelId);
+        return profileMode ? ({}) : panelController.nativePanelVisibilityStatus(selectedPanelId);
     }
     readonly property var currentSubtabs: StudioNavigation.subtabsFor(mainTabIndex)
     readonly property var mainTabLabels: StudioNavigation.mainLabels()
@@ -280,7 +303,7 @@ Window {
 
     function rendererPreviewMode(candidate) {
         const edge = String(candidate && candidate.edge
-            || panelRegistry.panelValue(selectedPanelId, "edge")
+            || (profileMode ? panelValue("edge", profilePanelEdge) : panelRegistry.panelValue(selectedPanelId, "edge"))
             || "bottom");
         if (edge === "free")
             return "free";
@@ -331,11 +354,19 @@ Window {
             root.editorReloadQueued = false;
             // A hidden Studio reloads when it is shown; an audition owns the draft.
             if (root.auditionBusy || !root.visible) return;
-            const snapshot = panelController.panelSettingsEditorSnapshot(root.selectedPanelId, "studio");
+            const snapshot = root.editorSnapshot(root.selectedPanelId);
             const text = JSON.stringify(snapshot);
             if (text === root.loadedSnapshotText && root.editorSession.loaded) return;
             if (!root.hasPendingChanges) root.loadEditor(root.selectedPanelId, snapshot, text);
-            else {
+            else if (snapshot && snapshot.success === true && root.editorSession.loaded
+                     && Number(snapshot.revision) !== Number(root.editorSession.revision)) {
+                // The panel's settings changed outside Panel Studio while
+                // its changes were not applied: they are kept on the new
+                // settings, and the desktop shows them so.
+                root.loadedSnapshotText = text;
+                root.editorSession = EditorModel.rebase(root.editorSession, snapshot);
+                root.refreshProjection();
+            } else {
                 root.loadedSnapshotText = text;
                 root.editorSession = EditorModel.withContentFeedback(root.editorSession, snapshot);
             }
@@ -350,7 +381,8 @@ Window {
             return false;
         }
         projectionTimer.stop();
-        const snapshot = prefetched || panelController.panelSettingsEditorSnapshot(normalizedPanelId, "studio");
+        livePreviewShown = false;
+        const snapshot = prefetched || editorSnapshot(normalizedPanelId);
         loadedSnapshotText = prefetchedText || JSON.stringify(snapshot);
         const loaded = EditorModel.load(snapshot);
         editorSession = loaded;
@@ -379,6 +411,8 @@ Window {
             askBeforeLeaving("new:" + place);
             return false;
         }
+        if (!leaveProfileMode())
+            return false;
         newPanelEdge = place;
         studioError = "";
         setMainTab(1);
@@ -401,7 +435,7 @@ Window {
             studioError = qsTr("Apply or cancel desktop audition before editing another panel.");
             return false;
         }
-        if (id !== selectedPanelId && hasPendingChanges) {
+        if ((id !== selectedPanelId || profileMode) && hasPendingChanges) {
             askBeforeLeaving(id);
             return false;
         }
@@ -410,12 +444,87 @@ Window {
         return true;
     }
     function continueSwitch(target) {
-        if (String(target).startsWith("new:"))
-            openNewPanelPage(String(target).slice(4));
-        else if (selectPanel(target)) {
-            setMainTab(1);
-            setSubTab(0);
+        const place = String(target);
+        if (place === "profiles") {
+            leaveProfileMode();
+        } else if (place.startsWith("profile:")) {
+            const parts = place.slice(8).split("/");
+            editProfilePanel(parts[0], parts.slice(1).join("/"));
+        } else if (place.startsWith("new:")) {
+            leaveProfileMode();
+            openNewPanelPage(place.slice(4));
+        } else {
+            leaveProfileMode();
+            if (selectPanel(target)) {
+                setMainTab(1);
+                setSubTab(0);
+            }
         }
+    }
+
+    // A panel of a saved profile, edited on the profile's own copy; its
+    // changes not applied yet are asked about first.
+    function editProfilePanel(profile, panelId) {
+        const id = String(panelId || "");
+        if (!profilesService || String(profile || "").length === 0 || id.length === 0)
+            return false;
+        if (auditionBusy) {
+            studioError = qsTr("Apply or cancel desktop audition before editing a profile.");
+            return false;
+        }
+        if (hasPendingChanges) {
+            askBeforeLeaving("profile:" + profile + "/" + id);
+            return false;
+        }
+        clearLivePreview();
+        if (!profileMode)
+            profileReturnPanelId = selectedPanelId;
+        const listed = Array.from(profilesService.profilePanels(profile) || [])
+            .find(function(panel) { return String(panel.id) === id; });
+        profilePanelEdge = listed ? String(listed.edge || "") : "";
+        newPanelEdge = "";
+        artifactDraft = {};
+        internalPanelSelection = true;
+        profileId = String(profile);
+        selectedPanelId = id;
+        internalPanelSelection = false;
+        if (!loadEditor(id)) {
+            leaveProfileMode();
+            return false;
+        }
+        setMainTab(1);
+        setSubTab(0);
+        return true;
+    }
+    // Back to the desktop's panels, on the Profiles page.
+    function leaveProfileMode() {
+        if (!profileMode)
+            return true;
+        if (hasPendingChanges) {
+            askBeforeLeaving("profiles");
+            return false;
+        }
+        const back = profileReturnPanelId.length > 0 && Array.from(panelRegistry.panelIds).includes(profileReturnPanelId)
+            ? profileReturnPanelId : panelRegistry.activePanelId;
+        profileId = "";
+        profileReturnPanelId = "";
+        profilePanelEdge = "";
+        internalPanelSelection = true;
+        selectedPanelId = back;
+        internalPanelSelection = false;
+        loadEditor(back);
+        setMainTab(5);
+        setSubTab(0);
+        return true;
+    }
+    // The sidebar: Profiles, while a profile's panel is edited, goes back to
+    // the desktop's panels.
+    function chooseMainTab(index) {
+        if (profileMode && Number(index) === 5) {
+            leaveProfileMode();
+            return;
+        }
+        setMainTab(index);
     }
 
     function selectPanel(panelId) {
@@ -454,11 +563,18 @@ Window {
         if (sectionNumber === 0 && subtabNumber === 3)
             return standsApplied;
         if (presetPage) {
+            // Presets are tried on the desktop, so a profile's panel gets
+            // only the looks on Presets.
+            if (profileMode)
+                return presetPage.kind === "panel" && presetPage.scope === "all";
             // Your own catalog appears once it holds a preset for this panel.
             return presetPage.scope !== "user"
                 || presetsForSelectedPanel(presetPage.kind, "user").length > 0;
         }
         if (sectionNumber === 1) {
+            // Their presets are on Presets.
+            if (subtabNumber === 7 || subtabNumber === 8)
+                return false;
             if (subtabNumber === 1)
                 return fieldsForSection("panels-size").length > 0;
             if (subtabNumber === 4)
@@ -524,6 +640,8 @@ Window {
     }
 
     function isNativePanel() {
+        if (profileMode)
+            return String(panelValue("edge", profilePanelEdge || "bottom")) !== "free";
         return String(auditionActive ? panelValue("edge", "bottom") : panelRegistry.panelValue(selectedPanelId, "edge")
             || panelValue("edge", "bottom")) !== "free";
     }
@@ -561,7 +679,18 @@ Window {
             auditionCustomizations = changes;
             return loadAuditionEditor();
         }
-        const projected = panelController.resolvePanelSettingsEditorDraft(editorSession.panelId, editorSession.revision, EditorModel.transactionPanelCandidate(editorSession), EditorModel.globalCandidate(editorSession), "studio");
+        // Each change is shown on the desktop panel as it is made; Apply or
+        // OK keeps it and Cancel drops it.
+        const panelValues = EditorModel.transactionPanelCandidate(editorSession);
+        const globalValues = EditorModel.globalCandidate(editorSession);
+        const projected = profileMode
+            ? panelController.resolveProfilePanelEditorDraft(profileId, editorSession.panelId, editorSession.revision,
+                panelValues, "studio")
+            : livePreviewAvailable
+            ? panelController.previewPanelSettingsEditorDraft(editorSession.panelId, editorSession.revision,
+                panelValues, globalValues, "studio")
+            : panelController.resolvePanelSettingsEditorDraft(editorSession.panelId, editorSession.revision,
+                panelValues, globalValues, "studio");
         if (!projected || projected.success !== true) {
             editorSession = EditorModel.retainFailure(editorSession, projected);
             studioError = qsTr("Draft validation failed: %1 (%2)").arg(String(projected && projected.status ? projected.status : "failed")).arg(String(projected && (projected.errorMessage || projected.errorCode) ? (projected.errorMessage || projected.errorCode) : qsTr("No details were returned.")));
@@ -569,7 +698,25 @@ Window {
         }
         editorSession = EditorModel.withProjection(editorSession, projected);
         studioError = "";
+        livePreviewShown = projected.previewShown === true;
+        // Apply would refuse this change, so the desktop keeps the last one
+        // it can show.
+        studioWarning = String(projected.previewRefusal || "").length > 0
+            ? qsTr("Not shown on the desktop, and Apply refuses it: %1.").arg(projected.previewRefusal) : "";
         return true;
+    }
+    readonly property bool livePreviewAvailable: !profileMode
+        && typeof panelController.previewPanelSettingsEditorDraft === "function"
+    function editorSnapshot(panelId) {
+        return profileMode ? panelController.profilePanelEditorSnapshot(profileId, panelId, "studio")
+            : panelController.panelSettingsEditorSnapshot(panelId, "studio");
+    }
+    // Whether the desktop shows the draft now.
+    property bool livePreviewShown: false
+    function clearLivePreview() {
+        livePreviewShown = false;
+        if (livePreviewAvailable)
+            panelController.clearPanelSettingsPreview();
     }
 
     function fieldValue(field) {
@@ -932,7 +1079,7 @@ Window {
             && String(selectedPreviewTheme.name || "").length > 0
             ? String(selectedPreviewTheme.name) : optionLabel("appearance", panelValue("appearance", "glass"));
         return [section(qsTr("Panel"), qsTr("Settings currently applied to the selected panel."), true),
-            readOnlyRow(qsTr("Name"), panelRegistry.panelName(selectedPanelId)),
+            readOnlyRow(qsTr("Name"), profileMode ? editedPanelName : panelRegistry.panelName(selectedPanelId)),
             readOnlyRow(qsTr("Type"), optionLabel("type", panelValue("type", "empty"))),
             readOnlyRow(qsTr("Position"), free
                 ? qsTr("Free, at %1, %2").arg(Math.round(Number(panelValue("x", 0)))).arg(Math.round(Number(panelValue("y", 0))))
@@ -999,7 +1146,7 @@ Window {
         // application menu, as on Plasma's own panels.
         // Whether a free panel is on the desktop. One that is not is put back
         // or removed with the buttons beside the panel list.
-        if (!isNativePanel() && !auditionActive) {
+        if (!isNativePanel() && !auditionActive && !profileMode) {
             const hostState = String(panelRegistry.panelValue(selectedPanelId, "freeHostState") || "");
             rows.push(readOnlyRow(qsTr("Desktop widget"),
                 hostState === "detached" ? qsTr("Not on the desktop")
@@ -1130,11 +1277,14 @@ Window {
             qsTr("Pitch, yaw and roll turn the platform. Edit on desktop moves, turns and scales it by hand.")));
         rows.push.apply(rows, pick(["scene3DCameraPitch", "scene3DCameraYaw", "scene3DRoll"]));
         const sceneEditing = auditionActive && auditionKind === "scene3d";
-        rows.push({ kind: "actions", label: qsTr("Transform"), actions: [{
+        const transformActions = [{
             label: qsTr("Reset 3D transform"), icon: "edit-reset", action: "reset-3d-transform",
-            available: true }, {
-            label: qsTr("Edit on desktop"), icon: "transform-move", action: "edit-3d-on-desktop",
-            available: !sceneEditing && !auditionBusy && !hasPendingChanges }] });
+            available: true }];
+        if (!profileMode)
+            transformActions.push({
+                label: qsTr("Edit on desktop"), icon: "transform-move", action: "edit-3d-on-desktop",
+                available: !sceneEditing && !auditionBusy && !hasPendingChanges });
+        rows.push({ kind: "actions", label: qsTr("Transform"), actions: transformActions });
         // The platform's shape. A look without a 3D platform of its own stands
         // on one generated along the panel's layout, chosen on the Layout page
         // (one place per setting, ADREP-TASK-001); its width and bend are set
@@ -1207,7 +1357,8 @@ Window {
                 themes: available.filter(platform)
             },
             {
-                kind: "actions",
+                // Artwork belongs to a panel on the desktop.
+                kind: profileMode ? "none" : "actions",
                 label: qsTr("Artwork"),
                 description: artifactDescription(),
                 actions: [
@@ -1228,7 +1379,7 @@ Window {
                     }
                 ]
             }
-        ].filter(function(row) { return row.kind !== "themeSamples" || row.themes.length > 0; });
+        ].filter(function(row) { return row.kind !== "none" && (row.kind !== "themeSamples" || row.themes.length > 0); });
     }
 
     function panelBehaviorRows() {
@@ -1265,7 +1416,9 @@ Window {
             rows.push(section(qsTr("Opening and closing"),
                 qsTr("Choose the resting state, reveal trigger and motion. Preview is a draft until Apply."), true));
             rows.push.apply(rows, opening);
-            if (!hasPendingChanges && !auditionBusy && Boolean(panelValue("visible", false))
+            // The panel on the desktop, opened or closed as saved: not a
+            // profile's copy.
+            if (!hasPendingChanges && !auditionBusy && !profileMode && Boolean(panelValue("visible", false))
                     && panelValue("presentationMode", "open") === "collapsed") {
                 rows.push({kind: "actions", label: qsTr("Saved panel"), actions: [
                     {action: "open-panel", label: qsTr("Open panel")},
@@ -1474,7 +1627,7 @@ Window {
                 return panelAnimationRows();
             if (subTabIndex === 10)
                 return panel3DRows();
-            return panelThemeRows();
+            return [];
         }
         if (mainTabIndex === 2) {
             if (subTabIndex === 0)
@@ -1548,6 +1701,7 @@ Window {
 
     function discardStudioChanges() {
         projectionTimer.stop();
+        clearLivePreview();
         newPanelEdge = "";
         editorSession = EditorModel.cancel(editorSession);
         resetRendererPreview(EditorModel.rendererCandidate(editorSession));
@@ -1559,7 +1713,11 @@ Window {
     }
 
     function applyStudioChanges() {
-        flushProjection();
+        // The draft the desktop shows is exactly the one Apply saves.
+        if (livePreviewAvailable && hasSettingsChanges && !auditionBusy)
+            refreshProjection();
+        else
+            flushProjection();
         if (auditionBusy) {
             studioError = qsTr("Use Apply as Active or Cancel for the desktop preview.");
             return false;
@@ -1571,14 +1729,17 @@ Window {
             return false;
 
         if (hasSettingsChanges) {
-            const result = panelController.applyPanelSettingsTransaction(editorSession.panelId, editorSession.revision, EditorModel.transactionPanelCandidate(editorSession), EditorModel.globalCandidate(editorSession));
+            const result = profileMode
+                ? panelController.applyProfilePanelSettings(profileId, editorSession.panelId, editorSession.revision,
+                    EditorModel.transactionPanelCandidate(editorSession))
+                : panelController.applyPanelSettingsTransaction(editorSession.panelId, editorSession.revision, EditorModel.transactionPanelCandidate(editorSession), EditorModel.globalCandidate(editorSession));
             if (!EditorModel.transactionSucceeded(result)) {
                 editorSession = EditorModel.retainFailure(editorSession, result);
                 studioError = EditorModel.transactionConflict(result) ? qsTr("This panel changed outside Panel Studio. Cancel and reopen it before applying.") : qsTr("Settings transaction failed: %1 (%2)").arg(String(result && result.status ? result.status : "failed")).arg(String(result && (result.errorMessage || result.errorCode) ? (result.errorMessage || result.errorCode) : qsTr("No details were returned.")));
                 return false;
             }
 
-            const refreshed = panelController.panelSettingsEditorSnapshot(editorSession.panelId, "studio");
+            const refreshed = editorSnapshot(editorSession.panelId);
             editorSession = EditorModel.adoptResult(editorSession, result, refreshed);
             if (!editorSession.loaded || EditorModel.dirty(editorSession)) {
                 studioError = qsTr("The transaction succeeded, but its saved revision could not be reloaded.");
@@ -1735,6 +1896,7 @@ Window {
         } else if (action === "load-built-in-theme") {
             const candidate = auditionActive
                 ? (auditionStatus.editorProjection.themeCandidates || {})[String(data.themeId || "")]
+                : profileMode ? panelController.profilePanelThemeCandidate(profileId, selectedPanelId, String(data.themeId || ""))
                 : panelController.panelThemeCandidate(selectedPanelId, String(data.themeId || ""));
             if (!candidate || candidate.success !== true) {
                 studioError = qsTr("This theme cannot be loaded here: %1.")
@@ -1877,6 +2039,25 @@ Window {
         }
     }
 
+    // A panel of a saved profile: renamed or removed in the profile, or
+    // edited there with Panel Studio's pages. The desktop does not change.
+    function performProfilePanelAction(action, profileId, revision, panelId, value) {
+        if (!profilesService || hasPendingChanges || auditionBusy) return;
+        if (action === "edit") {
+            editProfilePanel(profileId, panelId);
+            return;
+        }
+        let result;
+        if (action === "rename") result = profilesService.renameProfilePanel(profileId, revision, panelId, value);
+        else if (action === "remove") result = profilesService.removeProfilePanel(profileId, revision, panelId);
+        else return;
+        profileNoticeIsError = !(result && result.success === true);
+        profileNotice = profileNoticeIsError
+            ? qsTr("The profile was not changed (%1).").arg(String(result && result.errorCode || "unknown-error"))
+            : action === "rename" ? qsTr("Renamed in the profile. The desktop does not change until you apply it.")
+            : qsTr("Removed from the profile. The desktop does not change until you apply it.");
+    }
+
     function performPresetAction(action, presetId, name) {
         const page = currentPresetPage;
         if (!page)
@@ -1895,7 +2076,7 @@ Window {
         if (presetNoticeIsError) {
             presetNoticeText = qsTr("The preset store was not changed (%1).").arg(String(result && result.errorCode ? result.errorCode : "unknown-error"));
         } else if (action === "duplicate") {
-            presetNoticeText = qsTr("Saved to %1 as “%2”.").arg(page.kind === "panel" ? qsTr("My Panel Presets") : qsTr("My Icon Presets")).arg(name);
+            presetNoticeText = qsTr("Saved to %1 as “%2”.").arg(page.kind === "panel" ? qsTr("My presets") : qsTr("My Icon Presets")).arg(name);
         } else if (action === "rename") {
             presetNoticeText = qsTr("Renamed to “%1”.").arg(name);
         } else {
@@ -1960,6 +2141,16 @@ Window {
     Connections {
         target: panelRegistry
         function onRevisionChanged() { root.queueEditorReload(); }
+    }
+
+    // A profile's panel follows changes to the profile made elsewhere.
+    Connections {
+        target: root.profilesService
+        ignoreUnknownSignals: true
+        function onChanged() {
+            if (root.profileMode)
+                root.queueEditorReload();
+        }
     }
 
     // Removing the last preset of your own also removes its tab.
@@ -2082,8 +2273,11 @@ Window {
             width: Math.min(implicitWidth, Math.max(0, parent.width - 2 * (12
                 + Math.max(titleLead.x + titleLead.width,
                            parent.width - closeButton.x))))
+            // The name as edited: the panel is shown with its draft.
             text: root.newPanelPicked ? root.newPanelName(root.newPanelEdge)
-                : panelRegistry.panelName(root.selectedPanelId) || qsTr("Panel Editor")
+                : root.profileMode ? qsTr("%1 · profile “%2”").arg(root.editedPanelName)
+                    .arg(root.editedProfile ? root.editedProfile.name : "")
+                : root.editedPanelName || qsTr("Panel Editor")
             color: "#d5e5ed"
             font.pixelSize: 12
             horizontalAlignment: Text.AlignHCenter
@@ -2171,7 +2365,7 @@ Window {
                         icon.name: root.mainTabIcons[index]
                         checkable: true
                         checked: root.mainTabIndex === index
-                        onClicked: root.setMainTab(index)
+                        onClicked: root.chooseMainTab(index)
 
                         contentItem: RowLayout {
                             spacing: 10
@@ -2208,7 +2402,9 @@ Window {
                 Label {
                     Layout.fillWidth: true
                     Layout.margins: 7
-                    text: qsTr("Changes are held until Apply or OK")
+                    text: root.livePreviewAvailable
+                        ? qsTr("Changes show on the desktop at once; Apply or OK keeps them, Cancel drops them")
+                        : qsTr("Changes are held until Apply or OK")
                     visible: !root.compactStudio
                     color: "#617985"
                     font.pixelSize: 9
@@ -2230,6 +2426,29 @@ Window {
             width: studioScroll.availableWidth
             height: Math.max(implicitHeight, studioScroll.availableHeight)
             spacing: 8
+
+            // Editing a panel of a saved profile: where the changes go, and
+            // the way back.
+            RowLayout {
+                objectName: "studio-profile-edit"
+                visible: root.profileMode
+                Layout.fillWidth: true
+                spacing: 8
+
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Editing “%1” in the profile “%2”. Apply saves the profile; the panels on your desktop change only when you apply the profile.")
+                        .arg(root.editedPanelName).arg(root.editedProfile ? root.editedProfile.name : "")
+                    color: "#d8e5ec"
+                    wrapMode: Text.Wrap
+                }
+                Button {
+                    objectName: "studio-profile-edit-back"
+                    text: qsTr("Back to Profiles")
+                    icon.name: "go-previous"
+                    onClicked: root.leaveProfileMode()
+                }
+            }
 
             RowLayout {
                 visible: root.mainTabIndex === 1 || (root.compactStudio && root.previewSection)
@@ -2432,7 +2651,8 @@ Window {
                             text: root.presetPreviewActive
                                 ? qsTr("Preset preview only — no panel is changed")
                                 : root.hasSettingsChanges
-                                    ? qsTr("Draft only — desktop unchanged")
+                                    ? (root.livePreviewShown ? qsTr("On the desktop — not saved until Apply")
+                                                             : qsTr("Draft only — desktop unchanged"))
                                     : qsTr("Saved settings")
                             color: root.hasSettingsChanges
                                     || root.presetPreviewActive
@@ -2541,6 +2761,7 @@ Window {
 
             RowLayout {
                 visible: root.currentPresetPage !== null && root.currentPresetPage.kind === "panel" && !root.newPanelPicked
+                && !root.profileMode
                 Layout.fillWidth: true
                 CheckBox {
                     objectName: "preset-audition-new-panel"
@@ -2595,6 +2816,10 @@ Window {
                 onActionRequested: function(action, profileId, revision, value) {
                     root.performProfileAction(action, profileId, revision, value);
                 }
+                service: root.profilesService
+                onPanelActionRequested: function(action, profileId, revision, panelId, value) {
+                    root.performProfilePanelAction(action, profileId, revision, panelId, value);
+                }
             }
 
             PresetBrowser {
@@ -2607,6 +2832,10 @@ Window {
                 kind: root.currentPresetPage ? root.currentPresetPage.kind : "panel"
                 scope: root.currentPresetPage ? root.currentPresetPage.scope : "builtin"
                 presets: root.presetCards
+                // The looks, with the panel presets on Presets.
+                themeRows: root.currentPresetPage && root.currentPresetPage.kind === "panel"
+                    ? root.panelThemeRows() : []
+                studio: root
                 catalogStatus: root.currentPresetPage
                     ? presetLibrary.catalogStatus() : ({ valid: true })
                 selectedPresetId: root.selectedPresetId
@@ -2614,7 +2843,7 @@ Window {
                 noticeIsError: root.presetNoticeIsError
                 auditionStatus: root.auditionStatus
                 actionsEnabled: (!root.auditionBusy || root.auditionActive) && root.auditionGuardError.length === 0
-                showAuditionBar: !root.auditionBusy
+                showAuditionBar: !root.auditionBusy && !root.profileMode
                 selectedDefault: root.auditionSelectedDefault
                 auditionGuardError: root.auditionGuardError
                 onPreviewRequested: function(presetId) { root.startPresetAudition(presetId, false); }
@@ -2631,6 +2860,9 @@ Window {
                 }
                 onRemoveRequested: function(presetId) {
                     root.performPresetAction("remove", presetId, "");
+                }
+                onStudioActionRequested: function(action) {
+                    root.performStudioAction(action, {});
                 }
             }
         }
@@ -2767,7 +2999,7 @@ Window {
         objectName: "unappliedChangesDialog"
 
         title: qsTr("Changes not applied")
-        text: qsTr("%1 has changes that are not applied yet.").arg(panelRegistry.panelName(root.selectedPanelId))
+        text: qsTr("%1 has changes that are not applied yet.").arg(root.editedPanelName)
         informativeText: qsTr("Apply them, discard them, or keep editing this panel.")
         buttons: MessageDialog.Apply | MessageDialog.Discard | MessageDialog.Cancel
         onButtonClicked: function(button, role) {
