@@ -184,3 +184,25 @@ edge a riding icon's stand is seen thin under the edge and its icon above
 it, and a stand wider than the strip shows its tips past the edges when it
 rides the far face; the Möbius opening with names takes about 0.6 s on a 3D
 panel.
+
+## Report 2 - recheck
+
+- A fresh clone of origin/main at `47f7896`, configured and built with one
+  job (1385 s, `41`/`42-recheck-*.log`), passed the 16 focused tests
+  (`43-recheck-tests.log`): panel-content-transaction, panel-window-
+  capability, panel-settings-schema, panel-settings-transaction,
+  panel-registry, theme-package, preset-preview-session, dock-geometry,
+  platform-geometry, layout-engine-visual, folder-expansion, folder-easing,
+  panel-scene, renderer-capability-software, folder-interaction-smoke and
+  folder-anchor-smoke.
+- All 655 committed files are the same in the clone and in the workspace
+  (`44-recheck-source-compare.txt`).
+- The complete suite ran on this source before the push: 119 of 120, the one
+  failure the known restart race of `preset-audition-matrix-defaults` in the
+  test harness.
+
+Piece 2 is closed; the owner's answers to the two questions above (the icon
+limit on tilted panels, the riding icons) are awaited while the list goes on.
+Next on the owner's list: piece 3, the Studio fixes - Presets and Panel
+Themes merged with bare previews, proper panel names and rename, a live
+preview on the desktop with Apply and Cancel, editing a saved profile.
