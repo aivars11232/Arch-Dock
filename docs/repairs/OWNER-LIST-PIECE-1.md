@@ -378,3 +378,26 @@ stand, name - at the bigger panel's drawn size, plus a small gap).
   strip opening, editing a saved profile (the owner: "not only profiles but
   also editing it" - "Edit a saved profile").
 
+
+## Report 2 - recheck
+
+- Source: `9a97a92` on `main`, pushed; the remote and the local branch were
+  the same before the clone.
+- Fresh clone of `origin/main` (`90-recheck-clone.log`), nothing copied
+  from the working build: Debug with Quick 3D configured (`91`) and built
+  with one job, exit 0 in 1359 s (`92-recheck-build.log`).
+- Ten focused tests serially on the clone's build, all passed
+  (`93-recheck-tests.log`): `panel-settings-schema-test`,
+  `panel-registry-test`, `folder-content-model-test`,
+  `panel-window-capability-test`, `dock-geometry-test`,
+  `platform-geometry-test`, `folder-expansion-test`, `folder-easing-test`,
+  `folder-interaction-smoke`, `folder-anchor-smoke` (all 90 openings).
+- All 652 committed files are the same in the clone and in the workspace
+  (`94-recheck-source-compare.txt`).
+- The complete suite ran on this source before the push: 119 of 120, the one
+  failure the known restart race of `preset-audition-matrix-defaults`, which
+  passed alone.
+
+Piece 1 is closed. Next on the owner's list: the icon limit by panel size,
+the Möbius strip opening, piece 2 (the Studio fixes, editing a saved
+profile).
