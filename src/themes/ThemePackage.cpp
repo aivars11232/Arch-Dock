@@ -578,7 +578,7 @@ private:
             QStringLiteral("triangle"), QStringLiteral("square"),
             QStringLiteral("pentagon"), QStringLiteral("hexagon"),
             QStringLiteral("octagon"), QStringLiteral("star"),
-            QStringLiteral("grid"), QStringLiteral("floating")};
+            QStringLiteral("grid"), QStringLiteral("floating"), QStringLiteral("mobius")};
         const QSet<QString> orientations{QStringLiteral("horizontal"),
                                          QStringLiteral("vertical"),
                                          QStringLiteral("free")};

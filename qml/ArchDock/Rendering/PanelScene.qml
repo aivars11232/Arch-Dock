@@ -686,6 +686,17 @@ Item {
         }
         return { x: drawnBounds.x, y: drawnBounds.y, width: drawnBounds.width, height: drawnBounds.height }
     }
+    // How much of its track the panel's icons get as drawn: on a 3D panel
+    // its platform's size as drawn, or with `asSeen` what its tilt and depth
+    // leave them (PanelScene3D.seenTrackFactor); on a flat one 1.
+    function seenTrackFactor(gap, asSeen) {
+        const mesh = surfaceLoader.true3DReady ? surfaceLoader.true3DItem : null
+        if (!mesh || typeof mesh.seenTrackFactor !== "function") return 1
+        const closed = ["circular", "ring", "ellipse", "polygon", "triangle", "square", "pentagon",
+                        "hexagon", "octagon", "star", "mobius"].includes(layoutPath)
+        const open = ["arc", "semicircle", "fan", "radial"].includes(layoutPath)
+        return closed || open ? mesh.seenTrackFactor(gap, closed, asSeen === true) : 1
+    }
     // How large the panel's icons are drawn against their own size: on a 3D
     // panel the nearest one's, elsewhere 1.
     function drawnIconScale() {
@@ -1585,7 +1596,9 @@ Item {
             return { centerX: rect.x + rect.width / 2, centerY: rect.y + rect.height / 2,
                      width: rect.width, height: rect.height,
                      rotation: output.rotation, onTrack: output.onTrack !== false,
-                     visibility: output.trackVisibility === undefined ? 1 : output.trackVisibility }
+                     visibility: output.trackVisibility === undefined ? 1 : output.trackVisibility,
+                     progress: Number(output.pathProgress) || 0,
+                     surface: Number(output.surfaceProgress) || 0 }
         })
         sceneConcealed: !root.entriesAnimatable
     }

@@ -280,7 +280,7 @@ TestCase {
         "horizontal", "vertical", "diagonal", "circular", "ring", "ellipse",
         "radial", "polygon", "triangle", "square", "pentagon", "hexagon",
         "octagon", "star", "arc", "semicircle", "fan", "spiral", "ribbon",
-        "horizontal-curve", "vertical-curve", "grid", "floating"
+        "horizontal-curve", "vertical-curve", "grid", "floating", "mobius"
     ]
 
     function collectNonFinite(value, path, problems) {
@@ -376,8 +376,53 @@ TestCase {
             { tag: "fan", layout: "fan", monotonic: true },
             { tag: "spiral", layout: "spiral", monotonic: true },
             { tag: "polygon", layout: "polygon", monotonic: false },
-            { tag: "star", layout: "star", monotonic: false }
+            { tag: "star", layout: "star", monotonic: false },
+            { tag: "mobius", layout: "mobius", monotonic: false }
         ]
+    }
+
+    // A Möbius panel: its icons stand on the band's middle line (the surface
+    // drawn under them), half on each loop, none where the loops cross, a
+    // pitch apart; flat, the band is the ∞ drawn as one unbroken track;
+    // turning carries the icons on round, through the crossing.
+    function test_mobiusPanelHoldsItsIconsOnBothLoops() {
+        const count = 8
+        const value = geometry("mobius", count)
+        const surface = LayoutEngine.surface("mobius", value, 0, 6)
+        verify(surface.closed)
+        verify(surface.widths === undefined && surface.over === undefined, "one track like a ring's")
+        const half = surface.points.length / 2
+        fuzzy(Math.hypot(surface.points[0].x - surface.points[half].x,
+                         surface.points[0].y - surface.points[half].y), 0, "the loops cross in the middle")
+        const centre = { x: value.width / 2, y: value.height / 2 }
+        const nearestOnBand = function(point) {
+            let best = Infinity
+            for (const sample of surface.points)
+                best = Math.min(best, Math.hypot(sample.x - point.x, sample.y - point.y))
+            return best
+        }
+        const places = []
+        for (let index = 0; index < count; ++index) {
+            const result = LayoutEngine.entryGeometry("mobius", index, count, value, 0, 6, "upright", "canonical")
+            const middle = { x: result.x + value.iconSize / 2, y: result.y + value.iconSize / 2 }
+            verify(nearestOnBand(middle) < 2, "icon " + index + " on the band")
+            verifyPointInside(result.position, value, "mobius[" + index + "]")
+            places.push(middle)
+        }
+        compare(places.filter(function(point) { return point.x > centre.x }).length, count / 2, "half on each loop")
+        const pitch = value.iconSize + value.spacing
+        for (const point of places)
+            verify(Math.hypot(point.x - centre.x, point.y - centre.y) > pitch * 0.7, "clear of the crossing")
+        for (let a = 0; a < places.length; ++a)
+            for (let b = a + 1; b < places.length; ++b)
+                verify(Math.hypot(places[a].x - places[b].x, places[a].y - places[b].y) >= pitch - 0.5,
+                       "icons " + a + " and " + b + " keep apart")
+        // Half a slot on, each icon is on its way to the next place.
+        const moving = Object.assign({}, value, { travel: 0.5 })
+        const between = LayoutEngine.entryGeometry("mobius", 0, count, moving, 0, 6, "upright", "canonical")
+        const middle = { x: between.x + value.iconSize / 2, y: between.y + value.iconSize / 2 }
+        verify(nearestOnBand(middle) < 2, "still on the band")
+        verify(Math.hypot(middle.x - places[0].x, middle.y - places[0].y) > 1, "moved on")
     }
 
     function test_entryOrderAndPathDirectionAreDeterministic(data) {

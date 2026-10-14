@@ -249,6 +249,45 @@ bool PanelWindow::reportFreePanelArea(const QString &panelId, double x, double y
     return true;
 }
 
+bool PanelWindow::reportPanelSeenRoom(const QString &panelId, double factor)
+{
+    if (!m_panelRegistry.panelIds().contains(panelId) ||
+        m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() != QStringLiteral("free") ||
+        !std::isfinite(factor) || factor < 0.05 || factor > 1.5)
+    {
+        return false;
+    }
+    m_panelSeenRoom.insert(panelId, factor);
+    return true;
+}
+
+double PanelWindow::seenRoomFactor(const ArchDock::PanelDefinition &definition) const
+{
+    // Only a free panel drawn in 3D is seen tilted; any other is drawn at
+    // its own size.
+    if (definition.host.kind != ArchDock::PanelHostKind::FreeDesktop ||
+        m_panelRegistry.resolvePanelCapabilities(definition).renderer.effectiveTier != ArchDock::RendererTier::True3D)
+    {
+        return 1.0;
+    }
+    return m_panelSeenRoom.value(definition.identity.id, 1.0);
+}
+
+double PanelWindow::predictedSeenRoom(const ArchDock::PanelDefinition &candidate,
+                                      const ArchDock::PanelDefinition *measured) const
+{
+    // A 3D panel's platform does not grow quite in step with its radius
+    // (2-3 % between sizes, measured), so what another size will leave its
+    // icons is taken a little short.
+    const double seen = seenRoomFactor(candidate);
+    const bool same = measured && measured->layout.radius == candidate.layout.radius
+        && measured->iconStyle.size == candidate.iconStyle.size
+        && measured->layout.pathType == candidate.layout.pathType
+        && measured->surface.parameters3D.value(QStringLiteral("scaleX")) == candidate.surface.parameters3D.value(QStringLiteral("scaleX"))
+        && measured->surface.parameters3D.value(QStringLiteral("scaleY")) == candidate.surface.parameters3D.value(QStringLiteral("scaleY"));
+    return m_panelSeenRoom.contains(candidate.identity.id) && seen < 1.0 && !same ? seen * 0.97 : seen;
+}
+
 QVariantList PanelWindow::freePanelAreas(const QString &exceptPanelId) const
 {
     QVariantList areas;

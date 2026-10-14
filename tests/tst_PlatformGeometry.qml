@@ -195,7 +195,7 @@ TestCase {
     }
 
     function test_layoutsWithAnExactPlatform_data() {
-        return supportedLayouts.map(function(layout) { return { tag: layout, layout: layout } })
+        return supportedLayouts.concat(["mobius"]).map(function(layout) { return { tag: layout, layout: layout } })
     }
 
     function test_layoutsWithAnExactPlatform(data) {
@@ -259,6 +259,48 @@ TestCase {
                 verify(onTop(px, py), data.layout + " entry " + index + " reaches "
                        + px.toFixed(3) + "," + py.toFixed(3) + " off the platform's top")
             }
+        }
+    }
+
+    // A Möbius strip platform: one band along the layout's ∞ with one half
+    // twist, closed on itself where a lap ends turned over (no gap, no
+    // seam); its strands pass the crossing apart in height, the second over
+    // the first; it twists, standing taller than its own thickness; and
+    // every icon of the layout stands on its middle line.
+    function test_mobiusStripPlatform() {
+        const shape = PlatformGeometry.shapeForLayout("mobius", 6)
+        compare(shape.kind, "mobius")
+        const mesh = PlatformGeometry.platform({ shape: shape, band: 0.1, bend: 0 })
+        compare(mesh.shape, "mobius")
+        compare(boundaryEdges(mesh).length, 0, "closed on itself")
+        compare(misWound(mesh), 0, "faces outward everywhere")
+        fuzzyCompare(PlatformGeometry.standLift("mobius", 0), -PlatformGeometry.mobiusLift, 1e-9)
+        fuzzyCompare(PlatformGeometry.standLift("mobius", 0.5), PlatformGeometry.mobiusLift, 1e-9)
+        compare(PlatformGeometry.standLift("ring", 0.3), 0)
+        let top = -Infinity, bottom = Infinity
+        for (const point of mesh.positions) {
+            top = Math.max(top, point[2])
+            bottom = Math.min(bottom, point[2])
+        }
+        verify(top - bottom > 2 * PlatformGeometry.mobiusLift + 0.1, "it twists: " + (top - bottom))
+        const count = 8
+        const geometry = LayoutEngine.metrics("mobius", count, 48, 8, 1, 140, 1, 10, false, 0, 6)
+        const reachOut = mesh.track * LayoutEngine.mobiusReach
+        const line = []
+        for (let step = 0; step < 720; ++step) {
+            const at = LayoutEngine.mobiusPoint(step / 720, reachOut)
+            line.push([at.x, -at.y])
+        }
+        for (let index = 0; index < count; ++index) {
+            const entry = LayoutEngine.entryGeometry("mobius", index, count, geometry, 0, 6,
+                                                     "upright", "canonical", "free")
+            const x = entry.position.x + geometry.iconSize / 2 - geometry.width / 2
+            const y = entry.position.y + geometry.iconSize / 2 - geometry.height / 2
+            const stand = PlatformGeometry.standPoint(x, -y, geometry.radius, mesh.track)
+            let nearest = Infinity
+            for (const point of line)
+                nearest = Math.min(nearest, Math.hypot(point[0] - stand[0], point[1] - stand[1]))
+            verify(nearest < 0.01, "entry " + index + " stands on the band's middle line: " + nearest)
         }
     }
 

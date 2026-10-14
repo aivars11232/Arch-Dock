@@ -15,8 +15,10 @@ PlasmaCore.Dialog {
     id: root
     property var snapshot: ({ status: "unavailable", entries: [] })
     property string folderTitle: ""
-    // "track" (Along the dock), "fan", "arc", "stack" or "ring".
+    // "track" (Along the dock), "fan", "arc", "stack", "ring" or "mobius".
     property string folderLayout: "track"
+    // A Möbius band opens where a ring would.
+    readonly property bool ringLike: folderLayout === "ring" || folderLayout === "mobius"
     property int folderSpeed: 260
     property string folderEasing: "outBack"
     property bool reducedMotion: false
@@ -125,6 +127,31 @@ PlasmaCore.Dialog {
             return { x: point.x, y: point.y }
         }
     }
+    // How much room there is beside the dock from `edge`, an x on the
+    // screen, going `sideways`: to the screen's edge, or to the nearest other
+    // panel about level with `y`.
+    function roomBeside(edge, y, sideways, area, avoid) {
+        let room = sideways > 0 ? area.x + area.width - edge : edge - area.x
+        const reach = 2 * Math.max(content.cellWidth, content.cellHeight)
+        for (const rect of avoid || []) {
+            if (rect.y > y + reach || rect.y + rect.height < y - reach) continue
+            const gap = sideways > 0 ? rect.x - edge : edge - (rect.x + rect.width)
+            if (gap > -reach) room = Math.min(room, Math.max(0, gap))
+        }
+        return room
+    }
+    // Of shapes opening on either side of the dock, the better: seen whole
+    // and on the screen, then holding more children at once, then the one
+    // that moved out least to keep clear of the panels.
+    function nearerShape(a, b) {
+        if (!a || a.hidden) return b && !b.hidden ? b : null
+        if (!b || b.hidden) return a
+        const fitsA = !(a.overflow > 0.5), fitsB = !(b.overflow > 0.5)
+        if (fitsA !== fitsB) return fitsA ? a : b
+        if (!fitsA) return a.overflow <= b.overflow ? a : b
+        if ((a.fewer || 0) !== (b.fewer || 0)) return (a.fewer || 0) < (b.fewer || 0) ? a : b
+        return (Number(a.out) || 0) <= (Number(b.out) || 0) ? a : b
+    }
     // A fan, arc, stack, grid or ring lying on a 3D panel's plane round the
     // folder (`plane`, from folderPlane), on the screen: `others` are the
     // dock's other icons there, `area` the screen and `avoid` the other free
@@ -132,7 +159,7 @@ PlasmaCore.Dialog {
     function planeShape(plane, others, toScreen, area, keep, avoid) {
         const onScreen = function(map) {
             return function(point) {
-                const view = map(point.x, point.y)
+                const view = map(point.x, point.y, point.height || 0)
                 if (!view) return null
                 const at = toScreen(view.x, view.y)
                 return { x: at.x, y: at.y, scale: view.scale }
@@ -177,9 +204,9 @@ PlasmaCore.Dialog {
         const atFolder = alignedFrom(plane.origin)
         // A ring opens beside the dock on the side of the screen with more
         // room - to the right of a dock on the left half, to the left of one
-        // on the right half - from the rim there; where another panel stands
-        // on that side, on the other side.
-        const middle = folderLayout === "ring" ? viewed({ x: 0, y: 0 }) : null
+        // on the right half - from the rim there; with other panels about,
+        // on whichever side keeps it nearer and fuller.
+        const middle = ringLike ? viewed({ x: 0, y: 0 }) : null
         if (middle) {
             const sideStart = function(sideways) {
                 let best = null
@@ -193,15 +220,23 @@ PlasmaCore.Dialog {
                 }
                 return best
             }
-            const preferred = middle.x <= area.x + area.width / 2 ? 1 : -1
-            const sides = avoid.length ? [preferred, -preferred] : [preferred]
-            return firstFitting(sides.map(function(sideways) {
-                return function() {
-                    const start = sideStart(sideways)
-                    return start ? build(start.point, { x: Math.cos(start.turn), y: Math.sin(start.turn) },
-                                         alignedFrom(start.point)) : null
-                }
-            }))
+            const right = sideStart(1), left = sideStart(-1)
+            const preferred = right && left
+                ? (roomBeside(right.at.x, right.at.y, 1, area, avoid)
+                   >= roomBeside(left.at.x, left.at.y, -1, area, avoid) ? 1 : -1)
+                : middle.x <= area.x + area.width / 2 ? 1 : -1
+            const beside = function(sideways) {
+                const start = sideStart(sideways)
+                return start ? build(start.point, { x: Math.cos(start.turn), y: Math.sin(start.turn) },
+                                     alignedFrom(start.point)) : null
+            }
+            let chosen = beside(preferred)
+            // Opening at once beside the rim, it needs no other side.
+            const settled = chosen && !chosen.hidden && !(chosen.overflow > 0.5) && !(chosen.fewer > 0)
+                && !(Number(chosen.out) > 2 * Math.max(content.cellWidth, content.cellHeight))
+            if (avoid.length && !settled)
+                chosen = nearerShape(chosen, beside(-preferred))
+            return chosen && !chosen.hidden ? chosen : null
         }
         const origin = plane.origin, facing = plane.outward
         // A fan hugs the panel: its children follow the rim round the folder.
@@ -427,32 +462,41 @@ PlasmaCore.Dialog {
                 }
                 // A ring opens beside the dock on the side with more of the
                 // screen: to the right of a dock on the left half, to the left of
-                // one on the right half, from the dock's rim there. Where it would
-                // leave the screen above or below, it is lowered or raised to fit.
-                if (folderLayout === "ring" && dock && panelRadius > 0) {
-                    const sideways = dock.x <= area.x + area.width / 2 ? 1 : -1
-                    origin = { x: dock.x + sideways * panelRadius, y: dock.y }
-                    facing = { x: sideways, y: 0 }
+                // one on the right half, from the dock's rim there; with other
+                // panels about, on whichever side keeps it nearer and fuller.
+                // Where it would leave the screen above or below, it is lowered
+                // or raised to fit.
+                const besideDock = ringLike && dock && panelRadius > 0
+                const preferred = !dock ? 1
+                    : roomBeside(dock.x + panelRadius, dock.y, 1, area, avoid)
+                      >= roomBeside(dock.x - panelRadius, dock.y, -1, area, avoid) ? 1 : -1
+                if (besideDock) {
+                    origin = { x: dock.x + preferred * panelRadius, y: dock.y }
+                    facing = { x: preferred, y: 0 }
                     fromEdge = true
                 }
-                const build = function(from) {
+                const build = function(from, way) {
                     return LayoutEngine.folderShape(folderLayout, {
-                        folder: from, outward: facing, fromEdge: fromEdge,
+                        folder: from, outward: way || facing, fromEdge: fromEdge,
                         iconSize: iconSize, cellWidth: content.cellWidth, cellHeight: content.cellHeight,
                         gap: 6, count: content.entries.length, fanOpening: fanOpening,
                         stackLength: stackLength, stackSpan: stackSpan, ringSize: ringSize, panelRadius: panelRadius,
                         obstacles: others, obstacleSize: iconSize, avoid: avoid, screen: area, screenMargin: margin,
                         outlineMargin: outlineStyle.lineWidth / 2 + outlineStyle.blur })
                 }
-                shape = build(origin)
-                if (folderLayout === "ring" && dock && panelRadius > 0) {
-                    const below = shape.bounds.y + shape.bounds.height + margin - (area.y + area.height)
-                    const above = area.y + margin - shape.bounds.y
-                    if (below > 0 || above > 0) {
-                        const lift = below > 0 ? -below : above
-                        shape = build({ x: origin.x, y: origin.y + lift })
-                    }
+                const besideAt = function(sideways) {
+                    const from = { x: dock.x + sideways * panelRadius, y: dock.y }
+                    const way = { x: sideways, y: 0 }
+                    const built = build(from, way)
+                    const below = built.bounds.y + built.bounds.height + margin - (area.y + area.height)
+                    const above = area.y + margin - built.bounds.y
+                    return below > 0 || above > 0
+                        ? build({ x: from.x, y: from.y + (below > 0 ? -below : above) }, way) : built
                 }
+                shape = besideDock ? besideAt(preferred) : build(origin)
+                if (besideDock && avoid.length && (shape.fewer > 0 || shape.overflow > 0.5
+                        || Number(shape.out) > 2 * Math.max(content.cellWidth, content.cellHeight)))
+                    shape = nearerShape(shape, besideAt(-preferred)) || shape
                 samples = shape.samples.map(function(point) { return { x: point.x, y: point.y, scale: 1 } })
             }
             rectangles.push(shape.bounds)
@@ -528,6 +572,7 @@ PlasmaCore.Dialog {
         pathPitch: root.screenShape !== null ? Number(root.screenShape.pitch || 0) : 0
         measureAsDrawn: root.screenShape !== null && root.screenShape.projected === true
         ringLimits: root.screenShape !== null && root.screenShape.ringCapacities ? root.screenShape.ringCapacities : []
+        lobedPath: root.screenShape !== null && root.screenShape.lobes === true
         gridCells: root.screenShape !== null && root.screenShape.grid ? ({
             columns: root.screenShape.grid.columns, rows: root.screenShape.grid.rows,
             cells: root.screenShape.grid.cells.map(function(line) {
@@ -540,7 +585,13 @@ PlasmaCore.Dialog {
         outline: root.screenOutline ? ({ closed: root.screenOutline.closed === true,
             strokeFrom: Number(root.screenOutline.strokeFrom) || 0,
             points: root.screenOutline.points.map(root.local),
-            loops: (root.screenOutline.loops || []).map(function(loop) { return loop.map(root.local) }) }) : null
+            loops: (root.screenOutline.loops || []).map(function(loop) { return loop.map(root.local) }),
+            evenOdd: root.screenOutline.evenOdd === true,
+            // A Möbius band, drawn as one solid ribbon between its sides.
+            ribbon: root.screenOutline.ribbon ? {
+                left: root.screenOutline.ribbon.left.map(root.local),
+                right: root.screenOutline.ribbon.right.map(root.local),
+                from: root.screenOutline.ribbon.from, twist: root.screenOutline.ribbon.twist } : undefined }) : null
         rings: root.screenShape !== null && root.screenShape.rings ? root.screenShape.rings.map(function(loop) {
             return loop.map(function(sample) {
                 const point = root.local(sample)

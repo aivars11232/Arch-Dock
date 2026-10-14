@@ -4,6 +4,7 @@
 // content transactions and folder entries.
 
 #include "PanelWindow.h"
+#include "../model/PanelIconCapacity.h"
 
 #include "../model/IconEntryIdentity.h"
 #include "../model/FolderContentModel.h"
@@ -780,8 +781,10 @@ bool PanelWindow::commitPanelContentTransaction(
         return false;
     }
     ArchDock::PanelContentOutcome outcome;
+    ArchDock::PanelContentRequest drawnRequest = request;
+    drawnRequest.seenTrackFactor = seenRoomFactor(*current);
     const std::optional<ArchDock::PanelDefinition> candidate =
-        ArchDock::PanelContentTransaction::prepare(*current, request, &outcome);
+        ArchDock::PanelContentTransaction::prepare(*current, drawnRequest, &outcome);
     if (!outcome.success)
     {
         qWarning().noquote() << "Arch Dock panel content"
@@ -806,6 +809,26 @@ bool PanelWindow::commitPanelContentTransaction(
     }
     m_panelRegistry.notifyPanelSettingsTransactionAdopted(false);
     return true;
+}
+
+QVariantMap PanelWindow::panelIconRoom(const QString &panelId) const
+{
+    const std::optional<ArchDock::PanelDefinition> definition = m_panelRegistry.panelDefinition(panelId);
+    if (!definition)
+        return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("panel-not-found")}};
+    const int count = ArchDock::panelIconCount(*definition);
+    // As it is now, and the size it may change to, as Panel Studio's limits.
+    const double seen = seenRoomFactor(*definition);
+    const double resized = predictedSeenRoom(*definition);
+    const auto capacity = ArchDock::panelIconCapacity(*definition, seen);
+    const auto radius = ArchDock::panelMinimumRadius(*definition, resized);
+    const auto size = ArchDock::panelMaximumIconSize(*definition, resized);
+    return {{QStringLiteral("success"), true},
+            {QStringLiteral("capacity"), capacity ? *capacity : -1},
+            {QStringLiteral("count"), count},
+            {QStringLiteral("seen"), seen},
+            {QStringLiteral("minimumRadius"), radius ? *radius : -1},
+            {QStringLiteral("maximumIconSize"), size ? *size : -1}};
 }
 
 bool PanelWindow::addPanelEntries(const QString &panelId, const QStringList &entries)

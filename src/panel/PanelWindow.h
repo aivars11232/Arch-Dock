@@ -187,6 +187,11 @@ public slots:
     // local URLs or application ids the dock model knows; an application is
     // pinned to the panel as its desktop entry. Native panels refuse them.
     bool addPanelEntries(const QString &panelId, const QStringList &entries);
+    // How many icons a panel's shape holds side by side (`capacity`, -1 for a
+    // shape that grows with its icons) and how many it has (`count`), with
+    // the least radius and the largest icon size its icons fit at, and how
+    // much of its track its icons get as drawn (`seen`).
+    [[nodiscard]] QVariantMap panelIconRoom(const QString &panelId) const;
     bool removePanelEntry(const QString &panelId, const QString &entryId);
     bool movePanelEntryBefore(const QString &panelId,
                               const QString &entryId,
@@ -226,6 +231,10 @@ public slots:
     bool reportFreePanelArea(const QString &panelId, double x, double y,
                              double width, double height, double room);
     [[nodiscard]] QVariantList freePanelAreas(const QString &exceptPanelId) const;
+    // How much of its track a 3D free panel's icons get as drawn, as its
+    // widget last measured it (PanelScene3D.seenTrackFactor): a tilt shortens
+    // the track as seen, so the panel holds fewer. Nothing of it is saved.
+    bool reportPanelSeenRoom(const QString &panelId, double factor);
     [[nodiscard]] QVariantMap panelInteractionGuards(const QString &panelId) const;
     // The applet reports the resting surface state and host phase its
     // presentation controller has reached. This is runtime state, never
@@ -556,6 +565,13 @@ private:
     // Free panels as drawn on the screen, with the room each one's folder
     // opening needs (reportFreePanelArea).
     QHash<QString, QVariantMap> m_freePanelAreas;
+    // What a 3D free panel's tilt leaves of its track (reportPanelSeenRoom).
+    QHash<QString, double> m_panelSeenRoom;
+    [[nodiscard]] double seenRoomFactor(const ArchDock::PanelDefinition &definition) const;
+    // The same once `candidate` is drawn, where its size differs from the
+    // panel as it was measured (`measured`, or always without one).
+    [[nodiscard]] double predictedSeenRoom(const ArchDock::PanelDefinition &candidate,
+                                           const ArchDock::PanelDefinition *measured = nullptr) const;
     QHash<QString, QVariantMap> m_panelPresentationStates;
     QHash<QString, QString> m_pendingPresentationRequests;
     qulonglong m_presentationRequestRevision = 0;

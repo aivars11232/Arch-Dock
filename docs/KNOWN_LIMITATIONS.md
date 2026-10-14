@@ -222,6 +222,27 @@ layouts and each renderer tier they offer (21 panels). What follows from it:
   larger than the folder's icon, so ones nearer than the panel stay that
   size. A grid there moves a row at a time; on a flat panel it keeps its
   popup.
+- A panel's icon limit on a 3D panel follows what its widget last measured
+  of its track as seen. Arch Dock predicts the room a different radius or
+  icon size will leave from that measure, taken 3 % short since a 3D
+  platform does not grow quite in step with its radius; the exact count is
+  known once the panel is drawn. Tilting a panel is never refused: a full
+  panel tilted further keeps its icons and takes no more. A steep tilt
+  leaves little room as seen (75 degrees: a tenth of the track), because the
+  ends of a nearly edge-on ring stand one behind another.
+- A panel that held more icons than its shape has room for before the limit
+  existed keeps them, overlapping as before, until it is made larger or its
+  icons smaller.
+- A Möbius strip tilted steeply holds few icons as seen (60 degrees: an
+  eighth of its track), as the strict limit counts what the camera shows.
+  While the dock turns, an icon passing the crossing may pass another on
+  the other strand, as things moving in space do; at rest none stands there.
+  An icon riding the strip keeps its usual pose, so where the band stands on
+  its edge the stand lies on the band's steep face, seen thin, and its icon
+  stands above the band's upper edge rather than out of the face; a stand
+  larger than the band's width shows its tips past the band's edges when it
+  rides the face turned away. A Möbius folder opening with names takes
+  about 0.6 s to find its place on a 3D panel, as a ring with names does.
 - A folder opening keeps clear of the other free panels as drawn, not of
   Plasma's own panels or windows. Where free panels stand closer than the
   minimum - as they may from before, since nothing moves at login - an

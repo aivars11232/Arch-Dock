@@ -10,6 +10,7 @@
 #include "../PanelVisibility.h"
 #include "../ScreenIdentity.h"
 #include "../integration/PlasmaPanelAdapter.h"
+#include "../model/PanelIconCapacity.h"
 #include "../model/PanelSettingsSchema.h"
 #include "../presets/PresetApplication.h"
 
@@ -1237,10 +1238,16 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         {
             choices = {QStringLiteral("fan"), QStringLiteral("grid"),
                        QStringLiteral("stack"), QStringLiteral("arc"), QStringLiteral("ring")};
-            // A curved free panel can open its folders along its own curve.
+            // A curved free panel can open its folders along its own curve,
+            // and any free panel as a Möbius band; an edge panel's popup
+            // draws no band.
             if (freeHost && curvedLayout(candidate.layout.pathType))
             {
                 choices.prepend(QStringLiteral("track"));
+            }
+            if (freeHost || candidate.content.folderLayout == QStringLiteral("mobius"))
+            {
+                choices.append(QStringLiteral("mobius"));
             }
             field.insert(QStringLiteral("choices"), choices);
         }
@@ -1373,7 +1380,9 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         {
             // Plain names where the stored value is a code word.
             static const QHash<QString, QHash<QString, const char *>> labels{
-                {QStringLiteral("folderLayout"), {{QStringLiteral("track"), QT_TR_NOOP("Along the dock")}}},
+                {QStringLiteral("folderLayout"), {{QStringLiteral("track"), QT_TR_NOOP("Along the dock")},
+                                                  {QStringLiteral("mobius"), QT_TR_NOOP("Möbius strip")}}},
+                {QStringLiteral("layout"), {{QStringLiteral("mobius"), QT_TR_NOOP("Möbius strip")}}},
                 {QStringLiteral("folderRingSize"),
                  {{QStringLiteral("small"), QT_TR_NOOP("Small")},
                   {QStringLiteral("panel"), QT_TR_NOOP("Same as panel")}}},
@@ -1415,6 +1424,26 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             }
             field.insert(QStringLiteral("minimumValue"), 0);
             field.insert(QStringLiteral("maximumValue"), qMax(0, options.size() - 1));
+        }
+        // A free panel's radius and icon size stop where its own icons would
+        // no longer fit side by side - never on the wrong side of the value
+        // it has, which a panel already holding more may be past.
+        if (freeHost && (key == QStringLiteral("layoutRadius") || key == QStringLiteral("iconSize")))
+        {
+            const int lowest = field.value(QStringLiteral("minimumValue")).toInt();
+            const int highest = field.value(QStringLiteral("maximumValue")).toInt();
+            const double seen = predictedSeenRoom(candidate);
+            if (key == QStringLiteral("layoutRadius"))
+            {
+                if (const auto least = ArchDock::panelMinimumRadius(candidate, seen))
+                    field.insert(QStringLiteral("minimumValue"),
+                                 qBound(lowest, qMin(*least, candidate.layout.radius), highest));
+            }
+            else if (const auto most = ArchDock::panelMaximumIconSize(candidate, seen))
+            {
+                field.insert(QStringLiteral("maximumValue"),
+                             qBound(lowest, qMax(*most, candidate.iconStyle.size), highest));
+            }
         }
         if (!options.isEmpty())
         {
@@ -1902,6 +1931,18 @@ QVariantMap PanelWindow::applyPanelSettingsTransaction(
             &outcome);
     if (!draft.has_value())
     {
+        return outcome.toVariantMap();
+    }
+    // A change made in Panel Studio never leaves a panel's icons less room
+    // than they need.
+    if (const auto refusal = ArchDock::panelIconRoomRefusal(draft->previousPanel, draft->candidatePanel,
+                                                            seenRoomFactor(draft->previousPanel),
+                                                            predictedSeenRoom(draft->candidatePanel,
+                                                                              &draft->previousPanel)))
+    {
+        outcome.status = ArchDock::PanelSettingsTransactionStatus::ValidationFailed;
+        outcome.errorCode = QStringLiteral("panel-too-small");
+        outcome.errorMessage = *refusal;
         return outcome.toVariantMap();
     }
 

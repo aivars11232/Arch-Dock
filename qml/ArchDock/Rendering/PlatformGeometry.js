@@ -1,4 +1,5 @@
 .pragma library
+.import "LayoutEngine.js" as LayoutEngine
 
 // Generated 3D geometry, as plain data in the theme mesh format
 // ("org.archdock.mesh": positions, normals, uv0s, indexes) so the same
@@ -8,8 +9,8 @@
 // - `pedestal()`: the column an icon stands on.
 // - `platform(spec)`: the platform a look is drawn on when its theme ships no
 //   3D mesh of its own. It follows the panel's layout path exactly, so every
-//   icon stands on it: a circle, an ellipse, a regular polygon, a star or
-//   the open 300-degree radial arc.
+//   icon stands on it: a circle, an ellipse, a regular polygon, a star, the
+//   open 300-degree radial arc or a Möbius strip.
 //
 // Frame: x right, y up (screen up), z out of the platform's top. The layout's
 // track becomes the platform's centre line at `trackRadius` (0.84, where the
@@ -598,7 +599,22 @@ function shapeForLayout(layout, polygonSides) {
         return { kind: "polygon", sides: clamp(Math.round(finite(polygonSides, 6)), 3, 12) }
     if (name === "star")
         return { kind: "star", points: clamp(Math.round(finite(polygonSides, 6)), 3, 12) }
+    if (name === "mobius")
+        return { kind: "mobius" }
     return null
+}
+
+// A Möbius strip's band follows the layout's ∞ (LayoutEngine.mobiusPoint)
+// with one half twist: its cross-section turns half a turn about the band's
+// way along one lap, so its two loops lean opposite ways and a lap ends
+// where it began, upside down. Its two strands pass the crossing this far
+// apart in height, the second over the first, so the band never runs
+// through itself.
+var mobiusLift = 0.2
+// How far a Möbius band stands above its plane at `progress` (0 to 1) of
+// the way round from the crossing; 0 for every other shape.
+function standLift(kind, progress) {
+    return kind === "mobius" ? -mobiusLift * Math.cos(2 * Math.PI * finite(progress, 0)) : 0
 }
 
 // A star's corners on the unit circle, tips and notches in turn, the first
@@ -636,6 +652,10 @@ function starCorners(points) {
 // its corners reach further out than its edges; a polygon with few sides
 // draws its centre line closer in to keep those corners within reach.
 function shapeTrackRadius(shape, half) {
+    // The ∞ reaches further than its radius; its loops' far ends stay
+    // within reach.
+    if (shape && shape.kind === "mobius")
+        return Math.min(trackRadius, (reach - half - outerBevel) / LayoutEngine.mobiusReach)
     if (shape && shape.kind === "star") {
         // The tips' mitred points reach furthest out.
         const tip = starCorners(shape.points)[0]
@@ -691,6 +711,27 @@ function centreLine(shape, segments, radius, overhang) {
                 { c: [from.c[0] * r, from.c[1] * r], m: from.m, n: from.after },
                 { c: [to.c[0] * r, to.c[1] * r], m: to.m, n: from.after }] })
         }
+    } else if (shape.kind === "mobius") {
+        // One run once round, its cross-section turning with the twist: each
+        // sample carries its frame, the way across the band (`across`) and
+        // the way up from its face (`up`), and its height (`z`). Where the
+        // run ends it meets where it began, turned over.
+        const count = Math.max(96, Math.round(finite(segments, 96) * 2))
+        const run = []
+        for (let index = 0; index <= count; ++index) {
+            const share = index / count
+            const at = LayoutEngine.mobiusPoint(share, r * LayoutEngine.mobiusReach)
+            const turn = at.tangent * Math.PI / 180
+            // The layout's y runs down the screen; this frame's runs up.
+            const way = [Math.cos(turn), -Math.sin(turn)]
+            const n = [-way[1], way[0], 0]
+            const twist = Math.PI * share - Math.PI / 2
+            const across = [n[0] * Math.cos(twist), n[1] * Math.cos(twist), Math.sin(twist)]
+            const up = [-n[0] * Math.sin(twist), -n[1] * Math.sin(twist), Math.cos(twist)]
+            run.push({ c: [at.x, -at.y], z: standLift("mobius", share), across: across, up: up,
+                       n: n, m: [n[0], n[1]] })
+        }
+        runs.push({ closed: false, twisted: true, samples: run })
     } else if (shape.kind === "arc") {
         // An open path's first and last icons stand on its ends: the platform
         // runs on past them by `overhang`, so their pedestals stand on it.
@@ -726,6 +767,25 @@ function profile(half, bend) {
     ]
 }
 
+// A Möbius band's cross-section: the same turned over (half a turn about
+// its middle), so where a lap ends upside down it meets where it began.
+function twistedProfile(half) {
+    const bevel = (innerBevel + outerBevel) / 2, depth = (topHeight - bottomHeight) / 2, drop = 0.045
+    return [[-half - bevel, -depth + drop], [-half - bevel, depth - drop], [-half, depth], [half, depth],
+            [half + bevel, depth - drop], [half + bevel, -depth + drop], [half, -depth], [-half, -depth]]
+}
+// Its faces: one colour on both faces of the band, which are one face.
+var twistedFaces = [
+    { from: 0, to: 1, part: "wall" },
+    { from: 1, to: 2, part: "rim" },
+    { from: 2, to: 3, part: "top" },
+    { from: 3, to: 4, part: "rim" },
+    { from: 4, to: 5, part: "wall" },
+    { from: 5, to: 6, part: "rim" },
+    { from: 6, to: 7, part: "top" },
+    { from: 7, to: 0, part: "rim" }
+]
+
 // The faces between consecutive profile points, and which surface each is.
 var profileFaces = [
     { from: 0, to: 1, part: "wall" },
@@ -750,10 +810,12 @@ function colour(palette, part) {
 function platform(spec) {
     const options = spec || ({})
     const shape = options.shape
-    if (!shape || ["ring", "polygon", "star", "arc"].indexOf(shape.kind) < 0)
+    if (!shape || ["ring", "polygon", "star", "arc", "mobius"].indexOf(shape.kind) < 0)
         return null
     const half = clamp(finite(options.band, 0.11), minimumBand, maximumBand)
-    const section = profile(half, options.bend)
+    const twisted = shape.kind === "mobius"
+    const section = twisted ? twistedProfile(half) : profile(half, options.bend)
+    const faces = twisted ? twistedFaces : profileFaces
     const track = shapeTrackRadius(shape, half)
     const runs = centreLine(shape, options.segments, track, half + outerBevel)
     const body = new MeshBuilder()
@@ -770,8 +832,15 @@ function platform(spec) {
     for (let index = 1; index < section.length; ++index)
         sectionLengths.push(sectionLengths[index - 1]
             + Math.hypot(section[index][0] - section[index - 1][0], section[index][1] - section[index - 1][1]))
-    const sectionLength = Math.max(1e-6, sectionLengths[sectionLengths.length - 1])
-    const across = function(pointIndex) { return sectionLengths[pointIndex] / sectionLength }
+    const sectionLength = Math.max(1e-6, sectionLengths[sectionLengths.length - 1]
+        + (twisted ? Math.hypot(section[0][0] - section[section.length - 1][0],
+                                section[0][1] - section[section.length - 1][1]) : 0))
+    // A twisted band's v repeats on each half of its section, so the
+    // texture meets itself where the band turns over.
+    const across = function(pointIndex) {
+        const share = pointIndex >= section.length ? 1 : sectionLengths[pointIndex] / sectionLength
+        return twisted ? 1 - Math.abs(2 * ((2 * share) % 1) - 1) : share
+    }
     const runLengths = function(run) {
         const lengths = [0]
         for (let index = 1; index < run.samples.length; ++index) {
@@ -797,7 +866,7 @@ function platform(spec) {
         const color = colour(options.palette, face.part)
         // The underside runs back from the outer foot to the inner one.
         const vFrom = face.part === "under" ? 1 : across(face.from)
-        const vTo = face.part === "under" ? 0 : across(face.to)
+        const vTo = face.part === "under" ? 0 : twisted && face.to === 0 ? across(section.length) : across(face.to)
         const lengths = runLengths(run)
         const total = Math.max(1e-6, lengths[lengths.length - 1])
         // A shorter run (a polygon's side) uses that share of the repeats.
@@ -806,15 +875,26 @@ function platform(spec) {
         const count = run.samples.length
         for (let index = 0; index < count; ++index) {
             const sample = run.samples[index]
-            const normal = [sample.n[0] * sectionNormal[0], sample.n[1] * sectionNormal[0], sectionNormal[1]]
-            const point = function(p) {
-                return [sample.c[0] + sample.m[0] * p[0], sample.c[1] + sample.m[1] * p[0], p[1]]
-            }
+            // A twisted band's section stands in its own frame there.
+            const normal = sample.across
+                ? normalized([sample.across[0] * sectionNormal[0] + sample.up[0] * sectionNormal[1],
+                              sample.across[1] * sectionNormal[0] + sample.up[1] * sectionNormal[1],
+                              sample.across[2] * sectionNormal[0] + sample.up[2] * sectionNormal[1]])
+                : [sample.n[0] * sectionNormal[0], sample.n[1] * sectionNormal[0], sectionNormal[1]]
+            const point = sample.across
+                ? function(p) {
+                    return [sample.c[0] + sample.across[0] * p[0] + sample.up[0] * p[1],
+                            sample.c[1] + sample.across[1] * p[0] + sample.up[1] * p[1],
+                            sample.z + sample.across[2] * p[0] + sample.up[2] * p[1]]
+                }
+                : function(p) {
+                    return [sample.c[0] + sample.m[0] * p[0], sample.c[1] + sample.m[1] * p[0], p[1]]
+                }
             const u = lengths[index] / total * share
             // The path's direction here, where the texture's u runs.
             const before = run.samples[index > 0 ? index - 1 : (run.closed ? count - 2 : 0)]
             const after = run.samples[index + 1 < count ? index + 1 : (run.closed ? 1 : count - 1)]
-            const tangent = [after.c[0] - before.c[0], after.c[1] - before.c[1], 0]
+            const tangent = [after.c[0] - before.c[0], after.c[1] - before.c[1], (after.z || 0) - (before.z || 0)]
             strip.push([mesh.vertex(point(from), normal, color, [u, vFrom], tangent),
                         mesh.vertex(point(to), normal, color, [u, vTo], tangent), normal])
         }
@@ -826,12 +906,13 @@ function platform(spec) {
         }
     }
     for (const run of runs)
-        for (const face of profileFaces)
+        for (const face of faces)
             if (face.part === "rim") rimFaces.push({ run: run, face: face })
             else addFace(body, run, face)
-    // An open arc is closed at both ends by its cross-section.
+    // An open arc is closed at both ends by its cross-section; a twisted
+    // band's ends meet each other.
     for (const run of runs) {
-        if (run.closed || run.edge) continue
+        if (run.closed || run.edge || run.twisted) continue
         const ends = [{ sample: run.samples[0], next: run.samples[1], sign: -1 },
                       { sample: run.samples[run.samples.length - 1],
                         next: run.samples[run.samples.length - 2], sign: -1 }]

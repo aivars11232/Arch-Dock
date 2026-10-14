@@ -48,6 +48,9 @@ Item {
     // At most this many at once on each of a ring's circles; 0 is as many
     // as fit.
     property var ringLimits: []
+    // A Möbius band's path: each of its loops holds half the children,
+    // none where they cross (LayoutEngine.lobedTrackLayout()).
+    property bool lobedPath: false
     // A grid's cells in this item's coordinates ({ columns, rows, cells },
     // LayoutEngine.gridTrackLayout()); null for a path. The wheel moves a
     // grid a row at a time.
@@ -97,7 +100,7 @@ Item {
         : LayoutEngine.folderTrackLayout(
         samples, entries.length, pitch, trackOffset,
         { closed: closedPath, start: startAtFolder ? "start" : "centre", capacity: pathCapacity, rings: rings,
-          unscaled: measureAsDrawn, ringLimits: ringLimits })
+          unscaled: measureAsDrawn, ringLimits: ringLimits, lobes: lobedPath })
     // What the popup reports about its layout, for the same consumers.
     readonly property var geometry: ({ layout: shape, side: "track" })
     signal childSelected(string childId)
@@ -311,6 +314,8 @@ Item {
             if (root.outline.closed) context.closePath()
             context.globalAlpha = 0.18
             context.fillStyle = style.stroke
+            // A band that goes round twice is filled between its edges only.
+            context.fillRule = root.outline.evenOdd ? Qt.OddEvenFill : Qt.WindingFill
             context.fill()
         }
         onVisibleChanged: if (visible) requestPaint()
@@ -338,7 +343,10 @@ Item {
             yScale: Math.max(0, root.openingProgress)
         }
         // The panel's track glow: its colour, as far as its blur reached.
-        readonly property real glowBlur: root.outlineStyle ? Number(root.outlineStyle.blur) || 0 : 0
+        // Round a solid band (a Möbius strip) the glow stays close, so its
+        // loops stay open.
+        readonly property real glowBlur: !root.outlineStyle ? 0
+            : (Number(root.outlineStyle.blur) || 0) * (root.outline && root.outline.ribbon ? 0.35 : 1)
         layer.enabled: visible && glowBlur > 0
         layer.effect: MultiEffect {
             shadowEnabled: true
@@ -356,6 +364,10 @@ Item {
             const points = root.outline ? root.outline.points || [] : []
             const style = root.outlineStyle
             if (points.length < 2 || !style) return
+            if (root.outline.ribbon) {
+                root.paintRibbon(context, root.outline.ribbon, style)
+                return
+            }
             context.lineWidth = style.lineWidth
             context.strokeStyle = style.stroke
             context.lineCap = "round"
@@ -383,6 +395,33 @@ Item {
             function onOutlineChanged() { outlineCanvas.requestPaint() }
             function onOutlineStyleChanged() { outlineCanvas.requestPaint() }
         }
+    }
+    // A Möbius band as one solid ribbon in the panel's look, one colour and
+    // one fill: each step of it two triangles, all turning the same way, so
+    // where they meet, where the band twists and its sides cross as seen, or
+    // where it crosses itself, nothing shows between them.
+    function paintRibbon(context, ribbon, style) {
+        const left = ribbon.left || [], right = ribbon.right || []
+        const count = Math.min(left.length, right.length)
+        if (count < 3) return
+        const triangle = function(a, b, c) {
+            const area = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
+            const corners = area < 0 ? [a, c, b] : [a, b, c]
+            context.moveTo(corners[0].x, corners[0].y)
+            context.lineTo(corners[1].x, corners[1].y)
+            context.lineTo(corners[2].x, corners[2].y)
+            context.closePath()
+        }
+        context.globalAlpha = 1
+        context.fillRule = Qt.WindingFill
+        context.fillStyle = Qt.lighter(style.stroke, 1.1)
+        context.beginPath()
+        for (let index = 0; index < count; ++index) {
+            const next = (index + 1) % count
+            triangle(left[index], left[next], right[next])
+            triangle(left[index], right[next], right[index])
+        }
+        context.fill()
     }
     function traceOutline(context, points, from) {
         context.beginPath()

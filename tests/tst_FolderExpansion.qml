@@ -640,7 +640,8 @@ TestCase {
     }
     function layoutOf(shape, count, travel) {
         return LayoutEngine.folderTrackLayout(shape.samples, count, shape.pitch, travel || 0,
-            { closed: shape.closed, start: shape.start, capacity: shape.capacity, rings: shape.rings || [] })
+            { closed: shape.closed, start: shape.start, capacity: shape.capacity, rings: shape.rings || [],
+              lobes: shape.lobes === true })
     }
     // Degrees from `from` to `to`, both directions, clockwise on the screen.
     function turnBetween(from, to) {
@@ -1003,11 +1004,87 @@ TestCase {
         verify(!one.rings)
         fuzzyCompare(axis(one.samples, one.centre), 0, 2.5, "one circle keeps the plane's tilt")
     }
+    // A Möbius strip, as its pictures show it: one band along an ∞ beside
+    // the folder, unbroken and seamless, its two loops crossing in the
+    // middle; flat it is the ∞ itself, on a 3D panel it twists. Each loop
+    // holds half the children, none where the loops cross; six at once, the
+    // others come round with the wheel.
+    function test_mobiusStripIsAnInfinity() {
+        const band = shapeOf("mobius", { x: 0, y: -1 }, 24, false)
+        compare(band.shape, "mobius")
+        verify(band.closed && band.lobes && band.band)
+        verify(!band.rings, "no second circle")
+        compare(band.capacity, 6)
+        const line = band.samples, around = line.length
+        const edge = band.outline.points
+        compare(edge.length, 2 * around)
+        verify(band.outline.evenOdd, "filled between its edges only")
+        const apart = function(a, b) { return Math.hypot(a.x - b.x, a.y - b.y) }
+        verify(apart(line[0], line[around / 2]) < 1, "the loops cross in the middle")
+        fuzzyCompare(apart(line[0], band.centre), 0, 1)
+        // The same width all the way round, through the crossing too: a
+        // little more than half an icon, so its loops stay open.
+        const ribbon = band.outline.ribbon
+        compare(ribbon.left.length, around)
+        for (const index of [0, around / 4, around / 2, 3 * around / 4])
+            fuzzyCompare(apart(ribbon.left[index], ribbon.right[index]), 28.8, 0.5, "full width at " + index)
+        verify(ribbon.shade === undefined && ribbon.from === undefined, "one colour, one shape")
+        // Along the way out: the far loop further from the folder.
+        const fromFolder = function(point) { return apart(point, shapeFolder) }
+        verify(fromFolder(line[around / 4]) > fromFolder(line[3 * around / 4]) + band.radius)
+        // At rest no child stands where the loops cross, nor touches another.
+        const layout = layoutOf(band, 24)
+        const shown = layout.entries.filter(function(entry) { return entry.onTrack })
+        compare(shown.length, 6)
+        for (const entry of shown)
+            verify(apart(entry, band.centre) > 0.7 * band.pitch, "clear of the crossing: " + apart(entry, band.centre))
+        for (let a = 0; a < shown.length; ++a)
+            for (let b = a + 1; b < shown.length; ++b)
+                verify(apart(shown[a], shown[b]) >= band.pitch - 0.5,
+                       "children " + a + " and " + b + " " + apart(shown[a], shown[b]) + " apart")
+        // Three on each loop: the far one above the crossing here.
+        compare(shown.filter(function(entry) { return entry.y < band.centre.y }).length, 3)
+        // On a 3D panel's plane, tilted 60 degrees here (a point's height
+        // above the plane is seen higher on the screen), it is a Möbius
+        // strip as seen in space: its two loops lean opposite ways, the
+        // strand under the crossing twisting there, the one over it flat.
+        const tilted = LayoutEngine.folderShape("mobius", {
+            folder: { x: 0, y: -300 }, outward: { x: 1, y: 0 }, fromEdge: true, iconSize: 48,
+            cellWidth: 48, cellHeight: 48, gap: 6, count: 9, obstacles: [],
+            screen: { x: 0, y: 0, width: 3840, height: 2160 },
+            project: function(point) {
+                return { x: 1920 + point.x, y: 1200 + point.y * 0.5 - (point.height || 0) * 0.87, scale: 1 }
+            } })
+        verify(tilted.projected && !tilted.hidden && tilted.lobes)
+        verify(tilted.outline.evenOdd)
+        compare(tilted.outline.points.length, 2 * tilted.samples.length)
+        const seenLine = tilted.samples, half = seenLine.length / 2
+        verify(apart(seenLine[0], seenLine[half]) < 1, "the strands cross in one place")
+        // At each loop's far end the band leans, its raised side (seen
+        // higher) the other way on the other loop.
+        const twisted = tilted.outline.ribbon
+        const raisedSide = function(index) {
+            const a = twisted.left[index], b = twisted.right[index]
+            return a.y < b.y ? a.x - b.x : b.x - a.x
+        }
+        verify(raisedSide(half / 2) * raisedSide(3 * half / 2) < -25, "the loops lean opposite ways: "
+               + raisedSide(half / 2) + ", " + raisedSide(3 * half / 2))
+        // Over the crossing the band is flat and wide, under it narrow.
+        verify(apart(twisted.left[half], twisted.right[half]) > 1.5 * apart(twisted.left[0], twisted.right[0]),
+               "flat over the crossing, twisting under it: " + apart(twisted.left[half], twisted.right[half])
+               + " over, " + apart(twisted.left[0], twisted.right[0]) + " under")
+        for (let index = 0; index < twisted.left.length; ++index)
+            verify(apart(twisted.left[index], twisted.right[index]) >= 12 - 0.5,
+                   "seen edge on it keeps its thickness at " + index)
+
+        // An edge panel's popup draws no band: its ring.
+        compare(LayoutEngine.expansionGeometry("mobius", 6, 48, 8, 120, 1, {}).layout, "ring")
+    }
     function test_folderShapes_data() {
         const rows = []
         const outwards = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 },
                            right: { x: 1, y: 0 }, diagonal: { x: 0.6, y: -0.8 } }
-        for (const kind of ["fan", "arc", "stack", "ring"])
+        for (const kind of ["fan", "arc", "stack", "ring", "mobius"])
             for (const way in outwards)
                 for (const count of [3, 8, 24])
                     for (const names of [false, true])
@@ -1063,6 +1140,17 @@ TestCase {
                 if (index > 0) fuzzyCompare(Math.hypot(entry.x - shown[index - 1].x,
                                                        entry.y - shown[index - 1].y), shape.pitch, 0.01)
             }
+        } else if (data.kind === "mobius") {
+            // An ∞ beside the folder along its outward direction, its loops
+            // crossing in the middle, the children on its loops.
+            verify(shape.closed && shape.lobes)
+            const away = direction(shapeFolder, shape.centre)
+            fuzzyCompare(away.x, n.x, 1e-6)
+            fuzzyCompare(away.y, n.y, 1e-6)
+            verify(Math.hypot(samples[0].x - samples[samples.length / 2].x,
+                              samples[0].y - samples[samples.length / 2].y) < 1, "the loops cross")
+            if (data.count <= layout.capacity)
+                compare(shown.length, data.count, "a small band holds every child")
         } else {
             // PD-14: a second circle beside the folder along its outward
             // direction, the children on its circumference.

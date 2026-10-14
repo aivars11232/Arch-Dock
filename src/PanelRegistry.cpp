@@ -1438,15 +1438,16 @@ std::optional<QVariantMap> PanelRegistry::genericScene3D(
     const QVariantMap &lookProjection) const
 {
     // Layouts with an exact generated platform (PlatformGeometry.js): closed
-    // circles, ellipses, regular polygons and stars, and the 300-degree
-    // radial arc, each drawn along the layout's own path so every icon stands
-    // on it. Arcs, semicircles and fans curve about a centre below their
-    // panel's middle, which a centred platform cannot follow; they stay flat.
+    // circles, ellipses, regular polygons and stars, the 300-degree radial
+    // arc and the Möbius strip, each drawn along the layout's own path so
+    // every icon stands on it. Arcs, semicircles and fans curve about a
+    // centre below their panel's middle, which a centred platform cannot
+    // follow; they stay flat.
     static const QStringList platformLayouts{
         QStringLiteral("circular"), QStringLiteral("ring"), QStringLiteral("ellipse"),
         QStringLiteral("radial"), QStringLiteral("polygon"), QStringLiteral("triangle"),
         QStringLiteral("square"), QStringLiteral("pentagon"), QStringLiteral("hexagon"),
-        QStringLiteral("octagon"), QStringLiteral("star")};
+        QStringLiteral("octagon"), QStringLiteral("star"), QStringLiteral("mobius")};
     if (definition.host.kind != ArchDock::PanelHostKind::FreeDesktop ||
         !platformLayouts.contains(definition.layout.pathType) ||
         look.contains(QStringLiteral("scene3D")) ||

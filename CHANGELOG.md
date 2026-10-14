@@ -66,6 +66,45 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   on the plane too, with no border round it. A ring with more children grows
   a second circle round the first, the small one inside the big one with a
   clear gap all round, the two leaning opposite ways.
+- A free panel holds as many icons as its size has room for (2026-10-14, the
+  owner: "there should be limited amount of how many icons I can put on that
+  panel depending on it's size", "nothing needs to be cut off when resized",
+  measured from the 16-pixel gap between the icons of the owner's own top
+  Plasma panel, "no matter of the icons size"). Each icon needs its own size
+  and 16 pixels along the panel's ring, star or arc; a row grows with its
+  icons. On a 3D panel the room is what is seen: its platform's size as
+  drawn and its tilt, which shortens the ring's ends as seen, so a tilted
+  ring holds fewer. A drop past the limit is refused and the panel says why
+  for four seconds; Panel Studio's Radius and Icon size stop where the icons
+  would no longer fit, as do the 3D handles on the desktop; a preset whose
+  icons would not fit makes the panel just large enough. A panel already
+  holding more keeps its icons and can only be given more room.
+- A Möbius strip, as the owner's reference pictures show one (the owner:
+  "Maybe add there another shape - Möbius strip", then many corrections: one
+  band, "NO VISIBLE GAPS, NOT EVEN SEPERATORS", "in 2D it's just infinity
+  symbol, in 3D it's visible Möbius strip"):
+  - a folder opening on free panels: a band along an ∞ beside the folder,
+    one seamless shape, its children half on each loop and none where the
+    loops cross; flat it is the ∞ itself; on a 3D panel's plane it turns
+    half a turn out of the plane, its two loops leaning opposite ways, the
+    strand over the crossing facing the viewer. An edge panel's popup shows
+    it as a ring.
+  - a free panel layout, "Möbius strip": flat, its icons stand on an ∞
+    track; in 3D on a generated twisted Möbius platform, one band closed on
+    itself, its strands passing the crossing apart in height. Its icons ride
+    the band's one face: turning the dock carries them through the twist to
+    what looks like the other side and back. Each icon and its stand stay as
+    on any panel, the stand on the band's face and the icon upright above
+    it; on the face turned toward the viewer the two are in front of the
+    band, on the face turned away behind it, so the band hides only what of
+    them it covers and never cuts through them, and an icon comes out from
+    behind the band's edge gradually. The band's glow is drawn behind the
+    icons in front of it. It holds two icons fewer than its length has room
+    for, for the gaps where its loops cross.
+- A ring or Möbius opening starts on the side of the panel with more room,
+  counting other free panels, and keeps the side where it stands nearer and
+  holds more at once; beside a large flat panel it took 1.4 s to find a
+  place far away, now 0.16 s beside its own panel.
 
 - A 3D panel turns freely all the way round (2026-10-13, the owner: "freely
   in 360 every direction"): Pitch goes past its edge and over, like Yaw and

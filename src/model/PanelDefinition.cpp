@@ -51,6 +51,7 @@ const std::array<std::pair<PanelLayoutKind, const char *>,
         {PanelLayoutKind::Star, "star"},
         {PanelLayoutKind::Grid, "grid"},
         {PanelLayoutKind::Floating, "floating"},
+        {PanelLayoutKind::Mobius, "mobius"},
     }};
     return names;
 }

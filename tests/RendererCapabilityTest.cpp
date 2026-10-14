@@ -1331,6 +1331,112 @@ private slots:
         QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
     }
 
+    // How much of its track a 3D panel's icons get as drawn: seen straight
+    // on, most of it; tilted, the track's ends are seen shortened, so less,
+    // and less again the further it tilts. A panel holds that many fewer
+    // icons.
+    void seenTrackFactorFollowsTheTilt()
+    {
+        if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+            return; // Needs the private RHI session, like the scene gates above.
+        const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
+        QVERIFY(!glyphFixture.isEmpty());
+        // A generated platform with a procedural look, as in
+        // generatedPlatformsFollowTheLayoutAndLook.
+        QVariantMap theme{
+            {QStringLiteral("format"), QStringLiteral("org.archdock.theme")},
+            {QStringLiteral("version"), 2}, {QStringLiteral("valid"), true},
+            {QStringLiteral("id"), QStringLiteral("procedural-look")},
+            {QStringLiteral("name"), QStringLiteral("Procedural look")},
+            {QStringLiteral("capabilities"), QVariantMap{
+                {QStringLiteral("rendererTiers"), QVariantList{QStringLiteral("true3d"), QStringLiteral("procedural2d")}},
+                {QStringLiteral("preferredRendererTier"), QStringLiteral("procedural2d")},
+                {QStringLiteral("fallbackRendererTiers"), QVariantList{QStringLiteral("procedural2d")}}}}};
+        theme.insert(QStringLiteral("scene3D"), QVariantMap{
+            {QStringLiteral("generic"), true}, {QStringLiteral("generated"), QVariantMap{}},
+            {QStringLiteral("fieldOfView"), 40}, {QStringLiteral("cameraPitch"), 0},
+            {QStringLiteral("cameraYaw"), 0}, {QStringLiteral("keyLightBrightness"), 1.2},
+            {QStringLiteral("fillLightBrightness"), 0.45},
+            {QStringLiteral("defaultQuality"), QStringLiteral("low")},
+            {QStringLiteral("transitions"), false}, {QStringLiteral("parts"), QVariantList{}}});
+        theme.insert(QStringLiteral("scene3DResources"), QVariantMap{
+            {QStringLiteral("material"), QVariantMap{
+                {QStringLiteral("format"), QStringLiteral("org.archdock.material")},
+                {QStringLiteral("version"), 1}, {QStringLiteral("baseColor"), QStringLiteral("#406080")},
+                {QStringLiteral("emissiveColor"), QStringLiteral("#000000")},
+                {QStringLiteral("emissiveStrength"), 0.0}, {QStringLiteral("metalness"), 0.3},
+                {QStringLiteral("roughness"), 0.45}}},
+            {QStringLiteral("parts"), QVariantList{}}, {QStringLiteral("indexBudget"), 262144}});
+        QQmlEngine engine;
+        engine.addImportPath(importRoot());
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import ArchDock.Rendering 1.0
+            PanelScene {
+                required property string glyphFixture
+                property real pitch: 30
+                panelDefinition: ({rendererTier: "true3d", layout: "circular", layoutRadius: 150,
+                                   scene3DQuality: "low", iconSize: 48, spacing: 8, layoutPadding: 10,
+                                   scene3DCameraPitch: pitch, scene3DCameraYaw: 0,
+                                   scene3DTransitions: false, scene3DFloat: false})
+                entryDelegateContext: ({hostKind: "free"})
+                hostCapabilities: ({rotation: {available: true}})
+                orderedEntries: [0, 1, 2, 3, 4, 5, 6, 7].map(function(index) {
+                    return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphFixture}
+                })
+            }
+        )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/SeenTrackConsumer.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QQuickWindow window;
+        std::unique_ptr<QObject> object(component.createWithInitialProperties({
+            {QStringLiteral("themeDefinition"), theme},
+            {QStringLiteral("glyphFixture"), QUrl::fromLocalFile(glyphFixture).toString()}}));
+        QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+        auto *scene = qobject_cast<QQuickItem *>(object.get());
+        QVERIFY(scene);
+        scene->setParentItem(window.contentItem());
+        window.resize(qCeil(scene->width()), qCeil(scene->height()));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(),
+                                 QStringLiteral("true3d"), 5000);
+        auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+        QVERIFY(renderer);
+        QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 8);
+        const auto seen = [&](bool asSeen) {
+            QVariant result;
+            QMetaObject::invokeMethod(scene, "seenTrackFactor", Q_RETURN_ARG(QVariant, result),
+                                      Q_ARG(QVariant, 16), Q_ARG(QVariant, asSeen));
+            return result.toDouble();
+        };
+        // Tilted, once the icons are drawn there: the panel's size as drawn
+        // and what the camera shows of it; -1 if they never are drawn.
+        const auto tilted = [&](double pitch) {
+            const QVariant before = plainValue(renderer->property("projectedEntryGeometry"));
+            scene->setProperty("pitch", pitch);
+            const bool drawn = QTest::qWaitFor([&]() {
+                return plainValue(renderer->property("projectedEntryGeometry")) != before;
+            }, 5000);
+            QTest::qWait(100);
+            return drawn ? QPointF(seen(false), seen(true)) : QPointF(-1, -1);
+        };
+        const QPointF facing = tilted(0);
+        const QPointF steep = tilted(60);
+        const QPointF steeper = tilted(75);
+        const QString values = QStringLiteral("%1 %2 %3 %4 %5 %6").arg(facing.x()).arg(facing.y())
+            .arg(steep.x()).arg(steep.y()).arg(steeper.x()).arg(steeper.y());
+        // The platform is drawn a little inside the panel's own layout, its
+        // icons at their own size; seen straight on, the camera shows that.
+        QVERIFY2(facing.x() > 0.4 && facing.x() <= 1.5, qPrintable(values));
+        QVERIFY2(qAbs(facing.y() - facing.x()) < 0.15 * facing.x(), qPrintable(values));
+        // Its size does not change with the tilt; what the camera shows does.
+        QVERIFY2(qAbs(steep.x() - facing.x()) < 0.1 * facing.x(), qPrintable(values));
+        QVERIFY2(qAbs(steeper.x() - facing.x()) < 0.1 * facing.x(), qPrintable(values));
+        QVERIFY2(steep.y() < 0.75 * facing.y() && steep.y() > 0.25 * facing.y(), qPrintable(values));
+        QVERIFY2(steeper.y() < steep.y(), qPrintable(values));
+    }
+
     // The owner's Panel Studio, 2026-10-13: picking the Top or Side panel
     // while a 3D free panel was previewed killed Arch Dock (SIGSEGV in
     // QSGRhiLayer::grab, called from QQuick3DTexture's afterSynchronizing

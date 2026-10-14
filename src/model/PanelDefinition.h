@@ -47,6 +47,7 @@ enum class PanelLayoutKind
     Star,
     Grid,
     Floating,
+    Mobius,
     Count
 };
 

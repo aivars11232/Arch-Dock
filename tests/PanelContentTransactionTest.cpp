@@ -1,4 +1,5 @@
 #include "panel/PanelContentTransaction.h"
+#include "model/PanelIconCapacity.h"
 
 #include <QTest>
 
@@ -74,7 +75,107 @@ private slots:
     void segmentsPartitionEntriesWithoutStealing();
     void segmentClaimsFailClosed();
     void contentOperationsPreserveSegmentOwnership();
+    void capacityFollowsTheShapeAndTheIconSize();
+    void addStopsWhenTheShapeIsFull();
 };
+
+// A shape holds its length in slots of an icon and a 16 pixel gap; bigger
+// icons fit fewer, a row has no limit.
+void PanelContentTransactionTest::capacityFollowsTheShapeAndTheIconSize()
+{
+    using ArchDock::panelIconCapacity;
+    QCOMPARE(panelIconCapacity(QStringLiteral("circular"), 150, 52, 6), std::optional<int>(13));
+    QCOMPARE(panelIconCapacity(QStringLiteral("ring"), 150, 84, 6), std::optional<int>(9));
+    QCOMPARE(panelIconCapacity(QStringLiteral("hexagon"), 150, 52, 6), std::optional<int>(13));
+    // An open arc holds one more than its slots: one at each end.
+    QCOMPARE(panelIconCapacity(QStringLiteral("arc"), 150, 52, 6), std::optional<int>(6));
+    // A star's outline, notches at 0.46 of the radius.
+    QCOMPARE(panelIconCapacity(QStringLiteral("star"), 150, 52, 5), std::optional<int>(15));
+    // A Möbius band holds its length in slots less the two gaps where its
+    // loops cross, a little less round its tight loop ends: at radius 150,
+    // 12 to a ring's 13; ten need a radius of 125.
+    QCOMPARE(panelIconCapacity(QStringLiteral("mobius"), 150, 52, 6), std::optional<int>(12));
+    QCOMPARE(panelIconCapacity(QStringLiteral("mobius"), 200, 52, 6), std::optional<int>(17));
+    QCOMPARE(ArchDock::panelMinimumRadius(QStringLiteral("mobius"), 10, 52, 6).value(), 125);
+    QCOMPARE(panelIconCapacity(QStringLiteral("mobius"), 125, 52, 6), std::optional<int>(10));
+    // Seen tilted, half its track is left to its icons: half as many fit.
+    QCOMPARE(panelIconCapacity(QStringLiteral("circular"), 150, 52, 6, 1.0, 1.0, 0.5), std::optional<int>(6));
+    QCOMPARE(ArchDock::panelMinimumRadius(QStringLiteral("circular"), 13, 52, 6, 1.0, 1.0, 0.5).value(), 282);
+    // A 3D panel squeezed sideways holds fewer: its track is an ellipse of
+    // radii 75 and 150, its icons as large as before.
+    QCOMPARE(panelIconCapacity(QStringLiteral("circular"), 150, 52, 6, 0.5, 1.0), std::optional<int>(10));
+    QVERIFY(!panelIconCapacity(QStringLiteral("horizontal"), 150, 52, 6).has_value());
+    QVERIFY(!panelIconCapacity(QStringLiteral("grid"), 150, 52, 6).has_value());
+    // The least radius and the largest icon that still hold them.
+    QCOMPARE(ArchDock::panelMinimumRadius(QStringLiteral("circular"), 13, 52, 6), std::optional<int>(141));
+    QCOMPARE(panelIconCapacity(QStringLiteral("circular"), 141, 52, 6), std::optional<int>(13));
+    QCOMPARE(panelIconCapacity(QStringLiteral("circular"), 140, 52, 6), std::optional<int>(12));
+    QCOMPARE(ArchDock::panelMaximumIconSize(QStringLiteral("circular"), 13, 150, 6), std::optional<int>(56));
+    QCOMPARE(panelIconCapacity(QStringLiteral("circular"), 150, 57, 6), std::optional<int>(12));
+    QCOMPARE(ArchDock::panelMinimumRadius(QStringLiteral("arc"), 6, 52, 6), std::optional<int>(150));
+    QVERIFY(!ArchDock::panelMinimumRadius(QStringLiteral("horizontal"), 40, 52, 6).has_value());
+}
+
+// Icons are added only while the panel's shape has room for them side by
+// side; the refusal says how many fit.
+void PanelContentTransactionTest::addStopsWhenTheShapeIsFull()
+{
+    PanelDefinition ring = freePanel();
+    ring.layout.pathType = QStringLiteral("circular");
+    ring.layout.radius = 60;
+    ring.iconStyle.size = 52;
+    QCOMPARE(ArchDock::panelIconCapacity(ring), std::optional<int>(5));
+    QCOMPARE(ArchDock::panelIconCount(ring), 3);
+    PanelContentRequest request;
+    request.operation = PanelContentOperation::Add;
+    request.urls = {QStringLiteral("file:///tmp/b.desktop"), QStringLiteral("file:///tmp/c.desktop")};
+    PanelContentOutcome outcome;
+    const auto filled = PanelContentTransaction::prepare(ring, request, &outcome);
+    QVERIFY2(filled.has_value(), qPrintable(outcome.errorMessage));
+    QCOMPARE(ArchDock::panelIconCount(*filled), 5);
+    request.urls = {QStringLiteral("file:///tmp/d.desktop")};
+    QVERIFY(!PanelContentTransaction::prepare(*filled, request, &outcome).has_value());
+    QVERIFY(!outcome.success);
+    QCOMPARE(outcome.errorCode, QStringLiteral("panel-full"));
+    QVERIFY(outcome.errorMessage.contains(QStringLiteral("5 icons")));
+    // A row grows with its icons.
+    PanelDefinition row = *filled;
+    row.layout.pathType = QStringLiteral("horizontal");
+    QVERIFY(PanelContentTransaction::prepare(row, request, &outcome).has_value());
+
+    // Squeezing a full 3D ring sideways leaves its five icons too little
+    // room; widening it, or squeezing a panel that has room, does not.
+    PanelDefinition flat = *filled;
+    flat.surface.rendererTier = QStringLiteral("true3d");
+    PanelDefinition squeezed = flat;
+    squeezed.surface.parameters3D.insert(QStringLiteral("scaleX"), 0.6);
+    const auto refusal = ArchDock::panelIconRoomRefusal(flat, squeezed);
+    QVERIFY(refusal.has_value());
+    QVERIFY2(refusal->contains(QStringLiteral("its 5 icons fit only")), qPrintable(*refusal));
+    PanelDefinition wider = flat;
+    wider.surface.parameters3D.insert(QStringLiteral("scaleX"), 1.5);
+    QVERIFY(!ArchDock::panelIconRoomRefusal(flat, wider).has_value());
+    // A panel already holding more than it has room for keeps its icons
+    // while a change gives them no less room.
+    QVERIFY(!ArchDock::panelIconRoomRefusal(squeezed, squeezed).has_value());
+    PanelDefinition roomy = ring;
+    roomy.surface.rendererTier = QStringLiteral("true3d");
+    PanelDefinition roomySqueezed = roomy;
+    roomySqueezed.surface.parameters3D.insert(QStringLiteral("scaleX"), 0.6);
+    QVERIFY(!ArchDock::panelIconRoomRefusal(roomy, roomySqueezed).has_value());
+
+    // A look with bigger icons grows the full ring to the least radius its
+    // five icons fit at; one that leaves them room changes nothing.
+    PanelDefinition bigger = *filled;
+    bigger.iconStyle.size = 84;
+    ArchDock::growPanelToFitIcons(*filled, bigger);
+    QCOMPARE(bigger.layout.radius, ArchDock::panelMinimumRadius(QStringLiteral("circular"), 5, 84, 6).value());
+    QVERIFY(!ArchDock::panelIconRoomRefusal(*filled, bigger).has_value());
+    PanelDefinition smaller = *filled;
+    smaller.iconStyle.size = 32;
+    ArchDock::growPanelToFitIcons(*filled, smaller);
+    QCOMPARE(smaller.layout.radius, 60);
+}
 
 void PanelContentTransactionTest::canonicalOrderCoversEveryEntryExactlyOnce()
 {

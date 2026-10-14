@@ -205,6 +205,8 @@ function curvedTrack(resolvedLayout, geometry, polygonSides) {
     const radius = geometry.trackRadius > 0 ? geometry.trackRadius : geometry.radius;
     if (["circular", "ring", "ellipse"].includes(resolvedLayout))
         return { closed: true, length: 2 * Math.PI * radius };
+    if (resolvedLayout === "mobius")
+        return { closed: true, length: mobiusLength() * radius * mobiusReach };
     if (["polygon", "triangle", "square", "pentagon", "hexagon",
          "octagon"].includes(resolvedLayout)) {
         const sides = shapeSides(resolvedLayout, polygonSides);
@@ -238,8 +240,9 @@ function supportsWholeSceneRotation(layout) {
 // it turns instead of resizing its host every frame.
 function rotationEnvelope(geometry) {
     const source = safeGeometry(geometry, geometry ? geometry.layout : "");
+    const reach = source.radius * (source.layout === "mobius" ? mobiusReach : 1);
     const side = Math.max(1, Math.ceil(
-        2 * (source.radius + source.iconSize / 2 + source.padding)));
+        2 * (reach + source.iconSize / 2 + source.padding)));
     const result = {};
     for (const key of Object.keys(source))
         result[key] = source[key];
@@ -269,7 +272,7 @@ function shapeSides(layout, fallback) {
 var radialLayoutNames = [
     "circular", "ring", "ellipse", "radial", "polygon", "triangle",
     "square", "pentagon", "hexagon", "octagon", "star", "arc",
-    "semicircle", "fan", "spiral"
+    "semicircle", "fan", "spiral", "mobius"
 ];
 
 // Outward normal for a panel docked to a host edge, in degrees.
@@ -320,6 +323,10 @@ function metrics(layout, count, iconSize, spacing, scale, radius, rows,
                 "star", "spiral", "vertical-curve"].includes(resolvedLayout)) {
         width = safeRadius * 2 + size + safePadding * 2;
         height = width;
+    } else if (resolvedLayout === "mobius") {
+        const reach = safeRadius * mobiusReach;
+        width = reach * 2 + size + safePadding * 2;
+        height = reach * 2 * mobiusHalfHeight() + size + safePadding * 2;
     } else if (resolvedLayout === "arc" || resolvedLayout === "semicircle"
                || resolvedLayout === "fan") {
         width = safeRadius * 2 + size + safePadding * 2;
@@ -452,6 +459,110 @@ function starPoint(progress, points, radius) {
     };
 }
 
+// A Möbius strip, as its pictures show it: a band along an ∞ with one half
+// twist. Its middle line is a lemniscate of Bernoulli made a little fuller,
+// 1 from its middle to each loop's far end; the loops cross in the middle.
+// It is measured from where they cross (`0`), round the right loop to the
+// crossing again (`0.5`) and round the left loop back. On the first pass
+// through the crossing the band twists, seen edge on; on the second it
+// passes flat over the first.
+var mobiusFullness = 1.15;
+var mobiusTable = null;
+function mobiusLine(turn) {
+    const s = Math.sin(turn), c = Math.cos(turn), d = 1 + s * s;
+    return { x: c / d, y: mobiusFullness * s * c / d };
+}
+function mobiusSamples() {
+    if (mobiusTable)
+        return mobiusTable;
+    const steps = 720;
+    const points = [];
+    let length = 0;
+    for (let step = 0; step <= steps; ++step) {
+        // From the crossing (a quarter turn), down into the right loop.
+        const turn = Math.PI / 2 - 2 * Math.PI * step / steps;
+        const point = mobiusLine(turn);
+        if (points.length)
+            length += Math.hypot(point.x - points[points.length - 1].x, point.y - points[points.length - 1].y);
+        points.push({ x: point.x, y: point.y, turn: turn, along: length });
+    }
+    mobiusTable = { points: points, length: length };
+    return mobiusTable;
+}
+// The length of the middle line for a reach of 1.
+function mobiusLength() {
+    return mobiusSamples().length;
+}
+// The point `progress` (0 to 1) of the way along the middle line, for a
+// reach of `reach`, with the line's direction there (`tangent`, degrees) and
+// the way from the middle (`radial`). `width` is how wide the band is drawn
+// there against its full width: 0 where it twists, full where it passes
+// flat over the crossing and nearly so round the loops. Its sign changes
+// once a lap, so an edge traced over two laps (`progress` 0 to 2) is the
+// band's one edge. `lift` is how far the band stands above its plane, -1 to
+// 1: the strand passing flat over the crossing is above the twisting one.
+function mobiusPoint(progress, reach) {
+    const table = mobiusSamples();
+    const target = wrapped(finite(progress, 0), 1) * table.length;
+    let low = 0, high = table.points.length - 1;
+    while (high - low > 1) {
+        const middle = (low + high) >> 1;
+        if (table.points[middle].along <= target)
+            low = middle;
+        else
+            high = middle;
+    }
+    const a = table.points[low], b = table.points[high];
+    const share = b.along > a.along ? (target - a.along) / (b.along - a.along) : 0;
+    const x = (a.x + (b.x - a.x) * share) * reach;
+    const y = (a.y + (b.y - a.y) * share) * reach;
+    const twist = Math.sin(Math.PI * finite(progress, 0));
+    return {
+        x: x,
+        y: y,
+        tangent: Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI,
+        radial: Math.atan2(y, x) * 180 / Math.PI,
+        width: (twist < 0 ? -1 : 1) * Math.pow(Math.abs(twist), 0.35),
+        lift: -Math.cos(2 * Math.PI * finite(progress, 0))
+    };
+}
+
+// How far a Möbius panel's ∞ reaches from its middle against the panel's
+// radius: wider than a circle of that radius, about half as tall.
+var mobiusReach = 1.25;
+// How far the middle line reaches up and down for a reach of 1.
+function mobiusHalfHeight() {
+    let most = 0;
+    for (const point of mobiusSamples().points)
+        most = Math.max(most, Math.abs(point.y));
+    return most;
+}
+// Where the `slot`th of `count` entries of a Möbius band stands, as a share
+// of its middle line from where the loops cross (mobiusPoint): each loop
+// holds half of them, evenly, with a slot's gap at each of its ends, so none
+// stands where the loops cross; a slot between two whole ones is on its way
+// from one to the next, through the crossing at a loop's end.
+function lobeProgress(slot, count) {
+    return wrapped(lobeTravel(slot, count), 1);
+}
+// The same counted in laps and not wrapped: how far round the band an entry
+// has gone. A Möbius strip has one face: a lap on, an entry stands at the
+// same place on what looks like the other face, and two laps on it is back.
+function lobeTravel(slot, count) {
+    const total = Math.max(1, Math.round(finite(count, 1)));
+    const first = Math.ceil(total / 2), second = total - first;
+    const at = function(index) {
+        return index < first ? (index + 1) * 0.5 / (first + 1)
+            : 0.5 + (index - first + 1) * 0.5 / (second + 1);
+    };
+    const place = finite(slot, 0);
+    const whole = Math.floor(place), share = place - whole;
+    const laps = Math.floor(whole / total), index = wrapped(whole, total);
+    const from = at(index) + laps;
+    const to = (index + 1 < total ? at(index + 1) : at(0) + 1) + laps;
+    return from + (to - from) * share;
+}
+
 function entryGeometry(layout, index, count, rawGeometry, angle, polygonSides,
                        pathOrientation, compatibilityProfile, edge) {
     const geometry = safeGeometry(rawGeometry, layout);
@@ -472,8 +583,9 @@ function entryGeometry(layout, index, count, rawGeometry, angle, polygonSides,
         : null;
     const progress = placement && !track.closed ? placement.progress
         : safeCount === 1 ? 0.5 : safeIndex / (safeCount - 1);
-    const closedProgress = placement && track.closed ? placement.progress
+    let closedProgress = placement && track.closed ? placement.progress
         : safeIndex / safeCount;
+    let surfaceProgress = 0;
     const profile = compatibilityProfile || "canonical";
     let x = geometry.padding;
     let y = geometry.padding;
@@ -520,6 +632,18 @@ function entryGeometry(layout, index, count, rawGeometry, angle, polygonSides,
         const local = resolvedLayout === "star"
             ? starPoint(closedProgress, sides, geometry.radius)
             : polygonPoint(closedProgress, sides, geometry.radius);
+        x = centerX + local.x - size / 2;
+        y = centerY + local.y - size / 2;
+        tangent = local.tangent;
+        radial = local.radial;
+    } else if (resolvedLayout === "mobius") {
+        // Each loop holds half the entries, none where the loops cross; the
+        // dock's turning carries them on through it, and round the band's
+        // one face: `surfaceProgress` (0 to 2) is where on it an entry is.
+        const travelled = lobeTravel(safeIndex + finite(geometry.travel, 0), safeCount);
+        closedProgress = wrapped(travelled, 1);
+        surfaceProgress = wrapped(travelled, 2);
+        const local = mobiusPoint(closedProgress, geometry.radius * mobiusReach);
         x = centerX + local.x - size / 2;
         y = centerY + local.y - size / 2;
         tangent = local.tangent;
@@ -624,7 +748,7 @@ function entryGeometry(layout, index, count, rawGeometry, angle, polygonSides,
     const normalRadians = normalAngle * Math.PI / 180;
     const closedLayouts = [
         "circular", "ellipse", "ring", "polygon", "triangle", "square",
-        "pentagon", "hexagon", "octagon", "star"
+        "pentagon", "hexagon", "octagon", "star", "mobius"
     ];
     const panelBounds = {
         x: 0,
@@ -653,6 +777,7 @@ function entryGeometry(layout, index, count, rawGeometry, angle, polygonSides,
         scaleFactor: 1,
         pathProgress: closedLayouts.includes(resolvedLayout)
             ? closedProgress : progress,
+        surfaceProgress: surfaceProgress,
         bounds: panelBounds,
         panelBounds: panelBounds,
         entryBounds: entryBounds,
@@ -1056,8 +1181,14 @@ function surface(layout, rawGeometry, rawAngle, polygonSides) {
     const points = [];
     let closed = false;
     let samples = 72;
-
-    if (["circular", "ring", "ellipse", "polygon", "triangle", "square",
+    if (resolvedLayout === "mobius") {
+        // The ∞ the band follows, drawn as one track like a ring's.
+        closed = true;
+        for (let index = 0; index < 192; ++index) {
+            const at = mobiusPoint(index / 192, radius * mobiusReach);
+            points.push(rotate({ x: centerX + at.x, y: centerY + at.y }, centerX, centerY, angle));
+        }
+    } else if (["circular", "ring", "ellipse", "polygon", "triangle", "square",
          "pentagon", "hexagon", "octagon", "star"].includes(resolvedLayout)) {
         closed = true;
         const sides = shapeSides(resolvedLayout, polygonSides);
@@ -1373,7 +1504,8 @@ function expansionVertical(side) {
 // Large pages may scroll; they never shrink icons into unreadable hit targets.
 // `anchor` is the point of the contents the clicked folder stands against.
 function expansionGeometry(layout, count, iconSize, spacing, radius, rows, options) {
-    const requested = String(layout || "fan");
+    // A popup draws no band: a Möbius opening is its ring there.
+    const requested = layout === "mobius" ? "ring" : String(layout || "fan");
     const resolved = ["fan", "grid", "stack", "arc", "ring"].includes(requested)
         ? requested : "fan";
     const safeCount = clamp(Math.floor(finite(count, 0)), 0, 48);
@@ -1622,8 +1754,12 @@ function trackRun(a, b, unscaled) {
 // With `options.unscaled` (a shape on a 3D panel's plane, whose children are
 // drawn at their samples' scale) the path is measured as if drawn at scale
 // 1: neighbours stand a pitch apart at the size each is drawn, near or far.
+//
+// A Möbius band's path (`options.lobes`) is laid out by lobedTrackLayout().
 function folderTrackLayout(samples, count, pitch, offset, options) {
     const settings = options || {};
+    if (settings.lobes === true)
+        return lobedTrackLayout(samples, count, pitch, offset, settings);
     const closed = settings.closed === true;
     const unscaled = settings.unscaled === true;
     const rings = closed ? Array.from(settings.rings || []).filter(function(ring) {
@@ -1744,6 +1880,80 @@ function folderTrackLayout(samples, count, pitch, offset, options) {
              maximumOffset: Math.max(0, total - capacity), spacing: spacing, entries: entries,
              // Where a child leaving or arriving stands as it fades out.
              ends: [pointAt(first - spacing), pointAt(first + capacity * spacing)] };
+}
+
+// A Möbius band's children (folderShape "mobius"). Its path starts where
+// its two loops cross and crosses again halfway; each loop holds half the
+// children, evenly, with a slot's gap at each of its ends, so at rest none
+// stands where the loops cross. The wheel moves them round, from one loop
+// into the other through the crossing. As on a closed path, a folder with
+// more than it holds shows that many; the others come in where the path
+// starts as one leaves there.
+function lobedTrackLayout(samples, count, pitch, offset, options) {
+    const settings = options || {};
+    const unscaled = settings.unscaled === true;
+    const points = [];
+    const source = samples || [];
+    for (let index = 0; index < Math.floor(finite(source.length, 0)); ++index) {
+        const sample = source[index];
+        if (sample && isFinite(sample.x) && isFinite(sample.y))
+            points.push(sample);
+    }
+    const total = clamp(Math.floor(finite(count, 0)), 0, 48);
+    const empty = { capacity: 0, loop: 0, closed: true, windowed: false, maximumOffset: 0, entries: [] };
+    if (points.length < 3 || total === 0)
+        return empty;
+    points.push(points[0]);
+    const lengths = [0];
+    for (let index = 1; index < points.length; ++index)
+        lengths.push(lengths[index - 1] + trackRun(points[index - 1], points[index], unscaled));
+    const length = lengths[lengths.length - 1];
+    if (!(length > 0))
+        return empty;
+    const spacing = Math.max(1, finite(pitch, 1));
+    const limit = Math.floor(finite(settings.capacity, 0));
+    const fit = Math.max(1, Math.floor(length / spacing + 0.01) - 2);
+    const capacity = Math.max(1, Math.min(total, fit, limit > 0 ? limit : fit));
+    // A slot's place along the path (lobeProgress), between slots for a
+    // child on its way.
+    const along = function(slot) { return lobeProgress(slot, capacity) * length; };
+    const first = Math.ceil(capacity / 2);
+    function pointAt(target) {
+        let segment = 0;
+        while (segment < lengths.length - 2 && lengths[segment + 1] < target)
+            ++segment;
+        const span = lengths[segment + 1] - lengths[segment];
+        const t = span > 0 ? (target - lengths[segment]) / span : 0;
+        const a = points[segment], b = points[segment + 1];
+        const scaleA = finite(a.scale, 1), scaleB = finite(b.scale, 1);
+        return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t,
+                 scale: scaleA + (scaleB - scaleA) * clamp(t, 0, 1) };
+    }
+    const travel = finite(offset, 0);
+    const entries = [];
+    for (let index = 0; index < total; ++index) {
+        const position = wrapped(index + travel, total);
+        let slot = position;
+        let visibility = 1;
+        if (total > capacity && position > capacity - 1) {
+            if (position < capacity) {
+                visibility = capacity - position;
+            } else if (position > total - 1) {
+                slot = position - total;
+                visibility = 1 - (total - position);
+            } else {
+                slot = 0;
+                visibility = 0;
+            }
+        }
+        const point = pointAt(along(slot));
+        entries.push({ index: index, x: point.x, y: point.y, scale: point.scale, slot: slot,
+                       position: position,
+                       onTrack: total <= capacity || position <= capacity - 1 + 1e-9,
+                       visibility: clamp(visibility, 0, 1) });
+    }
+    return { capacity: capacity, loop: total, closed: true, windowed: total > capacity,
+             maximumOffset: Math.max(0, total - capacity), spacing: length / 2 / (first + 1), entries: entries };
 }
 
 // folderTrackLayout() for a ring folder with circles round it (`loops`, the
@@ -2042,6 +2252,9 @@ function unitedBounds(rectangles) {
 //                 children at a time.
 //   ring   PD-14  a circle beside the folder along the outward direction,
 //                 "small" to fit the children or "panel" at the dock's radius.
+//   mobius        a Möbius strip beside the folder along the outward
+//                 direction: a band along an ∞ with one half twist (see
+//                 mobiusPoint), each loop holding half the children.
 //
 // A shape opens along the folder's outward direction, `outward`, and turns
 // away from it only as far as the screen requires. Its radius - a ring's
@@ -2064,7 +2277,11 @@ function unitedBounds(rectangles) {
 // screen, so the shape keeps the panel's tilt.
 function folderShape(shape, options) {
     const value = options || {};
-    const kind = ["fan", "arc", "stack", "ring", "grid"].includes(shape) ? shape : "fan";
+    const kind = ["fan", "arc", "stack", "ring", "grid", "mobius"].includes(shape) ? shape : "fan";
+    // A Möbius band opens where a ring does and shows as many at once as a
+    // ring of one circle.
+    const ringLike = kind === "ring" || kind === "mobius";
+    const panelSized = kind === "ring" && value.ringSize === "panel";
     const folder = { x: finite(value.folder && value.folder.x, 0),
                      y: finite(value.folder && value.folder.y, 0) };
     const facing = { x: finite(value.outward && value.outward.x, 0),
@@ -2105,6 +2322,8 @@ function folderShape(shape, options) {
     // On a plane a child nearer than the folder is drawn no larger than the
     // folder's own icon (`largestScale`); one farther away, smaller.
     const largestScale = finite(value.largestScale, 0) > 0.35 ? finite(value.largestScale, 0) : Infinity;
+    // How far each circle of a two-circle ring leans on a plane.
+    const gimbalLean = 10 * Math.PI / 180;
     // Where a point is seen on the screen, and how large a child is drawn
     // there; a flat shape is its own picture, at size 1.
     function seen(point) {
@@ -2223,6 +2442,8 @@ function folderShape(shape, options) {
         }
         return total;
     }
+    // How far out a shape is looked for at most.
+    const largest = 640;
     // The least distance out, to 2 pixels, at which `fits(distance)` holds:
     // coarse steps, then halving between the last miss and the first fit.
     // `largest` when nothing up to it fits.
@@ -2248,7 +2469,6 @@ function folderShape(shape, options) {
         }
         return hit;
     }
-    const largest = 640;
     // The least size from `from` up to `limit`, to 2 pixels, at which
     // `fits(size)` holds, for a test that keeps holding once it does:
     // doubling steps, then halving between the last miss and the first fit.
@@ -2279,8 +2499,6 @@ function folderShape(shape, options) {
     // A ring's circles do not depend on which way it opens: worked out once
     // for each number of children it holds.
     const ringSizes = {};
-    // How far each circle of a two-circle ring leans on a plane.
-    const gimbalLean = 10 * Math.PI / 180;
     // A small ring at its smallest holds six children; a folder with more
     // has a second circle round it, a child's cell further out, for the
     // rest (only the ring does). Where the screen is short the first circle
@@ -2289,9 +2507,9 @@ function folderShape(shape, options) {
     // come round with the wheel. A ring the size of the panel keeps its
     // radius and one circle.
     const ringSteps = [];
-    if (kind === "ring" && value.ringSize !== "panel") {
+    if (ringLike && !panelSized) {
         const inner = Math.min(count, 6);
-        if (count > inner)
+        if (kind === "ring" && count > inner)
             for (const shown of [inner, 4, 3])
                 if (shown <= inner && !ringSteps.some(function(step) { return step.shown === shown; }))
                     ringSteps.push({ shown: shown, second: true });
@@ -2598,6 +2816,129 @@ function folderShape(shape, options) {
             result.capacity = columns * rows;
             // No border round it: the children alone.
             result.grid = { columns: columns, rows: rows, cells: grid.cells };
+        } else if (kind === "mobius") {
+            // The ∞ lies along the way out, its near loop's end a cell from
+            // the folder. Each loop holds half the children, a slot's gap at
+            // each of its ends where the loops cross; the band is just long
+            // enough for that, on a plane as drawn there.
+            const step = ringSteps[Math.min(fewer, ringSteps.length - 1)];
+            const slots = step.shown + 2;
+            const across = { x: -direction.y, y: direction.x };
+            const placeLocal = function(centre, x, y) {
+                return { x: centre.x + direction.x * x + across.x * y,
+                         y: centre.y + direction.y * x + across.y * y };
+            };
+            // The middle line once, for a reach of 1; each try only moves
+            // and sizes it.
+            const unit = [];
+            for (let index = 0; index < 192; ++index)
+                unit.push(mobiusPoint(index / 192, 1));
+            const band = function(centre, reach) {
+                return unit.map(function(at) { return placeLocal(centre, at.x * reach, at.y * reach); });
+            };
+            // Every two children a pitch apart in a straight line - round a
+            // loop's end that takes more than a pitch along the band - and
+            // on a plane the band as long as drawn as they need, as a ring is.
+            const bandFits = function(around) {
+                const points = band(folder, around);
+                const shown = lobedTrackLayout(points, step.shown, curvePitch, 0,
+                                               { capacity: step.shown }).entries;
+                for (let a = 0; a < shown.length; ++a)
+                    for (let b = a + 1; b < shown.length; ++b)
+                        if (Math.hypot(shown[a].x - shown[b].x, shown[a].y - shown[b].y) < curvePitch - 0.5)
+                            return false;
+                return !project || drawnLength(points.concat([points[0]])) >= slots * curvePitch - 0.5;
+            };
+            let reach = Math.max(1.2 * size, slots * curvePitch / mobiusLength());
+            const known = ringSizes[fewer];
+            reach = known ? known.radius : leastSize(reach, largest / 2, bandFits);
+            ringSizes[fewer] = { radius: reach, outerRadius: 0 };
+            // A child's cell is wider than six of the band's steps, so on a
+            // plane, where each point is looked up in the view, every sixth
+            // tells whether it keeps clear.
+            const thinned = function(points) {
+                return project ? points.filter(function(point, index) { return index % 6 === 0; }) : points;
+            };
+            let distance = squareReach(size, direction) + gap + reach;
+            const nearest = distance;
+            if (project) {
+                const from = distance;
+                distance = from + leastOut(function(out) {
+                    return allClear(thinned(band(along(folder, direction, from + out), reach)));
+                });
+            } else {
+                while (distance < largest + reach && !allClear(band(along(folder, direction, distance), reach)))
+                    distance += 4;
+            }
+            result.out = distance - nearest;
+            const centre = along(folder, direction, distance);
+            result.samples = band(centre, reach);
+            result.closed = true;
+            // Children stand on each loop apart from where they cross.
+            result.lobes = true;
+            result.capacity = step.shown;
+            // The band is drawn as one solid ribbon
+            // between its two sides (`ribbon`), from the far end of its
+            // second loop, so the strand passing over the crossing is drawn
+            // over the other. Flat it is the ∞ itself. On a 3D panel's plane
+            // it is a Möbius strip as one is seen in space: across its width
+            // it turns half a turn out of the plane along its length, so its
+            // two loops lean opposite ways. Where it passes over the crossing
+            // it faces the viewer, seen at its widest; under the crossing it
+            // is turned as near edge on as it can be seen; the half turn
+            // between is shared by the two loops so both hold. It is one
+            // colour, one shape, with nothing drawn between its parts. Its
+            // outline is its two sides.
+            // The band is a little more than half an icon wide, so its
+            // loops stay open round their middles.
+            const halfBand = 0.3 * size;
+            const sides = function(at, twist) {
+                const turn = at.tangent * Math.PI / 180;
+                const across = halfBand * Math.cos(twist), upward = halfBand * Math.sin(twist);
+                const raise = function(point, by) {
+                    return project ? { x: point.x, y: point.y, height: by } : point;
+                };
+                return [raise(placeLocal(centre, at.x - Math.sin(turn) * across, at.y + Math.cos(turn) * across), upward),
+                        raise(placeLocal(centre, at.x + Math.sin(turn) * across, at.y - Math.cos(turn) * across), -upward)];
+            };
+            // The turn across a strand at which it is seen widest or
+            // narrowest.
+            const seenTurn = function(progress, widest) {
+                const at = mobiusPoint(progress, reach);
+                let best = widest ? -1 : Infinity, chosen = 0;
+                for (let step = 0; step < 36; ++step) {
+                    const ends = sides(at, Math.PI * step / 36).map(seen);
+                    if (!ends[0] || !ends[1])
+                        continue;
+                    const apart = Math.hypot(ends[0].x - ends[1].x, ends[0].y - ends[1].y);
+                    if (widest ? apart > best : apart < best) {
+                        best = apart;
+                        chosen = Math.PI * step / 36;
+                    }
+                }
+                return chosen;
+            };
+            const under = project ? seenTurn(0, false) : 0, over = project ? seenTurn(0.5, true) : 0;
+            // From under to over round the first loop, over to under turned
+            // half round on through the second.
+            const firstTurn = ((over - under) % Math.PI + Math.PI) % Math.PI;
+            const left = [], right = [];
+            for (let index = 0; index < 192; ++index) {
+                const at = mobiusPoint(index / 192, reach);
+                const share = index / 192;
+                const twist = !project ? 0
+                    : share <= 0.5 ? under + firstTurn * share * 2
+                    : over + (Math.PI - firstTurn) * (share - 0.5) * 2;
+                const ends = sides(at, twist);
+                left.push(ends[0]);
+                right.push(ends[1]);
+            }
+            result.outline = { closed: true, points: left.concat(right), loops: [], evenOdd: true,
+                               ribbon: { left: left, right: right } };
+            result.band = true;
+            result.centre = centre;
+            result.radius = reach;
+            result.ringSize = "small";
         } else {
             const panelRadius = Math.max(0, finite(value.panelRadius, 0));
             // Neighbours on a circle stand a chord apart, a little less than
@@ -2607,7 +2948,7 @@ function folderShape(shape, options) {
             const step = ringSteps[Math.min(fewer, ringSteps.length - 1)];
             const fitting = Math.max(1.2 * size, step.shown >= 2
                 ? curvePitch / (2 * Math.sin(Math.PI / step.shown)) : 0);
-            let radius = Math.min(largest / 2, value.ringSize === "panel" && panelRadius > 0
+            let radius = Math.min(largest / 2, panelSized && panelRadius > 0
                 ? Math.max(1.2 * size, panelRadius) : fitting);
             // A circle of `around` from its point nearest the folder, clockwise.
             function circle(centre, around) {
@@ -2634,7 +2975,7 @@ function folderShape(shape, options) {
             const known = ringSizes[fewer];
             if (known) {
                 radius = known.radius;
-            } else if (project && value.ringSize !== "panel") {
+            } else if (project && !panelSized) {
                 radius = leastSize(radius, largest / 2, function(around) {
                     return loopLength(around, -1) >= step.shown * curvePitch - 0.5;
                 });
@@ -2694,6 +3035,7 @@ function folderShape(shape, options) {
                 return allClear(thinned(set.points)) && (!set.outer || allClear(thinned(set.outer)));
             };
             let distance = squareReach(size, direction) + gap + reach;
+            const nearest = distance;
             if (project) {
                 const from = distance;
                 distance = from + leastOut(function(out) { return clearRings(rings(from + out)); });
@@ -2701,6 +3043,8 @@ function folderShape(shape, options) {
                 while (distance < largest + reach && !clearRings(rings(distance)))
                     distance += 4;
             }
+            // How far it moved out to keep clear.
+            result.out = distance - nearest;
             const ring = rings(distance);
             result.samples = ring.points;
             result.closed = true;
@@ -2708,7 +3052,7 @@ function folderShape(shape, options) {
             const chordFit = function(around) {
                 return Math.max(1, Math.floor(Math.PI / Math.asin(Math.min(1, curvePitch / (2 * around))) + 1e-6));
             };
-            result.capacity = project && value.ringSize !== "panel" ? step.shown : chordFit(radius);
+            result.capacity = project && !panelSized ? step.shown : chordFit(radius);
             result.outline = { closed: true, points: ring.points, loops: ring.outer ? [ring.outer] : [] };
             if (ring.outer) {
                 result.rings = [ring.outer];
@@ -2718,7 +3062,7 @@ function folderShape(shape, options) {
             }
             result.centre = ring.centre;
             result.radius = radius;
-            result.ringSize = value.ringSize === "panel" && panelRadius > 0 ? "panel" : "small";
+            result.ringSize = panelSized && panelRadius > 0 ? "panel" : "small";
         }
         // The room it needs: every place a child passes through, a pitch past
         // an open path's ends where one fades, the outline and the folder.
@@ -2762,9 +3106,13 @@ function folderShape(shape, options) {
         if (project && !result.hidden) {
             result.projected = true;
             result.samples = result.samples.map(seen);
-            if (result.outline)
+            if (result.outline) {
+                const ribbon = result.outline.ribbon;
                 result.outline = { closed: result.outline.closed, points: outline, loops: loops,
-                                   strokeFrom: result.outline.strokeFrom };
+                                   strokeFrom: result.outline.strokeFrom, evenOdd: result.outline.evenOdd,
+                                   ribbon: ribbon ? thickRibbon(ribbon.left.map(seen), ribbon.right.map(seen))
+                                                  : undefined };
+            }
             if (result.rings)
                 result.rings = result.rings.map(function(loop) { return loop.map(seen); });
             if (result.grid)
@@ -2775,6 +3123,45 @@ function folderShape(shape, options) {
                     result[key] = seen(result[key]);
         }
         return result;
+    }
+
+    // A twisting band seen edge on still shows its thickness: where its two
+    // sides come closer than a quarter of an icon as drawn, they part that
+    // far across the band's way there.
+    function thickRibbon(left, right) {
+        if (left.some(function(point) { return !point; }) || right.some(function(point) { return !point; }))
+            return { left: left, right: right };
+        const count = left.length;
+        const middle = left.map(function(point, index) {
+            return { x: (point.x + right[index].x) / 2, y: (point.y + right[index].y) / 2,
+                     scale: (finite(point.scale, 1) + finite(right[index].scale, 1)) / 2 };
+        });
+        const thick = [], other = [];
+        for (let index = 0; index < count; ++index) {
+            const a = left[index], b = right[index], centre = middle[index];
+            const least = size / 4 * centre.scale;
+            const apart = Math.hypot(a.x - b.x, a.y - b.y);
+            if (apart >= least) {
+                thick.push(a);
+                other.push(b);
+                continue;
+            }
+            // Parted the way its sides already lie, so it widens smoothly;
+            // across the band's way where they meet in one point.
+            let nx = 0, ny = 0;
+            if (apart > 1e-3) {
+                nx = (a.x - b.x) / apart;
+                ny = (a.y - b.y) / apart;
+            } else {
+                const before = middle[(index - 1 + count) % count], after = middle[(index + 1) % count];
+                const dx = after.x - before.x, dy = after.y - before.y, length = Math.hypot(dx, dy) || 1;
+                nx = -dy / length;
+                ny = dx / length;
+            }
+            thick.push({ x: centre.x + nx * least / 2, y: centre.y + ny * least / 2, scale: a.scale });
+            other.push({ x: centre.x - nx * least / 2, y: centre.y - ny * least / 2, scale: b.scale });
+        }
+        return { left: thick, right: other };
     }
 
     function placed(degrees, fewer) {
@@ -2835,7 +3222,7 @@ function folderShape(shape, options) {
     // size shows at once, and stands as close to the panel as it can: of
     // every way it fits the screen, the one that moved out least (then the
     // one turned least). It holds fewer only where none fits.
-    if (project && kind !== "ring") {
+    if (project && !ringLike) {
         for (const fewer of shrinks) {
             let closest = null;
             for (const degrees of turns) {

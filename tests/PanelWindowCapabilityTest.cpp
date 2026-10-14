@@ -1,3 +1,4 @@
+#include "model/PanelIconCapacity.h"
 #include "model/PanelCapabilityResolver.h"
 #include "RendererBuildConfig.h"
 #include "model/PanelDefinition.h"
@@ -319,6 +320,8 @@ private slots:
     void freePanelContentFollowsItsRecordAndOrdersItsOwnEntries();
     void freeFolderIconsUseNativeMetadata();
     void freePanelAreasAreShared();
+    void panelsHoldTheIconsTheirShapeHasRoomFor();
+    void studioOffersTheMobiusStrip();
     void studioPageWheelInput();
     void studioPanelMotionControls();
     void tiltEditorsFollowTheSelectedRenderer();
@@ -442,6 +445,110 @@ void PanelWindowCapabilityTest::freePanelAreasAreShared()
     registry->removePanel(second);
     QVERIFY(!registry->panelIds().contains(second));
     QVERIFY(backend.freePanelAreas(first).isEmpty());
+}
+
+void PanelWindowCapabilityTest::panelsHoldTheIconsTheirShapeHasRoomFor()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    const auto set = [&](const QVariantMap &values) {
+        return backend.applyPanelSettingsTransaction(panel,
+            registry->panelDefinition(panel)->settingsRevision, values);
+    };
+    // A ring of radius 60 holds five icons of 52 pixels at a 16 pixel gap.
+    QVERIFY(set({{"type", "launcher"}, {"layout", "circular"}, {"layoutRadius", 60}, {"iconSize", 52},
+                 {"panelRotationMode", "none"}}).value("success").toBool());
+    QTemporaryDir files;
+    QVERIFY(files.isValid());
+    QStringList urls;
+    for (int index = 0; index < 6; ++index) {
+        const QString folder = files.filePath("Folder " + QString::number(index));
+        QVERIFY(QDir().mkpath(folder));
+        urls.append(QUrl::fromLocalFile(folder).toString());
+    }
+    QVERIFY(backend.addPanelEntries(panel, urls.mid(0, 5)));
+    QVERIFY2(!backend.addPanelEntries(panel, urls.mid(5, 1)), "a sixth icon on a full ring");
+    QVariantMap room = backend.panelIconRoom(panel);
+    QCOMPARE(room.value("capacity").toInt(), 5);
+    QCOMPARE(room.value("count").toInt(), 5);
+    QCOMPARE(room.value("minimumRadius").toInt(), 55);
+    // Panel Studio cannot make it smaller, nor its icons bigger, than its
+    // icons fit; larger is fine, and then a sixth fits.
+    QVariantMap refused = set({{"layoutRadius", 48}});
+    QVERIFY(!refused.value("success").toBool());
+    QCOMPARE(refused.value("errorCode").toString(), QStringLiteral("panel-too-small"));
+    refused = set({{"iconSize", 80}});
+    QCOMPARE(refused.value("errorCode").toString(), QStringLiteral("panel-too-small"));
+    QCOMPARE(registry->panelDefinition(panel)->layout.radius, 60);
+    QVERIFY(set({{"layoutRadius", 80}}).value("success").toBool());
+    QVERIFY(backend.addPanelEntries(panel, urls.mid(5, 1)));
+    // Its sliders stop where the icons would no longer fit.
+    const QVariantList fields = backend.panelSettingsEditorSnapshot(panel, "studio")
+        .value("panelFields").toList();
+    const int needed = ArchDock::panelMinimumRadius(QStringLiteral("circular"), 6, 52, 6).value();
+    QCOMPARE(fieldByKey(fields, "layoutRadius").value("minimumValue").toInt(), needed);
+    const int largest = ArchDock::panelMaximumIconSize(QStringLiteral("circular"), 6, 80, 6).value();
+    QCOMPARE(fieldByKey(fields, "iconSize").value("maximumValue").toInt(), largest);
+    // What a tilt leaves of the track counts only for a panel drawn in 3D,
+    // and only a free panel's widget reports it.
+    QVERIFY(!backend.reportPanelSeenRoom("bottom", 0.5));
+    QVERIFY(!backend.reportPanelSeenRoom(panel, 0.01));
+    QVERIFY(backend.reportPanelSeenRoom(panel, 0.5));
+    QCOMPARE(backend.panelIconRoom(panel).value("seen").toDouble(), 1.0);
+    // Its flat widget reports all of the track.
+    QVERIFY(backend.reportPanelSeenRoom(panel, 1.0));
+    if (ARCHDOCK_QUICK3D_BUILT && ARCHDOCK_SCENE3D_BUILT)
+    {
+        QVERIFY(set({{"rendererTier", "true3d"}}).value("success").toBool());
+        QVERIFY(backend.reportPanelSeenRoom(panel, 0.5));
+        // Seen tilted to half its track, the six icons no longer fit: none
+        // can be added, and the panel cannot be made any smaller.
+        QCOMPARE(backend.panelIconRoom(panel).value("seen").toDouble(), 0.5);
+        QVERIFY(backend.panelIconRoom(panel).value("capacity").toInt() < 6);
+        QVERIFY(set({{"layoutRadius", 70}}).value("errorCode").toString() == QStringLiteral("panel-too-small"));
+        QVERIFY(set({{"rendererTier", "procedural2d"}}).value("success").toBool());
+    }
+    // A row grows with its icons: no limit there.
+    QVERIFY(set({{"layout", "horizontal"}}).value("success").toBool());
+    QCOMPARE(backend.panelIconRoom(panel).value("capacity").toInt(), -1);
+}
+
+// Panel Studio offers a free panel the Möbius strip by name, as its layout
+// and as its folders' opening; an edge panel's folders open a popup, which
+// has no band to draw.
+void PanelWindowCapabilityTest::studioOffersTheMobiusStrip()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    const auto labelOf = [](const QVariantMap &field, const QString &value) {
+        for (const QVariant &option : field.value("options").toList())
+            if (option.toMap().value("value").toString() == value)
+                return option.toMap().value("label").toString();
+        return QString();
+    };
+    // A folder on it, so its folders' opening is a setting there.
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"type", "launcher"}}).value("success").toBool());
+    QTemporaryDir files;
+    QVERIFY(files.isValid());
+    QVERIFY(QDir().mkpath(files.filePath("Folder")));
+    QVERIFY(backend.addPanelEntries(panel, {QUrl::fromLocalFile(files.filePath("Folder")).toString()}));
+    const QVariantList fields = backend.panelSettingsEditorSnapshot(panel, "studio").value("panelFields").toList();
+    QCOMPARE(labelOf(fieldByKey(fields, "layout"), "mobius"), QStringLiteral("Möbius strip"));
+    QCOMPARE(labelOf(fieldByKey(fields, "folderLayout"), "mobius"), QStringLiteral("Möbius strip"));
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"layout", "mobius"}}).value("success").toBool());
+    QCOMPARE(registry->panelDefinition(panel)->layout.pathType, QStringLiteral("mobius"));
+    const QVariantList edge = backend.panelSettingsEditorSnapshot("bottom", "studio").value("panelFields").toList();
+    QVERIFY(labelOf(fieldByKey(edge, "folderLayout"), "mobius").isEmpty());
 }
 
 void PanelWindowCapabilityTest::studioIconTiles_data()
@@ -682,13 +789,15 @@ void PanelWindowCapabilityTest::studioPanelMotionControls()
          QStringLiteral("closeDelay"), QStringLiteral("collapseMechanism")})
         QVERIFY2(!freeFields.contains(key), qPrintable(key));
     // A curved free panel opens its folders along its own curve by default,
-    // and offers that first; native panels keep the five popup layouts.
+    // and offers that first, and the Möbius strip last; native panels keep
+    // the five popup layouts.
     QCOMPARE(registry->panelValue(panel, QStringLiteral("folderLayout")).toString(), QStringLiteral("track"));
     const QVariantMap freeFolder = fieldByKey(backend.panelSettingsEditorSnapshot(panel, "studio")
         .value("panelFields").toList(), QStringLiteral("folderLayout"));
     QCOMPARE(freeFolder.value("choices").toStringList(),
              QStringList({QStringLiteral("track"), QStringLiteral("fan"), QStringLiteral("grid"),
-                          QStringLiteral("stack"), QStringLiteral("arc"), QStringLiteral("ring")}));
+                          QStringLiteral("stack"), QStringLiteral("arc"), QStringLiteral("ring"),
+                          QStringLiteral("mobius")}));
     QCOMPARE(freeFolder.value("options").toList().constFirst().toMap().value("label").toString(),
              QStringLiteral("Along the dock"));
     const auto nativeFields = fieldKeys(backend.panelSettingsEditorSnapshot("bottom", "studio").value("panelFields").toList());

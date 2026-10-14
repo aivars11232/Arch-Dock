@@ -1,5 +1,40 @@
 # Arch Dock current state
 
+<!-- LIST_PIECE_2_BEGIN -->
+## The owner's list, piece 2: a panel holds what its size has room for, the Möbius strip opening — 2026-10-14
+
+Report `docs/repairs/OWNER-LIST-PIECE-2.md`; every runtime claim comes from
+private sessions on a plain Plasma desktop with copies of Arch Dock's own
+settings.
+
+- Icon limit: each icon needs its own size and 16 pixels along the panel's
+  track (the owner's top Plasma panel's gap), so bigger icons fit fewer. A
+  ring or polygon holds its outline's length in such slots, an open arc one
+  more; rows, grids and spirals have no limit. A 3D panel's widget measures
+  what of its track its icons get as seen and reports it to Arch Dock: the
+  owner's free-2 (tilted 60 degrees, scaled 1.25) keeps 37 % (6 icons need
+  radius 182, 13 need 386); free-1 (tilted 75 degrees) 10 %, so its 7 icons
+  are more than the 1 that fits there, and it takes no more until it is made
+  larger, its icons smaller or its tilt flatter.
+- Refused past the limit: a drop (with a notice on the panel), Panel Studio's
+  Radius and Icon size (their spin boxes stop there; Apply refuses with the
+  sizes that would fit), the desktop's 3D scale handles; a preset that would
+  overfill a panel grows its radius instead. A tilt is never refused.
+- Möbius strip (approved by the owner on pictures, 2026-10-14): a folder
+  opening on free panels and a free panel layout. The band follows an ∞
+  (LayoutEngine `mobiusPoint`), one seamless shape; flat it is a plain ∞, in
+  3D it has one half twist so its loops lean opposite ways. A 3D panel stands
+  on a generated twisted platform (PlatformGeometry `mobius`); its icons
+  ride the band's face round both apparent sides. An icon and its stand keep
+  their usual pose (the stand on the face, the icon upright above it) and
+  move only along the line of sight (PanelScene3D `depthPush`): in front of
+  the band on the face turned toward the viewer, behind it on the face
+  turned away, blended across the turn. Children and icons stand half on
+  each loop, a slot's gap where the loops cross (`lobeProgress`).
+- Ring-like openings choose the side of the panel with more free room and
+  keep the nearer, fuller one.
+<!-- LIST_PIECE_2_END -->
+
 <!-- LIST_PIECE_1_BEGIN -->
 ## The owner's list, piece 1: folders open at once, the 3D star, panels that stay removed, one panel to a Studio window — 2026-10-13 late evening
 

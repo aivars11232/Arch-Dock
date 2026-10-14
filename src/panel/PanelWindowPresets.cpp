@@ -9,6 +9,7 @@
 #include "../PanelVisibility.h"
 #include "../ScreenIdentity.h"
 #include "../integration/PlasmaPanelAdapter.h"
+#include "../model/PanelIconCapacity.h"
 #include "../model/PanelSettingsSchema.h"
 #include "../presets/PresetApplication.h"
 #include "../persistence/ConfigurationBackup.h"
@@ -766,6 +767,17 @@ ArchDock::PresetPreviewSession::Operations PanelWindow::presetAuditionOperations
         if (!candidate.isValid(error)) return false;
         if (prepared.record.kind == QStringLiteral("icon") && !PresetApplication::iconOnlyChange(prepared.draft.previousPanel, candidate))
             return fail(QStringLiteral("icon-only-violation"));
+        // The desktop handles may not squeeze a 3D panel narrower than its
+        // own icons need. A look whose size leaves them too little room grows
+        // the panel to the least radius they fit at instead.
+        const double seenBefore = seenRoomFactor(prepared.draft.previousPanel);
+        const double seenAfter = predictedSeenRoom(candidate, &prepared.draft.previousPanel);
+        if (prepared.record.kind == QStringLiteral("panel"))
+            ArchDock::growPanelToFitIcons(prepared.draft.previousPanel, candidate, seenBefore, seenAfter);
+        if ((prepared.record.kind == QStringLiteral("scene3d") || prepared.record.kind == QStringLiteral("panel"))
+            && ArchDock::panelIconRoomRefusal(prepared.draft.previousPanel, candidate, seenBefore, seenAfter))
+            return fail(QStringLiteral("panel-too-small"));
+        if (!candidate.isValid(error)) return false;
         if ((prepared.iconPreset && !prepared.iconPreset->icon.perStateAnimationOverrides.isEmpty()) ||
             (prepared.recommendedIcons && !prepared.recommendedIcons->icon.perStateAnimationOverrides.isEmpty()))
             return fail(QStringLiteral("per-state-icon-motion-unavailable"));

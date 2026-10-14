@@ -2967,9 +2967,11 @@ def run_interaction_matrix(free_panel):
             desktop.write_text("[Desktop Entry]\nType=Application\nName=Travel " + str(index)
                                + "\nExec=/usr/bin/true\nIcon=" + icon + "\n")
             uris.append(desktop.as_uri())
+        # A radius at which the shortest open path, the fan, has room for
+        # all six icons: a panel holds only as many as its size has room for.
         base = {"type": "launcher", "rendererTier": "procedural2d", "panelThemeId": "",
                 "completeThemeId": "", "panelRotationMode": "none", "layout": "circular",
-                "layoutRadius": 120, "layoutAngle": 0}
+                "layoutRadius": 180, "layoutAngle": 0}
         if checking:
             base.update(panelMotionTarget="items", scrollSensitivity=1)
         configure(free_panel, base)

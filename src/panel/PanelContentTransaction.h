@@ -38,6 +38,9 @@ struct PanelContentRequest
     QString beforeEntryId;
     // SetOrder: a permutation of the current canonical order.
     QStringList order;
+    // Add: how much of its track the panel's icons get as drawn
+    // (PanelIconCapacity's `seen`).
+    double seenTrackFactor = 1;
 };
 
 struct PanelContentOutcome

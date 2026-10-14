@@ -1240,6 +1240,141 @@ Item {
         }
         return { samples: samples, depth: root.projectScenePoint(anchor.scenePosition).z }
     }
+    // How much of its track the dock's icons get as drawn, against the track
+    // in the panel's own pixels, for neighbours that need their drawn size
+    // and `gap` pixels between them. By default the panel at its size as
+    // drawn, however it is turned: the platform's track and its icons at the
+    // platform's middle. `asSeen` measures what the camera shows instead:
+    // less where a tilt shortens the track or far icons stand closer, at the
+    // worst place along it (a closed track's icons turn all the way round
+    // it, an open one's stay between its ends), for neighbours as far apart
+    // as they would stand once it is full.
+    function seenTrackFactor(gap, closed, asSeen) {
+        const node = worldEntries.count > 0 ? worldEntries.objectAt(0) : null
+        const drawn = projectedEntryGeometry[0]
+        if (!rendererReady || !node || !node.inputAnchor || !drawn || !(drawn.height > 0)) return 1
+        const size = Math.max(1, Number(node.size) || 1)
+        const sx = Math.max(1e-6, shownScaleX), sy = Math.max(1e-6, shownScaleY)
+        const own = entryFrame.mapPositionFromScene(node.scenePosition)
+        const radius = Math.hypot(own.x / sx, own.y / sy)
+        const plane = Math.max(1, layoutTrackRadius)
+        if (!(radius > 0)) return 1
+        const foot = sceneContent.mapPositionFromScene(node.scenePosition)
+        const lift = sceneContent.mapPositionFromScene(node.inputAnchor.scenePosition).minus(foot)
+        const frame = root.cameraMap(function(x, y) {
+            return sceneContent.mapPositionFromScene(entryFrame.mapPositionToScene(Qt.vector3d(x, y, own.z))).plus(lift)
+        })
+        // A Möbius strip's track is its ∞, its strands at their heights;
+        // every other one a circle (or ellipse) through the first icon.
+        const mobius = generatedPlatform !== null && generatedPlatform.shape === "mobius"
+        const trackScale = mobius ? generatedPlatform.track * platformScale : radius
+        const ownLift = mobius ? PlatformGeometry.standLift("mobius", (entryGeometry[0] || ({})).progress) : 0
+        const raised = root.cameraMap(function(x, y) {
+            return sceneContent.mapPositionFromScene(entryFrame.mapPositionToScene(Qt.vector3d(x, y, own.z + 1))).plus(lift)
+        }).at(0, 0)
+        const level = frame.at(0, 0)
+        const upward = { x: raised.x - level.x, y: raised.y - level.y, z: raised.z - level.z }
+        // A place along the track `share` of the way round: in the camera's
+        // frame, and in the panel's own pixels.
+        const trackAt = function(share, from, to) {
+            if (mobius) {
+                const at = LayoutEngine.mobiusPoint(share, trackScale * LayoutEngine.mobiusReach)
+                const own2d = LayoutEngine.mobiusPoint(share, plane * LayoutEngine.mobiusReach)
+                const rise = (PlatformGeometry.standLift("mobius", share) - ownLift) * platformScale
+                const base = frame.at(at.x * sx, -at.y * sy)
+                return { point: { x: base.x + upward.x * rise, y: base.y + upward.y * rise, z: base.z + upward.z * rise },
+                         flat: { x: own2d.x * sx, y: own2d.y * sy } }
+            }
+            const turn = from + (to - from) * share
+            return { point: frame.at(radius * Math.cos(turn) * sx, radius * Math.sin(turn) * sy),
+                     flat: { x: plane * Math.cos(turn) * sx, y: plane * Math.sin(turn) * sy } }
+        }
+        const nearDepth = Number(drawn.depth) + camera.clipNear
+        if (!asSeen) {
+            const middle = -frame.at(0, 0).z
+            if (!(middle > camera.clipNear + 1e-6)) return 1
+            const length = function(v) { return Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) }
+            const unit = (length(frame.step(1, 0)) + length(frame.step(0, 1))) / 2 * cameraDistance / middle
+            const icon = drawn.height * nearDepth / middle
+            const factor = trackScale * unit / plane * (size + gap) / (icon + gap)
+            return Number.isFinite(factor) && factor > 0 ? Math.max(0.05, Math.min(1.5, factor)) : 1
+        }
+        // An open track runs between its end icons: the circle less the
+        // widest gap between neighbouring icons.
+        let from = 0, to = 2 * Math.PI
+        if (!closed && worldEntries.count > 1) {
+            const turns = []
+            for (let index = 0; index < worldEntries.count; ++index) {
+                const entry = worldEntries.objectAt(index)
+                if (!entry) continue
+                const at = entryFrame.mapPositionFromScene(entry.scenePosition)
+                turns.push(Math.atan2(at.y / sy, at.x / sx))
+            }
+            turns.sort(function(a, b) { return a - b })
+            let widest = turns[0] + 2 * Math.PI - turns[turns.length - 1], after = 0
+            for (let index = 1; index < turns.length; ++index)
+                if (turns[index] - turns[index - 1] > widest) {
+                    widest = turns[index] - turns[index - 1]
+                    after = index
+                }
+            from = turns[after]
+            to = from + 2 * Math.PI - widest
+        }
+        // The track as drawn, in fine steps: where each place is seen, how
+        // large an icon is drawn there (it goes with the distance from the
+        // camera) and how far along the track it lies in the panel's pixels.
+        const places = []
+        let along = 0, previous = null
+        for (let step = 0; step <= 360; ++step) {
+            const sample = trackAt(step / 360, from, to)
+            const point = sample.point
+            const depth = -point.z
+            if (!(depth > camera.clipNear + 1e-6)) return 1
+            if (previous)
+                along += Math.hypot(sample.flat.x - previous.x, sample.flat.y - previous.y)
+            previous = sample.flat
+            const factor = cameraDistance / depth
+            places.push({ x: point.x * factor, y: -point.y * factor, icon: drawn.height * nearDepth / depth,
+                          along: along })
+        }
+        const length = along
+        if (!(length > 0)) return 1
+        const placeAt = function(distance) {
+            let low = 0, high = places.length - 1
+            while (high - low > 1) {
+                const middle = (low + high) >> 1
+                if (places[middle].along <= distance) low = middle
+                else high = middle
+            }
+            const a = places[low], b = places[high]
+            const share = b.along > a.along ? (distance - a.along) / (b.along - a.along) : 0
+            return { x: a.x + (b.x - a.x) * share, y: a.y + (b.y - a.y) * share,
+                     icon: a.icon + (b.icon - a.icon) * share }
+        }
+        // Neighbours `spacing` apart, everywhere along the track: the least
+        // of how far apart they are seen against what their drawn size and
+        // the gap need, as a share of what the spacing gives a flat panel.
+        const worst = function(spacing) {
+            let least = Infinity
+            for (let index = 0; index < places.length - 1; ++index) {
+                let target = places[index].along + spacing
+                if (target > length) {
+                    if (!closed) break
+                    target -= length
+                }
+                const a = places[index], b = placeAt(target)
+                const apart = Math.hypot(b.x - a.x, b.y - a.y)
+                least = Math.min(least, apart / spacing * (size + gap) / ((a.icon + b.icon) / 2 + gap))
+            }
+            return least
+        }
+        // Neighbours a step apart first, then as far apart as that many
+        // icons would stand, until it settles.
+        let factor = worst(length / 360)
+        for (let round = 0; round < 4 && Number.isFinite(factor) && factor > 0; ++round)
+            factor = worst(Math.min(length / 2, (size + gap) / factor))
+        return Number.isFinite(factor) && factor > 0 ? Math.max(0.05, Math.min(1.5, factor)) : 1
+    }
     // Points on a plane in the camera's frame, from `place(x, y)` giving
     // their places in the scene's content: the whole way there is affine,
     // so three points give every other one, as plain numbers. `at(x, y)` is
@@ -1282,9 +1417,16 @@ Item {
         const edge = Math.max(radius, folderRimDistance(ux, uy, radius))
         const depth = root.projectScenePoint(node.inputAnchor.scenePosition).z
         const frame = root.cameraMap(function(x, y) { return Qt.vector3d(x, y, foot.z).plus(lift) })
+        // A unit above the plane, in the camera's frame: a band twisting
+        // out of the plane stands that way.
+        const raised = root.cameraMap(function(x, y) { return Qt.vector3d(x, y, foot.z + 1).plus(lift) }).at(0, 0)
+        const level = frame.at(0, 0)
+        const up = { x: raised.x - level.x, y: raised.y - level.y, z: raised.z - level.z }
         const near = camera.clipNear, distance = cameraDistance, middleX = width / 2, middleY = height / 2
-        const view = function(x, y) {
-            const point = frame.at(x, y)
+        // `h` raises the point that far above the plane.
+        const view = function(x, y, h) {
+            const base = frame.at(x, y), rise = Number(h) || 0
+            const point = { x: base.x + up.x * rise, y: base.y + up.y * rise, z: base.z + up.z * rise }
             const ahead = -point.z
             if (!(ahead > near + 1e-6)) return null
             const factor = distance / ahead
@@ -1312,16 +1454,18 @@ Item {
             // placed and sized as seen at that point; each child keeps the
             // size its own place gives it.
             alignedAt: function(ox, oy) {
-                const centre = view(0, 0), atX = view(1, 0), atY = view(0, 1), origin = view(ox, oy)
-                if (!centre || !atX || !atY || !origin) return null
+                const centre = view(0, 0), atX = view(1, 0), atY = view(0, 1), atZ = view(0, 0, 1), origin = view(ox, oy)
+                if (!centre || !atX || !atY || !atZ || !origin) return null
                 const k = origin.scale / centre.scale
                 const xx = (atX.x - centre.x) * k, xy = (atX.y - centre.y) * k
                 const yx = (atY.x - centre.x) * k, yy = (atY.y - centre.y) * k
-                return function(x, y) {
-                    const own = view(x, y)
+                const zx = (atZ.x - centre.x) * k, zy = (atZ.y - centre.y) * k
+                return function(x, y, h) {
+                    const own = view(x, y, h)
                     if (!own) return null
-                    const dx = x - ox, dy = y - oy
-                    return { x: origin.x + xx * dx + yx * dy, y: origin.y + xy * dx + yy * dy, scale: own.scale }
+                    const dx = x - ox, dy = y - oy, rise = Number(h) || 0
+                    return { x: origin.x + xx * dx + yx * dy + zx * rise,
+                             y: origin.y + xy * dx + yy * dy + zy * rise, scale: own.scale }
                 }
             }
         }
@@ -2028,6 +2172,137 @@ Item {
                 readonly property real pedestalWobble: root.pedestalAnimation === "wobble" ? pedestalBeat * 10 : 0
                 readonly property real pedestalShine: root.pedestalAnimation === "glow" ? 0.6 + 0.4 * pedestalBeat : 1
                 readonly property real baseLift: size * 0.02
+                // On a Möbius strip each entry rides the band's one face: its
+                // stand and icon stay as on any panel - the stand on the face,
+                // turned with the band there, the icon standing up from it
+                // facing the viewer - and the band only decides whether the
+                // two are in front of it or behind it (`depthPush` below).
+                // Going round they pass through the twist to what looks like
+                // the band's other side, behind it, and two laps on are back
+                // in front. `surfaceTurn` turns the entry with the band; what
+                // faces the viewer is turned back.
+                readonly property bool riding: root.generatedPlatform !== null
+                    && root.generatedPlatform.shape === "mobius"
+                readonly property real surfaceTwist: Math.PI * (Number(rect.surface) || 0) - Math.PI / 2
+                readonly property vector3d surfaceWay: {
+                    if (!riding) return Qt.vector3d(1, 0, 0)
+                    const turn = LayoutEngine.mobiusPoint((Number(rect.surface) || 0) % 1, 1).tangent * Math.PI / 180
+                    return Qt.vector3d(Math.cos(turn), -Math.sin(turn), 0)
+                }
+                readonly property quaternion surfaceTurn: riding
+                    ? Qt.quaternion(Math.cos(surfaceTwist / 2), surfaceWay.x * Math.sin(surfaceTwist / 2),
+                                    surfaceWay.y * Math.sin(surfaceTwist / 2), 0)
+                    : Qt.quaternion(1, 0, 0, 0)
+                readonly property vector3d surfaceUp: surfaceTurn.times(Qt.vector3d(0, 0, 1))
+                readonly property quaternion facing: riding ? surfaceTurn.inverted().times(root.iconFacing) : root.iconFacing
+                readonly property vector3d facingRight: riding ? surfaceTurn.inverted().times(root.iconRight) : root.iconRight
+                readonly property vector3d facingUp: riding ? surfaceTurn.inverted().times(root.iconUp) : root.iconUp
+                readonly property vector3d facingForward: riding ? surfaceTurn.inverted().times(root.iconForward) : root.iconForward
+                // How far the stand and its icon move along the line of sight,
+                // as a share of their distance from the camera: moved so, each
+                // of their points stays exactly where it is seen and as large,
+                // and only what covers what changes. Riding the face turned
+                // toward the viewer they come just in front of the band where
+                // it is seen across the icon; riding the face turned away they
+                // go just behind it, so the band hides what of them it covers
+                // and nothing of the band cuts through them. The stand lies on
+                // the face, on the right side of the band already.
+                readonly property real depthPush: {
+                    if (!riding) return 1
+                    const camera = root.cameraInEntries, ahead = root.iconForward
+                    const right = root.iconRight, upward = root.iconUp
+                    const rest = position
+                    const view = function(point) {
+                        const away = point.minus(camera)
+                        return { x: away.dotProduct(right), y: away.dotProduct(upward), depth: -away.dotProduct(ahead) }
+                    }
+                    // The icon's square on its stand, as seen: it faces the
+                    // viewer, so all of it is as far away as its middle. A
+                    // stand facing the viewer stands below it.
+                    const shown = size * hoverScale
+                    const middle = view(rest.plus(root.iconFacing.times(Qt.vector3d(pedestalTopX, footLift + shown / 2, 0))))
+                    const foot = view(rest)
+                    if (!(middle.depth > 0) || !(foot.depth > 0)) return 1
+                    const box = { left: (middle.x - shown / 2) / middle.depth, right: (middle.x + shown / 2) / middle.depth,
+                                  low: (middle.y - shown / 2) / middle.depth, high: (middle.y + shown / 2) / middle.depth }
+                    if (!root.pedestalOnPanel)
+                        box.low = Math.min(box.low, foot.y / foot.depth)
+                    // The part of a straight piece of the band, p to q, seen
+                    // inside the square: how far away its two ends are.
+                    const inside = function(p, q) {
+                        let from = 0, to = 1
+                        const dx = q.x - p.x, dy = q.y - p.y, dd = q.depth - p.depth
+                        const sides = [[p.x - box.left * p.depth, dx - box.left * dd],
+                                       [box.right * p.depth - p.x, box.right * dd - dx],
+                                       [p.y - box.low * p.depth, dy - box.low * dd],
+                                       [box.high * p.depth - p.y, box.high * dd - dy]]
+                        for (const side of sides) {
+                            if (Math.abs(side[1]) < 1e-12) {
+                                if (side[0] < 0) return null
+                                continue
+                            }
+                            const t = -side[0] / side[1]
+                            if (side[1] > 0) from = Math.max(from, t)
+                            else to = Math.min(to, t)
+                            if (from > to) return null
+                        }
+                        return [p.depth + dd * from, p.depth + dd * to]
+                    }
+                    // The band an icon and a half along it either way, as the
+                    // platform builds it, a cross-section every sixth of an
+                    // icon: its two faces and its two edges, with the shell of
+                    // its glow round it, which is drawn as part of it.
+                    const platform = root.generatedPlatform
+                    const trackReach = platform.track * LayoutEngine.mobiusReach
+                    const glowShell = root.panelGlowAmount > 0 ? 0.02 + 0.04 * root.panelGlowReach : 0
+                    const half = Math.min(PlatformGeometry.maximumBand, Math.max(PlatformGeometry.minimumBand,
+                        Number(root.resolvedBand) || 0.11)) + (PlatformGeometry.innerBevel + PlatformGeometry.outerBevel) / 2
+                        + glowShell
+                    const thick = (PlatformGeometry.topHeight - PlatformGeometry.bottomHeight) / 2 + glowShell
+                    const sx = root.platformScale * root.shownScaleX, sy = root.platformScale * root.shownScaleY
+                    const sz = root.platformScale * root.platformThickness
+                    const step = size / 6 / Math.max(1e-6, LayoutEngine.mobiusLength() * trackReach * root.platformScale)
+                    let near = Infinity, far = -Infinity
+                    for (let index = -9; index <= 9; ++index) {
+                        const share = (Number(rect.progress) || 0) + index * step
+                        const at = LayoutEngine.mobiusPoint(share, trackReach)
+                        const turn = at.tangent * Math.PI / 180
+                        const nx = Math.sin(turn), ny = Math.cos(turn)
+                        const twist = Math.PI * share - Math.PI / 2
+                        const cosine = Math.cos(twist), sine = Math.sin(twist)
+                        const lift = PlatformGeometry.standLift("mobius", share)
+                        const point = function(a, h) {
+                            return view(Qt.vector3d((at.x + nx * cosine * a - nx * sine * h) * sx,
+                                                    (-at.y + ny * cosine * a - ny * sine * h) * sy,
+                                                    (lift + sine * a + cosine * h) * sz))
+                        }
+                        const pieces = [[point(-half, -thick), point(half, -thick)], [point(-half, thick), point(half, thick)],
+                                        [point(-half, -thick), point(-half, thick)], [point(half, -thick), point(half, thick)]]
+                        for (const piece of pieces) {
+                            if (!(piece[0].depth > 0) || !(piece[1].depth > 0)) continue
+                            const seen = inside(piece[0], piece[1])
+                            if (!seen) continue
+                            near = Math.min(near, seen[0], seen[1])
+                            far = Math.max(far, seen[0], seen[1])
+                        }
+                    }
+                    if (!Number.isFinite(near)) return 1
+                    const margin = size * 0.02
+                    const before = Math.min(1, (near - margin) / middle.depth)
+                    const behind = Math.max(1, (far + margin) / middle.depth)
+                    // While the face turns across the line of sight the two
+                    // move from one side of the band to the other gradually,
+                    // so the band, which is thick even seen edge on, uncovers
+                    // the icon as it comes out from behind its edge instead of
+                    // letting it jump out at once.
+                    const turned = surfaceUp.dotProduct(camera.minus(rest).normalized())
+                    const share = Math.max(0, Math.min(1, (turned + 0.2) / 0.4))
+                    const smooth = share * share * (3 - 2 * share)
+                    return behind + (before - behind) * smooth
+                }
+                // That move, in the entry's own turned frame.
+                readonly property vector3d depthShift: surfaceTurn.inverted()
+                    .times(root.cameraInEntries.minus(position).times(1 - depthPush))
                 // On a bent band the stand and its icon rise to the band's
                 // highest point beneath the stand (the owner's 2026-10-12
                 // picture: front discs cut by the rim at Bend -1).
@@ -2042,7 +2317,7 @@ Item {
                 // in place on the screen, until nothing of them, the icon
                 // magnified included, is below the platform's top.
                 readonly property real facingClearance: {
-                    const rz = root.iconRight.z, uz = root.iconUp.z
+                    const rz = facingRight.z, uz = facingUp.z
                     let lowest = root.pedestalDrawn ? root.pedestalExtentsUnit.lowest * pedestalScale : 0
                     const half = size * 0.85
                     for (const x of [pedestalTopX - half, pedestalTopX + half])
@@ -2050,7 +2325,9 @@ Item {
                             lowest = Math.min(lowest, x * rz + y * uz)
                     return Math.max(0, -lowest)
                 }
-                readonly property real clearanceTravel: facingClearance / Math.max(0.3, Math.abs(root.iconForward.z))
+                // Riding a Möbius strip, `depthPush` keeps them clear instead.
+                readonly property real clearanceTravel: riding ? 0
+                    : facingClearance / Math.max(0.3, Math.abs(facingForward.z))
                 readonly property real tileLift: visual ? Math.max(-24, Math.min(96,
                     root.number(visual.tileSettings, "iconTileElevation", 0)))
                     * size / Math.max(1, Number(visual.logicalSize || 52)) : 0
@@ -2100,6 +2377,11 @@ Item {
                             view = Qt.quaternion(Math.cos(half(angle)), unit.x * Math.sin(half(angle)),
                                                  unit.y * Math.sin(half(angle)), unit.z * Math.sin(half(angle)))
                         }
+                        // Riding a Möbius strip the stand is turned with the
+                        // band first; that turn is undone here, so the view's
+                        // turn acts as on the panel and the band's after it.
+                        if (riding)
+                            view = surfaceTurn.inverted().times(view).times(surfaceTurn)
                     }
                     const along = (pathAngle + 90 + pedestalSpin) * Math.PI / 180
                     const sway = pedestalSway * Math.PI / 180, wobble = pedestalWobble * Math.PI / 180
@@ -2108,8 +2390,11 @@ Item {
                         .times(Qt.quaternion(Math.cos(wobble / 2), 0, Math.sin(wobble / 2), 0))
                 }
                 readonly property var standPoint: {
+                    // On a Möbius strip, as high as its strand is there.
+                    const lift = root.generatedPlatform
+                        ? PlatformGeometry.standLift(root.generatedPlatform.shape, rect.progress) : 0
                     const point = PlatformGeometry.foldPoint(
-                        [baseStandPoint[0], baseStandPoint[1], root.baseTopHeight],
+                        [baseStandPoint[0], baseStandPoint[1], root.baseTopHeight + lift],
                         root.platformFold, root.baseTopHeight).map(v => v * root.platformScale)
                     return [point[0] * root.shownScaleX, point[1] * root.shownScaleY, point[2]]
                 }
@@ -2130,10 +2415,56 @@ Item {
                 // The entry's origin travels with the layout; the icon's own
                 // motion moves the icon alone (below) and the pedestal's
                 // motion moves the pedestal alone, so neither drags the other.
-                position: Qt.vector3d(standPoint[0], standPoint[1],
-                    standPoint[2] * root.platformThickness + bendRise + baseLift + tileLift)
+                position: {
+                    const rise = bendRise + baseLift + tileLift
+                    if (!riding)
+                        return Qt.vector3d(standPoint[0], standPoint[1], standPoint[2] * root.platformThickness + rise)
+                    // On the band's face: its middle line at its strand's
+                    // height, then out of the face as far as its top is.
+                    const middle = PlatformGeometry.standLift("mobius", rect.progress) * root.platformScale
+                    const out = root.baseTopHeight * root.platformScale * root.platformThickness + rise
+                    return Qt.vector3d(standPoint[0] + surfaceUp.x * out, standPoint[1] + surfaceUp.y * out,
+                                       middle + surfaceUp.z * out)
+                }
+                rotation: surfaceTurn
                 opacity: root.number(iconMotion, "opacity", 1) * trackVisibility
 
+                Texture {
+                    id: glyphTexture
+                    readonly property Item candidateSource:
+                        entryNode.visual ? entryNode.visual.glyphTextureItem : null
+                    // A detached source releases its layer before QObject destruction.
+                    sourceItem: candidateSource && root.Window.window
+                        && candidateSource.Window.window === root.Window.window
+                        && entryNode.visual.meshVisualActive ? candidateSource : null
+                }
+                Texture {
+                    id: tileTexture
+                    readonly property Item candidateSource:
+                        entryNode.visual ? entryNode.visual.tileTextureItem : null
+                    sourceItem: candidateSource && root.Window.window
+                        && candidateSource.Window.window === root.Window.window
+                        && entryNode.visual.meshVisualActive ? candidateSource : null
+                }
+                // Qt Quick 3D refreshes a texture taken from an icon's layer
+                // after every frame until the texture is deleted. The Loader
+                // that drops this scene, or the repeater that drops this
+                // entry, first turns the bindings above off and deletes the
+                // node a moment later; an icon leaving the window in that
+                // moment left a texture refreshing a freed layer, and Arch
+                // Dock crashed when Panel Studio went from a 3D free panel to
+                // the Top or Side panel (2026-10-13). Destruction is
+                // announced while the bindings still run: let go here.
+                Component.onDestruction: {
+                    glyphTexture.sourceItem = null
+                    tileTexture.sourceItem = null
+                }
+                // What `depthPush` moves along the line of sight: the stand,
+                // the theme's own parts for the entry and the icon.
+                Node {
+                    objectName: "mesh-stand-and-icon-" + entryNode.index
+                    position: entryNode.depthShift
+                    scale: Qt.vector3d(entryNode.depthPush, entryNode.depthPush, entryNode.depthPush)
                 // The stand: its foot's middle on the platform at the icon's
                 // place, turned by Stand facing, in the platform's material or
                 // its own. Its own motion moves it, not the icon. It and the
@@ -2173,8 +2504,8 @@ Item {
                 }
                 Node {
                     objectName: "mesh-stand-frame-" + entryNode.index
-                    position: root.iconForward.times(entryNode.clearanceTravel)
-                    rotation: root.iconFacing
+                    position: entryNode.facingForward.times(entryNode.clearanceTravel)
+                    rotation: entryNode.facing
                     visible: root.pedestalDrawn && !root.pedestalOnPanel
                     Node {
                         position: Qt.vector3d(root.pedestalAxis.x * entryNode.pedestalBob,
@@ -2248,56 +2579,17 @@ Item {
                         }
                     }
                 }
-                Texture {
-                    id: glyphTexture
-                    readonly property Item candidateSource:
-                        entryNode.visual ? entryNode.visual.glyphTextureItem : null
-                    // A detached source releases its layer before QObject destruction.
-                    sourceItem: candidateSource && root.Window.window
-                        && candidateSource.Window.window === root.Window.window
-                        && entryNode.visual.meshVisualActive ? candidateSource : null
-                }
-                Texture {
-                    id: tileTexture
-                    readonly property Item candidateSource:
-                        entryNode.visual ? entryNode.visual.tileTextureItem : null
-                    sourceItem: candidateSource && root.Window.window
-                        && candidateSource.Window.window === root.Window.window
-                        && entryNode.visual.meshVisualActive ? candidateSource : null
-                }
-                // Qt Quick 3D refreshes a texture taken from an icon's layer
-                // after every frame until the texture is deleted. The Loader
-                // that drops this scene, or the repeater that drops this
-                // entry, first turns the bindings above off and deletes the
-                // node a moment later; an icon leaving the window in that
-                // moment left a texture refreshing a freed layer, and Arch
-                // Dock crashed when Panel Studio went from a 3D free panel to
-                // the Top or Side panel (2026-10-13). Destruction is
-                // announced while the bindings still run: let go here.
-                Component.onDestruction: {
-                    glyphTexture.sourceItem = null
-                    tileTexture.sourceItem = null
-                }
                 // The icon faces the viewer at every pitch, yaw and roll, so it
                 // keeps the application's own glyph readable instead of lying
                 // flat on the platform; it stands on its pedestal.
                 Node {
                     objectName: "mesh-icon-" + entryNode.index
-                    rotation: root.iconFacing
+                    rotation: entryNode.facing
                     // The icon's own motion offsets, on the icon alone, and the
                     // stand's move toward the viewer.
-                    position: root.iconForward.times(entryNode.clearanceTravel).plus(
+                    position: entryNode.facingForward.times(entryNode.clearanceTravel).plus(
                         Qt.vector3d(root.number(entryNode.iconMotion, "x", 0),
                                     -root.number(entryNode.iconMotion, "y", 0), 0))
-                    // The icon's resting square, untouched by hover and motion:
-                    // its projection is the entry's input rectangle, so the
-                    // rectangle does not breathe under the pointer.
-                    Node {
-                        id: inputAnchor
-                        objectName: "mesh-input-anchor-" + entryNode.index
-                        x: entryNode.pedestalTopX
-                        y: entryNode.footLift + entryNode.size / 2
-                    }
                     Node {
                         objectName: "mesh-icon-body-" + entryNode.index
                         // Its foot floats over the stand's top, centred on it.
@@ -2325,8 +2617,11 @@ Item {
                             metalness: entryNode.tileMaterial.metalness
                             roughness: entryNode.tileMaterial.roughness
                             opacity: entryNode.tileMaterial.surfaceOpacity
+                            // Riding a Möbius strip, its solid part keeps whatever
+                            // see-through part of the panel is drawn after it (a
+                            // glow, a rim) behind it.
                             depthDrawMode: root.tileGlowAmount > 0 ? Material.AlwaysDepthDraw
-                                : Material.OpaqueOnlyDepthDraw
+                                : entryNode.riding ? Material.OpaquePrePassDepthDraw : Material.OpaqueOnlyDepthDraw
                             cullMode: Material.NoCulling
                         }
                         IconStyle3D {
@@ -2415,6 +2710,12 @@ Item {
                                 alphaMode: PrincipledMaterial.Blend
                                 baseColorMap: glyphTexture
                                 cullMode: Material.NoCulling
+                                // Riding a Möbius strip, the picture's solid part keeps
+                                // the panel's see-through parts drawn after it (its
+                                // glowing rim) behind it, as they are; its clear corners
+                                // hide nothing.
+                                depthDrawMode: entryNode.riding ? Material.OpaquePrePassDepthDraw
+                                    : Material.OpaqueOnlyDepthDraw
                             }
                         }
                         // The icon's glow (Icons > Glow): its picture's shape, a
@@ -2443,6 +2744,25 @@ Item {
                         }
                     }
                 }
+                }
+                // The icon's resting square, untouched by hover, motion and
+                // the move along the line of sight: its projection is the
+                // entry's input rectangle, so the rectangle does not breathe
+                // under the pointer, and the folder openings stand where the
+                // icon stands.
+                Node {
+                    objectName: "mesh-icon-rest-" + entryNode.index
+                    rotation: entryNode.facing
+                    position: entryNode.facingForward.times(entryNode.clearanceTravel).plus(
+                        Qt.vector3d(root.number(entryNode.iconMotion, "x", 0),
+                                    -root.number(entryNode.iconMotion, "y", 0), 0))
+                    Node {
+                        id: inputAnchor
+                        objectName: "mesh-input-anchor-" + entryNode.index
+                        x: entryNode.pedestalTopX
+                        y: entryNode.footLift + entryNode.size / 2
+                    }
+                }
             }
         }
         }
@@ -2467,6 +2787,12 @@ Item {
                     meshData: root.platformGlowMesh
                     materialData: ({})
                     shellMaterial: platformGlowMaterial
+                    // On a Möbius strip, whose icons ride in front of it and
+                    // behind it, drawn before every see-through part of them,
+                    // as if furthest away: its light, all round the band,
+                    // never shows through an icon's soft edge in front of it.
+                    depthBias: root.generatedPlatform !== null && root.generatedPlatform.shape === "mobius"
+                        ? root.cameraDistance * 8 : 0
                 }
                 IconStyle3D {
                     objectName: "mesh-platform-glow-wash"

@@ -631,8 +631,44 @@ PlasmoidItem {
             values.push(url.toString());
         const accepted = dropBackend.addUrls(panelId, freeSurface, values);
         if (accepted) refresh();
-        else console.warn("Arch Dock drop refused:", dropBackend.lastError);
+        else {
+            console.warn("Arch Dock drop refused:", dropBackend.lastError);
+            if (freeSurface) explainRefusedDrop();
+        }
         return accepted;
+    }
+
+    // A drop refused because the panel holds as many icons as its shape has
+    // room for says so on the panel for a few seconds.
+    property string fullNotice: ""
+    function explainRefusedDrop() {
+        callDock("panelIconRoom", [panelId], function(reply) {
+            const room = normalizeReply(reply);
+            if (!room || room.success !== true || !(room.capacity >= 0) || room.count < room.capacity) return;
+            // A 3D panel's tilt costs it room as seen.
+            const shown = root.activeDockRepresentation;
+            const tilted = shown !== null
+                && shown.seenTrackFactor(16, true) < shown.seenTrackFactor(16, false) - 0.05;
+            const ways = tilted
+                ? qsTr("Make it larger, its icons smaller or its tilt flatter in Panel Studio.")
+                : qsTr("Make it larger or its icons smaller in Panel Studio.");
+            fullNotice = (room.count > room.capacity
+                ? qsTr("This panel is full: it holds %1 icons, more than the %2 that fit as it is now.")
+                    .arg(room.count).arg(room.capacity)
+                : qsTr("This panel is full: %1 icons fit as it is now.").arg(room.capacity)) + " " + ways;
+            fullNoticeTimer.restart();
+        });
+    }
+    // A handle let go where the panel's icons would no longer fit: the panel
+    // goes back and says why.
+    function explainTooSmall() {
+        fullNotice = qsTr("Its icons would not fit: this panel cannot be made smaller. Remove icons or make them smaller first.");
+        fullNoticeTimer.restart();
+    }
+    Timer {
+        id: fullNoticeTimer
+        interval: 4000
+        onTriggered: root.fullNotice = ""
     }
 
     function openPanelStudio() {
@@ -822,6 +858,7 @@ PlasmoidItem {
             // close to another, it moves straight away from it, just far
             // enough. Starting up, a profile or a preview moves nothing.
             property var reportedArea: null
+            property double reportedSeen: 0
             property double reportedSince: 0
             property bool keepApartArmed: false
             property bool movingItself: false
@@ -859,6 +896,13 @@ PlasmoidItem {
                 if (!(area.width > 0 && area.height > 0)) return
                 const room = folderTrack.childExtent * panelScene.drawnIconScale()
                 root.callDock("reportFreePanelArea", [root.panelId, area.x, area.y, area.width, area.height, room])
+                // How much of its track its icons get as seen: how many it
+                // holds follows it.
+                const seen = panelScene.seenTrackFactor(16, true)
+                if (Math.abs(seen - reportedSeen) > 0.005) {
+                    reportedSeen = seen
+                    root.callDock("reportPanelSeenRoom", [root.panelId, seen])
+                }
                 if (reportedArea === null) reportedSince = Date.now()
                 reportedArea = area
                 movingItself = false
@@ -959,7 +1003,7 @@ PlasmoidItem {
                 && !LayoutEngine.curvedLayout(panelScene.layoutPath) ? "fan" : savedFolderLayout
             // A grid lies on a 3D panel's plane too; elsewhere it is a popup.
             readonly property bool folderOnPath: root.freeSurface
-                && (["track", "fan", "arc", "stack", "ring"].includes(folderLayout)
+                && (["track", "fan", "arc", "stack", "ring", "mobius"].includes(folderLayout)
                     || (folderLayout === "grid" && panelScene.folderPlaneReady))
             onFolderEntryIndexChanged: if (folderEntryIndex < 0) hideFolderExpansion()
 
@@ -1001,6 +1045,8 @@ PlasmoidItem {
                 return windowPreview.openPreview(keyboard)
             }
             function hideWindowPreview() { windowPreview.closePreview() }
+            // How much of its track the panel's icons get (PanelScene.seenTrackFactor).
+            function seenTrackFactor(gap, asSeen) { return panelScene.seenTrackFactor(gap, asSeen) }
 
             // The clicked folder's drawn icon. Its popup opens against this
             // square, on the side that faces out of the dock.
@@ -1304,7 +1350,10 @@ PlasmoidItem {
                     && !Boolean(root.configuration.sceneEditActive)
                 sceneEditActive: Boolean(root.configuration.sceneEditActive)
                 onSceneTransformEdited: function(values) {
-                    root.callDock("updateSceneEditDraft", [root.panelId, values]);
+                    root.callDock("updateSceneEditDraft", [root.panelId, values], function(reply) {
+                        const result = root.normalizeReply(reply);
+                        if (result && result.errorCode === "panel-too-small") root.explainTooSmall();
+                    });
                 }
                 // Turning the dock with the wheel closes a hover preview,
                 // which would otherwise stand beside an icon that moved.
@@ -1358,6 +1407,27 @@ PlasmoidItem {
                     text: qsTr("Retry")
                     visible: !dockService.registered || root.requestFailed
                     onClicked: root.refresh()
+                }
+            }
+
+            Rectangle {
+                id: fullNoticeBox
+                visible: root.fullNotice.length > 0
+                anchors.centerIn: parent
+                width: Math.min(parent.width - 2 * Kirigami.Units.largeSpacing,
+                                fullNoticeText.implicitWidth + 2 * Kirigami.Units.largeSpacing)
+                height: fullNoticeText.implicitHeight + 2 * Kirigami.Units.smallSpacing
+                radius: Kirigami.Units.smallSpacing
+                color: Qt.rgba(0, 0, 0, 0.75)
+                z: 1000
+                QQC2.Label {
+                    id: fullNoticeText
+                    anchors.centerIn: parent
+                    width: parent.width - 2 * Kirigami.Units.largeSpacing
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    color: "white"
+                    text: root.fullNotice
                 }
             }
 

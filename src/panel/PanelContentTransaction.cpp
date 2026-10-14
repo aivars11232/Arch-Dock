@@ -1,6 +1,8 @@
 // The free panel content operations described in the header.
 #include "PanelContentTransaction.h"
 
+#include "../model/PanelIconCapacity.h"
+
 #include <QSet>
 #include <QHash>
 
@@ -242,6 +244,16 @@ std::optional<PanelDefinition> PanelContentTransaction::prepare(
         if (!appended)
         {
             unchanged(outcome, currentOrder);
+            return std::nullopt;
+        }
+        // No more icons than the panel's shape holds side by side.
+        const std::optional<int> capacity = panelIconCapacity(candidate, request.seenTrackFactor);
+        if (capacity && order.size() > *capacity && order.size() > currentOrder.size())
+        {
+            fail(outcome, currentOrder,
+                 QStringLiteral("panel-full"),
+                 QStringLiteral("this panel holds %1 icons at this size: make it larger or its icons "
+                                "smaller to add more").arg(*capacity));
             return std::nullopt;
         }
         break;
