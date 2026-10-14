@@ -172,3 +172,29 @@ panels are not added to a profile on that page. The desktop pictures were
 made with the same backend calls Panel Studio makes on each change, because
 nothing can click inside Panel Studio on the private test desktop; the
 Studio's own path is covered by its tests.
+
+## Report 2 - recheck
+
+- A fresh clone of origin/main at `bacafff`, configured and built with one
+  job (1593 s, `41`/`42-recheck-*.log`), passed the 19 focused tests
+  (`43-recheck-tests.log`): panel-model, profile-store,
+  profile-apply-transaction, profile-manager, preset-preview-session,
+  preset-library, panel-settings-schema, panel-settings-transaction,
+  panel-registry, panel-window-capability, live-panel-preview,
+  runtime-ui-interaction-smoke, studio-preview-contract, preset-browser,
+  preset-audition, profile-page, studio-navigation, settings-editor-model and
+  configuration-upgrade.
+- All 659 committed files are the same in the clone and in the workspace
+  (`44-recheck-source-compare.txt`).
+- The complete suite ran twice on this piece before the push, 119 of 120 each
+  time; the one failure is the known restart race of
+  `preset-audition-matrix-defaults` in the test harness.
+
+Piece 3 is closed. The owner's answers of 2026-10-15: hiding and showing a
+panel stay on Apply; the Möbius strip belongs in Panels > Layout > Dock
+layout, as it is; that list is to show proper shape names, and a panel is
+to be named exactly as its shape is listed ("Ring", "Möbius Strip", "Ring
+2"); the icon limit on a tilted 3D panel is to count its size as drawn; the
+riding icons on the Möbius strip are as meant. The names, the list and the
+icon limit change in piece 4, with the UI themes.
+
