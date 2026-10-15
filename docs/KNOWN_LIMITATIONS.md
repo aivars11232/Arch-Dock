@@ -163,6 +163,18 @@ belong to Arch Dock, not to a profile. A profile's panels are listed and
 edited one profile at a time; panels cannot be added to a profile there
 (Save Current to Profile does that).
 
+Panel Studio's UI themes dress Panel Studio's own window and the Icon
+properties window. Dialogs Panel Studio opens from KDE (the colour picker,
+file choosers) keep the system's look. Arch Dock's logo stands before UI
+Themes where the package installed it; elsewhere a plain theme icon does.
+The alien themes' honeycomb is drawn once for each window size, so resizing
+Panel Studio draws it again.
+
+A panel's icon limit counts the icons pinned to it, including a pinned file
+or folder that no longer exists. Such an icon is not drawn, but it keeps its
+place, so a drive that is not mounted for a while cannot let the panel take
+more icons than fit once the drive is back.
+
 Some source files are still large (`PanelRegistry.cpp`, `SettingsPopup.qml`,
 `LayoutEngine.js`). `PanelWindow.cpp` has been split by topic into the
 `src/panel/PanelWindow*.cpp` files (see the list in `PanelWindow.h`), moving

@@ -645,13 +645,7 @@ PlasmoidItem {
         callDock("panelIconRoom", [panelId], function(reply) {
             const room = normalizeReply(reply);
             if (!room || room.success !== true || !(room.capacity >= 0) || room.count < room.capacity) return;
-            // A 3D panel's tilt costs it room as seen.
-            const shown = root.activeDockRepresentation;
-            const tilted = shown !== null
-                && shown.seenTrackFactor(16, true) < shown.seenTrackFactor(16, false) - 0.05;
-            const ways = tilted
-                ? qsTr("Make it larger, its icons smaller or its tilt flatter in Panel Studio.")
-                : qsTr("Make it larger or its icons smaller in Panel Studio.");
+            const ways = qsTr("Make it larger or its icons smaller in Panel Studio.");
             fullNotice = (room.count > room.capacity
                 ? qsTr("This panel is full: it holds %1 icons, more than the %2 that fit as it is now.")
                     .arg(room.count).arg(room.capacity)
@@ -896,9 +890,9 @@ PlasmoidItem {
                 if (!(area.width > 0 && area.height > 0)) return
                 const room = folderTrack.childExtent * panelScene.drawnIconScale()
                 root.callDock("reportFreePanelArea", [root.panelId, area.x, area.y, area.width, area.height, room])
-                // How much of its track its icons get as seen: how many it
-                // holds follows it.
-                const seen = panelScene.seenTrackFactor(16, true)
+                // How much of its track its icons get at its size as drawn,
+                // however it is tilted: how many it holds follows it.
+                const seen = panelScene.seenTrackFactor(16, false)
                 if (Math.abs(seen - reportedSeen) > 0.005) {
                     reportedSeen = seen
                     root.callDock("reportPanelSeenRoom", [root.panelId, seen])
@@ -1045,8 +1039,6 @@ PlasmoidItem {
                 return windowPreview.openPreview(keyboard)
             }
             function hideWindowPreview() { windowPreview.closePreview() }
-            // How much of its track the panel's icons get (PanelScene.seenTrackFactor).
-            function seenTrackFactor(gap, asSeen) { return panelScene.seenTrackFactor(gap, asSeen) }
 
             // The clicked folder's drawn icon. Its popup opens against this
             // square, on the side that faces out of the dock.

@@ -1,9 +1,10 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import "StudioThemes.js" as StudioThemes
 
 // Panel Studio's Profiles page: the saved sets of panels, with create,
 // rename, duplicate, delete, import, export and apply, the panels each one
@@ -18,6 +19,8 @@ ColumnLayout {
     property bool actionsBlocked: false
     // The profile service the panel list is read from.
     property var service: null
+    // Panel Studio's look.
+    property var theme: StudioThemes.theme("classic")
     property string notice: ""
     property bool noticeIsError: false
     property string selectedId: ""
@@ -63,7 +66,7 @@ ColumnLayout {
 
     Label {
         Layout.fillWidth: true
-        color: "#d8e5ec"
+        color: root.theme.text
         text: root.shortcutsOnly
             ? qsTr("Enable profile shortcuts to apply saved arrangements through KDE. Conflicting shortcuts stay with their current owner.")
             : qsTr("A profile saves your complete managed panel arrangement. Apply replaces that arrangement after a verified backup.")
@@ -72,7 +75,7 @@ ColumnLayout {
     Label {
         visible: root.actionsBlocked
         Layout.fillWidth: true
-        color: "#90a7b4"
+        color: root.theme.textSecondary
         text: qsTr("Apply or cancel your settings draft and finish any desktop preview before managing profiles.")
         wrapMode: Text.Wrap
     }
@@ -93,7 +96,7 @@ ColumnLayout {
     Label {
         objectName: "profile-summary"
         Layout.fillWidth: true
-        color: "#90a7b4"
+        color: root.theme.textSecondary
         wrapMode: Text.Wrap
         text: {
             if (!root.selected) return qsTr("Create a profile from your current panels, or import one.");
@@ -120,7 +123,7 @@ ColumnLayout {
         visible: creating > limit
         Layout.fillWidth: true
         wrapMode: Text.Wrap
-        color: "#ffc66d"
+        color: root.theme.warning
         text: qsTr("This profile holds %1 free panels that are not on the desktop. Apply Profile creates at most %2 at once. Put only the panels you want on the desktop, then use Save Current to Profile: the profile then holds those panels only.").arg(creating).arg(limit)
         Accessible.name: text
     }
@@ -130,7 +133,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.topMargin: 4
         text: qsTr("Panels in this profile")
-        color: "#d8e5ec"
+        color: root.theme.text
         font.weight: Font.DemiBold
     }
     Repeater {
@@ -158,7 +161,7 @@ ColumnLayout {
             }
             Label {
                 text: root.panelPlace(panelRow.modelData)
-                color: "#90a7b4"
+                color: root.theme.textSecondary
             }
             Button {
                 objectName: "profile-panel-edit-" + panelRow.modelData.id
@@ -219,7 +222,7 @@ ColumnLayout {
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
         font.pixelSize: 12
-        color: "#90a7b4"
+        color: root.theme.textSecondary
         // The owner (2026-10-12): a saved arrangement must reach the desktop
         // even when its free panel is gone.
         text: qsTr("A profile holds the panels that are on the desktop when it is saved. Apply Profile puts the whole saved arrangement back: a free panel the profile holds that is not on the desktop is created again with its saved look. For one saved panel look, use Panels > Presets with \"Preview on a new panel\".")
@@ -300,7 +303,7 @@ ColumnLayout {
         objectName: "profile-shortcut-registration"
         visible: root.shortcutsOnly
         Layout.fillWidth: true
-        color: "#90a7b4"
+        color: root.theme.textSecondary
         text: root.selectedBinding && (root.selectedBinding.registeredKeys || []).length
             ? qsTr("Registered: %1").arg(root.selectedBinding.registeredKeys.join(", "))
             : qsTr("No active shortcut for this profile. Saved assignments register only while the feature is enabled.")
@@ -312,7 +315,7 @@ ColumnLayout {
         Layout.fillWidth: true
         text: qsTr("Shortcut action failed (%1). %2").arg(String(root.shortcutStatus.errorCode || ""))
             .arg((root.shortcutStatus.conflicts || []).map(function(conflict) { return conflict.name || conflict.actionId || ""; }).join(", "))
-        color: "#ffc66d"
+        color: root.theme.warning
         wrapMode: Text.Wrap
     }
     Label {
@@ -320,14 +323,14 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: text.length > 0
         text: root.notice
-        color: root.noticeIsError ? "#ffc66d" : "#90a7b4"
+        color: root.noticeIsError ? root.theme.warning : root.theme.textSecondary
         wrapMode: Text.Wrap
         Accessible.name: text
     }
     Label {
         objectName: "profile-recovery-status"
         Layout.fillWidth: true
-        color: "#90a7b4"
+        color: root.theme.textSecondary
         visible: root.busy
         text: root.applyStatus.recoveryRequired
             ? qsTr("Profile recovery is required (%1). Your backup and ownership record have been retained.")

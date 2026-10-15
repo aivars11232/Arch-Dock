@@ -547,8 +547,8 @@ void PanelWindowCapabilityTest::studioOffersTheMobiusStrip()
     QVERIFY(QDir().mkpath(files.filePath("Folder")));
     QVERIFY(backend.addPanelEntries(panel, {QUrl::fromLocalFile(files.filePath("Folder")).toString()}));
     const QVariantList fields = backend.panelSettingsEditorSnapshot(panel, "studio").value("panelFields").toList();
-    QCOMPARE(labelOf(fieldByKey(fields, "layout"), "mobius"), QStringLiteral("Möbius strip"));
-    QCOMPARE(labelOf(fieldByKey(fields, "folderLayout"), "mobius"), QStringLiteral("Möbius strip"));
+    QCOMPARE(labelOf(fieldByKey(fields, "layout"), "mobius"), QStringLiteral("Möbius Strip"));
+    QCOMPARE(labelOf(fieldByKey(fields, "folderLayout"), "mobius"), QStringLiteral("Möbius Strip"));
     QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
         {{"layout", "mobius"}}).value("success").toBool());
     QCOMPARE(registry->panelDefinition(panel)->layout.pathType, QStringLiteral("mobius"));
@@ -567,24 +567,24 @@ void PanelWindowCapabilityTest::panelsNobodyNamedFollowTheirShape()
         ->contextProperty("panelRegistry").value<QObject *>());
     QVERIFY(registry);
     const QString panel = registry->addFreePanel();
-    QCOMPARE(registry->panelName(panel), QStringLiteral("Circle panel"));
+    QCOMPARE(registry->panelName(panel), QStringLiteral("Circle"));
     const auto apply = [&](const QVariantMap &values) {
         return backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
             values).value("success").toBool();
     };
     QVERIFY(apply({{"layout", "mobius"}}));
-    QCOMPARE(registry->panelName(panel), QStringLiteral("Möbius strip panel"));
+    QCOMPARE(registry->panelName(panel), QStringLiteral("Möbius Strip"));
     QVERIFY(apply({{"name", "  My dock  "}}));
     QCOMPARE(registry->panelName(panel), QStringLiteral("My dock"));
     QVERIFY(apply({{"layout", "star"}}));
     QCOMPARE(registry->panelName(panel), QStringLiteral("My dock"));
     QVERIFY(apply({{"name", ""}}));
-    QCOMPARE(registry->panelName(panel), QStringLiteral("Star panel"));
+    QCOMPARE(registry->panelName(panel), QStringLiteral("Star"));
     // Another panel of that shape takes the next number.
     const QString other = registry->addFreePanel();
     QVERIFY(backend.applyPanelSettingsTransaction(other, registry->panelDefinition(other)->settingsRevision,
         {{"layout", "star"}}).value("success").toBool());
-    QCOMPARE(registry->panelName(other), QStringLiteral("Star panel 2"));
+    QCOMPARE(registry->panelName(other), QStringLiteral("Star 2"));
     // A built-in panel keeps its own name when emptied.
     QVERIFY(backend.applyPanelSettingsTransaction("bottom", registry->panelDefinition("bottom")->settingsRevision,
         {{"name", ""}}).value("success").toBool());
@@ -798,7 +798,7 @@ void PanelWindowCapabilityTest::profilePanelsAreEditedInTheProfileOnly()
     QVariantMap listed;
     for (const QVariant &value : profiles->profilePanels(id))
         if (value.toMap().value("id").toString() == free) listed = value.toMap();
-    QCOMPARE(listed.value("name").toString(), QStringLiteral("Circle panel"));
+    QCOMPARE(listed.value("name").toString(), QStringLiteral("Circle"));
     QCOMPARE(listed.value("edge").toString(), QStringLiteral("free"));
     QVERIFY(listed.value("shown").toBool());
 
@@ -820,7 +820,7 @@ void PanelWindowCapabilityTest::profilePanelsAreEditedInTheProfileOnly()
     QVERIFY(edited);
     QCOMPARE(edited->toLegacyMap().value("panelGlow").toDouble(), 0.9);
     QCOMPARE(edited->layout.pathType, QStringLiteral("mobius"));
-    QCOMPARE(edited->identity.name, QStringLiteral("Möbius strip panel"));
+    QCOMPARE(edited->identity.name, QStringLiteral("Möbius Strip"));
     QCOMPARE(ArchDock::ProfileStore().load(id)->revision, stored->revision + 1);
     QCOMPARE(*registry->panelDefinition(free), desktop);
     // A profile changed since is not overwritten.
@@ -883,7 +883,7 @@ void PanelWindowCapabilityTest::studioEditsAProfilesPanel()
     QVERIFY(opened.toBool());
     QVERIFY(popup->property("profileMode").toBool());
     QCOMPARE(popup->property("mainTabIndex").toInt(), 1);
-    QCOMPARE(popup->property("editedPanelName").toString(), QStringLiteral("Circle panel"));
+    QCOMPARE(popup->property("editedPanelName").toString(), QStringLiteral("Circle"));
     QTRY_VERIFY(visibleItem(studio, QStringLiteral("studio-profile-edit")));
     // Presets are tried on the desktop: a profile's panel gets the looks only.
     const auto offered = [&](int section, int page) {
@@ -909,7 +909,7 @@ void PanelWindowCapabilityTest::studioEditsAProfilesPanel()
         if (row.toMap().value("label").toString() == QStringLiteral("Name"))
             overviewName = row.toMap().value("value").toString();
     QCOMPARE(overviewName, QStringLiteral("Work dock"));
-    QCOMPARE(registry->panelName(free), QStringLiteral("Circle panel"));
+    QCOMPARE(registry->panelName(free), QStringLiteral("Circle"));
     QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue",
         Q_ARG(QVariant, (QVariantMap{{"key", "panelGlow"}, {"scope", "panel"}})), Q_ARG(QVariant, 0.8)));
     QVERIFY(popup->property("hasPendingChanges").toBool());
@@ -4908,6 +4908,17 @@ void PanelWindowCapabilityTest::studioPagePictures()
         QVERIFY(QTest::qWaitForWindowExposed(window));
         QTest::qWait(1200);
         QVERIFY(window->grabWindow().save(folder + QLatin1Char('/') + QLatin1String(page.name) + ".png"));
+        if (QLatin1String(page.name) == QLatin1String("panels-layout")) {
+            // The Dock layout list, opened: the shapes a free panel can take.
+            QQuickItem *layouts = visibleItem(window, "studio-combo-layout");
+            QVERIFY(layouts);
+            auto *list = layouts->property("popup").value<QObject *>();
+            QVERIFY(list);
+            QVERIFY(QMetaObject::invokeMethod(list, "open"));
+            QTest::qWait(1200);
+            QVERIFY(window->grabWindow().save(folder + "/panels-layout-list.png"));
+            QMetaObject::invokeMethod(list, "close");
+        }
         if (QLatin1String(page.name) == QLatin1String("panels-presets")) {
             // Further down the same page: where the presets end and the
             // looks begin.
@@ -4928,6 +4939,41 @@ void PanelWindowCapabilityTest::studioPagePictures()
             QVERIFY(window->grabWindow().save(folder + "/panels-presets-looks-2.png"));
         }
         window->close();
+    }
+    // Every UI theme on Appearance, Presets and the UI Themes page; the
+    // theme in use goes back to Classic afterwards.
+    {
+        QObject *settings = engine.rootContext()->contextProperty("dockSettings").value<QObject *>();
+        QVERIFY(settings);
+        const auto classic = qScopeGuard([settings] { settings->setProperty("studioTheme", QStringLiteral("classic")); });
+        for (const char *theme : {"classic", "teal-glass", "teal-hud", "amber-hud",
+                                  "alien-white", "alien-black", "alien-green"}) {
+            QVERIFY(settings->setProperty("studioTheme", QString::fromLatin1(theme)));
+            for (const Page &page : {Page{1, 2, "appearance"}, Page{1, 3, "behavior"}, Page{1, 6, "presets"},
+                                     Page{6, 0, "ui-themes"}}) {
+                std::unique_ptr<QObject> studio(component.createWithInitialProperties({
+                    {"selectedPanelId", panel}, {"mainTabIndex", page.section}, {"subTabIndex", page.page}}));
+                auto *window = qobject_cast<QQuickWindow *>(studio.get());
+                QVERIFY(window);
+                window->show();
+                QVERIFY(QTest::qWaitForWindowExposed(window));
+                QTest::qWait(1200);
+                const QString name = folder + "/theme-" + QLatin1String(theme) + "-" + QLatin1String(page.name);
+                QVERIFY(window->grabWindow().save(name + ".png"));
+                if (page.section == 6) {
+                    // The later themes, further down the page.
+                    QQuickItem *scroll = visibleItem(window, "studio-page-scroll");
+                    QVERIFY(scroll);
+                    auto *flick = scroll->property("contentItem").value<QQuickItem *>();
+                    QVERIFY(flick);
+                    flick->setProperty("contentY",
+                        qMax(0.0, flick->property("contentHeight").toReal() - flick->height()));
+                    QTest::qWait(600);
+                    QVERIFY(window->grabWindow().save(name + "-2.png"));
+                }
+                window->close();
+            }
+        }
     }
     // The Profiles page with a saved profile, and that profile's panel open
     // in Panel Studio.

@@ -3117,7 +3117,8 @@ def run_interaction_matrix(free_panel):
         for layout in layouts:
             configure(free_panel, {"layout": layout})
             start = rest(layout + " at rest")
-            assert start["layout"] == layout, start
+            # Triangle to hexagon are read as the polygon with that many corners.
+            assert start["layout"] == ("polygon" if layout in ("triangle", "square", "hexagon") else layout), start
             row = {"capturedAtRest": capture(layout + "-0-rest", start), "steps": []}
             slots = [item["s"] for item in start["entries"] if shown(item)]
             capacity = len(slots)

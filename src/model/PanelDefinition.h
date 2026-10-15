@@ -54,6 +54,10 @@ enum class PanelLayoutKind
 [[nodiscard]] std::optional<PanelLayoutKind> panelLayoutKindFromName(
     const QString &name);
 [[nodiscard]] QString panelLayoutKindName(PanelLayoutKind kind);
+// A triangle, square, pentagon, hexagon or octagon is a polygon with that
+// many corners: their number for one of those names, 0 for any other layout.
+// A panel is always kept as "polygon" with its corners.
+[[nodiscard]] int namedPolygonCorners(const QString &layout);
 
 struct PanelPresetOrigin
 {

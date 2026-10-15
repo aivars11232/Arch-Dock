@@ -1,9 +1,10 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import ArchDock.Rendering 1.0
+import "StudioThemes.js" as StudioThemes
 
 // One built-in look, drawn on the selected panel as a bare panel, with no
 // icons, so the look itself shows. Load puts it on the panel's draft.
@@ -16,13 +17,21 @@ Rectangle {
     readonly property var rendererCandidate: studio.themeRendererCandidate(theme)
     readonly property var previewConfiguration: theme.previewConfiguration || ({})
     readonly property alias preview: themePreview
+    // Panel Studio's look.
+    readonly property var studioTheme: studio && studio.studioTheme ? studio.studioTheme : StudioThemes.theme("classic")
 
     // A look is drawn at the height of a preset card.
     implicitHeight: 188
-    radius: 8
-    color: "#1b2831"
-    border.width: 1
-    border.color: "#3a5868"
+    // The card is drawn by its frame, in the theme's shape.
+    color: "transparent"
+
+    StudioFrame {
+        anchors.fill: parent
+        radius: root.studioTheme.cardRadius
+        chamfer: root.studioTheme.chamfer
+        color: root.studioTheme.card
+        borderColor: root.studioTheme.cardBorder
+    }
 
     RowLayout {
         anchors.fill: parent
@@ -34,12 +43,12 @@ Rectangle {
 
             Label {
                 text: root.theme.name
-                color: "#edf7fa"
+                color: root.studioTheme.cardTitle
                 font.weight: Font.DemiBold
             }
             Label {
                 text: qsTr("Built-in · %1").arg(root.theme.category || "theme")
-                color: "#90a7b4"
+                color: root.studioTheme.textSecondary
                 font.pixelSize: 11
             }
 
@@ -67,7 +76,7 @@ Rectangle {
 
             Label {
                 text: themePreview.rendererStatusText
-                color: themePreview.fallbackApplied ? "#ffc66d" : "#72909f"
+                color: themePreview.fallbackApplied ? root.studioTheme.warning : root.studioTheme.hint
                 font.pixelSize: 9
             }
         }

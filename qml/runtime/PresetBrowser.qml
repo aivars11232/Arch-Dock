@@ -1,9 +1,10 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import "StudioThemes.js" as StudioThemes
 
 // One preset catalog page. Every piece of data arrives through a property and
 // every request leaves through a signal, so one component serves the preset
@@ -24,6 +25,8 @@ Item {
     // `studio`, which also loads them.
     property var themeRows: []
     property var studio: null
+    // Panel Studio's look.
+    readonly property var theme: studio && studio.studioTheme ? studio.studioTheme : StudioThemes.theme("classic")
     property var catalogStatus: ({ valid: true, errorCode: "" })
     property string selectedPresetId: ""
     // The outcome of the last store action, and whether it failed.
@@ -159,17 +162,18 @@ Item {
 
             Label {
                 objectName: "preset-browser-title"
-                text: root.title
-                color: "#f3f8fb"
+                text: StudioThemes.label(root.theme, root.title)
+                color: root.theme.heading
                 font.pixelSize: 16
-                font.weight: Font.DemiBold
+                font.letterSpacing: root.theme.letterSpacing
+                font.weight: root.theme.headingWeight
                 Accessible.role: Accessible.Heading
             }
 
             Label {
                 Layout.fillWidth: true
                 text: root.description
-                color: "#91a8b5"
+                color: root.theme.description
                 font.pixelSize: 11
                 wrapMode: Text.Wrap
             }
@@ -178,7 +182,7 @@ Item {
                 visible: !root.looksOnly
                 Layout.fillWidth: true
                 text: qsTr("Selecting a preset shows it in the preview above. It does not change any panel.")
-                color: "#728995"
+                color: root.theme.hint
                 font.pixelSize: 10
                 wrapMode: Text.Wrap
             }
@@ -204,6 +208,7 @@ Item {
         }
 
         PresetAuditionBar {
+            theme: root.theme
             visible: root.showAuditionBar && (root.selectedPresetId.length > 0
                 || String(root.auditionStatus.state || "IDLE") !== "IDLE")
             Layout.fillWidth: true
@@ -215,15 +220,15 @@ Item {
             onActionRequested: function(action, name) { root.auditionActionRequested(action, name); }
         }
 
-        Rectangle {
+        StudioFrame {
             objectName: "preset-pending-action"
             visible: root.pendingAction !== null
             Layout.fillWidth: true
             implicitHeight: pendingRow.implicitHeight + 16
-            radius: 7
-            color: "#22394a"
-            border.width: 1
-            border.color: "#5e73cfe7"
+            radius: root.theme.controlRadius + 1
+            chamfer: root.theme.chamfer / 2
+            color: root.theme.bar
+            borderColor: root.theme.barBorder
 
             RowLayout {
                 id: pendingRow
@@ -239,7 +244,7 @@ Item {
                             ? qsTr("Rename “%1” to").arg(root.pendingAction.name)
                             : qsTr("Delete “%1”? This cannot be undone.")
                                 .arg(root.pendingAction.name)
-                    color: "#d8e5ec"
+                    color: root.theme.text
                     wrapMode: Text.Wrap
                 }
 
@@ -289,7 +294,7 @@ Item {
                 : (root.panelKind
                     ? qsTr("You have no Panel Presets yet. Open Built-in Panel Presets and choose Duplicate to My Presets.")
                     : qsTr("You have no Icon Presets yet. Open Built-in Icon Presets and choose Duplicate to My Presets."))
-            color: "#8195a1"
+            color: root.theme.textMuted
             wrapMode: Text.Wrap
         }
 
@@ -318,10 +323,11 @@ Item {
                 visible: section.length > 0
                 height: visible ? implicitHeight + 10 : 0
                 topPadding: 6
-                text: section
-                color: "#f3f8fb"
+                text: StudioThemes.label(root.theme, section)
+                color: root.theme.heading
+                font.letterSpacing: root.theme.letterSpacing
                 font.pixelSize: 14
-                font.weight: Font.DemiBold
+                font.weight: root.theme.headingWeight
                 Accessible.role: Accessible.Heading
             }
 
@@ -338,6 +344,7 @@ Item {
                     id: presetCard
 
                     PresetCard {
+                        theme: root.theme
                         preset: entry.modelData.preset
                         // A panel preset shows the bare panel, no icons;
                         // an icon preset shows its icons.
@@ -375,15 +382,16 @@ Item {
 
                 Label {
                     Layout.topMargin: 12
-                    text: root.artworkRow ? String(root.artworkRow.label || "") : ""
-                    color: "#f3f8fb"
+                    text: StudioThemes.label(root.theme, root.artworkRow ? String(root.artworkRow.label || "") : "")
+                    color: root.theme.heading
                     font.pixelSize: 14
-                    font.weight: Font.DemiBold
+                    font.letterSpacing: root.theme.letterSpacing
+                    font.weight: root.theme.headingWeight
                 }
                 Label {
                     Layout.fillWidth: true
                     text: root.artworkRow ? String(root.artworkRow.description || "") : ""
-                    color: "#91a8b5"
+                    color: root.theme.description
                     font.pixelSize: 11
                     wrapMode: Text.Wrap
                 }

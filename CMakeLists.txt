@@ -339,7 +339,13 @@ set(ARCHDOCK_APPLICATION_QML_FILES
   qml/runtime/SettingsEditorModel.js
   qml/runtime/VisibilityStatus.js
   qml/runtime/StudioForm.qml
+  qml/runtime/StudioFrame.qml
+  qml/runtime/StudioHoneycomb.qml
+  qml/runtime/StudioLightStrip.qml
   qml/runtime/StudioNavigation.js
+  qml/runtime/StudioThemePreview.qml
+  qml/runtime/StudioThemes.js
+  qml/runtime/StudioThemesPage.qml
   qml/runtime/ThemeSampleCard.qml
   qml/runtime/SettingsPopup.qml)
 qt_add_qml_module(
@@ -1836,6 +1842,14 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_StudioNavigation.qml)
   set_tests_properties(
     studio-navigation-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME studio-themes-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_StudioThemes.qml)
+  set_tests_properties(
+    studio-themes-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(

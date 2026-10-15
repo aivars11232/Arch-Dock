@@ -1801,7 +1801,9 @@ void PresetCatalogTest::builtInPresetsAreDistinctAndCoverTheirFamilies()
                 .contains(rail.presentation.collapseMechanism));
     // The free-panel families, each with its safe procedural fallback tier.
     QCOMPARE(layout("circular-blue-ring"), QStringLiteral("ring"));
-    QCOMPARE(layout("octagonal-platform"), QStringLiteral("octagon"));
+    // The octagon is the polygon with eight corners.
+    QCOMPARE(layout("octagonal-platform"), QStringLiteral("polygon"));
+    QCOMPARE(panel("octagonal-platform").panel.configuration.layout.polygonSides, 8);
     QCOMPARE(layout("orange-arc-dock"), QStringLiteral("arc"));
     for (const char *id : {"circular-blue-ring", "octagonal-platform",
                            "orange-arc-dock"})

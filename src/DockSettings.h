@@ -44,6 +44,10 @@ class DockSettings final : public QObject
     Q_PROPERTY(QString topPanelType READ topPanelType WRITE setTopPanelType NOTIFY topPanelTypeChanged)
     Q_PROPERTY(QString sidePanelType READ sidePanelType WRITE setSidePanelType NOTIFY sidePanelTypeChanged)
     Q_PROPERTY(QString bottomPanelType READ bottomPanelType WRITE setBottomPanelType NOTIFY bottomPanelTypeChanged)
+    // Panel Studio's own look, a theme id of StudioThemes.js. It changes
+    // nothing on the desktop, so it is kept apart from the shared settings
+    // above and their transactions.
+    Q_PROPERTY(QString studioTheme READ studioTheme WRITE setStudioTheme NOTIFY studioThemeChanged)
 
 public:
     explicit DockSettings(QObject *parent = nullptr);
@@ -78,6 +82,7 @@ public:
     [[nodiscard]] const QString &topPanelType() const;
     [[nodiscard]] const QString &sidePanelType() const;
     [[nodiscard]] const QString &bottomPanelType() const;
+    [[nodiscard]] const QString &studioTheme() const;
 
     [[nodiscard]] QVariantMap transactionSnapshot() const;
     [[nodiscard]] QVariantMap editorTransactionSnapshot() const;
@@ -118,6 +123,7 @@ public slots:
     void setTopPanelType(const QString &topPanelType);
     void setSidePanelType(const QString &sidePanelType);
     void setBottomPanelType(const QString &bottomPanelType);
+    void setStudioTheme(const QString &theme);
     void applyProfile(const QString &profileName);
     void reset();
 
@@ -152,6 +158,7 @@ signals:
     void topPanelTypeChanged();
     void sidePanelTypeChanged();
     void bottomPanelTypeChanged();
+    void studioThemeChanged();
     void transactionAdopted();
 
 private:
@@ -187,4 +194,5 @@ private:
     QString m_topPanelType = QStringLiteral("hybrid");
     QString m_sidePanelType = QStringLiteral("hybrid");
     QString m_bottomPanelType = QStringLiteral("hybrid");
+    QString m_studioTheme = QStringLiteral("classic");
 };

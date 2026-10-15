@@ -3709,7 +3709,9 @@ void PanelRegistry::load()
                 ArchDock::panelNameIsOldDefault(probe.value(QStringLiteral("name")).toString())) || needsBackup;
             needsBackup = !source.contains(QStringLiteral("screen")) ||
                 !source.contains(QStringLiteral("visibilityMode")) ||
-                !source.contains(QStringLiteral("panelMotionTarget")) || needsBackup;
+                !source.contains(QStringLiteral("panelMotionTarget")) ||
+                ArchDock::namedPolygonCorners(source.value(QStringLiteral("layout")).toString()) > 0 ||
+                needsBackup;
         }
         if (needsBackup)
         {
@@ -3742,6 +3744,12 @@ void PanelRegistry::load()
             // given the motion it had (PanelDefinition::fromLegacyMap,
             // ADREP-TASK-002 PD-25); it is saved with it, after the backup.
             if (!sourceRecord.contains(QStringLiteral("panelMotionTarget")))
+            {
+                compatibilityRewriteRequired = true;
+            }
+            // A triangle, hexagon or octagon was kept under its own name; it
+            // is saved as a polygon with that many corners.
+            if (ArchDock::namedPolygonCorners(sourceRecord.value(QStringLiteral("layout")).toString()) > 0)
             {
                 compatibilityRewriteRequired = true;
             }

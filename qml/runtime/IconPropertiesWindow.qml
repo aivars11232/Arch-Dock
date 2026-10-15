@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Window
+import "StudioThemes.js" as StudioThemes
 
 // The window that holds the Icon Properties editor. Closing it without
 // Apply discards the draft.
@@ -14,6 +15,32 @@ Window {
         editorSnapshot && editorSnapshot.entryIdentity
             ? editorSnapshot.entryIdentity : "")
 
+    // Panel Studio's look (UI Themes), and its controls in its colours.
+    readonly property var studioTheme: StudioThemes.theme(typeof dockSettings !== "undefined" && dockSettings
+        ? String(dockSettings.studioTheme || "") : "")
+    palette.window: studioTheme.windowBottom
+    palette.windowText: studioTheme.text
+    palette.base: studioTheme.controlBase
+    palette.alternateBase: studioTheme.row
+    palette.text: studioTheme.controlText
+    palette.button: studioTheme.controlButton
+    palette.buttonText: studioTheme.controlText
+    palette.brightText: studioTheme.accentText
+    palette.highlight: studioTheme.accent
+    palette.highlightedText: studioTheme.accentText
+    palette.placeholderText: studioTheme.controlPlaceholder
+    palette.mid: studioTheme.controlBorder
+    palette.midlight: studioTheme.rowBorderHover
+    palette.dark: studioTheme.accent
+    palette.light: studioTheme.textSecondary
+    palette.shadow: "#000000"
+    palette.toolTipBase: studioTheme.card
+    palette.toolTipText: studioTheme.text
+    palette.link: studioTheme.accent
+    palette.disabled.windowText: studioTheme.textMuted
+    palette.disabled.text: studioTheme.textMuted
+    palette.disabled.buttonText: studioTheme.textMuted
+
     width: 620
     height: 590
     visible: false
@@ -26,20 +53,19 @@ Window {
         editorRequestedClose = false
     }
 
-    Rectangle {
+    StudioFrame {
         anchors.fill: parent
-        radius: 12
-        border.width: 1
-        border.color: "#75d9edf2"
-        gradient: Gradient {
-            GradientStop { position: 0; color: "#f62a3848" }
-            GradientStop { position: 1; color: "#f1081018" }
-        }
+        radius: root.studioTheme.radius
+        chamfer: root.studioTheme.chamfer
+        color: root.studioTheme.windowTop
+        colorBottom: root.studioTheme.windowBottom
+        borderColor: root.studioTheme.windowBorder
     }
 
     IconProperties {
         id: editor
 
+        theme: root.studioTheme
         objectName: "iconPropertiesEditor"
         anchors.fill: parent
         anchors.margins: 18

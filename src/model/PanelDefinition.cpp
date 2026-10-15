@@ -5,6 +5,7 @@
 #include "PanelSettingsSchema.h"
 
 #include <QCoreApplication>
+#include <QHash>
 #include <QMetaType>
 #include <QRegularExpression>
 #include <QSet>
@@ -265,6 +266,18 @@ std::optional<PanelLayoutKind> panelLayoutKindFromName(const QString &name)
         }
     }
     return std::nullopt;
+}
+
+int namedPolygonCorners(const QString &layout)
+{
+    static const QHash<QString, int> corners{
+        {QStringLiteral("triangle"), 3},
+        {QStringLiteral("square"), 4},
+        {QStringLiteral("pentagon"), 5},
+        {QStringLiteral("hexagon"), 6},
+        {QStringLiteral("octagon"), 8},
+    };
+    return corners.value(layout, 0);
 }
 
 QString panelLayoutKindName(PanelLayoutKind kind)
@@ -573,6 +586,11 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         QStringLiteral("layoutPadding"), definition.layout.padding).toInt();
     definition.layout.polygonSides = normalized(
         QStringLiteral("pathSides"), definition.layout.polygonSides).toInt();
+    if (const int corners = namedPolygonCorners(definition.layout.pathType); corners > 0)
+    {
+        definition.layout.pathType = QStringLiteral("polygon");
+        definition.layout.polygonSides = corners;
+    }
     definition.layout.orientation = normalized(
         QStringLiteral("pathOrientation"), definition.layout.orientation).toString();
     definition.layout.anchor = normalized(

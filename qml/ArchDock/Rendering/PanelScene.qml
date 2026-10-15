@@ -315,6 +315,13 @@ Item {
         resetTravel()
         resetTurn()
     }
+    // So does a polygon or star given another number of corners.
+    onPolygonSidesChanged: {
+        if (["polygon", "star"].includes(layoutPath)) {
+            resetTravel()
+            resetTurn()
+        }
+    }
     onReducedMotionChanged: if (reducedMotion) foldContinuousTravel()
 
     // The centre a drag turns about and a slot's turn is measured from: the

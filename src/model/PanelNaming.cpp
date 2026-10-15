@@ -1,7 +1,6 @@
 #include "model/PanelNaming.h"
 
 #include <QCoreApplication>
-#include <QHash>
 #include <QRegularExpression>
 
 namespace ArchDock
@@ -13,11 +12,12 @@ QString translated(const char *text)
     return QCoreApplication::translate("ArchDock::PanelNaming", text);
 }
 
-// Each layout's name as Panel Studio's choices show it.
+// Each shape's name as Panel Studio's lists show it. Triangle to octagon
+// are polygons now; their names stay for panels named before.
 const QList<QPair<QString, const char *>> &shapeWords()
 {
     static const QList<QPair<QString, const char *>> words{
-        {QStringLiteral("adaptive"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Dock")},
+        {QStringLiteral("adaptive"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Adaptive")},
         {QStringLiteral("horizontal"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Row")},
         {QStringLiteral("vertical"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Column")},
         {QStringLiteral("diagonal"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Diagonal")},
@@ -30,8 +30,8 @@ const QList<QPair<QString, const char *>> &shapeWords()
         {QStringLiteral("fan"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Fan")},
         {QStringLiteral("spiral"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Spiral")},
         {QStringLiteral("ribbon"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Ribbon")},
-        {QStringLiteral("vertical-curve"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Curve")},
-        {QStringLiteral("horizontal-curve"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Curve")},
+        {QStringLiteral("vertical-curve"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Vertical curve")},
+        {QStringLiteral("horizontal-curve"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Horizontal curve")},
         {QStringLiteral("polygon"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Polygon")},
         {QStringLiteral("triangle"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Triangle")},
         {QStringLiteral("square"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Square")},
@@ -41,7 +41,8 @@ const QList<QPair<QString, const char *>> &shapeWords()
         {QStringLiteral("star"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Star")},
         {QStringLiteral("grid"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Grid")},
         {QStringLiteral("floating"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Floating")},
-        {QStringLiteral("mobius"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Möbius strip")},
+        {QStringLiteral("mobius"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Möbius Strip")},
+        {QStringLiteral("stack"), QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Stack")},
     };
     return words;
 }
@@ -62,8 +63,8 @@ QString withPanel(const QString &word)
     return translated(QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "%1 panel")).arg(word);
 }
 
-// The name without a number at its end ("Ring panel 2" -> "Ring panel"),
-// and whether it had one.
+// The name without a number at its end ("Ring 2" -> "Ring"), and whether it
+// had one.
 QString withoutNumber(const QString &name, bool *numbered)
 {
     static const QRegularExpression trailing(QStringLiteral("^(.*\\S)\\s+[0-9]+$"));
@@ -71,6 +72,31 @@ QString withoutNumber(const QString &name, bool *numbered)
     if (numbered) *numbered = match.hasMatch();
     return match.hasMatch() ? match.captured(1) : name;
 }
+
+// A free panel's name for its shape with " panel" after it, as an earlier
+// version gave it ("Ring panel", "Möbius strip panel").
+bool earlierShapeName(const QString &stem)
+{
+    for (const auto &word : shapeWords())
+    {
+        if (stem.compare(withPanel(translated(word.second)), Qt::CaseInsensitive) == 0 ||
+            stem.compare(QString::fromUtf8(word.second) + QStringLiteral(" panel"), Qt::CaseInsensitive) == 0)
+            return true;
+    }
+    for (const char *earlier : {"Dock panel", "Curve panel"})
+        if (stem.compare(QString::fromUtf8(earlier), Qt::CaseInsensitive) == 0) return true;
+    return false;
+}
+}
+
+QString panelShapeName(const QString &layout)
+{
+    for (const auto &word : shapeWords())
+        if (word.first == layout) return translated(word.second);
+    // Any other: its code word, made readable.
+    QString text = layout;
+    text.replace(QLatin1Char('-'), QLatin1Char(' '));
+    return text.isEmpty() ? text : text.left(1).toUpper() + text.mid(1);
 }
 
 QString panelBaseName(const QString &edge, const QString &layout)
@@ -81,9 +107,9 @@ QString panelBaseName(const QString &edge, const QString &layout)
             if (word.first == edge) return withPanel(translated(word.second));
         return translated(QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Panel"));
     }
-    for (const auto &word : shapeWords())
-        if (word.first == layout) return withPanel(translated(word.second));
-    return translated(QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Free panel"));
+    if (layout.isEmpty())
+        return translated(QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Free panel"));
+    return panelShapeName(layout);
 }
 
 bool panelNameIsOldDefault(const QString &name)
@@ -91,6 +117,8 @@ bool panelNameIsOldDefault(const QString &name)
     const QString trimmed = name.trimmed();
     bool numbered = false;
     const QString stem = withoutNumber(trimmed, &numbered);
+    if (earlierShapeName(stem))
+        return true;
     if (!numbered) return false;
     // As older versions wrote them, in English or in the language they ran in.
     for (const QString &old : {QStringLiteral("Free panel"), QStringLiteral("Panel"),
@@ -106,7 +134,7 @@ bool panelNameIsAutomatic(const QString &name)
     if (trimmed.isEmpty() || panelNameIsOldDefault(trimmed)) return true;
     const QString stem = withoutNumber(trimmed, nullptr);
     for (const auto &word : shapeWords())
-        if (stem == withPanel(translated(word.second))) return true;
+        if (stem == translated(word.second)) return true;
     for (const auto &word : edgeWords())
         if (stem == withPanel(translated(word.second))) return true;
     return stem == translated(QT_TRANSLATE_NOOP("ArchDock::PanelNaming", "Free panel")) ||

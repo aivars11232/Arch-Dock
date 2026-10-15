@@ -1,7 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
@@ -11,6 +11,7 @@ import "CapabilityModel.js" as CapabilityModel
 import "PlacementStatus.js" as PlacementStatus
 import "SettingsEditorModel.js" as EditorModel
 import "StudioNavigation.js" as StudioNavigation
+import "StudioThemes.js" as StudioThemes
 import "VisibilityStatus.js" as VisibilityStatus
 
 // Panel Studio: Arch Dock's settings window. It edits one panel at a time
@@ -20,6 +21,39 @@ import "VisibilityStatus.js" as VisibilityStatus
 // profiles and 3D; only settings the panel's capabilities allow are shown.
 Window {
     id: root
+
+    // Panel Studio's own look (UI Themes); its controls take the theme's
+    // colours from the window's palette.
+    readonly property string studioThemeId: typeof dockSettings !== "undefined" && dockSettings
+        ? String(dockSettings.studioTheme || "") : ""
+    readonly property var studioTheme: StudioThemes.theme(studioThemeId)
+    function chooseStudioTheme(themeId) {
+        if (typeof dockSettings !== "undefined" && dockSettings)
+            dockSettings.studioTheme = String(themeId);
+    }
+    readonly property bool currentThemesPage: mainTabIndex === 6
+    palette.window: studioTheme.windowBottom
+    palette.windowText: studioTheme.text
+    palette.base: studioTheme.controlBase
+    palette.alternateBase: studioTheme.row
+    palette.text: studioTheme.controlText
+    palette.button: studioTheme.controlButton
+    palette.buttonText: studioTheme.controlText
+    palette.brightText: studioTheme.accentText
+    palette.highlight: studioTheme.accent
+    palette.highlightedText: studioTheme.accentText
+    palette.placeholderText: studioTheme.controlPlaceholder
+    palette.mid: studioTheme.controlBorder
+    palette.midlight: studioTheme.rowBorderHover
+    palette.dark: studioTheme.accent
+    palette.light: studioTheme.textSecondary
+    palette.shadow: "#000000"
+    palette.toolTipBase: studioTheme.card
+    palette.toolTipText: studioTheme.text
+    palette.link: studioTheme.accent
+    palette.disabled.windowText: studioTheme.textMuted
+    palette.disabled.text: studioTheme.textMuted
+    palette.disabled.buttonText: studioTheme.textMuted
 
     readonly property bool renderingModuleReady: RenderingModuleProbe.ready
     property string selectedPanelId: panelRegistry.activePanelId
@@ -285,7 +319,8 @@ Window {
     readonly property var currentSubtabs: StudioNavigation.subtabsFor(mainTabIndex)
     readonly property var mainTabLabels: StudioNavigation.mainLabels()
     // One icon per section of StudioNavigation.sections, in order.
-    readonly property var mainTabIcons: ["view-dashboard", "preferences-desktop-display", "preferences-desktop-icons", "draw-rectangle", "draw-ellipse", "document-save"]
+    // UI Themes wears Arch Dock's own logo.
+    readonly property var mainTabIcons: ["view-dashboard", "preferences-desktop-display", "preferences-desktop-icons", "draw-rectangle", "draw-ellipse", "document-save", "org.archdock.ArchDock"]
 
     function titleCase(value) {
         const text = String(value || "").replace(/-/g, " ");
@@ -1604,8 +1639,9 @@ Window {
     }
 
     function rowsForCurrentPage() {
-        // A preset page is a browser, not a settings form.
-        if (currentPresetPage)
+        // A preset page is a browser, and UI Themes a page of its own, not
+        // settings forms.
+        if (currentPresetPage || currentThemesPage)
             return [];
         if (mainTabIndex === 0)
             return subTabIndex === 0 ? overviewPanelRows() : subTabIndex === 1 ? overviewIconRows()
@@ -2190,24 +2226,26 @@ Window {
         onActivated: root.cancelStudioChanges()
     }
 
-    Rectangle {
+    StudioFrame {
         anchors.fill: parent
-        radius: 12
-        border.width: 1
-        border.color: "#75d9edf2"
-        gradient: Gradient {
-            GradientStop {
-                position: 0
-                color: "#f62a3848"
-            }
-            GradientStop {
-                position: 1
-                color: "#f1081018"
-            }
-        }
+        radius: root.studioTheme.radius
+        chamfer: root.studioTheme.chamfer
+        color: root.studioTheme.windowTop
+        colorBottom: root.studioTheme.windowBottom
+        borderColor: root.studioTheme.windowBorder
+        glowColor: root.studioTheme.glow
+        glowSize: root.studioTheme.edgeGlow
     }
 
-    Rectangle {
+    // The alien themes' honeycomb vents, behind everything else.
+    StudioHoneycomb {
+        objectName: "studio-honeycomb"
+        anchors.fill: parent
+        anchors.margins: Math.max(2, root.studioTheme.chamfer / 2)
+        color: root.studioTheme.honeycomb
+    }
+
+    StudioFrame {
         id: titleStrip
 
         anchors.top: parent.top
@@ -2215,14 +2253,26 @@ Window {
         anchors.right: parent.right
         anchors.margins: 1
         height: 38
-        color: "#e8182b3b"
+        radius: Math.max(0, root.studioTheme.radius - 1)
+        chamfer: Math.max(0, root.studioTheme.chamfer - 1)
+        bottomCorners: false
+        color: root.studioTheme.titleStrip
 
         Rectangle {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             height: 1
-            color: "#5e77d6e8"
+            color: root.studioTheme.titleBorder
+        }
+
+        // The alien themes' light strip along the title's lower edge.
+        StudioLightStrip {
+            objectName: "studio-title-light"
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.verticalCenter: parent.bottom
+            width: parent.width * 0.62
+            color: root.studioTheme.glow
         }
 
         Row {
@@ -2233,8 +2283,7 @@ Window {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 8
 
-            // Arch Dock's own logo (the owner, 2026-10-13: "there should be
-            // Arch Dock logo"); the generic icon only where it is not installed.
+            // Arch Dock's own logo; the generic icon only where it is not installed.
             Kirigami.Icon {
                 width: 18
                 height: 18
@@ -2244,8 +2293,9 @@ Window {
 
             Label {
                 anchors.verticalCenter: parent.verticalCenter
-                text: qsTr("Arch Dock")
-                color: "#f4f8fb"
+                text: StudioThemes.label(root.studioTheme, qsTr("Arch Dock"))
+                color: root.studioTheme.titleName
+                font.letterSpacing: root.studioTheme.letterSpacing
                 font.pixelSize: 13
                 font.weight: Font.DemiBold
             }
@@ -2254,13 +2304,14 @@ Window {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 1
                 height: 17
-                color: "#4d9cb4c1"
+                color: root.studioTheme.titleDivider
             }
 
             Label {
                 anchors.verticalCenter: parent.verticalCenter
-                text: qsTr("Panel Studio")
-                color: "#a9bfcb"
+                text: StudioThemes.label(root.studioTheme, qsTr("Panel Studio"))
+                color: root.studioTheme.titleMuted
+                font.letterSpacing: root.studioTheme.letterSpacing
                 font.pixelSize: 11
             }
         }
@@ -2278,7 +2329,7 @@ Window {
                 : root.profileMode ? qsTr("%1 · profile “%2”").arg(root.editedPanelName)
                     .arg(root.editedProfile ? root.editedProfile.name : "")
                 : root.editedPanelName || qsTr("Panel Editor")
-            color: "#d5e5ed"
+            color: root.studioTheme.titleText
             font.pixelSize: 12
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
@@ -2309,7 +2360,7 @@ Window {
 
             background: Rectangle {
                 radius: 4
-                color: closeButton.hovered ? "#b94b526f" : "transparent"
+                color: closeButton.hovered ? root.studioTheme.closeHover : "transparent"
             }
         }
     }
@@ -2325,13 +2376,13 @@ Window {
         anchors.bottomMargin: 10
         spacing: 12
 
-        Rectangle {
+        StudioFrame {
             Layout.fillHeight: true
             Layout.preferredWidth: root.compactStudio ? 112 : 164
-            radius: 8
-            color: "#4a101a23"
-            border.width: 1
-            border.color: "#263d5361"
+            radius: root.studioTheme.cardRadius
+            chamfer: root.studioTheme.chamfer
+            color: root.studioTheme.sidebar
+            borderColor: root.studioTheme.sidebarBorder
 
             ColumnLayout {
                 anchors.fill: parent
@@ -2344,7 +2395,7 @@ Window {
                     Layout.topMargin: 4
                     Layout.bottomMargin: 6
                     text: qsTr("STUDIO")
-                    color: "#718995"
+                    color: root.studioTheme.sidebarHeading
                     font.pixelSize: 10
                     font.weight: Font.DemiBold
                     font.letterSpacing: 1.2
@@ -2371,26 +2422,45 @@ Window {
                             spacing: 10
 
                             Kirigami.Icon {
+                                objectName: "studio-section-icon-" + mainTabDelegate.index
                                 Layout.preferredWidth: 20
                                 Layout.preferredHeight: 20
                                 source: mainTabDelegate.icon.name
-                                color: mainTabDelegate.checked ? "#7ce7fa" : "#9db0ba"
+                                // UI Themes shows the plain theme icon where
+                                // Arch Dock's logo is not installed.
+                                fallback: mainTabDelegate.index === 6 ? "preferences-desktop-theme-global" : "unknown"
+                                color: mainTabDelegate.checked ? root.studioTheme.sidebarIconActive : root.studioTheme.sidebarIcon
                             }
 
                             Label {
                                 Layout.fillWidth: true
-                                text: mainTabDelegate.text
-                                color: mainTabDelegate.checked ? "#f4fbff" : "#b2c1c8"
+                                text: StudioThemes.label(root.studioTheme, mainTabDelegate.text)
+                                color: mainTabDelegate.checked ? root.studioTheme.sidebarTextActive : root.studioTheme.sidebarText
+                                font.letterSpacing: root.studioTheme.letterSpacing / 2
                                 font.weight: mainTabDelegate.checked ? Font.DemiBold : Font.Normal
                                 elide: Text.ElideRight
                             }
                         }
 
-                        background: Rectangle {
-                            radius: 6
-                            color: mainTabDelegate.checked ? "#4b23627a" : (mainTabDelegate.hovered ? "#26384a56" : "transparent")
-                            border.width: mainTabDelegate.checked ? 1 : 0
-                            border.color: "#5e73cfe7"
+                        background: StudioFrame {
+                            radius: root.studioTheme.controlRadius
+                            chamfer: root.studioTheme.chamfer / 2
+                            color: mainTabDelegate.checked ? root.studioTheme.sidebarActive
+                                : (mainTabDelegate.hovered ? root.studioTheme.sidebarHover : "transparent")
+                            borderColor: mainTabDelegate.checked ? root.studioTheme.sidebarActiveBorder : "transparent"
+
+                            // The alien themes light the chosen section's
+                            // left edge.
+                            StudioLightStrip {
+                                lit: mainTabDelegate.checked
+                                vertical: true
+                                thickness: 3
+                                anchors.left: parent.left
+                                anchors.leftMargin: 2
+                                anchors.verticalCenter: parent.verticalCenter
+                                height: parent.height * 0.8
+                                color: root.studioTheme.glow
+                            }
                         }
                     }
                 }
@@ -2406,7 +2476,7 @@ Window {
                         ? qsTr("Changes show on the desktop at once; Apply or OK keeps them, Cancel drops them")
                         : qsTr("Changes are held until Apply or OK")
                     visible: !root.compactStudio
-                    color: "#617985"
+                    color: root.studioTheme.footerText
                     font.pixelSize: 9
                     wrapMode: Text.Wrap
                 }
@@ -2416,6 +2486,8 @@ Window {
         ScrollView {
             id: studioScroll
             objectName: "studio-page-scroll"
+            // Scrolls by the wheel as KDE's own scroll views do.
+            readonly property Kirigami.WheelHandler wheelHandler: Kirigami.WheelHandler { target: studioScroll.contentItem }
             implicitWidth: 0
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -2439,7 +2511,7 @@ Window {
                     Layout.fillWidth: true
                     text: qsTr("Editing “%1” in the profile “%2”. Apply saves the profile; the panels on your desktop change only when you apply the profile.")
                         .arg(root.editedPanelName).arg(root.editedProfile ? root.editedProfile.name : "")
-                    color: "#d8e5ec"
+                    color: root.studioTheme.text
                     wrapMode: Text.Wrap
                 }
                 Button {
@@ -2465,6 +2537,12 @@ Window {
 
                         objectName: "studio-new-panel-" + modelData
                         text: root.newPanelKindName(modelData)
+                        // In a narrow window the buttons shrink, their words
+                        // cut short, rather than pushing the page wider than
+                        // the window and the tab arrows out of reach.
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: implicitWidth
+                        Layout.minimumWidth: Math.min(implicitWidth, 48)
                         checkable: true
                         enabled: root.newPanelPicked && root.newPanelPlaceFree(modelData)
                         checked: root.newPanelPicked ? root.newPanelEdge === modelData
@@ -2507,16 +2585,16 @@ Window {
                 }
             }
 
-            Rectangle {
+            StudioFrame {
                 visible: (!root.compactStudio || root.expandedCompactPreview) && root.previewSection
                 id: rendererPreviewCard
 
                 Layout.fillWidth: true
                 Layout.preferredHeight: 210
-                radius: 8
-                color: "#32121f2a"
-                border.width: 1
-                border.color: "#3d587080"
+                radius: root.studioTheme.cardRadius
+                chamfer: root.studioTheme.chamfer
+                color: root.studioTheme.preview
+                borderColor: root.studioTheme.previewBorder
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -2533,7 +2611,7 @@ Window {
                         text: root.auditionActive ? qsTr("Desktop preview active — saved settings unchanged") : root.presetPreviewActive
                             ? qsTr("Preset preview — %1").arg(String(root.selectedPresetCard.name || ""))
                             : qsTr("Live renderer preview")
-                        color: "#e9f5fa"
+                        color: root.studioTheme.previewTitle
                         font.weight: Font.DemiBold
                         elide: Text.ElideRight
                     }
@@ -2629,7 +2707,7 @@ Window {
                         Label {
                             text: qsTr("Renderer: %1").arg(
                                 root.activeRendererPreview.activeRendererTier)
-                            color: "#86dff2"
+                            color: root.studioTheme.previewInfo
                             font.pixelSize: 10
                         }
 
@@ -2638,7 +2716,7 @@ Window {
                             text: qsTr("Fallback: %1").arg(
                                 root.activeRendererPreview.fallbackReason
                                 || qsTr("unspecified"))
-                            color: "#ffc66d"
+                            color: root.studioTheme.warning
                             font.pixelSize: 10
                         }
 
@@ -2656,7 +2734,7 @@ Window {
                                     : qsTr("Saved settings")
                             color: root.hasSettingsChanges
                                     || root.presetPreviewActive
-                                ? "#80de70" : "#728995"
+                                ? root.studioTheme.ready : root.studioTheme.hint
                             font.pixelSize: 10
                         }
                     }
@@ -2697,6 +2775,7 @@ Window {
                     icon.name: "go-previous"
                     ToolTip.text: text
                     ToolTip.visible: hovered
+                    ToolTip.delay: Kirigami.Units.toolTipDelay
                     onClicked: studioTabNavigation.scrollTabs(-1)
                 }
 
@@ -2708,6 +2787,8 @@ Window {
                     currentIndex: root.subTabIndex
                     contentItem.clip: true
                     contentItem.implicitHeight: count > 0 && itemAt(0) ? itemAt(0).height : 0
+                    // Each tab draws its own frame; the row behind them stays clear.
+                    background: Item {}
 
                     ScrollInput {
                         parent: studioTabs
@@ -2721,6 +2802,7 @@ Window {
                         model: root.currentSubtabs
 
                         delegate: TabButton {
+                            id: tabButton
                             required property string modelData
                             required property int index
                             readonly property bool offered: root.subtabAvailable(root.mainTabIndex, index)
@@ -2729,6 +2811,36 @@ Window {
                             visible: offered
                             width: offered ? Math.max(104, implicitWidth) : 0
                             onClicked: root.setSubTab(index)
+                            contentItem: Label {
+                                text: StudioThemes.label(root.studioTheme, tabButton.text)
+                                color: tabButton.checked ? root.studioTheme.sidebarTextActive : root.studioTheme.textSecondary
+                                font.weight: tabButton.checked ? Font.DemiBold : Font.Normal
+                                font.letterSpacing: root.studioTheme.letterSpacing / 2
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
+                            background: StudioFrame {
+                                implicitHeight: 34
+                                color: tabButton.checked ? root.studioTheme.sidebarActive
+                                    : tabButton.hovered ? root.studioTheme.rowHover : root.studioTheme.row
+                                borderColor: tabButton.checked ? root.studioTheme.sidebarActiveBorder
+                                    : root.studioTheme.rowBorder
+                                radius: root.studioTheme.controlRadius
+                                chamfer: root.studioTheme.chamfer / 2
+                                bottomCorners: false
+
+                                // The alien themes light the chosen tab's
+                                // lower edge.
+                                StudioLightStrip {
+                                    lit: tabButton.checked
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    anchors.bottom: parent.bottom
+                                    anchors.bottomMargin: 1
+                                    width: parent.width * 0.9
+                                    color: root.studioTheme.glow
+                                }
+                            }
                         }
                     }
                 }
@@ -2743,12 +2855,14 @@ Window {
                     icon.name: "go-next"
                     ToolTip.text: text
                     ToolTip.visible: hovered
+                    ToolTip.delay: Kirigami.Units.toolTipDelay
                     onClicked: studioTabNavigation.scrollTabs(1)
                 }
             }
 
             PresetAuditionBar {
                 objectName: "panel-studio-audition-bar"
+                theme: root.studioTheme
                 visible: root.auditionBusy
                 Layout.fillWidth: true
                 auditionStatus: root.auditionStatus
@@ -2790,7 +2904,8 @@ Window {
             StudioForm {
                 id: studioForm
                 objectName: "studio-page-form"
-                visible: root.currentPresetPage === null && !root.currentProfilePage && !root.newPanelPicked
+                visible: root.currentPresetPage === null && !root.currentProfilePage && !root.currentThemesPage
+                    && !root.newPanelPicked
                 enabled: !root.profilesService || !root.profilesService.active
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -2800,6 +2915,15 @@ Window {
                 pageKey: root.mainTabIndex + "/" + root.subTabIndex + "/" + root.selectedPanelId
             }
 
+            StudioThemesPage {
+                objectName: "panel-studio-themes-page"
+                visible: root.currentThemesPage && !root.newPanelPicked
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                currentThemeId: root.studioTheme.id
+                onThemeChosen: function(themeId) { root.chooseStudioTheme(themeId); }
+            }
+
             ProfilePage {
                 objectName: "panel-studio-profile-page"
                 visible: root.currentProfilePage && !root.newPanelPicked
@@ -2807,6 +2931,7 @@ Window {
                 Layout.fillHeight: true
                 Layout.minimumHeight: 320
                 profiles: root.profiles
+                theme: root.studioTheme
                 shortcutsOnly: root.subTabIndex === 2
                 shortcutStatus: root.profilesService ? root.profilesService.shortcutStatus : ({enabled: false, bindings: []})
                 applyStatus: root.profilesService ? root.profilesService.status : ({state: "IDLE"})
@@ -2890,7 +3015,7 @@ Window {
         Label {
             text: root.mainTabLabels[root.mainTabIndex] + (root.currentSubtabs.length > 0 ? "  /  " + root.currentSubtabs[root.subTabIndex] : "")
             visible: !root.compactStudio
-            color: "#69808d"
+            color: root.studioTheme.footerText
             font.pixelSize: 10
         }
 
@@ -2907,7 +3032,7 @@ Window {
             text: [root.studioError, root.studioWarning].filter(function(message) {
                 return message.length > 0;
             }).join("  ·  ")
-            color: root.studioError.length > 0 ? "#ff8c8c" : "#ffc66d"
+            color: root.studioError.length > 0 ? root.studioTheme.error : root.studioTheme.warning
             font.pixelSize: 11
             wrapMode: Text.Wrap
             maximumLineCount: 2
@@ -2921,6 +3046,7 @@ Window {
             }
             ToolTip.visible: studioMessageHover.hovered && studioMessage.truncated
             ToolTip.text: text
+            ToolTip.delay: Kirigami.Units.toolTipDelay
         }
 
         ToolButton {
@@ -2948,7 +3074,7 @@ Window {
         Label {
             visible: root.hasPendingChanges && root.studioError.length === 0 && root.studioWarning.length === 0
             text: qsTr("Pending changes")
-            color: "#80de70"
+            color: root.studioTheme.ready
             font.pixelSize: 10
         }
 

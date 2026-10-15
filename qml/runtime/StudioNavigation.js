@@ -6,7 +6,7 @@
 var sections = [
     {
         // What is applied to the selected panel; Icon Tiles and Pedestals
-        // only when the panel draws them (the owner, 2026-10-13).
+        // only when the panel draws them.
         label: "Overview",
         subtabs: ["Panel", "Icons", "Icon Tiles", "Pedestals"]
     },
@@ -19,8 +19,8 @@ var sections = [
             "Presets", "Built-in Panel Presets", "My Panel Presets", "Animations", "3D"]
     },
     {
-        // The icon style is chosen in one place, Icons > Appearance
-        // (ADREP-TASK-001, PD-05); there is no separate Icon Styles page.
+        // The icon style is chosen in one place, Icons > Appearance; there
+        // is no separate Icon Styles page.
         label: "Icons",
         subtabs: ["Appearance", "Behavior", "Indicators", "Notifications",
             "Built-in Icon Presets", "My Icon Presets"]
@@ -31,13 +31,18 @@ var sections = [
     },
     {
         // The stands under the icons: shape, size, lift, material and
-        // motion, on flat and 3D panels (owner's request, 2026-10-12).
+        // motion, on flat and 3D panels.
         label: "Pedestals",
         subtabs: []
     },
     {
         label: "Profiles",
         subtabs: ["Quick Profile", "Manage", "Shortcuts"]
+    },
+    {
+        // How Panel Studio itself looks; nothing on the desktop changes.
+        label: "UI Themes",
+        subtabs: []
     }
 ]
 

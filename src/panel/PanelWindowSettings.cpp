@@ -11,6 +11,7 @@
 #include "../ScreenIdentity.h"
 #include "../integration/PlasmaPanelAdapter.h"
 #include "../model/PanelIconCapacity.h"
+#include "../model/PanelNaming.h"
 #include "../model/PanelSettingsSchema.h"
 #include "../presets/PresetApplication.h"
 
@@ -28,6 +29,15 @@ using PanelWindowHelpers::panelTypeNeedsDockApplet;
 
 namespace
 {
+// A stored code word as a list shows it: "counter-clockwise" as
+// "Counter clockwise".
+QString readableChoice(const QString &choice)
+{
+    QString text = choice;
+    text.replace(QLatin1Char('-'), QLatin1Char(' '));
+    return text.isEmpty() ? text : text.left(1).toUpper() + text.mid(1);
+}
+
 // The settings an edge panel's Plasma panel itself carries: its edge,
 // screen, size and place along the edge.
 const QStringList &nativePlacementKeys()
@@ -1336,7 +1346,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             // A layout that draws exactly like another is no choice: a ring
             // and a circle place icons and platforms alike, and on a free
             // panel adaptive is the horizontal row. The current layout keeps
-            // its own name (ADREP-TASK-001 truth matrix).
+            // its own name.
             const auto drawing = [freeHost](const QString &layout)
             {
                 if (layout == QStringLiteral("ring"))
@@ -1360,6 +1370,14 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             for (const QString &choice : choices)
             {
                 if (!layoutAvailable(choice))
+                {
+                    continue;
+                }
+                // Triangle to octagon are the polygon with that many
+                // corners, set beside it; and on a free panel adaptive is
+                // listed as the row it is.
+                if (ArchDock::namedPolygonCorners(choice) > 0 ||
+                    (freeHost && choice == QStringLiteral("adaptive") && choice != current))
                 {
                     continue;
                 }
@@ -1442,9 +1460,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         {
             // Plain names where the stored value is a code word.
             static const QHash<QString, QHash<QString, const char *>> labels{
-                {QStringLiteral("folderLayout"), {{QStringLiteral("track"), QT_TR_NOOP("Along the dock")},
-                                                  {QStringLiteral("mobius"), QT_TR_NOOP("Möbius strip")}}},
-                {QStringLiteral("layout"), {{QStringLiteral("mobius"), QT_TR_NOOP("Möbius strip")}}},
+                {QStringLiteral("folderLayout"), {{QStringLiteral("track"), QT_TR_NOOP("Along the dock")}}},
                 {QStringLiteral("folderRingSize"),
                  {{QStringLiteral("small"), QT_TR_NOOP("Small")},
                   {QStringLiteral("panel"), QT_TR_NOOP("Same as panel")}}},
@@ -1461,7 +1477,10 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                   {QStringLiteral("both"), QT_TR_NOOP("Both")}}},
             };
             const char *label = labels.value(key).value(choice, nullptr);
-            QString text = label ? tr(label) : choice;
+            // A shape by its name, any other code word made readable.
+            QString text = label ? tr(label)
+                : key == QStringLiteral("layout") || key == QStringLiteral("folderLayout")
+                ? ArchDock::panelShapeName(choice) : readableChoice(choice);
             // A glowing look's own palette under its own name, the others
             // capitalised.
             if (key.endsWith(QStringLiteral("LookColour")))

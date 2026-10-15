@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Templates as T
 import QtTest
 import "../qml/runtime" as Runtime
 
@@ -186,7 +187,7 @@ TestCase {
 
     function visibleButtons(item) {
         return descendants(item).filter(function(candidate) {
-            return candidate instanceof Button && candidate.visible;
+            return candidate instanceof T.Button && candidate.visible;
         });
     }
 

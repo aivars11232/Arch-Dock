@@ -3,6 +3,7 @@
 
 #include "PresetCapabilityResolver.h"
 #include "../PanelRegistry.h"
+#include "../model/PanelNaming.h"
 #include "../model/PanelSettingsSchema.h"
 
 #include <QDir>
@@ -465,6 +466,15 @@ QVariantMap PresetLibrary::panelCard(const PanelPresetDefinition &preset) const
     card.insert(QStringLiteral("hostKinds"), preset.compatibility.hostKinds);
     card.insert(QStringLiteral("orientations"), preset.compatibility.orientations);
     card.insert(QStringLiteral("layouts"), preset.compatibility.layouts);
+    // The same layouts as Panel Studio's Dock layout list names them; a
+    // triangle to an octagon is the polygon.
+    QStringList layoutNames;
+    for (const QString &layout : preset.compatibility.layouts)
+    {
+        const QString name = panelShapeName(namedPolygonCorners(layout) > 0 ? QStringLiteral("polygon") : layout);
+        if (!layoutNames.contains(name)) layoutNames.append(name);
+    }
+    card.insert(QStringLiteral("layoutNames"), layoutNames);
     card.insert(QStringLiteral("hostKind"),
                 PanelDefinition::hostKindName(declared.host.kind));
     card.insert(QStringLiteral("layout"), declared.layout.pathType);

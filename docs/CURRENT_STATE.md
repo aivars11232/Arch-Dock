@@ -1,5 +1,39 @@
 # Arch Dock current state
 
+<!-- LIST_PIECE_4_BEGIN -->
+## The owner's list, piece 4: shape names, one Polygon, the icon limit as drawn, Panel Studio UI themes — 2026-10-15
+
+Report `docs/repairs/OWNER-LIST-PIECE-4.md`; Panel Studio pictures from a
+private KWin, desktop pictures from a private Plasma desktop with copies of
+Arch Dock's own settings.
+
+- Names (`model/PanelNaming`): a free panel nobody named is called exactly as
+  its shape is listed, "Ring", "Möbius Strip", "Star", numbered when taken
+  ("Ring 2"); an edge panel "Top panel". Older automatic names ("Ring panel",
+  "Free panel 3", "Dock panel") count as automatic and are renamed once on
+  load; a given name stays.
+- The Dock layout list shows `panelShapeName` for every layout, folds
+  triangle to octagon into Polygon (`namedPolygonCorners`: a stored named
+  polygon is read as "polygon" with that many corners, and its record is
+  backed up and rewritten on load), and lists a free panel's adaptive layout
+  as the Row it draws. Preset cards name layouts the same way.
+- The icon limit counts a 3D panel at its size as drawn, however steeply it
+  is tilted: the widget reports `seenTrackFactor(16, false)`.
+- UI themes (`qml/runtime/StudioThemes.js`): Classic, Teal Glass, Teal HUD,
+  Amber HUD, Alien White, Alien Black, Alien Green, chosen on the UI Themes
+  side tab (`StudioThemesPage.qml`, previews `StudioThemePreview.qml`) and
+  kept as `studio/theme` (`DockSettings::studioTheme`, ids checked on load
+  and save). The Studio's pages use Qt's Basic controls, which follow the
+  window palette set from the theme; frames are `StudioFrame` (rounded, or
+  cut corners, and a neon glow); the alien themes add `StudioHoneycomb` and
+  `StudioLightStrip`. Every theme's words meet 4.5 to 1 against their
+  background (3 to 1 for faint small print), checked by `studio-themes-test`.
+  KDE's wheel scrolling (`Kirigami.WheelHandler` on the three scroll views)
+  and tooltip delay are kept; the place buttons shrink in a narrow window.
+- A polygon or star given another number of corners starts its icons'
+  wheel travel afresh, as a new layout does (`PanelScene`).
+<!-- LIST_PIECE_4_END -->
+
 <!-- LIST_PIECE_3_BEGIN -->
 ## The owner's list, piece 3: one Presets page, panel names, live desktop preview, editing profiles — 2026-10-14
 

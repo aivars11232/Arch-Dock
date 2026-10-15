@@ -7,6 +7,30 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- Panel Studio has UI themes (the owner: "make multiple UI themes", "make a
+  separate side tab with themes and their previews"): Classic, Teal Glass,
+  Teal HUD, Amber HUD, Alien White, Alien Black and Alien Green, each shown
+  in a small preview on the new UI Themes side tab, which wears Arch Dock's
+  own icon. The choice is remembered; panels on the desktop are not changed,
+  and the window is always solid, so the wallpaper never shows through. The
+  three alien themes (the owner asked for "Alienware" white, black and green
+  looks, without marks or logos) have honeycomb vents, glowing light strips
+  under the title and on the chosen section and tab, a neon edge and thin
+  wide capitals; Alien White is white and black two tone. Panel Studio's
+  buttons, lists, sliders and fields now take the theme's colours.
+- Panels nobody named are called exactly as their shape is listed (the
+  owner: "Ring", "Möbius Strip"): "Ring", "Möbius Strip", "Star", "Ring 2"
+  for a second one; edge panels stay "Top panel" and so on. Names from
+  earlier versions, such as "Ring panel", are renamed once.
+- Panels > Layout > Dock layout lists plain shape names instead of code
+  words, and Triangle, Square, Pentagon, Hexagon and Octagon are gone from
+  it (the owner: "Since in settings I can just increase or decrease the
+  corners of polygons, the rest of them in that list are sort of useless"):
+  a panel that was one of them is a Polygon with that many corners and looks
+  the same. Preset cards name their layouts the same way.
+- A 3D panel's icon limit counts the panel at its size as drawn, however it
+  is tilted (the owner chose "Count the size as drawn"): a steeply tilted
+  platform that took one icon as seen now takes thirteen.
 - Every change made in Panel Studio shows on the desktop panel at once
   (the owner's request of 2026-10-13): its look, shape, size, glow and
   icons, the settings shared by all panels, an edge panel's Plasma size and

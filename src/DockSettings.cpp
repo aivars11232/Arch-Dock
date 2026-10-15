@@ -4,8 +4,22 @@
 #include "model/PanelSettingsSchema.h"
 
 #include <QGuiApplication>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QtGlobal>
+
+namespace
+{
+// A Panel Studio theme id: a few lower-case words joined by dashes, or empty
+// when `value` is no such id. Panel Studio knows which themes exist and shows
+// Classic for any other.
+QString studioThemeId(const QString &value)
+{
+    static const QRegularExpression valid(QStringLiteral("^[a-z0-9]+(-[a-z0-9]+)*$"));
+    const QString normalized = value.trimmed().toLower();
+    return normalized.size() <= 40 && valid.match(normalized).hasMatch() ? normalized : QString{};
+}
+}
 
 DockSettings::DockSettings(QObject *parent)
     : QObject(parent)
@@ -42,6 +56,9 @@ DockSettings::DockSettings(QObject *parent)
     m_sidePanelType = settings.value(QStringLiteral("sidePanelType"), m_sidePanelType).toString().toLower();
     m_bottomPanelType = settings.value(QStringLiteral("bottomPanelType"), m_bottomPanelType).toString().toLower();
     settings.endGroup();
+    if (const QString theme = studioThemeId(settings.value(QStringLiteral("studio/theme")).toString());
+        !theme.isEmpty())
+        m_studioTheme = theme;
 
     QVariantMap normalized;
     const bool normalizedSuccessfully =
@@ -666,6 +683,21 @@ void DockSettings::setBottomPanelType(const QString &value)
     if (normalized == m_bottomPanelType ||
         normalized != QStringLiteral("launcher") && normalized != QStringLiteral("tasks") && normalized != QStringLiteral("hybrid")) return;
     m_bottomPanelType = normalized; save(); emit bottomPanelTypeChanged();
+}
+
+const QString &DockSettings::studioTheme() const
+{
+    return m_studioTheme;
+}
+
+void DockSettings::setStudioTheme(const QString &value)
+{
+    const QString normalized = studioThemeId(value);
+    if (normalized.isEmpty() || normalized == m_studioTheme) return;
+    m_studioTheme = normalized;
+    QSettings settings;
+    settings.setValue(QStringLiteral("studio/theme"), m_studioTheme);
+    emit studioThemeChanged();
 }
 
 void DockSettings::setSidePanelType(const QString &value)

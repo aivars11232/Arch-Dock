@@ -484,6 +484,7 @@ private slots:
     void reservesAndOffsetsOnlySameScreenPanels();
     void concealsOnlyForRelevantActiveWindows();
     void persistsReducedMotionPreference();
+    void persistsStudioThemeChoice();
     void normalizesLayoutAndMotionValues();
     void separatesVisualChangesFromPanelTopology();
     void filtersEntriesByPanelContentType();
@@ -731,28 +732,40 @@ void PanelRegistryTest::preservesFreePanelForFreeSurface()
              QStringLiteral("launcher"));
 }
 
-// A panel nobody named goes by what it is, with a number when another has
-// that name; what an older version called every new panel ("Free panel 3",
-// "Panel 2") turns into such a name once, and a name its owner chose stays.
+// A free panel nobody named goes by its shape as Panel Studio's Dock layout
+// list shows it, an edge panel by its edge, with a number when another has
+// that name; what an older version called a new panel ("Free panel 3",
+// "Panel 2", "Ring panel") turns into such a name once, and a name its owner
+// chose stays. Triangle to octagon are kept as a polygon with that many
+// corners.
 void PanelRegistryTest::namesPanelsByWhatTheyAre()
 {
     QCOMPARE(ArchDock::panelBaseName(QStringLiteral("free"), QStringLiteral("mobius")),
-             QStringLiteral("Möbius strip panel"));
+             QStringLiteral("Möbius Strip"));
+    QCOMPARE(ArchDock::panelBaseName(QStringLiteral("free"), QStringLiteral("circular")),
+             QStringLiteral("Circle"));
+    QCOMPARE(ArchDock::panelShapeName(QStringLiteral("horizontal-curve")), QStringLiteral("Horizontal curve"));
     QCOMPARE(ArchDock::panelBaseName(QStringLiteral("left"), QString()), QStringLiteral("Left panel"));
-    QVERIFY(ArchDock::panelNameIsAutomatic(QStringLiteral("Ring panel 2")));
+    QVERIFY(ArchDock::panelNameIsAutomatic(QStringLiteral("Ring 2")));
     QVERIFY(ArchDock::panelNameIsAutomatic(QStringLiteral("Free panel 3")));
+    QVERIFY(ArchDock::panelNameIsAutomatic(QStringLiteral("Top panel")));
     QVERIFY(ArchDock::panelNameIsOldDefault(QStringLiteral("Panel 2")));
-    QVERIFY(!ArchDock::panelNameIsOldDefault(QStringLiteral("Ring panel")));
+    QVERIFY(ArchDock::panelNameIsOldDefault(QStringLiteral("Ring panel")));
+    QVERIFY(ArchDock::panelNameIsOldDefault(QStringLiteral("Möbius strip panel 2")));
+    QVERIFY(!ArchDock::panelNameIsOldDefault(QStringLiteral("Ring")));
+    QVERIFY(!ArchDock::panelNameIsOldDefault(QStringLiteral("Top panel")));
     QVERIFY(!ArchDock::panelNameIsAutomatic(QStringLiteral("My dock")));
-    QCOMPARE(ArchDock::uniquePanelName(QStringLiteral("Ring panel"),
-                 {QStringLiteral("Ring panel"), QStringLiteral("Ring panel 2")}),
-             QStringLiteral("Ring panel 3"));
+    QCOMPARE(ArchDock::uniquePanelName(QStringLiteral("Ring"),
+                 {QStringLiteral("Ring"), QStringLiteral("Ring 2")}),
+             QStringLiteral("Ring 3"));
+    QCOMPARE(ArchDock::namedPolygonCorners(QStringLiteral("octagon")), 8);
+    QCOMPARE(ArchDock::namedPolygonCorners(QStringLiteral("polygon")), 0);
     {
         PanelRegistry registry;
         const QString first = registry.addFreePanel();
         const QString second = registry.addFreePanel();
-        QCOMPARE(registry.panelName(first), QStringLiteral("Circle panel"));
-        QCOMPARE(registry.panelName(second), QStringLiteral("Circle panel 2"));
+        QCOMPARE(registry.panelName(first), QStringLiteral("Circle"));
+        QCOMPARE(registry.panelName(second), QStringLiteral("Circle 2"));
         QCOMPARE(registry.panelName(registry.addPanel(QStringLiteral("left"), QStringLiteral("launcher"))),
                  QStringLiteral("Left panel"));
     }
@@ -767,15 +780,24 @@ void PanelRegistryTest::namesPanelsByWhatTheyAre()
     stored(QStringLiteral("free-3"), QStringLiteral("Free panel 3"), QStringLiteral("free"), QStringLiteral("ring"));
     stored(QStringLiteral("free-4"), QStringLiteral("My dock"), QStringLiteral("free"), QStringLiteral("star"));
     stored(QStringLiteral("free-5"), QStringLiteral("Free panel 5"), QStringLiteral("free"), QStringLiteral("ring"));
+    stored(QStringLiteral("free-6"), QStringLiteral("Octagon panel"), QStringLiteral("free"), QStringLiteral("octagon"));
     stored(QStringLiteral("panel-2"), QStringLiteral("Panel 2"), QStringLiteral("left"), QStringLiteral("adaptive"));
     QSettings settings;
     settings.setValue(QStringLiteral("dock/panels"), QJsonDocument(panels).toJson(QJsonDocument::Compact));
     settings.sync();
     PanelRegistry registry;
-    QCOMPARE(registry.panelName(QStringLiteral("free-3")), QStringLiteral("Ring panel"));
+    QCOMPARE(registry.panelName(QStringLiteral("free-3")), QStringLiteral("Ring"));
     QCOMPARE(registry.panelName(QStringLiteral("free-4")), QStringLiteral("My dock"));
-    QCOMPARE(registry.panelName(QStringLiteral("free-5")), QStringLiteral("Ring panel 2"));
+    QCOMPARE(registry.panelName(QStringLiteral("free-5")), QStringLiteral("Ring 2"));
+    QCOMPARE(registry.panelName(QStringLiteral("free-6")), QStringLiteral("Polygon"));
+    QCOMPARE(registry.panelDefinition(QStringLiteral("free-6"))->layout.pathType, QStringLiteral("polygon"));
+    QCOMPARE(registry.panelDefinition(QStringLiteral("free-6"))->layout.polygonSides, 8);
     QCOMPARE(registry.panelName(QStringLiteral("panel-2")), QStringLiteral("Left panel"));
+    // Saved so: a new start finds the polygon and the names as they are.
+    PanelRegistry reloaded;
+    QCOMPARE(reloaded.panelValue(QStringLiteral("free-6"), QStringLiteral("layout")).toString(),
+             QStringLiteral("polygon"));
+    QCOMPARE(reloaded.panelName(QStringLiteral("free-3")), QStringLiteral("Ring"));
 }
 
 void PanelRegistryTest::normalizesFreeHostAssociationStates()
@@ -3111,6 +3133,35 @@ void PanelRegistryTest::persistsReducedMotionPreference()
 
     DockSettings restored;
     QVERIFY(restored.reducedMotion());
+}
+
+void PanelRegistryTest::persistsStudioThemeChoice()
+{
+    DockSettings settings;
+    QCOMPARE(settings.studioTheme(), QStringLiteral("classic"));
+    QSignalSpy changed(&settings, &DockSettings::studioThemeChanged);
+
+    settings.setStudioTheme(QStringLiteral(" Alien-Green "));
+    QCOMPARE(settings.studioTheme(), QStringLiteral("alien-green"));
+    QCOMPARE(changed.count(), 1);
+    settings.setStudioTheme(QStringLiteral("alien-green"));
+    QCOMPARE(changed.count(), 1);
+
+    // Anything that is no theme id is refused, and the choice stays.
+    for (const QString &refused : {QString{}, QStringLiteral("../teal"), QStringLiteral("Teal HUD"),
+                                   QStringLiteral("teal--hud"), QString(41, QLatin1Char('a'))}) {
+        settings.setStudioTheme(refused);
+        QCOMPARE(settings.studioTheme(), QStringLiteral("alien-green"));
+    }
+    QCOMPARE(changed.count(), 1);
+
+    DockSettings restored;
+    QCOMPARE(restored.studioTheme(), QStringLiteral("alien-green"));
+
+    // A stored value that is no theme id reads as Classic.
+    QSettings().setValue(QStringLiteral("studio/theme"), QStringLiteral("../../etc"));
+    DockSettings garbled;
+    QCOMPARE(garbled.studioTheme(), QStringLiteral("classic"));
 }
 
 void PanelRegistryTest::normalizesLayoutAndMotionValues()

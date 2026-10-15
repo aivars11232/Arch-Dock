@@ -1,10 +1,11 @@
 import QtQuick
 import QtQuick.Window
-import QtQuick.Controls
+import QtQuick.Controls.Basic
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import "IconPropertiesDraft.js" as IconPropertiesDraft
+import "StudioThemes.js" as StudioThemes
 
 // The Icon Properties editor for one dock entry: its own glyph, label, tile
 // and icon style. Changes stay a draft until Apply, which saves them for this
@@ -14,6 +15,8 @@ Item {
 
     property var editorSnapshot: ({})
     property var transactionController: null
+    // Panel Studio's look.
+    property var theme: StudioThemes.theme("classic")
     property string customGlyph: ""
     property string customLabel: ""
     property string tileMode: "panel-default"
@@ -228,6 +231,8 @@ Item {
         anchors.fill: parent
         clip: true
         contentWidth: availableWidth
+        // Scrolls by the wheel as KDE's own scroll views do.
+        readonly property Kirigami.WheelHandler wheelHandler: Kirigami.WheelHandler { target: editorScroll.contentItem }
 
     ColumnLayout {
         width: editorScroll.availableWidth
@@ -235,8 +240,9 @@ Item {
         spacing: Kirigami.Units.largeSpacing
 
         Label {
-            text: qsTr("Icon Properties")
-            color: "#f4f8fb"
+            text: StudioThemes.label(root.theme, qsTr("Icon Properties"))
+            color: root.theme.heading
+            font.letterSpacing: root.theme.letterSpacing
             font.pixelSize: 20
             font.weight: Font.DemiBold
         }
@@ -244,7 +250,7 @@ Item {
         Label {
             Layout.fillWidth: true
             text: root.previewLabel
-            color: "#a9bfcb"
+            color: root.theme.textSecondary
             elide: Text.ElideRight
             font.pixelSize: 13
         }
@@ -257,10 +263,10 @@ Item {
             Rectangle {
                 Layout.preferredWidth: 76
                 Layout.preferredHeight: 76
-                radius: 10
-                color: "#26000000"
+                radius: root.theme.cardRadius
+                color: root.theme.preview
                 border.width: 1
-                border.color: "#35ffffff"
+                border.color: root.theme.previewBorder
 
                 Kirigami.Icon {
                     anchors.centerIn: parent
@@ -274,13 +280,13 @@ Item {
                 Layout.fillWidth: true
                 text: qsTr("The original application glyph remains the safe fallback if a custom file is unavailable.")
                 wrapMode: Text.WordWrap
-                color: "#cbd8e2"
+                color: root.theme.text
             }
         }
 
         Label {
             text: qsTr("Custom glyph")
-            color: "#cbd8e2"
+            color: root.theme.text
         }
 
         RowLayout {
@@ -312,7 +318,7 @@ Item {
 
         Label {
             text: qsTr("Custom label")
-            color: "#cbd8e2"
+            color: root.theme.text
         }
 
         TextField {
@@ -338,7 +344,7 @@ Item {
 
                 Label {
                     text: qsTr("Tile")
-                    color: "#cbd8e2"
+                    color: root.theme.text
                 }
 
                 ComboBox {
@@ -366,7 +372,7 @@ Item {
 
                 Label {
                     text: qsTr("Icon style")
-                    color: "#cbd8e2"
+                    color: root.theme.text
                 }
 
                 ComboBox {
@@ -390,7 +396,7 @@ Item {
             Layout.fillWidth: true
             visible: root.draftErrorMessage.length > 0
             text: root.draftErrorMessage
-            color: "#ff8a9b"
+            color: root.theme.error
             wrapMode: Text.WordWrap
         }
 

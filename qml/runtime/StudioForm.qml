@@ -1,10 +1,11 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import ArchDock.Rendering 1.0
 import org.kde.kirigami as Kirigami
+import "StudioThemes.js" as StudioThemes
 
 // Draws one Panel Studio page from its rows: section titles, notices,
 // controls for settings (switches, sliders, spin boxes, combo boxes, colour
@@ -14,6 +15,11 @@ ScrollView {
     id: root
 
     required property var studio
+    // Panel Studio's look.
+    readonly property var theme: studio && studio.studioTheme ? studio.studioTheme : StudioThemes.theme("classic")
+    // Scrolls by the wheel as KDE's own scroll views do: smoothly, the
+    // desktop's number of lines per notch.
+    readonly property Kirigami.WheelHandler wheelHandler: Kirigami.WheelHandler { target: root.contentItem }
     property var rows: []
     // The page the rows belong to: another page starts at its top.
     property string pageKey: ""
@@ -103,17 +109,18 @@ ScrollView {
                     spacing: 2
 
                     Label {
-                        text: rowDelegate.modelData.label || ""
-                        color: "#f3f8fb"
+                        text: StudioThemes.label(root.theme, rowDelegate.modelData.label || "")
+                        color: root.theme.heading
                         font.pixelSize: 16
-                        font.weight: Font.DemiBold
+                        font.letterSpacing: root.theme.letterSpacing
+                        font.weight: root.theme.headingWeight
                     }
 
                     Label {
                         visible: text.length > 0
                         Layout.fillWidth: true
                         text: rowDelegate.modelData.description || ""
-                        color: "#91a8b5"
+                        color: root.theme.description
                         font.pixelSize: 11
                         wrapMode: Text.Wrap
                     }
@@ -122,7 +129,7 @@ ScrollView {
                         Layout.fillWidth: true
                         Layout.topMargin: 5
                         Layout.preferredHeight: 1
-                        color: "#31526472"
+                        color: root.theme.separator
                     }
                 }
 
@@ -133,14 +140,14 @@ ScrollView {
                     type: rowDelegate.modelData.warning ? Kirigami.MessageType.Warning : Kirigami.MessageType.Information
                 }
 
-                Rectangle {
+                StudioFrame {
                     visible: rowDelegate.kind !== "section" && rowDelegate.kind !== "notice"
                     Layout.fillWidth: true
                     implicitHeight: fieldRow.implicitHeight + 22
-                    radius: 7
-                    color: fieldMouse.hovered ? "#223c4d59" : "#172c3b46"
-                    border.width: 1
-                    border.color: fieldMouse.hovered ? "#426f8a99" : "#263f5260"
+                    radius: root.theme.controlRadius + 1
+                    chamfer: root.theme.chamfer / 2
+                    color: fieldMouse.hovered ? root.theme.rowHover : root.theme.row
+                    borderColor: fieldMouse.hovered ? root.theme.rowBorderHover : root.theme.rowBorder
 
                     HoverHandler {
                         id: fieldMouse
@@ -166,7 +173,7 @@ ScrollView {
                             Label {
                                 Layout.fillWidth: true
                                 text: rowDelegate.modelData.label || ""
-                                color: "#d8e5ec"
+                                color: root.theme.text
                                 font.pixelSize: 12
                                 wrapMode: Text.Wrap
                             }
@@ -175,7 +182,7 @@ ScrollView {
                                 visible: text.length > 0
                                 Layout.fillWidth: true
                                 text: rowDelegate.modelData.description || ""
-                                color: "#728995"
+                                color: root.theme.hint
                                 font.pixelSize: 10
                                 wrapMode: Text.Wrap
                             }
@@ -186,7 +193,7 @@ ScrollView {
                             Layout.preferredWidth: 260
                             horizontalAlignment: Text.AlignRight
                             text: root.studio.displayFieldValue(rowDelegate.modelData)
-                            color: "#b9cad3"
+                            color: root.theme.cardText
                             wrapMode: Text.Wrap
                         }
 
@@ -277,7 +284,7 @@ ScrollView {
                                 Layout.minimumWidth: 52
                                 horizontalAlignment: Text.AlignRight
                                 text: root.studio.formatFieldValue(rowDelegate.modelData, root.studio.fieldValue(rowDelegate.modelData))
-                                color: "#dce9ef"
+                                color: root.theme.text
                             }
                         }
 
@@ -302,7 +309,7 @@ ScrollView {
                                 radius: 4
                                 color: root.studio.colorPreviewValue(rowDelegate.modelData)
                                 border.width: 1
-                                border.color: "#8195a1"
+                                border.color: root.theme.textMuted
 
                                 Kirigami.Icon {
                                     visible: parent.color.a === 0
@@ -310,7 +317,7 @@ ScrollView {
                                     width: 16
                                     height: 16
                                     source: "edit-clear"
-                                    color: "#8799a3"
+                                    color: root.theme.textMuted
                                 }
                             }
 
@@ -330,6 +337,7 @@ ScrollView {
 
                                 ToolTip.visible: hovered
                                 ToolTip.text: qsTr("Use theme default")
+                                ToolTip.delay: Kirigami.Units.toolTipDelay
                             }
                         }
 

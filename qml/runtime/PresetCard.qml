@@ -1,11 +1,12 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import ArchDock.Rendering 1.0
 import "CapabilityModel.js" as CapabilityModel
 import "SettingsEditorModel.js" as EditorModel
+import "StudioThemes.js" as StudioThemes
 
 // One Panel Preset or Icon Preset, drawn by the shared renderer. A card owns
 // no data and changes nothing: it shows the record it is given and reports
@@ -20,6 +21,8 @@ Rectangle {
     property bool motionEnabled: false
     // Drawn as the bare panel, with no icons, so the panel's look shows.
     property bool barePreview: false
+    // Panel Studio's look.
+    property var theme: StudioThemes.theme("classic")
     property bool actionsEnabled: true
 
     readonly property string presetId: String(preset.id || "")
@@ -90,7 +93,7 @@ Rectangle {
         const lines = [
             qsTr("Host: %1 · Layout: %2 · Orientation: %3")
                 .arg(hosts.join(", "))
-                .arg(joined(preset.layouts))
+                .arg(joined(preset.layoutNames || preset.layouts))
                 .arg(joined(preset.orientations)),
             (tier === fallbackTier
                 ? qsTr("Renderer: %1").arg(tier)
@@ -166,11 +169,19 @@ Rectangle {
 
     objectName: "preset-card-" + presetId
     implicitHeight: Math.max(176, content.implicitHeight + 20)
-    radius: 8
-    color: selected ? "#22394a" : "#1b2831"
-    border.width: selected || activeFocus ? 2 : 1
-    border.color: activeFocus ? "#f4fbff" : selected ? "#73cfe7" : "#3a5868"
+    // The card is drawn by its frame, in the theme's shape.
+    color: "transparent"
     activeFocusOnTab: true
+
+    StudioFrame {
+        anchors.fill: parent
+        radius: root.theme.cardRadius
+        chamfer: root.theme.chamfer
+        color: root.selected ? root.theme.cardSelected : root.theme.card
+        borderWidth: root.selected || root.activeFocus ? 2 : 1
+        borderColor: root.activeFocus ? root.theme.cardFocus
+            : root.selected ? root.theme.cardBorderSelected : root.theme.cardBorder
+    }
 
     Accessible.role: Accessible.ListItem
     Accessible.name: qsTr("%1, %2, %3")
@@ -217,7 +228,7 @@ Rectangle {
                 Label {
                     Layout.fillWidth: true
                     text: String(root.preset.name || "")
-                    color: "#edf7fa"
+                    color: root.theme.cardTitle
                     font.weight: Font.DemiBold
                     elide: Text.ElideRight
                 }
@@ -226,8 +237,8 @@ Rectangle {
                     implicitWidth: stateChip.implicitWidth + 14
                     implicitHeight: stateChip.implicitHeight + 4
                     radius: 4
-                    color: root.presetState === "ready" ? "#2a80de70"
-                        : root.presetState === "fallback" ? "#33ffc66d" : "#33ff8f8f"
+                    color: Qt.alpha(root.presetState === "ready" ? root.theme.ready
+                        : root.presetState === "fallback" ? root.theme.warning : root.theme.error, 0.18)
 
                     Label {
                         id: stateChip
@@ -235,8 +246,8 @@ Rectangle {
                         objectName: "preset-state-" + root.presetId
                         anchors.centerIn: parent
                         text: root.stateLabel()
-                        color: root.presetState === "ready" ? "#80de70"
-                            : root.presetState === "fallback" ? "#ffc66d" : "#ff9c9c"
+                        color: root.presetState === "ready" ? root.theme.ready
+                            : root.presetState === "fallback" ? root.theme.warning : root.theme.error
                         font.pixelSize: 10
                         font.weight: Font.DemiBold
                     }
@@ -246,7 +257,7 @@ Rectangle {
             Label {
                 Layout.fillWidth: true
                 text: root.subtitle()
-                color: "#90a7b4"
+                color: root.theme.textSecondary
                 font.pixelSize: 11
                 elide: Text.ElideRight
             }
@@ -255,7 +266,7 @@ Rectangle {
                 visible: text.length > 0
                 Layout.fillWidth: true
                 text: String(root.preset.description || "")
-                color: "#b9cad3"
+                color: root.theme.cardText
                 font.pixelSize: 11
                 wrapMode: Text.Wrap
             }
@@ -268,7 +279,7 @@ Rectangle {
 
                     Layout.fillWidth: true
                     text: modelData
-                    color: "#86a0ae"
+                    color: root.theme.textSecondary
                     font.pixelSize: 10
                     wrapMode: Text.Wrap
                 }
@@ -279,7 +290,7 @@ Rectangle {
                 visible: text.length > 0
                 Layout.fillWidth: true
                 text: root.stateDetail()
-                color: root.presetState === "incompatible" ? "#ff9c9c" : "#ffc66d"
+                color: root.presetState === "incompatible" ? root.theme.error : root.theme.warning
                 font.pixelSize: 10
                 wrapMode: Text.Wrap
 
@@ -291,6 +302,7 @@ Rectangle {
                     && String(root.compatibility.reasonCode || "").length > 0
                 ToolTip.text: qsTr("Reported as: %1")
                     .arg(String(root.compatibility.reasonCode || ""))
+                ToolTip.delay: 600
             }
         }
 
@@ -337,7 +349,7 @@ Rectangle {
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 text: qsTr("No preview: this preset cannot be drawn on this system.")
-                color: "#8195a1"
+                color: root.theme.textMuted
                 font.pixelSize: 10
                 wrapMode: Text.Wrap
             }
@@ -347,7 +359,7 @@ Rectangle {
                 Layout.fillWidth: true
                 text: root.livePreview ? root.livePreview.rendererStatusText : ""
                 color: root.livePreview && root.livePreview.fallbackApplied
-                    ? "#ffc66d" : "#72909f"
+                    ? root.theme.warning : root.theme.hint
                 font.pixelSize: 9
                 elide: Text.ElideRight
             }

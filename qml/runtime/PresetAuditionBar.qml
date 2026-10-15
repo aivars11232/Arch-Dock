@@ -1,8 +1,9 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
+import "StudioThemes.js" as StudioThemes
 
 // The bar Panel Studio shows while a preset, or a desktop 3D edit, is being
 // tried on a real panel: what is happening, and Apply as Active, save as a
@@ -11,6 +12,8 @@ Rectangle {
     id: root
 
     property var auditionStatus: ({ state: "IDLE" })
+    // Panel Studio's look.
+    property var theme: StudioThemes.theme("classic")
     property string presetId: ""
     property bool resourceAvailable: false
     property bool selectedDefault: false
@@ -50,8 +53,8 @@ Rectangle {
     objectName: "preset-audition-bar"
     implicitHeight: body.implicitHeight + 16
     radius: 7
-    color: "#22394a"
-    border.color: blocked || guardError.length > 0 ? "#ffc66d" : "#5e73cfe7"
+    color: root.theme.bar
+    border.color: blocked || guardError.length > 0 ? root.theme.warning : root.theme.barBorder
     Accessible.role: Accessible.Grouping
     Accessible.name: qsTr("Desktop preset audition")
 
@@ -74,7 +77,7 @@ Rectangle {
             objectName: "preset-audition-status"
             Layout.fillWidth: true
             text: root.explanation()
-            color: root.blocked || root.guardError.length > 0 ? "#ffc66d" : "#d8e5ec"
+            color: root.blocked || root.guardError.length > 0 ? root.theme.warning : root.theme.text
             wrapMode: Text.Wrap
             Accessible.role: Accessible.StaticText
             Accessible.name: text
@@ -84,7 +87,7 @@ Rectangle {
             visible: root.active
             Layout.fillWidth: true
             text: qsTr("Visibility changes take effect on Apply.")
-            color: "#90a7b4"
+            color: root.theme.textSecondary
             wrapMode: Text.Wrap
         }
         Label {
@@ -94,7 +97,7 @@ Rectangle {
             text: qsTr("Safe fallback: %1 (%2)")
                 .arg(String((root.auditionStatus.fallback || {}).effectiveRendererTier || "available style"))
                 .arg(String((root.auditionStatus.fallback || {}).reasonCode || "primary unavailable"))
-            color: "#ffc66d"
+            color: root.theme.warning
             wrapMode: Text.Wrap
         }
         Label {
@@ -103,7 +106,7 @@ Rectangle {
             Layout.fillWidth: true
             text: qsTr("Preview action refused (%1). Cancel restores or reports a recovery conflict.")
                 .arg(String(root.auditionStatus.errorCode || ""))
-            color: "#ffc66d"
+            color: root.theme.warning
             wrapMode: Text.Wrap
         }
         RowLayout {
