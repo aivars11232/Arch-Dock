@@ -136,6 +136,25 @@ TestCase {
         verify(!scene.pedestalMotionActive)
     }
 
+    function test_standPictureLook() {
+        // A stand whose Look is Picture wears its own picture; without one it
+        // is in the panel's look; in the panel's look on a panel that wears
+        // a picture, it wears the panel's picture.
+        const scene = createScene({ appearance: "neon", tileSettings: ({
+            pedestalShape: "disc", pedestalMaterial: "picture", pedestalPicture: "file:///stand.png" }) })
+        const layer = findChild(scene, "icon-layer-pedestal")
+        verify(layer !== null)
+        compare(layer.textureLook, "picture")
+        compare(layer.picture, "file:///stand.png")
+        scene.tileSettings = ({ pedestalShape: "disc", pedestalMaterial: "picture" })
+        compare(layer.look, "neon")
+        compare(layer.textureLook, "neon")
+        scene.appearance = "picture"
+        scene.tileSettings = ({ pedestalShape: "disc", panelPicture: "file:///panel.png" })
+        compare(layer.textureLook, "picture")
+        compare(layer.picture, "file:///panel.png")
+    }
+
     function test_namedLayersAndSlots() {
         const scene = createScene({
             running: true,

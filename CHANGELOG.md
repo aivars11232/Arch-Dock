@@ -7,6 +7,31 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- Pictures can be imported (the owner: "for Icons, pedestals, icon tiles and
+  panels, there should be button or option to import a picture"): an Import
+  picture… button on Panels > Appearance, Pedestals (the icons' stands and
+  the folder items' stands) and Icon Tiles puts a picture of the owner's own
+  on the panel, its stands or its tiles, and a Picture choice joins their
+  look and texture lists. Arch Dock keeps its own copy, at most 2048 pixels
+  on its longest side. A flat panel wears the picture once over its shape; a
+  3D panel round its band, at the picture's own proportions, in its own
+  colours and still; a tile under a light veil in its colour, so the icon on
+  top stays clearly visible. Icons themselves are never coloured (the owner:
+  "those colors should not affect icons at all"), and every existing look
+  draws as before. A photo its camera stored on its side, as phones do, is
+  now read upright, here and in theme artwork, where it was refused.
+- A 3D panel wears its picture in real relief (the owner: "if the picture
+  is rocks, I should be able to see rocks same as I see them in real
+  world", "I don't need 2D disguised as 3D. I need real 3D"): the panel is
+  cut finely and its surface itself moves with the picture's brightness, a
+  generated band and a theme's own 3D platform alike. Relief depth sets how
+  far; Relief direction Inward keeps the band's outline, the raised parts
+  at its surface and the rest sunk in, like stones in a gabion's mesh, and
+  Outward raises them out of the band like little mountains; Raised parts
+  says whether the picture's light parts or its dark parts are the raised
+  ones. A panel in relief has no glowing inner and outer edge, and a panel
+  or a stand wearing a picture draws no glow (the owner: "Glow not
+  practicall for rocks").
 - Panel Studio has UI themes (the owner: "make multiple UI themes", "make a
   separate side tab with themes and their previews"): Classic, Teal Glass,
   Teal HUD, Amber HUD, Alien White, Alien Black and Alien Green, each shown

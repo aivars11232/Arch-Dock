@@ -116,10 +116,12 @@ PlasmoidItem {
     readonly property var folderPedestalSettings: {
         const source = configuration || ({})
         const settings = {}
-        const keys = ["Size", "Thickness", "Lift", "ViewAngle", "Material", "Texture", "Color", "Opacity",
+        const keys = ["Size", "Thickness", "Lift", "ViewAngle", "Material", "Texture", "Picture", "Color", "Opacity",
                       "Glow", "GlowReach", "Animation", "AnimationSpeed"]
         for (const key of ["pedestalShape"].concat(keys.map(name => "pedestal" + name)))
             if (source[key] !== undefined) settings[key] = source[key]
+        // The panel's picture, worn by stands in the panel's look.
+        if (source.panelPicture !== undefined) settings.panelPicture = source.panelPicture
         const folderShape = String(source.folderPedestalShape || "same").toLowerCase()
         if (folderShape !== "same") settings.pedestalShape = folderShape
         if (source.folderPedestalOwnStyle === true)

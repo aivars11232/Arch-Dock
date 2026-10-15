@@ -344,11 +344,24 @@ Item {
         scale: root.pedestalAnimation === "pulse" ? 1 + beat * 0.06 : 1
         rotation: root.pedestalAnimation === "sway" ? beat * 8 : 0
         transformOrigin: Item.Bottom
-        readonly property string look: root.pedestalMaterial === "panel" ? root.appearance : root.pedestalMaterial
-        readonly property string textureLook: root.pedestalTexture === "material" ? look : root.pedestalTexture
+        // A picture the user imported for the stands.
+        readonly property string ownPicture: String(root.tileSettings.pedestalPicture || "")
+        // The panel's look, or the stand's own; Picture without a picture
+        // is the panel's look.
+        readonly property bool panelLook: root.pedestalMaterial === "panel"
+            || (root.pedestalMaterial === "picture" && !ownPicture.length)
+        readonly property string look: panelLook ? root.appearance : root.pedestalMaterial
+        // The picture worn: the stand's own, or in the panel's look the
+        // panel's picture.
+        readonly property string picture: root.pedestalTexture === "picture" || !panelLook ? ownPicture
+            : String(root.tileSettings.panelPicture || "")
+        // The Picture texture without a picture falls back to the look.
+        readonly property string textureLook: root.pedestalTexture === "material"
+            || (root.pedestalTexture === "picture" && !ownPicture.length) ? look : root.pedestalTexture
         // A glowing look in the stands' palette.
         readonly property string lookPalette: String(root.tileSettings.pedestalLookColour || "")
         readonly property url textureSource: textureLook === "none" ? ""
+            : textureLook === "picture" ? picture
             : Qt.resolvedUrl("materials/" + LayoutEngine.lookTexture(textureLook, lookPalette) + ".png")
         readonly property string tint: root.pedestalColor.length ? root.pedestalColor
             : String(LayoutEngine.themeStyle(look, "", 48).stroke || "#b5d3e0")
@@ -472,7 +485,8 @@ Item {
             context.clip()
             fillTexture(context, width, height)
             context.restore()
-            if (root.pedestalColor.length) {
+            // A picture is worn in its own colours; a look takes the tint.
+            if (root.pedestalColor.length && textureLook !== "picture") {
                 context.save()
                 context.globalCompositeOperation = "source-atop"
                 context.globalAlpha = 0.5
@@ -487,6 +501,18 @@ Item {
         function fillTexture(context, width, height) {
             context.translate(width / 2, height / 2)
             context.rotate(drawnSpin)
+            if (textureLook === "picture") {
+                // The picture once, centred, covering the stand however far
+                // it turns.
+                const pictureWidth = standPicture.implicitWidth
+                const pictureHeight = standPicture.implicitHeight
+                if (pictureWidth > 0 && pictureHeight > 0) {
+                    const cover = Math.hypot(width, height) / Math.min(pictureWidth, pictureHeight)
+                    context.drawImage(String(textureSource), -pictureWidth * cover / 2, -pictureHeight * cover / 2,
+                                      pictureWidth * cover, pictureHeight * cover)
+                }
+                return
+            }
             const s = Math.max(width, height) / 512 * 1.1
             context.scale(s, s)
             const reach = Math.ceil(Math.hypot(width, height) / 2 / s) + 2
@@ -501,6 +527,15 @@ Item {
                 context.lineTo(face.corners[2][0], face.corners[2][1])
                 context.closePath()
             }
+        }
+
+        // The stand picture's own size, for fitting it.
+        Image {
+            id: standPicture
+            visible: false
+            asynchronous: true
+            source: pedestalLayer.textureLook === "picture" ? pedestalLayer.picture : ""
+            onStatusChanged: if (status === Image.Ready) pedestalCanvas.requestPaint()
         }
 
         Canvas {
@@ -810,6 +845,7 @@ Item {
                         || (!root.styledLayersActive && (String(root.tileSettings.iconTileTexture || "none") !== "none"
                             || root.tileValue("iconTileThickness", 0, 0, 24) > 0)))
                     texture: String(root.tileSettings.iconTileTexture || "none")
+                    picture: String(root.tileSettings.iconTilePicture || "")
                     thickness: root.meshVisualActive ? 0 : root.tileValue("iconTileThickness", 0, 0, 24)
                     bevel: 0
                     shape: root.resolvedIconStyle.iconShape || root.tileShape

@@ -5,7 +5,9 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
+#include <QImageIOHandler>
 #include <QImageReader>
+#include <QImageWriter>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -102,6 +104,7 @@ private slots:
     void preservesManualCleanupRequirements();
     void rejectsUnsafeAndOutOfBoundsRequests();
     void rejectsUnsupportedFormatsWithoutExternalExecution();
+    void readsTurnedPhotosUpright();
 };
 
 void ThemeAssetProcessorTest::distinguishesAlphaChannelFromTransparency()
@@ -369,6 +372,26 @@ void ThemeAssetProcessorTest::rejectsUnsupportedFormatsWithoutExternalExecution(
                  QStringLiteral("unsupported-asset-format"));
         QVERIFY(result.derivatives.isEmpty());
     }
+}
+
+void ThemeAssetProcessorTest::readsTurnedPhotosUpright()
+{
+    // A photo its camera stored on its side, with a note to turn it.
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    QImage stored(QSize(80, 40), QImage::Format_RGB32);
+    stored.fill(qRgb(32, 96, 160));
+    const QString path = QDir(temporary.path()).filePath(QStringLiteral("turned.tif"));
+    QImageWriter writer(path, "tiff");
+    writer.setTransformation(QImageIOHandler::TransformationRotate90);
+    QVERIFY2(writer.write(stored), qPrintable(writer.errorString()));
+    if (QImageReader(path).transformation() != QImageIOHandler::TransformationRotate90)
+        QSKIP("This Qt writes no turned pictures to test with.");
+    const auto turned = ThemeAssetProcessor::process(baseRequest(
+        path, QDir(temporary.path()).filePath(QStringLiteral("turned-output")),
+        QStringLiteral("turned")));
+    QVERIFY2(turned.isValid(), qPrintable(turned.primaryCode()));
+    QCOMPARE(turned.inspection.sourceSize, QSize(40, 80));
 }
 
 QTEST_GUILESS_MAIN(ThemeAssetProcessorTest)

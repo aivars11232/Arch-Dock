@@ -76,6 +76,29 @@ TestCase {
         capture.save("tile-texture-" + data.texture + ".png")
     }
 
+    // A picture the user imported covers the tile once, centred, under a
+    // light veil of the tile's colour that keeps the icon readable: the left
+    // half of a red | blue picture shows red, the right half blue.
+    function test_pictureCoversTheTile() {
+        const picture = Qt.resolvedUrl("fixtures/pictures/red-blue.png")
+        const tile = createTemporaryObject(tileComponent, captureWindow.contentItem,
+            {shape: "square", fillColor: "#7895b0", borderWidth: 0, texture: "picture", picture: picture})
+        compare(String(tile.textureSource), String(picture))
+        tryCompare(tile, "textureReady", true)
+        tryVerify(function() {
+            const image = grabImage(tile)
+            return image.red(25, 50) > 180 && image.blue(75, 50) > 180
+        })
+        const image = grabImage(tile)
+        verify(image.blue(25, 50) < 90 && image.red(75, 50) < 90)
+    }
+
+    // Without a picture the Picture texture draws no texture at all.
+    function test_pictureTextureWithoutAPicture() {
+        const tile = createTemporaryObject(tileComponent, testCase, {texture: "picture", picture: ""})
+        compare(String(tile.textureSource), "")
+    }
+
     function test_tileThicknessDrawsABevel() {
         const tile = createTemporaryObject(tileComponent, captureWindow.contentItem,
             {shape: "circle", fillColor: "#7895b0", borderWidth: 0})

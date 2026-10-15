@@ -58,9 +58,14 @@ function MeshBuilder() {
     // across direction with it: a relief map needs both to light its bumps.
     this.tangents = []
     this.binormals = []
+    // How far each point of a picture's relief may rise (see platform()).
+    this.uv1s = []
 }
 
-MeshBuilder.prototype.vertex = function(point, normal, color, uv, tangent) {
+// `across`, when given, is where the texture's v grows, which a picture's
+// relief lights its bumps by; otherwise the binormal is the normal crossed
+// with the tangent.
+MeshBuilder.prototype.vertex = function(point, normal, color, uv, tangent, uv1, across) {
     this.positions.push([point[0], point[1], point[2]])
     const n = normalized(normal)
     this.normals.push(n)
@@ -70,8 +75,10 @@ MeshBuilder.prototype.vertex = function(point, normal, color, uv, tangent) {
     if (tangent) {
         const along = normalized(tangent)
         this.tangents.push(along)
-        this.binormals.push(normalized(crossProduct(n, along)))
+        this.binormals.push(across ? normalized(across) : normalized(crossProduct(n, along)))
     }
+    if (uv1)
+        this.uv1s.push([uv1[0], uv1[1]])
     if (color)
         this.colors.push([color[0], color[1], color[2], color.length > 3 ? color[3] : 1])
     return this.positions.length - 1
@@ -102,6 +109,8 @@ MeshBuilder.prototype.result = function(extra) {
         mesh.tangents = this.tangents
         mesh.binormals = this.binormals
     }
+    if (this.uv1s.length === this.positions.length && this.uv1s.length > 0)
+        mesh.uv1s = this.uv1s
     const keys = Object.keys(extra || ({}))
     for (let index = 0; index < keys.length; ++index)
         mesh[keys[index]] = extra[keys[index]]
@@ -801,12 +810,55 @@ function colour(palette, part) {
     return value && value.length >= 3 ? value : [1, 1, 1, 1]
 }
 
+// A point of a run between two of its samples, `t` of the way: on the
+// straight line between them (a polygon's side stays flat), its directions
+// turned between theirs.
+function sampleBetween(a, b, t) {
+    const mix = function(x, y) { return x + (y - x) * t }
+    const result = { c: [mix(a.c[0], b.c[0]), mix(a.c[1], b.c[1])], m: [mix(a.m[0], b.m[0]), mix(a.m[1], b.m[1])],
+                     n: normalized([mix(a.n[0], b.n[0]), mix(a.n[1], b.n[1]), mix(a.n[2] || 0, b.n[2] || 0)]) }
+    if (a.z !== undefined) result.z = mix(a.z, b.z)
+    if (a.across) result.across = normalized(a.across.map(function(v, i) { return mix(v, b.across[i]) }))
+    if (a.up) result.up = normalized(a.up.map(function(v, i) { return mix(v, b.up[i]) }))
+    return result
+}
+
+// A run with samples no further apart than `step`.
+function refineRun(run, step) {
+    const samples = [run.samples[0]]
+    for (let index = 1; index < run.samples.length; ++index) {
+        const a = run.samples[index - 1], b = run.samples[index]
+        const distance = Math.hypot(b.c[0] - a.c[0], b.c[1] - a.c[1], (b.z || 0) - (a.z || 0))
+        const parts = Math.max(1, Math.ceil(distance / step))
+        for (let k = 1; k < parts; ++k)
+            samples.push(sampleBetween(a, b, k / parts))
+        samples.push(b)
+    }
+    return Object.assign({}, run, { samples: samples })
+}
+
+// A picture's relief is real geometry, cut finely enough for a stone or a
+// peak to be a bump of its own: strips across the top and the underside,
+// across the walls and across the rims; steps along the band of a section's
+// length cut in this many at the finest, coarser only where a long band
+// would pass this many points; and how far, in sections, an open run's end
+// takes to rise to its full height. A theme's own mesh is cut into at most
+// this many triangles.
+var reliefAcross = 14
+var reliefWall = 6
+var reliefRim = 2
+var reliefSteps = 72
+var reliefPoints = 15000
+var reliefEdge = 0.2
+var reliefTriangles = 24000
+
 // A generated platform. `spec`: shape (from shapeForLayout), band (half the
 // flat top's width, 0.06 to 0.16 of the outer radius), bend (-1 to 1, the
 // top tilting outward up or down about the icons' line), segments, and a
 // palette of [r, g, b, a] colours for top, rim, wall and under. The rim faces
 // come last, as their own index range (`rimOffset`, `rimCount`), so they can
-// carry a glowing material of their own.
+// carry a glowing material of their own. With `relief` the platform is
+// built for a picture's relief instead (reliefPlatform).
 function platform(spec) {
     const options = spec || ({})
     const shape = options.shape
@@ -817,7 +869,8 @@ function platform(spec) {
     const section = twisted ? twistedProfile(half) : profile(half, options.bend)
     const faces = twisted ? twistedFaces : profileFaces
     const track = shapeTrackRadius(shape, half)
-    const runs = centreLine(shape, options.segments, track, half + outerBevel)
+    const relief = options.relief === true
+    let runs = centreLine(shape, options.segments, track, half + outerBevel)
     const body = new MeshBuilder()
     const rimFaces = []
     // Texture coordinates: the texture wraps round the band the way a label
@@ -856,6 +909,8 @@ function platform(spec) {
     let textureRepeats = 1
     for (const run of runs)
         textureRepeats = Math.max(textureRepeats, runRepeats(run))
+    if (relief)
+        return reliefPlatform(options, shape, half, twisted, section, faces, track, runs, sectionLength, across)
     const addFace = function(mesh, run, face) {
         const from = section[face.from], to = section[face.to]
         // The section runs clockwise (up the inner wall, over the top, down
@@ -949,6 +1004,261 @@ function platform(spec) {
     })
 }
 
+// A platform wearing a picture in relief (platform() with `relief`). The
+// band's whole cross-section is one strip of points shared from face to
+// face, its corners rounded, so the picture's bumps rise over the band's
+// edges as well, as on a terrace of stones, and no edge of it is drawn on
+// its own (there is no rim range). Its faces are cut in strips across (the
+// top and the underside finely, the walls and the rims less) and its runs
+// in steps along. The texture runs on round a polygon's or a star's
+// corners, where both sides take the way out between them, so the band
+// rises there as one. Each point carries in uv1's x how far it may rise:
+// all the way, but toward an open end (an arc's, or where a Möbius strip
+// meets itself turned over) nothing; its binormal is where the texture's v
+// grows. The result also says the texture's length along (`alongLength`)
+// and across (`sectionLength`).
+function reliefPlatform(options, shape, half, twisted, section, faces, track, runs, sectionLength, across) {
+    const ease = function(s) {
+        const x = clamp(s, 0, 1)
+        return x * x * (3 - 2 * x)
+    }
+    const partsOf = function(face) {
+        return face.part === "top" || face.part === "under" ? reliefAcross
+            : face.part === "wall" ? reliefWall : reliefRim
+    }
+    // The way out of each face, in the section's plane: its direction from
+    // its first corner to its last turned by +90 degrees (the section runs
+    // clockwise).
+    const faceNormals = faces.map(function(face) {
+        const from = section[face.from], to = section[face.to]
+        return normalized([-(to[1] - from[1]), to[0] - from[0], 0])
+    })
+    // The loop of points round the section, each with v as the faces have
+    // it and its way out, a corner's between its two faces'.
+    const loop = []
+    for (let f = 0; f < faces.length; ++f) {
+        const face = faces[f], parts = partsOf(face)
+        const from = section[face.from], to = section[face.to]
+        const vFrom = face.part === "under" ? 1 : across(face.from)
+        const vTo = face.part === "under" ? 0 : twisted && face.to === 0 ? across(section.length) : across(face.to)
+        const before = faceNormals[(f + faces.length - 1) % faces.length]
+        for (let k = 0; k < parts; ++k) {
+            const t = k / parts
+            loop.push({
+                p: k === 0 ? from : [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t],
+                v: vFrom + (vTo - vFrom) * t,
+                n: k === 0 ? normalized([before[0] + faceNormals[f][0], before[1] + faceNormals[f][1], 0])
+                           : faceNormals[f]
+            })
+        }
+    }
+    // Steps along the band: a 72nd of a section at the finest, coarser on a
+    // band so long that the finest would pass reliefPoints points. Each of
+    // the band's own segments is cut into whole steps, which can add one
+    // more each.
+    let plainLength = 0, segments = 0
+    for (const run of runs)
+        for (let index = 1; index < run.samples.length; ++index) {
+            const a = run.samples[index - 1], b = run.samples[index]
+            plainLength += Math.hypot(b.c[0] - a.c[0], b.c[1] - a.c[1], (b.z || 0) - (a.z || 0))
+            ++segments
+        }
+    const samples = Math.max(segments + 1, reliefPoints / loop.length - segments)
+    const step = Math.max(sectionLength / reliefSteps, plainLength / samples)
+    runs = runs.map(function(run) { return refineRun(run, step) })
+    // Where v grows at each point of the loop, in the section's plane.
+    for (let i = 0; i < loop.length; ++i) {
+        const prev = loop[(i + loop.length - 1) % loop.length], next = loop[(i + 1) % loop.length]
+        const grows = next.v >= prev.v ? 1 : -1
+        loop[i].a = [(next.p[0] - prev.p[0]) * grows, (next.p[1] - prev.p[1]) * grows]
+    }
+    const runLengths = function(run) {
+        const lengths = [0]
+        for (let index = 1; index < run.samples.length; ++index) {
+            const a = run.samples[index - 1], b = run.samples[index]
+            lengths.push(lengths[index - 1] + Math.hypot(b.c[0] - a.c[0], b.c[1] - a.c[1]))
+        }
+        return lengths
+    }
+    const totals = runs.map(function(run) { const lengths = runLengths(run); return lengths[lengths.length - 1] })
+    const alongLength = Math.max(1e-6, totals.reduce(function(sum, total) { return sum + total }, 0))
+    // A polygon's or a star's sides close on each other.
+    const sides = runs.length > 1 && runs.every(function(run) { return run.edge === true })
+    const textureRepeats = Math.max(1, Math.round(alongLength / sectionLength))
+    const body = new MeshBuilder()
+    let start = 0
+    for (let r = 0; r < runs.length; ++r) {
+        const run = runs[r], lengths = runLengths(run), total = Math.max(1e-6, totals[r])
+        const count = run.samples.length
+        const columns = []
+        for (let index = 0; index < count; ++index) {
+            const sample = run.samples[index]
+            // A side's ends take the way out between it and its neighbour.
+            const outward = sides && (index === 0 || index === count - 1)
+                ? normalized([sample.m[0], sample.m[1], 0]) : sample.n
+            const place = sample.across
+                ? function(p) {
+                    return [sample.c[0] + sample.across[0] * p[0] + sample.up[0] * p[1],
+                            sample.c[1] + sample.across[1] * p[0] + sample.up[1] * p[1],
+                            sample.z + sample.across[2] * p[0] + sample.up[2] * p[1]]
+                }
+                : function(p) {
+                    return [sample.c[0] + sample.m[0] * p[0], sample.c[1] + sample.m[1] * p[0], p[1]]
+                }
+            const facing = function(n) {
+                return sample.across
+                    ? normalized([sample.across[0] * n[0] + sample.up[0] * n[1],
+                                  sample.across[1] * n[0] + sample.up[1] * n[1],
+                                  sample.across[2] * n[0] + sample.up[2] * n[1]])
+                    : normalized([outward[0] * n[0], outward[1] * n[0], n[1]])
+            }
+            const u = (start + lengths[index]) / alongLength
+            const before = run.samples[index > 0 ? index - 1 : (run.closed ? count - 2 : 0)]
+            const after = run.samples[index + 1 < count ? index + 1 : (run.closed ? 1 : count - 1)]
+            const tangent = [after.c[0] - before.c[0], after.c[1] - before.c[1], (after.z || 0) - (before.z || 0)]
+            const rise = run.closed || sides ? 1
+                : ease(Math.min(lengths[index], total - lengths[index]) / (sectionLength * reliefEdge))
+            const column = loop.map(function(point) {
+                const at = place(point.p)
+                const toward = place([point.p[0] + point.a[0], point.p[1] + point.a[1]])
+                return body.vertex(at, facing(point.n), null, [u, point.v], tangent, [rise, 0], subtract(toward, at))
+            })
+            columns.push({ ids: column, normals: loop.map(function(point) { return facing(point.n) }) })
+        }
+        for (let index = 0; index + 1 < columns.length; ++index) {
+            const a = columns[index], b = columns[index + 1]
+            for (let k = 0; k < loop.length; ++k) {
+                const next = (k + 1) % loop.length
+                const n = normalized([a.normals[k][0] + a.normals[next][0] + b.normals[k][0] + b.normals[next][0],
+                                      a.normals[k][1] + a.normals[next][1] + b.normals[k][1] + b.normals[next][1],
+                                      a.normals[k][2] + a.normals[next][2] + b.normals[k][2] + b.normals[next][2]])
+                body.triangle(a.ids[k], b.ids[k], b.ids[next], n)
+                body.triangle(a.ids[k], b.ids[next], a.ids[next], n)
+            }
+        }
+        start += total
+        // An open arc is closed at both ends by its cross-section, fanned
+        // from its middle; nothing rises there.
+        if (run.closed || run.edge || run.twisted)
+            continue
+        for (const end of [{ sample: run.samples[0], next: run.samples[1] },
+                           { sample: run.samples[count - 1], next: run.samples[count - 2] }]) {
+            const along = normalized([end.next.c[0] - end.sample.c[0], end.next.c[1] - end.sample.c[1], 0])
+            const out = [-along[0], -along[1], 0]
+            const capVertex = function(p) {
+                return body.vertex([end.sample.c[0] + end.sample.m[0] * p[0],
+                                    end.sample.c[1] + end.sample.m[1] * p[0], p[1]], out, null,
+                                   null, [end.sample.m[0], end.sample.m[1], 0], [0, 0])
+            }
+            const middle = capVertex([loop.reduce(function(sum, point) { return sum + point.p[0] }, 0) / loop.length,
+                                      loop.reduce(function(sum, point) { return sum + point.p[1] }, 0) / loop.length])
+            const points = loop.map(function(point) { return capVertex(point.p) })
+            for (let index = 0; index < points.length; ++index)
+                body.triangle(middle, points[index], points[(index + 1) % points.length], out)
+        }
+    }
+    let reachX = 0, reachY = 0
+    for (const point of body.positions) {
+        reachX = Math.max(reachX, Math.abs(point[0]))
+        reachY = Math.max(reachY, Math.abs(point[1]))
+    }
+    return body.result({
+        reachX: reachX,
+        reachY: reachY,
+        rimOffset: body.indexes.length,
+        rimCount: 0,
+        shape: shape.kind,
+        band: half,
+        track: track,
+        textureRepeats: textureRepeats,
+        sectionLength: sectionLength,
+        alongLength: alongLength,
+        meshStep: step
+    })
+}
+
+// A theme's own mesh cut for a picture's relief (PictureRelief): every
+// triangle cut alike, so that neighbours share every point on the edge
+// between them, their sides at most `step` long where that stays within
+// reliefTriangles. A point two faces share (an edge where they meet at an
+// angle) moves the one way between theirs, so the faces stay joined however
+// far it moves, and the surface's edges move with the relief like the rest,
+// rounded, as a generated band's do. Every point may move all the way
+// (uv1's x is 1). Its texture coordinates are the theme's own.
+function reliefMesh(mesh, step) {
+    if (!mesh || !mesh.positions || !mesh.normals || !mesh.indexes
+            || mesh.normals.length !== mesh.positions.length)
+        return null
+    const P = mesh.positions, U = mesh.uv0s || []
+    const I = mesh.indexes
+    const triangles = Math.floor(I.length / 3)
+    if (triangles < 1)
+        return null
+    const pointKey = function(p) {
+        return Math.round(p[0] * 1e5) + "," + Math.round(p[1] * 1e5) + "," + Math.round(p[2] * 1e5)
+    }
+    let longest = 0
+    const faceNormals = []
+    for (let t = 0; t < triangles; ++t) {
+        const a = P[I[3 * t]], b = P[I[3 * t + 1]], c = P[I[3 * t + 2]]
+        faceNormals.push(normalized(crossProduct(subtract(b, a), subtract(c, a))))
+        for (const [p, q] of [[a, b], [b, c], [c, a]])
+            longest = Math.max(longest, Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]))
+    }
+    const cuts = Math.max(1, Math.min(Math.ceil(longest / Math.max(1e-6, finite(step, 0.015))),
+                                      Math.floor(Math.sqrt(reliefTriangles / triangles))))
+    const grid = function(t, visit) {
+        const A = P[I[3 * t]], B = P[I[3 * t + 1]], C = P[I[3 * t + 2]]
+        for (let j = 0; j <= cuts; ++j)
+            for (let i = 0; i + j <= cuts; ++i) {
+                const s = i / cuts, r = j / cuts, q = 1 - s - r
+                visit(i, j, s, r, q, [A[0] * q + B[0] * s + C[0] * r, A[1] * q + B[1] * s + C[1] * r,
+                                      A[2] * q + B[2] * s + C[2] * r])
+            }
+    }
+    // The way each point moves: its face's, or for a point faces share, the
+    // way between theirs.
+    const ways = {}
+    for (let t = 0; t < triangles; ++t) {
+        const n = faceNormals[t]
+        grid(t, function(i, j, s, r, q, p) {
+            const key = pointKey(p)
+            const way = ways[key] || (ways[key] = { sum: [0, 0, 0], faces: [] })
+            if (way.faces.indexOf(t) < 0) {
+                way.faces.push(t)
+                way.sum = [way.sum[0] + n[0], way.sum[1] + n[1], way.sum[2] + n[2]]
+            }
+        })
+    }
+    const out = new MeshBuilder()
+    for (let t = 0; t < triangles; ++t) {
+        const ia = I[3 * t], ib = I[3 * t + 1], ic = I[3 * t + 2]
+        const UA = U[ia] || [0, 0], UB = U[ib] || [0, 0], UC = U[ic] || [0, 0]
+        const textured = U.length === P.length
+        const ids = []
+        for (let j = 0; j <= cuts; ++j)
+            ids.push([])
+        grid(t, function(i, j, s, r, q, p) {
+            const way = ways[pointKey(p)]
+            ids[j].push(out.vertex(p, normalized(way.sum), null,
+                                   textured ? [UA[0] * q + UB[0] * s + UC[0] * r, UA[1] * q + UB[1] * s + UC[1] * r]
+                                            : null, null, [1, 0]))
+        })
+        const facing = faceNormals[t]
+        for (let j = 0; j < cuts; ++j)
+            for (let i = 0; i + j < cuts; ++i) {
+                out.triangle(ids[j][i], ids[j][i + 1], ids[j + 1][i], facing)
+                if (i + j + 1 < cuts)
+                    out.triangle(ids[j][i + 1], ids[j + 1][i + 1], ids[j + 1][i], facing)
+            }
+    }
+    const extra = { meshStep: longest / cuts }
+    for (const key of Object.keys(mesh))
+        if (["positions", "normals", "uv0s", "indexes", "colors", "tangents", "binormals", "uv1s"].indexOf(key) < 0)
+            extra[key] = mesh[key]
+    return out.result(extra)
+}
+
 // Where an icon stands on a generated platform: the layout's own position,
 // relative to the track's centre and radius, carried onto the centre line
 // (`track`, the platform's own). Every generated shape is its layout's path
@@ -984,6 +1294,10 @@ function foldMesh(mesh, fold, hingeHeight) {
     const result = Object.assign({}, mesh, {positions: [], normals: [], uv0s: [], indexes: []})
     if (mesh.colors) result.colors = []
     if (mesh.tangents) { result.tangents = []; result.binormals = [] }
+    // A folded relief keeps its light but does not rise: each triangle has
+    // points of its own here, which would part if they rose along their
+    // own faces' normals.
+    if (mesh.uv1s) result.uv1s = []
     // Each face keeps its winding and gets its actual deformed normal. This
     // also gives the crease a hard edge instead of an interpolated false one.
     for (let i = 0; i < mesh.indexes.length; i += 3) {
@@ -998,8 +1312,11 @@ function foldMesh(mesh, fold, hingeHeight) {
             if (mesh.tangents) {
                 const tangent = normalized(foldVector(mesh.tangents[ids[j]], mesh.positions[ids[j]], fold))
                 result.tangents.push(tangent)
-                result.binormals.push(normalized(crossProduct(normal, tangent)))
+                result.binormals.push(mesh.uv1s
+                    ? normalized(foldVector(mesh.binormals[ids[j]], mesh.positions[ids[j]], fold))
+                    : normalized(crossProduct(normal, tangent)))
             }
+            if (mesh.uv1s) result.uv1s.push([0, 0])
             result.indexes.push(result.indexes.length)
         }
     }

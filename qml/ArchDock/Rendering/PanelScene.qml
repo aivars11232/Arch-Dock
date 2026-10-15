@@ -109,6 +109,9 @@ Item {
         "shape", "iconShape", "rounded"))
     readonly property string appearance: String(definitionValue(
         "surface", "appearance", "appearance", "glass"))
+    // The picture of the "picture" look, Arch Dock's copy of it.
+    readonly property string picture: String(definitionValue(
+        "surface", "picture", "panelPicture", ""))
     readonly property string customColor: String(definitionValue(
         "surface", "color", "color", ""))
     readonly property real panelOpacity: Number(definitionValue(
@@ -1541,6 +1544,7 @@ Item {
         restingAngle: root.layoutAngle
         polygonSides: root.polygonSides
         appearance: root.appearance
+        picture: root.picture
         customColor: root.customColor
         panelOpacity: root.panelOpacity
         sparkleIntensity: root.sparkleIntensity
@@ -1580,6 +1584,7 @@ Item {
                     ["pedestalColor", "pedestalColor"], ["pedestalAnimation", "pedestalAnimation"],
                     ["pedestalAnimationSpeed", "pedestalAnimationSpeed"],
                     ["pedestalThickness", "pedestalThickness"], ["pedestalTexture", "pedestalTexture"],
+                    ["pedestalPicture", "pedestalPicture"],
                     ["pedestalOpacity", "pedestalOpacity"], ["pedestalGlow", "pedestalGlow"],
                     ["pedestalGlowReach", "pedestalGlowReach"], ["pedestalGlowColor", "pedestalGlowColor"],
                     ["panelGlow", "panelGlow"], ["panelGlowReach", "panelGlowReach"],
@@ -1588,6 +1593,8 @@ Item {
                     ["iconTileGlow", "iconTileGlow"], ["iconTileGlowReach", "iconTileGlowReach"],
                     ["iconTileGlowColor", "iconTileGlowColor"],
                     ["panelLookBackground", "panelLookBackground"],
+                    ["panelPictureDepth", "panelPictureDepth"], ["panelPictureRise", "panelPictureRise"],
+                    ["panelPictureDirection", "panelPictureDirection"],
                     ["pedestalLookBackground", "pedestalLookBackground"],
                     ["lookMotionSpeed", "lookMotionSpeed"],
                     ["panelLookColour", "panelLookColour"], ["pedestalLookColour", "pedestalLookColour"],

@@ -15,8 +15,15 @@ Model {
     property Texture surfaceTexture: null
     // The surface's relief map, lit as bumps when the mesh carries tangents.
     property Texture surfaceNormalTexture: null
-    readonly property bool reliefReady: surfaceNormalTexture !== null && meshReady
-        && Array.isArray(meshData.tangents) && meshData.tangents.length === meshData.positions.length
+    // A material that raises the body from a picture (PictureRelief) in
+    // place of the body's own; a mesh cut for it brings its tangents and
+    // how far each point rises.
+    property Material reliefMaterial: null
+    readonly property bool tangentsReady: meshReady && Array.isArray(meshData.tangents)
+        && meshData.tangents.length === meshData.positions.length
+    readonly property bool reliefReady: surfaceNormalTexture !== null && tangentsReady
+    readonly property bool risesReady: reliefMaterial !== null && meshReady && Array.isArray(meshData.uv1s)
+        && meshData.uv1s.length === meshData.positions.length
     property Material faceMaterial: null
     // A glow shell (PanelScene3D) draws the whole mesh in this one material.
     property Material shellMaterial: null
@@ -83,8 +90,11 @@ Model {
         positions: root.meshReady ? root.vectors(root.meshData.positions, 3) : []
         normals: root.meshReady ? root.vectors(root.meshData.normals, 3) : []
         uv0s: root.meshReady ? root.vectors(root.meshData.uv0s, 2) : []
-        tangents: root.reliefReady ? root.vectors(root.meshData.tangents, 3) : []
-        binormals: root.reliefReady ? root.vectors(root.meshData.binormals, 3) : []
+        uv1s: root.risesReady ? root.vectors(root.meshData.uv1s, 2) : []
+        tangents: root.reliefReady || (root.reliefMaterial !== null && root.tangentsReady)
+            ? root.vectors(root.meshData.tangents, 3) : []
+        binormals: root.reliefReady || (root.reliefMaterial !== null && root.tangentsReady)
+            ? root.vectors(root.meshData.binormals, 3) : []
         colors: root.vertexColoured ? root.colours(root.meshData.colors) : []
         indexes: root.meshReady ? root.meshData.indexes : []
         primitiveMode: ProceduralMesh.Triangles
@@ -103,8 +113,9 @@ Model {
         offset: root.faceOffset
         count: root.faceOffset > 0 ? root.meshData.indexes.length - root.faceOffset : 0
     }
-    materials: shellMaterial ? [shellMaterial] : faceOffset > 0 ? [bodyMaterial, faceMaterial]
-        : rimCount > 0 ? [bodyMaterial, rimMaterial] : [bodyMaterial]
+    readonly property Material shownBodyMaterial: reliefMaterial !== null ? reliefMaterial : bodyMaterial
+    materials: shellMaterial ? [shellMaterial] : faceOffset > 0 ? [shownBodyMaterial, faceMaterial]
+        : rimCount > 0 ? [shownBodyMaterial, rimMaterial] : [shownBodyMaterial]
     readonly property PrincipledMaterial bodyMaterial: PrincipledMaterial {
         readonly property var values: root.materialData || ({})
         readonly property color emission: values.emissiveColor || "#000000"

@@ -58,6 +58,28 @@ geometry and shaders. A generated platform
 wraps its texture round its band; the two bundled 3D themes keep their vector
 surfaces, since theme packages carry no raster files.
 
+An imported picture (the Picture look of a panel, its stands or its tiles)
+is drawn differently flat and in 3D: a flat panel shows the one picture
+through its shape, scaled to cover it, while a 3D panel lays it round its
+band, repeated at the picture's own proportions, so a thin band shows a
+strip of it each time. A theme package's own 3D mesh maps the picture the
+way it maps its own surface. Arch Dock keeps its copy of every picture
+imported in its data folder (`~/.local/share/Arch Dock/Arch Dock/pictures`)
+after the picture is removed from a panel, since a profile or another
+panel may still use it; an animated picture shows its first frame.
+A 3D panel's relief takes a picture's brightness (or, with Raised parts
+Dark, its darkness) for its height, which fits pictures seen from above:
+stones, bark, bricks, fabric, a terrain. A photo taken from the side (a
+mountain against the sky) holds no heights of its own, and Relief depth 0
+shows it flat. The relief is the mesh itself moving, cut to a 72nd of the
+band's cross-section at the finest (coarser on a very long band, to stay
+within 15000 points; a theme's own mesh within 24000 triangles), so it
+follows the picture blurred to the mesh's steps; the picture's finer grain
+only bends the light. Building the finely cut mesh takes a moment when a
+panel's look or shape changes. The relief's own shadows fall from the
+scene's key light. An arc's two ends, the place where a Möbius strip meets
+itself turned over, and a folded platform do not move.
+
 A 3D panel turns all the way round and scales from 0.05 to 20 times, all
 ways or sideways and up and down on its own; its view stops at the screen's
 size, so a panel scaled past the screen is drawn up to the screen's edge.

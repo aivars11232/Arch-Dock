@@ -304,6 +304,98 @@ TestCase {
         }
     }
 
+    // A picture's relief: the platform is cut finely enough for the
+    // picture's bumps to rise from it; it stays one closed surface facing
+    // outward, every point two runs share rises with both, no edge is drawn
+    // on its own (no rim range), and an open end does not rise. Without a
+    // relief the platform is as it was.
+    function test_pictureReliefMesh_data() {
+        return supportedLayouts.concat(["mobius"]).map(function(layout) { return { tag: layout, layout: layout } })
+    }
+
+    function test_pictureReliefMesh(data) {
+        const shape = PlatformGeometry.shapeForLayout(data.layout, 7)
+        const spec = { shape: shape, band: 0.1, bend: 0.3,
+            palette: { top: [0.1, 0.2, 0.3, 1], rim: [0.9, 0.5, 0.2, 1],
+                       wall: [0.05, 0.1, 0.15, 1], under: [0, 0, 0, 1] } }
+        const plain = PlatformGeometry.platform(spec)
+        compare(JSON.stringify(PlatformGeometry.platform(Object.assign({ relief: false }, spec))),
+                JSON.stringify(plain), "no relief, no change")
+        verify(plain.uv1s === undefined && plain.sectionLength === undefined)
+        const mesh = PlatformGeometry.platform(Object.assign({ relief: true }, spec))
+        compare(boundaryEdges(mesh).length, 0, data.layout + " is a closed surface")
+        compare(misWound(mesh), 0, data.layout + " faces outward everywhere")
+        verify(mesh.positions.length > 2 * plain.positions.length, "cut finely: " + mesh.positions.length)
+        verify(mesh.positions.length <= PlatformGeometry.reliefPoints * 1.2, "within the limit: " + mesh.positions.length)
+        compare(mesh.uv1s.length, mesh.positions.length, "every point says how far it rises")
+        compare(mesh.tangents.length, mesh.positions.length)
+        verify(mesh.textureRepeats >= 1)
+        verify(mesh.sectionLength > 0 && mesh.alongLength > 0)
+        compare(mesh.rimCount, 0, "no edge drawn on its own")
+        compare(mesh.rimOffset, mesh.indexes.length)
+        const rises = {}
+        let highest = 0
+        for (let index = 0; index < mesh.positions.length; ++index) {
+            const k = key(mesh.positions[index])
+            rises[k] = (rises[k] || []).concat([mesh.uv1s[index][0]])
+            highest = Math.max(highest, mesh.uv1s[index][0])
+        }
+        for (const k of Object.keys(rises))
+            if (rises[k].length > 1)
+                verify(rises[k].every(function(rise) { return rise === rises[k][0] }),
+                       "a point shared by faces rises with them all: " + rises[k].join(" "))
+        compare(highest, 1, "the band rises all the way")
+        // A polygon's or a star's corners rise with their sides.
+        if (["triangle", "square", "pentagon", "hexagon", "octagon", "polygon", "star"].indexOf(data.layout) >= 0)
+            verify(mesh.uv1s.every(function(rise) { return rise[0] === 1 }), "nothing fades at the corners")
+        for (const point of mesh.positions)
+            verify(Math.hypot(point[0], point[1]) <= PlatformGeometry.reach + 1e-9)
+        // A folded relief keeps its light but does not rise.
+        const folded = PlatformGeometry.foldMesh(mesh, 0.5, PlatformGeometry.topHeight)
+        compare(folded.uv1s.length, folded.positions.length)
+        verify(folded.uv1s.every(function(rise) { return rise[0] === 0 }))
+        compare(folded.binormals.length, folded.positions.length)
+    }
+
+    // A theme's own mesh cut for a picture's relief: every triangle cut
+    // alike, so neighbours share every point of their edge, within the
+    // triangle limit; every point moves all the way, and a point two faces
+    // share moves the one way in both, between their faces' ways, so the
+    // faces stay joined.
+    function test_themeMeshCutForRelief() {
+        const shape = PlatformGeometry.shapeForLayout("octagon", 8)
+        const theme = PlatformGeometry.platform({ shape: shape, band: 0.12, bend: 0 })
+        let t0 = Date.now()
+        const mesh = PlatformGeometry.reliefMesh(theme, 0.015)
+        verify(Date.now() - t0 < 3000, "cut in a moment: " + (Date.now() - t0) + " ms")
+        verify(mesh !== null)
+        verify(mesh.indexes.length / 3 > 4 * theme.indexes.length / 3, "cut finely")
+        verify(mesh.indexes.length / 3 <= PlatformGeometry.reliefTriangles, "within the limit")
+        compare(mesh.uv1s.length, mesh.positions.length)
+        verify(mesh.uv1s.every(function(rise) { return rise[0] === 1 }), "every point moves all the way")
+        compare(boundaryEdges(mesh).length, 0, "still closed")
+        compare(misWound(mesh), 0, "still faces outward")
+        verify(mesh.meshStep > 0)
+        const ways = {}
+        let edgeWays = 0
+        for (let index = 0; index < mesh.positions.length; ++index) {
+            const k = key(mesh.positions[index])
+            const way = key(mesh.normals[index])
+            if (ways[k] !== undefined)
+                compare(way, ways[k], "a shared point moves the one way")
+            ways[k] = way
+        }
+        // A corner of the plain platform, where faces meet at an angle,
+        // moves between their ways: not along any one face's.
+        for (let index = 0; index < theme.positions.length; ++index) {
+            const n = mesh.normals[mesh.positions.findIndex(function(p) { return key(p) === key(theme.positions[index]) })]
+            const own = theme.normals[index]
+            if (Math.abs(n[0] * own[0] + n[1] * own[1] + n[2] * own[2]) < 0.999)
+                ++edgeWays
+        }
+        verify(edgeWays > 0, "the edges move between their faces")
+    }
+
     // A star with any number of points, from three to twelve, is one closed
     // band within the scene's reach, its tips ending in points.
     function test_starsOfEveryPointCount() {

@@ -6,6 +6,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
+#include <QImageIOHandler>
 #include <QImageReader>
 #include <QImageWriter>
 #include <QJsonArray>
@@ -484,8 +485,12 @@ ThemeAssetProcessingResult ThemeAssetProcessor::process(
             QStringLiteral("source dimensions exceed the decode limit")));
         return result;
     }
+    // A photo its camera stored on its side is read turned upright, so it
+    // comes out with its sides swapped.
+    const QSize uprightSize = reader.transformation() & QImageIOHandler::TransformationRotate90
+        ? declaredSize.transposed() : declaredSize;
     QImage image = reader.read();
-    if (image.isNull() || image.size() != declaredSize)
+    if (image.isNull() || image.size() != uprightSize)
     {
         result.diagnostics.append(processorDiagnostic(
             QStringLiteral("unsupported-asset-format"), QStringLiteral("/sourcePath"),

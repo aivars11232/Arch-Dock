@@ -99,8 +99,10 @@ Item {
         appearance, customColor, Number(geometry.iconSize || 40))
     // A clear-ground look (lightning, aurora) in its chosen palette.
     property string lookPalette: ""
-    readonly property url materialSource: Qt.resolvedUrl(
-        "../materials/" + LayoutEngine.lookTexture(surfaceStyle.material, lookPalette) + ".png")
+    // The picture of the "picture" look, Arch Dock's copy of it.
+    property string picture: ""
+    readonly property url materialSource: surfaceStyle.picture ? picture
+        : Qt.resolvedUrl("../materials/" + LayoutEngine.lookTexture(surfaceStyle.material, lookPalette) + ".png")
     readonly property bool materialReady: canvas.materialLoaded
     readonly property bool materialAnimationActive: visible && !sceneConcealed
         && !reducedMotion && surfaceStyle.animated && motionOpacity > 0 && panelOpacity > 0
@@ -163,6 +165,58 @@ Item {
             if (closed)
                 paintStretch(a, angle, start, Math.max(start, half), end, true)
         }
+    }
+
+    // A picture fills the panel's own shape once, scaled to cover the whole
+    // of it, rather than running along the track as a texture does. The band
+    // is drawn first without its glow, the picture only where the band is,
+    // then the glow behind both, so no picture shows in the glow.
+    function paintPicture(context) {
+        context.shadowBlur = 0
+        context.shadowColor = "transparent"
+        trace(context)
+        context.stroke()
+        const points = surfacePath.points
+        const half = surfaceStyle.lineWidth / 2
+        let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
+        for (let i = 0; i < points.length; ++i) {
+            left = Math.min(left, points[i].x)
+            right = Math.max(right, points[i].x)
+            top = Math.min(top, points[i].y)
+            bottom = Math.max(bottom, points[i].y)
+        }
+        const width = right - left + half * 2
+        const height = bottom - top + half * 2
+        const pictureWidth = pictureSize.implicitWidth
+        const pictureHeight = pictureSize.implicitHeight
+        if (canvas.materialLoaded && width > 0 && height > 0 && pictureWidth > 0 && pictureHeight > 0) {
+            const scale = Math.max(width / pictureWidth, height / pictureHeight)
+            context.save()
+            context.globalCompositeOperation = "source-atop"
+            context.drawImage(String(materialSource),
+                              left - half + (width - pictureWidth * scale) / 2,
+                              top - half + (height - pictureHeight * scale) / 2,
+                              pictureWidth * scale, pictureHeight * scale)
+            context.restore()
+        }
+        if (lookGlow > 0) {
+            context.save()
+            context.globalCompositeOperation = "destination-over"
+            context.shadowColor = surfaceStyle.shadow
+            context.shadowBlur = surfaceStyle.blur * lookGlow
+            trace(context)
+            context.stroke()
+            context.restore()
+        }
+    }
+
+    // The picture's own size, for fitting it.
+    Image {
+        id: pictureSize
+        visible: false
+        asynchronous: true
+        source: root.surfaceStyle.picture ? root.picture : ""
+        onStatusChanged: if (status === Image.Ready) canvas.requestPaint()
     }
 
     function trace(context) {
@@ -272,6 +326,11 @@ Item {
         property bool materialLoaded: false
 
         function loadMaterial() {
+            if (!String(root.materialSource).length) {
+                materialLoaded = false
+                requestPaint()
+                return
+            }
             if (!isImageLoaded(root.materialSource)) loadImage(root.materialSource)
             materialLoaded = isImageLoaded(root.materialSource)
             requestPaint()
@@ -330,6 +389,10 @@ Item {
                 root.trace(context)
                 context.stroke()
                 context.restore()
+            }
+            if (root.surfaceStyle.picture) {
+                root.paintPicture(context)
+                return
             }
             root.trace(context)
             if (root.surfaceStyle.clearGround) {

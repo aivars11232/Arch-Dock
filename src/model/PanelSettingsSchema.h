@@ -58,6 +58,8 @@ enum class PanelSettingsNormalization
     HostId,
     StringList,
     UrlList,
+    // A picture Arch Dock keeps a copy of: a local file URL, or nothing.
+    PictureUrl,
     Map,
     Revision
 };
@@ -105,6 +107,11 @@ enum class EditorCapability
     Lightning,
     // What the panel is called: every panel has a name.
     Identity,
+    // A picture the user imported as the panel's look: worn by a panel
+    // drawn flat or in 3D (baked and skinned looks are artwork already).
+    PanelPicture,
+    // How deep the picture a 3D panel wears stands out of it.
+    PictureRelief,
     Count
 };
 

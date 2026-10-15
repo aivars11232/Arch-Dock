@@ -81,6 +81,31 @@ TestCase {
         return values.reduce((a, b) => a + (b - mean) * (b - mean), 0) / values.length
     }
 
+    // A picture the user imported fills the panel's own shape once, scaled
+    // to cover it: a red | blue picture shows red round the left of the ring
+    // and blue round the right, instead of repeating along the track.
+    function test_pictureFillsThePanelOnce() {
+        // Settings carry a picture as text, as Arch Dock stores it.
+        const picture = String(Qt.resolvedUrl("fixtures/pictures/red-blue.png"))
+        const scene = createTemporaryObject(sceneComponent, captureWindow.contentItem, {
+            panelDefinition: { layout: "circular", layoutRadius: 300, iconSize: 52,
+                appearance: "picture", panelPicture: picture, opacity: 1, rendererTier: "procedural2d" }
+        })
+        verify(scene)
+        verify(waitForRendering(scene))
+        const surface = scene.visualPanel
+        compare(String(surface.materialSource), picture)
+        tryVerify(function() {
+            captureWindow.update()
+            const image = grabImage(surface)
+            const radius = Number(surface.geometry.radius)
+            const leftX = Math.round(image.width / 2 - radius), rightX = Math.round(image.width / 2 + radius)
+            const y = Math.round(image.height / 2)
+            return image.red(leftX, y) > 180 && image.blue(leftX, y) < 90
+                && image.blue(rightX, y) > 180 && image.red(rightX, y) < 90
+        }, 4000, "the picture covers the ring once: red on its left, blue on its right")
+    }
+
     function test_tintKeepsTexture_data() {
         return looks.map(look => ({ tag: look, look: look }))
     }

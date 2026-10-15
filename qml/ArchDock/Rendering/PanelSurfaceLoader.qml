@@ -29,7 +29,9 @@ Item {
     property real lightningBackground: 0
     property real lookMotionSpeed: 1
     property string lookPalette: ""
+    // A panel wearing a picture does not glow, as stone does not.
     readonly property bool flatGlowActive: panelGlow > 0 && !true3DReady
+        && !(appearance === "picture" && picture.length > 0)
     property bool reducedMotion: false
     property var geometry: ({})
     property real layoutAngle: 0
@@ -38,6 +40,7 @@ Item {
     property real restingAngle: layoutAngle
     property int polygonSides: 6
     property string appearance: "glass"
+    property string picture: ""
     property string customColor: ""
     property real panelOpacity: 0.9
     property real sparkleIntensity: 0
@@ -221,7 +224,7 @@ Item {
                         "pedestalOpacity", "pedestalGlow", "pedestalGlowReach", "pedestalViewAngle",
                         "panelGlow", "panelGlowReach", "iconGlow", "iconGlowReach", "iconTileGlow",
                         "iconTileGlowReach", "panelLookBackground", "pedestalLookBackground",
-                        "lookMotionSpeed"])
+                        "lookMotionSpeed", "panelPictureDepth"])
                     if (parameters[key] !== undefined && parameters[key] !== null
                             && Number.isFinite(Number(parameters[key])))
                         merged[key] = Number(parameters[key])
@@ -233,6 +236,9 @@ Item {
                                             ["pedestalMaterial", "pedestalMaterial"],
                                             ["pedestalColor", "pedestalColor"],
                                             ["pedestalTexture", "pedestalTexture"],
+                                            ["pedestalPicture", "pedestalPicture"],
+                                            ["panelPictureRise", "panelPictureRise"],
+                                            ["panelPictureDirection", "panelPictureDirection"],
                                             ["pedestalFacing", "pedestalFacing"],
                                             ["pedestalAnimation", "pedestalAnimation"],
                                             ["pedestalGlowColor", "pedestalGlowColor"],
@@ -242,6 +248,7 @@ Item {
                                             ["panelLookColour", "panelLookColour"],
                                             ["pedestalLookColour", "pedestalLookColour"]])
                     if (typeof parameters[key] === "string") merged[target] = parameters[key]
+                merged.panelPicture = root.picture
                 // All the way round (the owner, 2026-10-13: "freely in 360 every direction").
                 if (isFinite(root.cameraPitch)) merged.cameraPitch = Math.max(-180, Math.min(180, root.cameraPitch))
                 return merged
@@ -337,6 +344,7 @@ Item {
             restingAngle: root.restingAngle
             polygonSides: root.polygonSides
             appearance: root.appearance
+            picture: root.picture
             customColor: root.customColor
             lightningBackground: root.lightningBackground
             glowIntensity: root.glowIntensity

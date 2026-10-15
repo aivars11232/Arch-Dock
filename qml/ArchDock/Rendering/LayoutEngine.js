@@ -1373,6 +1373,11 @@ function themeStyle(appearance, customColor, iconSize) {
         "pedestal": {
             stroke: "#8395a6",
             shadow: "rgba(0, 0, 0, 0.48)", width: 0.82, blur: 5
+        },
+        // A picture the user imported, filling a wide band.
+        "picture": {
+            stroke: "#c8d4de",
+            shadow: "rgba(0, 0, 0, 0.5)", width: 0.86, blur: 8
         }
     };
     const result = styles[preset] || styles.glass;
@@ -1395,7 +1400,9 @@ function themeStyle(appearance, customColor, iconSize) {
         // the chosen strength: lightning and aurora.
         clearGround: preset === "lightning" || preset === "aurora",
         skyColour: preset === "aurora" ? "6, 10, 20" : "12, 10, 31",
-        sparkle: preset === "crystal" || preset === "plasma"
+        sparkle: preset === "crystal" || preset === "plasma",
+        // Drawn once over the whole shape, not run along the track.
+        picture: preset === "picture"
     };
 }
 

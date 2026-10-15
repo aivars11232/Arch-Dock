@@ -1,5 +1,52 @@
 # Arch Dock current state
 
+<!-- LIST_PIECE_5_BEGIN -->
+## The owner's list, piece 5: Import picture for panels, stands and icon tiles (Phase 3) — 2026-10-15
+
+Report `docs/repairs/OWNER-LIST-PIECE-5.md`; Panel Studio pictures from a
+private KWin, desktop pictures from a private Plasma desktop with copies of
+Arch Dock's own settings, a KDE wallpaper as the test picture.
+
+- Settings: `panelPicture` (`surface.picture`), `pedestalPicture`,
+  `folderPedestalPicture` (`surface.parameters3D`), `iconTilePicture`
+  (`iconStyle.tilePicture`), normalized by `PictureUrl` (a local file URL
+  with an absolute path, else empty); "picture" joins the choices of
+  `appearance`, `scene3DTexture`, `pedestalTexture`, `folderPedestalTexture`
+  and `iconTileTexture`; capability `panel-picture` on flat and 3D panels.
+- Import: `PanelRegistry::importPicture` copies a local picture through
+  `ThemeAssetProcessor` into `AppDataLocation/pictures` (PNG, at most 2048
+  pixels on the longest side, content-addressed; 64 MB, 16384 pixels and 16
+  megapixels at most), returning the copy's URL or a message. A picture
+  stored on its side is read upright (the processor expects its sides
+  swapped), for theme artwork as well.
+- Panel Studio: a picture row (preview, Import picture…, ×) on Panels >
+  Appearance, Pedestals (with the folder item stands) and Icon Tiles;
+  importing gives a stand a shape and tiles their switch, then puts each
+  Look the picture is worn as on Picture (`pictureLooks`: a flat panel's
+  Theme, a 3D panel's Look, the stands', folder item stands' and tiles'
+  Look) with its paired setting (`setLook`); × puts back the Look the part
+  had before in that window, or a plain one. Picture is listed only for a
+  part with a picture, and without one falls back to the look it stands
+  for.
+- Drawing: flat panels cover their shape with the picture once
+  (`PanelProcedural2D.paintPicture`); 3D panels and stands wear it in its
+  own colours, solid, without the look's tint, metal, glow or flow
+  (`PanelScene3D.wearPicture`), a generated band repeating it at its own
+  proportions; flat stands untinted (`IconScene`); tiles cover-fitted under
+  a 35 % veil in the tile's colour (`IconTile`). Icons are never coloured;
+  every other look draws as before.
+- Relief, real geometry: a 3D platform wearing a picture is cut finely
+  (`PlatformGeometry.reliefPlatform` for a generated band, `reliefMesh` for
+  a theme's own mesh; uv1's x the movement allowed, `meshStep` the steps)
+  and drawn with `optional3d/PictureRelief.qml`, a custom material whose
+  vertex shader moves the surface by the picture's brightness, inward or
+  outward, and whose fragment shader lights the finer grain and casts the
+  relief's own shadows; Relief depth `panelPictureDepth`, Raised parts
+  `panelPictureRise`, Relief direction `panelPictureDirection` (capability
+  `picture-relief`, shown only on a 3D panel wearing a picture). A picture
+  fits no glow: hidden in the Studio and not drawn.
+<!-- LIST_PIECE_5_END -->
+
 <!-- LIST_PIECE_4_BEGIN -->
 ## The owner's list, piece 4: shape names, one Polygon, the icon limit as drawn, Panel Studio UI themes — 2026-10-15
 

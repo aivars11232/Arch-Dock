@@ -697,6 +697,9 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
           std::tuple{"folderPedestalGlowReach", "folderPedestalGlowReach", QVariant(0.75)},
           std::tuple{"panelGlow", "panelGlow", QVariant(0.0)},
           std::tuple{"panelLookBackground", "panelLookBackground", QVariant(0.5)},
+          std::tuple{"panelPictureDepth", "panelPictureDepth", QVariant(0.8)},
+          std::tuple{"panelPictureRise", "panelPictureRise", QVariant(QStringLiteral("light"))},
+          std::tuple{"panelPictureDirection", "panelPictureDirection", QVariant(QStringLiteral("inward"))},
           std::tuple{"pedestalLookBackground", "pedestalLookBackground", QVariant(0.5)},
           std::tuple{"lookMotionSpeed", "lookMotionSpeed", QVariant(1.0)},
           std::tuple{"panelLookColour", "panelLookColour", QVariant(QStringLiteral("original"))},
@@ -709,7 +712,9 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
           std::tuple{"iconTileGlowReach", "iconTileGlowReach", QVariant(0.75)},
           std::tuple{"iconTileGlowColor", "iconTileGlowColor", QVariant(QString{})},
           std::tuple{"folderPedestalAnimation", "folderPedestalAnimation", QVariant(QStringLiteral("none"))},
-          std::tuple{"folderPedestalAnimationSpeed", "folderPedestalAnimationSpeed", QVariant(1.0)}}) {
+          std::tuple{"folderPedestalAnimationSpeed", "folderPedestalAnimationSpeed", QVariant(1.0)},
+          std::tuple{"pedestalPicture", "pedestalPicture", QVariant(QString{})},
+          std::tuple{"folderPedestalPicture", "folderPedestalPicture", QVariant(QString{})}}) {
         if (record.contains(QLatin1String(key)))
             definition.surface.parameters3D.insert(QLatin1String(parameter),
                 normalized(QLatin1String(key), fallback));
@@ -721,6 +726,8 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     setString(QStringLiteral("themeSource"), &definition.surface.themeSource);
     definition.surface.themeFit = normalized(
         QStringLiteral("themeFit"), definition.surface.themeFit).toString();
+    definition.surface.picture = normalized(
+        QStringLiteral("panelPicture"), definition.surface.picture).toString();
     setString(QStringLiteral("themeSourceKind"), &definition.surface.themeSourceKind, true);
     setString(QStringLiteral("themeSourceFormat"), &definition.surface.themeSourceFormat, true);
     definition.surface.themeSourceWidth = qMax(
@@ -823,6 +830,7 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     definition.iconStyle.tileBorderColor = normalized(QStringLiteral("iconTileBorderColor"), definition.iconStyle.tileBorderColor).toString();
     definition.iconStyle.tileBorderWidth = normalized(QStringLiteral("iconTileBorderWidth"), definition.iconStyle.tileBorderWidth).toReal();
     definition.iconStyle.tileTexture = normalized(QStringLiteral("iconTileTexture"), definition.iconStyle.tileTexture).toString();
+    definition.iconStyle.tilePicture = normalized(QStringLiteral("iconTilePicture"), definition.iconStyle.tilePicture).toString();
     definition.iconStyle.tileThickness = normalized(QStringLiteral("iconTileThickness"), definition.iconStyle.tileThickness).toReal();
     definition.iconStyle.tileIconOffsetX = normalized(QStringLiteral("iconTileIconOffsetX"), definition.iconStyle.tileIconOffsetX).toReal();
     definition.iconStyle.tileIconOffsetY = normalized(QStringLiteral("iconTileIconOffsetY"), definition.iconStyle.tileIconOffsetY).toReal();
@@ -1314,6 +1322,9 @@ QVariantMap PanelDefinition::toLegacyMap() const
           std::pair{"folderPedestalGlowReach", "folderPedestalGlowReach"},
           std::pair{"panelGlow", "panelGlow"},
           std::pair{"panelLookBackground", "panelLookBackground"},
+          std::pair{"panelPictureDepth", "panelPictureDepth"},
+          std::pair{"panelPictureRise", "panelPictureRise"},
+          std::pair{"panelPictureDirection", "panelPictureDirection"},
           std::pair{"pedestalLookBackground", "pedestalLookBackground"},
           std::pair{"lookMotionSpeed", "lookMotionSpeed"},
           std::pair{"panelLookColour", "panelLookColour"},
@@ -1326,7 +1337,9 @@ QVariantMap PanelDefinition::toLegacyMap() const
           std::pair{"iconTileGlowReach", "iconTileGlowReach"},
           std::pair{"iconTileGlowColor", "iconTileGlowColor"},
           std::pair{"folderPedestalAnimation", "folderPedestalAnimation"},
-          std::pair{"folderPedestalAnimationSpeed", "folderPedestalAnimationSpeed"}}) {
+          std::pair{"folderPedestalAnimationSpeed", "folderPedestalAnimationSpeed"},
+          std::pair{"pedestalPicture", "pedestalPicture"},
+          std::pair{"folderPedestalPicture", "folderPedestalPicture"}}) {
         if (surface.parameters3D.contains(QLatin1String(parameter)))
             record.insert(QLatin1String(key), surface.parameters3D.value(QLatin1String(parameter)));
     }
@@ -1336,6 +1349,7 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("themeAsset"), surface.themeAsset);
     record.insert(QStringLiteral("themeSource"), surface.themeSource);
     record.insert(QStringLiteral("themeFit"), surface.themeFit);
+    record.insert(QStringLiteral("panelPicture"), surface.picture);
     record.insert(QStringLiteral("themeSourceKind"), surface.themeSourceKind);
     record.insert(QStringLiteral("themeSourceFormat"), surface.themeSourceFormat);
     record.insert(QStringLiteral("themeSourceWidth"), surface.themeSourceWidth);
@@ -1381,6 +1395,7 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("iconTileBorderColor"), iconStyle.tileBorderColor);
     record.insert(QStringLiteral("iconTileBorderWidth"), iconStyle.tileBorderWidth);
     record.insert(QStringLiteral("iconTileTexture"), iconStyle.tileTexture);
+    record.insert(QStringLiteral("iconTilePicture"), iconStyle.tilePicture);
     record.insert(QStringLiteral("iconTileThickness"), iconStyle.tileThickness);
     record.insert(QStringLiteral("iconTileIconOffsetX"), iconStyle.tileIconOffsetX);
     record.insert(QStringLiteral("iconTileIconOffsetY"), iconStyle.tileIconOffsetY);

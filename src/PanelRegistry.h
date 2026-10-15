@@ -255,6 +255,11 @@ public:
                                  qreal devicePixelRatio = 0,
                                  bool force = false);
     Q_INVOKABLE bool clearTheme(const QString &panelId);
+    // Copies a picture the user chose into Arch Dock's own pictures folder,
+    // scaled to at most 2048 pixels on its longer side, for a look made of
+    // it (a panel's, its stands' or its tiles'). The original is
+    // only read. Returns {success, url, width, height} or {success, message}.
+    Q_INVOKABLE QVariantMap importPicture(const QUrl &sourceUrl) const;
 
 public slots:
     void setActivePanelId(const QString &panelId);

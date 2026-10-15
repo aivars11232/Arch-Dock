@@ -895,6 +895,12 @@ Window {
         colorDialog.open();
     }
 
+    // Whether the selected panel offers a field now (Apply refuses others).
+    function fieldOffered(key) {
+        const descriptor = fieldDescriptor(key, "panel");
+        return descriptor !== null && descriptor.inactive !== true;
+    }
+
     function fieldDescriptor(key, scope) {
         const fields = scope === "settings" ? editorSession.globalFields : editorSession.panelFields;
         for (let index = 0; index < fields.length; ++index) {
@@ -945,7 +951,7 @@ Window {
         scene3DMaterial: { key: "scene3DTexture", value: function(look) { return look; } },
         pedestalMaterial: { key: "pedestalTexture", value: function(look) { return "material"; } },
         folderPedestalMaterial: { key: "folderPedestalTexture", value: function(look) { return "material"; } },
-        iconTileTexture: { key: "iconTileMaterial", value: function(look) { return look === "none" ? "minimal" : look; } }
+        iconTileTexture: { key: "iconTileMaterial", value: function(look) { return ["none", "picture"].includes(look) ? "minimal" : look; } }
     })
     readonly property var lookPairedKeys: ["scene3DTexture", "pedestalTexture", "folderPedestalTexture", "iconTileMaterial"]
     function lookLabel(value) {
@@ -977,6 +983,10 @@ Window {
             options: descriptor.options && descriptor.options.length > 0 ? descriptor.options : choicesToOptions(descriptor.choices),
             description: descriptor.scope === "global" ? qsTr("Applies to all Arch Dock panels") : ""
         };
+        // "Picture" is a choice once the part has a picture to wear.
+        const pictureKey = pictureFor[descriptor.key];
+        if (pictureKey !== undefined && !String(panelValue(pictureKey, "")).length)
+            row.options = (row.options || []).filter(function(option) { return option.value !== "picture"; });
         if (lookPairs[descriptor.key] !== undefined) {
             row.label = qsTr("Look");
             row.options = (row.options || []).map(function(option) {
@@ -1695,6 +1705,90 @@ Window {
         if (mainTabIndex === 4)
             return pedestalRows();
         return unavailablePage(currentSubtabs.length > 0 ? currentSubtabs[subTabIndex] : qsTr("Profiles"), qsTr("Reusable profiles are outside the current settings contract."));
+    }
+
+    // Pictures the user imports (Panels > Appearance, Icon Tiles,
+    // Pedestals): the row the picture dialog is open for.
+    property var pictureRow: null
+    // The picture each Look or texture choice wears as "picture".
+    readonly property var pictureFor: ({
+        appearance: "panelPicture", scene3DMaterial: "panelPicture", scene3DTexture: "panelPicture",
+        pedestalMaterial: "pedestalPicture", pedestalTexture: "pedestalPicture",
+        folderPedestalMaterial: "folderPedestalPicture", folderPedestalTexture: "folderPedestalPicture",
+        iconTileTexture: "iconTilePicture"
+    })
+    // The Looks each picture is worn as (a flat panel's Theme and a 3D
+    // panel's Look, a stand's, a tile's), with the plain one left when the
+    // picture is removed.
+    readonly property var pictureLooks: ({
+        panelPicture: [{ key: "appearance", off: "glass" }, { key: "scene3DMaterial", off: "theme" }],
+        pedestalPicture: [{ key: "pedestalMaterial", off: "panel" }],
+        folderPedestalPicture: [{ key: "folderPedestalMaterial", off: "panel" }],
+        iconTilePicture: [{ key: "iconTileTexture", off: "none" }]
+    })
+    // The Look a part had before it wore a picture, by panel and setting:
+    // removing the picture while this window is open puts it back (a Neon
+    // panel is Neon again), otherwise the plain one above.
+    property var lookBeforePicture: ({})
+    // A Look and the setting paired with it, as choosing it in its list sets them.
+    function setLook(key, value) {
+        editorSession = EditorModel.setPanelValue(editorSession, key, value);
+        const pair = lookPairs[key];
+        if (pair !== undefined)
+            editorSession = EditorModel.setPanelValue(editorSession, pair.key, pair.value(value));
+    }
+    function putOnPicture(key) {
+        const before = String(panelValue(key, ""));
+        if (before !== "picture")
+            lookBeforePicture[selectedPanelId + "/" + key] = before;
+        setLook(key, "picture");
+    }
+    function takeOffPicture(key, plain) {
+        if (String(panelValue(key, "")) !== "picture")
+            return;
+        const before = String(lookBeforePicture[selectedPanelId + "/" + key] || "");
+        setLook(key, before.length ? before : plain);
+    }
+    function importPicture(row) {
+        pictureRow = row;
+        pictureDialog.open();
+    }
+    // Arch Dock copies the chosen picture and the draft wears the copy; the
+    // part it is for shows at once: a stand gets a shape, tiles turn on.
+    function usePicture(url) {
+        const row = pictureRow;
+        pictureRow = null;
+        if (!row)
+            return;
+        const imported = panelRegistry.importPicture(url);
+        if (!imported || imported.success !== true) {
+            studioError = String(imported && imported.message ? imported.message
+                : qsTr("The picture could not be imported."));
+            return;
+        }
+        studioError = "";
+        editorSession = EditorModel.setPanelValue(editorSession, row.key, String(imported.url));
+        // The part is shown first, so that its Look is offered: a stand
+        // gets a shape, folder item stands their own settings, tiles their
+        // switch. Then it wears the picture.
+        if (row.key === "pedestalPicture" && String(panelValue("pedestalShape", "none")) === "none")
+            editorSession = EditorModel.setPanelValue(editorSession, "pedestalShape", "disc");
+        if (row.key === "folderPedestalPicture")
+            editorSession = EditorModel.setPanelValue(editorSession, "folderPedestalOwnStyle", true);
+        if (row.key === "iconTilePicture" && panelValue("iconTilesEnabled", true) === false)
+            editorSession = EditorModel.setPanelValue(editorSession, "iconTilesEnabled", true);
+        refreshProjection();
+        for (const look of pictureLooks[row.key] || [])
+            if (fieldOffered(look.key))
+                putOnPicture(look.key);
+        refreshProjection();
+    }
+    function removePicture(row) {
+        editorSession = EditorModel.setPanelValue(editorSession, row.key, "");
+        for (const look of pictureLooks[row.key] || [])
+            if (fieldOffered(look.key))
+                takeOffPicture(look.key, look.off);
+        refreshProjection();
     }
 
     function stageArtifact(action, sourceUrl) {
@@ -3104,6 +3198,18 @@ Window {
             icon.name: "dialog-cancel"
             onClicked: root.cancelStudioChanges()
         }
+    }
+
+    FileDialog {
+        id: pictureDialog
+        objectName: "studio-picture-dialog"
+
+        title: qsTr("Import picture")
+        fileMode: FileDialog.OpenFile
+        nameFilters: [qsTr("Pictures (*.png *.jpg *.jpeg *.webp *.bmp *.gif *.svg *.tif *.tiff *.avif *.jxl)"),
+            qsTr("All files (*)")]
+        onAccepted: root.usePicture(selectedFile)
+        onRejected: root.pictureRow = null
     }
 
     FileDialog {

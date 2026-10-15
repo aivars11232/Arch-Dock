@@ -89,9 +89,11 @@ bool curvedLayout(const QString &pathType)
 // glow.
 bool glowFitsLook(const QString &look)
 {
+    // A picture is worn as the thing it shows, which mostly does not glow
+    // (stone, wood, a mountain).
     const QString name = look.trimmed().toLower();
     return name != QStringLiteral("organic") && name != QStringLiteral("pedestal")
-        && name != QStringLiteral("lime");
+        && name != QStringLiteral("lime") && name != QStringLiteral("picture");
 }
 
 // The looks a panel's surface is drawn in, its material and its texture
@@ -1112,6 +1114,15 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             break;
         case ArchDock::EditorCapability::Identity:
             available = true;
+            break;
+        case ArchDock::EditorCapability::PanelPicture:
+            available = tier == ArchDock::RendererTier::Procedural2D || tier == ArchDock::RendererTier::True3D;
+            break;
+        case ArchDock::EditorCapability::PictureRelief:
+            // Only a 3D panel wearing a picture stands out in relief.
+            available = true;
+            inactive = tier != ArchDock::RendererTier::True3D || candidate.surface.picture.isEmpty()
+                || !panelLooks(candidate, tier).contains(QStringLiteral("picture"));
             break;
         case ArchDock::EditorCapability::Pedestals:
         {

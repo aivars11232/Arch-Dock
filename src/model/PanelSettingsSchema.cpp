@@ -313,6 +313,16 @@ bool normalizeValue(const Descriptor &descriptor,
     case Normalization::UrlList:
         normalized = normalizedStringList(value, true);
         break;
+    case Normalization::PictureUrl:
+    {
+        // Anything other than a local file, a web address among others, is
+        // no picture.
+        const QString candidate = value.toString().trimmed();
+        const QUrl url(candidate);
+        normalized = url.isLocalFile() && url.toLocalFile().startsWith(QLatin1Char('/'))
+            ? candidate : QString{};
+        break;
+    }
     case Normalization::Map:
         normalized = value.toMap();
         break;
@@ -809,12 +819,12 @@ const QVector<Descriptor> &schemaFields()
         panel("scene3DMaterial", Access::Editor, Type::String, Normalization::ChoiceLower,
               QStringLiteral("theme"), "surface.parameters3D.material", {}, {},
               {"theme", "glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
-               "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"},
+               "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "picture"},
               true, true, editor("panels-3d", "Material", "combo", {"studio"}, "scene3d-quality")),
         panel("scene3DTexture", Access::Editor, Type::String, Normalization::ChoiceLower,
               QStringLiteral("theme"), "surface.parameters3D.texture", {}, {},
               {"theme", "none", "glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
-               "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"},
+               "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "picture"},
               true, true, editor("panels-3d", "Texture", "combo", {"studio"}, "scene3d-quality")),
         // Pedestals (owner's requests, 2026-10-12): the stands under the
         // icons, on flat and 3D panels alike, facing the viewer with their
@@ -854,12 +864,15 @@ const QVector<Descriptor> &schemaFields()
                           {QStringLiteral("suffix"), QStringLiteral("°")}})),
         panel("pedestalMaterial", Access::Editor, Type::String, Normalization::ChoiceLower,
               QStringLiteral("panel"), "surface.parameters3D.pedestalMaterial", {}, {},
-              {"panel", "glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime", "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"},
+              {"panel", "glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime", "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "picture"},
               true, true, editor("pedestals", "Material", "combo", {"studio"}, "pedestals")),
         panel("pedestalTexture", Access::Editor, Type::String, Normalization::ChoiceLower,
               QStringLiteral("material"), "surface.parameters3D.pedestalTexture", {}, {},
-              {"material", "none", "glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime", "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"},
+              {"material", "none", "glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime", "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "picture"},
               true, true, editor("pedestals", "Texture", "combo", {"studio"}, "pedestals")),
+        panel("pedestalPicture", Access::Editor, Type::String, Normalization::PictureUrl,
+              QString{}, "surface.parameters3D.pedestalPicture", {}, {}, {}, true, true,
+              editor("pedestals", "Picture", "picture", {"studio"}, "pedestals")),
         panel("pedestalColor", Access::Editor, Type::String, Normalization::HexColor,
               QString{}, "surface.parameters3D.pedestalColor", {}, {}, {}, true, true,
               editor("pedestals", "Colour", "color", {"studio"}, "pedestals")),
@@ -919,12 +932,15 @@ const QVector<Descriptor> &schemaFields()
                           {QStringLiteral("suffix"), QStringLiteral("°")}})),
         panel("folderPedestalMaterial", Access::Editor, Type::String, Normalization::ChoiceLower,
               QStringLiteral("panel"), "surface.parameters3D.folderPedestalMaterial", {}, {},
-              {"panel", "glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime", "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"},
+              {"panel", "glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime", "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "picture"},
               true, true, editor("pedestals-folder", "Material", "combo", {"studio"}, "pedestals")),
         panel("folderPedestalTexture", Access::Editor, Type::String, Normalization::ChoiceLower,
               QStringLiteral("material"), "surface.parameters3D.folderPedestalTexture", {}, {},
-              {"material", "none", "glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime", "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"},
+              {"material", "none", "glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime", "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "picture"},
               true, true, editor("pedestals-folder", "Texture", "combo", {"studio"}, "pedestals")),
+        panel("folderPedestalPicture", Access::Editor, Type::String, Normalization::PictureUrl,
+              QString{}, "surface.parameters3D.folderPedestalPicture", {}, {}, {}, true, true,
+              editor("pedestals-folder", "Picture", "picture", {"studio"}, "pedestals")),
         panel("folderPedestalColor", Access::Editor, Type::String, Normalization::HexColor,
               QString{}, "surface.parameters3D.folderPedestalColor", {}, {}, {}, true, true,
               editor("pedestals-folder", "Colour", "color", {"studio"}, "pedestals")),
@@ -966,9 +982,32 @@ const QVector<Descriptor> &schemaFields()
               Normalization::ChoiceLower, QStringLiteral("glass"), "surface.appearance", {}, {},
               {"glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
                "floating-glass", "metallic", "futuristic", "organic", "platform",
-               "plate", "pedestal"}, false, true,
+               "plate", "pedestal", "picture"}, false, true,
               editor("panels-appearance", "Theme", "combo", {"studio"},
                      "procedural-surface")), {"dock-configuration"}),
+        // Pictures the user imports become looks of their own: the panel's,
+        // its stands', its folder items' stands' and its tiles'. Each is Arch
+        // Dock's own copy, by file URL; the icons themselves stay as they are.
+        panel("panelPicture", Access::Editor, Type::String, Normalization::PictureUrl,
+              QString{}, "surface.picture", {}, {}, {}, true, true,
+              editor("panels-appearance", "Picture", "picture", {"studio"}, "panel-picture")),
+        // How deep a 3D panel's picture stands out of it and sinks into it,
+        // its brightness its height.
+        panel("panelPictureDepth", Access::Editor, Type::Real, Normalization::RealRange,
+              0.8, "surface.parameters3D.panelPictureDepth", 0.0, 1.0, {}, true, true,
+              editor("panels-appearance", "Relief depth", "slider", {"studio"}, "picture-relief",
+                     {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
+        // Which parts of that picture stand out: its light ones (stones
+        // between dark gaps) or its dark ones (dark mountains under a light
+        // sky); its brightness alone cannot tell.
+        panel("panelPictureRise", Access::Editor, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("light"), "surface.parameters3D.panelPictureRise", {}, {}, {"light", "dark"}, true, true,
+              editor("panels-appearance", "Raised parts", "combo", {"studio"}, "picture-relief")),
+        // Whether those parts rise out of the panel (little mountains), or
+        // stay at its surface while the rest sinks in (stones in a cage).
+        panel("panelPictureDirection", Access::Editor, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("inward"), "surface.parameters3D.panelPictureDirection", {}, {}, {"inward", "outward"},
+              true, true, editor("panels-appearance", "Relief direction", "combo", {"studio"}, "picture-relief")),
         panel("sparkleIntensity", Access::Editor, Type::Real, Normalization::RealRange,
               0.0, "surface.parameters2D.sparkleIntensity", 0.0, 1.0, {}, true, true,
               editor("panels-appearance", "Sparkle intensity", "slider", {"studio"},
@@ -1212,8 +1251,11 @@ const QVector<Descriptor> &schemaFields()
         panel("iconTileTexture", Access::Editor, Type::String, Normalization::ChoiceLower,
               QStringLiteral("none"), "iconStyle.tileTexture", {}, {},
               {"none", "glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime", "floating-glass",
-               "metallic", "futuristic", "organic", "platform", "plate", "pedestal"}, false, true,
+               "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "picture"}, false, true,
               editor("icon-tiles", "Texture", "combo", {"studio"}, "icon-state-styling")),
+        panel("iconTilePicture", Access::Editor, Type::String, Normalization::PictureUrl,
+              QString{}, "iconStyle.tilePicture", {}, {}, {}, true, true,
+              editor("icon-tiles", "Picture", "picture", {"studio"}, "icon-state-styling")),
         panel("iconTileThickness", Access::Editor, Type::Real, Normalization::RealRange,
               0.0, "iconStyle.tileThickness", 0.0, 24.0, {}, false, true,
               editor("icon-tiles", "Tile thickness", "slider", {"studio"}, "icon-state-styling", {},
@@ -1426,6 +1468,8 @@ QString editorCapabilityName(EditorCapability capability)
     case EditorCapability::Glow: return QStringLiteral("glow");
     case EditorCapability::Lightning: return QStringLiteral("lightning");
     case EditorCapability::Identity: return QStringLiteral("identity");
+    case EditorCapability::PanelPicture: return QStringLiteral("panel-picture");
+    case EditorCapability::PictureRelief: return QStringLiteral("picture-relief");
     case EditorCapability::Count: break;
     }
     return QString{};

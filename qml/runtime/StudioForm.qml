@@ -341,6 +341,66 @@ ScrollView {
                             }
                         }
 
+                        // The user's picture: its thumbnail, Import
+                        // picture..., and the way back to the look without it.
+                        RowLayout {
+                            id: pictureRow
+                            visible: rowDelegate.kind === "picture"
+                            Layout.preferredWidth: 270
+                            spacing: 8
+                            readonly property string picture: rowDelegate.kind === "picture"
+                                ? String(root.studio.fieldValue(rowDelegate.modelData) || "") : ""
+
+                            Rectangle {
+                                Layout.preferredWidth: 32
+                                Layout.preferredHeight: 32
+                                radius: 4
+                                color: "transparent"
+                                border.width: 1
+                                border.color: root.theme.textMuted
+                                clip: true
+
+                                Image {
+                                    objectName: "studio-picture-thumbnail-" + String(rowDelegate.modelData.key || "")
+                                    anchors.fill: parent
+                                    anchors.margins: 1
+                                    source: pictureRow.picture
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                    sourceSize: Qt.size(64, 64)
+                                }
+                                Kirigami.Icon {
+                                    visible: pictureRow.picture.length === 0
+                                    anchors.centerIn: parent
+                                    width: 16
+                                    height: 16
+                                    source: "image-x-generic"
+                                    color: root.theme.textMuted
+                                }
+                            }
+
+                            Button {
+                                objectName: "studio-picture-import-" + String(rowDelegate.modelData.key || "")
+                                Layout.fillWidth: true
+                                text: qsTr("Import picture…")
+                                icon.name: "document-import"
+                                onClicked: root.studio.importPicture(rowDelegate.modelData)
+                            }
+
+                            // Only while there is a picture to remove.
+                            ToolButton {
+                                objectName: "studio-picture-remove-" + String(rowDelegate.modelData.key || "")
+                                Accessible.name: qsTr("Remove the picture")
+                                visible: pictureRow.picture.length > 0
+                                icon.name: "edit-clear"
+                                onClicked: root.studio.removePicture(rowDelegate.modelData)
+
+                                ToolTip.visible: hovered
+                                ToolTip.text: Accessible.name
+                                ToolTip.delay: Kirigami.Units.toolTipDelay
+                            }
+                        }
+
                         Button {
                             visible: rowDelegate.kind === "action"
                             text: rowDelegate.modelData.buttonText || rowDelegate.modelData.label

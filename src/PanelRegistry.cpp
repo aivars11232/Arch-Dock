@@ -32,6 +32,8 @@
 #include <QScreen>
 #include <QSet>
 #include <QSettings>
+#include <QImageIOHandler>
+#include <QImageReader>
 #include <QStandardPaths>
 #include <QScopeGuard>
 #include <QTemporaryDir>
@@ -2853,6 +2855,52 @@ void PanelRegistry::removePanel(const QString &panelId)
         changed(nativePanel);
         return;
     }
+}
+
+QVariantMap PanelRegistry::importPicture(const QUrl &sourceUrl) const
+{
+    const auto failure = [](const QString &message) {
+        return QVariantMap{{QStringLiteral("success"), false}, {QStringLiteral("message"), message}};
+    };
+    if (!sourceUrl.isLocalFile())
+        return failure(tr("Only a picture on this computer can be imported."));
+    const QString sourcePath = sourceUrl.toLocalFile();
+    if (!QFileInfo(sourcePath).isFile())
+        return failure(tr("This file is no picture Arch Dock can read."));
+    // The size alone, before anything is decoded; the processor checks the
+    // limits again on the real picture. A photo its camera stored on its
+    // side is turned upright when it is read, so its size is taken turned.
+    QImageReader reader(sourcePath);
+    reader.setAutoTransform(true);
+    QSize sourceSize = reader.size();
+    if (!sourceSize.isValid() || sourceSize.isEmpty())
+        return failure(tr("This file is no picture Arch Dock can read."));
+    if (reader.transformation() & QImageIOHandler::TransformationRotate90)
+        sourceSize.transpose();
+    const int longest = qMax(sourceSize.width(), sourceSize.height());
+    const qreal scale = qMin<qreal>(1.0, 2048.0 / longest);
+    ArchDock::ThemeAssetProcessingRequest request;
+    request.sourcePath = sourcePath;
+    request.managedOutputRoot = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+        + QStringLiteral("/pictures");
+    request.assetId = QStringLiteral("picture");
+    request.targetSize = QSize(qMax(1, qRound(sourceSize.width() * scale)),
+                               qMax(1, qRound(sourceSize.height() * scale)));
+    request.fit = QStringLiteral("stretch");
+    request.cleanupRequirements = {QStringLiteral("none")};
+    const ArchDock::ThemeAssetProcessingResult processed = ArchDock::ThemeAssetProcessor::process(request);
+    if (!processed.isValid())
+        return failure(tr("The picture could not be imported: %1")
+            .arg(processorFailureMessage(processed, tr("it could not be decoded."))));
+    for (const ArchDock::ThemeAssetDerivative &derivative : processed.derivatives)
+    {
+        if (derivative.role == QStringLiteral("variant"))
+            return {{QStringLiteral("success"), true},
+                    {QStringLiteral("url"), QUrl::fromLocalFile(derivative.absolutePath).toString()},
+                    {QStringLiteral("width"), derivative.pixelSize.width()},
+                    {QStringLiteral("height"), derivative.pixelSize.height()}};
+    }
+    return failure(tr("The picture could not be imported."));
 }
 
 bool PanelRegistry::importTheme(const QString &panelId, const QUrl &sourceUrl)

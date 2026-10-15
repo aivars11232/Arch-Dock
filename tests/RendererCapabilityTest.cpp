@@ -453,6 +453,28 @@ private slots:
                 preceding = material;
                 QTRY_VERIFY(projectionMatches());
             }
+            // A picture on a theme's own mesh is real relief as well: the
+            // mesh is cut finely and rises, and Relief depth changes it.
+            {
+                auto pictured = edited;
+                pictured.insert("panelPicture",
+                    QUrl::fromLocalFile(QFINDTESTDATA("fixtures/pictures/red-blue.png")).toString());
+                pictured.insert("scene3DTexture", "picture");
+                pictured.insert("panelPictureDepth", 0.0);
+                scene->setProperty("panelDefinition", pictured);
+                QTRY_COMPARE(renderer->property("textureMaterial").toString(), QStringLiteral("picture"));
+                QObject *platformNode = renderer->findChild<QObject *>(QStringLiteral("mesh-platform"));
+                QVERIFY(platformNode && objectValue(platformNode->property("reliefMaterial")));
+                QTRY_VERIFY(platformNode->property("risesReady").toBool());
+                QVERIFY(renderer->property("triangleCount").toInt() > expectedTriangles);
+                QTest::qWait(150);
+                const QImage flatPicture = pixels();
+                pictured.insert("panelPictureDepth", 1.0);
+                scene->setProperty("panelDefinition", pictured);
+                QTest::qWait(150);
+                QVERIFY2(!flatPicture.isNull() && pixels() != flatPicture, "Relief depth changes a theme's mesh");
+                QTRY_VERIFY(projectionMatches());
+            }
             edited.insert("scene3DColor", "#dd3399");
             edited.insert("scene3DTexture", "none");
             scene->setProperty("panelDefinition", edited);
@@ -1663,12 +1685,21 @@ private slots:
                 property real fold: 0
                 property real thickness: 1
                 property bool moving: false
-                panelDefinition: ({rendererTier: "true3d", layout: layoutName, layoutRadius: 120,
+                property string picture: ""
+                property string look: ""
+                property real depth: 0.8
+                property string rise: "light"
+                property string direction: "inward"
+                panelDefinition: Object.assign({rendererTier: "true3d", layout: layoutName, layoutRadius: 120,
                                    scene3DQuality: "high", iconSize: 40, layoutPadding: 10,
                                    pathSides: 7, appearance: "neon", scene3DCameraPitch: pitch,
                                    scene3DTransitions: false, scene3DFold: fold, scene3DThickness: thickness,
                                    panelMotionTarget: "items", panelRotationMode: moving ? "clockwise" : "none",
-                                   panelTravelSpeed: 2, panelRotationTrigger: "idle"})
+                                   panelTravelSpeed: 2, panelRotationTrigger: "idle"},
+                                   picture.length ? {panelPicture: picture, scene3DTexture: "picture",
+                                                     panelPictureDepth: depth, panelPictureRise: rise,
+                                                     panelPictureDirection: direction} : {},
+                                   look.length ? {scene3DMaterial: look} : {})
                 entryDelegateContext: ({hostKind: "free"})
                 hostCapabilities: ({rotation: {available: true}})
                 orderedEntries: [0, 1, 2, 3, 4, 5].map(function(index) {
@@ -1862,6 +1893,90 @@ private slots:
         if (!evidence.isEmpty()) {
             QVERIFY(QDir().mkpath(evidence + QStringLiteral("/generated")));
             QVERIFY(seen.save(evidence + QStringLiteral("/generated/") + tag + QStringLiteral("-top.png")));
+        }
+
+        // A picture is worn as it is: the ring shows the picture's own red
+        // and blue, solid and still, with none of the neon look's cyan, metal
+        // or flow laid over it.
+        if (layout == QStringLiteral("ring")) {
+            const QString picture = QFINDTESTDATA("fixtures/pictures/red-blue.png");
+            QVERIFY(!picture.isEmpty());
+            scene->setProperty("picture", QUrl::fromLocalFile(picture).toString());
+            QTRY_COMPARE(renderer->property("textureMaterial").toString(), QStringLiteral("picture"));
+            QTRY_VERIFY_WITH_TIMEOUT(renderer->property("materialTextureReady").toBool(), 5000);
+            QVERIFY(!renderer->property("materialAnimationActive").toBool());
+            const QVariantMap worn = plainValue(renderer->property("platformMaterial")).toMap();
+            QCOMPARE(worn.value(QStringLiteral("vertexColours")).toBool(), false);
+            QCOMPARE(worn.value(QStringLiteral("metalness")).toDouble(), 0.0);
+            QCOMPARE(worn.value(QStringLiteral("opacity")).toDouble(), 1.0);
+            QCOMPARE(worn.value(QStringLiteral("emissiveStrength")).toDouble(), 0.0);
+            QTest::qWait(200);
+            const QImage pictured = pixels();
+            QVERIFY(!pictured.isNull());
+            const QVariantList entries = plainValue(renderer->property("projectedEntryGeometry")).toList();
+            int red = 0, blue = 0, cyan = 0;
+            for (int step = 0; step < 48; ++step) {
+                const double angle = step * M_PI / 24 + 0.05;
+                const QPoint point = drawn(track * std::cos(angle), track * std::sin(angle));
+                bool covered = false;
+                for (const QVariant &value : entries) {
+                    const QVariantMap rect = value.toMap();
+                    covered |= QRectF(rect.value("x").toDouble() - 4, rect.value("y").toDouble() - 4,
+                                      rect.value("width").toDouble() + 8,
+                                      rect.value("height").toDouble() + 8).contains(point);
+                }
+                const QColor colour = pictured.pixelColor(point);
+                if (covered || colour.alpha() < 200) continue;
+                red += colour.red() > colour.green() + 60 && colour.red() > colour.blue() + 60;
+                blue += colour.blue() > colour.green() + 60 && colour.blue() > colour.red() + 60;
+                cyan += colour.green() > colour.red() + 60 && colour.blue() > colour.red() + 60;
+            }
+            QVERIFY2(red >= 3 && blue >= 3 && cyan == 0, qPrintable(QStringLiteral(
+                "%1 red, %2 blue, %3 cyan samples").arg(red).arg(blue).arg(cyan)));
+            if (!evidence.isEmpty())
+                QVERIFY(pictured.save(evidence + QStringLiteral("/generated/") + tag + QStringLiteral("-picture.png")));
+            // It is worn as a real surface, its brightness its height: the
+            // platform's mesh is cut finely and rises as deep as Relief depth.
+            QObject *platformNode = renderer->findChild<QObject *>(QStringLiteral("mesh-platform"));
+            QVERIFY(platformNode);
+            QTRY_VERIFY(platformNode->property("risesReady").toBool());
+            QVERIFY(objectValue(platformNode->property("reliefMaterial")));
+            scene->setProperty("depth", 0.0);
+            QTest::qWait(200);
+            const QImage flat = pixels();
+            scene->setProperty("depth", 1.0);
+            QTest::qWait(200);
+            const QImage deep = pixels();
+            QVERIFY2(!flat.isNull() && flat != deep, "Relief depth changes the drawn surface");
+            // Raising the dark parts instead of the light ones changes it too.
+            scene->setProperty("rise", QStringLiteral("dark"));
+            QTRY_VERIFY(renderer->property("pictureRaisesDark").toBool());
+            QTest::qWait(200);
+            QVERIFY2(pixels() != deep, "Raised parts changes the drawn surface");
+            scene->setProperty("rise", QStringLiteral("light"));
+            // Rising out of the band instead of sinking into it changes it too.
+            scene->setProperty("direction", QStringLiteral("outward"));
+            QTRY_VERIFY(renderer->property("pictureRisesOut").toBool());
+            QTest::qWait(200);
+            QVERIFY2(pixels() != deep, "Relief direction changes the drawn surface");
+            scene->setProperty("direction", QStringLiteral("inward"));
+            if (!evidence.isEmpty()) {
+                QVERIFY(flat.save(evidence + QStringLiteral("/generated/") + tag + QStringLiteral("-picture-flat.png")));
+                QVERIFY(deep.save(evidence + QStringLiteral("/generated/") + tag + QStringLiteral("-picture-deep.png")));
+            }
+            scene->setProperty("depth", 0.8);
+            // Picture as the platform's Look wears it the same way; without a
+            // picture that Look is the theme's own, and the scene stays drawn.
+            scene->setProperty("look", QStringLiteral("picture"));
+            QTRY_COMPARE(renderer->property("materialLook").toString(), QStringLiteral("picture"));
+            QCOMPARE(plainValue(renderer->property("platformMaterial")).toMap()
+                .value(QStringLiteral("vertexColours")).toBool(), false);
+            scene->setProperty("picture", QString());
+            QTRY_VERIFY(renderer->property("textureMaterial").toString() != QStringLiteral("picture"));
+            QCOMPARE(renderer->property("materialLook").toString(), QStringLiteral("theme"));
+            QTRY_VERIFY_WITH_TIMEOUT(renderer->property("materialTextureReady").toBool(), 5000);
+            QVERIFY(renderer->property("rendererReady").toBool());
+            scene->setProperty("look", QString());
         }
 
         // Tilted: icons face the viewer and stand on pedestals above the top.
@@ -3073,7 +3188,9 @@ private slots:
         QVERIFY(QFileInfo::exists(module + QStringLiteral("RendererCapabilityProbe.qml")));
         QCOMPARE(QFileInfo::exists(module + QStringLiteral("optional3d/RendererImportProbe.qml")),
                  ARCHDOCK_QUICK3D_BUILT != 0);
-        for (const QString &file : {QStringLiteral("PanelScene3D.qml"), QStringLiteral("IconStyle3D.qml")})
+        for (const QString &file : {QStringLiteral("PanelScene3D.qml"), QStringLiteral("IconStyle3D.qml"),
+                                    QStringLiteral("PictureRelief.qml"), QStringLiteral("picture-relief.vert"),
+                                    QStringLiteral("picture-relief.frag")})
             QCOMPARE(QFileInfo::exists(module + QStringLiteral("optional3d/") + file),
                      ARCHDOCK_SCENE3D_BUILT != 0);
     }

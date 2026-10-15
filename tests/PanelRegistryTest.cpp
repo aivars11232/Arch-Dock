@@ -24,6 +24,9 @@
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QImage>
+#include <QImageIOHandler>
+#include <QImageReader>
+#include <QImageWriter>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -485,6 +488,10 @@ private slots:
     void concealsOnlyForRelevantActiveWindows();
     void persistsReducedMotionPreference();
     void persistsStudioThemeChoice();
+    void importsPicturesIntoArchDocksOwnFolder();
+    void keepsPicturesAsLocalFiles();
+    void importsTurnedPhotosUpright();
+    void importsGreyPicturesInColour();
     void normalizesLayoutAndMotionValues();
     void separatesVisualChangesFromPanelTopology();
     void filtersEntriesByPanelContentType();
@@ -3162,6 +3169,128 @@ void PanelRegistryTest::persistsStudioThemeChoice()
     QSettings().setValue(QStringLiteral("studio/theme"), QStringLiteral("../../etc"));
     DockSettings garbled;
     QCOMPARE(garbled.studioTheme(), QStringLiteral("classic"));
+}
+
+void PanelRegistryTest::importsPicturesIntoArchDocksOwnFolder()
+{
+    PanelRegistry registry;
+    QTemporaryDir source;
+    QVERIFY(source.isValid());
+    // A wide picture keeps its shape, its longer side brought to 2048.
+    QImage wide(4096, 1024, QImage::Format_RGB32);
+    wide.fill(QColor(QStringLiteral("#3366cc")));
+    const QString widePath = source.filePath(QStringLiteral("wide.png"));
+    QVERIFY(wide.save(widePath));
+    QFile wideFile(widePath);
+    QVERIFY(wideFile.open(QIODevice::ReadOnly));
+    const QByteArray originalBytes = wideFile.readAll();
+    wideFile.close();
+    const QVariantMap imported = registry.importPicture(QUrl::fromLocalFile(widePath));
+    QVERIFY2(imported.value(QStringLiteral("success")).toBool(),
+             qPrintable(imported.value(QStringLiteral("message")).toString()));
+    const QUrl copy(imported.value(QStringLiteral("url")).toString());
+    QVERIFY(copy.isLocalFile());
+    const QString picturesRoot = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+        + QStringLiteral("/pictures/");
+    QVERIFY2(copy.toLocalFile().startsWith(picturesRoot), qPrintable(copy.toLocalFile()));
+    QCOMPARE(QImage(copy.toLocalFile()).size(), QSize(2048, 512));
+    QCOMPARE(imported.value(QStringLiteral("width")).toInt(), 2048);
+    QCOMPARE(imported.value(QStringLiteral("height")).toInt(), 512);
+    // The original is only read.
+    QVERIFY(wideFile.open(QIODevice::ReadOnly));
+    QCOMPARE(wideFile.readAll(), originalBytes);
+    // The same picture again is the same copy.
+    QCOMPARE(registry.importPicture(QUrl::fromLocalFile(widePath)).value(QStringLiteral("url")).toString(),
+             copy.toString());
+    // A small picture keeps its size.
+    QImage small(40, 30, QImage::Format_ARGB32);
+    small.fill(Qt::red);
+    const QString smallPath = source.filePath(QStringLiteral("small.png"));
+    QVERIFY(small.save(smallPath));
+    const QVariantMap kept = registry.importPicture(QUrl::fromLocalFile(smallPath));
+    QVERIFY(kept.value(QStringLiteral("success")).toBool());
+    QCOMPARE(QImage(QUrl(kept.value(QStringLiteral("url")).toString()).toLocalFile()).size(), QSize(40, 30));
+    // Anything else is refused, with a reason.
+    QFile text(source.filePath(QStringLiteral("notes.png")));
+    QVERIFY(text.open(QIODevice::WriteOnly));
+    text.write("not a picture");
+    text.close();
+    for (const QUrl &refused : {QUrl::fromLocalFile(text.fileName()),
+                                QUrl::fromLocalFile(source.filePath(QStringLiteral("missing.png"))),
+                                QUrl(QStringLiteral("https://example.invalid/picture.png"))}) {
+        const QVariantMap result = registry.importPicture(refused);
+        QVERIFY2(!result.value(QStringLiteral("success")).toBool(), qPrintable(refused.toString()));
+        QVERIFY(!result.value(QStringLiteral("message")).toString().isEmpty());
+    }
+}
+
+void PanelRegistryTest::keepsPicturesAsLocalFiles()
+{
+    PanelRegistry registry;
+    const QString panel = QStringLiteral("bottom");
+    registry.setPanelValue(panel, QStringLiteral("iconTilePicture"), QStringLiteral("file:///tmp/archdock-picture.png"));
+    QCOMPARE(registry.panelValue(panel, QStringLiteral("iconTilePicture")).toString(),
+             QStringLiteral("file:///tmp/archdock-picture.png"));
+    // A web address is no picture Arch Dock keeps.
+    registry.setPanelValue(panel, QStringLiteral("iconTilePicture"), QStringLiteral("https://example.invalid/picture.png"));
+    QCOMPARE(registry.panelValue(panel, QStringLiteral("iconTilePicture")).toString(), QString());
+    registry.setPanelValue(panel, QStringLiteral("pedestalPicture"), QStringLiteral("file:///tmp/stand.png"));
+    registry.setPanelValue(panel, QStringLiteral("pedestalTexture"), QStringLiteral("picture"));
+    registry.setPanelValue(panel, QStringLiteral("panelPicture"), QStringLiteral("file:///tmp/panel.png"));
+    PanelRegistry reloaded;
+    QCOMPARE(reloaded.panelValue(panel, QStringLiteral("pedestalPicture")).toString(),
+             QStringLiteral("file:///tmp/stand.png"));
+    QCOMPARE(reloaded.panelValue(panel, QStringLiteral("pedestalTexture")).toString(), QStringLiteral("picture"));
+    QCOMPARE(reloaded.panelValue(panel, QStringLiteral("panelPicture")).toString(), QStringLiteral("file:///tmp/panel.png"));
+}
+
+void PanelRegistryTest::importsTurnedPhotosUpright()
+{
+    // A camera stores a photo taken upright on its side, with a note that
+    // it is to be turned: the copy is upright, in the photo's own shape.
+    QTemporaryDir source;
+    QVERIFY(source.isValid());
+    QImage stored(400, 100, QImage::Format_RGB32);
+    stored.fill(QColor(QStringLiteral("#cc3333")));
+    const QString path = source.filePath(QStringLiteral("turned.tif"));
+    QImageWriter writer(path, "tiff");
+    writer.setTransformation(QImageIOHandler::TransformationRotate90);
+    QVERIFY2(writer.write(stored), qPrintable(writer.errorString()));
+    if (QImageReader(path).transformation() != QImageIOHandler::TransformationRotate90)
+        QSKIP("This Qt writes no turned pictures to test with.");
+    PanelRegistry registry;
+    const QVariantMap imported = registry.importPicture(QUrl::fromLocalFile(path));
+    QVERIFY2(imported.value(QStringLiteral("success")).toBool(),
+             qPrintable(imported.value(QStringLiteral("message")).toString()));
+    QCOMPARE(imported.value(QStringLiteral("width")).toInt(), 100);
+    QCOMPARE(imported.value(QStringLiteral("height")).toInt(), 400);
+    QCOMPARE(QImage(QUrl(imported.value(QStringLiteral("url")).toString()).toLocalFile()).size(), QSize(100, 400));
+    // Anything but a plain file, a folder among others, is refused at once.
+    const QVariantMap folder = registry.importPicture(QUrl::fromLocalFile(source.path()));
+    QVERIFY(!folder.value(QStringLiteral("success")).toBool());
+    QVERIFY(!folder.value(QStringLiteral("message")).toString().isEmpty());
+}
+
+void PanelRegistryTest::importsGreyPicturesInColour()
+{
+    // A black and white picture comes in as a colour one, since a 3D
+    // panel's relief reads the picture's three colours from the file.
+    QTemporaryDir source;
+    QVERIFY(source.isValid());
+    QImage grey(64, 32, QImage::Format_Grayscale8);
+    grey.fill(128);
+    const QString path = source.filePath(QStringLiteral("grey.png"));
+    QVERIFY(grey.save(path));
+    QCOMPARE(QImageReader(path).imageFormat(), QImage::Format_Grayscale8);
+    PanelRegistry registry;
+    const QVariantMap imported = registry.importPicture(QUrl::fromLocalFile(path));
+    QVERIFY2(imported.value(QStringLiteral("success")).toBool(),
+             qPrintable(imported.value(QStringLiteral("message")).toString()));
+    const QImage::Format format
+        = QImageReader(QUrl(imported.value(QStringLiteral("url")).toString()).toLocalFile()).imageFormat();
+    QVERIFY2(format != QImage::Format_Grayscale8 && format != QImage::Format_Grayscale16
+                 && format != QImage::Format_Indexed8 && format != QImage::Format_Mono,
+             qPrintable(QString::number(int(format))));
 }
 
 void PanelRegistryTest::normalizesLayoutAndMotionValues()

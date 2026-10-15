@@ -340,6 +340,7 @@ private slots:
     void studioFolderItemNames_data();
     void studioFolderItemNames();
     void studioPlainSurfaceOffers3DWhereItWorks();
+    void studioPicturesComeAndGo();
     void wholePanelRotationFieldsAreGatedByTheResolver();
     void studioMotionAndDirectionRows();
     void studioPagePictures();
@@ -1072,6 +1073,116 @@ void PanelWindowCapabilityTest::studioPlainSurfaceOffers3DWhereItWorks()
     QCOMPARE(popup->property("subTabIndex").toInt(), 6);
     QCOMPARE(registry->panelDefinition(panel)->toPersistedMap(), before);
     QVERIFY(!popup->property("hasPendingChanges").toBool());
+}
+
+void PanelWindowCapabilityTest::studioPicturesComeAndGo()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"appearance", "neon"}, {"iconTilesEnabled", false}}).value("success").toBool());
+    const auto before = registry->panelDefinition(panel)->toPersistedMap();
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> popup(component.createWithInitialProperties({
+        {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 2}}));
+    QVERIFY(popup);
+    const auto value = [&](const QString &key) {
+        QVariant result;
+        QMetaObject::invokeMethod(popup.get(), "panelValue", Q_RETURN_ARG(QVariant, result),
+            Q_ARG(QVariant, key), Q_ARG(QVariant, QVariant()));
+        return result;
+    };
+    // What the file chooser hands over for the row it was opened for.
+    const auto use = [&](const QString &key, const QString &file) {
+        popup->setProperty("pictureRow", QVariantMap{{"key", key}});
+        return QMetaObject::invokeMethod(popup.get(), "usePicture",
+            Q_ARG(QVariant, QUrl::fromLocalFile(file).toString()));
+    };
+    const auto remove = [&](const QString &key) {
+        const QVariant row = QVariantMap{{"key", key}};
+        return QMetaObject::invokeMethod(popup.get(), "removePicture", Q_ARG(QVariant, row));
+    };
+    const QString picture = QFINDTESTDATA("fixtures/pictures/red-blue.png");
+    QVERIFY(!picture.isEmpty());
+
+    // The panel wears Arch Dock's own copy as its look, and is Neon again
+    // once the picture is removed.
+    QVERIFY(use("panelPicture", picture));
+    QCOMPARE(popup->property("studioError").toString(), QString{});
+    const QUrl copy(value("panelPicture").toString());
+    QVERIFY2(copy.isLocalFile() && copy.toLocalFile() != picture, qPrintable(copy.toString()));
+    QVERIFY(QFile::exists(copy.toLocalFile()));
+    QCOMPARE(value("appearance").toString(), QStringLiteral("picture"));
+    // A panel wearing a picture has no glow to set, as stone does not glow.
+    QVariant offered;
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "fieldOffered", Q_RETURN_ARG(QVariant, offered),
+        Q_ARG(QVariant, QStringLiteral("panelGlow"))));
+    QVERIFY(!offered.toBool());
+    QVERIFY(remove("panelPicture"));
+    QCOMPARE(value("panelPicture").toString(), QString{});
+    QCOMPARE(value("appearance").toString(), QStringLiteral("neon"));
+
+    // Tiles are turned on to show it, and wear their texture again after.
+    const QString tileTexture = value("iconTileTexture").toString();
+    QVERIFY(use("iconTilePicture", picture));
+    QCOMPARE(value("iconTilesEnabled").toBool(), true);
+    QCOMPARE(value("iconTileTexture").toString(), QStringLiteral("picture"));
+    QVERIFY(remove("iconTilePicture"));
+    QCOMPARE(value("iconTileTexture").toString(), tileTexture);
+
+    // A stand gets a shape to wear it on, and Picture as its Look.
+    QVERIFY(use("pedestalPicture", picture));
+    QCOMPARE(value("pedestalShape").toString(), QStringLiteral("disc"));
+    QCOMPARE(value("pedestalMaterial").toString(), QStringLiteral("picture"));
+    QCOMPARE(value("pedestalTexture").toString(), QStringLiteral("material"));
+
+    // A file that is no picture is refused with a message and changes nothing.
+    QTemporaryDir files;
+    QVERIFY(files.isValid());
+    const QString notAPicture = files.filePath(QStringLiteral("notes.png"));
+    {
+        QFile file(notAPicture);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("not a picture");
+    }
+    QVERIFY(use("panelPicture", notAPicture));
+    QVERIFY(!popup->property("studioError").toString().isEmpty());
+    QCOMPARE(value("panelPicture").toString(), QString{});
+    QCOMPARE(value("appearance").toString(), QStringLiteral("neon"));
+
+    // Nothing is saved before Apply.
+    QCOMPARE(registry->panelDefinition(panel)->toPersistedMap(), before);
+
+    // Picture chosen in the tiles' Look list leaves their 3D finish a plain
+    // one where the tiles have one (none without 3D, as here), and Apply
+    // keeps it all.
+    const auto set = [&](const QString &key, const QVariant &to) {
+        const QVariant field = QVariantMap{{"key", key}, {"scope", "panel"}};
+        return QMetaObject::invokeMethod(popup.get(), "setFieldValue", Q_ARG(QVariant, field), Q_ARG(QVariant, to));
+    };
+    const QJSValue tileFinish = popup->property("lookPairs").value<QJSValue>()
+        .property(QStringLiteral("iconTileTexture")).property(QStringLiteral("value"));
+    QVERIFY(tileFinish.isCallable());
+    QCOMPARE(tileFinish.call({QJSValue(QStringLiteral("picture"))}).toString(), QStringLiteral("minimal"));
+    QVERIFY(use("iconTilePicture", picture));
+    QVERIFY(set("iconTileTexture", "none"));
+    QVERIFY(set("iconTileTexture", "picture"));
+    QCOMPARE(value("iconTileTexture").toString(), QStringLiteral("picture"));
+    QVariant applied;
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "applyStudioChanges", Q_RETURN_ARG(QVariant, applied)));
+    QVERIFY2(applied.toBool(), qPrintable(popup->property("studioError").toString()));
+    PanelRegistry saved;
+    QCOMPARE(saved.panelValue(panel, "iconTileTexture").toString(), QStringLiteral("picture"));
+    QCOMPARE(saved.panelValue(panel, "iconTileMaterial").toString(), QStringLiteral("minimal"));
+    QCOMPARE(saved.panelValue(panel, "pedestalMaterial").toString(), QStringLiteral("picture"));
+    QVERIFY(QUrl(saved.panelValue(panel, "iconTilePicture").toString()).isLocalFile());
+    QCOMPARE(saved.panelValue(panel, "appearance").toString(), QStringLiteral("neon"));
 }
 
 void PanelWindowCapabilityTest::studioIconTiles()
@@ -2896,12 +3007,16 @@ void PanelWindowCapabilityTest::cleanup()
     settings.clear();
     settings.sync();
 
-    const QString themesRoot = QDir(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
-                                   .filePath(QStringLiteral("themes"));
-    if (QFileInfo::exists(themesRoot))
+    // Imported themes and pictures, in the tests' own data folder.
+    for (const QString &managed : {QStringLiteral("themes"), QStringLiteral("pictures")})
     {
-        QVERIFY2(QDir(themesRoot).removeRecursively(), qPrintable(themesRoot));
+        const QString root = QDir(
+            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
+                                 .filePath(managed);
+        if (QFileInfo::exists(root))
+        {
+            QVERIFY2(QDir(root).removeRecursively(), qPrintable(root));
+        }
     }
 }
 
@@ -4899,7 +5014,8 @@ void PanelWindowCapabilityTest::studioPagePictures()
     struct Page { int section; int page; const char *name; };
     for (const Page &page : {Page{1, 0, "panels-general"}, Page{1, 2, "panels-appearance"},
                              Page{1, 4, "panels-layout"}, Page{1, 6, "panels-presets"},
-                             Page{2, 0, "icons-appearance"}, Page{4, 0, "pedestals"}}) {
+                             Page{2, 0, "icons-appearance"}, Page{3, 0, "icon-tiles"},
+                             Page{4, 0, "pedestals"}}) {
         std::unique_ptr<QObject> studio(component.createWithInitialProperties({
             {"selectedPanelId", panel}, {"mainTabIndex", page.section}, {"subTabIndex", page.page}}));
         auto *window = qobject_cast<QQuickWindow *>(studio.get());
@@ -4975,6 +5091,51 @@ void PanelWindowCapabilityTest::studioPagePictures()
             }
         }
     }
+    // The pages with pictures imported: the panel's look, its stands' and
+    // its tiles', from a copy Arch Dock makes of a KDE wallpaper
+    // (or of the test picture where the wallpaper is not installed).
+    {
+        const QString wallpaper = QStringLiteral("/usr/share/wallpapers/ColorfulCups/contents/images/2560x1600.jpg");
+        const QString source = QFile::exists(wallpaper) ? wallpaper : QFINDTESTDATA("fixtures/pictures/red-blue.png");
+        const QVariantMap copy = registry->importPicture(QUrl::fromLocalFile(source));
+        QVERIFY2(copy.value("success").toBool(), qPrintable(copy.value("message").toString()));
+        const QString picture = copy.value("url").toString();
+        const QVariantMap applied = backend.applyPanelSettingsTransaction(panel,
+            registry->panelDefinition(panel)->settingsRevision,
+            {{"panelPicture", picture}, {"appearance", "picture"}, {"pedestalShape", "disc"},
+             {"pedestalPicture", picture}, {"pedestalMaterial", "picture"}, {"iconTilesEnabled", true},
+             {"iconTileMode", "custom"}, {"iconTilePicture", picture}, {"iconTileTexture", "picture"}});
+        QVERIFY2(applied.value("success").toBool(), qPrintable(QJsonDocument::fromVariant(applied).toJson()));
+        for (const Page &page : {Page{1, 2, "pictures-panels-appearance"}, Page{3, 0, "pictures-icon-tiles"},
+                                 Page{4, 0, "pictures-pedestals"}}) {
+            std::unique_ptr<QObject> studio(component.createWithInitialProperties({
+                {"selectedPanelId", panel}, {"mainTabIndex", page.section}, {"subTabIndex", page.page}}));
+            auto *window = qobject_cast<QQuickWindow *>(studio.get());
+            QVERIFY(window);
+            window->show();
+            QVERIFY(QTest::qWaitForWindowExposed(window));
+            QTest::qWait(1500);
+            QVERIFY(window->grabWindow().save(folder + QLatin1Char('/') + QLatin1String(page.name) + ".png"));
+            if (page.section != 1) {
+                // Again with the page scrolled to its Picture row.
+                const QString key = page.section == 3 ? QStringLiteral("iconTilePicture")
+                                                      : QStringLiteral("pedestalPicture");
+                QQuickItem *scroll = visibleItem(window, "studio-page-scroll");
+                QQuickItem *row = visibleItem(window, "studio-picture-import-" + key);
+                QVERIFY(scroll && row);
+                auto *flick = scroll->property("contentItem").value<QQuickItem *>();
+                QVERIFY(flick);
+                auto *content = flick->property("contentItem").value<QQuickItem *>();
+                QVERIFY(content);
+                const qreal y = row->mapToItem(content, QPointF(0, 0)).y();
+                flick->setProperty("contentY", qBound(0.0, y - flick->height() / 3,
+                    qMax(0.0, flick->property("contentHeight").toReal() - flick->height())));
+                QTest::qWait(600);
+                QVERIFY(window->grabWindow().save(folder + QLatin1Char('/') + QLatin1String(page.name) + "-2.png"));
+            }
+            window->close();
+        }
+    }
     // The Profiles page with a saved profile, and that profile's panel open
     // in Panel Studio.
     {
@@ -5023,6 +5184,39 @@ void PanelWindowCapabilityTest::studioPagePictures()
         QVERIFY(QTest::qWaitForWindowExposed(window));
         QTest::qWait(1500);
         QVERIFY(window->grabWindow().save(folder + QLatin1Char('/') + QLatin1String(page.name) + ".png"));
+        window->close();
+    }
+    // The same 3D panel wearing a picture in relief, scrolled to its Picture
+    // row and Relief depth.
+    {
+        const QString wallpaper = QStringLiteral("/usr/share/wallpapers/Grey/contents/images/2560x1600.jpg");
+        const QString source = QFile::exists(wallpaper) ? wallpaper : QFINDTESTDATA("fixtures/pictures/red-blue.png");
+        const QVariantMap copy = registry->importPicture(QUrl::fromLocalFile(source));
+        QVERIFY2(copy.value("success").toBool(), qPrintable(copy.value("message").toString()));
+        const QVariantMap applied = backend.applyPanelSettingsTransaction(platformPanel,
+            registry->panelDefinition(platformPanel)->settingsRevision,
+            {{"panelPicture", copy.value("url")}, {"scene3DMaterial", "picture"}, {"scene3DTexture", "picture"},
+             {"panelPictureDepth", 0.8}});
+        QVERIFY2(applied.value("success").toBool(), qPrintable(QJsonDocument::fromVariant(applied).toJson()));
+        std::unique_ptr<QObject> studio(component.createWithInitialProperties({
+            {"selectedPanelId", platformPanel}, {"mainTabIndex", 1}, {"subTabIndex", 2}}));
+        auto *window = qobject_cast<QQuickWindow *>(studio.get());
+        QVERIFY(window);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QTest::qWait(1500);
+        QQuickItem *scroll = visibleItem(window, "studio-page-scroll");
+        QQuickItem *row = visibleItem(window, "studio-picture-import-panelPicture");
+        QVERIFY(scroll && row);
+        auto *flick = scroll->property("contentItem").value<QQuickItem *>();
+        QVERIFY(flick);
+        auto *content = flick->property("contentItem").value<QQuickItem *>();
+        QVERIFY(content);
+        const qreal y = row->mapToItem(content, QPointF(0, 0)).y();
+        flick->setProperty("contentY", qBound(0.0, y - flick->height() / 3,
+            qMax(0.0, flick->property("contentHeight").toReal() - flick->height())));
+        QTest::qWait(800);
+        QVERIFY(window->grabWindow().save(folder + "/pictures-panels-appearance-3d.png"));
         window->close();
     }
 }

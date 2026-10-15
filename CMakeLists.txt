@@ -133,7 +133,10 @@ set(ARCHDOCK_RENDERING_MODULE_SOURCES)
 set(ARCHDOCK_OPTIONAL_RENDERING_FILES
     optional3d/RendererImportProbe.qml
     optional3d/PanelScene3D.qml
-    optional3d/IconStyle3D.qml)
+    optional3d/IconStyle3D.qml
+    optional3d/PictureRelief.qml
+    optional3d/picture-relief.vert
+    optional3d/picture-relief.frag)
 # These are owned build outputs. Remove stale optional files on ON -> OFF.
 foreach(rendering_file IN LISTS ARCHDOCK_OPTIONAL_RENDERING_FILES)
   if(NOT ARCHDOCK_QUICK3D_BUILT)

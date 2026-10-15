@@ -94,8 +94,21 @@ Item {
     property string appearance: ""
     property string customColor: ""
     readonly property var materialNames: ["glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
-        "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"]
+        "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "picture"]
+    // Pictures the user imported for the "picture" look: the platform's
+    // and the stands', Arch Dock's copies of them.
+    readonly property string panelPicture: String((sceneDefinition || ({})).panelPicture || "")
+    readonly property string pedestalPicture: String((sceneDefinition || ({})).pedestalPicture || "")
+    // A look's texture: its own file, in its palette, or for "picture" the
+    // imported picture.
+    function lookTextureSource(look, palette, picture) {
+        if (look === "picture")
+            return picture
+        return Qt.resolvedUrl("../materials/" + LayoutEngine.lookTexture(look, palette) + ".png")
+    }
+    // Picture without a picture is the theme's own look.
     readonly property string materialLook: materialNames.includes(String(sceneDefinition.materialLook))
+        && (String(sceneDefinition.materialLook) !== "picture" || panelPicture.length)
         ? String(sceneDefinition.materialLook) : "theme"
     readonly property string materialColour: PlatformGeometry.parseColour(sceneDefinition.materialColor)
         ? String(sceneDefinition.materialColor) : ""
@@ -106,17 +119,19 @@ Item {
     readonly property string effectiveMaterialLook: materialLook !== "theme" ? materialLook
         : generatedSpec && !textureRequired
             ? LayoutEngine.themeStyle(appearance, "", 48).material : "theme"
+    // Picture without a picture is the panel's own look.
     readonly property string textureChoice: ["theme", "none"].concat(materialNames)
-        .includes(String(sceneDefinition.materialTexture)) ? String(sceneDefinition.materialTexture) : "theme"
+        .includes(String(sceneDefinition.materialTexture))
+        && (String(sceneDefinition.materialTexture) !== "picture" || panelPicture.length)
+        ? String(sceneDefinition.materialTexture) : "theme"
     readonly property string textureMaterial: textureChoice === "none" ? ""
         : textureChoice !== "theme" ? textureChoice
         : materialLook !== "theme" ? materialLook
         : generatedSpec && !textureRequired
             ? LayoutEngine.themeStyle(appearance, "", 48).material : ""
     readonly property url materialTextureSource: textureMaterial.length
-        ? Qt.resolvedUrl("../materials/" + LayoutEngine.lookTexture(textureMaterial, lookPalette(textureMaterial, "panel"))
-                         + ".png") : ""
-    readonly property url materialNormalSource: textureMaterial.length
+        ? lookTextureSource(textureMaterial, lookPalette(textureMaterial, "panel"), panelPicture) : ""
+    readonly property url materialNormalSource: textureMaterial.length && textureMaterial !== "picture"
         ? Qt.resolvedUrl("../materials/" + textureMaterial + "-normal.png") : ""
     // The energy looks flow round the band while the scene is animated.
     property real flowOffset: 0
@@ -139,7 +154,10 @@ Item {
     readonly property bool materialTextureReady: !textureMaterial.length
         || (clearLooks.includes(textureMaterial) ? panelLightning.ready : materialImage.status === Image.Ready)
         || (shownOnce && materialImage.status !== Image.Error)
+    // A picture holds still: it does not flow or breathe like a look's own
+    // texture.
     readonly property bool materialAnimationActive: effectiveMaterialLook !== "theme"
+        && textureMaterial !== "picture"
         && LayoutEngine.themeStyle(effectiveMaterialLook, "", 48).animated
         && motionAllowed && visible && !sceneConcealed && !reducedMotion
     property real materialPulse: 0
@@ -224,13 +242,36 @@ Item {
     readonly property real resolvedBand: bandAuto ? flatLineBand : bandSetting
     readonly property real platformThickness: transformValue("thickness", 1, 0.05, 20)
         * (bandAuto ? Math.max(0.4, Math.min(1, resolvedBand / 0.11)) : 1)
-    readonly property string generatedKey: generatedShape ? JSON.stringify({
+    // A platform wearing a picture wears it as a real surface, its
+    // brightness its height (PictureRelief), as deep as Relief depth: traced
+    // per pixel on any platform, and a generated one's mesh is cut finely
+    // enough to rise with it as well.
+    readonly property bool pictureRelief: textureMaterial === "picture" && panelPicture.length > 0
+    // Relief depth 0.8, the default, sinks the gaps 0.08 of the scene's
+    // units; 1 is a little deeper, the band never worn thin.
+    readonly property real pictureDepth: bounded("panelPictureDepth", 0.8, 0, 1) * 0.1
+    // Which parts of the picture stand out: its light ones, or its dark ones;
+    // and whether they rise out of the band or the rest sinks into it.
+    readonly property bool pictureRaisesDark: String((sceneDefinition || ({})).panelPictureRise || "light") === "dark"
+    readonly property bool pictureRisesOut: String((sceneDefinition || ({})).panelPictureDirection || "inward") === "outward"
+    // A picture keeps its own proportions round the band: a wide one
+    // repeats fewer times, so it is never squeezed into a square.
+    readonly property int pictureRepeats: !generatedPlatform ? 1
+        : materialImage.implicitHeight > 0
+            ? Math.max(1, Math.round(Number(generatedPlatform.textureRepeats || 1)
+                * materialImage.implicitHeight / Math.max(1, materialImage.implicitWidth)))
+            : Number(generatedPlatform.textureRepeats || 1)
+    readonly property string generatedKey: generatedShape ? JSON.stringify(Object.assign({
         shape: generatedShape, band: resolvedBand,
-        bend: bounded("bend", 0, -1, 1), palette: generatedPalette }) : ""
+        bend: bounded("bend", 0, -1, 1), palette: generatedPalette }, pictureRelief ? { relief: true } : {})) : ""
     readonly property var generatedPlatform: generatedKey.length > 0
         ? PlatformGeometry.platform(JSON.parse(generatedKey)) : null
+    // A theme's own mesh wearing a picture is cut finely enough for its
+    // relief to be real geometry.
+    readonly property var themeReliefMesh: pictureRelief && !generatedSpec
+        ? PlatformGeometry.reliefMesh((sceneResources || ({})).mesh || null, 0.015) : null
     readonly property var basePlatformMesh: generatedSpec ? generatedPlatform
-        : (sceneResources || ({})).mesh || null
+        : themeReliefMesh || (sceneResources || ({})).mesh || null
     readonly property real baseTopHeight: generatedSpec ? PlatformGeometry.topHeight
         : Math.max(0, ...((basePlatformMesh || {}).positions || []).map(p => Number(p[2])))
     readonly property real platformFold: bounded("fold", 0, -1, 1)
@@ -270,6 +311,8 @@ Item {
                 material.emissiveColor = materialColour || "#ffffff"
             }
         }
+        if (textureMaterial === "picture")
+            wearPicture(material)
         return material
     }
     // The theme's own surface texture, for everything drawn in its material:
@@ -294,7 +337,7 @@ Item {
     // material, the 3D page's Pedestal height tall, the icon on its top;
     // "none", the default, draws none.
     readonly property var materialLooks: ["glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
-        "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"]
+        "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "picture"]
     readonly property string pedestalShape: String((sceneDefinition || ({})).pedestalShape || "none").toLowerCase()
     readonly property string pedestalKind: pedestalShape === "auto" ? "column"
         : PlatformGeometry.pedestalShapes.includes(pedestalShape) ? pedestalShape : "none"
@@ -310,8 +353,10 @@ Item {
     readonly property string pedestalColour: String((sceneDefinition || ({})).pedestalColor || "")
     readonly property string pedestalAnimation: String((sceneDefinition || ({})).pedestalAnimation || "none").toLowerCase()
     readonly property real pedestalAnimationSpeed: bounded("pedestalAnimationSpeed", 1, 0.1, 5)
+    // Picture without a picture is the panel's look.
     readonly property bool pedestalOwnMaterial: pedestalDrawn && pedestalMaterialLook !== "panel"
         && materialLooks.includes(pedestalMaterialLook)
+        && (pedestalMaterialLook !== "picture" || pedestalPicture.length)
     // Its look from a little above, in its icon's frame: the top shows.
     readonly property real pedestalTilt: 20
     readonly property var pedestalMesh: PlatformGeometry.pedestalShape(pedestalDrawn ? pedestalKind : "column", 24)
@@ -328,12 +373,15 @@ Item {
     // glow; its texture: the material's own, none, or a look's.
     readonly property string pedestalTextureLook: pedestalTextureChoice === "material"
         ? (pedestalOwnMaterial ? pedestalMaterialLook : "panel")
+        : pedestalTextureChoice === "picture" && !pedestalPicture.length ? "panel"
         : pedestalTextureChoice === "none" || materialLooks.includes(pedestalTextureChoice)
             ? pedestalTextureChoice : "panel"
     readonly property var pedestalMaterialData: {
         const base = Object.assign({}, pedestalOwnMaterial
             ? materialForLook(pedestalMaterialLook, pedestalColour) : platformMaterial || ({}))
         if (!pedestalOwnMaterial && pedestalColour.length) base.baseColor = pedestalColour
+        if (pedestalTextureLook === "picture")
+            wearPicture(base)
         base.opacity = Math.min(Number(base.opacity === undefined ? 1 : base.opacity), pedestalOpacity)
         // A palette of its own paints the stand's look in its own colours.
         if (LayoutEngine.lookTexture(pedestalTextureLook, pedestalPalette) !== pedestalTextureLook) {
@@ -356,7 +404,8 @@ Item {
     // brighter than white round it. The shell stands a little out of the
     // stand on every side, centred on it, and is seen only from inside, so
     // it shows round the stand's edges and never over its faces.
-    readonly property real pedestalGlowAmount: !pedestalDrawn ? 0
+    // A stand wearing a picture does not glow, as stone does not.
+    readonly property real pedestalGlowAmount: !pedestalDrawn || pedestalTextureLook === "picture" ? 0
         : pedestalAnimation === "glow" ? Math.max(0.5, pedestalGlow) : pedestalGlow
     readonly property string pedestalGlowColour: String((sceneDefinition || ({})).pedestalGlowColor || "")
     readonly property var pedestalGlowRgb: PlatformGeometry.parseColour(pedestalGlowColour.length
@@ -373,8 +422,9 @@ Item {
     readonly property vector3d pedestalGlowLight: glowLight(pedestalGlowRgb, pedestalGlowAmount)
     // The panel's own glow, light round its shape: in its colour or its
     // look's line colour, from a shell of the platform pushed out along its
-    // surface, so a ring glows on its inner and outer edges alike.
-    readonly property real panelGlowAmount: bounded("panelGlow", 0, 0, 1)
+    // surface, so a ring glows on its inner and outer edges alike. A panel
+    // wearing a picture does not glow, as stone does not.
+    readonly property real panelGlowAmount: pictureRelief ? 0 : bounded("panelGlow", 0, 0, 1)
     readonly property var panelGlowRgb: PlatformGeometry.parseColour(
         String((sceneDefinition || ({})).panelGlowColor || "").length
             ? String(sceneDefinition.panelGlowColor) : materialColour.length ? materialColour
@@ -470,10 +520,9 @@ Item {
     readonly property bool pedestalOwnTexture: pedestalDrawn && pedestalTextureLook !== "panel"
         && pedestalTextureLook !== "none"
     readonly property url pedestalTextureSource: pedestalOwnTexture
-        ? Qt.resolvedUrl("../materials/" + LayoutEngine.lookTexture(pedestalTextureLook,
-                                                                    lookPalette(pedestalTextureLook, "pedestal")) + ".png")
+        ? lookTextureSource(pedestalTextureLook, lookPalette(pedestalTextureLook, "pedestal"), pedestalPicture)
         : ""
-    readonly property url pedestalNormalSource: pedestalOwnTexture
+    readonly property url pedestalNormalSource: pedestalOwnTexture && pedestalTextureLook !== "picture"
         ? Qt.resolvedUrl("../materials/" + pedestalTextureLook + "-normal.png") : ""
     readonly property Texture pedestalTexture: pedestalTextureLook === "none" ? null
         : pedestalOwnTexture ? ((clearLooks.includes(pedestalTextureLook) ? standLightning.ready
@@ -552,6 +601,21 @@ Item {
         : pedestalKind === "column" ? 0.4 * pedestalThickness / 0.18 : pedestalThickness
     readonly property var pedestalExtentsUnit: PlatformGeometry.pedestalExtents(pedestalDrawn ? pedestalKind : "column",
         pedestalStretch, [pedestalAxis.x, pedestalAxis.y, pedestalAxis.z], iconRight.z, iconUp.z, iconForward.z)
+    // A picture is worn as it is: in its own colours and solid, with no
+    // tint, vertex shades, metal sheen or look glow laid over it. The rim
+    // keeps the look's own colour and glow.
+    function wearPicture(material) {
+        material.baseColor = "#ffffff"
+        material.vertexColours = false
+        material.metalness = 0
+        material.roughness = 0.6
+        material.opacity = 1
+        material.alphaBlend = false
+        material.emissiveColor = "#000000"
+        material.emissiveStrength = 0
+        material.emissiveThroughTexture = false
+        return material
+    }
     // A look's material properties, as the platform takes them for a chosen
     // look: metalness, roughness, opacity and an energy look's glow.
     function materialForLook(look, colour) {
@@ -2037,10 +2101,13 @@ Item {
             // A generated platform wraps the texture round its band, as
             // many times along it as keep the texture's scale the same both
             // ways; a theme's mesh maps its texture as the theme authored it.
-            scaleU: root.generatedPlatform ? Number(root.generatedPlatform.textureRepeats || 1) : 1
+            scaleU: !root.generatedPlatform ? 1
+                : root.textureMaterial === "picture" ? root.pictureRepeats
+                : Number(root.generatedPlatform.textureRepeats || 1)
             tilingModeHorizontal: Texture.Repeat
             tilingModeVertical: Texture.Repeat
-            positionU: root.flowOffset + (root.textureMaterial === "lightning" ? root.lightningShift : 0)
+            positionU: root.textureMaterial === "picture" ? 0
+                : root.flowOffset + (root.textureMaterial === "lightning" ? root.lightningShift : 0)
         }
         Texture {
             id: selectedPedestalTexture
@@ -2081,6 +2148,34 @@ Item {
                 ? textureImage : null
             generateMipmaps: true
             mipFilter: Texture.Linear
+        }
+        // The picture a generated platform wears as a real surface, at its
+        // full size, with the blurred halvings its rise follows.
+        Texture {
+            id: pictureReliefTexture
+            source: root.pictureRelief ? root.panelPicture : ""
+            generateMipmaps: true
+            mipFilter: Texture.Linear
+            tilingModeHorizontal: Texture.Repeat
+            tilingModeVertical: Texture.Repeat
+        }
+        PictureRelief {
+            id: platformRelief
+            pictureMap: TextureInput {
+                texture: pictureReliefTexture
+                enabled: root.pictureRelief
+            }
+            repeatU: root.pictureRepeats
+            lengthU: root.generatedPlatform ? Number(root.generatedPlatform.alongLength || 1) : 1
+            lengthV: root.generatedPlatform ? Number(root.generatedPlatform.sectionLength || 1) : 1
+            reliefDepth: root.pictureDepth
+            keyLightDirection: keyLight.forward.times(-1)
+            // A theme's own mesh gets the picture at a generated band's
+            // scale, about one picture across 0.9 of the scene's units.
+            boxScale: root.generatedPlatform ? 0 : 1.1
+            reliefInvert: root.pictureRaisesDark ? 1 : 0
+            reliefOutward: root.pictureRisesOut ? 1 : 0
+            meshStep: Number((root.platformMesh || ({})).meshStep || 0.02)
         }
         // Tilt first, then turn about the tilted view's own up: tilted 90
         // degrees the panel lies level whatever its turn, which then spins
@@ -2780,6 +2875,7 @@ Item {
                 materialData: root.platformMaterial
                 surfaceTexture: root.themeTexture
                 surfaceNormalTexture: root.themeNormalTexture
+                reliefMaterial: root.pictureRelief ? platformRelief : null
                 emissionScale: root.emissionScale
                 IconStyle3D {
                     objectName: "mesh-platform-glow"
@@ -2923,6 +3019,7 @@ Item {
         }
         // Lights stay in world space; only the platform and its icons move.
         DirectionalLight {
+            id: keyLight
             objectName: "mesh-key-light"
             eulerRotation: Qt.vector3d(-35, -35, 0)
             brightness: root.bounded("keyLightBrightness", 1, 0, 4)

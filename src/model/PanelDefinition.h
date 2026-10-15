@@ -256,6 +256,9 @@ struct PanelSurfaceDefinition
     QVariantMap parameters2D;
     QVariantMap parameters2_5D;
     QVariantMap parameters3D;
+    // A picture the user imported for the panel's own look ("picture"), as
+    // the file URL of Arch Dock's copy of it.
+    QString picture;
 
     QString themeAsset;
     QString themeSource;
@@ -310,6 +313,8 @@ struct PanelIconStyleDefinition
     QString tileBorderColor = QStringLiteral("#94a3b8");
     qreal tileBorderWidth = 1.0;
     QString tileTexture = QStringLiteral("none");
+    // A picture the user imported for the tiles to wear (texture "picture").
+    QString tilePicture;
     qreal tileThickness = 0.0;
     qreal tileIconOffsetX = 0.0;
     qreal tileIconOffsetY = 0.0;
