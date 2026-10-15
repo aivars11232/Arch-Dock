@@ -175,11 +175,15 @@ logos").
   `runtime-ui-interaction-smoke`, `path-travel-smoke` (twice), with
   `studio-themes-test` and `studio-navigation-test`; the audition matrix
   failed again at its known step S13.
-- Complete suite on the final files (`30-full-suite.log`): **not finished.**
-  The owner paused the work on 2026-10-15 and asked for commit and sync; the
-  run was stopped after 36 of 121 tests, all of them passing. This piece is
-  committed as it stands; still to do: the complete suite once more, then
-  the recheck on a fresh clone (Report 2).
+- Complete suite on the committed files (`30-full-suite.log`, 96489f9): 119
+  of 121 in 2535 s. An earlier run was stopped when the owner paused the work,
+  while `panel-window-capability-test` was running; one of its tests had saved
+  a profile ("Work", 03:38:36) in the tests' own data folder and was killed
+  before its cleanup. That leftover made `profileServicePersistsAndHonorsPanelGuards`
+  find a profile at its start in this run. With the file removed, the whole
+  capability test passes again and leaves no profile behind
+  (`31-capability-rerun.log`). The other failure is the known restart race of
+  `preset-audition-matrix-defaults` in step S13.
 
 ### Questions for the owner
 
@@ -196,3 +200,24 @@ In `docs/KNOWN_LIMITATIONS.md`: KDE's own dialogs opened from Panel Studio
 drawn again when Panel Studio is resized; a pinned file or folder that no
 longer exists is not drawn but keeps its place in the icon limit, so a drive
 that is unmounted for a while cannot let a panel overfill when it returns.
+
+## Report 2 - recheck
+
+- A fresh clone of origin/main at `96489f9`, configured and built with one
+  job (1463 s, `41`/`42-recheck-*.log`), passed the 21 focused tests
+  (`43-recheck-tests.log`): panel-model, profile-store,
+  profile-apply-transaction, profile-manager, preset-preview-session,
+  preset-library, panel-settings-schema, panel-settings-transaction,
+  panel-registry, panel-window-capability, live-panel-preview,
+  studio-truth-matrix-smoke, runtime-ui-interaction-smoke,
+  studio-preview-contract, preset-browser, preset-audition, profile-page,
+  studio-navigation, studio-themes, settings-editor-model and
+  configuration-upgrade.
+- All 667 committed files are the same in the clone and in the workspace
+  (`44-recheck-source-compare.txt`).
+- No crash reporter was left by any private test session.
+
+Piece 4 is closed. Work stops here at the owner's request of 2026-10-15;
+the next piece on the list is Phase 3, importing a picture for icons, icon
+tiles and stands. The samples research the owner asked for before any
+sample-based change is done (outside the repository, in the audit folder).
