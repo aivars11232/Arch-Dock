@@ -58,6 +58,13 @@ geometry and shaders. A generated platform
 wraps its texture round its band; the two bundled 3D themes keep their vector
 surfaces, since theme packages carry no raster files.
 
+The River and Magma panelpapers flow in a loop along the band, one way,
+with no waves in the band itself; a flat panel shows the water with gleams
+sliding along it and the lava with hot streaks creeping along it, and
+stands and tiles wearing them show them still. The water mirrors a plain
+sky, not the desktop or the icons. The magma's crust drifts with the lava
+as one texture; it does not break apart or melt away.
+
 An imported picture (a panel's or a stand's imported panelpaper) is
 repeated at its own proportions: a flat panel across its band, each repeat
 twice as tall as the band is wide with the band showing the middle of it,

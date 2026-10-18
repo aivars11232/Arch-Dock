@@ -1306,10 +1306,22 @@ function lookTexture(look, palette) {
         // Polished, heat-tinted metal shows a faint rainbow (the owner,
         // 2026-10-13: "chameleon"); lime stays a lime.
         "metallic": ["chameleon", "iridescent"],
-        "plate": ["chameleon", "iridescent"]
+        "plate": ["chameleon", "iridescent"],
+        // Water in its moods: clear, deep, jade green, under a sunset.
+        "river": ["clear", "deep", "jade", "sunset"],
+        // Lava in its heats: dying embers, a blaze, fully molten.
+        "magma": ["ember", "blaze", "molten"]
     };
     const list = palettes[name];
     return list && list.indexOf(chosen) >= 0 ? name + "-" + chosen : name;
+}
+
+// The looks that take no glow: a thing that does not shine (wood, stone, a
+// lime), a picture worn as the thing it shows, or water. The same rule
+// hides the Glow rows in Panel Studio, so a hidden row also draws nothing.
+function glowFitsLook(look) {
+    const name = String(look || "").trim().toLowerCase();
+    return ["organic", "pedestal", "lime", "picture", "river"].indexOf(name) < 0;
 }
 
 function themeStyle(appearance, customColor, iconSize) {
@@ -1378,6 +1390,16 @@ function themeStyle(appearance, customColor, iconSize) {
         "picture": {
             stroke: "#c8d4de",
             shadow: "rgba(0, 0, 0, 0.5)", width: 0.86, blur: 8
+        },
+        // The panel as a river: water flowing along it.
+        "river": {
+            stroke: "#2d7fb2",
+            shadow: "rgba(18, 56, 88, 0.5)", width: 0.6, blur: 12
+        },
+        // The panel as flowing magma: dark crust, the lava glowing between.
+        "magma": {
+            stroke: "#c4541c",
+            shadow: "rgba(70, 22, 6, 0.55)", width: 0.6, blur: 14
         }
     };
     const result = styles[preset] || styles.glass;
@@ -1393,7 +1415,15 @@ function themeStyle(appearance, customColor, iconSize) {
         depth: preset === "pedestal" ? 9 : preset === "platform" ? 6
             : preset === "plate" ? 3 : preset === "floating-glass" ? 5 : 0,
         animated: preset === "futuristic" || preset === "plasma" || preset === "lightning"
-            || preset === "aurora",
+            || preset === "aurora" || preset === "river" || preset === "magma",
+        // Water: its light ripples along instead of a glowing wave; lava:
+        // hot streaks creep along and add their light to the crust.
+        water: preset === "river",
+        lava: preset === "magma",
+        // Their textures carry their own colours (and palettes): a flat
+        // panel lays them at their natural size, untinted, as it lays a
+        // picture.
+        ownColours: preset === "river" || preset === "magma",
         // Lightning flickers and strikes instead of flowing.
         flicker: preset === "lightning",
         // Light on a clear ground, the look's dark sky drawn behind it at

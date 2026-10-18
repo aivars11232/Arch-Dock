@@ -441,7 +441,8 @@ private slots:
                 QStringLiteral("neon"), QStringLiteral("minimal"), QStringLiteral("plasma"),
                 QStringLiteral("lime"), QStringLiteral("floating-glass"), QStringLiteral("metallic"),
                 QStringLiteral("futuristic"), QStringLiteral("organic"), QStringLiteral("platform"),
-                QStringLiteral("plate"), QStringLiteral("pedestal")}) {
+                QStringLiteral("plate"), QStringLiteral("pedestal"), QStringLiteral("river"),
+                QStringLiteral("magma")}) {
                 edited.insert("scene3DMaterial", look);
                 edited.insert("scene3DTexture", "theme");
                 scene->setProperty("panelDefinition", edited);
@@ -453,6 +454,27 @@ private slots:
                 preceding = material;
                 QTRY_VERIFY(projectionMatches());
             }
+            // The river and the magma: their surface flows along the band in
+            // its own material, and water and lava draw differently.
+            QImage flows[2];
+            int flowIndex = 0;
+            for (const QString &look : {QStringLiteral("river"), QStringLiteral("magma")}) {
+                edited.insert("scene3DMaterial", look);
+                edited.insert("scene3DTexture", "theme");
+                scene->setProperty("panelDefinition", edited);
+                QTRY_COMPARE(renderer->property("textureMaterial").toString(), look);
+                QTRY_VERIFY(renderer->property("flowingSurface").toBool());
+                QCOMPARE(renderer->property("moltenFlow").toBool(), look == QStringLiteral("magma"));
+                QObject *platformNode = renderer->findChild<QObject *>(QStringLiteral("mesh-platform"));
+                QVERIFY(platformNode && objectValue(platformNode->property("reliefMaterial")));
+                QTRY_VERIFY_WITH_TIMEOUT(renderer->property("materialTextureReady").toBool(), 5000);
+                QTest::qWait(150);
+                flows[flowIndex] = pixels();
+                QVERIFY2(!flows[flowIndex].isNull(), qPrintable(look));
+                if (!evidence.isEmpty()) QVERIFY(flows[flowIndex].save(QDir(evidence).filePath("flow-" + look + ".png")));
+                ++flowIndex;
+            }
+            QVERIFY2(flows[0] != flows[1], "water and lava draw differently");
             // A picture on a theme's own mesh is real relief as well: the
             // mesh is cut finely and rises, and Relief depth changes it.
             {
@@ -3210,7 +3232,8 @@ private slots:
                  ARCHDOCK_QUICK3D_BUILT != 0);
         for (const QString &file : {QStringLiteral("PanelScene3D.qml"), QStringLiteral("IconStyle3D.qml"),
                                     QStringLiteral("PictureRelief.qml"), QStringLiteral("picture-relief.vert"),
-                                    QStringLiteral("picture-relief.frag")})
+                                    QStringLiteral("picture-relief.frag"), QStringLiteral("FlowingSurface.qml"),
+                                    QStringLiteral("flowing-surface.vert"), QStringLiteral("flowing-surface.frag")})
             QCOMPARE(QFileInfo::exists(module + QStringLiteral("optional3d/") + file),
                      ARCHDOCK_SCENE3D_BUILT != 0);
     }

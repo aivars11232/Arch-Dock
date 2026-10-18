@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Window
 import ArchDock.Rendering 1.0
 import "PlatformGeometry.js" as PlatformGeometry
+import "LayoutEngine.js" as LayoutEngine
 
 // The shared panel renderer. Given a panel's definition, its runtime state,
 // its entries and what the host and theme allow, it lays the entries out
@@ -136,6 +137,15 @@ Item {
         const candidate = Number(definitionValue(
             "surface", "glowIntensity", "glowIntensity", 1))
         return isFinite(candidate) ? candidate : 1
+    }
+    // Whether the panel's looks take a glow at all (LayoutEngine.glowFitsLook):
+    // a 3D panel's material and texture, a flat panel's look.
+    readonly property bool glowFitsPanel: {
+        const definition = root.panelDefinition || ({})
+        const looks = String(definition.rendererTier || "") === "true3d"
+            ? [String(definition.scene3DMaterial || "theme"), String(definition.scene3DTexture || "theme")]
+            : [String(definition.appearance || "glass")]
+        return looks.every(function(look) { return LayoutEngine.glowFitsLook(look) })
     }
     readonly property color tintColor:
         customColor.length > 0 ? customColor : "#78e9f4"
@@ -1541,8 +1551,9 @@ Item {
         hovered: root.panelHovered
         tintColor: root.tintColor
         glowIntensity: root.glowIntensity
-        // Light round the panel's shape, in its own colour or its look's.
-        panelGlow: Math.max(0, Math.min(1, Number(root.panelDefinition.panelGlow || 0)))
+        // Light round the panel's shape, in its own colour or its look's;
+        // none round a look that takes no glow.
+        panelGlow: root.glowFitsPanel ? Math.max(0, Math.min(1, Number(root.panelDefinition.panelGlow || 0))) : 0
         panelGlowReach: Math.max(0, Math.min(1, Number(root.panelDefinition.panelGlowReach === undefined
             ? 0.75 : root.panelDefinition.panelGlowReach)))
         panelGlowColour: String(root.panelDefinition.panelGlowColor || "").length

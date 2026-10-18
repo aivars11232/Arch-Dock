@@ -22,6 +22,7 @@
 #include <QScreen>
 #include <QSet>
 
+#include <algorithm>
 #include <utility>
 
 using PanelWindowHelpers::plasmaScriptStringLiteral;
@@ -93,7 +94,8 @@ bool glowFitsLook(const QString &look)
     // (stone, wood, a mountain).
     const QString name = look.trimmed().toLower();
     return name != QStringLiteral("organic") && name != QStringLiteral("pedestal")
-        && name != QStringLiteral("lime") && name != QStringLiteral("picture");
+        && name != QStringLiteral("lime") && name != QStringLiteral("picture")
+        && name != QStringLiteral("river");
 }
 
 // The looks a panel's surface is drawn in, its material and its texture
@@ -1315,7 +1317,13 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                     {QStringLiteral("metallic"), {"Metal finish", "Steel",
                         {QStringLiteral("chameleon"), QStringLiteral("iridescent")}}},
                     {QStringLiteral("plate"), {"Metal finish", "Steel",
-                        {QStringLiteral("chameleon"), QStringLiteral("iridescent")}}}};
+                        {QStringLiteral("chameleon"), QStringLiteral("iridescent")}}},
+                    // Water in its moods, and lava in its heats.
+                    {QStringLiteral("river"), {"Water", "River",
+                        {QStringLiteral("clear"), QStringLiteral("deep"), QStringLiteral("jade"),
+                         QStringLiteral("sunset")}}},
+                    {QStringLiteral("magma"), {"Lava", "Magma",
+                        {QStringLiteral("ember"), QStringLiteral("blaze"), QStringLiteral("molten")}}}};
                 const auto found = std::find_if(palettes.cbegin(), palettes.cend(), [&](const auto &entry) {
                     return looks.last() == entry.first || looks.first() == entry.first;
                 });

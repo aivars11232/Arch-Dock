@@ -18,7 +18,7 @@ TestCase {
 
     readonly property var looks: ["glass", "crystal", "neon", "minimal",
         "plasma", "lime", "floating-glass", "metallic", "futuristic",
-        "organic", "platform", "plate", "pedestal"]
+        "organic", "platform", "plate", "pedestal", "river", "magma"]
 
     Component {
         id: sceneComponent
@@ -152,6 +152,39 @@ TestCase {
                 if (a.red(x, y) !== b.red(x, y) || a.green(x, y) !== b.green(x, y) || a.blue(x, y) !== b.blue(x, y))
                     return true
         return false
+    }
+
+    // A flowing look on a flat panel: its texture along the band, and its
+    // light sliding along as the phase moves: the river's gleams, the
+    // magma's hot streaks.
+    function test_flowingLightSlidesAlong_data() {
+        return [{ tag: "river", look: "river", flows: "water" },
+                { tag: "magma", look: "magma", flows: "lava" }]
+    }
+
+    function test_flowingLightSlidesAlong(data) {
+        const scene = createTemporaryObject(sceneComponent, captureWindow.contentItem, {
+            panelDefinition: { layout: "circular", layoutRadius: 300, iconSize: 52,
+                appearance: data.look, opacity: 1, rendererTier: "procedural2d" }
+        })
+        verify(scene)
+        verify(waitForRendering(scene))
+        const surface = scene.visualPanel
+        verify(surface.surfaceStyle[data.flows] === true, data.look + " flows")
+        verify(surface.surfaceStyle.animated === true, data.look + " moves")
+        const gleams = findChild(scene, "procedural-material-energy")
+        verify(gleams)
+        tryCompare(gleams, "visible", true)
+        surface.energyPhase = 0
+        gleams.requestPaint()
+        verify(waitForRendering(scene))
+        const first = grabImage(surface)
+        surface.energyPhase = 0.5
+        gleams.requestPaint()
+        tryVerify(function() {
+            captureWindow.update()
+            return differs(first, grabImage(surface))
+        }, 4000, "the light moves along the band")
     }
 
     function test_tintKeepsTexture_data() {

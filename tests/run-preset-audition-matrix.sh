@@ -142,7 +142,14 @@ preset_host_snapshot() {
     printf '%s;%s\n' "$(native_panel_placement_snapshot "$1")" "$(native_panel_geometry_snapshot "$1")"
 }
 preset_crash_service() {
-    kill -KILL "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
+    # The service may have been started anew since it was remembered (an
+    # earlier phase crashed it and D-Bus activated it again): crash the
+    # process that owns the name now.
+    local current_pid
+    if current_pid="$(arch_dock_service_pid 2>/dev/null)" && [[ "$current_pid" =~ ^[0-9]+$ ]]; then
+        ARCHDOCK_SESSION_ARCH_DOCK_PID="$current_pid"
+    fi
+    kill -KILL "$ARCHDOCK_SESSION_ARCH_DOCK_PID" 2>/dev/null || true
     wait "$ARCHDOCK_SESSION_ARCH_DOCK_PID" 2>/dev/null || true
     ARCHDOCK_SESSION_ARCH_DOCK_PID=''
     unload_kwin_script org.archdock.windowwatcher.runtime

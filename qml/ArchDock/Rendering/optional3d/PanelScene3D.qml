@@ -94,7 +94,7 @@ Item {
     property string appearance: ""
     property string customColor: ""
     readonly property var materialNames: ["glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
-        "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "picture"]
+        "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "river", "magma", "picture"]
     // Pictures the user imported for the "picture" look: the platform's
     // and the stands', Arch Dock's copies of them.
     readonly property string panelPicture: String((sceneDefinition || ({})).panelPicture || "")
@@ -142,7 +142,8 @@ Item {
         loops: Animation.Infinite
         from: 0
         to: 1
-        duration: Math.round(9000 / root.motionPace)
+        // Lava creeps; the other looks flow.
+        duration: Math.round((root.moltenFlow ? 26000 : 9000) / root.motionPace)
     }
     // A texture that is being replaced keeps the scene ready: while the new
     // file loads, the platform keeps drawing (without that texture for a
@@ -247,6 +248,10 @@ Item {
     // per pixel on any platform, and a generated one's mesh is cut finely
     // enough to rise with it as well.
     readonly property bool pictureRelief: textureMaterial === "picture" && panelPicture.length > 0
+    // The panel as a river or as magma: its water or lava flows along the
+    // band in a loop (FlowingSurface). Lava creeps.
+    readonly property bool flowingSurface: textureMaterial === "river" || moltenFlow
+    readonly property bool moltenFlow: textureMaterial === "magma"
     // Relief depth 0.8, the default, sinks the gaps 0.08 of the scene's
     // units; 1 is a little deeper, the band never worn thin.
     readonly property real pictureDepth: bounded("panelPictureDepth", 0.8, 0, 1) * 0.1
@@ -342,7 +347,7 @@ Item {
     // material, the 3D page's Pedestal height tall, the icon on its top;
     // "none", the default, draws none.
     readonly property var materialLooks: ["glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
-        "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "picture"]
+        "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "river", "magma", "picture"]
     readonly property string pedestalShape: String((sceneDefinition || ({})).pedestalShape || "none").toLowerCase()
     readonly property string pedestalKind: pedestalShape === "auto" ? "column"
         : PlatformGeometry.pedestalShapes.includes(pedestalShape) ? pedestalShape : "none"
@@ -447,7 +452,8 @@ Item {
     // look's line colour, from a shell of the platform pushed out along its
     // surface, so a ring glows on its inner and outer edges alike. A panel
     // wearing a picture does not glow, as stone does not.
-    readonly property real panelGlowAmount: pictureRelief ? 0 : bounded("panelGlow", 0, 0, 1)
+    readonly property real panelGlowAmount: pictureRelief || !LayoutEngine.glowFitsLook(textureMaterial)
+        ? 0 : bounded("panelGlow", 0, 0, 1)
     readonly property var panelGlowRgb: PlatformGeometry.parseColour(
         String((sceneDefinition || ({})).panelGlowColor || "").length
             ? String(sceneDefinition.panelGlowColor) : materialColour.length ? materialColour
@@ -648,8 +654,10 @@ Item {
         material.roughness = ["glass", "floating-glass", "crystal"].includes(look) ? 0.12
             : look === "organic" || look === "minimal" ? 0.85 : 0.38
         material.opacity = LayoutEngine.themeStyle(look, "", 48).alpha
-        if (["neon", "plasma", "lightning", "aurora", "futuristic"].includes(look)) {
-            material.emissiveColor = colour && colour.length ? colour : LayoutEngine.themeStyle(look, "", 48).stroke
+        if (["neon", "plasma", "lightning", "aurora", "futuristic", "magma"].includes(look)) {
+            // Magma's light is the lava's own colours in its texture.
+            material.emissiveColor = look === "magma" ? "#ffffff"
+                : colour && colour.length ? colour : LayoutEngine.themeStyle(look, "", 48).stroke
             material.emissiveStrength = root.energyStrength(look)
             material.emissiveThroughTexture = true
         }
@@ -2230,6 +2238,39 @@ Item {
             reliefSmoothing: root.pedestalPictureSmoothing
             meshStep: Number((root.pedestalReliefMesh || ({})).meshStep || 0.05)
         }
+        // The river or the magma: its water or lava and its relief flowing
+        // along the band. A custom material reads its textures from files,
+        // not from the rendered image items the built-in materials share.
+        Texture {
+            id: flowSurfaceTexture
+            source: root.flowingSurface ? root.materialTextureSource : ""
+            generateMipmaps: true
+            mipFilter: Texture.Linear
+            tilingModeHorizontal: Texture.Repeat
+            tilingModeVertical: Texture.Repeat
+        }
+        Texture {
+            id: flowReliefTexture
+            source: root.flowingSurface ? root.materialNormalSource : ""
+            generateMipmaps: true
+            mipFilter: Texture.Linear
+            tilingModeHorizontal: Texture.Repeat
+            tilingModeVertical: Texture.Repeat
+        }
+        FlowingSurface {
+            id: platformFlow
+            surfaceMap: TextureInput {
+                texture: flowSurfaceTexture
+                enabled: root.flowingSurface
+            }
+            reliefMap: TextureInput {
+                texture: flowReliefTexture
+                enabled: root.flowingSurface
+            }
+            molten: root.moltenFlow
+            repeatU: root.generatedPlatform ? Number(root.generatedPlatform.textureRepeats || 1) : 1
+            flowOffset: root.flowOffset
+        }
         // Tilt first, then turn about the tilted view's own up: tilted 90
         // degrees the panel lies level whatever its turn, which then spins
         // it like a turntable (the owner, 2026-10-13: "I still should be able
@@ -2930,7 +2971,7 @@ Item {
                 materialData: root.platformMaterial
                 surfaceTexture: root.themeTexture
                 surfaceNormalTexture: root.themeNormalTexture
-                reliefMaterial: root.pictureRelief ? platformRelief : null
+                reliefMaterial: root.pictureRelief ? platformRelief : root.flowingSurface ? platformFlow : null
                 emissionScale: root.emissionScale
                 IconStyle3D {
                     objectName: "mesh-platform-glow"

@@ -1,5 +1,61 @@
 # Arch Dock current state
 
+<!-- LIST_PIECE_6_BEGIN -->
+## The owner's list, piece 6: the river and the magma — 2026-10-19
+
+Report `docs/repairs/OWNER-LIST-PIECE-6.md`.
+
+- Looks "river" and "magma" in every look list (`PanelSettingsSchema`),
+  with `LayoutEngine.themeStyle` entries (animated; `water: true` for the
+  river, `lava: true` for the magma; `ownColours: true` for both, so a
+  flat panel lays them through `paintPicture` at their natural size, 512
+  px per repeat, untinted, the band showing a strip of the surface rather
+  than a whole repeat squeezed into it) and palettes clear, deep, jade,
+  sunset and ember, blaze,
+  molten (`lookTexture`; the Colour row labels "Water" and "Lava" in
+  `PanelWindowSettings`). Textures `materials/river*.png` and
+  `materials/magma*.png` with their relief maps come from real texture
+  sets, not drawn patterns (the owner, 2026-10-18: "real magma and real
+  water"): the generator's `--real <folder>` stage composes them from
+  ambientCG's CC0 sets (Lava003/002/005/004 for the magma and its heats,
+  with Lava003's own relief map; Gravel021 and Gravel020 as river beds),
+  see `materials/CREDITS.md`. The water is composed over the bed: ripples
+  from a wind-driven wave spectrum (Tessendorf 2001, `ripples`), the bed
+  seen through water of one depth that absorbs light with depth (the 3D
+  shader lightens the banks itself, so the texture tiles any way round on
+  a flat panel), the light the ripples focus (`surface_normals`'
+  curvature), the sky mirrored where a ripple tilts, sun glitter
+  (`water_rows`); `river-normal.png` is the ripples' normal map. The lava
+  colour is the set's colour with its emission screened over it
+  (`lava_rows`). Water glows no more than a picture (`glowFitsLook`);
+  magma glows.
+- 3D (`PanelScene3D`): `flowingSurface` (river or magma; `moltenFlow` for
+  magma) swaps the band's material for `optional3d/FlowingSurface.qml`
+  (`flowing-surface.vert` passes the band's uv and tangent frame;
+  `flowing-surface.frag`: two layers of the relief map flowing with
+  `flowOffset` at different speeds bend the light; water: the bed sampled
+  at its still uv, wobbled by the ripples (refraction), a sky colour
+  mirrored by Schlick's Fresnel, roughness 0.05 for the lights' glitter;
+  `molten`: the texture flowing, a heat mask from red over blue (grey
+  crust, orange lava), a second layer of lava showing through the crust,
+  the lava emissive with a slow shimmer (two per loop), the crust rough).
+  No mesh displacement: the owner wants "regular looped flow", not waves,
+  so there is no Wave height setting. The material reads its textures
+  from file-backed `Texture` items (`flowSurfaceTexture`,
+  `flowReliefTexture`), since a custom material gets nothing from the
+  image-item textures the built-in materials share. `flowOffset` loops
+  over 9 s (magma 26 s) / Motion speed. Stands and tiles of magma use
+  `materialForLook`'s emissive-through-texture path with a white emissive
+  colour. A look that takes no glow draws none: `LayoutEngine.glowFitsLook`
+  mirrors the Studio rule (`PanelScene.glowFitsPanel` zeroes `panelGlow`,
+  `PanelScene3D.panelGlowAmount` likewise).
+- Flat (`PanelProcedural2D`): the texture wrapped along the band as other
+  looks, and `paintFlowingLight` on the energy canvas: the river's three
+  pale gleams or the magma's two hot streaks (added with "lighter"),
+  each lapping the band a whole number of times per round of
+  `energyPhase`, so nothing jumps at the wrap.
+<!-- LIST_PIECE_6_END -->
+
 <!-- LIST_PIECE_5_BEGIN -->
 ## The owner's list, piece 5: Import picture for panels and stands (Phase 3) — 2026-10-15, closed 2026-10-18
 

@@ -2828,6 +2828,15 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
         QVERIFY(standPlain.value("success").toBool());
         QVERIFY(standField(QStringLiteral("pedestalPictureDepth")).value(QStringLiteral("inactive")).toBool());
         QVERIFY(!standField(QStringLiteral("pedestalColor")).value(QStringLiteral("inactive")).toBool());
+        // The flowing looks are plain looks: the panel wears them with no
+        // rows of their own, and takes them off again.
+        for (const QString &look : {QStringLiteral("river"), QStringLiteral("magma"), QStringLiteral("theme")})
+        {
+            const auto flowing = window.applyPanelSettingsTransaction(panelId,
+                registry->panelDefinition(panelId)->settingsRevision,
+                {{"scene3DMaterial", look}, {"scene3DTexture", "theme"}}, {});
+            QVERIFY2(flowing.value("success").toBool(), qPrintable(flowing.value("errorMessage").toString()));
+        }
         const auto rotationDraft = window.resolvePanelSettingsEditorDraft(panelId,
             registry->panelDefinition(panelId)->settingsRevision,
             {{QStringLiteral("panelRotationMode"), QStringLiteral("clockwise")}}, {}, QStringLiteral("studio"));
@@ -5310,6 +5319,24 @@ void PanelWindowCapabilityTest::studioPagePictures()
         QVERIFY(window->grabWindow().save(folder + "/pictures-pedestals-3d.png"));
         window->close();
     }
+    // The same 3D panel as a river, then as magma: its 3D page, where a 3D
+    // panel's Panelpaper row is.
+    for (const QString &look : {QStringLiteral("river"), QStringLiteral("magma")})
+    {
+        const QVariantMap applied = backend.applyPanelSettingsTransaction(platformPanel,
+            registry->panelDefinition(platformPanel)->settingsRevision,
+            {{"scene3DMaterial", look}, {"scene3DTexture", "theme"}});
+        QVERIFY2(applied.value("success").toBool(), qPrintable(QJsonDocument::fromVariant(applied).toJson()));
+        std::unique_ptr<QObject> studio(component.createWithInitialProperties({
+            {"selectedPanelId", platformPanel}, {"mainTabIndex", 1}, {"subTabIndex", 10}}));
+        auto *window = qobject_cast<QQuickWindow *>(studio.get());
+        QVERIFY(window);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QTest::qWait(1500);
+        QVERIFY(window->grabWindow().save(folder + "/panels-3d-" + look + ".png"));
+        window->close();
+    }
 }
 
 void PanelWindowCapabilityTest::studioMotionAndDirectionRows()
@@ -5611,8 +5638,9 @@ void PanelWindowCapabilityTest::studioTileParametersAreTransactional()
     for (const QString &key : {QStringLiteral("iconTileBevel"), QStringLiteral("iconTileMaterial"), QStringLiteral("iconTileElevation")})
         QVERIFY2(!offered.contains(key), qPrintable(key + " must wait for a 3D renderer"));
     auto *texture = visibleItem(window, "studio-combo-iconTileTexture"); QVERIFY(texture);
+    // End picks the last of the tile looks.
     texture->forceActiveFocus(); QTest::keyClick(window, Qt::Key_End);
-    QTRY_COMPARE(draft(popup.get()).value("iconTileTexture").toString(), QStringLiteral("pedestal"));
+    QTRY_COMPARE(draft(popup.get()).value("iconTileTexture").toString(), QStringLiteral("magma"));
     const QVariantMap values{{"iconTileTexture", "pedestal"}, {"iconTileThickness", 8.0},
         {"iconTileIconOffsetX", -9.0}, {"iconTileIconOffsetY", 6.0}, {"iconTileIconScale", 85}};
     for (auto it = values.cbegin(); it != values.cend(); ++it) {

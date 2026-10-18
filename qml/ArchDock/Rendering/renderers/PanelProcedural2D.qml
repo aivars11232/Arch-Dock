@@ -219,7 +219,12 @@ Item {
         const height = bottom - top + half * 2
         const pictureWidth = pictureSize.implicitWidth
         const pictureHeight = pictureSize.implicitHeight
-        if (canvas.materialLoaded && width > 0 && height > 0 && pictureWidth > 0 && pictureHeight > 0) {
+        // Water and lava are laid at their natural size: the band shows a
+        // strip of the real surface, never a whole repeat squeezed into it.
+        const natural = surfaceStyle.ownColours
+        const repeatWidth = natural ? 512 : tileWidth
+        const repeatHeight = natural ? 512 : tileHeight
+        if (canvas.materialLoaded && width > 0 && height > 0 && (natural || (pictureWidth > 0 && pictureHeight > 0))) {
             // The picture at its own proportions, repeated across the shape
             // as the 3D band repeats it along, so a texture keeps its grain
             // whatever the panel's size: each repeat twice as tall as the
@@ -229,9 +234,9 @@ Item {
             const x0 = left - half, y0 = top - half
             context.save()
             context.globalCompositeOperation = "source-atop"
-            for (let y = y0 - tileHeight / 2; y < y0 + height; y += tileHeight)
-                for (let x = x0; x < x0 + width; x += tileWidth)
-                    context.drawImage(source, x, y, tileWidth, tileHeight)
+            for (let y = y0 - repeatHeight / 2; y < y0 + height; y += repeatHeight)
+                for (let x = x0; x < x0 + width; x += repeatWidth)
+                    context.drawImage(source, x, y, repeatWidth, repeatHeight)
             context.restore()
         }
         if (lookGlow > 0) {
@@ -305,6 +310,40 @@ Item {
             }
         }
         return data
+    }
+
+    // The light sliding along a flowing look on a flat panel: the river's
+    // three pale gleams, or the magma's two broad hot streaks adding their
+    // light to the crust. Each is a soft stretch of light that laps the
+    // band a whole number of times per round of the phase, so nothing
+    // jumps when the phase wraps.
+    function paintFlowingLight(context, points) {
+        const lava = surfaceStyle.lava
+        context.lineCap = "round"
+        context.lineJoin = "round"
+        if (lava) context.globalCompositeOperation = "lighter"
+        const width = surfaceStyle.lineWidth
+        const count = points.length
+        const bands = lava ? 2 : 3
+        for (let band = 0; band < bands; ++band) {
+            const speed = band + 1
+            const spread = lava ? 0.2 + band * 0.08 : 0.09 + band * 0.03
+            const offset = band * 0.37
+            const peak = lava ? 0.3 - band * 0.08 : 0.28 - band * 0.05
+            context.lineWidth = Math.max(1, width * (lava ? 0.8 - band * 0.25 : 0.5 - band * 0.12))
+            for (let i = 1; i < count; ++i) {
+                let place = (i / count - (energyPhase * speed + offset)) % 1
+                if (place < 0) place += 1
+                const near = Math.min(place, 1 - place)
+                const light = Math.exp(-(near / spread) * (near / spread)) * peak
+                if (light < 0.01) continue
+                context.strokeStyle = (lava ? "rgba(255,170,60," : "rgba(220,240,255,") + light.toFixed(3) + ")"
+                context.beginPath()
+                context.moveTo(points[i - 1].x, points[i - 1].y)
+                context.lineTo(points[i].x, points[i].y)
+                context.stroke()
+            }
+        }
     }
 
     // The picture's own size, for fitting it.
@@ -488,7 +527,7 @@ Item {
                 context.stroke()
                 context.restore()
             }
-            if (root.surfaceStyle.picture) {
+            if (root.surfaceStyle.picture || root.surfaceStyle.ownColours) {
                 root.paintPicture(context)
                 return
             }
@@ -590,6 +629,10 @@ Item {
             if (points.length < 2) return
             if (root.surfaceStyle.flicker) {
                 root.paintLightning(context, points)
+                return
+            }
+            if (root.surfaceStyle.water || root.surfaceStyle.lava) {
+                root.paintFlowingLight(context, points)
                 return
             }
             // Aurora's light is all in its curtains.

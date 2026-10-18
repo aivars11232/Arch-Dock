@@ -129,6 +129,17 @@ endforeach()
 foreach(palette emerald australis cosmic solar rainbow)
   list(APPEND ARCHDOCK_RENDERING_MODULE_FILES materials/aurora-${palette}.png)
 endforeach()
+# The flowing looks are made from real texture sets, not drawn from a
+# swatch: a texture, a relief map and the look's palettes.
+foreach(look river magma)
+  list(APPEND ARCHDOCK_RENDERING_MODULE_FILES materials/${look}.png materials/${look}-normal.png)
+endforeach()
+foreach(palette clear deep jade sunset)
+  list(APPEND ARCHDOCK_RENDERING_MODULE_FILES materials/river-${palette}.png)
+endforeach()
+foreach(palette ember blaze molten)
+  list(APPEND ARCHDOCK_RENDERING_MODULE_FILES materials/magma-${palette}.png)
+endforeach()
 set(ARCHDOCK_RENDERING_MODULE_SOURCES)
 set(ARCHDOCK_OPTIONAL_RENDERING_FILES
     optional3d/RendererImportProbe.qml
@@ -136,7 +147,10 @@ set(ARCHDOCK_OPTIONAL_RENDERING_FILES
     optional3d/IconStyle3D.qml
     optional3d/PictureRelief.qml
     optional3d/picture-relief.vert
-    optional3d/picture-relief.frag)
+    optional3d/picture-relief.frag
+    optional3d/FlowingSurface.qml
+    optional3d/flowing-surface.vert
+    optional3d/flowing-surface.frag)
 # These are owned build outputs. Remove stale optional files on ON -> OFF.
 foreach(rendering_file IN LISTS ARCHDOCK_OPTIONAL_RENDERING_FILES)
   if(NOT ARCHDOCK_QUICK3D_BUILT)

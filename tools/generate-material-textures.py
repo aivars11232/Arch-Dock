@@ -15,6 +15,17 @@ reference pixels, downloaded artwork or fonts:
    surface. This stage needs PySide6 (QtSvg renders the swatch); run it
    with `--raster`, or `--all` for both stages. Theme packages keep their
    vector surfaces.
+
+A third stage, `--real <folder>`, makes the looks of real things - the
+river and the magma - from real texture sets rather than drawn patterns:
+ambientCG's CC0 1.0 sets (https://ambientcg.com, `<Id>_1K-JPG.zip` unpacked
+into `<folder>/<Id>/`): Lava003, Lava002, Lava005 and Lava004 for the magma
+and its heats, Gravel021 and Gravel020 as river beds. The water over the bed
+is composed here: its ripples are a wave spectrum (Tessendorf, "Simulating
+Ocean Water", 2001: the Phillips spectrum of wind-driven waves), the bed
+seen through water that absorbs light with depth, the light the ripples
+focus on the bed, and the sky mirrored where the ripples tilt. This stage
+needs PySide6 or PyQt6 to read the sets.
 """
 import math
 import random
@@ -756,6 +767,8 @@ def write_lime(directory=ROOT, seed=401):
     print("lime written to", directory)
 
 
+
+
 def chameleon_rows(rows, seed, strength=0.0):
     """Polished, heat-tinted metal (the owner, 2026-10-13: "metal can have
     faint rainbow colors ... we usually call that chameleon"): the metal's
@@ -822,6 +835,198 @@ def peel(seed):
         p = pores[0].at(u * 96, v * 96) * 0.6 + pores[1].at(u * 192, v * 192) * 0.4
         return 0.5 + (p - 0.5) * 0.5 + (soft[0].at(u * 6, v * 6) - 0.5) * 0.2
     return detail
+
+
+# ambientCG texture sets (CC0 1.0, https://ambientcg.com/view?id=<Id>) the
+# real looks are made from: the magma's heats, and the beds of the river's
+# moods.
+LAVA_SETS = {"magma": "Lava003", "ember": "Lava002", "blaze": "Lava005", "molten": "Lava004"}
+WATER = {
+    # the bed, the water's own colour, how strongly it absorbs the bed's
+    # light with depth, the sky it mirrors, and how much of that sky
+    "river": ("Gravel021", (0.16, 0.46, 0.54), 0.8, (0.72, 0.82, 0.92), 0.35),
+    "clear": ("Gravel020", (0.24, 0.52, 0.56), 0.45, (0.80, 0.88, 0.95), 0.30),
+    "deep": ("Gravel021", (0.02, 0.10, 0.22), 2.2, (0.55, 0.65, 0.80), 0.40),
+    "jade": ("Gravel021", (0.08, 0.40, 0.30), 1.2, (0.75, 0.88, 0.84), 0.35),
+    "sunset": ("Gravel020", (0.24, 0.20, 0.36), 1.0, (1.0, 0.62, 0.34), 0.5),
+}
+_qt_app = None
+
+
+def qt_modules():
+    """Qt's image classes from PySide6 or PyQt6, whichever is installed."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    try:
+        from PySide6 import QtCore, QtGui
+    except ImportError:
+        from PyQt6 import QtCore, QtGui
+    global _qt_app
+    if _qt_app is None:
+        _qt_app = QtGui.QGuiApplication(sys.argv[:1])
+    return QtGui, QtCore
+
+
+def load_rows(path, size=SIZE):
+    """A picture's pixels, scaled to size, as rows of (r, g, b) in 0..1."""
+    QtGui, QtCore = qt_modules()
+    image = QtGui.QImage(str(path))
+    if image.isNull():
+        raise SystemExit(f"cannot read {path}")
+    image = image.scaled(size, size, QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
+                         QtCore.Qt.TransformationMode.SmoothTransformation)
+    image = image.convertToFormat(QtGui.QImage.Format.Format_RGBA8888)
+    bits = image.constBits()
+    # PyQt6 hands out a pointer that must be read by its size; PySide6 a
+    # memoryview.
+    data = bits.asstring(image.sizeInBytes()) if hasattr(bits, "asstring") else bytes(bits)
+    stride = image.bytesPerLine()
+    return [[(data[y * stride + x * 4] / 255, data[y * stride + x * 4 + 1] / 255,
+              data[y * stride + x * 4 + 2] / 255) for x in range(size)] for y in range(size)]
+
+
+def ripples(size, seed, components=96, wind=(1.0, 0.3)):
+    """A water surface's small waves as a height field that tiles: wave
+    components on the texture's own lattice (each repeats exactly across
+    it), their amplitudes from the Phillips spectrum of wind-driven waves
+    (Tessendorf 2001: the waves the wind builds most are the largest, the
+    shortest are damped, and waves run with the wind), their phases
+    random. The strongest components and a weighted handful of the rest.
+    Returns rows of heights in -1..1."""
+    rng = random.Random(seed)
+    wx, wy = wind
+    length = math.hypot(wx, wy)
+    wx, wy = wx / length, wy / length
+    # The waves the wind builds most are a twelfth of the texture long
+    # (Phillips' L is a wavelength over 2 pi); waves under a few texels are
+    # damped.
+    largest = size / 75.0
+    cutoff = size / 640.0
+    candidates = []
+    for n in range(-40, 41):
+        for m in range(-40, 41):
+            if n == 0 and m == 0:
+                continue
+            kx, ky = 2 * math.pi * n / size, 2 * math.pi * m / size
+            k = math.hypot(kx, ky)
+            along = (kx * wx + ky * wy) / k
+            if along <= 0:
+                continue
+            # Phillips spreads waves by the square of their alignment with
+            # the wind; a river's surface is choppier, so by the alignment.
+            power = math.exp(-1 / (k * largest) ** 2) / k ** 4 * along * math.exp(-(k * cutoff) ** 2)
+            candidates.append((power, kx, ky))
+    candidates.sort(reverse=True)
+    strongest = candidates[:components // 4]
+    rest = candidates[len(strongest):]
+    picks = strongest + rng.choices(rest, weights=[c[0] for c in rest], k=components - len(strongest))
+    waves = [(math.sqrt(power), kx, ky, rng.uniform(0, 2 * math.pi)) for power, kx, ky in picks]
+    # cos(kx x + ky y + phase) = cos(kx x + phase) cos(ky y) - sin(kx x + phase) sin(ky y)
+    cos_x = [[math.cos(kx * x + phase) for x in range(size)] for _, kx, _, phase in waves]
+    sin_x = [[math.sin(kx * x + phase) for x in range(size)] for _, kx, _, phase in waves]
+    rows = []
+    for y in range(size):
+        row = [0.0] * size
+        for index, (amplitude, _, ky, _) in enumerate(waves):
+            cy, sy = math.cos(ky * y) * amplitude, math.sin(ky * y) * amplitude
+            row = [r + c * cy - s * sy for r, c, s in zip(row, cos_x[index], sin_x[index])]
+        rows.append(row)
+    top = max(abs(h) for row in rows for h in row) or 1.0
+    return [[h / top for h in row] for row in rows]
+
+
+def surface_normals(heights, strength):
+    """Unit normals (x, y, z) of a tiling height field, and how much light
+    its surface focuses at each point (the negative of its curvature)."""
+    size = len(heights)
+    normals, focus = [], []
+    for y in range(size):
+        up, down, row = heights[(y - 1) % size], heights[(y + 1) % size], heights[y]
+        normal_row, focus_row = [], []
+        for x in range(size):
+            left, right = row[(x - 1) % size], row[(x + 1) % size]
+            dx, dy = (right - left) * strength, (down[x] - up[x]) * strength
+            length = math.sqrt(dx * dx + dy * dy + 1)
+            normal_row.append((-dx / length, -dy / length, 1 / length))
+            focus_row.append(-(left + right + up[x] + down[x] - 4 * row[x]))
+        normals.append(normal_row)
+        focus.append(focus_row)
+    top = max(abs(f) for row in focus for f in row) or 1.0
+    return normals, [[f / top for f in row] for row in focus]
+
+
+def normal_rows(normals):
+    """A tangent-space normal map (OpenGL convention) as rows of RGBA bytes."""
+    return [bytes(b for nx, ny, nz in row for b in (clamp((nx * 0.5 + 0.5) * 255), clamp((ny * 0.5 + 0.5) * 255),
+                                                    clamp((nz * 0.5 + 0.5) * 255), 255)) for row in normals]
+
+
+def water_rows(bed, normals, focus, water, absorb, sky, mirror, seed):
+    """A river seen from above: its bed through water of one depth (deeper
+    and shallower along it; the 3D renderer lightens the banks itself, so
+    the texture tiles any way round), the bed's light absorbed with depth
+    (red first, blue last) and the water's own colour scattered back
+    instead, the light the ripples focus on the bed, the sky mirrored where
+    a ripple tilts the surface toward the viewer, and the sun's glitter on
+    the ripples. Returns rows of RGBA bytes."""
+    size = len(bed)
+    absorption = (1.7, 0.95, 0.55)
+    light = (-0.55, -0.55, 0.63)
+    along = Noise(3, seed)
+    rows = []
+    for y in range(size):
+        v = y / size
+        profile = 0.8
+        row = bytearray()
+        for x in range(size):
+            u = x / size
+            depth = profile * absorb * (0.75 + 0.5 * along.at(u * 3, v * 3))
+            through = [math.exp(-k * depth) for k in absorption]
+            caustic = max(0.0, focus[y][x]) * 1.3
+            nx, ny, nz = normals[y][x]
+            tilt = min(1.0, math.sqrt(nx * nx + ny * ny) / 0.45)
+            fresnel = 0.03 + mirror * tilt * tilt * (3 - 2 * tilt)
+            glint = max(0.0, nx * light[0] + ny * light[1] + nz * light[2]) ** 60 * 1.1
+            for c in range(3):
+                colour = bed[y][x][c] * (1 + caustic) * through[c] + water[c] * (1 - through[c])
+                row.append(clamp((colour * (1 - fresnel) + sky[c] * fresnel + glint * sky[c]) * 255))
+            row.append(255)
+        rows.append(bytes(row))
+    return rows
+
+
+def lava_rows(colour, emission):
+    """Cooling lava: the set's colour with its own light screened over it, so
+    the glow in the cracks is in the picture the flat renderer draws."""
+    return [bytes(b for c, e in zip(colour_row, emission_row)
+                  for b in (clamp((1 - (1 - c[0]) * (1 - e[0] * 0.9)) * 255), clamp((1 - (1 - c[1]) * (1 - e[1] * 0.9)) * 255),
+                            clamp((1 - (1 - c[2]) * (1 - e[2] * 0.9)) * 255), 255))
+            for colour_row, emission_row in zip(colour, emission)]
+
+
+def write_real(assets, directory=ROOT):
+    """The river's moods and the magma's heats from the real sets in
+    `assets`, with their relief maps."""
+    heights = ripples(SIZE, 701)
+    normals, focus = surface_normals(heights, 1.6)
+    write_png(Path(directory) / "river-normal.png", normal_rows(normals))
+    beds = {}
+    for palette, (bed_set, water, absorb, sky, mirror) in WATER.items():
+        if bed_set not in beds:
+            beds[bed_set] = load_rows(assets / bed_set / f"{bed_set}_1K-JPG_Color.jpg")
+        name = "river.png" if palette == "river" else f"river-{palette}.png"
+        write_png(Path(directory) / name, water_rows(beds[bed_set], normals, focus, water, absorb, sky, mirror, 707))
+        print(name)
+    for palette, lava_set in LAVA_SETS.items():
+        colour = load_rows(assets / lava_set / f"{lava_set}_1K-JPG_Color.jpg")
+        emission = load_rows(assets / lava_set / f"{lava_set}_1K-JPG_Emission.jpg")
+        name = "magma.png" if palette == "magma" else f"magma-{palette}.png"
+        write_png(Path(directory) / name, lava_rows(colour, emission))
+        print(name)
+    crust = load_rows(assets / LAVA_SETS["magma"] / f"{LAVA_SETS['magma']}_1K-JPG_NormalGL.jpg")
+    write_png(Path(directory) / "magma-normal.png",
+              [bytes(b for n in row for b in (clamp(n[0] * 255), clamp(n[1] * 255), clamp(n[2] * 255), 255)) for row in crust])
+    print("real looks written to", directory)
 
 
 RECIPES = {
@@ -966,3 +1171,5 @@ if __name__ == "__main__":
         write_lime(sys.argv[2] if len(sys.argv) > 2 else ROOT)
     if stage == "--rainbows":
         write_rainbows(sys.argv[2] if len(sys.argv) > 2 else ROOT)
+    if stage == "--real":
+        write_real(Path(sys.argv[2]), Path(sys.argv[3]) if len(sys.argv) > 3 else ROOT)

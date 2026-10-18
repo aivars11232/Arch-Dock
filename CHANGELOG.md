@@ -7,6 +7,27 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- Two flowing panelpapers: River (the owner, 2026-10-15: "There could even
+  be like tha panel is the river, with animations") and Magma (the owner,
+  2026-10-18: "Since we have water, mind as well we can add flowing magma
+  too"). The river is water flowing along the band, in five moods (River,
+  Clear, Deep, Jade, Sunset) on the Colour row; the magma is dark crust
+  with the lava glowing between its plates, in four heats (Magma, Ember,
+  Blaze, Molten). Both are made from real texture sets (ambientCG, CC0:
+  lava sets and river beds, see `qml/ArchDock/Rendering/materials/CREDITS.md`),
+  the water composed over its bed from a real wave spectrum, with the bed
+  showing through the shallows and the sky mirrored in the ripples. Both
+  flow along the band in a loop (the owner: "No need for waves just
+  regular looped flow is enough"). On a 3D panel the water runs over its
+  still bed in two layers of ripples that bend the light and mirror the
+  sky, with the lights glittering on it; the lava creeps along with its
+  crust, lighting itself in a slow shimmer, so the Glow rows stay for it
+  (water takes no glow, like a picture, and a look that takes no glow now
+  draws none). Motion speed sets the flow. A flat panel shows the water
+  with pale gleams sliding along it and the lava with hot streaks creeping
+  along it, each in its own colours unless a colour is chosen. Stands and
+  tiles can wear them too, still; stands and tiles of magma glow with its
+  lava.
 - Pictures can be imported (the owner: "for Icons, pedestals, icon tiles and
   panels, there should be button or option to import a picture"): an Import
   picture… button on Panels > Appearance and on Pedestals (the icons' stands

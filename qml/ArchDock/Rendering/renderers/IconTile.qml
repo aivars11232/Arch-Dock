@@ -16,7 +16,7 @@ Item {
     property real thickness: 0
     property real bevel: 0
     readonly property url textureSource: ["glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
-        "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"].includes(texture)
+        "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "river", "magma"].includes(texture)
         ? Qt.resolvedUrl("../materials/" + texture + ".png") : ""
     readonly property bool extraSurface: String(textureSource).length > 0 || thickness > 0 || bevel > 0
     readonly property bool textureReady: !String(textureSource).length
