@@ -569,3 +569,26 @@ different; an imported picture stays in Arch Dock's data folder when it is
 removed from a panel; an animated picture shows its first frame; a theme
 package's own 3D mesh (the two bundled 3D themes) gets the picture laid on
 each face from the side it faces, with a seam where faces meet.
+
+## Report 2 - recheck
+
+- A fresh clone of origin/main at `bd8e7f0`, configured and built with one
+  job (1550 s, `41`/`42-recheck-*.log`), passed the 21 focused tests
+  (`43-recheck-tests.log`): panel-model, profile-store,
+  theme-asset-processor, panel-settings-schema, panel-settings-transaction,
+  panel-registry, panel-window-capability (431 s), icon-tiles,
+  platform-geometry, panel-materials, live-panel-preview, icon-scene,
+  rendering-import-smoke (174 s, real graphics), studio-truth-matrix-smoke
+  (391 s), runtime-ui-interaction-smoke, studio-preview-contract,
+  profile-matrix-apply, studio-navigation, settings-editor-model,
+  configuration-upgrade and session-startup-runtime (the last two session
+  tests under the KWin 6.8 runner fix).
+- All 672 committed files are the same in the clone and in the workspace
+  (`44-recheck-source-compare.txt`).
+- No crash reporter from a test session was left (the launchers seen
+  during the day were the owner's own file indexer's).
+
+Piece 5 is closed. Next on the list: the river look (the owner: "the panel
+is the river, with animations"), then Phase 4, real 3D icons with their
+animations. A package can be built at any point the owner asks for one.
+
