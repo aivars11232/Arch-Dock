@@ -254,6 +254,11 @@ Item {
     // and whether they rise out of the band or the rest sinks into it.
     readonly property bool pictureRaisesDark: String((sceneDefinition || ({})).panelPictureRise || "light") === "dark"
     readonly property bool pictureRisesOut: String((sceneDefinition || ({})).panelPictureDirection || "inward") === "outward"
+    // The depth map's regulators: its midtone, the steepness through it,
+    // and its blur.
+    readonly property real pictureLevel: bounded("panelPictureLevel", 0.38, 0, 1)
+    readonly property real pictureContrast: bounded("panelPictureContrast", 0.35, 0, 1)
+    readonly property real pictureSmoothing: bounded("panelPictureSmoothing", 0, 0, 1)
     // A picture keeps its own proportions round the band: a wide one
     // repeats fewer times, so it is never squeezed into a square.
     readonly property int pictureRepeats: !generatedPlatform ? 1
@@ -351,6 +356,19 @@ Item {
     readonly property string pedestalMaterialLook: String((sceneDefinition || ({})).pedestalMaterial || "panel").toLowerCase()
     readonly property string pedestalTextureChoice: String((sceneDefinition || ({})).pedestalTexture || "material").toLowerCase()
     readonly property string pedestalColour: String((sceneDefinition || ({})).pedestalColor || "")
+    // A stand wearing a picture of its own stands out in relief as the
+    // panel does: its mesh is cut finely and rises by the picture's
+    // brightness, in its own units. A stand is small, so its relief is a
+    // quarter of its size at the full Relief depth, and its stones stand
+    // out of it (Outward) unless told to sink in.
+    readonly property bool pedestalPictureRelief: pedestalDrawn && pedestalTextureLook === "picture"
+        && pedestalPicture.length > 0
+    readonly property real pedestalPictureDepth: bounded("pedestalPictureDepth", 0.8, 0, 1) * 0.25
+    readonly property bool pedestalPictureRaisesDark: String((sceneDefinition || ({})).pedestalPictureRise || "light") === "dark"
+    readonly property bool pedestalPictureRisesOut: String((sceneDefinition || ({})).pedestalPictureDirection || "outward") === "outward"
+    readonly property real pedestalPictureLevel: bounded("pedestalPictureLevel", 0.38, 0, 1)
+    readonly property real pedestalPictureContrast: bounded("pedestalPictureContrast", 0.35, 0, 1)
+    readonly property real pedestalPictureSmoothing: bounded("pedestalPictureSmoothing", 0, 0, 1)
     readonly property string pedestalAnimation: String((sceneDefinition || ({})).pedestalAnimation || "none").toLowerCase()
     readonly property real pedestalAnimationSpeed: bounded("pedestalAnimationSpeed", 1, 0.1, 5)
     // Picture without a picture is the panel's look.
@@ -360,8 +378,13 @@ Item {
     // Its look from a little above, in its icon's frame: the top shows.
     readonly property real pedestalTilt: 20
     readonly property var pedestalMesh: PlatformGeometry.pedestalShape(pedestalDrawn ? pedestalKind : "column", 24)
+    // Cut finely for its relief, within fewer triangles than the platform
+    // (each icon has a stand of its own).
+    readonly property var pedestalReliefMesh: pedestalPictureRelief
+        ? PlatformGeometry.reliefMesh(pedestalMesh, 0.05, 6000) : null
+    readonly property var pedestalShownMesh: pedestalReliefMesh || pedestalMesh
     readonly property real pedestalShapeHeight: PlatformGeometry.pedestalShapeHeight(pedestalKind)
-    readonly property int pedestalTriangles: pedestalMesh.indexes.length / 3
+    readonly property int pedestalTriangles: pedestalShownMesh.indexes.length / 3
     // Each shape's width per unit, in icon sizes at Size 1, and its reach.
     readonly property real pedestalShapeScale: PlatformGeometry.pedestalShapeScale(pedestalKind)
     readonly property real pedestalShapeReach: PlatformGeometry.pedestalShapeReach(pedestalKind)
@@ -2175,7 +2198,37 @@ Item {
             boxScale: root.generatedPlatform ? 0 : 1.1
             reliefInvert: root.pictureRaisesDark ? 1 : 0
             reliefOutward: root.pictureRisesOut ? 1 : 0
+            reliefLevel: root.pictureLevel
+            reliefContrast: root.pictureContrast
+            reliefSmoothing: root.pictureSmoothing
             meshStep: Number((root.platformMesh || ({})).meshStep || 0.02)
+        }
+        // The picture a stand wears as a real surface.
+        Texture {
+            id: pedestalReliefTexture
+            source: root.pedestalPictureRelief ? root.pedestalPicture : ""
+            generateMipmaps: true
+            mipFilter: Texture.Linear
+            tilingModeHorizontal: Texture.Repeat
+            tilingModeVertical: Texture.Repeat
+        }
+        PictureRelief {
+            id: standRelief
+            pictureMap: TextureInput {
+                texture: pedestalReliefTexture
+                enabled: root.pedestalPictureRelief
+            }
+            reliefDepth: root.pedestalPictureDepth
+            keyLightDirection: keyLight.forward.times(-1)
+            // Laid on each face from the side it faces, about ten stones
+            // across a stand, so they still read on a small one.
+            boxScale: 0.4
+            reliefInvert: root.pedestalPictureRaisesDark ? 1 : 0
+            reliefOutward: root.pedestalPictureRisesOut ? 1 : 0
+            reliefLevel: root.pedestalPictureLevel
+            reliefContrast: root.pedestalPictureContrast
+            reliefSmoothing: root.pedestalPictureSmoothing
+            meshStep: Number((root.pedestalReliefMesh || ({})).meshStep || 0.05)
         }
         // Tilt first, then turn about the tilted view's own up: tilted 90
         // degrees the panel lies level whatever its turn, which then spins
@@ -2577,8 +2630,9 @@ Item {
                         id: standOnPanel
                         objectName: "mesh-pedestal-" + entryNode.index
                         underGlow: root.pedestalGlowAmount > 0
-                        meshData: root.pedestalMesh
+                        meshData: root.pedestalShownMesh
                         materialData: root.pedestalMaterialData
+                        reliefMaterial: root.pedestalPictureRelief ? standRelief : null
                         surfaceTexture: root.pedestalTexture
                         surfaceNormalTexture: root.pedestalNormalTexture
                         emissionScale: root.emissionScale * entryNode.pedestalShine * (1 + entryNode.glow)
@@ -2613,8 +2667,9 @@ Item {
                                 id: standFacing
                                 objectName: "mesh-pedestal-facing-" + entryNode.index
                                 underGlow: root.pedestalGlowAmount > 0
-                                meshData: root.pedestalMesh
+                                meshData: root.pedestalShownMesh
                                 materialData: root.pedestalMaterialData
+                                reliefMaterial: root.pedestalPictureRelief ? standRelief : null
                                 surfaceTexture: root.pedestalTexture
                                 surfaceNormalTexture: root.pedestalNormalTexture
                                 emissionScale: root.emissionScale * entryNode.pedestalShine * (1 + entryNode.glow)

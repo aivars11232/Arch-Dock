@@ -1534,7 +1534,7 @@ run_outer() {
     # The private session's own limit; the Studio truth matrix draws every
     # field of 21 panels and the travel matrix (ADREP-TASK-002) twelve
     # layouts step by step, so they need longer.
-    local session_seconds=180
+    local session_seconds=210
     if [[ "${ARCHDOCK_RENDERING_TRUTH_MATRIX:-}" == '1' ]]; then
         session_seconds=900
     elif [[ "${ARCHDOCK_RENDERING_TRAVEL:-}" == '1' ]]; then

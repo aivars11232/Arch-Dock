@@ -845,7 +845,6 @@ Item {
                         || (!root.styledLayersActive && (String(root.tileSettings.iconTileTexture || "none") !== "none"
                             || root.tileValue("iconTileThickness", 0, 0, 24) > 0)))
                     texture: String(root.tileSettings.iconTileTexture || "none")
-                    picture: String(root.tileSettings.iconTilePicture || "")
                     thickness: root.meshVisualActive ? 0 : root.tileValue("iconTileThickness", 0, 0, 24)
                     bevel: 0
                     shape: root.resolvedIconStyle.iconShape || root.tileShape

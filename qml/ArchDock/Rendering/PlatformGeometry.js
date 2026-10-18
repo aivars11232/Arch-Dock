@@ -1184,8 +1184,19 @@ function reliefPlatform(options, shape, half, twisted, section, faces, track, ru
 // angle) moves the one way between theirs, so the faces stay joined however
 // far it moves, and the surface's edges move with the relief like the rest,
 // rounded, as a generated band's do. Every point may move all the way
-// (uv1's x is 1). Its texture coordinates are the theme's own.
-function reliefMesh(mesh, step) {
+// (uv1's x is 1), and uv1's y says which of the mesh's planes a picture
+// is laid on each face from (boxFace). Its texture coordinates are the
+// theme's own.
+// `limit`, when given, caps the cut mesh's triangles below reliefTriangles
+// (a stand is drawn once per icon).
+// Which of a mesh's three planes a picture is laid on a face from: the one
+// the face mostly faces (0 across z, 1 across x, 2 across y).
+function boxFace(normal) {
+    const x = Math.abs(normal[0]), y = Math.abs(normal[1]), z = Math.abs(normal[2])
+    return z >= x && z >= y ? 0 : x >= y ? 1 : 2
+}
+
+function reliefMesh(mesh, step, limit) {
     if (!mesh || !mesh.positions || !mesh.normals || !mesh.indexes
             || mesh.normals.length !== mesh.positions.length)
         return null
@@ -1206,7 +1217,7 @@ function reliefMesh(mesh, step) {
             longest = Math.max(longest, Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]))
     }
     const cuts = Math.max(1, Math.min(Math.ceil(longest / Math.max(1e-6, finite(step, 0.015))),
-                                      Math.floor(Math.sqrt(reliefTriangles / triangles))))
+                                      Math.floor(Math.sqrt(finite(limit, reliefTriangles) / triangles))))
     const grid = function(t, visit) {
         const A = P[I[3 * t]], B = P[I[3 * t + 1]], C = P[I[3 * t + 2]]
         for (let j = 0; j <= cuts; ++j)
@@ -1238,13 +1249,16 @@ function reliefMesh(mesh, step) {
         const ids = []
         for (let j = 0; j <= cuts; ++j)
             ids.push([])
+        const facing = faceNormals[t]
+        // The plane the picture is laid on this face from, the same for all
+        // its points, so no face is torn between two sides.
+        const box = boxFace(facing)
         grid(t, function(i, j, s, r, q, p) {
             const way = ways[pointKey(p)]
             ids[j].push(out.vertex(p, normalized(way.sum), null,
                                    textured ? [UA[0] * q + UB[0] * s + UC[0] * r, UA[1] * q + UB[1] * s + UC[1] * r]
-                                            : null, null, [1, 0]))
+                                            : null, null, [1, box]))
         })
-        const facing = faceNormals[t]
         for (let j = 0; j < cuts; ++j)
             for (let i = 0; i + j < cuts; ++i) {
                 out.triangle(ids[j][i], ids[j][i + 1], ids[j + 1][i], facing)

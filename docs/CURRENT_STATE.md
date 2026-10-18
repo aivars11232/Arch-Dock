@@ -1,18 +1,19 @@
 # Arch Dock current state
 
 <!-- LIST_PIECE_5_BEGIN -->
-## The owner's list, piece 5: Import picture for panels, stands and icon tiles (Phase 3) — 2026-10-15
+## The owner's list, piece 5: Import picture for panels and stands (Phase 3) — 2026-10-15, closed 2026-10-18
 
 Report `docs/repairs/OWNER-LIST-PIECE-5.md`; Panel Studio pictures from a
 private KWin, desktop pictures from a private Plasma desktop with copies of
 Arch Dock's own settings, a KDE wallpaper as the test picture.
 
-- Settings: `panelPicture` (`surface.picture`), `pedestalPicture`,
-  `folderPedestalPicture` (`surface.parameters3D`), `iconTilePicture`
-  (`iconStyle.tilePicture`), normalized by `PictureUrl` (a local file URL
-  with an absolute path, else empty); "picture" joins the choices of
-  `appearance`, `scene3DTexture`, `pedestalTexture`, `folderPedestalTexture`
-  and `iconTileTexture`; capability `panel-picture` on flat and 3D panels.
+- Settings: `panelPicture` (`surface.picture`), `pedestalPicture` and
+  `folderPedestalPicture` (`surface.parameters3D`), normalized by
+  `PictureUrl` (a local file URL with an absolute path, else empty);
+  "picture" joins the choices of `appearance`, `scene3DTexture`,
+  `pedestalTexture` and `folderPedestalTexture`; capability `panel-picture`
+  on flat and 3D panels. Icon tiles take no picture (the owner, 2026-10-18;
+  the tile picture built on the 15th was removed again).
 - Import: `PanelRegistry::importPicture` copies a local picture through
   `ThemeAssetProcessor` into `AppDataLocation/pictures` (PNG, at most 2048
   pixels on the longest side, content-addressed; 64 MB, 16384 pixels and 16
@@ -20,11 +21,10 @@ Arch Dock's own settings, a KDE wallpaper as the test picture.
   stored on its side is read upright (the processor expects its sides
   swapped), for theme artwork as well.
 - Panel Studio: a picture row (preview, Import picture…, ×) on Panels >
-  Appearance, Pedestals (with the folder item stands) and Icon Tiles;
-  importing gives a stand a shape and tiles their switch, then puts each
-  Look the picture is worn as on Picture (`pictureLooks`: a flat panel's
-  Theme, a 3D panel's Look, the stands', folder item stands' and tiles'
-  Look) with its paired setting (`setLook`); × puts back the Look the part
+  Appearance and Pedestals (with the folder item stands); importing gives a
+  stand a shape, then puts each Look the picture is worn as on Picture
+  (`pictureLooks`: a flat panel's Look, a 3D panel's Look, the stands' and
+  folder item stands' Look) with its paired setting (`setLook`); × puts back the Look the part
   had before in that window, or a plain one. Picture is listed only for a
   part with a picture, and without one falls back to the look it stands
   for.
@@ -32,9 +32,8 @@ Arch Dock's own settings, a KDE wallpaper as the test picture.
   (`PanelProcedural2D.paintPicture`); 3D panels and stands wear it in its
   own colours, solid, without the look's tint, metal, glow or flow
   (`PanelScene3D.wearPicture`), a generated band repeating it at its own
-  proportions; flat stands untinted (`IconScene`); tiles cover-fitted under
-  a 35 % veil in the tile's colour (`IconTile`). Icons are never coloured;
-  every other look draws as before.
+  proportions; flat stands untinted (`IconScene`). Icons are never
+  coloured; every other look draws as before.
 - Relief, real geometry: a 3D platform wearing a picture is cut finely
   (`PlatformGeometry.reliefPlatform` for a generated band, `reliefMesh` for
   a theme's own mesh; uv1's x the movement allowed, `meshStep` the steps)
@@ -44,7 +43,68 @@ Arch Dock's own settings, a KDE wallpaper as the test picture.
   relief's own shadows; Relief depth `panelPictureDepth`, Raised parts
   `panelPictureRise`, Relief direction `panelPictureDirection` (capability
   `picture-relief`, shown only on a 3D panel wearing a picture). A picture
-  fits no glow: hidden in the Studio and not drawn.
+  fits no glow and takes no colour: the glow rows, a flat panel's colour,
+  the platform colour and a stand's colour are hidden while a picture is
+  worn (`panelWearsPicture`,
+  `standWearsOwnPicture` in `PanelWindowSettings.cpp`), and no glow is
+  drawn. A 3D stand wearing a picture of its own is cut for a relief as
+  well (`pedestalReliefMesh`, `reliefMesh` within 6000 triangles, drawn with
+  a second `PictureRelief`, the picture laid on each face at 0.4 repeats
+  per unit, a quarter of a unit deep at the full Relief depth) with
+  `pedestalPictureDepth`, `pedestalPictureRise`, `pedestalPictureDirection`
+  (Outward by default: a stand is a thin plate) and their `folderPedestal`
+  twins (Pedestals
+  rows shown only for a 3D stand wearing its own picture; the folder items'
+  stands take theirs through `folderPedestalSettings`). On a mesh cut by
+  `reliefMesh` each face's points carry in uv1's y the plane the picture is
+  laid on that face from (`boxFace`), read by `picture-relief.vert`, so no
+  face is torn between two sides.
+- Names and places (the owner, 2026-10-18): a panel's surface is its
+  panelpaper, its contours its decoration. Panels > Appearance
+  (`panelAppearanceRows`) opens with a Panelpaper section (the flat
+  `appearance` row and the 3D `scene3DMaterial` row are labelled
+  "Panelpaper"; the choice "picture" reads "Imported picture" in every look
+  list and is always listed, the 3D choice "theme" "Default"; the picture
+  row, "Imported picture" with Import panelpaper…, is `available` only
+  while the picture is the chosen look (`pictureChosen`), and choosing it
+  with no picture opens the chooser, `pictureFallback` putting the previous
+  choice back if it is cancelled), then the panel's rows, then a Panel
+  decorations section with the `panelThemeRows` cards ("Flat decorations",
+  "Platform decorations", the "Decoration package" actions), rendered by
+  `StudioForm`'s `themeSamples` row kind: each `ThemeSampleCard` sits in a
+  Loader (`studio-decoration-<id>`) made only near the visible part of the
+  page (`scrollTo` brings one into view). The Presets page holds presets
+  only (`themeRows: []`); a profile's panel has no Presets page. An unset
+  colour reads "Default".
+- Flat relief: `PanelProcedural2D.shadeHeights` turns one repeat of the
+  picture (drawn in `embossTile`, a small software canvas: the panel's own
+  canvas renders on the graphics card and `getImageData` reads nothing
+  back there) into heights (Relief level and contrast), each pixel's Sobel
+  slope (over Relief smoothing's reach) into a surface normal, and lights
+  it from the top left with a shine toward the viewer, Relief depth
+  scaling the slopes; a level stretch keeps its colour. The shaded pixels
+  (`shadedData`, CanvasImageData) are what the panel's canvas repeats
+  across the band. `pictureDepth` and
+  `pictureRaisesDark` reaching it from `PanelScene` through
+  `PanelSurfaceLoader`; the `picture-relief` rows are offered on a flat
+  panel wearing a picture too, `panelPictureDirection` only in 3D.
+- Relief regulators: `panelPictureLevel` (0.38, the brightness that is
+  half height), `panelPictureContrast` (0.35; the height climbs through
+  the level over a span of 1 - contrast, a smoothstep) and
+  `panelPictureSmoothing` (0; more mip levels in the 3D shaders, a wider
+  pixel comparison in the flat emboss), with `pedestalPicture*` and
+  `folderPedestalPicture*` twins; `PictureRelief.qml` carries them as
+  `reliefLevel`, `reliefContrast`, `reliefSmoothing` (the old fixed
+  smoothstep(0.05, 0.7) is level 0.38 with contrast 0.35); the 3D method
+  is Blender's Displace modifier (value minus midlevel, times strength,
+  along the normal), the flat one the Sobel height-to-normal method of
+  GIMP's normal map filter and BumpToNormalMap (MIT), formulas only. The stands'
+  relief settings now reach the 3D scene (`PanelSurfaceLoader` passes
+  `pedestalPicture*` numbers and the rise and direction strings).
+- Test harness: `tests/run-plasma-lifecycle.sh` names its private KWin
+  socket outright (`--socket`); KWin 6.8 no longer takes the name from
+  WAYLAND_DISPLAY and the sixteen isolated-session tests timed out waiting
+  for it. The rendering import smoke's private session allows 210 s.
 <!-- LIST_PIECE_5_END -->
 
 <!-- LIST_PIECE_4_BEGIN -->

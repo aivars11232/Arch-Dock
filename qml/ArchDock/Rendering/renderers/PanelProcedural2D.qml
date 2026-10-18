@@ -101,6 +101,36 @@ Item {
     property string lookPalette: ""
     // The picture of the "picture" look, Arch Dock's copy of it.
     property string picture: ""
+    // The picture's relief: how far it stands out (0 flat, 1 tallest) and
+    // whether its light or its dark parts do.
+    property real pictureDepth: 0.8
+    property bool pictureRaisesDark: false
+    // The depth map's regulators: the brightness that is half height, how
+    // steeply the height climbs through it, and how far apart the pixels
+    // compared lie (a blur of the map).
+    property real pictureLevel: 0.38
+    property real pictureContrast: 0.35
+    property real pictureSmoothing: 0
+    // One repeat of the picture across the band: twice as tall as the band
+    // is wide, at the picture's own proportions.
+    readonly property int tileHeight: Math.max(48, Math.round(surfaceStyle.lineWidth * 2))
+    readonly property int tileWidth: pictureSize.implicitHeight > 0
+        ? Math.max(1, Math.round(tileHeight * pictureSize.implicitWidth / pictureSize.implicitHeight)) : 1
+    // That repeat shaded for its relief (pixels the canvas can draw), made
+    // once per picture and setting in a small software canvas: the panel's
+    // own canvas draws on the graphics card and cannot read its pixels back.
+    property var shadedData: null
+    readonly property bool reliefWanted: surfaceStyle.picture && pictureDepth > 0.001
+        && String(materialSource).length > 0
+    onReliefWantedChanged: embossTile.refresh()
+    onPictureDepthChanged: embossTile.refresh()
+    onPictureRaisesDarkChanged: embossTile.refresh()
+    onPictureLevelChanged: embossTile.refresh()
+    onPictureContrastChanged: embossTile.refresh()
+    onPictureSmoothingChanged: embossTile.refresh()
+    onTileWidthChanged: embossTile.refresh()
+    onTileHeightChanged: embossTile.refresh()
+    onShadedDataChanged: canvas.requestPaint()
     readonly property url materialSource: surfaceStyle.picture ? picture
         : Qt.resolvedUrl("../materials/" + LayoutEngine.lookTexture(surfaceStyle.material, lookPalette) + ".png")
     readonly property bool materialReady: canvas.materialLoaded
@@ -190,13 +220,18 @@ Item {
         const pictureWidth = pictureSize.implicitWidth
         const pictureHeight = pictureSize.implicitHeight
         if (canvas.materialLoaded && width > 0 && height > 0 && pictureWidth > 0 && pictureHeight > 0) {
-            const scale = Math.max(width / pictureWidth, height / pictureHeight)
+            // The picture at its own proportions, repeated across the shape
+            // as the 3D band repeats it along, so a texture keeps its grain
+            // whatever the panel's size: each repeat twice as tall as the
+            // band is wide, the band showing the middle of it; in relief,
+            // the repeat already shaded for it.
+            const source = reliefWanted && shadedData !== null ? shadedData : String(materialSource)
+            const x0 = left - half, y0 = top - half
             context.save()
             context.globalCompositeOperation = "source-atop"
-            context.drawImage(String(materialSource),
-                              left - half + (width - pictureWidth * scale) / 2,
-                              top - half + (height - pictureHeight * scale) / 2,
-                              pictureWidth * scale, pictureHeight * scale)
+            for (let y = y0 - tileHeight / 2; y < y0 + height; y += tileHeight)
+                for (let x = x0; x < x0 + width; x += tileWidth)
+                    context.drawImage(source, x, y, tileWidth, tileHeight)
             context.restore()
         }
         if (lookGlow > 0) {
@@ -210,14 +245,77 @@ Item {
         }
     }
 
+    // The picture's relief on a flat panel, shaded into one repeat of it
+    // the way normal maps are made from height maps (GIMP's normal map
+    // filter and its descendants): its
+    // brightness is its height, a Sobel filter over the heights around
+    // each pixel (farther apart the more smoothing) gives its slope, and
+    // normalize(-dx, -dy, 1 / strength) its surface normal, lit here by a
+    // light from the top left and the viewer's own reflection, so a
+    // stone's upper edge is lit and its lower edge shadowed. Relief depth
+    // is the strength; with the dark parts raised the map is turned round.
+    // A level stretch keeps its colour.
+    function shadeHeights(context, w, h) {
+        if (w < 3 || h < 3)
+            return null
+        const data = context.getImageData(0, 0, w, h)
+        const pixels = data.data
+        // The height each pixel's brightness stands for: half height at
+        // Relief level, the climb as steep as Relief contrast says.
+        const heights = new Float32Array(w * h)
+        const span = Math.max(0.02, 1 - pictureContrast)
+        const low = pictureLevel - span / 2
+        const flip = pictureRaisesDark ? -1 : 1
+        for (let i = 0, p = 0; i < heights.length; ++i, p += 4) {
+            let t = ((pixels[p] * 0.299 + pixels[p + 1] * 0.587 + pixels[p + 2] * 0.114) / 255 - low) / span
+            t = Math.max(0, Math.min(1, t))
+            heights[i] = flip * t * t * (3 - 2 * t)
+        }
+        const reach = Math.max(1, Math.round(1 + pictureSmoothing * 3))
+        // The Sobel filter's sum is 8 heights wide over 2 * reach pixels.
+        const scale = (3 + pictureDepth * 45) / (8 * reach)
+        // The light, from the top left and above; the half-way vector
+        // between it and the viewer for the shine.
+        const lx = -0.55, ly = -0.55, lz = 0.63
+        const hl = Math.hypot(lx, ly, lz + 1)
+        const hx = lx / hl, hy = ly / hl, hz = (lz + 1) / hl
+        const ambient = 0.3, diffuse = 0.8, shine = 0.45
+        // What a level stretch gets, so that it keeps its colour.
+        const level = ambient + diffuse * lz + shine * Math.pow(hz, 24)
+        for (let row = 0; row < h; ++row) {
+            const up = Math.max(0, row - reach) * w, mid = row * w, down = Math.min(h - 1, row + reach) * w
+            for (let col = 0; col < w; ++col) {
+                const i = mid + col, p = i * 4
+                if (pixels[p + 3] === 0)
+                    continue
+                const left = Math.max(0, col - reach), right = Math.min(w - 1, col + reach)
+                // Sobel: the derivative across, smoothed along (1, 2, 1).
+                const sx = (heights[up + right] + 2 * heights[mid + right] + heights[down + right]
+                            - heights[up + left] - 2 * heights[mid + left] - heights[down + left]) * scale
+                const sy = (heights[down + left] + 2 * heights[down + col] + heights[down + right]
+                            - heights[up + left] - 2 * heights[up + col] - heights[up + right]) * scale
+                const length = Math.hypot(sx, sy, 1)
+                const nx = -sx / length, ny = -sy / length, nz = 1 / length
+                const lit = Math.max(0, nx * lx + ny * ly + nz * lz)
+                const glint = Math.pow(Math.max(0, nx * hx + ny * hy + nz * hz), 24)
+                const shade = (ambient + diffuse * lit + shine * glint) / level
+                pixels[p] = Math.max(0, Math.min(255, pixels[p] * shade))
+                pixels[p + 1] = Math.max(0, Math.min(255, pixels[p + 1] * shade))
+                pixels[p + 2] = Math.max(0, Math.min(255, pixels[p + 2] * shade))
+            }
+        }
+        return data
+    }
+
     // The picture's own size, for fitting it.
     Image {
         id: pictureSize
         visible: false
         asynchronous: true
         source: root.surfaceStyle.picture ? root.picture : ""
-        onStatusChanged: if (status === Image.Ready) canvas.requestPaint()
+        onStatusChanged: if (status === Image.Ready) { canvas.requestPaint(); embossTile.refresh() }
     }
+
 
     function trace(context) {
         context.beginPath()
@@ -515,4 +613,36 @@ Item {
         }
     }
     }
+    // One repeat of the picture, shaded for its relief, drawn in software
+    // (its pixels can be read back) and handed to the panel's canvas as
+    // pixels it draws like a picture.
+    Canvas {
+        id: embossTile
+        visible: false
+        width: root.tileWidth
+        height: root.tileHeight
+        renderTarget: Canvas.Image
+        renderStrategy: Canvas.Immediate
+        function refresh() {
+            if (!root.reliefWanted) {
+                root.shadedData = null
+                return
+            }
+            if (!isImageLoaded(root.materialSource)) {
+                loadImage(root.materialSource)
+                return
+            }
+            requestPaint()
+        }
+        onImageLoaded: refresh()
+        onPaint: {
+            const context = getContext("2d")
+            context.reset()
+            if (!root.reliefWanted || !isImageLoaded(root.materialSource) || width < 3 || height < 3)
+                return
+            context.drawImage(String(root.materialSource), 0, 0, width, height)
+            root.shadedData = root.shadeHeights(context, Math.floor(width), Math.floor(height))
+        }
+    }
+
 }

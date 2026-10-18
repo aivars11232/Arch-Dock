@@ -3228,12 +3228,12 @@ void PanelRegistryTest::keepsPicturesAsLocalFiles()
 {
     PanelRegistry registry;
     const QString panel = QStringLiteral("bottom");
-    registry.setPanelValue(panel, QStringLiteral("iconTilePicture"), QStringLiteral("file:///tmp/archdock-picture.png"));
-    QCOMPARE(registry.panelValue(panel, QStringLiteral("iconTilePicture")).toString(),
+    registry.setPanelValue(panel, QStringLiteral("panelPicture"), QStringLiteral("file:///tmp/archdock-picture.png"));
+    QCOMPARE(registry.panelValue(panel, QStringLiteral("panelPicture")).toString(),
              QStringLiteral("file:///tmp/archdock-picture.png"));
     // A web address is no picture Arch Dock keeps.
-    registry.setPanelValue(panel, QStringLiteral("iconTilePicture"), QStringLiteral("https://example.invalid/picture.png"));
-    QCOMPARE(registry.panelValue(panel, QStringLiteral("iconTilePicture")).toString(), QString());
+    registry.setPanelValue(panel, QStringLiteral("panelPicture"), QStringLiteral("https://example.invalid/picture.png"));
+    QCOMPARE(registry.panelValue(panel, QStringLiteral("panelPicture")).toString(), QString());
     registry.setPanelValue(panel, QStringLiteral("pedestalPicture"), QStringLiteral("file:///tmp/stand.png"));
     registry.setPanelValue(panel, QStringLiteral("pedestalTexture"), QStringLiteral("picture"));
     registry.setPanelValue(panel, QStringLiteral("panelPicture"), QStringLiteral("file:///tmp/panel.png"));

@@ -598,10 +598,10 @@ Window {
         if (sectionNumber === 0 && subtabNumber === 3)
             return standsApplied;
         if (presetPage) {
-            // Presets are tried on the desktop, so a profile's panel gets
-            // only the looks on Presets.
+            // Presets are tried on the desktop, so a profile's panel has no
+            // Presets page; its decorations are on Appearance.
             if (profileMode)
-                return presetPage.kind === "panel" && presetPage.scope === "all";
+                return false;
             // Your own catalog appears once it holds a preset for this panel.
             return presetPage.scope !== "user"
                 || presetsForSelectedPanel(presetPage.kind, "user").length > 0;
@@ -816,10 +816,18 @@ Window {
         if (field.scope === "settings") {
             editorSession = EditorModel.setGlobalValue(editorSession, field.key, value);
         } else {
+            const previous = String(panelValue(field.key, ""));
             editorSession = EditorModel.setPanelValue(editorSession, field.key, value);
             const pair = lookPairs[field.key];
             if (pair !== undefined)
                 editorSession = EditorModel.setPanelValue(editorSession, pair.key, pair.value(value));
+            // Imported picture chosen with no picture imported yet: the
+            // chooser opens at once; cancelled, the previous choice comes back.
+            if (value === "picture" && pictureFor[field.key] !== undefined
+                    && !String(panelValue(pictureFor[field.key], "")).length) {
+                pictureFallback = { key: field.key, value: previous };
+                importPicture({ key: pictureFor[field.key] });
+            }
             if (field.key === "presentationMode") {
                 if (value === "collapsed" && panelValue("collapseMechanism", "open") === "open") {
                     const preferred = previewMode === "vertical" ? "collapse-vertical" : "collapse-horizontal";
@@ -880,7 +888,7 @@ Window {
 
     function colorDisplayValue(field) {
         const value = String(fieldValue(field) || "").trim();
-        return value.length > 0 ? value : qsTr("Theme default");
+        return value.length > 0 ? value : qsTr("Default");
     }
 
     function colorPreviewValue(field) {
@@ -951,12 +959,14 @@ Window {
         scene3DMaterial: { key: "scene3DTexture", value: function(look) { return look; } },
         pedestalMaterial: { key: "pedestalTexture", value: function(look) { return "material"; } },
         folderPedestalMaterial: { key: "folderPedestalTexture", value: function(look) { return "material"; } },
-        iconTileTexture: { key: "iconTileMaterial", value: function(look) { return ["none", "picture"].includes(look) ? "minimal" : look; } }
+        iconTileTexture: { key: "iconTileMaterial", value: function(look) { return look === "none" ? "minimal" : look; } }
     })
     readonly property var lookPairedKeys: ["scene3DTexture", "pedestalTexture", "folderPedestalTexture", "iconTileMaterial"]
+    // A look list's entries: Default is the surface a panel's own design
+    // gives it, Imported picture the picture the user imported.
     function lookLabel(value) {
-        const names = { theme: qsTr("Theme's own look"), panel: qsTr("The panel's look"), none: qsTr("None"),
-                        "floating-glass": qsTr("Floating glass") };
+        const names = { theme: qsTr("Default"), picture: qsTr("Imported picture"), panel: qsTr("Same as the panel"),
+                        none: qsTr("None"), "floating-glass": qsTr("Floating glass") };
         return names[value] !== undefined ? names[value] : titleCase(value);
     }
 
@@ -983,12 +993,13 @@ Window {
             options: descriptor.options && descriptor.options.length > 0 ? descriptor.options : choicesToOptions(descriptor.choices),
             description: descriptor.scope === "global" ? qsTr("Applies to all Arch Dock panels") : ""
         };
-        // "Picture" is a choice once the part has a picture to wear.
-        const pictureKey = pictureFor[descriptor.key];
-        if (pictureKey !== undefined && !String(panelValue(pictureKey, "")).length)
-            row.options = (row.options || []).filter(function(option) { return option.value !== "picture"; });
+        // The row for importing a picture shows only while the imported
+        // picture is the part's chosen panelpaper or look.
+        if (control === "picture")
+            row.available = pictureChosen(descriptor.key);
         if (lookPairs[descriptor.key] !== undefined) {
-            row.label = qsTr("Look");
+            // A panel's surface is its panelpaper; a stand's or tile's its look.
+            row.label = ["appearance", "scene3DMaterial"].includes(descriptor.key) ? qsTr("Panelpaper") : qsTr("Look");
             row.options = (row.options || []).map(function(option) {
                 return { label: lookLabel(option.value), value: option.value };
             });
@@ -1105,7 +1116,7 @@ Window {
                 text = titleCase(String(value));
         }
         else if (row.kind === "color")
-            text = String(value || "").trim().length > 0 ? String(value) : qsTr("Theme default");
+            text = String(value || "").trim().length > 0 ? String(value) : qsTr("Default");
         else if (row.kind === "spin" || row.kind === "slider")
             text = formatFieldValue(row, value);
         return readOnlyRow(row.label, text);
@@ -1130,8 +1141,8 @@ Window {
                 ? qsTr("Free, at %1, %2").arg(Math.round(Number(panelValue("x", 0)))).arg(Math.round(Number(panelValue("y", 0))))
                 : optionLabel("edge", panelValue("edge", "bottom"))),
             readOnlyRow(qsTr("Layout"), optionLabel("layout", panelValue("layout", "adaptive"))),
-            readOnlyRow(qsTr("Look"), look),
-            readOnlyRow(qsTr("Color"), color.length > 0 ? color : qsTr("Theme default")),
+            readOnlyRow(qsTr("Panelpaper"), look),
+            readOnlyRow(qsTr("Color"), color.length > 0 ? color : qsTr("Default")),
             readOnlyRow(qsTr("Opacity"), Math.round(Number(panelValue("opacity", 0.9)) * 100) + "%")]
             .concat(Number(panelValue("panelGlow", 0)) > 0
                 ? summaryRows(["panelGlow", "panelGlowReach", "panelGlowColor"]) : []);
@@ -1236,7 +1247,7 @@ Window {
         }).filter(function(row) { return row !== undefined; });
         if (picked.length === 0)
             return [];
-        return [section(qsTr("Look"), qsTr("Colour tints the texture. Theme uses this look's own material and artwork."))]
+        return [section(qsTr("Panelpaper"), qsTr("The surface the panel wears: a built-in panelpaper, or a picture of your own in relief. Colour tints a panelpaper's texture; Default is the surface the panel's own design gives it."))]
             .concat(picked, [{kind: "actions", label: qsTr("Surface"), actions: [{label: qsTr("Reset material"),
                 icon: "edit-reset", action: "reset-3d-material", available: true}]}]);
     }
@@ -1251,7 +1262,19 @@ Window {
             const reset = look.pop();
             rows.unshift.apply(rows, [heading].concat(look));
             rows.push(reset);
+        } else {
+            // A flat panel's panelpaper rows come from the schema; they get
+            // their heading here.
+            rows.splice(1, 0, section(qsTr("Panelpaper"),
+                qsTr("The surface the panel wears: a built-in panelpaper, or a picture of your own in relief.")));
         }
+        // What remakes the panel's outlines, contours and parts: its
+        // decoration, a built-in one or an imported package.
+        const decorations = panelThemeRows();
+        if (decorations.length > 0)
+            rows.push.apply(rows, [section(qsTr("Panel decorations"),
+                qsTr("Outlines, contours and parts the panel's design gives it: a built-in decoration, or an imported decoration package. Load puts one on the panel; Apply saves it."))]
+                .concat(decorations));
         rows.push.apply(rows, glowRows("panels-glow",
             qsTr("Light round the panel's shape: how strong, how far it reaches out of the panel, and its colour (the look's own when empty).")));
         if (subtabAvailable(1, 10))
@@ -1391,24 +1414,24 @@ Window {
         return [
             {
                 kind: "themeSamples",
-                label: qsTr("Flat looks"),
-                description: qsTr("Flat skins and procedural materials. Load stages the look; Apply saves it."),
+                label: qsTr("Flat decorations"),
+                description: qsTr("Flat skins and procedural materials."),
                 themes: available.filter(theme => !platform(theme))
             },
             {
                 kind: "themeSamples",
-                label: qsTr("Platform looks"),
-                description: qsTr("Perspective and true 3D platforms. Load turns Platform presentation on and remembers your flat look."),
+                label: qsTr("Platform decorations"),
+                description: qsTr("Perspective and true 3D platforms. Load turns Platform presentation on and remembers your flat panelpaper."),
                 themes: available.filter(platform)
             },
             {
-                // Artwork belongs to a panel on the desktop.
+                // An imported package belongs to a panel on the desktop.
                 kind: profileMode ? "none" : "actions",
-                label: qsTr("Artwork"),
+                label: qsTr("Decoration package"),
                 description: artifactDescription(),
                 actions: [
                     {
-                        label: qsTr("Import"),
+                        label: qsTr("Import…"),
                         icon: "document-import",
                         action: "import-theme"
                     },
@@ -1714,17 +1737,15 @@ Window {
     readonly property var pictureFor: ({
         appearance: "panelPicture", scene3DMaterial: "panelPicture", scene3DTexture: "panelPicture",
         pedestalMaterial: "pedestalPicture", pedestalTexture: "pedestalPicture",
-        folderPedestalMaterial: "folderPedestalPicture", folderPedestalTexture: "folderPedestalPicture",
-        iconTileTexture: "iconTilePicture"
+        folderPedestalMaterial: "folderPedestalPicture", folderPedestalTexture: "folderPedestalPicture"
     })
-    // The Looks each picture is worn as (a flat panel's Theme and a 3D
-    // panel's Look, a stand's, a tile's), with the plain one left when the
-    // picture is removed.
+    // The Looks each picture is worn as (a flat panel's Look and a 3D
+    // panel's Look, a stand's), with the plain one left when the picture is
+    // removed.
     readonly property var pictureLooks: ({
         panelPicture: [{ key: "appearance", off: "glass" }, { key: "scene3DMaterial", off: "theme" }],
         pedestalPicture: [{ key: "pedestalMaterial", off: "panel" }],
-        folderPedestalPicture: [{ key: "folderPedestalMaterial", off: "panel" }],
-        iconTilePicture: [{ key: "iconTileTexture", off: "none" }]
+        folderPedestalPicture: [{ key: "folderPedestalMaterial", off: "panel" }]
     })
     // The Look a part had before it wore a picture, by panel and setting:
     // removing the picture while this window is open puts it back (a Neon
@@ -1753,6 +1774,23 @@ Window {
         pictureRow = row;
         pictureDialog.open();
     }
+    // Whether a part's chosen panelpaper or look is its imported picture.
+    function pictureChosen(pictureKey) {
+        return Object.keys(pictureFor).some(function(key) {
+            return pictureFor[key] === pictureKey && String(panelValue(key, "")) === "picture";
+        });
+    }
+    // The choice a part had before "Imported picture" was picked with no
+    // picture to import yet: put back when the chooser is cancelled.
+    property var pictureFallback: null
+    function dropPictureFallback() {
+        const fallback = pictureFallback;
+        pictureFallback = null;
+        if (!fallback || String(panelValue(pictureFor[fallback.key] || "", "")).length)
+            return;
+        setLook(fallback.key, fallback.value);
+        refreshProjection();
+    }
     // Arch Dock copies the chosen picture and the draft wears the copy; the
     // part it is for shows at once: a stand gets a shape, tiles turn on.
     function usePicture(url) {
@@ -1768,15 +1806,14 @@ Window {
         }
         studioError = "";
         editorSession = EditorModel.setPanelValue(editorSession, row.key, String(imported.url));
+        pictureFallback = null;
         // The part is shown first, so that its Look is offered: a stand
-        // gets a shape, folder item stands their own settings, tiles their
-        // switch. Then it wears the picture.
+        // gets a shape, folder item stands their own settings. Then it wears
+        // the picture.
         if (row.key === "pedestalPicture" && String(panelValue("pedestalShape", "none")) === "none")
             editorSession = EditorModel.setPanelValue(editorSession, "pedestalShape", "disc");
         if (row.key === "folderPedestalPicture")
             editorSession = EditorModel.setPanelValue(editorSession, "folderPedestalOwnStyle", true);
-        if (row.key === "iconTilePicture" && panelValue("iconTilesEnabled", true) === false)
-            editorSession = EditorModel.setPanelValue(editorSession, "iconTilesEnabled", true);
         refreshProjection();
         for (const look of pictureLooks[row.key] || [])
             if (fieldOffered(look.key))
@@ -3051,9 +3088,8 @@ Window {
                 kind: root.currentPresetPage ? root.currentPresetPage.kind : "panel"
                 scope: root.currentPresetPage ? root.currentPresetPage.scope : "builtin"
                 presets: root.presetCards
-                // The looks, with the panel presets on Presets.
-                themeRows: root.currentPresetPage && root.currentPresetPage.kind === "panel"
-                    ? root.panelThemeRows() : []
+                // The decorations are on Appearance; Presets holds presets.
+                themeRows: []
                 studio: root
                 catalogStatus: root.currentPresetPage
                     ? presetLibrary.catalogStatus() : ({ valid: true })
@@ -3209,13 +3245,16 @@ Window {
         nameFilters: [qsTr("Pictures (*.png *.jpg *.jpeg *.webp *.bmp *.gif *.svg *.tif *.tiff *.avif *.jxl)"),
             qsTr("All files (*)")]
         onAccepted: root.usePicture(selectedFile)
-        onRejected: root.pictureRow = null
+        onRejected: {
+            root.pictureRow = null;
+            root.dropPictureFallback();
+        }
     }
 
     FileDialog {
         id: themeDialog
 
-        title: qsTr("Import theme package or artwork")
+        title: qsTr("Import decoration package or artwork")
         fileMode: FileDialog.OpenFile
         nameFilters: [qsTr("Theme packages (archdock-theme.json *.archdock-theme.json *.json)"), qsTr("Design files (*.png *.jpg *.jpeg *.webp *.avif *.heif *.heic *.jxl *.svg *.svgz *.tif *.tiff *.pdf *.psd *.xcf *.blend)"), qsTr("All files (*)")]
         onAccepted: {

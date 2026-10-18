@@ -84,8 +84,11 @@ TestCase {
     // A picture the user imported fills the panel's own shape once, scaled
     // to cover it: a red | blue picture shows red round the left of the ring
     // and blue round the right, instead of repeating along the track.
-    function test_pictureFillsThePanelOnce() {
-        // Settings carry a picture as text, as Arch Dock stores it.
+    function test_pictureRepeatsAcrossTheBand() {
+        // Settings carry a picture as text, as Arch Dock stores it. The
+        // picture (red | blue) repeats at its own proportions, twice as tall
+        // as the band is wide, so along the ring's top both colours come
+        // and go within a few repeats.
         const picture = String(Qt.resolvedUrl("fixtures/pictures/red-blue.png"))
         const scene = createTemporaryObject(sceneComponent, captureWindow.contentItem, {
             panelDefinition: { layout: "circular", layoutRadius: 300, iconSize: 52,
@@ -99,11 +102,56 @@ TestCase {
             captureWindow.update()
             const image = grabImage(surface)
             const radius = Number(surface.geometry.radius)
-            const leftX = Math.round(image.width / 2 - radius), rightX = Math.round(image.width / 2 + radius)
-            const y = Math.round(image.height / 2)
-            return image.red(leftX, y) > 180 && image.blue(leftX, y) < 90
-                && image.blue(rightX, y) > 180 && image.red(rightX, y) < 90
-        }, 4000, "the picture covers the ring once: red on its left, blue on its right")
+            const y = Math.round(image.height / 2 - radius)
+            let reds = 0, blues = 0, changes = 0, last = ""
+            for (let x = Math.round(image.width / 2 - 160); x <= Math.round(image.width / 2 + 160); x += 2) {
+                const colour = image.red(x, y) > 150 && image.blue(x, y) < 110 ? "red"
+                    : image.blue(x, y) > 150 && image.red(x, y) < 110 ? "blue" : ""
+                if (colour === "red") ++reds
+                if (colour === "blue") ++blues
+                if (colour.length && last.length && colour !== last) ++changes
+                if (colour.length) last = colour
+            }
+            return reds > 5 && blues > 5 && changes >= 2
+        }, 4000, "the picture repeats along the band: red and blue take turns")
+    }
+
+    // On a flat panel the picture's relief is an embossing by its brightness:
+    // with Relief depth the painted band differs from the flat picture, and
+    // with the dark parts raised it differs again.
+    function test_pictureReliefOnAFlatPanel() {
+        const picture = String(Qt.resolvedUrl("fixtures/pictures/red-blue.png"))
+        const definition = { layout: "circular", layoutRadius: 300, iconSize: 52,
+            appearance: "picture", panelPicture: picture, opacity: 1, rendererTier: "procedural2d",
+            panelPictureDepth: 0 }
+        const scene = createTemporaryObject(sceneComponent, captureWindow.contentItem, { panelDefinition: definition })
+        verify(scene)
+        verify(waitForRendering(scene))
+        const surface = scene.visualPanel
+        compare(surface.pictureDepth, 0)
+        const flat = grabImage(surface)
+        scene.panelDefinition = Object.assign({}, definition, { panelPictureDepth: 0.8 })
+        tryCompare(surface, "pictureDepth", 0.8)
+        let raised = null
+        tryVerify(function() {
+            captureWindow.update()
+            raised = grabImage(surface)
+            return differs(flat, raised)
+        }, 4000, "Relief depth changes the flat picture")
+        scene.panelDefinition = Object.assign({}, definition, { panelPictureDepth: 0.8, panelPictureRise: "dark" })
+        tryCompare(surface, "pictureRaisesDark", true)
+        tryVerify(function() {
+            captureWindow.update()
+            return differs(raised, grabImage(surface))
+        }, 4000, "Raised parts changes the flat picture")
+    }
+
+    function differs(a, b) {
+        for (let y = 0; y < a.height; y += 3)
+            for (let x = 0; x < a.width; x += 3)
+                if (a.red(x, y) !== b.red(x, y) || a.green(x, y) !== b.green(x, y) || a.blue(x, y) !== b.blue(x, y))
+                    return true
+        return false
     }
 
     function test_tintKeepsTexture_data() {

@@ -9,10 +9,32 @@ import "StudioThemes.js" as StudioThemes
 
 // Draws one Panel Studio page from its rows: section titles, notices,
 // controls for settings (switches, sliders, spin boxes, combo boxes, colour
-// and file fields) and action buttons. Presets and looks are cards in the
-// preset browser (PresetBrowser, ThemeSampleCard).
+// and file fields), action buttons and rows of decoration cards
+// (ThemeSampleCard). Presets are cards in the preset browser.
 ScrollView {
     id: root
+
+    // The view the page scrolls in: the one around this form when there is
+    // one (Panel Studio's page scroll), else this form's own.
+    property var pageScroll: null
+    function findPageScroll() {
+        let view = root.parent;
+        while (view && view.contentY === undefined)
+            view = view.parent;
+        pageScroll = view || root.contentItem;
+    }
+    // Scrolls the page so that `item`, something on it, is in view: a
+    // decoration card is drawn only near the visible part of the page.
+    function scrollTo(item) {
+        const flick = pageScroll || contentItem;
+        if (!item || !flick)
+            return;
+        // Where the item is in the page: its place in the view plus how far
+        // the view is scrolled.
+        const y = item.mapToItem(flick, 0, 0).y + flick.contentY;
+        const farthest = Math.max(0, flick.contentHeight - flick.height);
+        flick.contentY = Math.max(0, Math.min(y - 12, farthest));
+    }
 
     required property var studio
     // Panel Studio's look.
@@ -78,7 +100,10 @@ ScrollView {
 
     onRowsChanged: synchronizeRows()
     onPageKeyChanged: contentItem.contentY = 0
-    Component.onCompleted: synchronizeRows()
+    Component.onCompleted: {
+        synchronizeRows();
+        findPageScroll();
+    }
 
     clip: true
     implicitWidth: 0 // The containing layout supplies width; avoid the KDE contentWidth loop.
@@ -140,8 +165,62 @@ ScrollView {
                     type: rowDelegate.modelData.warning ? Kirigami.MessageType.Warning : Kirigami.MessageType.Information
                 }
 
+                // A row of decoration cards, the built-in theme packages that
+                // fit this panel, under their own heading. A card draws the
+                // panel live, so each is made only while it is near the
+                // visible part of the page.
+                ColumnLayout {
+                    visible: rowDelegate.kind === "themeSamples"
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Label {
+                        text: StudioThemes.label(root.theme, rowDelegate.modelData.label || "")
+                        color: root.theme.heading
+                        font.pixelSize: 14
+                        font.letterSpacing: root.theme.letterSpacing
+                        font.weight: root.theme.headingWeight
+                    }
+
+                    Label {
+                        visible: text.length > 0
+                        Layout.fillWidth: true
+                        text: rowDelegate.modelData.description || ""
+                        color: root.theme.description
+                        font.pixelSize: 11
+                        wrapMode: Text.Wrap
+                    }
+
+                    Repeater {
+                        model: rowDelegate.kind === "themeSamples" ? (rowDelegate.modelData.themes || []) : []
+
+                        delegate: Loader {
+                            id: cardSlot
+                            required property var modelData
+                            objectName: "studio-decoration-" + String(modelData.id || "")
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 188
+                            active: {
+                                // Read so that a scroll or a move of the row
+                                // decides again: near the window's visible
+                                // part, within a window's height or two.
+                                const scrolled = root.pageScroll ? root.pageScroll.contentY : 0;
+                                const own = cardSlot.y;
+                                const top = cardSlot.mapToItem(null, 0, 0).y;
+                                const span = Math.max(300, cardSlot.Window.height);
+                                return top > -span * 1.5 && top < span * 2.5;
+                            }
+                            sourceComponent: ThemeSampleCard {
+                                studio: root.studio
+                                theme: cardSlot.modelData
+                            }
+                        }
+                    }
+                }
+
                 StudioFrame {
                     visible: rowDelegate.kind !== "section" && rowDelegate.kind !== "notice"
+                        && rowDelegate.kind !== "themeSamples"
                     Layout.fillWidth: true
                     implicitHeight: fieldRow.implicitHeight + 22
                     radius: root.theme.controlRadius + 1
@@ -382,7 +461,8 @@ ScrollView {
                             Button {
                                 objectName: "studio-picture-import-" + String(rowDelegate.modelData.key || "")
                                 Layout.fillWidth: true
-                                text: qsTr("Import picture…")
+                                text: String(rowDelegate.modelData.key || "") === "panelPicture"
+                                    ? qsTr("Import panelpaper…") : qsTr("Import picture…")
                                 icon.name: "document-import"
                                 onClicked: root.studio.importPicture(rowDelegate.modelData)
                             }

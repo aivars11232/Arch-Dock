@@ -9,16 +9,16 @@ The proposed `v0.1.1` tag and publication need separate authorization.
 
 - Pictures can be imported (the owner: "for Icons, pedestals, icon tiles and
   panels, there should be button or option to import a picture"): an Import
-  picture… button on Panels > Appearance, Pedestals (the icons' stands and
-  the folder items' stands) and Icon Tiles puts a picture of the owner's own
-  on the panel, its stands or its tiles, and a Picture choice joins their
-  look and texture lists. Arch Dock keeps its own copy, at most 2048 pixels
-  on its longest side. A flat panel wears the picture once over its shape; a
-  3D panel round its band, at the picture's own proportions, in its own
-  colours and still; a tile under a light veil in its colour, so the icon on
-  top stays clearly visible. Icons themselves are never coloured (the owner:
-  "those colors should not affect icons at all"), and every existing look
-  draws as before. A photo its camera stored on its side, as phones do, is
+  picture… button on Panels > Appearance and on Pedestals (the icons' stands
+  and the folder items' stands) puts a picture of the owner's own on the
+  panel or its stands, and a Picture choice joins their look lists. Arch
+  Dock keeps its own copy, at most 2048 pixels on its longest side. A flat
+  panel wears the picture once over its shape; a 3D panel round its band, at
+  the picture's own proportions, in its own colours and still. Icon tiles
+  take no picture (the owner: "for icon tiles, picture is not needed, not
+  practicall, colors can be changed and glow and shine, and transparency and
+  shape"), and icons themselves are never coloured (the owner: "those colors
+  should not affect icons at all"); every existing look draws as before. A photo its camera stored on its side, as phones do, is
   now read upright, here and in theme artwork, where it was refused.
 - A 3D panel wears its picture in real relief (the owner: "if the picture
   is rocks, I should be able to see rocks same as I see them in real
@@ -31,7 +31,46 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   says whether the picture's light parts or its dark parts are the raised
   ones. A panel in relief has no glowing inner and outer edge, and a panel
   or a stand wearing a picture draws no glow (the owner: "Glow not
-  practicall for rocks").
+  practicall for rocks"). A picture is worn in its own colours, so a
+  panel's and a stand's Colour setting is put away while they wear one.
+  A 3D stand wearing a picture of its own stands out in relief the same
+  way, with its own Relief depth, Raised parts and Relief direction, its
+  stones standing out of the thin stand by default (the owner: "Add the
+  same thing for ... pedestals too").
+- Panelpaper and panel decorations (the owner: "For pictures that cover
+  panels surface, the name should be panelpaper and for contours, outlines
+  and stuff name should be panel decorations"; "Panelpaper and Panel
+  decorations should be under appierance"). A panel's surface is its
+  panelpaper: Panels > Appearance opens with a Panelpaper section, the
+  built-in panelpapers (Glass, Crystal, Neon and the rest) and "Imported
+  picture" in its list; choosing Imported picture shows the row with the
+  picture and Import panelpaper… (the owner: "those import picture
+  settings appiers only when I select imported picture") and, with no
+  picture imported yet, opens the chooser at once; a 3D panel's "Default"
+  is the surface its own design gives it. A panel's outlines, contours and parts are its
+  decoration: the built-in decorations (the sixteen theme packages
+  installed with Arch Dock, flat and platform ones) are cards under Panel
+  decorations on the same page, with Import…, Re-render and Clear for a
+  decoration package of your own; the Presets page holds presets only. A
+  colour not set reads "Default".
+- A flat panel's picture stands out in relief as well (the owner: "some
+  option to change texture or relief, like with slide, the more the higher
+  is the relief ... that function can be in both 3D and 2D"): the same
+  Relief depth slider embosses the picture by its brightness, lit from the
+  top left, and Raised parts says whether its light or its dark parts
+  stand out; Relief direction stays a 3D panel's choice.
+- The relief has the regulators a relief generator has (the owner, with a
+  depth-map workflow: "That's how i want them on my panels and pedestals.
+  That's what i mean with real relief"; "imported picture should be
+  rendered like that with some extra settings to adjust to users needs"):
+  the picture is the depth map, its brightness the height, and beside
+  Relief depth (the height scale), Raised parts (invert) and Relief
+  direction, there are now Relief level (the brightness that is half
+  height, the map's midtone), Relief contrast (how steeply the height
+  climbs through it: gentle slopes or sharp steps) and Relief smoothing (a
+  blur of the map), for panels and for stands, in 3D and flat. The mesh is
+  cut finely, so there is no terracing to smooth away; the edge-on view is
+  the side check.
 - Panel Studio has UI themes (the owner: "make multiple UI themes", "make a
   separate side tab with themes and their previews"): Classic, Teal Glass,
   Teal HUD, Amber HUD, Alien White, Alien Black and Alien Green, each shown

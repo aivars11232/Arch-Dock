@@ -70,7 +70,7 @@ Item {
     readonly property string description: looksOnly
         ? qsTr("Looks for this panel. Load puts one on it; Apply saves it.")
         : allScope
-        ? qsTr("Complete starting configurations for this panel and looks for it. Built-in presets are read-only: duplicate one to make it yours. Load puts a look on this panel; Apply saves it.")
+        ? qsTr("Complete starting configurations for this panel. Built-in presets are read-only: duplicate one to make it yours.")
         : builtInScope
         ? (panelKind
             ? qsTr("Complete one-panel starting configurations installed with Arch Dock. They are read-only: duplicate one to make it yours.")

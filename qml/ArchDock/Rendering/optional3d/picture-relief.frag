@@ -15,8 +15,10 @@ VARYING float reliefWorldDepth;
 // halving blurrier than it is drawn, its raised parts all at the top.
 float reliefLuma(vec2 uv, vec2 dx, vec2 dy)
 {
-    float luma = dot(textureGrad(pictureMap, uv, dx * 2.0, dy * 2.0).rgb, vec3(0.299, 0.587, 0.114));
-    return smoothstep(0.05, 0.7, mix(luma, 1.0 - luma, reliefInvert));
+    float blur = 2.0 + reliefSmoothing * 6.0;
+    float luma = dot(textureGrad(pictureMap, uv, dx * blur, dy * blur).rgb, vec3(0.299, 0.587, 0.114));
+    float span = max(0.02, 1.0 - reliefContrast);
+    return smoothstep(reliefLevel - span * 0.5, reliefLevel + span * 0.5, mix(luma, 1.0 - luma, reliefInvert));
 }
 
 void MAIN()

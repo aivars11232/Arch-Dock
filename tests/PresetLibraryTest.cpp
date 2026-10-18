@@ -1000,12 +1000,17 @@ void PresetLibraryTest::verifyRenderedCards(bool energyOnly)
         std::unique_ptr<QSignalSpy> canvasPaints;
         if (auto *scene = preview->property("panelSceneItem").value<QObject *>()) {
             if (auto *surface = scene->property("visualPanel").value<QObject *>()) {
+                // The surface's own canvas where it names one (a flat panel
+                // has a small helper canvas as well), else the first.
+                QObject *surfaceCanvas = nullptr;
                 for (auto *child : surface->findChildren<QObject *>()) {
-                    if (child->inherits("QQuickCanvasItem")) {
-                        canvasPaints = std::make_unique<QSignalSpy>(child, SIGNAL(painted()));
-                        break;
-                    }
+                    if (!child->inherits("QQuickCanvasItem")) continue;
+                    if (!surfaceCanvas || child->objectName() == QLatin1String("procedural-surface-canvas"))
+                        surfaceCanvas = child;
+                    if (child->objectName() == QLatin1String("procedural-surface-canvas")) break;
                 }
+                if (surfaceCanvas)
+                    canvasPaints = std::make_unique<QSignalSpy>(surfaceCanvas, SIGNAL(painted()));
             }
         }
         QImage previous;

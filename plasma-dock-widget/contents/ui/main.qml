@@ -116,7 +116,9 @@ PlasmoidItem {
     readonly property var folderPedestalSettings: {
         const source = configuration || ({})
         const settings = {}
-        const keys = ["Size", "Thickness", "Lift", "ViewAngle", "Material", "Texture", "Picture", "Color", "Opacity",
+        const keys = ["Size", "Thickness", "Lift", "ViewAngle", "Material", "Texture", "Picture",
+                      "PictureDepth", "PictureRise", "PictureDirection", "PictureLevel", "PictureContrast",
+                      "PictureSmoothing", "Color", "Opacity",
                       "Glow", "GlowReach", "Animation", "AnimationSpeed"]
         for (const key of ["pedestalShape"].concat(keys.map(name => "pedestal" + name)))
             if (source[key] !== undefined) settings[key] = source[key]

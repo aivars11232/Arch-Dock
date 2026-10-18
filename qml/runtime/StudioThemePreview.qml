@@ -159,7 +159,7 @@ Item {
             spacing: 4
             // A list and a slider, as Appearance shows them.
             Repeater {
-                model: [{ label: "Theme", kind: "list" }, { label: "Glow intensity", kind: "slider" }]
+                model: [{ label: "Look", kind: "list" }, { label: "Glow intensity", kind: "slider" }]
                 delegate: StudioFrame {
                     required property var modelData
                     width: page.width; height: 20

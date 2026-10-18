@@ -886,14 +886,15 @@ void PanelWindowCapabilityTest::studioEditsAProfilesPanel()
     QCOMPARE(popup->property("mainTabIndex").toInt(), 1);
     QCOMPARE(popup->property("editedPanelName").toString(), QStringLiteral("Circle"));
     QTRY_VERIFY(visibleItem(studio, QStringLiteral("studio-profile-edit")));
-    // Presets are tried on the desktop: a profile's panel gets the looks only.
+    // Presets are tried on the desktop: a profile's panel has no Presets
+    // page (its decorations are on Appearance).
     const auto offered = [&](int section, int page) {
         QVariant available;
         QMetaObject::invokeMethod(popup.get(), "subtabAvailable", Q_RETURN_ARG(QVariant, available),
                                   Q_ARG(QVariant, section), Q_ARG(QVariant, page));
         return available.toBool();
     };
-    QVERIFY(offered(1, 6));
+    QVERIFY(!offered(1, 6));
     QVERIFY(!offered(2, 4));
     QVERIFY(!offered(2, 5));
 
@@ -1110,37 +1111,69 @@ void PanelWindowCapabilityTest::studioPicturesComeAndGo()
     };
     const QString picture = QFINDTESTDATA("fixtures/pictures/red-blue.png");
     QVERIFY(!picture.isEmpty());
+    // The row for importing a picture is on the page only while the
+    // imported picture is the chosen panelpaper.
+    const auto pictureRowShown = [&]() {
+        QVariant rows;
+        if (!QMetaObject::invokeMethod(popup.get(), "rowsForCurrentPage", Q_RETURN_ARG(QVariant, rows)))
+            return false;
+        const QVariantList list = rows.metaType() == QMetaType::fromType<QJSValue>()
+            ? rows.value<QJSValue>().toVariant().toList() : rows.toList();
+        for (const QVariant &row : list) {
+            const QVariantMap map = row.toMap();
+            if (map.value("key").toString() == QStringLiteral("panelPicture"))
+                return map.value("available", true).toBool();
+        }
+        return false;
+    };
+    QVERIFY(!pictureRowShown());
 
     // The panel wears Arch Dock's own copy as its look, and is Neon again
     // once the picture is removed.
     QVERIFY(use("panelPicture", picture));
+    QVERIFY(pictureRowShown());
     QCOMPARE(popup->property("studioError").toString(), QString{});
     const QUrl copy(value("panelPicture").toString());
     QVERIFY2(copy.isLocalFile() && copy.toLocalFile() != picture, qPrintable(copy.toString()));
     QVERIFY(QFile::exists(copy.toLocalFile()));
     QCOMPARE(value("appearance").toString(), QStringLiteral("picture"));
-    // A panel wearing a picture has no glow to set, as stone does not glow.
+    // A panel wearing a picture has no glow to set, as stone does not glow,
+    // and no colour, as the picture covers it in its own; it has a relief,
+    // flat as well, though which way it stands is a 3D panel's choice.
     QVariant offered;
-    QVERIFY(QMetaObject::invokeMethod(popup.get(), "fieldOffered", Q_RETURN_ARG(QVariant, offered),
-        Q_ARG(QVariant, QStringLiteral("panelGlow"))));
-    QVERIFY(!offered.toBool());
+    for (const QString &key : {QStringLiteral("panelGlow"), QStringLiteral("color"),
+                               QStringLiteral("panelPictureDirection")}) {
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "fieldOffered", Q_RETURN_ARG(QVariant, offered),
+            Q_ARG(QVariant, key)));
+        QVERIFY2(!offered.toBool(), qPrintable(key));
+    }
+    for (const QString &key : {QStringLiteral("panelPictureDepth"), QStringLiteral("panelPictureRise"),
+                               QStringLiteral("panelPictureContrast"), QStringLiteral("panelPictureLevel"),
+                               QStringLiteral("panelPictureSmoothing")}) {
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "fieldOffered", Q_RETURN_ARG(QVariant, offered),
+            Q_ARG(QVariant, key)));
+        QVERIFY2(offered.toBool(), qPrintable(key));
+    }
     QVERIFY(remove("panelPicture"));
     QCOMPARE(value("panelPicture").toString(), QString{});
     QCOMPARE(value("appearance").toString(), QStringLiteral("neon"));
-
-    // Tiles are turned on to show it, and wear their texture again after.
-    const QString tileTexture = value("iconTileTexture").toString();
-    QVERIFY(use("iconTilePicture", picture));
-    QCOMPARE(value("iconTilesEnabled").toBool(), true);
-    QCOMPARE(value("iconTileTexture").toString(), QStringLiteral("picture"));
-    QVERIFY(remove("iconTilePicture"));
-    QCOMPARE(value("iconTileTexture").toString(), tileTexture);
+    QVERIFY(!pictureRowShown());
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "fieldOffered", Q_RETURN_ARG(QVariant, offered),
+        Q_ARG(QVariant, QStringLiteral("color"))));
+    QVERIFY(offered.toBool());
 
     // A stand gets a shape to wear it on, and Picture as its Look.
     QVERIFY(use("pedestalPicture", picture));
     QCOMPARE(value("pedestalShape").toString(), QStringLiteral("disc"));
     QCOMPARE(value("pedestalMaterial").toString(), QStringLiteral("picture"));
     QCOMPARE(value("pedestalTexture").toString(), QStringLiteral("material"));
+    // Its colour would not show through the picture, so it is not offered;
+    // its relief is a 3D stand's, not a flat panel's.
+    for (const QString &key : {QStringLiteral("pedestalColor"), QStringLiteral("pedestalPictureDepth")}) {
+        QVERIFY(QMetaObject::invokeMethod(popup.get(), "fieldOffered", Q_RETURN_ARG(QVariant, offered),
+            Q_ARG(QVariant, key)));
+        QVERIFY2(!offered.toBool(), qPrintable(key));
+    }
 
     // A file that is no picture is refused with a message and changes nothing.
     QTemporaryDir files;
@@ -1159,30 +1192,21 @@ void PanelWindowCapabilityTest::studioPicturesComeAndGo()
     // Nothing is saved before Apply.
     QCOMPARE(registry->panelDefinition(panel)->toPersistedMap(), before);
 
-    // Picture chosen in the tiles' Look list leaves their 3D finish a plain
-    // one where the tiles have one (none without 3D, as here), and Apply
-    // keeps it all.
-    const auto set = [&](const QString &key, const QVariant &to) {
-        const QVariant field = QVariantMap{{"key", key}, {"scope", "panel"}};
-        return QMetaObject::invokeMethod(popup.get(), "setFieldValue", Q_ARG(QVariant, field), Q_ARG(QVariant, to));
-    };
-    const QJSValue tileFinish = popup->property("lookPairs").value<QJSValue>()
-        .property(QStringLiteral("iconTileTexture")).property(QStringLiteral("value"));
-    QVERIFY(tileFinish.isCallable());
-    QCOMPARE(tileFinish.call({QJSValue(QStringLiteral("picture"))}).toString(), QStringLiteral("minimal"));
-    QVERIFY(use("iconTilePicture", picture));
-    QVERIFY(set("iconTileTexture", "none"));
-    QVERIFY(set("iconTileTexture", "picture"));
-    QCOMPARE(value("iconTileTexture").toString(), QStringLiteral("picture"));
+    // Apply keeps the stand's picture and its Look.
     QVariant applied;
     QVERIFY(QMetaObject::invokeMethod(popup.get(), "applyStudioChanges", Q_RETURN_ARG(QVariant, applied)));
     QVERIFY2(applied.toBool(), qPrintable(popup->property("studioError").toString()));
     PanelRegistry saved;
-    QCOMPARE(saved.panelValue(panel, "iconTileTexture").toString(), QStringLiteral("picture"));
-    QCOMPARE(saved.panelValue(panel, "iconTileMaterial").toString(), QStringLiteral("minimal"));
     QCOMPARE(saved.panelValue(panel, "pedestalMaterial").toString(), QStringLiteral("picture"));
-    QVERIFY(QUrl(saved.panelValue(panel, "iconTilePicture").toString()).isLocalFile());
+    QVERIFY(QUrl(saved.panelValue(panel, "pedestalPicture").toString()).isLocalFile());
     QCOMPARE(saved.panelValue(panel, "appearance").toString(), QStringLiteral("neon"));
+
+    // Without its picture the stand's colour is offered again.
+    QVERIFY(remove("pedestalPicture"));
+    QCOMPARE(value("pedestalMaterial").toString(), QStringLiteral("panel"));
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "fieldOffered", Q_RETURN_ARG(QVariant, offered),
+        Q_ARG(QVariant, QStringLiteral("pedestalColor"))));
+    QVERIFY(offered.toBool());
 }
 
 void PanelWindowCapabilityTest::studioIconTiles()
@@ -1840,7 +1864,7 @@ void PanelWindowCapabilityTest::themeCardsResolveEachThemesOwnRenderer()
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         std::unique_ptr<QObject> popup(component.createWithInitialProperties({
-            {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 6},
+            {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 2},
             {"width", 980}, {"height", 720}}));
         QVERIFY(popup);
         auto *window = qobject_cast<QQuickWindow *>(popup.get());
@@ -1848,16 +1872,14 @@ void PanelWindowCapabilityTest::themeCardsResolveEachThemesOwnRenderer()
         window->show();
         QVERIFY(QTest::qWaitForWindowExposed(window));
         QVERIFY(QQuickTest::qWaitForPolish(window));
-        // Panels > Presets lists the looks after the presets; only the cards
-        // near the view exist, so each look is scrolled into view.
+        // Panels > Appearance lists the decorations under the panelpaper;
+        // a card is drawn only near the visible part of the page, so each
+        // is scrolled into view.
+        QQuickItem *form = visibleItem(window, "studio-page-form");
+        QVERIFY(form);
         const auto showLook = [&](const QString &id) {
-            QQuickItem *list = visibleItem(window, "panel-studio-preset-browser");
-            if (!list) return;
-            const QVariantList items = list->property("items").value<QJSValue>().toVariant().toList();
-            for (int index = 0; index < items.size(); ++index)
-                if (items.at(index).toMap().value("theme").toMap().value("id").toString() == id)
-                    QMetaObject::invokeMethod(list->property("listView").value<QQuickItem *>(),
-                        "positionViewAtIndex", Q_ARG(int, index), Q_ARG(int, 1));
+            if (QQuickItem *slot = visibleItem(window, "studio-decoration-" + id))
+                QMetaObject::invokeMethod(form, "scrollTo", Q_ARG(QVariant, QVariant::fromValue<QObject *>(slot)));
         };
         for (auto it = themes.cbegin(); it != themes.cend(); ++it) {
             const QString id = it.key();
@@ -2764,6 +2786,48 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
             {{"scene3DColor", ""}, {"scene3DMaterial", "theme"},
              {"scene3DTexture", "theme"}, {"scene3DFold", 0.0}}, {});
         QVERIFY(reset.value("success").toBool());
+        // The platform colour is put away while the panel wears a picture,
+        // which is drawn in its own colours, and offered again without it.
+        const QVariantMap copy = registry->importPicture(
+            QUrl::fromLocalFile(QFINDTESTDATA("fixtures/pictures/red-blue.png")));
+        QVERIFY2(copy.value("success").toBool(), qPrintable(copy.value("message").toString()));
+        const auto colourField = [&]() {
+            return fieldByKey(window.panelSettingsEditorSnapshot(panelId, QStringLiteral("studio"))
+                .value(QStringLiteral("panelFields")).toList(), QStringLiteral("scene3DColor"));
+        };
+        QVERIFY(!colourField().value(QStringLiteral("inactive")).toBool());
+        const auto wearing = window.applyPanelSettingsTransaction(panelId,
+            registry->panelDefinition(panelId)->settingsRevision,
+            {{"panelPicture", copy.value("url")}, {"scene3DMaterial", "picture"},
+             {"scene3DTexture", "picture"}}, {});
+        QVERIFY2(wearing.value("success").toBool(), qPrintable(wearing.value("errorMessage").toString()));
+        QVERIFY(colourField().value(QStringLiteral("inactive")).toBool());
+        const auto bare = window.applyPanelSettingsTransaction(panelId,
+            registry->panelDefinition(panelId)->settingsRevision,
+            {{"panelPicture", ""}, {"scene3DMaterial", "theme"}, {"scene3DTexture", "theme"}}, {});
+        QVERIFY(bare.value("success").toBool());
+        QVERIFY(!colourField().value(QStringLiteral("inactive")).toBool());
+        // A 3D stand wearing a picture of its own gets the relief rows and
+        // loses its colour row; in another look it is the other way round.
+        const auto standField = [&](const QString &key) {
+            return fieldByKey(window.panelSettingsEditorSnapshot(panelId, QStringLiteral("studio"))
+                .value(QStringLiteral("panelFields")).toList(), key);
+        };
+        const auto standPicture = window.applyPanelSettingsTransaction(panelId,
+            registry->panelDefinition(panelId)->settingsRevision,
+            {{"pedestalShape", "disc"}, {"pedestalPicture", copy.value("url")}, {"pedestalMaterial", "picture"}}, {});
+        QVERIFY2(standPicture.value("success").toBool(), qPrintable(standPicture.value("errorMessage").toString()));
+        for (const QString &key : {QStringLiteral("pedestalPictureDepth"), QStringLiteral("pedestalPictureRise"),
+                                   QStringLiteral("pedestalPictureDirection")}) {
+            QVERIFY2(!standField(key).isEmpty(), qPrintable(key));
+            QVERIFY2(!standField(key).value(QStringLiteral("inactive")).toBool(), qPrintable(key));
+        }
+        QVERIFY(standField(QStringLiteral("pedestalColor")).value(QStringLiteral("inactive")).toBool());
+        const auto standPlain = window.applyPanelSettingsTransaction(panelId,
+            registry->panelDefinition(panelId)->settingsRevision, {{"pedestalMaterial", "glass"}}, {});
+        QVERIFY(standPlain.value("success").toBool());
+        QVERIFY(standField(QStringLiteral("pedestalPictureDepth")).value(QStringLiteral("inactive")).toBool());
+        QVERIFY(!standField(QStringLiteral("pedestalColor")).value(QStringLiteral("inactive")).toBool());
         const auto rotationDraft = window.resolvePanelSettingsEditorDraft(panelId,
             registry->panelDefinition(panelId)->settingsRevision,
             {{QStringLiteral("panelRotationMode"), QStringLiteral("clockwise")}}, {}, QStringLiteral("studio"));
@@ -5037,22 +5101,15 @@ void PanelWindowCapabilityTest::studioPagePictures()
         }
         if (QLatin1String(page.name) == QLatin1String("panels-presets")) {
             // Further down the same page: where the presets end and the
-            // looks begin.
-            QQuickItem *list = visibleItem(window, "panel-studio-preset-browser");
-            QVERIFY(list);
-            const QVariantList items = list->property("items").value<QJSValue>().toVariant().toList();
-            int firstLook = -1;
-            for (int index = 0; index < items.size() && firstLook < 0; ++index)
-                if (items.at(index).toMap().contains("theme")) firstLook = index;
-            QVERIFY(firstLook > 0);
-            QVERIFY(QMetaObject::invokeMethod(list->property("listView").value<QQuickItem *>(),
-                "positionViewAtIndex", Q_ARG(int, firstLook), Q_ARG(int, 1)));
+            // decorations begin: they are on Appearance, under the panelpaper.
+            studio->setProperty("subTabIndex", 2);
             QTest::qWait(1200);
-            QVERIFY(window->grabWindow().save(folder + "/panels-presets-looks.png"));
-            QVERIFY(QMetaObject::invokeMethod(list->property("listView").value<QQuickItem *>(),
-                "positionViewAtIndex", Q_ARG(int, firstLook), Q_ARG(int, 0)));
-            QTest::qWait(1200);
-            QVERIFY(window->grabWindow().save(folder + "/panels-presets-looks-2.png"));
+            QQuickItem *form = visibleItem(window, "studio-page-form");
+            QQuickItem *first = visibleItem(window, "studio-decoration-obsidian-glass");
+            QVERIFY(form && first);
+            QVERIFY(QMetaObject::invokeMethod(form, "scrollTo", Q_ARG(QVariant, QVariant::fromValue<QObject *>(first))));
+            QTest::qWait(1500);
+            QVERIFY(window->grabWindow().save(folder + "/panels-appearance-decorations.png"));
         }
         window->close();
     }
@@ -5103,11 +5160,9 @@ void PanelWindowCapabilityTest::studioPagePictures()
         const QVariantMap applied = backend.applyPanelSettingsTransaction(panel,
             registry->panelDefinition(panel)->settingsRevision,
             {{"panelPicture", picture}, {"appearance", "picture"}, {"pedestalShape", "disc"},
-             {"pedestalPicture", picture}, {"pedestalMaterial", "picture"}, {"iconTilesEnabled", true},
-             {"iconTileMode", "custom"}, {"iconTilePicture", picture}, {"iconTileTexture", "picture"}});
+             {"pedestalPicture", picture}, {"pedestalMaterial", "picture"}});
         QVERIFY2(applied.value("success").toBool(), qPrintable(QJsonDocument::fromVariant(applied).toJson()));
-        for (const Page &page : {Page{1, 2, "pictures-panels-appearance"}, Page{3, 0, "pictures-icon-tiles"},
-                                 Page{4, 0, "pictures-pedestals"}}) {
+        for (const Page &page : {Page{1, 2, "pictures-panels-appearance"}, Page{4, 0, "pictures-pedestals"}}) {
             std::unique_ptr<QObject> studio(component.createWithInitialProperties({
                 {"selectedPanelId", panel}, {"mainTabIndex", page.section}, {"subTabIndex", page.page}}));
             auto *window = qobject_cast<QQuickWindow *>(studio.get());
@@ -5118,8 +5173,7 @@ void PanelWindowCapabilityTest::studioPagePictures()
             QVERIFY(window->grabWindow().save(folder + QLatin1Char('/') + QLatin1String(page.name) + ".png"));
             if (page.section != 1) {
                 // Again with the page scrolled to its Picture row.
-                const QString key = page.section == 3 ? QStringLiteral("iconTilePicture")
-                                                      : QStringLiteral("pedestalPicture");
+                const QString key = QStringLiteral("pedestalPicture");
                 QQuickItem *scroll = visibleItem(window, "studio-page-scroll");
                 QQuickItem *row = visibleItem(window, "studio-picture-import-" + key);
                 QVERIFY(scroll && row);
@@ -5164,9 +5218,15 @@ void PanelWindowCapabilityTest::studioPagePictures()
         studio->setProperty("subTabIndex", 2);
         QTest::qWait(1200);
         QVERIFY(window->grabWindow().save(folder + "/profile-panel-appearance.png"));
-        studio->setProperty("subTabIndex", 6);
+        // Its decorations, on Appearance.
+        {
+            QQuickItem *form = visibleItem(window, "studio-page-form");
+            QQuickItem *first = visibleItem(window, "studio-decoration-obsidian-glass");
+            QVERIFY(form && first);
+            QVERIFY(QMetaObject::invokeMethod(form, "scrollTo", Q_ARG(QVariant, QVariant::fromValue<QObject *>(first))));
+        }
         QTest::qWait(1500);
-        QVERIFY(window->grabWindow().save(folder + "/profile-panel-looks.png"));
+        QVERIFY(window->grabWindow().save(folder + "/profile-panel-decorations.png"));
         window->close();
     }
     // A 3D panel's Appearance and 3D pages: its look, and how it stands.
@@ -5217,6 +5277,37 @@ void PanelWindowCapabilityTest::studioPagePictures()
             qMax(0.0, flick->property("contentHeight").toReal() - flick->height())));
         QTest::qWait(800);
         QVERIFY(window->grabWindow().save(folder + "/pictures-panels-appearance-3d.png"));
+        window->close();
+    }
+    // Its stands wearing a picture of their own, in relief: the Pedestals
+    // page scrolled to their Picture row, with the relief rows under it.
+    {
+        const QVariantMap copy = registry->importPicture(
+            QUrl::fromLocalFile(QFINDTESTDATA("fixtures/pictures/red-blue.png")));
+        QVERIFY2(copy.value("success").toBool(), qPrintable(copy.value("message").toString()));
+        const QVariantMap applied = backend.applyPanelSettingsTransaction(platformPanel,
+            registry->panelDefinition(platformPanel)->settingsRevision,
+            {{"pedestalShape", "disc"}, {"pedestalPicture", copy.value("url")}, {"pedestalMaterial", "picture"}});
+        QVERIFY2(applied.value("success").toBool(), qPrintable(QJsonDocument::fromVariant(applied).toJson()));
+        std::unique_ptr<QObject> studio(component.createWithInitialProperties({
+            {"selectedPanelId", platformPanel}, {"mainTabIndex", 4}, {"subTabIndex", 0}}));
+        auto *window = qobject_cast<QQuickWindow *>(studio.get());
+        QVERIFY(window);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QTest::qWait(1500);
+        QQuickItem *scroll = visibleItem(window, "studio-page-scroll");
+        QQuickItem *row = visibleItem(window, "studio-picture-import-pedestalPicture");
+        QVERIFY(scroll && row);
+        auto *flick = scroll->property("contentItem").value<QQuickItem *>();
+        QVERIFY(flick);
+        auto *content = flick->property("contentItem").value<QQuickItem *>();
+        QVERIFY(content);
+        const qreal y = row->mapToItem(content, QPointF(0, 0)).y();
+        flick->setProperty("contentY", qBound(0.0, y - flick->height() / 3,
+            qMax(0.0, flick->property("contentHeight").toReal() - flick->height())));
+        QTest::qWait(800);
+        QVERIFY(window->grabWindow().save(folder + "/pictures-pedestals-3d.png"));
         window->close();
     }
 }
@@ -5878,29 +5969,17 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
     QVERIFY(openPage(0, 0));
     QVERIFY(findVisible(QStringLiteral("panel-studio-live-renderer-preview")));
 
-    // The looks are on Presets with the panel presets, nowhere else. The icon
-    // style is chosen in one place, the Icon style choice on Icons >
-    // Appearance; the Icon Styles tab that repeated it is gone (PD-05).
+    // The decorations are on Appearance, under the panelpaper, nowhere
+    // else; Presets holds the panel presets. The icon style is chosen in
+    // one place, the Icon style choice on Icons > Appearance; the Icon
+    // Styles tab that repeated it is gone (PD-05).
     QVERIFY(openPage(1, 2));
-    QVERIFY(!findVisible(QStringLiteral("theme-live-preview-obsidian-glass")));
+    QTRY_VERIFY(findVisible(QStringLiteral("theme-live-preview-obsidian-glass")));
     QVERIFY(openPage(1, 6));
     QCOMPARE(plain(popup->property("currentPresetPage")).toMap().value(QStringLiteral("scope")).toString(),
              QStringLiteral("all"));
     QVERIFY(findVisible(browser));
-    {
-        // Only the cards near the view exist: the look is scrolled into view.
-        QQuickItem *list = findVisible(browser);
-        const QVariantList items = plain(list->property("items")).toList();
-        int at = -1;
-        for (int index = 0; index < items.size(); ++index)
-            if (items.at(index).toMap().value(QStringLiteral("theme")).toMap()
-                    .value(QStringLiteral("id")).toString() == QStringLiteral("obsidian-glass"))
-                at = index;
-        QVERIFY(at >= 0);
-        QVERIFY(QMetaObject::invokeMethod(list->property("listView").value<QQuickItem *>(),
-            "positionViewAtIndex", Q_ARG(int, at), Q_ARG(int, 1)));
-    }
-    QTRY_VERIFY(findVisible(QStringLiteral("theme-live-preview-obsidian-glass")));
+    QVERIFY(!findVisible(QStringLiteral("theme-live-preview-obsidian-glass")));
     QVERIFY(openPage(2, 0));
     QVERIFY(!plain(popup->property("currentSubtabs")).toStringList()
                  .contains(QStringLiteral("Icon Styles")));

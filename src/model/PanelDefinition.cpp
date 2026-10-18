@@ -714,7 +714,22 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
           std::tuple{"folderPedestalAnimation", "folderPedestalAnimation", QVariant(QStringLiteral("none"))},
           std::tuple{"folderPedestalAnimationSpeed", "folderPedestalAnimationSpeed", QVariant(1.0)},
           std::tuple{"pedestalPicture", "pedestalPicture", QVariant(QString{})},
-          std::tuple{"folderPedestalPicture", "folderPedestalPicture", QVariant(QString{})}}) {
+          std::tuple{"folderPedestalPicture", "folderPedestalPicture", QVariant(QString{})},
+          std::tuple{"pedestalPictureDepth", "pedestalPictureDepth", QVariant(0.8)},
+          std::tuple{"pedestalPictureRise", "pedestalPictureRise", QVariant(QStringLiteral("light"))},
+          std::tuple{"pedestalPictureDirection", "pedestalPictureDirection", QVariant(QStringLiteral("outward"))},
+          std::tuple{"folderPedestalPictureDepth", "folderPedestalPictureDepth", QVariant(0.8)},
+          std::tuple{"folderPedestalPictureRise", "folderPedestalPictureRise", QVariant(QStringLiteral("light"))},
+          std::tuple{"folderPedestalPictureDirection", "folderPedestalPictureDirection", QVariant(QStringLiteral("outward"))},
+          std::tuple{"panelPictureLevel", "panelPictureLevel", QVariant(0.38)},
+          std::tuple{"panelPictureContrast", "panelPictureContrast", QVariant(0.35)},
+          std::tuple{"panelPictureSmoothing", "panelPictureSmoothing", QVariant(0.0)},
+          std::tuple{"pedestalPictureLevel", "pedestalPictureLevel", QVariant(0.38)},
+          std::tuple{"pedestalPictureContrast", "pedestalPictureContrast", QVariant(0.35)},
+          std::tuple{"pedestalPictureSmoothing", "pedestalPictureSmoothing", QVariant(0.0)},
+          std::tuple{"folderPedestalPictureLevel", "folderPedestalPictureLevel", QVariant(0.38)},
+          std::tuple{"folderPedestalPictureContrast", "folderPedestalPictureContrast", QVariant(0.35)},
+          std::tuple{"folderPedestalPictureSmoothing", "folderPedestalPictureSmoothing", QVariant(0.0)}}) {
         if (record.contains(QLatin1String(key)))
             definition.surface.parameters3D.insert(QLatin1String(parameter),
                 normalized(QLatin1String(key), fallback));
@@ -830,7 +845,6 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     definition.iconStyle.tileBorderColor = normalized(QStringLiteral("iconTileBorderColor"), definition.iconStyle.tileBorderColor).toString();
     definition.iconStyle.tileBorderWidth = normalized(QStringLiteral("iconTileBorderWidth"), definition.iconStyle.tileBorderWidth).toReal();
     definition.iconStyle.tileTexture = normalized(QStringLiteral("iconTileTexture"), definition.iconStyle.tileTexture).toString();
-    definition.iconStyle.tilePicture = normalized(QStringLiteral("iconTilePicture"), definition.iconStyle.tilePicture).toString();
     definition.iconStyle.tileThickness = normalized(QStringLiteral("iconTileThickness"), definition.iconStyle.tileThickness).toReal();
     definition.iconStyle.tileIconOffsetX = normalized(QStringLiteral("iconTileIconOffsetX"), definition.iconStyle.tileIconOffsetX).toReal();
     definition.iconStyle.tileIconOffsetY = normalized(QStringLiteral("iconTileIconOffsetY"), definition.iconStyle.tileIconOffsetY).toReal();
@@ -1339,7 +1353,22 @@ QVariantMap PanelDefinition::toLegacyMap() const
           std::pair{"folderPedestalAnimation", "folderPedestalAnimation"},
           std::pair{"folderPedestalAnimationSpeed", "folderPedestalAnimationSpeed"},
           std::pair{"pedestalPicture", "pedestalPicture"},
-          std::pair{"folderPedestalPicture", "folderPedestalPicture"}}) {
+          std::pair{"folderPedestalPicture", "folderPedestalPicture"},
+          std::pair{"pedestalPictureDepth", "pedestalPictureDepth"},
+          std::pair{"pedestalPictureRise", "pedestalPictureRise"},
+          std::pair{"pedestalPictureDirection", "pedestalPictureDirection"},
+          std::pair{"folderPedestalPictureDepth", "folderPedestalPictureDepth"},
+          std::pair{"folderPedestalPictureRise", "folderPedestalPictureRise"},
+          std::pair{"folderPedestalPictureDirection", "folderPedestalPictureDirection"},
+          std::pair{"panelPictureLevel", "panelPictureLevel"},
+          std::pair{"panelPictureContrast", "panelPictureContrast"},
+          std::pair{"panelPictureSmoothing", "panelPictureSmoothing"},
+          std::pair{"pedestalPictureLevel", "pedestalPictureLevel"},
+          std::pair{"pedestalPictureContrast", "pedestalPictureContrast"},
+          std::pair{"pedestalPictureSmoothing", "pedestalPictureSmoothing"},
+          std::pair{"folderPedestalPictureLevel", "folderPedestalPictureLevel"},
+          std::pair{"folderPedestalPictureContrast", "folderPedestalPictureContrast"},
+          std::pair{"folderPedestalPictureSmoothing", "folderPedestalPictureSmoothing"}}) {
         if (surface.parameters3D.contains(QLatin1String(parameter)))
             record.insert(QLatin1String(key), surface.parameters3D.value(QLatin1String(parameter)));
     }
@@ -1395,7 +1424,6 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("iconTileBorderColor"), iconStyle.tileBorderColor);
     record.insert(QStringLiteral("iconTileBorderWidth"), iconStyle.tileBorderWidth);
     record.insert(QStringLiteral("iconTileTexture"), iconStyle.tileTexture);
-    record.insert(QStringLiteral("iconTilePicture"), iconStyle.tilePicture);
     record.insert(QStringLiteral("iconTileThickness"), iconStyle.tileThickness);
     record.insert(QStringLiteral("iconTileIconOffsetX"), iconStyle.tileIconOffsetX);
     record.insert(QStringLiteral("iconTileIconOffsetY"), iconStyle.tileIconOffsetY);

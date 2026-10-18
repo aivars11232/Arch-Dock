@@ -134,6 +134,13 @@ unload_kwin_script() {
 
 stop_arch_dock() {
     unload_kwin_script org.archdock.windowwatcher.runtime
+    # The service may have been started anew since this session began (a
+    # test crashes it and D-Bus activates it again): stop the process that
+    # owns the name now, not the one remembered.
+    local current_pid
+    if current_pid="$(arch_dock_service_pid 2>/dev/null)" && [[ "$current_pid" =~ ^[0-9]+$ ]]; then
+        ARCHDOCK_SESSION_ARCH_DOCK_PID="$current_pid"
+    fi
     stop_process "$ARCHDOCK_SESSION_ARCH_DOCK_PID"
     ARCHDOCK_SESSION_ARCH_DOCK_PID=''
 
@@ -1717,6 +1724,10 @@ start_arch_dock() {
 }
 
 start_compositor() {
+    # The socket is named outright: the session's clients connect by
+    # WAYLAND_DISPLAY, and a KWin left to choose takes the first free name
+    # in the private runtime folder (wayland-0 since KWin 6.8) instead.
+    local socket_name="${WAYLAND_DISPLAY:-wayland-0}"
     # KWin's KDE MIME associations differ from the guarded test session.
     # A separate native cache avoids rebuilding each other's database.
     env \
@@ -1729,11 +1740,12 @@ start_compositor() {
         --width 1280 \
         --height 720 \
         --output-count 2 \
+        --socket "$socket_name" \
         --no-global-shortcuts \
         --no-lockscreen >"$ARCHDOCK_TEST_LOG_DIR/kwin.log" 2>&1 &
     ARCHDOCK_SESSION_KWIN_PID=$!
 
-    local display_socket="$XDG_RUNTIME_DIR/${WAYLAND_DISPLAY:-wayland-0}"
+    local display_socket="$XDG_RUNTIME_DIR/$socket_name"
     local attempt
     for ((attempt = 0; attempt < 200; ++attempt)); do
         [[ -S "$display_socket" ]] && return

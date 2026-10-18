@@ -58,12 +58,14 @@ geometry and shaders. A generated platform
 wraps its texture round its band; the two bundled 3D themes keep their vector
 surfaces, since theme packages carry no raster files.
 
-An imported picture (the Picture look of a panel, its stands or its tiles)
-is drawn differently flat and in 3D: a flat panel shows the one picture
-through its shape, scaled to cover it, while a 3D panel lays it round its
-band, repeated at the picture's own proportions, so a thin band shows a
-strip of it each time. A theme package's own 3D mesh maps the picture the
-way it maps its own surface. Arch Dock keeps its copy of every picture
+An imported picture (a panel's or a stand's imported panelpaper) is
+repeated at its own proportions: a flat panel across its band, each repeat
+twice as tall as the band is wide with the band showing the middle of it,
+a 3D panel round its band, so a thin band shows a strip of a photo each
+time; a texture keeps its grain, a photo does not show whole. A theme package's own 3D mesh gets the picture laid
+on each face from the side it faces, so its stones are as large on its
+walls as on its top, with a seam where faces meet. Arch Dock keeps its copy
+of every picture
 imported in its data folder (`~/.local/share/Arch Dock/Arch Dock/pictures`)
 after the picture is removed from a panel, since a profile or another
 panel may still use it; an animated picture shows its first frame.

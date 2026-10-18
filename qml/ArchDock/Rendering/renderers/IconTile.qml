@@ -13,12 +13,9 @@ Item {
     property real borderWidth: 1
     property real radiusFactor: 0.22
     property string texture: "none"
-    // A picture the user imported, worn when the texture is "picture".
-    property string picture: ""
     property real thickness: 0
     property real bevel: 0
-    readonly property url textureSource: texture === "picture" ? picture
-        : ["glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
+    readonly property url textureSource: ["glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
         "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal"].includes(texture)
         ? Qt.resolvedUrl("../materials/" + texture + ".png") : ""
     readonly property bool extraSurface: String(textureSource).length > 0 || thickness > 0 || bevel > 0
@@ -86,15 +83,6 @@ Item {
     // ShapePath.fillItem is ignored by Qt's software Shape renderer (096
     // native probe). Use the same native Canvas/QPainter pattern as the panel
     // surface for this optional, static treatment on both rendering backends.
-    // The picture's own size, for fitting it.
-    Image {
-        id: tilePicture
-        visible: false
-        asynchronous: true
-        source: root.texture === "picture" ? root.picture : ""
-        onStatusChanged: if (status === Image.Ready && surfaceLoader.item) surfaceLoader.item.requestPaint()
-    }
-
     Loader {
         id: surfaceLoader
         anchors.fill: parent
@@ -176,24 +164,6 @@ Item {
                     context.fill()
                     context.fillStyle = context.createPattern(String(root.textureSource), "repeat")
                     context.fill()
-                } else if (root.texture === "picture" && String(root.textureSource).length && materialLoaded) {
-                    // The picture once, covering the tile.
-                    context.save()
-                    context.clip()
-                    const pictureWidth = tilePicture.implicitWidth
-                    const pictureHeight = tilePicture.implicitHeight
-                    if (pictureWidth > 0 && pictureHeight > 0) {
-                        const cover = Math.max(width / pictureWidth, height / pictureHeight)
-                        context.drawImage(String(root.textureSource), (width - pictureWidth * cover) / 2,
-                                          (height - pictureHeight * cover) / 2,
-                                          pictureWidth * cover, pictureHeight * cover)
-                    }
-                    // A veil in the tile's own colour, so the icon on top
-                    // stays clearly readable over a busy picture.
-                    context.globalAlpha = 0.35
-                    context.fillStyle = root.fillColor
-                    context.fill()
-                    context.restore()
                 } else if (String(root.textureSource).length && materialLoaded) {
                     context.fillStyle = context.createPattern(String(root.textureSource), "repeat")
                     context.fill()

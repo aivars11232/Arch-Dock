@@ -109,9 +109,22 @@ Item {
         "shape", "iconShape", "rounded"))
     readonly property string appearance: String(definitionValue(
         "surface", "appearance", "appearance", "glass"))
-    // The picture of the "picture" look, Arch Dock's copy of it.
+    // The picture of the "picture" look, Arch Dock's copy of it, and its
+    // relief: how far it stands out and which parts, light or dark, do.
     readonly property string picture: String(definitionValue(
         "surface", "picture", "panelPicture", ""))
+    readonly property real pictureDepth: {
+        const value = Number((panelDefinition || ({})).panelPictureDepth)
+        return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0.8
+    }
+    readonly property bool pictureRaisesDark: String((panelDefinition || ({})).panelPictureRise || "light") === "dark"
+    function pictureNumber(key, fallback) {
+        const value = Number((panelDefinition || ({}))[key])
+        return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback
+    }
+    readonly property real pictureLevel: pictureNumber("panelPictureLevel", 0.38)
+    readonly property real pictureContrast: pictureNumber("panelPictureContrast", 0.35)
+    readonly property real pictureSmoothing: pictureNumber("panelPictureSmoothing", 0)
     readonly property string customColor: String(definitionValue(
         "surface", "color", "color", ""))
     readonly property real panelOpacity: Number(definitionValue(
@@ -1545,6 +1558,11 @@ Item {
         polygonSides: root.polygonSides
         appearance: root.appearance
         picture: root.picture
+        pictureDepth: root.pictureDepth
+        pictureRaisesDark: root.pictureRaisesDark
+        pictureLevel: root.pictureLevel
+        pictureContrast: root.pictureContrast
+        pictureSmoothing: root.pictureSmoothing
         customColor: root.customColor
         panelOpacity: root.panelOpacity
         sparkleIntensity: root.sparkleIntensity
@@ -1585,6 +1603,8 @@ Item {
                     ["pedestalAnimationSpeed", "pedestalAnimationSpeed"],
                     ["pedestalThickness", "pedestalThickness"], ["pedestalTexture", "pedestalTexture"],
                     ["pedestalPicture", "pedestalPicture"],
+                    ["pedestalPictureDepth", "pedestalPictureDepth"], ["pedestalPictureRise", "pedestalPictureRise"],
+                    ["pedestalPictureDirection", "pedestalPictureDirection"],
                     ["pedestalOpacity", "pedestalOpacity"], ["pedestalGlow", "pedestalGlow"],
                     ["pedestalGlowReach", "pedestalGlowReach"], ["pedestalGlowColor", "pedestalGlowColor"],
                     ["panelGlow", "panelGlow"], ["panelGlowReach", "panelGlowReach"],
@@ -1595,6 +1615,10 @@ Item {
                     ["panelLookBackground", "panelLookBackground"],
                     ["panelPictureDepth", "panelPictureDepth"], ["panelPictureRise", "panelPictureRise"],
                     ["panelPictureDirection", "panelPictureDirection"],
+                    ["panelPictureLevel", "panelPictureLevel"], ["panelPictureContrast", "panelPictureContrast"],
+                    ["panelPictureSmoothing", "panelPictureSmoothing"],
+                    ["pedestalPictureLevel", "pedestalPictureLevel"], ["pedestalPictureContrast", "pedestalPictureContrast"],
+                    ["pedestalPictureSmoothing", "pedestalPictureSmoothing"],
                     ["pedestalLookBackground", "pedestalLookBackground"],
                     ["lookMotionSpeed", "lookMotionSpeed"],
                     ["panelLookColour", "panelLookColour"], ["pedestalLookColour", "pedestalLookColour"],

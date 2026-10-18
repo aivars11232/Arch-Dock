@@ -362,6 +362,26 @@ TestCase {
     // triangle limit; every point moves all the way, and a point two faces
     // share moves the one way in both, between their faces' ways, so the
     // faces stay joined.
+    // A stand wearing a picture is cut finely for its relief, within a
+    // smaller limit than the platform's, and stays a closed solid.
+    function test_pedestalShapesCutForRelief_data() {
+        return PlatformGeometry.pedestalShapes.map(function(kind) { return { tag: kind, kind: kind } })
+    }
+
+    function test_pedestalShapesCutForRelief(data) {
+        const stand = PlatformGeometry.pedestalShape(data.kind, 24)
+        const mesh = PlatformGeometry.reliefMesh(stand, 0.05, 6000)
+        verify(mesh !== null, data.kind + " is cut")
+        verify(mesh.indexes.length > stand.indexes.length, data.kind + " is cut finely")
+        verify(mesh.indexes.length / 3 <= 6000, data.kind + " within the stand's limit")
+        compare(mesh.uv1s.length, mesh.positions.length)
+        verify(mesh.uv1s.every(function(rise) { return rise[0] === 1 }), data.kind + ": every point moves")
+        verify(mesh.uv1s.every(function(rise) { return [0, 1, 2].indexOf(rise[1]) >= 0 }), data.kind + ": a side per point")
+        compare(boundaryEdges(mesh).length, 0, data.kind + " stays closed")
+        compare(misWound(mesh), 0, data.kind + " still faces outward")
+        verify(mesh.meshStep > 0)
+    }
+
     function test_themeMeshCutForRelief() {
         const shape = PlatformGeometry.shapeForLayout("octagon", 8)
         const theme = PlatformGeometry.platform({ shape: shape, band: 0.12, bend: 0 })
@@ -376,6 +396,16 @@ TestCase {
         compare(boundaryEdges(mesh).length, 0, "still closed")
         compare(misWound(mesh), 0, "still faces outward")
         verify(mesh.meshStep > 0)
+        // Each point says which plane its face takes a picture from, the
+        // top's points from across z, every point of a face the same.
+        verify(mesh.uv1s.every(function(rise) { return [0, 1, 2].indexOf(rise[1]) >= 0 }), "a side per point")
+        for (let t = 0; t < mesh.indexes.length; t += 3) {
+            const sides = [0, 1, 2].map(function(c) { return mesh.uv1s[mesh.indexes[t + c]][1] })
+            verify(sides[0] === sides[1] && sides[1] === sides[2], "one side per face")
+            const a = mesh.positions[mesh.indexes[t]], b = mesh.positions[mesh.indexes[t + 1]], c = mesh.positions[mesh.indexes[t + 2]]
+            if (Math.abs(a[2] - b[2]) < 1e-9 && Math.abs(a[2] - c[2]) < 1e-9)
+                compare(sides[0], 0, "a level face takes its picture from across z")
+        }
         const ways = {}
         let edgeWays = 0
         for (let index = 0; index < mesh.positions.length; ++index) {

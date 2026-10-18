@@ -313,8 +313,6 @@ struct PanelIconStyleDefinition
     QString tileBorderColor = QStringLiteral("#94a3b8");
     qreal tileBorderWidth = 1.0;
     QString tileTexture = QStringLiteral("none");
-    // A picture the user imported for the tiles to wear (texture "picture").
-    QString tilePicture;
     qreal tileThickness = 0.0;
     qreal tileIconOffsetX = 0.0;
     qreal tileIconOffsetY = 0.0;

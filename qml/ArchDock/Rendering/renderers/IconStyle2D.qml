@@ -136,7 +136,6 @@ Item {
                 height: layerDelegate.shapeHeight
                 visible: layerDelegate.layerKind === "procedural"
                 texture: layerDelegate.adjustableTile ? String(root.tileSettings.iconTileTexture || "none") : "none"
-                picture: layerDelegate.adjustableTile ? String(root.tileSettings.iconTilePicture || "") : ""
                 thickness: layerDelegate.adjustableTile
                     ? root.clamped(root.tileSettings.iconTileThickness, 0, 24, 0) : 0
                 bevel: layerDelegate.adjustableTile

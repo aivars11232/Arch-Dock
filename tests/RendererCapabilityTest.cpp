@@ -1690,6 +1690,8 @@ private slots:
                 property real depth: 0.8
                 property string rise: "light"
                 property string direction: "inward"
+                property real contrast: 0.35
+                property string standPicture: ""
                 panelDefinition: Object.assign({rendererTier: "true3d", layout: layoutName, layoutRadius: 120,
                                    scene3DQuality: "high", iconSize: 40, layoutPadding: 10,
                                    pathSides: 7, appearance: "neon", scene3DCameraPitch: pitch,
@@ -1698,8 +1700,11 @@ private slots:
                                    panelTravelSpeed: 2, panelRotationTrigger: "idle"},
                                    picture.length ? {panelPicture: picture, scene3DTexture: "picture",
                                                      panelPictureDepth: depth, panelPictureRise: rise,
-                                                     panelPictureDirection: direction} : {},
-                                   look.length ? {scene3DMaterial: look} : {})
+                                                     panelPictureDirection: direction,
+                                                     panelPictureContrast: contrast} : {},
+                                   look.length ? {scene3DMaterial: look} : {},
+                                   standPicture.length ? {pedestalShape: "disc", pedestalPicture: standPicture,
+                                                          pedestalMaterial: "picture", pedestalPictureDepth: depth} : {})
                 entryDelegateContext: ({hostKind: "free"})
                 hostCapabilities: ({rotation: {available: true}})
                 orderedEntries: [0, 1, 2, 3, 4, 5].map(function(index) {
@@ -1960,11 +1965,26 @@ private slots:
             QTest::qWait(200);
             QVERIFY2(pixels() != deep, "Relief direction changes the drawn surface");
             scene->setProperty("direction", QStringLiteral("inward"));
+            // A steeper climb through the midtone changes it too.
+            scene->setProperty("contrast", 1.0);
+            QTRY_COMPARE(renderer->property("pictureContrast").toDouble(), 1.0);
+            QTest::qWait(200);
+            QVERIFY2(pixels() != deep, "Relief contrast changes the drawn surface");
+            scene->setProperty("contrast", 0.35);
             if (!evidence.isEmpty()) {
                 QVERIFY(flat.save(evidence + QStringLiteral("/generated/") + tag + QStringLiteral("-picture-flat.png")));
                 QVERIFY(deep.save(evidence + QStringLiteral("/generated/") + tag + QStringLiteral("-picture-deep.png")));
             }
             scene->setProperty("depth", 0.8);
+            // A stand wearing a picture of its own rises the same way.
+            scene->setProperty("standPicture", QUrl::fromLocalFile(QFINDTESTDATA("fixtures/pictures/red-blue.png")).toString());
+            QTRY_VERIFY(renderer->property("pedestalPictureRelief").toBool());
+            QObject *standNode = renderer->findChild<QObject *>(QStringLiteral("mesh-pedestal-0"));
+            QVERIFY(standNode);
+            QTRY_VERIFY(standNode->property("risesReady").toBool());
+            QVERIFY(objectValue(standNode->property("reliefMaterial")));
+            scene->setProperty("standPicture", QString());
+            QTRY_VERIFY(!renderer->property("pedestalPictureRelief").toBool());
             // Picture as the platform's Look wears it the same way; without a
             // picture that Look is the theme's own, and the scene stays drawn.
             scene->setProperty("look", QStringLiteral("picture"));

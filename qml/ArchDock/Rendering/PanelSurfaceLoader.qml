@@ -41,6 +41,13 @@ Item {
     property int polygonSides: 6
     property string appearance: "glass"
     property string picture: ""
+    // The picture's relief on a flat panel: how far, and whether its light
+    // or its dark parts stand out.
+    property real pictureDepth: 0.8
+    property bool pictureRaisesDark: false
+    property real pictureLevel: 0.38
+    property real pictureContrast: 0.35
+    property real pictureSmoothing: 0
     property string customColor: ""
     property real panelOpacity: 0.9
     property real sparkleIntensity: 0
@@ -224,7 +231,9 @@ Item {
                         "pedestalOpacity", "pedestalGlow", "pedestalGlowReach", "pedestalViewAngle",
                         "panelGlow", "panelGlowReach", "iconGlow", "iconGlowReach", "iconTileGlow",
                         "iconTileGlowReach", "panelLookBackground", "pedestalLookBackground",
-                        "lookMotionSpeed", "panelPictureDepth"])
+                        "lookMotionSpeed", "panelPictureDepth", "panelPictureLevel", "panelPictureContrast",
+                        "panelPictureSmoothing", "pedestalPictureDepth", "pedestalPictureLevel",
+                        "pedestalPictureContrast", "pedestalPictureSmoothing"])
                     if (parameters[key] !== undefined && parameters[key] !== null
                             && Number.isFinite(Number(parameters[key])))
                         merged[key] = Number(parameters[key])
@@ -239,6 +248,8 @@ Item {
                                             ["pedestalPicture", "pedestalPicture"],
                                             ["panelPictureRise", "panelPictureRise"],
                                             ["panelPictureDirection", "panelPictureDirection"],
+                                            ["pedestalPictureRise", "pedestalPictureRise"],
+                                            ["pedestalPictureDirection", "pedestalPictureDirection"],
                                             ["pedestalFacing", "pedestalFacing"],
                                             ["pedestalAnimation", "pedestalAnimation"],
                                             ["pedestalGlowColor", "pedestalGlowColor"],
@@ -345,6 +356,11 @@ Item {
             polygonSides: root.polygonSides
             appearance: root.appearance
             picture: root.picture
+            pictureDepth: root.pictureDepth
+            pictureRaisesDark: root.pictureRaisesDark
+            pictureLevel: root.pictureLevel
+            pictureContrast: root.pictureContrast
+            pictureSmoothing: root.pictureSmoothing
             customColor: root.customColor
             lightningBackground: root.lightningBackground
             glowIntensity: root.glowIntensity

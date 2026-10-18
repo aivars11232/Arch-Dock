@@ -16,26 +16,28 @@ VARYING float reliefWorldDepth;
 
 // The picture's coordinates at a point: the band's own, repeated along it,
 // or on a mesh not made for it (a theme's own) laid on each face straight
-// from the side it faces, boxScale repeats per unit, so its stones are as
-// large on its walls as on its top.
-vec2 reliefPictureUv(vec2 meshUv, vec3 position, vec3 normal)
+// from the side it faces (uv1's y, chosen for the whole face when the mesh
+// was cut, so no face is torn between two sides), boxScale repeats per
+// unit, so its stones are as large on its walls as on its top.
+vec2 reliefPictureUv(vec2 meshUv, vec3 position, float side)
 {
     if (boxScale <= 0.0)
         return vec2(meshUv.x * repeatU, meshUv.y);
-    vec3 facing = abs(normal);
-    return (facing.z >= facing.x && facing.z >= facing.y ? position.xy
-            : facing.x >= facing.y ? position.yz : position.xz) * boxScale;
+    return (side < 0.5 ? position.xy : side < 1.5 ? position.yz : position.xz) * boxScale;
 }
 
-float reliefHeightAt(vec2 uv, float level)
+// The height a brightness stands for: half height at reliefLevel, the
+// climb through it as steep as reliefContrast says.
+float reliefHeightAt(vec2 uv, float lod)
 {
-    float luma = dot(textureLod(pictureMap, uv, level).rgb, vec3(0.299, 0.587, 0.114));
-    return smoothstep(0.05, 0.7, mix(luma, 1.0 - luma, reliefInvert));
+    float luma = dot(textureLod(pictureMap, uv, lod).rgb, vec3(0.299, 0.587, 0.114));
+    float span = max(0.02, 1.0 - reliefContrast);
+    return smoothstep(reliefLevel - span * 0.5, reliefLevel + span * 0.5, mix(luma, 1.0 - luma, reliefInvert));
 }
 
 void MAIN()
 {
-    vec2 uv = reliefPictureUv(UV0, VERTEX, NORMAL);
+    vec2 uv = reliefPictureUv(UV0, VERTEX, UV1.y);
     reliefUv = uv;
     reliefRise = UV1.x;
     reliefHeight = 1.0;
@@ -46,7 +48,7 @@ void MAIN()
         // across that width.
         float span = boxScale > 0.0 ? 1.0 / boxScale : lengthU / max(repeatU, 1.0);
         float steps = span / max(meshStep, 1e-4);
-        float level = max(0.0, log2(size.x / max(2.0 * steps, 1.0)));
+        float level = max(0.0, log2(size.x / max(2.0 * steps, 1.0))) + reliefSmoothing * 3.0;
         float h = reliefHeightAt(uv, level);
         float amount = reliefDepth * UV1.x;
         reliefHeight = h;

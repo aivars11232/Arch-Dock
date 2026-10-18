@@ -125,6 +125,25 @@ QStringList standLooks(const ArchDock::PanelDefinition &candidate,
     return {surface, texture == QStringLiteral("material") ? surface : texture};
 }
 
+// Whether the panel is drawn with the picture it was given. A picture is
+// worn in its own colours, so a colour setting changes nothing under it.
+bool panelWearsPicture(const ArchDock::PanelDefinition &candidate,
+                       const std::optional<ArchDock::RendererTier> &tier)
+{
+    return !candidate.surface.picture.isEmpty()
+        && panelLooks(candidate, tier).contains(QStringLiteral("picture"));
+}
+
+// The same for a stand wearing a picture of its own as its look.
+bool standWearsOwnPicture(const ArchDock::PanelDefinition &candidate, const QString &prefix)
+{
+    const QVariantMap &values = candidate.surface.parameters3D;
+    if (values.value(prefix + QStringLiteral("Picture")).toString().isEmpty())
+        return false;
+    return values.value(prefix + QStringLiteral("Material")).toString() == QStringLiteral("picture")
+        || values.value(prefix + QStringLiteral("Texture")).toString() == QStringLiteral("picture");
+}
+
 bool looksGlow(const QStringList &looks)
 {
     return glowFitsLook(looks.first()) && (looks.last() == QStringLiteral("none") || glowFitsLook(looks.last()));
@@ -883,6 +902,9 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             // Native colour is the live material control on Panels > 3D.
             available = tier != ArchDock::RendererTier::True3D
                 && controlAvailable(descriptor->editor.capability);
+            // A picture covers the whole band in its own colours.
+            if (available && key == QStringLiteral("color") && panelWearsPicture(candidate, tier))
+                inactive = true;
             break;
         case ArchDock::EditorCapability::DynamicGlow:
         {
@@ -1064,6 +1086,9 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                     && candidate.surface.parameters3D.value(QStringLiteral("pedestalShape"),
                            QStringLiteral("none")).toString() != QStringLiteral("auto"))
                     inactive = true;
+                // The platform colour does nothing under a picture.
+                if (available && key == QStringLiteral("scene3DColor") && panelWearsPicture(candidate, tier))
+                    inactive = true;
             }
             break;
         }
@@ -1119,10 +1144,12 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             available = tier == ArchDock::RendererTier::Procedural2D || tier == ArchDock::RendererTier::True3D;
             break;
         case ArchDock::EditorCapability::PictureRelief:
-            // Only a 3D panel wearing a picture stands out in relief.
+            // A panel wearing a picture stands out in relief, flat (its
+            // picture embossed by its brightness) or in 3D (its mesh moving);
+            // the direction, in or out of the band, is a 3D panel's.
             available = true;
-            inactive = tier != ArchDock::RendererTier::True3D || candidate.surface.picture.isEmpty()
-                || !panelLooks(candidate, tier).contains(QStringLiteral("picture"));
+            inactive = !panelWearsPicture(candidate, tier)
+                || (key == QStringLiteral("panelPictureDirection") && tier != ArchDock::RendererTier::True3D);
             break;
         case ArchDock::EditorCapability::Pedestals:
         {
@@ -1148,6 +1175,13 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 if (key == QStringLiteral("folderPedestalAnimationSpeed"))
                     inactive = inactive || values.value(QStringLiteral("folderPedestalAnimation"),
                         QStringLiteral("none")).toString() == QStringLiteral("none");
+                // A stand's colour does nothing under its own picture; its
+                // relief is a 3D stand's wearing one.
+                if (key == QStringLiteral("folderPedestalColor"))
+                    inactive = inactive || standWearsOwnPicture(candidate, QStringLiteral("folderPedestal"));
+                if (key.startsWith(QStringLiteral("folderPedestalPicture")) && key != QStringLiteral("folderPedestalPicture"))
+                    inactive = inactive || tier != ArchDock::RendererTier::True3D
+                        || !standWearsOwnPicture(candidate, QStringLiteral("folderPedestal"));
                 // Glow where light round the stand makes sense; its reach
                 // only while it shines.
                 if (key.startsWith(QStringLiteral("folderPedestalGlow")))
@@ -1176,6 +1210,13 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 if (key == QStringLiteral("pedestalAnimationSpeed"))
                     inactive = inactive || values.value(QStringLiteral("pedestalAnimation"),
                         QStringLiteral("none")).toString() == QStringLiteral("none");
+                // A stand's colour does nothing under its own picture; its
+                // relief is a 3D stand's wearing one.
+                if (key == QStringLiteral("pedestalColor"))
+                    inactive = inactive || standWearsOwnPicture(candidate, QStringLiteral("pedestal"));
+                if (key.startsWith(QStringLiteral("pedestalPicture")) && key != QStringLiteral("pedestalPicture"))
+                    inactive = inactive || tier != ArchDock::RendererTier::True3D
+                        || !standWearsOwnPicture(candidate, QStringLiteral("pedestal"));
                 // Glow where light round the stand makes sense; its reach and
                 // colour only while it shines; no glowing motion without it.
                 const bool glowFits = standGlowFits(candidate, tier, QStringLiteral("pedestal"));
@@ -1472,6 +1513,18 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             // Plain names where the stored value is a code word.
             static const QHash<QString, QHash<QString, const char *>> labels{
                 {QStringLiteral("folderLayout"), {{QStringLiteral("track"), QT_TR_NOOP("Along the dock")}}},
+                // The surface a panel's own design gives it: its flat panelpaper
+                // on a generated platform, a decoration's artwork on its own
+                // mesh; and the picture the user imported, in every look list.
+                {QStringLiteral("scene3DMaterial"), {{QStringLiteral("theme"), QT_TR_NOOP("Default")},
+                                                     {QStringLiteral("picture"), QT_TR_NOOP("Imported picture")}}},
+                {QStringLiteral("scene3DTexture"), {{QStringLiteral("theme"), QT_TR_NOOP("Default")},
+                                                    {QStringLiteral("picture"), QT_TR_NOOP("Imported picture")}}},
+                {QStringLiteral("appearance"), {{QStringLiteral("picture"), QT_TR_NOOP("Imported picture")}}},
+                {QStringLiteral("pedestalMaterial"), {{QStringLiteral("picture"), QT_TR_NOOP("Imported picture")}}},
+                {QStringLiteral("pedestalTexture"), {{QStringLiteral("picture"), QT_TR_NOOP("Imported picture")}}},
+                {QStringLiteral("folderPedestalMaterial"), {{QStringLiteral("picture"), QT_TR_NOOP("Imported picture")}}},
+                {QStringLiteral("folderPedestalTexture"), {{QStringLiteral("picture"), QT_TR_NOOP("Imported picture")}}},
                 {QStringLiteral("folderRingSize"),
                  {{QStringLiteral("small"), QT_TR_NOOP("Small")},
                   {QStringLiteral("panel"), QT_TR_NOOP("Same as panel")}}},

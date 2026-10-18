@@ -35,6 +35,12 @@ CustomMaterial {
     property real boxScale: 0
     // 1 raises the picture's dark parts instead of its light ones.
     property real reliefInvert: 0
+    // The brightness that is half height (the depth map's midtone), how
+    // steeply the height climbs through it (0 gently over the whole range,
+    // 1 a sharp step), and how much the picture is blurred for it.
+    property real reliefLevel: 0.38
+    property real reliefContrast: 0.35
+    property real reliefSmoothing: 0
     property TextureInput pictureMap: TextureInput {}
 
     shadingMode: CustomMaterial.Shaded
