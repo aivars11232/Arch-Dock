@@ -741,11 +741,68 @@ Item {
             if (layer) diameter = (1 - 2 * Number(layer.inset || 0))
                 * (layer.shape === "diamond" ? 0.96 : 1)
         }
+        // A bubble takes the plate's place.
+        if (bubbleWanted(visual)) return null
         return PlatformGeometry.tile({shape: visual.resolvedIconStyle.iconShape,
             thickness: 2 * thickness / logicalSize,
             bevel: 2 * Math.max(0, Math.min(12, root.number(values, "iconTileBevel", 0))) / logicalSize,
             diameter: diameter})
     })
+    // Whether an entry's tile is a bubble (Icon Tiles > 3D tile form).
+    function bubbleWanted(visual) {
+        return visual !== null && visual.tileRenderingEnabled
+            && String((visual.tileSettings || ({})).iconTileForm || "flat") === "bubble"
+    }
+    // How wide and how high an entry's bubble has to be to hold its icon
+    // whole: wide enough for the icon's whole picture, whatever the shape
+    // (a circle wider than the picture's diagonal, a diamond wider still),
+    // with a margin for the outline; high enough for the icon's volume and
+    // its rings at its depth, and never lower than nine tenths of the
+    // tile's half width. In the tile's frame (1 = half the cell).
+    function bubbleFit(visual) {
+        const values = visual ? visual.tileSettings || ({}) : ({})
+        const logicalSize = Math.max(1, Number(visual && visual.logicalSize || 52))
+        const pictureScale = Math.max(0.25, Math.min(1.5, root.number(values, "iconTileIconScale", 100) / 100))
+        const halfSide = 0.72 * pictureScale
+        const offsetX = 2 * root.number(values, "iconTileIconOffsetX", 0) / logicalSize
+        const offsetY = -2 * root.number(values, "iconTileIconOffsetY", 0) / logicalSize
+        const shape = visual ? visual.resolvedIconStyle.iconShape : "rounded"
+        const own = 0.92 * Number(visual && visual.resolvedIconStyle.diameter || 1)
+        const diameter = Math.max(own, 1.08 * PlatformGeometry.containingScale(shape, halfSide, offsetX, offsetY))
+        const mesh = visual ? visual.solidMesh : null
+        const reach = mesh ? Number(mesh.reach || mesh.depth || 0) : 0
+        // The icon's frame is a hundred units over 0.72 of the cell: a unit
+        // is 0.0144 of half the cell.
+        // Each half of the shell, from the icon's middle: past the icon's
+        // reach, never a thin pancake.
+        const height = Math.max(0.6, 0.15 + 1.25 * root.iconDepth * reach * 0.0144 * pictureScale)
+        // The icon's middle: its picture's plane plus half its volume, in
+        // the tile's frame (the glyph's plane sits a hundredth of the cell
+        // before the tile, the volume's back on it).
+        const middle = 0.02 + 0.02 * (mesh ? Number(mesh.depth || 0) : 0) * root.iconDepth
+        return { diameter: diameter, height: height, middle: middle }
+    }
+    // The bubble over each tile: the tile's outline risen as a dome round
+    // the icon, standing on the tile's face.
+    readonly property var bubbleMeshes: entryVisuals.map(function(entry) {
+        const visual = entry ? entry.meshVisualItem : null
+        if (!bubbleWanted(visual)) return null
+        const fit = bubbleFit(visual)
+        return PlatformGeometry.bubble({shape: visual.resolvedIconStyle.iconShape, height: fit.height, diameter: fit.diameter})
+    })
+    // A bubble's glass: clear and glossy, a light tint of the tile's colour
+    // (glass is paler than what it stands on), as clear as the tile's
+    // opacity allows.
+    function bubbleMaterial(visual) {
+        const values = visual ? visual.tileSettings || ({}) : ({})
+        const base = tileMaterial(visual)
+        const tint = Qt.color(base.baseColor)
+        return {format: "org.archdock.material",
+            baseColor: Qt.rgba(0.62 + 0.38 * tint.r, 0.62 + 0.38 * tint.g, 0.62 + 0.38 * tint.b, 1),
+            metalness: 0, roughness: 0.06,
+            opacity: 0.4 * Math.max(0.05, Math.min(1, root.number(values, "iconTileOpacity", 0.8))),
+            surfaceOpacity: 1, emissiveColor: base.emissiveColor, emissiveStrength: 0, look: "glass"}
+    }
     function tileMaterial(visual) {
         const values = visual ? visual.tileSettings || ({}) : ({})
         const requested = String(values.iconTileMaterial || "minimal")
@@ -2620,6 +2677,14 @@ Item {
                     * size / Math.max(1, Number(visual.logicalSize || 52)) : 0
                 readonly property var tileMesh: root.tileMeshes[index] || null
                 readonly property var tileMaterial: root.tileMaterial(visual)
+                readonly property var bubbleMesh: root.bubbleMeshes[index] || null
+                readonly property var bubbleMaterial: root.bubbleMaterial(visual)
+                // Where the bubble's middle lies: the icon's own middle, in
+                // the tile's frame.
+                readonly property real bubbleMiddle: bubbleMesh !== null ? root.bubbleFit(visual).middle : 0
+                readonly property color bubbleOutlineColour: String((visual && visual.tileSettings || ({})).iconTileBorderColor || "#94a3b8")
+                readonly property real bubbleOutlineWidth: Math.max(0.5, Math.min(12,
+                    root.number(visual ? visual.tileSettings : null, "iconTileBorderWidth", 1)))
                 readonly property bool tileShown: visual !== null && visual.tileRenderingEnabled
                 // Where the entry stands. On a generated platform the layout's
                 // own position, carried onto the platform's centre line: the
@@ -2941,6 +3006,58 @@ Item {
                                     * root.number(entryNode.tileMotion, "scaleY", 1), entryNode.size / 2)
                             opacity: root.number(entryNode.tileMotion, "opacity", 1) * (1 - root.collapseProgress)
                         }
+                        // The bubble (Icon Tiles > 3D tile form): a closed glass
+                        // shell in the tile's shape round the icon, in the
+                        // tile's place, its middle on the icon's own middle so
+                        // the icon sits at its centre from every side, its
+                        // outline drawn round it (a shell a little larger, seen
+                        // only from inside) so the bubble shows for all its
+                        // clearness.
+                        IconStyle3D {
+                            objectName: "mesh-tile-bubble-" + entryNode.index
+                            meshData: entryNode.bubbleMesh
+                            materialData: entryNode.bubbleMaterial
+                            visible: entryNode.tileShown && entryNode.bubbleMesh !== null && root.collapseProgress < 1
+                            position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
+                                entryNode.size / 2 - root.number(entryNode.tileMotion, "y", 0),
+                                entryNode.bubbleMiddle * entryNode.size / 2)
+                            eulerRotation: Qt.vector3d(0, root.number(entryNode.tileMotion, "rotateY", 0)
+                                + root.number(entryNode.tileMotion, "rotateZ", 0), 0)
+                            scale: Qt.vector3d(entryNode.size / 2 * root.number(entryNode.tileMotion, "scale", 1)
+                                    * root.number(entryNode.tileMotion, "scaleX", 1),
+                                entryNode.size / 2 * root.number(entryNode.tileMotion, "scale", 1)
+                                    * root.number(entryNode.tileMotion, "scaleY", 1), entryNode.size / 2)
+                            opacity: root.number(entryNode.tileMotion, "opacity", 1) * (1 - root.collapseProgress)
+                            Model {
+                                id: bubbleOutline
+                                objectName: "mesh-tile-bubble-outline-" + entryNode.index
+                                readonly property var mesh: entryNode.bubbleMesh
+                                readonly property real spread: 1 + 2 * entryNode.bubbleOutlineWidth / Math.max(1, entryNode.size)
+                                function toVectors(values, dimension) {
+                                    return (values || []).map(function(value) {
+                                        return dimension === 3 ? Qt.vector3d(value[0], value[1], value[2])
+                                                               : Qt.vector2d(value[0], value[1])
+                                    })
+                                }
+                                pickable: false
+                                visible: mesh !== null
+                                scale: Qt.vector3d(spread, spread, spread)
+                                geometry: ProceduralMesh {
+                                    positions: bubbleOutline.mesh ? bubbleOutline.toVectors(bubbleOutline.mesh.positions, 3) : []
+                                    normals: bubbleOutline.mesh ? bubbleOutline.toVectors(bubbleOutline.mesh.normals, 3) : []
+                                    uv0s: bubbleOutline.mesh ? bubbleOutline.toVectors(bubbleOutline.mesh.uv0s, 2) : []
+                                    indexes: bubbleOutline.mesh ? bubbleOutline.mesh.indexes : []
+                                    primitiveMode: ProceduralMesh.Triangles
+                                }
+                                materials: PrincipledMaterial {
+                                    lighting: PrincipledMaterial.NoLighting
+                                    baseColor: entryNode.bubbleOutlineColour
+                                    opacity: 0.85
+                                    alphaMode: PrincipledMaterial.Blend
+                                    cullMode: Material.FrontFaceCulling
+                                }
+                            }
+                        }
                         Model {
                             objectName: "mesh-tile-glow-flat-" + entryNode.index
                             source: "#Rectangle"
@@ -2966,7 +3083,9 @@ Item {
                             objectName: "mesh-tile-" + entryNode.index
                             source: "#Rectangle"
                             pickable: false
-                            visible: entryNode.tileShown && entryNode.tileMesh === null && root.collapseProgress < 1
+                            // Not under a bubble, which takes the tile's place.
+                            visible: entryNode.tileShown && entryNode.tileMesh === null && entryNode.bubbleMesh === null
+                                && root.collapseProgress < 1
                             position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
                                 entryNode.size / 2 - root.number(entryNode.tileMotion, "y", 0), 0)
                             eulerRotation: Qt.vector3d(0, root.number(entryNode.tileMotion, "rotateY", 0)

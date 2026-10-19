@@ -857,6 +857,7 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     definition.iconStyle.tileIconScale = normalized(QStringLiteral("iconTileIconScale"), definition.iconStyle.tileIconScale).toInt();
     definition.iconStyle.tileBevel = normalized(QStringLiteral("iconTileBevel"), definition.iconStyle.tileBevel).toReal();
     definition.iconStyle.tileMaterial = normalized(QStringLiteral("iconTileMaterial"), definition.iconStyle.tileMaterial).toString();
+    definition.iconStyle.tileForm = normalized(QStringLiteral("iconTileForm"), definition.iconStyle.tileForm).toString();
     definition.iconStyle.tileElevation = normalized(QStringLiteral("iconTileElevation"), definition.iconStyle.tileElevation).toReal();
     definition.iconStyle.globalDefaults = record.value(
         QStringLiteral("iconGlobalDefaults")).toMap();
@@ -1442,6 +1443,7 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("iconTileIconScale"), iconStyle.tileIconScale);
     record.insert(QStringLiteral("iconTileBevel"), iconStyle.tileBevel);
     record.insert(QStringLiteral("iconTileMaterial"), iconStyle.tileMaterial);
+    record.insert(QStringLiteral("iconTileForm"), iconStyle.tileForm);
     record.insert(QStringLiteral("iconTileElevation"), iconStyle.tileElevation);
     insertIfNotEmpty(
         &record,

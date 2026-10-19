@@ -321,7 +321,8 @@ const QStringList &IconPresetDefinition::parameterValueKeys()
         QStringLiteral("iconTileColor"), QStringLiteral("iconTileOpacity"), QStringLiteral("iconTileBorderColor"),
         QStringLiteral("iconTileBorderWidth"), QStringLiteral("iconTileTexture"), QStringLiteral("iconTileThickness"),
         QStringLiteral("iconTileIconOffsetX"), QStringLiteral("iconTileIconOffsetY"), QStringLiteral("iconTileIconScale"),
-        QStringLiteral("iconTileBevel"), QStringLiteral("iconTileMaterial"), QStringLiteral("iconTileElevation")};
+        QStringLiteral("iconTileBevel"), QStringLiteral("iconTileMaterial"), QStringLiteral("iconTileElevation"),
+        QStringLiteral("iconTileForm")};
     return keys;
 }
 

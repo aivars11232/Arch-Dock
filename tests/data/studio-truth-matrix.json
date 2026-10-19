@@ -453,6 +453,7 @@
     "iconTileIconScale": {"probe": "frame", "needsShaders": ["true3d"], "value": 60},
     "iconTileBevel": {"probe": "frame", "needsShaders": ["true3d"], "value": 4},
     "iconTileMaterial": {"probe": "frame", "needsShaders": ["true3d"], "value": "metallic"},
+    "iconTileForm": {"probe": "frame", "needsShaders": ["true3d"], "value": "bubble", "alternate": "flat"},
     "iconTileElevation": {"probe": "frame", "needsShaders": ["true3d"], "value": 24},
     "iconTilesEnabled": {"probe": "hoverFrame"},
     "iconTileMode": {"probe": "frame"},

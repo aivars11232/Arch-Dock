@@ -5,6 +5,41 @@
 
 Report `docs/repairs/OWNER-LIST-PIECE-7.md`.
 
+Part two, the tiles as bubbles: `PlatformGeometry.tileOutline(shape)`
+(the outline shared with `tile`) and `PlatformGeometry.bubble({shape,
+height, diameter, rings})`: the outline risen as a dome toward the viewer
+and the same dome away, a closed shell a quarter round in cross-section
+each way (ten rings from the widest at the middle to one point at each
+end), normals from the surface's slopes, uv its shadow.
+`PanelScene3D.bubbleMeshes` builds one per entry when the tile settings'
+`iconTileForm` is "bubble" (`bubbleWanted`), as wide and as high as
+`bubbleFit` says: the width the larger of the tile's own (0.92 × the
+style's diameter) and 1.08 × `PlatformGeometry.containingScale(shape,
+halfSide, offsetX, offsetY)` (the smallest width of the shape round the
+icon's square: 0.72 × Icon scale either way of the centre moved by the
+icon offsets; `outlineReach` meets the outline along each corner's ray),
+each half's height the larger of 0.6 and 0.15 + 1.25 × Icon depth × the
+solid's `reach` × 0.0144 × Icon scale (the icon's frame is a hundred
+units over 0.72 of the cell), and the middle (`middle`) at 0.02 + 0.02 ×
+the solid's `depth` × Icon depth: the icon's own middle in the tile's
+frame, where `mesh-tile-bubble-<n>` is placed (`bubbleMiddle`); under a
+bubble the plate (`tileMeshes`) and the flat quad are not drawn, the
+bubble takes the tile's place; the icon item's `bubbleTile` asks
+`IconSolid.iconMesh` for `globe: false`, so a round picture inside a
+bubble keeps a flat back. `bubbleMaterial` is
+a pale tint of the tile's colour (62 % white) at roughness 0.06,
+metalness 0 and opacity 0.4 × Icon tile opacity;
+`mesh-tile-bubble-<n>` (an `IconStyle3D` placed like the solid tile, at
+the tile's face) carries `mesh-tile-bubble-outline-<n>`, the same mesh
+scaled by 1 + 2 × border width / size, unlit in the border colour at
+0.85, front faces culled (the inverted hull, the classic drawn outline).
+Setting `iconTileForm` ("flat" | "bubble", storage `iconStyle.tileForm`,
+`tileForm` in the icon style struct) on the Icon Tiles page, 3D only
+(`PanelWindowSettings` lists it with the 3D-only tile keys; the icon
+preset keys carry it); truth matrix probe (bubble/flat on 3D rows);
+renderer tiles test (the bubble and its outline shown, the picture
+changed); geometry unit test (a dome over every shape).
+
 - `qml/ArchDock/Rendering/IconSolid.js`: an icon's picture (RGBA bytes of
   a small picture of its glyph layer) to a solid: `maskFromImageData`
   (alpha over 96), `outlines` (every filled pixel's edges toward empty

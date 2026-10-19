@@ -834,11 +834,12 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 || key == QStringLiteral("iconTileThickness") || key == QStringLiteral("iconTileIconOffsetX")
                 || key == QStringLiteral("iconTileIconOffsetY") || key == QStringLiteral("iconTileIconScale")
                 || key == QStringLiteral("iconTileBevel") || key == QStringLiteral("iconTileMaterial")
-                || key == QStringLiteral("iconTileElevation");
+                || key == QStringLiteral("iconTileElevation") || key == QStringLiteral("iconTileForm");
             if (available && tileParameter)
             {
                 const bool only3D = key == QStringLiteral("iconTileBevel")
-                    || key == QStringLiteral("iconTileMaterial") || key == QStringLiteral("iconTileElevation");
+                    || key == QStringLiteral("iconTileMaterial") || key == QStringLiteral("iconTileElevation")
+                    || key == QStringLiteral("iconTileForm");
                 available = !only3D || tier == ArchDock::RendererTier::True3D;
                 if (available && (key == QStringLiteral("iconTileTexture")
                          || key == QStringLiteral("iconTileThickness")))

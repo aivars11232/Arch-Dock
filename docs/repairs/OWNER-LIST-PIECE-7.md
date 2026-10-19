@@ -201,6 +201,82 @@ is drawn from, in about a tenth of a second per icon:
   letter) rises with a flat top and bevelled edges.
 - **Rounded parts** as before for everything else.
 
+## Part two: the tiles as bubbles
+
+The owner (2026-10-13): 3D tiles as a "bubble" round each icon in various
+shapes; (2026-10-19): "3D icon tiles should be more like glass,
+transparent, and yet the outlines are visible enough to tell a
+difference".
+
+- **3D tile form** (Icon Tiles, 3D only): Flat keeps the tile as it is;
+  Bubble puts, in the tile's place, a closed glass shell in the tile's
+  outline, whatever shape the tile has, round the icon, domed toward the
+  viewer and away. The glass is a pale tint of the tile's colour, clear
+  and glossy, as clear as the tile's opacity allows; its outline is drawn
+  round it in the tile's border colour and width, so the bubble shows for
+  all its clearness.
+- **Centred, its own shape, one bubble** (the owner, 2026-10-19, on the
+  next pictures: "Should be centered within that bubble", "Icon should
+  not take bubbles shape", "No double bubbles"): the first dome stood on
+  the tile's plate, so from the raised view the icon's volume sat above
+  the dome's base and the plate showed its own shape round the icon, and
+  a round icon's ball relief made a ball in the ball. Now the shell's
+  middle lies on the icon's own middle, so the icon is at the bubble's
+  centre from every side; the plate is gone under a bubble, so the icon
+  keeps its own shape; and inside a bubble a round icon keeps a flat
+  back, its parts rounded but no globe.
+- **The icon whole inside** (the owner, 2026-10-19, on the first
+  pictures, where a circle cut the icons' corners: "Icons should be fully
+  inside that bubble, no matter of icons or bubble shape"): the bubble
+  grows to the smallest width of its shape that holds the icon's whole
+  picture (with the icon's scale and offsets), with a margin for the
+  outline, and its plate grows with it; so a rounded square keeps the
+  tile's width, a circle comes out a little wider than the cell, a
+  hexagon a little, a diamond half as wide again. Its height follows the
+  icon's depth and its rings' reach, never under nine tenths of the
+  tile's half width.
+
+### Verification of part two
+
+Evidence logs 70-96 in `build-codex-adrep/evidence/OWNER-LIST-PIECE-7/`
+(the way here: the outline's mesh bound out of scope, 71; the glass
+tinted, 75; the first circle bubbles cut the icons' corners and the
+containment did not take because every tile and bubble was clamped to
+the cell's width, 85-91; the dome on its plate sat under the icon's
+volume from the raised view, the plate showed its shape round the icon,
+and a round icon made a ball in the ball, 93-95).
+
+- **Geometry unit tests** (`platform-geometry-test`, 94/94 under ctest):
+  a bubble is a closed dome over every shape (a point per outline point
+  per ring each way and a top and a bottom, the halves at the height
+  either way, unit normals, every triangle facing outward, the rim's
+  normals nearly flat, the ends' straight out); the containing width per
+  shape (a circle the picture's diagonal, a square its side, a rounded
+  square within the tile's own width, a hexagon a little more, a diamond
+  twice the half side, an offset picture more); a bubble and a plate
+  asked to be wider than the cell are.
+- **Icon unit tests** (`icon-solid-test`, 20/20): a round icon asked for
+  no globe rises as parts only, lower than its ball.
+- **Renderer smoke** (`94-bubble-smoke-7.log`, 188 s): passed; the tiles
+  test puts a bubble in the tile's place (the bubble and its outline
+  shown, the plate hidden, the picture changed), grows a circle bubble
+  past the cell with the bubble on the icon's middle before the tile's
+  face, and brings the plate back for the flat form
+  (`scene7/tiles/bubble.png`, `bubble-circle.png`).
+- **Focused tests** (`96-bubble-focused-tests-3.log`): 2/2 passed,
+  panel-window-capability-test (464.63 s) and studio-truth-matrix-smoke (410 s)
+  (the same two passed on the build before the owner's three rulings,
+  `87-bubble-focused-tests-2.log`, 446 s and 408 s; the Studio's Icon
+  Tiles page offers the 3D tile form only with a 3D renderer, and the
+  matrix probes it on the 3D rows).
+- **Desktop pictures** (`95-bubble-replica-5.log`, replica
+  `piece7-bubble-5`; sheets `36-bubbles-ring-centred.png` and
+  `37-bubbles-close-centred.png`): the ring with flat custom tiles, then
+  bubbles rounded, circle, hexagon, clearer (tile opacity 0.4), from a
+  low view, and diamond; close-ups of the logo in a rounded bubble and
+  the round camera icon in a circle and in a hexagon, centred, whole, in
+  its own shape and flat-backed.
+
 ### Verification of the addition 2
 
 Evidence logs 60-68 in `build-codex-adrep/evidence/OWNER-LIST-PIECE-7/`.

@@ -7,6 +7,24 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- 3D tiles as bubbles (Phase 4, part two; the owner, 2026-10-19: "3D icon
+  tiles should be more like glass, transparent, and yet the outlines are
+  visible enough to tell a difference"): on a 3D panel, Icon Tiles > 3D
+  tile form set to Bubble puts, in the tile's place, a closed glass shell
+  in the tile's outline (rounded, square, squircle, circle, hexagon or
+  diamond) round its icon, domed toward the viewer and away, clear and
+  glossy in a pale tint of the tile's colour (as clear as the tile's
+  opacity allows), with its outline drawn round it in the tile's border
+  colour and width so the bubble shows for all its clearness. The bubble
+  holds the icon whole and centred whatever the shape of either (the
+  owner, 2026-10-19): it grows to the smallest width of its shape round
+  the icon's whole picture, so a circle comes out a little wider than the
+  cell and a diamond wider still; its middle lies on the icon's own
+  middle, so the icon sits at its centre from every side; its depth
+  follows the icon's depth and its rings' reach; and inside it a round
+  icon keeps a flat back instead of rising as a ball, so there is no
+  bubble in the bubble. The icon keeps its own shape; nothing is clipped
+  to the tile's. Flat keeps the tile as it is.
 - Real 3D icons (Phase 4; the owner, 2026-10-13: "real 3D icons, where it
   renders my current icon in 3D not changes the icon but renders it", with
   the Sketchfab "Firefox logo 3D" model as the reference): on a 3D panel

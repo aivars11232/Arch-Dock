@@ -320,6 +320,12 @@ TestCase {
         for (let index = 0; index < mesh.positions.length; index += 2) highest = Math.max(highest, mesh.positions[index][2])
         // A ball twenty pixels across rises about its radius in frame units.
         verify(highest > 20 * 100 / 48 * 0.8, "it rises like a ball: " + highest.toFixed(1))
+        // Asked for no globe, the same picture rises as parts only.
+        const flat = IconSolid.iconMesh(data, width, height, "auto", { globe: false })
+        verify(!flat.globe, "no globe when asked")
+        let top = 0
+        for (let index = 0; index < flat.positions.length; index += 2) top = Math.max(top, flat.positions[index][2])
+        verify(top < highest, "lower without the globe: " + top.toFixed(1) + " under " + highest.toFixed(1))
     }
 
     function test_aDiscAndABlob() {

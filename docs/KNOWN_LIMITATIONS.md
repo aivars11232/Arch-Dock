@@ -58,6 +58,17 @@ geometry and shaders. A generated platform
 wraps its texture round its band; the two bundled 3D themes keep their vector
 surfaces, since theme packages carry no raster files.
 
+A bubble tile is a closed glass shell in the tile's shape round the icon,
+in the tile's place; it does not bend the light (no refraction), it shows
+the scene's highlights on its glass, and its outline is a shell drawn
+round it, so a bubble seen exactly from the side shows its outline as a
+line and not as a rim. A bubble grows to hold the icon's whole picture,
+so on a tightly packed panel a circle bubble (a little wider than its
+cell) or a diamond bubble (half as wide again) may touch its neighbours;
+the icon's own outline is not read for the fit, its whole square is. The
+shell's back half reaches behind the icon's plane, through a stand or a
+panel surface close behind it.
+
 A 3D icon's volume is modelled from its picture alone, so it is an
 educated reading of a flat picture, not the icon's maker's own model. The
 kind is read from the outline: an outline that fills its box (a rounded

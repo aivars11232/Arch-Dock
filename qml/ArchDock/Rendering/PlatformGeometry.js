@@ -525,13 +525,9 @@ function pedestalExtents(kind, stretch, axis, rightZ, upZ, forwardZ) {
 // PD-20/22, OF-42: one bounded solid behind an upright icon. Its front is
 // z=0 and its real depth extends backwards; UVs share the IconScene texture's
 // full-cell frame. Reuse MeshBuilder and the existing native mesh renderer.
-function tile(spec) {
-    const values = spec || ({})
-    const depth = clamp(finite(values.thickness, 0), 0, 4)
-    if (depth <= 0) return null
-    const diameter = clamp(finite(values.diameter, 0.92), 0.1, 1)
-    const bevel = clamp(finite(values.bevel, 0), 0, Math.min(depth / 2, diameter * 0.45))
-    const shape = String(values.shape || "rounded")
+// The outline of a tile shape, counter-clockwise in the tile's frame
+// (a unit square, the shape at its full width).
+function tileOutline(shape) {
     let outline = []
     if (shape === "diamond") outline = [[1,0], [0,1], [-1,0], [0,-1]]
     else if (shape === "hexagon") outline = [[1,0], [0.5,1], [-0.5,1], [-1,0], [-0.5,-1], [0.5,-1]]
@@ -551,6 +547,105 @@ function tile(spec) {
         if (outline.length > 1 && Math.hypot(outline[0][0]-outline[outline.length-1][0],
                 outline[0][1]-outline[outline.length-1][1]) < 1e-9) outline.pop()
     }
+    return outline
+}
+
+// How far a tile outline reaches from its centre in a direction: where
+// the ray meets the outline polygon (the shape at its full width).
+function outlineReach(outline, angle) {
+    const dx = Math.cos(angle), dy = Math.sin(angle)
+    let reach = 0
+    for (let i = 0; i < outline.length; ++i) {
+        const a = outline[i], b = outline[(i + 1) % outline.length]
+        const ex = b[0] - a[0], ey = b[1] - a[1]
+        const denominator = dx * ey - dy * ex
+        if (Math.abs(denominator) < 1e-12) continue
+        const t = (a[0] * ey - a[1] * ex) / denominator
+        const u = (a[0] * dy - a[1] * dx) / denominator
+        if (t > 0 && u >= -1e-9 && u <= 1 + 1e-9) reach = Math.max(reach, t)
+    }
+    return reach
+}
+
+// The smallest width of a tile shape, in the tile's frame (1 = half the
+// cell), that holds a square whole: the icon's picture, `halfSide` either
+// way from a centre moved by `offsetX` and `offsetY`. The shape's corners
+// decide: a circle must be wider than the square's diagonal, a diamond
+// wider still, a rounded square hardly at all.
+function containingScale(shape, halfSide, offsetX, offsetY) {
+    const outline = tileOutline(String(shape || "rounded"))
+    const h = Math.max(0, finite(halfSide, 0.72)), ox = finite(offsetX, 0), oy = finite(offsetY, 0)
+    let scale = 0
+    for (const corner of [[ox - h, oy - h], [ox + h, oy - h], [ox + h, oy + h], [ox - h, oy + h]]) {
+        const distance = Math.hypot(corner[0], corner[1])
+        if (distance < 1e-9) continue
+        const reach = outlineReach(outline, Math.atan2(corner[1], corner[0]))
+        if (reach > 1e-9) scale = Math.max(scale, distance / reach)
+    }
+    return scale
+}
+
+// A bubble round an icon: the tile's outline risen as a dome toward the
+// viewer and the same dome away, a closed shell a quarter round in
+// cross-section each way, its widest at the icon's own plane, its top and
+// its bottom one point each. Height is each half's, in the tile's frame
+// (1 = half the cell). Normals follow the surface, texture coordinates
+// its shadow.
+function bubble(spec) {
+    const values = spec || ({})
+    const height = clamp(finite(values.height, 0.9), 0.05, 2)
+    // Wider than the cell when it has to hold the icon whole.
+    const diameter = clamp(finite(values.diameter, 0.92), 0.1, 2)
+    const outline = tileOutline(String(values.shape || "rounded"))
+    const rings = Math.max(3, Math.round(finite(values.rings, 10)))
+    const mesh = new MeshBuilder()
+    const count = outline.length
+    const half = function(side) {
+        const point = function(i, ring) {
+            const angle = ring / rings * Math.PI / 2
+            const across = Math.cos(angle) * diameter
+            return [outline[i][0] * across, outline[i][1] * across, side * height * Math.sin(angle)]
+        }
+        const grid = []
+        for (let ring = 0; ring < rings; ++ring) {
+            const row = []
+            for (let i = 0; i < count; ++i) {
+                const p = point(i, ring)
+                // The surface's slopes along the outline and up the dome.
+                const along = subtract(point((i + 1) % count, ring), point((i + count - 1) % count, ring))
+                const up = subtract(point(i, Math.min(ring + 1, rings)), point(i, Math.max(ring - 1, 0)))
+                let normal = normalized(crossProduct(along, up))
+                if (dot(normal, [p[0], p[1], p[2] + side * height * 0.25]) < 0) normal = normal.map(function(v) { return -v })
+                row.push(mesh.vertex(p, normal, undefined, [0.5 + p[0] / 2, 0.5 + p[1] / 2]))
+            }
+            grid.push(row)
+        }
+        const apex = mesh.vertex([0, 0, side * height], [0, 0, side], undefined, [0.5, 0.5])
+        for (let ring = 0; ring < rings - 1; ++ring)
+            for (let i = 0; i < count; ++i) {
+                const next = (i + 1) % count
+                const a = grid[ring][i], b = grid[ring][next], c = grid[ring + 1][next], d = grid[ring + 1][i]
+                const facing = mesh.normals[a]
+                mesh.triangle(a, b, c, facing)
+                mesh.triangle(a, c, d, facing)
+            }
+        for (let i = 0; i < count; ++i)
+            mesh.triangle(grid[rings - 1][i], grid[rings - 1][(i + 1) % count], apex, [0, 0, side])
+    }
+    half(1)
+    half(-1)
+    return mesh.result({})
+}
+
+function tile(spec) {
+    const values = spec || ({})
+    const depth = clamp(finite(values.thickness, 0), 0, 4)
+    if (depth <= 0) return null
+    // Wider than the cell under a bubble that holds the icon whole.
+    const diameter = clamp(finite(values.diameter, 0.92), 0.1, 2)
+    const bevel = clamp(finite(values.bevel, 0), 0, Math.min(depth / 2, diameter * 0.45))
+    const shape = String(values.shape || "rounded")
+    const outline = tileOutline(shape)
     const rings = bevel > 0
         ? [[diameter-bevel,0], [diameter,-bevel], [diameter,-depth+bevel], [diameter-bevel,-depth]]
         : [[diameter,0], [diameter,-depth]]

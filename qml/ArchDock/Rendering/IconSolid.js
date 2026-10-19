@@ -512,7 +512,7 @@ function reliefMesh(data, width, height, options) {
     for (let index = 0; index < width * height; ++index) if (parted.labels[index] >= 0) outline.push(index)
     const whole = fitEllipse(outline, width)
     const kind = reliefKind(parted.labels.map(function(label) { return label >= 0 ? 1 : 0 }), width, height)
-    const globe = whole !== null && kind.hullFill >= 0.88 && whole.b / whole.a >= 0.8
+    const globe = settings.globe !== false && whole !== null && kind.hullFill >= 0.88 && whole.b / whole.a >= 0.8
         && outline.length / (Math.PI * whole.a * whole.b) > 0.85
     const heights = reliefHeights(parted.labels, parted.parts, layers, width, height,
                                   Object.assign({}, settings, { shapes: read.shapes, globe: globe }))
@@ -634,7 +634,9 @@ function reliefKind(mask, width, height, options) {
 }
 
 // The mesh of a picture for the relief asked for: "rounded", "block", or
-// "auto" (the picture's own kind). The mesh tells which kind it is.
+// "auto" (the picture's own kind). The mesh tells which kind it is. With
+// `globe: false` a round picture rises as parts, not as a ball (inside a
+// bubble, a ball would be a bubble in the bubble).
 function iconMesh(data, width, height, relief, options) {
     const settings = options || ({})
     let kind = relief

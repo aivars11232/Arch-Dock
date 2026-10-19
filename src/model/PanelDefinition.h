@@ -319,6 +319,7 @@ struct PanelIconStyleDefinition
     int tileIconScale = 100;
     qreal tileBevel = 0.0;
     QString tileMaterial = QStringLiteral("minimal");
+    QString tileForm = QStringLiteral("flat");
     qreal tileElevation = 0.0;
     QVariantMap globalDefaults;
     struct EntryOverride

@@ -5641,7 +5641,8 @@ void PanelWindowCapabilityTest::studioTileParametersAreTransactional()
     for (const QString &key : {QStringLiteral("iconTileTexture"), QStringLiteral("iconTileThickness"),
             QStringLiteral("iconTileIconOffsetX"), QStringLiteral("iconTileIconOffsetY"), QStringLiteral("iconTileIconScale")})
         QVERIFY2(offered.contains(key), qPrintable(key));
-    for (const QString &key : {QStringLiteral("iconTileBevel"), QStringLiteral("iconTileMaterial"), QStringLiteral("iconTileElevation")})
+    for (const QString &key : {QStringLiteral("iconTileBevel"), QStringLiteral("iconTileMaterial"), QStringLiteral("iconTileElevation"),
+            QStringLiteral("iconTileForm")})
         QVERIFY2(!offered.contains(key), qPrintable(key + " must wait for a 3D renderer"));
     auto *texture = visibleItem(window, "studio-combo-iconTileTexture"); QVERIFY(texture);
     // End picks the last of the tile looks.

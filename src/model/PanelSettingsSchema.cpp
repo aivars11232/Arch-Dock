@@ -1373,6 +1373,12 @@ const QVector<Descriptor> &schemaFields()
               {"glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime", "floating-glass",
                "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "river", "magma"}, false, true,
               editor("icon-tiles", "3D tile material", "combo", {"studio"}, "icon-state-styling")),
+        // Flat: the tile as it is; bubble: a glass dome in the tile's shape
+        // over the icon, with its outline drawn round it.
+        panel("iconTileForm", Access::Editor, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("flat"), "iconStyle.tileForm", {}, {},
+              {"flat", "bubble"}, false, true,
+              editor("icon-tiles", "3D tile form", "combo", {"studio"}, "icon-state-styling")),
         panel("iconTileElevation", Access::Editor, Type::Real, Normalization::RealRange,
               0.0, "iconStyle.tileElevation", -24.0, 96.0, {}, false, true,
               editor("icon-tiles", "3D tile elevation", "slider", {"studio"}, "icon-state-styling", {},

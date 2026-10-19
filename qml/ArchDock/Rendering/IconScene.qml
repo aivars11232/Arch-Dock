@@ -300,6 +300,11 @@ Item {
     // other its parts rounded); "rounded": the picture's parts inflated
     // into rounded volumes; "block": the picture cut out as a block.
     property string solidRelief: "auto"
+    // Inside a bubble tile (Icon Tiles > 3D tile form) a round picture
+    // keeps a flat back instead of rising as a ball: no bubble in the
+    // bubble.
+    readonly property bool bubbleTile: String((tileSettings || ({})).iconTileForm || "flat") === "bubble"
+    onBubbleTileChanged: if (solidWanted) refreshSolid()
     readonly property bool solidWanted: meshVisualActive && solidDepth > 0
     property var solidMesh: null
     function refreshSolid() {
@@ -349,7 +354,7 @@ Item {
             context.clearRect(0, 0, width, height)
             context.drawImage(pending, 0, 0, width, height)
             const data = context.getImageData(0, 0, width, height)
-            const mesh = IconSolid.iconMesh(data.data, width, height, root.solidRelief)
+            const mesh = IconSolid.iconMesh(data.data, width, height, root.solidRelief, { globe: !root.bubbleTile })
             root.solidMesh = mesh.indexes.length ? mesh : null
             unloadImage(pending)
             pending = ""

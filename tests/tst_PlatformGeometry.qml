@@ -501,4 +501,56 @@ TestCase {
         compare(PlatformGeometry.shapeForLayout(data.layout, 6), null)
         compare(PlatformGeometry.platform({ shape: null }), null)
     }
+
+    function test_bubbleIsADomeOverEveryShape() {
+        for (const shape of ["rounded", "circle", "square", "squircle", "hexagon", "diamond"]) {
+            const outline = PlatformGeometry.tileOutline(shape)
+            const mesh = PlatformGeometry.bubble({shape: shape, height: 0.9, diameter: 0.92, rings: 10})
+            compare(mesh.positions.length, 2 * (outline.length * 10 + 1), shape + ": a point per outline point per ring, and the top, each way")
+            let lowest = 1e9, highest = -1e9
+            for (const p of mesh.positions) { lowest = Math.min(lowest, p[2]); highest = Math.max(highest, p[2]) }
+            verify(Math.abs(lowest + 0.9) < 1e-9, shape + ": the bottom at the height behind")
+            verify(Math.abs(highest - 0.9) < 1e-9, shape + ": the top at the height")
+            for (const n of mesh.normals) verify(Math.abs(Math.hypot(n[0], n[1], n[2]) - 1) < 1e-6, shape + ": unit normals")
+            // Every triangle faces outward: its own normal agrees with its
+            // first corner's.
+            for (let at = 0; at < mesh.indexes.length; at += 3) {
+                const a = mesh.positions[mesh.indexes[at]], b = mesh.positions[mesh.indexes[at + 1]], c = mesh.positions[mesh.indexes[at + 2]]
+                const n = mesh.normals[mesh.indexes[at]]
+                const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2]
+                const face = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx]
+                verify(face[0] * n[0] + face[1] * n[1] + face[2] * n[2] > -1e-9, shape + ": a triangle faces outward")
+            }
+            // The rim's normals lie nearly flat, the top's points up, the
+            // bottom's down.
+            const rim = mesh.normals[0]
+            verify(Math.abs(rim[2]) < 0.35, shape + ": the rim's normal lies nearly flat: " + rim[2].toFixed(2))
+            compare(mesh.normals[outline.length * 10][2], 1)
+            compare(mesh.normals[mesh.normals.length - 1][2], -1)
+        }
+    }
+
+    function test_aBubbleGrowsToHoldTheIconWhole() {
+        // The icon's picture is a square 0.72 either way of the centre, in
+        // a frame where the tile's half width is 1. A circle must be wider
+        // than its diagonal, a diamond wider still, a rounded square and a
+        // square hold it within the tile's own width.
+        const diagonal = 0.72 * Math.SQRT2
+        verify(Math.abs(PlatformGeometry.containingScale("circle", 0.72, 0, 0) - diagonal) < 1e-6, "a circle: the diagonal")
+        verify(Math.abs(PlatformGeometry.containingScale("square", 0.72, 0, 0) - 0.72) < 1e-6, "a square: the side")
+        verify(PlatformGeometry.containingScale("rounded", 0.72, 0, 0) < 0.92, "a rounded square holds it as it is")
+        verify(PlatformGeometry.containingScale("hexagon", 0.72, 0, 0) > 0.92, "a hexagon has to grow")
+        verify(Math.abs(PlatformGeometry.containingScale("diamond", 0.72, 0, 0) - 1.44) < 1e-6, "a diamond: twice the half side")
+        // A picture moved aside needs more on that side.
+        verify(PlatformGeometry.containingScale("circle", 0.72, 0.2, 0) > diagonal, "an offset picture needs more")
+        verify(PlatformGeometry.outlineReach(PlatformGeometry.tileOutline("circle"), 1.1) > 0.99, "a circle reaches one every way")
+        // A bubble and a plate asked to be wider than the cell are.
+        let widest = 0
+        for (const p of PlatformGeometry.bubble({shape: "circle", height: 0.9, diameter: 1.1}).positions) widest = Math.max(widest, Math.abs(p[0]))
+        verify(Math.abs(widest - 1.1) < 1e-6, "a bubble wider than the cell: " + widest)
+        widest = 0
+        for (const p of PlatformGeometry.tile({shape: "circle", thickness: 0.3, bevel: 0, diameter: 1.1}).positions) widest = Math.max(widest, Math.abs(p[0]))
+        verify(Math.abs(widest - 1.1) < 1e-6, "a plate wider than the cell: " + widest)
+    }
+
 }

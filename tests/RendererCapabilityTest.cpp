@@ -3510,6 +3510,32 @@ void RendererCapabilityTest::tileDepthMaterialsPlacementAndOrbitRenderUnderRhi()
         minimumZ = qMin(minimumZ, point.toList().value(2).toDouble());
     QVERIFY(qAbs(minimumZ * tile->property("scale").value<QVector3D>().z() + 8) < 0.001);
     QVERIFY(renderer->property("geometryWithinBudget").toBool());
+    // A bubble (3D tile form): a closed glass shell in the tile's shape
+    // round the icon, in the tile's place, its outline round it, draws
+    // differently from the tile.
+    values.insert("iconTileForm", "bubble"); scene->setProperty("tileValues", values);
+    auto *bubble = renderer->findChild<QObject *>("mesh-tile-bubble-0"); QVERIFY(bubble);
+    QTRY_VERIFY(bubble->property("visible").toBool());
+    QTRY_VERIFY(!tile->property("visible").toBool());
+    QVERIFY(renderer->findChild<QObject *>("mesh-tile-bubble-outline-0"));
+    const QImage bubbled = capture("bubble"); QVERIFY(changed(solid, bubbled) >= 20);
+    // A circle bubble grows past the tile's own width to hold the icon's
+    // whole picture, and the bubble sits on the icon's middle, before the
+    // tile's face.
+    values.insert("iconShape", "circle"); scene->setProperty("tileValues", values);
+    const auto widest = [](const QVariantMap &mesh) {
+        double widest = 0;
+        for (const QVariant &point : mesh.value("positions").toList())
+            widest = qMax(widest, qAbs(point.toList().value(0).toDouble()));
+        return widest;
+    };
+    QTRY_VERIFY(widest(plainValue(bubble->property("meshData")).toMap()) > 1.0);
+    QVERIFY(bubble->property("position").value<QVector3D>().z() > 0);
+    QVERIFY(!capture("bubble-circle").isNull());
+    values.insert("iconShape", "rounded");
+    values.insert("iconTileForm", "flat"); scene->setProperty("tileValues", values);
+    QTRY_VERIFY(!bubble->property("visible").toBool());
+    QTRY_VERIFY(tile->property("visible").toBool());
     for (const QString &shape : {QStringLiteral("rounded"), QStringLiteral("square"), QStringLiteral("squircle"),
             QStringLiteral("circle"), QStringLiteral("hexagon"), QStringLiteral("diamond")}) {
         values.insert("iconShape", shape); scene->setProperty("tileValues", values);
