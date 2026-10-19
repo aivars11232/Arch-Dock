@@ -199,3 +199,10 @@ Evidence logs 50-53 in `build-codex-adrep/evidence/OWNER-LIST-PIECE-7/`.
   depth 0.3 with Icon lighting 0.5 (the look of the earlier pictures),
   1.0 (the light alone: deeper shade, stronger highlights) and 0 (the
   picture's own brightness, the volume by its shape alone).
+
+## Report 2 of the addition - recheck
+
+A fresh clone of origin/main at `c5ebc6a` (logs 45-49), built with one
+job in 1538 s, ran the same 27 focused tests serially: 27/27 passed.
+Every one of the 691 committed files is identical in the clone and the
+workspace.
