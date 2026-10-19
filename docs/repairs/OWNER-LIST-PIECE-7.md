@@ -261,3 +261,10 @@ A fresh clone of origin/main at `c5ebc6a` (logs 45-49), built with one
 job in 1538 s, ran the same 27 focused tests serially: 27/27 passed.
 Every one of the 691 committed files is identical in the clone and the
 workspace.
+
+## Report 2 of the addition 2 - recheck
+
+A fresh clone of origin/main at `dafd9fe` (logs 63-67), built with one
+job in 1454 s, ran the same 27 focused tests serially: 27/27 passed.
+Every one of the 692 committed files is identical in the clone and the
+workspace.
