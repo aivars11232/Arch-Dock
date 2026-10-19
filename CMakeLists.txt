@@ -80,6 +80,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     LayoutEngine.js
     GizmoMath.js
     PlatformGeometry.js
+    IconSolid.js
     StandFrames.js
     IconStyleResolver.js
     AnimationProfileRuntime.js
@@ -1432,6 +1433,15 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PlatformGeometry.qml)
   set_tests_properties(
     platform-geometry-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME icon-solid-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_IconSolid.qml)
+  set_tests_properties(
+    icon-solid-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(

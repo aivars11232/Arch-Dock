@@ -646,10 +646,15 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     if (record.contains(QStringLiteral("scene3DCameraPitch")))
         definition.surface.parameters3D.insert(QStringLiteral("cameraPitch"),
             normalized(QStringLiteral("scene3DCameraPitch"), 25.0));
+    if (record.contains(QStringLiteral("scene3DIconRelief")))
+        definition.surface.parameters3D.insert(QStringLiteral("iconRelief"),
+            normalized(QStringLiteral("scene3DIconRelief"), QStringLiteral("auto")));
     for (const auto &[key, parameter, fallback] :
          {std::tuple{"scene3DCameraYaw", "cameraYaw", QVariant(10.0)},
           std::tuple{"scene3DThickness", "thickness", QVariant(1.0)},
           std::tuple{"scene3DIconElevation", "iconElevation", QVariant(0.3)},
+          std::tuple{"scene3DIconDepth", "iconDepth", QVariant(0.3)},
+          std::tuple{"scene3DIconTurn", "iconTurn", QVariant(15.0)},
           std::tuple{"scene3DRoll", "roll", QVariant(0.0)},
           std::tuple{"scene3DPositionX", "positionX", QVariant(0.0)},
           std::tuple{"scene3DPositionY", "positionY", QVariant(0.0)},
@@ -1285,10 +1290,15 @@ QVariantMap PanelDefinition::toLegacyMap() const
     if (surface.parameters3D.contains(QStringLiteral("cameraPitch")))
         record.insert(QStringLiteral("scene3DCameraPitch"),
             surface.parameters3D.value(QStringLiteral("cameraPitch")));
+    if (surface.parameters3D.contains(QStringLiteral("iconRelief")))
+        record.insert(QStringLiteral("scene3DIconRelief"),
+            surface.parameters3D.value(QStringLiteral("iconRelief")));
     for (const auto &[key, parameter] :
          {std::pair{"scene3DCameraYaw", "cameraYaw"},
           std::pair{"scene3DThickness", "thickness"},
           std::pair{"scene3DIconElevation", "iconElevation"},
+          std::pair{"scene3DIconDepth", "iconDepth"},
+          std::pair{"scene3DIconTurn", "iconTurn"},
           std::pair{"scene3DRoll", "roll"},
           std::pair{"scene3DPositionX", "positionX"},
           std::pair{"scene3DPositionY", "positionY"},

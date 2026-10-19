@@ -40,6 +40,9 @@ Item {
     // and costs frames, so the controller withdraws every track.
     property bool sceneVisible: true
     property bool meshVisualActive: false
+    // How deep, and in what shape, the 3D scene makes the icon's solid.
+    property real solidDepth: 0
+    property string solidRelief: "auto"
     property string motionContextKey: ""
     readonly property var meshVisualItem: visual
     property real motionSpeed: 1
@@ -394,6 +397,8 @@ Item {
                 showIndicator: root.showIndicator
                 reducedMotion: root.reducedMotion
                 meshVisualActive: root.meshVisualActive
+                solidDepth: root.solidDepth
+                solidRelief: root.solidRelief
                 glyphMotion: root.glyphMotion
                 tileMotion: root.tileMotion
                 indicatorMotion: root.indicatorMotion

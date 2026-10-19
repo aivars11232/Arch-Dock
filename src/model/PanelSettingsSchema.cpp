@@ -783,6 +783,24 @@ const QVector<Descriptor> &schemaFields()
               0.3, "surface.parameters3D.iconElevation", 0.0, 2.0, {}, true, true,
               editor("panels-3d", "Pedestal height", "slider", {"studio"}, "scene3d-quality",
                      {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
+        // Real 3D icons: how deep each icon's own picture stands as a solid,
+        // as a share of its size (0 keeps it a flat picture), and how far the
+        // solid turns about its upright axis so its depth shows.
+        panel("scene3DIconDepth", Access::Editor, Type::Real, Normalization::RealRange,
+              0.3, "surface.parameters3D.iconDepth", 0.0, 1.0, {}, true, true,
+              editor("panels-3d", "Icon depth", "slider", {"studio"}, "scene3d-quality",
+                     {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
+        panel("scene3DIconTurn", Access::Editor, Type::Real, Normalization::RealRange,
+              15.0, "surface.parameters3D.iconTurn", -60.0, 60.0, {}, true, true,
+              editor("panels-3d", "Icon turn", "slider", {"studio"}, "scene3d-quality",
+                     {}, {{QStringLiteral("step"), 1.0}, {QStringLiteral("decimals"), 0}})),
+        // Auto: a plate-shaped picture a block, any other its parts rounded;
+        // rounded: the picture's parts inflated into rounded volumes; block:
+        // the picture cut out as a block with walls.
+        panel("scene3DIconRelief", Access::Editor, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("auto"), "surface.parameters3D.iconRelief", {}, {},
+              {"auto", "rounded", "block"}, true, true,
+              editor("panels-3d", "Icon relief", "combo", {"studio"}, "scene3d-quality")),
         // A generated platform's own shape (ADFIX-TASK-002): how wide its flat
         // top is, as half its width in the platform's radius, and how far its
         // top tilts up or down outward of the icons' line.

@@ -198,8 +198,10 @@ private slots:
         QVERIFY2(package.isValid(), qPrintable(package.primaryCode()));
         QVariantMap theme = package.package->runtimeProjection();
         // A private XDG session need not have a desktop icon theme configured.
-        // Reuse a local fixture so this gate measures mesh motion, not icon lookup.
-        const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
+        // Use a drawn icon of the test data (a folder, an icon's own kind of
+        // outline, not a plate) so this gate measures mesh motion, not icon
+        // lookup, and its pictures show an icon.
+        const QString glyphFixture = QFINDTESTDATA("data/truth-glyph-files.svg");
         QVERIFY(!glyphFixture.isEmpty());
         QQmlEngine engine;
         QStringList unexpectedWarnings;
@@ -217,7 +219,7 @@ private slots:
                 required property string glyphFixture
                 panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
                                    scene3DQuality: "low", iconSize: 40, layoutPadding: 10,
-                                   panelMotionTarget: "panel"})
+                                   panelMotionTarget: "panel", scene3DIconDepth: 0})
                 entryDelegateContext: ({hostKind: "free"})
                 hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [
                     {id: "open", available: true}, {id: "collapse-radial", available: true}]})
@@ -314,11 +316,11 @@ private slots:
                 for (int x = qMax(0, qRound(projected.x()) - radius);
                      x < qMin(first.width(), qRound(projected.x()) + radius); ++x) {
                     const QColor color = first.pixelColor(x, y);
-                    // The fixture's dark blue fill (#243447) is distinct from the
-                    // light cyan platform and from the dark brown orange one.
-                    glyphPixels += color.alpha() > 32 && color.redF() < 0.4
-                        && color.greenF() < 0.4 && color.blueF() < 0.4
-                        && color.blueF() > color.redF() + 0.05;
+                    // The folder's amber fill (#f2b33d) is distinct from the
+                    // light cyan platform and from the darker orange one.
+                    glyphPixels += color.alpha() > 32 && color.redF() > 0.8
+                        && color.greenF() > 0.55 && color.greenF() < 0.85
+                        && color.blueF() < 0.45;
                 }
             QVERIFY2(glyphPixels > 100, qPrintable(QStringLiteral(
                 "Entry %1 glyph was covered by the platform: %2 visible pixels")
@@ -520,6 +522,47 @@ private slots:
                 }
             }
             QVERIFY2(flows[0] != flows[1], "water and lava draw differently");
+            // Real 3D icons: with Icon depth each icon's picture stands as a
+            // solid of its own outline, and the scene draws differently from
+            // the flat pictures.
+            {
+                auto flat = edited;
+                flat.insert("scene3DMaterial", "theme");
+                flat.insert("scene3DIconDepth", 0.0);
+                scene->setProperty("panelDefinition", flat);
+                QTRY_COMPARE(renderer->property("iconDepth").toDouble(), 0.0);
+                QTest::qWait(200);
+                const QImage flatIcons = pixels();
+                auto deep = flat;
+                deep.insert("scene3DIconDepth", 0.5);
+                deep.insert("scene3DIconTurn", 25.0);
+                // The folder is a plate, which the icon's own kind would make a
+                // block: ask for the rounded relief by name first.
+                deep.insert("scene3DIconRelief", "rounded");
+                scene->setProperty("panelDefinition", deep);
+                QTRY_COMPARE(renderer->property("iconDepth").toDouble(), 0.5);
+                QObject *solid = renderer->findChild<QObject *>(QStringLiteral("mesh-icon-solid-0"));
+                QVERIFY(solid);
+                QTRY_VERIFY_WITH_TIMEOUT(solid->property("shown").toBool(), 8000);
+                QTest::qWait(300);
+                const QImage solidIcons = pixels();
+                QVERIFY2(!flatIcons.isNull() && solidIcons != flatIcons, "the icons' solids draw differently from the flat pictures");
+                // The other shape, a block with walls, draws differently from
+                // the rounded relief once its mesh is cut.
+                auto blocky = deep;
+                blocky.insert("scene3DIconRelief", "block");
+                scene->setProperty("panelDefinition", blocky);
+                QTRY_COMPARE(renderer->property("iconRelief").toString(), QStringLiteral("block"));
+                QTRY_VERIFY_WITH_TIMEOUT(pixels() != solidIcons, 8000);
+                QTest::qWait(300);
+                const QImage blockIcons = pixels();
+                if (!evidence.isEmpty()) {
+                    QVERIFY(flatIcons.save(QDir(evidence).filePath("icons-flat.png")));
+                    QVERIFY(solidIcons.save(QDir(evidence).filePath("icons-rounded.png")));
+                    QVERIFY(blockIcons.save(QDir(evidence).filePath("icons-block.png")));
+                }
+                scene->setProperty("panelDefinition", edited);
+            }
             // A picture on a theme's own mesh is real relief as well: the
             // mesh is cut finely and rises, and Relief depth changes it.
             {
@@ -1764,7 +1807,7 @@ private slots:
                                    pathSides: 7, appearance: "neon", scene3DCameraPitch: pitch,
                                    scene3DTransitions: false, scene3DFold: fold, scene3DThickness: thickness,
                                    panelMotionTarget: "items", panelRotationMode: moving ? "clockwise" : "none",
-                                   panelTravelSpeed: 2, panelRotationTrigger: "idle"},
+                                   panelTravelSpeed: 2, panelRotationTrigger: "idle", scene3DIconDepth: 0},
                                    picture.length ? {panelPicture: picture, scene3DTexture: "picture",
                                                      panelPictureDepth: depth, panelPictureRise: rise,
                                                      panelPictureDirection: direction,
@@ -3134,7 +3177,8 @@ private slots:
                 panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
                                    scene3DQuality: "low", iconSize: 40, spacing: 8, layoutPadding: 10,
                                    scene3DTransitions: false, scene3DMaterial: look, scene3DTexture: look,
-                                   panelLookBackground: 0.5, panelGlow: glow, panelGlowReach: 0.7})
+                                   panelLookBackground: 0.5, panelGlow: glow, panelGlowReach: 0.7,
+                                   scene3DIconDepth: 0})
                 animationProfiles: ({reducedMotion: true})
                 entryDelegateContext: ({hostKind: "free"})
                 hostCapabilities: ({rotation: {available: true}, presentationMechanisms: [

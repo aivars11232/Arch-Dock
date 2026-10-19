@@ -224,7 +224,7 @@ Item {
                 if (scene.generated)
                     merged.generated = Object.assign({}, scene.generated,
                         { layout: root.layout, polygonSides: root.polygonSides })
-                for (const key of ["cameraYaw", "thickness", "iconElevation", "roll", "positionX",
+                for (const key of ["cameraYaw", "thickness", "iconElevation", "iconDepth", "iconTurn", "roll", "positionX",
                         "positionY", "positionZ", "scale", "scaleX", "scaleY", "fieldOfView", "keyLightBrightness",
                         "fillLightBrightness", "band", "bend", "fold",
                         "pedestalSize", "pedestalLift", "pedestalAnimationSpeed", "pedestalThickness",
@@ -240,7 +240,7 @@ Item {
                 for (const key of ["transitions", "float"])
                     if (typeof parameters[key] === "boolean") merged[key] = parameters[key]
                 for (const [key, target] of [["color", "materialColor"], ["material", "materialLook"],
-                                            ["texture", "materialTexture"],
+                                            ["texture", "materialTexture"], ["iconRelief", "iconRelief"],
                                             ["pedestalShape", "pedestalShape"],
                                             ["pedestalMaterial", "pedestalMaterial"],
                                             ["pedestalColor", "pedestalColor"],

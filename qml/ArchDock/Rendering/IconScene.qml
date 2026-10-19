@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Effects
 import org.kde.kirigami as Kirigami
 import "MotionChannels.js" as MotionChannels
+import "IconSolid.js" as IconSolid
 import "LayoutEngine.js" as LayoutEngine
 import "PlatformGeometry.js" as PlatformGeometry
 import "StandFrames.js" as StandFrames
@@ -289,6 +290,71 @@ Item {
 
     width: logicalSize
     height: logicalSize
+
+    // The icon as a solid for a 3D panel (Icon depth): the glyph layer's
+    // picture, taken small, gives the block its outline from its own
+    // transparency; the scene scales the block's depth. Taken anew when the
+    // icon changes.
+    property real solidDepth: 0
+    // "auto": the picture's own kind (a plate-shaped picture a block, any
+    // other its parts rounded); "rounded": the picture's parts inflated
+    // into rounded volumes; "block": the picture cut out as a block.
+    property string solidRelief: "auto"
+    readonly property bool solidWanted: meshVisualActive && solidDepth > 0
+    property var solidMesh: null
+    function refreshSolid() {
+        if (!solidWanted) {
+            solidMesh = null
+            return
+        }
+        glyphLayer.grabToImage(function(result) { solidCanvas.take(result.url) },
+                               Qt.size(solidCanvas.width, solidCanvas.height))
+    }
+    onSolidWantedChanged: refreshSolid()
+    onResolvedIconSourceChanged: if (solidWanted) refreshSolid()
+    onSolidReliefChanged: if (solidWanted) refreshSolid()
+    // The picture may arrive after the solid was asked for, and the layer
+    // may still be unsized then: cut the solid again once both are there.
+    Connections {
+        target: glyph
+        function onStatusChanged() {
+            if (root.solidWanted && glyph.status === Kirigami.Icon.Ready) root.refreshSolid()
+        }
+    }
+    Connections {
+        target: glyphLayer
+        function onWidthChanged() { if (root.solidWanted && root.solidMesh === null) root.refreshSolid() }
+        function onHeightChanged() { if (root.solidWanted && root.solidMesh === null) root.refreshSolid() }
+    }
+    Canvas {
+        id: solidCanvas
+        visible: false
+        width: 64
+        height: 64
+        renderTarget: Canvas.Image
+        renderStrategy: Canvas.Immediate
+        property string pending: ""
+        function take(url) {
+            pending = url
+            if (!isImageLoaded(url)) loadImage(url)
+            // A grabbed picture is already in the engine's cache, so it
+            // loads at once and no loaded signal follows.
+            if (isImageLoaded(url)) requestPaint()
+        }
+        onImageLoaded: if (pending.length && isImageLoaded(pending)) requestPaint()
+        onPaint: {
+            if (!pending.length || !isImageLoaded(pending)) return
+            const context = getContext("2d")
+            context.reset()
+            context.clearRect(0, 0, width, height)
+            context.drawImage(pending, 0, 0, width, height)
+            const data = context.getImageData(0, 0, width, height)
+            const mesh = IconSolid.iconMesh(data.data, width, height, root.solidRelief)
+            root.solidMesh = mesh.indexes.length ? mesh : null
+            unloadImage(pending)
+            pending = ""
+        }
+    }
 
     ShaderEffectSource {
         id: glyphTexture

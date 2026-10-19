@@ -1,5 +1,82 @@
 # Arch Dock current state
 
+<!-- LIST_PIECE_7_BEGIN -->
+## The owner's list, piece 7: real 3D icons (Phase 4) — 2026-10-19
+
+Report `docs/repairs/OWNER-LIST-PIECE-7.md`.
+
+- `qml/ArchDock/Rendering/IconSolid.js`: an icon's picture (RGBA bytes of
+  a small picture of its glyph layer) to a solid: `maskFromImageData`
+  (alpha over 96), `outlines` (every filled pixel's edges toward empty
+  neighbours, wound clockwise round the pixel, linked into loops; outer
+  loops have positive area, holes negative and are dropped, so a hole is
+  filled), `simplify` (Douglas-Peucker on the closed loop), `triangulate`
+  (ear clipping), `solidMesh` (caps at z ±50 and walls per edge in the
+  glyph's hundred-unit frame, y up, uv = the picture's coordinates; the
+  walls read the picture one unit inside the edge and off the corners,
+  so they take the picture's own edge colours, not the clear outside
+  blended in; the loops kept are those with at least 1 % of the filled
+  area; caps at z ±25, so a block is half as thick as the frame at full
+  Icon depth). That is the Block relief. The Rounded relief
+  (`reliefMesh`): `colourParts` (region growing over the mask, a pixel
+  joining its neighbour's part when within 90 of the part's first colour
+  or within 30 of the neighbour itself, so a shaded part stays whole;
+  touching parts of nearly the same mean colour merged; parts under 1 %
+  folded into the neighbour they touch most), `partLayers` (parts at the
+  rim or the picture's edge are the ground, their neighbours a step up,
+  and so on inward), `distanceInside` (the 3-4 chamfer distance transform
+  of Borgefors), `reliefHeights` (per part a half-circle profile over the
+  distance to the part's own edge, peak = twice the part's radius, so a
+  part is a full half round at Icon depth 0.5; plus 12 units per layer;
+  plus a low cushion over the distance to the rim, peak 12 units) and the
+  grid mesh over the pixels (corners at the mean
+  height of the pixels round them, rim corners on the ground, uv nudged
+  half a pixel inward at the rim, normals from the slopes, the back
+  mirrored; `depth` = the top height, by which the scene lifts the
+  volume so its back lies where the flat picture lay). `reliefKind`
+  reads the outline: box fill (area over the bounding box) at least 0.84
+  and hull fill (area over the convex hull, monotone chain) at least 0.88
+  = a plate = "block", else "rounded"; `iconMesh(data, w, h, relief)` is
+  the one entry point ("auto" asks `reliefKind`) and the mesh carries
+  `kind`. Unit test `tests/tst_IconSolid.qml` (icon-solid-test, 16 tests).
+- `IconScene.qml`: `solidDepth` (from the 3D scene's `iconDepth` through
+  `PanelScene.sceneIconDepth`), `solidWanted` while the mesh visual is
+  active; `refreshSolid` grabs the glyph layer at 48 px
+  (`grabToImage`) into a software `Canvas` (`renderTarget: Image`,
+  `Immediate`), reads the pixels and sets `solidMesh`; taken anew when the
+  icon changes, when its picture becomes ready and when the layer gets
+  its size. A grabbed picture is already in the engine's cache, so the
+  canvas loads it at once and no loaded signal follows: the paint is
+  asked for right after the load.
+- `PanelScene3D.qml`: `iconDepth` (0.3, `scene3DIconDepth`), `iconTurn`
+  (15°, `scene3DIconTurn`) and `iconRelief` ("auto" default | "rounded"
+  | "block", `scene3DIconRelief`; not `iconShape`, which is the tile
+  shape), all on the 3D page (`panels-3d`, capability `scene3d-quality`);
+  in each entry's icon body a `Model`
+  `mesh-icon-solid-<n>` (`ProceduralMesh` from the visual's `solidMesh`,
+  `PrincipledMaterial` with the glyph texture as base colour and a 0.25
+  emissive, roughness 0.45, alpha mask cut at 0.25, below the outline's own threshold,
+  so see-through parts inside the picture stay see-through and the caps
+  reach their walls, back faces culled), at the glyph's place with its
+  back where the flat picture lay (z + half its depth), the glyph's
+  motion turn plus Icon turn about the upright axis, scaled like the
+  glyph with z = Icon depth. The flat glyph stays, drawn clear (opacity
+  0) while the solid shows: the scene's hit tests, the icon's glow and
+  the water's mirror images go by it, through its `pictureOpacity`.
+  Settings: tuples/pairs in `PanelDefinition.cpp`, key lists in
+  `PanelScene.qml` and `PanelSurfaceLoader.qml`, truth matrix entries
+  (frame probes). The depth and the relief reach the icon items through
+  every delegate: `PanelScene.qml`'s own, the Studio's live preview
+  (`previews/LivePanelPreview.qml`) and the Plasma widget's
+  (`plasma-dock-widget/contents/ui/main.qml` -> `DockEntry.qml`
+  `solidDepth`/`solidRelief`), as the mesh flag does; the widget's was
+  the desktop's missing link (the icon item's parent there is a wrapper,
+  so `parent.sceneIconDepth` read as nothing). The renderer test's own
+  scenes start flat (`scene3DIconDepth: 0`), its icon is the test data's
+  drawn folder (`tests/data/truth-glyph-files.svg`), and the solid block
+  switches the depth on, then the Block relief.
+<!-- LIST_PIECE_7_END -->
+
 <!-- LIST_PIECE_6_BEGIN -->
 ## The owner's list, piece 6: the river and the magma — 2026-10-19
 

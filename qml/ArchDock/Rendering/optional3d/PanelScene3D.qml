@@ -353,6 +353,16 @@ Item {
         && materialTextureReady && materialNormalImage.status === Image.Ready ? selectedMaterialNormal : null
     // Turns an icon, from inside the entries' frame, to face the camera: the
     // frame's own rotation undone, the camera's taken.
+    // Real 3D icons: how deep each icon's solid is, as a share of the icon's
+    // size (0 keeps the flat picture), and how far the solid turns about
+    // its upright axis, so its depth shows (the icon still faces the user,
+    // turned that much).
+    readonly property real iconDepth: bounded("iconDepth", 0.3, 0, 1)
+    readonly property real iconTurn: bounded("iconTurn", 15, -60, 60)
+    readonly property string iconRelief: {
+        const word = String((sceneDefinition || ({})).iconRelief || "")
+        return word === "block" || word === "rounded" ? word : "auto"
+    }
     readonly property quaternion iconFacing: entryFrame.sceneRotation.inverted()
         .times(camera.sceneRotation)
     // The stand under every icon (the Pedestals page). It turns with its
@@ -2105,7 +2115,7 @@ Item {
                     height: place ? place.size : 1
                     x: place ? place.x - width / 2 : 0
                     y: place ? place.y - height / 2 : 0
-                    opacity: glyph ? glyph.opacity : 1
+                    opacity: glyph ? glyph.pictureOpacity : 1
                     // Upside down, as a mirror image in water is.
                     transform: Scale { origin.y: mirrorSprite.height / 2; yScale: -1 }
                 }
@@ -2965,6 +2975,58 @@ Item {
                             opacity: root.number(entryNode.tileMotion, "opacity", 1) * (1 - root.collapseProgress)
                             materials: tileFaceMaterial
                         }
+                        // The icon as a solid (Icon depth): its own picture's
+                        // outline cut from its transparency and drawn as a
+                        // block, the picture on its front and its back, the
+                        // walls in the picture's edge colours, the block's
+                        // back where the flat picture would lie, turned by
+                        // Icon turn so its depth shows.
+                        Model {
+                            id: solidModel
+                            objectName: "mesh-icon-solid-" + entryNode.index
+                            readonly property var mesh: entryNode.visual ? entryNode.visual.solidMesh : null
+                            readonly property bool shown: root.iconDepth > 0 && mesh !== null
+                                && entryNode.visual !== null && root.collapseProgress < 1
+                            function toVectors(values, dimension) {
+                                return (values || []).map(function(value) {
+                                    return dimension === 3 ? Qt.vector3d(value[0], value[1], value[2])
+                                                           : Qt.vector2d(value[0], value[1])
+                                })
+                            }
+                            pickable: false
+                            visible: shown
+                            // Its back where the flat picture lay.
+                            position: Qt.vector3d(glyphModel.position.x, glyphModel.position.y,
+                                                  glyphModel.position.z + (mesh ? mesh.depth : 50) * scale.z)
+                            eulerRotation: Qt.vector3d(0, glyphModel.eulerRotation.y + root.iconTurn, 0)
+                            scale: Qt.vector3d(glyphModel.scale.x, glyphModel.scale.y, glyphModel.scale.x * root.iconDepth)
+                            opacity: glyphModel.pictureOpacity
+                            geometry: ProceduralMesh {
+                                positions: solidModel.mesh ? solidModel.toVectors(solidModel.mesh.positions, 3) : []
+                                normals: solidModel.mesh ? solidModel.toVectors(solidModel.mesh.normals, 3) : []
+                                uv0s: solidModel.mesh ? solidModel.toVectors(solidModel.mesh.uv0s, 2) : []
+                                indexes: solidModel.mesh ? solidModel.mesh.indexes : []
+                                primitiveMode: ProceduralMesh.Triangles
+                            }
+                            materials: PrincipledMaterial {
+                                lighting: PrincipledMaterial.FragmentLighting
+                                baseColorMap: glyphTexture
+                                // The light models the parts; the picture keeps
+                                // a little of its own brightness so its colours
+                                // stay readable in shade.
+                                emissiveMap: glyphTexture
+                                emissiveFactor: Qt.vector3d(0.25, 0.25, 0.25)
+                                // A see-through part inside the picture stays
+                                // see-through on the caps; the cut lies below
+                                // the outline's own threshold, so the caps reach
+                                // their walls.
+                                alphaMode: PrincipledMaterial.Mask
+                                alphaCutoff: 0.25
+                                roughness: 0.45
+                                metalness: 0
+                                cullMode: Material.BackFaceCulling
+                            }
+                        }
                         Model {
                             id: glyphModel
                             pickable: true
@@ -2981,7 +3043,14 @@ Item {
                                     * root.number(entryNode.glyphMotion, "scaleX", 1),
                                 entryNode.size / 100 * root.number(entryNode.glyphMotion, "scale", 1)
                                     * root.number(entryNode.glyphMotion, "scaleY", 1), 1)
-                            opacity: root.number(entryNode.glyphMotion, "opacity", 1) * (1 - root.collapseProgress)
+                            // The picture's own opacity, which its solid, its glow
+                            // and its mirror image share.
+                            readonly property real pictureOpacity: root.number(entryNode.glyphMotion, "opacity", 1)
+                                * (1 - root.collapseProgress)
+                            // Drawn clear while the icon's solid stands in for it,
+                            // yet still there: the scene's hit tests and the
+                            // water's mirror images go by this picture.
+                            opacity: pictureOpacity * (solidModel.shown ? 0 : 1)
                             materials: PrincipledMaterial {
                                 lighting: PrincipledMaterial.NoLighting
                                 alphaMode: PrincipledMaterial.Blend
@@ -3007,7 +3076,7 @@ Item {
                             eulerRotation: glyphModel.eulerRotation
                             scale: Qt.vector3d(glyphModel.scale.x * root.iconGlowSpread,
                                                glyphModel.scale.y * root.iconGlowSpread, 1)
-                            opacity: glyphModel.opacity
+                            opacity: glyphModel.pictureOpacity
                             materials: PrincipledMaterial {
                                 baseColor: "#000000"
                                 roughness: 1

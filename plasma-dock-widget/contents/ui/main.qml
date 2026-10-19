@@ -1495,6 +1495,8 @@ PlasmoidItem {
             }
             sceneVisible: parent.sceneVisible
             meshVisualActive: parent.sceneMeshActive
+            solidDepth: Number(parent.sceneIconDepth || 0)
+            solidRelief: String(parent.sceneIconRelief || "auto")
             motionContextKey: parent.sceneMotionContextKey
             editMode: root.plasmaEditMode
             acceptDrops: root.configuration.acceptDrops

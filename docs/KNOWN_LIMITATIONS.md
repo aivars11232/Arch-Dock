@@ -58,6 +58,22 @@ geometry and shaders. A generated platform
 wraps its texture round its band; the two bundled 3D themes keep their vector
 surfaces, since theme packages carry no raster files.
 
+A 3D icon's volume is modelled from its picture alone, so it is an
+educated reading of a flat picture, not the icon's maker's own model. The
+kind is read from the outline: an outline that fills its box (a rounded
+square, a rectangle) is taken for a plate and becomes a block, any other
+outline has its parts rounded; a round badge therefore becomes a ball and
+a square picture of a thing a slab, and Icon relief can say otherwise for
+the whole panel. In the rounded relief the parts are the picture's areas
+of one colour, a part inside another is taken to stand above it, and a
+shaded part stays one part; a picture whose parts are drawn with soft
+edges or shadows may rise in fewer parts than the eye sees; a hole in an
+icon (a ring, a letter's counter) stays see-through; the back of the
+volume mirrors the front. In the Block relief a hole is filled in the
+block, though it stays see-through on the block's front and back, and the
+walls take the picture's edge colours. Only the icon's picture becomes a
+volume; badges, progress and overlays stay flat on the entry.
+
 The River and Magma panelpapers flow in a loop along the band, one way,
 with no waves in the band itself; a flat panel shows the water with gleams
 sliding along it and the lava with hot streaks creeping along it, and

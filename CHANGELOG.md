@@ -7,6 +7,23 @@ status are recorded in [current state](docs/CURRENT_STATE.md).
 The owner selected GPL-3.0-or-later for original Arch Dock project work.
 The proposed `v0.1.1` tag and publication need separate authorization.
 
+- Real 3D icons (Phase 4; the owner, 2026-10-13: "real 3D icons, where it
+  renders my current icon in 3D not changes the icon but renders it", with
+  the Sketchfab "Firefox logo 3D" model as the reference): on a 3D panel
+  each icon's own picture becomes a volume modelled from the picture
+  itself, in the kind the picture asks for. A plate-shaped icon (its
+  outline fills its box like a rounded square: a sign, a badge, a tile)
+  becomes a block: just thickness, the picture on its front and back, the
+  walls in its edge colours. Any other icon (a round picture of a thing,
+  a figure, a star) has its parts of one colour found and each part rises
+  as a rounded volume of its own from its own edge, a half round at half
+  the depth, with a crease to the next part, a part inside another a step
+  up, and the light rounds every part; the picture stays the colour of it
+  all, front and back, so the icon stays the user's own. Icon depth (a
+  share of the icon's size, 0 keeps the flat picture), Icon turn (how far
+  the icon turns so its depth shows) and Icon relief (Auto, Rounded or
+  Block for every icon of the panel) on the Panels > 3D page. The icons'
+  motions turn and move the volume as they did the picture.
 - Two flowing panelpapers: River (the owner, 2026-10-15: "There could even
   be like tha panel is the river, with animations") and Magma (the owner,
   2026-10-18: "Since we have water, mind as well we can add flowing magma

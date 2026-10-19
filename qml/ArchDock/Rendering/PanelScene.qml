@@ -1599,6 +1599,7 @@ Item {
             const parameters = Object.assign({}, (definition.surface || {}).parameters3D || definition.surface3D || ({}))
             for (const [key, parameter] of [["scene3DCameraYaw", "cameraYaw"],
                     ["scene3DThickness", "thickness"], ["scene3DIconElevation", "iconElevation"],
+                    ["scene3DIconDepth", "iconDepth"], ["scene3DIconTurn", "iconTurn"], ["scene3DIconRelief", "iconRelief"],
                     ["scene3DRoll", "roll"], ["scene3DPositionX", "positionX"],
                     ["scene3DPositionY", "positionY"], ["scene3DPositionZ", "positionZ"],
                     ["scene3DScale", "scale"], ["scene3DScaleX", "scaleX"], ["scene3DScaleY", "scaleY"], ["scene3DFieldOfView", "fieldOfView"],
@@ -1850,6 +1851,12 @@ Item {
                     entryItem.sceneIconStyleDefinition
                 readonly property var sceneContext: entryItem.sceneContext
                 readonly property bool sceneMeshActive: surfaceLoader.true3DReady
+                // How deep the 3D scene makes its icons (Icon depth), for the
+                // icons' solids.
+                readonly property real sceneIconDepth: surfaceLoader.true3DReady && surfaceLoader.true3DItem
+                    ? Number(surfaceLoader.true3DItem.iconDepth || 0) : 0
+                readonly property string sceneIconRelief: surfaceLoader.true3DReady && surfaceLoader.true3DItem
+                    ? String(surfaceLoader.true3DItem.iconRelief || "auto") : "auto"
                 // Whether a stand stands on the path at its icon's place (a
                 // free panel's) or with its icon in the row (an edge panel's).
                 readonly property bool scenePedestalOnPath: root.pedestalOnPath
@@ -1892,6 +1899,8 @@ Item {
                 "indicator", "visible", "showIndicators", true))
             reducedMotion: root.reducedMotion
             meshVisualActive: Boolean(parent.sceneMeshActive)
+            solidDepth: Number(parent.sceneIconDepth || 0)
+            solidRelief: String(parent.sceneIconRelief || "auto")
             glyphMotion: parent.sceneGlyphMotion
             tileMotion: parent.sceneTileMotion
             indicatorMotion: parent.sceneIndicatorMotion

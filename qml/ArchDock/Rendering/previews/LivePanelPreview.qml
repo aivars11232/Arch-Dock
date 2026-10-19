@@ -301,6 +301,8 @@ Item {
             reducedMotion: Boolean(root.animationValue(
                 "reducedMotion", "reducedMotion", true))
             meshVisualActive: Boolean(parent.sceneMeshActive)
+            solidDepth: Number(parent.sceneIconDepth || 0)
+            solidRelief: String(parent.sceneIconRelief || "auto")
             glyphMotion: parent.sceneGlyphMotion || ({})
             tileMotion: parent.sceneTileMotion || ({})
             indicatorMotion: parent.sceneIndicatorMotion || ({})
