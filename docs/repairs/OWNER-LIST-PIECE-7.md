@@ -175,6 +175,61 @@ of the 691 committed files is identical in the clone and the workspace.
   alone; at 1 the light alone shapes it, with stronger highlights and
   deeper shade, like a modelled object under a lamp.
 
+## Addition 2: the shapes in the picture
+
+The owner (2026-10-19 evening), with eight screenshots of neural4d.com
+turning the Arch Dock logo into a full model: "So for real 3D Icons u can
+reverse engeneer this site ... i also gave u some samples on how Arch
+Dock should turn 2D Icons into 3D"; then: "But it have to be light and
+fast I mean 2-3 seconds fast if not faster." That site runs a trained
+image-to-3D model on its servers; on this machine (an AMD Radeon 610M,
+no CUDA, 14 GB) the one open model that runs on the processor takes
+minutes per icon, so no model. Instead the app reads the shapes a logo
+is drawn from, in about a tenth of a second per icon:
+
+- **A ring.** A thin band lying on an ellipse, at least half the way
+  round, is a ring seen at a tilt (the tilt from the ellipse's axes). It
+  becomes a real ring through the icon, passing in front where the
+  picture shows it over the figure and behind where the figure hides it,
+  wearing the picture's colours. The figure the ring crosses is whole
+  again under it. Read from the whole outline's thin strokes, so a ring
+  drawn in the figure's own colours (the Arch Dock logo's) is found too;
+  a rounded-square frame (LCL's) is not taken for one.
+- **A globe.** A round outline (Firefox's) rises as a ball the parts ride
+  on.
+- **A prism.** A part with three to six corners (the Arch Dock A, a
+  letter) rises with a flat top and bevelled edges.
+- **Rounded parts** as before for everything else.
+
+### Verification of the addition 2
+
+Evidence logs 60-68 in `build-codex-adrep/evidence/OWNER-LIST-PIECE-7/`.
+
+- **Geometry unit tests** (`icon-solid-test`, 20/20): the earlier sixteen,
+  and: a drawn logo (a triangle with a ring round it, the ring's lower
+  half drawn over the triangle) is read into one ring and one whole
+  triangle, a polygon, with the lower half of the ring in front; its
+  mesh is a prism with a flat top and a ring reaching in front of and
+  behind the body, the depth the body's top and the reach the ring's; a
+  round two-colour icon is a globe; a lying ellipse is a disc.
+- **Real icons** (scratch runs on this machine, logged in the session):
+  the Arch Dock logo's picture gives one ring (semi-axes 27 and 8 px at
+  64 px, a band of 3 px) and its A as a polygon; LCL gives no ring (its
+  rounded-square frame is rejected by the hull test), Firefox none and a
+  globe, the Breeze folder a block; about 80 ms per icon.
+- **Renderer smoke** (`61-shapes-smoke.log`, 183 s): passed with the
+  logo as the test's icon (`scene5/icons-flat.png`, `icons-rounded.png`:
+  the prism with its ring, `icons-block.png`, `icons-sculpted.png`;
+  sheets `22-test-scene-shapes.png`, `26-test-scene-logo-close.png`).
+- **Focused tests** (`68-shapes-focused-tests.log`): 3/3 passed:
+  panel-settings-schema-test, panel-window-capability-test (411 s) and
+  studio-truth-matrix-smoke (373 s).
+- **Desktop pictures** (`62-shapes-replica.log`, replica `piece7-solid-6`;
+  sheets `23-desktop-shapes-close.png`, `24-desktop-shapes-ring.png`,
+  `25-desktop-logo-close.png`): the Arch Dock logo on the ring as a
+  bevelled prism with a real ring through it and a disc at its base,
+  from its flat picture; the other icons as before.
+
 ### Verification of the addition
 
 Evidence logs 50-53 in `build-codex-adrep/evidence/OWNER-LIST-PIECE-7/`.

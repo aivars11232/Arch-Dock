@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Truth matrix glyph: a logo of a triangle with a ring round it, drawn without an icon theme. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <path d="M32 10 L54 56 L10 56 Z" fill="#2458b0"/>
+  <path d="M6 36 A26 9 0 0 0 58 36" stroke="#3a86e0" stroke-width="3.5" fill="none"/>
+  <path d="M6 36 A26 9 0 0 1 20 27.6 M44 27.6 A26 9 0 0 1 58 36" stroke="#3a86e0" stroke-width="3.5" fill="none"/>
+</svg>

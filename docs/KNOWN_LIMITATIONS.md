@@ -62,14 +62,22 @@ A 3D icon's volume is modelled from its picture alone, so it is an
 educated reading of a flat picture, not the icon's maker's own model. The
 kind is read from the outline: an outline that fills its box (a rounded
 square, a rectangle) is taken for a plate and becomes a block, any other
-outline has its parts rounded; a round badge therefore becomes a ball and
-a square picture of a thing a slab, and Icon relief can say otherwise for
-the whole panel. In the rounded relief the parts are the picture's areas
-of one colour, a part inside another is taken to stand above it, and a
+outline is read for its shapes; a round badge therefore becomes a ball
+and a square picture of a thing a slab, and Icon relief can say otherwise
+for the whole panel. The shapes read are rings (a thin band on an
+ellipse, at least half the way round), globes (a round outline), prisms
+(a part with three to six corners) and rounded parts; a ring whose
+hidden side cannot be told from the picture is taken to come forward at
+the bottom, as a ring seen from a little above does; a ring wears the
+picture's colours at the place it projects to, so its back, where the
+picture hides it, wears what the picture shows there; a knob on a ring
+is not read as a ball of its own. The parts are the picture's areas of
+one colour, a part inside another is taken to stand above it, and a
 shaded part stays one part; a picture whose parts are drawn with soft
 edges or shadows may rise in fewer parts than the eye sees; a hole in an
-icon (a ring, a letter's counter) stays see-through; the back of the
-volume mirrors the front. In the Block relief a hole is filled in the
+icon stays see-through; the back of the volume mirrors the front. The
+reading takes about a tenth of a second per icon on the panel's thread
+when the icon first shows. In the Block relief a hole is filled in the
 block, though it stays see-through on the block's front and back, and the
 walls take the picture's edge colours. Only the icon's picture becomes a
 volume; badges, progress and overlays stay flat on the entry.

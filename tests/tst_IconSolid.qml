@@ -237,4 +237,102 @@ TestCase {
             verify(faceNormal[0] * n[0] + faceNormal[1] * n[1] + faceNormal[2] * n[2] > 0, "a wall faces outward")
         }
     }
+
+    // A logo: a triangle with an elliptical ring round it, the ring's
+    // lower half drawn over the triangle.
+    function logo(width, height) {
+        // The ring: a band of even width round an ellipse, as a stroke is.
+        const samples = []
+        for (let step = 0; step < 240; ++step) {
+            const angle = step / 240 * 2 * Math.PI
+            samples.push([32 + 26 * Math.cos(angle), 36 + 9 * Math.sin(angle)])
+        }
+        return coloured(width, height, function(x, y) {
+            const px = x + 0.5, py = y + 0.5
+            let nearest = 1e9
+            for (const sample of samples) nearest = Math.min(nearest, Math.hypot(px - sample[0], py - sample[1]))
+            const ring = nearest <= 1.75
+            const triangle = py >= 12 && py <= 54 && Math.abs(px - 32) <= (py - 12) * 0.55
+            if (ring && (py >= 36 || !triangle)) return [40, 120, 220]
+            if (triangle) return [20, 60, 160]
+            return null
+        })
+    }
+    function test_partsOfALogo() {
+        const width = 64, height = 64
+        const data = logo(width, height)
+        const mask = IconSolid.maskFromImageData(data, width, height)
+        const parted = IconSolid.colourParts(data, mask, width, height)
+        verify(parted.parts.length >= 2, "a ring and a triangle, in pieces")
+        const read = IconSolid.iconShapes(data, width, height)
+        compare(read.rings.length, 1, "one ring")
+        compare(read.parts.length, 1, "the triangle is whole again under the ring")
+        compare(read.shapes[0].shape, "polygon", "the triangle is a polygon")
+        verify(Math.sin(read.rings[0].front) > 0.5, "the lower half of the ring is in front: " + read.rings[0].front)
+        const r = read.rings[0]
+        verify(Math.abs(r.ellipse.a - 26) < 3, "the ring's longer semi-axis: " + r.ellipse.a)
+        verify(Math.abs(r.ellipse.b - 9) < 3, "the ring's shorter semi-axis: " + r.ellipse.b)
+        verify(r.band > 1.5 && r.band < 5, "the band's width: " + r.band)
+        const torus = IconSolid.torusMesh(r.ellipse, r.band, r.front, width, height)
+        compare(torus.positions.length, 48 * 12)
+        compare(torus.indexes.length, 48 * 12 * 6)
+        let front = 0, back = 0
+        for (const p of torus.positions) { if (p[2] > 2) front++; else if (p[2] < -2) back++ }
+        verify(front > 100 && back > 100, "the ring passes in front and behind: " + front + " " + back)
+        for (const n of torus.normals) verify(Math.abs(Math.hypot(n[0], n[1], n[2]) - 1) < 1e-6)
+    }
+    function test_theLogoBecomesAPrismWithARingThroughIt() {
+        const width = 64, height = 64
+        const mesh = IconSolid.reliefMesh(logo(width, height), width, height)
+        compare(mesh.rings, 1, "one ring")
+        compare(mesh.parts, 1, "one body")
+        verify(!mesh.globe, "a triangle is no globe")
+        // The body's front has a flat top: many corners share the greatest
+        // height, as a prism's top does and a dome's does not.
+        const body = mesh.positions.length - 48 * 12
+        let highest = 0
+        for (let index = 0; index < body; index += 2) highest = Math.max(highest, mesh.positions[index][2])
+        let flat = 0
+        for (let index = 0; index < body; index += 2) if (mesh.positions[index][2] > highest - 0.5) ++flat
+        verify(flat > 20, "a flat top: " + flat + " corners at " + highest.toFixed(1))
+        // The ring reaches in front of and behind the body.
+        let front = 0, back = 0
+        for (let index = body; index < mesh.positions.length; ++index) {
+            if (mesh.positions[index][2] > highest * 0.5) ++front
+            if (mesh.positions[index][2] < -highest * 0.5) ++back
+        }
+        verify(front > 50 && back > 50, "the ring passes in front and behind the body: " + front + " " + back)
+        verify(Math.abs(mesh.depth - highest) < 1e-6, "the depth is the body's top")
+        verify(mesh.reach >= mesh.depth, "the reach takes the ring in")
+    }
+
+    function test_aRoundIconIsAGlobe() {
+        const width = 48, height = 48
+        const data = coloured(width, height, function(x, y) {
+            const r = Math.hypot(x + 0.5 - 24, y + 0.5 - 24)
+            if (r >= 20) return null
+            return y < 24 ? [230, 120, 40] : [60, 80, 200]
+        })
+        const mesh = IconSolid.reliefMesh(data, width, height)
+        verify(mesh.globe, "a round outline is a globe")
+        compare(mesh.rings, 0)
+        let highest = 0
+        for (let index = 0; index < mesh.positions.length; index += 2) highest = Math.max(highest, mesh.positions[index][2])
+        // A ball twenty pixels across rises about its radius in frame units.
+        verify(highest > 20 * 100 / 48 * 0.8, "it rises like a ball: " + highest.toFixed(1))
+    }
+
+    function test_aDiscAndABlob() {
+        const width = 48, height = 48
+        const data = coloured(width, height, function(x, y) {
+            if (Math.hypot((x + 0.5 - 24) / 18, (y + 0.5 - 24) / 8) < 1) return [200, 50, 50]
+            return null
+        })
+        const mask = IconSolid.maskFromImageData(data, width, height)
+        const parted = IconSolid.colourParts(data, mask, width, height)
+        const shapes = IconSolid.partShapes(parted.labels, parted.parts, width, height)
+        compare(shapes[0].shape, "disc")
+        verify(Math.abs(shapes[0].ellipse.a - 18) < 2 && Math.abs(shapes[0].ellipse.b - 8) < 2, "disc axes " + shapes[0].ellipse.a + " " + shapes[0].ellipse.b)
+        verify(Math.abs(shapes[0].ellipse.angle) < 0.2, "lying flat: " + shapes[0].ellipse.angle)
+    }
 }

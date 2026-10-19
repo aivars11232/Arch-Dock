@@ -262,7 +262,8 @@ function solidMesh(data, width, height, options) {
 function colourParts(data, mask, width, height, options) {
     const settings = options || ({})
     const tolerance = settings.tolerance === undefined ? 90 : settings.tolerance
-    const step = settings.step === undefined ? 30 : settings.step
+    const step = settings.step === undefined ? 0 : settings.step
+    const contrast = settings.contrast === undefined ? 30 : settings.contrast
     const minimumShare = settings.minimumShare === undefined ? 0.01 : settings.minimumShare
     const labels = new Int32Array(width * height).fill(-1)
     const groups = []
@@ -299,24 +300,33 @@ function colourParts(data, mask, width, height, options) {
         }
         groups.push({ count: count, colour: [sum[0] / count, sum[1] / count, sum[2] / count] })
     }
-    // Touching groups of nearly the same colour are one part.
+    // Touching groups whose colours meet softly along their shared edge
+    // (a shaded part grown in bands) are one part; a hard edge keeps
+    // two colours apart however close their means.
     const owner = groups.map(function(group, index) { return index })
     const find = function(index) {
         while (owner[index] !== index) { owner[index] = owner[owner[index]]; index = owner[index] }
         return index
     }
-    const touching = function(a, b) {
-        return Math.abs(groups[a].colour[0] - groups[b].colour[0]) + Math.abs(groups[a].colour[1] - groups[b].colour[1])
-            + Math.abs(groups[a].colour[2] - groups[b].colour[2]) <= tolerance
-    }
+    const edges = new Map()
     for (let index = 0; index < width * height; ++index) {
         if (labels[index] < 0) continue
         const x = index % width
         for (const next of [x < width - 1 ? index + 1 : -1, index + width < width * height ? index + width : -1]) {
             if (next < 0 || labels[next] < 0 || labels[next] === labels[index]) continue
-            const a = find(labels[index]), b = find(labels[next])
-            if (a !== b && touching(a, b)) owner[b] = a
+            const key = Math.min(labels[index], labels[next]) + ":" + Math.max(labels[index], labels[next])
+            const difference = Math.abs(data[next * 4] - data[index * 4]) + Math.abs(data[next * 4 + 1] - data[index * 4 + 1])
+                + Math.abs(data[next * 4 + 2] - data[index * 4 + 2])
+            const edge = edges.get(key) || { sum: 0, count: 0 }
+            edge.sum += difference; ++edge.count
+            edges.set(key, edge)
         }
+    }
+    for (const [key, edge] of edges) {
+        if (edge.sum / edge.count > contrast) continue
+        const [first, second] = key.split(":").map(Number)
+        const a = find(first), b = find(second)
+        if (a !== b) owner[b] = a
     }
     const merged = relabel(labels, groups, owner.map(function(_, index) { return find(index) }), width, height)
     // Specks go into the neighbour they touch most, until none is left.
@@ -451,13 +461,17 @@ function distanceInside(inside, width, height) {
 // to the next, twice a half circle's height, so at half the Icon depth
 // a part is a full half round.
 function reliefHeights(labels, parts, layers, width, height, settings) {
-    const dome = settings.dome === undefined ? 12 : settings.dome
     const bump = settings.bump === undefined ? 2 : settings.bump
     const step = settings.step === undefined ? 12 : settings.step
+    const shapes = settings.shapes || []
     const unit = 100 / width
     const whole = distanceInside(function(index) { return labels[index] >= 0 }, width, height)
     let reach = 1
     for (let index = 0; index < width * height; ++index) reach = Math.max(reach, whole[index])
+    // A round outline is a globe: the whole rises as a ball and the parts
+    // ride on it; any other outline rises a little as a cushion.
+    const dome = settings.globe ? reach * unit * bump / 2 : (settings.dome === undefined ? 12 : settings.dome)
+    const ride = settings.globe ? 0.5 : 1
     const heights = new Float32Array(width * height)
     for (let index = 0; index < width * height; ++index) {
         if (labels[index] < 0) continue
@@ -468,10 +482,15 @@ function reliefHeights(labels, parts, layers, width, height, settings) {
         const own = distanceInside(function(index) { return labels[index] === part }, width, height)
         let radius = 1
         for (let index = 0; index < width * height; ++index) radius = Math.max(radius, own[index])
+        const shape = shapes[part] ? shapes[part].shape : "blob"
+        // A part with corners is a prism: a flat top with a bevel a
+        // quarter of its radius wide; a rounded part is a half round.
+        const bevel = Math.max(1, radius * 0.25), top = bump * unit * radius * 0.6
         for (let index = 0; index < width * height; ++index) {
             if (labels[index] !== part) continue
             const d = own[index]
-            heights[index] += bump * unit * Math.sqrt(Math.max(0, d * (2 * radius - d)))
+            heights[index] += ride * (shape === "polygon" ? top * Math.min(1, d / bevel)
+                                                          : bump * unit * Math.sqrt(Math.max(0, d * (2 * radius - d))))
         }
     }
     return heights
@@ -485,13 +504,21 @@ function reliefHeights(labels, parts, layers, width, height, settings) {
 // own. Normals follow the slopes, so the light rounds the parts.
 function reliefMesh(data, width, height, options) {
     const settings = options || ({})
-    const mask = maskFromImageData(data, width, height, settings.threshold)
-    const parted = colourParts(data, mask, width, height, settings)
+    const read = iconShapes(data, width, height, settings)
+    const parted = read
     const layers = partLayers(parted.labels, parted.parts, width, height)
-    const heights = reliefHeights(parted.labels, parted.parts, layers, width, height, settings)
+    // A round outline, nearly a circle, filled: a globe.
+    const outline = []
+    for (let index = 0; index < width * height; ++index) if (parted.labels[index] >= 0) outline.push(index)
+    const whole = fitEllipse(outline, width)
+    const kind = reliefKind(parted.labels.map(function(label) { return label >= 0 ? 1 : 0 }), width, height)
+    const globe = whole !== null && kind.hullFill >= 0.88 && whole.b / whole.a >= 0.8
+        && outline.length / (Math.PI * whole.a * whole.b) > 0.85
+    const heights = reliefHeights(parted.labels, parted.parts, layers, width, height,
+                                  Object.assign({}, settings, { shapes: read.shapes, globe: globe }))
     const columns = width + 1, rows = height + 1
     const unit = 100 / width
-    const cell = function(x, y) { return x >= 0 && y >= 0 && x < width && y < height && mask[y * width + x] ? y * width + x : -1 }
+    const cell = function(x, y) { return x >= 0 && y >= 0 && x < width && y < height && parted.labels[y * width + x] >= 0 ? y * width + x : -1 }
     // Each corner's height and texture point.
     const z = new Float32Array(columns * rows)
     const used = new Uint8Array(columns * rows)
@@ -542,8 +569,20 @@ function reliefMesh(data, width, height, options) {
     let top = 0, depth = 0
     for (const layer of layers) top = Math.max(top, layer)
     for (const corner of z) depth = Math.max(depth, corner)
+    // The rings, as real rings through the picture's plane; they may
+    // reach behind the body, which stands with its back on the plane.
+    let reach = depth
+    for (const ring of read.rings) {
+        const torus = torusMesh(ring.ellipse, ring.band, ring.front, width, height, settings)
+        const base = positions.length
+        for (let index = 0; index < torus.positions.length; ++index) {
+            positions.push(torus.positions[index]); normals.push(torus.normals[index]); uv0s.push(torus.uv0s[index])
+        }
+        for (const index of torus.indexes) indexes.push(base + index)
+        reach = Math.max(reach, torus.reach)
+    }
     return { positions: positions, normals: normals, uv0s: uv0s, indexes: indexes,
-             parts: parted.parts.length, layers: top + 1, depth: depth }
+             parts: parted.parts.length, layers: top + 1, depth: depth, reach: reach, rings: read.rings.length, globe: globe }
 }
 
 // ---------------------------------------------------------------------
@@ -606,4 +645,464 @@ function iconMesh(data, width, height, relief, options) {
     const mesh = kind === "block" ? solidMesh(data, width, height, settings) : reliefMesh(data, width, height, settings)
     mesh.kind = kind
     return mesh
+}
+
+// ---------------------------------------------------------------------
+// Shapes in the picture. A logo is drawn from shapes: a ring round a
+// figure, a disc, a triangle or a letter. Each part of one colour is
+// read for the shape it is, and the volume follows the shape: a thin
+// closed loop that fits an ellipse is a ring seen at a tilt and becomes
+// a real ring (a torus) through the icon; a part with few corners rises
+// as a bevelled prism; a round outline is a globe the parts ride on.
+
+// The ellipse a set of pixels fits: centre, semi-axes (the longer first)
+// and the longer axis's angle, from the pixels' second moments.
+function fitEllipse(indexes, width) {
+    const count = indexes.length
+    if (!count) return null
+    let cx = 0, cy = 0
+    for (const index of indexes) { cx += index % width + 0.5; cy += Math.floor(index / width) + 0.5 }
+    cx /= count; cy /= count
+    let mxx = 0, myy = 0, mxy = 0
+    for (const index of indexes) {
+        const dx = index % width + 0.5 - cx, dy = Math.floor(index / width) + 0.5 - cy
+        mxx += dx * dx; myy += dy * dy; mxy += dx * dy
+    }
+    mxx /= count; myy /= count; mxy /= count
+    const trace = mxx + myy, det = mxx * myy - mxy * mxy
+    const root = Math.sqrt(Math.max(0, trace * trace / 4 - det))
+    const large = trace / 2 + root, small = Math.max(1e-6, trace / 2 - root)
+    // A filled ellipse's second moment along an axis is a quarter of
+    // that semi-axis squared.
+    return { cx: cx, cy: cy, a: 2 * Math.sqrt(large), b: 2 * Math.sqrt(small),
+             angle: axisAngle(0.5 * Math.atan2(2 * mxy, mxx - myy)), count: count }
+}
+
+// The pixels of a part together with the holes it closes round: the
+// part's pixels plus every pixel not reachable from the picture's edge
+// without crossing the part.
+function filledPixels(labels, part, width, height) {
+    const reached = new Uint8Array(width * height)
+    const queue = new Int32Array(width * height)
+    let head = 0, tail = 0
+    const push = function(index) { if (!reached[index] && labels[index] !== part) { reached[index] = 1; queue[tail++] = index } }
+    for (let x = 0; x < width; ++x) { push(x); push((height - 1) * width + x) }
+    for (let y = 0; y < height; ++y) { push(y * width); push(y * width + width - 1) }
+    while (head < tail) {
+        const index = queue[head++]
+        const x = index % width, y = (index - x) / width
+        if (x > 0) push(index - 1)
+        if (x < width - 1) push(index + 1)
+        if (y > 0) push(index - width)
+        if (y < height - 1) push(index + width)
+    }
+    const own = [], holes = []
+    for (let index = 0; index < width * height; ++index) {
+        if (labels[index] === part) own.push(index)
+        else if (!reached[index]) holes.push(index)
+    }
+    return { own: own, holes: holes }
+}
+
+// How many corners a part's outline keeps when simplified coarsely (a
+// tenth of its size), for telling a triangle or a letter from a blob.
+function partCorners(labels, part, width, height) {
+    const mask = new Uint8Array(width * height)
+    let left = width, right = -1, top = height, bottom = -1
+    for (let index = 0; index < width * height; ++index) {
+        if (labels[index] !== part) continue
+        mask[index] = 1
+        const x = index % width, y = (index - x) / width
+        left = Math.min(left, x); right = Math.max(right, x); top = Math.min(top, y); bottom = Math.max(bottom, y)
+    }
+    const loops = outlines(mask, width, height)
+    if (!loops.length) return 0
+    const size = Math.max(right - left + 1, bottom - top + 1)
+    return simplify(loops[0], Math.max(1, size * 0.1)).length
+}
+
+// The ellipse a thin band's pixels lie on, by least squares on the conic
+// A x^2 + B x y + C y^2 + D x + E y = 1: centre, semi-axes (the longer
+// first) and the longer axis's angle; null when the pixels fit no ellipse.
+function fitConic(indexes, width) {
+    if (indexes.length < 6) return null
+    const m = [], v = [0, 0, 0, 0, 0]
+    for (let i = 0; i < 5; ++i) m.push([0, 0, 0, 0, 0])
+    for (const index of indexes) {
+        const x = index % width + 0.5, y = Math.floor(index / width) + 0.5
+        const row = [x * x, x * y, y * y, x, y]
+        for (let i = 0; i < 5; ++i) { v[i] += row[i]; for (let j = 0; j < 5; ++j) m[i][j] += row[i] * row[j] }
+    }
+    // Solve m w = v by elimination.
+    for (let i = 0; i < 5; ++i) {
+        let pivot = i
+        for (let k = i + 1; k < 5; ++k) if (Math.abs(m[k][i]) > Math.abs(m[pivot][i])) pivot = k
+        if (Math.abs(m[pivot][i]) < 1e-12) return null
+        if (pivot !== i) { const t = m[i]; m[i] = m[pivot]; m[pivot] = t; const tv = v[i]; v[i] = v[pivot]; v[pivot] = tv }
+        for (let k = i + 1; k < 5; ++k) {
+            const f = m[k][i] / m[i][i]
+            for (let j = i; j < 5; ++j) m[k][j] -= f * m[i][j]
+            v[k] -= f * v[i]
+        }
+    }
+    const w = [0, 0, 0, 0, 0]
+    for (let i = 4; i >= 0; --i) {
+        let sum = v[i]
+        for (let j = i + 1; j < 5; ++j) sum -= m[i][j] * w[j]
+        w[i] = sum / m[i][i]
+    }
+    const [A, B, C, D, E] = w
+    const det = 4 * A * C - B * B
+    if (det <= 1e-12) return null
+    const cx = (B * E - 2 * C * D) / det, cy = (B * D - 2 * A * E) / det
+    const constant = A * cx * cx + B * cx * cy + C * cy * cy + D * cx + E * cy - 1
+    const half = (A + C) / 2, spread = Math.sqrt(((A - C) / 2) ** 2 + (B / 2) ** 2)
+    const small = half - spread, large = half + spread
+    // An ellipse: both curvatures of one sign, the centre's value of the
+    // other (the normalisation to 1 may have turned every sign).
+    if (!(small > 0 && large > 0 && constant < 0) && !(small < 0 && large < 0 && constant > 0)) return null
+    // Each curvature's direction; the longer axis is the one with the
+    // smaller curvature in size.
+    const axisOf = function(curvature) {
+        if (Math.abs(B) < 1e-9) return Math.abs(curvature - A) < Math.abs(curvature - C) ? 0 : Math.PI / 2
+        return Math.atan2(curvature - A, B / 2)
+    }
+    const first = Math.sqrt(-constant / small), second = Math.sqrt(-constant / large)
+    if (first >= second) return { cx: cx, cy: cy, a: first, b: second, angle: axisAngle(axisOf(small)), count: indexes.length }
+    return { cx: cx, cy: cy, a: second, b: first, angle: axisAngle(axisOf(large)), count: indexes.length }
+}
+
+// An axis angle kept between a quarter turn either way, so the
+// direction across the longer axis always points down the picture.
+function axisAngle(angle) {
+    let result = angle
+    while (result > Math.PI / 2) result -= Math.PI
+    while (result <= -Math.PI / 2) result += Math.PI
+    return result
+}
+
+// A pixel's angle round an ellipse, in the ellipse's own frame.
+function ellipseAngle(ellipse, x, y) {
+    const dx = x - ellipse.cx, dy = y - ellipse.cy
+    const along = dx * Math.cos(ellipse.angle) + dy * Math.sin(ellipse.angle)
+    const across = -dx * Math.sin(ellipse.angle) + dy * Math.cos(ellipse.angle)
+    return Math.atan2(across / ellipse.b, along / ellipse.a)
+}
+
+// What each part is: "disc" (a filled ellipse), "polygon" (few corners)
+// or "blob". Rings are read from the outline's thin strokes, not here.
+function partShapes(labels, parts, width, height) {
+    const shapes = []
+    for (let part = 0; part < parts.length; ++part) {
+        const own = []
+        for (let index = 0; index < width * height; ++index) if (labels[index] === part) own.push(index)
+        const points = own.map(function(index) { return [index % width + 0.5, Math.floor(index / width) + 0.5] })
+        const hull = convexHull(points)
+        const hullArea = hull.length >= 3 ? Math.abs(signedArea(hull)) : own.length
+        const hullFill = own.length / Math.max(1, hullArea)
+        const ellipse = fitEllipse(own, width)
+        let shape = "blob"
+        const round = ellipse ? own.length / (Math.PI * ellipse.a * ellipse.b) : 0
+        if (hullFill > 0.85 && round > 0.85 && round < 1.2) shape = "disc"
+        else {
+            const corners = partCorners(labels, part, width, height)
+            if (corners >= 3 && corners <= 6) shape = "polygon"
+        }
+        shapes.push({ shape: shape, ellipse: ellipse, hullFill: hullFill })
+    }
+    return shapes
+}
+
+// The rings in the outline: its thin strokes (what an opening by
+// `radius`, an erosion then a dilation, takes away), in touching runs,
+// each run fitted with an ellipse; runs on one ellipse are one ring. A
+// ring has to lie on its ellipse within its own band's width, go at least
+// half the way round, and, when it goes nearly all the way, its hull has
+// to be the ellipse's and not a frame's with corners. Each ring tells its
+// ellipse, its band's width, its pixels and the angle of the gap where
+// another part hides it.
+function thinRings(mask, data, width, height, options) {
+    const settings = options || ({})
+    const radius = settings.strokeRadius === undefined ? Math.max(2.5, width * 0.045) : settings.strokeRadius
+    const inside = distanceInside(function(index) { return mask[index] === 1 }, width, height)
+    const core = new Uint8Array(width * height)
+    for (let index = 0; index < width * height; ++index) if (inside[index] > radius) core[index] = 1
+    const toCore = distanceInside(function(index) { return !core[index] }, width, height)
+    const thin = new Uint8Array(width * height)
+    for (let index = 0; index < width * height; ++index) if (mask[index] && toCore[index] > radius) thin[index] = 1
+    const seen = new Uint8Array(width * height)
+    const runs = []
+    for (let start = 0; start < width * height; ++start) {
+        if (!thin[start] || seen[start]) continue
+        const run = [start]; seen[start] = 1
+        for (let head = 0; head < run.length; ++head) {
+            const index = run[head], x = index % width, y = (index - x) / width
+            for (const side of [x > 0 ? index - 1 : -1, x < width - 1 ? index + 1 : -1, y > 0 ? index - width : -1, y < height - 1 ? index + width : -1])
+                if (side >= 0 && thin[side] && !seen[side]) { seen[side] = 1; run.push(side) }
+        }
+        if (run.length >= Math.max(8, width * height * 0.003)) runs.push(run)
+    }
+    const fits = function(conic, pixels, stroke) {
+        let near = 0
+        const bins = new Uint8Array(36)
+        for (const index of pixels) {
+            const x = index % width + 0.5, y = Math.floor(index / width) + 0.5
+            const angle = ellipseAngle(conic, x, y)
+            const rx = Math.cos(angle) * conic.a, ry = Math.sin(angle) * conic.b
+            const px = conic.cx + rx * Math.cos(conic.angle) - ry * Math.sin(conic.angle)
+            const py = conic.cy + rx * Math.sin(conic.angle) + ry * Math.cos(conic.angle)
+            if (Math.hypot(x - px, y - py) <= Math.max(1.5, stroke * 0.75)) ++near
+            bins[Math.floor(((angle + Math.PI) / (2 * Math.PI)) * 36) % 36] = 1
+        }
+        let covered = 0
+        for (const bin of bins) covered += bin
+        return { near: near / pixels.length, covered: covered, bins: bins }
+    }
+    // A band's width from its pixels' distances to its edge: they run
+    // from one to half the width, so the mean is a quarter of the width
+    // and a half.
+    const strokeOf = function(pixels) {
+        let sum = 0
+        for (const index of pixels) sum += inside[index]
+        return Math.max(1, 4 * sum / pixels.length - 2)
+    }
+    // Runs are grouped greedily, the largest first: a run joins a group
+    // when the group and the run together lie on one ellipse, so the arcs
+    // of a ring cut by the figure it crosses find each other.
+    runs.sort(function(a, b) { return b.length - a.length })
+    const rings = []
+    const taken = runs.map(function() { return false })
+    for (let first = 0; first < runs.length; ++first) {
+        if (taken[first]) continue
+        let pixels = runs[first].slice()
+        let conic = fitConic(pixels, width)
+        if (!conic || conic.b / conic.a < 0.08 || conic.a > width) continue
+        taken[first] = true
+        let grew = true
+        while (grew) {
+            grew = false
+            for (let other = 0; other < runs.length; ++other) {
+                if (taken[other]) continue
+                const joint = pixels.concat(runs[other])
+                const fit = fitConic(joint, width)
+                if (!fit || fit.b < 2 || fit.b / fit.a < 0.12 || fit.a > width) continue
+                const stroke = strokeOf(joint)
+                if (stroke > fit.a * 0.3 || fits(fit, joint, stroke).near < 0.8) continue
+                pixels = joint; conic = fit; taken[other] = true; grew = true
+            }
+        }
+        rings.push({ conic: conic, pixels: pixels })
+    }
+    const result = []
+    for (const ring of rings) {
+        const whole = fitConic(ring.pixels, width) || ring.conic
+        const stroke = strokeOf(ring.pixels)
+        const fit = fits(whole, ring.pixels, stroke)
+        if (fit.near < 0.8 || fit.covered < 18) continue
+        if (fit.covered >= 30) {
+            const hull = convexHull(ring.pixels.map(function(index) { return [index % width + 0.5, Math.floor(index / width) + 0.5] }))
+            const hullRound = Math.abs(signedArea(hull)) / (Math.PI * (whole.a + stroke / 2) * (whole.b + stroke / 2))
+            if (hullRound > 1.1) continue
+        }
+        // The whole band along the ellipse: every pixel within the band's
+        // half width. Where the ring crosses in front of the figure its
+        // edges show as sharp changes of colour across the band; where the
+        // figure hides it the band lies on the figure's smooth surface.
+        // The widest stretch without the ring's edges is the gap.
+        const band = []
+        const edgy = new Float32Array(36), total = new Float32Array(36)
+        const read = function(index) { return index >= 0 && index < width * height ? [data[index * 4], data[index * 4 + 1], data[index * 4 + 2]] : null }
+        for (let index = 0; index < width * height; ++index) {
+            if (!mask[index]) continue
+            const x = index % width + 0.5, y = Math.floor(index / width) + 0.5
+            const angle = ellipseAngle(whole, x, y)
+            const rx = Math.cos(angle) * whole.a, ry = Math.sin(angle) * whole.b
+            const px = whole.cx + rx * Math.cos(whole.angle) - ry * Math.sin(whole.angle)
+            const py = whole.cy + rx * Math.sin(whole.angle) + ry * Math.cos(whole.angle)
+            // Half the band and a pixel of softened edge.
+            if (Math.hypot(x - px, y - py) > Math.max(2, stroke * 0.5 + 1.5)) continue
+            band.push(index)
+            const bin = Math.floor(((angle + Math.PI) / (2 * Math.PI)) * 36) % 36
+            ++total[bin]
+            const here = read(index)
+            let sharpest = 0
+            const ix = index % width
+            for (const side of [ix > 0 ? index - 1 : -1, ix < width - 1 ? index + 1 : -1, index - width, index + width]) {
+                const there = read(side)
+                if (!there) continue
+                sharpest = Math.max(sharpest, Math.abs(here[0] - there[0]) + Math.abs(here[1] - there[1]) + Math.abs(here[2] - there[2]))
+            }
+            if (sharpest > 60) ++edgy[bin]
+        }
+        const shown = function(bin) { return total[bin] > 0 && (fit.bins[bin] || edgy[bin] / total[bin] >= 0.2) }
+        let gap = null, bestStart = -1, bestLength = 0
+        for (let start = 0; start < 36; ++start) {
+            if (shown(start)) continue
+            let length = 0
+            while (length < 36 && !shown((start + length) % 36)) ++length
+            if (length > bestLength) { bestLength = length; bestStart = start }
+        }
+        if (bestLength > 0 && bestLength < 36) gap = ((bestStart + bestLength / 2) / 36) * 2 * Math.PI - Math.PI
+        result.push({ ellipse: whole, band: stroke, pixels: band, gap: gap })
+    }
+    return result
+}
+
+// A ring as a torus in the glyph's frame, tilted so that it projects to
+// the ellipse it was drawn as; `front` is the angle, in the ellipse's
+// frame, of the side that comes toward the viewer. Texture coordinates
+// follow the projection, so the ring wears its own colours.
+function torusMesh(ellipse, band, front, width, height, options) {
+    const settings = options || ({})
+    const around = settings.around || 48, across = settings.across || 12
+    const unit = 100 / width
+    const R = ellipse.a * unit
+    const r = Math.max(1.5, band / 2 * unit)
+    // The tilt about the longer axis lifts one side of the ring toward
+    // the viewer: the side the front angle points to.
+    let tilt = Math.acos(Math.max(0, Math.min(1, ellipse.b / ellipse.a)))
+    if (Math.sin(front) < 0) tilt = -tilt
+    const cosT = Math.cos(tilt), sinT = Math.sin(tilt)
+    const cosA = Math.cos(ellipse.angle), sinA = Math.sin(ellipse.angle)
+    const cx = (ellipse.cx / width - 0.5) * 100, cy = (0.5 - ellipse.cy / height) * 100
+    const positions = [], normals = [], uv0s = [], indexes = []
+    // In the ring's own frame: X along the longer axis, Y along the
+    // shorter one, Z toward the viewer; then the tilt about X, the turn
+    // about Z and the move to the centre. Picture y runs down, so the
+    // frame's y is the picture's negated.
+    const place = function(x, y, z) {
+        const ty = y * cosT - z * sinT, tz = y * sinT + z * cosT
+        const rx = x * cosA - ty * sinA, ry = x * sinA + ty * cosA
+        return [rx, -ry, tz]
+    }
+    for (let i = 0; i < around; ++i) {
+        const u = i / around * 2 * Math.PI
+        for (let j = 0; j < across; ++j) {
+            const v = j / across * 2 * Math.PI
+            const p = place((R + r * Math.cos(v)) * Math.cos(u), (R + r * Math.cos(v)) * Math.sin(u), r * Math.sin(v))
+            const n = place(Math.cos(v) * Math.cos(u), Math.cos(v) * Math.sin(u), Math.sin(v))
+            positions.push([cx + p[0], cy + p[1], p[2]])
+            normals.push(n)
+            uv0s.push([(cx + p[0]) / 100 + 0.5, (cy + p[1]) / 100 + 0.5])
+        }
+    }
+    for (let i = 0; i < around; ++i)
+        for (let j = 0; j < across; ++j) {
+            const a = i * across + j, b = ((i + 1) % around) * across + j
+            const c = i * across + (j + 1) % across, d = ((i + 1) % around) * across + (j + 1) % across
+            indexes.push(a, b, d, a, d, c)
+        }
+    return { positions: positions, normals: normals, uv0s: uv0s, indexes: indexes, reach: R * Math.abs(sinT) + r }
+}
+
+// Which side of a ring comes toward the viewer: the side opposite the
+// gap where another part hides it; a ring hidden nowhere shows its lower
+// half nearer, as a ring seen from a little above does. Given as the
+// angle, in the ellipse's frame, of the nearest point.
+function ringFront(shape) {
+    if (shape.gap !== null && shape.gap !== undefined) return shape.gap + Math.PI
+    // Straight down in the picture (y grows downward) in the frame.
+    return ellipseAngle(shape.ellipse, shape.ellipse.cx, shape.ellipse.cy + shape.ellipse.b)
+}
+
+function insideHull(hull, point) {
+    if (hull.length < 3) return false
+    for (let i = 0; i < hull.length; ++i)
+        if (cross(hull[i], hull[(i + 1) % hull.length], point) < 0) return false
+    return true
+}
+
+// The rings taken out of the parts: a ring's pixels inside the other
+// pixels' convex hull go to the nearest part (so a figure the ring
+// crosses in front of is whole again), the rest become clear; parts of
+// one colour that now touch are one part.
+function bridgeRings(labels, parts, rings, width, height) {
+    if (!rings.length) return { labels: labels, parts: parts, rings: [] }
+    const ringPixels = new Uint8Array(width * height)
+    for (const ring of rings) for (const index of ring.pixels) ringPixels[index] = 1
+    const others = []
+    for (let index = 0; index < width * height; ++index)
+        if (labels[index] >= 0 && !ringPixels[index]) others.push([index % width + 0.5, Math.floor(index / width) + 0.5])
+    const hull = convexHull(others)
+    const next = new Int32Array(labels)
+    const pending = new Set()
+    for (let index = 0; index < width * height; ++index) {
+        if (!ringPixels[index]) continue
+        next[index] = -1
+        if (insideHull(hull, [index % width + 0.5, Math.floor(index / width) + 0.5])) pending.add(index)
+    }
+    // Grow the other parts into the ring's pixels within the hull.
+    let guard = 0
+    while (pending.size && guard++ < width + height) {
+        const settled = []
+        for (const index of pending) {
+            const x = index % width, y = (index - x) / width
+            const sides = [x > 0 ? index - 1 : -1, x < width - 1 ? index + 1 : -1, y > 0 ? index - width : -1, y < height - 1 ? index + width : -1]
+            for (const side of sides)
+                if (side >= 0 && next[side] >= 0 && !pending.has(side)) { settled.push([index, next[side]]); break }
+        }
+        if (!settled.length) break
+        for (const [index, part] of settled) { next[index] = part; pending.delete(index) }
+    }
+    // Renumber, then merge touching parts of one colour.
+    const owner = parts.map(function(part, index) { return index })
+    const find = function(index) { while (owner[index] !== index) index = owner[index]; return index }
+    const close = function(a, b) {
+        return Math.abs(parts[a].colour[0] - parts[b].colour[0]) + Math.abs(parts[a].colour[1] - parts[b].colour[1])
+            + Math.abs(parts[a].colour[2] - parts[b].colour[2]) <= 90
+    }
+    for (let index = 0; index < width * height; ++index) {
+        if (next[index] < 0) continue
+        const x = index % width
+        for (const side of [x < width - 1 ? index + 1 : -1, index + width < width * height ? index + width : -1]) {
+            if (side < 0 || next[side] < 0 || next[side] === next[index]) continue
+            const a = find(next[index]), b = find(next[side])
+            if (a !== b && close(a, b)) owner[b] = a
+        }
+    }
+    const merged = relabel(next, parts, owner.map(function(_, index) { return find(index) }), width, height)
+    const folded = foldTiny(merged.labels, merged.parts, width, height, Math.max(4, width * height * 0.01))
+    return { labels: folded.labels, parts: folded.parts,
+             rings: rings.map(function(ring) { return { ellipse: ring.ellipse, band: ring.band, front: ringFront(ring) } }) }
+}
+
+// Parts smaller than `minimum` pixels go to the neighbour they touch
+// most, or away when they touch none.
+function foldTiny(labels, parts, width, height, minimum) {
+    const small = parts.map(function(part) { return part.count < minimum })
+    if (!small.some(function(flag) { return flag })) return { labels: labels, parts: parts }
+    const contact = parts.map(function() { return new Map() })
+    for (let index = 0; index < width * height; ++index) {
+        const label = labels[index]
+        if (label < 0) continue
+        const x = index % width
+        for (const next of [x < width - 1 ? index + 1 : -1, index + width < width * height ? index + width : -1]) {
+            if (next < 0 || labels[next] < 0 || labels[next] === label) continue
+            contact[label].set(labels[next], (contact[label].get(labels[next]) || 0) + 1)
+            contact[labels[next]].set(label, (contact[labels[next]].get(label) || 0) + 1)
+        }
+    }
+    const target = parts.map(function(part, index) { return index })
+    for (let index = 0; index < parts.length; ++index) {
+        if (!small[index]) continue
+        let best = -1, most = 0
+        for (const [other, shared] of contact[index]) if (!small[other] && shared > most) { most = shared; best = other }
+        target[index] = best
+    }
+    const next = new Int32Array(labels)
+    for (let index = 0; index < width * height; ++index)
+        if (next[index] >= 0 && target[next[index]] !== next[index]) next[index] = target[next[index]]
+    const owner = parts.map(function(part, index) { return target[index] < 0 ? index : target[index] })
+    return relabel(next, parts, owner, width, height)
+}
+
+// The picture read as shapes: its parts, with rings taken out as rings.
+function iconShapes(data, width, height, options) {
+    const settings = options || ({})
+    const mask = maskFromImageData(data, width, height, settings.threshold)
+    const grouped = colourParts(data, mask, width, height, settings)
+    const rings = thinRings(mask, data, width, height, settings)
+    const bridged = bridgeRings(grouped.labels, grouped.parts, rings, width, height)
+    const shapes = partShapes(bridged.labels, bridged.parts, width, height)
+    return { mask: mask, labels: bridged.labels, parts: bridged.parts, shapes: shapes, rings: bridged.rings }
 }

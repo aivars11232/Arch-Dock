@@ -38,7 +38,35 @@ Report `docs/repairs/OWNER-LIST-PIECE-7.md`.
   and hull fill (area over the convex hull, monotone chain) at least 0.88
   = a plate = "block", else "rounded"; `iconMesh(data, w, h, relief)` is
   the one entry point ("auto" asks `reliefKind`) and the mesh carries
-  `kind`. Unit test `tests/tst_IconSolid.qml` (icon-solid-test, 16 tests).
+  `kind`. The shapes (`iconShapes`): `colourParts` groups by the seed
+  tolerance only (no neighbour chaining; touching groups merge when the
+  mean contrast across their shared edge is at most 30, so shading
+  merges and hard edges part); `thinRings` reads rings from the whole
+  outline's thin strokes (what an opening by 4.5 % of the width takes
+  away), in touching runs grouped greedily by a joint least-squares
+  conic fit (`fitConic`, the normal equations of A x² + B x y + C y² +
+  D x + E y = 1, the axes ordered by their directions, the angle kept
+  within a quarter turn so the across direction points down the
+  picture), kept when on the ellipse within the band's width, at least
+  18 of 36 angle bins covered, and, when nearly closed, the hull no wider
+  than the band's outer ellipse (so a rounded-square frame is no ring);
+  the ring's pixels are the whole band along the ellipse, its hidden
+  side the widest stretch of band without the ring's own edges
+  (`ringFront` = the gap's opposite; no gap = the lower side);
+  `bridgeRings` gives band pixels inside the other pixels' hull to the
+  nearest part and clears the rest, merges touching parts of one colour
+  and folds parts under 1 %; `partShapes` reads each part as "disc",
+  "polygon" (3 to 6 corners at a tenth of its size) or "blob";
+  `reliefHeights` gives a polygon a flat top with a bevel a quarter of
+  its radius wide and the others the half round, and a round outline
+  (hull fill at least 0.88, axes ratio at least 0.8, filled) a globe
+  (the dome = the radius, the parts at half); `torusMesh` builds a ring
+  (48 by 12) tilted by acos(b/a) about its longer axis toward its front
+  side, uv by projection; the mesh carries `depth` (the body's top, by
+  which the scene lifts it) and `reach` (with the rings). Unit test
+  `tests/tst_IconSolid.qml` (icon-solid-test, 20 tests). The renderer
+  test's icon is `tests/data/truth-glyph-logo.svg` (a triangle with a
+  ring).
 - `IconScene.qml`: `solidDepth` (from the 3D scene's `iconDepth` through
   `PanelScene.sceneIconDepth`), `solidWanted` while the mesh visual is
   active; `refreshSolid` grabs the glyph layer at 48 px

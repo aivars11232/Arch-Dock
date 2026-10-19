@@ -198,10 +198,11 @@ private slots:
         QVERIFY2(package.isValid(), qPrintable(package.primaryCode()));
         QVariantMap theme = package.package->runtimeProjection();
         // A private XDG session need not have a desktop icon theme configured.
-        // Use a drawn icon of the test data (a folder, an icon's own kind of
-        // outline, not a plate) so this gate measures mesh motion, not icon
-        // lookup, and its pictures show an icon.
-        const QString glyphFixture = QFINDTESTDATA("data/truth-glyph-files.svg");
+        // Use a drawn icon of the test data (a logo: a triangle with a ring
+        // round it, an icon's own kind of outline, not a plate) so this gate
+        // measures mesh motion, not icon lookup, and its pictures show an
+        // icon with a shape to read.
+        const QString glyphFixture = QFINDTESTDATA("data/truth-glyph-logo.svg");
         QVERIFY(!glyphFixture.isEmpty());
         QQmlEngine engine;
         QStringList unexpectedWarnings;
@@ -316,11 +317,11 @@ private slots:
                 for (int x = qMax(0, qRound(projected.x()) - radius);
                      x < qMin(first.width(), qRound(projected.x()) + radius); ++x) {
                     const QColor color = first.pixelColor(x, y);
-                    // The folder's amber fill (#f2b33d) is distinct from the
-                    // light cyan platform and from the darker orange one.
-                    glyphPixels += color.alpha() > 32 && color.redF() > 0.8
-                        && color.greenF() > 0.55 && color.greenF() < 0.85
-                        && color.blueF() < 0.45;
+                    // The logo's blues (#2458b0, #3a86e0) are distinct from
+                    // the light cyan platform and from the orange one.
+                    glyphPixels += color.alpha() > 32 && color.blueF() > 0.55
+                        && color.redF() < 0.35 && color.greenF() < 0.6
+                        && color.blueF() > color.greenF() + 0.1;
                 }
             QVERIFY2(glyphPixels > 100, qPrintable(QStringLiteral(
                 "Entry %1 glyph was covered by the platform: %2 visible pixels")
@@ -536,8 +537,8 @@ private slots:
                 auto deep = flat;
                 deep.insert("scene3DIconDepth", 0.5);
                 deep.insert("scene3DIconTurn", 25.0);
-                // The folder is a plate, which the icon's own kind would make a
-                // block: ask for the rounded relief by name first.
+                // Ask for the rounded relief by name first, whatever the
+                // icon's own kind.
                 deep.insert("scene3DIconRelief", "rounded");
                 scene->setProperty("panelDefinition", deep);
                 QTRY_COMPARE(renderer->property("iconDepth").toDouble(), 0.5);

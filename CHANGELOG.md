@@ -15,11 +15,17 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   outline fills its box like a rounded square: a sign, a badge, a tile)
   becomes a block: just thickness, the picture on its front and back, the
   walls in its edge colours. Any other icon (a round picture of a thing,
-  a figure, a star) has its parts of one colour found and each part rises
-  as a rounded volume of its own from its own edge, a half round at half
-  the depth, with a crease to the next part, a part inside another a step
-  up, and the light rounds every part; the picture stays the colour of it
-  all, front and back, so the icon stays the user's own. Icon depth (a
+  a figure, a star) is read for the shapes it is drawn from, as a
+  modelled logo is built: a thin band round an ellipse is a ring seen at
+  a tilt and becomes a real ring through the icon, passing behind it
+  where the picture hides it and in front where the picture shows it; a
+  round outline is a globe the parts ride on; a part with few corners (a
+  triangle, a letter) rises as a prism with bevelled edges; every other
+  part of one colour rises as a rounded volume of its own from its own
+  edge, a half round at half the depth, with a crease to the next part,
+  a part inside another a step up; and the light rounds every part; the
+  picture stays the colour of it all, front and back, so the icon stays
+  the user's own. Icon depth (a
   share of the icon's size, 0 keeps the flat picture), Icon turn (how far
   the icon turns so its depth shows), Icon relief (Auto, Rounded or
   Block for every icon of the panel) and Icon lighting (how much the
