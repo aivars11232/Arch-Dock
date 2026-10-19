@@ -132,3 +132,25 @@ in order; sheets in `sheets/`, desktop pictures in
 In `docs/KNOWN_LIMITATIONS.md`: no waves in the band; the water mirrors a
 plain sky, not the desktop; the water and the lava flow one way along the
 band; the crust drifts with the lava as one texture.
+
+## Report 2 - fresh-clone recheck
+
+A fresh clone of origin/main at `52fda6a` (the piece 6 commit), configured
+and built with one job (1443 s), the focused tests run serially with the
+PySide6 test environment on PATH, and every committed file compared with
+the workspace (`tools/piece6-recheck.sh` in the audit folder; evidence
+`build-codex-adrep/evidence/OWNER-LIST-PIECE-6/40`-`44-recheck-*`): 26 of
+26 tests passed (panel-model, profile-store, preset-library,
+theme-asset-processor, panel-settings-schema, renderer-capability-software,
+panel-settings-transaction, panel-registry, panel-window-capability (407 s),
+icon-tiles, layout-engine-visual, platform-geometry, panel-materials,
+panel-scene, live-panel-preview, icon-scene, rendering-import-smoke,
+studio-truth-matrix-smoke, runtime-ui-interaction-smoke,
+studio-preview-contract, profile-matrix-apply, studio-navigation,
+studio-themes, settings-editor-model, configuration-upgrade,
+session-startup-runtime); 688 files compared, 0 differing. The first run of
+this recheck on 2026-10-19 was stopped at the owner's request mid-build and
+rerun whole on 2026-10-20.
+
+Piece 6 is closed. Next: the water mirrors the icons (the owner's answer
+to the question above), then Phase 4, real 3D icons with their animations.
