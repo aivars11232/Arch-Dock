@@ -158,3 +158,16 @@ see-through with visible outlines, while the icon itself stays solid.
 
 In `docs/KNOWN_LIMITATIONS.md`: a hole in a picture is filled in its
 block; only the picture becomes a solid, badges and overlays stay flat.
+
+## Report 2 - recheck
+
+A fresh clone of origin/main at `5cd7e5c` (logs 40-44), configured with
+Quick 3D and a short private temp folder, built with one job in 1491 s,
+ran 27 focused tests serially (the capability, registry, schema,
+transaction, model, theme-asset, icon tiles, icon scene, icon solid,
+materials, platform geometry, renderer smoke, truth matrix, settings
+editor, Studio preview contract, live preview, runtime UI interaction,
+profile store, configuration upgrade, Studio navigation, session startup,
+profile matrix, renderer software, preset library, layout engine visual,
+panel scene and Studio themes tests): 27/27 passed in 1246 s. Every one
+of the 691 committed files is identical in the clone and the workspace.
