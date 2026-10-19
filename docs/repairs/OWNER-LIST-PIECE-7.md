@@ -344,3 +344,11 @@ A fresh clone of origin/main at `dafd9fe` (logs 63-67), built with one
 job in 1454 s, ran the same 27 focused tests serially: 27/27 passed.
 Every one of the 692 committed files is identical in the clone and the
 workspace.
+
+## Report 2 of part two - recheck
+
+A fresh clone of origin/main at `f55e7d8` (logs 80-84), built with one
+job in 1519 s, ran the same 27 focused tests serially: 27/27 passed in
+1261 s. Every one of the 692 committed files is identical in the clone
+and the workspace. With this, piece 7 (Phase 4: real 3D icons, Icon
+lighting, the shapes in the picture, and the tiles as bubbles) is closed.
