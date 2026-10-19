@@ -152,7 +152,7 @@ studio-preview-contract, profile-matrix-apply, studio-navigation,
 studio-themes, settings-editor-model, configuration-upgrade,
 session-startup-runtime); 688 files compared, 0 differing. The first run of
 this recheck on 2026-10-19 was stopped at the owner's request mid-build and
-rerun whole on 2026-10-20.
+rerun whole on 2026-10-19.
 
 Piece 6 is closed. Next: the water mirrors the icons (the owner's answer
 to the question above), then Phase 4, real 3D icons with their animations.
@@ -161,7 +161,7 @@ to the question above), then Phase 4, real 3D icons with their animations.
 
 Owner's answer (2026-10-19) to the question above: "They should mirror it
 yes, but also the reflection should move same time when icon moved, that
-includes scrolling and animations"; and (2026-10-20): "The icon reflection
+includes scrolling and animations"; and (2026-10-19): "The icon reflection
 should be like in real life, it's fainter than the real object it
 reflects". Run ADREP-style as piece 6's addition: implement, focused tests,
 the complete serial suite, this report, one commit on main and push, a
@@ -180,7 +180,7 @@ fresh-clone recheck built with one job, Report 2.
   their icons lie on the band and there is no water beside them.
 - Seen straight on, an icon's mirror image lies mostly behind the icon
   itself, as it does in real water; it shows when the panel is tilted so
-  one looks across the water (sheets 06 and 07; the owner, 2026-10-20,
+  one looks across the water (sheets 06 and 07; the owner, 2026-10-19,
   ticked the low-view pictures: "I marked a good ones").
 - How it works (for the code): see `docs/CURRENT_STATE.md`, piece 6. A
   second 3D view drawing the icons from the camera's mirror image was
@@ -228,3 +228,22 @@ sheets 06 and 07 in `sheets/`; desktop pictures in
   07, close: straight on the mirror image lies behind the icon, from the
   low view the LCL icon's mirror image lies under the star, faint and
   upside down. The owner ticked the low-view pictures.
+
+### Report 2 - fresh-clone recheck
+
+A fresh clone of origin/main at `40d905b` (the addition's commit),
+configured and built with one job (1600 s), the focused tests run serially
+with the PySide6 test environment on PATH, and every committed file
+compared with the workspace (`tools/piece6-addition-recheck.sh` in the
+audit folder; evidence `45`-`49-addition-recheck-*`): 25 of 26 tests
+passed on the first run and 688 files compared, 0 differing. The 26th,
+`session-startup-runtime-test`, failed in 0.8 s three times in the clone
+while passing in the workspace build: its private KWin crashed before
+creating its socket, because the clone's longer folder name
+(`recheck-piece6-addition`) pushed the socket's path to 118 characters,
+past the 108 a unix socket path may have (`48b`, `48c`). The clone
+reconfigured with a short temp folder for its sessions (`48d`) passes it
+(`48e`, 39 s); the script now uses a short folder. So all 26 pass.
+
+The addition is closed. Next: Phase 4, real 3D icons with their
+animations.
