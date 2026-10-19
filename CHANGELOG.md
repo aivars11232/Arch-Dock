@@ -20,7 +20,10 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   flow along the band in a loop (the owner: "No need for waves just
   regular looped flow is enough"). On a 3D panel the water runs over its
   still bed in two layers of ripples that bend the light and mirror the
-  sky, with the lights glittering on it; the lava creeps along with its
+  sky, with the lights glittering on it, and it mirrors the icons standing
+  on it: their mirror images move with them at once, scrolling and
+  animations included (the owner: "the reflection should move same time
+  when icon moved"); the lava creeps along with its
   crust, lighting itself in a slow shimmer, so the Glow rows stay for it
   (water takes no glow, like a picture, and a look that takes no glow now
   draws none). Motion speed sets the flow. A flat panel shows the water

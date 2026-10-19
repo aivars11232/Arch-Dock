@@ -61,9 +61,11 @@ surfaces, since theme packages carry no raster files.
 The River and Magma panelpapers flow in a loop along the band, one way,
 with no waves in the band itself; a flat panel shows the water with gleams
 sliding along it and the lava with hot streaks creeping along it, and
-stands and tiles wearing them show them still. The water mirrors a plain
-sky, not the desktop or the icons. The magma's crust drifts with the lava
-as one texture; it does not break apart or melt away.
+stands and tiles wearing them show them still. In 3D the water mirrors
+the icons' pictures (not their stands or tiles) and a plain sky, not the
+desktop; a flat panel's water mirrors nothing, since its icons lie on the
+band. The magma's crust drifts with the lava as one texture; it does not
+break apart or melt away.
 
 An imported picture (a panel's or a stand's imported panelpaper) is
 repeated at its own proportions: a flat panel across its band, each repeat

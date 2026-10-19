@@ -473,6 +473,51 @@ private slots:
                 QVERIFY2(!flows[flowIndex].isNull(), qPrintable(look));
                 if (!evidence.isEmpty()) QVERIFY(flows[flowIndex].save(QDir(evidence).filePath("flow-" + look + ".png")));
                 ++flowIndex;
+                if (look == QStringLiteral("river")) {
+                    // The water mirrors the icons: the mirror sheet holds one
+                    // picture per icon, and the water changes when the mirror
+                    // is taken away.
+                    QTRY_VERIFY(renderer->property("waterReflections").toBool());
+                    QObject *mirrorView = renderer->findChild<QObject *>(QStringLiteral("river-mirror-sheet"));
+                    QVERIFY(mirrorView && mirrorView->property("width").toReal() > 0);
+                    // The sheet's sprites are its visual children (a repeater's
+                    // delegates are not found by object name).
+                    auto *sheetItem = qobject_cast<QQuickItem *>(mirrorView);
+                    QVERIFY(sheetItem);
+                    const auto spriteShown = [sheetItem]() {
+                        for (QQuickItem *child : sheetItem->childItems())
+                            if (child->objectName() == QStringLiteral("mirror-glyph-0")) return true;
+                        return false;
+                    };
+                    QTRY_VERIFY(spriteShown());
+                    // Seen from low over the water the mirror images reach out
+                    // from under the icons; from straight above the icons would
+                    // cover them.
+                    auto low = edited;
+                    low.insert("scene3DCameraPitch", 60.0);
+                    scene->setProperty("panelDefinition", low);
+                    QTRY_COMPARE(renderer->property("shownPitch").toDouble(), 60.0);
+                    QTest::qWait(300);
+                    const QImage mirrored = pixels();
+                    if (!evidence.isEmpty()) {
+                        QVERIFY(mirrored.save(QDir(evidence).filePath("mirror-river.png")));
+                        // What the mirror sheet holds.
+                        auto *mirrorItem = qobject_cast<QQuickItem *>(mirrorView);
+                        QVERIFY(mirrorItem);
+                        auto grab = mirrorItem->grabToImage();
+                        QVERIFY(grab);
+                        QTRY_VERIFY(!grab->image().isNull());
+                        QVERIFY(grab->image().save(QDir(evidence).filePath("mirror-view.png")));
+                    }
+                    renderer->setProperty("reflectionsAllowed", false);
+                    QTRY_VERIFY(!renderer->property("waterReflections").toBool());
+                    QTest::qWait(150);
+                    if (!evidence.isEmpty()) QVERIFY(pixels().save(QDir(evidence).filePath("mirror-off.png")));
+                    QVERIFY2(!mirrored.isNull() && pixels() != mirrored, "the icons' mirror images show in the water");
+                    renderer->setProperty("reflectionsAllowed", true);
+                    scene->setProperty("panelDefinition", edited);
+                    QTRY_COMPARE(renderer->property("shownPitch").toDouble(), edited.value("scene3DCameraPitch").toDouble());
+                }
             }
             QVERIFY2(flows[0] != flows[1], "water and lava draw differently");
             // A picture on a theme's own mesh is real relief as well: the

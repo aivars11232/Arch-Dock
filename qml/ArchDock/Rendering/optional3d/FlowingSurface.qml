@@ -17,6 +17,14 @@ CustomMaterial {
     property TextureInput reliefMap: TextureInput {}
     // Lava instead of water.
     property bool molten: false
+    // The icons' mirror images for the water, on a sheet over the view;
+    // sampled at each point's own place on the screen and wobbled by the
+    // ripples.
+    property TextureInput reflectionMap: TextureInput {}
+    property bool mirrored: false
+    // How much of the mirror image shows: fainter than the icon itself, as
+    // a reflection in water is.
+    property real mirrorStrength: 0.5
     // Repeats of the texture along the band.
     property real repeatU: 1
     // How far the surface has flowed along the band, in repeats: 0 to 1 is

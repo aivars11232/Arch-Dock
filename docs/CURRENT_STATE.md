@@ -49,6 +49,30 @@ Report `docs/repairs/OWNER-LIST-PIECE-6.md`.
   colour. A look that takes no glow draws none: `LayoutEngine.glowFitsLook`
   mirrors the Studio rule (`PanelScene.glowFitsPanel` zeroes `panelGlow`,
   `PanelScene3D.panelGlowAmount` likewise).
+- The water mirrors the icons (`PanelScene3D.waterReflections`, river in
+  3D only): a plain item, the mirror sheet (`river-mirror-sheet`, as wide
+  as the view, inside a 1 px clipped item so it is drawn into the water's
+  texture only), holds one sprite per entry: a `ShaderEffect` with Qt's
+  default shaders drawing the icon's own picture provider (the entry's
+  `glyphTexture.sourceItem`, an offscreen `ShaderEffectSource` of no size,
+  which a layer of it would render as nothing), placed where the icon's
+  mirror point lies on the view (`reflectedPoint` through the band's
+  plane: `mirrorNormal` = sceneContent's z axis in scene space,
+  `mirrorPoint` = its origin lifted by `platformTop`; then
+  `view.mapFrom3DScene`), sized by the mirror point's depth and the field
+  of view, flipped upside down, bound to the glyph's position, scale and
+  opacity and to the camera's angles, so scrolling, animations and turns
+  move it at once. `FlowingSurface.reflectionMap`/`mirrored`: the
+  fragment samples the sheet at the point's own projection
+  (`VIEWPROJECTION_MATRIX * VAR_WORLD_POSITION`, rows from the top; the
+  fragment's pixel coordinates run past the view's size under the high
+  quality's supersampling), wobbled by the ripples, and blends it into the water, fainter and
+  darker than the icon (`mirrorStrength` 0.5, colour 0.7). A second
+  `View3D` in the scene was tried first and crashes the scene's teardown
+  (any second view, even a bare one), so the sheet it is. The scene lets
+  go of the sheet and the sprites' sources at destruction;
+  `reflectionsAllowed` lets a test switch the mirrors off. Flat panels do
+  not mirror: their icons lie on the band.
 - Flat (`PanelProcedural2D`): the texture wrapped along the band as other
   looks, and `paintFlowingLight` on the energy canvas: the river's three
   pale gleams or the magma's two hot streaks (added with "lighter"),

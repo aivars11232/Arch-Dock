@@ -252,6 +252,23 @@ Item {
     // band in a loop (FlowingSurface). Lava creeps.
     readonly property bool flowingSurface: textureMaterial === "river" || moltenFlow
     readonly property bool moltenFlow: textureMaterial === "magma"
+    // The water mirrors the icons: each icon's picture again, upside down,
+    // at the place on the screen where the icon's mirror image in the
+    // band's plane lies, on a sheet the water samples at each point's own
+    // place on the screen. The sheet is a plain item (a second 3D view in
+    // the scene crashes the scene's teardown), and the mirror images follow
+    // the icons' every move through their bindings.
+    property bool reflectionsAllowed: true
+    readonly property bool waterReflections: flowingSurface && !moltenFlow && reflectionsAllowed
+        && rendererReady && !sceneConcealed
+    readonly property vector3d mirrorNormal: sceneContent.mapDirectionToScene(Qt.vector3d(0, 0, 1)).normalized()
+    readonly property vector3d mirrorPoint: sceneContent.mapPositionToScene(Qt.vector3d(0, 0, platformTop))
+    function reflectedPoint(p) {
+        const n = mirrorNormal
+        const o = mirrorPoint
+        const d = 2 * ((p.x - o.x) * n.x + (p.y - o.y) * n.y + (p.z - o.z) * n.z)
+        return Qt.vector3d(p.x - d * n.x, p.y - d * n.y, p.z - d * n.z)
+    }
     // Relief depth 0.8, the default, sinks the gaps 0.08 of the scene's
     // units; 1 is a little deeper, the band never worn thin.
     readonly property real pictureDepth: bounded("panelPictureDepth", 0.8, 0, 1) * 0.1
@@ -1779,7 +1796,13 @@ Item {
                 root.updateEndOnAxes()
         }
     }
-    Component.onDestruction: frameUpdates.stop()
+    Component.onDestruction: {
+        frameUpdates.stop()
+        // Let go of the mirror sheet and the icons' pictures before they
+        // are deleted with the scene.
+        reflectionsAllowed = false
+        reflectionTexture.sourceItem = null
+    }
     Connections {
         target: root.Window.window
         function onFrameSwapped() { frameUpdates.start() }
@@ -2037,6 +2060,58 @@ Item {
         onActivated: root.cancelGizmoDrag()
     }
 
+    // The mirror images' sheet: as wide as the view, clipped away on screen,
+    // drawn into the water's texture only.
+    Item {
+        clip: true
+        width: 1
+        height: 1
+        Item {
+            id: mirrorSheet
+            objectName: "river-mirror-sheet"
+            width: view.width
+            height: view.height
+            Repeater {
+                model: root.waterReflections ? worldEntries.count : 0
+                // A shader effect with Qt's own default shaders draws its
+                // source's texture as it is: the icon's picture item is an
+                // offscreen texture provider with no size of its own, which
+                // a layer of it would render as nothing.
+                delegate: ShaderEffect {
+                    id: mirrorSprite
+                    required property int index
+                    objectName: "mirror-glyph-" + index
+                    readonly property var entryNode: root.entryVisuals.length >= 0 ? worldEntries.objectAt(index) : null
+                    readonly property var glyph: entryNode ? entryNode.glyphModel : null
+                    // Where the icon's mirror image lies on the view, and how
+                    // large it is there: the icon's picture is a hundred units
+                    // square at the glyph's scale, seen at the mirror point's
+                    // depth. Read with the camera's angles so a turn of the
+                    // scene moves it too.
+                    readonly property var place: {
+                        if (!glyph || !glyph.visible) return null
+                        const angles = [root.shownPitch, root.shownYaw, root.shownRoll, root.cameraDistance, view.width, view.height]
+                        const mapped = view.mapFrom3DScene(root.reflectedPoint(glyph.scenePosition))
+                        if (!(mapped.z > 0)) return null
+                        const focal = (view.height / 2) / Math.tan(root.viewFieldOfView * Math.PI / 360)
+                        const size = 100 * glyph.sceneScale.y * focal / (mapped.z + camera.clipNear)
+                        return { x: mapped.x, y: mapped.y, size: size }
+                    }
+                    // The icon's own picture item, as the entry's texture
+                    // holds it: when the entry lets go of it, this does too.
+                    property variant source: entryNode && entryNode.glyphTexture ? entryNode.glyphTexture.sourceItem : null
+                    visible: place !== null && source !== null
+                    width: place ? place.size : 1
+                    height: place ? place.size : 1
+                    x: place ? place.x - width / 2 : 0
+                    y: place ? place.y - height / 2 : 0
+                    opacity: glyph ? glyph.opacity : 1
+                    // Upside down, as a mirror image in water is.
+                    transform: Scale { origin.y: mirrorSprite.height / 2; yScale: -1 }
+                }
+            }
+        }
+    }
     View3D {
         id: view
         x: -root.overflowX
@@ -2257,6 +2332,11 @@ Item {
             tilingModeHorizontal: Texture.Repeat
             tilingModeVertical: Texture.Repeat
         }
+        Texture {
+            id: reflectionTexture
+            sourceItem: root.waterReflections && mirrorSheet.Window.window === root.Window.window
+                ? mirrorSheet : null
+        }
         FlowingSurface {
             id: platformFlow
             surfaceMap: TextureInput {
@@ -2267,6 +2347,11 @@ Item {
                 texture: flowReliefTexture
                 enabled: root.flowingSurface
             }
+            reflectionMap: TextureInput {
+                texture: reflectionTexture
+                enabled: root.waterReflections
+            }
+            mirrored: root.waterReflections
             molten: root.moltenFlow
             repeatU: root.generatedPlatform ? Number(root.generatedPlatform.textureRepeats || 1) : 1
             flowOffset: root.flowOffset
@@ -2588,6 +2673,7 @@ Item {
                     return [point[0] * root.shownScaleX, point[1] * root.shownScaleY, point[2]]
                 }
                 property alias glyphModel: glyphModel
+                property alias glyphTexture: glyphTexture
                 property alias inputAnchor: inputAnchor
                 property alias standOnPanel: standOnPanel
                 property alias standFacing: standFacing

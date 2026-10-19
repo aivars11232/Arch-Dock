@@ -2,7 +2,8 @@
 // different speeds bending the light. Water: the bed stands still and
 // wobbles with the ripples passing over it (refraction), the sky is
 // mirrored where the surface tilts toward the viewer (Schlick's
-// approximation of Fresnel), and the lights glitter on it. Lava: the crust
+// approximation of Fresnel), the icons' mirror images lie on it where the
+// mirrored camera drew them, and the lights glitter on it. Lava: the crust
 // and the lava run along together, the crust rough and lit, the lava
 // glowing with its own light in a slow shimmer, a second layer of lava
 // showing dimly through the crust.
@@ -60,6 +61,20 @@ void MAIN()
         // The sky is far brighter than the bed, so its mirror image shows
         // even where Fresnel keeps the share small.
         vec3 sky = 2.2 * mix(vec3(0.55, 0.62, 0.70), vec3(0.30, 0.48, 0.80), clamp(reflected.y, 0.0, 1.0));
+        if (mirrored) {
+            // The mirror images' sheet lies over the view: sample it at this
+            // point's own place on the screen, from its projection (the
+            // fragment's pixel coordinates run past the view's size when the
+            // scene is supersampled), the sheet's rows running from the top,
+            // wobbled by the ripples.
+            vec4 clip = VIEWPROJECTION_MATRIX * vec4(VAR_WORLD_POSITION, 1.0);
+            vec2 screen = clip.xy / clip.w * 0.5 + 0.5;
+            if (NDC_Y_UP < 0.0) screen.y = 1.0 - screen.y;
+            vec4 mirror = texture(reflectionMap, vec2(screen.x, 1.0 - screen.y) + bend * 0.015);
+            // Fainter and darker than the icon itself, as a reflection in
+            // water is.
+            water = water * (1.0 - mirror.a * mirrorStrength) + mirror.rgb * 0.7 * mirrorStrength;
+        }
         BASE_COLOR = vec4(mix(water, sky * 0.9, fresnel), 1.0);
         EMISSIVE_COLOR = sky * fresnel * 0.25;
         ROUGHNESS = 0.05;
