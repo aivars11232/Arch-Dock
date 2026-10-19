@@ -1538,7 +1538,8 @@ void PanelWindowCapabilityTest::tiltEditorsFollowTheSelectedRenderer()
         QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
             {{"scene3DCameraPitch", -35.0}, {"scene3DCameraYaw", -20.0},
              {"scene3DThickness", 1.6}, {"scene3DIconElevation", 0.5}, {"scene3DIconDepth", 0.45},
-             {"scene3DIconTurn", 20.0}, {"scene3DIconRelief", "block"}}).value("success").toBool());
+             {"scene3DIconTurn", 20.0}, {"scene3DIconRelief", "block"},
+             {"scene3DIconLighting", 0.8}}).value("success").toBool());
         QCOMPARE(backend.panelRendererConfiguration(panel).value("scene3DCameraPitch").toDouble(), -35.0);
         const auto parameters = registry->panelDefinition(panel)->surface.parameters3D;
         QCOMPARE(parameters.value("cameraYaw").toDouble(), -20.0);
@@ -1547,6 +1548,7 @@ void PanelWindowCapabilityTest::tiltEditorsFollowTheSelectedRenderer()
         QCOMPARE(parameters.value("iconDepth").toDouble(), 0.45);
         QCOMPARE(parameters.value("iconTurn").toDouble(), 20.0);
         QCOMPARE(parameters.value("iconRelief").toString(), QStringLiteral("block"));
+        QCOMPARE(parameters.value("iconLighting").toDouble(), 0.8);
     }
     const auto nativeBefore = registry->panelDefinition("bottom")->toPersistedMap();
     QVERIFY(!backend.applyPanelSettingsTransaction("bottom", registry->panelDefinition("bottom")->settingsRevision,

@@ -359,6 +359,9 @@ Item {
     // turned that much).
     readonly property real iconDepth: bounded("iconDepth", 0.3, 0, 1)
     readonly property real iconTurn: bounded("iconTurn", 15, -60, 60)
+    // How much the light models the icons' volumes (Icon lighting): 0 keeps
+    // the picture's own brightness, 1 lets the light alone shape them.
+    readonly property real iconLighting: bounded("iconLighting", 0.5, 0, 1)
     readonly property string iconRelief: {
         const word = String((sceneDefinition || ({})).iconRelief || "")
         return word === "block" || word === "rounded" ? word : "auto"
@@ -3011,18 +3014,21 @@ Item {
                             materials: PrincipledMaterial {
                                 lighting: PrincipledMaterial.FragmentLighting
                                 baseColorMap: glyphTexture
-                                // The light models the parts; the picture keeps
-                                // a little of its own brightness so its colours
-                                // stay readable in shade.
+                                // The light models the parts as far as Icon
+                                // lighting says; the rest is the picture's own
+                                // brightness, so its colours stay readable in
+                                // shade.
                                 emissiveMap: glyphTexture
-                                emissiveFactor: Qt.vector3d(0.25, 0.25, 0.25)
+                                emissiveFactor: Qt.vector3d(0.5 * (1 - root.iconLighting), 0.5 * (1 - root.iconLighting),
+                                                            0.5 * (1 - root.iconLighting))
                                 // A see-through part inside the picture stays
                                 // see-through on the caps; the cut lies below
                                 // the outline's own threshold, so the caps reach
                                 // their walls.
                                 alphaMode: PrincipledMaterial.Mask
                                 alphaCutoff: 0.25
-                                roughness: 0.45
+                                // Glossier as the light takes over.
+                                roughness: 0.7 - 0.5 * root.iconLighting
                                 metalness: 0
                                 cullMode: Material.BackFaceCulling
                             }

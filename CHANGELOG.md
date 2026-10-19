@@ -21,9 +21,11 @@ The proposed `v0.1.1` tag and publication need separate authorization.
   up, and the light rounds every part; the picture stays the colour of it
   all, front and back, so the icon stays the user's own. Icon depth (a
   share of the icon's size, 0 keeps the flat picture), Icon turn (how far
-  the icon turns so its depth shows) and Icon relief (Auto, Rounded or
-  Block for every icon of the panel) on the Panels > 3D page. The icons'
-  motions turn and move the volume as they did the picture.
+  the icon turns so its depth shows), Icon relief (Auto, Rounded or
+  Block for every icon of the panel) and Icon lighting (how much the
+  light models the volume: 0 keeps the picture's own brightness, 1 lets
+  the light alone shape it) on the Panels > 3D page. The icons' motions
+  turn and move the volume as they did the picture.
 - Two flowing panelpapers: River (the owner, 2026-10-15: "There could even
   be like tha panel is the river, with animations") and Magma (the owner,
   2026-10-18: "Since we have water, mind as well we can add flowing magma

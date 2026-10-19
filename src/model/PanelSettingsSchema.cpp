@@ -801,6 +801,12 @@ const QVector<Descriptor> &schemaFields()
               QStringLiteral("auto"), "surface.parameters3D.iconRelief", {}, {},
               {"auto", "rounded", "block"}, true, true,
               editor("panels-3d", "Icon relief", "combo", {"studio"}, "scene3d-quality")),
+        // How much the light models the icon's volume: 0 keeps the picture's
+        // own brightness, 1 lets the light alone shape it.
+        panel("scene3DIconLighting", Access::Editor, Type::Real, Normalization::RealRange,
+              0.5, "surface.parameters3D.iconLighting", 0.0, 1.0, {}, true, true,
+              editor("panels-3d", "Icon lighting", "slider", {"studio"}, "scene3d-quality",
+                     {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
         // A generated platform's own shape (ADFIX-TASK-002): how wide its flat
         // top is, as half its width in the platform's radius, and how far its
         // top tilts up or down outward of the icons' line.

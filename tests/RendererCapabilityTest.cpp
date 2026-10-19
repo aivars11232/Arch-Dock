@@ -547,6 +547,18 @@ private slots:
                 QTest::qWait(300);
                 const QImage solidIcons = pixels();
                 QVERIFY2(!flatIcons.isNull() && solidIcons != flatIcons, "the icons' solids draw differently from the flat pictures");
+                // Icon lighting at its full lets the light alone shape the
+                // volume, which draws differently from the half-lit default.
+                auto sculpted = deep;
+                sculpted.insert("scene3DIconLighting", 1.0);
+                scene->setProperty("panelDefinition", sculpted);
+                QTRY_COMPARE(renderer->property("iconLighting").toDouble(), 1.0);
+                QTest::qWait(300);
+                const QImage sculptedIcons = pixels();
+                QVERIFY2(!sculptedIcons.isNull() && sculptedIcons != solidIcons, "the light shapes the volume differently");
+                if (!evidence.isEmpty()) QVERIFY(sculptedIcons.save(QDir(evidence).filePath("icons-sculpted.png")));
+                scene->setProperty("panelDefinition", deep);
+                QTRY_COMPARE(renderer->property("iconLighting").toDouble(), 0.5);
                 // The other shape, a block with walls, draws differently from
                 // the rounded relief once its mesh is cut.
                 auto blocky = deep;

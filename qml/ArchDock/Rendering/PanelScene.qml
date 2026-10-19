@@ -1600,6 +1600,7 @@ Item {
             for (const [key, parameter] of [["scene3DCameraYaw", "cameraYaw"],
                     ["scene3DThickness", "thickness"], ["scene3DIconElevation", "iconElevation"],
                     ["scene3DIconDepth", "iconDepth"], ["scene3DIconTurn", "iconTurn"], ["scene3DIconRelief", "iconRelief"],
+                    ["scene3DIconLighting", "iconLighting"],
                     ["scene3DRoll", "roll"], ["scene3DPositionX", "positionX"],
                     ["scene3DPositionY", "positionY"], ["scene3DPositionZ", "positionZ"],
                     ["scene3DScale", "scale"], ["scene3DScaleX", "scaleX"], ["scene3DScaleY", "scaleY"], ["scene3DFieldOfView", "fieldOfView"],

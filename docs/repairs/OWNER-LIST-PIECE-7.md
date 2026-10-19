@@ -130,17 +130,12 @@ sheets in `sheets/`; desktop pictures in
   recipient disconnected from message bus"), a session flake of the kind
   seen in piece 6; rerun alone it passed (`38-wayland-scale100-rerun.log`).
 
-### Questions for the owner
+### Questions for the owner, answered
 
-- The default is the rounded relief at depth 0.3 and turn 15°, which is
-  subtle on icons of 48 px; depth 0.6 shows the volume clearly. Should
-  the default be deeper?
-- In the Block relief the walls take the colours of the picture's edge.
-  Should they instead be one colour of the owner's choosing, or darker
-  than the picture?
-- The icon's picture keeps its own brightness on the volume (a little
-  self-lit), so its colours stay readable; a more sculpted look (the
-  light alone, with stronger highlights) is a slider away if wanted.
+The owner (2026-10-19): "Default depth should be 0.3, rather pictures
+edge, and yes, more sculpted lightning slider". So the default depth
+stays 0.3, the Block relief's walls keep the picture's edge colours, and
+the addition after Report 2 adds the slider.
 
 ### The owner's words on the pictures (2026-10-19)
 
@@ -171,3 +166,36 @@ profile store, configuration upgrade, Studio navigation, session startup,
 profile matrix, renderer software, preset library, layout engine visual,
 panel scene and Studio themes tests): 27/27 passed in 1246 s. Every one
 of the 691 committed files is identical in the clone and the workspace.
+
+## Addition: Icon lighting
+
+- **Icon lighting** (Panels > 3D, 0 to 1, default 0.5 = the look of the
+  pictures above) sets how much the light models an icon's volume: at 0
+  the picture keeps its own brightness and the volume shows by its shape
+  alone; at 1 the light alone shapes it, with stronger highlights and
+  deeper shade, like a modelled object under a lamp.
+
+### Verification of the addition
+
+Evidence logs 50-53 in `build-codex-adrep/evidence/OWNER-LIST-PIECE-7/`.
+
+- **Focused tests** (`51-lighting-focused-tests.log`): panel-settings-schema-test,
+  icon-solid-test, rendering-import-smoke (184 s; the solid block now
+  also checks that Icon lighting at its full draws the rounded relief
+  differently from the half-lit default: `scene4/icons-sculpted.png`,
+  sheet `sheets/21-test-scene-lighting.png`) and studio-truth-matrix-smoke
+  (411 s; the matrix holds Icon lighting with a frame probe at 1.0 and
+  0.0) passed. panel-window-capability-test crashed 52 s in, inside the
+  QML engine's garbage collector while a string property was being
+  written during the Studio page pictures (`coredumpctl` 19:15:39, the
+  trace in Qt's QV4 memory manager); rerun alone it passed
+  (`53-capability-rerun.log`, 7 min), and it had passed twice before on
+  the same code paths, so it is taken for a one-off of the engine, to be
+  watched; its 3D transaction carries Icon lighting 0.8 and the parameter
+  comes back so.
+- **Desktop pictures** (`52-lighting-replica.log`, replica
+  `piece7-solid-5`; sheets `19-desktop-lighting-close.png` and
+  `20-desktop-lighting-ring.png`): the ring's icons in their own kind at
+  depth 0.3 with Icon lighting 0.5 (the look of the earlier pictures),
+  1.0 (the light alone: deeper shade, stronger highlights) and 0 (the
+  picture's own brightness, the volume by its shape alone).

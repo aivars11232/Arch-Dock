@@ -224,7 +224,7 @@ Item {
                 if (scene.generated)
                     merged.generated = Object.assign({}, scene.generated,
                         { layout: root.layout, polygonSides: root.polygonSides })
-                for (const key of ["cameraYaw", "thickness", "iconElevation", "iconDepth", "iconTurn", "roll", "positionX",
+                for (const key of ["cameraYaw", "thickness", "iconElevation", "iconDepth", "iconTurn", "iconLighting", "roll", "positionX",
                         "positionY", "positionZ", "scale", "scaleX", "scaleY", "fieldOfView", "keyLightBrightness",
                         "fillLightBrightness", "band", "bend", "fold",
                         "pedestalSize", "pedestalLift", "pedestalAnimationSpeed", "pedestalThickness",

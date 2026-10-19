@@ -49,13 +49,16 @@ Report `docs/repairs/OWNER-LIST-PIECE-7.md`.
   canvas loads it at once and no loaded signal follows: the paint is
   asked for right after the load.
 - `PanelScene3D.qml`: `iconDepth` (0.3, `scene3DIconDepth`), `iconTurn`
-  (15°, `scene3DIconTurn`) and `iconRelief` ("auto" default | "rounded"
-  | "block", `scene3DIconRelief`; not `iconShape`, which is the tile
-  shape), all on the 3D page (`panels-3d`, capability `scene3d-quality`);
-  in each entry's icon body a `Model`
+  (15°, `scene3DIconTurn`), `iconRelief` ("auto" default | "rounded" |
+  "block", `scene3DIconRelief`; not `iconShape`, which is the tile shape)
+  and `iconLighting` (0.5, `scene3DIconLighting`: the solid's emissive =
+  0.5 × (1 − lighting), roughness = 0.7 − 0.5 × lighting), all on the 3D
+  page (`panels-3d`, capability `scene3d-quality`); in each entry's icon
+  body a `Model`
   `mesh-icon-solid-<n>` (`ProceduralMesh` from the visual's `solidMesh`,
-  `PrincipledMaterial` with the glyph texture as base colour and a 0.25
-  emissive, roughness 0.45, alpha mask cut at 0.25, below the outline's own threshold,
+  `PrincipledMaterial` with the glyph texture as base colour and
+  emissive map, the emissive and the roughness from Icon lighting (0.25
+  and 0.45 at its default), alpha mask cut at 0.25, below the outline's own threshold,
   so see-through parts inside the picture stay see-through and the caps
   reach their walls, back faces culled), at the glyph's place with its
   back where the flat picture lay (z + half its depth), the glyph's
