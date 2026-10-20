@@ -384,3 +384,20 @@ Also in `docs/KNOWN_LIMITATIONS.md`.
 - A part thinner than about two of the solid's grid steps can break into
   pieces on a very long 3D panel, whose grid is coarser to stay within the
   triangle limit.
+
+## 3D platform decorations — Report 2 (recheck)
+
+A fresh clone of origin/main at `f6a972a` (logs 30-34), configured with
+Quick 3D and a short private temp folder, built with one job in 1696 s,
+ran 17 focused tests serially: this work's own (decoration lighting,
+decoration scene, panel decoration, theme package, the new
+`decoration-3d-smoke` with the real renderer, the rendering module's import
+and host-neutral checks, the renderer capability tests with software
+rendering and with Quick 3D missing, the staged import smoke) and those it
+touches (platform geometry, panel window capability, live panel preview,
+the Studio truth matrix, panel scene, icon scene, layout engine visual):
+**17 of 17 passed** in 1073 s. Every one of the 891 committed files is
+identical in the clone and the workspace. With this, 3D platform
+decorations are closed; part two of piece 8, the holographic icons, is
+next.
+
