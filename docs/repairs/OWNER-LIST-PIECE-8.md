@@ -252,4 +252,18 @@ redraw the panel only while it is shown; not yet measured).
 
 ## Report 2 - recheck
 
-(Filled in after the fresh-clone recheck.)
+A fresh clone of origin/main at `b5dec54` (logs 20-24), configured with
+Quick 3D and a short private temp folder, built with one job in 1633 s,
+ran 36 focused tests serially: this piece's own (decoration lighting,
+decoration scene, panel decoration, theme package, the rendering
+module's import and host-neutral checks, and the three icon preset groups
+that the stale count had stopped) and piece 7's 27 (the capability,
+registry, schema, transaction, model, theme-asset, icon tiles, icon
+scene, icon solid, materials, platform geometry, renderer smoke, truth
+matrix, settings editor, Studio preview contract, live preview, runtime
+UI interaction, profile store, configuration upgrade, Studio navigation,
+session startup, profile matrix, renderer software, preset library,
+layout engine visual, panel scene and Studio themes tests): **36 of 36
+passed** in 1876 s. Every one of the 878 committed files is identical in
+the clone and the workspace. With this, part one of piece 8 is closed;
+3D platform decorations are next, then part two, the holographic icons.
