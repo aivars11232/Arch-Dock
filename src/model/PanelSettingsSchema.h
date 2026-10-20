@@ -112,6 +112,10 @@ enum class EditorCapability
     PanelPicture,
     // How deep the picture a 3D panel wears stands out of it.
     PictureRelief,
+    // A panel decoration remaking a flat panel's outline, and its motion.
+    Decoration,
+    // The colours of the decoration a flat panel wears.
+    DecorationColours,
     Count
 };
 

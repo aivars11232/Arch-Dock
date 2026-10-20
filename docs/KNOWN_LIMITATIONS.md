@@ -153,6 +153,15 @@ stand. A free panel's folder opened Along the dock on a tilted 3D platform
 follows the projected ring, and the curve widens round the dock as far as
 the children need; a folder with more children than fit still scrolls.
 
+Panel decorations (Panels > Appearance > Panel decorations) are drawn on
+flat panels only: a panel drawn in 3D, or with a theme's skin or baked
+platform, keeps its own look. While icons travel along a free panel's
+path (continuous motion) the decoration stays where the icons rest. On a
+thin edge panel a decoration with a tall launcher seat (the Raptor Hull)
+shrinks to fit the panel's thickness, and its seat with it. A theme
+package may carry a decoration's contour, which is checked member by
+member, but only the built-in decorations are drawn so far.
+
 ## Resource use
 
 The [full audit of 2026-10-06](audits/FULL_AUDIT_2026-10-06.md) measured the
@@ -173,6 +182,14 @@ That is a larger change and is left for later.
 Glow and energy layers animate continuously while their panel is shown and
 reduced motion is off. They stop when the panel is hidden or reduced motion is
 on.
+
+A panel decoration is lit once for each change of the panel's size, shape or
+decoration settings, on one worker thread shared by every panel, so the
+panel keeps its previous picture for a moment, longer on a long panel; when
+a decoration is first chosen, the panel shows only its icons until then. A
+moving decoration keeps 12 lit frames (24 for spinning gauges) in memory;
+its lights and motion redraw the panel while it is shown and stop when it is
+hidden or reduced motion is on. Their cost has not been measured yet.
 
 Creating, placing or removing a panel, and some preset auditions, wait for
 Plasma's scripting interface or KWin to answer before the service continues.

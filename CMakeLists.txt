@@ -84,6 +84,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     ContourFrames.js
     DecorationCatalogue.js
     DecorationScene.js
+    DecorationJob.js
     StandFrames.js
     IconStyleResolver.js
     AnimationProfileRuntime.js
@@ -106,11 +107,13 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     inputs/GeometryHitRegion.qml
     inputs/ScrollInput.qml
     previews/LivePanelPreview.qml
+    previews/DecorationThumbnail.qml
     previews/WindowPreviewPopup.qml
     renderers/IconStyle2D.qml
     renderers/IconTile.qml
     renderers/GlowEffect.qml
     renderers/PanelProcedural2D.qml
+    renderers/PanelDecoration2D.qml
     renderers/PanelSkin2D.qml
     renderers/PanelSkinLayer2D.qml
     renderers/PanelBaked25D.qml)
@@ -230,6 +233,29 @@ install(FILES
   "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Input/archdock-input.qmltypes"
   DESTINATION "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Input")
 add_dependencies(archdock-rendering-module archdock-inputplugin)
+
+# The decoration lighting (panel decorations lit per pixel), a plugin like
+# ArchDock.Input so the dock widget in plasmashell loads it too.
+qt_add_qml_module(archdock-decorations SHARED
+  URI ArchDock.Decorations VERSION 1.0
+  OUTPUT_DIRECTORY "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Decorations"
+  SOURCES src/decorations/DecorationLighting.h src/decorations/DecorationLighting.cpp
+          src/decorations/DecorationWorker.h src/decorations/DecorationWorker.cpp
+          src/decorations/DecorationBaker.h src/decorations/DecorationBaker.cpp
+          src/decorations/DecorationLayer.h src/decorations/DecorationLayer.cpp)
+target_link_libraries(archdock-decorations PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick)
+# Per-pixel lighting is unusably slow unoptimised, even in a debug build.
+set_source_files_properties(src/decorations/DecorationLighting.cpp PROPERTIES COMPILE_OPTIONS "-O2")
+target_include_directories(archdock-decorations PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/decorations")
+set_target_properties(archdock-decorations archdock-decorationsplugin
+  PROPERTIES INSTALL_RPATH "$ORIGIN")
+install(TARGETS archdock-decorations archdock-decorationsplugin
+  LIBRARY DESTINATION "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Decorations")
+install(FILES
+  "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Decorations/qmldir"
+  "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Decorations/archdock-decorations.qmltypes"
+  DESTINATION "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Decorations")
+add_dependencies(archdock-rendering-module archdock-decorationsplugin)
 
 qt_add_qml_module(archdock-integration SHARED
   URI ArchDock.Integration VERSION 1.0
@@ -379,6 +405,7 @@ set(ARCHDOCK_APPLICATION_QML_FILES
   qml/runtime/ProfilePage.qml
   qml/runtime/SettingsEditorModel.js
   qml/runtime/VisibilityStatus.js
+  qml/runtime/StudioCatalogueTree.qml
   qml/runtime/StudioForm.qml
   qml/runtime/StudioFrame.qml
   qml/runtime/StudioHoneycomb.qml
@@ -449,6 +476,16 @@ if(BUILD_TESTING)
   set_tests_properties(drop-delivery-test PROPERTIES
     TIMEOUT 30 RUN_SERIAL TRUE
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=org.kde.desktop;QT_NO_XDG_DESKTOP_PORTAL=1;QT_QPA_PLATFORMTHEME=generic")
+
+  # The decoration lighting, by itself: what a scene's pictures hold.
+  qt_add_executable(decoration-lighting-test tests/DecorationLightingTest.cpp
+    src/decorations/DecorationLighting.h src/decorations/DecorationLighting.cpp)
+  target_include_directories(decoration-lighting-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/decorations)
+  target_link_libraries(decoration-lighting-test PRIVATE Qt6::Core Qt6::Gui Qt6::Test)
+  target_compile_definitions(decoration-lighting-test PRIVATE
+    ARCHDOCK_DECORATION_MATERIALS="${CMAKE_CURRENT_SOURCE_DIR}/qml/ArchDock/Rendering/materials")
+  add_test(NAME decoration-lighting-test COMMAND decoration-lighting-test)
+  set_tests_properties(decoration-lighting-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   qt_add_executable(overlay-model-test tests/OverlayModelTest.cpp
     src/content/OverlayModel.h src/content/OverlayModel.cpp
@@ -720,6 +757,7 @@ if(BUILD_TESTING)
   target_link_libraries(
     theme-package-test
     PRIVATE Qt6::Core
+            Qt6::Qml
             Qt6::Test)
   add_test(NAME theme-package-test COMMAND theme-package-test)
 
@@ -1406,6 +1444,18 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_StudioScroll.qml)
   set_tests_properties(studio-scroll-test PROPERTIES ENVIRONMENT
     "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=org.kde.desktop;QT_NO_XDG_DESKTOP_PORTAL=1")
+
+  add_test(NAME decoration-scene-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_DecorationScene.qml)
+  set_tests_properties(decoration-scene-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(NAME panel-decoration-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_PanelDecoration2D.qml)
+  set_tests_properties(panel-decoration-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(NAME icon-tiles-test
     COMMAND $<TARGET_FILE:Qt6::qmltestrunner>

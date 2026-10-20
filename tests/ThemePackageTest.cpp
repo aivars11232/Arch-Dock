@@ -1,5 +1,7 @@
 #include "themes/ThemePackage.h"
 
+#include <QJSEngine>
+
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
@@ -17,6 +19,25 @@ namespace
 QString fixturePath(const QString &name)
 {
     return QFINDTESTDATA(QStringLiteral("fixtures/theme-v2/") + name);
+}
+
+// The procedural fixture with a contour of its own, as a package carries one.
+QByteArray manifestWithContour(const QJsonObject &contour)
+{
+    QFile base(fixturePath(QStringLiteral("valid-procedural.json")));
+    if (!base.open(QIODevice::ReadOnly))
+        return {};
+    QJsonObject manifest = QJsonDocument::fromJson(base.readAll()).object();
+    manifest.insert(QStringLiteral("contour"), contour);
+    return QJsonDocument(manifest).toJson(QJsonDocument::Compact);
+}
+
+QString diagnosticsText(const ArchDock::ThemePackageLoadResult &result)
+{
+    QStringList lines;
+    for (const auto &diagnostic : result.diagnostics)
+        lines << diagnostic.code + QLatin1Char(' ') + diagnostic.jsonPointer + QLatin1Char(' ') + diagnostic.message;
+    return lines.join(QLatin1String("; "));
 }
 
 bool writeBytes(const QString &path, const QByteArray &bytes)
@@ -146,6 +167,9 @@ class ThemePackageTest final : public QObject
 private slots:
     void fixtures_data();
     void fixtures();
+    void builtInDecorationsPassThePackageChecks();
+    void contourMistakesAreRefused_data();
+    void contourMistakesAreRefused();
     void versionOneAdaptsWithoutRewritingSource();
     void repeatedLoadsAreDeterministic();
     void symlinkEscapeIsRejectedBeforeUse();
@@ -638,6 +662,72 @@ void ThemePackageTest::scenePartsEnforceExpandedBudget()
     mesh[QStringLiteral("indexes")] = indices;
     QVERIFY(writeBytes(root.filePath(QStringLiteral("mesh.json")), QJsonDocument(mesh).toJson()));
     QCOMPARE(resultFor(parts).primaryCode(), QStringLiteral("scene3d-resource-limit"));
+}
+
+// Every built-in decoration, as a package would carry it - its contour with
+// its body's material, animations, folds and end room - passes the package
+// checks: the checks know the whole vocabulary the renderers draw.
+void ThemePackageTest::builtInDecorationsPassThePackageChecks()
+{
+    QFile catalogue(QFINDTESTDATA(QStringLiteral("../qml/ArchDock/Rendering/DecorationCatalogue.js")));
+    QVERIFY(catalogue.open(QIODevice::ReadOnly));
+    QString source = QString::fromUtf8(catalogue.readAll());
+    source.replace(QStringLiteral(".pragma library"), QString());
+    QJSEngine engine;
+    const QJSValue text = engine.evaluate(QStringLiteral("(function() {\n") + source
+                                          + QStringLiteral("\nreturn JSON.stringify(decorations)\n})()"));
+    QVERIFY2(!text.isError(), qPrintable(text.toString()));
+    const QJsonArray decorations = QJsonDocument::fromJson(text.toString().toUtf8()).array();
+    QVERIFY(decorations.size() >= 160);
+    const QString root = QFileInfo(fixturePath(QStringLiteral("valid-procedural.json"))).absolutePath();
+    QStringList refused;
+    for (const QJsonValue &value : decorations)
+    {
+        const QJsonObject decoration = value.toObject();
+        QJsonObject contour = decoration.value(QStringLiteral("contour")).toObject();
+        for (const QString key : {QStringLiteral("material"), QStringLiteral("animation"), QStringLiteral("folds"),
+                                  QStringLiteral("room")})
+            if (decoration.contains(key))
+                contour.insert(key, decoration.value(key));
+        const auto result = ThemePackage::loadBytes(manifestWithContour(contour), root);
+        if (!result.isValid())
+            refused << decoration.value(QStringLiteral("id")).toString() + QStringLiteral(": ") + diagnosticsText(result);
+    }
+    QVERIFY2(refused.isEmpty(), qPrintable(refused.join(QLatin1Char('\n'))));
+}
+
+void ThemePackageTest::contourMistakesAreRefused_data()
+{
+    QTest::addColumn<QByteArray>("contour");
+    QTest::addColumn<QString>("pointer");
+    QTest::newRow("unknown part member") << QByteArray(R"({"parts":[{"kind":"gem","sparkle":3}]})")
+                                         << QStringLiteral("/contour/parts/0/sparkle");
+    QTest::newRow("unknown gem cut") << QByteArray(R"({"parts":[{"kind":"gem","cut":"rose"}]})")
+                                     << QStringLiteral("/contour/parts/0/cut");
+    QTest::newRow("gleam out of range") << QByteArray(R"({"body":{"gleam":9}})") << QStringLiteral("/contour/body/gleam");
+    QTest::newRow("unknown line kind") << QByteArray(R"({"lines":[{"kind":"laser"}]})")
+                                       << QStringLiteral("/contour/lines/0/kind");
+    QTest::newRow("material not a name") << QByteArray(R"({"material":{"id":"../etc/passwd"}})")
+                                         << QStringLiteral("/contour/material/id");
+    QTest::newRow("bad strip side") << QByteArray(R"({"layers":[{"side":"left"}]})")
+                                    << QStringLiteral("/contour/layers/0/side");
+    QTest::newRow("too many parts") << QByteArray(QByteArray(R"({"parts":[)") + QByteArray(R"({"kind":"box"},)").repeated(32)
+                                                  + QByteArray(R"({"kind":"box"}]})")) << QStringLiteral("/contour/parts");
+    QTest::newRow("unknown animation") << QByteArray(R"({"animation":[{"kind":"explode"}]})")
+                                       << QStringLiteral("/contour/animation/0/kind");
+}
+
+void ThemePackageTest::contourMistakesAreRefused()
+{
+    QFETCH(QByteArray, contour);
+    QFETCH(QString, pointer);
+    const QString root = QFileInfo(fixturePath(QStringLiteral("valid-procedural.json"))).absolutePath();
+    const auto result = ThemePackage::loadBytes(manifestWithContour(QJsonDocument::fromJson(contour).object()), root);
+    QVERIFY(!result.isValid());
+    bool found = false;
+    for (const auto &diagnostic : result.diagnostics)
+        found = found || diagnostic.jsonPointer == pointer;
+    QVERIFY2(found, qPrintable(diagnosticsText(result)));
 }
 
 QTEST_GUILESS_MAIN(ThemePackageTest)

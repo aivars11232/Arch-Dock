@@ -568,6 +568,12 @@ Item {
         }
     }
 
+    // The panel's decoration has a launcher seat, this entry may sit in it,
+    // and `setSeat(appId)` puts an entry there (an empty id frees it).
+    property bool seatAvailable: false
+    property bool seated: false
+    property var setSeat: null
+
     QQC2.Menu {
         id: contextMenu
         // A native panel is much shorter than this menu. An in-scene popup
@@ -629,6 +635,14 @@ Item {
         }
         QQC2.MenuSeparator {
             visible: root.iconPropertiesSupported
+        }
+        QQC2.MenuItem {
+            objectName: "seatEntryAction"
+            text: root.seated ? qsTr("Leave the decoration's seat") : qsTr("Sit in the decoration's seat")
+            icon.name: root.seated ? "go-down" : "go-up"
+            visible: root.seatAvailable && typeof root.setSeat === "function"
+            enabled: root.contextInteractionAllowed
+            onTriggered: root.setSeat(root.seated ? "" : String(root.entry.appId))
         }
         QQC2.MenuItem {
             objectName: "pinEntryAction"

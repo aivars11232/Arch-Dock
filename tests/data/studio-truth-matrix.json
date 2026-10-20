@@ -428,6 +428,7 @@
     "iconTileTexture": {"probe": "hoverFrame", "needsShaders": ["true3d"], "value": "organic"},
     "panelPicture": {"probe": "runtime", "value": "file:///tmp/archdock-truth-matrix-picture.png", "consumers": [["qml/ArchDock/Rendering/PanelScene.qml", "\"surface\", \"picture\", \"panelPicture\", \"\""]]},
     "panelPictureDepth": {"probe": "runtime", "value": 0.2, "consumers": [["qml/ArchDock/Rendering/PanelScene.qml", "[\"panelPictureDepth\", \"panelPictureDepth\"]"]]},
+    "panelDecoration": {"probe": "runtime", "value": "starship-red-core", "consumers": [["qml/ArchDock/Rendering/PanelScene.qml", "(panelDefinition || ({})).panelDecoration"], ["qml/ArchDock/Rendering/PanelSurfaceLoader.qml", "PanelDecoration2D {"]]},
     "panelPictureRise": {"probe": "runtime", "value": "dark", "consumers": [["qml/ArchDock/Rendering/PanelScene.qml", "[\"panelPictureRise\", \"panelPictureRise\"]"]]},
     "panelPictureDirection": {"probe": "runtime", "value": "outward", "consumers": [["qml/ArchDock/Rendering/PanelScene.qml", "[\"panelPictureDirection\", \"panelPictureDirection\"]"]]},
     "panelPictureLevel": {"probe": "runtime", "value": 0.2, "consumers": [["qml/ArchDock/Rendering/PanelScene.qml", "[\"panelPictureLevel\", \"panelPictureLevel\"]"]]},

@@ -754,7 +754,17 @@ Window {
             panelController.clearPanelSettingsPreview();
     }
 
+    // A palette's colours: as chosen (its colours in order, separated by
+    // commas), or as designed.
+    function paletteColours(field) {
+        const text = String(field.scope === "settings" ? globalValue(field.key, "") : panelValue(field.key, "") || "").trim();
+        const colours = text.length > 0 ? text.split(",") : (field.designed || []);
+        return colours.map(function(colour) { return String(colour).trim(); });
+    }
+
     function fieldValue(field) {
+        if (field.paletteIndex !== undefined)
+            return paletteColours(field)[field.paletteIndex] || "";
         if (field.segmentIndex !== undefined) {
             const segment = (panelValue("segments", []) || [])[field.segmentIndex] || {};
             return field.entryId !== undefined ? (segment.entryIds || []).includes(field.entryId)
@@ -770,6 +780,15 @@ Window {
     }
 
     function setFieldValue(field, value) {
+        if (field.paletteIndex !== undefined) {
+            // One colour of a palette: the palette with it changed.
+            const colours = paletteColours(field);
+            colours[field.paletteIndex] = String(value);
+            const whole = Object.assign({}, field);
+            delete whole.paletteIndex;
+            setFieldValue(whole, colours.join(","));
+            return;
+        }
         if (field.segmentIndex !== undefined) {
             const segments = EditorModel.copyValue(panelValue("segments", []));
             const segment = segments[field.segmentIndex];
@@ -888,11 +907,12 @@ Window {
 
     function colorDisplayValue(field) {
         const value = String(fieldValue(field) || "").trim();
-        return value.length > 0 ? value : qsTr("Default");
+        return value.length > 0 ? value : field.emptyText || qsTr("Default");
     }
 
+    // A colour as chosen; one not chosen shows what it is as designed.
     function colorPreviewValue(field) {
-        const value = String(fieldValue(field) || "").trim();
+        const value = String(fieldValue(field) || "").trim() || String(field.designed || "");
         return /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value) ? value : "transparent";
     }
 
@@ -1252,8 +1272,94 @@ Window {
                 icon: "edit-reset", action: "reset-3d-material", available: true}]}]);
     }
 
+    // The colour settings each decoration has (DecorationScene.colourControls),
+    // worked out once per decoration.
+    property var decorationControlsCache: ({})
+    function decorationControls(id) {
+        if (decorationControlsCache[id] === undefined) {
+            const decoration = DecorationCatalogue.decoration(id);
+            decorationControlsCache[id] = decoration ? DecorationScene.colourControls(decoration) : ({});
+        }
+        return decorationControlsCache[id];
+    }
+
+    // The panel's decoration: chosen from its tree, then only the settings
+    // the chosen one has, since a setting that cannot apply is not shown:
+    // its lights' and body's colours and finishes, its palette, its trims'
+    // metal, its picture's colours, its body's material, and its motion
+    // when it moves.
+    function decorationRows(fields) {
+        const byKey = ({});
+        for (const field of fields)
+            byKey[field.key] = field;
+        if (!byKey.panelDecoration)
+            return [];
+        const rows = [Object.assign({}, byKey.panelDecoration, {
+            label: qsTr("Decoration"),
+            description: qsTr("Remakes the panel's outline: a starship's hull, a nebula, a branch, a wand. None wears the panelpaper again.")
+        })];
+        const id = String(panelValue("panelDecoration", ""));
+        const decoration = id.length > 0 ? DecorationCatalogue.decoration(id) : null;
+        if (!decoration)
+            return rows;
+        const controls = decorationControls(id);
+        const add = function(key, extra) {
+            if (byKey[key])
+                rows.push(Object.assign({}, byKey[key], extra || ({})));
+        };
+        const finishes = { solid: qsTr("Solid"), chameleon: qsTr("Chameleon"), iridescent: qsTr("Iridescent"),
+                           rainbow: qsTr("Rainbow"), "metallic-rainbow": qsTr("Metallic rainbow") };
+        const finishOptions = function(field) {
+            return ((field || {}).options || []).map(function(option) {
+                return { label: finishes[option.value] || option.label, value: option.value };
+            });
+        };
+        if (controls.light) {
+            add("panelDecorationLight", { designed: controls.light.colour, emptyText: qsTr("As designed"),
+                description: qsTr("The colour of its lights; white-hot ones stay white.") });
+            add("panelDecorationLightFinish", { options: finishOptions(byKey.panelDecorationLightFinish) });
+        }
+        if (controls.main) {
+            add("panelDecorationMain", { designed: controls.main.colour, emptyText: qsTr("As designed"),
+                description: qsTr("The colour of its body; its material's grain and shine stay.") });
+            // Its body's colour can be a whole material, shown as it looks.
+            if (controls.material)
+                add("panelDecorationMaterial", { label: qsTr("Or made of"),
+                    description: qsTr("A material for its body, as it looks lit: stone, wood, gems, metal and more.") });
+            add("panelDecorationFinish", { options: finishOptions(byKey.panelDecorationFinish) });
+        } else if (controls.material) {
+            add("panelDecorationMaterial", { label: qsTr("Made of"),
+                description: qsTr("A material for its body, as it looks lit: stone, wood, gems, metal and more.") });
+        }
+        if (controls.palette)
+            add("panelDecorationPalette", { designed: controls.palette.colours,
+                description: qsTr("Its colours in order. Click one to change it.") });
+        if (controls.metal)
+            add("panelDecorationMetal", { description: qsTr("The metal of its trims."),
+                options: ((byKey.panelDecorationMetal || {}).options || []).map(function(option) {
+                    const material = DecorationCatalogue.material(option.value);
+                    return { label: option.value === "designed" ? qsTr("As designed") : material ? material.name : option.label,
+                             value: option.value };
+                }) });
+        if (controls.picture) {
+            add("panelDecorationHue", { description: qsTr("Turns the picture's colours round the colour wheel.") });
+            add("panelDecorationStrength", { description: qsTr("How strong the picture's colours are.") });
+            add("panelDecorationBrightness");
+        }
+        if ((decoration.animation || []).length > 0) {
+            add("panelDecorationAnimation", { description: qsTr("Its lights and motion, as it was made to move.") });
+            add("panelDecorationSpeed");
+        }
+        return rows;
+    }
+
     function panelAppearanceRows() {
         const rows = schemaSectionRows("panels-appearance", qsTr("Appearance"), qsTr("Surface styling for the selected panel."));
+        // The decoration's settings go under its own heading.
+        const decorationFields = rows.filter(function(row) { return String(row.key || "").indexOf("panelDecoration") === 0; });
+        for (let index = rows.length - 1; index >= 0; --index)
+            if (String(rows[index].key || "").indexOf("panelDecoration") === 0)
+                rows.splice(index, 1);
         // The look first, then how much of it shows and its own glow, then
         // the light round it.
         const look = scene3DLookRows();
@@ -1262,18 +1368,19 @@ Window {
             const reset = look.pop();
             rows.unshift.apply(rows, [heading].concat(look));
             rows.push(reset);
-        } else {
+        } else if (!DecorationCatalogue.decoration(String(panelValue("panelDecoration", "")))) {
             // A flat panel's panelpaper rows come from the schema; they get
-            // their heading here.
+            // their heading here (none while a decoration is worn in their
+            // place).
             rows.splice(1, 0, section(qsTr("Panelpaper"),
                 qsTr("The surface the panel wears: a built-in panelpaper, or a picture of your own in relief.")));
         }
-        // What remakes the panel's outlines, contours and parts: its
-        // decoration, a built-in one or an imported package.
-        const decorations = panelThemeRows();
+        // What remakes the panel's outlines, contours and parts: a built-in
+        // decoration, or an imported decoration package.
+        const decorations = decorationRows(decorationFields).concat(panelThemeRows());
         if (decorations.length > 0)
             rows.push.apply(rows, [section(qsTr("Panel decorations"),
-                qsTr("Outlines, contours and parts the panel's design gives it: a built-in decoration, or an imported decoration package. Load puts one on the panel; Apply saves it."))]
+                qsTr("Outlines, contours and parts the panel's design gives it: a built-in decoration, or an imported decoration package."))]
                 .concat(decorations));
         rows.push.apply(rows, glowRows("panels-glow",
             qsTr("Light round the panel's shape: how strong, how far it reaches out of the panel, and its colour (the look's own when empty).")));
@@ -3296,8 +3403,17 @@ Window {
         modality: Qt.WindowModal
         options: ColorDialog.ShowAlphaChannel
         onAccepted: {
-            if (root.colorField !== null)
-                root.setFieldValue(root.colorField, selectedColor.toString());
+            if (root.colorField !== null) {
+                // A decoration's colours are plain colours, as it is drawn
+                // opaque: #rrggbb.
+                const hex = function(channel) {
+                    const text = Math.round(channel * 255).toString(16);
+                    return text.length < 2 ? "0" + text : text;
+                };
+                const plain = "#" + hex(selectedColor.r) + hex(selectedColor.g) + hex(selectedColor.b);
+                root.setFieldValue(root.colorField, String(root.colorField.key || "").indexOf("panelDecoration") === 0
+                    ? plain : selectedColor.toString());
+            }
             root.colorField = null;
         }
         onRejected: root.colorField = null

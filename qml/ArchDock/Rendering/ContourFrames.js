@@ -42,19 +42,19 @@
 //   sway: { amp, period, phase } the band's middle swinging from side to
 //         side along it (a vine's stem, a serpent)
 //   body: { feather, round, fill: "material" | "none", glow, opacity,
-//           bevel } a
+//           bevel, coat, gleam } a
 //         soft fading outline, a round (log, branch) shading or a chrome
 //         one (round: "chrome", a polished sculpted shell), no fill (the
 //         lines and parts are the panel), a glow round it; `bevel` the
 //         width of the lit and shaded rim along its outline (half-widths)
 //   layers: [{ side: "outer" | "inner" | "middle", inset, width, offset,
 //              fill, material, glow, opacity, dash, avoid, margin, ink,
-//              recess, window }] strips
+//              recess, window, gloss }] strips
 //           along the band with their own colour or material (a rail, a
 //           stripe, a blade's core)
 //   parts: [{ kind: "ellipse" | "dome" | "box" | "trapezoid" | "capsule" |
 //             "polygon" | "strut" | "branch" | "crystal" | "star" | "ring" |
-//             "arc" | "lens" | "flame",
+//             "arc" | "lens" | "flame" | "gem",
 //             at: "middle" | "start" | "end" | "both" | "icons" |
 //             "between" | "at" | "period", where, period, every, alternate,
 //             s, t, on: "outer" | "inner", align, w, h, top, r, chamfer,
@@ -62,14 +62,19 @@
 //             fill, material, glow, stroke, gradient, opacity, z, shade,
 //             depth, bevel, colour, ink, sheen }] pieces standing on or round the band (a
 //           nacelle, a dome, a twig, a hilt); a "lens" is a glowing glass
-//           lens in its bezel, drawn by the renderer from its colour
+//           lens in its bezel, drawn by the renderer from its colour; a
+//           "gem" a cut stone, its facets drawn from its colour (or its
+//           material's): `cut` "brilliant" (round), "princess" (square),
+//           "baguette" (a long step cut) or "cabochon" (a polished dome),
+//           and `halo` a ring of that many small diamonds round it
 //   lines: [{ kind: "loop" | "middle" | "edge" | "brackets" | "spiral" |
 //             "wave" | "dots" | "stars" | "slats" | "ends" | "windows" |
 //             "chips" | "streaks" | "plait" | "tendrils" | "bristles" |
 //             "runes" | "lightning" | "cracks" | "hexgrid" | "panels" |
 //             "twigs" | "footprints" | "fringe" | "plan" | "greebles" |
 //             "ticks" | "dotgrid" | "widgets" | "plates" | "pipes" |
-//             "grilles" | "fins", ... }]
+//             "grilles" | "fins" | "scrolls", ..., engrave }]; `engrave`
+//           cuts a line into the surface instead of drawing it on
 //   launcher: { at, where, on, s, t, size } a seat for the panel's
 //             application launcher (a start button): where on the
 //             decoration it is pinned instead of standing in the row
@@ -162,7 +167,11 @@ function normalizedContour(raw) {
                 round: body.round === "chrome" ? "chrome" : body.round === true,
                 fill: String(body.fill || "material"), glow: body.glow ? String(body.glow) : "",
                 opacity: clamp(finite(body.opacity, 1), 0, 1),
-                bevel: clamp(finite(body.bevel, 0.07), 0, 0.5) },
+                bevel: clamp(finite(body.bevel, 0.07), 0, 0.5),
+                // a clear glaze over it (unset: as its kind of body has),
+                // and how brightly it is lit round about (a light tent)
+                coat: body.coat === undefined ? null : clamp(finite(body.coat, 0), 0, 1),
+                gleam: clamp(finite(body.gleam, 1), 0.5, 3) },
         layers: (contour.layers || []).map(function(layer) { return Object.assign({ side: "middle" }, layer) }),
         parts: (contour.parts || []).map(function(part) { return Object.assign({ kind: "box", at: "middle" }, part) }),
         lines: (contour.lines || []).map(function(line) { return Object.assign({ kind: "middle" }, line) }),
@@ -271,10 +280,22 @@ function featureCentres(feature, length, closed, slots, halfWidth) {
     return centres
 }
 
+// How far along a closed band, or an open one, a swell travels in one turn
+// of its motion: about fourteen half-widths, a whole number of times round
+// a closed band.
+function swellLength(length, closed, halfWidth) {
+    return closed ? length / Math.max(1, Math.round(length / (14 * halfWidth))) : 14 * halfWidth
+}
+
 // The two edges' distances from the middle at `s` (half-widths): the base,
-// the features and the wobble, then the run's ends.
-function edgesAt(contour, s, run, length, closed, slots, halfWidth) {
+// the features and the wobble, then the run's ends. A moving outline
+// (`motion.waves`) swells and settles in a wave travelling along the band,
+// its fine wobble rocking with it; `still` leaves the motion out.
+function edgesAt(contour, s, run, length, closed, slots, halfWidth, still) {
     const decoration = normalizedContour(contour)
+    const motion = still ? null : decoration.motion
+    const waves = motion && motion.waves !== undefined ? motion.waves : null
+    const swell = waves !== null ? swellLength(length, closed, halfWidth) : 1
     const cache = decoration.cache
     if (cache.length !== length || cache.closed !== closed || cache.slots !== slots || cache.halfWidth !== halfWidth) {
         cache.length = length; cache.closed = closed; cache.slots = slots; cache.halfWidth = halfWidth
@@ -303,12 +324,14 @@ function edgesAt(contour, s, run, length, closed, slots, halfWidth) {
                 }
                 let shape = featureShape(feature, d / halfWidth)
                 if (shape !== 0 && feature.vary > 0) shape *= 1 - feature.vary * hash(k + index * 31, name === "outer" ? 5 : 9)
+                if (shape !== 0 && waves !== null) shape *= 1 + 0.4 * Math.sin(waves - 2 * Math.PI * centres[k] / swell)
                 if (Math.abs(shape) > Math.abs(best)) best = shape
             }
             offset += feature.depth * best
         }
         if (side.rough.amp > 0)
-            offset += side.rough.amp * roughAt(s / halfWidth, side.rough, closed ? length / halfWidth : 0)
+            offset += side.rough.amp * roughAt(s / halfWidth + (waves !== null ? 0.5 * Math.sin(waves) : 0),
+                                               side.rough, closed ? length / halfWidth : 0)
         return offset
     }
     let outer = sideAt(decoration.outer, "outer"), inner = sideAt(decoration.inner, "inner")
@@ -317,7 +340,9 @@ function edgesAt(contour, s, run, length, closed, slots, halfWidth) {
         // closed band takes a whole number of swings round it.
         const total = length / halfWidth
         const swings = closed ? Math.max(1, Math.round(total / decoration.sway.period)) : total / decoration.sway.period
-        const swing = decoration.sway.amp * Math.sin(2 * Math.PI * (swings * s / Math.max(1e-9, length) + decoration.sway.phase))
+        // A swaying decoration rocks its swings back and forth.
+        const rock = motion && motion.sway !== undefined ? motion.swayAmount * Math.sin(motion.sway) : 0
+        const swing = decoration.sway.amp * Math.sin(2 * Math.PI * (swings * s / Math.max(1e-9, length) + decoration.sway.phase + rock))
         outer += swing
         inner -= swing
     }
@@ -538,16 +563,31 @@ const RUNES = [
 // in half-widths. `fill` marks a closed shape to fill (a window, a display
 // block), `clip` one to keep inside the band, `fade` one that fades out
 // along its length, `outline` a strand's darker rim.
+// A footprint's strength as a walk passes: it appears as the walker sets
+// foot there and fades over the next strides; `u` is how far the walk has
+// gone past it, in its share of the strides shown at once.
+function footfall(u) {
+    const v = u - Math.floor(u)
+    return v < 0.08 ? 0.2 + 0.8 * v / 0.08 : Math.max(0.2, 1 - (v - 0.08) / 0.7)
+}
+
 function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
     const decoration = normalizedContour(contour)
+    const motion = decoration.motion
+    // Light flowing along a wave or a plait moves it on by one wavelength a
+    // turn; a sway rocks a plait's strands back and forth.
+    const flow = motion && motion.flow !== undefined ? motion.flow : 0
+    const rock = motion && motion.sway !== undefined ? 2 * Math.PI * motion.swayAmount * Math.sin(motion.sway) : 0
     const result = []
     for (const line of decoration.lines) {
+        const before = result.length
         const width = finite(line.width, 0.08)
         const colour = line.colour || (line.kind === "spiral" || line.kind === "wave" ? decoration.colours.accent : decoration.colours.light)
         const inset = finite(line.inset, 0.3)
         for (const run of runs) {
             const samples = runSamples(run, step)
             const edge = function(s) { return edgesAt(decoration, s, run, length, closed, slots, halfWidth) }
+            const stillEdge = function(s) { return edgesAt(decoration, s, run, length, closed, slots, halfWidth, true) }
             const across = function(s) {
                 const e = edge(s)
                 return line.side === "outer" ? e.outer - inset : line.side === "inner" ? -(e.inner - inset) : finite(line.offset, 0)
@@ -585,9 +625,60 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                 // A closed band takes a whole number of waves round it.
                 const waves = run.open ? (run.to - run.from) / period : Math.max(1, Math.round((run.to - run.from) / period))
                 const points = samples.map(function(s) {
-                    return [s, shift + amp * Math.sin(2 * Math.PI * (waves * (s - run.from) / (run.to - run.from) + phase))]
+                    return [s, shift + amp * Math.sin(2 * Math.PI * (waves * (s - run.from) / (run.to - run.from) + phase) - flow)]
                 })
                 result.push({ kind: line.kind, points: points, closed: !run.open, width: width, colour: colour, dash: line.dash })
+            } else if (line.kind === "scrolls") {
+                // Filigree: the running scroll of classical ornament worked
+                // in wire - a stem waving along the band whose every crest
+                // curls into a spiral, above and below in turn - with a
+                // grain of the metal in each spiral's eye.
+                const pitch = Math.max(0.6, finite(line.period, 1.8)) * halfWidth
+                const amp = finite(line.amp, 0.55), curl = finite(line.size, 0.3)
+                const turns = finite(line.turns, 1.35), offset = finite(line.offset, 0)
+                const margin = run.open ? finite(line.margin, 0.5) * halfWidth : 0
+                const from = run.from + margin, to = run.to - margin
+                const count = run.open ? Math.max(1, Math.floor((to - from) / pitch))
+                                       : Math.max(1, Math.round((run.to - run.from) / pitch))
+                const span = run.open ? count * pitch : run.to - run.from
+                const first = run.open ? from + ((to - from) - span) / 2 : run.from
+                const step = span / count
+                const stem = []
+                const pointsPerUnit = Math.max(12, Math.ceil(step / Math.max(1, step / 24)))
+                for (let k = 0; k < count; ++k)
+                    for (let i = 0; i < pointsPerUnit; ++i) {
+                        const u = (k + i / pointsPerUnit)
+                        stem.push([first + u * step, offset + amp * 0.62 * Math.sin(Math.PI * u)])
+                    }
+                if (run.open) stem.push([first + span, offset])
+                else stem.push([first + span, offset + amp * 0.62 * Math.sin(Math.PI * count)])
+                result.push({ kind: line.kind, points: stem, closed: !run.open, width: width, colour: colour,
+                              material: line.material || null, cap: "round" })
+                const eyes = [], eyeSizes = []
+                for (let k = 0; k < count; ++k) {
+                    // At each crest a curl leaves the stem heading on along
+                    // it and winds inward round a centre one curl's radius
+                    // toward the band's middle, tightening as it goes.
+                    const side = k % 2 === 0 ? 1 : -1
+                    const crest = first + (k + 0.5) * step
+                    const top = offset + side * amp * 0.62
+                    const centre = [crest, top - side * curl]
+                    const points = []
+                    const n = 36
+                    for (let i = 0; i <= n; ++i) {
+                        const v = i / n
+                        const r = curl * (1 - 0.8 * v)
+                        const a = Math.PI / 2 - 2 * Math.PI * turns * v
+                        points.push([centre[0] + Math.cos(a) * r * halfWidth, centre[1] + side * Math.sin(a) * r])
+                    }
+                    result.push({ kind: line.kind, points: points, closed: false, width: width * 0.85, colour: colour,
+                                  material: line.material || null, cap: "round" })
+                    eyes.push(points[points.length - 1])
+                    eyeSizes.push(1)
+                }
+                if (line.grains !== false)
+                    result.push({ kind: "dots", points: eyes, closed: false, width: width * 1.25, colour: colour,
+                                  dots: true, sizes: eyeSizes })
             } else if (line.kind === "dots") {
                 // Round studs or rivets in a row, `period` apart, at `offset`
                 // across (or on both edges, inset, with side "both").
@@ -619,7 +710,7 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                 const points = [], sizes = []
                 for (let index = 0; index < count; ++index) {
                     const s = run.from + hash(index, 1 + salt) * (run.to - run.from)
-                    const e = edge(s)
+                    const e = stillEdge(s)
                     const t = -e.inner * 0.8 + hash(index, 2 + salt) * (e.inner + e.outer) * 0.8
                     points.push([s, t])
                     sizes.push(0.4 + 0.9 * hash(index, 3 + salt))
@@ -789,7 +880,8 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                     for (let k = 0; k < strands; ++k)
                         for (let i = 0; i < count; ++i) {
                             const u0 = i / count, u1 = (i + 1) / count
-                            const pa = 2 * Math.PI * (waves * u0 + k / strands), pb = 2 * Math.PI * (waves * u1 + k / strands)
+                            const pa = 2 * Math.PI * (waves * u0 + k / strands) - flow + rock
+                            const pb = 2 * Math.PI * (waves * u1 + k / strands) - flow + rock
                             pieces.push({ z: Math.cos((pa + pb) / 2), colour: colours[k % colours.length],
                                           points: [[from + (to - from) * u0 - (i ? 0.4 : 0), offset + amp * gather(u0) * Math.sin(pa)],
                                                    [from + (to - from) * u1 + (i + 1 < count ? 0.4 : 0), offset + amp * gather(u1) * Math.sin(pb)]] })
@@ -1036,6 +1128,9 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                     for (let s = interval[0] + pitch / 2; s < interval[1]; s += pitch, ++index) {
                         const side = index % 2 === 0 ? 1 : -1
                         const t = finite(line.offset, 0) + side * size * 0.38
+                        // A walk sets the prints down one after another.
+                        const strength = motion && motion.walk !== undefined
+                            ? footfall(motion.walk / (2 * Math.PI) - index / finite(motion.strides, 6)) : undefined
                         const oval = function(cs, ct, rs, rt) {
                             const ring = []
                             for (let k = 0; k < 14; ++k) {
@@ -1045,9 +1140,9 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                             return ring
                         }
                         result.push({ kind: line.kind, fill: true, closed: true, width: 0, colour: colour, step: index,
-                                      points: oval(s + size * 0.16 * halfWidth, t, size * 0.32, size * 0.17) })
+                                      opacity: strength, points: oval(s + size * 0.16 * halfWidth, t, size * 0.32, size * 0.17) })
                         result.push({ kind: line.kind, fill: true, closed: true, width: 0, colour: colour, step: index,
-                                      points: oval(s - size * 0.3 * halfWidth, t, size * 0.13, size * 0.13) })
+                                      opacity: strength, points: oval(s - size * 0.3 * halfWidth, t, size * 0.13, size * 0.13) })
                         const every = Math.round(finite(line.labels, 0))
                         if (every > 0 && index % every === 0) {
                             // a small ribbon banner with forked ends, two
@@ -1388,6 +1483,19 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                 }
             }
         }
+        // Whether a line is a round wire, cut in, or a bead that is not
+        // metal, carried to every stroke it made; what a plain line is made
+        // of, too (the machinery kinds give their own parts their own
+        // materials).
+        const plain = ["edge", "middle", "loop", "wave", "spiral", "brackets", "ends", "scrolls", "slats"]
+        for (let index = before; index < result.length; ++index) {
+            const made = result[index]
+            if (made.material === undefined && line.material && plain.indexOf(line.kind) >= 0) made.material = line.material
+            if (made.pipe === undefined && line.pipe) made.pipe = true
+            if (made.engrave === undefined && line.engrave) made.engrave = true
+            if (made.metal === undefined && line.metal !== undefined) made.metal = finite(line.metal, 0.8)
+            if (made.gleam === undefined && line.gleam !== undefined) made.gleam = clamp(finite(line.gleam, 1), 0.5, 3)
+        }
     }
     return result
 }
@@ -1499,7 +1607,11 @@ function partRings(part) {
     const onEdge = part.on === "outer" || part.on === "inner"
     const base = part.align ? part.align === "base" : onEdge
     const y0 = base ? 0 : -h / 2
-    if (kind === "ellipse" || kind === "lens") return [ellipseArc(0, y0 + h / 2, w / 2, h / 2, 0, 2 * Math.PI, 48)]
+    // A cut gem's girdle: its facets are drawn by the scene (DecorationScene);
+    // a square or step-cut stone is a rectangle.
+    if (kind === "gem" && (part.cut === "princess" || part.cut === "baguette"))
+        return [[[-w / 2, y0], [w / 2, y0], [w / 2, y0 + h], [-w / 2, y0 + h]]]
+    if (kind === "ellipse" || kind === "lens" || kind === "gem") return [ellipseArc(0, y0 + h / 2, w / 2, h / 2, 0, 2 * Math.PI, 48)]
     if (kind === "dome") return [ellipseArc(0, y0, w / 2, h, 0, Math.PI, 28)]
     if (kind === "ring") {
         const share = clamp(finite(part.hole, 0.6), 0.05, 0.95)
@@ -1581,7 +1693,13 @@ function partRings(part) {
 // The parts laid along the band in screen space.
 function placedParts(decoration, runs, lay, length, closed, slots, halfWidth) {
     const result = []
-    for (const part of decoration.parts) {
+    const motion = decoration.motion
+    const spin = motion && motion.spin !== undefined ? motion.spin * 180 / Math.PI : 0
+    // Floating things (candles in the air) rise and sink, each in its own
+    // rhythm, instead of swinging.
+    const floating = motion && motion.sway !== undefined && motion.swayMode === "float"
+    for (let partIndex = 0; partIndex < decoration.parts.length; ++partIndex) {
+        const part = decoration.parts[partIndex]
         for (const anchor of partAnchors(part, runs, length, closed, slots, halfWidth)) {
             // The edge a part stands on is measured where the part stands,
             // its own place along the band, not at the anchor (a band's
@@ -1596,7 +1714,8 @@ function placedParts(decoration, runs, lay, length, closed, slots, halfWidth) {
             if (part.alternate && anchor.index % 2 === 1) on = on === "outer" ? "inner" : on === "inner" ? "outer" : on
             const turn = part.kind === "branch" ? 0 : finite(part.angle, 0) * Math.PI / 180
             const cos = Math.cos(turn), sin = Math.sin(turn)
-            const sOff = finite(part.s, 0), tOff = finite(part.t, 0)
+            const sOff = finite(part.s, 0)
+            const tOff = finite(part.t, 0) + (floating ? motion.swayAmount * 2.5 * Math.sin(motion.sway + anchor.index * 1.7) : 0)
             const place = function(p) {
                 let x = p[0], y = p[1]
                 if (turn) {
@@ -1612,7 +1731,12 @@ function placedParts(decoration, runs, lay, length, closed, slots, halfWidth) {
             const onEdge = on === "outer" || on === "inner"
             const middleY = (part.align ? part.align === "base" : onEdge) ? finite(part.h, 1) / 2 : 0
             const gradient = part.gradient
-            const local = partRings(Object.assign({}, part, { on: on }))
+            // A spinning gauge's arcs turn a whole turn a loop, every
+            // other one the other way.
+            const turned = spin && part.kind === "arc"
+                ? { from: finite(part.from, 0) + (partIndex % 2 ? -spin : spin), to: finite(part.to, 90) + (partIndex % 2 ? -spin : spin) }
+                : ({})
+            const local = partRings(Object.assign({}, part, { on: on }, turned))
             const spines = local.filter(function(ring) { return ring.spine }).map(function(ring) {
                 return ring.spine.map(function(p) { const q = place([p[0], p[1]]); return { x: q.x, y: q.y, width: p[2] * halfWidth } })
             })
@@ -1639,6 +1763,10 @@ function placedParts(decoration, runs, lay, length, closed, slots, halfWidth) {
                 depth: finite(part.depth, 1),
                 centre: place([0, middleY]),
                 radius: Math.max(finite(part.w, 1), finite(part.h, 1)) / 2 * halfWidth,
+                // its own width and height (pixels), and how a gem is cut
+                size: { width: finite(part.w, 1) * halfWidth, height: finite(part.h, 1) * halfWidth },
+                cut: String(part.cut || "brilliant"), halo: Math.max(0, Math.round(finite(part.halo, 0))),
+                gleam: clamp(finite(part.gleam, 1), 0.5, 3),
                 // which way is out from the band here, and the part's own
                 // height in pixels: a round part's shading runs across it
                 normal: on === "inner" ? { x: -frame.nx, y: -frame.ny } : { x: frame.nx, y: frame.ny },
@@ -1693,7 +1821,12 @@ function placedLayers(decoration, runs, lay, length, closed, slots, halfWidth, s
                               // a stain soaking into the surface, or a channel cut into it
                               ink: layer.ink === true, recess: layer.recess === true,
                               // glass looking out (a viewport): what lies beyond it gives the light
-                              window: layer.window === true })
+                              window: layer.window === true,
+                              // glossy as enamel under a clear glaze
+                              gloss: layer.gloss === true,
+                              gleam: clamp(finite(layer.gleam, 1), 0.5, 3),
+                              // how far along the band its middle is, for lights chasing along it
+                              along: shareAlong((interval[0] + interval[1]) / 2, length, closed) })
             }
         }
     }
@@ -1852,15 +1985,43 @@ function bevelStrips(rings, width) {
     return result
 }
 
+// How far along the band `s` is, 0 to 1 (round a closed band, wrapping).
+function shareAlong(s, length, closed) {
+    if (!(length > 0)) return 0
+    return closed ? (((s % length) + length) % length) / length : clamp(s / length, 0, 1)
+}
+
+// The band laid out with whatever stands out of it swinging as it sways:
+// twigs, tendrils, a fringe, past its edges, along the band, the farther out
+// the more, in a ripple so neighbours do not swing together; and with
+// `ends`, a broom's tail past an open band's end, across it.
+function swayingRibbon(lay, motion, halfWidth, ends) {
+    const length = lay.length
+    const ripples = lay.closed ? Math.max(1, Math.round(length / (9 * halfWidth))) : length / (9 * halfWidth)
+    return Object.assign({}, lay, {
+        point: function(s, t) {
+            const out = Math.min(4, Math.max(0, Math.abs(t) / halfWidth - 1))
+            const beyond = ends && !lay.closed ? Math.min(4, Math.max(0, -s, s - length) / halfWidth) : 0
+            const wave = Math.sin(motion.sway + 2 * Math.PI * ripples * s / Math.max(1e-9, length))
+            return lay.point(s + motion.swayAmount * out * halfWidth * wave,
+                             t + motion.swayAmount * beyond * halfWidth * Math.sin(motion.sway + 1.3))
+        }
+    })
+}
+
 // A flat panel's decoration in screen space: the outline of each run as a
 // polygon (a closed band as two rings, the inner one a hole), the strips,
 // the parts, the shading, the fading and the lines.
 // `path`: { points: [{x, y}], closed, outward }; `halfWidth`: half the
 // plain band's width in pixels; `slots`: the icons' places along the path
-// in pixels.
+// in pixels; `options`: { step, motion }, `motion` the angle each moving
+// kind has turned to (DecorationScene.motionAt): `waves`, `flow`, `sway`
+// with `swayAmount` and `swayMode` ("swing" or "float"), `walk` with
+// `strides`, `spin`.
 function flatDecoration(contour, path, halfWidth, slots, options) {
     const settings = options || ({})
     const decoration = normalizedContour(contour)
+    decoration.motion = settings.motion || null
     const lay = ribbon(path)
     const length = lay.length
     if (length <= 0) return { shapes: [], lines: [], parts: [], layers: [], shading: [], fades: [], length: 0 }
@@ -1880,14 +2041,19 @@ function flatDecoration(contour, path, halfWidth, slots, options) {
         if (run.open) shapes.push({ rings: [outer.concat(inner.reverse())], colour: fill, index: run.index })
         else shapes.push({ rings: [outer, inner.reverse()], colour: fill, index: run.index })
     }
+    const swaying = decoration.motion && decoration.motion.sway !== undefined
+    const lineLay = swaying ? swayingRibbon(lay, decoration.motion, halfWidth, true) : lay
     const lines = linesOf(decoration, runs, length, lay.closed, slots, halfWidth, step).map(function(line) {
         return Object.assign({}, line, {
-            points: line.points.map(function(p) { return lay.point(p[0], p[1] * halfWidth) }),
+            // how far along the band it starts, for lights chasing along it
+            along: line.points.length ? shareAlong(line.points[0][0], length, lay.closed) : 0,
+            points: line.points.map(function(p) { return lineLay.point(p[0], p[1] * halfWidth) }),
             width: line.width * halfWidth,
             outlineWidth: line.outlineWidth !== undefined ? line.outlineWidth * halfWidth : undefined
         })
     })
-    const parts = placedParts(decoration, runs, lay, length, lay.closed, slots, halfWidth)
+    const parts = placedParts(decoration, runs, swaying ? swayingRibbon(lay, decoration.motion, halfWidth, false) : lay,
+                              length, lay.closed, slots, halfWidth)
     // The launcher's seat, where the decoration has one.
     let launcher = null
     if (decoration.launcher) {

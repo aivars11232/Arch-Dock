@@ -1,5 +1,10 @@
 # Owner list, piece 8: panel decorations - handoff for the next session
 
+**Status (2026-10-20, second session):** steps 1 to 7 below are done and
+reported in `OWNER-LIST-PIECE-8.md` (part one); step 8 (3D platform
+decorations, then holographic icons) is next. This file stays as the
+record of the checkpoint.
+
 Written 2026-10-20 at the owner's word: "Commit and Sync current changes,
 make a handoff for tomorrow and stop". Piece 8 is Phase 5 of the owner's
 plan: decorations that remake a panel's outline (any panel shape, any

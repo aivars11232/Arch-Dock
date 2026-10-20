@@ -16,7 +16,8 @@
 // long picture laid along the band (the nebulae).
 // `animation` lists what moves by default: lights pulse, flicker, twinkle,
 // blink, crackle or cycle through colours; the outline waves, the picture
-// drifts, light flows, parts sway, footprints walk, rings spin.
+// drifts, light flows, parts sway (or float, with `mode: "float"`: rise and
+// sink), footprints walk, rings spin.
 //
 // The materials are photographed real surfaces: ambientCG's CC0 1.0 sets
 // (https://ambientcg.com), turned into each material's colour and height
@@ -1958,7 +1959,7 @@ var decorations = [
         colours: {body: "#8a7a68", edge: "#000000aa", light: "#ffe6a8", accent: "#ffe6a8"}
       } },
     { id: "floating-candles", name: "Floating Candles", family: "wizard-hall",
-      animation: [{kind: "flicker", period: 0.12, amount: 0.25}, {kind: "sway", period: 4, amount: 0.06}, {kind: "twinkle", period: 2.2, amount: 0.7}],
+      animation: [{kind: "flicker", period: 0.12, amount: 0.25}, {kind: "sway", period: 4, amount: 0.06, mode: "float"}, {kind: "twinkle", period: 2.2, amount: 0.7}],
       contour: {
         outer: {base: 0.95, rough: {amp: 0.12, scale: 1.3}, features: [{kind: "wave", period: 5, length: 4.6, depth: 0.3, vary: 0.7}, {kind: "wave", period: 2.6, length: 2.4, depth: 0.15, phase: 0.3, vary: 0.8}]},
         inner: {base: 0.9, rough: {amp: 0.1, scale: 1.6, seed: 4}, features: [{kind: "wave", period: 4.4, length: 4, depth: 0.25, phase: 0.2, vary: 0.7}]},
@@ -2172,6 +2173,318 @@ var decorations = [
             {kind: "dots", side: "middle", offset: -1.07, period: 0.36, width: 0.035, colour: "#a7adb5"}
         ],
         colours: {body: "#9ea6ae", edge: "#000000aa", light: "#ffffff", accent: "#45ff7a"}
+      } },
+    // Jewellery: each precious metal worked as a jeweller works it - wire
+    // filigree, beaded milgrain edges, engine-turned engraving under
+    // enamel, stones in their settings, rope twists and chains - in the
+    // metal it is named for, polished and lit as jewellery is photographed.
+    { id: "yellow-gold-filigree", name: "Yellow Gold Filigree", family: "jewellery",
+      material: {id: "yellow-gold"},
+      room: [0.2, 0.2],
+      animation: [{kind: "twinkle", period: 2.8, amount: 0.45}],
+      contour: {
+        outer: {base: 0.92},
+        inner: {base: 0.92},
+        ends: {kind: "pill"},
+        body: {fill: "none"},
+        parts: [
+            {kind: "ring", at: "between", w: 0.8, h: 0.8, hole: 0.76, align: "centre", material: {id: "polished-gold"}, shade: "chrome", gleam: 1.8, z: "front"},
+            {kind: "gem", at: "between", w: 0.6, h: 0.6, align: "centre", material: {id: "diamond"}, z: "front"},
+            {kind: "ellipse", at: "between", s: 0.42, t: 0.42, w: 0.12, h: 0.12, align: "centre", material: {id: "polished-gold"}, shade: "chrome", gleam: 1.8, z: "front"},
+            {kind: "ellipse", at: "between", s: -0.42, t: -0.42, w: 0.12, h: 0.12, align: "centre", material: {id: "polished-gold"}, shade: "chrome", gleam: 1.8, z: "front"}
+        ],
+        lines: [
+            {kind: "edge", side: "outer", pipe: true, width: 0.17, material: {id: "yellow-gold"}, gleam: 1.8},
+            {kind: "edge", side: "inner", pipe: true, width: 0.17, material: {id: "yellow-gold"}, gleam: 1.8},
+            {kind: "scrolls", period: 1.5, amp: 0.62, size: 0.24, width: 0.06, material: {id: "yellow-gold"}, gleam: 1.8, margin: 0.3},
+            {kind: "dots", side: "outer", inset: 0.16, period: 0.15, width: 0.04, colour: "#f0cd62", gleam: 1.8},
+            {kind: "dots", side: "inner", inset: 0.16, period: 0.15, width: 0.04, colour: "#f0cd62", gleam: 1.8}
+        ],
+        colours: {body: "#b8902f", edge: "#00000055", light: "#fff4d6", accent: "#e9c35a"}
+      } },
+    { id: "polished-gold-tennis", name: "Polished Gold Tennis Bracelet", family: "jewellery",
+      material: {id: "polished-gold"},
+      room: [0.2, 0.2],
+      animation: [{kind: "twinkle", period: 2.4, amount: 0.5}],
+      contour: {
+        outer: {base: 0.6},
+        inner: {base: 0.6},
+        ends: {kind: "pill"},
+        body: {round: "chrome", coat: 0, gleam: 1.8},
+        parts: [
+            {kind: "ellipse", at: "period", period: 0.86, w: 0.8, h: 0.8, align: "centre", material: {id: "polished-gold"}, shade: "chrome", gleam: 1.8, z: "front"},
+            {kind: "gem", at: "period", period: 0.86, w: 0.64, h: 0.64, align: "centre", material: {id: "diamond"}, z: "front"}
+        ],
+        lines: [
+            {kind: "dots", side: "middle", offset: 0.43, period: 0.43, width: 0.08, colour: "#f6d985", gleam: 1.8},
+            {kind: "dots", side: "middle", offset: -0.43, period: 0.43, width: 0.08, colour: "#f6d985", gleam: 1.8}
+        ],
+        colours: {body: "#c9a13f", edge: "#00000055", light: "#ffffff", accent: "#f4d27c"}
+      } },
+    { id: "bright-gold-guilloche", name: "Bright Gold Guilloché", family: "jewellery",
+      material: {id: "bright-gold"},
+      room: [0.3, 0.3],
+      animation: [{kind: "twinkle", period: 3, amount: 0.4}],
+      contour: {
+        outer: {base: 1},
+        inner: {base: 1},
+        ends: {kind: "pill"},
+        body: {round: "chrome", coat: 0, gleam: 1.8, bevel: 0.1},
+        layers: [
+            {side: "middle", width: 1.32, fill: "#3456c4", opacity: 0.74, gloss: true, z: "over"}
+        ],
+        parts: [
+            {kind: "ring", at: "between", w: 0.68, h: 0.68, hole: 0.76, align: "centre", material: {id: "bright-gold"}, shade: "chrome", gleam: 1.8, z: "front"},
+            {kind: "gem", at: "between", w: 0.52, h: 0.52, align: "centre", material: {id: "diamond"}, z: "front"}
+        ],
+        lines: [
+            {kind: "slats", period: 0.11, amp: 0.28, size: 0.66, width: 0.016, engrave: true, colour: "#6b4c10"},
+            {kind: "slats", period: 0.11, amp: -0.28, size: 0.66, width: 0.016, engrave: true, colour: "#6b4c10"},
+            {kind: "wave", period: 0.9, amp: 0.42, width: 0.026, engrave: true, colour: "#6b4c10"},
+            {kind: "dots", side: "outer", inset: 0.13, period: 0.13, width: 0.06, colour: "#f6f0e4", metal: 0},
+            {kind: "dots", side: "inner", inset: 0.13, period: 0.13, width: 0.06, colour: "#f6f0e4", metal: 0}
+        ],
+        colours: {body: "#d9ad2f", edge: "#00000066", light: "#ffffff", accent: "#f7d76a"}
+      } },
+    { id: "white-gold-tiara", name: "White Gold Diamond Tiara", family: "jewellery",
+      material: {id: "white-gold"},
+      room: [0.3, 0.3],
+      animation: [{kind: "twinkle", period: 2.2, amount: 0.55}],
+      contour: {
+        outer: {base: 0.42, features: [{kind: "arch", length: 2.0, depth: 0.56, anchor: "icons"}]},
+        inner: {base: 0.66},
+        ends: {kind: "square"},
+        body: {fill: "none"},
+        parts: [
+            {kind: "gem", at: "period", period: 0.36, on: "inner", t: -0.02, w: 0.3, h: 0.3, align: "centre", material: {id: "diamond"}, z: "front"},
+            {kind: "gem", at: "period", period: 0.26, on: "outer", t: -0.1, w: 0.2, h: 0.2, align: "centre", material: {id: "diamond"}, z: "front"},
+            {kind: "gem", at: "icons", on: "outer", t: 0.06, w: 0.38, h: 0.38, align: "base", material: {id: "diamond"}, z: "front"},
+            {kind: "gem", at: "icons", on: "outer", t: 0.46, w: 0.2, h: 0.2, align: "base", material: {id: "diamond"}, z: "front"},
+            {kind: "gem", at: "both", on: "inner", t: 0.3, w: 0.32, h: 0.32, align: "centre", material: {id: "diamond"}, z: "front"}
+        ],
+        lines: [
+            {kind: "edge", side: "inner", pipe: true, width: 0.07, material: {id: "white-gold"}, gleam: 1.6},
+            {kind: "edge", side: "outer", pipe: true, width: 0.06, material: {id: "white-gold"}, gleam: 1.6}
+        ],
+        colours: {body: "#d8d6d0", edge: "#00000055", light: "#ffffff", accent: "#eef2f8"}
+      } },
+    { id: "gold-leaf-byzantine", name: "Gold Leaf Byzantine Chain", family: "jewellery",
+      material: {id: "gold-leaf"},
+      room: [0.2, 0.2],
+      animation: [{kind: "pulse", period: 3.6, amount: 0.15}],
+      contour: {
+        outer: {base: 0.8},
+        inner: {base: 0.8},
+        ends: {kind: "pill"},
+        body: {fill: "none"},
+        parts: [
+            {kind: "ring", at: "period", period: 0.62, w: 0.86, h: 0.92, hole: 0.6, align: "centre", material: {id: "gold-leaf"}, shade: "chrome", gleam: 1.9, z: "front"},
+            {kind: "capsule", at: "period", period: 0.62, phase: 0.5, w: 0.5, h: 0.22, align: "centre", material: {id: "polished-gold"}, shade: "chrome", gleam: 2, z: "front"}
+        ],
+        colours: {body: "#c9a54a", edge: "#00000055", light: "#fff2cc", accent: "#f2cf6a"}
+      } },
+    { id: "rose-gold-torsade", name: "Rose Gold Torsade", family: "jewellery",
+      material: {id: "rose-gold"},
+      room: [0.2, 0.2],
+      animation: [{kind: "twinkle", period: 2.8, amount: 0.45}],
+      contour: {
+        outer: {base: 0.66},
+        inner: {base: 0.66},
+        ends: {kind: "pill"},
+        body: {round: "chrome", coat: 0, gleam: 1.8},
+        parts: [
+            {kind: "ring", at: "between", w: 0.78, h: 0.78, hole: 0.76, align: "centre", material: {id: "rose-gold"}, shade: "chrome", gleam: 1.9, z: "front"},
+            {kind: "gem", at: "between", w: 0.58, h: 0.58, align: "centre", material: {id: "pink-tourmaline"}, z: "front"},
+            {kind: "gem", at: "between", s: 0.52, w: 0.2, h: 0.2, align: "centre", material: {id: "diamond"}, z: "front"},
+            {kind: "gem", at: "between", s: -0.52, w: 0.2, h: 0.2, align: "centre", material: {id: "diamond"}, z: "front"}
+        ],
+        lines: [
+            {kind: "slats", period: 0.3, amp: 0.42, size: 0.68, width: 0.035, engrave: true, colour: "#6a3a2e", margin: 0.4}
+        ],
+        colours: {body: "#d89a86", edge: "#00000055", light: "#ffe2da", accent: "#f2b8a8"}
+      } },
+    { id: "red-gold-cabochon", name: "Red Gold Garnet Cabochons", family: "jewellery",
+      material: {id: "red-gold"},
+      room: [0.2, 0.2],
+      animation: [{kind: "pulse", period: 3.4, amount: 0.2}],
+      contour: {
+        outer: {base: 0.92},
+        inner: {base: 0.92},
+        ends: {kind: "pill"},
+        body: {round: "chrome", coat: 0, gleam: 1.7},
+        parts: [
+            {kind: "ring", at: "between", w: 0.98, h: 0.74, hole: 0.84, align: "centre", material: {id: "red-gold"}, shade: "chrome", gleam: 1.9, z: "front"},
+            {kind: "gem", at: "between", cut: "cabochon", w: 0.82, h: 0.58, align: "centre", material: {id: "garnet"}, z: "front"}
+        ],
+        lines: [
+            {kind: "middle", offset: 0.74, width: 0.025, engrave: true, colour: "#5a2a18"},
+            {kind: "middle", offset: -0.74, width: 0.025, engrave: true, colour: "#5a2a18"},
+            {kind: "dots", side: "outer", inset: 0.08, period: 0.14, width: 0.04, colour: "#f0a888", gleam: 1.8},
+            {kind: "dots", side: "inner", inset: 0.08, period: 0.14, width: 0.04, colour: "#f0a888", gleam: 1.8}
+        ],
+        colours: {body: "#c86a50", edge: "#00000055", light: "#ffd0c0", accent: "#f0a888"}
+      } },
+    { id: "green-gold-nouveau", name: "Green Gold Art Nouveau", family: "jewellery",
+      material: {id: "green-gold"},
+      room: [0.2, 0.2],
+      animation: [{kind: "twinkle", period: 3, amount: 0.4}],
+      contour: {
+        outer: {base: 0.9},
+        inner: {base: 0.9},
+        ends: {kind: "pill"},
+        body: {fill: "none"},
+        parts: [
+            {kind: "ring", at: "between", w: 0.72, h: 0.72, hole: 0.76, align: "centre", material: {id: "green-gold"}, shade: "chrome", gleam: 1.8, z: "front"},
+            {kind: "gem", at: "between", cut: "cabochon", w: 0.56, h: 0.56, align: "centre", material: {id: "emerald"}, z: "front"}
+        ],
+        lines: [
+            {kind: "edge", side: "outer", pipe: true, width: 0.1, material: {id: "green-gold"}, gleam: 1.8},
+            {kind: "edge", side: "inner", pipe: true, width: 0.1, material: {id: "green-gold"}, gleam: 1.8},
+            {kind: "wave", period: 2.4, amp: 0.58, width: 0.11, pipe: true, material: {id: "green-gold"}, gleam: 1.8},
+            {kind: "wave", period: 2.4, amp: 0.58, phase: 0.5, width: 0.07, pipe: true, material: {id: "green-gold"}, gleam: 1.8}
+        ],
+        colours: {body: "#b8b56a", edge: "#00000055", light: "#e8ffe0", accent: "#d7d58a"}
+      } },
+    { id: "blue-gold-channel", name: "Blue Gold Sapphire Channel", family: "jewellery",
+      material: {id: "blue-gold"},
+      room: [0.2, 0.2],
+      animation: [{kind: "twinkle", period: 2.6, amount: 0.45}],
+      contour: {
+        outer: {base: 0.82},
+        inner: {base: 0.82},
+        ends: {kind: "pill"},
+        body: {round: "chrome", coat: 0, gleam: 1.7},
+        parts: [
+            {kind: "gem", at: "period", period: 0.46, cut: "baguette", w: 0.4, h: 0.86, align: "centre", material: {id: "sapphire"}, z: "front"}
+        ],
+        lines: [
+            {kind: "middle", offset: 0.5, pipe: true, width: 0.1, material: {id: "blue-gold"}, gleam: 1.9},
+            {kind: "middle", offset: -0.5, pipe: true, width: 0.1, material: {id: "blue-gold"}, gleam: 1.9},
+            {kind: "dots", side: "outer", inset: 0.1, period: 0.14, width: 0.04, colour: "#c8d8f4", gleam: 1.8},
+            {kind: "dots", side: "inner", inset: 0.1, period: 0.14, width: 0.04, colour: "#c8d8f4", gleam: 1.8}
+        ],
+        colours: {body: "#8aa6d6", edge: "#00000055", light: "#d8e6ff", accent: "#c8d8f4"}
+      } },
+    { id: "purple-gold-halo", name: "Purple Gold Amethyst Halo", family: "jewellery",
+      material: {id: "purple-gold"},
+      room: [0.2, 0.2],
+      animation: [{kind: "twinkle", period: 2.6, amount: 0.5}],
+      contour: {
+        outer: {base: 0.94},
+        inner: {base: 0.94},
+        ends: {kind: "pill"},
+        body: {round: "chrome", coat: 0, gleam: 1.7},
+        parts: [
+            {kind: "gem", at: "between", w: 0.5, h: 0.5, halo: 12, align: "centre", material: {id: "amethyst"}, z: "front"}
+        ],
+        lines: [
+            {kind: "scrolls", period: 1.6, amp: 0.66, size: 0.24, width: 0.035, engrave: true, grains: false, colour: "#3e2450"},
+            {kind: "dots", side: "outer", inset: 0.1, period: 0.14, width: 0.04, colour: "#e2c8f4", gleam: 1.8},
+            {kind: "dots", side: "inner", inset: 0.1, period: 0.14, width: 0.04, colour: "#e2c8f4", gleam: 1.8}
+        ],
+        colours: {body: "#a87ac8", edge: "#00000055", light: "#f0dcff", accent: "#e2c8f4"}
+      } },
+    { id: "black-gold-deco", name: "Black Gold Onyx Deco", family: "jewellery",
+      material: {id: "black-gold"},
+      room: [0.3, 0.3],
+      animation: [{kind: "twinkle", period: 2.4, amount: 0.5}],
+      contour: {
+        outer: {base: 0.92},
+        inner: {base: 0.92},
+        ends: {kind: "chamfer", size: 0.5},
+        body: {round: "chrome", coat: 0, gleam: 1.6, bevel: 0.1},
+        layers: [
+            {side: "middle", width: 1.1, material: {id: "obsidian"}, gloss: true}
+        ],
+        parts: [
+            {kind: "gem", at: "period", period: 0.22, on: "outer", t: -0.12, w: 0.16, h: 0.16, align: "centre", material: {id: "diamond"}, z: "front"},
+            {kind: "gem", at: "period", period: 0.22, on: "inner", t: -0.12, w: 0.16, h: 0.16, align: "centre", material: {id: "diamond"}, z: "front"},
+            {kind: "gem", at: "between", cut: "princess", w: 0.46, h: 0.46, align: "centre", material: {id: "diamond"}, z: "front"}
+        ],
+        colours: {body: "#4d4743", edge: "#00000088", light: "#ffffff", accent: "#e8e4dc"}
+      } },
+    { id: "grey-gold-engine-turned", name: "Grey Gold Engine-Turned", family: "jewellery",
+      material: {id: "grey-gold"},
+      room: [0.3, 0.3],
+      animation: [{kind: "twinkle", period: 3, amount: 0.4}],
+      contour: {
+        outer: {base: 1},
+        inner: {base: 1},
+        ends: {kind: "pill"},
+        body: {round: "chrome", coat: 0, gleam: 1.5, bevel: 0.1},
+        parts: [
+            {kind: "ring", at: "between", w: 0.66, h: 0.66, hole: 0.76, align: "centre", material: {id: "grey-gold"}, shade: "chrome", gleam: 1.8, z: "front"},
+            {kind: "gem", at: "between", w: 0.5, h: 0.5, align: "centre", material: {id: "diamond"}, z: "front"}
+        ],
+        lines: [
+            {kind: "slats", period: 0.12, amp: 0.3, size: 0.68, width: 0.02, engrave: true, colour: "#4a4236"},
+            {kind: "slats", period: 0.12, amp: -0.3, size: 0.68, width: 0.02, engrave: true, colour: "#4a4236"},
+            {kind: "wave", period: 0.9, amp: 0.42, width: 0.03, engrave: true, colour: "#4a4236"},
+            {kind: "dots", side: "outer", inset: 0.13, period: 0.13, width: 0.055, colour: "#f4eee2", metal: 0},
+            {kind: "dots", side: "inner", inset: 0.13, period: 0.13, width: 0.055, colour: "#f4eee2", metal: 0}
+        ],
+        colours: {body: "#bdb8af", edge: "#00000066", light: "#ffffff", accent: "#ece6da"}
+      } },
+    { id: "silver-bright-cut", name: "Silver Bright-Cut", family: "jewellery",
+      material: {id: "silver"},
+      room: [0.2, 0.2],
+      animation: [{kind: "pulse", period: 3.6, amount: 0.15}],
+      contour: {
+        outer: {base: 0.94},
+        inner: {base: 0.94},
+        ends: {kind: "pill"},
+        body: {round: "chrome", coat: 0, gleam: 1},
+        parts: [
+            {kind: "ring", at: "between", w: 0.86, h: 0.66, hole: 0.82, align: "centre", material: {id: "silver"}, shade: "chrome", gleam: 1.1, z: "front"},
+            {kind: "gem", at: "between", cut: "cabochon", w: 0.72, h: 0.52, align: "centre", colour: "#1e1d22", z: "front"},
+            {kind: "gem", at: "period", period: 0.24, on: "outer", t: -0.13, w: 0.17, h: 0.17, align: "centre", colour: "#4a4e55", z: "front"},
+            {kind: "gem", at: "period", period: 0.24, on: "inner", t: -0.13, w: 0.17, h: 0.17, align: "centre", colour: "#4a4e55", z: "front"}
+        ],
+        lines: [
+            {kind: "scrolls", period: 1.6, amp: 0.56, size: 0.22, width: 0.04, engrave: true, grains: false, colour: "#3a3f46"}
+        ],
+        colours: {body: "#c8ccd2", edge: "#00000055", light: "#ffffff", accent: "#e6e9ee"}
+      } },
+    { id: "platinum-deco-baguettes", name: "Platinum Deco Baguettes", family: "jewellery",
+      material: {id: "brushed-platinum"},
+      room: [0.4, 0.4],
+      animation: [{kind: "twinkle", period: 2.4, amount: 0.5}],
+      contour: {
+        outer: {base: 0.82},
+        inner: {base: 0.82},
+        ends: {kind: "chamfer", size: 0.5},
+        body: {round: "chrome", coat: 0, gleam: 1.4, bevel: 0.1},
+        parts: [
+            {kind: "gem", at: "period", period: 0.6, cut: "baguette", w: 0.24, h: 0.7, align: "centre", material: {id: "diamond"}, z: "front"},
+            {kind: "gem", at: "period", period: 0.6, phase: 0.5, w: 0.36, h: 0.36, align: "centre", material: {id: "diamond"}, z: "front"},
+            {kind: "gem", at: "both", s: 0.34, cut: "princess", w: 0.62, h: 0.62, align: "centre", material: {id: "diamond"}, z: "front"}
+        ],
+        lines: [
+            {kind: "middle", offset: 0.45, pipe: true, width: 0.07, material: {id: "brushed-platinum"}, gleam: 1.6},
+            {kind: "middle", offset: -0.45, pipe: true, width: 0.07, material: {id: "brushed-platinum"}, gleam: 1.6},
+            {kind: "middle", offset: 0.66, width: 0.02, engrave: true, colour: "#3a3e44"},
+            {kind: "middle", offset: -0.66, width: 0.02, engrave: true, colour: "#3a3e44"}
+        ],
+        colours: {body: "#d9dde2", edge: "#00000055", light: "#ffffff", accent: "#eef1f4"}
+      } },
+    { id: "copper-torc", name: "Copper Torc", family: "jewellery",
+      material: {id: "polished-copper"},
+      room: [0.7, 0.7],
+      animation: [{kind: "pulse", period: 3.6, amount: 0.15}],
+      contour: {
+        outer: {base: 0.64},
+        inner: {base: 0.64},
+        ends: {kind: "pill"},
+        body: {round: "chrome", coat: 0, gleam: 1.6},
+        parts: [
+            {kind: "ellipse", at: "both", s: 0.05, w: 1.0, h: 1.34, align: "centre", material: {id: "polished-copper"}, shade: "chrome", gleam: 1.8, z: "front"},
+            {kind: "ring", at: "both", s: 0.05, w: 0.6, h: 0.82, hole: 0.62, align: "centre", material: {id: "polished-copper"}, shade: "chrome", gleam: 2, z: "front"}
+        ],
+        lines: [
+            {kind: "slats", period: 0.36, amp: 0.5, size: 0.66, width: 0.045, engrave: true, colour: "#4a2410", margin: 0.7},
+            {kind: "slats", period: 0.36, amp: 0.5, size: 0.66, width: 0.02, offset: 0.0, engrave: true, colour: "#6a3418", margin: 0.88}
+        ],
+        colours: {body: "#b87333", edge: "#00000055", light: "#ffd8b8", accent: "#e8a070"}
       } }
 ]
 
@@ -2408,6 +2721,26 @@ var decorationGroups = [
     {
         "name": "Precious Metals",
         "subgroups": [
+            {
+                "name": "Jewellery",
+                "decorations": [
+                    "yellow-gold-filigree",
+                    "polished-gold-tennis",
+                    "bright-gold-guilloche",
+                    "white-gold-tiara",
+                    "gold-leaf-byzantine",
+                    "rose-gold-torsade",
+                    "red-gold-cabochon",
+                    "green-gold-nouveau",
+                    "blue-gold-channel",
+                    "purple-gold-halo",
+                    "black-gold-deco",
+                    "grey-gold-engine-turned",
+                    "silver-bright-cut",
+                    "platinum-deco-baguettes",
+                    "copper-torc"
+                ]
+            },
             {
                 "name": "Gold",
                 "decorations": [

@@ -1,5 +1,97 @@
 # Arch Dock current state
 
+<!-- LIST_PIECE_8_BEGIN -->
+## The owner's list, piece 8: panel decorations (Phase 5, part one) — 2026-10-20
+
+Report `docs/repairs/OWNER-LIST-PIECE-8.md`; the checkpoint's handoff
+(the design pipeline outside the repo, the approved renders)
+`docs/repairs/OWNER-LIST-PIECE-8-HANDOFF.md`.
+
+- `ArchDock.Decorations`, a C++ QML plugin in `src/decorations/`, built
+  and installed like `ArchDock.Input` so plasmashell loads it.
+  `DecorationLighting`: `bakeDecoration(scene, materialDirectory, scale,
+  maximumPixels, cancelled)` lights a scene (`DecorationScene.scene`'s
+  elements) into a `DecorationBake`: `base` and one picture per light
+  group (`lights`, `stars`, `starsB`, `blinkA`, `blinkB`, `arcs`), each
+  cropped to where its light reaches (`rects`). Heights are in pixels
+  (an element's `height` × the half width); profiles come from the exact
+  distance transform (Felzenszwalb-Huttenlocher), blurs are separable
+  Gaussians or three box passes (Kovesi), cast shadows a monotonic-queue
+  maximum filter, highlights Blinn-Phong normalised by (n + 8) / 8π with
+  Schlick's Fresnel, bloom blurred from one downsampled copy; `gleam` (a
+  light tent) brightens polished metal's reflections. `DecorationWorker`:
+  one `QThread` for every panel with its own `QJSEngine`, which loads
+  `.pragma library` files with their imports (`DecorationScripts::module`)
+  and runs `DecorationJob.js` (`prepare(text)` → frames, loop, half
+  width; `sceneText(text, phase, halfWidth)`). `DecorationBaker` (QML
+  type): in `directory`, `decoration` (or `decorationData`), `path`,
+  `halfWidth`, `iconPlaces`, `choices`, `animated`, `ends`, `fit`,
+  `clip`, `scale`; out `busy`, `revision`, `bounds`, `layers`, `frames`,
+  `frameCount`, `loop`, `drawnHalfWidth`, `launcher`, `error`. A newer
+  setting drops the older bake (generation counter and a cancel check in
+  the lighting); a frame is at most 1.2 Mpx, a still picture 3 Mpx; a
+  frame's layer no different from the first frame's is the first's copy.
+  `DecorationLayer` (QML type): one `picture` of one `frame`, its textures
+  kept by image key.
+- `renderers/PanelDecoration2D.qml` (`objectName: "panel-decoration"`):
+  the path from `LayoutEngine.surface`, the half width the icon size /
+  1.7 (fitted to an edge panel's thickness), the icons' resting centres
+  as slots (`DecorationScene.slotsOnPath`), end room 2.5 half widths.
+  Light kinds (pulse, flicker, twinkle, blink, crackle) are the layers'
+  opacity on a 33 ms clock; motion kinds (waves, drift, flow, sway, walk,
+  spin, cycle, float) a loop of 12 lit frames (24 for spin), each
+  crossfaded into the next. It plays only while shown, with Animation on
+  and reduced motion off. `PanelSurfaceLoader` loads it in the flat
+  surface's place when `panelDecoration` is set and the panel is neither
+  true 3D nor baked (`decorationActive`), and passes its `decorationReach`
+  and `decorationLauncher`; `PanelScene` grows its effect margins by the
+  reach, and a native host by `decorationAlongRoom`; `IconScene`'s
+  `panelDecorated` leaves the icons bare (no look, hover or active tiles;
+  a tile the user chose stays).
+- Settings (all `surface.parameters3D.<key>`, editor section
+  `panels-appearance`, capability `decoration` or `decoration-colours`):
+  `panelDecoration` (id, "" none), `panelDecorationAnimation` (true),
+  `panelDecorationSpeed` (1, 0.1 to 3), `panelDecorationLight`,
+  `panelDecorationLightFinish` (solid, rainbow), `panelDecorationMain`,
+  `panelDecorationFinish` (solid, chameleon, iridescent, rainbow,
+  metallic-rainbow), `panelDecorationPalette` (colours separated by
+  commas), `panelDecorationMetal` (designed or one of ten metals),
+  `panelDecorationMaterial` (a material id), `panelDecorationHue` (−180 to
+  180), `panelDecorationStrength` (0 to 2), `panelDecorationBrightness`
+  (0.2 to 2) and `panelDecorationSeat` (an entry id, set from the dock,
+  not Studio). `PanelWindowSettings` offers a colour setting only when the
+  worn decoration has it (`DecorationScene.colourControls`) and hides the
+  flat look's settings while one is worn; a metal it does not offer is
+  never kept. Studio: `StudioCatalogueTree.qml` (group → subgroup →
+  picture cards drawn by `previews/DecorationThumbnail.qml`, open at the
+  item worn), `SettingsPopup.decorationRows`.
+- The launcher seat (`contour.launcher`): `PanelWindow::
+  setPanelDecorationSeat(panelId, entryId)` and `seatPanelUrl(panelId,
+  url)` (D-Bus slots); the dock entry's menu ("Sit in the decoration's
+  seat", "Leave the decoration's seat") and a drop area over the seat in
+  `plasma-dock-widget/contents/ui/main.qml`; the seated entry leaves the
+  row (`rowEntryCount`) and sits at the seat's place and size.
+- `DecorationScene.js` and `ContourFrames.js`: a motion `phase` for every
+  moving kind, filigree scrolls, engraved grooves, enamel strips, round
+  wires, pearls, cut stones (brilliant, princess, baguette, cabochon)
+  with halos and twinkling glints, `gleam`, a chosen body material.
+  `DecorationCatalogue.js`: 160 decorations (the 145 approved and fifteen
+  pieces of jewellery under Precious Metals > Jewellery), the materials
+  tree without the precious metals (each is a decoration).
+- `ThemePackage::parseContour` checks the whole vocabulary (parts,
+  layers, body, sway, launcher, every line kind, gems and cuts,
+  materials, animations), refusing unknown members at their place.
+- Tests: `decoration-lighting-test`, `decoration-scene-test`
+  (`tests/tst_DecorationScene.qml`), `panel-decoration-test`
+  (`tests/tst_PanelDecoration2D.qml`), `PanelWindowCapabilityTest`'s
+  `decorationSettingsFollowTheDecoration`, `decorationSeatTakesAnIcon`
+  and `studioDecorationPictures`, `ThemePackageTest`'s
+  `builtInDecorationsPassThePackageChecks` and
+  `contourMistakesAreRefused`, the truth matrix's `panelDecoration` row.
+  The icon preset matrix counts the 25 settings an icon preset saves
+  (with `iconTileForm`).
+<!-- LIST_PIECE_8_END -->
+
 <!-- LIST_PIECE_7_BEGIN -->
 ## The owner's list, piece 7: real 3D icons (Phase 4) — 2026-10-19
 

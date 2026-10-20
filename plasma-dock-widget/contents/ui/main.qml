@@ -605,6 +605,12 @@ PlasmoidItem {
         });
     }
 
+    // The icon sitting in the panel's decoration's launcher seat.
+    function setDecorationSeat(appId) {
+        if (dockService.registered)
+            callDock("setPanelDecorationSeat", [panelId, String(appId || "")], refresh);
+    }
+
     function reorderEntry(appId, beforeAppId) {
         if (!dockService.registered || plasmaEditMode || !configuration.acceptDrops
                 || appId === beforeAppId)
@@ -1182,10 +1188,11 @@ PlasmoidItem {
                 Math.max(panelScene.height,
                          Number(panelScene.effectBounds.height || 0))
 
+            // An edge panel is as long again as its decoration's ends reach.
             implicitWidth: root.freeSurface
-                ? sceneEffectWidth : panelScene.width
+                ? sceneEffectWidth : panelScene.width + Number(panelScene.decorationAlongRoom.width || 0)
             implicitHeight: root.freeSurface
-                ? sceneEffectHeight : panelScene.height
+                ? sceneEffectHeight : panelScene.height + Number(panelScene.decorationAlongRoom.height || 0)
             Layout.minimumWidth: implicitWidth
             Layout.minimumHeight: implicitHeight
 
@@ -1327,7 +1334,41 @@ PlasmoidItem {
                         console.debug(rendererLog, "ArchDockRenderer " + rendererObservation);
                 }
 
+                // A decoration's launcher seat takes an icon dropped on it:
+                // one of the panel's own, or an application or a file from
+                // elsewhere, which the panel gains.
+                DropArea {
+                    id: seatDropArea
+                    readonly property var seat: panelScene.decorationSeat
+                    readonly property bool present: seat !== null && seat !== undefined && Number(seat.size) > 0
+                    visible: present
+                    enabled: present && Boolean(root.configuration.acceptDrops) && !root.plasmaEditMode
+                        && root.sceneInputEnabled
+                    x: present ? Number(seat.x) - Number(seat.size) * 0.65 : 0
+                    y: present ? Number(seat.y) - Number(seat.size) * 0.65 : 0
+                    width: present ? Number(seat.size) * 1.3 : 0
+                    height: width
+                    keys: ["application/x-archdock-app", "text/uri-list"]
+                    onDropped: drop => {
+                        drop.accepted = false;
+                        const source = drop.source;
+                        const appId = source && source.entry && source.entry.appId !== undefined
+                            ? String(source.entry.appId)
+                            : String(drop.getDataAsString("application/x-archdock-app") || "");
+                        if (appId.length > 0) {
+                            root.setDecorationSeat(appId);
+                            drop.acceptProposedAction();
+                        } else if (drop.hasUrls && drop.urls.length > 0 && dockService.registered) {
+                            root.callDock("seatPanelUrl", [root.panelId, String(drop.urls[0])], root.refresh);
+                            drop.acceptProposedAction();
+                        }
+                    }
+                }
+
                 anchors.centerIn: parent
+                // An edge panel's decoration may reach farther at one end.
+                anchors.horizontalCenterOffset: root.freeSurface ? 0 : Number(decorationAlongRoom.offsetX || 0)
+                anchors.verticalCenterOffset: root.freeSurface ? 0 : Number(decorationAlongRoom.offsetY || 0)
                 panelDefinition: root.scenePanelDefinition
                 runtimeState: root.sceneRuntimeState
                 orderedEntries: root.entries
@@ -1477,6 +1518,9 @@ PlasmoidItem {
             // representation, where `panelScene` is not in reach (it read as
             // undefined, and a free panel's stands stood as in a row).
             pedestalOnPath: parent.scenePedestalOnPath === true
+            seatAvailable: parent.sceneSeatAvailable === true
+            seated: parent.sceneSeated === true
+            setSeat: root.setDecorationSeat
             appearance: root.configuration.appearance
             showReflection: root.configuration.showReflections
             showIndicator: root.configuration.showIndicators

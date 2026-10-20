@@ -322,6 +322,8 @@ private slots:
     void freePanelAreasAreShared();
     void panelsHoldTheIconsTheirShapeHasRoomFor();
     void studioOffersTheMobiusStrip();
+    void decorationSettingsFollowTheDecoration();
+    void decorationSeatTakesAnIcon();
     void panelsNobodyNamedFollowTheirShape();
     void studioDraftsShowOnTheDesktopAtOnce();
     void studioChangesShowOnTheDesktopAtOnce();
@@ -344,6 +346,7 @@ private slots:
     void wholePanelRotationFieldsAreGatedByTheResolver();
     void studioMotionAndDirectionRows();
     void studioPagePictures();
+    void studioDecorationPictures();
     void studioIconAppearanceOptionsAreTransactional();
     void studioTileParametersAreTransactional();
     void studioFolderShapeRows();
@@ -555,6 +558,108 @@ void PanelWindowCapabilityTest::studioOffersTheMobiusStrip()
     QCOMPARE(registry->panelDefinition(panel)->layout.pathType, QStringLiteral("mobius"));
     const QVariantList edge = backend.panelSettingsEditorSnapshot("bottom", "studio").value("panelFields").toList();
     QVERIFY(labelOf(fieldByKey(edge, "folderLayout"), "mobius").isEmpty());
+}
+
+// A flat panel can wear a decoration: its picker is offered, its motion and
+// colours once one is worn, its speed while it animates; and then the flat
+// look's own settings are not, the decoration being drawn in their place.
+void PanelWindowCapabilityTest::decorationSettingsFollowTheDecoration()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    const auto shown = [&](const QString &key) {
+        const QVariantMap field = fieldByKey(backend.panelSettingsEditorSnapshot(panel, "studio")
+            .value("panelFields").toList(), key);
+        return !field.isEmpty() && !field.value("inactive").toBool();
+    };
+    const auto apply = [&](const QVariantMap &values) {
+        return backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision, values)
+            .value("success").toBool();
+    };
+    const QStringList motion{QStringLiteral("panelDecorationAnimation"), QStringLiteral("panelDecorationSpeed")};
+    const QStringList colours{QStringLiteral("panelDecorationLight"), QStringLiteral("panelDecorationLightFinish"),
+                              QStringLiteral("panelDecorationMain"), QStringLiteral("panelDecorationFinish"),
+                              QStringLiteral("panelDecorationPalette"), QStringLiteral("panelDecorationMetal"),
+                              QStringLiteral("panelDecorationMaterial"),
+                              QStringLiteral("panelDecorationHue"), QStringLiteral("panelDecorationStrength"),
+                              QStringLiteral("panelDecorationBrightness")};
+    QVERIFY(shown("panelDecoration"));
+    QVERIFY(shown("appearance"));
+    for (const QString &key : motion + colours)
+        QVERIFY2(!shown(key), qPrintable(key));
+
+    QVERIFY(apply({{"panelDecoration", "starship-red-core"}}));
+    QCOMPARE(registry->panelDefinition(panel)->surface.parameters3D.value("panelDecoration").toString(),
+             QStringLiteral("starship-red-core"));
+    QCOMPARE(registry->panelDefinition(panel)->toLegacyMap().value("panelDecoration").toString(),
+             QStringLiteral("starship-red-core"));
+    for (const QString &key : motion + colours)
+        QVERIFY2(shown(key), qPrintable(key));
+    for (const QString &key : {QStringLiteral("appearance"), QStringLiteral("color"), QStringLiteral("panelGlow"),
+                               QStringLiteral("panelPicture"), QStringLiteral("lookMotionSpeed"),
+                               QStringLiteral("glowIntensity")})
+        QVERIFY2(!shown(key), qPrintable(key));
+
+    // Its colours are kept as chosen; a palette is its colours in order.
+    QVERIFY(apply({{"panelDecorationLight", "#33CC66"}, {"panelDecorationPalette", "#ff0000, #00ff00,#0000ff"},
+                   {"panelDecorationMetal", "rose-gold"}}));
+    const QVariantMap record = registry->panelDefinition(panel)->toLegacyMap();
+    QCOMPARE(record.value("panelDecorationLight").toString().toLower(), QStringLiteral("#33cc66"));
+    QCOMPARE(record.value("panelDecorationPalette").toString(), QStringLiteral("#ff0000, #00ff00,#0000ff"));
+    QCOMPARE(record.value("panelDecorationMetal").toString(), QStringLiteral("rose-gold"));
+    // A metal it does not offer is never kept.
+    apply({{"panelDecorationMetal", "plutonium"}});
+    const QStringList metals = fieldByKey(backend.panelSettingsEditorSnapshot(panel, "studio").value("panelFields").toList(),
+                                          "panelDecorationMetal").value("choices").toStringList();
+    QVERIFY(metals.contains(QStringLiteral("rose-gold")));
+    QVERIFY(metals.contains(registry->panelDefinition(panel)->toLegacyMap().value("panelDecorationMetal").toString()));
+
+    // Still, it has no speed to set.
+    QVERIFY(apply({{"panelDecorationAnimation", false}}));
+    QVERIFY(!shown("panelDecorationSpeed"));
+    QVERIFY(shown("panelDecorationAnimation"));
+
+    // Taken off, the flat look is back with its settings.
+    QVERIFY(apply({{"panelDecoration", ""}}));
+    QVERIFY(shown("appearance"));
+    for (const QString &key : motion + colours)
+        QVERIFY2(!shown(key), qPrintable(key));
+}
+
+// A decoration's launcher seat takes an icon: dropped on it, an item the
+// panel did not have is added and seated; freed, the seat lets it go back to
+// the row, still on the panel.
+void PanelWindowCapabilityTest::decorationSeatTakesAnIcon()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"type", "launcher"}, {"panelDecoration", "raptor-hull"}}).value("success").toBool());
+    QTemporaryDir files;
+    QVERIFY(files.isValid());
+    QFile note(files.filePath("note.txt"));
+    QVERIFY(note.open(QIODevice::WriteOnly));
+    note.write("seat");
+    note.close();
+    const QString url = QUrl::fromLocalFile(note.fileName()).toString();
+    const QString id = ArchDock::PanelContent::urlEntryId(url);
+    QVERIFY(backend.seatPanelUrl(panel, url));
+    QCOMPARE(registry->panelDefinition(panel)->toLegacyMap().value("panelDecorationSeat").toString(), id);
+    QVERIFY(backend.panelEntryOrder(panel).contains(id));
+    // Seated again, it is not added twice.
+    QVERIFY(backend.seatPanelUrl(panel, url));
+    QCOMPARE(backend.panelEntryOrder(panel).count(id), 1);
+    QVERIFY(backend.setPanelDecorationSeat(panel, QString()));
+    QCOMPARE(registry->panelDefinition(panel)->toLegacyMap().value("panelDecorationSeat").toString(), QString());
+    QVERIFY(backend.panelEntryOrder(panel).contains(id));
 }
 
 // A panel nobody named goes by what it is: given another shape it takes
@@ -5065,6 +5170,68 @@ void PanelWindowCapabilityTest::wholePanelRotationFieldsAreGatedByTheResolver()
     set({{QStringLiteral("panelMotionTarget"), QStringLiteral("sideways")}});
     QCOMPARE(window.panelRendererConfiguration(panelId).value(QStringLiteral("panelMotionTarget")).toString(),
              QStringLiteral("items"));
+}
+
+// Not a check: pictures of Appearance's Panel decorations section with a
+// decoration worn - the tree open at it, and only the settings it has - for
+// design reviews, saved only when ARCHDOCK_STUDIO_SNAPSHOT_DIR names a folder.
+void PanelWindowCapabilityTest::studioDecorationPictures()
+{
+    const QString folder = qEnvironmentVariable("ARCHDOCK_STUDIO_SNAPSHOT_DIR");
+    if (folder.isEmpty())
+        QSKIP("Studio pictures only on request");
+    QVERIFY(QDir().mkpath(folder));
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"type", "launcher"}, {"layout", "horizontal"}}).value("success").toBool());
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    for (const char *decoration : {"starship-red-core", "carina-nebula", "crimson-gold-banner"}) {
+        QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+            {{"panelDecoration", QString::fromLatin1(decoration)}}).value("success").toBool());
+        std::unique_ptr<QObject> studio(component.createWithInitialProperties({
+            {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 2}}));
+        auto *window = qobject_cast<QQuickWindow *>(studio.get());
+        QVERIFY(window);
+        window->resize(1100, 1500);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QTest::qWait(1500);
+        QQuickItem *form = visibleItem(window, "studio-page-form");
+        QQuickItem *tree = visibleItem(window, "studio-tree-panelDecoration");
+        QVERIFY(form && tree);
+        QVERIFY(QMetaObject::invokeMethod(form, "scrollTo", Q_ARG(QVariant, QVariant::fromValue<QObject *>(tree))));
+        // The open subgroup's thumbnails are lit off the window's thread.
+        QTest::qWait(4000);
+        // The tree is open at the decoration worn.
+        const QString state = QString::fromUtf8(QJsonDocument::fromVariant(QVariantList{
+            tree->property("openGroups").value<QJSValue>().toVariant(),
+            tree->property("openSubgroups").value<QJSValue>().toVariant(),
+            tree->property("current"), tree->property("opened")}).toJson(QJsonDocument::Compact));
+        QVERIFY2(visibleItem(window, QStringLiteral("studio-tree-item-") + QLatin1String(decoration)), qPrintable(state));
+        if (QLatin1String(decoration) == QLatin1String("starship-red-core")) {
+            // The materials its body can be made of, a subgroup open.
+            QQuickItem *group = visibleItem(window, "studio-tree-material-group-Stones");
+            QVERIFY(group);
+            QVERIFY(QMetaObject::invokeMethod(group, "clicked"));
+            QTest::qWait(300);
+            QQuickItem *subgroup = visibleItem(window, "studio-tree-material-subgroup-Marble and Obsidian");
+            QVERIFY(subgroup);
+            QVERIFY(QMetaObject::invokeMethod(subgroup, "clicked"));
+            QTest::qWait(300);
+            QVERIFY(QMetaObject::invokeMethod(form, "scrollTo", Q_ARG(QVariant, QVariant::fromValue<QObject *>(group))));
+            QTest::qWait(4000);
+            QVERIFY(window->grabWindow().save(folder + "/decorations-materials.png"));
+        }
+        QVERIFY(window->grabWindow().save(folder + "/decorations-" + QLatin1String(decoration) + ".png"));
+        window->close();
+    }
 }
 
 // ADREP-TASK-002: Animations lists free-panel motion in the order it is

@@ -8,6 +8,8 @@ AnimationProfileRuntime 1.0 AnimationProfileRuntime.js
 MotionChannels 1.0 MotionChannels.js
 PresentationStates 1.0 PresentationStates.js
 ThemeStateSelection 1.0 ThemeStateSelection.js
+DecorationCatalogue 1.0 DecorationCatalogue.js
+DecorationScene 1.0 DecorationScene.js
 IconScene 1.0 IconScene.qml
 FolderExpansion 1.0 FolderExpansion.qml
 FolderTrack 1.0 FolderTrack.qml
@@ -26,9 +28,11 @@ PanelSegment 1.0 PanelSegment.qml
 PanelSurfaceLoader 1.0 PanelSurfaceLoader.qml
 RunningIndicator 1.0 RunningIndicator.qml
 LivePanelPreview 1.0 previews/LivePanelPreview.qml
+DecorationThumbnail 1.0 previews/DecorationThumbnail.qml
 WindowPreviewPopup 1.0 previews/WindowPreviewPopup.qml
 AlphaHitMask 1.0 inputs/AlphaHitMask.qml
 PanelProcedural2D 1.0 renderers/PanelProcedural2D.qml
+PanelDecoration2D 1.0 renderers/PanelDecoration2D.qml
 PanelSkin2D 1.0 renderers/PanelSkin2D.qml
 PanelSkinLayer2D 1.0 renderers/PanelSkinLayer2D.qml
 PanelBaked25D 1.0 renderers/PanelBaked25D.qml

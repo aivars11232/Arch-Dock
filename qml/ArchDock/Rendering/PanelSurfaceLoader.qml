@@ -4,8 +4,9 @@ import "ThemeStateSelection.js" as ThemeStates
 
 // Chooses and loads the renderer for a panel's surface: the theme's skin
 // (skinned 2D), its baked 2.5D platform or its 3D scene when they are
-// requested and can be drawn, and the procedural 2D surface otherwise, and
-// reports which one is in use and why.
+// requested and can be drawn, and the procedural 2D surface otherwise - or,
+// on a flat panel with a panel decoration chosen, the decoration in its
+// place - and reports which one is in use and why.
 Item {
     id: root
 
@@ -66,6 +67,16 @@ Item {
     // Desktop 3D editing: handles on the mesh scene, and the edits it reports.
     property bool sceneEditMode: false
     signal sceneTransformEdited(var values)
+    // A panel decoration (DecorationCatalogue.js) remaking the flat panel's
+    // outline: its id, the viewer's colours, whether it animates and how
+    // fast, the screen edge an edge panel stands on (empty for a free one)
+    // and the icons' centres at rest.
+    property string decoration: ""
+    property var decorationChoices: ({})
+    property bool decorationAnimated: true
+    property real decorationSpeed: 1
+    property string decorationEdge: ""
+    property var iconCentres: []
 
     readonly property string normalizedRequestedTier:
         String(requestedRendererTier || "procedural2d").toLowerCase()
@@ -157,9 +168,23 @@ Item {
     }
     readonly property string effectiveRendererTier:
         true3DReady ? "true3d" : bakedReady ? "baked2.5d" : skinnedReady ? "skinned2d" : "procedural2d"
+    // A decoration takes the flat surface's place; a skin, a baked platform
+    // or a 3D scene keeps its own.
+    readonly property bool decorationActive: decoration.length > 0 && !true3DReady && !bakedReady
+        && !skinnedReady && Boolean(DecorationCatalogue.decoration(decoration))
+    readonly property var decorationItem: decorationRenderer.item
+    readonly property bool decorationReady: decorationActive && decorationItem
+        && Boolean(decorationItem.rendererReady)
+    // How far the decoration reaches out of the panel's box, and where its
+    // launcher seat is.
+    readonly property var decorationReach: decorationActive && decorationItem
+        ? decorationItem.reach : ({ left: 0, top: 0, right: 0, bottom: 0 })
+    readonly property var decorationLauncher: decorationActive && decorationItem
+        ? decorationItem.launcherSeat : null
     readonly property var surfaceItem:
         true3DReady ? true3DItem : bakedReady ? bakedItem
-        : skinnedReady ? skinnedItem : proceduralRenderer.item
+        : skinnedReady ? skinnedItem
+        : decorationActive && decorationItem ? decorationItem : proceduralRenderer.item
     readonly property var inputMaskItem:
         bakedReady ? bakedItem.inputMaskItem
         : skinnedReady ? skinnedItem.inputMaskItem : null
@@ -298,7 +323,7 @@ Item {
 
         anchors.fill: parent
         sourceComponent: proceduralComponent
-        visible: !root.skinnedReady && !root.bakedReady && !root.true3DReady
+        visible: !root.skinnedReady && !root.bakedReady && !root.true3DReady && !root.decorationActive
         layer.enabled: root.flatGlowActive && visible
         layer.effect: GlowEffect {
             glowColor: root.panelGlowColour
@@ -320,6 +345,15 @@ Item {
             intensity: root.panelGlow
             reach: root.panelGlowReach
         }
+    }
+
+    Loader {
+        id: decorationRenderer
+        objectName: "panel-decoration-renderer"
+
+        anchors.fill: parent
+        active: root.decorationActive
+        sourceComponent: decorationComponent
     }
 
     Loader {
@@ -369,6 +403,28 @@ Item {
             panelOpacity: root.panelOpacity
             motionTracks: root.motionTracks
             sparkleIntensity: root.sparkleIntensity
+            reducedMotion: root.reducedMotion
+            sceneConcealed: root.sceneConcealed
+        }
+    }
+
+    Component {
+        id: decorationComponent
+
+        PanelDecoration2D {
+            decoration: root.decoration
+            choices: root.decorationChoices
+            animated: root.decorationAnimated
+            motionSpeed: root.decorationSpeed
+            edge: root.decorationEdge
+            iconCentres: root.iconCentres
+            layout: root.layout
+            geometry: root.geometry
+            layoutAngle: root.layoutAngle
+            restingAngle: root.restingAngle
+            polygonSides: root.polygonSides
+            panelOpacity: root.panelOpacity
+            motionTracks: root.motionTracks
             reducedMotion: root.reducedMotion
             sceneConcealed: root.sceneConcealed
         }

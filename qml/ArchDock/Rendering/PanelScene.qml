@@ -104,6 +104,13 @@ Item {
     // of its own, so the edge is what tells motion which way is "out".
     readonly property string placementEdge: String(definitionValue(
         "placement", "edge", "edge", "bottom"))
+    // The screen edge an edge panel really stands on, where the host knows
+    // it (the dock widget lays every edge panel's row out as a bottom or a
+    // left one).
+    readonly property string screenEdge: {
+        const edge = String((panelDefinition || ({})).screenEdge || "")
+        return ["top", "bottom", "left", "right"].indexOf(edge) >= 0 ? edge : placementEdge
+    }
     readonly property real iconSize: Number(iconValue("size", "iconSize", 52))
     readonly property real iconSpacing: Number(iconValue("spacing", "spacing", 8))
     readonly property string iconShape: String(iconValue(
@@ -128,6 +135,84 @@ Item {
     readonly property real pictureSmoothing: pictureNumber("panelPictureSmoothing", 0)
     readonly property string customColor: String(definitionValue(
         "surface", "color", "color", ""))
+    // The panel decoration remaking a flat panel's outline (Appearance >
+    // Panel decorations): its id, the viewer's colours for it, whether it
+    // animates and how fast.
+    readonly property string panelDecoration: String((panelDefinition || ({})).panelDecoration || "")
+    readonly property var decorationChoices: {
+        const definition = panelDefinition || ({})
+        const choices = ({})
+        // Each as designed until chosen: no colour, a solid finish, the
+        // designed metal, no change to a picture.
+        for (const [key, choice, designed] of [["panelDecorationLight", "light", ""],
+                                               ["panelDecorationLightFinish", "lightFinish", "solid"],
+                                               ["panelDecorationMain", "main", ""],
+                                               ["panelDecorationFinish", "mainFinish", "solid"],
+                                               ["panelDecorationMetal", "metal", "designed"],
+                                               ["panelDecorationMaterial", "material", ""]]) {
+            const value = definition[key]
+            if (typeof value === "string" && value.length && value !== designed) choices[choice] = value
+        }
+        const palette = definition.panelDecorationPalette
+        const colours = Array.isArray(palette) ? palette
+            : typeof palette === "string" && palette.length ? palette.split(",") : []
+        if (colours.length) choices.palette = colours.map(function(c) { return String(c).trim() })
+        for (const [key, choice, designed] of [["panelDecorationHue", "hue", 0], ["panelDecorationStrength", "saturation", 1],
+                                               ["panelDecorationBrightness", "brightness", 1]]) {
+            const value = Number(definition[key])
+            if (definition[key] !== undefined && definition[key] !== null && Number.isFinite(value)
+                    && Math.abs(value - designed) > 1e-6)
+                choices[choice] = value
+        }
+        return choices
+    }
+    readonly property bool decorationAnimated: (panelDefinition || ({})).panelDecorationAnimation !== false
+    // A decoration's launcher seat (a raptor's head): the entry put there
+    // leaves the row and sits in the seat, at the seat's size, where the lit
+    // decoration says the seat is.
+    readonly property bool decorationSeatAvailable: {
+        const decoration = panelDecoration.length ? DecorationCatalogue.decoration(panelDecoration) : null
+        return Boolean(decoration && decoration.contour && decoration.contour.launcher) && surfaceLoader.decorationActive
+    }
+    readonly property string seatedEntryId: decorationSeatAvailable
+        ? String((panelDefinition || ({})).panelDecorationSeat || "") : ""
+    readonly property int seatedIndex: {
+        if (!seatedEntryId.length) return -1
+        const list = orderedEntries || []
+        for (let index = 0; index < list.length; ++index)
+            if (String(list[index].appId || list[index].id || "") === seatedEntryId) return index
+        return -1
+    }
+    // The entries the row lays out.
+    readonly property int rowEntryCount: Math.max(0, entryCount - (seatedIndex >= 0 ? 1 : 0))
+    // Where the seat is, in the scene's pixels ({ x, y, size }), once the
+    // decoration is lit.
+    readonly property var decorationSeat: {
+        const seat = decorationSeatAvailable ? surfaceLoader.decorationLauncher : null
+        return seat && Number(seat.size) > 0 ? seat : null
+    }
+    function seatedEntryGeometry() {
+        const seat = decorationSeat
+        const size = Number(layoutGeometry.iconSize || 52)
+        const shown = seat !== null && seat !== undefined && Number(seat.size) > 0
+        const cx = shown ? Number(seat.x) : Number(layoutGeometry.width || 0) / 2
+        const cy = shown ? Number(seat.y) : Number(layoutGeometry.height || 0) / 2
+        const seatSize = shown ? Number(seat.size) : size
+        const panelBounds = { x: 0, y: 0, width: Number(layoutGeometry.width || 0), height: Number(layoutGeometry.height || 0) }
+        const entryBounds = { x: cx - seatSize / 2, y: cy - seatSize / 2, width: seatSize, height: seatSize }
+        return {
+            position: { x: cx - size / 2, y: cy - size / 2 }, x: cx - size / 2, y: cy - size / 2,
+            rotation: 0, tangentAngle: 0, outwardNormal: { x: 0, y: -1, angle: -90 },
+            depthOrder: cy + seatSize, scaleFactor: seatSize / size, pathProgress: 0.5, surfaceProgress: 0.5,
+            bounds: panelBounds, panelBounds: panelBounds, entryBounds: entryBounds, safeInputRegion: panelBounds,
+            onTrack: true, trackVisibility: shown ? 1 : 0, position3D: null, orientation3D: null,
+            seated: true, effectBounds: effectBounds, effectAllowance: entryEffectAllowance(entryBounds)
+        }
+    }
+    readonly property real decorationSpeed: {
+        const value = Number((panelDefinition || ({})).panelDecorationSpeed)
+        return Number.isFinite(value) && value > 0 ? Math.max(0.1, Math.min(3, value)) : 1
+    }
     readonly property real panelOpacity: Number(definitionValue(
         "surface", "opacity", "opacity", 0.9))
     readonly property real sparkleIntensity: Number(panelDefinition.sparkleIntensity !== undefined
@@ -564,7 +649,7 @@ Item {
     // the flag changes first.
     readonly property var configuredLayoutGeometry: segmentLayout
         ? segmentLayout.geometry : LayoutEngine.metrics(
-        layoutPath, entryCount, iconSize, iconSpacing, layoutScale,
+        layoutPath, rowEntryCount, iconSize, iconSpacing, layoutScale,
         layoutRadius, layoutRows, layoutPadding, verticalLayout,
         layoutAngle, polygonSides)
     // While rotation is enabled the scene keeps the square every angle fits
@@ -1060,10 +1145,11 @@ Item {
                 height: layoutGeometry.height,
                 contentX: 0,
                 contentY: 0,
-                effectLeft: effectMargin,
-                effectTop: effectMargin + pedestalHeadroom.top,
-                effectRight: effectMargin,
-                effectBottom: effectMargin + pedestalHeadroom.bottom,
+                // A decoration reaches out as far as it is drawn.
+                effectLeft: Math.max(effectMargin, surfaceLoader.decorationReach.left),
+                effectTop: Math.max(effectMargin, surfaceLoader.decorationReach.top) + pedestalHeadroom.top,
+                effectRight: Math.max(effectMargin, surfaceLoader.decorationReach.right),
+                effectBottom: Math.max(effectMargin, surfaceLoader.decorationReach.bottom) + pedestalHeadroom.bottom,
                 handleExtent: 0
             }
         }
@@ -1106,6 +1192,38 @@ Item {
         }
     }
 
+    // How much longer an edge panel's widget is made for its decoration's
+    // ends (a hilt, a broom's tail, a band running on past its end icons),
+    // and how far the scene stands off the widget's centre so each end has
+    // its own room: the ends lie along the panel, where a thin panel has
+    // room; across it the decoration fits the panel's thickness.
+    readonly property var decorationAlongRoom: {
+        const reach = surfaceLoader.decorationReach
+        if (freeHost || !surfaceLoader.decorationActive) return ({ width: 0, height: 0, offsetX: 0, offsetY: 0 })
+        return verticalLayout
+            ? ({ width: 0, height: reach.top + reach.bottom, offsetX: 0, offsetY: (reach.top - reach.bottom) / 2 })
+            : ({ width: reach.left + reach.right, height: 0, offsetX: (reach.left - reach.right) / 2, offsetY: 0 })
+    }
+
+    // The icons' centres at rest, for a decoration to stand round: where
+    // they stand before any travel along the path, and on a turning panel
+    // turned back to the resting angle the decoration is drawn at.
+    readonly property var decorationIconCentres: {
+        if (!panelDecoration.length) return []
+        const turn = layoutGeometry && layoutGeometry.rotationEnvelope === true ? sceneRotationAngle : 0
+        const cx = Number(layoutGeometry.width || 0) / 2, cy = Number(layoutGeometry.height || 0) / 2
+        const radians = -turn * Math.PI / 180, cos = Math.cos(radians), sin = Math.sin(radians)
+        const centres = []
+        for (let index = 0; index < entryCount; ++index) {
+            if (index === seatedIndex) continue
+            const rect = baseEntryGeometryAt(index, 0).entryBounds
+            if (!rect) continue
+            const x = rect.x + rect.width / 2 - cx, y = rect.y + rect.height / 2 - cy
+            centres.push({ x: Math.round((cx + x * cos - y * sin) * 2) / 2, y: Math.round((cy + x * sin + y * cos) * 2) / 2 })
+        }
+        return centres
+    }
+
     function buildRendererGeometry() {
         const result = ({})
         const keys = Object.keys(layoutGeometry || ({}))
@@ -1135,6 +1253,8 @@ Item {
     // default it is where they are now.
     function baseEntryGeometryAt(index, travel) {
         const phase = travel === undefined ? entryTravel : Number(travel)
+        if (index === seatedIndex)
+            return seatedEntryGeometry()
         if (segmentLayout && segmentLayout.entries[index]) {
             const result = Object.assign({}, segmentLayout.entries[index])
             result.effectBounds = effectBounds
@@ -1156,8 +1276,10 @@ Item {
             output.effectAllowance = entryEffectAllowance(output.entryBounds)
             return output
         }
+        // A seated entry leaves its place in the row to the next.
+        const rowIndex = seatedIndex >= 0 && index > seatedIndex ? index - 1 : index
         const geometry = LayoutEngine.entryGeometry(
-            layoutPath, index, entryCount, travel === undefined
+            layoutPath, rowIndex, rowEntryCount, travel === undefined
                 ? entryLayoutGeometry : Object.assign({}, trackGeometry, { travel: phase }),
             surfaceLoader.true3DReady ? 0 : effectiveLayoutAngle,
             polygonSides, pathOrientation, geometryCompatibilityProfile,
@@ -1563,6 +1685,12 @@ Item {
         lookMotionSpeed: Math.max(0.1, Math.min(3, Number(root.panelDefinition.lookMotionSpeed || 1)))
         lookPalette: String(root.panelDefinition.panelLookColour || "")
         reducedMotion: root.reducedMotion
+        decoration: root.panelDecoration
+        decorationChoices: root.decorationChoices
+        decorationAnimated: root.decorationAnimated
+        decorationSpeed: root.decorationSpeed
+        decorationEdge: root.freeHost ? "" : root.screenEdge
+        iconCentres: root.decorationIconCentres
         geometry: root.rendererGeometry
         layoutAngle: root.effectiveLayoutAngle
         restingAngle: root.layoutAngle
@@ -1861,6 +1989,10 @@ Item {
                 // Whether a stand stands on the path at its icon's place (a
                 // free panel's) or with its icon in the row (an edge panel's).
                 readonly property bool scenePedestalOnPath: root.pedestalOnPath
+                // Whether the decoration has a launcher seat, and whether this
+                // entry sits in it.
+                readonly property bool sceneSeatAvailable: root.decorationSeatAvailable
+                readonly property bool sceneSeated: index === root.seatedIndex
                 readonly property string sceneMotionContextKey: root.motionContextKey
                 readonly property var sceneGlyphMotion: entryItem.glyphMotion
                 readonly property var sceneTileMotion: entryItem.tileMotion
@@ -1888,6 +2020,7 @@ Item {
             logicalSize: Number(parent.sceneGeometry.iconSize || width)
             tileShape: root.iconShape
             appearance: root.appearance
+            panelDecorated: surfaceLoader.decorationActive
             vertical: root.verticalLayout
             hovered: Number(root.runtimeState
                             ? root.runtimeState.hoveredEntry : -1)

@@ -19,6 +19,8 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <functional>
+#include <optional>
 
 namespace
 {
@@ -986,10 +988,12 @@ private:
         return object.toVariantMap();
     }
 
-    // A panel decoration's contour (ContourFrames.js). Every member is checked
-    // for its type and its range and nothing unknown is let through, so the
-    // renderers can take the section as it is. Lengths are in half-widths of
-    // the panel's band.
+    // A panel decoration's contour (ContourFrames.js), with what a built-in
+    // decoration carries beside it (DecorationCatalogue.js): its body's
+    // material, its default animations, a paper's folds and the room its
+    // ends need. Every member is checked for its type and its range and
+    // nothing unknown is let through, so the renderers can take the section
+    // as it is. Lengths are in half-widths of the panel's band.
     void parseContour(const QJsonObject &manifest, ThemeDefinition *definition)
     {
         if (!manifest.contains(QStringLiteral("contour")))
@@ -1002,8 +1006,14 @@ private:
         }
         const QJsonObject contour = manifest.value(QStringLiteral("contour")).toObject();
         rejectUnknown(contour, {QStringLiteral("outer"), QStringLiteral("inner"), QStringLiteral("ends"),
-                                QStringLiteral("segments"), QStringLiteral("lines"), QStringLiteral("colours"),
-                                QStringLiteral("pattern")}, pointer);
+                                QStringLiteral("segments"), QStringLiteral("sway"), QStringLiteral("body"),
+                                QStringLiteral("layers"), QStringLiteral("parts"), QStringLiteral("lines"),
+                                QStringLiteral("launcher"), QStringLiteral("colours"), QStringLiteral("pattern"),
+                                QStringLiteral("material"), QStringLiteral("animation"), QStringLiteral("folds"),
+                                QStringLiteral("room")}, pointer);
+        static const QRegularExpression hex(QStringLiteral("^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"));
+        static const QStringList colourNames{QStringLiteral("body"), QStringLiteral("edge"), QStringLiteral("light"),
+                                             QStringLiteral("accent")};
         const auto bounded = [this](const QJsonObject &object, const QString &key, const QString &at,
                                     qreal minimum, qreal maximum)
         {
@@ -1028,12 +1038,13 @@ private:
             if (object.contains(key) && !object.value(key).isBool())
                 add(QStringLiteral("invalid-type"), pointerChild(at, key), QStringLiteral("value must be a boolean"));
         };
-        const auto colour = [this](const QJsonObject &object, const QString &key, const QString &at)
+        // A colour, or (`named`) one of the decoration's own by its name.
+        const auto colour = [this](const QJsonObject &object, const QString &key, const QString &at, bool named = false)
         {
             if (!object.contains(key))
                 return;
-            static const QRegularExpression hex(QStringLiteral("^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"));
-            if (!hex.match(stringValue(object, key, at, false)).hasMatch())
+            const QString value = stringValue(object, key, at, false);
+            if (!hex.match(value).hasMatch() && !(named && colourNames.contains(value)))
                 add(QStringLiteral("invalid-value"), pointerChild(at, key),
                     QStringLiteral("colour must be #rrggbb or #aarrggbb"));
         };
@@ -1068,53 +1079,136 @@ private:
             }
             return array;
         };
+        // Numbers in a list, each within its range (`count` of them exactly,
+        // or up to `maximum`).
+        const auto numbers = [&](const QJsonObject &object, const QString &key, const QString &at, qsizetype count,
+                                 qsizetype maximum, qreal minimum, qreal most)
+        {
+            if (!object.contains(key))
+                return;
+            const QJsonArray list = arrayAt(object, key, at, maximum);
+            if (count > 0 && object.value(key).isArray() && list.size() != count)
+            {
+                add(QStringLiteral("invalid-value"), pointerChild(at, key), QStringLiteral("value has the wrong number of members"));
+                return;
+            }
+            for (const QJsonValue &value : list)
+                if (!isFiniteNumber(value) || value.toDouble() < minimum || value.toDouble() > most)
+                {
+                    add(QStringLiteral("invalid-bounds"), pointerChild(at, key),
+                        QStringLiteral("contour value is outside its supported range"));
+                    return;
+                }
+        };
+        const auto colours = [&](const QJsonObject &object, const QString &key, const QString &at, qsizetype maximum)
+        {
+            const QJsonArray list = arrayAt(object, key, at, maximum);
+            for (qsizetype index = 0; index < list.size(); ++index)
+                if (!list[index].isString() || !(hex.match(list[index].toString()).hasMatch()
+                                                 || colourNames.contains(list[index].toString())))
+                    add(QStringLiteral("invalid-value"), pointerChild(at, key) + QLatin1Char('/') + QString::number(index),
+                        QStringLiteral("colour must be #rrggbb or #aarrggbb"));
+        };
+        // A material: one of the named materials, with its tint, relief and
+        // scale, or (where `body` is allowed) true for the body's own.
+        const auto material = [&](const QJsonObject &object, const QString &key, const QString &at, bool body)
+        {
+            if (!object.contains(key))
+                return;
+            const QJsonValue value = object.value(key);
+            if (value.isBool() && body)
+                return;
+            const auto spec = objectAt(object, key, at);
+            if (!spec)
+                return;
+            const QString here = pointerChild(at, key);
+            rejectUnknown(*spec, {QStringLiteral("id"), QStringLiteral("tint"), QStringLiteral("relief"),
+                                  QStringLiteral("scale"), QStringLiteral("fit"), QStringLiteral("body")}, here);
+            static const QRegularExpression name(QStringLiteral("^[a-z0-9][a-z0-9-]{0,47}$"));
+            if (spec->contains(QStringLiteral("id")) && !name.match(stringValue(*spec, QStringLiteral("id"), here, false)).hasMatch())
+                add(QStringLiteral("invalid-value"), pointerChild(here, QStringLiteral("id")), QStringLiteral("material id is not a name"));
+            colour(*spec, QStringLiteral("tint"), here);
+            bounded(*spec, QStringLiteral("relief"), here, 0, 1.5);
+            bounded(*spec, QStringLiteral("scale"), here, 0.1, 10);
+            boolean(*spec, QStringLiteral("fit"), here);
+            boolean(*spec, QStringLiteral("body"), here);
+        };
+        // A list of [x, y] points, each within `reach` of the origin.
+        const auto points = [&](const QJsonObject &object, const QString &key, const QString &at, qsizetype maximum, qreal reach)
+        {
+            const QJsonArray list = arrayAt(object, key, at, maximum);
+            for (const QJsonValue &value : list)
+            {
+                const QJsonArray pair = value.toArray();
+                if (!value.isArray() || pair.size() != 2 || !isFiniteNumber(pair[0]) || !isFiniteNumber(pair[1])
+                    || std::abs(pair[0].toDouble()) > reach || std::abs(pair[1].toDouble()) > reach)
+                {
+                    add(QStringLiteral("invalid-value"), pointerChild(at, key), QStringLiteral("points must be [x, y] pairs in range"));
+                    return;
+                }
+            }
+        };
+        // Each member of a list of objects, checked by `check`.
+        const auto each = [&](const QJsonObject &parent, const QString &key, const QString &at, qsizetype maximum,
+                              const std::function<void(const QJsonObject &, const QString &)> &check)
+        {
+            const QJsonArray list = arrayAt(parent, key, at, maximum);
+            for (qsizetype index = 0; index < list.size(); ++index)
+            {
+                const QString here = pointerChild(at, key) + QLatin1Char('/') + QString::number(index);
+                if (!list[index].isObject())
+                {
+                    add(QStringLiteral("invalid-type"), here, QStringLiteral("value must be an object"));
+                    continue;
+                }
+                check(list[index].toObject(), here);
+            }
+        };
+
         for (const QString side : {QStringLiteral("outer"), QStringLiteral("inner")})
         {
             const auto object = objectAt(contour, side, pointer);
             if (!object.has_value())
                 continue;
             const QString at = pointerChild(pointer, side);
-            rejectUnknown(*object, {QStringLiteral("base"), QStringLiteral("taper"), QStringLiteral("features")}, at);
+            rejectUnknown(*object, {QStringLiteral("base"), QStringLiteral("taper"), QStringLiteral("features"),
+                                    QStringLiteral("rough")}, at);
             bounded(*object, QStringLiteral("base"), at, 0.2, 3);
-            if (object->contains(QStringLiteral("taper")))
+            numbers(*object, QStringLiteral("taper"), at, 2, 2, 0.1, 3);
+            if (const auto rough = objectAt(*object, QStringLiteral("rough"), at))
             {
-                const QJsonValue taper = object->value(QStringLiteral("taper"));
-                const QJsonArray ends = taper.toArray();
-                if (!taper.isArray() || ends.size() != 2 || !isFiniteNumber(ends[0]) || !isFiniteNumber(ends[1])
-                    || ends[0].toDouble() < 0.1 || ends[0].toDouble() > 3 || ends[1].toDouble() < 0.1 || ends[1].toDouble() > 3)
-                    add(QStringLiteral("invalid-value"), pointerChild(at, QStringLiteral("taper")),
-                        QStringLiteral("taper must be two scales between 0.1 and 3"));
+                const QString here = pointerChild(at, QStringLiteral("rough"));
+                rejectUnknown(*rough, {QStringLiteral("amp"), QStringLiteral("scale"), QStringLiteral("seed")}, here);
+                bounded(*rough, QStringLiteral("amp"), here, 0, 1);
+                bounded(*rough, QStringLiteral("scale"), here, 0.2, 20);
+                bounded(*rough, QStringLiteral("seed"), here, -100000, 100000);
             }
-            const QJsonArray features = arrayAt(*object, QStringLiteral("features"), at, 8);
-            for (qsizetype index = 0; index < features.size(); ++index)
-            {
-                const QString featureAt = at + QStringLiteral("/features/") + QString::number(index);
-                if (!features[index].isObject())
-                {
-                    add(QStringLiteral("invalid-type"), featureAt, QStringLiteral("feature must be an object"));
-                    continue;
-                }
-                const QJsonObject feature = features[index].toObject();
+            each(*object, QStringLiteral("features"), at, 8, [&](const QJsonObject &feature, const QString &here) {
                 rejectUnknown(feature, {QStringLiteral("kind"), QStringLiteral("length"), QStringLiteral("depth"),
                                         QStringLiteral("chamfer"), QStringLiteral("period"), QStringLiteral("phase"),
-                                        QStringLiteral("anchor")}, featureAt);
-                oneOf(feature, QStringLiteral("kind"), featureAt,
-                      {QStringLiteral("step"), QStringLiteral("tooth"), QStringLiteral("arch"), QStringLiteral("wave")});
-                bounded(feature, QStringLiteral("length"), featureAt, 0.1, 40);
-                bounded(feature, QStringLiteral("depth"), featureAt, -0.9, 3);
-                bounded(feature, QStringLiteral("chamfer"), featureAt, 0, 10);
-                bounded(feature, QStringLiteral("period"), featureAt, 0.5, 80);
-                bounded(feature, QStringLiteral("phase"), featureAt, -1, 1);
-                oneOf(feature, QStringLiteral("anchor"), featureAt,
-                      {QStringLiteral("period"), QStringLiteral("icons"), QStringLiteral("between")});
-            }
+                                        QStringLiteral("anchor"), QStringLiteral("skew"), QStringLiteral("curve"),
+                                        QStringLiteral("vary"), QStringLiteral("at")}, here);
+                oneOf(feature, QStringLiteral("kind"), here, {QStringLiteral("step"), QStringLiteral("tooth"),
+                      QStringLiteral("arch"), QStringLiteral("wave"), QStringLiteral("round")});
+                bounded(feature, QStringLiteral("length"), here, 0.1, 40);
+                bounded(feature, QStringLiteral("depth"), here, -0.9, 3);
+                bounded(feature, QStringLiteral("chamfer"), here, 0, 10);
+                bounded(feature, QStringLiteral("period"), here, 0.1, 80);
+                bounded(feature, QStringLiteral("phase"), here, -1, 1);
+                bounded(feature, QStringLiteral("skew"), here, -0.95, 0.95);
+                bounded(feature, QStringLiteral("curve"), here, 0.25, 4);
+                bounded(feature, QStringLiteral("vary"), here, 0, 1);
+                numbers(feature, QStringLiteral("at"), here, 0, 16, 0, 1);
+                oneOf(feature, QStringLiteral("anchor"), here, {QStringLiteral("period"), QStringLiteral("icons"),
+                      QStringLiteral("between"), QStringLiteral("middle"), QStringLiteral("ends"), QStringLiteral("at")});
+            });
         }
         const QSet<QString> endMembers{QStringLiteral("kind"), QStringLiteral("size"), QStringLiteral("depth"),
                                        QStringLiteral("outer"), QStringLiteral("inner")};
         const auto checkEnd = [&](const QJsonObject &end, const QString &at)
         {
             oneOf(end, QStringLiteral("kind"), at, {QStringLiteral("square"), QStringLiteral("chamfer"),
-                  QStringLiteral("pill"), QStringLiteral("point"), QStringLiteral("block")});
+                  QStringLiteral("pill"), QStringLiteral("point"), QStringLiteral("block"), QStringLiteral("broken")});
             bounded(end, QStringLiteral("size"), at, 0, 20);
             bounded(end, QStringLiteral("depth"), at, 0, 4);
             boolean(end, QStringLiteral("outer"), at);
@@ -1141,69 +1235,281 @@ private:
             rejectUnknown(*segments, {QStringLiteral("kind"), QStringLiteral("gap"), QStringLiteral("colours")}, at);
             oneOf(*segments, QStringLiteral("kind"), at, {QStringLiteral("none"), QStringLiteral("icons")});
             bounded(*segments, QStringLiteral("gap"), at, 0, 4);
-            const QJsonArray colours = arrayAt(*segments, QStringLiteral("colours"), at, 12);
-            for (qsizetype index = 0; index < colours.size(); ++index)
-            {
-                static const QRegularExpression hex(QStringLiteral("^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"));
-                if (!colours[index].isString() || !hex.match(colours[index].toString()).hasMatch())
-                    add(QStringLiteral("invalid-value"), at + QStringLiteral("/colours/") + QString::number(index),
-                        QStringLiteral("colour must be #rrggbb or #aarrggbb"));
-            }
+            colours(*segments, QStringLiteral("colours"), at, 12);
         }
-        const QJsonArray lines = arrayAt(contour, QStringLiteral("lines"), pointer, 12);
-        for (qsizetype index = 0; index < lines.size(); ++index)
+        if (const auto sway = objectAt(contour, QStringLiteral("sway"), pointer))
         {
-            const QString at = pointer + QStringLiteral("/lines/") + QString::number(index);
-            if (!lines[index].isObject())
+            const QString at = pointerChild(pointer, QStringLiteral("sway"));
+            rejectUnknown(*sway, {QStringLiteral("amp"), QStringLiteral("period"), QStringLiteral("phase")}, at);
+            bounded(*sway, QStringLiteral("amp"), at, 0, 2);
+            bounded(*sway, QStringLiteral("period"), at, 0.5, 80);
+            bounded(*sway, QStringLiteral("phase"), at, -1, 1);
+        }
+        if (const auto body = objectAt(contour, QStringLiteral("body"), pointer))
+        {
+            const QString at = pointerChild(pointer, QStringLiteral("body"));
+            rejectUnknown(*body, {QStringLiteral("feather"), QStringLiteral("round"), QStringLiteral("fill"),
+                                  QStringLiteral("glow"), QStringLiteral("opacity"), QStringLiteral("bevel"),
+                                  QStringLiteral("coat"), QStringLiteral("gleam")}, at);
+            bounded(*body, QStringLiteral("feather"), at, 0, 1.5);
+            if (body->contains(QStringLiteral("round")) && !body->value(QStringLiteral("round")).isBool())
+                oneOf(*body, QStringLiteral("round"), at, {QStringLiteral("chrome")});
+            oneOf(*body, QStringLiteral("fill"), at, {QStringLiteral("material"), QStringLiteral("none")});
+            colour(*body, QStringLiteral("glow"), at);
+            bounded(*body, QStringLiteral("opacity"), at, 0, 1);
+            bounded(*body, QStringLiteral("bevel"), at, 0, 0.5);
+            bounded(*body, QStringLiteral("coat"), at, 0, 1);
+            bounded(*body, QStringLiteral("gleam"), at, 0.5, 3);
+        }
+        each(contour, QStringLiteral("layers"), pointer, 16, [&](const QJsonObject &layer, const QString &at) {
+            rejectUnknown(layer, {QStringLiteral("side"), QStringLiteral("inset"), QStringLiteral("width"),
+                                  QStringLiteral("offset"), QStringLiteral("fill"), QStringLiteral("material"),
+                                  QStringLiteral("glow"), QStringLiteral("opacity"), QStringLiteral("dash"),
+                                  QStringLiteral("avoid"), QStringLiteral("margin"), QStringLiteral("ink"),
+                                  QStringLiteral("recess"), QStringLiteral("window"), QStringLiteral("gloss"),
+                                  QStringLiteral("gleam"), QStringLiteral("free"), QStringLiteral("z"),
+                                  QStringLiteral("depth")}, at);
+            oneOf(layer, QStringLiteral("side"), at, {QStringLiteral("outer"), QStringLiteral("inner"), QStringLiteral("middle")});
+            bounded(layer, QStringLiteral("inset"), at, -2, 3);
+            bounded(layer, QStringLiteral("width"), at, 0, 4);
+            bounded(layer, QStringLiteral("offset"), at, -4, 4);
+            bounded(layer, QStringLiteral("opacity"), at, 0, 1);
+            bounded(layer, QStringLiteral("avoid"), at, 0, 10);
+            bounded(layer, QStringLiteral("margin"), at, 0, 20);
+            bounded(layer, QStringLiteral("depth"), at, 0, 2);
+            bounded(layer, QStringLiteral("gleam"), at, 0.5, 3);
+            colour(layer, QStringLiteral("fill"), at, true);
+            colour(layer, QStringLiteral("glow"), at, true);
+            material(layer, QStringLiteral("material"), at, true);
+            numbers(layer, QStringLiteral("dash"), at, 2, 2, 0.01, 10);
+            for (const QString flag : {QStringLiteral("ink"), QStringLiteral("recess"), QStringLiteral("window"),
+                                       QStringLiteral("gloss"), QStringLiteral("free")})
+                boolean(layer, flag, at);
+            oneOf(layer, QStringLiteral("z"), at, {QStringLiteral("under"), QStringLiteral("over")});
+        });
+        // A limb's forks (a branch's twigs), forked again at most twice.
+        std::function<void(const QJsonObject &, const QString &, int)> forks =
+            [&](const QJsonObject &owner, const QString &at, int depth) {
+                each(owner, QStringLiteral("forks"), at, 8, [&](const QJsonObject &fork, const QString &here) {
+                    rejectUnknown(fork, {QStringLiteral("at"), QStringLiteral("angle"), QStringLiteral("width"),
+                                         QStringLiteral("length"), QStringLiteral("tip"), QStringLiteral("bend"),
+                                         QStringLiteral("wobble"), QStringLiteral("seed"), QStringLiteral("forks")}, here);
+                    bounded(fork, QStringLiteral("at"), here, 0, 1);
+                    bounded(fork, QStringLiteral("angle"), here, -360, 360);
+                    bounded(fork, QStringLiteral("width"), here, 0.005, 10);
+                    bounded(fork, QStringLiteral("length"), here, 0.05, 40);
+                    bounded(fork, QStringLiteral("tip"), here, 0, 10);
+                    bounded(fork, QStringLiteral("bend"), here, -360, 360);
+                    bounded(fork, QStringLiteral("wobble"), here, 0, 4);
+                    bounded(fork, QStringLiteral("seed"), here, -100000, 100000);
+                    if (depth < 2) forks(fork, here, depth + 1);
+                    else if (fork.contains(QStringLiteral("forks")))
+                        add(QStringLiteral("limit-exceeded"), pointerChild(here, QStringLiteral("forks")),
+                            QStringLiteral("forks are nested too deep"));
+                });
+            };
+        each(contour, QStringLiteral("parts"), pointer, 32, [&](const QJsonObject &part, const QString &at) {
+            rejectUnknown(part, {QStringLiteral("kind"), QStringLiteral("at"), QStringLiteral("where"),
+                                 QStringLiteral("period"), QStringLiteral("every"), QStringLiteral("skip"),
+                                 QStringLiteral("alternate"), QStringLiteral("phase"), QStringLiteral("s"),
+                                 QStringLiteral("t"), QStringLiteral("on"), QStringLiteral("align"), QStringLiteral("w"),
+                                 QStringLiteral("h"), QStringLiteral("top"), QStringLiteral("r"), QStringLiteral("chamfer"),
+                                 QStringLiteral("angle"), QStringLiteral("points"), QStringLiteral("from"), QStringLiteral("to"),
+                                 QStringLiteral("width"), QStringLiteral("length"), QStringLiteral("tip"),
+                                 QStringLiteral("bend"), QStringLiteral("forks"), QStringLiteral("wobble"),
+                                 QStringLiteral("seed"), QStringLiteral("fill"), QStringLiteral("material"),
+                                 QStringLiteral("glow"), QStringLiteral("stroke"), QStringLiteral("strokeWidth"),
+                                 QStringLiteral("gradient"), QStringLiteral("opacity"), QStringLiteral("z"),
+                                 QStringLiteral("shade"), QStringLiteral("depth"), QStringLiteral("bevel"),
+                                 QStringLiteral("colour"), QStringLiteral("ink"), QStringLiteral("sheen"),
+                                 QStringLiteral("hole"), QStringLiteral("lean"), QStringLiteral("cut"), QStringLiteral("halo"),
+                                 QStringLiteral("gleam"), QStringLiteral("x"), QStringLiteral("y")}, at);
+            oneOf(part, QStringLiteral("kind"), at, {QStringLiteral("ellipse"), QStringLiteral("dome"), QStringLiteral("box"),
+                  QStringLiteral("trapezoid"), QStringLiteral("capsule"), QStringLiteral("polygon"), QStringLiteral("strut"),
+                  QStringLiteral("branch"), QStringLiteral("crystal"), QStringLiteral("star"), QStringLiteral("ring"),
+                  QStringLiteral("arc"), QStringLiteral("lens"), QStringLiteral("flame"), QStringLiteral("gem")});
+            oneOf(part, QStringLiteral("at"), at, {QStringLiteral("middle"), QStringLiteral("start"), QStringLiteral("end"),
+                  QStringLiteral("both"), QStringLiteral("at"), QStringLiteral("icons"), QStringLiteral("between"),
+                  QStringLiteral("period")});
+            numbers(part, QStringLiteral("where"), at, 0, 16, 0, 1);
+            bounded(part, QStringLiteral("period"), at, 0.1, 80);
+            bounded(part, QStringLiteral("every"), at, 1, 32);
+            bounded(part, QStringLiteral("skip"), at, 0, 32);
+            bounded(part, QStringLiteral("phase"), at, -1, 1);
+            for (const QString key : {QStringLiteral("s"), QStringLiteral("t"), QStringLiteral("x"), QStringLiteral("y")})
+                bounded(part, key, at, -20, 20);
+            for (const QString key : {QStringLiteral("w"), QStringLiteral("h")})
+                bounded(part, key, at, 0.01, 20);
+            bounded(part, QStringLiteral("top"), at, 0, 20);
+            bounded(part, QStringLiteral("r"), at, 0, 10);
+            bounded(part, QStringLiteral("chamfer"), at, 0, 10);
+            bounded(part, QStringLiteral("angle"), at, -360, 360);
+            bounded(part, QStringLiteral("width"), at, 0.005, 20);
+            bounded(part, QStringLiteral("length"), at, 0.05, 40);
+            bounded(part, QStringLiteral("tip"), at, 0, 10);
+            bounded(part, QStringLiteral("bend"), at, -360, 360);
+            bounded(part, QStringLiteral("wobble"), at, 0, 4);
+            bounded(part, QStringLiteral("seed"), at, -100000, 100000);
+            bounded(part, QStringLiteral("strokeWidth"), at, 0, 2);
+            bounded(part, QStringLiteral("opacity"), at, 0, 1);
+            bounded(part, QStringLiteral("depth"), at, 0, 4);
+            bounded(part, QStringLiteral("bevel"), at, 0, 1);
+            bounded(part, QStringLiteral("hole"), at, 0.05, 0.98);
+            bounded(part, QStringLiteral("lean"), at, -1, 1);
+            bounded(part, QStringLiteral("halo"), at, 0, 24);
+            bounded(part, QStringLiteral("gleam"), at, 0.5, 3);
+            for (const QString flag : {QStringLiteral("alternate"), QStringLiteral("ink"), QStringLiteral("sheen")})
+                boolean(part, flag, at);
+            oneOf(part, QStringLiteral("on"), at, {QStringLiteral("outer"), QStringLiteral("inner")});
+            oneOf(part, QStringLiteral("align"), at, {QStringLiteral("base"), QStringLiteral("centre")});
+            oneOf(part, QStringLiteral("z"), at, {QStringLiteral("front"), QStringLiteral("back")});
+            oneOf(part, QStringLiteral("shade"), at, {QStringLiteral("chrome"), QStringLiteral("cylinder"), QStringLiteral("dome")});
+            oneOf(part, QStringLiteral("cut"), at, {QStringLiteral("brilliant"), QStringLiteral("princess"),
+                  QStringLiteral("baguette"), QStringLiteral("cabochon")});
+            for (const QString key : {QStringLiteral("fill"), QStringLiteral("glow"), QStringLiteral("stroke"),
+                                      QStringLiteral("colour")})
+                colour(part, key, at, true);
+            colours(part, QStringLiteral("gradient"), at, 2);
+            material(part, QStringLiteral("material"), at, true);
+            // A star's points are a count, a polygon's its outline; an arc
+            // runs between two angles, a strut between two points.
+            if (part.value(QStringLiteral("points")).isArray()) points(part, QStringLiteral("points"), at, 64, 40);
+            else bounded(part, QStringLiteral("points"), at, 3, 32);
+            for (const QString key : {QStringLiteral("from"), QStringLiteral("to")})
             {
-                add(QStringLiteral("invalid-type"), at, QStringLiteral("line must be an object"));
-                continue;
+                if (part.value(key).isArray()) numbers(part, key, at, 2, 2, -40, 40);
+                else bounded(part, key, at, -720, 720);
             }
-            const QJsonObject line = lines[index].toObject();
+            forks(part, at, 0);
+        });
+        each(contour, QStringLiteral("lines"), pointer, 24, [&](const QJsonObject &line, const QString &at) {
             rejectUnknown(line, {QStringLiteral("kind"), QStringLiteral("inset"), QStringLiteral("width"),
                                  QStringLiteral("dash"), QStringLiteral("offset"), QStringLiteral("margin"),
                                  QStringLiteral("long"), QStringLiteral("short"), QStringLiteral("turns"),
                                  QStringLiteral("size"), QStringLiteral("period"), QStringLiteral("amp"),
-                                 QStringLiteral("phase"), QStringLiteral("side"), QStringLiteral("colour")}, at);
+                                 QStringLiteral("phase"), QStringLiteral("side"), QStringLiteral("colour"),
+                                 QStringLiteral("colours"), QStringLiteral("accent"), QStringLiteral("at"),
+                                 QStringLiteral("avoid"), QStringLiteral("bolts"), QStringLiteral("bulge"),
+                                 QStringLiteral("clamp"), QStringLiteral("clampMaterial"), QStringLiteral("clampWidth"),
+                                 QStringLiteral("cord"), QStringLiteral("count"), QStringLiteral("detail"),
+                                 QStringLiteral("dim"), QStringLiteral("engrave"), QStringLiteral("forks"),
+                                 QStringLiteral("gap"), QStringLiteral("gather"), QStringLiteral("gleam"),
+                                 QStringLiteral("glow"), QStringLiteral("grains"), QStringLiteral("height"),
+                                 QStringLiteral("keep"), QStringLiteral("labels"), QStringLiteral("length"),
+                                 QStringLiteral("lengths"), QStringLiteral("light"), QStringLiteral("lit"),
+                                 QStringLiteral("louvre"), QStringLiteral("major"), QStringLiteral("material"),
+                                 QStringLiteral("metal"), QStringLiteral("opacity"), QStringLiteral("outline"),
+                                 QStringLiteral("outlineWidth"), QStringLiteral("pipe"), QStringLiteral("root"),
+                                 QStringLiteral("rows"), QStringLiteral("seam"), QStringLiteral("seed"),
+                                 QStringLiteral("shades"), QStringLiteral("share"), QStringLiteral("shine"),
+                                 QStringLiteral("sizes"), QStringLiteral("span"), QStringLiteral("spread"),
+                                 QStringLiteral("square"), QStringLiteral("strands"), QStringLiteral("tip"),
+                                 QStringLiteral("cap"), QStringLiteral("plain")}, at);
             oneOf(line, QStringLiteral("kind"), at, {QStringLiteral("loop"), QStringLiteral("middle"),
                   QStringLiteral("edge"), QStringLiteral("brackets"), QStringLiteral("spiral"), QStringLiteral("wave"),
-                  QStringLiteral("dots"), QStringLiteral("stars"), QStringLiteral("slats"), QStringLiteral("ends")});
-            bounded(line, QStringLiteral("inset"), at, 0, 2);
-            bounded(line, QStringLiteral("width"), at, 0.01, 0.5);
-            bounded(line, QStringLiteral("offset"), at, -1, 1);
-            bounded(line, QStringLiteral("margin"), at, 0, 10);
-            bounded(line, QStringLiteral("long"), at, 0, 40);
-            bounded(line, QStringLiteral("short"), at, 0, 4);
-            bounded(line, QStringLiteral("turns"), at, 0.25, 4);
-            bounded(line, QStringLiteral("size"), at, 0.2, 4);
-            bounded(line, QStringLiteral("period"), at, 0.5, 40);
-            bounded(line, QStringLiteral("amp"), at, 0, 2);
-            bounded(line, QStringLiteral("phase"), at, -1, 1);
+                  QStringLiteral("dots"), QStringLiteral("stars"), QStringLiteral("slats"), QStringLiteral("ends"),
+                  QStringLiteral("windows"), QStringLiteral("chips"), QStringLiteral("streaks"), QStringLiteral("plait"),
+                  QStringLiteral("tendrils"), QStringLiteral("bristles"), QStringLiteral("runes"),
+                  QStringLiteral("lightning"), QStringLiteral("cracks"), QStringLiteral("hexgrid"), QStringLiteral("panels"),
+                  QStringLiteral("twigs"), QStringLiteral("footprints"), QStringLiteral("fringe"), QStringLiteral("plan"),
+                  QStringLiteral("greebles"), QStringLiteral("ticks"), QStringLiteral("dotgrid"), QStringLiteral("widgets"),
+                  QStringLiteral("plates"), QStringLiteral("pipes"), QStringLiteral("grilles"), QStringLiteral("fins"),
+                  QStringLiteral("scrolls")});
             oneOf(line, QStringLiteral("side"), at, {QStringLiteral("outer"), QStringLiteral("inner"),
                   QStringLiteral("middle"), QStringLiteral("both")});
-            colour(line, QStringLiteral("colour"), at);
-            if (line.contains(QStringLiteral("dash")))
-            {
-                const QJsonValue dash = line.value(QStringLiteral("dash"));
-                const QJsonArray parts = dash.toArray();
-                if (!dash.isArray() || parts.size() != 2 || !isFiniteNumber(parts[0]) || !isFiniteNumber(parts[1])
-                    || parts[0].toDouble() <= 0 || parts[0].toDouble() > 10
-                    || parts[1].toDouble() <= 0 || parts[1].toDouble() > 10)
-                    add(QStringLiteral("invalid-value"), pointerChild(at, QStringLiteral("dash")),
-                        QStringLiteral("dash must be two lengths between 0 and 10"));
-            }
+            oneOf(line, QStringLiteral("at"), at, {QStringLiteral("start"), QStringLiteral("end")});
+            oneOf(line, QStringLiteral("cap"), at, {QStringLiteral("round"), QStringLiteral("butt"), QStringLiteral("square")});
+            for (const QString key : {QStringLiteral("inset"), QStringLiteral("offset"), QStringLiteral("amp")})
+                bounded(line, key, at, -4, 4);
+            bounded(line, QStringLiteral("width"), at, 0.005, 2);
+            bounded(line, QStringLiteral("margin"), at, 0, 20);
+            bounded(line, QStringLiteral("long"), at, 0, 40);
+            bounded(line, QStringLiteral("short"), at, 0, 4);
+            bounded(line, QStringLiteral("turns"), at, 0.25, 6);
+            bounded(line, QStringLiteral("period"), at, 0.02, 40);
+            bounded(line, QStringLiteral("phase"), at, -1, 1);
+            for (const QString key : {QStringLiteral("avoid"), QStringLiteral("gap"), QStringLiteral("gather"),
+                                      QStringLiteral("bulge"), QStringLiteral("root"), QStringLiteral("spread"),
+                                      QStringLiteral("tip"), QStringLiteral("height"), QStringLiteral("share"),
+                                      QStringLiteral("clampWidth"), QStringLiteral("outlineWidth"), QStringLiteral("length"),
+                                      QStringLiteral("major")})
+                bounded(line, key, at, 0, 40);
+            for (const QString key : {QStringLiteral("count"), QStringLiteral("rows"), QStringLiteral("strands"),
+                                      QStringLiteral("labels"), QStringLiteral("bolts"), QStringLiteral("detail"),
+                                      QStringLiteral("clamp"), QStringLiteral("keep")})
+                if (!line.value(key).isBool()) bounded(line, key, at, 0, 400);
+            bounded(line, QStringLiteral("seed"), at, -100000, 100000);
+            bounded(line, QStringLiteral("opacity"), at, 0, 1);
+            bounded(line, QStringLiteral("metal"), at, 0, 1);
+            bounded(line, QStringLiteral("dim"), at, 0, 1);
+            bounded(line, QStringLiteral("lit"), at, 0, 1);
+            bounded(line, QStringLiteral("gleam"), at, 0.5, 3);
+            // A line's size is one size, or its parts' least and largest.
+            if (line.value(QStringLiteral("size")).isArray()) numbers(line, QStringLiteral("size"), at, 2, 2, 0, 20);
+            else bounded(line, QStringLiteral("size"), at, 0, 20);
+            numbers(line, QStringLiteral("span"), at, 2, 2, -4, 4);
+            numbers(line, QStringLiteral("sizes"), at, 0, 64, 0, 20);
+            numbers(line, QStringLiteral("lengths"), at, 0, 64, 0, 40);
+            numbers(line, QStringLiteral("dash"), at, 2, 2, 0.001, 10);
+            for (const QString key : {QStringLiteral("colour"), QStringLiteral("accent"), QStringLiteral("cord"),
+                                      QStringLiteral("glow"), QStringLiteral("light"), QStringLiteral("louvre"),
+                                      QStringLiteral("outline"), QStringLiteral("seam")})
+                if (!line.value(key).isBool()) colour(line, key, at, true);
+            colours(line, QStringLiteral("colours"), at, 16);
+            colours(line, QStringLiteral("shades"), at, 16);
+            material(line, QStringLiteral("material"), at, false);
+            material(line, QStringLiteral("clampMaterial"), at, false);
+            for (const QString flag : {QStringLiteral("engrave"), QStringLiteral("pipe"), QStringLiteral("grains"),
+                                       QStringLiteral("shine"), QStringLiteral("square"), QStringLiteral("plain"),
+                                       QStringLiteral("forks")})
+                if (line.contains(flag) && !line.value(flag).isBool() && !isFiniteNumber(line.value(flag)))
+                    add(QStringLiteral("invalid-type"), pointerChild(at, flag), QStringLiteral("value must be a boolean"));
+        });
+        if (const auto launcher = objectAt(contour, QStringLiteral("launcher"), pointer))
+        {
+            const QString at = pointerChild(pointer, QStringLiteral("launcher"));
+            rejectUnknown(*launcher, {QStringLiteral("at"), QStringLiteral("where"), QStringLiteral("on"),
+                                      QStringLiteral("s"), QStringLiteral("t"), QStringLiteral("size")}, at);
+            oneOf(*launcher, QStringLiteral("at"), at, {QStringLiteral("middle"), QStringLiteral("start"), QStringLiteral("end"),
+                  QStringLiteral("at"), QStringLiteral("icons"), QStringLiteral("between")});
+            numbers(*launcher, QStringLiteral("where"), at, 0, 4, 0, 1);
+            oneOf(*launcher, QStringLiteral("on"), at, {QStringLiteral("outer"), QStringLiteral("inner")});
+            bounded(*launcher, QStringLiteral("s"), at, -20, 20);
+            bounded(*launcher, QStringLiteral("t"), at, -20, 20);
+            bounded(*launcher, QStringLiteral("size"), at, 0.2, 6);
         }
-        if (const auto colours = objectAt(contour, QStringLiteral("colours"), pointer))
+        if (const auto palette = objectAt(contour, QStringLiteral("colours"), pointer))
         {
             const QString at = pointerChild(pointer, QStringLiteral("colours"));
-            rejectUnknown(*colours, {QStringLiteral("body"), QStringLiteral("edge"), QStringLiteral("light"),
+            rejectUnknown(*palette, {QStringLiteral("body"), QStringLiteral("edge"), QStringLiteral("light"),
                                      QStringLiteral("accent")}, at);
             for (const QString key : {QStringLiteral("body"), QStringLiteral("edge"), QStringLiteral("light"),
                                       QStringLiteral("accent")})
-                colour(*colours, key, at);
+                colour(*palette, key, at);
         }
         oneOf(contour, QStringLiteral("pattern"), pointer, {QStringLiteral("none"), QStringLiteral("honeycomb"),
               QStringLiteral("stripes"), QStringLiteral("scales"), QStringLiteral("grid")});
+        material(contour, QStringLiteral("material"), pointer, false);
+        each(contour, QStringLiteral("animation"), pointer, 8, [&](const QJsonObject &animation, const QString &at) {
+            rejectUnknown(animation, {QStringLiteral("kind"), QStringLiteral("period"), QStringLiteral("amount"),
+                                      QStringLiteral("speed"), QStringLiteral("mode")}, at);
+            oneOf(animation, QStringLiteral("kind"), at, {QStringLiteral("pulse"), QStringLiteral("flicker"),
+                  QStringLiteral("twinkle"), QStringLiteral("blink"), QStringLiteral("crackle"), QStringLiteral("cycle"),
+                  QStringLiteral("waves"), QStringLiteral("drift"), QStringLiteral("flow"), QStringLiteral("sway"),
+                  QStringLiteral("walk"), QStringLiteral("spin")});
+            bounded(animation, QStringLiteral("period"), at, 0.03, 60);
+            bounded(animation, QStringLiteral("amount"), at, 0, 1);
+            bounded(animation, QStringLiteral("speed"), at, 0.01, 10);
+            oneOf(animation, QStringLiteral("mode"), at, {QStringLiteral("swing"), QStringLiteral("float")});
+        });
+        if (const auto folds = objectAt(contour, QStringLiteral("folds"), pointer))
+        {
+            const QString at = pointerChild(pointer, QStringLiteral("folds"));
+            rejectUnknown(*folds, {QStringLiteral("period"), QStringLiteral("height")}, at);
+            bounded(*folds, QStringLiteral("period"), at, 0.5, 20);
+            bounded(*folds, QStringLiteral("height"), at, 0, 1);
+        }
+        numbers(contour, QStringLiteral("room"), pointer, 2, 2, 0, 20);
         definition->contour = contour.toVariantMap();
     }
 

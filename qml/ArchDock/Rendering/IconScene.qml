@@ -82,6 +82,9 @@ Item {
     property real visualScale: 1
     property string tileShape: "style-default"
     property string appearance: "glass"
+    // The panel wears a decoration: its icons stand on it bare, with no
+    // tile of the look's under them (one chosen for the icons still shows).
+    property bool panelDecorated: false
     property bool showReflection: false
     property bool showIndicator: true
     property bool vertical: false
@@ -928,11 +931,13 @@ Item {
                 }
 
                 Rectangle {
+                    objectName: "icon-highlight-tile"
                     anchors.fill: parent
                     anchors.margins: Math.max(1, root.logicalSize * 0.04)
                     radius: root.tileRadius()
                     visible: root.tileRenderingEnabled && !root.customTileActive && !root.styledLayersActive
-                        && (root.appearance === "plate"
+                        && (root.panelDecorated ? root.dropTarget
+                            : root.appearance === "plate"
                             || root.appearance === "platform"
                             || root.appearance === "floating-glass"
                             || root.hovered || root.active || root.dropTarget)
@@ -956,7 +961,7 @@ Item {
                     width: parent.width * 0.92
                     height: parent.height * 0.32
                     visible: root.tileRenderingEnabled && !root.customTileActive && !root.styledLayersActive
-                        && root.appearance === "pedestal"
+                        && root.appearance === "pedestal" && !root.panelDecorated
 
                     Rectangle {
                         anchors.horizontalCenter: parent.horizontalCenter

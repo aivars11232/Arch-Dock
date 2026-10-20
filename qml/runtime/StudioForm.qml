@@ -9,8 +9,9 @@ import "StudioThemes.js" as StudioThemes
 
 // Draws one Panel Studio page from its rows: section titles, notices,
 // controls for settings (switches, sliders, spin boxes, combo boxes, colour
-// and file fields), action buttons and rows of decoration cards
-// (ThemeSampleCard). Presets are cards in the preset browser.
+// and file fields, palettes), action buttons, rows of decoration cards
+// (ThemeSampleCard) and the panel decorations' and materials' trees
+// (StudioCatalogueTree). Presets are cards in the preset browser.
 ScrollView {
     id: root
 
@@ -43,6 +44,27 @@ ScrollView {
     // desktop's number of lines per notch.
     readonly property Kirigami.WheelHandler wheelHandler: Kirigami.WheelHandler { target: root.contentItem }
     property var rows: []
+    // The built-in panel decorations and materials as trees of groups,
+    // subgroups and items, with their names. The precious metals are not
+    // among the materials: each is a decoration of its own (Jewellery).
+    readonly property var decorationTree: DecorationCatalogue.decorationGroups.map(function(group) {
+        return { name: group.name, subgroups: group.subgroups.map(function(subgroup) {
+            return { name: subgroup.name, items: subgroup.decorations.map(function(id) {
+                const decoration = DecorationCatalogue.decoration(id)
+                return { id: id, name: decoration ? decoration.name : id }
+            }) }
+        }) }
+    })
+    readonly property var materialTree: DecorationCatalogue.materialGroups.filter(function(group) {
+        return group.name !== "Precious Metals"
+    }).map(function(group) {
+        return { name: group.name, subgroups: group.subgroups.map(function(subgroup) {
+            return { name: subgroup.name, items: subgroup.materials.map(function(id) {
+                const material = DecorationCatalogue.material(id)
+                return { id: id, name: material ? material.name : id }
+            }) }
+        }) }
+    })
     // The page the rows belong to: another page starts at its top.
     property string pageKey: ""
     property var rowsByKey: ({})
@@ -218,9 +240,49 @@ ScrollView {
                     }
                 }
 
+                // A catalogue to choose from: the panel decorations, or the
+                // materials a decoration's body can be made of.
+                ColumnLayout {
+                    visible: rowDelegate.kind === "decoration" || rowDelegate.kind === "material"
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Label {
+                        text: StudioThemes.label(root.theme, rowDelegate.modelData.label || "")
+                        color: root.theme.heading
+                        font.pixelSize: 14
+                        font.letterSpacing: root.theme.letterSpacing
+                        font.weight: root.theme.headingWeight
+                    }
+
+                    Label {
+                        visible: text.length > 0
+                        Layout.fillWidth: true
+                        text: rowDelegate.modelData.description || ""
+                        color: root.theme.description
+                        font.pixelSize: 11
+                        wrapMode: Text.Wrap
+                    }
+
+                    Loader {
+                        Layout.fillWidth: true
+                        active: rowDelegate.kind === "decoration" || rowDelegate.kind === "material"
+                        sourceComponent: StudioCatalogueTree {
+                            objectName: "studio-tree-" + String(rowDelegate.modelData.key || "")
+                            theme: root.theme
+                            itemKind: rowDelegate.kind
+                            groups: rowDelegate.kind === "decoration" ? root.decorationTree : root.materialTree
+                            current: String(root.studio.fieldValue(rowDelegate.modelData) || "")
+                            emptyLabel: rowDelegate.kind === "decoration" ? qsTr("None") : qsTr("As designed")
+                            onChosen: function(id) { root.studio.setFieldValue(rowDelegate.modelData, id) }
+                        }
+                    }
+                }
+
                 StudioFrame {
                     visible: rowDelegate.kind !== "section" && rowDelegate.kind !== "notice"
-                        && rowDelegate.kind !== "themeSamples"
+                        && rowDelegate.kind !== "themeSamples" && rowDelegate.kind !== "decoration"
+                        && rowDelegate.kind !== "material"
                     Layout.fillWidth: true
                     implicitHeight: fieldRow.implicitHeight + 22
                     radius: root.theme.controlRadius + 1
@@ -416,6 +478,52 @@ ScrollView {
 
                                 ToolTip.visible: hovered
                                 ToolTip.text: qsTr("Use theme default")
+                                ToolTip.delay: Kirigami.Units.toolTipDelay
+                            }
+                        }
+
+                        // A palette: its colours in order, each changed on
+                        // its own, and the way back to the designed ones.
+                        RowLayout {
+                            visible: rowDelegate.kind === "palette"
+                            Layout.preferredWidth: 270
+                            spacing: 6
+
+                            Repeater {
+                                model: rowDelegate.kind === "palette" ? root.studio.paletteColours(rowDelegate.modelData) : []
+                                delegate: AbstractButton {
+                                    id: swatch
+                                    required property string modelData
+                                    required property int index
+                                    objectName: "studio-palette-" + index
+                                    implicitWidth: 26
+                                    implicitHeight: 26
+                                    hoverEnabled: true
+                                    Accessible.name: qsTr("Colour %1").arg(index + 1)
+                                    background: Rectangle {
+                                        radius: 4
+                                        color: swatch.modelData
+                                        border.width: swatch.hovered ? 2 : 1
+                                        border.color: swatch.hovered ? root.theme.accent : root.theme.textMuted
+                                    }
+                                    onClicked: root.studio.openColorEditor(Object.assign({}, rowDelegate.modelData,
+                                                                                         { paletteIndex: index }))
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: modelData
+                                    ToolTip.delay: Kirigami.Units.toolTipDelay
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            ToolButton {
+                                Accessible.name: qsTr("Use the designed colours")
+                                enabled: rowDelegate.kind === "palette"
+                                    && String(root.studio.fieldValue(rowDelegate.modelData) || "").trim().length > 0
+                                icon.name: "edit-reset"
+                                onClicked: root.studio.setFieldValue(rowDelegate.modelData, "")
+                                ToolTip.visible: hovered
+                                ToolTip.text: Accessible.name
                                 ToolTip.delay: Kirigami.Units.toolTipDelay
                             }
                         }

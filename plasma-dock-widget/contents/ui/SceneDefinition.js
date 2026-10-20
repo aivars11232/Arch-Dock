@@ -14,6 +14,11 @@ function build(configuration, host) {
             definition[key] = source[key];
     }
     definition.edge = host.freeSurface ? "free" : host.vertical ? "left" : "bottom";
+    // The screen edge an edge panel really stands on, which a decoration
+    // faces away from, into the screen.
+    definition.screenEdge = host.freeSurface ? ""
+        : ["top", "bottom", "left", "right"].indexOf(String(source.edge)) >= 0 ? String(source.edge)
+        : definition.edge;
     definition.rendererTier = String(
         source.rendererTier || host.effectiveRendererTier || "procedural2d");
     if (host.freeSurface) {

@@ -1101,6 +1101,68 @@ const QVector<Descriptor> &schemaFields()
               0.0, "surface.parameters3D.panelPictureSmoothing", 0.0, 1.0, {}, true, true,
               editor("panels-appearance", "Relief smoothing", "slider", {"studio"}, "picture-relief",
                      {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
+        // A panel decoration remaking a flat panel's outline on every shape
+        // and edge (DecorationCatalogue.js; empty for none): a starship's
+        // front, a nebula, a branch, a wand. Its lights pulse and its motion
+        // plays unless its animation is off, as fast as chosen.
+        panel("panelDecoration", Access::Editor, Type::String, Normalization::LowerString,
+              QString{}, "surface.parameters3D.panelDecoration", {}, {}, {}, true, true,
+              editor("panels-appearance", "Panel decoration", "decoration", {"studio"}, "decoration")),
+        panel("panelDecorationAnimation", Access::Editor, Type::Boolean, Normalization::Boolean,
+              true, "surface.parameters3D.panelDecorationAnimation", {}, {}, {}, true, true,
+              editor("panels-appearance", "Animation", "switch", {"studio"}, "decoration")),
+        panel("panelDecorationSpeed", Access::Editor, Type::Real, Normalization::RealRange,
+              1.0, "surface.parameters3D.panelDecorationSpeed", 0.1, 3.0, {}, true, true,
+              editor("panels-appearance", "Animation speed", "slider", {"studio"}, "decoration",
+                     {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
+        // Its colours, as designed when empty: its lights' colour and finish
+        // (a rainbow), its body's main colour (the material's grain kept)
+        // and finish, the colours of a many-coloured one, the metal of its
+        // trims, and a picture's hue, strength and brightness (a nebula).
+        panel("panelDecorationLight", Access::Editor, Type::String, Normalization::HexColor,
+              QString{}, "surface.parameters3D.panelDecorationLight", {}, {}, {}, true, true,
+              editor("panels-appearance", "Light colour", "color", {"studio"}, "decoration-colours")),
+        panel("panelDecorationLightFinish", Access::Editor, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("solid"), "surface.parameters3D.panelDecorationLightFinish", {}, {},
+              {"solid", "rainbow"}, true, true,
+              editor("panels-appearance", "Light finish", "combo", {"studio"}, "decoration-colours")),
+        panel("panelDecorationMain", Access::Editor, Type::String, Normalization::HexColor,
+              QString{}, "surface.parameters3D.panelDecorationMain", {}, {}, {}, true, true,
+              editor("panels-appearance", "Main colour", "color", {"studio"}, "decoration-colours")),
+        panel("panelDecorationFinish", Access::Editor, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("solid"), "surface.parameters3D.panelDecorationFinish", {}, {},
+              {"solid", "chameleon", "iridescent", "rainbow", "metallic-rainbow"}, true, true,
+              editor("panels-appearance", "Finish", "combo", {"studio"}, "decoration-colours")),
+        // The palette as its colours in order, separated by commas.
+        panel("panelDecorationPalette", Access::Editor, Type::String, Normalization::TrimmedString,
+              QString{}, "surface.parameters3D.panelDecorationPalette", {}, {}, {}, true, true,
+              editor("panels-appearance", "Palette", "palette", {"studio"}, "decoration-colours")),
+        panel("panelDecorationMetal", Access::Editor, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("designed"), "surface.parameters3D.panelDecorationMetal", {}, {},
+              {"designed", "polished-gold", "bright-gold", "yellow-gold", "gold-leaf", "white-gold", "rose-gold",
+               "red-gold", "silver", "brushed-platinum", "polished-copper"}, true, true,
+              editor("panels-appearance", "Metal", "combo", {"studio"}, "decoration-colours")),
+        // The icon sitting in the decoration's launcher seat (a raptor's
+        // head), by its entry id: put there from the icon's menu or by
+        // dropping it on the seat, not from Panel Studio.
+        panel("panelDecorationSeat", Access::Editor, Type::String, Normalization::TrimmedString,
+              QString{}, "surface.parameters3D.panelDecorationSeat", {}, {}, {}, true, true),
+        // The body's material: one of the named materials, or as designed.
+        panel("panelDecorationMaterial", Access::Editor, Type::String, Normalization::LowerString,
+              QString{}, "surface.parameters3D.panelDecorationMaterial", {}, {}, {}, true, true,
+              editor("panels-appearance", "Material", "material", {"studio"}, "decoration-colours")),
+        panel("panelDecorationHue", Access::Editor, Type::Real, Normalization::RealRange,
+              0.0, "surface.parameters3D.panelDecorationHue", -180.0, 180.0, {}, true, true,
+              editor("panels-appearance", "Picture hue", "slider", {"studio"}, "decoration-colours",
+                     {}, {{QStringLiteral("step"), 1}, {QStringLiteral("decimals"), 0}})),
+        panel("panelDecorationStrength", Access::Editor, Type::Real, Normalization::RealRange,
+              1.0, "surface.parameters3D.panelDecorationStrength", 0.0, 2.0, {}, true, true,
+              editor("panels-appearance", "Picture strength", "slider", {"studio"}, "decoration-colours",
+                     {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
+        panel("panelDecorationBrightness", Access::Editor, Type::Real, Normalization::RealRange,
+              1.0, "surface.parameters3D.panelDecorationBrightness", 0.2, 2.0, {}, true, true,
+              editor("panels-appearance", "Picture brightness", "slider", {"studio"}, "decoration-colours",
+                     {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
         panel("sparkleIntensity", Access::Editor, Type::Real, Normalization::RealRange,
               0.0, "surface.parameters2D.sparkleIntensity", 0.0, 1.0, {}, true, true,
               editor("panels-appearance", "Sparkle intensity", "slider", {"studio"},
@@ -1568,6 +1630,8 @@ QString editorCapabilityName(EditorCapability capability)
     case EditorCapability::Identity: return QStringLiteral("identity");
     case EditorCapability::PanelPicture: return QStringLiteral("panel-picture");
     case EditorCapability::PictureRelief: return QStringLiteral("picture-relief");
+    case EditorCapability::Decoration: return QStringLiteral("decoration");
+    case EditorCapability::DecorationColours: return QStringLiteral("decoration-colours");
     case EditorCapability::Count: break;
     }
     return QString{};

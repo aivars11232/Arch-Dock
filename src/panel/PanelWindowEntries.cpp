@@ -880,6 +880,31 @@ bool PanelWindow::addPanelEntries(const QString &panelId, const QStringList &ent
     return commitPanelContentTransaction(panelId, request);
 }
 
+bool PanelWindow::setPanelDecorationSeat(const QString &panelId, const QString &entryId)
+{
+    const auto definition = m_panelRegistry.panelDefinition(panelId);
+    if (!definition)
+        return false;
+    const QVariantMap result = applyPanelSettingsTransaction(panelId, definition->settingsRevision,
+        {{QStringLiteral("panelDecorationSeat"), entryId.trimmed()}}, {});
+    return result.value(QStringLiteral("success")).toBool();
+}
+
+bool PanelWindow::seatPanelUrl(const QString &panelId, const QString &url)
+{
+    const auto definition = m_panelRegistry.panelDefinition(panelId);
+    const QUrl parsed = QUrl::fromUserInput(url.trimmed());
+    if (!definition || !parsed.isValid() || parsed.isEmpty())
+        return false;
+    // On the panel first (already there, it stays as it is), then in the
+    // seat, by the id the panel knows it by.
+    pinPanelUrls(panelId, {parsed.toString()});
+    const QString entryId = definition->host.kind == ArchDock::PanelHostKind::NativeEdge
+        ? m_dockModel.applicationIdForUrl(parsed)
+        : ArchDock::PanelContent::urlEntryId(parsed.toString());
+    return !entryId.isEmpty() && setPanelDecorationSeat(panelId, entryId);
+}
+
 bool PanelWindow::removePanelEntry(const QString &panelId, const QString &entryId)
 {
     ArchDock::PanelContentRequest request;

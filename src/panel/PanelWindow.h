@@ -215,6 +215,12 @@ public slots:
     // local URLs or application ids the dock model knows; an application is
     // pinned to the panel as its desktop entry. Native panels refuse them.
     bool addPanelEntries(const QString &panelId, const QStringList &entries);
+    // The icon that sits in the panel's decoration's launcher seat (a
+    // raptor's head) instead of in the row: an entry by its id (empty: the
+    // seat is free), or an item dropped on the seat, added to the panel if
+    // it is not on it yet.
+    bool setPanelDecorationSeat(const QString &panelId, const QString &entryId);
+    bool seatPanelUrl(const QString &panelId, const QString &url);
     // How many icons a panel's shape holds side by side (`capacity`, -1 for a
     // shape that grows with its icons) and how many it has (`count`), with
     // the least radius and the largest icon size its icons fit at, and how
