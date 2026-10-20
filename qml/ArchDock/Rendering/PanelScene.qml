@@ -283,14 +283,46 @@ Item {
     // and the icon floats above it; in an edge panel's row icon and stand are
     // centred together in the row (the Pedestals page, 2026-10-12).
     readonly property bool pedestalOnPath: themeOrientation === "free"
-    // A flat scene leaves room above and below its layout for an icon that
-    // floats over its stand, and its growth about its foot when magnified.
+    // A flat scene leaves room round its layout for an icon that floats over
+    // its stand, and its growth about its foot when magnified; for a
+    // hologram icon, its light and glow too. The stands stand at the screen
+    // edge's side of an edge panel's icons (IconScene.screenEdge), so the
+    // room lies away from that edge: above a bottom panel's icons, below a
+    // top panel's, inward of a side panel's.
     readonly property var pedestalHeadroom: {
-        const layout = PlatformGeometry.pedestalLayout(panelDefinition,
-            Number(definitionValue("iconStyle", "size", "iconSize", 52)) || 52, pedestalOnPath)
-        if (!layout.drawn || effectiveRendererTier === "true3d")
-            return ({ top: 0, bottom: 0 })
-        return ({ top: Math.ceil(layout.above + layout.height * 0.1), bottom: Math.ceil(layout.below + 4) })
+        const size = Number(definitionValue("iconStyle", "size", "iconSize", 52)) || 52
+        const none = ({ top: 0, bottom: 0, left: 0, right: 0 })
+        if (effectiveRendererTier === "true3d")
+            return none
+        const hologram = PlatformGeometry.hologramLayout(panelDefinition, size, pedestalOnPath, screenEdge)
+        const layout = PlatformGeometry.pedestalLayout(panelDefinition, size, true)
+        // How far it reaches past the cells toward the icons' side, toward
+        // the stands' side, and to either side across.
+        let ahead = 0, behind = 0, across = 0
+        if (hologram.on) {
+            ahead = hologram.above
+            behind = hologram.below
+            across = hologram.across
+        } else if (layout.drawn) {
+            ahead = layout.above + layout.height * 0.1
+            behind = layout.below + 4
+            across = Math.max(0, layout.width / 2 - size / 2)
+        }
+        // A hologram icon without its light still glows round itself.
+        if ((panelDefinition || ({})).hologramIcons === true) {
+            ahead = Math.max(ahead, size * 0.3)
+            behind = Math.max(behind, size * 0.3)
+            across = Math.max(across, size * 0.3)
+        }
+        if (ahead <= 0 && behind <= 0 && across <= 0)
+            return none
+        const way = PlatformGeometry.standDirection(screenEdge, pedestalOnPath).name
+        const sides = way === "down" ? { top: behind, bottom: ahead, left: across, right: across }
+            : way === "right" ? { top: across, bottom: across, left: behind, right: ahead }
+            : way === "left" ? { top: across, bottom: across, left: ahead, right: behind }
+            : { top: ahead, bottom: behind, left: across, right: across }
+        return ({ top: Math.ceil(sides.top), bottom: Math.ceil(sides.bottom),
+                  left: Math.ceil(sides.left), right: Math.ceil(sides.right) })
     }
     // Free-panel motion (ADREP-TASK-002). The entries travel along the
     // panel's own path, the whole scene turns, or both, as "Continuous motion
@@ -390,8 +422,21 @@ Item {
     signal sceneTransformEdited(var values)
     // The wheel moved the entries or turned the dock.
     signal wheelUsed()
-    // The last wheel event the scene took, as Qt delivered it.
+    // The last wheel event the scene took, as Qt delivered it, and where.
     property var lastWheelInput: ({})
+    // A wheel spin keeps its place: for a moment after the scene took a
+    // notch it takes the next ones there too, though what was under the
+    // pointer moved on - a 3D panel's icon stands up from its band, so a
+    // turn of the panel leaves the pointer over nothing. As Firefox's wheel
+    // transactions do, the spin ends after a pause or once the pointer
+    // moves away.
+    readonly property int wheelLatchMs: 1000
+    function wheelLatched(point) {
+        const last = lastWheelInput || ({})
+        const since = Date.now() - Number(last.at || 0)
+        return since >= 0 && since < wheelLatchMs && Number.isFinite(Number(last.x))
+            && Math.hypot(point.x - Number(last.x), point.y - Number(last.y)) < layoutGeometry.iconSize
+    }
     // How long one wheel step takes to arrive, eased out (OF-11). It ends
     // within 120 ms of the wheel event, the frame that shows it included.
     readonly property int stepDuration: 100
@@ -927,6 +972,27 @@ Item {
         : surfaceLoader.inputMaskItem ? "alpha-mask"
         : geometryHitRegionActive ? "geometry-band" : "rectangle"
     readonly property var entryRects: buildEntryRects()
+    // Where each entry shows itself at rest, in the scene's coordinates: its
+    // cell and, over a stand or in a hologram's light, its icon away from
+    // the screen edge, with room round it for its glow - where an edge
+    // panel drawn past its panel takes the pointer.
+    readonly property var entryShownRects: {
+        const size = Number(definitionValue("iconStyle", "size", "iconSize", 52)) || 52
+        const definition = panelDefinition || ({})
+        const hologram = PlatformGeometry.hologramLayout(definition, size, pedestalOnPath, screenEdge)
+        const stand = PlatformGeometry.pedestalLayout(definition, size, true)
+        const raise = hologram.on ? hologram.raise : stand.drawn ? stand.raise : 0
+        const way = PlatformGeometry.standDirection(screenEdge, pedestalOnPath)
+        const glow = definition.hologramIcons === true ? size * 0.2 : 0
+        return entryRects.map(function(cell) {
+            if (!(cell.width > 0)) return cell
+            const moved = { x: cell.x + way.x * raise, y: cell.y + way.y * raise }
+            const left = Math.min(cell.x, moved.x) - glow, top = Math.min(cell.y, moved.y) - glow
+            const right = Math.max(cell.x, moved.x) + cell.width + glow
+            const bottom = Math.max(cell.y, moved.y) + cell.height + glow
+            return { x: left, y: top, width: right - left, height: bottom - top }
+        })
+    }
 
     containmentMask: sceneEditActive ? null
         : geometryHitRegionActive ? geometryHitRegion
@@ -1146,9 +1212,9 @@ Item {
                 contentX: 0,
                 contentY: 0,
                 // A decoration reaches out as far as it is drawn.
-                effectLeft: Math.max(effectMargin, surfaceLoader.decorationReach.left),
+                effectLeft: Math.max(effectMargin, surfaceLoader.decorationReach.left) + pedestalHeadroom.left,
                 effectTop: Math.max(effectMargin, surfaceLoader.decorationReach.top) + pedestalHeadroom.top,
-                effectRight: Math.max(effectMargin, surfaceLoader.decorationReach.right),
+                effectRight: Math.max(effectMargin, surfaceLoader.decorationReach.right) + pedestalHeadroom.right,
                 effectBottom: Math.max(effectMargin, surfaceLoader.decorationReach.bottom) + pedestalHeadroom.bottom,
                 handleExtent: 0
             }
@@ -1572,8 +1638,17 @@ Item {
     // panel clockwise), scrolling down the other way. This is transient
     // geometry, not a saved edit.
     ScrollInput {
+        id: scrollInput
         enabled: (root.wheelRotationAvailable || root.wheelTravelAvailable) && !root.sceneEditActive
-        containmentMask: root.containmentMask
+        containmentMask: QtObject {
+            function contains(point: point): bool {
+                if (root.wheelLatched(point))
+                    return true
+                const mask = root.containmentMask
+                return mask ? mask.contains(point)
+                    : point.x >= 0 && point.y >= 0 && point.x < scrollInput.width && point.y < scrollInput.height
+            }
+        }
         verticalOnly: true
         acceptedModifiers: Qt.NoModifier
         wheelConsumer: function(event, normalizedPixels) {
@@ -1583,7 +1658,7 @@ Item {
                 event.accepted = false
                 return
             }
-            root.lastWheelInput = { angleDelta: angle, pixelDelta: pixels, at: Date.now() }
+            root.lastWheelInput = { angleDelta: angle, pixelDelta: pixels, at: Date.now(), x: event.x, y: event.y }
             root.takeWheel(angle, pixels)
             event.accepted = true
             root.wheelUsed()
@@ -1764,7 +1839,26 @@ Item {
                     ["lookMotionSpeed", "lookMotionSpeed"],
                     ["panelLookColour", "panelLookColour"], ["pedestalLookColour", "pedestalLookColour"],
                     ["pedestalFacing", "pedestalFacing"], ["pedestalViewAngle", "pedestalViewAngle"],
-                    ["folderPedestalShape", "folderPedestalShape"]])
+                    ["folderPedestalShape", "folderPedestalShape"],
+                    ["hologramIcons", "hologramIcons"], ["hologramIconColours", "hologramIconColours"],
+                    ["hologramIconOutlineColor", "hologramIconOutlineColor"], ["hologramIconInlineColor", "hologramIconInlineColor"],
+                    ["hologramIconVolumeColor", "hologramIconVolumeColor"], ["hologramIconGlowColor", "hologramIconGlowColor"],
+                    ["hologramIconGlow", "hologramIconGlow"], ["hologramIconGlowReach", "hologramIconGlowReach"],
+                    ["hologramIconFlicker", "hologramIconFlicker"], ["hologramIconFloat", "hologramIconFloat"],
+                    ["hologramIconTurning", "hologramIconTurning"], ["hologramIconSpeed", "hologramIconSpeed"],
+                    ["hologramBeam", "hologramBeam"], ["hologramLightColor", "hologramLightColor"],
+                    ["hologramOpeningColor", "hologramOpeningColor"], ["hologramBeamStrength", "hologramBeamStrength"],
+                    ["hologramBeamHeight", "hologramBeamHeight"], ["hologramBeamMotion", "hologramBeamMotion"],
+                    ["hologramPanel", "hologramPanel"], ["hologramPanelColours", "hologramPanelColours"],
+                    ["hologramPanelOutlineColor", "hologramPanelOutlineColor"], ["hologramPanelInlineColor", "hologramPanelInlineColor"],
+                    ["hologramPanelVolumeColor", "hologramPanelVolumeColor"], ["hologramPanelGlowColor", "hologramPanelGlowColor"],
+                    ["hologramPanelGlow", "hologramPanelGlow"], ["hologramPanelGlowReach", "hologramPanelGlowReach"],
+                    ["hologramPanelFlicker", "hologramPanelFlicker"], ["hologramPanelSpeed", "hologramPanelSpeed"],
+                    ["hologramPedestals", "hologramPedestals"], ["hologramPedestalColours", "hologramPedestalColours"],
+                    ["hologramPedestalOutlineColor", "hologramPedestalOutlineColor"], ["hologramPedestalInlineColor", "hologramPedestalInlineColor"],
+                    ["hologramPedestalVolumeColor", "hologramPedestalVolumeColor"], ["hologramPedestalGlowColor", "hologramPedestalGlowColor"],
+                    ["hologramPedestalGlow", "hologramPedestalGlow"], ["hologramPedestalGlowReach", "hologramPedestalGlowReach"],
+                    ["hologramPedestalFlicker", "hologramPedestalFlicker"], ["hologramPedestalSpeed", "hologramPedestalSpeed"]])
                 if (definition[key] !== undefined) parameters[parameter] = definition[key]
             return parameters
         }
@@ -1989,6 +2083,9 @@ Item {
                 // Whether a stand stands on the path at its icon's place (a
                 // free panel's) or with its icon in the row (an edge panel's).
                 readonly property bool scenePedestalOnPath: root.pedestalOnPath
+                // The screen edge an edge panel stands on: its stands stand
+                // at that side of their icons.
+                readonly property string sceneScreenEdge: root.screenEdge
                 // Whether the decoration has a launcher seat, and whether this
                 // entry sits in it.
                 readonly property bool sceneSeatAvailable: root.decorationSeatAvailable
@@ -2017,6 +2114,9 @@ Item {
             iconStyleDefinition: parent.sceneIconStyleDefinition
             tileSettings: root.panelDefinition
             pedestalOnPath: root.pedestalOnPath
+            standsOnPanel: true
+            screenEdge: parent.sceneScreenEdge
+            panelThickness: root.freeHost ? 0 : root.verticalLayout ? root.width : root.height
             logicalSize: Number(parent.sceneGeometry.iconSize || width)
             tileShape: root.iconShape
             appearance: root.appearance

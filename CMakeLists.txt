@@ -77,6 +77,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     qmldir
     RendererCapabilityProbe.qml
     RenderingModuleProbe.qml
+    HologramClock.qml
     LayoutEngine.js
     GizmoMath.js
     PlatformGeometry.js
@@ -86,6 +87,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     DecorationScene.js
     DecorationJob.js
     StandFrames.js
+    HologramLook.js
     IconStyleResolver.js
     AnimationProfileRuntime.js
     MotionChannels.js
@@ -112,6 +114,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     renderers/IconStyle2D.qml
     renderers/IconTile.qml
     renderers/GlowEffect.qml
+    renderers/HologramEffect.qml
     renderers/PanelProcedural2D.qml
     renderers/PanelDecoration2D.qml
     renderers/PanelSkin2D.qml
@@ -184,7 +187,15 @@ set(ARCHDOCK_OPTIONAL_RENDERING_FILES
     optional3d/decoration-surface.frag
     optional3d/DecorationTube.qml
     optional3d/decoration-tube.vert
-    optional3d/decoration-tube.frag)
+    optional3d/decoration-tube.frag
+    optional3d/HologramSurface.qml
+    optional3d/hologram-surface.vert
+    optional3d/hologram-folded.vert
+    optional3d/hologram-surface.frag
+    optional3d/HologramLight.qml
+    optional3d/hologram-light.frag
+    optional3d/HologramOpening.qml
+    optional3d/hologram-opening.frag)
 # These are owned build outputs. Remove stale optional files on ON -> OFF.
 foreach(rendering_file IN LISTS ARCHDOCK_OPTIONAL_RENDERING_FILES)
   if(NOT ARCHDOCK_QUICK3D_BUILT)
@@ -225,10 +236,33 @@ add_custom_target(
   DEPENDS ${ARCHDOCK_RENDERING_MODULE_SOURCES}
   COMMENT "Preparing the ArchDock.Rendering QML module")
 
+# The holograms' flat shaders (Qt Quick shader effects), compiled into Qt's
+# shader packs with qsb at build time, for every graphics backend Qt Quick
+# draws with.
+find_package(Qt6 REQUIRED COMPONENTS ShaderTools)
+set(ARCHDOCK_RENDERING_SHADERS hologram hologram-beam hologram-opening)
+set(ARCHDOCK_RENDERING_SHADER_PACKS)
+file(MAKE_DIRECTORY "${ARCHDOCK_RENDERING_BUILD_DIR}/shaders")
+foreach(shader IN LISTS ARCHDOCK_RENDERING_SHADERS)
+  set(shader_pack "${ARCHDOCK_RENDERING_BUILD_DIR}/shaders/${shader}.frag.qsb")
+  add_custom_command(
+    OUTPUT "${shader_pack}"
+    COMMAND Qt6::qsb --glsl "100es,120,150" --hlsl 50 --msl 12 -o "${shader_pack}"
+            "${ARCHDOCK_RENDERING_SOURCE_DIR}/shaders/${shader}.frag"
+    DEPENDS "${ARCHDOCK_RENDERING_SOURCE_DIR}/shaders/${shader}.frag"
+    COMMENT "Compiling the ${shader} shader"
+    VERBATIM)
+  list(APPEND ARCHDOCK_RENDERING_SHADER_PACKS "${shader_pack}")
+endforeach()
+add_custom_target(archdock-rendering-shaders ALL DEPENDS ${ARCHDOCK_RENDERING_SHADER_PACKS})
+add_dependencies(archdock-rendering-module archdock-rendering-shaders)
+install(FILES ${ARCHDOCK_RENDERING_SHADER_PACKS}
+        DESTINATION "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Rendering/shaders")
+
 qt_add_qml_module(archdock-input SHARED
   URI ArchDock.Input VERSION 1.0
   OUTPUT_DIRECTORY "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Input"
-  SOURCES src/inputs/WheelSource.h)
+  SOURCES src/inputs/WheelSource.h src/inputs/WindowInputShape.h)
 target_link_libraries(archdock-input PRIVATE Qt6::Core Qt6::Gui Qt6::Qml)
 target_include_directories(archdock-input PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/inputs")
 set_target_properties(archdock-input archdock-inputplugin
@@ -1532,6 +1566,15 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_GizmoMath.qml)
   set_tests_properties(
     gizmo-math-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_test(
+    NAME hologram-look-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_HologramLook.qml)
+  set_tests_properties(
+    hologram-look-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(

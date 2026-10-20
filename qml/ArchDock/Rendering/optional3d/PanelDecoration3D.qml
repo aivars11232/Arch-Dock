@@ -11,7 +11,9 @@ import "../PlatformGeometry.js" as PlatformGeometry
 // as the decoration stands and an underside, curving round to meet each
 // other halfway all round its outline), and lit by the scene as it turns
 // (DecorationSurface). Its lights pulse, flicker, twinkle, blink or crackle
-// as on a flat panel; its motion is not drawn.
+// as on a flat panel; its motion is not drawn. On a holographic panel
+// (Panels > Hologram) it is drawn as light instead, its own colours made
+// light as the platform's would be (HologramSurface).
 // Placed in the platform's own frame (its units, y up, z out of its top),
 // its ground on the platform's top.
 Node {
@@ -47,6 +49,16 @@ Node {
     property var project: null
     property real pictureScale: 1
     property real emissionScale: 1
+    // Drawn as a hologram: HologramSurface's colours and `own`, its time,
+    // flicker and brightness, as the panel's platform wears them.
+    property bool hologram: false
+    property color hologramOutline: "#ffffff"
+    property color hologramInline: "#e6fdff"
+    property color hologramVolume: "#5aeaff"
+    property vector4d hologramOwn: Qt.vector4d(1, 1, 1, 0)
+    property real hologramTime: 0
+    property real hologramFlicker: 0
+    property real hologramBrightness: 1
 
     readonly property var entry: decoration.length ? DecorationCatalogue.decoration(decoration) : null
     readonly property bool ready: decorationBaker.triangleCount > 0
@@ -155,9 +167,14 @@ Node {
         generateMipmaps: true
         mipFilter: Texture.Linear
     }
+    // Its own colours, worn lit or as a hologram's.
+    SurfaceMap {
+        id: albedoTexture
+        textureData: DecorationMap { baker: decorationBaker; map: "albedo" }
+    }
     DecorationSurface {
         id: surfaceMaterial
-        albedoMap: TextureInput { texture: SurfaceMap { textureData: DecorationMap { baker: decorationBaker; map: "albedo" } } }
+        albedoMap: TextureInput { texture: albedoTexture }
         finishMap: TextureInput { texture: SurfaceMap { textureData: DecorationMap { baker: decorationBaker; map: "finish" } } }
         shapeMap: TextureInput { texture: SurfaceMap { textureData: DecorationMap { baker: decorationBaker; map: "shape" } } }
         lightsMap: TextureInput { texture: SurfaceMap { textureData: DecorationMap { baker: decorationBaker; map: "lights" } } }
@@ -203,6 +220,53 @@ Node {
         }
     }
 
+    // The bark of what is round all the way round.
+    Texture {
+        id: barkTexture
+        textureData: DecorationMap { baker: decorationBaker; map: "tubeBark" }
+        generateMipmaps: true
+        mipFilter: Texture.Linear
+        tilingModeHorizontal: Texture.Repeat
+        tilingModeVertical: Texture.Repeat
+    }
+    // As a hologram: the solid and its tubes see-through, their colours
+    // made light, folded with the platform.
+    component HologramPart: HologramSurface {
+        property real foldTurn: 0
+        vertexShader: "hologram-folded.vert"
+        usePicture: 1
+        keepColour: 1
+        seed: 0.37
+        body: 0.75
+        cullMode: Material.BackFaceCulling
+    }
+    HologramPart {
+        id: hologramSolid
+        objectName: "mesh-platform-decoration-hologram"
+        picture: TextureInput { texture: albedoTexture }
+        foldTurn: surfaceMaterial.foldTurn
+        outlineColour: root.hologramOutline
+        inlineColour: root.hologramInline
+        volumeColour: root.hologramVolume
+        own: root.hologramOwn
+        time: root.hologramTime
+        flicker: root.hologramFlicker
+        brightness: root.hologramBrightness
+    }
+    HologramPart {
+        id: hologramTubes
+        objectName: "mesh-platform-decoration-tubes-hologram"
+        picture: TextureInput { texture: barkTexture }
+        foldTurn: hologramSolid.foldTurn
+        outlineColour: hologramSolid.outlineColour
+        inlineColour: hologramSolid.inlineColour
+        volumeColour: hologramSolid.volumeColour
+        own: hologramSolid.own
+        time: hologramSolid.time
+        flicker: hologramSolid.flicker
+        brightness: hologramSolid.brightness
+    }
+
     // The decoration's pixels are the scene's: the platform's units are
     // `unit` of them; its ground lies on the platform's top.
     Node {
@@ -214,7 +278,7 @@ Node {
             visible: root.ready
             pickable: true
             geometry: DecorationSolid { baker: decorationBaker }
-            materials: surfaceMaterial
+            materials: root.hologram ? hologramSolid : surfaceMaterial
         }
         // What is round all the way round (a trunk and its branches), as
         // tubes wearing their bark.
@@ -223,21 +287,21 @@ Node {
             visible: root.ready
             pickable: true
             geometry: DecorationSolid { baker: decorationBaker; part: "tubes" }
-            materials: DecorationTube {
-                barkMap: TextureInput { texture: Texture { textureData: DecorationMap { baker: decorationBaker; map: "tubeBark" }
-                                                           generateMipmaps: true; mipFilter: Texture.Linear
-                                                           tilingModeHorizontal: Texture.Repeat; tilingModeVertical: Texture.Repeat } }
-                reliefMap: TextureInput { texture: Texture { textureData: DecorationMap { baker: decorationBaker; map: "tubeRelief" }
-                                                             generateMipmaps: true; mipFilter: Texture.Linear
-                                                             tilingModeHorizontal: Texture.Repeat; tilingModeVertical: Texture.Repeat } }
-                capMap: TextureInput { texture: Texture { textureData: DecorationMap { baker: decorationBaker; map: "tubeCap" }
-                                                          generateMipmaps: true; mipFilter: Texture.Linear } }
-                hasRelief: decorationBaker.tubeReliefDepth > 0 ? 1 : 0
-                reliefDepth: Math.max(0.01, decorationBaker.tubeReliefDepth)
-                roughness: decorationBaker.tubeRoughness
-                metalness: decorationBaker.tubeMetalness
-                foldTurn: surfaceMaterial.foldTurn
-            }
+            materials: root.hologram ? hologramTubes : tubeMaterial
         }
+    }
+    DecorationTube {
+        id: tubeMaterial
+        barkMap: TextureInput { texture: barkTexture }
+        reliefMap: TextureInput { texture: Texture { textureData: DecorationMap { baker: decorationBaker; map: "tubeRelief" }
+                                                     generateMipmaps: true; mipFilter: Texture.Linear
+                                                     tilingModeHorizontal: Texture.Repeat; tilingModeVertical: Texture.Repeat } }
+        capMap: TextureInput { texture: Texture { textureData: DecorationMap { baker: decorationBaker; map: "tubeCap" }
+                                                  generateMipmaps: true; mipFilter: Texture.Linear } }
+        hasRelief: decorationBaker.tubeReliefDepth > 0 ? 1 : 0
+        reliefDepth: Math.max(0.01, decorationBaker.tubeReliefDepth)
+        roughness: decorationBaker.tubeRoughness
+        metalness: decorationBaker.tubeMetalness
+        foldTurn: surfaceMaterial.foldTurn
     }
 }

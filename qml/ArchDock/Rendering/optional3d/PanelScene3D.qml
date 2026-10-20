@@ -5,6 +5,8 @@ import QtQuick3D.Helpers
 import "../GizmoMath.js" as GizmoMath
 import "../LayoutEngine.js" as LayoutEngine
 import "../PlatformGeometry.js" as PlatformGeometry
+import "../HologramLook.js" as HologramLook
+import ".."
 
 // The true-3D panel renderer (Qt Quick 3D), loaded only when the system can
 // draw it. It draws the theme's own platform mesh, or a platform generated
@@ -385,7 +387,9 @@ Item {
     // size (0 keeps the flat picture), and how far the solid turns about
     // its upright axis, so its depth shows (the icon still faces the user,
     // turned that much).
-    readonly property real iconDepth: bounded("iconDepth", 0.3, 0, 1)
+    // A hologram icon is always a solid, so it shows as it turns.
+    readonly property real iconDepth: iconHologram.on ? Math.max(0.3, bounded("iconDepth", 0.3, 0, 1))
+        : bounded("iconDepth", 0.3, 0, 1)
     readonly property real iconTurn: bounded("iconTurn", 15, -60, 60)
     // How much the light models the icons' volumes (Icon lighting): 0 keeps
     // the picture's own brightness, 1 lets the light alone shape them.
@@ -416,9 +420,15 @@ Item {
     readonly property real pedestalLift: bounded("pedestalLift", 0.3, 0, 2)
     readonly property real pedestalOpacity: bounded("pedestalOpacity", 1, 0.1, 1)
     readonly property real pedestalGlow: bounded("pedestalGlow", 0, 0, 1)
-    readonly property string pedestalMaterialLook: String((sceneDefinition || ({})).pedestalMaterial || "panel").toLowerCase()
+    // A stand made for a hologram (a projector) wears its own finish in the
+    // panel's look's place.
+    readonly property var pedestalFinish: String((sceneDefinition || ({})).pedestalMaterial || "panel").toLowerCase()
+        === "panel" ? PlatformGeometry.pedestalFinish(pedestalKind) : null
+    readonly property string pedestalMaterialLook: pedestalFinish ? pedestalFinish.look
+        : String((sceneDefinition || ({})).pedestalMaterial || "panel").toLowerCase()
     readonly property string pedestalTextureChoice: String((sceneDefinition || ({})).pedestalTexture || "material").toLowerCase()
     readonly property string pedestalColour: String((sceneDefinition || ({})).pedestalColor || "")
+        || (pedestalFinish ? pedestalFinish.colour : "")
     // A stand wearing a picture of its own stands out in relief as the
     // panel does: its mesh is cut finely and rises by the picture's
     // brightness, in its own units. A stand is small, so its relief is a
@@ -590,6 +600,7 @@ Item {
             || Number(platformMaterial.emissiveStrength || 0) > 0)
     readonly property bool bloomWanted: pedestalGlowAmount > 0 || panelGlowing || panelGlowAmount > 0
         || iconGlowAmount > 0 || tileGlowAmount > 0 || (decorationShown && platformDecoration.glows)
+        || hologramShown
     // How far a glow reaches out of what glows (Glow reach, 0 to 1): the
     // stands' and the panel's own. A view has one glow, so it reaches as far
     // as the farthest that is lit. Each further halving of the blur doubles
@@ -630,6 +641,84 @@ Item {
         to: 1
         duration: Math.round(4000 / Math.max(0.1, root.pedestalAnimationSpeed))
     }
+    // Holograms (the Hologram tabs): the icons' solids, the stands and the
+    // platform drawn as light (HologramSurface), each icon floating over
+    // its projector's light (HologramLight) where that is on, the light
+    // leaving a lens (HologramOpening) in the middle of its stand's top or
+    // on the platform, the icons turning as Turning says - all on the
+    // holograms' one clock, still under reduced motion.
+    readonly property var iconHologram: HologramLook.settings(sceneDefinition, "Icon")
+    readonly property var iconHologramColours: HologramLook.colours(sceneDefinition, "Icon")
+    readonly property var panelHologram: HologramLook.settings(sceneDefinition, "Panel")
+    readonly property var panelHologramColours: HologramLook.colours(sceneDefinition, "Panel")
+    readonly property var standHologram: HologramLook.settings(sceneDefinition, "Pedestal")
+    readonly property var standHologramColours: HologramLook.colours(sceneDefinition, "Pedestal")
+    readonly property bool standHologramShown: standHologram.on && pedestalDrawn
+    // The panel's hologram: its platform, or the decoration standing in its
+    // place, drawn as light.
+    readonly property bool panelHologramShown: panelHologram.on
+    readonly property bool hologramShown: iconHologram.on || panelHologramShown || standHologramShown
+    readonly property bool hologramMoving: hologramShown && motionAllowed && visible && !sceneConcealed
+        && !reducedMotion
+    property bool holdingHologramClock: false
+    function holdHologramClock(wanted) {
+        if (wanted === holdingHologramClock)
+            return
+        holdingHologramClock = wanted
+        if (wanted)
+            HologramClock.hold()
+        else
+            HologramClock.release()
+    }
+    onHologramMovingChanged: holdHologramClock(hologramMoving)
+    readonly property real hologramClock: hologramMoving ? HologramClock.time : 0
+    readonly property real iconHologramTime: hologramClock * iconHologram.speed
+    // The icons' turn as holograms, degrees about their upright axis.
+    readonly property real hologramTurn: !iconHologram.on || !hologramMoving ? 0
+        : iconHologram.turning === "turn" ? (iconHologramTime * 40) % 360
+        : iconHologram.turning === "sway" ? Math.sin(iconHologramTime * 0.9) * 28 : 0
+    // How far a hologram icon floats over its light's opening, in icon
+    // sizes (Light height), and the light's motion.
+    readonly property real hologramLift: iconHologram.beam ? 0.95 * iconHologram.beamHeight : 0
+    readonly property var hologramLightFlags: HologramLook.beamMotionFlags(iconHologram.beamMotion)
+    // A colour as the shaders take it.
+    function hologramColour(part) {
+        return (part && part.colour) ? part.colour : "#ffffff"
+    }
+    function hologramOwn(colours) {
+        const c = colours || ({})
+        return Qt.vector4d(c.outline && c.outline.own ? 1 : 0, c.inline && c.inline.own ? 1 : 0,
+                           c.volume && c.volume.own ? 1 : 0, 0)
+    }
+    // The stands and the platform as holograms: in their own material's
+    // colour, or their set's.
+    HologramSurface {
+        id: standHologramMaterial
+        ownColour: String((pedestalMaterialData || ({})).baseColor || "#9fb8c8")
+        outlineColour: root.hologramColour(root.standHologramColours.outline)
+        inlineColour: root.hologramColour(root.standHologramColours.inline)
+        volumeColour: root.hologramColour(root.standHologramColours.volume)
+        own: root.hologramOwn(root.standHologramColours)
+        time: root.hologramClock * root.standHologram.speed
+        flicker: root.hologramMoving ? root.standHologram.flicker : 0
+        seed: 1.7
+        brightness: 0.55 + 0.35 * root.standHologram.glow
+        cullMode: Material.BackFaceCulling
+    }
+    HologramSurface {
+        id: platformHologramMaterial
+        ownColour: String((platformMaterial || ({})).baseColor || "#9fb8c8")
+        outlineColour: root.hologramColour(root.panelHologramColours.outline)
+        inlineColour: root.hologramColour(root.panelHologramColours.inline)
+        volumeColour: root.hologramColour(root.panelHologramColours.volume)
+        own: root.hologramOwn(root.panelHologramColours)
+        time: root.hologramClock * root.panelHologram.speed
+        flicker: root.hologramMoving ? root.panelHologram.flicker : 0
+        seed: 0.37
+        body: 0.75
+        brightness: 0.6 + 0.4 * root.panelHologram.glow
+        cullMode: Material.BackFaceCulling
+    }
     // The camera's right and up, seen from the entries' frame: how far an
     // icon turned to face the viewer leans toward the platform. Its stand
     // and icon rise by that much, so no part of them dips into the platform
@@ -644,7 +733,7 @@ Item {
     // degrees or less above its plane and stays level on one seen from 60
     // degrees up, blending between.
     readonly property string pedestalFacing: String((sceneDefinition || ({})).pedestalFacing || "panel").toLowerCase()
-    readonly property real pedestalViewAngle: bounded("pedestalViewAngle", 20, 0, 60)
+    readonly property real pedestalViewAngle: bounded("pedestalViewAngle", 20, 0, 90)
     readonly property real panelElevation: Math.asin(Math.max(0, Math.min(1, Math.abs(iconForward.z)))) * 180 / Math.PI
     readonly property real pedestalPanelShare: pedestalFacing === "panel" ? 1
         : pedestalFacing === "viewer" ? 0
@@ -1216,7 +1305,10 @@ Item {
     onShownScaleXChanged: hitTestsChanged()
     onShownScaleYChanged: hitTestsChanged()
     onTransitionsEnabledChanged: followTransform()
-    Component.onCompleted: settleTransform()
+    Component.onCompleted: {
+        settleTransform()
+        holdHologramClock(hologramMoving)
+    }
     FrameAnimation {
         running: root.transitionsEnabled && !root.transformSettled
         onTriggered: root.stepTransform(frameTime)
@@ -1895,6 +1987,7 @@ Item {
         }
     }
     Component.onDestruction: {
+        holdHologramClock(false)
         frameUpdates.stop()
         // Let go of the mirror sheet and the icons' pictures before they
         // are deleted with the scene.
@@ -2534,8 +2627,35 @@ Item {
                 // The icon's foot above the entry's root. The picture keeps a
                 // margin of 0.07 icon sizes inside its square, as on a flat
                 // panel, so the gap the eye sees is the Float height's.
-                readonly property real footLift: root.pedestalDrawn
+                readonly property real standFootLift: root.pedestalDrawn
                     ? Math.max(pedestalTop, pedestalTop + pedestalGap - size * 0.07) : 0
+                // A hologram's light leaves a lens in the middle of the stand's
+                // top, or on the platform where there is none; where it is in
+                // the icon's frame (x right, y up, z toward the viewer), how
+                // wide, and the icon floating its Light height over it.
+                readonly property var openingSpot: root.pedestalDrawn ? PlatformGeometry.pedestalOpening(root.pedestalKind)
+                    : ({ radius: 0, height: 0, hole: false })
+                readonly property vector3d openingInIcon: root.pedestalDrawn
+                    ? root.pedestalAxis.times(openingSpot.height * pedestalDepth + pedestalBob)
+                    : facing.inverted().times(Qt.vector3d(0, 0, -(baseLift + tileLift)))
+                readonly property real openingRadius: root.pedestalDrawn ? openingSpot.radius * pedestalScale : size * 0.4
+                readonly property bool hologramLightShown: root.iconHologram.beam && visual !== null
+                readonly property real footLift: hologramLightShown ? openingInIcon.y + root.hologramLift * size : standFootLift
+                readonly property real iconX: hologramLightShown ? openingInIcon.x : pedestalTopX
+                // The lens the hologram's light leaves, in its colour or its
+                // icon's main colour.
+                property Material openingMaterial: HologramOpening {
+                    picture.texture: glyphTexture
+                    tint: root.hologramColour(root.iconHologramColours.opening)
+                    own: root.iconHologramColours.opening && root.iconHologramColours.opening.own ? 1 : 0
+                    time: root.iconHologramTime
+                    lens: 1 / 1.6
+                    strength: Math.min(1.2, root.iconHologram.beamStrength)
+                }
+                // A hologram's gentle float, each icon a little after the one
+                // before it.
+                readonly property real hologramFloat: root.iconHologram.on && root.iconHologram.float
+                    ? Math.sin(root.iconHologramTime * 1.3 + index * 0.7) * size * 0.025 : 0
                 // This entry's motion: its own phase along the scene's.
                 readonly property real pedestalBeat: root.pedestalMotionActive
                     ? Math.sin((root.pedestalPhase + index * 0.17) * 2 * Math.PI) : 0
@@ -2852,6 +2972,17 @@ Item {
                     objectName: "mesh-stand-and-icon-" + entryNode.index
                     position: entryNode.depthShift
                     scale: Qt.vector3d(entryNode.depthPush, entryNode.depthPush, entryNode.depthPush)
+                // With no stand, the hologram's lens lies on the platform under
+                // its icon.
+                Model {
+                    objectName: "mesh-hologram-opening-on-panel-" + entryNode.index
+                    source: "#Rectangle"
+                    pickable: false
+                    visible: entryNode.hologramLightShown && !root.pedestalDrawn
+                    z: -(entryNode.baseLift + entryNode.tileLift) + entryNode.size * 0.005
+                    scale: Qt.vector3d(entryNode.openingRadius * 3.2 / 100, entryNode.openingRadius * 3.2 / 100, 1)
+                    materials: entryNode.openingMaterial
+                }
                 // The stand: its foot's middle on the platform at the icon's
                 // place, turned by Stand facing, in the platform's material or
                 // its own. Its own motion moves it, not the icon. It and the
@@ -2868,9 +2999,10 @@ Item {
                     IconStyle3D {
                         id: standOnPanel
                         objectName: "mesh-pedestal-" + entryNode.index
-                        underGlow: root.pedestalGlowAmount > 0
+                        underGlow: root.pedestalGlowAmount > 0 && !root.standHologramShown
                         meshData: root.pedestalShownMesh
                         materialData: root.pedestalMaterialData
+                        shellMaterial: root.standHologramShown ? standHologramMaterial : null
                         reliefMaterial: root.pedestalPictureRelief ? standRelief : null
                         surfaceTexture: root.pedestalTexture
                         surfaceNormalTexture: root.pedestalNormalTexture
@@ -2878,9 +3010,22 @@ Item {
                         scale: Qt.vector3d(entryNode.pedestalScale * entryNode.pedestalPulse,
                                            entryNode.pedestalScale * entryNode.pedestalPulse,
                                            Math.max(1e-3, entryNode.pedestalDepth))
+                        // The hologram's light leaves its lens here, in the
+                        // middle of the stand's top (or, through a ring or a
+                        // halo, the panel inside it).
+                        Model {
+                            objectName: "mesh-hologram-opening-panel-" + entryNode.index
+                            source: "#Rectangle"
+                            pickable: false
+                            visible: entryNode.hologramLightShown
+                            z: entryNode.openingSpot.height + 0.004
+                            scale: Qt.vector3d(entryNode.openingSpot.radius * 3.2 / 100,
+                                               entryNode.openingSpot.radius * 3.2 / 100, 1)
+                            materials: entryNode.openingMaterial
+                        }
                         IconStyle3D {
                             objectName: "mesh-pedestal-glow-" + entryNode.index
-                            visible: root.pedestalGlowAmount > 0
+                            visible: root.pedestalGlowAmount > 0 && !root.standHologramShown
                             meshData: root.pedestalMesh
                             materialData: ({})
                             shellMaterial: standGlowMaterial
@@ -2905,9 +3050,10 @@ Item {
                             IconStyle3D {
                                 id: standFacing
                                 objectName: "mesh-pedestal-facing-" + entryNode.index
-                                underGlow: root.pedestalGlowAmount > 0
+                                underGlow: root.pedestalGlowAmount > 0 && !root.standHologramShown
                                 meshData: root.pedestalShownMesh
                                 materialData: root.pedestalMaterialData
+                                shellMaterial: root.standHologramShown ? standHologramMaterial : null
                                 reliefMaterial: root.pedestalPictureRelief ? standRelief : null
                                 surfaceTexture: root.pedestalTexture
                                 surfaceNormalTexture: root.pedestalNormalTexture
@@ -2916,9 +3062,22 @@ Item {
                                 scale: Qt.vector3d(entryNode.pedestalScale * entryNode.pedestalPulse,
                                                    entryNode.pedestalScale * entryNode.pedestalPulse,
                                                    Math.max(1e-3, entryNode.pedestalDepth))
+                                // The hologram's light leaves its lens here, in the
+                                // middle of the stand's top (or, through a ring or a
+                                // halo, the panel inside it).
+                                Model {
+                                    objectName: "mesh-hologram-opening-facing-" + entryNode.index
+                                    source: "#Rectangle"
+                                    pickable: false
+                                    visible: entryNode.hologramLightShown
+                                    z: entryNode.openingSpot.height + 0.004
+                                    scale: Qt.vector3d(entryNode.openingSpot.radius * 3.2 / 100,
+                                                       entryNode.openingSpot.radius * 3.2 / 100, 1)
+                                    materials: entryNode.openingMaterial
+                                }
                                 IconStyle3D {
                                     objectName: "mesh-pedestal-facing-glow-" + entryNode.index
-                                    visible: root.pedestalGlowAmount > 0
+                                    visible: root.pedestalGlowAmount > 0 && !root.standHologramShown
                                     meshData: root.pedestalMesh
                                     materialData: ({})
                                     shellMaterial: standGlowMaterial
@@ -2979,18 +3138,54 @@ Item {
                     position: entryNode.facingForward.times(entryNode.clearanceTravel).plus(
                         Qt.vector3d(root.number(entryNode.iconMotion, "x", 0),
                                     -root.number(entryNode.iconMotion, "y", 0), 0))
+                    // The hologram's light, a strip facing the viewer from its
+                    // lens up into the icon's near part.
+                    Model {
+                        id: hologramLightStrip
+                        objectName: "mesh-hologram-light-" + entryNode.index
+                        source: "#Rectangle"
+                        pickable: false
+                        visible: entryNode.hologramLightShown
+                        readonly property vector3d from: entryNode.openingInIcon
+                        readonly property vector3d to: Qt.vector3d(entryNode.iconX,
+                            entryNode.footLift + entryNode.size * 0.42, 0)
+                        readonly property real length: Math.max(1, Math.hypot(to.y - from.y, to.z - from.z))
+                        readonly property real sheet: 2 * Math.max(entryNode.openingRadius * 1.04, entryNode.size * 0.59)
+                        position: Qt.vector3d(from.x, (from.y + to.y) / 2, (from.z + to.z) / 2)
+                        eulerRotation.x: Math.atan2(to.z - from.z, to.y - from.y) * 180 / Math.PI
+                        scale: Qt.vector3d(sheet / 100, length / 100, 1)
+                        materials: HologramLight {
+                            picture.texture: glyphTexture
+                            tint: root.hologramColour(root.iconHologramColours.light)
+                            own: root.iconHologramColours.light && root.iconHologramColours.light.own ? 1 : 0
+                            motion: Qt.vector4d(root.hologramLightFlags.rise, root.hologramLightFlags.drift,
+                                                root.hologramLightFlags.pulse, root.hologramLightFlags.sweep)
+                            time: root.hologramLightFlags.moving ? root.iconHologramTime : 0
+                            startHalf: entryNode.openingRadius * 0.95 / hologramLightStrip.sheet
+                            endHalf: entryNode.size * 0.59 / hologramLightStrip.sheet
+                            streaks: 30
+                            sparks: 0.1
+                            seed: entryNode.index * 0.37
+                            fade: 1.6
+                            strength: root.iconHologram.beamStrength
+                        }
+                    }
                     Node {
                         objectName: "mesh-icon-body-" + entryNode.index
-                        // Its foot floats over the stand's top, centred on it.
-                        x: entryNode.pedestalTopX
-                        y: entryNode.footLift
+                        // Its foot floats over the stand's top, centred on it,
+                        // or over its hologram's light.
+                        x: entryNode.iconX
+                        y: entryNode.footLift + entryNode.hologramFloat
                         // Hover magnification and icon motion grow the icon about
                         // its foot, so it stays standing on the pedestal. A turn
                         // in the icon's plane (Spin, Wobble, Swing) becomes a turn
                         // about the vertical axis here, the way a stand spins,
-                        // instead of a roll of the picture (owner, 2026-10-12).
+                        // instead of a roll of the picture; so does a hologram's
+                        // turning, each icon a little after the one before it.
                         eulerRotation: Qt.vector3d(0, root.number(entryNode.iconMotion, "rotateY", 0)
-                            + root.number(entryNode.iconMotion, "rotateZ", 0),
+                            + root.number(entryNode.iconMotion, "rotateZ", 0)
+                            + (root.hologramTurn !== 0 ? root.hologramTurn
+                               + (root.iconHologram.turning === "turn" ? entryNode.index * 37 : 0) : 0),
                             -Number(entryNode.rect.rotation || 0))
                         scale: Qt.vector3d(entryNode.hoverScale * root.number(entryNode.iconMotion, "scale", 1)
                                 * root.number(entryNode.iconMotion, "scaleX", 1),
@@ -3152,8 +3347,10 @@ Item {
                             pickable: false
                             visible: shown
                             // Its back where the flat picture lay.
+                            // As a hologram, its middle on the axis it turns about.
                             position: Qt.vector3d(glyphModel.position.x, glyphModel.position.y,
-                                                  glyphModel.position.z + (mesh ? mesh.depth : 50) * scale.z)
+                                                  glyphModel.position.z + (mesh ? mesh.depth : 50) * scale.z
+                                                      * (root.iconHologram.on ? 0.5 : 1))
                             eulerRotation: Qt.vector3d(0, glyphModel.eulerRotation.y + root.iconTurn, 0)
                             scale: Qt.vector3d(glyphModel.scale.x, glyphModel.scale.y, glyphModel.scale.x * root.iconDepth)
                             opacity: glyphModel.pictureOpacity
@@ -3164,7 +3361,7 @@ Item {
                                 indexes: solidModel.mesh ? solidModel.mesh.indexes : []
                                 primitiveMode: ProceduralMesh.Triangles
                             }
-                            materials: PrincipledMaterial {
+                            property Material litMaterial: PrincipledMaterial {
                                 lighting: PrincipledMaterial.FragmentLighting
                                 baseColorMap: glyphTexture
                                 // The light models the parts as far as Icon
@@ -3185,6 +3382,21 @@ Item {
                                 metalness: 0
                                 cullMode: Material.BackFaceCulling
                             }
+                            // As a hologram: its picture drawn as light.
+                            property Material hologramMaterial: HologramSurface {
+                                picture.texture: glyphTexture
+                                usePicture: 1
+                                outlineColour: root.hologramColour(root.iconHologramColours.outline)
+                                inlineColour: root.hologramColour(root.iconHologramColours.inline)
+                                volumeColour: root.hologramColour(root.iconHologramColours.volume)
+                                own: root.hologramOwn(root.iconHologramColours)
+                                time: root.iconHologramTime
+                                flicker: root.hologramMoving ? root.iconHologram.flicker : 0
+                                seed: entryNode.index * 1.37
+                                brightness: 1 + 0.6 * root.iconHologram.glow
+                                cullMode: Material.BackFaceCulling
+                            }
+                            materials: root.iconHologram.on ? [hologramMaterial] : [litMaterial]
                         }
                         Model {
                             id: glyphModel
@@ -3210,7 +3422,7 @@ Item {
                             // yet still there: the scene's hit tests and the
                             // water's mirror images go by this picture.
                             opacity: pictureOpacity * (solidModel.shown ? 0 : 1)
-                            materials: PrincipledMaterial {
+                            property Material litMaterial: PrincipledMaterial {
                                 lighting: PrincipledMaterial.NoLighting
                                 alphaMode: PrincipledMaterial.Blend
                                 baseColorMap: glyphTexture
@@ -3221,6 +3433,55 @@ Item {
                                 // hide nothing.
                                 depthDrawMode: entryNode.riding ? Material.OpaquePrePassDepthDraw
                                     : Material.OpaqueOnlyDepthDraw
+                            }
+                            // As a hologram, until its solid is cut: its picture
+                            // drawn as light, seen from both sides as it turns.
+                            property Material hologramMaterial: HologramSurface {
+                                picture.texture: glyphTexture
+                                usePicture: 1
+                                outlineColour: root.hologramColour(root.iconHologramColours.outline)
+                                inlineColour: root.hologramColour(root.iconHologramColours.inline)
+                                volumeColour: root.hologramColour(root.iconHologramColours.volume)
+                                own: root.hologramOwn(root.iconHologramColours)
+                                time: root.iconHologramTime
+                                flicker: root.hologramMoving ? root.iconHologram.flicker : 0
+                                seed: entryNode.index * 1.37
+                                brightness: 1 + 0.6 * root.iconHologram.glow
+                                cullMode: Material.NoCulling
+                            }
+                            materials: root.iconHologram.on ? [hologramMaterial] : [litMaterial]
+                        }
+                        // A hologram's glow: its picture's shape, a little larger,
+                        // just behind it, brighter than white in the glow's colour
+                        // or the picture's own, which the view spreads round it.
+                        Model {
+                            objectName: "mesh-hologram-glow-" + entryNode.index
+                            source: "#Rectangle"
+                            pickable: false
+                            visible: root.iconHologram.on && root.iconHologram.glow > 0 && glyphModel.visible
+                            position: Qt.vector3d(glyphModel.position.x, glyphModel.position.y, -entryNode.size * 0.02)
+                            eulerRotation: glyphModel.eulerRotation
+                            scale: Qt.vector3d(glyphModel.scale.x * (1.06 + 0.12 * root.iconHologram.glowReach),
+                                               glyphModel.scale.y * (1.06 + 0.12 * root.iconHologram.glowReach), 1)
+                            opacity: glyphModel.pictureOpacity * 0.85
+                            readonly property var glowRgb: PlatformGeometry.parseColour(
+                                root.hologramColour(root.iconHologramColours.glow)) || [0.13, 0.85, 1, 1]
+                            readonly property bool ownGlow: Boolean(root.iconHologramColours.glow
+                                && root.iconHologramColours.glow.own)
+                            materials: PrincipledMaterial {
+                                baseColor: "#000000"
+                                roughness: 1
+                                specularAmount: 0
+                                emissiveMap: parent.ownGlow ? glyphTexture : null
+                                emissiveFactor: parent.ownGlow
+                                    ? Qt.vector3d(1.4 * root.iconHologram.glow, 1.4 * root.iconHologram.glow,
+                                                  1.4 * root.iconHologram.glow)
+                                    : root.glowLight(parent.glowRgb, root.iconHologram.glow)
+                                opacityMap: glyphTexture
+                                opacityChannel: Material.A
+                                alphaMode: PrincipledMaterial.Blend
+                                cullMode: Material.NoCulling
+                                depthDrawMode: Material.NeverDepthDraw
                             }
                         }
                         // The icon's glow (Icons > Glow): its picture's shape, a
@@ -3264,7 +3525,7 @@ Item {
                     Node {
                         id: inputAnchor
                         objectName: "mesh-input-anchor-" + entryNode.index
-                        x: entryNode.pedestalTopX
+                        x: entryNode.iconX
                         y: entryNode.footLift + entryNode.size / 2
                     }
                 }
@@ -3289,10 +3550,12 @@ Item {
                 surfaceTexture: root.themeTexture
                 surfaceNormalTexture: root.themeNormalTexture
                 reliefMaterial: root.pictureRelief ? platformRelief : root.flowingSurface ? platformFlow : null
+                // A holographic panel (Panels > Hologram) is drawn as light.
+                shellMaterial: root.panelHologramShown ? platformHologramMaterial : null
                 emissionScale: root.emissionScale
                 IconStyle3D {
                     objectName: "mesh-platform-glow"
-                    visible: root.platformGlowMesh !== null
+                    visible: root.platformGlowMesh !== null && !root.panelHologramShown
                     meshData: root.platformGlowMesh
                     materialData: ({})
                     shellMaterial: platformGlowMaterial
@@ -3305,7 +3568,7 @@ Item {
                 }
                 IconStyle3D {
                     objectName: "mesh-platform-glow-wash"
-                    visible: root.platformWashMesh !== null
+                    visible: root.platformWashMesh !== null && !root.panelHologramShown
                     meshData: root.platformWashMesh
                     materialData: ({})
                     shellMaterial: platformWashMaterial
@@ -3353,6 +3616,16 @@ Item {
                 // grain holds as it turns toward the viewer or is scaled up.
                 pictureScale: 2 * (root.Window.window ? root.Window.window.devicePixelRatio : 1)
                 emissionScale: root.emissionScale
+                // A holographic panel's decoration is drawn as light, as its
+                // platform would be.
+                hologram: root.panelHologramShown
+                hologramOutline: platformHologramMaterial.outlineColour
+                hologramInline: platformHologramMaterial.inlineColour
+                hologramVolume: platformHologramMaterial.volumeColour
+                hologramOwn: platformHologramMaterial.own
+                hologramTime: platformHologramMaterial.time
+                hologramFlicker: platformHologramMaterial.flicker
+                hologramBrightness: platformHologramMaterial.brightness
             }
         }
         }

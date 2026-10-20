@@ -1436,6 +1436,12 @@ QVariantMap PanelRegistry::catalogTheme(const QString &themeId) const
     return {};
 }
 
+bool PanelRegistry::standsOnGeneratedPlatform(const ArchDock::PanelDefinition &definition) const
+{
+    return definition.layout.pathType != QStringLiteral("mobius")
+        && genericScene3D(definition, catalogTheme(themeIdFor(definition)), {}).has_value();
+}
+
 std::optional<QVariantMap> PanelRegistry::genericScene3D(
     const ArchDock::PanelDefinition &definition, const QVariantMap &look,
     const QVariantMap &lookProjection) const

@@ -61,6 +61,19 @@ PlasmoidItem {
     readonly property real iconSize: Number(configuration.iconSize || 52)
     readonly property real spacing: Number(configuration.spacing || 8)
     readonly property real baseCellSize: iconSize + Math.max(4, spacing)
+    // An edge panel whose icons stand on stands, or float as holograms,
+    // reaches past its panel, which Plasma would cut: it is drawn in Arch
+    // Dock's own window over the panel (OverflowHost) - while the panel is
+    // always shown. Plasma hides an auto-hiding panel through the
+    // compositor, unseen by its widgets, and keeps it shown while a window
+    // of theirs is; such a panel draws its dock in itself as before.
+    readonly property bool dockReachesPastPanel: !freeSurface
+        && (String(configuration.pedestalShape || "none") !== "none" || configuration.hologramIcons === true)
+        && String(configuration.visibilityMode || "always") === "always"
+    // How thick the edge panel is across its edge: the widget's own size
+    // there, which Plasma gives it.
+    readonly property real panelCrossSize: activeDockRepresentation
+        ? (vertical ? activeDockRepresentation.width : activeDockRepresentation.height) : 0
     readonly property real magnification: Number(configuration.magnification || 1.65)
     readonly property real panelOpacity: configuration.opacity === undefined
         ? 0.9 : Number(configuration.opacity)
@@ -1255,61 +1268,6 @@ PlasmoidItem {
             onAuthoritativeHostChanged: publishHostConcealed()
             Component.onCompleted: publishHostConcealed()
 
-            // Panel-wide interaction guards. The pointer being anywhere over
-            // the panel holds it open, not merely the pointer being over an
-            // icon, so the gaps between entries are not a way to make a dock
-            // close under the user's cursor.
-            HoverHandler {
-                id: panelHover
-
-                onHoveredChanged: root.panelPointerInside = hovered
-            }
-
-            // The reveal zone is the strip the panel keeps when it is
-            // collapsed. It is deliberately inside the applet's own bounds: an
-            // edge-approach detector outside the widget is not something this
-            // host can honestly provide, so the handle the user can actually
-            // see is what opens the panel.
-            //
-            // The scene is thicker than a Plasma panel (room for magnification
-            // and motion) and centred in it, so the scene's own handle strip
-            // lies outside the panel window on every edge (audit E-01). The
-            // strip is laid along this item's own edge instead: the whole
-            // panel length, as thick as the Reveal zone setting.
-            Item {
-                id: revealZone
-
-                readonly property string edge: root.freeSurface ? "bottom"
-                    : String(root.configuration.edge || "bottom")
-                readonly property bool alongWidth: edge === "top" || edge === "bottom"
-                readonly property real thickness: Math.max(1, Number(alongWidth
-                    ? panelScene.revealHandle.height : panelScene.revealHandle.width) || 8)
-
-                x: edge === "right" ? Math.max(0, parent.width - thickness) : 0
-                y: edge === "bottom" ? Math.max(0, parent.height - thickness) : 0
-                width: alongWidth ? parent.width : Math.min(thickness, parent.width)
-                height: alongWidth ? Math.min(thickness, parent.height) : parent.height
-                visible: root.presentationTrigger === "edge"
-                    && presentationController.hostVisible
-                    && panelScene.collapseProgress > 0
-                z: 30
-
-                HoverHandler {
-                    enabled: revealZone.visible
-                    onHoveredChanged: root.revealZoneActive = hovered
-                }
-            }
-
-            // Click-to-open applies only while the panel is closed, so it can
-            // never intercept a click meant for an entry that is on screen.
-            TapHandler {
-                enabled: root.opensOnClick
-                    && panelScene.collapseProgress >= 1
-                    && !root.plasmaEditMode
-                gesturePolicy: TapHandler.ReleaseWithinBounds
-                onTapped: root.requestPresentationOpen()
-            }
-
             onActiveFocusChanged: root.panelKeyboardFocus = activeFocus
             Component.onDestruction: {
                 root.panelPointerInside = false;
@@ -1317,175 +1275,268 @@ PlasmoidItem {
                 root.panelDropActive = false;
             }
 
-            PanelScene {
-                id: panelScene
+            // The dock as it is drawn and handled: in the panel, or, on an edge
+            // panel whose stands and holograms reach past it, in Arch Dock's
+            // own clear window over the panel (OverflowHost), laid exactly
+            // over this widget, which stays in the panel as the dock's place.
+            Item {
+                id: dockContent
 
-                readonly property string rendererObservation: JSON.stringify({
-                    panelId: root.panelId, appletId: Number(Plasmoid.id),
-                    themeId: String((root.configuration.themeDefinition || ({})).id || ""),
-                    requested: requestedRendererTier, effective: effectiveRendererTier,
-                    reason: fallbackReason,
-                    triangles: activeSurfaceRenderer ? Number(activeSurfaceRenderer.triangleCount || 0) : 0,
-                    frameRendered: activeSurfaceRenderer ? Boolean(activeSurfaceRenderer.frameRendered) : false,
-                    quality: activeSurfaceRenderer ? activeSurfaceRenderer.qualityState || ({}) : ({})
-                })
-                onRendererObservationChanged: {
-                    if (requestedRendererTier === "true3d")
-                        console.debug(rendererLog, "ArchDockRenderer " + rendererObservation);
+                parent: overflowHost.hosting ? overflowHost.contentItem : representation
+                x: overflowHost.hosting ? overflowHost.dockPlace.x : 0
+                y: overflowHost.hosting ? overflowHost.dockPlace.y : 0
+                width: representation.width
+                height: representation.height
+
+                // Panel-wide interaction guards. The pointer being anywhere over
+                // the panel holds it open, not merely the pointer being over an
+                // icon, so the gaps between entries are not a way to make a dock
+                // close under the user's cursor.
+                HoverHandler {
+                    id: panelHover
+
+                    onHoveredChanged: root.panelPointerInside = hovered
                 }
 
-                // A decoration's launcher seat takes an icon dropped on it:
-                // one of the panel's own, or an application or a file from
-                // elsewhere, which the panel gains.
+                // The reveal zone is the strip the panel keeps when it is
+                // collapsed. It is deliberately inside the applet's own bounds: an
+                // edge-approach detector outside the widget is not something this
+                // host can honestly provide, so the handle the user can actually
+                // see is what opens the panel.
+                //
+                // The scene is thicker than a Plasma panel (room for magnification
+                // and motion) and centred in it, so the scene's own handle strip
+                // lies outside the panel window on every edge (audit E-01). The
+                // strip is laid along this item's own edge instead: the whole
+                // panel length, as thick as the Reveal zone setting.
+                Item {
+                    id: revealZone
+
+                    readonly property string edge: root.freeSurface ? "bottom"
+                        : String(root.configuration.edge || "bottom")
+                    readonly property bool alongWidth: edge === "top" || edge === "bottom"
+                    readonly property real thickness: Math.max(1, Number(alongWidth
+                        ? panelScene.revealHandle.height : panelScene.revealHandle.width) || 8)
+
+                    x: edge === "right" ? Math.max(0, parent.width - thickness) : 0
+                    y: edge === "bottom" ? Math.max(0, parent.height - thickness) : 0
+                    width: alongWidth ? parent.width : Math.min(thickness, parent.width)
+                    height: alongWidth ? Math.min(thickness, parent.height) : parent.height
+                    visible: root.presentationTrigger === "edge"
+                        && presentationController.hostVisible
+                        && panelScene.collapseProgress > 0
+                    z: 30
+
+                    HoverHandler {
+                        enabled: revealZone.visible
+                        onHoveredChanged: root.revealZoneActive = hovered
+                    }
+                }
+
+                // Click-to-open applies only while the panel is closed, so it can
+                // never intercept a click meant for an entry that is on screen.
+                TapHandler {
+                    enabled: root.opensOnClick
+                        && panelScene.collapseProgress >= 1
+                        && !root.plasmaEditMode
+                    gesturePolicy: TapHandler.ReleaseWithinBounds
+                    onTapped: root.requestPresentationOpen()
+                }
+
+                PanelScene {
+                    id: panelScene
+
+                    readonly property string rendererObservation: JSON.stringify({
+                        panelId: root.panelId, appletId: Number(Plasmoid.id),
+                        themeId: String((root.configuration.themeDefinition || ({})).id || ""),
+                        requested: requestedRendererTier, effective: effectiveRendererTier,
+                        reason: fallbackReason,
+                        triangles: activeSurfaceRenderer ? Number(activeSurfaceRenderer.triangleCount || 0) : 0,
+                        frameRendered: activeSurfaceRenderer ? Boolean(activeSurfaceRenderer.frameRendered) : false,
+                        quality: activeSurfaceRenderer ? activeSurfaceRenderer.qualityState || ({}) : ({})
+                    })
+                    onRendererObservationChanged: {
+                        if (requestedRendererTier === "true3d")
+                            console.debug(rendererLog, "ArchDockRenderer " + rendererObservation);
+                    }
+
+                    // A decoration's launcher seat takes an icon dropped on it:
+                    // one of the panel's own, or an application or a file from
+                    // elsewhere, which the panel gains.
+                    DropArea {
+                        id: seatDropArea
+                        readonly property var seat: panelScene.decorationSeat
+                        readonly property bool present: seat !== null && seat !== undefined && Number(seat.size) > 0
+                        visible: present
+                        enabled: present && Boolean(root.configuration.acceptDrops) && !root.plasmaEditMode
+                            && root.sceneInputEnabled
+                        x: present ? Number(seat.x) - Number(seat.size) * 0.65 : 0
+                        y: present ? Number(seat.y) - Number(seat.size) * 0.65 : 0
+                        width: present ? Number(seat.size) * 1.3 : 0
+                        height: width
+                        keys: ["application/x-archdock-app", "text/uri-list"]
+                        onDropped: drop => {
+                            drop.accepted = false;
+                            const source = drop.source;
+                            const appId = source && source.entry && source.entry.appId !== undefined
+                                ? String(source.entry.appId)
+                                : String(drop.getDataAsString("application/x-archdock-app") || "");
+                            if (appId.length > 0) {
+                                root.setDecorationSeat(appId);
+                                drop.acceptProposedAction();
+                            } else if (drop.hasUrls && drop.urls.length > 0 && dockService.registered) {
+                                root.callDock("seatPanelUrl", [root.panelId, String(drop.urls[0])], root.refresh);
+                                drop.acceptProposedAction();
+                            }
+                        }
+                    }
+
+                    anchors.centerIn: parent
+                    // An edge panel's decoration may reach farther at one end.
+                    anchors.horizontalCenterOffset: root.freeSurface ? 0 : Number(decorationAlongRoom.offsetX || 0)
+                    anchors.verticalCenterOffset: root.freeSurface ? 0 : Number(decorationAlongRoom.offsetY || 0)
+                    panelDefinition: root.scenePanelDefinition
+                    runtimeState: root.sceneRuntimeState
+                    orderedEntries: root.entries
+                    hostCapabilities: root.sceneHostCapabilities
+                    themeDefinition: root.configuration.themeDefinition || ({})
+                    iconStyleDefinition:
+                        root.configuration.iconStyleDefinition || ({})
+                    animationProfiles: ({
+                        reducedMotion: root.configuration.reducedMotion,
+                        duration: root.motionDuration
+                    })
+                    entryDelegate: liveEntryDelegate
+                    // While Panel Studio holds a desktop 3D edit, presses belong
+                    // to the handles and no application can start.
+                    entryInteractionEnabled: root.sceneInputEnabled
+                        && !Boolean(root.configuration.sceneEditActive)
+                    sceneEditActive: Boolean(root.configuration.sceneEditActive)
+                    onSceneTransformEdited: function(values) {
+                        root.callDock("updateSceneEditDraft", [root.panelId, values], function(reply) {
+                            const result = root.normalizeReply(reply);
+                            if (result && result.errorCode === "panel-too-small") root.explainTooSmall();
+                        });
+                    }
+                    // Turning the dock with the wheel closes a hover preview,
+                    // which would otherwise stand beside an icon that moved.
+                    onWheelUsed: if (root.activeDockRepresentation)
+                        root.activeDockRepresentation.hideWindowPreview()
+                    sceneConcealed: !presentationController.hostVisible
+                    geometryCompatibilityProfile: root.freeSurface
+                        ? "live" : "canonical"
+                    entryDelegateContext: ({
+                        hostKind: root.freeSurface ? "free" : "native",
+                        vertical: root.vertical
+                    })
+                }
+
+                Column {
+                    anchors.centerIn: parent
+                    z: 20
+                    spacing: Kirigami.Units.smallSpacing
+                    visible: root.entries.length === 0
+
+                    Kirigami.Icon {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: Kirigami.Units.iconSizes.medium
+                        height: width
+                        // A widget added from Plasma's widget list has no panel
+                        // behind it and never gets one by itself (its bootstrap
+                        // is off); it must not invite drops.
+                        readonly property bool unbound: root.panelId.length === 0
+                            && !Plasmoid.configuration.bootstrapFreeDock
+                        source: dockService.registered
+                            ? (root.requestFailed ? "data-error" : unbound ? "dialog-information" : "list-add")
+                            : "network-disconnect"
+                    }
+                    QQC2.Label {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        width: Math.min(implicitWidth, Math.max(120, parent.width - 2 * Kirigami.Units.largeSpacing))
+                        text: !dockService.registered
+                            ? qsTr("Arch Dock service is unavailable")
+                            : root.requestFailed
+                                ? qsTr("Could not load dock entries")
+                                : root.panelId.length === 0 && !Plasmoid.configuration.bootstrapFreeDock
+                                    ? qsTr("This widget has no panel. Create one in Panel Studio: Panels, then New free panel at the end of the panel list, or with Add Panel > Arch Dock Circular Free Dock; then remove this widget.")
+                                    : root.panelType === "empty"
+                                        ? qsTr("Choose Launcher or Hybrid in Panel Studio to show dropped items")
+                                        : qsTr("Drop applications or folders here, from the application menu or a file manager")
+                    }
+                    QQC2.Button {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: qsTr("Retry")
+                        visible: !dockService.registered || root.requestFailed
+                        onClicked: root.refresh()
+                    }
+                }
+
+                Rectangle {
+                    id: fullNoticeBox
+                    visible: root.fullNotice.length > 0
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width - 2 * Kirigami.Units.largeSpacing,
+                                    fullNoticeText.implicitWidth + 2 * Kirigami.Units.largeSpacing)
+                    height: fullNoticeText.implicitHeight + 2 * Kirigami.Units.smallSpacing
+                    radius: Kirigami.Units.smallSpacing
+                    color: Qt.rgba(0, 0, 0, 0.75)
+                    z: 1000
+                    QQC2.Label {
+                        id: fullNoticeText
+                        anchors.centerIn: parent
+                        width: parent.width - 2 * Kirigami.Units.largeSpacing
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        color: "white"
+                        text: root.fullNotice
+                    }
+                }
+
                 DropArea {
-                    id: seatDropArea
-                    readonly property var seat: panelScene.decorationSeat
-                    readonly property bool present: seat !== null && seat !== undefined && Number(seat.size) > 0
-                    visible: present
-                    enabled: present && Boolean(root.configuration.acceptDrops) && !root.plasmaEditMode
-                        && root.sceneInputEnabled
-                    x: present ? Number(seat.x) - Number(seat.size) * 0.65 : 0
-                    y: present ? Number(seat.y) - Number(seat.size) * 0.65 : 0
-                    width: present ? Number(seat.size) * 1.3 : 0
-                    height: width
-                    keys: ["application/x-archdock-app", "text/uri-list"]
+                    id: panelDropArea
+
+                    anchors.fill: parent
+                    containmentMask: root.freeSurface ? drawnArea : null
+                    enabled: Boolean(root.configuration.acceptDrops) && !root.plasmaEditMode
+                        && root.sceneInputEnabled && ["launcher", "hybrid"].includes(root.panelType)
+                    keys: ["text/uri-list"]
+                    onContainsDragChanged: root.panelDropActive = containsDrag
                     onDropped: drop => {
                         drop.accepted = false;
-                        const source = drop.source;
-                        const appId = source && source.entry && source.entry.appId !== undefined
-                            ? String(source.entry.appId)
-                            : String(drop.getDataAsString("application/x-archdock-app") || "");
-                        if (appId.length > 0) {
-                            root.setDecorationSeat(appId);
-                            drop.acceptProposedAction();
-                        } else if (drop.hasUrls && drop.urls.length > 0 && dockService.registered) {
-                            root.callDock("seatPanelUrl", [root.panelId, String(drop.urls[0])], root.refresh);
-                            drop.acceptProposedAction();
+                        try {
+                            if (drop.hasUrls && root.pinDroppedUrls(drop.urls))
+                                drop.acceptProposedAction();
+                        } finally {
+                            root.panelDropActive = false;
                         }
                     }
                 }
+            }
 
-                anchors.centerIn: parent
-                // An edge panel's decoration may reach farther at one end.
-                anchors.horizontalCenterOffset: root.freeSurface ? 0 : Number(decorationAlongRoom.offsetX || 0)
-                anchors.verticalCenterOffset: root.freeSurface ? 0 : Number(decorationAlongRoom.offsetY || 0)
-                panelDefinition: root.scenePanelDefinition
-                runtimeState: root.sceneRuntimeState
-                orderedEntries: root.entries
-                hostCapabilities: root.sceneHostCapabilities
-                themeDefinition: root.configuration.themeDefinition || ({})
-                iconStyleDefinition:
-                    root.configuration.iconStyleDefinition || ({})
-                animationProfiles: ({
-                    reducedMotion: root.configuration.reducedMotion,
-                    duration: root.motionDuration
+            OverflowHost {
+                id: overflowHost
+
+                edge: String(root.configuration.edge || "bottom")
+                placeholder: representation
+                wanted: root.dockReachesPastPanel && representation.authoritativeHost
+                // Plasma's edit mode handles the panel and its widgets: the
+                // dock is still drawn here, and every press goes to Plasma.
+                takesPointer: !root.plasmaEditMode
+                // How far the dock is drawn past the panel, away from the
+                // screen edge (the scene's own drawn bounds), and where.
+                reach: {
+                    const drawn = panelScene.drawnBounds
+                    const top = panelScene.y + drawn.y, left = panelScene.x + drawn.x
+                    const bottom = top + drawn.height, right = left + drawn.width
+                    return edge === "top" ? bottom - representation.height
+                        : edge === "left" ? right - representation.width
+                        : edge === "right" ? -left : -top
+                }
+                shownRects: (panelScene.entryShownRects || []).map(function(rect) {
+                    return Qt.rect(panelScene.x + rect.x, panelScene.y + rect.y, rect.width, rect.height)
                 })
-                entryDelegate: liveEntryDelegate
-                // While Panel Studio holds a desktop 3D edit, presses belong
-                // to the handles and no application can start.
-                entryInteractionEnabled: root.sceneInputEnabled
-                    && !Boolean(root.configuration.sceneEditActive)
-                sceneEditActive: Boolean(root.configuration.sceneEditActive)
-                onSceneTransformEdited: function(values) {
-                    root.callDock("updateSceneEditDraft", [root.panelId, values], function(reply) {
-                        const result = root.normalizeReply(reply);
-                        if (result && result.errorCode === "panel-too-small") root.explainTooSmall();
-                    });
-                }
-                // Turning the dock with the wheel closes a hover preview,
-                // which would otherwise stand beside an icon that moved.
-                onWheelUsed: if (root.activeDockRepresentation)
-                    root.activeDockRepresentation.hideWindowPreview()
-                sceneConcealed: !presentationController.hostVisible
-                geometryCompatibilityProfile: root.freeSurface
-                    ? "live" : "canonical"
-                entryDelegateContext: ({
-                    hostKind: root.freeSurface ? "free" : "native",
-                    vertical: root.vertical
-                })
-            }
-
-            Column {
-                anchors.centerIn: parent
-                z: 20
-                spacing: Kirigami.Units.smallSpacing
-                visible: root.entries.length === 0
-
-                Kirigami.Icon {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    width: Kirigami.Units.iconSizes.medium
-                    height: width
-                    // A widget added from Plasma's widget list has no panel
-                    // behind it and never gets one by itself (its bootstrap
-                    // is off); it must not invite drops.
-                    readonly property bool unbound: root.panelId.length === 0
-                        && !Plasmoid.configuration.bootstrapFreeDock
-                    source: dockService.registered
-                        ? (root.requestFailed ? "data-error" : unbound ? "dialog-information" : "list-add")
-                        : "network-disconnect"
-                }
-                QQC2.Label {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.WordWrap
-                    width: Math.min(implicitWidth, Math.max(120, parent.width - 2 * Kirigami.Units.largeSpacing))
-                    text: !dockService.registered
-                        ? qsTr("Arch Dock service is unavailable")
-                        : root.requestFailed
-                            ? qsTr("Could not load dock entries")
-                            : root.panelId.length === 0 && !Plasmoid.configuration.bootstrapFreeDock
-                                ? qsTr("This widget has no panel. Create one in Panel Studio: Panels, then New free panel at the end of the panel list, or with Add Panel > Arch Dock Circular Free Dock; then remove this widget.")
-                                : root.panelType === "empty"
-                                    ? qsTr("Choose Launcher or Hybrid in Panel Studio to show dropped items")
-                                    : qsTr("Drop applications or folders here, from the application menu or a file manager")
-                }
-                QQC2.Button {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: qsTr("Retry")
-                    visible: !dockService.registered || root.requestFailed
-                    onClicked: root.refresh()
-                }
-            }
-
-            Rectangle {
-                id: fullNoticeBox
-                visible: root.fullNotice.length > 0
-                anchors.centerIn: parent
-                width: Math.min(parent.width - 2 * Kirigami.Units.largeSpacing,
-                                fullNoticeText.implicitWidth + 2 * Kirigami.Units.largeSpacing)
-                height: fullNoticeText.implicitHeight + 2 * Kirigami.Units.smallSpacing
-                radius: Kirigami.Units.smallSpacing
-                color: Qt.rgba(0, 0, 0, 0.75)
-                z: 1000
-                QQC2.Label {
-                    id: fullNoticeText
-                    anchors.centerIn: parent
-                    width: parent.width - 2 * Kirigami.Units.largeSpacing
-                    horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.WordWrap
-                    color: "white"
-                    text: root.fullNotice
-                }
-            }
-
-            DropArea {
-                id: panelDropArea
-
-                anchors.fill: parent
-                containmentMask: root.freeSurface ? drawnArea : null
-                enabled: Boolean(root.configuration.acceptDrops) && !root.plasmaEditMode
-                    && root.sceneInputEnabled && ["launcher", "hybrid"].includes(root.panelType)
-                keys: ["text/uri-list"]
-                onContainsDragChanged: root.panelDropActive = containsDrag
-                onDropped: drop => {
-                    drop.accepted = false;
-                    try {
-                        if (drop.hasUrls && root.pinDroppedUrls(drop.urls))
-                            drop.acceptProposedAction();
-                    } finally {
-                        root.panelDropActive = false;
-                    }
-                }
             }
         }
     }
@@ -1518,6 +1569,8 @@ PlasmoidItem {
             // representation, where `panelScene` is not in reach (it read as
             // undefined, and a free panel's stands stood as in a row).
             pedestalOnPath: parent.scenePedestalOnPath === true
+            screenEdge: String(parent.sceneScreenEdge || "bottom")
+            panelThickness: root.freeSurface ? 0 : root.panelCrossSize
             seatAvailable: parent.sceneSeatAvailable === true
             seated: parent.sceneSeated === true
             setSeat: root.setDecorationSeat

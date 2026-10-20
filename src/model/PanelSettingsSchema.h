@@ -116,6 +116,9 @@ enum class EditorCapability
     Decoration,
     // The colours of the decoration a flat panel wears.
     DecorationColours,
+    // Holographic icons: each icon drawn as light over a projector's
+    // opening, on flat and 3D panels alike.
+    Hologram,
     Count
 };
 

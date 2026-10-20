@@ -1,6 +1,7 @@
 import QtQuick
 import ArchDock.Rendering 1.0
 import "ThemeStateSelection.js" as ThemeStates
+import "HologramLook.js" as HologramLook
 
 // Chooses and loads the renderer for a panel's surface: the theme's skin
 // (skinned 2D), its baked 2.5D platform or its 3D scene when they are
@@ -33,6 +34,48 @@ Item {
     // A panel wearing a picture does not glow, as stone does not.
     readonly property bool flatGlowActive: panelGlow > 0 && !true3DReady
         && !(appearance === "picture" && picture.length > 0)
+    // A holographic panel (Panels > Hologram): a flat panel's surface drawn
+    // as light in its renderer's layer effect, on the holograms' shared
+    // clock; a 3D scene draws its own.
+    readonly property var panelHologram: HologramLook.settings(sceneParameters, "Panel")
+    readonly property var panelHologramColours: HologramLook.colours(sceneParameters, "Panel")
+    readonly property bool panelHologramDrawn: panelHologram.on && !true3DReady
+    readonly property bool panelHologramMoving: panelHologramDrawn && visible && !reducedMotion && !sceneConcealed
+    property bool holdingHologramClock: false
+    function holdHologramClock(wanted) {
+        if (wanted === holdingHologramClock)
+            return
+        holdingHologramClock = wanted
+        if (wanted)
+            HologramClock.hold()
+        else
+            HologramClock.release()
+    }
+    onPanelHologramMovingChanged: holdHologramClock(panelHologramMoving)
+    Component.onDestruction: holdHologramClock(false)
+    Component {
+        id: panelGlowEffect
+
+        GlowEffect {
+            glowColor: root.panelGlowColour
+            intensity: root.panelGlow
+            reach: root.panelGlowReach
+        }
+    }
+    Component {
+        id: panelHologramEffect
+
+        HologramEffect {
+            colours: root.panelHologramColours
+            time: root.panelHologramMoving ? HologramClock.time * root.panelHologram.speed : 0
+            flicker: root.panelHologramMoving ? root.panelHologram.flicker : 0
+            glow: root.panelHologram.glow
+            glowReach: root.panelHologram.glowReach
+            lineSpacing: 2.2
+            seed: 0.37
+            body: 0.75
+        }
+    }
     property bool reducedMotion: false
     property var geometry: ({})
     property real layoutAngle: 0
@@ -258,11 +301,16 @@ Item {
                         "iconTileGlowReach", "panelLookBackground", "pedestalLookBackground",
                         "lookMotionSpeed", "panelPictureDepth", "panelPictureLevel", "panelPictureContrast",
                         "panelPictureSmoothing", "pedestalPictureDepth", "pedestalPictureLevel",
-                        "pedestalPictureContrast", "pedestalPictureSmoothing"])
+                        "pedestalPictureContrast", "pedestalPictureSmoothing",
+                        "hologramIconGlow", "hologramIconGlowReach", "hologramIconFlicker", "hologramIconSpeed",
+                        "hologramBeamStrength", "hologramBeamHeight", "hologramPanelGlow", "hologramPanelGlowReach",
+                        "hologramPanelFlicker", "hologramPanelSpeed", "hologramPedestalGlow",
+                        "hologramPedestalGlowReach", "hologramPedestalFlicker", "hologramPedestalSpeed"])
                     if (parameters[key] !== undefined && parameters[key] !== null
                             && Number.isFinite(Number(parameters[key])))
                         merged[key] = Number(parameters[key])
-                for (const key of ["transitions", "float"])
+                for (const key of ["transitions", "float", "hologramIcons", "hologramIconFloat", "hologramBeam",
+                                   "hologramPanel", "hologramPedestals"])
                     if (typeof parameters[key] === "boolean") merged[key] = parameters[key]
                 for (const [key, target] of [["color", "materialColor"], ["material", "materialLook"],
                                             ["texture", "materialTexture"], ["iconRelief", "iconRelief"],
@@ -282,7 +330,26 @@ Item {
                                             ["iconGlowColor", "iconGlowColor"],
                                             ["iconTileGlowColor", "iconTileGlowColor"],
                                             ["panelLookColour", "panelLookColour"],
-                                            ["pedestalLookColour", "pedestalLookColour"]])
+                                            ["pedestalLookColour", "pedestalLookColour"],
+                                            ["hologramIconColours", "hologramIconColours"],
+                                            ["hologramIconOutlineColor", "hologramIconOutlineColor"],
+                                            ["hologramIconInlineColor", "hologramIconInlineColor"],
+                                            ["hologramIconVolumeColor", "hologramIconVolumeColor"],
+                                            ["hologramIconGlowColor", "hologramIconGlowColor"],
+                                            ["hologramIconTurning", "hologramIconTurning"],
+                                            ["hologramLightColor", "hologramLightColor"],
+                                            ["hologramOpeningColor", "hologramOpeningColor"],
+                                            ["hologramBeamMotion", "hologramBeamMotion"],
+                                            ["hologramPanelColours", "hologramPanelColours"],
+                                            ["hologramPanelOutlineColor", "hologramPanelOutlineColor"],
+                                            ["hologramPanelInlineColor", "hologramPanelInlineColor"],
+                                            ["hologramPanelVolumeColor", "hologramPanelVolumeColor"],
+                                            ["hologramPanelGlowColor", "hologramPanelGlowColor"],
+                                            ["hologramPedestalColours", "hologramPedestalColours"],
+                                            ["hologramPedestalOutlineColor", "hologramPedestalOutlineColor"],
+                                            ["hologramPedestalInlineColor", "hologramPedestalInlineColor"],
+                                            ["hologramPedestalVolumeColor", "hologramPedestalVolumeColor"],
+                                            ["hologramPedestalGlowColor", "hologramPedestalGlowColor"]])
                     if (typeof parameters[key] === "string") merged[target] = parameters[key]
                 merged.panelPicture = root.picture
                 // All the way round (the owner, 2026-10-13: "freely in 360 every direction").
@@ -320,7 +387,10 @@ Item {
         })
     }
     onTrue3DEnabledChanged: synchronizeScene()
-    Component.onCompleted: synchronizeScene()
+    Component.onCompleted: {
+        synchronizeScene()
+        holdHologramClock(panelHologramMoving)
+    }
 
     Loader {
         id: proceduralRenderer
@@ -329,12 +399,8 @@ Item {
         anchors.fill: parent
         sourceComponent: proceduralComponent
         visible: !root.skinnedReady && !root.bakedReady && !root.true3DReady && !root.decorationActive
-        layer.enabled: root.flatGlowActive && visible
-        layer.effect: GlowEffect {
-            glowColor: root.panelGlowColour
-            intensity: root.panelGlow
-            reach: root.panelGlowReach
-        }
+        layer.enabled: (root.flatGlowActive || root.panelHologramDrawn) && visible
+        layer.effect: root.panelHologramDrawn ? panelHologramEffect : panelGlowEffect
     }
 
     Loader {
@@ -344,21 +410,34 @@ Item {
         active: root.skinnedRequested && root.themeUsable
         sourceComponent: skinnedComponent
         visible: root.skinnedReady
-        layer.enabled: root.flatGlowActive && visible
-        layer.effect: GlowEffect {
-            glowColor: root.panelGlowColour
-            intensity: root.panelGlow
-            reach: root.panelGlowReach
-        }
+        layer.enabled: (root.flatGlowActive || root.panelHologramDrawn) && visible
+        layer.effect: root.panelHologramDrawn ? panelHologramEffect : panelGlowEffect
     }
 
-    Loader {
-        id: decorationRenderer
-        objectName: "panel-decoration-renderer"
+    // A decoration lights itself; a holographic panel's is drawn as light
+    // through this layer, which takes in all the decoration draws: it
+    // reaches past the panel's box, and a layer leaves out whatever lies
+    // outside its item.
+    Item {
+        objectName: "panel-decoration-layer"
+        x: -root.decorationReach.left
+        y: -root.decorationReach.top
+        width: root.width + root.decorationReach.left + root.decorationReach.right
+        height: root.height + root.decorationReach.top + root.decorationReach.bottom
+        layer.enabled: root.panelHologramDrawn && decorationRenderer.visible && root.decorationActive
+        layer.effect: panelHologramEffect
 
-        anchors.fill: parent
-        active: root.decorationActive
-        sourceComponent: decorationComponent
+        Loader {
+            id: decorationRenderer
+            objectName: "panel-decoration-renderer"
+
+            x: root.decorationReach.left
+            y: root.decorationReach.top
+            width: root.width
+            height: root.height
+            active: root.decorationActive
+            sourceComponent: decorationComponent
+        }
     }
 
     Loader {
@@ -376,12 +455,8 @@ Item {
         active: root.bakedRequested && root.themeUsable
         sourceComponent: bakedComponent
         visible: root.bakedReady
-        layer.enabled: root.flatGlowActive && visible
-        layer.effect: GlowEffect {
-            glowColor: root.panelGlowColour
-            intensity: root.panelGlow
-            reach: root.panelGlowReach
-        }
+        layer.enabled: (root.flatGlowActive || root.panelHologramDrawn) && visible
+        layer.effect: root.panelHologramDrawn ? panelHologramEffect : panelGlowEffect
     }
 
     Component {

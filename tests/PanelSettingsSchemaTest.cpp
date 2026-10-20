@@ -45,6 +45,7 @@ private slots:
     void materialsAndFlatLookRoundTrip();
     void iconParametersRoundTripAndRespectBounds();
     void pedestalParametersRoundTripAndRespectBounds();
+    void hologramParametersRoundTripAndRespectBounds();
     void tileParametersRoundTripAndRestoreWithTheFlatLook();
     void tiltScalarsPreserveParameterMaps();
     void sceneTransformFieldsAreBoundedAndReversible();
@@ -940,7 +941,151 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
     QCOMPARE(result.value(QStringLiteral("pedestalColor")).toString(), QString{});
     QCOMPARE(result.value(QStringLiteral("pedestalAnimation")).toString(), QStringLiteral("none"));
     QCOMPARE(result.value(QStringLiteral("pedestalFacing")).toString(), QStringLiteral("panel"));
-    QCOMPARE(result.value(QStringLiteral("pedestalViewAngle")).toDouble(), 60.0);
+    // Up to straight from above.
+    QCOMPARE(result.value(QStringLiteral("pedestalViewAngle")).toDouble(), 90.0);
+}
+
+void PanelSettingsSchemaTest::hologramParametersRoundTripAndRespectBounds()
+{
+    // Holograms: a Hologram tab each for the icons, the panel and its
+    // stands, on every host and renderer, stored beside the 3D parameters
+    // and bounded like them.
+    const QVariantMap values{
+        {QStringLiteral("hologramIcons"), true},
+        {QStringLiteral("hologramIconColours"), QStringLiteral("emerald")},
+        {QStringLiteral("hologramIconOutlineColor"), QStringLiteral("#ffffff")},
+        {QStringLiteral("hologramIconInlineColor"), QStringLiteral("#ccffee")},
+        {QStringLiteral("hologramIconVolumeColor"), QStringLiteral("#44ff99")},
+        {QStringLiteral("hologramIconGlowColor"), QStringLiteral("#11dd66")},
+        {QStringLiteral("hologramIconGlow"), 1.3},
+        {QStringLiteral("hologramIconGlowReach"), 0.4},
+        {QStringLiteral("hologramIconFlicker"), 1.5},
+        {QStringLiteral("hologramIconFloat"), false},
+        {QStringLiteral("hologramIconTurning"), QStringLiteral("sway")},
+        {QStringLiteral("hologramIconSpeed"), 2.0},
+        {QStringLiteral("hologramBeam"), false},
+        {QStringLiteral("hologramLightColor"), QStringLiteral("#22d8ff")},
+        {QStringLiteral("hologramOpeningColor"), QStringLiteral("#3fb0ff")},
+        {QStringLiteral("hologramBeamStrength"), 0.6},
+        {QStringLiteral("hologramBeamHeight"), 0.5},
+        {QStringLiteral("hologramBeamMotion"), QStringLiteral("pulse")},
+        {QStringLiteral("hologramPanel"), true},
+        {QStringLiteral("hologramPanelColours"), QStringLiteral("violet")},
+        {QStringLiteral("hologramPanelOutlineColor"), QStringLiteral("#faf5ff")},
+        {QStringLiteral("hologramPanelInlineColor"), QStringLiteral("#e4d0ff")},
+        {QStringLiteral("hologramPanelVolumeColor"), QStringLiteral("#b080ff")},
+        {QStringLiteral("hologramPanelGlowColor"), QStringLiteral("#7a3dff")},
+        {QStringLiteral("hologramPanelGlow"), 0.5},
+        {QStringLiteral("hologramPanelGlowReach"), 0.2},
+        {QStringLiteral("hologramPanelFlicker"), 0.0},
+        {QStringLiteral("hologramPanelSpeed"), 0.5},
+        {QStringLiteral("hologramPedestals"), true},
+        {QStringLiteral("hologramPedestalColours"), QStringLiteral("amber")},
+        {QStringLiteral("hologramPedestalOutlineColor"), QStringLiteral("#fffaf0")},
+        {QStringLiteral("hologramPedestalInlineColor"), QStringLiteral("#ffe8b8")},
+        {QStringLiteral("hologramPedestalVolumeColor"), QStringLiteral("#ffc04a")},
+        {QStringLiteral("hologramPedestalGlowColor"), QStringLiteral("#ff9410")},
+        {QStringLiteral("hologramPedestalGlow"), 0.9},
+        {QStringLiteral("hologramPedestalGlowReach"), 1.0},
+        {QStringLiteral("hologramPedestalFlicker"), 2.0},
+        {QStringLiteral("hologramPedestalSpeed"), 3.0},
+    };
+    auto record = PanelDefinition::defaults(
+        QStringLiteral("hologram-parameters"), QStringLiteral("Hologram parameters"),
+        QStringLiteral("free"), false).toPersistedMap();
+    for (auto it = values.cbegin(); it != values.cend(); ++it)
+    {
+        const auto *descriptor = PanelSettingsSchema::panelDescriptor(it.key());
+        QVERIFY2(descriptor, qPrintable(it.key()));
+        const QString &key = it.key();
+        QCOMPARE(descriptor->editor.section,
+                 key.startsWith(QStringLiteral("hologramPanel")) ? QStringLiteral("panels-hologram")
+                 : key.startsWith(QStringLiteral("hologramPedestal")) ? QStringLiteral("pedestals-hologram")
+                 : QStringLiteral("icons-hologram"));
+        QCOMPARE(descriptor->editor.capability, QStringLiteral("hologram"));
+        QVERIFY(PanelSettingsSchema::isEditorField(PanelSettingsFieldScope::Panel, key));
+        QVERIFY(PanelSettingsSchema::isTransactionPanelField(key));
+        record.insert(key, it.value());
+    }
+    const auto restored = PanelDefinition::fromLegacyMap(record);
+    QVERIFY(restored.has_value());
+    const QVariantMap saved = restored->toPersistedMap();
+    for (auto it = values.cbegin(); it != values.cend(); ++it)
+    {
+        QCOMPARE(restored->surface.parameters3D.value(it.key()), it.value());
+        QCOMPARE(saved.value(it.key()), it.value());
+    }
+    // A new panel has no holograms; switched on, each part keeps its own
+    // colours, glows as far as the other glows reach by default, floats
+    // and turns, over its projector's light rising and drifting sideways.
+    const auto defaultOf = [](const char *key) {
+        return PanelSettingsSchema::panelDescriptor(QString::fromLatin1(key))->defaultValue;
+    };
+    for (const char *key : {"hologramIcons", "hologramPanel", "hologramPedestals"})
+        QCOMPARE(defaultOf(key).toBool(), false);
+    for (const char *key : {"hologramIconColours", "hologramPanelColours", "hologramPedestalColours"})
+        QCOMPARE(defaultOf(key).toString(), QStringLiteral("original"));
+    for (const char *key : {"hologramIconGlowReach", "hologramPanelGlowReach", "hologramPedestalGlowReach"})
+        QCOMPARE(defaultOf(key).toDouble(), 0.75);
+    QCOMPARE(defaultOf("hologramIconOutlineColor").toString(), QString{});
+    QCOMPARE(defaultOf("hologramBeam").toBool(), true);
+    QCOMPARE(defaultOf("hologramIconFloat").toBool(), true);
+    QCOMPARE(defaultOf("hologramIconTurning").toString(), QStringLiteral("turn"));
+    QCOMPARE(defaultOf("hologramBeamMotion").toString(), QStringLiteral("rise-drift"));
+    const auto fresh = PanelDefinition::defaults(
+        QStringLiteral("hologram-defaults"), QStringLiteral("Hologram defaults"),
+        QStringLiteral("free"), false);
+    QVERIFY(!fresh.toPersistedMap().contains(QStringLiteral("hologramIcons")));
+    // The choices are the ones the renderers and Panel Studio know
+    // (HologramLook.js).
+    const QStringList sets{QStringLiteral("original"), QStringLiteral("cyan"), QStringLiteral("ice"),
+        QStringLiteral("emerald"), QStringLiteral("amber"), QStringLiteral("ruby"), QStringLiteral("violet"),
+        QStringLiteral("rose")};
+    for (const char *key : {"hologramIconColours", "hologramPanelColours", "hologramPedestalColours"})
+        QCOMPARE(PanelSettingsSchema::panelDescriptor(QString::fromLatin1(key))->choices, sets);
+    QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("hologramBeamMotion"))->choices,
+             (QStringList{QStringLiteral("rise-drift"), QStringLiteral("rise"), QStringLiteral("pulse"),
+                          QStringLiteral("sweep"), QStringLiteral("still")}));
+    QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("hologramIconTurning"))->choices,
+             (QStringList{QStringLiteral("turn"), QStringLiteral("sway"), QStringLiteral("still")}));
+    // A projector is a stand of its own, for the icons and the folder items.
+    for (const char *shape : {"projector", "projector-round"})
+    {
+        QVERIFY(PanelSettingsSchema::panelDescriptor(QStringLiteral("pedestalShape"))
+                    ->choices.contains(QString::fromLatin1(shape)));
+        QVERIFY(PanelSettingsSchema::panelDescriptor(QStringLiteral("folderPedestalShape"))
+                    ->choices.contains(QString::fromLatin1(shape)));
+    }
+    // Bounds and choices.
+    record.insert(QStringLiteral("hologramIconGlow"), 5.0);
+    record.insert(QStringLiteral("hologramIconGlowReach"), -1.0);
+    record.insert(QStringLiteral("hologramIconFlicker"), 9.0);
+    record.insert(QStringLiteral("hologramIconSpeed"), 0.0);
+    record.insert(QStringLiteral("hologramBeamStrength"), 0.0);
+    record.insert(QStringLiteral("hologramBeamHeight"), 7.0);
+    record.insert(QStringLiteral("hologramPanelFlicker"), -3.0);
+    record.insert(QStringLiteral("hologramPedestalSpeed"), 10.0);
+    record.insert(QStringLiteral("hologramIconColours"), QStringLiteral("Cyan"));
+    record.insert(QStringLiteral("hologramPanelColours"), QStringLiteral("plaid"));
+    record.insert(QStringLiteral("hologramIconTurning"), QStringLiteral("spin"));
+    record.insert(QStringLiteral("hologramBeamMotion"), QStringLiteral("zigzag"));
+    record.insert(QStringLiteral("hologramIconVolumeColor"), QStringLiteral("green"));
+    const auto bounded = PanelDefinition::fromLegacyMap(record);
+    QVERIFY(bounded.has_value());
+    const QVariantMap &result = bounded->surface.parameters3D;
+    QCOMPARE(result.value(QStringLiteral("hologramIconGlow")).toDouble(), 1.5);
+    QCOMPARE(result.value(QStringLiteral("hologramIconGlowReach")).toDouble(), 0.0);
+    QCOMPARE(result.value(QStringLiteral("hologramIconFlicker")).toDouble(), 2.0);
+    QCOMPARE(result.value(QStringLiteral("hologramIconSpeed")).toDouble(), 0.1);
+    QCOMPARE(result.value(QStringLiteral("hologramBeamStrength")).toDouble(), 0.2);
+    QCOMPARE(result.value(QStringLiteral("hologramBeamHeight")).toDouble(), 2.0);
+    QCOMPARE(result.value(QStringLiteral("hologramPanelFlicker")).toDouble(), 0.0);
+    QCOMPARE(result.value(QStringLiteral("hologramPedestalSpeed")).toDouble(), 3.0);
+    QCOMPARE(result.value(QStringLiteral("hologramIconColours")).toString(), QStringLiteral("cyan"));
+    QCOMPARE(result.value(QStringLiteral("hologramPanelColours")).toString(), QStringLiteral("original"));
+    QCOMPARE(result.value(QStringLiteral("hologramIconTurning")).toString(), QStringLiteral("turn"));
+    QCOMPARE(result.value(QStringLiteral("hologramBeamMotion")).toString(), QStringLiteral("rise-drift"));
+    QCOMPARE(result.value(QStringLiteral("hologramIconVolumeColor")).toString(), QString{});
 }
 
 QTEST_MAIN(PanelSettingsSchemaTest)

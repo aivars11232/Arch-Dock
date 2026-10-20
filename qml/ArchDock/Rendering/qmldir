@@ -2,6 +2,7 @@ module ArchDock.Rendering
 singleton RendererBuildConfig 1.0 RendererBuildConfig.qml
 RendererCapabilityProbe 1.0 RendererCapabilityProbe.qml
 singleton RenderingModuleProbe 1.0 RenderingModuleProbe.qml
+singleton HologramClock 1.0 HologramClock.qml
 LayoutEngine 1.0 LayoutEngine.js
 IconStyleResolver 1.0 IconStyleResolver.js
 AnimationProfileRuntime 1.0 AnimationProfileRuntime.js
@@ -10,6 +11,7 @@ PresentationStates 1.0 PresentationStates.js
 ThemeStateSelection 1.0 ThemeStateSelection.js
 DecorationCatalogue 1.0 DecorationCatalogue.js
 DecorationScene 1.0 DecorationScene.js
+HologramLook 1.0 HologramLook.js
 IconScene 1.0 IconScene.qml
 FolderExpansion 1.0 FolderExpansion.qml
 FolderTrack 1.0 FolderTrack.qml
@@ -23,6 +25,7 @@ ScrollInput 1.0 inputs/ScrollInput.qml
 IconStyle2D 1.0 renderers/IconStyle2D.qml
 IconTile 1.0 renderers/IconTile.qml
 GlowEffect 1.0 renderers/GlowEffect.qml
+HologramEffect 1.0 renderers/HologramEffect.qml
 PanelScene 1.0 PanelScene.qml
 PanelSegment 1.0 PanelSegment.qml
 PanelSurfaceLoader 1.0 PanelSurfaceLoader.qml

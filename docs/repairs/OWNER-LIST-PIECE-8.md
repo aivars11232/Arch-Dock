@@ -401,3 +401,200 @@ identical in the clone and the workspace. With this, 3D platform
 decorations are closed; part two of piece 8, the holographic icons, is
 next.
 
+
+## Holograms — Report 1 (2026-10-21)
+
+The owner's words over the two days: holograms "could be entirely new
+section, like 3D, u can enable that to not only icons, but also to panels
+and pedestals, and that light should be optional"; "not side bar ... it's
+a subtab, like appierance"; "by default when I enable holograms, the colors
+should resemble original colors of the panel and icons and stuff, and then
+in settings I could change color set. For each one of them"; the light's
+motion "upwards and sideways", researched online, and "no sound". On the
+bars: "for top the light could come from top, where pedestals should be
+also ... side bars pedestals should be sideways vertical closer to edge",
+the stands "near horizontal", "on the panel", fitting "within the panel"
+while icons and light may reach past it ("we already have it like that on
+free panels"), the bars "still tide to edges", the light "almost half the
+length" and then a setting for its height, the side bar's light the one
+for every bar. And: "try to do it right with the first time ... good
+enough for me to use for few months". Ticked along the way: the flat look,
+the level stands on every shape, the smaller projectors and their finish,
+the bars drawn past their panel, the clicks, the wrapping light, the 3D
+holograms and their toned lenses ("Much better"), the decorations as
+holograms ("Very nice, very good") with their own colours, and the two
+fixes below ("Good").
+
+### What changed for the owner
+
+- **A Hologram tab under Panels, Icons and Pedestals** (Pedestals only
+  while stands are drawn), on flat and 3D panels alike. Each has its
+  switch, a colour set (Original colours, the default, keeps the part's
+  own colours made light; or Cyan, Ice, Emerald, Amber, Ruby, Violet,
+  Rose), its own outline, inline, volume and glow colours, Glow intensity
+  and Glow reach (hidden while the glow is off), Flicker and Speed. The
+  icons' tab also has Float, Turning (3D panels: turning, swaying, still)
+  and the Projector light: on or off, its light and lens colours, Light
+  strength, Light height and Light motion (rising and drifting, rising,
+  pulsing, sweeping, still).
+- **Flat holograms**: an icon, a panel or a stand drawn as light,
+  see-through, its edges and inner lines brighter, crossed by drifting
+  lines, flickering now and then as a weak signal does, a glow round it.
+  The icon floats in a light rising from the middle of its stand's top (or
+  from the panel), over a glowing lens.
+- **3D holograms**: the icon's own solid drawn as light, turning or
+  swaying as it floats in its light; stands, platforms and decorations
+  drawn as light too, a decoration keeping its own colours.
+- **Stands by the screen edge**, holograms or not: on a top bar the stands
+  are above and the icons hang under them, on a side bar the stands stand
+  sideways at the screen-edge side; the light always points away from the
+  edge. Flat stands lie level at Pedestals > View angle (0-90, default
+  20) on every shape; Stand facing is a 3D panel's setting.
+- **Stands on the bar, fitting its thickness**: the bigger the bar, the
+  bigger its stands; icons and their light may reach past the bar.
+- **Two projector stands**: Projector (brushed metal, rounded) and Round
+  projector (a dark pad).
+- **Edge bars drawn past their Plasma panel**, still tied to their edge,
+  through a see-through window of Arch Dock's own: raised icons and stands
+  take clicks, previews open in the right place, Plasma's widgets beside
+  the dock still work, and clicks on empty see-through spots reach what
+  lies under them. On every bar the light is short and wraps the icon.
+- **Two faults found and fixed while testing**: a flat panel's and a
+  stand's hologram was drawn squeezed inside its glow (on a bar the light
+  was a thin line), and a flat decoration's hologram was squeezed and cut
+  at the panel's box, leaving its lenses' and branches' glow floating
+  outside it. Both are now drawn full size, their glow round them.
+- **Panel Studio offers decorations on 3D panels** standing on a generated
+  platform, as the 3D panels now draw them.
+
+### How it works
+
+- **The look** follows open-source hologram shaders: the see-through body
+  with brighter edges, drifting scan lines and a weak signal's blink from
+  Anderson Mancini's holographic material for three.js (MIT) and the Godot
+  "SciFi Hologram" shader (MIT); the projector's light, soft at its sides
+  and fading as it rises, from the Godot "Spatial Light Shaft" shader
+  (CC0), its rays drifting sideways in two layers as in the Godot "God
+  Rays" shader (CC0), its random-looking pattern and height gradient as in
+  Blender's light-cone tutorials. Flat: `HologramEffect.qml` with
+  `shaders/hologram.frag`, `hologram-beam.frag`, `hologram-opening.frag`,
+  compiled by Qt's shader tool at build time. 3D: Quick 3D materials with a
+  Fresnel rim (`HologramSurface`, `HologramLight`, `HologramOpening`).
+- **One clock** (`HologramClock`) moves every hologram, and holds still
+  under reduced motion or when nothing moves.
+- **The squeeze**: as a layer's effect, Qt's `MultiEffect` (the glow)
+  widens the layer's picture by its blur's padding (Qt's
+  `qgfxsourceproxy.cpp` sets the layer's `sourceRect`), and the light
+  stretched that whole picture over the item. The light now reads the
+  item's own part of it; a decoration is drawn through a layer as large as
+  everything it draws. Measured: Red Core's lens as light sat about 36
+  pixels inside the real lens (on a ring about 490 pixels across); now on
+  it.
+- **Stands by edge** turn the stand, lens and light in one frame by the
+  edge's angle, and raise the icon away from the edge, upright.
+- **The see-through window** (`OverflowHost.qml`) is a Wayland layer-shell
+  window anchored to the bar's edge, holding the widget's interface over the
+  bar; its input region (`WindowInputShape`) is the bar plus what the dock
+  shows past it.
+
+### Verification
+
+- Focused: the new `hologram-look-test`; platform geometry (3 new checks:
+  the light leaves every stand's middle, stands stand at the edge's side,
+  the icon floats in its light), icon scene (4 new), the schema's hologram
+  settings (round trip, defaults, bounds), the capability test's
+  `hologramSettingsFollowEachPart` and `studioHologramTabs`, the Studio
+  navigation tabs.
+- `decoration-3d-smoke`, drawn by the real renderer in a private KWin, now
+  also draws the 3D holograms (icons on plates, cyan on the panel,
+  everything on projectors, a decorated panel) and checks a flat
+  hologram keeps its size (a bar's light as tall as the bar; each of Red
+  Core's lenses lit where the lens is); with the old mapping put back it
+  fails. Its pictures now show icon-shaped pictures, not plates.
+- The complete serial suite has not run to its end on this code yet: the
+  last run, stopped for the wheel check below, had passed 37 of 127 with
+  none failed. At this checkpoint 14 focused tests passed on the committed
+  code (hologram look, platform geometry, icon scene, panel scene, scene
+  rotation, geometry hit region, schema, Studio navigation, live preview,
+  panel surface, panel decoration, dock entry, `decoration-3d-smoke`,
+  `path-travel-smoke`); the capability test's two new hologram tests passed
+  earlier the same day.
+- Private desktop sessions (plain Plasma, Arch Dock's own bars only):
+  bars on every edge with stands and holograms, clicks, previews, Plasma
+  widgets, edit mode, auto-hide (`tools/holo-edge-replica.sh`,
+  `tools/private-pointer`).
+- Pictures, before and after, in
+  `/mnt/F/archdock-audit-2026-10-08/evidence/piece8-holo/`:
+  `tilt-before-after.png`, `all-stands-on-panel-holograms.png`,
+  `projector-finish-before-after.png`, `3d-lens-before-after.png`,
+  `decorated-hologram-before-after.png`,
+  `decorated-3d-colours-before-after.png`,
+  `decorated-flat-fixed-before-after.png`,
+  `panel-hologram-area-before-after.png`; the bars in
+  `evidence/holo-edge-replica` and `evidence/holo-click-a` to `-f`.
+
+### Known limitations
+
+Also in `docs/KNOWN_LIMITATIONS.md`.
+
+- Only always-visible edge bars are drawn past their panel; a bar that
+  hides itself keeps its stands and holograms inside it, cut at its edge,
+  until the bars become Arch Dock's own windows (next).
+- In Plasma's edit mode a top bar's hanging icons can cover Plasma's edit
+  toolbar, which still takes the clicks.
+- Items in a folder's opening are not holograms.
+- A 3D decoration drawn as a hologram does not pulse or twinkle its lights
+  separately.
+
+### The mouse wheel on free panels (2026-10-21)
+
+The owner asked for the holograms to be checked while a free panel is
+turned with the mouse wheel ("check that, and fix it"); without holograms
+the owner had tested it already. Measured in private sessions on the
+owner's own PC, the frame times during each wheel step read from Qt's
+render loop:
+
+- **The holograms follow**: lights, lenses, glows and stands travel with
+  their icons, and turn with the panel, flat and 3D, with nothing lagging
+  or coming apart (`evidence/piece8-holo/wheel-midturn.png`).
+- **Smooth almost everywhere**: while the wheel spins a panel without a
+  pause, a flat panel with every hologram, and a 3D panel with holographic
+  icons or with its icons travelling, keep 60 frames a second with at most
+  4% of frames late; one hologram clock tick costs 0.1 ms.
+- **Fixed: a 3D panel that turns as a whole lost the wheel** after one
+  notch, holograms or not: its icons stand up from its band, so once the
+  panel turned the pointer was over nothing. A wheel spin now keeps its
+  place for a second after each notch, while the pointer stays within an
+  icon's size of where it was, as Firefox's wheel transactions do
+  (`PanelScene.wheelLatched`); measured, 24 of 24 notches taken.
+- **Found, not yet fixed: projector stands on a 3D panel turning as a
+  whole** run 11% of frames late without holograms and about 20% with them
+  (plates, columns and the same stands on a travelling panel: none or
+  very few). Measured, it is not their size (216 triangles, fewer than a
+  dome's) nor their metal finish (plates in metal: 2%); by the code, the
+  hit tests do not read stands and the 3D view's margins change only in
+  steps; the render thread waits for frames rather than drawing slowly.
+  Qt's QML profiler
+  did not attach to the test runner; the next step is to profile it with
+  the QML runtime instead.
+
+### Checkpoint and what comes next
+
+Committed at the owner's word ("Commit and Sync current changes, make a
+report and stop, we'll continue tomorrow") before the holograms were
+closed. Next, in order:
+
+1. Find and fix the projector stands' cost on a turning 3D panel (profile
+   with `qml` and `qmlprofiler`; the measuring scenes are in the session's
+   scratch folder `wheel/`).
+2. Short video clips of every hologram motion (flicker, lines, float,
+   turning, each light motion) and of free panels turned with the wheel,
+   for the owner to judge; ffmpeg is installed.
+3. The complete serial suite, Report 1's suite line, then the fresh-clone
+   recheck (`/mnt/F/archdock-audit-2026-10-08/tools/piece8-holo-recheck.sh`,
+   logs 40-44) and Report 2, closing the holograms.
+4. Then the bars: two bars side by side on one edge as Arch Dock's own
+   windows (which also lets bars that hide themselves draw past their
+   edge), Plasma widgets inside Arch Dock bars, each bar's own icons, and
+   the package for the owner's PC.
+

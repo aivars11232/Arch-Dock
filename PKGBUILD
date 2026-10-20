@@ -9,7 +9,7 @@ depends=('glibc' 'gcc-libs' 'qt6-base>=6.8' 'qt6-declarative>=6.8'
          'qt6-svg' 'qt6-wayland' 'kirigami' 'kservice' 'kio'
          'kglobalaccel' 'kglobalacceld' 'libplasma' 'plasma-workspace'
          'plasma-desktop' 'kwin')
-makedepends=('cmake' 'make' 'gcc' 'pkgconf' 'qt6-quick3d')
+makedepends=('cmake' 'make' 'gcc' 'pkgconf' 'qt6-quick3d' 'qt6-shadertools')
 optdepends=('qt6-quick3d: optional true 3D rendering; ordinary renderers work without it'
             'kpipewire: optional live window thumbnails')
 # Bound compiler/linker memory, including when makepkg enables LTO by default.

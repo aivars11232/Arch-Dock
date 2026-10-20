@@ -17,6 +17,7 @@
 #include <QQmlAbstractUrlInterceptor>
 #include <QQmlComponent>
 #include <QQmlEngine>
+#include <QQmlListReference>
 #include <QQmlProperty>
 #include <QQuickItem>
 #include <QQuickItemGrabResult>
@@ -27,6 +28,7 @@
 #include <QtTest>
 #include <QElapsedTimer>
 
+#include <functional>
 #include <memory>
 
 namespace
@@ -1731,6 +1733,9 @@ private slots:
     // across the band between every two icons.
     void decorationsStandAsSolids_data();
     void decorationsStandAsSolids();
+    void hologramsDrawAsLight_data();
+    void hologramsDrawAsLight();
+    void flatHologramsKeepTheirSize();
 
     void generatedPlatformsFollowTheLayoutAndLook_data()
     {
@@ -3617,8 +3622,15 @@ void RendererCapabilityTest::decorationsStandAsSolids()
         QSKIP("Runs in its own private session (ARCHDOCK_RENDERING_DECORATIONS).");
     QTest::failOnWarning(QRegularExpression(
         QStringLiteral("Failed to compile|Failed to parse shader|Failed to build graphics pipeline")));
-    const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
-    QVERIFY(!glyphFixture.isEmpty());
+    // Icon-shaped pictures (a terminal, a folder, a logo), each in its own
+    // colours, as a panel's icons are.
+    QStringList glyphs;
+    for (const char *name : {"data/truth-glyph-terminal.svg", "data/truth-glyph-files.svg", "data/truth-glyph-logo.svg"})
+    {
+        const QString file = QFINDTESTDATA(name);
+        QVERIFY2(!file.isEmpty(), name);
+        glyphs << QUrl::fromLocalFile(file).toString();
+    }
     QVariantMap theme{
         {QStringLiteral("format"), QStringLiteral("org.archdock.theme")},
         {QStringLiteral("version"), 2}, {QStringLiteral("valid"), true},
@@ -3651,7 +3663,7 @@ void RendererCapabilityTest::decorationsStandAsSolids()
         import QtQuick
         import ArchDock.Rendering 1.0
         PanelScene {
-            required property string glyphFixture
+            required property var glyphs
             required property string decorationId
             panelDefinition: ({rendererTier: "true3d", layout: "circular", layoutRadius: 150,
                                scene3DQuality: "high", iconSize: 40, layoutPadding: 10, appearance: "neon",
@@ -3660,7 +3672,7 @@ void RendererCapabilityTest::decorationsStandAsSolids()
             entryDelegateContext: ({hostKind: "free"})
             hostCapabilities: ({rotation: {available: true}})
             orderedEntries: [0, 1, 2, 3, 4, 5].map(function(index) {
-                return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphFixture}
+                return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphs[index % glyphs.length]}
             })
         }
     )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/DecorationConsumer.qml")));
@@ -3671,7 +3683,7 @@ void RendererCapabilityTest::decorationsStandAsSolids()
     std::unique_ptr<QObject> object(component.createWithInitialProperties({
         {QStringLiteral("themeDefinition"), theme},
         {QStringLiteral("decorationId"), decoration},
-        {QStringLiteral("glyphFixture"), QUrl::fromLocalFile(glyphFixture).toString()}}));
+        {QStringLiteral("glyphs"), glyphs}}));
     QVERIFY2(object != nullptr, qPrintable(component.errorString()));
     auto *scene = qobject_cast<QQuickItem *>(object.get());
     QVERIFY(scene);
@@ -3730,6 +3742,379 @@ void RendererCapabilityTest::decorationsStandAsSolids()
     const QString evidence = qEnvironmentVariable("ARCHDOCK_RENDERING_LOG_DIR");
     if (!evidence.isEmpty()) frame.save(QDir(evidence).filePath(QStringLiteral("decoration-3d-%1.png").arg(decoration)));
     QVERIFY2(bare.isEmpty(), qPrintable(decoration + QStringLiteral(" is not drawn ") + bare.join(QStringLiteral(", "))));
+}
+
+void RendererCapabilityTest::hologramsDrawAsLight_data()
+{
+    QTest::addColumn<QVariantMap>("settings");
+    QTest::newRow("icons-on-plates") << QVariantMap{{QStringLiteral("hologramIcons"), true},
+        {QStringLiteral("pedestalShape"), QStringLiteral("plate")}};
+    QTest::newRow("icons-on-the-panel-cyan") << QVariantMap{{QStringLiteral("hologramIcons"), true},
+        {QStringLiteral("hologramIconColours"), QStringLiteral("cyan")}};
+    QTest::newRow("everything-on-projectors") << QVariantMap{{QStringLiteral("hologramIcons"), true},
+        {QStringLiteral("pedestalShape"), QStringLiteral("projector")},
+        {QStringLiteral("hologramPedestals"), true}, {QStringLiteral("hologramPanel"), true},
+        {QStringLiteral("hologramIconTurning"), QStringLiteral("sway")}};
+    // A decoration standing in the platform's place is drawn as light too.
+    QTest::newRow("decorated-panel") << QVariantMap{{QStringLiteral("hologramIcons"), true},
+        {QStringLiteral("panelDecoration"), QStringLiteral("carina-nebula")},
+        {QStringLiteral("hologramPanel"), true}};
+}
+
+void RendererCapabilityTest::hologramsDrawAsLight()
+{
+    QFETCH(QVariantMap, settings);
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+        return; // Holograms are drawn as light only in the real RHI scene.
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_DECORATIONS"))
+        QSKIP("Runs in its own private session (ARCHDOCK_RENDERING_DECORATIONS).");
+    QTest::failOnWarning(QRegularExpression(
+        QStringLiteral("Failed to compile|Failed to parse shader|Failed to build graphics pipeline")));
+    // Icon-shaped pictures (a terminal, a folder, a logo), each in its own
+    // colours, as a panel's icons are.
+    QStringList glyphs;
+    for (const char *name : {"data/truth-glyph-terminal.svg", "data/truth-glyph-files.svg", "data/truth-glyph-logo.svg"})
+    {
+        const QString file = QFINDTESTDATA(name);
+        QVERIFY2(!file.isEmpty(), name);
+        glyphs << QUrl::fromLocalFile(file).toString();
+    }
+    QVariantMap theme{
+        {QStringLiteral("format"), QStringLiteral("org.archdock.theme")},
+        {QStringLiteral("version"), 2}, {QStringLiteral("valid"), true},
+        {QStringLiteral("id"), QStringLiteral("procedural-look")},
+        {QStringLiteral("name"), QStringLiteral("Procedural look")},
+        {QStringLiteral("capabilities"), QVariantMap{
+            {QStringLiteral("rendererTiers"), QVariantList{QStringLiteral("true3d"), QStringLiteral("procedural2d")}},
+            {QStringLiteral("preferredRendererTier"), QStringLiteral("procedural2d")},
+            {QStringLiteral("fallbackRendererTiers"), QVariantList{QStringLiteral("procedural2d")}}}},
+        {QStringLiteral("scene3D"), QVariantMap{
+            {QStringLiteral("generic"), true}, {QStringLiteral("generated"), QVariantMap{}},
+            {QStringLiteral("fieldOfView"), 40}, {QStringLiteral("cameraPitch"), 25},
+            {QStringLiteral("cameraYaw"), 0}, {QStringLiteral("keyLightBrightness"), 1.2},
+            {QStringLiteral("fillLightBrightness"), 0.45},
+            {QStringLiteral("defaultQuality"), QStringLiteral("high")},
+            {QStringLiteral("transitions"), false}, {QStringLiteral("parts"), QVariantList{}}}},
+        {QStringLiteral("scene3DResources"), QVariantMap{
+            {QStringLiteral("material"), QVariantMap{
+                {QStringLiteral("format"), QStringLiteral("org.archdock.material")},
+                {QStringLiteral("version"), 1}, {QStringLiteral("baseColor"), QStringLiteral("#406080")},
+                {QStringLiteral("emissiveColor"), QStringLiteral("#000000")},
+                {QStringLiteral("emissiveStrength"), 0.0}, {QStringLiteral("metalness"), 0.3},
+                {QStringLiteral("roughness"), 0.45}}},
+            {QStringLiteral("parts"), QVariantList{}}, {QStringLiteral("indexBudget"), 262144}}}};
+
+    QQmlEngine engine;
+    engine.addImportPath(importRoot());
+    QQmlComponent component(&engine);
+    component.setData(R"(
+        import QtQuick
+        import ArchDock.Rendering 1.0
+        PanelScene {
+            required property var glyphs
+            required property var hologramSettings
+            panelDefinition: Object.assign({rendererTier: "true3d", layout: "circular", layoutRadius: 150,
+                               scene3DQuality: "high", iconSize: 40, layoutPadding: 10, appearance: "glass",
+                               scene3DCameraPitch: 25, scene3DTransitions: false}, hologramSettings)
+            entryDelegateContext: ({hostKind: "free"})
+            hostCapabilities: ({rotation: {available: true}})
+            orderedEntries: [0, 1, 2, 3, 4, 5].map(function(index) {
+                return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphs[index % glyphs.length]}
+            })
+        }
+    )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/HologramConsumer.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    QQuickWindow window;
+    const QColor background(QStringLiteral("#1b2333"));
+    window.setColor(background);
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({
+        {QStringLiteral("themeDefinition"), theme},
+        {QStringLiteral("hologramSettings"), settings},
+        {QStringLiteral("glyphs"), glyphs}}));
+    QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+    auto *scene = qobject_cast<QQuickItem *>(object.get());
+    QVERIFY(scene);
+    scene->setParentItem(window.contentItem());
+    window.resize(qCeil(scene->width()), qCeil(scene->height()));
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(), QStringLiteral("true3d"), 5000);
+    auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+    QVERIFY(renderer);
+    QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 6);
+    QVERIFY(renderer->property("hologramShown").toBool());
+    const bool decorated = settings.contains(QStringLiteral("panelDecoration"));
+    if (decorated)
+    {
+        QTRY_VERIFY_WITH_TIMEOUT(renderer->property("decorationShown").toBool(), 60000);
+        auto *solid = renderer->findChild<QObject *>(QStringLiteral("mesh-platform-decoration"));
+        QVERIFY(solid);
+        QQmlListReference materials(solid, "materials");
+        QVERIFY(materials.isValid() && materials.count() == 1);
+        QCOMPARE(materials.at(0)->objectName(), QStringLiteral("mesh-platform-decoration-hologram"));
+    }
+    // Every icon has its light and its lens, and its solid wears the hologram.
+    for (int index = 0; index < 6; ++index)
+    {
+        auto *light = renderer->findChild<QObject *>(QStringLiteral("mesh-hologram-light-%1").arg(index));
+        QVERIFY2(light && light->property("visible").toBool(), qPrintable(QStringLiteral("light %1").arg(index)));
+        const bool stand = settings.contains(QStringLiteral("pedestalShape"));
+        const QString lens = stand ? QStringLiteral("mesh-hologram-opening-panel-%1").arg(index)
+                                   : QStringLiteral("mesh-hologram-opening-on-panel-%1").arg(index);
+        const QString lensFacing = QStringLiteral("mesh-hologram-opening-facing-%1").arg(index);
+        auto *opening = renderer->findChild<QObject *>(lens);
+        auto *openingFacing = renderer->findChild<QObject *>(lensFacing);
+        QVERIFY2((opening && opening->property("visible").toBool())
+                     || (openingFacing && openingFacing->property("visible").toBool()),
+                 qPrintable(QStringLiteral("lens %1").arg(index)));
+    }
+    for (int k = 0; k < 6; ++k)
+    {
+        QSignalSpy swapped(&window, &QQuickWindow::frameSwapped);
+        window.update();
+        QVERIFY(swapped.wait(5000));
+    }
+    QTest::qWait(400);
+    const QImage frame = window.grabWindow();
+    QVERIFY(!frame.isNull());
+    const double scale = frame.width() / std::max(1.0, double(window.width()));
+    // Light is added at every icon: brighter than the window round it.
+    QStringList dark;
+    int index = 0;
+    for (const QVariant &value : plainValue(renderer->property("projectedEntryGeometry")).toList())
+    {
+        const QVariantMap rect = value.toMap();
+        const QPointF centre = scene->mapToScene(QPointF(rect.value("centerX").toDouble(), rect.value("centerY").toDouble()));
+        const double half = rect.value("width").toDouble() * 0.7;
+        int bright = 0;
+        for (int dy = -6; dy <= 6; ++dy)
+            for (int dx = -6; dx <= 6; ++dx)
+            {
+                const QPoint at = ((centre + QPointF(dx * half / 6, dy * half / 6)) * scale).toPoint();
+                if (!frame.rect().contains(at)) continue;
+                const QColor c = frame.pixelColor(at);
+                bright += c.red() + c.green() + c.blue() > background.red() + background.green() + background.blue() + 120;
+            }
+        if (bright < 4) dark << QStringLiteral("icon %1 (%2 lit)").arg(index).arg(bright);
+        ++index;
+    }
+    // A decorated panel's band is drawn between every two icons, as light:
+    // out from the ring's middle between them (the icons float above the
+    // band, so the band lies anywhere along the way out).
+    if (decorated)
+    {
+        QList<QPointF> icons;
+        QPointF middle;
+        for (const QVariant &value : plainValue(renderer->property("projectedEntryGeometry")).toList())
+        {
+            const QVariantMap rect = value.toMap();
+            icons << scene->mapToScene(QPointF(rect.value("centerX").toDouble(), rect.value("centerY").toDouble()));
+            middle += icons.last();
+        }
+        middle /= icons.size();
+        for (int k = 0; k < icons.size(); ++k)
+        {
+            const QPointF between = (icons[k] + icons[(k + 1) % icons.size()]) / 2;
+            const QPointF out = between - middle;
+            int drawn = 0;
+            for (int step = 50; step <= 170; ++step)
+            {
+                const QPoint at = ((middle + out * (step / 100.0)) * scale).toPoint();
+                if (!frame.rect().contains(at)) continue;
+                const QColor c = frame.pixelColor(at);
+                drawn += std::abs(c.red() - background.red()) + std::abs(c.green() - background.green())
+                         + std::abs(c.blue() - background.blue()) > 30;
+            }
+            if (drawn < 6) dark << QStringLiteral("the band between icons %1 and %2 (%3 drawn)").arg(k)
+                                       .arg((k + 1) % icons.size()).arg(drawn);
+        }
+    }
+    const QString evidence = qEnvironmentVariable("ARCHDOCK_RENDERING_LOG_DIR");
+    if (!evidence.isEmpty())
+        frame.save(QDir(evidence).filePath(QStringLiteral("hologram-3d-%1.png").arg(QString::fromLatin1(QTest::currentDataTag()))));
+    QVERIFY2(dark.isEmpty(), qPrintable(QStringLiteral("no hologram light at ") + dark.join(QStringLiteral(", "))));
+}
+
+// A flat panel's hologram is drawn as large as the panel: the glow's blur
+// widens the layer's picture past the panel to make room for itself, and the
+// light must still read the panel's own part of it, not squeeze all of it in.
+void RendererCapabilityTest::flatHologramsKeepTheirSize()
+{
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI"))
+        return; // The glow's blur and the light are drawn only in the real RHI scene.
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_DECORATIONS"))
+        QSKIP("Runs in its own private session (ARCHDOCK_RENDERING_DECORATIONS).");
+    QTest::failOnWarning(QRegularExpression(
+        QStringLiteral("Failed to compile|Failed to parse shader|Failed to build graphics pipeline")));
+    QStringList glyphs;
+    for (const char *name : {"data/truth-glyph-terminal.svg", "data/truth-glyph-files.svg", "data/truth-glyph-logo.svg"})
+    {
+        const QString file = QFINDTESTDATA(name);
+        QVERIFY2(!file.isEmpty(), name);
+        glyphs << QUrl::fromLocalFile(file).toString();
+    }
+    QQmlEngine engine;
+    engine.addImportPath(importRoot());
+    QQmlComponent component(&engine);
+    component.setData(R"(
+        import QtQuick
+        import ArchDock.Rendering 1.0
+        PanelScene {
+            required property var glyphs
+            property var settings: ({})
+            panelDefinition: Object.assign({rendererTier: "procedural2d", iconSize: 44, layoutPadding: 10,
+                                            appearance: "glass"}, settings)
+            entryDelegateContext: ({hostKind: "free"})
+            orderedEntries: [0, 1, 2, 3, 4, 5].map(function(index) {
+                return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphs[index % glyphs.length]}
+            })
+        }
+    )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/FlatHologramConsumer.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    const QColor background(QStringLiteral("#1b2333"));
+    const QString evidence = qEnvironmentVariable("ARCHDOCK_RENDERING_LOG_DIR");
+    // The items the scene draws, the layers' effects among them.
+    const std::function<QQuickItem *(QQuickItem *, const QString &)> find =
+        [&find](QQuickItem *item, const QString &name) -> QQuickItem * {
+            if (!item) return nullptr;
+            if (item->objectName() == name) return item;
+            for (QQuickItem *child : item->childItems())
+                if (QQuickItem *found = find(child, name)) return found;
+            return nullptr;
+        };
+    const auto drawn = [&](QQuickWindow &window, const QString &name) {
+        for (int k = 0; k < 6; ++k)
+        {
+            QSignalSpy swapped(&window, &QQuickWindow::frameSwapped);
+            window.update();
+            if (!swapped.wait(5000)) return QImage();
+        }
+        QTest::qWait(300);
+        const QImage frame = window.grabWindow();
+        if (!evidence.isEmpty()) frame.save(QDir(evidence).filePath(QStringLiteral("flat-hologram-%1.png").arg(name)));
+        return frame;
+    };
+    // What is drawn over the window's colour.
+    const auto extent = [&](const QImage &frame) {
+        QRect box;
+        for (int y = 0; y < frame.height(); ++y)
+            for (int x = 0; x < frame.width(); ++x)
+            {
+                const QColor c = frame.pixelColor(x, y);
+                if (std::abs(c.red() - background.red()) + std::abs(c.green() - background.green())
+                        + std::abs(c.blue() - background.blue()) > 40)
+                    box |= QRect(x, y, 1, 1);
+            }
+        return box;
+    };
+    const auto open = [&](QQuickWindow &window, const QVariantMap &settings) -> std::unique_ptr<QObject> {
+        std::unique_ptr<QObject> object(component.createWithInitialProperties({
+            {QStringLiteral("glyphs"), glyphs}, {QStringLiteral("settings"), settings}}));
+        if (auto *scene = qobject_cast<QQuickItem *>(object.get()))
+        {
+            scene->setParentItem(window.contentItem());
+            window.resize(qCeil(scene->width()) + 160, qCeil(scene->height()) + 160);
+            scene->setPosition(QPointF(80, 80));
+        }
+        return object;
+    };
+
+    // A bar: its hologram, its glow off, covers what the panel covers.
+    {
+        QQuickWindow window;
+        window.setColor(background);
+        auto plain = open(window, {{QStringLiteral("layout"), QStringLiteral("horizontal")}});
+        QVERIFY(plain);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        const QRect panel = extent(drawn(window, QStringLiteral("bar-plain")));
+        plain.reset();
+        auto hologram = open(window, {{QStringLiteral("layout"), QStringLiteral("horizontal")},
+                                      {QStringLiteral("hologramPanel"), true},
+                                      {QStringLiteral("hologramPanelGlow"), 0.0}});
+        QVERIFY(hologram);
+        const QRect light = extent(drawn(window, QStringLiteral("bar-hologram")));
+        QVERIFY2(panel.isValid() && light.isValid(), "both are drawn");
+        QVERIFY2(light.height() >= panel.height() * 0.85 && light.width() >= panel.width() * 0.9,
+                 qPrintable(QStringLiteral("the panel is %1x%2, its hologram %3x%4").arg(panel.width())
+                     .arg(panel.height()).arg(light.width()).arg(light.height())));
+        // With its glow, the light reads the panel's own part of the layer's
+        // widened picture.
+        hologram.reset();
+        hologram = open(window, {{QStringLiteral("layout"), QStringLiteral("horizontal")},
+                                 {QStringLiteral("hologramPanel"), true}});
+        auto *scene = qobject_cast<QQuickItem *>(hologram.get());
+        drawn(window, QStringLiteral("bar-hologram-glow"));
+        QQuickItem *lightItem = find(scene, QStringLiteral("hologram-light"));
+        QVERIFY(lightItem);
+        auto *source = qvariant_cast<QQuickItem *>(lightItem->parentItem()->property("source"));
+        QVERIFY(source);
+        const QRectF picture = source->property("sourceRect").toRectF();
+        const QVector4D area = lightItem->property("area").value<QVector4D>();
+        if (picture.width() > lightItem->width())
+        {
+            QVERIFY(qAbs(area.z() - lightItem->width() / picture.width()) < 1e-3);
+            QVERIFY(qAbs(area.x() + picture.x() / picture.width()) < 1e-3);
+        }
+    }
+
+    // A decorated ring: each of Red Core's lenses drawn as light where the
+    // lens is, not inside it (squeezed, the reddest light near a lens lay a
+    // tenth of the ring's size inward of it).
+    {
+        QQuickWindow window;
+        window.setColor(background);
+        const QVariantMap ring{{QStringLiteral("layout"), QStringLiteral("circular")},
+                               {QStringLiteral("layoutRadius"), 150},
+                               {QStringLiteral("panelDecoration"), QStringLiteral("starship-red-core")}};
+        QMap<int, QPoint> lenses;
+        for (const bool hologram : {false, true})
+        {
+            QVariantMap settings = ring;
+            if (hologram) settings.insert(QStringLiteral("hologramPanel"), true);
+            auto object = open(window, settings);
+            QVERIFY(object);
+            auto *scene = qobject_cast<QQuickItem *>(object.get());
+            if (!window.isVisible())
+            {
+                window.show();
+                QVERIFY(QTest::qWaitForWindowExposed(&window));
+            }
+            QTRY_VERIFY_WITH_TIMEOUT(find(scene, QStringLiteral("panel-decoration"))
+                && find(scene, QStringLiteral("panel-decoration"))->property("rendererReady").toBool(), 60000);
+            const QImage frame = drawn(window, hologram ? QStringLiteral("ring-hologram") : QStringLiteral("ring-plain"));
+            const double scale = frame.width() / std::max(1.0, double(window.width()));
+            for (int index = 0; index < 6; ++index)
+            {
+                QQuickItem *spot = find(scene, QStringLiteral("panel-decoration-light-spot-%1").arg(index));
+                QVERIFY(spot);
+                const QPoint at = (spot->mapToScene(QPointF(spot->width() / 2, spot->height() / 2)) * scale).toPoint();
+                if (!hologram)
+                {
+                    lenses.insert(index, at);
+                    continue;
+                }
+                QCOMPARE(at, lenses.value(index));
+                // The reddest light round the lens.
+                const int reach = qRound(30 * scale);
+                QPoint reddest = at;
+                int most = -255;
+                for (int dy = -reach; dy <= reach; ++dy)
+                    for (int dx = -reach; dx <= reach; ++dx)
+                    {
+                        const QPoint point = at + QPoint(dx, dy);
+                        if (!frame.rect().contains(point)) continue;
+                        const QColor c = frame.pixelColor(point);
+                        const int red = c.red() - (c.green() + c.blue()) / 2;
+                        if (red > most) { most = red; reddest = point; }
+                    }
+                const double away = std::hypot(reddest.x() - at.x(), reddest.y() - at.y()) / scale;
+                QVERIFY2(most > 20 && away <= 8,
+                         qPrintable(QStringLiteral("lens %1: its reddest light (%2) lies %3 px from it")
+                             .arg(index).arg(most).arg(away, 0, 'f', 1)));
+            }
+        }
+    }
 }
 
 QTEST_MAIN(RendererCapabilityTest)

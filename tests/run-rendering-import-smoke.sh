@@ -482,6 +482,22 @@ run_private_session() {
                     return 1
                 }
         sed -n '/^Totals:/p' "$ARCHDOCK_RENDERING_LOG_DIR/decoration-3d.log"
+        printf 'Checking holograms drawn as light on 3D panels under private KWin.\n'
+        ARCHDOCK_TEST_RHI=1 ARCHDOCK_TEST_DECORATIONS=1 ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \
+            "$ARCHDOCK_RENDERING_CAPABILITY_TEST" hologramsDrawAsLight \
+                >"$ARCHDOCK_RENDERING_LOG_DIR/hologram-3d.log" 2>&1 || {
+                    tail -n 100 "$ARCHDOCK_RENDERING_LOG_DIR/hologram-3d.log" >&2
+                    return 1
+                }
+        sed -n '/^Totals:/p' "$ARCHDOCK_RENDERING_LOG_DIR/hologram-3d.log"
+        printf 'Checking flat holograms keeping their size under private KWin.\n'
+        ARCHDOCK_TEST_RHI=1 ARCHDOCK_TEST_DECORATIONS=1 ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \
+            "$ARCHDOCK_RENDERING_CAPABILITY_TEST" flatHologramsKeepTheirSize \
+                >"$ARCHDOCK_RENDERING_LOG_DIR/hologram-flat.log" 2>&1 || {
+                    tail -n 100 "$ARCHDOCK_RENDERING_LOG_DIR/hologram-flat.log" >&2
+                    return 1
+                }
+        sed -n '/^Totals:/p' "$ARCHDOCK_RENDERING_LOG_DIR/hologram-flat.log"
         return 0
     fi
 

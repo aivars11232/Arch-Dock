@@ -23,6 +23,12 @@ Item {
     property var tileSettings: ({})
     // A free panel's path: the stand on the path, the icon above it.
     property bool pedestalOnPath: false
+    // The screen edge an edge panel stands on (IconScene.screenEdge).
+    property string screenEdge: "bottom"
+    // Its stand stands on the panel (IconScene.standsOnPanel).
+    property bool standsOnPanel: true
+    // How thick its panel is, which its stand fits within (IconScene.panelThickness).
+    property real panelThickness: 0
     required property string appearance
     required property bool showReflection
     required property bool showIndicator
@@ -380,6 +386,9 @@ Item {
                 tileShape: root.tileShape
                 tileSettings: root.tileSettings
                 pedestalOnPath: root.pedestalOnPath
+                screenEdge: root.screenEdge
+                standsOnPanel: root.standsOnPanel
+                panelThickness: root.panelThickness
                 appearance: root.appearance
                 vertical: root.vertical
                 hovered: hoverArea.containsMouse
@@ -413,15 +422,33 @@ Item {
         }
     }
 
+    // Where the pointer finds the entry: its cell, and its icon where it
+    // rests raised over its stand or in its hologram's light (not where its
+    // motion or magnification carries it), in this item's coordinates.
+    readonly property rect restingIconRect: visual.restingIconRect
+    readonly property rect pointerReach: {
+        const icon = restingIconRect
+        const left = Math.min(0, icon.x), top = Math.min(0, icon.y)
+        return Qt.rect(left, top, Math.max(width, icon.x + icon.width) - left,
+                       Math.max(height, icon.y + icon.height) - top)
+    }
+
     QtObject {
         id: entryHitMask
         // A custom mask replaces Qt's default rectangle check. Visibility
         // may narrow that rectangle, but must not make a neighbour's point
-        // part of this entry's pointer or drop target (PD-18).
+        // part of this entry's pointer or drop target (PD-18). The point is
+        // the pointer area's; the raised icon takes it as the cell does.
         function contains(point: point): bool {
-            return root !== null && point.x >= 0 && point.y >= 0
-                && point.x <= root.width && point.y <= root.height
-                && root.inputContainsPoint(point)
+            if (root === null)
+                return false
+            const x = point.x + hoverArea.x, y = point.y + hoverArea.y
+            const icon = root.restingIconRect
+            if (x >= icon.x && y >= icon.y && x <= icon.x + icon.width && y <= icon.y + icon.height
+                    && (icon.x !== 0 || icon.y !== 0))
+                return true
+            return x >= 0 && y >= 0 && x <= root.width && y <= root.height
+                && root.inputContainsPoint(Qt.point(x, y))
         }
     }
 
@@ -429,7 +456,10 @@ Item {
         id: hoverArea
 
         objectName: "dockEntryPointerTarget"
-        anchors.fill: parent
+        x: root.pointerReach.x
+        y: root.pointerReach.y
+        width: root.pointerReach.width
+        height: root.pointerReach.height
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         hoverEnabled: true
         enabled: root.inputEnabled
@@ -448,7 +478,7 @@ Item {
             root.dispatchMotionEvent("hover-exit");
         }
         onPressed: mouse => {
-            dragProxy.Drag.hotSpot = Qt.point(mouse.x, mouse.y);
+            dragProxy.Drag.hotSpot = Qt.point(mouse.x + hoverArea.x, mouse.y + hoverArea.y);
             root.clickPulse = true;
             root.dispatchMotionEvent("press");
         }

@@ -147,9 +147,9 @@ TestCase {
             const onPath = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalLift: 0.4 }, 52, true)
             fuzzyCompare(onPath.standCentre, 0, 0.01, shape + " stands on the path")
             verify(onPath.raise > layout.raise, shape + " lifts the icon above its stand on the path")
-            // A level stand (Stand facing: Viewer) is seen View angle degrees
-            // from above; one that is part of the panel (Panel, the default)
-            // is seen straight on, as the flat panel is.
+            // A flat panel's stand lies level, seen View angle degrees from
+            // above, whatever its facing (which turns a 3D panel's stands):
+            // near horizontal by default, straight from above at 90.
             const steep = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalFacing: "viewer",
                                                             pedestalViewAngle: 50 }, 52)
             const side = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalFacing: "viewer",
@@ -157,8 +157,12 @@ TestCase {
             compare(steep.tilt, 50)
             compare(side.tilt, 0)
             const flat = PlatformGeometry.pedestalLayout({ pedestalShape: shape }, 52)
-            compare(flat.tilt, 90, shape + " lies in the flat panel's plane")
-            fuzzyCompare(flat.height, flat.width, 1e-6, shape + " seen straight on is as tall as it is wide")
+            compare(flat.tilt, 20, shape + " lies near horizontal by default")
+            const above = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalViewAngle: 90 }, 52)
+            compare(above.tilt, 90)
+            verify(Math.abs(above.height - flat.height) > 1e-6, shape + " is seen otherwise from straight above")
+            if (!PlatformGeometry.pedestalSpec(shape).rounded)
+                fuzzyCompare(above.height, above.width, 1e-6, shape + " seen straight from above is as tall as it is wide")
             // A folder of a 3D panel draws its stands at the angle the
             // panel's own are seen at, over its own facing and View angle,
             // up to straight on; without that angle nothing changes.
@@ -553,4 +557,62 @@ TestCase {
         verify(Math.abs(widest - 1.1) < 1e-6, "a plate wider than the cell: " + widest)
     }
 
+    function test_hologramLightLeavesEveryStandsMiddle() {
+        // Every stand has a lens in the middle of its top, as wide as the
+        // top's flat part allows; through a ring or a halo it is the panel
+        // inside it; a projector's is its lens.
+        for (const shape of PlatformGeometry.pedestalShapes) {
+            const spot = PlatformGeometry.pedestalOpening(shape)
+            verify(spot.radius > 0, shape + " has a lens")
+            verify(spot.radius < PlatformGeometry.pedestalShapeReach(shape), shape + "'s lens lies inside it")
+            verify(spot.height >= 0 && spot.height <= PlatformGeometry.pedestalShapeHeight(shape) + 1e-9,
+                   shape + "'s lens lies on its top")
+        }
+        verify(PlatformGeometry.pedestalOpening("ring").hole && PlatformGeometry.pedestalOpening("ring").height === 0,
+               "a ring's light leaves the panel inside it")
+        verify(PlatformGeometry.pedestalOpening("halo").hole)
+        fuzzyCompare(PlatformGeometry.pedestalOpening("star").radius, 0.58 * 0.72, 1e-9, "a star's middle")
+        compare(PlatformGeometry.pedestalOpening("projector").radius, 0.62)
+        compare(PlatformGeometry.pedestalFinish("projector").look, "metallic")
+        compare(PlatformGeometry.pedestalFinish("plate"), null, "other stands wear the panel's look")
+    }
+
+    function test_standsStandAtTheScreenEdgesSide() {
+        compare(PlatformGeometry.standDirection("bottom", false).name, "up")
+        compare(PlatformGeometry.standDirection("top", false).turn, 180)
+        compare(PlatformGeometry.standDirection("left", false).name, "right")
+        compare(PlatformGeometry.standDirection("right", false).turn, -90)
+        compare(PlatformGeometry.standDirection("top", true).name, "up", "a free panel's path keeps its icons up")
+    }
+
+    function test_hologramIconFloatsInItsLight() {
+        compare(PlatformGeometry.hologramLayout({}, 52, false, "bottom").on, false, "no hologram by default")
+        compare(PlatformGeometry.hologramLayout({ hologramIcons: true, hologramBeam: false }, 52, false, "bottom").on,
+                false, "a hologram without its light stays in its place")
+        for (const edge of ["bottom", "top", "left", "right"]) {
+            for (const shape of ["none", "plate", "star", "ring", "projector", "column"]) {
+                const values = { hologramIcons: true, pedestalShape: shape }
+                const layout = PlatformGeometry.hologramLayout(values, 52, false, edge)
+                verify(layout.on, edge + " " + shape)
+                verify(layout.raise > 0, edge + " " + shape + ": the icon lies away from the screen edge")
+                verify(layout.wraps, "an edge panel's light wraps its icon")
+                fuzzyCompare(layout.beam.length, layout.lift + 52 * 1.05, 1e-6, "it reaches on past the icon")
+                verify(layout.beam.endHalf > layout.beam.startHalf, "the light widens as it rises")
+                if (shape !== "none") {
+                    verify(layout.opening.y >= layout.standTop - 1e-6
+                           && layout.opening.y <= layout.standTop + layout.stand.height + 1e-6,
+                           edge + " " + shape + ": its lens lies on its stand")
+                    fuzzyCompare(layout.standTop + layout.stand.height / 2, 0, 1e-6, "its stand stands on the panel")
+                }
+                verify(layout.above > 0, "it reaches past its cell away from the edge")
+                const higher = PlatformGeometry.hologramLayout(Object.assign({ hologramBeamHeight: 2 }, values), 52, false, edge)
+                verify(higher.raise > layout.raise, "Light height lifts the icon higher")
+            }
+        }
+        // A free panel's light rises tall, the icon high in its wide end.
+        const free = PlatformGeometry.hologramLayout({ hologramIcons: true }, 52, true, "")
+        verify(!free.wraps)
+        fuzzyCompare(free.lift, 52 * 0.95, 1e-6)
+        fuzzyCompare(free.opening.y, 0, 1e-6, "its lens lies on the path")
+    }
 }

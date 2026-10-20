@@ -323,6 +323,8 @@ private slots:
     void panelsHoldTheIconsTheirShapeHasRoomFor();
     void studioOffersTheMobiusStrip();
     void decorationSettingsFollowTheDecoration();
+    void hologramSettingsFollowEachPart();
+    void studioHologramTabs();
     void decorationSeatTakesAnIcon();
     void panelsNobodyNamedFollowTheirShape();
     void studioDraftsShowOnTheDesktopAtOnce();
@@ -628,6 +630,234 @@ void PanelWindowCapabilityTest::decorationSettingsFollowTheDecoration()
     QVERIFY(shown("appearance"));
     for (const QString &key : motion + colours)
         QVERIFY2(!shown(key), qPrintable(key));
+
+    // A 3D panel on a generated platform wears one too, in the platform's
+    // place, whose colour then draws nothing; a Möbius strip, whose band
+    // turns over, keeps its own.
+    QVERIFY(apply({{"type", "launcher"}, {"layout", "circular"}, {"rendererTier", "true3d"}}));
+    QVERIFY(shown("panelDecoration"));
+    QVERIFY(shown("scene3DColor"));
+    QVERIFY(apply({{"panelDecoration", "carina-nebula"}, {"panelDecorationAnimation", true}}));
+    for (const QString &key : motion)
+        QVERIFY2(shown(key), qPrintable(key));
+    QVERIFY(shown("panelDecorationHue"));
+    QVERIFY(!shown("scene3DColor"));
+    QVERIFY(apply({{"layout", "mobius"}}));
+    QVERIFY(!shown("panelDecoration"));
+    for (const QString &key : motion + colours)
+        QVERIFY2(!shown(key), qPrintable(key));
+}
+
+// Holograms: each part's switch on its own Hologram tab, its settings only
+// while it is on; the stands' only where stands are drawn; the icons'
+// Turning only on a 3D panel, where they are solids; the light's colours,
+// strength, height and motion only while the light is on; a glow's colour
+// and reach only while it glows.
+void PanelWindowCapabilityTest::hologramSettingsFollowEachPart()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    const auto shown = [&](const QString &key) {
+        const QVariantMap field = fieldByKey(backend.panelSettingsEditorSnapshot(panel, "studio")
+            .value("panelFields").toList(), key);
+        return !field.isEmpty() && !field.value("inactive").toBool();
+    };
+    const auto apply = [&](const QVariantMap &values) {
+        return backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision, values)
+            .value("success").toBool();
+    };
+    const auto part = [](const QString &prefix) {
+        QStringList keys;
+        for (const char *name : {"Colours", "OutlineColor", "InlineColor", "VolumeColor", "GlowColor", "Glow",
+                                 "GlowReach", "Flicker", "Speed"})
+            keys << prefix + QLatin1String(name);
+        return keys;
+    };
+    const QStringList icons = part(QStringLiteral("hologramIcon"))
+        + QStringList{QStringLiteral("hologramIconFloat"), QStringLiteral("hologramBeam")};
+    const QStringList light{QStringLiteral("hologramLightColor"), QStringLiteral("hologramOpeningColor"),
+                            QStringLiteral("hologramBeamStrength"), QStringLiteral("hologramBeamHeight"),
+                            QStringLiteral("hologramBeamMotion")};
+    const QStringList panelKeys = part(QStringLiteral("hologramPanel"));
+    const QStringList stands = part(QStringLiteral("hologramPedestal"));
+
+    // A new panel: the icons' and the panel's switches; no stands to switch.
+    QVERIFY(shown("hologramIcons"));
+    QVERIFY(shown("hologramPanel"));
+    QVERIFY(!shown("hologramPedestals"));
+    for (const QString &key : icons + light + panelKeys + stands + QStringList{QStringLiteral("hologramIconTurning")})
+        QVERIFY2(!shown(key), qPrintable(key));
+
+    // Switched on, a part's settings show; a flat panel's icons are
+    // pictures, which do not turn.
+    QVERIFY(apply({{"hologramIcons", true}, {"hologramPanel", true}}));
+    QCOMPARE(registry->panelDefinition(panel)->surface.parameters3D.value("hologramIcons").toBool(), true);
+    for (const QString &key : icons + light + panelKeys)
+        QVERIFY2(shown(key), qPrintable(key));
+    QVERIFY(!shown("hologramIconTurning"));
+    for (const QString &key : stands)
+        QVERIFY2(!shown(key), qPrintable(key));
+
+    // Without its light, the light's own settings go; a glow that is off
+    // has no colour or reach to set.
+    QVERIFY(apply({{"hologramBeam", false}, {"hologramIconGlow", 0.0}, {"hologramPanelGlow", 0.0}}));
+    for (const QString &key : light)
+        QVERIFY2(!shown(key), qPrintable(key));
+    QVERIFY(shown("hologramBeam"));
+    for (const QString &prefix : {QStringLiteral("hologramIcon"), QStringLiteral("hologramPanel")})
+    {
+        QVERIFY(shown(prefix + "Glow"));
+        QVERIFY2(!shown(prefix + "GlowColor"), qPrintable(prefix));
+        QVERIFY2(!shown(prefix + "GlowReach"), qPrintable(prefix));
+    }
+
+    // Stands: their switch while they are drawn, their settings while it is
+    // on. View angle lays a flat panel's stands level; Stand facing is a 3D
+    // panel's.
+    QVERIFY(apply({{"pedestalShape", "projector"}}));
+    QVERIFY(shown("hologramPedestals"));
+    for (const QString &key : stands)
+        QVERIFY2(!shown(key), qPrintable(key));
+    QVERIFY(apply({{"hologramPedestals", true}}));
+    for (const QString &key : stands)
+        QVERIFY2(shown(key), qPrintable(key));
+    QVERIFY(shown("pedestalViewAngle"));
+    QVERIFY(!shown("pedestalFacing"));
+
+    // On a 3D panel the icons turn; its stands lie on it, seen as it is,
+    // unless they face the viewer, at their own view angle.
+    QVERIFY(apply({{"type", "launcher"}, {"layout", "circular"}, {"rendererTier", "true3d"}}));
+    QVERIFY(shown("hologramIconTurning"));
+    QVERIFY(shown("pedestalFacing"));
+    QVERIFY(!shown("pedestalViewAngle"));
+    QVERIFY(apply({{"pedestalFacing", "viewer"}}));
+    QVERIFY(shown("pedestalViewAngle"));
+    QVERIFY(apply({{"hologramIcons", false}}));
+    QVERIFY(!shown("hologramIconTurning"));
+
+    // Stands taken away take their hologram's settings with them; the
+    // choice is kept for when they are back.
+    QVERIFY(apply({{"pedestalShape", "none"}}));
+    QVERIFY(!shown("hologramPedestals"));
+    for (const QString &key : stands)
+        QVERIFY2(!shown(key), qPrintable(key));
+    QCOMPARE(registry->panelDefinition(panel)->surface.parameters3D.value("hologramPedestals").toBool(), true);
+}
+
+// Panel Studio's Hologram tabs: one under Panels, one under Icons, one under
+// Pedestals while stands are drawn; each shows its part's switch, then,
+// while it is on, its colours (each part's own colour empty while it keeps
+// the set's, or its own), glow and flicker, and the icons' motion and
+// projector light.
+void PanelWindowCapabilityTest::studioHologramTabs()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    const auto apply = [&](const QVariantMap &values) {
+        return backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision, values)
+            .value("success").toBool();
+    };
+    const auto toList = [](const QVariant &value) {
+        return value.metaType() == QMetaType::fromType<QJSValue>()
+            ? value.value<QJSValue>().toVariant().toList() : value.toList();
+    };
+    // The page's rows and whether its tab is offered, seen as Panel Studio
+    // opens on it.
+    struct Page { bool offered = false; QVariantList rows; };
+    const auto page = [&](int section, int tab) {
+        Page result;
+        std::unique_ptr<QObject> popup(component.createWithInitialProperties({
+            {"selectedPanelId", panel}, {"mainTabIndex", section}, {"subTabIndex", tab}}));
+        if (!popup) return result;
+        QVariant offered;
+        QVariant rows;
+        QMetaObject::invokeMethod(popup.get(), "subtabAvailable", Q_RETURN_ARG(QVariant, offered),
+            Q_ARG(QVariant, section), Q_ARG(QVariant, tab));
+        QMetaObject::invokeMethod(popup.get(), "rowsForCurrentPage", Q_RETURN_ARG(QVariant, rows));
+        result.offered = offered.toBool();
+        result.rows = toList(rows);
+        return result;
+    };
+    const auto row = [](const Page &shownPage, const QString &key) {
+        for (const QVariant &item : shownPage.rows)
+            if (item.toMap().value("key").toString() == key)
+                return item.toMap();
+        return QVariantMap{};
+    };
+    const auto keys = [](const Page &shownPage) {
+        QStringList result;
+        for (const QVariant &item : shownPage.rows)
+            if (!item.toMap().value("key").toString().isEmpty())
+                result << item.toMap().value("key").toString();
+        return result;
+    };
+
+    // Off: the Panels and Icons tabs hold their switch alone; with no stands
+    // there is no Pedestals tab.
+    Page panels = page(1, 11);
+    Page icons = page(2, 6);
+    QVERIFY(panels.offered);
+    QVERIFY(icons.offered);
+    QCOMPARE(keys(panels), QStringList{QStringLiteral("hologramPanel")});
+    QCOMPARE(keys(icons), QStringList{QStringLiteral("hologramIcons")});
+    QVERIFY(!page(4, 1).offered);
+
+    // On, in Original colours: every part keeps its own colours, the light
+    // its icon's.
+    QVERIFY(apply({{"hologramIcons", true}, {"pedestalShape", "plate"}}));
+    icons = page(2, 6);
+    QCOMPARE(keys(icons).first(), QStringLiteral("hologramIcons"));
+    for (const char *key : {"hologramIconColours", "hologramIconOutlineColor", "hologramIconGlow",
+                            "hologramIconFlicker", "hologramIconFloat", "hologramIconSpeed", "hologramBeam",
+                            "hologramLightColor", "hologramBeamHeight", "hologramBeamMotion"})
+        QVERIFY2(keys(icons).contains(QLatin1String(key)), key);
+    QVERIFY(!keys(icons).contains(QStringLiteral("hologramIconTurning")));
+    const QVariantList sets = row(icons, "hologramIconColours").value("options").toList();
+    QCOMPARE(sets.size(), 8);
+    QCOMPARE(sets.first().toMap().value("label").toString(), QStringLiteral("Original colours"));
+    QCOMPARE(sets.first().toMap().value("value").toString(), QStringLiteral("original"));
+    QCOMPARE(row(icons, "hologramIconOutlineColor").value("emptyText").toString(), QStringLiteral("Its own colours"));
+    QCOMPARE(row(icons, "hologramLightColor").value("emptyText").toString(), QStringLiteral("The icon's own colour"));
+    QCOMPARE(row(icons, "hologramIconOutlineColor").value("designed").toString(), QString{});
+    QCOMPARE(row(icons, "hologramBeamMotion").value("options").toList().size(), 5);
+
+    // A colour set gives each part its colour.
+    QVERIFY(apply({{"hologramIconColours", "cyan"}}));
+    icons = page(2, 6);
+    QCOMPARE(row(icons, "hologramIconOutlineColor").value("emptyText").toString(), QStringLiteral("From the set"));
+    QCOMPARE(row(icons, "hologramIconVolumeColor").value("designed").toString(), QStringLiteral("#5aeaff"));
+    QCOMPARE(row(icons, "hologramLightColor").value("designed").toString(), QStringLiteral("#22d8ff"));
+
+    // Without the light, its colours, strength, height and motion go.
+    QVERIFY(apply({{"hologramBeam", false}}));
+    icons = page(2, 6);
+    QVERIFY(keys(icons).contains(QStringLiteral("hologramBeam")));
+    for (const char *key : {"hologramLightColor", "hologramOpeningColor", "hologramBeamStrength",
+                            "hologramBeamHeight", "hologramBeamMotion"})
+        QVERIFY2(!keys(icons).contains(QLatin1String(key)), key);
+
+    // Stands drawn: the Pedestals tab, its switch, then its settings.
+    Page stands = page(4, 1);
+    QVERIFY(stands.offered);
+    QCOMPARE(keys(stands), QStringList{QStringLiteral("hologramPedestals")});
+    QVERIFY(apply({{"hologramPedestals", true}, {"hologramPanel", true}}));
+    stands = page(4, 1);
+    for (const char *key : {"hologramPedestalColours", "hologramPedestalGlow", "hologramPedestalSpeed"})
+        QVERIFY2(keys(stands).contains(QLatin1String(key)), key);
+    panels = page(1, 11);
+    for (const char *key : {"hologramPanelColours", "hologramPanelGlowReach", "hologramPanelFlicker"})
+        QVERIFY2(keys(panels).contains(QLatin1String(key)), key);
 }
 
 // A decoration's launcher seat takes an icon: dropped on it, an item the

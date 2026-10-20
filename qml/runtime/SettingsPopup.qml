@@ -618,6 +618,8 @@ Window {
                 return fieldDescriptor("segments", "panel") !== null;
             if (subtabNumber === 9)
                 return panelAnimationRows().length > 0;
+            if (subtabNumber === 11)
+                return fieldsForSection("panels-hologram").length > 0;
             if (subtabNumber === 10)
                 return scene3DControlsAvailable || (!isNativePanel()
                     && EditorModel.platformTier(panelValue("rendererTier", "")
@@ -628,7 +630,12 @@ Window {
                 return fieldsForSection("icons-indicators").length > 0;
             if (subtabNumber === 3)
                 return fieldsForSection("icons-notifications").length > 0;
+            if (subtabNumber === 6)
+                return fieldsForSection("icons-hologram").length > 0;
         }
+        // The stands' hologram where stands are drawn.
+        if (sectionNumber === 4 && subtabNumber === 1)
+            return fieldsForSection("pedestals-hologram").length > 0;
         return true;
     }
 
@@ -1165,7 +1172,9 @@ Window {
             readOnlyRow(qsTr("Color"), color.length > 0 ? color : qsTr("Default")),
             readOnlyRow(qsTr("Opacity"), Math.round(Number(panelValue("opacity", 0.9)) * 100) + "%")]
             .concat(Number(panelValue("panelGlow", 0)) > 0
-                ? summaryRows(["panelGlow", "panelGlowReach", "panelGlowColor"]) : []);
+                ? summaryRows(["panelGlow", "panelGlowReach", "panelGlowColor"]) : [])
+            .concat(Boolean(panelValue("hologramPanel", false))
+                ? summaryRows(["hologramPanel", "hologramPanelColours"]) : []);
     }
 
     function overviewIconRows() {
@@ -1176,7 +1185,9 @@ Window {
             readOnlyRow(qsTr("Animation"), optionLabel("iconAnimation", panelValue("iconAnimation", "scale"))),
             readOnlyRow(qsTr("Magnification"), globalValue("magnificationEnabled", true) ? Number(globalValue("magnification", 1.65)).toFixed(2) + "×" : qsTr("Off"))]
             .concat(Number(panelValue("iconGlow", 0)) > 0
-                ? summaryRows(["iconGlow", "iconGlowReach", "iconGlowColor"]) : []);
+                ? summaryRows(["iconGlow", "iconGlowReach", "iconGlowColor"]) : [])
+            .concat(Boolean(panelValue("hologramIcons", false))
+                ? summaryRows(["hologramIcons", "hologramIconColours", "hologramBeam"]) : []);
     }
 
     function overviewTileRows() {
@@ -1210,6 +1221,9 @@ Window {
             rows.push(section(qsTr("Icon style pedestal"), ""));
             rows = rows.concat(summaryRows(["iconPedestalHeight", "iconPedestalColor"]));
         }
+        rows = rows.concat(summaryRows(["hologramPedestals"]).filter(function() {
+            return Boolean(root.panelValue("hologramPedestals", false));
+        }));
         return rows;
     }
 
@@ -1685,6 +1699,81 @@ Window {
         return rows;
     }
 
+    // A part's Hologram tab (Panels, Icons, Pedestals): whether it is drawn
+    // as light, then its colour set and each part's own colour (the set's,
+    // or its own colours, shown while none is chosen), its glow, flicker
+    // and speed; the icons' tab also their float and turning, and the
+    // projector light they float in with its colours, strength, height and
+    // motion. A setting that cannot apply is not shown.
+    readonly property var hologramSetLabels: ({
+        original: qsTr("Original colours"), cyan: qsTr("Cyan"), ice: qsTr("Ice"), emerald: qsTr("Emerald"),
+        amber: qsTr("Amber"), ruby: qsTr("Ruby"), violet: qsTr("Violet"), rose: qsTr("Rose")
+    })
+    function hologramRows(sectionId) {
+        const part = sectionId === "icons-hologram" ? "Icon" : sectionId === "panels-hologram" ? "Panel" : "Pedestal";
+        const prefix = "hologram" + part;
+        const byKey = ({});
+        for (const field of fieldsForSection(sectionId))
+            byKey[field.key] = field;
+        const rows = [];
+        const add = function(key, extra) {
+            if (byKey[key])
+                rows.push(Object.assign({}, byKey[key], extra || ({})));
+        };
+        const titles = { Icon: qsTr("Holographic icons"), Panel: qsTr("Holographic panel"),
+                         Pedestal: qsTr("Holographic pedestals") };
+        const descriptions = {
+            Icon: qsTr("Each icon drawn as light: see-through, its edges brighter, crossed by drifting lines, flickering now and then as a weak signal does. With the projector light it floats in a light rising from the middle of its stand, or from the panel where it has none."),
+            Panel: qsTr("The panel drawn as light: see-through, its edges brighter, crossed by drifting lines, flickering now and then as a weak signal does."),
+            Pedestal: qsTr("The stands under the icons drawn as light: see-through, their edges brighter, crossed by drifting lines, flickering now and then as a weak signal does.")
+        };
+        rows.push(section(titles[part], descriptions[part], true));
+        add(part === "Icon" ? "hologramIcons" : part === "Panel" ? "hologramPanel" : "hologramPedestals");
+        if (!byKey[prefix + "Colours"])
+            return rows;
+        const setName = String(panelValue(prefix + "Colours", "original"));
+        const set = HologramLook.colourSets[setName] || null;
+        rows.push(section(qsTr("Colours"),
+            qsTr("Original colours keeps its own colours, made light; a colour set gives every part its colour. A part's own colour, when chosen, replaces the set's.")));
+        add(prefix + "Colours", { options: HologramLook.setNames.map(function(name) {
+            return { label: root.hologramSetLabels[name] || root.titleCase(name), value: name };
+        }) });
+        const partColour = function(key, role, description, ownText) {
+            add(key, { designed: set ? set[role] : "", description: description,
+                       emptyText: set ? qsTr("From the set") : ownText || qsTr("Its own colours") });
+        };
+        partColour(prefix + "OutlineColor", "outline", qsTr("Its edges, where it ends."));
+        partColour(prefix + "InlineColor", "inline", qsTr("Its inner lines, where its colours change."));
+        partColour(prefix + "VolumeColor", "volume", qsTr("Its body, between the lines."));
+        partColour(prefix + "GlowColor", "glow", qsTr("The light round it."));
+        rows.push(section(qsTr("Glow and flicker")));
+        add(prefix + "Glow", { description: qsTr("How strong the light round it is.") });
+        add(prefix + "GlowReach", { description: qsTr("How far the light round it reaches.") });
+        add(prefix + "Flicker", { description: qsTr("How often it blinks, as a weak signal does. None never blinks.") });
+        if (part === "Icon") {
+            rows.push(section(qsTr("Motion")));
+            add("hologramIconFloat", { description: qsTr("A gentle rise and fall.") });
+            add("hologramIconTurning", { description: qsTr("How the icons turn as they float on a 3D panel."),
+                options: [{ label: qsTr("Turning"), value: "turn" }, { label: qsTr("Swaying"), value: "sway" },
+                          { label: qsTr("Still"), value: "still" }] });
+            add("hologramIconSpeed", { description: qsTr("How fast the lines drift, the icons float and turn, and the light moves.") });
+            rows.push(section(qsTr("Projector light"),
+                qsTr("The light each icon floats in, rising from the middle of its stand's top, or from the panel where it has none. On a top panel it comes down from the stands; on a side panel it wraps the icon from the side.")));
+            add("hologramBeam");
+            partColour("hologramLightColor", "light", qsTr("The light's colour."), qsTr("The icon's own colour"));
+            partColour("hologramOpeningColor", "opening", qsTr("The lens it leaves."), qsTr("The icon's own colour"));
+            add("hologramBeamStrength");
+            add("hologramBeamHeight", { description: qsTr("How high the icons float in it.") });
+            add("hologramBeamMotion", { description: qsTr("How the light moves: its streaks rising, its rays drifting sideways, rings of light rising through it, or a bright band sweeping across it."),
+                options: [{ label: qsTr("Rising and drifting"), value: "rise-drift" }, { label: qsTr("Rising"), value: "rise" },
+                          { label: qsTr("Pulsing"), value: "pulse" }, { label: qsTr("Sweeping"), value: "sweep" },
+                          { label: qsTr("Still"), value: "still" }] });
+        } else {
+            add(prefix + "Speed", { description: qsTr("How fast its lines drift.") });
+        }
+        return rows;
+    }
+
     function iconTileRows() {
         const rows = schemaSectionRows("icon-tiles", qsTr("Icon Tiles"),
             qsTr("Tile backgrounds for this panel. Preview changes here, then Apply to save."));
@@ -1803,6 +1892,8 @@ Window {
                 return panelAnimationRows();
             if (subTabIndex === 10)
                 return panel3DRows();
+            if (subTabIndex === 11)
+                return hologramRows("panels-hologram");
             return [];
         }
         if (mainTabIndex === 2) {
@@ -1828,12 +1919,14 @@ Window {
                     qsTr("What applications can show on their icons in this panel."));
                 return rows;
             }
+            if (subTabIndex === 6)
+                return hologramRows("icons-hologram");
             return [];
         }
         if (mainTabIndex === 3)
             return iconTileRows();
         if (mainTabIndex === 4)
-            return pedestalRows();
+            return subTabIndex === 1 ? hologramRows("pedestals-hologram") : pedestalRows();
         return unavailablePage(currentSubtabs.length > 0 ? currentSubtabs[subTabIndex] : qsTr("Profiles"), qsTr("Reusable profiles are outside the current settings contract."));
     }
 

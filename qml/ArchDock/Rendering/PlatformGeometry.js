@@ -263,6 +263,78 @@ function facetedLathe(profile, sides, start) {
     return mesh.result()
 }
 
+// A solid turned about the z axis on a rounded square instead of a
+// circle: each profile point's radius is the square's half width there, its
+// corners rounded by `corner` of that half width. A projector's plate: the
+// profile's steps become its flat top, bevel and sides. Normals follow the
+// swept surface: along a side the outline's own outward direction, tipped
+// up a bevel by the profile's slope.
+function roundedLathe(profile, corner, segments) {
+    const rc = clamp(finite(corner, 0.3), 0.02, 1)
+    // Steps round each corner; the straight sides need none between.
+    const steps = Math.max(4, Math.round(finite(segments, 32) / 4))
+    // The outline (half width 1) as points with outward normals, counter-
+    // clockwise from the right side's lower end: each side straight, then
+    // a quarter circle round the next corner, the last one ending where the
+    // first side began; `t` how far round it lies.
+    const ring = [{ point: [1, -(1 - rc)], normal: [1, 0] }]
+    for (let side = 0; side < 4; ++side) {
+        const turn = side * Math.PI / 2
+        const c = Math.cos(turn), n = Math.sin(turn)
+        const centre = [(1 - rc) * (c - n), (1 - rc) * (n + c)]
+        for (let step = 0; step <= steps; ++step) {
+            const angle = turn + step / steps * Math.PI / 2
+            ring.push({ point: [centre[0] + rc * Math.cos(angle), centre[1] + rc * Math.sin(angle)],
+                        normal: [Math.cos(angle), Math.sin(angle)] })
+        }
+    }
+    let travelled = 0
+    ring[0].t = 0
+    for (let index = 1; index < ring.length; ++index) {
+        travelled += Math.hypot(ring[index].point[0] - ring[index - 1].point[0],
+                                ring[index].point[1] - ring[index - 1].point[1])
+        ring[index].t = travelled
+    }
+    for (const sample of ring) sample.t /= Math.max(1e-6, travelled)
+    const count = ring.length - 1
+    const points = profile.slice()
+    const lengths = [0]
+    for (let index = 1; index < points.length; ++index)
+        lengths.push(lengths[index - 1] + Math.hypot(points[index][0] - points[index - 1][0],
+                                                     points[index][1] - points[index - 1][1]))
+    const total = Math.max(1e-6, lengths[lengths.length - 1])
+    const reachRadius = Math.max(1e-6, ...points.map(function(point) { return point[0] }))
+    const mesh = new MeshBuilder()
+    for (let step = 0; step + 1 < points.length; ++step) {
+        const a = points[step], b = points[step + 1]
+        const dr = b[0] - a[0], dz = b[1] - a[1]
+        const length = Math.hypot(dr, dz)
+        if (length < 1e-9) continue
+        const cap = a[0] <= 1e-9 || b[0] <= 1e-9
+        for (let index = 0; index < count; ++index) {
+            const corners = []
+            for (const [sample, point, along] of [[ring[index], a, lengths[step]], [ring[index + 1], a, lengths[step]],
+                                                   [ring[index + 1], b, lengths[step + 1]], [ring[index], b, lengths[step + 1]]]) {
+                const p = sample.point, o = sample.normal
+                // How far out of the middle the outline lies along its own
+                // normal there (1 along a side, less round a corner).
+                const out = p[0] * o[0] + p[1] * o[1]
+                const normal = cap ? [0, 0, dr < 0 ? 1 : -1]
+                    : normalized([dz * o[0], dz * o[1], -dr * out])
+                const uv = cap ? [0.5 + point[0] * p[0] / (2 * reachRadius), 0.5 + point[0] * p[1] / (2 * reachRadius)]
+                    : [sample.t, 1 - along / total]
+                const tangent = cap ? [1, 0, 0] : [-o[1], o[0], 0]
+                corners.push(mesh.vertex([point[0] * p[0], point[0] * p[1], point[1]], normal, null, uv, tangent))
+            }
+            const middle = ring[index].normal
+            const facing = cap ? [0, 0, dr < 0 ? 1 : -1] : [dz * middle[0], dz * middle[1], -dr]
+            if (a[0] > 1e-9) mesh.triangle(corners[0], corners[1], corners[2], facing)
+            if (b[0] > 1e-9) mesh.triangle(corners[0], corners[2], corners[3], facing)
+        }
+    }
+    return mesh.result()
+}
+
 // A star-shaped plate: `points` tips at `outer`, notches at `inner`, from
 // z 0 to `height`, with flat top and bottom and a flat face per edge.
 function starPrism(outer, inner, points, height) {
@@ -362,7 +434,15 @@ var pedestalSpecs = (function() {
         hourglass: { profile: [[0, 0], [0.9, 0], [0.9, 0.08], [0.32, 0.42], [0.9, 0.76], [0.9, 0.84],
                                [0, 0.84]], scale: 0.48 },
         crystal: { profile: [[0, 0], [0.62, 0.3], [0.8, 0.5], [0.55, 0.7], [0, 0.74]], sides: 6, scale: 0.5 },
-        halo: { profile: halo, loop: true, scale: 0.42 }
+        halo: { profile: halo, loop: true, scale: 0.42 },
+        // Two stands made to carry a hologram: a projector's square plate
+        // with rounded corners, brushed metal, a lens in its middle; and a
+        // round pad, dark and glossy, its lens a glowing pool. Each wears its
+        // own finish while the stands' Look is the panel's.
+        projector: { profile: [[0, 0], [1, 0], [1, 0.1], [0.95, 0.13], [0, 0.13]], rounded: 0.32, scale: 0.54,
+                     opening: { radius: 0.62, height: 0.13 }, finish: { look: "metallic", colour: "" } },
+        "projector-round": { profile: [[0, 0], [1, 0], [1, 0.06], [0.95, 0.09], [0, 0.09]], scale: 0.58,
+                             opening: { radius: 0.52, height: 0.09 }, finish: { look: "metallic", colour: "#1d232b" } }
     }
 })()
 var pedestalShapes = Object.keys(pedestalSpecs)
@@ -379,7 +459,43 @@ function pedestalShape(kind, segments) {
         return starPrism(spec.star.outer, spec.star.inner, spec.star.points, spec.height)
     if (spec.sides)
         return facetedLathe(spec.profile, spec.sides, -Math.PI / 2 - Math.PI / spec.sides)
+    if (spec.rounded)
+        return roundedLathe(spec.profile, spec.rounded, 32)
     return lathe(spec.profile, segments, spec.loop === true)
+}
+
+// The finish a stand made for a hologram wears of its own (a projector's
+// brushed metal), while the stands' Look is the panel's; null for others.
+function pedestalFinish(kind) {
+    const spec = pedestalSpecs[String(kind || "")]
+    return spec && spec.finish ? { look: spec.finish.look, colour: spec.finish.colour } : null
+}
+
+// Where a hologram's light leaves a stand, in its own units: the middle of
+// its top, as wide as the top's flat part allows (a star's middle, a cone's
+// tip), or, through a ring or a halo, the panel inside it (`hole`). A
+// projector's opening is its lens.
+function pedestalOpening(kind) {
+    const spec = pedestalSpec(kind)
+    if (spec.opening)
+        return { radius: spec.opening.radius, height: spec.opening.height, hole: false }
+    if (spec.star)
+        return { radius: spec.star.inner * 0.72, height: spec.height, hole: false }
+    const profile = spec.profile
+    if (spec.loop) {
+        const inner = Math.min(...profile.map(function(point) { return point[0] }))
+        return { radius: inner * 0.85, height: 0, hole: true }
+    }
+    const top = Math.max(...profile.map(function(point) { return point[1] }))
+    // The top's flat part: its widest point at the top's height.
+    let flat = 0
+    for (const point of profile)
+        if (top - point[1] < 1e-6) flat = Math.max(flat, point[0])
+    const facets = spec.sides ? Math.cos(Math.PI / spec.sides) : 1
+    if (flat >= 0.2)
+        return { radius: flat * facets * 0.72, height: top, hole: false }
+    // A pointed or rounded top: a small light at its tip.
+    return { radius: 0.25 * pedestalShapeReach(kind), height: top, hole: false }
 }
 
 // How high a pedestal shape reaches, in its own units.
@@ -389,11 +505,17 @@ function pedestalShapeHeight(kind) {
     return Math.max(...spec.profile.map(function(point) { return point[1] }))
 }
 
-// How far a shape reaches from its axis, in its own units.
+// How far a shape reaches from its axis, in its own units: a rounded
+// square's corners reach farther than its sides.
 function pedestalShapeReach(kind) {
     const spec = pedestalSpec(kind)
     if (spec.star) return spec.star.outer
-    return Math.max(...spec.profile.map(function(point) { return point[0] }))
+    const widest = Math.max(...spec.profile.map(function(point) { return point[0] }))
+    if (spec.rounded) {
+        const rc = clamp(finite(spec.rounded, 0.3), 0.02, 1)
+        return widest * ((1 - rc) * Math.SQRT2 + rc)
+    }
+    return widest
 }
 
 // How many icon sizes one unit of a shape is, at Size 1.
@@ -419,8 +541,7 @@ function pedestalOutline(kind, thickness, tilt) {
         top = Math.max(top, z + across)
         bottom = Math.min(bottom, z - across)
     }
-    return { top: top, bottom: bottom, reach: spec.star ? spec.star.outer
-        : Math.max(...spec.profile.map(function(point) { return point[0] })) }
+    return { top: top, bottom: bottom, reach: pedestalShapeReach(kind) }
 }
 
 // A flat stand's measures in pixels for an icon of `size` (the flat
@@ -448,16 +569,16 @@ function pedestalLayout(values, size, onPath) {
     const scale = number("pedestalSize", 1, 0.2, 4)
     const thickness = number("pedestalThickness", 1, 0.2, 4)
     const lift = number("pedestalLift", 0.3, 0, 2)
-    // Stand facing: Panel (the default) draws the stand in the panel's own
-    // plane, seen straight on as a flat panel is, fixed to the panel at the
-    // icon's place; Viewer and Auto draw it level, View angle degrees from
-    // above. A folder opened from a true 3D panel passes the angle its
-    // panel's own stands are seen at instead (`pedestalSeenAngle`, not a
-    // setting), so its items' stands look like the ones on the panel.
-    const facing = String(v.pedestalFacing || "panel").toLowerCase()
+    // A flat panel's stand lies level, seen View angle degrees from above:
+    // near horizontal by default, straight from above at 90. (Stand facing
+    // turns a 3D panel's stands; a flat panel is seen face-on, where it
+    // would only show the stands from straight above.) A folder opened from
+    // a true 3D panel passes the angle its panel's own stands are seen at
+    // instead (`pedestalSeenAngle`, not a setting), so its items' stands
+    // look like the ones on the panel.
     const seen = typeof v.pedestalSeenAngle === "number" ? finite(v.pedestalSeenAngle, NaN) : NaN
     const tilt = Number.isFinite(seen) ? clamp(seen, 0, 90)
-        : facing === "panel" ? 90 : number("pedestalViewAngle", pedestalTilt2D, 0, 60)
+        : number("pedestalViewAngle", pedestalTilt2D, 0, 90)
     const unit = icon * pedestalShapeScale(kind === "none" ? "column" : kind) * scale
     const depth = shape === "auto" ? icon * 0.3
         : kind === "column" ? icon * 0.4 * scale * thickness : unit * thickness
@@ -476,6 +597,97 @@ function pedestalLayout(values, size, onPath) {
     return { shape: shape, kind: kind, drawn: true, unit: unit, depth: depth, outline: outline, tilt: tilt,
              height: height, width: 2 * outline.reach * unit, gap: gap, raise: raise,
              standCentre: standCentre, above: raise, below: below }
+}
+
+// Which way an icon lies from its stand on the screen (x right, y down):
+// away from the screen edge an edge panel stands on, so the stand is at the
+// edge's side and nothing reaches past the screen's edge - up on a bottom
+// panel and on a free panel's path, down from a top panel's stands, which
+// the icons hang under, inward from a side panel's. `turn` (degrees,
+// clockwise) stands a stand that way.
+function standDirection(edge, onPath) {
+    if (onPath === true) return { name: "up", x: 0, y: -1, turn: 0 }
+    const word = String(edge || "bottom")
+    if (word === "top") return { name: "down", x: 0, y: 1, turn: 180 }
+    if (word === "left") return { name: "right", x: 1, y: 0, turn: 90 }
+    if (word === "right") return { name: "left", x: -1, y: 0, turn: -90 }
+    return { name: "up", x: 0, y: -1, turn: 0 }
+}
+
+// How far a stand's top edge (its own up) lies from its icon cell's middle,
+// in its own frame, where the icon lies toward -y: the icon's visible foot
+// (0.07 icon sizes inside its cell) the Lift gap above it.
+function standTopOffset(layout, size) {
+    return 0.43 * Math.max(1, finite(size, 52)) - layout.raise + layout.gap
+}
+
+// The view a stand-less hologram's opening is seen at on the panel,
+// degrees above its plane: a projector's lens seen a little from above.
+var hologramOpeningView = 28
+
+// A hologram icon over its projector's light (Icons > Hologram, Projector
+// light on), in its stand's frame: the light rises toward -y as on a
+// bottom panel and the scene turns the frame as standDirection says, the
+// icon itself staying upright. Where the light's opening lies (the middle
+// of the stand's top, or on the panel where there is no stand) and how wide
+// it is seen; how far the light reaches and how wide it ends, the icon's
+// near part in its wide end; how far the icon rises from its cell's middle.
+// Its stand stands on the panel at the icon's place, its middle on the
+// cell's, as on a free panel's path; with no stand the opening lies on the
+// panel at the cell's edge side of an edge panel, on a free panel's path. On a side panel the light is short and wide, wrapping
+// the icon close round like a halo. `above`, `below` and `across` are how
+// far the whole reaches past the cell, glow and float included.
+function hologramLayout(values, size, onPath, edge) {
+    const v = values || ({})
+    const icon = Math.max(1, finite(size, 52))
+    const direction = standDirection(edge, onPath)
+    if (!(v.hologramIcons === true && v.hologramBeam !== false))
+        return { on: false, direction: direction }
+    const side = direction.name === "left" || direction.name === "right"
+    // An edge panel's light is short and its icon sits deep in it, the
+    // light reaching on past the icon and round it like a halo; a free
+    // panel's rises tall, the icon floating high in its widening end.
+    const wraps = onPath !== true
+    const height = clamp(finite(v.hologramBeamHeight, 1), 0.2, 2)
+    const lift = icon * height * (wraps ? 0.3 : 0.95)
+    const stand = pedestalLayout(v, icon, onPath === true)
+    let standTop = 0, opening = 0, rx = 0, ry = 0, hole = false, nearEnd = 0
+    if (stand.drawn) {
+        const spot = pedestalOpening(stand.kind)
+        const turn = stand.tilt * Math.PI / 180
+        const stretch = stand.depth / Math.max(1e-6, stand.unit)
+        // The opening's middle as seen, this far under the stand's top edge.
+        const under = (stand.outline.top - spot.height * stretch * Math.cos(turn)) * stand.unit
+        // The stand stands on the panel (or the path) at the icon's place.
+        standTop = -stand.height / 2
+        opening = standTop + under
+        rx = spot.radius * stand.unit
+        ry = rx * Math.sin(turn)
+        hole = spot.hole
+        nearEnd = standTop + stand.height
+    } else {
+        rx = icon * (side ? 0.36 : 0.4)
+        ry = rx * Math.sin(hologramOpeningView * Math.PI / 180)
+        // On the panel at the cell's edge side.
+        opening = onPath === true ? 0 : icon / 2 - ry
+        nearEnd = opening + ry
+    }
+    const nearEdge = opening - lift
+    const raise = icon / 2 - nearEdge
+    const length = lift + icon * (wraps ? 1.05 : 0.42)
+    const startHalf = Math.max(icon * 0.08, rx * 0.95)
+    const endHalf = icon * (wraps ? 0.72 : 0.59)
+    // Its glow and float reach past the icon and the light.
+    const glow = icon * 0.3
+    const farEnd = Math.min(nearEdge - icon, opening - length) - glow - icon * 0.03
+    const acrossHalf = Math.max(icon / 2 + glow, rx, endHalf, stand.drawn ? stand.width / 2 : 0)
+    return { on: true, direction: direction, side: side, wraps: wraps, lift: lift, raise: raise,
+             stand: stand, standTop: standTop,
+             opening: { y: opening, rx: rx, ry: ry, hole: hole },
+             beam: { start: opening, length: length, startHalf: startHalf, endHalf: endHalf,
+                     fade: wraps ? 0.9 : 1.6 },
+             above: Math.max(0, -farEnd - icon / 2), below: Math.max(0, nearEnd + icon * 0.05 - icon / 2),
+             across: Math.max(0, acrossHalf - icon / 2) }
 }
 
 // A stand turned so its axis is `axis` (a unit vector in the viewer's

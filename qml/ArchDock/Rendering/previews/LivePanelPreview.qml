@@ -271,6 +271,9 @@ Item {
             logicalSize: Number(parent.sceneGeometry.iconSize || width)
             tileSettings: root.resolvedPanelDefinition
             pedestalOnPath: panelScene.pedestalOnPath
+            screenEdge: panelScene.screenEdge
+            standsOnPanel: true
+            panelThickness: panelScene.freeHost ? 0 : panelScene.verticalLayout ? panelScene.width : panelScene.height
             tileShape: String(root.iconValue(
                 "shape", "iconShape", "rounded"))
             appearance: String(root.iconValue(

@@ -34,7 +34,8 @@ TestCase {
             "Built-in Panel Presets",
             "My Panel Presets",
             "Animations",
-            "3D"
+            "3D",
+            "Hologram"
         ])
         // The icon style is chosen only on Icons > Appearance, so the Icon
         // Styles tab that repeated it is gone.
@@ -44,10 +45,12 @@ TestCase {
             "Indicators",
             "Notifications",
             "Built-in Icon Presets",
-            "My Icon Presets"
+            "My Icon Presets",
+            "Hologram"
         ])
         compareList(StudioNavigation.subtabsFor(3), [])
-        compareList(StudioNavigation.subtabsFor(4), [])
+        // The stands' own page, and the stands drawn as a hologram.
+        compareList(StudioNavigation.subtabsFor(4), ["Appearance", "Hologram"])
         compareList(StudioNavigation.subtabsFor(5), [
             "Quick Profile",
             "Manage",
@@ -65,11 +68,11 @@ TestCase {
 
     function test_clampsSubtabIndices() {
         compare(StudioNavigation.clampSubtabIndex(0, -1), 0)
-        compare(StudioNavigation.clampSubtabIndex(1, 99), 10)
+        compare(StudioNavigation.clampSubtabIndex(1, 99), 11)
         compare(StudioNavigation.clampSubtabIndex(2, 3), 3)
-        compare(StudioNavigation.clampSubtabIndex(2, 99), 5)
+        compare(StudioNavigation.clampSubtabIndex(2, 99), 6)
         compare(StudioNavigation.clampSubtabIndex(3, 99), 0)
-        compare(StudioNavigation.clampSubtabIndex(4, 99), 0)
+        compare(StudioNavigation.clampSubtabIndex(4, 99), 1)
         compare(StudioNavigation.clampSubtabIndex(5, 2.9), 2)
         compare(StudioNavigation.clampSubtabIndex(6, 99), 0)
     }

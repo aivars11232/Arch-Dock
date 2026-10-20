@@ -121,6 +121,10 @@ public:
         const ArchDock::PanelDefinition &definition,
         const QVariantMap &look,
         const QVariantMap &lookProjection) const;
+    // Whether a panel drawn in 3D stands on such a generated platform, one a
+    // panel decoration can stand in the place of (not a Möbius strip, whose
+    // band turns over).
+    [[nodiscard]] bool standsOnGeneratedPlatform(const ArchDock::PanelDefinition &definition) const;
     [[nodiscard]] ArchDock::CapabilityResolution resolvePanelCapabilities(
         const ArchDock::PanelDefinition &definition,
         QString *errorCode = nullptr) const;

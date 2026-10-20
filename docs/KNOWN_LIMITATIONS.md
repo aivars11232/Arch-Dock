@@ -24,6 +24,18 @@ geometry/recovery integration. Plasma controls the host; Arch Dock renders
 and animates within it. Ownership tokens and unrelated-panel/widget safeguards
 apply to both native and free hosts.
 
+An edge panel whose stands, holograms or their light reach past it is drawn
+in a see-through window of Arch Dock's own over the Plasma panel, tied to the
+same screen edge; it takes the pointer only over the panel and over what it
+shows past it. This is done for panels that are always visible: on a panel
+that hides itself Plasma would neither hide it while that window shows nor
+let Arch Dock see when it hides, so such a panel keeps its stands and
+holograms inside the panel, cut at its edge. In Plasma's edit mode the
+window keeps drawing and takes no pointer, so a top panel's hanging icons
+can cover Plasma's edit toolbar, which still takes the clicks. Two panels
+side by side on one edge are not possible while the edge panels are Plasma
+panels, which Plasma stacks.
+
 KDE's own widgets (the clock, the application launcher, Panel Colorizer)
 can be added to an edge panel with Plasma's Add Widgets, since it is a
 Plasma panel: Plasma sizes them to the panel, beside Arch Dock's widget and
@@ -167,6 +179,14 @@ thin edge panel a decoration with a tall launcher seat (the Raptor Hull)
 shrinks to fit the panel's thickness, and its seat with it. A theme
 package may carry a decoration's contour, which is checked member by
 member, but only the built-in decorations are drawn so far.
+
+Holograms (Panels, Icons and Pedestals > Hologram) are drawn on flat and
+3D panels. The items in a folder's opening are not drawn as holograms. A
+3D decoration drawn as a hologram shows its own colours made light; its
+lights do not pulse or twinkle separately while it is a hologram, as they
+do on a flat panel. On a 3D panel that turns as a whole with the mouse
+wheel, projector stands make about a fifth of the frames late while it
+turns (being looked into).
 
 ## Resource use
 

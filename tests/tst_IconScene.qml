@@ -56,6 +56,96 @@ TestCase {
         return scene
     }
 
+    // Shaders are only compiled by a real graphics backend, not the
+    // software one offscreen tests draw with.
+    function shadersCompile(effect) {
+        if (GraphicsInfo.api === GraphicsInfo.Software || GraphicsInfo.api === GraphicsInfo.Unknown)
+            return true
+        return effect.status === ShaderEffect.Compiled
+    }
+
+    function test_hologramIconIsDrawnAsLight() {
+        // Icons > Hologram: the icon drawn as light over its projector's
+        // light, floating up in it; without the light it stays in its place.
+        const scene = createScene({ tileSettings: ({ hologramIcons: true }) })
+        const body = findChild(scene, "icon-hologram")
+        verify(body !== null && body.visible, "the hologram is drawn")
+        const light = findChild(body, "hologram-light")
+        verify(light !== null)
+        tryVerify(function() { return shadersCompile(light) }, 3000, "its shader loads")
+        const beam = findChild(scene, "icon-hologram-beam")
+        const opening = findChild(scene, "icon-hologram-opening")
+        verify(beam.visible && opening.visible, "with its projector's light and lens")
+        tryVerify(function() { return shadersCompile(beam) && shadersCompile(opening) }, 3000)
+        const visual = findChild(scene, "icon-visual-layer")
+        verify(visual.anchors.verticalCenterOffset < 0, "the icon floats up in its light")
+        verify(!scene.hologramMoving, "still under reduced motion")
+        compare(scene.hologramTime, 0)
+        scene.tileSettings = ({ hologramIcons: true, hologramBeam: false })
+        wait(0)
+        verify(!beam.visible && !opening.visible, "no light, no lens")
+        compare(visual.anchors.verticalCenterOffset, 0, "without its light it stays in its place")
+        verify(body.visible, "still a hologram")
+        scene.tileSettings = ({})
+        wait(0)
+        verify(!body.visible, "a plain icon again")
+    }
+
+    function test_standsTurnAwayFromTheScreenEdge() {
+        // An edge panel's stands stand at the screen edge's side, on the
+        // panel, the icon floating away from the edge; it stays upright.
+        const scene = createScene({ tileSettings: ({ pedestalShape: "plate" }), standsOnPanel: true,
+                                    screenEdge: "top" })
+        const frame = findChild(scene, "icon-stand-frame")
+        const visual = findChild(scene, "icon-visual-layer")
+        compare(frame.rotation, 180, "a top panel's stands hang above its icons")
+        verify(visual.anchors.verticalCenterOffset > 0, "the icon hangs under its stand")
+        compare(visual.rotation, 0, "upright")
+        scene.screenEdge = "left"
+        wait(0)
+        compare(frame.rotation, 90)
+        verify(visual.anchors.horizontalCenterOffset > 0, "a left panel's icon lies right of its stand")
+        compare(visual.anchors.verticalCenterOffset, 0)
+        scene.screenEdge = "right"
+        wait(0)
+        compare(frame.rotation, -90)
+        verify(visual.anchors.horizontalCenterOffset < 0)
+        scene.screenEdge = "bottom"
+        wait(0)
+        compare(frame.rotation, 0)
+        verify(visual.anchors.verticalCenterOffset < 0)
+        fuzzyCompare(scene.pedestalLayout.standCentre, 0, 0.01, "the stand stands on the panel")
+        verify(scene.restingIconRect.y < 0, "the pointer finds the icon where it rests, raised")
+    }
+
+    function test_standsFitInsideThePanel() {
+        // A stand fits within its edge panel's thickness: made smaller when
+        // it would not, kept as made when it does, and on a free panel.
+        const scene = createScene({ tileSettings: ({ pedestalShape: "pillar", pedestalSize: 4,
+                                                     pedestalViewAngle: 40 }),
+                                    standsOnPanel: true, panelThickness: 76 })
+        verify(scene.standFit < 1, "a stand too tall for the panel is made smaller")
+        verify(scene.pedestalLayout.height <= 76 * 0.86 + 0.5, "it fits inside the panel")
+        scene.panelThickness = 1000
+        wait(0)
+        compare(scene.standFit, 1, "a thick panel keeps it as made")
+        scene.panelThickness = 0
+        wait(0)
+        compare(scene.standFit, 1, "a free panel's stands are as made")
+    }
+
+    function test_holographicStand() {
+        // Pedestals > Hologram: the stand drawn through the hologram as its
+        // layer's effect; with no stand there is nothing to draw so.
+        const scene = createScene({ tileSettings: ({ pedestalShape: "hexagon", hologramPedestals: true }) })
+        const canvas = findChild(scene, "icon-pedestal-canvas")
+        verify(scene.standHologramDrawn)
+        verify(canvas.layer.enabled, "the stand is drawn through its hologram")
+        scene.tileSettings = ({ hologramPedestals: true })
+        wait(0)
+        verify(!scene.standHologramDrawn)
+    }
+
     function test_pedestalLayerFollowsThePedestalSettings() {
         // The Pedestals page on a flat panel: no stand by default; Auto is a
         // column, as in 3D, unless the icon style draws its own pedestal;
@@ -80,7 +170,7 @@ TestCase {
         compare(visual.anchors.verticalCenterOffset, 0)
         const shapes = ["column", "plate", "disc", "ring", "saucer", "cube", "hexagon", "octagon", "star",
                         "cone", "pyramid", "dome", "orb", "bowl", "pillar", "tiered", "goblet", "hourglass",
-                        "crystal", "halo"]
+                        "crystal", "halo", "projector", "projector-round"]
         for (const shape of shapes) {
             for (const lift of [0, 0.5, 2]) {
                 scene.tileSettings = ({ pedestalShape: shape, pedestalLift: lift, pedestalSize: 1.2,
@@ -108,15 +198,16 @@ TestCase {
         fuzzyCompare(pathStandMiddle, scene.height / 2, 1, "the stand's middle is on the path")
         verify(visual.y + visual.height < pathStandMiddle, "the icon is above its stand")
         scene.pedestalOnPath = false
-        // A thicker level stand is taller; a bigger one is wider. (A stand in
-        // the panel's own plane, the default, is seen straight on.)
+        // A thicker level stand is taller; a bigger one is wider. (A flat
+        // panel's stands lie level at their View angle; at 90 they are seen
+        // straight from above.)
         scene.tileSettings = ({ pedestalShape: "plate", pedestalFacing: "viewer", pedestalThickness: 1 })
         const thin = scene.pedestalLayout.height
         scene.tileSettings = ({ pedestalShape: "plate", pedestalFacing: "viewer", pedestalThickness: 4 })
         verify(scene.pedestalLayout.height > thin * 1.5, "Thickness makes the stand taller")
-        scene.tileSettings = ({ pedestalShape: "plate" })
+        scene.tileSettings = ({ pedestalShape: "plate", pedestalViewAngle: 90 })
         fuzzyCompare(scene.pedestalLayout.height, scene.pedestalLayout.width, 1e-6,
-                     "a stand in the panel's plane is seen straight on")
+                     "a stand seen straight from above is as tall as it is wide")
         scene.tileSettings = ({ pedestalShape: "plate", pedestalSize: 1 })
         const narrow = scene.pedestalLayout.width
         scene.tileSettings = ({ pedestalShape: "plate", pedestalSize: 3 })

@@ -136,12 +136,21 @@ bool panelWearsPicture(const ArchDock::PanelDefinition &candidate,
         && panelLooks(candidate, tier).contains(QStringLiteral("picture"));
 }
 
-// Whether a flat panel wears a panel decoration: it is drawn in place of
-// the flat look, so the look's own settings draw nothing on it.
-bool panelWearsDecoration(const ArchDock::PanelDefinition &candidate,
-                          const std::optional<ArchDock::RendererTier> &tier)
+// Whether a panel can wear a panel decoration: a flat panel in its flat
+// look's place, a 3D panel standing on a generated platform in that
+// platform's place.
+bool decorationFits(const std::optional<ArchDock::RendererTier> &tier, bool generatedPlatform)
 {
     return tier == ArchDock::RendererTier::Procedural2D
+        || (tier == ArchDock::RendererTier::True3D && generatedPlatform);
+}
+
+// Whether it wears one: drawn in place of the look, the look's own settings
+// draw nothing on it.
+bool panelWearsDecoration(const ArchDock::PanelDefinition &candidate,
+                          const std::optional<ArchDock::RendererTier> &tier, bool generatedPlatform)
+{
+    return decorationFits(tier, generatedPlatform)
         && !candidate.surface.parameters3D.value(QStringLiteral("panelDecoration")).toString().trimmed().isEmpty();
 }
 
@@ -589,6 +598,10 @@ QVariantList PanelWindow::panelSettingsEditorFields(
     const bool freeHost = candidate.host.kind == ArchDock::PanelHostKind::FreeDesktop;
     const std::optional<ArchDock::RendererTier> tier = resolution.available
         ? resolution.renderer.effectiveTier : std::nullopt;
+    // A 3D panel on a platform the renderer generates, which a decoration can
+    // stand in the place of.
+    const bool generatedPlatform = tier == ArchDock::RendererTier::True3D
+        && m_panelRegistry.standsOnGeneratedPlatform(candidate);
     const QString content = candidate.content.type;
     // Content that holds applications: launchers, running tasks or both.
     const bool applicationContent = content == QStringLiteral("launcher") ||
@@ -917,7 +930,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             // A picture covers the whole band in its own colours, and a
             // decoration is drawn in its own.
             if (available && key == QStringLiteral("color")
-                && (panelWearsPicture(candidate, tier) || panelWearsDecoration(candidate, tier)))
+                && (panelWearsPicture(candidate, tier) || panelWearsDecoration(candidate, tier, generatedPlatform)))
                 inactive = true;
             break;
         case ArchDock::EditorCapability::DynamicGlow:
@@ -946,7 +959,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             if (available && names.contains(energy))
                 field.insert(QStringLiteral("label"), names.value(energy));
             // A decoration is drawn with its own lights in the look's place.
-            if (panelWearsDecoration(candidate, tier))
+            if (panelWearsDecoration(candidate, tier, generatedPlatform))
                 inactive = true;
             break;
         }
@@ -1103,8 +1116,10 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                     && candidate.surface.parameters3D.value(QStringLiteral("pedestalShape"),
                            QStringLiteral("none")).toString() != QStringLiteral("auto"))
                     inactive = true;
-                // The platform colour does nothing under a picture.
-                if (available && key == QStringLiteral("scene3DColor") && panelWearsPicture(candidate, tier))
+                // The platform colour does nothing under a picture or a
+                // decoration.
+                if (available && key == QStringLiteral("scene3DColor")
+                    && (panelWearsPicture(candidate, tier) || panelWearsDecoration(candidate, tier, generatedPlatform)))
                     inactive = true;
             }
             break;
@@ -1142,22 +1157,23 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 available = available && (candidate.surface.appearance == QStringLiteral("crystal")
                     || candidate.surface.appearance == QStringLiteral("plasma"));
             // A decoration is drawn in the look's place.
-            inactive = panelWearsDecoration(candidate, tier);
+            inactive = panelWearsDecoration(candidate, tier, generatedPlatform);
             break;
         case ArchDock::EditorCapability::Decoration:
-            // A decoration remakes a flat panel's outline; its motion only
-            // while one is worn, its speed only while it moves.
-            available = tier == ArchDock::RendererTier::Procedural2D;
+            // A decoration remakes a flat panel's outline, or stands as a
+            // solid in a generated 3D platform's place; its motion only while
+            // one is worn, its speed only while it moves.
+            available = decorationFits(tier, generatedPlatform);
             if (key != QStringLiteral("panelDecoration"))
-                inactive = !panelWearsDecoration(candidate, tier)
+                inactive = !panelWearsDecoration(candidate, tier, generatedPlatform)
                     || (key == QStringLiteral("panelDecorationSpeed")
                         && !candidate.surface.parameters3D.value(QStringLiteral("panelDecorationAnimation"), true).toBool());
             break;
         case ArchDock::EditorCapability::DecorationColours:
             // Which colours a decoration takes is its own: Panel Studio
             // offers only those (DecorationScene.colourControls).
-            available = tier == ArchDock::RendererTier::Procedural2D;
-            inactive = !panelWearsDecoration(candidate, tier);
+            available = decorationFits(tier, generatedPlatform);
+            inactive = !panelWearsDecoration(candidate, tier, generatedPlatform);
             break;
         case ArchDock::EditorCapability::ArtworkFit:
             available = resolution.available &&
@@ -1176,7 +1192,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             break;
         case ArchDock::EditorCapability::PanelPicture:
             available = tier == ArchDock::RendererTier::Procedural2D || tier == ArchDock::RendererTier::True3D;
-            inactive = panelWearsDecoration(candidate, tier);
+            inactive = panelWearsDecoration(candidate, tier, generatedPlatform);
             break;
         case ArchDock::EditorCapability::PictureRelief:
             // A panel wearing a picture stands out in relief, flat (its
@@ -1237,11 +1253,16 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             else if (key != QStringLiteral("pedestalShape"))
             {
                 inactive = !drawn;
-                // View angle is a level stand's; a stand that is part of the
-                // panel (Stand facing: Panel) takes the panel's own view.
+                // View angle is a level stand's: every stand of a flat panel,
+                // a 3D panel's unless it lies on the panel (Stand facing:
+                // Panel), where it takes the panel's own view. Stand facing
+                // turns a 3D panel's stands only.
+                const bool solidPanel = tier == ArchDock::RendererTier::True3D;
                 if (key == QStringLiteral("pedestalViewAngle"))
-                    inactive = inactive || values.value(QStringLiteral("pedestalFacing"),
-                        QStringLiteral("panel")).toString() == QStringLiteral("panel");
+                    inactive = inactive || (solidPanel && values.value(QStringLiteral("pedestalFacing"),
+                        QStringLiteral("panel")).toString() == QStringLiteral("panel"));
+                if (key == QStringLiteral("pedestalFacing"))
+                    inactive = inactive || !solidPanel;
                 if (key == QStringLiteral("pedestalAnimationSpeed"))
                     inactive = inactive || values.value(QStringLiteral("pedestalAnimation"),
                         QStringLiteral("none")).toString() == QStringLiteral("none");
@@ -1286,7 +1307,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             if (key.startsWith(QStringLiteral("panelGlow")))
             {
                 // A decoration's lights give their own glow.
-                inactive = !panelGlowFits(candidate, tier) || panelWearsDecoration(candidate, tier)
+                inactive = !panelGlowFits(candidate, tier) || panelWearsDecoration(candidate, tier, generatedPlatform)
                     || (key != QStringLiteral("panelGlow") && !shining(QStringLiteral("panelGlow")));
             }
             else if (key.startsWith(QStringLiteral("iconTileGlow")))
@@ -1308,6 +1329,46 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             {
                 inactive = key != QStringLiteral("iconGlow") && !shining(QStringLiteral("iconGlow"));
             }
+            break;
+        }
+        case ArchDock::EditorCapability::Hologram:
+        {
+            // Holograms on every Arch Dock panel, flat or 3D, each on its
+            // part's own Hologram tab: the icons, the panel itself and its
+            // stands (only where stands are drawn), each switched on of its
+            // own. Its settings show while it is on; the glow's colour and
+            // reach while it glows; the icons' Turning only on a 3D panel,
+            // where they are solids; the projector light's colours,
+            // strength, height and motion while it is on.
+            available = true;
+            const QVariantMap &values = candidate.surface.parameters3D;
+            const auto flag = [&values](const char *name, bool fallback) {
+                return values.value(QLatin1String(name), fallback).toBool();
+            };
+            const bool standsDrawn = values.value(QStringLiteral("pedestalShape"), QStringLiteral("none")).toString()
+                != QStringLiteral("none");
+            const bool icons = flag("hologramIcons", false);
+            const bool beam = icons && flag("hologramBeam", true);
+            const auto glowOff = [&values, &key](const QString &prefix) {
+                return (key == prefix + QStringLiteral("GlowReach") || key == prefix + QStringLiteral("GlowColor"))
+                    && values.value(prefix + QStringLiteral("Glow"), 1.0).toDouble() <= 0.0;
+            };
+            if (key == QStringLiteral("hologramIcons") || key == QStringLiteral("hologramPanel"))
+                inactive = false;
+            else if (key == QStringLiteral("hologramPedestals"))
+                inactive = !standsDrawn;
+            else if (key.startsWith(QStringLiteral("hologramPedestal")))
+                inactive = !standsDrawn || !flag("hologramPedestals", false)
+                    || glowOff(QStringLiteral("hologramPedestal"));
+            else if (key.startsWith(QStringLiteral("hologramPanel")))
+                inactive = !flag("hologramPanel", false) || glowOff(QStringLiteral("hologramPanel"));
+            else if (key == QStringLiteral("hologramIconTurning"))
+                inactive = !icons || tier != ArchDock::RendererTier::True3D;
+            else if (key.startsWith(QStringLiteral("hologramIcon")) || key == QStringLiteral("hologramBeam"))
+                inactive = !icons || glowOff(QStringLiteral("hologramIcon"));
+            else
+                // The projector light's colours, strength, height and motion.
+                inactive = !beam;
             break;
         }
         case ArchDock::EditorCapability::Lightning:
@@ -1384,7 +1445,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             else if (tier == ArchDock::RendererTier::True3D)
                 field.insert(QStringLiteral("section"), QStringLiteral("panels-3d"));
             // A decoration is drawn in the panel's look's place.
-            if (!stand && panelWearsDecoration(candidate, tier))
+            if (!stand && panelWearsDecoration(candidate, tier, generatedPlatform))
                 inactive = true;
             break;
         }

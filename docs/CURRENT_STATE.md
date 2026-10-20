@@ -126,6 +126,63 @@ Report `docs/repairs/OWNER-LIST-PIECE-8.md`; the checkpoint's handoff
   (`RendererCapabilityTest::decorationsStandAsSolids` in its own private
   KWin session, `ARCHDOCK_RENDERING_DECORATIONS=1`): four designs drawn by
   the real renderer, failing on any shader that does not build.
+- **Panel Studio offers decorations on 3D panels** standing on a generated
+  platform (`PanelRegistry::standsOnGeneratedPlatform`, not a Möbius strip;
+  `PanelWindowSettings` `decorationFits`/`panelWearsDecoration`), hiding
+  the look's own colour and glow there.
+- **Holograms** (part two): `HologramLook.js` (colour sets `original`,
+  `cyan`, `ice`, `emerald`, `amber`, `ruby`, `violet`, `rose`; `colours()`
+  and `settings()` per part `Icon`/`Panel`/`Pedestal`), the `HologramClock`
+  singleton (one 33 ms clock, held while a hologram moves, still under
+  reduced motion), 38 settings in sections `icons-hologram`,
+  `panels-hologram`, `pedestals-hologram` (capability `hologram`:
+  `PanelWindowSettings` hides a part's settings while it is off, a glow's
+  colour and reach while it does not glow, Turning on flat panels, the
+  light's settings while it is off, the stands' switch where no stand is
+  drawn). Studio tabs Panels > Hologram (11), Icons > Hologram (6),
+  Pedestals > Appearance / Hologram (`StudioNavigation.js`,
+  `SettingsPopup.hologramRows`). Flat: `renderers/HologramEffect.qml` (the
+  glow a `MultiEffect`, the light `shaders/hologram.frag`; its `area` reads
+  the item's own part of a layer's picture, which `MultiEffect` widens by
+  its padding when it is a layer's effect, qgfxsourceproxy.cpp), the lens
+  `hologram-opening.frag` and the light `hologram-beam.frag`, compiled to
+  `.qsb` by CMake's qsb step (`qt6-shadertools` to build). IconScene draws
+  an icon through `hologramSource`; the panel is drawn through its
+  renderer's `layer.effect`, a decoration through `panel-decoration-layer`
+  (an item covering the decoration's reach), a stand through its canvas's
+  layer. 3D (`PanelScene3D`): `optional3d/HologramSurface.qml`
+  (`hologram-surface.vert/.frag`, a Fresnel rim, screen-space scan lines;
+  `keepColour` for a decoration's own colours), `HologramLight.qml`
+  (`hologram-light.frag`, `mesh-hologram-light-N`), `HologramOpening.qml`
+  (`mesh-hologram-opening-*-N`), stand and platform shells, and a 3D
+  decoration's solid and tubes (`PanelDecoration3D.hologram`,
+  `hologram-folded.vert` folding with the platform). Stands by screen edge:
+  `PlatformGeometry.standDirection(edge)` turns IconScene's `standFrame`
+  (bottom 0, top 180, left 90, right -90) and the icon is offset by its
+  raise; `standsOnPanel` puts a stand on the panel and `standFit` (at most
+  0.86 of the panel's thickness over the stand's height) fits it;
+  `hologramLayout(values, size, onPath, edge)` (edge bars lift 0.3 of an
+  icon in a short wrapping light, free panels 0.95). Flat stands lie level
+  at View angle (0-90, default 20) for every facing; Stand facing is a 3D
+  panel's. Projector stands `projector` and `projector-round`
+  (`roundedLathe`, `pedestalFinish`, `pedestalOpening`). An edge bar whose
+  stands or hologram icons reach past it (visibility always) is drawn in
+  `plasma-dock-widget/contents/ui/OverflowHost.qml`, a LayerShellQt window
+  anchored to the bar's edge (exclusion -1, scope `archdock-dock`) holding
+  the widget's interface, its input region set by
+  `ArchDock.Input.WindowInputShape`; DockEntry's `pointerReach` takes the
+  pointer over a raised icon. Tests: `hologram-look-test`, platform
+  geometry (3 new), icon scene (4 new), the schema's
+  `hologramParametersRoundTripAndRespectBounds`, the capability test's
+  `hologramSettingsFollowEachPart` and `studioHologramTabs`, and
+  `decoration-3d-smoke` now also runs `hologramsDrawAsLight` (4 cases, a
+  decorated panel among them) and `flatHologramsKeepTheirSize`, drawing
+  icon-shaped pictures (`tests/data/truth-glyph-*.svg`).
+- **A wheel spin keeps its place** (`PanelScene.wheelLatched`,
+  `wheelLatchMs` 1000): the scene's wheel input takes a notch within an
+  icon's size of the last one taken in the past second, though what was
+  under the pointer moved on (a 3D panel turning as a whole), as Firefox's
+  wheel transactions do; `lastWheelInput` now records where.
 <!-- LIST_PIECE_8_END -->
 
 <!-- LIST_PIECE_7_BEGIN -->

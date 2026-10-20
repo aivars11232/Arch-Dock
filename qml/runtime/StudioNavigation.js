@@ -16,14 +16,15 @@ var sections = [
         // offered; their places keep the later tabs' numbers.
         label: "Panels",
         subtabs: ["General", "Size", "Appearance", "Behavior", "Layout", "Segments",
-            "Presets", "Built-in Panel Presets", "My Panel Presets", "Animations", "3D"]
+            "Presets", "Built-in Panel Presets", "My Panel Presets", "Animations", "3D", "Hologram"]
     },
     {
         // The icon style is chosen in one place, Icons > Appearance; there
-        // is no separate Icon Styles page.
+        // is no separate Icon Styles page. Each part drawn as a hologram has
+        // its Hologram tab: the panel's, the icons', the stands'.
         label: "Icons",
         subtabs: ["Appearance", "Behavior", "Indicators", "Notifications",
-            "Built-in Icon Presets", "My Icon Presets"]
+            "Built-in Icon Presets", "My Icon Presets", "Hologram"]
     },
     {
         label: "Icon Tiles",
@@ -31,9 +32,9 @@ var sections = [
     },
     {
         // The stands under the icons: shape, size, lift, material and
-        // motion, on flat and 3D panels.
+        // motion, on flat and 3D panels; and the stands as a hologram.
         label: "Pedestals",
-        subtabs: []
+        subtabs: ["Appearance", "Hologram"]
     },
     {
         label: "Profiles",
