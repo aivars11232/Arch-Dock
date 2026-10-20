@@ -473,6 +473,18 @@ run_private_session() {
     ARCHDOCK_RENDERING_KWIN_PID=$!
     wait_for_wayland_socket
 
+    if [[ "${ARCHDOCK_RENDERING_DECORATIONS:-}" == '1' ]]; then
+        printf 'Checking panel decorations standing as solids on 3D panels under private KWin.\n'
+        ARCHDOCK_TEST_RHI=1 ARCHDOCK_TEST_DECORATIONS=1 ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \
+            "$ARCHDOCK_RENDERING_CAPABILITY_TEST" decorationsStandAsSolids \
+                >"$ARCHDOCK_RENDERING_LOG_DIR/decoration-3d.log" 2>&1 || {
+                    tail -n 100 "$ARCHDOCK_RENDERING_LOG_DIR/decoration-3d.log" >&2
+                    return 1
+                }
+        sed -n '/^Totals:/p' "$ARCHDOCK_RENDERING_LOG_DIR/decoration-3d.log"
+        return 0
+    fi
+
     if [[ "${ARCHDOCK_RENDERING_TILES:-}" == '1' ]]; then
         printf 'Running ADREP-TASK-005 tile pixels, solid depth and upright orbit under private KWin.\n'
         ARCHDOCK_TEST_RHI=1 ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \

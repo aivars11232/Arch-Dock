@@ -59,10 +59,12 @@
 //             "between" | "at" | "period", where, period, every, alternate,
 //             s, t, on: "outer" | "inner", align, w, h, top, r, chamfer,
 //             angle, points, from, to, width, length, tip, bend, forks,
-//             fill, material, glow, stroke, gradient, opacity, z, shade,
+//             fill, material, glow, stroke, gradient, opacity, z, shade, dim,
 //             depth, bevel, colour, ink, sheen }] pieces standing on or round the band (a
 //           nacelle, a dome, a twig, a hilt); a "lens" is a glowing glass
-//           lens in its bezel, drawn by the renderer from its colour; a
+//           lens in its bezel, drawn by the renderer from its colour (one
+//           resting `dim`, 0 to 1, is darker glass that lights up under the
+//           pointer); a
 //           "gem" a cut stone, its facets drawn from its colour (or its
 //           material's): `cut` "brilliant" (round), "princess" (square),
 //           "baguette" (a long step cut) or "cabochon" (a polished dome),
@@ -73,8 +75,11 @@
 //             "runes" | "lightning" | "cracks" | "hexgrid" | "panels" |
 //             "twigs" | "footprints" | "fringe" | "plan" | "greebles" |
 //             "ticks" | "dotgrid" | "widgets" | "plates" | "pipes" |
-//             "grilles" | "fins" | "scrolls", ..., engrave }]; `engrave`
-//           cuts a line into the surface instead of drawing it on
+//             "grilles" | "fins" | "scrolls", ..., avoid, under, engrave }];
+//           `avoid` keeps a line that far (half-widths) from each icon's
+//           place, `under` draws it only that far either way of each place,
+//           as the icon's stand; `engrave` cuts a line into the surface
+//           instead of drawing it on
 //   launcher: { at, where, on, s, t, size } a seat for the panel's
 //             application launcher (a start button): where on the
 //             decoration it is pinned instead of standing in the row
@@ -493,9 +498,38 @@ function nearIcon(s, slots, radius, length, closed) {
     return false
 }
 
+// How far round each icon's place a line keeps away (half-widths); a line
+// drawn under the icons as their stands (`under`) asks for the opposite, as
+// a distance below 0: it runs that far either way of each place and nowhere
+// else.
+function avoidOf(line, fallback) {
+    return line.under !== undefined ? -Math.max(0.05, finite(line.under, 1)) : finite(line.avoid, fallback)
+}
+
 // The stretches of a run clear of the icons: [from + margin, to - margin]
-// without `avoid` round each icon's place.
+// without `avoid` round each icon's place; or, when `avoid` is below 0, the
+// stretches that far either way of each place, the icons' stands.
 function freeIntervals(run, margin, slots, avoid, length, closed) {
+    if (avoid < 0) {
+        // Each stand reaches at most a little under halfway to the next
+        // icon, so the stands stay one under each icon on a tight row.
+        const from = run.from + margin, to = run.to - margin
+        const places = (slots || []).slice().sort(function(p, q) { return p - q })
+        const under = []
+        for (let k = 0; k < places.length; ++k) {
+            let room = Infinity
+            if (k > 0) room = Math.min(room, places[k] - places[k - 1])
+            if (k + 1 < places.length) room = Math.min(room, places[k + 1] - places[k])
+            if (closed && places.length > 1) room = Math.min(room, places[0] + length - places[places.length - 1])
+            const reach = Math.min(-avoid, room * 0.42)
+            for (const shift of closed ? [-length, 0, length] : [0]) {
+                const a = Math.max(from, places[k] + shift - reach), b = Math.min(to, places[k] + shift + reach)
+                if (b - a > 1e-6) under.push([a, b])
+            }
+        }
+        under.sort(function(p, q) { return p[0] - q[0] })
+        return under
+    }
     let intervals = [[run.from + margin, run.to - margin]]
     if (avoid > 0)
         for (const slot of slots || []) {
@@ -796,7 +830,7 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                 const seed = finite(line.seed, 3)
                 const margin = run.open ? finite(line.margin, 1.2) * halfWidth : 0
                 let index = 0
-                for (const interval of freeIntervals(run, margin, slots, finite(line.avoid, 1.0) * halfWidth, length, closed)) {
+                for (const interval of freeIntervals(run, margin, slots, avoidOf(line, 1.0) * halfWidth, length, closed)) {
                     const count = Math.floor((interval[1] - interval[0]) / pitch)
                     const start = interval[0] + (interval[1] - interval[0] - (count - 1) * pitch) / 2
                     for (let k = 0; k < count; ++k, ++index) {
@@ -820,7 +854,7 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                 const seed = finite(line.seed, 7)
                 const margin = run.open ? finite(line.margin, 0.8) * halfWidth : 0
                 let index = 0
-                for (const interval of freeIntervals(run, margin, slots, finite(line.avoid, 1.0) * halfWidth, length, closed)) {
+                for (const interval of freeIntervals(run, margin, slots, avoidOf(line, 1.0) * halfWidth, length, closed)) {
                     let s = interval[0]
                     while (interval[1] - s > gap * 1.5 && index < 4000) {
                         let span = (shortest + (longest - shortest) * hash(index, seed)) * halfWidth
@@ -963,7 +997,7 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                 const margin = run.open ? finite(line.margin, 0.9) * halfWidth : 0
                 const seed = finite(line.seed, 29)
                 let index = 0
-                for (const interval of freeIntervals(run, margin, slots, finite(line.avoid, 1.0) * halfWidth, length, closed)) {
+                for (const interval of freeIntervals(run, margin, slots, avoidOf(line, 1.0) * halfWidth, length, closed)) {
                     const room = interval[1] - interval[0]
                     const count = Math.floor(room / pitch)
                     if (count < 1) continue
@@ -1124,7 +1158,7 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                 const size = finite(line.size, 0.34)
                 const margin = run.open ? finite(line.margin, 0.8) * halfWidth : 0
                 let index = 0
-                for (const interval of freeIntervals(run, margin, slots, finite(line.avoid, 1.0) * halfWidth, length, closed)) {
+                for (const interval of freeIntervals(run, margin, slots, avoidOf(line, 1.0) * halfWidth, length, closed)) {
                     for (let s = interval[0] + pitch / 2; s < interval[1]; s += pitch, ++index) {
                         const side = index % 2 === 0 ? 1 : -1
                         const t = finite(line.offset, 0) + side * size * 0.38
@@ -1189,7 +1223,7 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                 const seed = finite(line.seed, 61)
                 const margin = run.open ? finite(line.margin, 0.6) * halfWidth : 0
                 let index = 0
-                for (const interval of freeIntervals(run, margin, slots, finite(line.avoid, 0.95) * halfWidth, length, closed)) {
+                for (const interval of freeIntervals(run, margin, slots, avoidOf(line, 0.95) * halfWidth, length, closed)) {
                     const room = interval[1] - interval[0]
                     if (room < halfWidth * 0.6) continue
                     const w = room * (0.45 + 0.35 * hash(index, seed)), h = 0.5 + 0.5 * hash(index, seed + 1)
@@ -1221,7 +1255,7 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                 let index = 0
                 for (let row = 0; row < rows; ++row) {
                     const a = across0 + (across1 - across0) * row / rows, c = across0 + (across1 - across0) * (row + 1) / rows
-                    for (const interval of freeIntervals(run, margin, slots, finite(line.avoid, 0) * halfWidth, length, closed)) {
+                    for (const interval of freeIntervals(run, margin, slots, avoidOf(line, 0) * halfWidth, length, closed)) {
                         let s = interval[0]
                         while (s < interval[1] - gap && index < 8000) {
                             const pipe = hash(index, seed + 7) < 0.12
@@ -1265,7 +1299,7 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                 const outerSide = line.side !== "inner"
                 const margin = run.open ? finite(line.margin, 0.5) * halfWidth : 0
                 let k = 0
-                for (const interval of freeIntervals(run, margin, slots, finite(line.avoid, 0) * halfWidth, length, closed))
+                for (const interval of freeIntervals(run, margin, slots, avoidOf(line, 0) * halfWidth, length, closed))
                     for (let s = interval[0]; s <= interval[1]; s += pitch, ++k) {
                         const e = edge(s)
                         const base = outerSide ? e.outer - inset : -(e.inner - inset)
@@ -1298,7 +1332,7 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                 const push = function(points, closed, w, c, fill, extra) {
                     result.push(Object.assign({ kind: line.kind, closed: closed, points: points, width: fill ? 0 : w, colour: c, fill: fill === true, cap: "butt" }, extra || {}))
                 }
-                for (const interval of freeIntervals(run, margin, slots, finite(line.avoid, 0.92) * halfWidth, length, closed)) {
+                for (const interval of freeIntervals(run, margin, slots, avoidOf(line, 0.92) * halfWidth, length, closed)) {
                     const room = interval[1] - interval[0]
                     if (room < halfWidth * 0.5) continue
                     // one or two modules side by side in the gap
@@ -1405,7 +1439,7 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                 const offset = finite(line.offset, 0)
                 const clampPitch = Math.max(0.3, finite(line.period, 1.6)) * halfWidth
                 const margin = run.open ? finite(line.margin, 0.6) * halfWidth : 0
-                for (const interval of freeIntervals(run, margin, slots, finite(line.avoid, 0) * halfWidth, length, closed)) {
+                for (const interval of freeIntervals(run, margin, slots, avoidOf(line, 0) * halfWidth, length, closed)) {
                     if (interval[1] - interval[0] < halfWidth * 0.4) continue
                     for (let k = 0; k < count; ++k) {
                         const t = offset - total / 2 + pipeW / 2 + k * (pipeW + gapT)
@@ -1428,7 +1462,7 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                 const share = clamp(finite(line.share, 0.62), 0.1, 1)
                 const ct = finite(line.offset, 0)
                 const margin = run.open ? finite(line.margin, 0.6) * halfWidth : 0
-                for (const interval of freeIntervals(run, margin, slots, finite(line.avoid, 0.95) * halfWidth, length, closed)) {
+                for (const interval of freeIntervals(run, margin, slots, avoidOf(line, 0.95) * halfWidth, length, closed)) {
                     const room = interval[1] - interval[0]
                     if (room < halfWidth * 0.6) continue
                     const w = room * share, cs = (interval[0] + interval[1]) / 2
@@ -1453,7 +1487,7 @@ function linesOf(contour, runs, length, closed, slots, halfWidth, step) {
                 const pitch = Math.max(0.05, finite(line.period, 0.16)) * halfWidth, finW = finite(line.width, 0.06) * halfWidth
                 const span = line.span || [0.2, 0.8]
                 const margin = run.open ? finite(line.margin, 0.6) * halfWidth : 0
-                for (const interval of freeIntervals(run, margin, slots, finite(line.avoid, 0.95) * halfWidth, length, closed)) {
+                for (const interval of freeIntervals(run, margin, slots, avoidOf(line, 0.95) * halfWidth, length, closed)) {
                     for (let s = interval[0] + pitch / 2; s < interval[1] - finW; s += pitch) {
                         const e = edge(s), thickness = e.outer + e.inner
                         const t0 = -e.inner + thickness * finite(span[0], 0.2), t1 = -e.inner + thickness * finite(span[1], 0.8)
@@ -1767,6 +1801,8 @@ function placedParts(decoration, runs, lay, length, closed, slots, halfWidth) {
                 size: { width: finite(part.w, 1) * halfWidth, height: finite(part.h, 1) * halfWidth },
                 cut: String(part.cut || "brilliant"), halo: Math.max(0, Math.round(finite(part.halo, 0))),
                 gleam: clamp(finite(part.gleam, 1), 0.5, 3),
+                // a light resting dim (lit up under the pointer)
+                dim: part.dim !== undefined ? clamp(finite(part.dim, 1), 0, 1) : undefined,
                 // which way is out from the band here, and the part's own
                 // height in pixels: a round part's shading runs across it
                 normal: on === "inner" ? { x: -frame.nx, y: -frame.ny } : { x: frame.nx, y: frame.ny },

@@ -1395,8 +1395,8 @@ var decorations = [
       room: [0.5, 2.8],
       animation: [{kind: "sway", period: 4.2, amount: 0.08}],
       contour: {
-        outer: {base: 0.62, taper: [1, 0.55], rough: {amp: 0.06, scale: 1.6}},
-        inner: {base: 0.62, taper: [1, 0.55], rough: {amp: 0.06, scale: 1.9, seed: 7}},
+        outer: {base: 0.62, taper: [1, 0.9], rough: {amp: 0.06, scale: 1.6}},
+        inner: {base: 0.62, taper: [1, 0.9], rough: {amp: 0.06, scale: 1.9, seed: 7}},
         ends: {start: {kind: "square"}, end: {kind: "point", size: 1.4}},
         body: {round: true},
         parts: [
@@ -1413,8 +1413,8 @@ var decorations = [
       room: [0.5, 2.6],
       animation: [{kind: "sway", period: 3.8, amount: 0.1}],
       contour: {
-        outer: {base: 0.55, taper: [1, 0.5], rough: {amp: 0.03, scale: 2}},
-        inner: {base: 0.55, taper: [1, 0.5], rough: {amp: 0.03, scale: 2.2, seed: 8}},
+        outer: {base: 0.55, taper: [1, 0.9], rough: {amp: 0.03, scale: 2}},
+        inner: {base: 0.55, taper: [1, 0.9], rough: {amp: 0.03, scale: 2.2, seed: 8}},
         ends: {start: {kind: "square"}, end: {kind: "point", size: 1.4}},
         body: {round: true},
         parts: [
@@ -1434,8 +1434,8 @@ var decorations = [
       room: [0.5, 2.6],
       animation: [{kind: "sway", period: 4.4, amount: 0.08}],
       contour: {
-        outer: {base: 0.6, taper: [1, 0.5], rough: {amp: 0.04, scale: 1.8}},
-        inner: {base: 0.6, taper: [1, 0.5], rough: {amp: 0.04, scale: 2.1, seed: 2}},
+        outer: {base: 0.6, taper: [1, 0.9], rough: {amp: 0.04, scale: 1.8}},
+        inner: {base: 0.6, taper: [1, 0.9], rough: {amp: 0.04, scale: 2.1, seed: 2}},
         ends: {start: {kind: "broken", size: 0.9}, end: {kind: "point", size: 1.4}},
         body: {round: true},
         parts: [
@@ -1603,22 +1603,20 @@ var decorations = [
         ends: {kind: "pill"},
         body: {round: "chrome"},
         layers: [
-            {side: "inner", inset: -0.2, width: 0.34, fill: "#18181b", dash: [0.13, 0.05], free: true},
+            {side: "inner", inset: -0.2, width: 0.34, fill: "#18181b", free: true},
             {side: "inner", inset: -0.14, width: 0.05, fill: "#ffffff2e", free: true}
         ],
         parts: [
             {align: "centre", z: "front", at: "between", on: "outer", t: -0.3, kind: "ellipse", w: 0.95, h: 0.95, material: {id: "silver"}, stroke: "#00000099", shade: "chrome", bevel: 0.05},
-            {align: "centre", z: "front", at: "between", on: "outer", t: -0.3, kind: "lens", w: 0.646, h: 0.646, colour: "#e3170a"},
+            {align: "centre", z: "front", at: "between", on: "outer", t: -0.3, kind: "lens", w: 0.646, h: 0.646, colour: "#e3170a", dim: 0.3},
             {align: "centre", z: "front", at: "both", s: -0.2, kind: "ellipse", w: 2.3, h: 2.3, material: {id: "silver"}, stroke: "#00000099", shade: "chrome", bevel: 0.05},
-            {align: "centre", z: "front", at: "both", s: -0.2, kind: "lens", w: 1.564, h: 1.564, colour: "#e3170a"},
+            {align: "centre", z: "front", at: "both", s: -0.2, kind: "lens", w: 1.564, h: 1.564, colour: "#e3170a", dim: 0.3},
             {kind: "box", at: "between", on: "outer", t: -0.42, w: 0.16, h: 0.4, r: 0.04, material: {id: "silver"}, shade: "chrome"},
             {kind: "box", at: "between", on: "outer", t: -0.5, w: 0.26, h: 0.12, r: 0.03, material: {id: "black-metal"}}
         ],
         lines: [
-            {kind: "chips", offset: -0.42, height: 0.13, lengths: [0.25, 0.9], gap: 0.06, colours: ["#ff2a1f", "#ff5a3c", "#ff2a1f", "#ffb0a0"], avoid: 0.95, margin: 1.4, square: true},
-            {kind: "pipes", count: 2, offset: -0.66, width: 0.05, gap: 0.025, period: 1, material: {id: "black-metal"}, avoid: 0.92, margin: 1.4},
-            {kind: "dots", side: "outer", inset: 0.07, period: 0.28, width: 0.035, colour: "#5a5d62", avoid: 0.92},
-            {kind: "dots", side: "inner", inset: 0.07, period: 0.28, width: 0.035, colour: "#5a5d62", avoid: 0.92}
+            {kind: "chips", offset: -0.42, height: 0.13, lengths: [0.25, 0.9], gap: 0.06, colours: ["#ff2a1f", "#ff5a3c", "#ff2a1f", "#ffb0a0"], under: 1.05, margin: 1.4, square: true},
+            {kind: "pipes", count: 2, offset: -0.66, width: 0.05, gap: 0.025, period: 1, material: {id: "black-metal"}, under: 1.05, margin: 1.4}
         ],
         colours: {body: "#0b0b0d", edge: "#000000aa", light: "#ff2a1f", accent: "#ff5a3c"}
       } },
@@ -2918,7 +2916,7 @@ var materials = [
     {id: "worn-green-paint", name: "Worn Green Paint", texture: "paint-green", group: "metal", relief: 0.45, metal: 0.3, rough: 0.5},
     {id: "rubber-grip", name: "Rubber Grip", texture: "rubber", group: "synthetic", relief: 0.5, metal: 0, rough: 0.55},
     {id: "grained-rubber", name: "Grained Rubber", texture: "rubber-grain", group: "synthetic", relief: 0.5, metal: 0, rough: 0.55},
-    {id: "black-gloss-plastic", name: "Black Gloss Plastic", texture: "plastic-black", group: "synthetic", relief: 0.2, metal: 0, rough: 0.18},
+    {id: "black-gloss-plastic", name: "Black Gloss Plastic", texture: "plastic-black", group: "synthetic", relief: 0, metal: 0, rough: 0.18},
     {id: "yellow-plastic", name: "Yellow Plastic", texture: "plastic-yellow", group: "synthetic", relief: 0.2, metal: 0, rough: 0.18},
     {id: "travertine", name: "Travertine", texture: "travertine", group: "stone", relief: 0.45, metal: 0, rough: 0.85},
     {id: "banded-travertine", name: "Banded Travertine", texture: "travertine-banded", group: "stone", relief: 0.45, metal: 0, rough: 0.85},

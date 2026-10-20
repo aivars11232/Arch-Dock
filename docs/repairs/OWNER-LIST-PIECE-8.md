@@ -267,3 +267,120 @@ layout engine visual, panel scene and Studio themes tests): **36 of 36
 passed** in 1876 s. Every one of the 878 committed files is identical in
 the clone and the workspace. With this, part one of piece 8 is closed;
 3D platform decorations are next, then part two, the holographic icons.
+
+## 3D platform decorations — Report 1 (2026-10-20)
+
+The owner's words on the day: a decoration on a 3D panel is real 3D, a
+tree's trunk "round all around from all sides, bottom, top, inwards,
+outwards sides, branches, like a real life tree trunk", nearly as wide at
+its end as at its start with a smooth join; no lines or stripes down the
+walls ("look on internet where that problem is solved"); Red Core smooth,
+its light strips as stands "as much as there are icons", its red lights
+"dark red, on hover lighter or brighter red" and then "Don't need to be
+that bright"; "Not all of them have to be rounded, use some common
+sense", "the inner curve should be same as top or bottom curve", "The
+nebula panels look flat". The last pictures were ticked "Much better" and
+"Very good".
+
+### What changed for the owner
+
+- **On a 3D panel a decoration stands as a solid**, in the generated
+  platform's place and along its middle, the icons standing on it: its
+  top as high as the design stands, an underside on the platform's
+  bottom, walls round its outline. The 3D scene lights it as it turns:
+  the studio mirrored in its metal and lacquer, its relief's shadows, its
+  lights pulsing, twinkling and blinking as on a flat panel. Its maps are
+  made at twice the screen's pixels.
+- **Trees are round all the way round**: a trunk and its branches are
+  tubes wearing their bark, nearly as wide at the tip as at the start;
+  where a trunk's two ends meet round a ring they join smoothly, on edge
+  and free panels alike.
+- **Soft decorations are rounded like cushions** (the five space pictures
+  and Floating Candles): no straight wall; the top curves down and the
+  underside up to meet halfway, the underside's curve the top's mirrored,
+  right across the band. A space picture keeps its own colours (a third of
+  its colour its own light), shaded by the scene's lights, with no lacquer
+  washing it out.
+- **Machined and jewellery designs keep their walls** (the gold filigree,
+  the tiara, Red Core), now without stripes: a wall shows what the
+  decoration is made of evenly along its edge, and the outline lies
+  exactly where the pictures draw it.
+- **Red Core**: smooth gloss (no relief on its black plastic), no rivets,
+  its light strip groups as stands under the icons, its round red lights
+  dark red at rest and a softer brighter red under the pointer, flat and
+  in 3D.
+
+### How it works
+
+- **The solid** (`src/decorations/DecorationRelief.cpp`): the walled one
+  by marching squares (Lorensen and Cline, "Marching Cubes", 1987), each
+  outline crossing found on the decoration's own coverage along the
+  grid's edge rather than between the grid's two samples of it - the
+  refinement contouring uses when the underlying function can be read
+  anywhere; the walls' normals from the smoothed coverage, averaged along
+  the outline over neighbours facing the same way. The rounded one by
+  marching triangles (each grid cell split corner to corner), sliced into
+  bands at eight equal turns of a quarter circle, so every point on a band
+  line stands at the same height on the curve; its normals worked out from
+  the curve itself, and its picture laid round the curve by its length.
+- **The rounding** (`roundSurfaceEdges` in `DecorationLighting.cpp`): the
+  distance from the outline both ways by the exact distance transform
+  (Felzenszwalb and Huttenlocher, 2012), each part's half width by its
+  local thickness (Hildebrand and Rüegsegger, "A new method for the
+  model-independent assessment of thickness in three-dimensional images",
+  1997), the top's height in general by normalized convolution (Knutsson
+  and Westin, 1993).
+- **The maps' margins** (`fillSurfaceMargins`): as texture bakers leave a
+  margin round what they bake, every map past the outline carries the
+  nearest covered pixel's (the distance transform remembering which pixel
+  is nearest), and a half-covered pixel's colour and light are taken back
+  out of their mix with the dark; a light's map only two pixels out, so a
+  star by the edge stays a star.
+- **The stripes**: a wall used to take one row of the picture's pixels at
+  the edge and stretch it down its height - the stretched texels that
+  triplanar mapping (Ben Golus, "Normal Mapping for a Triplanar Shader",
+  2017) and extruded shapes' own side-wall mapping (the three.js forum's
+  "UV for Extrude Geometry") exist to avoid. Measured row by row with the
+  glow off, what streaked was the share of the decoration a wall shows
+  next to the dark round it, read a set way in from outline points that
+  wavered in and out of the drawn edge. With the crossings on the edge
+  itself, and that share and the colour evened out along the edge, the
+  inner gold ring's wall went from swings of about 12 levels to 2 or 3.
+- **Tubes** (`DecorationTubes.cpp`): swept along each trunk's middle line,
+  the bark wrapped round with its grain along, bump mapped without
+  tangents (Mikkelsen, "Bump Mapping Unparametrized Surfaces on the GPU",
+  2010).
+- **The pointer's light** on a flat panel is a radial gradient over the
+  lens (`PanelDecoration2D.qml`); in 3D the lens's spot is found by
+  projecting each lens to the view.
+
+### Verification
+
+- Focused: `decoration-lighting-test` (17 passed, 1 skipped: a file bake
+  run only on request), `panel-decoration-test`, `decoration-scene-test`,
+  `theme-package-test`.
+- **A new check, `decoration-3d-smoke`**: four designs drawn by the real
+  renderer in a private KWin (Carina rounded, the gold filigree walled,
+  Red Core walled with its lights, the oak branch's tubes); it fails on any
+  shader that does not build (two such slips happened during the day and
+  showed only as a bare panel), and across the band between every two
+  icons it must find the decoration drawn. 4 of 4; with a broken shader
+  copied in, it failed at once.
+- The complete serial suite: **126 of 126 passed** in 2678 s (log 25 in
+  `build-codex-adrep/evidence/OWNER-LIST-PIECE-8`).
+- Pictures, before and after, in
+  `/mnt/F/archdock-audit-2026-10-08/evidence/piece8-3d/` (the runs 1 to
+  28; `walls-before-after-2.png`, `others-before-after.png`,
+  `hover-dark-bright.png`, `trunk-before-after.png`).
+
+### Known limitations
+
+Also in `docs/KNOWN_LIMITATIONS.md`.
+
+- A Möbius strip and a theme's own 3D mesh keep their own look.
+- In 3D a decoration's motion (a drifting picture, waves, spinning
+  gauges) is not drawn; its lights still animate.
+- The launcher seat is a flat panel's only.
+- A part thinner than about two of the solid's grid steps can break into
+  pieces on a very long 3D panel, whose grid is coarser to stay within the
+  triangle limit.

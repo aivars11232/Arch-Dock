@@ -297,6 +297,11 @@ Item {
                 return ThemeStates.assetUrl(definition, (definition.scene3D || ({})).texture)
             }),
             entryGeometry: Qt.binding(function() { return root.entryGeometry }),
+            // A decoration is worn in a generated platform's place.
+            decoration: Qt.binding(function() { return root.decoration }),
+            decorationChoices: Qt.binding(function() { return root.decorationChoices }),
+            decorationAnimated: Qt.binding(function() { return root.decorationAnimated }),
+            decorationSpeed: Qt.binding(function() { return root.decorationSpeed }),
             layoutTrackRadius: Qt.binding(function() { return Number(root.geometry.radius || 0) }),
             iconCellSize: Qt.binding(function() { return Number(root.geometry.iconSize || 52) }),
             appearance: Qt.binding(function() { return root.appearance }),

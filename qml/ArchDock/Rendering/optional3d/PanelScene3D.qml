@@ -36,6 +36,13 @@ Item {
     property bool hovered: false
     property bool reducedMotion: false
     property real glowIntensity: 1
+    // A panel decoration (DecorationCatalogue.js) worn in a generated
+    // platform's place (PanelDecoration3D), with the viewer's colours, its
+    // light animations on or off and their speed.
+    property string decoration: ""
+    property var decorationChoices: ({})
+    property bool decorationAnimated: true
+    property real decorationSpeed: 1
     readonly property bool motionAllowed: rendererReady && !sceneConcealed && visible && panelOpacity > 0
     readonly property real emissionScale: Math.max(0, Math.min(2, glowIntensity)) * (hovered ? 1.18 : 1)
     readonly property var panelParts: partsForScope("panel")
@@ -293,6 +300,27 @@ Item {
         bend: bounded("bend", 0, -1, 1), palette: generatedPalette }, pictureRelief ? { relief: true } : {})) : ""
     readonly property var generatedPlatform: generatedKey.length > 0
         ? PlatformGeometry.platform(JSON.parse(generatedKey)) : null
+    // A decoration is worn in a generated platform's place, along its
+    // centre line with the icons where they stand; a Möbius strip, whose
+    // band turns over, and a theme's own mesh keep their own look.
+    readonly property bool decorationWanted: decoration.length > 0 && generatedPlatform !== null
+        && generatedShape !== null && generatedShape.kind !== "mobius"
+    readonly property bool decorationShown: decorationWanted && platformDecoration.ready
+    readonly property var decorationRuns: decorationWanted
+        ? PlatformGeometry.centreLine(generatedShape, 96, generatedPlatform.track,
+            Math.max(PlatformGeometry.minimumBand, Math.min(PlatformGeometry.maximumBand, resolvedBand))
+            + PlatformGeometry.outerBevel)
+        : []
+    readonly property var decorationIconPoints: decorationWanted ? entryGeometry.map(function(rect) {
+        return PlatformGeometry.standPoint(Number(rect.centerX) - width / 2, height / 2 - Number(rect.centerY),
+                                           layoutTrackRadius, generatedPlatform.track)
+    }) : []
+    // How far an icon stands raised on the decoration under it, in the
+    // scene's pixels (its height there, Thickness stretching it).
+    function decorationLift(index) {
+        if (!decorationShown) return 0
+        return Number((platformDecoration.iconHeights || [])[index] || 0) * platformThickness
+    }
     // A theme's own mesh wearing a picture is cut finely enough for its
     // relief to be real geometry.
     readonly property var themeReliefMesh: pictureRelief && !generatedSpec
@@ -561,7 +589,7 @@ Item {
         && (Number(platformMaterial.rimEmissiveStrength || 0) > 0
             || Number(platformMaterial.emissiveStrength || 0) > 0)
     readonly property bool bloomWanted: pedestalGlowAmount > 0 || panelGlowing || panelGlowAmount > 0
-        || iconGlowAmount > 0 || tileGlowAmount > 0
+        || iconGlowAmount > 0 || tileGlowAmount > 0 || (decorationShown && platformDecoration.glows)
     // How far a glow reaches out of what glows (Glow reach, 0 to 1): the
     // stands' and the panel's own. A view has one glow, so it reaches as far
     // as the farthest that is lit. Each further halving of the blur doubles
@@ -2182,6 +2210,11 @@ Item {
             }
         }
     }
+    // The pointer over the panel, only watched, for a decoration's lights.
+    HoverHandler {
+        id: decorationPointer
+        enabled: root.decorationShown
+    }
     View3D {
         id: view
         x: -root.overflowX
@@ -2771,7 +2804,8 @@ Item {
                 position: {
                     const rise = bendRise + baseLift + tileLift
                     if (!riding)
-                        return Qt.vector3d(standPoint[0], standPoint[1], standPoint[2] * root.platformThickness + rise)
+                        return Qt.vector3d(standPoint[0], standPoint[1], standPoint[2] * root.platformThickness + rise
+                                       + root.decorationLift(index))
                     // On the band's face: its middle line at its strand's
                     // height, then out of the face as far as its top is.
                     const middle = PlatformGeometry.standLift("mobius", rect.progress) * root.platformScale
@@ -3245,6 +3279,9 @@ Item {
             IconStyle3D {
                 id: platform
                 objectName: "mesh-platform"
+                // Under a decoration it is not drawn; its mesh stays the
+                // panel's shape for input.
+                visible: !root.decorationShown
                 pickable: true
                 underGlow: root.platformGlowMesh !== null
                 meshData: root.platformMesh
@@ -3283,7 +3320,7 @@ Item {
                     readonly property var meshBox: root.meshBox(meshData)
                     objectName: "mesh-panel-part-" + index
                     partDefinition: root.panelParts[index].definition
-                    visible: partDefinition.mechanism === root.mechanism
+                    visible: partDefinition.mechanism === root.mechanism && !root.decorationShown
                     meshData: PlatformGeometry.foldMesh(root.panelParts[index].resources.mesh || null,
                         root.platformFold, root.baseTopHeight)
                     materialData: root.panelParts[index].resources.material || ({})
@@ -3292,6 +3329,30 @@ Item {
                     openAmount: root.partOpenAmount(partDefinition)
                     emissionScale: root.emissionScale
                 }
+            }
+            PanelDecoration3D {
+                id: platformDecoration
+                objectName: "mesh-platform-decoration-node"
+                decoration: root.decorationWanted ? root.decoration : ""
+                choices: root.decorationChoices
+                animated: root.decorationAnimated && !root.reducedMotion
+                motionSpeed: root.decorationSpeed
+                running: root.motionAllowed
+                centreRuns: root.decorationRuns
+                iconPoints: root.decorationIconPoints
+                unit: root.platformScale
+                // As wide as the decorations were designed round an icon.
+                halfWidth: Math.max(6, root.iconCellSize / 1.7)
+                fold: root.platformFold
+                lightDirection: keyLight.forward.times(-1)
+                cameraTransform: camera.sceneTransform
+                // A round light under the pointer lights up.
+                pointer: decorationPointer.hovered ? decorationPointer.point.position : null
+                project: root.projectScenePoint
+                // Twice as many pixels as the panel shows at rest, so its
+                // grain holds as it turns toward the viewer or is scaled up.
+                pictureScale: 2 * (root.Window.window ? root.Window.window.devicePixelRatio : 1)
+                emissionScale: root.emissionScale
             }
         }
         }

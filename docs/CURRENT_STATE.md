@@ -90,6 +90,42 @@ Report `docs/repairs/OWNER-LIST-PIECE-8.md`; the checkpoint's handoff
   `contourMistakesAreRefused`, the truth matrix's `panelDecoration` row.
   The icon preset matrix counts the 25 settings an icon preset saves
   (with `iconTileForm`).
+- **3D platform decorations** (`optional3d/PanelDecoration3D.qml`, a
+  `PanelScene3D` child `mesh-platform-decoration-node`): on a true 3D panel
+  with a generated platform (not a Möbius strip, not a theme's own mesh,
+  `decorationWanted`) the decoration takes the platform's place along
+  `PlatformGeometry.centreLine`, its icons standing on it
+  (`decorationLift`). `DecorationBaker` with `relief: true`, `underside`
+  (the platform's thickness) and `triangles` (120000) makes, on the worker:
+  `decorationSurface` (the lit field as unlit maps: albedo, finish, shape
+  with height, light face, coverage round about (a Gaussian, σ 3 map px)
+  and own-light share, and each group's light), `fillSurfaceMargins`
+  (half-covered pixels taken out of their mix with the dark; past the
+  outline every map the nearest covered pixel's by a feature transform,
+  lights only 2 px), `roundSurfaceEdges` when the scene's `roundEdges` is
+  set (a soft body, `body.feather > 0`: `edgeAlong`, `edgeLevel`,
+  `edgeDeep`), `reliefMesh` (`DecorationRelief.cpp`: a walled solid by
+  marching squares with each crossing found on the coverage itself along
+  the grid's edge, wall normals averaged along the outline; or the rounded
+  solid by marching triangles sliced at eight equal turns of a quarter
+  circle, `edgePoint` giving each point's heights, normals and how far in
+  its maps are read) and `decorationTubes` (`DecorationTubes.cpp`: what is
+  `solid: "round"`, a trunk and its branches, swept as tubes with bark).
+  `ArchDock.Decorations3D` (`DecorationSolid3D.cpp`, built only with Quick
+  3D): `DecorationSolid` (part `relief` or `tubes`) and `DecorationMap`.
+  Shaders: `decoration-surface.vert/.frag` (`DecorationSurface.qml`: the
+  studio mirrored in the camera's frame, relief grain and shadows, walls
+  evened out along the edge and mixed with the dark as much as the
+  coverage round about says, the own-light share, a lens lit under the
+  pointer) and `decoration-tube.vert/.frag` (`DecorationTube.qml`).
+  `DecorationScene.scene(..., {solids: true})` marks round bodies,
+  `tubes`, `tubeMarks`, `roundEdges`, and gives a picture strip (the space
+  materials) `ownLight: 0.35`, no emission and no coat. The flat panel's
+  `PanelDecoration2D` lights a lens under the pointer
+  (`panel-decoration-light-spot-N`). Test: `decoration-3d-smoke`
+  (`RendererCapabilityTest::decorationsStandAsSolids` in its own private
+  KWin session, `ARCHDOCK_RENDERING_DECORATIONS=1`): four designs drawn by
+  the real renderer, failing on any shader that does not build.
 <!-- LIST_PIECE_8_END -->
 
 <!-- LIST_PIECE_7_BEGIN -->

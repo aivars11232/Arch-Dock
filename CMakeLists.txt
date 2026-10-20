@@ -177,7 +177,14 @@ set(ARCHDOCK_OPTIONAL_RENDERING_FILES
     optional3d/picture-relief.frag
     optional3d/FlowingSurface.qml
     optional3d/flowing-surface.vert
-    optional3d/flowing-surface.frag)
+    optional3d/flowing-surface.frag
+    optional3d/PanelDecoration3D.qml
+    optional3d/DecorationSurface.qml
+    optional3d/decoration-surface.vert
+    optional3d/decoration-surface.frag
+    optional3d/DecorationTube.qml
+    optional3d/decoration-tube.vert
+    optional3d/decoration-tube.frag)
 # These are owned build outputs. Remove stale optional files on ON -> OFF.
 foreach(rendering_file IN LISTS ARCHDOCK_OPTIONAL_RENDERING_FILES)
   if(NOT ARCHDOCK_QUICK3D_BUILT)
@@ -240,12 +247,15 @@ qt_add_qml_module(archdock-decorations SHARED
   URI ArchDock.Decorations VERSION 1.0
   OUTPUT_DIRECTORY "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Decorations"
   SOURCES src/decorations/DecorationLighting.h src/decorations/DecorationLighting.cpp
+          src/decorations/DecorationRelief.h src/decorations/DecorationRelief.cpp
+          src/decorations/DecorationTubes.h src/decorations/DecorationTubes.cpp
           src/decorations/DecorationWorker.h src/decorations/DecorationWorker.cpp
           src/decorations/DecorationBaker.h src/decorations/DecorationBaker.cpp
           src/decorations/DecorationLayer.h src/decorations/DecorationLayer.cpp)
 target_link_libraries(archdock-decorations PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick)
 # Per-pixel lighting is unusably slow unoptimised, even in a debug build.
-set_source_files_properties(src/decorations/DecorationLighting.cpp PROPERTIES COMPILE_OPTIONS "-O2")
+set_source_files_properties(src/decorations/DecorationLighting.cpp src/decorations/DecorationRelief.cpp
+  src/decorations/DecorationTubes.cpp PROPERTIES COMPILE_OPTIONS "-O2")
 target_include_directories(archdock-decorations PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/decorations")
 set_target_properties(archdock-decorations archdock-decorationsplugin
   PROPERTIES INSTALL_RPATH "$ORIGIN")
@@ -256,6 +266,29 @@ install(FILES
   "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Decorations/archdock-decorations.qmltypes"
   DESTINATION "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Decorations")
 add_dependencies(archdock-rendering-module archdock-decorationsplugin)
+
+# A decoration in a 3D scene: its solid and surface maps as Qt Quick 3D
+# geometry and textures. A module of its own, so a flat panel never loads
+# Qt Quick 3D for its decoration.
+if(ARCHDOCK_QUICK3D_BUILT)
+  qt_add_qml_module(archdock-decorations3d SHARED
+    URI ArchDock.Decorations3D VERSION 1.0
+    OUTPUT_DIRECTORY "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Decorations3D"
+    DEPENDENCIES QtQuick3D
+    SOURCES src/decorations/DecorationSolid3D.h src/decorations/DecorationSolid3D.cpp)
+  target_link_libraries(archdock-decorations3d PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Quick3D
+    archdock-decorations)
+  target_include_directories(archdock-decorations3d PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/decorations")
+  set_target_properties(archdock-decorations3d archdock-decorations3dplugin
+    PROPERTIES INSTALL_RPATH "$ORIGIN:$ORIGIN/../Decorations")
+  install(TARGETS archdock-decorations3d archdock-decorations3dplugin
+    LIBRARY DESTINATION "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Decorations3D")
+  install(FILES
+    "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Decorations3D/qmldir"
+    "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Decorations3D/archdock-decorations3d.qmltypes"
+    DESTINATION "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Decorations3D")
+  add_dependencies(archdock-rendering-module archdock-decorations3dplugin)
+endif()
 
 qt_add_qml_module(archdock-integration SHARED
   URI ArchDock.Integration VERSION 1.0
@@ -479,7 +512,9 @@ if(BUILD_TESTING)
 
   # The decoration lighting, by itself: what a scene's pictures hold.
   qt_add_executable(decoration-lighting-test tests/DecorationLightingTest.cpp
-    src/decorations/DecorationLighting.h src/decorations/DecorationLighting.cpp)
+    src/decorations/DecorationLighting.h src/decorations/DecorationLighting.cpp
+    src/decorations/DecorationRelief.h src/decorations/DecorationRelief.cpp
+    src/decorations/DecorationTubes.h src/decorations/DecorationTubes.cpp)
   target_include_directories(decoration-lighting-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/decorations)
   target_link_libraries(decoration-lighting-test PRIVATE Qt6::Core Qt6::Gui Qt6::Test)
   target_compile_definitions(decoration-lighting-test PRIVATE
@@ -1818,6 +1853,18 @@ if(BUILD_TESTING)
             bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
   set_tests_properties(presentation-mechanism-smoke
     PROPERTIES DEPENDS window-interaction-smoke RUN_SERIAL TRUE TIMEOUT 240)
+
+  # Panel decorations on 3D panels, drawn by a private compositor's real
+  # graphics backend: their shaders build and each stands as a solid.
+  add_test(NAME decoration-3d-smoke
+    COMMAND ${CMAKE_COMMAND} -E env
+            ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
+            ARCHDOCK_QMLTESTRUNNER=$<TARGET_FILE:Qt6::qmltestrunner>
+            ARCHDOCK_RENDERING_DECORATIONS=1
+            bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
+  set_tests_properties(decoration-3d-smoke
+    PROPERTIES DEPENDS rendering-import-smoke RUN_SERIAL TRUE TIMEOUT 270)
 
   # ADREP-TASK-001: the Studio truth matrix drawn with a private compositor's
   # real graphics backend, where shader-drawn effects and true 3D appear.

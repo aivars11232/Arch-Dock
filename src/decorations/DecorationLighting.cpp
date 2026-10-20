@@ -12,6 +12,7 @@
 
 #include <QColor>
 #include <QFileInfo>
+#include <QFloat16>
 #include <QJsonArray>
 #include <QMutex>
 #include <QMutexLocker>
@@ -280,6 +281,119 @@ std::vector<float> maximumFilter(const std::vector<float> &source, int w, int h,
     return result;
 }
 
+// For every pixel, the nearest pixel of a mask (its index; -1 when the mask
+// is empty): the distance transform's two passes, each remembering which
+// pixel gave it its distance (a feature transform) - first the nearest down
+// each column, then the lower envelope of those columns' parabolas along
+// each row.
+std::vector<int> nearestOf(const std::vector<uint8_t> &mask, int w, int h)
+{
+    std::vector<int> nearestRow(std::size_t(w) * h, -1);
+    for (int x = 0; x < w; ++x)
+    {
+        int last = -1;
+        for (int y = 0; y < h; ++y)
+        {
+            if (mask[std::size_t(y) * w + x]) last = y;
+            nearestRow[std::size_t(y) * w + x] = last;
+        }
+        last = -1;
+        for (int y = h - 1; y >= 0; --y)
+        {
+            if (mask[std::size_t(y) * w + x]) last = y;
+            int &best = nearestRow[std::size_t(y) * w + x];
+            if (last >= 0 && (best < 0 || last - y < y - best)) best = last;
+        }
+    }
+    const double big = 1e20;
+    std::vector<int> nearest(std::size_t(w) * h, -1);
+    const std::size_t columns = std::size_t(w);
+    std::vector<double> f(columns), z(columns + 1);
+    std::vector<int> v(columns);
+    for (int y = 0; y < h; ++y)
+    {
+        const int *row = &nearestRow[std::size_t(y) * w];
+        // The columns holding a pixel of the mask, each a parabola.
+        int k = -1;
+        for (int q = 0; q < w; ++q)
+        {
+            if (row[q] < 0) continue;
+            f[std::size_t(q)] = double(row[q] - y) * (row[q] - y);
+            if (k < 0)
+            {
+                k = 0;
+                v[0] = q;
+                z[0] = -big;
+                z[1] = big;
+                continue;
+            }
+            const auto meet = [&](int a) {
+                return ((f[std::size_t(q)] + double(q) * q) - (f[std::size_t(a)] + double(a) * a)) / (2.0 * q - 2.0 * a);
+            };
+            double s = meet(v[std::size_t(k)]);
+            while (k > 0 && s <= z[std::size_t(k)])
+            {
+                --k;
+                s = meet(v[std::size_t(k)]);
+            }
+            ++k;
+            v[std::size_t(k)] = q;
+            z[std::size_t(k)] = s;
+            z[std::size_t(k) + 1] = big;
+        }
+        if (k < 0) continue;
+        int j = 0;
+        for (int q = 0; q < w; ++q)
+        {
+            while (z[std::size_t(j) + 1] < q) ++j;
+            const int x = v[std::size_t(j)];
+            nearest[std::size_t(y) * w + q] = row[x] * w + x;
+        }
+    }
+    return nearest;
+}
+
+// How wide a shape's part is at each of its pixels, as the distance from
+// its middle to its outline: each ridge of the distance to the outline
+// carried down that distance's slope to the outline (the pixels taken from
+// the farthest in, each keeping the widest its farther-in neighbours hold),
+// close to the radius of the widest disc inside the shape over the pixel,
+// the "local thickness" of Hildebrand and Ruegsegger ("A new method for the
+// model-independent assessment of thickness in three-dimensional images",
+// 1997).
+std::vector<float> partHalfWidth(const std::vector<float> &distance, int w, int h)
+{
+    std::vector<float> widest(distance);
+    float farthest = 0;
+    for (float d : distance) farthest = std::max(farthest, d);
+    if (farthest <= 0) return widest;
+    // A counting sort by the distance in quarter pixels, farthest first.
+    const int buckets = int(farthest * 4) + 1;
+    const auto bucketOf = [&](float d) { return buckets - 1 - std::min(buckets - 1, int(d * 4)); };
+    std::vector<int> start(std::size_t(buckets) + 1, 0);
+    for (float d : distance)
+        if (d > 0) ++start[std::size_t(bucketOf(d)) + 1];
+    for (int b = 0; b < buckets; ++b) start[std::size_t(b) + 1] += start[std::size_t(b)];
+    std::vector<int> order(std::size_t(start[std::size_t(buckets)]));
+    for (std::size_t i = 0; i < distance.size(); ++i)
+        if (distance[i] > 0) order[std::size_t(start[std::size_t(bucketOf(distance[i]))]++)] = int(i);
+    for (int p : order)
+    {
+        const int x = p % w, y = p / w;
+        float best = widest[std::size_t(p)];
+        for (int dy = -1; dy <= 1; ++dy)
+            for (int dx = -1; dx <= 1; ++dx)
+            {
+                const int xx = x + dx, yy = y + dy;
+                if ((dx == 0 && dy == 0) || xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+                const std::size_t q = std::size_t(yy) * w + xx;
+                if (distance[q] > distance[std::size_t(p)]) best = std::max(best, widest[q]);
+            }
+        widest[std::size_t(p)] = best;
+    }
+    return widest;
+}
+
 // The materials' pictures, read once.
 QImage materialPicture(const QString &directory, const QString &texture, bool heights)
 {
@@ -342,6 +456,9 @@ struct Element
     // light tent: above 1 its reflections show the bright surround in its
     // own colour (gold that shines as gold), 1 the studio as it is.
     float gleam = 1;
+    // How much of its colour is its own light (a nebula's picture), which a
+    // 3D scene's lights only shade a little.
+    float own = 0;
     std::optional<float> lift;
     std::vector<qreal> dash;
     QPointF centre;
@@ -416,6 +533,7 @@ Element readElement(const QJsonObject &object, const QTransform &toPicture, doub
     e.strength = number(object, "strength", 0.8f);
     e.lit = std::clamp(number(object, "lit", 1), 0.0f, 1.0f);
     e.gleam = std::clamp(number(object, "gleam", 1), 0.5f, 3.0f);
+    e.own = std::clamp(number(object, "ownLight", 0), 0.0f, 1.0f);
     if (object.value(QLatin1String("lift")).isDouble()) e.lift = float(object.value(QLatin1String("lift")).toDouble());
     for (const QJsonValue &v : object.value(QLatin1String("dash")).toArray()) e.dash.push_back(v.toDouble() * scale);
     if (object.value(QLatin1String("glow")).isString()) e.glow = colourOf(object.value(QLatin1String("glow")).toString());
@@ -769,34 +887,42 @@ void fadeToWindow(QImage &image, QPoint at, const QRectF &window, float fade)
     }
 }
 
-} // namespace
 
-DecorationBake bakeDecoration(const QJsonObject &scene, const QString &materialDirectory, qreal requestedScale,
-                              qsizetype maximumPixels, const std::function<bool()> &cancelled)
+// A decoration's elements stacked into one field, before any light: what
+// covers each pixel, its colour, its height and finish, and each group's
+// light; in the pictures' pixels.
+struct Field
 {
-    DecorationBake bake;
-    const auto stop = [&]() {
-        if (!cancelled || !cancelled()) return false;
-        bake.layers.clear();
-        bake.rects.clear();
-        bake.error = QStringLiteral("cancelled");
-        return true;
-    };
+    QRect bounds;
+    double scale = 1;
+    int W = 0, H = 0;
+    float hw = 0;
+    QTransform toPicture;
+    BandPath band;
+    Plane A, RGB, HEIGHT, METAL, ROUGH, COAT, GLEAM, INK, BODY, LIGHT, LINE, OWN;
+    QHash<QString, LightGroup> groups;
+};
+
+// Draws the scene's elements, each into its own box (its coverage, its
+// albedo - a colour, a gradient or a real material laid along the band -
+// its relief and the height its shape gives it from its distance to its own
+// edge), and stacks them into `field`. Says why when there is nothing to
+// light: "empty-scene", or "cancelled" when `cancelled` says the pictures
+// are no longer wanted.
+QString buildField(Field &field, const QJsonObject &scene, const QString &materialDirectory, qreal requestedScale,
+                   qsizetype maximumPixels, const std::function<bool()> &cancelled)
+{
     const QJsonObject boundsObject = scene.value(QLatin1String("bounds")).toObject();
     const QRect bounds(int(std::floor(boundsObject.value(QLatin1String("x")).toDouble())),
                        int(std::floor(boundsObject.value(QLatin1String("y")).toDouble())),
                        int(std::ceil(boundsObject.value(QLatin1String("width")).toDouble())),
                        int(std::ceil(boundsObject.value(QLatin1String("height")).toDouble())));
-    bake.bounds = bounds;
-    if (bounds.width() <= 0 || bounds.height() <= 0)
-    {
-        bake.error = QStringLiteral("empty-scene");
-        return bake;
-    }
+    field.bounds = bounds;
+    if (bounds.width() <= 0 || bounds.height() <= 0) return QStringLiteral("empty-scene");
     double scale = std::max(0.25, double(requestedScale));
     const double pixels = double(bounds.width()) * bounds.height() * scale * scale;
     if (pixels > double(maximumPixels)) scale *= std::sqrt(double(maximumPixels) / pixels);
-    bake.scale = scale;
+    field.scale = scale;
     const int W = std::max(1, int(std::ceil(bounds.width() * scale)));
     const int H = std::max(1, int(std::ceil(bounds.height() * scale)));
     const QTransform toPicture = QTransform::fromScale(scale, scale) * QTransform::fromTranslate(-bounds.x() * scale, -bounds.y() * scale);
@@ -828,7 +954,7 @@ DecorationBake bakeDecoration(const QJsonObject &scene, const QString &materialD
         }
     }
 
-    Plane A(W, H), RGB(W, H, 3), HEIGHT(W, H), METAL(W, H), ROUGH(W, H, 1, 0.5f), COAT(W, H), GLEAM(W, H, 1, 1.0f);
+    Plane A(W, H), RGB(W, H, 3), HEIGHT(W, H), METAL(W, H), ROUGH(W, H, 1, 0.5f), COAT(W, H), GLEAM(W, H, 1, 1.0f), OWN(W, H);
     Plane INK(W, H, 3), BODY(W, H), LIGHT(W, H), LINE(W, H);
     QHash<QString, LightGroup> groups;
     auto groupFor = [&](const QString &name) -> LightGroup & {
@@ -847,7 +973,7 @@ DecorationBake bakeDecoration(const QJsonObject &scene, const QString &materialD
 
     for (const QJsonValue &value : scene.value(QLatin1String("elements")).toArray())
     {
-        if (stop()) return bake;
+        if (cancelled && cancelled()) return QStringLiteral("cancelled");
         Element e = readElement(value.toObject(), toPicture, scale);
         QRectF area = e.shape.boundingRect();
         if (e.type == QLatin1String("stroke")) area.adjust(-e.width, -e.width, e.width, e.width);
@@ -1051,7 +1177,9 @@ DecorationBake bakeDecoration(const QJsonObject &scene, const QString &materialD
                     for (int k = 0; k < 3; ++k) colour[i][k] = rainbowLight[i][k] * (1 - pale) + pale;
                 }
         }
-        // The lens: deep glass round a hot core.
+        // The lens: deep glass round a hot core; one resting dim (its `lit`
+        // below 1) is darker glass with a fainter core, lighting up when the
+        // pointer is over it.
         if (e.hasLens)
         {
             const Rgb base = e.lightFinish == QLatin1String("rainbow")
@@ -1063,8 +1191,8 @@ DecorationBake bakeDecoration(const QJsonObject &scene, const QString &materialD
                     const float r = float(std::hypot(x0 + x - e.lensCentre.x() + e.lensRadius * 0.12,
                                                      y0 + y - e.lensCentre.y() + e.lensRadius * 0.14))
                                     / std::max(1.0f, e.lensRadius);
-                    const float core = std::pow(clamp01(1 - r / 0.5f), 1.5f);
-                    const float body = 0.18f + 0.75f * clamp01(1.1f - r);
+                    const float core = std::pow(clamp01(1 - r / 0.5f), 1.5f) * e.lit;
+                    const float body = (0.18f + 0.75f * clamp01(1.1f - r)) * (0.5f + 0.5f * e.lit);
                     for (int k = 0; k < 3; ++k) colour[std::size_t(y) * w + x][k] = base[k] * body + core * (1 - base[k]) * 0.55f;
                 }
             e.rough = 0.05f;
@@ -1215,6 +1343,7 @@ DecorationBake bakeDecoration(const QJsonObject &scene, const QString &materialD
                 ROUGH.at(X, Y) = ROUGH.at(X, Y) * (1 - aa) + e.rough * aa;
                 COAT.at(X, Y) = COAT.at(X, Y) * (1 - aa) + e.coat * aa;
                 GLEAM.at(X, Y) = GLEAM.at(X, Y) * (1 - aa) + e.gleam * aa;
+                OWN.at(X, Y) = OWN.at(X, Y) * (1 - aa) + e.own * aa;
                 // The element covers every group's light under it, and gives
                 // its own.
                 const std::size_t at = (std::size_t(Y) * W + X) * 3;
@@ -1243,6 +1372,130 @@ DecorationBake bakeDecoration(const QJsonObject &scene, const QString &materialD
                 A.at(X, Y) = A.at(X, Y) + aa * (1 - A.at(X, Y));
             }
     }
+
+    field.W = W;
+    field.H = H;
+    field.hw = hw;
+    field.toPicture = toPicture;
+    field.band = std::move(band);
+    field.A = std::move(A);
+    field.RGB = std::move(RGB);
+    field.HEIGHT = std::move(HEIGHT);
+    field.METAL = std::move(METAL);
+    field.ROUGH = std::move(ROUGH);
+    field.COAT = std::move(COAT);
+    field.GLEAM = std::move(GLEAM);
+    field.INK = std::move(INK);
+    field.BODY = std::move(BODY);
+    field.LIGHT = std::move(LIGHT);
+    field.LINE = std::move(LINE);
+    field.OWN = std::move(OWN);
+    field.groups = std::move(groups);
+    return QString();
+}
+
+// A solid's outline made smooth where it is finely notched (a row of studs
+// or ribs along an edge, which would stand as fins down a 3D wall): the
+// notches narrower than 2 * radius are closed (the coverage grown by
+// `radius` and taken back, by exact distances), and round about them every
+// map is evened out from the covered pixels near it - a blur weighted by the
+// coverage, normalized convolution (Knutsson and Westin, "Normalized and
+// Differential Convolution", 1993) - so the edge there is one smooth
+// surface. Wider openings and the rest of the decoration stay as drawn.
+void smoothNotches(Field &f, float radius)
+{
+    const int W = f.W, H = f.H;
+    const std::size_t n = std::size_t(W) * H;
+    std::vector<uint8_t> outside(n), grown(n), filled(n), elsewhere(n);
+    for (std::size_t i = 0; i < n; ++i) outside[i] = f.A.data[i] < 0.5f;
+    const std::vector<float> reach = distanceInside(outside, W, H);
+    for (std::size_t i = 0; i < n; ++i) grown[i] = !outside[i] || reach[i] <= radius;
+    const std::vector<float> depth = distanceInside(grown, W, H);
+    bool any = false;
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        filled[i] = outside[i] && depth[i] > radius;
+        any = any || filled[i];
+    }
+    if (!any) return;
+    for (std::size_t i = 0; i < n; ++i) elsewhere[i] = !filled[i];
+    // How far each pixel lies from the nearest notch.
+    const std::vector<float> nearest = distanceInside(elsewhere, W, H);
+    const float zone = 2 * radius;
+    // The maps weighted by the coverage, the weights, and the closed outline.
+    constexpr int maps = 13;
+    Plane weighted(W, H, maps), weight(W, H), closed(W, H);
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x)
+        {
+            const std::size_t i = std::size_t(y) * W + x;
+            const float c = f.A.data[i];
+            weight.at(x, y) = c;
+            closed.at(x, y) = !outside[i] || filled[i] ? 1.0f : 0.0f;
+            const float values[maps] = {f.RGB.at(x, y, 0), f.RGB.at(x, y, 1), f.RGB.at(x, y, 2),
+                                        f.INK.at(x, y, 0), f.INK.at(x, y, 1), f.INK.at(x, y, 2),
+                                        f.METAL.at(x, y), f.ROUGH.at(x, y), f.COAT.at(x, y), f.GLEAM.at(x, y),
+                                        f.HEIGHT.at(x, y), f.LIGHT.at(x, y), f.OWN.at(x, y)};
+            for (int k = 0; k < maps; ++k) weighted.at(x, y, k) = values[k] * c;
+        }
+    const float sigma = std::max(1.0f, radius * 0.6f);
+    const Plane spread = gaussian(weighted, sigma), spreadWeight = gaussian(weight, sigma), outline = gaussian(closed, sigma);
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x)
+        {
+            const std::size_t i = std::size_t(y) * W + x;
+            if (nearest[i] > zone) continue;
+            const float w = spreadWeight.at(x, y);
+            if (w > 1e-4f)
+            {
+                float v[maps];
+                for (int k = 0; k < maps; ++k) v[k] = spread.at(x, y, k) / w;
+                for (int k = 0; k < 3; ++k)
+                {
+                    f.RGB.at(x, y, k) = v[k];
+                    f.INK.at(x, y, k) = v[3 + k];
+                }
+                f.METAL.at(x, y) = v[6];
+                f.ROUGH.at(x, y) = v[7];
+                f.COAT.at(x, y) = v[8];
+                f.GLEAM.at(x, y) = v[9];
+                f.HEIGHT.at(x, y) = v[10];
+                f.LIGHT.at(x, y) = v[11];
+                f.OWN.at(x, y) = v[12];
+            }
+            f.A.at(x, y) = outline.at(x, y);
+        }
+}
+
+} // namespace
+
+DecorationBake bakeDecoration(const QJsonObject &scene, const QString &materialDirectory, qreal requestedScale,
+                              qsizetype maximumPixels, const std::function<bool()> &cancelled)
+{
+    DecorationBake bake;
+    Field field;
+    const QString failed = buildField(field, scene, materialDirectory, requestedScale, maximumPixels, cancelled);
+    bake.bounds = field.bounds;
+    bake.scale = field.scale;
+    if (!failed.isEmpty())
+    {
+        bake.error = failed;
+        return bake;
+    }
+    const auto stop = [&]() {
+        if (!cancelled || !cancelled()) return false;
+        bake.layers.clear();
+        bake.rects.clear();
+        bake.error = QStringLiteral("cancelled");
+        return true;
+    };
+    const int W = field.W, H = field.H;
+    const double scale = field.scale;
+    const float hw = field.hw;
+    const QTransform &toPicture = field.toPicture;
+    const Plane &A = field.A, &RGB = field.RGB, &HEIGHT = field.HEIGHT, &METAL = field.METAL, &ROUGH = field.ROUGH,
+                &COAT = field.COAT, &GLEAM = field.GLEAM, &INK = field.INK, &LIGHT = field.LIGHT, &LINE = field.LINE;
+    QHash<QString, LightGroup> &groups = field.groups;
 
     // Lighting.
     if (stop()) return bake;
@@ -1489,6 +1742,401 @@ DecorationBake bakeDecoration(const QJsonObject &scene, const QString &materialD
         }
     }
     return bake;
+}
+
+QImage materialAlbedo(const QString &materialDirectory, const QJsonObject &albedo, const QJsonObject &recolour,
+                      const QJsonObject &adjust)
+{
+    const QString texture = albedo.value(QLatin1String("texture")).toString();
+    QImage picture = texture.isEmpty() ? QImage() : materialPicture(materialDirectory, texture, false);
+    if (picture.isNull())
+    {
+        picture = QImage(4, 4, QImage::Format_ARGB32_Premultiplied);
+        picture.fill(QColor(albedo.value(QLatin1String("colour")).toString(QStringLiteral("#808080")).left(7)));
+    }
+    QImage out = picture.convertToFormat(QImage::Format_RGBA8888);
+    const int w = out.width(), h = out.height();
+    std::vector<Rgb> colour(std::size_t(w) * h);
+    for (int y = 0; y < h; ++y)
+    {
+        const uchar *line = out.constScanLine(y);
+        for (int x = 0; x < w; ++x)
+            colour[std::size_t(y) * w + x] = {line[x * 4] / 255.0f, line[x * 4 + 1] / 255.0f, line[x * 4 + 2] / 255.0f};
+    }
+    if (albedo.value(QLatin1String("tint")).isString())
+    {
+        const Rgb tint = colourOf(albedo.value(QLatin1String("tint")).toString());
+        for (Rgb &c : colour) for (int k = 0; k < 3; ++k) c[k] *= tint[k];
+    }
+    if (!recolour.isEmpty())
+    {
+        double meanS = 0, meanV = 0;
+        std::vector<Rgb> hsv(colour.size());
+        for (std::size_t i = 0; i < colour.size(); ++i)
+        {
+            hsv[i] = rgbToHsv(colour[i]);
+            meanS += hsv[i][1];
+            meanV += hsv[i][2];
+        }
+        const float ms = std::max(0.05f, float(meanS / double(colour.size())));
+        const float mv = std::max(0.05f, float(meanV / double(colour.size())));
+        const float hue = number(recolour, "hue", 0), saturation = number(recolour, "saturation", 0);
+        const float value = number(recolour, "value", 0.5f);
+        for (std::size_t i = 0; i < colour.size(); ++i)
+            colour[i] = hsvToRgb({hue / 360.0f, clamp01(hsv[i][1] / ms * std::max(0.02f, saturation)),
+                                  clamp01(hsv[i][2] / mv * std::max(0.04f, value))});
+    }
+    if (!adjust.isEmpty())
+    {
+        const float hue = number(adjust, "hue", 0), saturation = number(adjust, "saturation", 1);
+        const float brightness = number(adjust, "brightness", 1);
+        for (Rgb &c : colour)
+        {
+            const Rgb hsv = rgbToHsv(c);
+            c = hsvToRgb({hsv[0] + hue / 360.0f, clamp01(hsv[1] * saturation), clamp01(hsv[2] * brightness)});
+        }
+    }
+    for (int y = 0; y < h; ++y)
+    {
+        uchar *line = out.scanLine(y);
+        for (int x = 0; x < w; ++x)
+        {
+            const Rgb &c = colour[std::size_t(y) * w + x];
+            for (int k = 0; k < 3; ++k) line[x * 4 + k] = uchar(std::lround(clamp01(c[k]) * 255));
+            line[x * 4 + 3] = 255;
+        }
+    }
+    return out;
+}
+
+QImage materialHeights(const QString &materialDirectory, const QString &texture)
+{
+    if (texture.isEmpty()) return {};
+    const QImage heights = materialPicture(materialDirectory, texture, true);
+    return heights.isNull() ? QImage() : heights.convertToFormat(QImage::Format_Grayscale8);
+}
+
+DecorationSurface decorationSurface(const QJsonObject &scene, const QString &materialDirectory, qreal requestedScale,
+                                    qsizetype maximumPixels, const std::function<bool()> &cancelled)
+{
+    DecorationSurface surface;
+    Field field;
+    const QString failed = buildField(field, scene, materialDirectory, requestedScale, maximumPixels, cancelled);
+    surface.bounds = field.bounds;
+    surface.scale = field.scale;
+    if (!failed.isEmpty())
+    {
+        surface.error = failed;
+        return surface;
+    }
+    // A solid stands on a smooth outline where the flat pictures have a fine
+    // row of notches.
+    smoothNotches(field, std::max(1.5f, 0.07f * field.hw));
+    const int W = field.W, H = field.H;
+    const float hw = field.hw;
+    const std::size_t n = std::size_t(W) * H;
+    surface.halfWidth = hw;
+    surface.size = QSize(W, H);
+    surface.cover.assign(field.A.data.begin(), field.A.data.end());
+    surface.rise.assign(field.HEIGHT.data.begin(), field.HEIGHT.data.end());
+    // The light reaching hollows and the light picking out the relief, as
+    // the flat lighting has them.
+    const Plane hollow = gaussian(field.HEIGHT, hw * 0.12f);
+    const Plane smooth = gaussian(field.HEIGHT, 0.7f);
+    // How much of the round about the decoration covers, evened out over a
+    // few pixels: a wall's share of what it is made of (a thin part's
+    // walls, seen edge on, show less of it than a broad one's).
+    const Plane around = gaussian(field.A, 3.0f);
+    surface.albedo.resize(qsizetype(n) * 4);
+    surface.finish.resize(qsizetype(n) * 4);
+    surface.shape.resize(qsizetype(n) * 4 * qsizetype(sizeof(qfloat16)));
+    auto *albedo = reinterpret_cast<uchar *>(surface.albedo.data());
+    auto *finish = reinterpret_cast<uchar *>(surface.finish.data());
+    auto *shape = reinterpret_cast<qfloat16 *>(surface.shape.data());
+    const auto byte = [](float v) { return uchar(std::lround(clamp01(v) * 255)); };
+    for (int y = 0; y < H; ++y)
+    {
+        if (cancelled && cancelled())
+        {
+            surface = DecorationSurface{};
+            surface.error = QStringLiteral("cancelled");
+            return surface;
+        }
+        for (int x = 0; x < W; ++x)
+        {
+            const std::size_t i = std::size_t(y) * W + x;
+            const float ao = std::clamp(1 - (hollow.at(x, y) - field.HEIGHT.at(x, y)) * (2.2f / hw), 0.45f, 1.0f);
+            for (int k = 0; k < 3; ++k) albedo[i * 4 + k] = byte(field.RGB.at(x, y, k) * (1 - field.INK.at(x, y, k)));
+            albedo[i * 4 + 3] = byte(ao);
+            finish[i * 4 + 0] = byte(field.METAL.at(x, y));
+            finish[i * 4 + 1] = byte(field.ROUGH.at(x, y));
+            finish[i * 4 + 2] = byte(field.COAT.at(x, y));
+            finish[i * 4 + 3] = byte(field.GLEAM.at(x, y) / 3);
+            shape[i * 4 + 0] = qfloat16(smooth.at(x, y));
+            shape[i * 4 + 1] = qfloat16(field.LIGHT.at(x, y));
+            shape[i * 4 + 2] = qfloat16(around.at(x, y));
+            shape[i * 4 + 3] = qfloat16(field.OWN.at(x, y));
+        }
+    }
+    // Each group's own light, as bright as the flat lighting has it before
+    // it is held to what a picture can show (a 3D scene's bloom spreads what
+    // is brighter), and a share of the glow its lights give round them.
+    for (auto g = field.groups.cbegin(); g != field.groups.cend(); ++g)
+    {
+        if (g->right < 0) continue;
+        const QString name = g.key().isEmpty() ? QStringLiteral("lights") : g.key();
+        const QRect rect = QRect(QPoint(g->left, g->top), QPoint(g->right, g->bottom)).intersected(QRect(0, 0, W, H));
+        if (rect.isEmpty()) continue;
+        DecorationSurface::Light light;
+        light.rect = rect;
+        light.data.resize(qsizetype(rect.width()) * rect.height() * 4 * qsizetype(sizeof(qfloat16)));
+        auto *out = reinterpret_cast<qfloat16 *>(light.data.data());
+        bool lit = false;
+        for (int y = rect.top(); y <= rect.bottom(); ++y)
+            for (int x = rect.left(); x <= rect.right(); ++x)
+            {
+                const std::size_t o = (std::size_t(y - rect.top()) * rect.width() + (x - rect.left())) * 4;
+                for (int k = 0; k < 3; ++k)
+                {
+                    const float v = (g->emission.at(x, y, k) * 1.4f + g->glow.at(x, y, k) * 0.35f) * (1 - field.INK.at(x, y, k));
+                    out[o + k] = qfloat16(v);
+                    if (v > 0.002f) lit = true;
+                }
+                out[o + 3] = qfloat16(1.0f);
+            }
+        if (!lit) continue;
+        auto existing = surface.lights.find(name);
+        if (existing == surface.lights.end())
+        {
+            surface.lights.insert(name, light);
+            continue;
+        }
+        // Lights in no group join the "lights" group: one picture over
+        // both rects.
+        const QRect both = existing->rect.united(rect);
+        QByteArray merged(qsizetype(both.width()) * both.height() * 4 * qsizetype(sizeof(qfloat16)), 0);
+        auto *m = reinterpret_cast<qfloat16 *>(merged.data());
+        for (const DecorationSurface::Light *part : {&existing.value(), &light})
+        {
+            const auto *in = reinterpret_cast<const qfloat16 *>(part->data.constData());
+            for (int y = 0; y < part->rect.height(); ++y)
+                for (int x = 0; x < part->rect.width(); ++x)
+                {
+                    const std::size_t from = (std::size_t(y) * part->rect.width() + x) * 4;
+                    const std::size_t to = (std::size_t(part->rect.top() - both.top() + y) * both.width()
+                                            + (part->rect.left() - both.left() + x)) * 4;
+                    for (int k = 0; k < 3; ++k) m[to + k] = qfloat16(float(m[to + k]) + float(in[from + k]));
+                    m[to + 3] = qfloat16(1.0f);
+                }
+        }
+        existing->rect = both;
+        existing->data = merged;
+    }
+    return surface;
+}
+
+namespace
+{
+
+// Which of a surface's pixels it covers (at least half), none if it is empty.
+std::vector<uint8_t> coveredPixels(const DecorationSurface &surface)
+{
+    const std::size_t n = std::size_t(surface.size.width()) * surface.size.height();
+    std::vector<uint8_t> inside(n);
+    bool any = false;
+    for (std::size_t i = 0; i < n && i < surface.cover.size(); ++i)
+    {
+        inside[i] = surface.cover[i] >= 0.5f;
+        any = any || inside[i];
+    }
+    return any ? inside : std::vector<uint8_t>();
+}
+
+// The colour, finish and own-light maps: on the outline's half-covered
+// pixels the decoration is taken back out of its mix with the empty dark
+// round it (the finish from the defaults under it), and past the outline
+// each carries the nearest covered pixel's - the margin texture bakers leave
+// round what they bake - so filtering and the maps' blurrier levels do not
+// pull the dark in at the edge.
+void fillColourMargins(DecorationSurface &surface, const std::vector<uint8_t> &inside, const std::vector<int> &nearest)
+{
+    const std::size_t n = inside.size();
+    auto *albedo = reinterpret_cast<uchar *>(surface.albedo.data());
+    auto *finish = reinterpret_cast<uchar *>(surface.finish.data());
+    auto *shape = reinterpret_cast<qfloat16 *>(surface.shape.data());
+    const auto byte = [](float v) { return uchar(std::lround(clamp01(v) * 255)); };
+    const float defaults[4] = {0.0f, 0.5f, 0.0f, 1.0f / 3};
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        const float c = surface.cover[i];
+        if (!inside[i] || c >= 0.999f) continue;
+        for (int k = 0; k < 3; ++k) albedo[i * 4 + k] = byte(float(albedo[i * 4 + k]) / 255.0f / c);
+        for (int k = 0; k < 4; ++k)
+            finish[i * 4 + k] = byte((float(finish[i * 4 + k]) / 255.0f - defaults[k] * (1 - c)) / c);
+    }
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        if (inside[i] || nearest[i] < 0) continue;
+        const std::size_t j = std::size_t(nearest[i]);
+        std::copy_n(albedo + j * 4, 4, albedo + i * 4);
+        std::copy_n(finish + j * 4, 4, finish + i * 4);
+        shape[i * 4 + 1] = shape[j * 4 + 1];
+        shape[i * 4 + 3] = shape[j * 4 + 3];
+    }
+}
+
+// Each light's map the same way, carried only a pixel or two past the
+// outline: wider, a star by the edge would spread into a blot.
+void fillLightMargins(DecorationSurface &surface, const std::vector<uint8_t> &inside, const std::vector<int> &nearest)
+{
+    const int W = surface.size.width();
+    for (auto light = surface.lights.begin(); light != surface.lights.end(); ++light)
+    {
+        const QRect rect = light->rect;
+        auto *data = reinterpret_cast<qfloat16 *>(light->data.data());
+        const auto at = [&](int x, int y) {
+            return data + (std::size_t(y - rect.top()) * rect.width() + (x - rect.left())) * 4;
+        };
+        for (int y = rect.top(); y <= rect.bottom(); ++y)
+            for (int x = rect.left(); x <= rect.right(); ++x)
+            {
+                const std::size_t i = std::size_t(y) * W + x;
+                const float c = surface.cover[i];
+                if (!inside[i] || c >= 0.999f) continue;
+                qfloat16 *v = at(x, y);
+                for (int k = 0; k < 3; ++k) v[k] = qfloat16(float(v[k]) / c);
+            }
+        for (int y = rect.top(); y <= rect.bottom(); ++y)
+            for (int x = rect.left(); x <= rect.right(); ++x)
+            {
+                const std::size_t i = std::size_t(y) * W + x;
+                if (inside[i] || nearest[i] < 0) continue;
+                const int fx = nearest[i] % W, fy = nearest[i] / W;
+                const bool near = (fx - x) * (fx - x) + (fy - y) * (fy - y) <= 4 && rect.contains(fx, fy);
+                qfloat16 *v = at(x, y);
+                for (int k = 0; k < 3; ++k) v[k] = near ? at(fx, fy)[k] : qfloat16(0.0f);
+            }
+    }
+}
+
+bool mapsFit(const DecorationSurface &surface)
+{
+    const qsizetype n = qsizetype(surface.size.width()) * surface.size.height();
+    return n > 0 && qsizetype(surface.cover.size()) == n && surface.albedo.size() == n * 4 && surface.finish.size() == n * 4
+           && surface.shape.size() == n * 4 * qsizetype(sizeof(qfloat16));
+}
+
+} // namespace
+
+EdgePoint edgePoint(float along, QVector2D alongSlope, float height, QVector2D heightSlope, float level, float deep)
+{
+    EdgePoint p;
+    const float u = clamp01(along);
+    // Half the solid's thickness, and its middle, where top and underside meet.
+    const float half = std::max(0.5f, (level + deep) * 0.5f);
+    const float middle = level - half;
+    // A quarter circle: upright at the outline, level where it ends.
+    const float q = std::sqrt(std::max(0.0f, 1 - (1 - u) * (1 - u)));
+    p.top = middle + (height - middle) * q;
+    // The underside's curve is the top's mirrored (without the top's raised
+    // parts), flat by the time the curve ends.
+    const float mirrored = std::min(height, level) - middle;
+    const float lower = mirrored + (half - mirrored) * smoothstep01(u);
+    const float lowerSlope = (half - mirrored) * 6 * u * (1 - u);
+    p.bottom = std::min(p.top, middle - lower * q);
+    // Each surface's slope times the curve's height there, which stays
+    // finite on the outline, where the curve stands upright; the maps' y
+    // turns over into the solid's.
+    const QVector2D topSlope = alongSlope * ((height - middle) * (1 - u)) + heightSlope * (q * q);
+    const QVector2D lowSlope = alongSlope * -(lower * (1 - u) + lowerSlope * q * q);
+    const QVector3D out(-alongSlope.x(), alongSlope.y(), 0);
+    p.upward = QVector3D(-topSlope.x(), topSlope.y(), q);
+    p.downward = QVector3D(lowSlope.x(), -lowSlope.y(), -q);
+    for (QVector3D *n : {&p.upward, &p.downward})
+    {
+        if (n->lengthSquared() > 1e-12f) *n = n->normalized();
+        else *n = out.lengthSquared() > 1e-12f ? out.normalized() : QVector3D(0, 0, n == &p.upward ? 1 : -1);
+    }
+    // The picture laid round the curve evenly: a point a share of the
+    // quarter circle's length round from the outline reads the maps that
+    // share of its radius in.
+    const float rate = alongSlope.length();
+    if (rate > 1e-6f && u > 0 && u < 1)
+        p.inward = (std::acos(1 - u) * 2 / float(M_PI) - u) / rate;
+    return p;
+}
+
+void roundSurfaceEdges(DecorationSurface &surface, float underside)
+{
+    const int W = surface.size.width(), H = surface.size.height();
+    const std::size_t n = std::size_t(W) * H;
+    if (W < 2 || H < 2 || surface.cover.size() != n || surface.rise.size() != n) return;
+    std::vector<uint8_t> inside(n), outside(n);
+    bool any = false;
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        inside[i] = surface.cover[i] >= 0.5f;
+        outside[i] = !inside[i];
+        any = any || inside[i];
+    }
+    if (!any) return;
+    const float deep = std::max(0.0f, underside) * float(surface.scale);
+    // The distance from the outline (which runs half way between a covered
+    // pixel's middle and an uncovered one's), inside above 0: each side's
+    // exact distance to the other's pixels, a pixel on the outline placed
+    // within itself by how much of it is covered, lightly smoothed.
+    const std::vector<float> in = distanceInside(inside, W, H), out = distanceInside(outside, W, H);
+    Plane signedDistance(W, H);
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        float s = inside[i] ? in[i] - 0.5f : 0.5f - out[i];
+        const float c = surface.cover[i];
+        if ((inside[i] ? in[i] : out[i]) <= 1.0f && c > 0.0f && c < 1.0f) s = c - 0.5f;
+        signedDistance.data[i] = s;
+    }
+    const Plane distance = gaussian(signedDistance, 0.8f);
+    // How wide each part is, and the top's height in general (evened out
+    // over half the solid's depth), each from the covered pixels only and
+    // carried a little past the outline.
+    std::vector<float> depth(n);
+    for (std::size_t i = 0; i < n; ++i) depth[i] = inside[i] ? std::max(0.0f, distance.data[i]) : 0.0f;
+    const std::vector<float> widest = partHalfWidth(depth, W, H);
+    Plane weight(W, H), raised(W, H), wide(W, H);
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        const float m = inside[i] ? 1.0f : 0.0f;
+        weight.data[i] = m;
+        raised.data[i] = surface.rise[i] * m;
+        wide.data[i] = widest[i] * m;
+    }
+    const float sigma = std::max(2.0f, deep * 0.5f);
+    const Plane spreadWeight = gaussian(weight, sigma), spreadRaised = gaussian(raised, sigma);
+    const Plane nearWeight = gaussian(weight, 1.5f), nearWide = gaussian(wide, 1.5f);
+    surface.edgeAlong.resize(n);
+    surface.edgeLevel.resize(n);
+    surface.edgeDeep = deep;
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        const float level = spreadWeight.data[i] > 1e-4f ? spreadRaised.data[i] / spreadWeight.data[i] : 0.0f;
+        const float half = std::max(0.5f, (level + deep) * 0.5f);
+        const float across = nearWeight.data[i] > 1e-3f ? nearWide.data[i] / nearWeight.data[i] : half;
+        // The curve reaches right across, to the part's middle: a soft body
+        // rounds like a cushion, lit and shaded all the way over.
+        const float radius = std::max(0.5f, across);
+        surface.edgeAlong[i] = distance.data[i] / radius;
+        surface.edgeLevel[i] = level;
+    }
+}
+
+
+void fillSurfaceMargins(DecorationSurface &surface)
+{
+    if (!mapsFit(surface)) return;
+    const std::vector<uint8_t> inside = coveredPixels(surface);
+    if (inside.empty()) return;
+    const std::vector<int> nearest = nearestOf(inside, surface.size.width(), surface.size.height());
+    fillColourMargins(surface, inside, nearest);
+    fillLightMargins(surface, inside, nearest);
 }
 
 } // namespace ArchDock

@@ -1,13 +1,16 @@
-// The decoration lighting by itself: what the pictures of a scene hold.
+// The decoration lighting by itself: what the pictures of a scene hold, and
+// the decoration as a solid for a 3D scene: its maps and its mesh.
 //
 // Set ARCHDOCK_DECORATION_BAKE=<scene.json>:<picture.png> to light a scene
 // file and save it over the design pictures' background, for comparing with
 // them by eye.
 #include "DecorationLighting.h"
+#include "DecorationRelief.h"
 
 #include <QColor>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFloat16>
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -296,6 +299,202 @@ private slots:
         const QImage base = bake.layers.value(QStringLiteral("base"));
         QVERIFY(qsizetype(base.width()) * base.height() <= 1'010'000);
         QVERIFY(bake.scale < 1);
+    }
+
+    // ---- The decoration as a solid, for a 3D scene ----------------------
+
+    void surfaceHoldsTheFieldUnlit()
+    {
+        QJsonObject body = rectangle(60, 40, 200, 40);
+        body.insert(QStringLiteral("role"), QStringLiteral("body"));
+        body.insert(QStringLiteral("albedo"), QJsonObject{{QStringLiteral("colour"), QStringLiteral("#c03030")}});
+        body.insert(QStringLiteral("profile"), QStringLiteral("bevel"));
+        body.insert(QStringLiteral("height"), 0.5);
+        body.insert(QStringLiteral("metal"), 0.8);
+        body.insert(QStringLiteral("ownLight"), 0.5);
+        const DecorationSurface surface = decorationSurface(
+            sceneOf({body, glowingDot({100, 60}, QStringLiteral("stars"))}, QRect(0, 0, 320, 120)), materials(), 1);
+        QVERIFY(surface.error.isEmpty());
+        QCOMPARE(surface.size, QSize(320, 120));
+        const std::size_t inside = std::size_t(60) * 320 + 160, outside = std::size_t(10) * 320 + 10;
+        QCOMPARE(surface.cover[inside], 1.0f);
+        QCOMPARE(surface.cover[outside], 0.0f);
+        // As high as its bevel rises (half the half width), nothing outside.
+        QVERIFY(std::abs(surface.rise[inside] - 12.0f) < 0.5f);
+        QCOMPARE(surface.rise[outside], 0.0f);
+        // Its colour as drawn, unlit, and its metal.
+        const auto *albedo = reinterpret_cast<const uchar *>(surface.albedo.constData());
+        QCOMPARE(int(albedo[inside * 4]), 0xc0);
+        QCOMPARE(int(albedo[inside * 4 + 1]), 0x30);
+        const auto *finish = reinterpret_cast<const uchar *>(surface.finish.constData());
+        QCOMPARE(int(finish[inside * 4]), 204);
+        // Half of its colour is its own light.
+        const auto *shape = reinterpret_cast<const qfloat16 *>(surface.shape.constData());
+        QVERIFY(std::abs(float(shape[inside * 4 + 3]) - 0.5f) < 0.01f);
+        QCOMPARE(float(shape[outside * 4 + 3]), 0.0f);
+        // The light has a map of its own, over only the light, brighter at
+        // its core than a picture shows.
+        QVERIFY(surface.lights.contains(QStringLiteral("stars")));
+        const DecorationSurface::Light &star = surface.lights.value(QStringLiteral("stars"));
+        QVERIFY(star.rect.width() < 40 && star.rect.contains(QPoint(100, 60)));
+        const auto *light = reinterpret_cast<const qfloat16 *>(star.data.constData());
+        const std::size_t core = (std::size_t(60 - star.rect.top()) * star.rect.width() + (100 - star.rect.left())) * 4;
+        QVERIFY(float(light[core]) > 1.0f);
+    }
+
+    void solidStandsOnItsOutline()
+    {
+        QJsonObject body = rectangle(60, 40, 200, 40);
+        body.insert(QStringLiteral("profile"), QStringLiteral("bevel"));
+        body.insert(QStringLiteral("height"), 0.5);
+        DecorationSurface surface = decorationSurface(sceneOf({body}, QRect(0, 0, 320, 120)), materials(), 1);
+        fillSurfaceMargins(surface);
+        const ReliefMesh solid = reliefMesh(surface, 6);
+        QVERIFY(!solid.indices.empty());
+        // It covers the rectangle (y turned up) and stands from its
+        // underside to the bevel's top.
+        QVERIFY(std::abs(solid.minimum.x() - 60) < 1.5f && std::abs(solid.maximum.x() - 260) < 1.5f);
+        QVERIFY(std::abs(solid.minimum.y() + 80) < 1.5f && std::abs(solid.maximum.y() + 40) < 1.5f);
+        QCOMPARE(solid.minimum.z(), -6.0f);
+        QVERIFY(std::abs(solid.maximum.z() - 12) < 0.5f);
+        // Every face faces out of it: the upper surface up, the underside
+        // down, a wall away from the middle.
+        const QVector3D middle(160, -60, 0);
+        int upper = 0, walls = 0, under = 0;
+        for (std::size_t t = 0; t < solid.indices.size(); t += 3)
+        {
+            QVector3D p[3];
+            float top = 0;
+            for (int k = 0; k < 3; ++k)
+            {
+                const float *v = &solid.vertices[std::size_t(solid.indices[t + k]) * ReliefMesh::stride];
+                p[k] = QVector3D(v[0], v[1], v[2]);
+                top += v[8];
+                QCOMPARE(v[9], 1.0f);
+            }
+            const QVector3D n = QVector3D::crossProduct(p[1] - p[0], p[2] - p[0]).normalized();
+            if (top == 3)
+            {
+                QVERIFY2(n.z() > 0, "the upper surface faces up");
+                ++upper;
+            }
+            else if (p[0].z() == -6.0f && p[1].z() == -6.0f && p[2].z() == -6.0f)
+            {
+                QVERIFY2(n.z() < -0.999f, "the underside faces down");
+                ++under;
+            }
+            else
+            {
+                const QVector3D centre = (p[0] + p[1] + p[2]) / 3;
+                QVERIFY2(std::abs(n.z()) < 1e-3f, "a wall stands upright");
+                QVERIFY2(QVector3D::dotProduct(n, QVector3D(centre.x(), centre.y(), 0) - middle) > 0, "a wall faces out");
+                ++walls;
+            }
+        }
+        QVERIFY(upper > 100 && walls > 20 && under > 100);
+    }
+
+    void solidIsRoundAllRoundItsOutline()
+    {
+        QJsonObject body = rectangle(60, 40, 200, 40);
+        body.insert(QStringLiteral("profile"), QStringLiteral("bevel"));
+        body.insert(QStringLiteral("height"), 0.5);
+        body.insert(QStringLiteral("albedo"), QJsonObject{{QStringLiteral("colour"), QStringLiteral("#c03030")}});
+        DecorationSurface surface = decorationSurface(sceneOf({body}, QRect(0, 0, 320, 120)), materials(), 1);
+        fillSurfaceMargins(surface);
+        roundSurfaceEdges(surface, 6);
+        // On the outline the curve begins; it reaches right across, ending
+        // in the middle, where the body is highest.
+        const std::size_t middleOf = std::size_t(60) * 320 + 160, edge = std::size_t(60) * 320 + 60;
+        QVERIFY2(surface.edgeAlong[middleOf] > 0.9f, qPrintable(QString::number(surface.edgeAlong[middleOf])));
+        QVERIFY(surface.edgeAlong[std::size_t(50) * 320 + 160] < surface.edgeAlong[middleOf]);
+        QVERIFY(std::abs(surface.edgeAlong[edge]) < 0.1f);
+        // Past the outline the maps carry the colour inside it.
+        const auto *albedo = reinterpret_cast<const uchar *>(surface.albedo.constData());
+        QCOMPARE(int(albedo[(std::size_t(60) * 320 + 52) * 4]), 0xc0);
+        const ReliefMesh solid = reliefMesh(surface, 6);
+        QVERIFY(!solid.indices.empty());
+        // It covers the rectangle (y turned up) and stands from its
+        // underside to the bevel's top.
+        QVERIFY(std::abs(solid.minimum.x() - 60) < 1.5f && std::abs(solid.maximum.x() - 260) < 1.5f);
+        QVERIFY(std::abs(solid.minimum.y() + 80) < 1.5f && std::abs(solid.maximum.y() + 40) < 1.5f);
+        QVERIFY(std::abs(solid.minimum.z() + 6) < 0.05f);
+        QVERIFY(std::abs(solid.maximum.z() - 12) < 0.5f);
+        // Every face faces out of it, the upper surface up (or out, where it
+        // curves down to the outline) and the underside down; none joins the
+        // two: there is no wall.
+        int upper = 0, under = 0;
+        for (std::size_t t = 0; t < solid.indices.size(); t += 3)
+        {
+            QVector3D p[3];
+            float top = 0;
+            for (int k = 0; k < 3; ++k)
+            {
+                const float *v = &solid.vertices[std::size_t(solid.indices[t + k]) * ReliefMesh::stride];
+                p[k] = QVector3D(v[0], v[1], v[2]);
+                top += v[8];
+            }
+            const QVector3D n = QVector3D::crossProduct(p[1] - p[0], p[2] - p[0]).normalized();
+            QVERIFY2(top == 3 || top == 0, "a face lies on the top or the underside");
+            QVERIFY2(top == 3 ? n.z() > -1e-4f : n.z() < 1e-4f, "it faces out of the solid");
+            ++(top == 3 ? upper : under);
+        }
+        QVERIFY(upper > 100 && under > 100);
+        // Round the outline the top and the underside meet halfway between
+        // them, both facing straight out there.
+        const QVector3D middle(160, -60, 0);
+        int onTop = 0, onUnderside = 0;
+        for (std::size_t v = 0; v < solid.vertices.size(); v += ReliefMesh::stride)
+        {
+            const float *p = &solid.vertices[v];
+            if (p[9] > 0) continue;
+            ++(p[8] > 0.5f ? onTop : onUnderside);
+            QVERIFY2(p[2] > -6 && p[2] < 12, "between the underside and the top");
+            QVERIFY2(std::abs(p[5]) < 1e-3f, "level");
+            QVERIFY2(QVector3D::dotProduct(QVector3D(p[3], p[4], 0), QVector3D(p[0], p[1], 0) - middle) > 0, "facing out");
+        }
+        QVERIFY(onTop > 40);
+        QCOMPARE(onTop, onUnderside);
+    }
+
+    void solidKeepsItsHoles()
+    {
+        // A ring: nothing is built in its hole.
+        QJsonObject band{{QStringLiteral("type"), QStringLiteral("fill")}, {QStringLiteral("evenodd"), true},
+                         {QStringLiteral("albedo"), QJsonObject{{QStringLiteral("colour"), QStringLiteral("#808080")}}}};
+        QList<QPointF> outer, inner;
+        for (int k = 0; k < 96; ++k)
+        {
+            const double a = k * 2 * M_PI / 96;
+            outer.append(QPointF(160 + 100 * std::cos(a), 160 + 100 * std::sin(a)));
+            inner.append(QPointF(160 + 60 * std::cos(a), 160 + 60 * std::sin(a)));
+        }
+        band.insert(QStringLiteral("rings"), QJsonArray{ring(outer), ring(inner)});
+        DecorationSurface surface = decorationSurface(sceneOf({band}, QRect(0, 0, 320, 320)), materials(), 1);
+        // Walled, and with its edge rounded.
+        for (int round = 0; round < 2; ++round)
+        {
+            if (round) roundSurfaceEdges(surface, 4);
+            const ReliefMesh solid = reliefMesh(surface, 4);
+            QVERIFY(!solid.indices.empty());
+            for (std::size_t t = 0; t < solid.indices.size(); ++t)
+            {
+                const float *v = &solid.vertices[std::size_t(solid.indices[t]) * ReliefMesh::stride];
+                const float r = std::hypot(v[0] - 160, -v[1] - 160);
+                QVERIFY2(r > 58 && r < 102, "every point lies on the band");
+            }
+        }
+    }
+
+    void solidKeepsToItsTriangles()
+    {
+        QJsonObject body = rectangle(10, 10, 1500, 300);
+        DecorationSurface surface = decorationSurface(sceneOf({body}, QRect(0, 0, 1520, 320)), materials(), 1);
+        const ReliefMesh fine = reliefMesh(surface, 4, 200000);
+        const ReliefMesh coarse = reliefMesh(surface, 4, 8000);
+        QVERIFY(coarse.indices.size() / 3 <= 8000);
+        QVERIFY(coarse.step > fine.step);
+        QVERIFY(fine.step >= 1);
     }
 };
 

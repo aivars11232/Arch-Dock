@@ -16,7 +16,8 @@
 //   ends: how far (half-widths) an open band runs on past its first and
 //         last icons, as the decorations were designed;
 //   clip: { x, y, width, height, fade } the window the panel is seen
-//         through, or null.
+//         through, or null;
+//   relief: made a solid for a 3D scene (its icons' points are given).
 
 function inputOf(text) {
     try {
@@ -33,8 +34,12 @@ function decorationOf(input) {
 }
 
 // An open path run on straight past both its ends by `extra` pixels, and
-// the icons' places on it.
-function extended(path, slots, extra) {
+// the icons' places on it. When the two ends would meet that way (an arc
+// nearly round), the band is joined instead: the gap is bridged by a curve
+// leaving the last point the way the path runs there and arriving at the
+// first the way it runs on from there (a cubic Hermite curve), and the band
+// goes round as one, its ends' own shapes left out.
+function extended(path, slots, extra, halfWidth) {
     const points = path.points
     if (path.closed || !(extra > 0) || points.length < 2) return { path: path, slots: slots }
     const along = function(a, b) {
@@ -43,6 +48,20 @@ function extended(path, slots, extra) {
     }
     const first = points[0], last = points[points.length - 1]
     const head = along(points[1], first), tail = along(points[points.length - 2], last)
+    const gapX = last.x - first.x, gapY = last.y - first.y
+    const gap = Math.hypot(gapX, gapY)
+    const facing = head.x * gapX + head.y * gapY > 0 && tail.x * -gapX + tail.y * -gapY > 0
+    if (points.length > 2 && facing && gap < 2 * extra + Math.max(0, Number(halfWidth) || 0)) {
+        const bridge = []
+        const steps = Math.max(2, Math.ceil(gap / 6))
+        for (let k = 1; k < steps; ++k) {
+            const t = k / steps, t2 = t * t, t3 = t2 * t
+            const h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2
+            bridge.push({ x: h00 * last.x + h10 * tail.x * gap + h01 * first.x - h11 * head.x * gap,
+                          y: h00 * last.y + h10 * tail.y * gap + h01 * first.y - h11 * head.y * gap })
+        }
+        return { path: Object.assign({}, path, { points: points.concat(bridge), closed: true }), slots: slots }
+    }
     const longer = [{ x: first.x + head.x * extra, y: first.y + head.y * extra }].concat(points,
         [{ x: last.x + tail.x * extra, y: last.y + tail.y * extra }])
     return { path: Object.assign({}, path, { points: longer }),
@@ -51,7 +70,7 @@ function extended(path, slots, extra) {
 
 // The path and icon places a decoration is drawn on, at a half-width.
 function laidOut(input, halfWidth) {
-    return extended(input.path, input.slots || [], Math.max(0, Number(input.ends) || 0) * halfWidth)
+    return extended(input.path, input.slots || [], Math.max(0, Number(input.ends) || 0) * halfWidth, halfWidth)
 }
 
 // How far a scene reaches out from its path, toward the outward side and
@@ -98,16 +117,42 @@ function prepare(text) {
     return JSON.stringify({ frames: frames, loop: frames ? Scene.motionLoop(decoration) : 0, halfWidth: halfWidth })
 }
 
+// The point `distance` pixels along a path from its first point.
+function pointAlong(path, distance) {
+    const points = path.points || []
+    if (!points.length) return [0, 0]
+    const list = path.closed === true ? points.concat([points[0]]) : points
+    let left = Math.max(0, Number(distance) || 0)
+    for (let i = 1; i < list.length; ++i) {
+        const a = list[i - 1], b = list[i]
+        const length = Math.hypot(b.x - a.x, b.y - a.y)
+        if (left <= length && length > 0) {
+            const u = left / length
+            return [a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u]
+        }
+        left -= length
+    }
+    const last = list[list.length - 1]
+    return [last.x, last.y]
+}
+
 // The scene of one frame (`phase` 0 to 1 through the loop; below 0 for a
-// still decoration), as JSON text.
+// still decoration), as JSON text. A solid's (`relief`) also says where its
+// icons stand, so they can stand on it.
 function sceneText(text, phase, halfWidth) {
     const input = inputOf(text)
     const decoration = decorationOf(input)
     if (!decoration) return ""
-    const options = { choices: input.choices || ({}) }
+    const options = { choices: input.choices || ({}), solids: !!input.relief }
     if (Number(phase) >= 0) options.phase = Number(phase)
     const layout = laidOut(input, Number(halfWidth))
     const scene = Scene.scene(decoration, layout.path, Number(halfWidth), layout.slots, options)
     if (input.clip) scene.clip = input.clip
+    if (input.relief) scene.iconPoints = (layout.slots || []).map(function(s) { return pointAlong(layout.path, s) })
+    // Where its round lights (lenses) are, which brighten under the pointer.
+    scene.lightSpots = scene.elements.filter(function(e) { return e.lens }).map(function(e) {
+        return { x: e.lens.centre[0], y: e.lens.centre[1], radius: e.lens.radius, colour: e.lens.colour,
+                 group: e.group || "lights" }
+    })
     return JSON.stringify(scene)
 }

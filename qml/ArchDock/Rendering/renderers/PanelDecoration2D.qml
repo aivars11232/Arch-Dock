@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 import QtQuick.Window
 import ArchDock.Rendering 1.0
 import ArchDock.Decorations 1.0
@@ -103,6 +104,19 @@ Item {
     // Where the decoration's launcher seat is, in this item's pixels, or
     // null.
     readonly property var launcherSeat: decorationBaker.launcher
+    // Its round lights (lenses), each brightening while the pointer is over
+    // it.
+    readonly property var lightSpots: decorationBaker.lightSpots
+    // A light's colour (a "#rrggbb" name) at an opacity, and the same
+    // colour a share of the way to white.
+    function tinted(colour, alpha) {
+        const c = Qt.color(String(colour || "#ff3b1f"))
+        return Qt.rgba(c.r, c.g, c.b, alpha)
+    }
+    function lighter(colour, share, alpha) {
+        const c = Qt.color(String(colour || "#ff3b1f"))
+        return Qt.rgba(c.r + (1 - c.r) * share, c.g + (1 - c.g) * share, c.b + (1 - c.b) * share, alpha)
+    }
 
     property alias baker: decorationBaker
 
@@ -128,12 +142,7 @@ Item {
     // ---- Animation ----------------------------------------------------
     // The kinds of light animation (the rest move the decoration and are
     // in its frames).
-    readonly property var lightAnimations: {
-        const list = entry && entry.animation ? entry.animation : []
-        return list.filter(function(a) {
-            return ["pulse", "flicker", "twinkle", "blink", "crackle"].indexOf(a.kind) >= 0
-        })
-    }
+    readonly property var lightAnimations: DecorationScene.lightAnimations(entry)
     readonly property bool looping: decorationBaker.frameCount > 1 && decorationBaker.frames === decorationBaker.frameCount
         && decorationBaker.loop > 0
     readonly property bool playing: animated && !reducedMotion && !sceneConcealed && visible
@@ -151,36 +160,9 @@ Item {
     readonly property int frameB: looping ? (frameA + 1) % decorationBaker.frameCount : 0
     readonly property real blend: looping ? loopPosition - Math.floor(loopPosition) : 0
 
-    // Smooth noise in [0, 1] at `t`, the same every time.
-    function noise(t, seed) {
-        const hash = function(n) {
-            const x = Math.sin(n * 127.1 + seed * 311.7) * 43758.5453
-            return x - Math.floor(x)
-        }
-        const i = Math.floor(t), f = t - i
-        const w = f * f * (3 - 2 * f)
-        return hash(i) * (1 - w) + hash(i + 1) * w
-    }
     // How bright a group of lights is now (1 as lit).
     function lightLevel(group, time) {
-        let level = 1
-        for (const a of lightAnimations) {
-            const period = Math.max(0.03, Number(a.period) || 1)
-            const amount = Math.max(0, Math.min(1, Number(a.amount === undefined ? 0.3 : a.amount)))
-            const turn = 2 * Math.PI * time / period
-            if (a.kind === "pulse" && ["lights", "blinkA", "blinkB"].indexOf(group) >= 0)
-                level *= 1 - amount * (0.5 - 0.5 * Math.cos(turn))
-            else if (a.kind === "flicker" && group === "lights")
-                level *= 1 - amount * noise(time / period, 3)
-            else if (a.kind === "twinkle" && (group === "stars" || group === "starsB"))
-                level *= 1 - amount * (0.5 + 0.5 * Math.sin(turn + (group === "starsB" ? Math.PI : 0)))
-            else if (a.kind === "blink" && (group === "blinkA" || group === "blinkB")) {
-                const on = Math.max(-1, Math.min(1, 3 * Math.sin(turn + (group === "blinkB" ? Math.PI : 0))))
-                level *= 0.12 + 0.88 * (0.5 + 0.5 * on)
-            } else if (a.kind === "crackle" && group === "arcs")
-                level *= noise(time / period, 7) > 0.42 ? 1 : 0.18
-        }
-        return level
+        return DecorationScene.lightLevel(lightAnimations, group, time)
     }
 
     // ---- The collapse track, as the flat surface follows it ------------
@@ -288,6 +270,71 @@ Item {
                             frame: root.frameB
                             visible: root.looping
                             opacity: lightLayer.level * root.blend
+                        }
+                    }
+                }
+                // Under the pointer a round light lights up: a glow of its
+                // own colour swells over it, brightest at its middle and
+                // fading out round it, and fades back as the pointer leaves.
+                // The pointer is only watched here, never taken from the
+                // icons.
+                HoverHandler {
+                    id: pointerWatch
+                    objectName: "panel-decoration-hover"
+                }
+                Repeater {
+                    model: root.lightSpots
+                    delegate: Item {
+                        id: spotLight
+                        required property var modelData
+                        required property int index
+                        objectName: "panel-decoration-light-spot-" + index
+                        readonly property real radius: Math.max(1, Number(modelData.radius) || 0)
+                        readonly property real reach: radius * 2.3
+                        readonly property bool hovered: pointerWatch.hovered
+                            && Math.hypot(pointerWatch.point.position.x + pictures.x - Number(modelData.x),
+                                          pointerWatch.point.position.y + pictures.y - Number(modelData.y)) <= radius * 1.3
+                        x: Number(modelData.x) - pictures.x - reach
+                        y: Number(modelData.y) - pictures.y - reach
+                        width: 2 * reach
+                        height: 2 * reach
+                        opacity: hovered ? 1 : 0
+                        scale: hovered ? 1.06 : 0.9
+                        visible: opacity > 0.01
+                        Behavior on opacity {
+                            enabled: !root.reducedMotion
+                            NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+                        }
+                        Behavior on scale {
+                            enabled: !root.reducedMotion
+                            NumberAnimation { duration: 240; easing.type: Easing.OutBack }
+                        }
+                        Shape {
+                            anchors.fill: parent
+                            ShapePath {
+                                strokeColor: "transparent"
+                                fillGradient: RadialGradient {
+                                    centerX: spotLight.reach
+                                    centerY: spotLight.reach
+                                    centerRadius: spotLight.reach
+                                    focalX: spotLight.reach
+                                    focalY: spotLight.reach
+                                    // The lens lit a brighter red from its
+                                    // middle, a soft glow round it.
+                                    GradientStop { position: 0; color: root.lighter(spotLight.modelData.colour, 0.4, 0.85) }
+                                    GradientStop { position: 0.3; color: root.tinted(spotLight.modelData.colour, 0.6) }
+                                    GradientStop { position: 0.6; color: root.tinted(spotLight.modelData.colour, 0.18) }
+                                    GradientStop { position: 1; color: root.tinted(spotLight.modelData.colour, 0) }
+                                }
+                                PathAngleArc {
+                                    centerX: spotLight.reach
+                                    centerY: spotLight.reach
+                                    radiusX: spotLight.reach
+                                    radiusY: spotLight.reach
+                                    startAngle: 0
+                                    sweepAngle: 360
+                                }
+                            }
                         }
                     }
                 }

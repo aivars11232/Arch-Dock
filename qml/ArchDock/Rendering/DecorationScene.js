@@ -207,6 +207,49 @@ function motionAt(decoration, phase) {
     return motion
 }
 
+// The kinds of animation that brighten and dim a decoration's lights as they
+// are (the rest move it, and are drawn in its frames).
+var LIGHT_KINDS = ["pulse", "flicker", "twinkle", "blink", "crackle"]
+function lightAnimations(decoration) {
+    const list = decoration && decoration.animation ? decoration.animation : []
+    return list.filter(function(a) { return LIGHT_KINDS.indexOf(a.kind) >= 0 })
+}
+
+// Smooth noise in [0, 1] at `t`, the same every time.
+function noise(t, seed) {
+    const hash = function(n) {
+        const x = Math.sin(n * 127.1 + seed * 311.7) * 43758.5453
+        return x - Math.floor(x)
+    }
+    const i = Math.floor(t), f = t - i
+    const w = f * f * (3 - 2 * f)
+    return hash(i) * (1 - w) + hash(i + 1) * w
+}
+
+// How bright a group of lights (DecorationLighting's groups: "lights",
+// "stars", "starsB", "blinkA", "blinkB", "arcs") is `time` seconds in, under
+// the decoration's light animations (lightAnimations); 1 as lit.
+function lightLevel(animations, group, time) {
+    let level = 1
+    for (const a of animations || []) {
+        const period = Math.max(0.03, Number(a.period) || 1)
+        const amount = Math.max(0, Math.min(1, Number(a.amount === undefined ? 0.3 : a.amount)))
+        const turn = 2 * Math.PI * time / period
+        if (a.kind === "pulse" && ["lights", "blinkA", "blinkB"].indexOf(group) >= 0)
+            level *= 1 - amount * (0.5 - 0.5 * Math.cos(turn))
+        else if (a.kind === "flicker" && group === "lights")
+            level *= 1 - amount * noise(time / period, 3)
+        else if (a.kind === "twinkle" && (group === "stars" || group === "starsB"))
+            level *= 1 - amount * (0.5 + 0.5 * Math.sin(turn + (group === "starsB" ? Math.PI : 0)))
+        else if (a.kind === "blink" && (group === "blinkA" || group === "blinkB")) {
+            const on = Math.max(-1, Math.min(1, 3 * Math.sin(turn + (group === "blinkB" ? Math.PI : 0))))
+            level *= 0.12 + 0.88 * (0.5 + 0.5 * on)
+        } else if (a.kind === "crackle" && group === "arcs")
+            level *= noise(time / period, 7) > 0.42 ? 1 : 0.18
+    }
+    return level
+}
+
 // A colour's hue turned on by `share` of the colour wheel, its strength,
 // lightness and opacity kept.
 function turnHue(hex, share) {
@@ -275,6 +318,9 @@ function scene(decoration, path, halfWidth, slots, options) {
                             opacity: body.opacity === undefined ? 1 : body.opacity, feather: (body.feather || 0) * hw,
                             glow: body.glow ? paint(body.glow).c : null })
             if (body.gleam !== undefined && body.gleam !== 1) elements[elements.length - 1].gleam = body.gleam
+            // A round body that grew (a trunk, a branch, a wand), not a
+            // polished band: made solid, it is round all the way round.
+            if (body.round === true) elements[elements.length - 1].solid = "round"
         })
     // A part, strip or line lit in a light tent keeps that (only where it is
     // asked for, so the designs as they were stay as they were).
@@ -315,7 +361,9 @@ function scene(decoration, path, halfWidth, slots, options) {
                  lens: part.kind === "lens" ? { colour: paint(part.colour).c, centre: [round1(part.centre.x), round1(part.centre.y)],
                                                 radius: part.radius } : null,
                  flame: part.kind === "flame", glowGain: part.kind === "flame" ? 3.0 : part.kind === "star" ? 3.5 : 1,
-                 bodyMaterial: bodyMaterial }
+                 bodyMaterial: bodyMaterial, solid: tube ? "round" : undefined,
+                 // A light resting dim, lit up under the pointer.
+                 lit: part.dim !== undefined ? Math.max(0, Math.min(1, Number(part.dim) || 0)) : undefined }
     }
     const partElement = function(part, index) {
         return shining(partElementPlain(part, index), part.gleam)
@@ -583,8 +631,12 @@ function scene(decoration, path, halfWidth, slots, options) {
         }
     }
     for (const layer of d.layers) if (layer.z === "over") elements.push(layerElement(layer))
+    // Made solid, a round body that grew (a trunk) is a tube of its own: the
+    // sawn end drawn on it is its cut end's face instead.
+    const roundSolid = settings.solids === true && body.round === true
     d.parts.forEach(function(part, index) {
         if (part.z !== "front") return
+        if (roundSolid && part.kind === "ellipse" && !part.glow && part.material) return
         if (part.ink) { for (const e of inkOutline(part)) elements.push(e) }
         else if (part.kind === "gem") { for (const e of gemElements(part, index)) elements.push(e) }
         else elements.push(partElement(part, index))
@@ -656,8 +708,82 @@ function scene(decoration, path, halfWidth, slots, options) {
     const bounds = isFinite(x0) ? { x: Math.floor(x0 - reach), y: Math.floor(y0 - reach),
                                     width: Math.ceil(x1 - x0 + 2 * reach), height: Math.ceil(y1 - y0 + 2 * reach) }
                                 : { x: 0, y: 0, width: 0, height: 0 }
-    return { hw: hw, path: { points: (path.points || []).map(function(p) { return [round1(p.x), round1(p.y)] }), closed: path.closed === true },
-             elements: elements, launcher: d.launcher, bounds: bounds, groups: groups }
+    const result = { hw: hw, path: { points: (path.points || []).map(function(p) { return [round1(p.x), round1(p.y)] }), closed: path.closed === true },
+                     elements: elements, launcher: d.launcher, bounds: bounds, groups: groups }
+    if (settings.solids === true) {
+        // A picture of what gives its own light (a nebula, a deep field)
+        // keeps its own colours in a 3D scene: a third of its colour its own
+        // light, so its shaded side keeps them too, the rest lit by the
+        // scene, which shows its shape, with no lacquer over it.
+        for (const e of elements)
+            if (e.albedo && e.albedo.strip) {
+                e.ownLight = 0.35
+                e.emissive = 0
+                e.coat = 0
+            }
+        // A soft body (one that fades at its edges, a nebula's) has no
+        // straight wall round it: its edge is rounded.
+        result.roundEdges = (body.feather || 0) > 0
+        // For a 3D scene, what is round all the way round (a trunk, its
+        // branches) is made a tube of its own: its centre line with the
+        // radius at each point and what it is made of; the rest stays
+        // elements, for the decoration's solid.
+        const tubes = []
+        const startPart = (decoration.contour.parts || []).find(function(p) { return p.at === "start" && p.material && p.material.fit })
+        const cap = startPart ? albedoOf(startPart.material, startPart.fill) : null
+        result.elements = elements.filter(function(e) {
+            if (e.solid !== "round") return true
+            const looks = { albedo: e.albedo, recolour: e.recolour, adjust: e.adjust, finish: e.finish,
+                            metal: e.metal, rough: e.rough, coat: e.coat }
+            if (e.role === "body") {
+                for (const line of centreLines(e.rings))
+                    tubes.push(Object.assign({ points: line.points, closed: line.closed, body: true, cap: cap }, looks))
+            } else {
+                for (const spine of e.spines || [])
+                    tubes.push(Object.assign({ points: spine.map(function(p) { return [p[0], p[1], round1(p[2] / 2)] }),
+                                               closed: false, body: false }, looks))
+            }
+            return false
+        })
+        result.tubes = tubes
+        // What is drawn on a round trunk in plain colours (a knot hole, a
+        // birch's dark marks) lies on its bark, as marks on it, not lights.
+        if (roundSolid) {
+            const marks = []
+            result.elements = result.elements.filter(function(e) {
+                const mark = e.type === "fill" && (e.role === "line" || e.role === "part")
+                    && e.albedo && e.albedo.colour && !e.albedo.texture
+                if (mark) marks.push({ rings: e.rings, colour: e.albedo.colour })
+                return !mark
+            })
+            result.tubeMarks = marks
+        }
+    }
+    return result
+}
+
+// A band's centre line and its half width at each point, from its outline
+// as the decoration engine draws it: a closed band's outer and inner edges
+// (its two rings), an open one's outer edge and inner edge going back (one
+// ring), point for point across the band.
+function centreLines(bandRings) {
+    const lines = []
+    const across = function(outer, inner, closed) {
+        const count = Math.min(outer.length, inner.length)
+        const points = []
+        for (let k = 0; k < count; ++k) {
+            const a = outer[k], b = inner[k]
+            points.push([round1((a[0] + b[0]) / 2), round1((a[1] + b[1]) / 2),
+                         round1(Math.hypot(a[0] - b[0], a[1] - b[1]) / 2)])
+        }
+        if (points.length > 1) lines.push({ points: points, closed: closed })
+    }
+    if (bandRings.length >= 2) across(bandRings[0], bandRings[1].slice().reverse(), true)
+    else if (bandRings.length === 1) {
+        const ring = bandRings[0], half = Math.floor(ring.length / 2)
+        across(ring.slice(0, half), ring.slice(half).reverse(), false)
+    }
+    return lines
 }
 
 // The colour settings that fit a decoration (the owner: every decoration

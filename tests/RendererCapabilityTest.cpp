@@ -21,6 +21,7 @@
 #include <QQuickItem>
 #include <QQuickItemGrabResult>
 #include <QQuickWindow>
+#include <QRegularExpression>
 #include <QVector3D>
 #include <QWheelEvent>
 #include <QtTest>
@@ -1721,6 +1722,15 @@ private slots:
     // colours, with upright icons on pedestals. Every supported shape, the
     // owner's baked blue ring and the steel octagon, drawn by the real RHI.
     void tileDepthMaterialsPlacementAndOrbitRenderUnderRhi();
+
+    // A panel decoration on a 3D panel stands as a solid of its own, drawn by
+    // the real RHI: a soft one rounded (a nebula, in its own colours), walled
+    // ones (gold filigree, a starship's hull with its lights) and one round
+    // all the way round (an oak branch's tubes). Its shaders build - one that
+    // does not leaves the panel bare with no other sign - and it is drawn
+    // across the band between every two icons.
+    void decorationsStandAsSolids_data();
+    void decorationsStandAsSolids();
 
     void generatedPlatformsFollowTheLayoutAndLook_data()
     {
@@ -3589,6 +3599,137 @@ void RendererCapabilityTest::tileDepthMaterialsPlacementAndOrbitRenderUnderRhi()
     scene->setProperty("wheelTravel", 2.0); QVERIFY(!capture("upright-orbit-2").isNull());
     QCOMPARE(glyph->property("sceneRotation"), orientation);
     QVERIFY2(warnings.isEmpty(), qPrintable(warnings.join('\n')));
+}
+
+void RendererCapabilityTest::decorationsStandAsSolids_data()
+{
+    QTest::addColumn<QString>("decoration");
+    for (const char *id : {"carina-nebula", "yellow-gold-filigree", "starship-red-core", "oak-branch"})
+        QTest::newRow(id) << QString::fromLatin1(id);
+}
+
+void RendererCapabilityTest::decorationsStandAsSolids()
+{
+    QFETCH(QString, decoration);
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+        return; // A decoration stands as a solid only in the real RHI scene.
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_DECORATIONS"))
+        QSKIP("Runs in its own private session (ARCHDOCK_RENDERING_DECORATIONS).");
+    QTest::failOnWarning(QRegularExpression(
+        QStringLiteral("Failed to compile|Failed to parse shader|Failed to build graphics pipeline")));
+    const QString glyphFixture = QFINDTESTDATA("fixtures/icon-style-v1/assets/base.svg");
+    QVERIFY(!glyphFixture.isEmpty());
+    QVariantMap theme{
+        {QStringLiteral("format"), QStringLiteral("org.archdock.theme")},
+        {QStringLiteral("version"), 2}, {QStringLiteral("valid"), true},
+        {QStringLiteral("id"), QStringLiteral("procedural-look")},
+        {QStringLiteral("name"), QStringLiteral("Procedural look")},
+        {QStringLiteral("capabilities"), QVariantMap{
+            {QStringLiteral("rendererTiers"), QVariantList{QStringLiteral("true3d"), QStringLiteral("procedural2d")}},
+            {QStringLiteral("preferredRendererTier"), QStringLiteral("procedural2d")},
+            {QStringLiteral("fallbackRendererTiers"), QVariantList{QStringLiteral("procedural2d")}}}},
+        {QStringLiteral("scene3D"), QVariantMap{
+            {QStringLiteral("generic"), true}, {QStringLiteral("generated"), QVariantMap{}},
+            {QStringLiteral("fieldOfView"), 40}, {QStringLiteral("cameraPitch"), 25},
+            {QStringLiteral("cameraYaw"), 0}, {QStringLiteral("keyLightBrightness"), 1.2},
+            {QStringLiteral("fillLightBrightness"), 0.45},
+            {QStringLiteral("defaultQuality"), QStringLiteral("high")},
+            {QStringLiteral("transitions"), false}, {QStringLiteral("parts"), QVariantList{}}}},
+        {QStringLiteral("scene3DResources"), QVariantMap{
+            {QStringLiteral("material"), QVariantMap{
+                {QStringLiteral("format"), QStringLiteral("org.archdock.material")},
+                {QStringLiteral("version"), 1}, {QStringLiteral("baseColor"), QStringLiteral("#406080")},
+                {QStringLiteral("emissiveColor"), QStringLiteral("#000000")},
+                {QStringLiteral("emissiveStrength"), 0.0}, {QStringLiteral("metalness"), 0.3},
+                {QStringLiteral("roughness"), 0.45}}},
+            {QStringLiteral("parts"), QVariantList{}}, {QStringLiteral("indexBudget"), 262144}}}};
+
+    QQmlEngine engine;
+    engine.addImportPath(importRoot());
+    QQmlComponent component(&engine);
+    component.setData(R"(
+        import QtQuick
+        import ArchDock.Rendering 1.0
+        PanelScene {
+            required property string glyphFixture
+            required property string decorationId
+            panelDefinition: ({rendererTier: "true3d", layout: "circular", layoutRadius: 150,
+                               scene3DQuality: "high", iconSize: 40, layoutPadding: 10, appearance: "neon",
+                               scene3DCameraPitch: 25, scene3DTransitions: false, scene3DIconDepth: 0,
+                               panelDecoration: decorationId, panelDecorationAnimation: false})
+            entryDelegateContext: ({hostKind: "free"})
+            hostCapabilities: ({rotation: {available: true}})
+            orderedEntries: [0, 1, 2, 3, 4, 5].map(function(index) {
+                return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphFixture}
+            })
+        }
+    )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/DecorationConsumer.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    QQuickWindow window;
+    const QColor background(QStringLiteral("#1b2333"));
+    window.setColor(background);
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({
+        {QStringLiteral("themeDefinition"), theme},
+        {QStringLiteral("decorationId"), decoration},
+        {QStringLiteral("glyphFixture"), QUrl::fromLocalFile(glyphFixture).toString()}}));
+    QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+    auto *scene = qobject_cast<QQuickItem *>(object.get());
+    QVERIFY(scene);
+    scene->setParentItem(window.contentItem());
+    window.resize(qCeil(scene->width()), qCeil(scene->height()));
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(), QStringLiteral("true3d"), 5000);
+    auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+    QVERIFY(renderer);
+    QTRY_VERIFY_WITH_TIMEOUT(renderer->property("decorationShown").toBool(), 60000);
+    QObject *node = renderer->findChild<QObject *>(QStringLiteral("mesh-platform-decoration-node"));
+    QVERIFY(node);
+    QVERIFY(node->property("triangleCount").toInt() > 0);
+    QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 6);
+    // A few frames for the solid and its maps to reach the graphics card.
+    for (int k = 0; k < 4; ++k)
+    {
+        QSignalSpy swapped(&window, &QQuickWindow::frameSwapped);
+        window.update();
+        QVERIFY(swapped.wait(5000));
+    }
+    QTest::qWait(300);
+    const QImage frame = window.grabWindow();
+    QVERIFY(!frame.isNull());
+    const double scale = frame.width() / std::max(1.0, double(window.width()));
+
+    // Across the band between every two icons (out from the ring's middle
+    // through the middle of the two), something is drawn, not the window.
+    QList<QPointF> icons;
+    QPointF middle;
+    for (const QVariant &value : plainValue(renderer->property("projectedEntryGeometry")).toList())
+    {
+        const QVariantMap rect = value.toMap();
+        icons << scene->mapToScene(QPointF(rect.value("centerX").toDouble(), rect.value("centerY").toDouble()));
+        middle += icons.last();
+    }
+    middle /= icons.size();
+    QStringList bare;
+    for (int k = 0; k < icons.size(); ++k)
+    {
+        const QPointF between = (icons[k] + icons[(k + 1) % icons.size()]) / 2;
+        QPointF out = between - middle;
+        out /= std::max(1.0, std::hypot(out.x(), out.y()));
+        int drawn = 0;
+        for (int step = -30; step <= 30; ++step)
+        {
+            const QPoint at = ((between + out * step) * scale).toPoint();
+            if (!frame.rect().contains(at)) continue;
+            const QColor c = frame.pixelColor(at);
+            drawn += std::abs(c.red() - background.red()) + std::abs(c.green() - background.green())
+                     + std::abs(c.blue() - background.blue()) > 30;
+        }
+        if (drawn < 6) bare << QStringLiteral("between icons %1 and %2 (%3 drawn)").arg(k).arg((k + 1) % icons.size()).arg(drawn);
+    }
+    const QString evidence = qEnvironmentVariable("ARCHDOCK_RENDERING_LOG_DIR");
+    if (!evidence.isEmpty()) frame.save(QDir(evidence).filePath(QStringLiteral("decoration-3d-%1.png").arg(decoration)));
+    QVERIFY2(bare.isEmpty(), qPrintable(decoration + QStringLiteral(" is not drawn ") + bare.join(QStringLiteral(", "))));
 }
 
 QTEST_MAIN(RendererCapabilityTest)

@@ -202,6 +202,29 @@ TestCase {
         compare(scene.rowEntryCount, 6)
     }
 
+    function test_aLightBrightensUnderThePointer() {
+        const geometry = rowGeometry(4)
+        const renderer = made({ decoration: "starship-red-core", geometry: geometry, animated: false,
+                                iconCentres: centresOn(geometry, 4) })
+        tryVerify(function() { return renderer.rendererReady }, 30000)
+        verify(renderer.lightSpots.length > 2, "the red lenses are known")
+        const first = findChild(renderer, "panel-decoration-light-spot-0")
+        const second = findChild(renderer, "panel-decoration-light-spot-1")
+        verify(first && second)
+        compare(first.opacity, 0)
+        // Over the first lens it brightens; the others stay as they are.
+        const spot = renderer.lightSpots[0]
+        const window = renderer.Window.window
+        const at = renderer.mapToItem(window.contentItem, Number(spot.x), Number(spot.y))
+        mouseMove(window.contentItem, at.x, at.y)
+        tryCompare(first, "opacity", 1, 2000)
+        verify(first.scale > 1.05, "it swells a little")
+        compare(second.opacity, 0)
+        // Away from it, it fades back.
+        mouseMove(window.contentItem, at.x, at.y + 200)
+        tryCompare(first, "opacity", 0, 2000)
+    }
+
     function test_unknownDecorationDrawsNothing() {
         const geometry = rowGeometry(3)
         const renderer = made({ decoration: "no-such-decoration", geometry: geometry,

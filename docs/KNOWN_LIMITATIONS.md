@@ -154,8 +154,14 @@ follows the projected ring, and the curve widens round the dock as far as
 the children need; a folder with more children than fit still scrolls.
 
 Panel decorations (Panels > Appearance > Panel decorations) are drawn on
-flat panels only: a panel drawn in 3D, or with a theme's skin or baked
-platform, keeps its own look. While icons travel along a free panel's
+flat panels and, as solids, on 3D panels standing on a generated
+platform; a Möbius strip, a theme's own 3D mesh, and a flat panel with a
+theme's skin or baked platform keep their own look. In 3D a decoration's
+motion (a drifting picture, waves, spinning gauges) is not drawn, though
+its lights still pulse and twinkle, and the launcher seat is a flat
+panel's only. A part thinner than about two of the solid's grid steps can
+break into pieces on a very long 3D panel, whose grid is coarser to stay
+within the triangle limit. While icons travel along a free panel's
 path (continuous motion) the decoration stays where the icons rest. On a
 thin edge panel a decoration with a tall launcher seat (the Raptor Hull)
 shrinks to fit the panel's thickness, and its seat with it. A theme

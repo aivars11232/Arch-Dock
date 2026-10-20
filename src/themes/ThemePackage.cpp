@@ -1323,7 +1323,7 @@ private:
                                  QStringLiteral("shade"), QStringLiteral("depth"), QStringLiteral("bevel"),
                                  QStringLiteral("colour"), QStringLiteral("ink"), QStringLiteral("sheen"),
                                  QStringLiteral("hole"), QStringLiteral("lean"), QStringLiteral("cut"), QStringLiteral("halo"),
-                                 QStringLiteral("gleam"), QStringLiteral("x"), QStringLiteral("y")}, at);
+                                 QStringLiteral("gleam"), QStringLiteral("dim"), QStringLiteral("x"), QStringLiteral("y")}, at);
             oneOf(part, QStringLiteral("kind"), at, {QStringLiteral("ellipse"), QStringLiteral("dome"), QStringLiteral("box"),
                   QStringLiteral("trapezoid"), QStringLiteral("capsule"), QStringLiteral("polygon"), QStringLiteral("strut"),
                   QStringLiteral("branch"), QStringLiteral("crystal"), QStringLiteral("star"), QStringLiteral("ring"),
@@ -1358,6 +1358,7 @@ private:
             bounded(part, QStringLiteral("lean"), at, -1, 1);
             bounded(part, QStringLiteral("halo"), at, 0, 24);
             bounded(part, QStringLiteral("gleam"), at, 0.5, 3);
+            bounded(part, QStringLiteral("dim"), at, 0, 1);
             for (const QString flag : {QStringLiteral("alternate"), QStringLiteral("ink"), QStringLiteral("sheen")})
                 boolean(part, flag, at);
             oneOf(part, QStringLiteral("on"), at, {QStringLiteral("outer"), QStringLiteral("inner")});
@@ -1404,7 +1405,7 @@ private:
                                  QStringLiteral("shades"), QStringLiteral("share"), QStringLiteral("shine"),
                                  QStringLiteral("sizes"), QStringLiteral("span"), QStringLiteral("spread"),
                                  QStringLiteral("square"), QStringLiteral("strands"), QStringLiteral("tip"),
-                                 QStringLiteral("cap"), QStringLiteral("plain")}, at);
+                                 QStringLiteral("cap"), QStringLiteral("plain"), QStringLiteral("under")}, at);
             oneOf(line, QStringLiteral("kind"), at, {QStringLiteral("loop"), QStringLiteral("middle"),
                   QStringLiteral("edge"), QStringLiteral("brackets"), QStringLiteral("spiral"), QStringLiteral("wave"),
                   QStringLiteral("dots"), QStringLiteral("stars"), QStringLiteral("slats"), QStringLiteral("ends"),
@@ -1428,7 +1429,7 @@ private:
             bounded(line, QStringLiteral("turns"), at, 0.25, 6);
             bounded(line, QStringLiteral("period"), at, 0.02, 40);
             bounded(line, QStringLiteral("phase"), at, -1, 1);
-            for (const QString key : {QStringLiteral("avoid"), QStringLiteral("gap"), QStringLiteral("gather"),
+            for (const QString key : {QStringLiteral("avoid"), QStringLiteral("under"), QStringLiteral("gap"), QStringLiteral("gather"),
                                       QStringLiteral("bulge"), QStringLiteral("root"), QStringLiteral("spread"),
                                       QStringLiteral("tip"), QStringLiteral("height"), QStringLiteral("share"),
                                       QStringLiteral("clampWidth"), QStringLiteral("outlineWidth"), QStringLiteral("length"),
