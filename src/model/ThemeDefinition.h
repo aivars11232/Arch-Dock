@@ -302,6 +302,10 @@ struct ThemeDefinition
     std::optional<ThemeResourceReference> iconStyleRef;
     QVector<ThemeResourceReference> animationProfileRefs;
     std::optional<ThemeScene3DDefinition> scene3D;
+    // A panel decoration's contour (ContourFrames.js): the band's edges, its
+    // ends, its segments and its lines, as the package declares them after
+    // the loader has checked every member. Empty for any other package.
+    QVariantMap contour;
 
     int sourceVersion = CurrentVersion;
     bool adaptedFromVersion1 = false;

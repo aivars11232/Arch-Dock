@@ -24,3 +24,108 @@ generator's `--real` stage: a wind-driven wave spectrum (Tessendorf,
 "Simulating Ocean Water", 2001), the bed seen through water that absorbs light
 with depth, the light the ripples focus on the bed, and the sky mirrored where
 the ripples tilt.
+
+## Panel decoration materials
+
+The panel decorations' materials (`deco-<name>.jpg` or `.png`, each with
+`deco-<name>-height.png`) are made by the generator's `--decorations` stage
+from ambientCG's CC0 1.0 sets (https://ambientcg.com), downloaded as
+`<Id>_1K-JPG.zip`: the set's colour, scaled to 512 px, and its displacement
+as a 256 px grey height map. The golds and the cut gems come from one set
+each, kept in grey so a decoration tints them with an alloy's or a gem's
+colour; a cut stone's facets are computed (Worley's cellular basis, 1996).
+
+| Files | ambientCG set |
+| --- | --- |
+| `deco-agate` | Onyx006 |
+| `deco-alien-metal` | Metal046A (relief from PavingStones075) |
+| `deco-alien-plastic` | Plastic010 (relief from PavingStones075) |
+| `deco-amber-band` | Onyx007 |
+| `deco-azure-tiles` | Tiles019 |
+| `deco-bamboo` | Bamboo001A |
+| `deco-bark-birch` | Bark007 |
+| `deco-bark-brown` | Bark014 |
+| `deco-bark-cedar` | Bark012 |
+| `deco-bark-grey` | Bark004 |
+| `deco-bark-mossy` | Bark006 |
+| `deco-bark-oak` | Bark001 |
+| `deco-bark-plane` | Bark009 |
+| `deco-battle-plates` | MetalPlates013 |
+| `deco-black-gold-vein` | Marble006 |
+| `deco-black-marble` | Marble016 |
+| `deco-carbon` | Fabric004 |
+| `deco-carnelian` | Onyx002 |
+| `deco-castle-stone` | Bricks076A |
+| `deco-concrete` | Concrete034 |
+| `deco-console-plastic` | Plastic013A |
+| `deco-copper` | Metal035 |
+| `deco-corrugated` | CorrugatedSteel009 |
+| `deco-dark-rock` | Rock035 |
+| `deco-diamond-plate` | DiamondPlate009 |
+| `deco-gilded-porcelain` | ChristmasTreeOrnament013 |
+| `deco-gold` | Metal048A |
+| `deco-gold-bright` | Metal034 |
+| `deco-gold-foil` | Foil002 |
+| `deco-gold-polished` | Metal007 |
+| `deco-gravel` | Gravel023 |
+| `deco-hull-metal` | Metal032 |
+| `deco-ice-crystal` | Ice002 |
+| `deco-iridescent` | ChristmasTreeOrnament019 |
+| `deco-leather-brown` | Leather030 |
+| `deco-leather-red` | Leather037 |
+| `deco-malachite` | Onyx011 |
+| `deco-marble` | Marble012 |
+| `deco-marble-polished` | Marble021 |
+| `deco-metal-black` | Metal027 |
+| `deco-mosaic` | Tiles131 |
+| `deco-moss` | Moss002 |
+| `deco-moss-agate` | Onyx014 |
+| `deco-obsidian` | Onyx013 |
+| `deco-opal` | Onyx009 |
+| `deco-paint-green` | PaintedMetal006 |
+| `deco-paint-hazard` | PaintedMetal016 |
+| `deco-paint-red` | PaintedMetal004 |
+| `deco-paint-white` | PaintedMetal011 |
+| `deco-paper-aged` | Paper006 |
+| `deco-parchment` | Paper005 |
+| `deco-pebbles` | Rocks023 |
+| `deco-perforated` | MetalWalkway014 |
+| `deco-plaster` | Plaster003 |
+| `deco-plastic-black` | Plastic006 |
+| `deco-plastic-yellow` | Plastic016A |
+| `deco-platinum` | Metal009 |
+| `deco-red-jasper` | Onyx010 |
+| `deco-rope` | Rope001 |
+| `deco-rubber` | Rubber004 |
+| `deco-rubber-grain` | Rubber001 |
+| `deco-serpent` | Leather008 |
+| `deco-silver` | Metal049A |
+| `deco-steel-rope` | Rope002 |
+| `deco-straw` | ThatchedRoof001A |
+| `deco-straw-grey` | ThatchedRoof002A |
+| `deco-travertine` | Travertine009 |
+| `deco-travertine-banded` | Travertine001 |
+| `deco-travertine-blue` | Travertine013 |
+| `deco-velvet` | Fabric062 |
+| `deco-volcanic` | Lava001 |
+| `deco-walnut` | Wood051 |
+| `deco-warm-wood` | Wood066 |
+| `deco-wood-pine` | Wood092 |
+| `deco-gold-neutral` | Metal048A, its grain in grey |
+| `deco-crystal-neutral` | Ice001, its grain in grey (relief: computed facets) |
+| `deco-log-end` | TreeEnd004 (its disc and outline) |
+| `deco-log-end-pale` | TreeEnd001 (its disc and outline) |
+
+The galactic decorations' strips (`deco-nebula-*.jpg`, `deco-deep-field.jpg`
+and their height maps) are made by the generator's `--nebulae` stage from the
+James Webb Space Telescope's pictures, as science.nasa.gov publishes them in
+their 2000-pixel renditions. STScI releases its material for free use as in
+the public domain and asks that NASA and STScI be credited:
+
+| Files | Picture | Credit |
+| --- | --- | --- |
+| `deco-nebula-carina` | "Cosmic Cliffs" in the Carina Nebula (NIRCam and MIRI) | NASA, ESA, CSA, STScI |
+| `deco-nebula-pillars` | Pillars of Creation (NIRCam) | NASA, ESA, CSA, STScI; Joseph DePasquale, Anton Koekemoer, Alyssa Pagan (STScI) |
+| `deco-nebula-southern-ring` | Southern Ring Nebula (NIRCam) | NASA, ESA, CSA, STScI |
+| `deco-nebula-tarantula` | Tarantula Nebula (NIRCam) | NASA, ESA, CSA, STScI, Webb ERO Production Team |
+| `deco-deep-field` | Webb's First Deep Field (NIRCam) | NASA, ESA, CSA, STScI |

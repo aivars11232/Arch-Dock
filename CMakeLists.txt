@@ -81,6 +81,9 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     GizmoMath.js
     PlatformGeometry.js
     IconSolid.js
+    ContourFrames.js
+    DecorationCatalogue.js
+    DecorationScene.js
     StandFrames.js
     IconStyleResolver.js
     AnimationProfileRuntime.js
@@ -140,6 +143,26 @@ foreach(palette clear deep jade sunset)
 endforeach()
 foreach(palette ember blaze molten)
   list(APPEND ARCHDOCK_RENDERING_MODULE_FILES materials/magma-${palette}.png)
+endforeach()
+# The panel decorations' materials: photographed real surfaces (ambientCG's
+# CC0 sets, the Webb telescope's nebulae), each a picture and a height map.
+foreach(texture agate alien-metal alien-plastic amber-band azure-tiles bamboo bark-birch
+         bark-brown bark-cedar bark-grey bark-mossy bark-oak bark-plane battle-plates
+         black-gold-vein black-marble carbon carnelian castle-stone concrete console-plastic
+         copper corrugated crystal-neutral dark-rock deep-field diamond-plate gilded-porcelain
+         gold gold-bright gold-foil gold-neutral gold-polished gravel hull-metal ice-crystal
+         iridescent leather-brown leather-red malachite marble marble-polished metal-black
+         mosaic moss moss-agate nebula-carina nebula-pillars nebula-southern-ring
+         nebula-tarantula obsidian opal paint-green paint-hazard paint-red paint-white
+         paper-aged parchment pebbles perforated plaster plastic-black plastic-yellow platinum
+         red-jasper rope rubber rubber-grain serpent silver steel-rope straw straw-grey
+         travertine travertine-banded travertine-blue velvet volcanic walnut warm-wood wood-pine)
+  list(APPEND ARCHDOCK_RENDERING_MODULE_FILES materials/deco-${texture}.jpg
+              materials/deco-${texture}-height.png)
+endforeach()
+foreach(texture log-end log-end-pale)
+  list(APPEND ARCHDOCK_RENDERING_MODULE_FILES materials/deco-${texture}.png
+              materials/deco-${texture}-height.png)
 endforeach()
 set(ARCHDOCK_RENDERING_MODULE_SOURCES)
 set(ARCHDOCK_OPTIONAL_RENDERING_FILES

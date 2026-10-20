@@ -26,6 +26,30 @@ Ocean Water", 2001: the Phillips spectrum of wind-driven waves), the bed
 seen through water that absorbs light with depth, the light the ripples
 focus on the bed, and the sky mirrored where the ripples tilt. This stage
 needs PySide6 or PyQt6 to read the sets.
+
+A fourth stage, `--decorations <folder>`, makes the panel decorations' real
+materials from ambientCG's CC0 sets in the same folder: for each, the set's
+colour (`deco-<name>.jpg`, 512 px; a PNG where it has its own outline) and
+its relief as a grey height map (`deco-<name>-height.png`, 256 px, from the
+set's displacement). The flat
+renderer shades the height map into the colour; the 3D platform raises the
+band by it. The Alienware-style metals take their relief from a hexagonal
+paving set, which gives them a real honeycomb. The same stage makes the
+realistic decorations' materials: barks for branches, trunks and woody
+vines, straw and rope for a broom, rubber for a hilt's grip, old building
+stone, worn paint for starship hulls, glossy plastic, river pebbles, and
+the end grain of sawn logs (`deco-log-end*.png`, cut from inside the disc
+so it fills a log's end).
+
+A fifth stage, `--nebulae <folder> [out]`, makes the galactic decorations'
+strips from the James Webb Space Telescope's pictures (NASA, ESA, CSA,
+STScI, released by STScI for free use as in the public domain, with credit
+requested): a band through each picture, `deco-<name>.png` 2048 x 256, made
+to repeat along a panel by blending its end into its start, and its
+brightness smoothed as the height under a glassy surface
+(`deco-<name>-height.png`, 512 x 64). Pictures are written as JPEG. The pictures are the 2000-pixel
+renditions from science.nasa.gov: cosmic-cliffs.png, pillars-of-creation.png,
+southern-ring.png, tarantula.png and first-deep-field.png.
 """
 import math
 import random
@@ -1051,6 +1075,314 @@ RECIPES = {
 
 
 
+# The panel decorations' materials: name -> (colour set, height set). The
+# sets are ambientCG's (CC0 1.0), unpacked into <folder>/<Id>/.
+DECORATION_MATERIALS = {
+    "alien-metal": ("Metal046A", "PavingStones075"),
+    "alien-plastic": ("Plastic010", "PavingStones075"),
+    "diamond-plate": ("DiamondPlate009", "DiamondPlate009"),
+    "corrugated": ("CorrugatedSteel009", "CorrugatedSteel009"),
+    "hull-metal": ("Metal032", "Metal032"),
+    "console-plastic": ("Plastic013A", "Plastic013A"),
+    "gold": ("Metal048A", "Metal048A"),
+    "copper": ("Metal035", "Metal035"),
+    "walnut": ("Wood051", "Wood051"),
+    "warm-wood": ("Wood066", "Wood066"),
+    "leather-brown": ("Leather030", "Leather030"),
+    "leather-red": ("Leather037", "Leather037"),
+    "parchment": ("Paper005", "Paper005"),
+    "dark-rock": ("Rock035", "Rock035"),
+    "castle-stone": ("Bricks076A", "Bricks076A"),
+    "marble": ("Marble012", "Marble012"),
+    "bamboo": ("Bamboo001A", "Bamboo001A"),
+    "velvet": ("Fabric062", "Fabric062"),
+    "ice-crystal": ("Ice002", "Ice002"),
+    "agate": ("Onyx006", "Onyx006"),
+    "obsidian": ("Onyx013", "Onyx013"),
+    "iridescent": ("ChristmasTreeOrnament019", "ChristmasTreeOrnament019"),
+    "gilded-porcelain": ("ChristmasTreeOrnament013", "ChristmasTreeOrnament013"),
+    "carbon": ("Fabric004", "Fabric004"),
+    "perforated": ("MetalWalkway014", "MetalWalkway014"),
+    "battle-plates": ("MetalPlates013", "MetalPlates013"),
+    "serpent": ("Leather008", "Leather008"),
+    "volcanic": ("Lava001", "Lava001"),
+    "moss": ("Moss002", "Moss002"),
+    "mosaic": ("Tiles131", "Tiles131"),
+    "azure-tiles": ("Tiles019", "Tiles019"),
+}
+# More of them: precious metals and gemstones, the banded stones as they
+# are, and two neutral ones, the real grain in grey, which a decoration tints
+# with an alloy's colour (every gold from one gold) or a gem's (every cut
+# stone from one crystal). "facets" is the relief of a cut stone, computed.
+DECORATION_MATERIALS.update({
+    "gold-polished": ("Metal007", "Metal007"),
+    "gold-bright": ("Metal034", "Metal034"),
+    "gold-foil": ("Foil002", "Foil002"),
+    "silver": ("Metal049A", "Metal049A"),
+    "platinum": ("Metal009", "Metal009"),
+    "carnelian": ("Onyx002", "Onyx002"),
+    "amber-band": ("Onyx007", "Onyx007"),
+    "opal": ("Onyx009", "Onyx009"),
+    "red-jasper": ("Onyx010", "Onyx010"),
+    "malachite": ("Onyx011", "Onyx011"),
+    "moss-agate": ("Onyx014", "Onyx014"),
+    "black-gold-vein": ("Marble006", "Marble006"),
+    "black-marble": ("Marble016", "Marble016"),
+})
+NEUTRAL_MATERIALS = {
+    "gold-neutral": ("Metal048A", "Metal048A"),
+    "crystal-neutral": ("Ice001", "facets"),
+}
+HEIGHT_SIZE = 256
+
+
+def write_jpeg(target, rows, quality=88):
+    """Rows of RGBA bytes as a JPEG (Qt's encoder): a photograph's colours
+    in a fraction of a PNG's size."""
+    QtGui, _ = qt_modules()
+    width, height = len(rows[0]) // 4, len(rows)
+    data = b"".join(rows)
+    image = QtGui.QImage(data, width, height, width * 4, QtGui.QImage.Format.Format_RGBA8888).copy()
+    if not image.save(str(target), "JPG", quality):
+        raise SystemExit(f"cannot write {target}")
+
+
+def write_grey_png(target, rows):
+    """Rows of RGBA bytes whose channels are equal, as an 8-bit grey PNG."""
+    import struct
+    import zlib
+
+    def chunk(tag, data):
+        return (struct.pack(">I", len(data)) + tag + data
+                + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
+    width, height = len(rows[0]) // 4, len(rows)
+    raw = b"".join(b"\x00" + row[0::4] for row in rows)
+    Path(target).write_bytes(b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+
+
+def colour_bytes(rows):
+    """Rows of (r, g, b) in 0..1 as rows of RGBA bytes."""
+    return [bytes(b for r, g, b_ in row for b in (clamp(r * 255), clamp(g * 255), clamp(b_ * 255), 255)) for row in rows]
+
+
+def height_bytes(rows):
+    """A displacement map's rows as a grey height map stretched to its full
+    range, as rows of RGBA bytes."""
+    values = [[(r + g + b) / 3 for r, g, b in row] for row in rows]
+    low = min(min(row) for row in values)
+    high = max(max(row) for row in values)
+    span = max(1e-6, high - low)
+    return [bytes(b for v in row for b in (clamp((v - low) / span * 255),) * 3 + (255,)) for row in values]
+
+
+def neutral_bytes(rows):
+    """A texture's own grain in grey, its brightness spread over the upper
+    two thirds so a tint keeps it bright: rows of RGBA bytes."""
+    values = [[0.299 * r + 0.587 * g + 0.114 * b for r, g, b in row] for row in rows]
+    low = min(min(row) for row in values)
+    high = max(max(row) for row in values)
+    span = max(1e-6, high - low)
+    return [bytes(b for v in row for b in (clamp((0.35 + 0.65 * (v - low) / span) * 255),) * 3 + (255,)) for row in values]
+
+
+def facet_heights(size, seed, cells=36):
+    """A cut stone's relief, tiling: Worley's cellular basis (1996), each
+    cell a flat facet tilted its own way, so the creases between facets
+    catch the light as a cut stone's edges do. Rows of heights in 0..1."""
+    rng = random.Random(seed)
+    sites = [(rng.random(), rng.random(), rng.uniform(-1.4, 1.4), rng.uniform(-1.4, 1.4), rng.random() * 0.3)
+             for _ in range(cells)]
+    rows = []
+    for y in range(size):
+        row = []
+        for x in range(size):
+            u, v = x / size, y / size
+            best, value = 9.0, 0.0
+            for cx, cy, gx, gy, h0 in sites:
+                dx = (u - cx + 0.5) % 1.0 - 0.5
+                dy = (v - cy + 0.5) % 1.0 - 0.5
+                d = dx * dx + dy * dy
+                if d < best:
+                    best, value = d, h0 + gx * dx + gy * dy
+            row.append(value)
+        rows.append(row)
+    low = min(min(r) for r in rows)
+    high = max(max(r) for r in rows)
+    return [[(h - low) / max(1e-6, high - low) for h in r] for r in rows]
+
+
+def write_decorations(assets, directory=ROOT, only=None):
+    """The panel decorations' materials from the real sets in `assets`
+    (`only`: just these names)."""
+    for name, (colour_set, height_set) in DECORATION_MATERIALS.items():
+        if only and name not in only:
+            continue
+        colour = load_rows(assets / colour_set / f"{colour_set}_1K-JPG_Color.jpg")
+        height = load_rows(assets / height_set / f"{height_set}_1K-JPG_Displacement.jpg", HEIGHT_SIZE)
+        write_jpeg(Path(directory) / f"deco-{name}.jpg", colour_bytes(colour))
+        write_grey_png(Path(directory) / f"deco-{name}-height.png", height_bytes(height))
+        print(f"deco-{name}")
+    for name, (colour_set, height_set) in NEUTRAL_MATERIALS.items():
+        if only and name not in only:
+            continue
+        colour = load_rows(assets / colour_set / f"{colour_set}_1K-JPG_Color.jpg")
+        write_jpeg(Path(directory) / f"deco-{name}.jpg", neutral_bytes(colour))
+        if height_set == "facets":
+            heights = facet_heights(HEIGHT_SIZE, 911)
+            write_grey_png(Path(directory) / f"deco-{name}-height.png",
+                           [bytes(b for h in row for b in (clamp(h * 255),) * 3 + (255,)) for row in heights])
+        else:
+            height = load_rows(assets / height_set / f"{height_set}_1K-JPG_Displacement.jpg", HEIGHT_SIZE)
+            write_grey_png(Path(directory) / f"deco-{name}-height.png", height_bytes(height))
+        print(f"deco-{name}")
+    if not only or any(name in only for name in LOG_ENDS):
+        write_log_ends(assets, directory)
+    print("decoration materials written to", directory)
+
+
+# The realistic decorations' materials, ambientCG's CC0 sets as above.
+DECORATION_MATERIALS.update({
+    "bark-oak": ("Bark001", "Bark001"),
+    "bark-grey": ("Bark004", "Bark004"),
+    "bark-mossy": ("Bark006", "Bark006"),
+    "bark-birch": ("Bark007", "Bark007"),
+    "bark-plane": ("Bark009", "Bark009"),
+    "bark-cedar": ("Bark012", "Bark012"),
+    "bark-brown": ("Bark014", "Bark014"),
+    "straw": ("ThatchedRoof001A", "ThatchedRoof001A"),
+    "straw-grey": ("ThatchedRoof002A", "ThatchedRoof002A"),
+    "rope": ("Rope001", "Rope001"),
+    "steel-rope": ("Rope002", "Rope002"),
+    "rubber": ("Rubber004", "Rubber004"),
+    "rubber-grain": ("Rubber001", "Rubber001"),
+    "travertine": ("Travertine009", "Travertine009"),
+    "travertine-banded": ("Travertine001", "Travertine001"),
+    "travertine-blue": ("Travertine013", "Travertine013"),
+    "concrete": ("Concrete034", "Concrete034"),
+    "plaster": ("Plaster003", "Plaster003"),
+    "marble-polished": ("Marble021", "Marble021"),
+    "paint-hazard": ("PaintedMetal016", "PaintedMetal016"),
+    "paint-white": ("PaintedMetal011", "PaintedMetal011"),
+    "paint-red": ("PaintedMetal004", "PaintedMetal004"),
+    "paint-green": ("PaintedMetal006", "PaintedMetal006"),
+    "plastic-black": ("Plastic006", "Plastic006"),
+    "plastic-yellow": ("Plastic016A", "Plastic016A"),
+    "pebbles": ("Rocks023", "Rocks023"),
+    "gravel": ("Gravel023", "Gravel023"),
+    "metal-black": ("Metal027", "Metal027"),
+    "wood-pine": ("Wood092", "Wood092"),
+    "paper-aged": ("Paper006", "Paper006"),
+})
+# Sawn log ends: the end grain's whole disc (its box x, y, w, h in the 1K
+# set) with its own ragged outline from the set's opacity, so a log's end
+# shows its growth rings and its bark round them.
+LOG_ENDS = {
+    "log-end": ("TreeEnd004", (60, 60, 888, 896)),
+    "log-end-pale": ("TreeEnd001", (28, 8, 972, 996)),
+}
+# The nebulae: picture, the band through it (x, y, width, height in the
+# 2000-pixel rendition), whether the picture is turned a quarter first
+# (the Pillars of Creation stand upright; turned, they run along a panel),
+# and the columns of a bright star's long diffraction spike crossing the
+# band, painted out from the pixels either side of them.
+NEBULAE = {
+    "nebula-carina": ("cosmic-cliffs.png", (0, 205, 2000, 250), False),
+    "nebula-pillars": ("pillars-of-creation.png", (0, 360, 2000, 250), True),
+    "nebula-southern-ring": ("southern-ring.png", (0, 805, 2000, 250), False),
+    "nebula-tarantula": ("tarantula.png", (0, 455, 2000, 250), False),
+    "deep-field": ("first-deep-field.png", (0, 900, 1960, 245), False, [(838, 849), (299, 307), (1718, 1726)]),
+}
+NEBULA_SIZE = (2048, 256)
+NEBULA_BLEND = 256
+
+
+def load_box(path, box, width, height, turn=False, clean=()):
+    """A box (x, y, w, h) of a picture, turned a quarter first if asked,
+    with the `clean` column ranges (in the box) painted out row by row from
+    the pixels just outside them, scaled to width x height, as rows of
+    (r, g, b) in 0..1."""
+    QtGui, QtCore = qt_modules()
+    image = QtGui.QImage(str(path))
+    if image.isNull():
+        raise SystemExit(f"cannot read {path}")
+    if turn:
+        image = image.transformed(QtGui.QTransform().rotate(90))
+    x, y, w, h = box
+    image = image.copy(x, y, w, h)
+    for first, last in clean:
+        for row in range(h):
+            a = image.pixelColor(max(0, first - 2), row)
+            b = image.pixelColor(min(w - 1, last + 2), row)
+            for column in range(first, last + 1):
+                u = (column - first + 1) / (last - first + 2)
+                image.setPixelColor(column, row, QtGui.QColor.fromRgbF(
+                    a.redF() + (b.redF() - a.redF()) * u, a.greenF() + (b.greenF() - a.greenF()) * u,
+                    a.blueF() + (b.blueF() - a.blueF()) * u))
+    image = image.scaled(width, height, QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
+                                          QtCore.Qt.TransformationMode.SmoothTransformation)
+    image = image.convertToFormat(QtGui.QImage.Format.Format_RGBA8888)
+    bits = image.constBits()
+    data = bits.asstring(image.sizeInBytes()) if hasattr(bits, "asstring") else bytes(bits)
+    stride = image.bytesPerLine()
+    return [[(data[r * stride + c * 4] / 255, data[r * stride + c * 4 + 1] / 255,
+              data[r * stride + c * 4 + 2] / 255) for c in range(width)] for r in range(height)]
+
+
+def write_log_ends(assets, directory=ROOT):
+    for name, (set_id, box) in LOG_ENDS.items():
+        colour = load_box(assets / set_id / f"{set_id}_1K-JPG_Color.jpg", box, SIZE, SIZE)
+        opacity = load_box(assets / set_id / f"{set_id}_1K-JPG_Opacity.jpg", box, SIZE, SIZE)
+        height = load_box(assets / set_id / f"{set_id}_1K-JPG_Displacement.jpg", box, HEIGHT_SIZE, HEIGHT_SIZE)
+        write_png(Path(directory) / f"deco-{name}.png",
+                  [bytes(b for (r, g, b_), (a, _, _) in zip(row, alpha)
+                         for b in (clamp(r * 255), clamp(g * 255), clamp(b_ * 255), clamp(a * 255)))
+                   for row, alpha in zip(colour, opacity)])
+        write_grey_png(Path(directory) / f"deco-{name}-height.png", height_bytes(height))
+        print(f"deco-{name}")
+
+
+def write_nebulae(source, directory=ROOT):
+    """The galactic strips: a band through each Webb picture, its end
+    blended into its start (smoothstep over NEBULA_BLEND pixels) so it
+    repeats along a panel without a seam, and its brightness, smoothed,
+    as a gentle height."""
+    width, height = NEBULA_SIZE
+    for name, entry in NEBULAE.items():
+        picture, box, turn = entry[:3]
+        rows = load_box(Path(source) / picture, box, width + NEBULA_BLEND, height, turn, entry[3] if len(entry) > 3 else ())
+        strip = []
+        for row in rows:
+            out = []
+            for x in range(width):
+                if x < NEBULA_BLEND:
+                    w = x / NEBULA_BLEND
+                    w = w * w * (3 - 2 * w)
+                    a, b = row[x], row[x + width]
+                    out.append((a[0] * w + b[0] * (1 - w), a[1] * w + b[1] * (1 - w), a[2] * w + b[2] * (1 - w)))
+                else:
+                    out.append(row[x])
+            strip.append(out)
+        write_jpeg(Path(directory) / f"deco-{name}.jpg", colour_bytes(strip), 90)
+        # A quarter-size brightness, blurred twice by a 3 x 3 box that wraps
+        # along the strip.
+        qw, qh = width // 4, height // 4
+        bright = [[sum(0.299 * strip[y * 4 + j][x * 4 + i][0] + 0.587 * strip[y * 4 + j][x * 4 + i][1]
+                       + 0.114 * strip[y * 4 + j][x * 4 + i][2] for j in range(4) for i in range(4)) / 16
+                   for x in range(qw)] for y in range(qh)]
+        for _ in range(2):
+            bright = [[sum(bright[min(qh - 1, max(0, y + j))][(x + i) % qw] for j in (-1, 0, 1) for i in (-1, 0, 1)) / 9
+                       for x in range(qw)] for y in range(qh)]
+        low = min(min(r) for r in bright)
+        high = max(max(r) for r in bright)
+        span = max(1e-6, high - low)
+        write_grey_png(Path(directory) / f"deco-{name}-height.png",
+                       [bytes(b for v in row for b in (clamp((v - low) / span * 255),) * 3 + (255,)) for row in bright])
+        print(f"deco-{name}")
+    print("nebulae written to", directory)
+
+
 def render_svg(path):
     from PySide6.QtCore import QRectF
     from PySide6.QtGui import QColor, QImage, QPainter
@@ -1173,3 +1505,8 @@ if __name__ == "__main__":
         write_rainbows(sys.argv[2] if len(sys.argv) > 2 else ROOT)
     if stage == "--real":
         write_real(Path(sys.argv[2]), Path(sys.argv[3]) if len(sys.argv) > 3 else ROOT)
+    if stage == "--decorations":
+        write_decorations(Path(sys.argv[2]), Path(sys.argv[3]) if len(sys.argv) > 3 else ROOT,
+                          set(sys.argv[4:]) or None)
+    if stage == "--nebulae":
+        write_nebulae(Path(sys.argv[2]), Path(sys.argv[3]) if len(sys.argv) > 3 else ROOT)

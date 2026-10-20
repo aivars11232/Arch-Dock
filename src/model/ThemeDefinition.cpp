@@ -334,6 +334,10 @@ QVariantMap ThemeDefinition::toVariantMap() const
     {
         result.insert(QStringLiteral("scene3D"), scene3D->toVariantMap());
     }
+    if (!contour.isEmpty())
+    {
+        result.insert(QStringLiteral("contour"), contour);
+    }
     return result;
 }
 
