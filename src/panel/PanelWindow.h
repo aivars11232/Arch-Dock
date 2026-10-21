@@ -31,6 +31,7 @@
 #include "../model/PanelSettingsSchema.h"
 #include "../presets/PresetLibrary.h"
 #include "../presets/PresetPreviewSession.h"
+#include "BarHostSupervisor.h"
 #include "FreePanelController.h"
 #include "PanelContentTransaction.h"
 #include "ProfileManager.h"
@@ -104,6 +105,15 @@ public slots:
     // only added where none does; there is one panel to an edge.
     QStringList occupiedScreenEdges() const;
     QString createNativePanel(const QString &edge, const QString &type);
+    // A new edge bar of Arch Dock's own, shown by its bar host
+    // (arch-dock-bars) instead of Plasma, so that it can stand beside other
+    // bars on its edge. Its id, or nothing when the edge or type is unknown.
+    QString createBar(const QString &edge, const QString &type);
+    // The bars the bar host shows, as the JSON list it reads (one object per
+    // bar: its id, what it holds, its screen, edge, alignment, order,
+    // thickness, length, margin, visibility and whether windows keep clear
+    // of it). barHostRecordsChanged says when it changes.
+    QString barHostRecordsJson() const;
     QVariantMap createFreePanel();
     QVariantMap createFreePanelFromTemplate(int containmentId, const QString &ownershipToken);
     QVariantMap adoptFreePanelApplet(int desktopContainmentId, int dockAppletId);
@@ -303,6 +313,7 @@ signals:
     void nativeVisibilityRevisionChanged();
     void presentationRequestRevisionChanged();
     void nativePanelRecoveryFinished();
+    void barHostRecordsChanged();
 
 private:
     [[nodiscard]] ArchDock::ProfileApplyTransaction::Operations profileOperations();
@@ -679,4 +690,19 @@ private:
     int m_nativePanelRecoveryGeneration = 0;
     bool m_nativePanelRecoveryActive = false;
     bool m_settingsTransactionAdoptionActive = false;
+
+    // Arch Dock's own bars: edge panels whose host is the bar host rather
+    // than Plasma. Their list is sent to the bar host when it changes, and
+    // the bar host is kept running while there are bars.
+    [[nodiscard]] bool barHosted(const QString &panelId) const;
+    void scheduleBarRecordsUpdate();
+    void publishBarRecords();
+    // A bar's visibility needs nothing from Plasma: what the caller asks to
+    // keep is saved, and the bar host shows or hides the bar from it.
+    bool persistBarVisibility(const QString &panelId,
+                              std::optional<ArchDock::PanelVisibilityMode> requestedMode,
+                              const QVariantMap &persistValues);
+    BarHostSupervisor m_barHost;
+    QTimer m_barRecordsTimer;
+    QString m_barRecordsJson;
 };

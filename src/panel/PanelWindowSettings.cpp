@@ -833,6 +833,10 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             // Placement along a screen edge and Plasma's panel visibility
             // belong to edge panels; a free panel has neither (OF-02, OF-06).
             available = !freeHost;
+            // A bar of Arch Dock's own stands anywhere along its edge; a
+            // Plasma panel is placed along it by Plasma.
+            if (key == QStringLiteral("offset"))
+                available = available && candidate.host.edgeHost == QLatin1String("bar");
             break;
         case ArchDock::EditorCapability::LengthMutation:
         case ArchDock::EditorCapability::ThicknessMutation:

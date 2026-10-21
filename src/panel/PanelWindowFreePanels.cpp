@@ -157,6 +157,12 @@ void PanelWindow::panelRemovalRequested(const QString &panelId, bool removing)
     {
         return;
     }
+    // A bar of Arch Dock's own is removed by Arch Dock only: its widget
+    // going away (the bar host closing, or rebuilding the bar) says nothing.
+    if (barHosted(panelId))
+    {
+        return;
+    }
     if (!removing)
     {
         m_removalRequested.remove(panelId);

@@ -86,6 +86,10 @@ required = {'usr/bin/arch-dock', 'usr/lib/systemd/user/arch-dock.service',
     'usr/share/kwin/scripts/org.archdock.windowwatcher/metadata.json',
     'usr/share/plasma/plasmoids/org.archdock.control/metadata.json',
     'usr/share/plasma/plasmoids/org.archdock.dock/metadata.json',
+    'usr/bin/arch-dock-bars',
+    'usr/share/applications/org.archdock.ArchDock.Bars.desktop',
+    'usr/share/plasma/plasmoids/org.archdock.bar/metadata.json',
+    'usr/share/plasma/shells/org.archdock.barshell/metadata.json',
     'usr/share/licenses/arch-dock/LICENSE',
     'usr/share/licenses/arch-dock/LICENSING.md'}
 assert required <= set(files), 'required runtime resources are absent'
@@ -107,11 +111,17 @@ assert len(production) == 17
 for relative in production:
     license = json.loads((installed / relative).read_text())['license']
     assert license['spdx'] == 'GPL-3.0-or-later' and license['redistribution'] == 'allowed', relative
-components = [relative for relative in files if relative.endswith('/metadata.json') and
+# The eight older Plasma/KWin components keep their MIT declaration; the bars'
+# containment and shell are newer project work under the project's license.
+bar_components = {'usr/share/plasma/plasmoids/org.archdock.bar/metadata.json',
+                  'usr/share/plasma/shells/org.archdock.barshell/metadata.json'}
+components = [relative for relative in files if relative.endswith('/metadata.json') and relative not in bar_components and
               ('/kwin/scripts/' in relative or '/plasma/plasmoids/' in relative or '/layout-templates/' in relative)]
 assert len(components) == 8
 for relative in components:
     assert json.loads((installed / relative).read_text())['KPlugin']['License'] == 'MIT', relative
+for relative in bar_components:
+    assert json.loads((installed / relative).read_text())['KPlugin']['License'] == 'GPL-3.0-or-later', relative
 (evidence / 'installed-licensing.json').write_text(json.dumps({
     'project_license': 'GPL-3.0-or-later', 'separate_component_license': 'MIT',
     'original_asset_packages': production, 'mit_components': components,
@@ -130,7 +140,10 @@ PY
 audit_installed_payload
 ldd "$sysroot/usr/bin/arch-dock" >"$evidence/package-ldd.log"
 ! rg -q 'not found|libQt6Quick3D' "$evidence/package-ldd.log"
+ldd "$sysroot/usr/bin/arch-dock-bars" >"$evidence/package-bars-ldd.log"
+! rg -q 'not found' "$evidence/package-bars-ldd.log"
 desktop-file-validate "$sysroot/usr/share/applications/org.archdock.ArchDock.desktop"
+desktop-file-validate "$sysroot/usr/share/applications/org.archdock.ArchDock.Bars.desktop"
 bwrap --die-with-parent --ro-bind / / --tmpfs /tmp \
     --overlay-src /usr --overlay-src "$sysroot/usr" --ro-overlay /usr \
     env TMPDIR=/tmp systemd-analyze --user verify /usr/lib/systemd/user/arch-dock.service

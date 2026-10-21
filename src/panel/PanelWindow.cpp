@@ -219,6 +219,16 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
             {
                 notifyDockRevision();
             });
+    // Arch Dock's own bars follow their records, as drawn: the bar host is
+    // told when the list changes and is kept running while there are bars.
+    m_barRecordsTimer.setSingleShot(true);
+    m_barRecordsTimer.setInterval(0);
+    connect(&m_barRecordsTimer, &QTimer::timeout, this, &PanelWindow::publishBarRecords);
+    connect(&m_panelRegistry, &PanelRegistry::panelsChanged, this, &PanelWindow::scheduleBarRecordsUpdate);
+    connect(this, &PanelWindow::dockRevisionChanged, this, &PanelWindow::scheduleBarRecordsUpdate);
+    connect(this, &PanelWindow::nativePlacementRevisionChanged, this, &PanelWindow::scheduleBarRecordsUpdate);
+    connect(this, &PanelWindow::screenRevisionChanged, this, &PanelWindow::scheduleBarRecordsUpdate);
+    scheduleBarRecordsUpdate();
     const auto notifyGlobalVisualChange = [this]
     {
         if (!m_settingsTransactionAdoptionActive)
@@ -491,6 +501,8 @@ QVariantMap PanelWindow::stopIntentionally(const QString &reason)
     // Panel Studio's draft is dropped and Plasma put back before the quit.
     clearPanelSettingsPreview();
     restoreStudioDraftHosts();
+    // Arch Dock's own bars go with it.
+    m_barHost.stop();
     WindowWatcher::releaseKWinScripts();
     QMetaObject::invokeMethod(QCoreApplication::instance(), &QCoreApplication::quit,
                               Qt::QueuedConnection);

@@ -367,6 +367,7 @@ private slots:
     void studioArtworkPersistenceFailure_data();
     void studioArtworkPersistenceFailure();
     void studioEditsOnePanelAtATime();
+    void barsFollowTheirRecords();
     void studioShowsEachSettingOnce();
     void ownersFreeCircleOffersOnlyWhatWorks();
     void studioTruthMatrixHarnessIsTheApplet();
@@ -2573,6 +2574,87 @@ void PanelWindowCapabilityTest::studioArtworkPersistenceFailure()
 // user is asked first and the panel stays. The General page adds and
 // removes no panel. An edge panel with nothing on it yet is previewed bare
 // instead of as an empty card.
+void PanelWindowCapabilityTest::barsFollowTheirRecords()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    QSignalSpy listChanged(&backend, &PanelWindow::barHostRecordsChanged);
+    const auto bars = [&backend] {
+        QJsonArray list = QJsonDocument::fromJson(backend.barHostRecordsJson().toUtf8()).array();
+        QHash<QString, QJsonObject> byId;
+        for (const QJsonValue &bar : list)
+            byId.insert(bar.toObject().value("id").toString(), bar.toObject());
+        return byId;
+    };
+    const auto apply = [&](const QString &panel, const QVariantMap &values) {
+        return backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision, values)
+            .value("success").toBool();
+    };
+    const auto shown = [&](const QString &panel, const QString &key) {
+        const QVariantMap field = fieldByKey(backend.panelSettingsEditorSnapshot(panel, "studio")
+            .value("panelFields").toList(), key);
+        return !field.isEmpty() && !field.value("inactive").toBool();
+    };
+
+    // Two bars on one edge: edge panels of Arch Dock's own, listed for the
+    // bar host in their order; a Plasma panel is not listed.
+    QVERIFY(backend.createBar("sideways", "launcher").isEmpty());
+    const QString left = backend.createBar("bottom", "launcher");
+    const QString right = backend.createBar("bottom", "hybrid");
+    const QString plasmaPanel = registry->addPanel("top", "launcher");
+    QVERIFY(!left.isEmpty() && !right.isEmpty() && left != right);
+    QCOMPARE(registry->panelDefinition(left)->host.edgeHost, QStringLiteral("bar"));
+    QCOMPARE(registry->panelDefinition(plasmaPanel)->host.edgeHost, QStringLiteral("plasma"));
+    QTRY_COMPARE(bars().size(), 2);
+    QVERIFY(!bars().contains(plasmaPanel));
+    QCOMPARE(bars().value(left).value("edge").toString(), QStringLiteral("bottom"));
+    QCOMPARE(bars().value(left).value("type").toString(), QStringLiteral("launcher"));
+    QCOMPARE(bars().value(right).value("type").toString(), QStringLiteral("hybrid"));
+    QVERIFY(bars().value(left).value("order").toInt() < bars().value(right).value("order").toInt());
+    QVERIFY(bars().value(left).value("reservesSpace").toBool());
+    QTRY_VERIFY(listChanged.count() >= 1);
+
+    // Each its own place and length: one at the corner, one in the middle
+    // and moved along, as Panel Studio sets them.
+    QVERIFY(apply(left, {{"alignment", "start"}, {"width", 640}}));
+    QVERIFY(apply(right, {{"alignment", "center"}, {"width", 560}, {"offset", -150}}));
+    QTRY_COMPARE(bars().value(left).value("alignment").toString(), QStringLiteral("start"));
+    QCOMPARE(bars().value(left).value("fixedLength").toInt(), 640);
+    QCOMPARE(bars().value(right).value("alignment").toString(), QStringLiteral("center"));
+    QCOMPARE(bars().value(right).value("fixedLength").toInt(), 560);
+    QCOMPARE(bars().value(right).value("offset").toInt(), -150);
+    QVERIFY(apply(right, {{"dynamic", true}}));
+    QTRY_COMPARE(bars().value(right).value("lengthMode").toString(), QStringLiteral("fit"));
+    // A bar that hides keeps no room for itself.
+    QVERIFY(apply(right, {{"visibilityMode", "auto-hide"}}));
+    QTRY_VERIFY(!bars().value(right).value("reservesSpace").toBool());
+    // Hidden and shown again with no Plasma panel to ask.
+    QVERIFY(backend.setPanelVisible(right, false));
+    QTRY_VERIFY(!bars().value(right).value("visible").toBool());
+    QVERIFY(backend.setPanelVisible(right, true));
+    QTRY_VERIFY(bars().value(right).value("visible").toBool());
+
+    // Offset is a bar's own: Plasma places its panels along their edge, and a
+    // free panel has no edge.
+    QVERIFY(shown(left, "offset"));
+    QVERIFY(!shown(plasmaPanel, "offset"));
+    QVERIFY(!shown(registry->addFreePanel(), "offset"));
+
+    // A bar's widget going away removes nothing, even after the wait in
+    // which a Plasma panel's removal is confirmed; Arch Dock's own Remove
+    // does, with no Plasma panel to ask.
+    backend.panelRemovalRequested(left, true);
+    QTest::qWait(5500);
+    QVERIFY(registry->panelIds().contains(left));
+    backend.removePanel(left);
+    QVERIFY(!registry->panelIds().contains(left));
+    QTRY_COMPARE(bars().size(), 1);
+    QVERIFY(bars().contains(right));
+}
+
 void PanelWindowCapabilityTest::studioEditsOnePanelAtATime()
 {
     QQmlApplicationEngine engine;

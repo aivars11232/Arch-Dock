@@ -47,6 +47,15 @@ run_startup_diagnostics() {
     executable="$(sed -n 's/^Exec=//p' "$root/prefix with spaces/share/dbus-1/services/org.archdock.ArchDock.service")"
     [[ "$executable" == "\"$root/prefix with spaces/bin/arch-dock\" --dbus-activated" ]] || return 1
     printf 'Native activation refused the missing executable; installed Exec=%s\n' "$executable"
+    # KWin grants the bar host its Wayland interfaces by an entry whose Exec
+    # is the installed program itself.
+    local bars
+    bars="$(sed -n 's/^Exec=//p' "$root/prefix with spaces/share/applications/org.archdock.ArchDock.Bars.desktop")"
+    [[ "$bars" == "\"$root/prefix with spaces/bin/arch-dock-bars\"" ]] || {
+        printf 'The bar host entry names %s instead of the installed program.\n' "$bars" >&2
+        return 1
+    }
+    printf 'The bar host entry names the installed program: Exec=%s\n' "$bars"
     rm -rf -- "$root"
     trap - EXIT
     printf 'Disconnected-bus and missing-installed-executable diagnostics PASS.\n'

@@ -1,0 +1,15 @@
+[Desktop]
+Containment=org.archdock.bar
+ToolBox=
+RuntimePlatform=
+
+[Desktop][ContainmentActions]
+
+[Panel]
+Containment=org.archdock.bar
+ToolBox=
+
+[Panel][ContainmentActions]
+
+[Theme]
+Theme=default

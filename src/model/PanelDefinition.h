@@ -83,6 +83,9 @@ struct PanelIdentity
 struct PanelHost
 {
     PanelHostKind kind = PanelHostKind::NativeEdge;
+    // Who shows an edge panel: Plasma, as a Plasma panel ("plasma"), or
+    // Arch Dock's own bar host ("bar"), where bars stand side by side.
+    QString edgeHost = QStringLiteral("plasma");
     int screenIndex = 0;
     QString screenId;
 

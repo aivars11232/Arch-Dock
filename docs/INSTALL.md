@@ -33,6 +33,20 @@ run any code: it is treated as a crash, and the next activation request starts
 Arch Dock again. While it is stopped, on-demand activation is refused with
 `org.freedesktop.DBus.Error.Spawn.ChildExited` and exit status 75.
 
+### Arch Dock's own bars
+
+An edge bar of Arch Dock's own (one that can stand beside others on the same
+screen edge) is shown by a second program, `arch-dock-bars`, not by Plasma.
+The backend starts it while there are such bars, starts it again if it stops
+unexpectedly or does not come up (at most five times within a minute, and
+again once the bars change), and stops it when the last bar goes or Arch Dock
+is stopped. Only one runs in a session, owning
+`org.archdock.ArchDock.Bars`; it keeps the bars' own layout in
+`~/.config/arch-dock-bars-appletsrc` and never reads or changes Plasma's
+layout. Its hidden application entry, `org.archdock.ArchDock.Bars.desktop`,
+names the Wayland interfaces KWin grants it (window lists and live window
+previews), as Plasma's own `plasmawindowed` entry does.
+
 ## Flat looks in 3D
 
 Turning **Platform presentation** on (Panels > 3D) keeps the design made
@@ -387,7 +401,9 @@ supported. Source symbolic links, including dangling links, are refused.
 
 The recipe uses one compile job, disables LTO/debug splitting, and installs
 under `/usr`. Required dependencies cover Qt Quick/Wayland, SVG, KDE service
-and KIO integration, global shortcuts, Plasma and KWin. Qt Quick 3D is an
+and KIO integration, global shortcuts, Plasma and KWin; Arch Dock's own bars
+also need libplasma 6.8 with KPackage and KConfig, and layer-shell-qt 6.8 for
+their windows. Qt Quick 3D is an
 explicit build dependency so the package includes its optional renderer. It
 is an **optional runtime dependency**: the executable does not link against
 Qt Quick 3D, and ordinary rendering works when the QML module is absent.

@@ -36,6 +36,17 @@ can cover Plasma's edit toolbar, which still takes the clicks. Two panels
 side by side on one edge are not possible while the edge panels are Plasma
 panels, which Plasma stacks.
 
+Arch Dock's own bars, which can stand side by side on one edge, are shown by
+Arch Dock's bar host (`arch-dock-bars`) and are being built in steps
+(`docs/repairs/OWNER-LIST-PIECE-9.md`). So far: a bar is made through the
+backend (`createBar`), while Panel Studio still adds Plasma panels for edges;
+a bar is always shown, and one set to hide or dodge shows and keeps no room
+until hiding comes; profiles and preset trials refuse while a bar is
+involved; launcher bars share one application list; Plasma's widgets do not
+go into bars yet. Live window previews in a bar need the installed entry
+`org.archdock.ArchDock.Bars.desktop`, by which KWin grants the bar host the
+interfaces they use; a bar host run from a build tree runs without them.
+
 KDE's own widgets (the clock, the application launcher, Panel Colorizer)
 can be added to an edge panel with Plasma's Add Widgets, since it is a
 Plasma panel: Plasma sizes them to the panel, beside Arch Dock's widget and

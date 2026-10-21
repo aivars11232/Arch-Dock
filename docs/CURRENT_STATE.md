@@ -1,5 +1,80 @@
 # Arch Dock current state
 
+<!-- LIST_PIECE_9_BEGIN -->
+## The owner's list, piece 9: Arch Dock's own bars — 2026-10-21
+
+Report `docs/repairs/OWNER-LIST-PIECE-9.md`; step 1 of six, the bar host.
+
+- **`arch-dock-bars`** (`src/bars/`), a program beside the backend.
+  `BarCorona`, a `Plasma::Corona` as plasma-sdk's plasmoidviewer hosts
+  widgets: shell package `org.archdock.barshell` (`plasma-bar-shell/`),
+  layout file `arch-dock-bars-appletsrc` (never Plasma's); one containment
+  per bar (`org.archdock.bar`, `plasma-bar-containment/`), found again by
+  its `archDockBar` key, holding `org.archdock.dock` configured with
+  `General/panelId` and `panelType` (as the backend configures it in a
+  Plasma panel) unless the bar is empty. The containment gives each widget
+  a slot as long as the widget asks along the bar and as thick as the bar
+  across it, as a Plasma panel does; the dock takes the spare length.
+  `BarWindow`, a `PlasmaQuick::ContainmentView`: a LayerShellQt surface on
+  the top layer, anchored to its edge and the edge's start with its start
+  as margin, exclusive zone -1, keyboard on demand, not activated on show,
+  moved to another screen by being shown again there. Its QWindow position
+  is kept (`QT_WAYLAND_DISABLE_FIXED_POSITIONS` set while Qt starts, as
+  plasmashell does) for the dock's popups and `OverflowHost`; a move asks
+  for a frame, which carries the new place to the compositor.
+  `ReservedStrip`: one see-through 1 px surface per screen edge on the
+  bottom layer, taking no input, reserving the deepest reserving bar's
+  thickness and margin (corner-anchored surfaces cannot reserve).
+  `placeOnEdge` (`BarLayout`): start bars from the start, end bars from the
+  end, the middle group centred and moved by its first bar's offset, all
+  kept in the room the others leave, 8 px apart, nothing past the edge.
+  `parseBarRecords` (`BarRecord`): the backend's JSON list, unknown values
+  defaulted and numbers bounded. `BarHost`: the list from the backend
+  (`barHostRecordsJson`, again on `barHostRecordsChanged` and whenever
+  `org.archdock.ArchDock` appears) or from `ARCHDOCK_BARS_RECORDS_FILE`;
+  without an answer the bars stay; a bar no longer listed goes with its
+  containment. One per session: `org.archdock.ArchDock.Bars`, `/Bars`
+  `quit()`.
+- **Backend**: `PanelHost::edgeHost` ("plasma" or "bar"; protected schema
+  key `edgeHost`), `PanelRegistry::addPanel(edge, type, edgeHost)`.
+  `PanelWindow::createBar(edge, type)`. `barHostRecordsJson()` from
+  `runtimePanelDefinition` (Studio's draft included) and
+  `normalizedNativePanelPlacement`: id, type, screen, edge, alignment,
+  order (the registry's order), offset, thickness, length mode and lengths,
+  floating margin, visibility mode, `reservesSpace`, visible.
+  `barHostRecordsChanged` follows the registry, the dock and placement
+  revisions and the screens, compared on a zero-time timer. Every Plasma
+  path passes bars by: native recovery, widget removal reports (a bar's
+  widget going away removes nothing), type changes, removal (the record
+  only), Plasma panel creation and removal, visibility (saved by
+  `persistBarVisibility`), placement (validated, then saved; no containment
+  or token). Profiles and preset trials refuse bars for now
+  (`bars-not-in-profiles-yet`, `bars-not-in-presets-yet`).
+  `BarHostSupervisor` starts `arch-dock-bars` detached while there are
+  bars (`ARCHDOCK_BARS_EXECUTABLE`, else beside the backend's real program
+  file, else the PATH's), only from the process owning
+  `org.archdock.ArchDock`; again after an unexpected stop or a start that
+  never comes up on the bus within 15 s, at most five times a minute, and
+  once more when the bars change after it gave up; asks it to quit when the
+  last bar goes or Arch Dock is stopped. `WindowWatcher` passes the bar host's windows by
+  (`arch-dock-bars`, `org.archdock.ArchDock.Bars`).
+- **Panel Studio**: `offset` is an editor field on General, -4096 to
+  4096 px, shown for bars only: from the corner for Start and End, from
+  the middle for Center.
+- **Installed**: `arch-dock-bars`, `share/plasma/plasmoids/org.archdock.bar`,
+  `share/plasma/shells/org.archdock.barshell` and the hidden entry
+  `org.archdock.ArchDock.Bars.desktop` (Exec the installed program,
+  `X-KDE-Wayland-Interfaces` as Plasma's `plasmawindowed`). PKGBUILD:
+  libplasma 6.8, layer-shell-qt 6.8, kpackage, kconfig.
+- **Tests**: `barlayout-test`, `barrecord-test`; `bar-host-smoke` (private
+  KWin: three bars where their list puts them, the strips, a maximised
+  window clear of them, the dock told its panel, the list changing, a
+  deeper bar's strip, the host stopping on TERM); `PanelWindowCapabilityTest::barsFollowTheirRecords`;
+  the bar host entry in `session-startup-metadata-test` and
+  `session-startup-diagnostics-test`; the package test's files, licences
+  and libraries.
+<!-- LIST_PIECE_9_END -->
+
 <!-- LIST_PIECE_8_BEGIN -->
 ## The owner's list, piece 8: panel decorations (Phase 5, part one) — 2026-10-20
 

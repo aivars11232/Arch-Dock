@@ -74,6 +74,11 @@ bool PanelWindow::setNativePanelType(const QString &panelId, const QString &type
     }
 
     m_panelRegistry.setPanelValue(panelId, QStringLiteral("type"), normalizedType);
+    // A bar's dock follows its record in the bar host.
+    if (barHosted(panelId))
+    {
+        return true;
+    }
     return createNativeKdePanel(panelId);
 }
 
@@ -797,6 +802,11 @@ bool PanelWindow::createNativeKdePanel(const QString &panelId)
     {
         return false;
     }
+    if (barHosted(panelId))
+    {
+        qWarning() << "Panel" << panelId << "is a bar of Arch Dock's own; it gets no Plasma panel.";
+        return false;
+    }
 
     int storedContainmentId = nativePanelId(panelId);
     const QString panelType = m_panelRegistry.panelValue(
@@ -1012,6 +1022,11 @@ bool PanelWindow::removeNativeKdePanel(const QString &panelId)
     if (!m_panelRegistry.panelIds().contains(panelId))
     {
         return false;
+    }
+    // A bar of Arch Dock's own has no Plasma panel to remove.
+    if (barHosted(panelId))
+    {
+        return true;
     }
 
     const QString edge = m_panelRegistry.panelValue(
@@ -1236,7 +1251,8 @@ void PanelWindow::removePanel(const QString &panelId)
         return;
     }
 
-    if (!removeNativeKdePanel(panelId))
+    // A bar of Arch Dock's own leaves the bar host with its record.
+    if (!barHosted(panelId) && !removeNativeKdePanel(panelId))
     {
         qWarning() << "Preserving the panel record after native removal was refused for"
                    << panelId;

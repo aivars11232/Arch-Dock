@@ -1,0 +1,15 @@
+{
+    "KPackageStructure": "Plasma/Shell",
+    "KPlugin": {
+        "Id": "org.archdock.barshell",
+        "Name": "Arch Dock bars",
+        "Description": "The shell of Arch Dock's own bars.",
+        "License": "GPL-3.0-or-later",
+        "Version": "1.0.0",
+        "Authors": [
+            {
+                "Name": "Arch Dock"
+            }
+        ]
+    }
+}

@@ -453,6 +453,9 @@ qt_add_executable(
   src/panel/PanelWindowPresets.cpp
   src/panel/PanelWindowScreens.cpp
   src/panel/PanelWindowSettings.cpp
+  src/panel/PanelWindowBars.cpp
+  src/panel/BarHostSupervisor.h
+  src/panel/BarHostSupervisor.cpp
   src/WindowItem.h
   src/WindowModel.h
   src/WindowModel.cpp
@@ -528,6 +531,54 @@ target_compile_definitions(
           ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH="${ARCHDOCK_SOURCE_ANIMATION_PROFILE_CATALOG_PATH}"
           ARCHDOCK_SOURCE_PRESET_ROOT="${ARCHDOCK_SOURCE_PRESET_ROOT}")
 
+# Arch Dock's own bars: a program beside the backend that shows each edge bar
+# as a Plasma containment (libplasma, as Plasma's plasmoidviewer hosts
+# widgets) in a layer-shell window of its own, so that bars can stand side by
+# side on one screen edge.
+# KF6Package's CMake macros pull in extra-cmake-modules only when these are
+# not set already.
+if(NOT DEFINED KDE_INSTALL_DATADIR)
+  set(KDE_INSTALL_DATADIR share)
+endif()
+if(NOT DEFINED KDE_INSTALL_METAINFODIR)
+  set(KDE_INSTALL_METAINFODIR share/metainfo)
+endif()
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(KF6Config REQUIRED)
+find_package(KF6Package REQUIRED)
+find_package(Plasma 6.8 REQUIRED)
+find_package(PlasmaQuick 6.8 REQUIRED)
+find_package(LayerShellQt 6.8 REQUIRED)
+set(ARCHDOCK_BAR_LOGIC_SOURCES
+    src/bars/BarLayout.h src/bars/BarLayout.cpp
+    src/bars/BarRecord.h src/bars/BarRecord.cpp)
+add_executable(
+  arch-dock-bars
+  src/bars/main.cpp
+  src/bars/BarCorona.h
+  src/bars/BarCorona.cpp
+  src/bars/BarHost.h
+  src/bars/BarHost.cpp
+  src/bars/BarWindow.h
+  src/bars/BarWindow.cpp
+  ${ARCHDOCK_BAR_LOGIC_SOURCES}
+  src/ScreenIdentity.h
+  src/ScreenIdentity.cpp)
+target_include_directories(arch-dock-bars PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(
+  arch-dock-bars
+  PRIVATE Qt6::Core
+          Qt6::DBus
+          Qt6::Gui
+          Qt6::Quick
+          Qt6::Widgets
+          KF6::ConfigCore
+          KF6::ConfigGui
+          KF6::Package
+          Plasma::Plasma
+          Plasma::PlasmaQuick
+          LayerShellQt::Interface)
+
 include(CTest)
 if(BUILD_TESTING)
   find_package(Qt6 REQUIRED COMPONENTS Test QmlTools QuickTest)
@@ -555,6 +606,27 @@ if(BUILD_TESTING)
     ARCHDOCK_DECORATION_MATERIALS="${CMAKE_CURRENT_SOURCE_DIR}/qml/ArchDock/Rendering/materials")
   add_test(NAME decoration-lighting-test COMMAND decoration-lighting-test)
   set_tests_properties(decoration-lighting-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  # Arch Dock's own bars shown by the bar host in a private KWin: side by side
+  # on an edge, each where its list puts it, windows kept clear of them.
+  add_test(NAME bar-host-smoke
+    COMMAND ${CMAKE_COMMAND} -E env
+            ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            ARCHDOCK_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            ARCHDOCK_QML_IMPORT_ROOT=${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            ARCHDOCK_QML_TOOL=$<TARGET_FILE_DIR:Qt6::qmltestrunner>/qml
+            bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-bar-host-smoke.sh)
+  set_tests_properties(bar-host-smoke PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
+  # Arch Dock's bars, by themselves: where each stands on its edge, and what
+  # the backend's list of them says.
+  foreach(bar_test IN ITEMS BarLayout BarRecord)
+    string(TOLOWER "${bar_test}" bar_test_name)
+    qt_add_executable(${bar_test_name}-test tests/${bar_test}Test.cpp ${ARCHDOCK_BAR_LOGIC_SOURCES})
+    target_include_directories(${bar_test_name}-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(${bar_test_name}-test PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME ${bar_test_name}-test COMMAND ${bar_test_name}-test)
+  endforeach()
 
   qt_add_executable(overlay-model-test tests/OverlayModelTest.cpp
     src/content/OverlayModel.h src/content/OverlayModel.cpp
@@ -1342,6 +1414,9 @@ if(BUILD_TESTING)
     src/panel/PanelWindowPresets.cpp
     src/panel/PanelWindowScreens.cpp
     src/panel/PanelWindowSettings.cpp
+    src/panel/PanelWindowBars.cpp
+    src/panel/BarHostSupervisor.h
+    src/panel/BarHostSupervisor.cpp
     src/model/PresetIdentity.h
     src/model/PresetIdentity.cpp
     src/model/IconPresetDefinition.h
@@ -2143,7 +2218,8 @@ endif()
 
 install(TARGETS arch-dock RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES LICENSE packaging/LICENSING.md DESTINATION share/licenses/arch-dock)
-foreach(startup_descriptor IN ITEMS arch-dock.service org.archdock.ArchDock.service org.archdock.ArchDock.desktop)
+foreach(startup_descriptor IN ITEMS arch-dock.service org.archdock.ArchDock.service org.archdock.ArchDock.desktop
+                                    org.archdock.ArchDock.Bars.desktop)
   configure_file("data/${startup_descriptor}.in"
                  "startup-templates/${startup_descriptor}.in" COPYONLY)
 endforeach()
@@ -2218,6 +2294,13 @@ install(CODE [[
 install(
   DIRECTORY plasma-dock-widget/
   DESTINATION share/plasma/plasmoids/org.archdock.dock)
+install(TARGETS arch-dock-bars RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(
+  DIRECTORY plasma-bar-containment/
+  DESTINATION share/plasma/plasmoids/org.archdock.bar)
+install(
+  DIRECTORY plasma-bar-shell/
+  DESTINATION share/plasma/shells/org.archdock.barshell)
 install(
   DIRECTORY plasma-layout-template/
   DESTINATION share/plasma/layout-templates/org.archdock.plasma.desktop.emptyPanel)

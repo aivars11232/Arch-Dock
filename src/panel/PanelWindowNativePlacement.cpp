@@ -413,6 +413,10 @@ bool PanelWindow::reconcileNativePanelVisibility(
     bool visible,
     QVariantMap persistValues)
 {
+    if (barHosted(panelId))
+    {
+        return persistBarVisibility(panelId, requestedMode, persistValues);
+    }
     const ArchDock::NativeVisibilityCapabilities capabilities =
         nativeVisibilityCapabilities(panelId);
     const QString requestedModeName = ArchDock::panelVisibilityModeToString(requestedMode);
@@ -624,6 +628,10 @@ bool PanelWindow::synchronizeNativePanelVisibility(const QString &panelId,
                                                    std::optional<ArchDock::PanelVisibilityMode> requestedMode,
                                                    QVariantMap persistValues)
 {
+    if (barHosted(panelId))
+    {
+        return persistBarVisibility(panelId, requestedMode, persistValues);
+    }
     int containmentId = nativePanelId(panelId);
     const QString type = m_panelRegistry.panelValue(
         panelId, QStringLiteral("type")).toString();
@@ -965,12 +973,15 @@ ArchDock::PlasmaPanelPlacementApplyResult PanelWindow::applyNativePanelPlacement
         result.errorCode = QStringLiteral("placement-invalid-panel");
         return result;
     }
-    if (containmentId < 0)
+    // A bar of Arch Dock's own has no Plasma panel: the bar host places it
+    // from its record.
+    const bool bar = definition->host.edgeHost == QLatin1String("bar");
+    if (!bar && containmentId < 0)
     {
         result.errorCode = QStringLiteral("containment-missing");
         return result;
     }
-    if (ownershipToken.trimmed().isEmpty())
+    if (!bar && ownershipToken.trimmed().isEmpty())
     {
         result.errorCode = QStringLiteral("ownership-token-missing");
         return result;
@@ -1037,6 +1048,20 @@ ArchDock::PlasmaPanelPlacementApplyResult PanelWindow::applyNativePanelPlacement
         {
             result.errorCode = QStringLiteral("placement-unsupported");
         }
+        return result;
+    }
+    if (bar)
+    {
+        if (persistIntent && !m_panelRegistry.updatePanelChecked(panelId, values))
+        {
+            result.errorCode = QStringLiteral("persistence-failed");
+            return result;
+        }
+        result.status = QStringLiteral("applied");
+        result.errorCode.clear();
+        result.ownershipVerified = true;
+        result.savedIntent = nativePanelPlacementIntent(panelId);
+        scheduleBarRecordsUpdate();
         return result;
     }
 

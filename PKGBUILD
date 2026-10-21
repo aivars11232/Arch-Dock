@@ -7,8 +7,8 @@ url='https://github.com/aivars11232/Arch-Dock'
 license=('GPL-3.0-or-later' 'MIT')
 depends=('glibc' 'gcc-libs' 'qt6-base>=6.8' 'qt6-declarative>=6.8'
          'qt6-svg' 'qt6-wayland' 'kirigami' 'kservice' 'kio'
-         'kglobalaccel' 'kglobalacceld' 'libplasma' 'plasma-workspace'
-         'plasma-desktop' 'kwin')
+         'kglobalaccel' 'kglobalacceld' 'libplasma>=6.8' 'plasma-workspace'
+         'plasma-desktop' 'kwin' 'layer-shell-qt>=6.8' 'kpackage' 'kconfig')
 makedepends=('cmake' 'make' 'gcc' 'pkgconf' 'qt6-quick3d' 'qt6-shadertools')
 optdepends=('qt6-quick3d: optional true 3D rendering; ordinary renderers work without it'
             'kpipewire: optional live window thumbnails')

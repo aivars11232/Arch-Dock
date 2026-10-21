@@ -249,7 +249,10 @@ public:
     bool applyTheme(const QString &panelId,
                     const QString &themeId,
                     const QString &layer);
-    QString addPanel(const QString &edge, const QString &type);
+    // A new edge panel, shown by Plasma ("plasma") or by Arch Dock's own bar
+    // host ("bar").
+    QString addPanel(const QString &edge, const QString &type,
+                     const QString &edgeHost = QStringLiteral("plasma"));
     QString addFreePanel();
     Q_INVOKABLE void removePanel(const QString &panelId);
     Q_INVOKABLE bool importTheme(const QString &panelId, const QUrl &sourceUrl);

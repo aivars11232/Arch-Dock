@@ -2751,7 +2751,7 @@ bool PanelRegistry::applyTheme(const QString &panelId,
     return true;
 }
 
-QString PanelRegistry::addPanel(const QString &edge, const QString &type)
+QString PanelRegistry::addPanel(const QString &edge, const QString &type, const QString &edgeHost)
 {
     const QString normalizedEdge = edge.trimmed().toLower();
     if (!isEdge(normalizedEdge))
@@ -2772,6 +2772,7 @@ QString PanelRegistry::addPanel(const QString &edge, const QString &type)
         normalizedEdge,
         false);
     panel.insert(QStringLiteral("visible"), true);
+    panel.insert(QStringLiteral("edgeHost"), normalizeValue(QStringLiteral("edgeHost"), edgeHost));
     const QString normalizedType = normalizeValue(QStringLiteral("type"), type).toString();
     panel.insert(QStringLiteral("type"), normalizedType);
     if (normalizedType == QStringLiteral("empty"))

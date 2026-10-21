@@ -1,0 +1,198 @@
+# Owner list, piece 9: Arch Dock's own bars
+
+The owner's words (2026-10-20): "if I would want 2 panels on either edge
+in same line, than I should be able to do so too, currently with native
+panels I can't do that"; "Not on top of each other, but more like side by
+side"; Plasma's widgets in Arch Dock bars - "can't u just make it so that
+I can use plasma widgets in that Arch Dock panels, like all the time,
+WiFi, app launcher and other stuff" - "Ofcourse the Arch Dock theme and
+stuff would still change the appierance to those plasma widgets on Arch
+Dock"; and "only one panel should be the one where opened apps are, same
+with time and other small stuff". All of it before the update.
+
+## Where things stand (survey, 2026-10-21)
+
+- An Arch Dock edge bar is a real Plasma panel (a containment in
+  plasmashell) holding Arch Dock's widget, created and placed through
+  Plasma's scripting interface and recognised again by an ownership token
+  (`src/panel/PanelWindowNativePanels.cpp`,
+  `src/integration/PlasmaPanelAdapter.cpp`). Plasma stacks panels on one
+  edge, so two bars cannot stand side by side; Plasma draws its own panel
+  background round the dock; a bar that hides itself is hidden by Plasma.
+- Every launcher bar shows the same pinned applications
+  (`PanelWindowEntries.cpp`: native panels use the shared application
+  model).
+- Plasma's own widgets can only sit beside Arch Dock's widget in the same
+  Plasma panel, on Plasma's background.
+- Since piece 8 an edge bar draws past its Plasma panel through a
+  see-through layer-shell window (`OverflowHost.qml`).
+
+## Two experiments on this PC (KWin 6.8, private sessions)
+
+1. **Reserved space** (`/mnt/F/archdock-audit-2026-10-08/experiments/
+   layer-shell-zones`, `evidence/layer-zones-sheet.png`). Two bars
+   anchored to a corner each (bottom-left, bottom-right) stand side by
+   side at the edge, but a bar anchored to a corner reserves nothing - the
+   layer-shell protocol ignores the exclusive zone of a corner-anchored
+   surface - so a maximised window covered them. With one see-through
+   strip along the whole edge reserving the space and the bars inside it
+   reserving nothing (exclusive zone -1), the bars stand side by side at
+   the edge and a maximised window stops above them. That is the design.
+2. **Plasma widgets without plasmashell** (`experiments/plasma-host`,
+   `evidence/plasma-host-1/sheet.png`). Plasma's own `plasmoidviewer`
+   (plasma-sdk), which hosts a widget through libplasma's public classes
+   (a `Plasma::Corona`, a containment, a `PlasmaQuick::ContainmentView`),
+   ran the clock, the application launcher and the network widget with no
+   plasmashell running. So Arch Dock can host Plasma widgets in its own
+   bars the same way.
+
+## The design
+
+- **A bar host of Arch Dock's own** (`arch-dock-bars`, a small program
+  next to the backend): a Plasma corona whose containments are Arch Dock's
+  bars - each holding Arch Dock's dock widget and any Plasma widgets the
+  owner adds - each shown in a window of Arch Dock's own: a layer-shell
+  surface on the top layer, anchored to its screen edge and placed along
+  it (start, middle or end of the edge, side by side), reserving nothing
+  itself. As Plasma's own panels are shown (PanelView) and as
+  `plasmoidviewer` hosts widgets. A widget that crashes takes down the bar
+  host, not the backend or Panel Studio, and the backend starts it again.
+- **One reserved strip per screen edge**: a see-through surface along the
+  edge reserving the thickness of its thickest always-visible bar, so
+  maximised windows stop above every bar on that edge.
+- **Hiding is Arch Dock's own**: a bar that hides itself slides away and a
+  thin reveal strip at the edge brings it back; it reserves nothing.
+- **The backend stays the brain**: the bars' records stay in Arch Dock's
+  own settings (a new host kind beside the native and free ones), Panel
+  Studio edits them, the backend starts and watches the bar host, and
+  Arch Dock starts at login by itself (an autostart entry), no longer woken
+  by a widget in plasmashell.
+- **The owner's Plasma layout is not touched**: the bar host keeps its own
+  configuration; only Arch Dock's own Plasma panels (recognised by their
+  ownership token) are replaced, after their own bars are up, with the
+  Plasma widgets they held moved into the new bars.
+
+## Steps, each ADREP-style (tests, the complete suite, report, commit,
+fresh-clone recheck)
+
+1. The bar host with bars side by side on one edge, always visible, the
+   reserved strip, new bars created in it; pictures of two bars on one
+   edge on a private desktop.
+2. Hiding: auto-hide and dodge of Arch Dock's own, each bar on its own,
+   as Plasma's panels hide. The owner (2026-10-21): "They must hide if
+   opend window is over it, same with maximized and full screen" - a
+   dodging bar hides while any window covers part of it (a maximised or
+   full-screen window too), and comes back when nothing does or when the
+   pointer touches the screen edge along it. And: "if window is over it or
+   full screen or maximized, with hower panel should reaper while howering
+   same as it is in native plasma panels" - a hidden bar comes back over
+   the window while the pointer is at its stretch of the edge or on it (or
+   one of its popups is open), and hides again when the pointer leaves,
+   through KWin's own edge as Plasma's panels do.
+3. Existing bars moved over from Plasma panels, start at login, the
+   lifecycle tests rewritten for the bar host.
+4. Plasma widgets inside the bars (Panel Studio: add, remove, order),
+   standing on the Arch Dock look.
+5. Each bar's own icons (one bar with the open applications and the clock,
+   as on the owner's desktop).
+6. The package and the update steps.
+
+## Risks being watched
+
+- Plasma widgets in a host that is not plasmashell: popups, keyboard
+  focus for search (the application launcher), global shortcuts (the
+  launcher's Meta key belongs to the owner's own Plasma panel), and the
+  system tray's services. Each is checked in a private session before it
+  is offered.
+- Plasma's restricted Wayland interfaces: what the bar host may use is
+  declared in its desktop file, as Plasma's own programs do.
+- Many tests assume edge bars are Plasma panels; they are rewritten with
+  the code, never dropped.
+
+## Step 1: the bar host — Report 1 (2026-10-21)
+
+### What the owner sees
+
+- **Bars side by side on one edge.** Each bar is a window of Arch Dock's own
+  along its screen edge, beside any others there, not stacked as Plasma
+  stacks its panels. The bars hold Arch Dock's dock with its whole look, on
+  no Plasma background.
+- **Each bar its own length**: Width for a top or bottom bar (Height for a
+  side bar) on the Size page, or **Dynamic** on the Behavior page, where the
+  bar is as long as its icons and grows when one is added.
+- **Each bar its own place**: Alignment (Start is the left or top corner,
+  Center the middle, End the right or bottom corner) and the new **Offset**
+  on the General page, in pixels from the corner, or from the middle for a
+  centred bar (below zero towards the start). It is offered for bars only:
+  Plasma places its own panels. A middle bar that would lie over a corner
+  bar stands aside of it; nothing goes past the edge.
+- **Each bar its own size**: Height (its thickness) and Icon size.
+- **Windows keep clear**: a maximised window stops above the deepest bar on
+  each edge. Stands and holograms reach past a bar as before, drawn in the
+  dock's own window above it.
+
+The owner's questions (2026-10-21), answered with pictures: a longer and a
+shorter bar, or two the same: yes. One at the corner and one in the middle:
+yes; anywhere between: the new Offset. One bigger than the other, both
+Dynamic: yes. Installing from GitHub: no containers or Docker (Arch Dock
+runs inside the user's own Plasma desktop); Arch Linux users build the
+package with the repository's PKGBUILD (`makepkg -si`); Plasma 6.8 on
+Wayland is needed.
+
+The owner's ticks: the two bars ("Even better than before"), stands on a bar
+("Good"), and the places and lengths ("Good").
+
+### Faults found on the way, and fixed
+
+1. **Icons cut off at the screen's edge.** The dock asks for the height of
+   its whole drawing, more than the bar; Plasma's panel ignores that across
+   the panel, the bar did not. Each widget now has a slot as thick as the
+   bar, as in a Plasma panel (before and after in the pictures).
+2. **A bar with stands vanished.** Qt on Wayland gives every window the
+   position of its screen's corner, and the dock's window above the bar
+   places itself from the bar's position. The bar host keeps its windows'
+   positions as plasmashell does.
+3. **A moved bar could stay where it was.** The compositor takes a new place
+   with a window's next frame, which a bar whose picture is unchanged does
+   not draw; a frame is now asked for (the bar test passed six runs in a row
+   after this, and failed one of two before).
+4. **The backend did not find the bar host when started through a link**
+   (Qt names the folder of the link); it now looks beside its own program
+   file.
+5. **Safety**: only the session's real backend (the process owning Arch
+   Dock's name on the session bus) starts or stops the bar host, so a test
+   can never start bars on the owner's desktop.
+
+Pictures (in `/mnt/F/archdock-audit-2026-10-08/evidence/piece9-bars-step1/`):
+`before-after-icons-in-the-bar.png`, `places-and-lengths.png` (corner and
+middle, the same length, Offset, Dynamic), `stands-on-a-bar.png`,
+`sizes-and-dynamic.png` (a big and a small bar, before and after an icon is
+added) and `maximised-window.png`. All on a private Plasma desktop with
+Plasma's own default panel removed.
+
+### Tests
+
+- New: `barlayout-test` (6), `barrecord-test` (4), `bar-host-smoke` (9
+  checks in a private KWin), `PanelWindowCapabilityTest::barsFollowTheirRecords`;
+  the bar host's entry in `session-startup-metadata-test` and
+  `session-startup-diagnostics-test`; the package test's files, licences and
+  libraries for the bars.
+- Complete serial suite: 130 of 130 passed in 2953 s on the step before its
+  last small fixes (a strip's new depth asks for a frame; a bar host that
+  never comes up is started again; the bar layout written when a bar is
+  made). On the final code 129 of 130 passed in 2498 s:
+  `panel-window-capability-test` crashed once inside Qt's QML garbage
+  collector (`QV4::GCStateMachine::transition` from
+  `MemoryManager::tryForceGCCompletion` in a property write) during
+  `studioMotionAndDirectionRows`, an older Panel Studio test that reaches no
+  bar code. That function then passed five runs alone, and the whole test
+  twice from the start (511 s, 502 s), with `barsFollowTheirRecords`.
+
+### Not yet (the next steps)
+
+Bars are made through the backend (`createBar`); Panel Studio still adds
+Plasma panels for edges until step 3, when Arch Dock's existing edge panels
+move over with their widgets and Arch Dock starts at login. A bar is always
+shown until step 2 brings hiding (auto-hide and dodge). Profiles and preset
+trials refuse while a bar is involved, until step 3. Launcher bars share one
+application list until step 5. Plasma's widgets go into bars in step 4.

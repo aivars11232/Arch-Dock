@@ -353,6 +353,10 @@ ArchDock::ProfileApplyTransaction::Operations PanelWindow::profileOperations()
         if (m_nativePanelRecoveryActive || m_settingsTransactionAdoptionActive)
             return QStringLiteral("panel-lifecycle-active");
         if (m_presetAudition && m_presetAudition->active()) return QStringLiteral("preset-audition-active");
+        // Profiles do not take Arch Dock's own bars yet: they would be asked
+        // for Plasma panels they do not have.
+        for (const QString &panelId : m_panelRegistry.panelIds())
+            if (barHosted(panelId)) return QStringLiteral("bars-not-in-profiles-yet");
         for (const auto &locks : std::as_const(m_panelInteractionGuards))
         {
             if (locks.editMode) return QStringLiteral("edit-mode-active");
@@ -397,6 +401,8 @@ ArchDock::ProfileApplyTransaction::Operations PanelWindow::profileOperations()
         panels = effective.resolved(references, diagnostics);
         for (auto &panel : panels)
         {
+            if (panel.host.kind == PanelHostKind::NativeEdge && panel.host.edgeHost == QLatin1String("bar"))
+                return fail(QStringLiteral("bars-not-in-profiles-yet"));
             const auto screen = resolveScreen(screenIds, panel.host.screenId, panel.host.screenIndex);
             if (screen.usedFallback && diagnostics) diagnostics->append(panel.identity.id + QStringLiteral(":screen-fallback"));
             panel.host.screenIndex = screen.index;
@@ -561,6 +567,9 @@ ArchDock::PresetPreviewSession::Operations PanelWindow::presetAuditionOperations
     operations.prepare = [this](const QVariantMap &request, QString *error) { return preparePresetPreview(request, error); };
     operations.guard = [this](const QString &panelId) {
         if (profileBusy()) return QStringLiteral("profile-recovery-or-apply-active");
+        // Presets are not tried on Arch Dock's own bars yet: a preview would
+        // be asked for a Plasma panel the bar does not have.
+        if (barHosted(panelId)) return QStringLiteral("bars-not-in-presets-yet");
         QStringList targets{panelId};
         if (m_presetAudition && m_presetAudition->active())
             targets.append(m_presetAudition->status().value(QStringLiteral("panelId")).toString());

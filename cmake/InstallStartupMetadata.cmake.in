@@ -26,9 +26,23 @@ string(REPLACE "%" "%%" _archdock_desktop "${_archdock_desktop}")
 string(REPLACE "\\" "\\\\" _archdock_desktop "${_archdock_desktop}")
 set(ARCHDOCK_DESKTOP_EXEC "\"${_archdock_desktop}\"")
 
+# The bar host, beside the backend. KWin grants it the Wayland interfaces its
+# desktop entry names when the entry's Exec is the very program, so the path
+# is absolute and quoted the same way.
+get_filename_component(_archdock_bindir_path "${_archdock_executable}" DIRECTORY)
+set(_archdock_bars "${_archdock_bindir_path}/arch-dock-bars")
+string(REPLACE "\\" "\\\\" _archdock_bars "${_archdock_bars}")
+string(REPLACE "\"" "\\\"" _archdock_bars "${_archdock_bars}")
+string(REPLACE "`" "\\`" _archdock_bars "${_archdock_bars}")
+string(REPLACE "$" "\\$" _archdock_bars "${_archdock_bars}")
+string(REPLACE "%" "%%" _archdock_bars "${_archdock_bars}")
+string(REPLACE "\\" "\\\\" _archdock_bars "${_archdock_bars}")
+set(ARCHDOCK_BARS_DESKTOP_EXEC "\"${_archdock_bars}\"")
+
 set(_archdock_generated "@CMAKE_CURRENT_BINARY_DIR@/startup-metadata")
 file(MAKE_DIRECTORY "${_archdock_generated}")
-foreach(_archdock_descriptor IN ITEMS arch-dock.service org.archdock.ArchDock.service org.archdock.ArchDock.desktop)
+foreach(_archdock_descriptor IN ITEMS arch-dock.service org.archdock.ArchDock.service org.archdock.ArchDock.desktop
+                                      org.archdock.ArchDock.Bars.desktop)
   configure_file("@CMAKE_CURRENT_BINARY_DIR@/startup-templates/${_archdock_descriptor}.in"
                  "${_archdock_generated}/${_archdock_descriptor}" @ONLY)
 endforeach()
@@ -37,4 +51,5 @@ file(INSTALL "${_archdock_generated}/arch-dock.service"
 file(INSTALL "${_archdock_generated}/org.archdock.ArchDock.service"
      DESTINATION "${CMAKE_INSTALL_PREFIX}/share/dbus-1/services")
 file(INSTALL "${_archdock_generated}/org.archdock.ArchDock.desktop"
+                "${_archdock_generated}/org.archdock.ArchDock.Bars.desktop"
      DESTINATION "${CMAKE_INSTALL_PREFIX}/share/applications")

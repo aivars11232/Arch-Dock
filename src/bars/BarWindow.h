@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#pragma once
+
+#include <PlasmaQuick/ContainmentView>
+
+#include <QPointer>
+#include <QQuickWindow>
+
+class QScreen;
+
+namespace LayerShellQt
+{
+class Window;
+}
+
+namespace ArchDock::Bars
+{
+// One Arch Dock bar on the screen: a window showing the bar's containment, as
+// Plasma shows a panel's, but a layer-shell surface of Arch Dock's own above
+// windows, placed along its edge by the bar host. It keeps no room for itself
+// (other bars may stand beside it on the same edge); the edge's reserved
+// strip keeps windows clear of it.
+class BarWindow : public PlasmaQuick::ContainmentView
+{
+    Q_OBJECT
+
+public:
+    BarWindow(Plasma::Corona *corona, Plasma::Containment *containment, const QUrl &view);
+
+    // How long the bar's widgets want it to be along its edge.
+    [[nodiscard]] int wantedLength() const;
+    // Stands the bar on this screen against `edge`, `start` pixels along it
+    // from the edge's start (its left, or its top on a side edge), `length`
+    // long, `thickness` deep and `margin` pixels off the edge. Shown unless
+    // it has no length.
+    void place(QScreen *screen, const QString &edge, int start, int length, int thickness, int margin);
+
+Q_SIGNALS:
+    void wantedLengthChanged();
+
+private:
+    LayerShellQt::Window *m_layer = nullptr;
+    QPointer<QScreen> m_screen;
+};
+
+// The room a screen edge's bars take: a see-through strip along the whole
+// edge, under windows, taking no input, whose only work is to reserve the
+// depth of the edge's deepest bar so that maximised windows stop above it.
+// One window per edge because the compositor keeps no room for a window
+// anchored to a corner, as a bar standing beside another must be.
+class ReservedStrip : public QQuickWindow
+{
+    Q_OBJECT
+
+public:
+    ReservedStrip(QScreen *screen, const QString &edge);
+
+    void setDepth(int depth);
+    [[nodiscard]] QScreen *placedScreen() const { return m_screen; }
+
+private:
+    LayerShellQt::Window *m_layer = nullptr;
+    QPointer<QScreen> m_screen;
+    int m_depth = -1;
+};
+}

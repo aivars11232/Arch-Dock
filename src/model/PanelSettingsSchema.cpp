@@ -374,6 +374,8 @@ const QVector<Descriptor> &schemaFields()
         panel("hostKind", Access::Protected, Type::String, Normalization::ChoiceLower,
               QStringLiteral("native-edge"), "host.kind", {}, {},
               {"native-edge", "free-desktop"}),
+        panel("edgeHost", Access::Protected, Type::String, Normalization::ChoiceLower,
+              QStringLiteral("plasma"), "host.edgeHost", {}, {}, {"plasma", "bar"}),
         exposedTo(panel("screen", Access::Editor, Type::Integer, Normalization::ScreenIndex, 0,
               "host.screenIndex", 0, {}, {}, false, true,
               editor("panels-general", "Display", "screen", {"studio"},
@@ -518,9 +520,15 @@ const QVector<Descriptor> &schemaFields()
               1000000, {}, false, true,
               editor("panels-general", "Vertical position", "spin", {"studio"},
                      "arbitrary-xy-placement", {}, {{QStringLiteral("suffix"), QStringLiteral(" px")}})),
-        panel("offset", Access::LegacyMutable, Type::Integer,
-              Normalization::NonNegativeInteger, 0, "placement.offset", {}, {}, {}, true,
-              true),
+        // How far a bar of Arch Dock's own stands from where its alignment
+        // puts it: from its corner for Start and End, from the middle for
+        // Center (towards the end, or the start below zero), as Plasma moves
+        // a panel by its offset.
+        exposedTo(panel("offset", Access::Editor, Type::Integer,
+              Normalization::IntegerRange, 0, "placement.offset", -4096, 4096, {}, true,
+              true, editor("panels-general", "Offset", "spin", {"studio"}, "alignment",
+                           {}, {{QStringLiteral("suffix"), QStringLiteral(" px")}})),
+                  {"native-placement"}),
         exposedTo(panel("floatingMargin", Access::LegacyMutable, Type::Integer,
               Normalization::NonNegativeInteger, 0, "placement.floatingMargin", {}, {}, {},
               true, true), {"native-placement"}),

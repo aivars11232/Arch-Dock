@@ -48,8 +48,19 @@ function(check_install logical_prefix physical_prefix)
   if(NOT dbus MATCHES "Name=org.archdock.ArchDock\n" OR dbus MATCHES "SystemdService=")
     message(FATAL_ERROR "The on-demand service must use direct session D-Bus activation")
   endif()
+  # The bar host's entry names the installed bar host itself: KWin grants it
+  # the Wayland interfaces the entry lists only then.
+  set(bars_entry "share/applications/org.archdock.ArchDock.Bars.desktop")
+  file(STRINGS "${physical_prefix}/${bars_entry}" bars REGEX "^Exec=")
+  if(NOT bars STREQUAL "Exec=\"${logical_prefix}/${INSTALL_BINDIR}/arch-dock-bars\"")
+    message(FATAL_ERROR "Bar host path mismatch in ${bars_entry}: ${bars}")
+  endif()
+  if(NOT "${logical_prefix}/${bars_entry}" IN_LIST manifest)
+    message(FATAL_ERROR "The bar host entry is absent from the install manifest")
+  endif()
   execute_process(COMMAND "${DESKTOP_VALIDATOR}"
     "${physical_prefix}/share/applications/org.archdock.ArchDock.desktop"
+    "${physical_prefix}/${bars_entry}"
     RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE error)
   if(NOT status EQUAL 0)
     message(FATAL_ERROR "Desktop metadata validation failed: ${output}${error}")

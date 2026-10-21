@@ -1,0 +1,19 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Id": "org.archdock.bar",
+        "Name": "Arch Dock bar",
+        "Description": "An Arch Dock bar: its widgets in a row along a screen edge.",
+        "Icon": "org.archdock.ArchDock",
+        "Category": "Containments",
+        "License": "GPL-3.0-or-later",
+        "Version": "1.0.0",
+        "Authors": [
+            {
+                "Name": "Arch Dock"
+            }
+        ]
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-ContainmentType": "Panel"
+}

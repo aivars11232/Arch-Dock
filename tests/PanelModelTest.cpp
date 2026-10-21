@@ -482,6 +482,7 @@ void PanelModelTest::currentFieldsAndExtensionsRoundTripWithoutLoss()
         {QStringLiteral("animationSpeed"), 0.9},
         {QStringLiteral("animationIntensity"), 0.8},
         {QStringLiteral("physicsEnabled"), true},
+        {QStringLiteral("edgeHost"), QStringLiteral("bar")},
         {QStringLiteral("nativePanelId"), 41},
         {QStringLiteral("nativeControlAppletId"), 42},
         {QStringLiteral("nativeDockAppletId"), 43},

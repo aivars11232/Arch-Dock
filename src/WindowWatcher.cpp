@@ -253,7 +253,11 @@ void WindowWatcher::windowAdded(const QString &internalId,
              << "resourceName:" << resourceName
              << "caption:" << caption;
 
-    if (resourceClass == QStringLiteral("arch-dock"))
+    // The backend's own windows, and its bar host's: a bar is named after
+    // the program, a bar's popup after its desktop file.
+    if (resourceClass == QStringLiteral("arch-dock") ||
+        resourceClass == QStringLiteral("arch-dock-bars") ||
+        resourceClass == QStringLiteral("org.archdock.ArchDock.Bars"))
     {
         qDebug() << "Ignoring Arch Dock's own window:" << internalId;
         return;

@@ -390,6 +390,8 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
 
     definition.host.kind = hostKindFromName(
         record.value(QStringLiteral("hostKind")).toString(), edge);
+    definition.host.edgeHost = normalized(
+        QStringLiteral("edgeHost"), definition.host.edgeHost).toString();
     definition.host.screenIndex = normalized(
         QStringLiteral("screen"), definition.host.screenIndex).toInt();
     definition.host.screenId = normalized(
@@ -1225,6 +1227,7 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("name"), identity.name);
     record.insert(QStringLiteral("builtIn"), identity.builtIn);
     record.insert(QStringLiteral("hostKind"), hostKindName(host.kind));
+    record.insert(QStringLiteral("edgeHost"), host.edgeHost);
     record.insert(QStringLiteral("screen"), host.screenIndex);
     record.insert(QStringLiteral("screenId"), host.screenId);
     record.insert(QStringLiteral("nativePanelId"), host.nativePanelId);
