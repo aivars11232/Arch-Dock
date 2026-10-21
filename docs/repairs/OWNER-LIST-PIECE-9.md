@@ -196,3 +196,18 @@ move over with their widgets and Arch Dock starts at login. A bar is always
 shown until step 2 brings hiding (auto-hide and dodge). Profiles and preset
 trials refuse while a bar is involved, until step 3. Launcher bars share one
 application list until step 5. Plasma's widgets go into bars in step 4.
+
+## Step 1 — Report 2 (recheck, 2026-10-21)
+
+A fresh clone of `origin/main` at `8bdd0dd` ("Owner list piece 9, step 1:
+Arch Dock's own bars"), configured as Debug with Quick 3D, built with one
+job in 1725 s, then the step's tests serially: `bar-host-smoke`,
+`barlayout-test`, `barrecord-test`, `panel-model-test`,
+`panel-settings-schema-test`, `panel-registry-test`,
+`panel-window-capability-test` (516 s), `studio-truth-matrix-smoke` (456 s),
+`plasma-template-contract-test`, `studio-navigation-test`,
+`session-startup-metadata-test` and `session-startup-diagnostics-test`:
+12 of 12 passed. All 935 committed files are the same in the clone and the
+workspace. Logs in `build-codex-adrep/evidence/OWNER-LIST-PIECE-9-STEP-1/`.
+
+Next: step 2, hiding.
