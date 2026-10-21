@@ -184,9 +184,7 @@ Holograms (Panels, Icons and Pedestals > Hologram) are drawn on flat and
 3D panels. The items in a folder's opening are not drawn as holograms. A
 3D decoration drawn as a hologram shows its own colours made light; its
 lights do not pulse or twinkle separately while it is a hologram, as they
-do on a flat panel. On a 3D panel that turns as a whole with the mouse
-wheel, projector stands make about a fifth of the frames late while it
-turns (being looked into).
+do on a flat panel.
 
 ## Resource use
 

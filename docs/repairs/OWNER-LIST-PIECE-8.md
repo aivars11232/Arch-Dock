@@ -511,14 +511,11 @@ fixes below ("Good").
   hologram keeps its size (a bar's light as tall as the bar; each of Red
   Core's lenses lit where the lens is); with the old mapping put back it
   fails. Its pictures now show icon-shaped pictures, not plates.
-- The complete serial suite has not run to its end on this code yet: the
-  last run, stopped for the wheel check below, had passed 37 of 127 with
-  none failed. At this checkpoint 14 focused tests passed on the committed
-  code (hologram look, platform geometry, icon scene, panel scene, scene
-  rotation, geometry hit region, schema, Studio navigation, live preview,
-  panel surface, panel decoration, dock entry, `decoration-3d-smoke`,
-  `path-travel-smoke`); the capability test's two new hologram tests passed
-  earlier the same day.
+- At the checkpoint (`e327f06`) 14 focused tests passed on the committed
+  code; the complete serial suite then ran on the code with the wheel
+  check's fixes: 126 of 127 (the first wheel latch, below), and after its
+  fix **127 of 127 passed** in 2990 s
+  (`/mnt/F/archdock-audit-2026-10-08/evidence/piece8-holo/suite/full-suite-4.log`).
 - Private desktop sessions (plain Plasma, Arch Dock's own bars only):
   bars on every edge with stands and holograms, clicks, previews, Plasma
   widgets, edit mode, auto-hide (`tools/holo-edge-replica.sh`,
@@ -564,19 +561,36 @@ render loop:
 - **Fixed: a 3D panel that turns as a whole lost the wheel** after one
   notch, holograms or not: its icons stand up from its band, so once the
   panel turned the pointer was over nothing. A wheel spin now keeps its
-  place for a second after each notch, while the pointer stays within an
-  icon's size of where it was, as Firefox's wheel transactions do
-  (`PanelScene.wheelLatched`); measured, 24 of 24 notches taken.
-- **Found, not yet fixed: projector stands on a 3D panel turning as a
-  whole** run 11% of frames late without holograms and about 20% with them
-  (plates, columns and the same stands on a travelling panel: none or
-  very few). Measured, it is not their size (216 triangles, fewer than a
-  dome's) nor their metal finish (plates in metal: 2%); by the code, the
-  hit tests do not read stands and the 3D view's margins change only in
-  steps; the render thread waits for frames rather than drawing slowly.
-  Qt's QML profiler
-  did not attach to the test runner; the next step is to profile it with
-  the QML runtime instead.
+  place for a second after each notch while the pointer stays where it
+  was (within 6 pixels), as Firefox's wheel transactions do
+  (`PanelScene.wheelLatched`); measured, 24 of 24 notches taken. The
+  complete suite caught the first version, which held the wheel within an
+  icon's size: a notch turned over a ring's empty middle just after one on
+  its band turned the panel (`runtime-ui-interaction-smoke`); a pointer
+  that moved now gives the wheel back to what lies under it.
+- **Fixed: projector stands on a 3D panel turning as a whole** made 11%
+  of frames late without holograms and about 20% with them (plates and
+  columns: none). Qt's QML profiler (through a test runner built with QML
+  debugging on, comparing a spin with projectors against the same spin
+  with plates) showed the main thread laying the whole scene out again on
+  nearly every frame: how far the stands rise sets the platform's size,
+  and the turn wobbled it in its last digits - the camera's directions in
+  the panel's frame come from a single-precision rotation (0.0000003 in a
+  direction, 0.000003 in the platform's size: nothing that shows). A
+  projector rises past the panel's top, so its platform followed the
+  wobble; a plate does not. The rise is now kept to a quarter of a pixel
+  (`PanelScene3D.standRise`): during a spin the platform's size changed 0
+  times instead of 296, projectors on a turning panel run 0% late, with
+  every hologram on 6%, the same as the other hologram cases. A new check
+  in `decoration-3d-smoke`, `turningPanelKeepsItsLayout`, spins such a
+  panel with the wheel in the real renderer and fails if its platform is
+  laid out again (with the old rise it was, 340 times).
+- **Every motion on film**: a 51-second video for the owner,
+  `evidence/piece8-holo/hologram-motions.mp4` - a bottom bar in each light
+  motion, every part holographic in Cyan, a side bar, 3D icons turning and
+  swaying, and free panels turned with the wheel (filmed in a private
+  session as fast as frames could be grabbed; the wheel parts at about 20
+  frames a second, slower than the panel itself draws).
 
 ### Checkpoint and what comes next
 
@@ -584,12 +598,13 @@ Committed at the owner's word ("Commit and Sync current changes, make a
 report and stop, we'll continue tomorrow") before the holograms were
 closed. Next, in order:
 
-1. Find and fix the projector stands' cost on a turning 3D panel (profile
-   with `qml` and `qmlprofiler`; the measuring scenes are in the session's
-   scratch folder `wheel/`).
-2. Short video clips of every hologram motion (flicker, lines, float,
-   turning, each light motion) and of free panels turned with the wheel,
-   for the owner to judge; ffmpeg is installed.
+1. Done 2026-10-21: the projector stands' cost on a turning 3D panel, and
+   the video of every motion (above); the measuring tools are kept in
+   `/mnt/F/archdock-audit-2026-10-08/tools/` (`qml-session.sh`,
+   `wheel-scene.py`, `pacing.py`, `profile-runner.sh` with the
+   QML-debugging `qmldebug-runner`, `qtd-sum.py`, `clip-scene.py`,
+   `clip-encode.py`).
+2. The owner's word on the video.
 3. The complete serial suite, Report 1's suite line, then the fresh-clone
    recheck (`/mnt/F/archdock-audit-2026-10-08/tools/piece8-holo-recheck.sh`,
    logs 40-44) and Report 2, closing the holograms.

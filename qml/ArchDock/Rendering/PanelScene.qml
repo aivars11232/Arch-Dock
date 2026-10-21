@@ -425,17 +425,19 @@ Item {
     // The last wheel event the scene took, as Qt delivered it, and where.
     property var lastWheelInput: ({})
     // A wheel spin keeps its place: for a moment after the scene took a
-    // notch it takes the next ones there too, though what was under the
-    // pointer moved on - a 3D panel's icon stands up from its band, so a
-    // turn of the panel leaves the pointer over nothing. As Firefox's wheel
-    // transactions do, the spin ends after a pause or once the pointer
-    // moves away.
+    // notch it takes the next ones at the same spot too, though what was
+    // under the pointer moved on - a 3D panel's icon stands up from its
+    // band, so a turn of the panel leaves a still pointer over nothing. As
+    // Firefox's wheel transactions do, the spin ends after a pause or once
+    // the pointer moves: a wheel turned over a ring's empty middle still
+    // reaches what lies under it.
     readonly property int wheelLatchMs: 1000
+    readonly property real wheelLatchReach: 6
     function wheelLatched(point) {
         const last = lastWheelInput || ({})
         const since = Date.now() - Number(last.at || 0)
         return since >= 0 && since < wheelLatchMs && Number.isFinite(Number(last.x))
-            && Math.hypot(point.x - Number(last.x), point.y - Number(last.y)) < layoutGeometry.iconSize
+            && Math.hypot(point.x - Number(last.x), point.y - Number(last.y)) < wheelLatchReach
     }
     // How long one wheel step takes to arrive, eased out (OF-11). It ends
     // within 120 ms of the wheel event, the frame that shows it included.

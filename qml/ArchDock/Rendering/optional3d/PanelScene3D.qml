@@ -1030,7 +1030,12 @@ Item {
         if (!pedestalDrawn) return 0
         const unit = iconCellSize * pedestalShapeScale * pedestalSize
         const gap = pedestalShape === "auto" ? iconCellSize * 0.02 : iconCellSize * (0.03 + pedestalLift * 0.3)
-        return Math.max(0, pedestalExtentsUnit.top * unit + gap - iconCellSize * 0.07)
+        // To a quarter of a pixel: the platform's size follows it, and its
+        // last digits wobble as the panel turns (the camera's directions in
+        // the panel's frame come from a single-precision rotation), which
+        // would otherwise lay the whole scene out again on every frame of
+        // the turn.
+        return Math.round(Math.max(0, pedestalExtentsUnit.top * unit + gap - iconCellSize * 0.07) * 4) / 4
     }
     readonly property real platformScale: {
         const fitted = Math.min(width / platformReachX, height / platformReachY) * 0.40

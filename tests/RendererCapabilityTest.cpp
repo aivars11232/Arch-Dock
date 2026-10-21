@@ -1736,6 +1736,7 @@ private slots:
     void hologramsDrawAsLight_data();
     void hologramsDrawAsLight();
     void flatHologramsKeepTheirSize();
+    void turningPanelKeepsItsLayout();
 
     void generatedPlatformsFollowTheLayoutAndLook_data()
     {
@@ -4115,6 +4116,96 @@ void RendererCapabilityTest::flatHologramsKeepTheirSize()
             }
         }
     }
+}
+
+// A 3D panel turned with the mouse wheel keeps its layout: its platform's
+// size follows how far its stands rise, and a turn only wobbles that in its
+// last digits (the camera's directions in the panel's frame come from a
+// single-precision rotation), which once laid the whole scene out again on
+// every frame of the turn - projector stands made a fifth of the frames late.
+void RendererCapabilityTest::turningPanelKeepsItsLayout()
+{
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+        return; // The 3D scene turns only in the real RHI scene.
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_DECORATIONS"))
+        QSKIP("Runs in its own private session (ARCHDOCK_RENDERING_DECORATIONS).");
+    const QString glyph = QFINDTESTDATA("data/truth-glyph-terminal.svg");
+    QVERIFY(!glyph.isEmpty());
+    QVariantMap theme{
+        {QStringLiteral("format"), QStringLiteral("org.archdock.theme")},
+        {QStringLiteral("version"), 2}, {QStringLiteral("valid"), true},
+        {QStringLiteral("id"), QStringLiteral("procedural-look")},
+        {QStringLiteral("name"), QStringLiteral("Procedural look")},
+        {QStringLiteral("capabilities"), QVariantMap{
+            {QStringLiteral("rendererTiers"), QVariantList{QStringLiteral("true3d"), QStringLiteral("procedural2d")}},
+            {QStringLiteral("preferredRendererTier"), QStringLiteral("procedural2d")},
+            {QStringLiteral("fallbackRendererTiers"), QVariantList{QStringLiteral("procedural2d")}}}},
+        {QStringLiteral("scene3D"), QVariantMap{
+            {QStringLiteral("generic"), true}, {QStringLiteral("generated"), QVariantMap{}},
+            {QStringLiteral("fieldOfView"), 40}, {QStringLiteral("cameraPitch"), 25},
+            {QStringLiteral("cameraYaw"), 0}, {QStringLiteral("defaultQuality"), QStringLiteral("high")},
+            {QStringLiteral("transitions"), false}, {QStringLiteral("parts"), QVariantList{}}}},
+        {QStringLiteral("scene3DResources"), QVariantMap{
+            {QStringLiteral("material"), QVariantMap{
+                {QStringLiteral("format"), QStringLiteral("org.archdock.material")},
+                {QStringLiteral("version"), 1}, {QStringLiteral("baseColor"), QStringLiteral("#406080")},
+                {QStringLiteral("emissiveColor"), QStringLiteral("#000000")},
+                {QStringLiteral("emissiveStrength"), 0.0}, {QStringLiteral("metalness"), 0.3},
+                {QStringLiteral("roughness"), 0.45}}},
+            {QStringLiteral("parts"), QVariantList{}}, {QStringLiteral("indexBudget"), 262144}}}};
+    QQmlEngine engine;
+    engine.addImportPath(importRoot());
+    QQmlComponent component(&engine);
+    component.setData(R"(
+        import QtQuick
+        import ArchDock.Rendering 1.0
+        PanelScene {
+            required property string glyph
+            panelDefinition: ({rendererTier: "true3d", layout: "circular", layoutRadius: 210, iconSize: 52,
+                               layoutPadding: 10, appearance: "glass", scene3DQuality: "high",
+                               scene3DCameraPitch: 25, scene3DTransitions: false,
+                               pedestalShape: "projector", panelMotionTarget: "panel", motionTarget: "panel"})
+            entryDelegateContext: ({hostKind: "free"})
+            hostCapabilities: ({rotation: {available: true}})
+            orderedEntries: [0, 1, 2, 3, 4, 5].map(function(index) {
+                return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyph}
+            })
+        }
+    )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/TurningPanelConsumer.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    QQuickWindow window;
+    window.setColor(QColor(QStringLiteral("#1b2333")));
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({
+        {QStringLiteral("themeDefinition"), theme},
+        {QStringLiteral("glyph"), QUrl::fromLocalFile(glyph).toString()}}));
+    QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+    auto *scene = qobject_cast<QQuickItem *>(object.get());
+    QVERIFY(scene);
+    scene->setParentItem(window.contentItem());
+    window.resize(qCeil(scene->width()), qCeil(scene->height()));
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(), QStringLiteral("true3d"), 5000);
+    auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+    QVERIFY(renderer);
+    QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 6);
+    QVERIFY(scene->property("wheelRotationAvailable").toBool());
+    QTest::qWait(500);
+    const double angle = scene->property("effectiveLayoutAngle").toDouble();
+    QSignalSpy relaid(renderer, SIGNAL(platformScaleChanged()));
+    // A wheel spun for a second and a half, a notch every 60 ms: a whole
+    // turn, 15 degrees a notch.
+    double midway = angle;
+    for (int notch = 0; notch < 24; ++notch)
+    {
+        QVERIFY(QMetaObject::invokeMethod(scene, "stepMotion", Q_ARG(QVariant, 1)));
+        QTest::qWait(60);
+        if (notch == 8)
+            midway = scene->property("effectiveLayoutAngle").toDouble();
+    }
+    QTest::qWait(200);
+    QVERIFY2(std::abs(std::remainder(midway - angle, 360.0)) > 60, "the panel turned");
+    QCOMPARE(relaid.count(), 0);
 }
 
 QTEST_MAIN(RendererCapabilityTest)

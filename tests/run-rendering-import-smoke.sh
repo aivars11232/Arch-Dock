@@ -498,6 +498,14 @@ run_private_session() {
                     return 1
                 }
         sed -n '/^Totals:/p' "$ARCHDOCK_RENDERING_LOG_DIR/hologram-flat.log"
+        printf 'Checking a 3D panel turned with the wheel keeping its layout under private KWin.\n'
+        ARCHDOCK_TEST_RHI=1 ARCHDOCK_TEST_DECORATIONS=1 ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \
+            "$ARCHDOCK_RENDERING_CAPABILITY_TEST" turningPanelKeepsItsLayout \
+                >"$ARCHDOCK_RENDERING_LOG_DIR/turning-3d.log" 2>&1 || {
+                    tail -n 100 "$ARCHDOCK_RENDERING_LOG_DIR/turning-3d.log" >&2
+                    return 1
+                }
+        sed -n '/^Totals:/p' "$ARCHDOCK_RENDERING_LOG_DIR/turning-3d.log"
         return 0
     fi
 

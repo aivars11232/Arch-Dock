@@ -179,10 +179,18 @@ Report `docs/repairs/OWNER-LIST-PIECE-8.md`; the checkpoint's handoff
   decorated panel among them) and `flatHologramsKeepTheirSize`, drawing
   icon-shaped pictures (`tests/data/truth-glyph-*.svg`).
 - **A wheel spin keeps its place** (`PanelScene.wheelLatched`,
-  `wheelLatchMs` 1000): the scene's wheel input takes a notch within an
-  icon's size of the last one taken in the past second, though what was
-  under the pointer moved on (a 3D panel turning as a whole), as Firefox's
-  wheel transactions do; `lastWheelInput` now records where.
+  `wheelLatchMs` 1000, `wheelLatchReach` 6): the scene's wheel input
+  takes a notch within 6 pixels of the last one taken in the past second,
+  though what was under the pointer moved on (a 3D panel turning as a
+  whole), as Firefox's wheel transactions do; `lastWheelInput` now records
+  where. A pointer that moved (into a ring's empty middle) is not held.
+  Test: `tst_PanelScene.qml` `test_wheelSpinKeepsItsPlaceWhileThePointerStays`.
+- **A turning 3D panel keeps its layout**: `PanelScene3D.standRise` (how
+  far the stands rise, which sets `platformScale` when they would reach
+  past the panel's top) is kept to a quarter of a pixel, so the turn's
+  single-precision wobble in `iconFacing` no longer lays the scene out
+  every frame. Check: `RendererCapabilityTest::turningPanelKeepsItsLayout`
+  in `decoration-3d-smoke`.
 <!-- LIST_PIECE_8_END -->
 
 <!-- LIST_PIECE_7_BEGIN -->

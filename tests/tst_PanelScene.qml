@@ -395,6 +395,20 @@ TestCase {
         return scene
     }
 
+    function test_wheelSpinKeepsItsPlaceWhileThePointerStays() {
+        // A notch taken holds the wheel at that spot for a second, though
+        // what was under it moved on; a pointer that moved, or a pause,
+        // gives the wheel back to whatever lies under it.
+        const scene = createScene()
+        verify(!scene.wheelLatched(Qt.point(100, 40)), "nothing taken yet")
+        scene.lastWheelInput = { angleDelta: 120, pixelDelta: 0, at: Date.now(), x: 100, y: 40 }
+        verify(scene.wheelLatched(Qt.point(100, 40)), "the same spot")
+        verify(scene.wheelLatched(Qt.point(103, 42)), "a hand's tremble")
+        verify(!scene.wheelLatched(Qt.point(110, 40)), "a pointer that moved")
+        scene.lastWheelInput = { angleDelta: 120, pixelDelta: 0, at: Date.now() - scene.wheelLatchMs - 1, x: 100, y: 40 }
+        verify(!scene.wheelLatched(Qt.point(100, 40)), "after a pause")
+    }
+
     function test_deterministicFixedData() {
         const first = createScene()
         const second = createScene()
