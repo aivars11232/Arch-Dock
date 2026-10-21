@@ -272,3 +272,17 @@ private Plasma desktop; KWin's permission checks on gave the same 14 results
   through KWin's input, the pointer gone, uncovered; an auto-hiding bar
   hidden, brought back and hidden again.
 - Complete serial suite: 130 of 130 passed in 3002 s.
+
+## Step 2 — Report 2 (recheck, 2026-10-21)
+
+A fresh clone of `origin/main` at `3926402` ("Owner list piece 9, step 2:
+Arch Dock's bars hide as Plasma's panels do"), Debug with Quick 3D, built
+with one job in 1750 s; then `bar-host-smoke`, `barlayout-test`,
+`barrecord-test`, `panel-model-test`, `window-preview-model-test`,
+`panel-window-capability-test` (500 s), `panel-visibility-test`,
+`window-interaction-smoke` (the KWin window script with live windows) and
+`session-startup-metadata-test`: 9 of 9 passed. All 939 committed files are
+the same in the clone and the workspace. Logs in
+`build-codex-adrep/evidence/OWNER-LIST-PIECE-9-STEP-2/`.
+
+Next: step 3, Panel Studio's bars, profiles with bars, and the start at login.
