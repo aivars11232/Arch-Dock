@@ -254,6 +254,7 @@ QVariantMap ProfileApplyTransaction::apply(const ProfileDefinition &profile)
         const auto requestedHost = panel.host;
         panel.host = ProfileDefinition::portablePanel(panel).host;
         if (found != previous.cend() && hosted(*found) && found->host.kind == panel.host.kind &&
+            found->host.edgeHost == panel.host.edgeHost &&
             found->content.type == panel.content.type && (panel.host.kind != PanelHostKind::FreeDesktop ||
                 found->host.screenIndex == requestedHost.screenIndex))
             panel.host = found->host;

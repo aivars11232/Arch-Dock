@@ -2232,26 +2232,26 @@ Window {
                 return;
             occupiedEdges = Array.from(panelController.occupiedScreenEdges() || []);
             if (!newPanelPlaceFree(edge)) {
-                studioError = qsTr("A panel already stands on the screen's %1 edge.").arg(edge);
+                studioError = qsTr("Another panel (Plasma's or another dock's) already stands on the screen's %1 edge.").arg(edge);
                 return;
             }
-            // Bottom, Top and Side, the built-in edge panels, come back when
-            // their edge is picked while they are hidden; any other panel
-            // on an edge is a new dock with nothing on it yet. (An edge
-            // panel of the "empty" type would be a plain Plasma panel, with
-            // no Arch Dock in it.)
+            // An edge panel is a bar of Arch Dock's own, which can stand
+            // beside others on its edge. Bottom, Top and Side, the built-in
+            // edge panels, come back as bars when their edge is picked while
+            // they are hidden; any other one is a new dock with nothing on it
+            // yet.
             const builtIn = Array.from(panelRegistry.panelIds).find(function(id) {
                 return panelRegistry.isBuiltIn(id) && String(panelRegistry.panelValue(id, "edge")) === edge
                     && !Boolean(panelRegistry.panelValue(id, "visible"));
             });
             if (builtIn !== undefined) {
-                if (panelController.setPanelVisible(builtIn, true))
+                if (panelController.showEdgePanelAsBar(builtIn))
                     openPanelEditor(builtIn);
                 else
                     studioError = qsTr("Could not add %1 to the desktop.").arg(panelRegistry.panelName(builtIn));
                 return;
             }
-            const panelId = String(panelController.createNativePanel(edge, "launcher") || "");
+            const panelId = String(panelController.createBar(edge, "launcher") || "");
             if (panelId.length > 0)
                 openPanelEditor(panelId);
             else
@@ -2883,7 +2883,7 @@ Window {
                         // new panel page, where an edge may be taken.
                         HoverHandler { id: placeHover }
                         ToolTip.visible: placeHover.hovered && root.newPanelPicked && !root.newPanelPlaceFree(modelData)
-                        ToolTip.text: qsTr("A panel already stands on this edge")
+                        ToolTip.text: qsTr("Another panel (Plasma's or another dock's) already stands on this edge")
                         ToolTip.delay: 400
                     }
                 }

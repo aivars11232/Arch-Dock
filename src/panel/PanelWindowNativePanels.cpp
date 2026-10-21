@@ -1164,10 +1164,11 @@ QStringList PanelWindow::occupiedScreenEdges() const
     const QList<QScreen *> screens = QGuiApplication::screens();
     const int screenIndex = screens.isEmpty()
         ? -1 : qBound(0, m_settings.monitorIndex(), screens.size() - 1);
-    // Arch Dock's own edge panels shown there.
+    // Arch Dock's own edge panels shown there that are Plasma panels; its
+    // own bars stand side by side, so another may join them.
     for (const ArchDock::EdgePanel &panel : edgePanels())
     {
-        if (panel.visible && panel.screenIndex == screenIndex)
+        if (panel.visible && panel.screenIndex == screenIndex && !barHosted(panel.id))
             occupied.insert(panel.edge);
     }
     if (screenIndex >= 0)

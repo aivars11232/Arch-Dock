@@ -109,16 +109,23 @@ QString PanelWindow::createBar(const QString &edge, const QString &type)
 
 QString PanelWindow::barHostRecordsJson() const
 {
+    QStringList panelIds = m_panelRegistry.panelIds();
+    // A new bar a preset is tried on is shown before it is kept.
+    if (m_presetAudition && m_presetAudition->active())
+    {
+        const QString trial = m_presetAudition->status().value(QStringLiteral("panelId")).toString();
+        if (!trial.isEmpty() && !panelIds.contains(trial))
+            panelIds.append(trial);
+    }
     QJsonArray bars;
     int order = 0;
-    for (const QString &panelId : m_panelRegistry.panelIds())
+    for (const QString &panelId : std::as_const(panelIds))
     {
-        if (!barHosted(panelId))
-            continue;
         // As drawn: with Panel Studio's draft or a preview, as the dock in
         // the bar is.
         const auto definition = runtimePanelDefinition(panelId);
-        if (!definition)
+        if (!definition || definition->host.kind != ArchDock::PanelHostKind::NativeEdge
+            || definition->host.edgeHost != QLatin1String("bar"))
             continue;
         const ArchDock::NativePanelPlacementResult normalized =
             normalizedNativePanelPlacement(*definition, {});
@@ -154,6 +161,22 @@ QString PanelWindow::barHostRecordsJson() const
         });
     }
     return QString::fromUtf8(QJsonDocument(bars).toJson(QJsonDocument::Compact));
+}
+
+bool PanelWindow::showEdgePanelAsBar(const QString &panelId)
+{
+    if (profileBusy() || !m_panelRegistry.panelIds().contains(panelId)
+        || !isNativeDockPanelEdge(m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString()))
+    {
+        return false;
+    }
+    if (!barHosted(panelId) && nativePanelId(panelId) < 0 && nativeOwnershipToken(panelId).trimmed().isEmpty()
+        && !m_panelRegistry.panelValue(panelId, QStringLiteral("visible")).toBool())
+    {
+        if (!m_panelRegistry.updatePanelChecked(panelId, {{QStringLiteral("edgeHost"), QStringLiteral("bar")}}))
+            return false;
+    }
+    return setPanelVisible(panelId, true);
 }
 
 QString PanelWindow::barHostWindowsJson() const

@@ -6,7 +6,8 @@
 #include <QTimer>
 
 // Keeps Arch Dock's bar host (arch-dock-bars, which shows the edge bars that
-// Plasma does not) running while there are bars to show. It is started on its
+// Plasma does not) running while there are bars to show, and Arch Dock
+// starting at login while there are (BarAutostart). It is started on its
 // own, apart from the backend, so that the bars stay on screen if the backend
 // stops unexpectedly; a backend started again finds it by its session bus
 // name. If it stops on its own it is started again, at most a few times in a
@@ -41,8 +42,11 @@ private:
     void hostGone();
     void askToQuit();
 
+    void syncAutostart();
+
     bool m_wanted = false;
     bool m_stopped = false;
+    bool m_autostartKnown = false;
     QDBusServiceWatcher m_watcher;
     QTimer m_restart;
     // A start that never came up on the session bus counts as a stop.

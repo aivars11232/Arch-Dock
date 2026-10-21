@@ -131,8 +131,10 @@ preset_no_orphans() {
     local count
     count="$(plasma_script "var count = 0; var all = panels().concat(desktops()); for (var i = 0; i < all.length; ++i) { var c = all[i]; c.currentConfigGroup = ['ArchDock']; if (String(c.readConfig('ownerToken', '')).indexOf('archdock-preview-') === 0) ++count; var ws = c.widgets(); for (var j = 0; j < ws.length; ++j) { var w = c.widgetById(ws[j].id); w.currentConfigGroup = ['General']; if (String(w.readConfig('ownerToken', '')).indexOf('archdock-preview-') === 0) ++count; } } print(count);" | gvariant_string)"
     preset_require_equal 0 "$count" 'preview ownership tokens after cleanup'
-    panel_registry_json | jq -e 'all(.[]; (.id | test("^(free|panel)-x[0-9a-f]{8}$") | not) or (.freeOwnershipToken // .nativeOwnershipToken | startswith("archdock-managed-")))' >/dev/null
+    # A kept trial panel owns its Plasma host; a kept trial bar has none.
+    panel_registry_json | jq -e 'all(.[]; (.id | test("^(free|panel)-x[0-9a-f]{8}$") | not) or (.edgeHost == "bar" and (.nativeOwnershipToken // "") == "") or (.freeOwnershipToken // .nativeOwnershipToken | startswith("archdock-managed-")))' >/dev/null
 }
+preset_bar_ids() { panel_call barHostRecordsJson | gvariant_string | jq -c 'map(.id)'; }
 preset_unrelated_unchanged() {
     require_unrelated_panel_unchanged "$PRESET_UNRELATED_ID" "$PRESET_UNRELATED_SNAPSHOT" "$1"
     preset_require_equal "$PRESET_FREE_SNAPSHOT" \
@@ -237,13 +239,18 @@ preset_temporary_group() {
     preset_require_equal 1 "$(panel_registry_value "$id" settingsRevision)" 'S5 initial revision'
     preset_unrelated_unchanged S5; preset_no_orphans
 
-    log_session_phase 'S6 new native preview / Cancel'
+    # A new edge panel is one of Arch Dock's own bars: nothing is made in
+    # Plasma, and the bar host is given the trial bar until it is cancelled.
+    log_session_phase 'S6 new edge preview is a bar / Cancel'
     registry="$(panel_registry_json)"
     reply="$(preset_begin panel obsidian-glass-dock true)"
     jq -e '.temporary==true and (.panelId|startswith("panel-x"))' <<<"$reply" >/dev/null
-    preset_require_equal "$((count+1))" "$(panel_count)" 'S6 one temporary native host'
+    id="$(jq -r '.panelId' <<<"$reply")"
+    preset_require_equal "$count" "$(panel_count)" 'S6 nothing made in Plasma'
+    preset_require_equal "[\"$id\"]" "$(preset_bar_ids)" 'S6 the trial bar listed for the bar host'
     preset_ok cancel >/dev/null
-    preset_require_equal "$count" "$(panel_count)" 'S6 native host removed'
+    preset_require_equal '[]' "$(preset_bar_ids)" 'S6 the trial bar gone'
+    preset_require_equal "$count" "$(panel_count)" 'S6 still nothing in Plasma'
     preset_require_equal "$registry" "$(panel_registry_json)" 'S6 registry unchanged'
     preset_no_orphans; preset_unrelated_unchanged S6
 }

@@ -3,7 +3,8 @@
 <!-- LIST_PIECE_9_BEGIN -->
 ## The owner's list, piece 9: Arch Dock's own bars — 2026-10-21
 
-Report `docs/repairs/OWNER-LIST-PIECE-9.md`; step 1 of six, the bar host.
+Report `docs/repairs/OWNER-LIST-PIECE-9.md`; steps 1 to 3 of six: the bar
+host, hiding, and Panel Studio, profiles, presets and the start at login.
 
 - **`arch-dock-bars`** (`src/bars/`), a program beside the backend.
   `BarCorona`, a `Plasma::Corona` as plasma-sdk's plasmoidviewer hosts
@@ -48,8 +49,7 @@ Report `docs/repairs/OWNER-LIST-PIECE-9.md`; step 1 of six, the bar host.
   widget going away removes nothing), type changes, removal (the record
   only), Plasma panel creation and removal, visibility (saved by
   `persistBarVisibility`), placement (validated, then saved; no containment
-  or token). Profiles and preset trials refuse bars for now
-  (`bars-not-in-profiles-yet`, `bars-not-in-presets-yet`).
+  or token). Profiles and preset trials take bars (step 3).
   `BarHostSupervisor` starts `arch-dock-bars` detached while there are
   bars (`ARCHDOCK_BARS_EXECUTABLE`, else beside the backend's real program
   file, else the PATH's), only from the process owning
@@ -79,8 +79,9 @@ Report `docs/repairs/OWNER-LIST-PIECE-9.md`; step 1 of six, the bar host.
   `AutoHideEdge` (`src/bars/ScreenEdge.*`, client of
   `src/bars/protocols/kde-screen-edge-v1.xml`): a bar that hides gets KWin's
   auto-hide edge for its border once its surface has its layer-shell role
-  (`surfaceRoleCreated`, or exposed; never earlier, which KWin treats as a
-  protocol error), dropped with the role. `BarWindow::setConcealWanted`
+  (when it is exposed; never earlier, which KWin treats as a protocol
+  error), dropped when it is hidden or loses its platform surface (public
+  window events only, no Qt private symbol). `BarWindow::setConcealWanted`
   shows at once and hides 400 ms later; Enter/Leave mark the pointer on the
   bar; `BarHost` counts popups (visible windows whose transient parent chain
   reaches the bar, followed by an application event filter on Show/Hide),
@@ -99,6 +100,34 @@ Report `docs/repairs/OWNER-LIST-PIECE-9.md`; step 1 of six, the bar host.
   `PanelWindowCapabilityTest::windowsOffTheTaskListStillCoverBars`,
   `bar-host-smoke` (17 checks; its KWin keeps global shortcuts, without
   which KWin's screen edges never take the pointer).
+- **Step 3, Panel Studio, profiles, presets, login**: Studio's new edge
+  panel is a bar (`createBar(edge, "launcher")`), several to an edge; a
+  hidden built-in edge panel with nothing of it in Plasma comes back as a
+  bar (`showEdgePanelAsBar`). `occupiedScreenEdges` counts Plasma panels and
+  other docks only. A preset tried on a new panel, or one needing another
+  kind of panel, is tried on a bar (`preparePresetPreview`), listed to the
+  bar host while the trial is active (`barHostRecordsJson`) and kept with
+  nothing to convert (`convertPresetPreviewHost`;
+  `PanelRegistry::adoptPreviewPanel` takes a bar with no Plasma panel or
+  ownership mark); a preset changing a bar's type needs no new panel, the
+  bar host adds or removes the dock. Profiles keep `edgeHost`
+  (`ProfileDefinition::portablePanel` had dropped it, so bars came back as
+  Plasma panels), and an apply never gives a profile's bar a Plasma panel of
+  the same id (`ProfileApplyTransaction`). Bars have no Plasma side to
+  capture, create, verify, restore or remove in profile and preset
+  operations (`isBar`); their record is all of them. `BarAutostart`
+  (`src/panel/BarAutostart.*`): while there are bars, the session's backend
+  keeps `$XDG_CONFIG_HOME/autostart/org.archdock.ArchDock.Bars.autostart.desktop`
+  (its own program, phase 2, hidden), written only when it differs and
+  removed with the last bar (`BarHostSupervisor::syncAutostart`). The dock
+  widget keeps its settings when the backend has none for its panel (one
+  just removed, its bar or Plasma panel about to go) instead of drawing
+  with empty ones, which filled the log with QML warnings. Tests:
+  `bar-autostart-test`, `PanelWindowCapabilityTest::studioAddsBars` and
+  `presetTrialsOnANewPanelAreBars`,
+  `PanelRegistryTest::adoptsAPreviewBarWithNothingInPlasma`,
+  `ProfileStoreTest::barsStayBarsInAProfile`,
+  `ProfileApplyTransactionTest::aBarInTheProfileNeverTakesOverAPlasmaPanel`.
 <!-- LIST_PIECE_9_END -->
 
 <!-- LIST_PIECE_8_BEGIN -->

@@ -114,6 +114,11 @@ public slots:
     // thickness, length, margin, visibility and whether windows keep clear
     // of it). barHostRecordsChanged says when it changes.
     QString barHostRecordsJson() const;
+    // Brings a hidden edge panel back as a bar of Arch Dock's own. One that
+    // was a Plasma panel becomes a bar only when nothing of it is left in
+    // Plasma (no Plasma panel, no ownership token); such a panel keeps its
+    // Plasma panel. Whether the panel shows now.
+    bool showEdgePanelAsBar(const QString &panelId);
     // The windows that may cover a bar, for bars that hide from them: those
     // shown on the virtual desktop in use, Panel Studio's too, as a JSON list (each one's
     // x, y, width, height, and whether it is active, maximized or full

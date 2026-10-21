@@ -168,6 +168,31 @@ private slots:
         QVERIFY(!hosts.physical.contains(key(previous)));
         QVERIFY(hosts.physical.contains(key(hosts.registry.last())));
     }
+    void aBarInTheProfileNeverTakesOverAPlasmaPanel()
+    {
+        QTemporaryDir directory; Hosts hosts;
+        auto profile = hosts.profile();
+        profile.panels.first().host.edgeHost = "bar";
+        profile.panels.first().visibility.visible = true;
+        auto op = hosts.operations();
+        const auto create = op.create;
+        // Arch Dock's own bar host stands a bar: nothing is made in Plasma.
+        op.create = [&](PanelDefinition &panel, const QString &token, QString *error) {
+            if (panel.host.edgeHost != "bar") return create(panel, token, error);
+            hosts.events.append("create-bar:" + panel.identity.id);
+            panel = panel.normalized();
+            return true;
+        };
+        ProfileApplyTransaction transaction(op, directory.filePath("journal.json"));
+        const auto result = transaction.apply(profile);
+        QVERIFY2(success(result), qPrintable(result.value("errorCode").toString()));
+        QVERIFY(hosts.events.contains("create-bar:bottom"));
+        QVERIFY(hosts.events.contains("remove:bottom"));
+        QVERIFY(!hosts.events.contains("apply:bottom"));
+        QCOMPARE(hosts.registry.first().host.edgeHost, QString("bar"));
+        QCOMPARE(hosts.registry.first().host.nativePanelId, -1);
+        QVERIFY(hosts.registry.first().host.nativeOwnershipToken.isEmpty());
+    }
     void appliesOneVerifiedSetAndBacksUpBeforeMutation()
     {
         QTemporaryDir directory; Hosts hosts;

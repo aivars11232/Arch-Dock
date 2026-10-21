@@ -89,10 +89,13 @@ fresh-clone recheck)
    the window while the pointer is at its stretch of the edge or on it (or
    one of its popups is open), and hides again when the pointer leaves,
    through KWin's own edge as Plasma's panels do.
-3. Existing bars moved over from Plasma panels, start at login, the
-   lifecycle tests rewritten for the bar host.
+3. Panel Studio adds bars (a new edge panel, a hidden Bottom, Top or Side
+   panel brought back, a panel a preset is tried on); profiles and presets
+   take bars; Arch Dock starts at login while it has bars.
 4. Plasma widgets inside the bars (Panel Studio: add, remove, order),
-   standing on the Arch Dock look.
+   standing on the Arch Dock look; Arch Dock's existing edge panels moved
+   into bars with their widgets, and the lifecycle tests rewritten for the
+   bar host.
 5. Each bar's own icons (one bar with the open applications and the clock,
    as on the owner's desktop).
 6. The package and the update steps.
@@ -286,3 +289,74 @@ the same in the clone and the workspace. Logs in
 `build-codex-adrep/evidence/OWNER-LIST-PIECE-9-STEP-2/`.
 
 Next: step 3, Panel Studio's bars, profiles with bars, and the start at login.
+
+## Step 3: Panel Studio, profiles, presets and the start at login — Report 1 (2026-10-21)
+
+### What the owner sees
+
+- **Adding an edge panel in Panel Studio** makes one of Arch Dock's own bars,
+  and Studio then edits it. Several go on one edge, side by side. A hidden
+  Bottom, Top or Side panel comes back as a bar. An edge where a Plasma panel
+  or another dock stands is still refused, and the message now says so.
+- **Profiles keep bars.** Applying a saved profile brings each bar back with
+  its length, place and look: a bar removed since comes back, and one changed
+  since is put back as saved (pictures 1 to 4).
+- **Presets on bars.** A preset tried on a bar works as on any panel.
+  "Preview on a new panel" tries it on a new bar beside the others; keeping
+  it keeps the bar, cancelling takes it away (pictures 5 to 8). Nothing is
+  made in Plasma for any of it.
+- **Start at login.** While there are bars, Arch Dock starts by itself at
+  login, since no Plasma widget is there to start it: an entry in
+  `~/.config/autostart` (System Settings > Autostart lists it), removed with
+  the last bar.
+- Edge panels made before the bars stay Plasma panels until step 4 moves them
+  into bars with their widgets, and a profile brings each edge panel back as
+  it was saved.
+
+### Found on the way, and fixed
+
+1. **A profile turned bars back into Plasma panels** (picture 3): when a
+   profile copied a panel, it kept only the panel's kind and screen from where
+   the panel stands, and lost the mark that it is a bar. It keeps the mark
+   now, and applying a profile never lets one of its bars take over a Plasma
+   panel of the same name, or the other way round.
+2. **A preset tried on a new panel was tried on a Plasma panel**, which
+   cannot stand beside bars and would have stayed one when kept. It is a bar
+   now, and a preset that changes a bar's type needs no new panel, since the
+   bar host adds or removes the dock itself.
+3. **Keeping a trial bar would have been refused**: Arch Dock accepted a kept
+   trial panel only with a Plasma panel behind it. A bar is accepted when it
+   truly has nothing in Plasma.
+4. **A removed bar's dock wrote warnings to the system log** (55 to 165
+   lines of "Unable to assign [undefined]") in the moment before the bar host
+   took it away, because it took the empty answer for a panel that is gone as
+   its settings. It keeps its look until it goes.
+
+Not faults of Arch Dock: the first profile test read the saved profile's
+name from the wrong field, which looked like a refusal ("unsafe-profile-path");
+and a test step that applied a profile 5 s after a change was refused while
+Arch Dock re-checked its Plasma panels, as it always has (0.5, 2 and 5 s
+after a change). The test now waits past those checks.
+
+Pictures (private Plasma desktop, the owner's files untouched):
+`/mnt/F/archdock-audit-2026-10-08/evidence/piece9-bars-step3/profiles-and-trials.png`
+(bottom strip of each picture; picture 3 is from the run before the fix,
+`evidence/bars-step3-profile-2`; the others from `bars-step3-profile-5` and
+`bars-step3-trial-3`, whose logs show no widget warnings).
+
+### Tests
+
+- New: `BarAutostartTest` (the entry starts the program in the background;
+  it comes and goes with the bars and is written only when it differs),
+  `PanelWindowCapabilityTest::studioAddsBars` and
+  `presetTrialsOnANewPanelAreBars`,
+  `PanelRegistryTest::adoptsAPreviewBarWithNothingInPlasma`,
+  `ProfileStoreTest::barsStayBarsInAProfile`,
+  `ProfileApplyTransactionTest::aBarInTheProfileNeverTakesOverAPlasmaPanel`.
+- Changed: `preset-audition-matrix-temporary` S6 (a new edge preview is a bar:
+  nothing made in Plasma, the trial bar listed for the bar host and gone after
+  Cancel); its orphan check takes a kept trial bar with no ownership mark.
+- Complete serial suite: 130 of 131 passed in 3077 s. The one failure,
+  `wayland-hardening-scale200-test`, stopped after 10 s ("containment-missing"
+  for Bottom's Plasma panel) while a disk cleanup ran beside the suite; run
+  alone on a quiet machine it passed three times out of three (42 s each).

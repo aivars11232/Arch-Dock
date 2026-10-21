@@ -456,6 +456,8 @@ qt_add_executable(
   src/panel/PanelWindowBars.cpp
   src/panel/BarHostSupervisor.h
   src/panel/BarHostSupervisor.cpp
+  src/panel/BarAutostart.h
+  src/panel/BarAutostart.cpp
   src/WindowItem.h
   src/WindowModel.h
   src/WindowModel.cpp
@@ -632,6 +634,12 @@ if(BUILD_TESTING)
 
   # Arch Dock's bars, by themselves: where each stands on its edge, and what
   # the backend's list of them says.
+  qt_add_executable(bar-autostart-test tests/BarAutostartTest.cpp
+    src/panel/BarAutostart.h src/panel/BarAutostart.cpp)
+  target_include_directories(bar-autostart-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(bar-autostart-test PRIVATE Qt6::Core Qt6::Test)
+  add_test(NAME bar-autostart-test COMMAND bar-autostart-test)
+
   foreach(bar_test IN ITEMS BarLayout BarRecord)
     string(TOLOWER "${bar_test}" bar_test_name)
     qt_add_executable(${bar_test_name}-test tests/${bar_test}Test.cpp ${ARCHDOCK_BAR_LOGIC_SOURCES})
@@ -1429,6 +1437,8 @@ if(BUILD_TESTING)
     src/panel/PanelWindowBars.cpp
     src/panel/BarHostSupervisor.h
     src/panel/BarHostSupervisor.cpp
+    src/panel/BarAutostart.h
+    src/panel/BarAutostart.cpp
     src/model/PresetIdentity.h
     src/model/PresetIdentity.cpp
     src/model/IconPresetDefinition.h

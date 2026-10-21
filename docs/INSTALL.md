@@ -37,6 +37,8 @@ Arch Dock again. While it is stopped, on-demand activation is refused with
 
 An edge bar of Arch Dock's own (one that can stand beside others on the same
 screen edge) is shown by a second program, `arch-dock-bars`, not by Plasma.
+Panel Studio adds every new edge panel as a bar, including a panel a preset
+is tried on, and brings a hidden Bottom, Top or Side panel back as one.
 The backend starts it while there are such bars, starts it again if it stops
 unexpectedly or does not come up (at most five times within a minute, and
 again once the bars change), and stops it when the last bar goes or Arch Dock
@@ -46,6 +48,14 @@ is stopped. Only one runs in a session, owning
 layout. Its hidden application entry, `org.archdock.ArchDock.Bars.desktop`,
 names the Wayland interfaces KWin grants it (window lists and live window
 previews), as Plasma's own `plasmawindowed` entry does.
+
+While there are bars, Arch Dock starts at login by itself: no Plasma widget is
+there to start it, as one does for its panels in Plasma. It keeps the entry
+`~/.config/autostart/org.archdock.ArchDock.Bars.autostart.desktop`, which
+starts the installed program after Plasma's desktop (as **Autostart** in
+System Settings lists it), and removes it when the last bar goes. A second
+start finds Arch Dock running and stops. A saved profile brings its bars back
+as they were saved, each with its length, place and icons.
 
 A bar that hides (Auto hide, Dodge windows, or hiding for maximized windows)
 is hidden through KWin's own auto-hide screen edge, as Plasma's panels are:
@@ -432,7 +442,9 @@ preset catalogs together. It neither starts nor enables a service. Launch
 Arch Dock through the desktop entry, `arch-dock`, or the documented D-Bus
 request. Removal deletes package-owned files and preserves user configuration
 and user presets. It does not remove panel records from the user's Plasma
-configuration. No cache rebuild or Plasma restart was needed in the verified
+configuration, nor the login entry Arch Dock keeps while it has bars
+(`~/.config/autostart/org.archdock.ArchDock.Bars.autostart.desktop`), which
+then starts nothing and can be deleted. No cache rebuild or Plasma restart was needed in the verified
 private install/startup flow; there are no package hooks to perform either.
 
 ## Upgrade

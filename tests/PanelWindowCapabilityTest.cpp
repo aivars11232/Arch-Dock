@@ -369,6 +369,8 @@ private slots:
     void studioArtworkPersistenceFailure();
     void studioEditsOnePanelAtATime();
     void barsFollowTheirRecords();
+    void studioAddsBars();
+    void presetTrialsOnANewPanelAreBars();
     void studioShowsEachSettingOnce();
     void ownersFreeCircleOffersOnlyWhatWorks();
     void studioTruthMatrixHarnessIsTheApplet();
@@ -2654,6 +2656,108 @@ void PanelWindowCapabilityTest::barsFollowTheirRecords()
     QVERIFY(!registry->panelIds().contains(left));
     QTRY_COMPARE(bars().size(), 1);
     QVERIFY(bars().contains(right));
+}
+
+void PanelWindowCapabilityTest::studioAddsBars()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    registry->setPanelValue("bottom", "visible", true);
+    registry->setPanelValue("top", "visible", false);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> popup(component.createWithInitialProperties({{"selectedPanelId", "bottom"},
+        {"mainTabIndex", 1}, {"subTabIndex", 0}}));
+    QVERIFY2(popup != nullptr, qPrintable(component.errorString()));
+    auto *studio = qobject_cast<QQuickWindow *>(popup.get()); QVERIFY(studio);
+    studio->show(); QVERIFY(QTest::qWaitForWindowExposed(studio));
+    QVERIFY(QQuickTest::qWaitForPolish(studio));
+    const auto add = [&](const QString &kind) {
+        QVariant result;
+        if (!QMetaObject::invokeMethod(popup.get(), "openNewPanelPage", Q_RETURN_ARG(QVariant, result),
+                                       Q_ARG(QVariant, kind)) || !result.toBool())
+            return false;
+        return QMetaObject::invokeMethod(popup.get(), "performStudioAction", Q_RETURN_ARG(QVariant, result),
+                                         Q_ARG(QVariant, QStringLiteral("add-new-panel")), Q_ARG(QVariant, QVariantMap{}));
+    };
+    const auto bars = [&backend] {
+        return QJsonDocument::fromJson(backend.barHostRecordsJson().toUtf8()).array().size();
+    };
+
+    // An edge panel added in Panel Studio is a bar, which Studio then edits;
+    // a bar does not take its edge, so a second one goes beside it.
+    for (int count = 1; count <= 2; ++count)
+    {
+        const QStringList before = registry->panelIds();
+        QVERIFY(add(QStringLiteral("left")));
+        QStringList added = registry->panelIds();
+        for (const QString &id : before)
+            added.removeAll(id);
+        QCOMPARE(added.size(), 1);
+        QCOMPARE(registry->panelValue(added.first(), "edge").toString(), QStringLiteral("left"));
+        QCOMPARE(registry->panelDefinition(added.first())->host.edgeHost, QStringLiteral("bar"));
+        QTRY_COMPARE(popup->property("selectedPanelId").toString(), added.first());
+        QTRY_COMPARE(bars(), count);
+    }
+    // Top, a built-in edge panel that is hidden with nothing of it in
+    // Plasma, comes back as a bar; no panel is added.
+    const int panels = registry->panelIds().size();
+    QVERIFY(add(QStringLiteral("top")));
+    QCOMPARE(registry->panelIds().size(), panels);
+    QCOMPARE(registry->panelDefinition("top")->host.edgeHost, QStringLiteral("bar"));
+    QVERIFY(registry->panelValue("top", "visible").toBool());
+    QTRY_COMPARE(popup->property("selectedPanelId").toString(), QStringLiteral("top"));
+    QTRY_COMPARE(bars(), 3);
+    // Bottom stays the Plasma panel it is, its edge taken.
+    QCOMPARE(registry->panelDefinition("bottom")->host.edgeHost, QStringLiteral("plasma"));
+    QVERIFY(backend.occupiedScreenEdges().contains(QStringLiteral("bottom")));
+    QVERIFY(!backend.occupiedScreenEdges().contains(QStringLiteral("left")));
+}
+
+void PanelWindowCapabilityTest::presetTrialsOnANewPanelAreBars()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()->contextProperty("panelRegistry").value<QObject *>());
+    auto *session = qobject_cast<ArchDock::PresetPreviewSession *>(
+        engine.rootContext()->contextProperty("presetAudition").value<QObject *>());
+    QVERIFY(registry && session);
+    const auto bars = [&backend] {
+        QStringList ids;
+        for (const QJsonValue &bar : QJsonDocument::fromJson(backend.barHostRecordsJson().toUtf8()).array())
+            ids.append(bar.toObject().value("id").toString());
+        return ids;
+    };
+    const QVariantMap request{{"kind", "panel"}, {"presetId", "obsidian-glass-dock"},
+        {"panelId", "bottom"}, {"newPanel", true}};
+
+    // A preset tried on a new panel is tried on a bar of Arch Dock's own,
+    // which the bar host shows before it is kept; cancelled, it goes.
+    auto result = session->beginPreview(request);
+    QVERIFY2(result.value("success").toBool(), qPrintable(result.value("errorCode").toString()));
+    const QString trial = session->status().value("panelId").toString();
+    QVERIFY(!registry->panelIds().contains(trial));
+    QCOMPARE(session->previewDefinition(trial)->host.edgeHost, QStringLiteral("bar"));
+    QCOMPARE(bars(), QStringList{trial});
+    QVERIFY(session->cancel().value("success").toBool());
+    QVERIFY(bars().isEmpty());
+    QVERIFY(!registry->panelIds().contains(trial));
+
+    // Kept, it is a bar with nothing of it in Plasma.
+    result = session->beginPreview(request);
+    QVERIFY2(result.value("success").toBool(), qPrintable(result.value("errorCode").toString()));
+    const QString kept = session->status().value("panelId").toString();
+    result = session->applyAsActive();
+    QVERIFY2(result.value("success").toBool(), qPrintable(result.value("errorCode").toString()));
+    const auto definition = registry->panelDefinition(kept);
+    QVERIFY(definition);
+    QCOMPARE(definition->host.edgeHost, QStringLiteral("bar"));
+    QCOMPARE(definition->host.nativePanelId, -1);
+    QVERIFY(definition->host.nativeOwnershipToken.isEmpty());
+    QCOMPARE(bars(), QStringList{kept});
 }
 
 void PanelWindowCapabilityTest::studioEditsOnePanelAtATime()

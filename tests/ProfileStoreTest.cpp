@@ -73,6 +73,25 @@ private slots:
         QVERIFY(restored->panels.first().host.nativeOwnershipToken.isEmpty());
         QCOMPARE(restored->panels.first().settingsRevision, quint64(0));
     }
+    void barsStayBarsInAProfile()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        ProfileStore store(directory.filePath("profiles"));
+        auto bar = PanelDefinition::defaults("panel-1", "Bar", "bottom", false);
+        bar.visibility.visible = true;
+        bar.host.edgeHost = "bar";
+        auto plasma = PanelDefinition::defaults("panel-2", "Plasma's", "top", false);
+        plasma.visibility.visible = true;
+        const auto profile = ProfileDefinition::capture("Bars", {bar.normalized(), plasma.normalized()});
+        QCOMPARE(profile.panels.first().host.edgeHost, QString("bar"));
+        QString error;
+        QVERIFY2(store.save(profile, &error).has_value(), qPrintable(error));
+        const auto restored = store.load(profile.id, &error);
+        QVERIFY2(restored.has_value(), qPrintable(error));
+        QCOMPARE(restored->panels.first().host.edgeHost, QString("bar"));
+        QCOMPARE(restored->panels.last().host.edgeHost, QString("plasma"));
+    }
     void loadingDoesNotCreateOrApplyAnything()
     {
         QTemporaryDir directory;

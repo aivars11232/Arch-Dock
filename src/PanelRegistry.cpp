@@ -1727,6 +1727,9 @@ bool PanelRegistry::adoptPreviewPanel(
     QString *errorMessage)
 {
     const bool free = definition.host.kind == ArchDock::PanelHostKind::FreeDesktop;
+    // A bar of Arch Dock's own has nothing in Plasma: no panel and no
+    // ownership mark.
+    const bool bar = !free && definition.host.edgeHost == QStringLiteral("bar");
     const QString token = free ? definition.host.freeOwnershipToken
                                : definition.host.nativeOwnershipToken;
     const bool associated = free
@@ -1734,11 +1737,12 @@ bool PanelRegistry::adoptPreviewPanel(
           definition.host.freeDockAppletId >= 0 &&
           definition.host.freeHostState == QStringLiteral("hosted-owned") &&
           definition.host.freeCreationState == QStringLiteral("idle")
+        : bar ? definition.host.nativePanelId < 0 && token.isEmpty()
         : definition.host.nativePanelId >= 0 &&
           definition.host.nativeDockAppletId >= 0 &&
           definition.host.nativeRecoveryState == QStringLiteral("ready");
     if (record(definition.identity.id) || definition.identity.builtIn ||
-        definition.settingsRevision != 1 || !associated || token.isEmpty() ||
+        definition.settingsRevision != 1 || !associated || (!bar && token.isEmpty()) ||
         token.startsWith(QStringLiteral("archdock-preview-")) ||
         definition.normalized() != definition || !definition.isValid(errorMessage))
     {

@@ -400,7 +400,9 @@ PlasmoidItem {
         }
         callDock("panelRendererConfiguration", [panelId], function(reply) {
             const value = normalizeReply(reply);
-            if (value && typeof value === "object") {
+            // A panel the backend no longer knows (just removed, its bar or
+            // Plasma panel about to go) keeps the look it has until then.
+            if (value && typeof value === "object" && Object.keys(value).length > 0) {
                 configuration = value;
                 if (typeof onUpdated === "function") onUpdated();
             }

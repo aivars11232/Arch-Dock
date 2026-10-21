@@ -35,6 +35,17 @@ using PanelWindowHelpers::plasmaScriptStringLiteral;
 using PanelWindowHelpers::isNativeDockPanelType;
 using PanelWindowHelpers::panelTypeNeedsDockApplet;
 
+namespace
+{
+// A bar of Arch Dock's own: its record is all there is of it, nothing in
+// Plasma to make, read, put back or remove.
+bool isBar(const ArchDock::PanelDefinition &definition)
+{
+    return definition.host.kind == ArchDock::PanelHostKind::NativeEdge
+        && definition.host.edgeHost == QLatin1String("bar");
+}
+}
+
 QVariantMap PanelWindow::presetResource(const QString &kind, const QString &presetId,
     bool builtInOnly) const
 {
@@ -105,9 +116,11 @@ std::optional<ArchDock::PresetPreviewSession::Prepared> PanelWindow::preparePres
         prepared.panelPreset = PanelPresetDefinition::fromVariantMap(object);
         if (!prepared.panelPreset) return fail(QStringLiteral("invalid-panel-preset"));
         auto &preset = *prepared.panelPreset;
+        // A Plasma panel with Arch Dock's widget cannot become one without it,
+        // or the other way; a bar's host adds or removes the widget itself.
         const bool temporary = request.value(QStringLiteral("newPanel")).toBool() || !snapshot ||
             !preset.compatibility.hostKinds.contains(PanelDefinition::hostKindName(snapshot->host.kind)) ||
-            (snapshot->host.kind == PanelHostKind::NativeEdge &&
+            (snapshot->host.kind == PanelHostKind::NativeEdge && !isBar(*snapshot) &&
                 panelTypeNeedsDockApplet(snapshot->content.type) != panelTypeNeedsDockApplet(preset.panel.configuration.content.type));
         prepared.record.temporary = temporary;
         if (temporary)
@@ -117,6 +130,9 @@ std::optional<ArchDock::PresetPreviewSession::Prepared> PanelWindow::preparePres
                 QUuid::createUuid().toString(QUuid::Id128).left(8);
             snapshot = PanelDefinition::defaults(id, preset.identity.name,
                 free ? QStringLiteral("free") : preset.panel.configuration.placement.edge, false).normalized();
+            // A new edge panel is one of Arch Dock's own bars, as Panel Studio
+            // adds them.
+            if (!free) snapshot->host.edgeHost = QStringLiteral("bar");
             snapshot->visibility.visible = true;
             snapshot->settingsRevision = 0;
             snapshot->host.screenIndex = qBound(0, m_settings.monitorIndex(), QGuiApplication::screens().size() - 1);
@@ -353,10 +369,6 @@ ArchDock::ProfileApplyTransaction::Operations PanelWindow::profileOperations()
         if (m_nativePanelRecoveryActive || m_settingsTransactionAdoptionActive)
             return QStringLiteral("panel-lifecycle-active");
         if (m_presetAudition && m_presetAudition->active()) return QStringLiteral("preset-audition-active");
-        // Profiles do not take Arch Dock's own bars yet: they would be asked
-        // for Plasma panels they do not have.
-        for (const QString &panelId : m_panelRegistry.panelIds())
-            if (barHosted(panelId)) return QStringLiteral("bars-not-in-profiles-yet");
         for (const auto &locks : std::as_const(m_panelInteractionGuards))
         {
             if (locks.editMode) return QStringLiteral("edit-mode-active");
@@ -401,8 +413,6 @@ ArchDock::ProfileApplyTransaction::Operations PanelWindow::profileOperations()
         panels = effective.resolved(references, diagnostics);
         for (auto &panel : panels)
         {
-            if (panel.host.kind == PanelHostKind::NativeEdge && panel.host.edgeHost == QLatin1String("bar"))
-                return fail(QStringLiteral("bars-not-in-profiles-yet"));
             const auto screen = resolveScreen(screenIds, panel.host.screenId, panel.host.screenIndex);
             if (screen.usedFallback && diagnostics) diagnostics->append(panel.identity.id + QStringLiteral(":screen-fallback"));
             panel.host.screenIndex = screen.index;
@@ -454,7 +464,7 @@ print('ARCHDOCK_RESULT:' + String(count));
         auto record = profileHostRecord(snapshot.definition);
         if (!presetAuditionOperations().captureHost(record, error)) return false;
         snapshot.hostState = record.hostState;
-        if (snapshot.definition.host.kind == PanelHostKind::NativeEdge)
+        if (snapshot.definition.host.kind == PanelHostKind::NativeEdge && !isBar(snapshot.definition))
         {
             const auto visibility = evaluatePlasmaScriptResultOptional(QStringLiteral(R"JS(
 var result = (function() {
@@ -478,6 +488,8 @@ var result = (function() {
         return presetAuditionOperations().createHost(record, panel, error);
     };
     operations.apply = [this](const PanelDefinition &, const PanelDefinition &panel, QString *error) {
+        if (isBar(panel))
+            return true;
         if (panel.host.kind == PanelHostKind::FreeDesktop)
         {
             auto geometry = presetFreeHostGeometry(panel, error);
@@ -506,6 +518,8 @@ var result = (function() {
     };
     operations.restore = [this](ProfileHostSnapshot &snapshot, QString *error) {
         auto &panel = snapshot.definition;
+        if (isBar(panel))
+            return true;
         const auto visibility = snapshot.hostState.value(QStringLiteral("nativeVisibility"));
         if (panel.host.kind == PanelHostKind::NativeEdge && (!PresetParsing::isInteger(visibility) ||
             visibility.toInt() < 0 || visibility.toInt() > 5))
@@ -567,9 +581,6 @@ ArchDock::PresetPreviewSession::Operations PanelWindow::presetAuditionOperations
     operations.prepare = [this](const QVariantMap &request, QString *error) { return preparePresetPreview(request, error); };
     operations.guard = [this](const QString &panelId) {
         if (profileBusy()) return QStringLiteral("profile-recovery-or-apply-active");
-        // Presets are not tried on Arch Dock's own bars yet: a preview would
-        // be asked for a Plasma panel the bar does not have.
-        if (barHosted(panelId)) return QStringLiteral("bars-not-in-presets-yet");
         QStringList targets{panelId};
         if (m_presetAudition && m_presetAudition->active())
             targets.append(m_presetAudition->status().value(QStringLiteral("panelId")).toString());
@@ -593,6 +604,11 @@ ArchDock::PresetPreviewSession::Operations PanelWindow::presetAuditionOperations
         return true;
     };
     operations.createHost = [this](PresetPreviewRecord &record, PanelDefinition &candidate, QString *error) {
+        if (isBar(candidate))
+        {
+            candidate = candidate.normalized();
+            return true;
+        }
         if (candidate.host.kind == PanelHostKind::FreeDesktop)
         {
             const auto created = createConfiguredFreePanelHost(candidate.host.screenIndex, record.panelId, record.previewToken);
@@ -627,6 +643,8 @@ ArchDock::PresetPreviewSession::Operations PanelWindow::presetAuditionOperations
         return true;
     };
     operations.applyHost = [this](const PanelDefinition &previous, const PanelDefinition &candidate, QString *error) {
+        if (isBar(candidate))
+            return true;
         const bool native = candidate.host.kind == PanelHostKind::NativeEdge;
         if (!(native ? nativePanelIsOwned(candidate.identity.id, candidate.host.nativePanelId, candidate.host.nativeOwnershipToken)
             : freePanelHostVerification(candidate.host.freeDesktopContainmentId, candidate.host.freeDockAppletId,
@@ -672,6 +690,8 @@ ArchDock::PresetPreviewSession::Operations PanelWindow::presetAuditionOperations
         return convertPresetPreviewHost(record, candidate, error);
     };
     operations.adoptHost = [this](const PanelDefinition &candidate, QString *error) {
+        if (isBar(candidate))
+            return m_panelRegistry.adoptPreviewPanel(candidate, error);
         const bool owned = candidate.host.kind == PanelHostKind::FreeDesktop
             ? freePanelHostVerification(candidate.host.freeDesktopContainmentId, candidate.host.freeDockAppletId,
                 candidate.identity.id, candidate.host.freeOwnershipToken) == FreePanelHostVerificationOutcome::Owned
@@ -1012,6 +1032,11 @@ var result = (function() {
 bool PanelWindow::capturePresetPreviewHost(ArchDock::PresetPreviewRecord &record,
     QString *errorCode) const
 {
+    if (isBar(record.snapshot))
+    {
+        record.hostState = {};
+        return true;
+    }
     const auto fail = [errorCode] { if (errorCode) *errorCode = QStringLiteral("preview-host-not-verified"); return false; };
     if (record.previewToken.isEmpty()) return fail();
     if (record.hostKind == QStringLiteral("free-desktop"))
@@ -1076,6 +1101,8 @@ print('ARCHDOCK_PREVIEW_HOST:' + JSON.stringify(state));
 bool PanelWindow::restorePresetPreviewHost(const ArchDock::PresetPreviewRecord &record,
     QString *errorCode, bool profileTransaction) const
 {
+    if (isBar(record.snapshot))
+        return true;
     const auto fail = [errorCode](const QString &code) { if (errorCode) *errorCode = code; return false; };
     const auto stored = m_panelRegistry.panelDefinition(record.panelId);
     if (!profileTransaction)
@@ -1137,6 +1164,8 @@ var result = (function() {
 bool PanelWindow::removePresetPreviewHost(const ArchDock::PresetPreviewRecord &record,
     QString *errorCode, bool profileTransaction) const
 {
+    if (isBar(record.snapshot))
+        return true;
     const auto fail = [errorCode] { if (errorCode) *errorCode = QStringLiteral("preview-host-cleanup-blocked"); return false; };
     if (!record.temporary || (!profileTransaction && m_panelRegistry.panelDefinition(record.panelId))) return fail();
     for (const QString &token : {record.previewToken, record.managedToken})
@@ -1187,6 +1216,8 @@ print('ARCHDOCK_RESULT:' + String(count));
 bool PanelWindow::recoverPresetPreviewHost(const ArchDock::PresetPreviewRecord &record,
     QString *errorCode)
 {
+    if (isBar(record.snapshot))
+        return true;
     const auto fail = [errorCode] { if (errorCode) *errorCode = QStringLiteral("preview-recovery-blocked"); return false; };
     const auto stored = m_panelRegistry.panelDefinition(record.panelId);
     if (record.temporary)
@@ -1243,6 +1274,15 @@ bool PanelWindow::convertPresetPreviewHost(const ArchDock::PresetPreviewRecord &
         if (errorCode) *errorCode = QStringLiteral("invalid-preview-conversion");
         return false;
     }
+    const auto kept = [&candidate] {
+        candidate.settingsRevision = 1;
+        candidate.identity.builtIn = false;
+        candidate = candidate.normalized();
+        return true;
+    };
+    // A bar has nothing in Plasma to hand over: its record is all of it.
+    if (isBar(candidate))
+        return kept();
     const bool free = candidate.host.kind == ArchDock::PanelHostKind::FreeDesktop;
     const QString host = free
         ? QStringLiteral("var desktop = desktopById(%1); var host = desktop ? desktop.widgetById(%2) : null;")
@@ -1281,8 +1321,5 @@ bool PanelWindow::convertPresetPreviewHost(const ArchDock::PresetPreviewRecord &
     }
     if (free) candidate.host.freeOwnershipToken = record.managedToken;
     else candidate.host.nativeOwnershipToken = record.managedToken;
-    candidate.settingsRevision = 1;
-    candidate.identity.builtIn = false;
-    candidate = candidate.normalized();
-    return true;
+    return kept();
 }

@@ -1,5 +1,7 @@
 #include "BarHostSupervisor.h"
 
+#include "BarAutostart.h"
+
 #include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
@@ -68,9 +70,13 @@ bool BarHostSupervisor::running() const
 
 void BarHostSupervisor::setWanted(bool wanted)
 {
-    if (m_stopped || wanted == m_wanted)
+    if (m_stopped || (wanted == m_wanted && m_autostartKnown))
         return;
+    const bool changed = wanted != m_wanted;
     m_wanted = wanted;
+    syncAutostart();
+    if (!changed)
+        return;
     if (wanted)
     {
         // Wanted again, it starts afresh.
@@ -83,6 +89,19 @@ void BarHostSupervisor::setWanted(bool wanted)
         m_startCheck.stop();
         askToQuit();
     }
+}
+
+void BarHostSupervisor::syncAutostart()
+{
+    // Only the session's backend keeps the entry, starting itself.
+    if (!isTheBackend())
+        return;
+    m_autostartKnown = true;
+    const QString self = QFileInfo(QStringLiteral("/proc/self/exe")).canonicalFilePath();
+    QString error;
+    if (!ArchDock::BarAutostart::sync(m_wanted, ArchDock::BarAutostart::entryPath(),
+                                      self.isEmpty() ? QCoreApplication::applicationFilePath() : self, &error))
+        qWarning() << "Arch Dock's start at login could not be set for its bars:" << error;
 }
 
 void BarHostSupervisor::barsChanged()

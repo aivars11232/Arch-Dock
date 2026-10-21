@@ -295,6 +295,9 @@ PanelDefinition ProfileDefinition::portablePanel(const PanelDefinition &panel)
     PanelDefinition result = panel;
     result.host = PanelHost{};
     result.host.kind = panel.host.kind;
+    // Whether Plasma or Arch Dock's own bar host stands an edge panel is part
+    // of the arrangement, not a detail of the panel now on the screen.
+    result.host.edgeHost = panel.host.edgeHost;
     result.host.screenIndex = panel.host.screenIndex;
     result.host.screenId = panel.host.screenId;
     result.settingsRevision = 0;

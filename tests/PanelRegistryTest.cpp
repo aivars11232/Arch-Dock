@@ -502,6 +502,7 @@ private slots:
     void resolvesIconStylesIndependentlyFromPanelThemes();
     void persistsPresetIconOverridesForPanelAndEntries();
     void adoptsExactlyOneVerifiedPreviewPanel();
+    void adoptsAPreviewBarWithNothingInPlasma();
     void resolvesBuiltInChassisPackagesAndImportPrecedence();
     void resolvesThemeCandidatesWithoutMutation();
     void completeThemeAdoptsItsOwnRendererTier();
@@ -3847,6 +3848,29 @@ void PanelRegistryTest::adoptsExactlyOneVerifiedPreviewPanel()
     QCOMPARE(registry.revision(), initialRevision + 2);
     QSettings verify;
     QCOMPARE(verify.value(QStringLiteral("dock/magnification")).toReal(), 1.8);
+}
+
+void PanelRegistryTest::adoptsAPreviewBarWithNothingInPlasma()
+{
+    PanelRegistry registry;
+    auto bar = ArchDock::PanelDefinition::defaults(QStringLiteral("panel-xbar1234"),
+        QStringLiteral("Adopted bar"), QStringLiteral("bottom"), false);
+    bar.settingsRevision = 1;
+    bar.visibility.visible = true;
+    bar.host.edgeHost = QStringLiteral("bar");
+    bar = bar.normalized();
+    QString error;
+    // A bar that claims a Plasma panel or an ownership mark is not one.
+    auto claimed = bar;
+    claimed.host.nativeOwnershipToken = QStringLiteral("archdock-managed-test");
+    QVERIFY(!registry.adoptPreviewPanel(claimed.normalized(), &error));
+    claimed = bar;
+    claimed.host.nativePanelId = 43;
+    QVERIFY(!registry.adoptPreviewPanel(claimed.normalized(), &error));
+    QVERIFY(!registry.panelDefinition(bar.identity.id).has_value());
+    error.clear();
+    QVERIFY2(registry.adoptPreviewPanel(bar, &error), qPrintable(error));
+    QCOMPARE(registry.panelDefinition(bar.identity.id)->host.edgeHost, QStringLiteral("bar"));
 }
 
 void PanelRegistryTest::resolvesIconStylesIndependentlyFromPanelThemes()
