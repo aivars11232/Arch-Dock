@@ -613,3 +613,28 @@ closed. Next, in order:
    edge), Plasma widgets inside Arch Dock bars, each bar's own icons, and
    the package for the owner's PC.
 
+
+## Holograms — Report 2 (recheck)
+
+A fresh clone of origin/main at `f3e1dc7` (logs 40-44 in
+`build-codex-adrep/evidence/OWNER-LIST-PIECE-8`), configured with Quick 3D
+and a private temp folder, built with one job in 1615 s, ran 24 focused
+tests serially: the holograms' own (hologram look, platform geometry, icon
+scene, the schema and the capability test's hologram settings and Studio
+tabs, Studio navigation), the rendering module's import, host-neutral and
+capability checks, `decoration-3d-smoke` with the real renderer (3D
+holograms, flat holograms keeping their size, a turning panel keeping its
+layout), the scenes and previews they touch (panel scene, live preview,
+panel surface, panel decoration, decoration scene, dock entry, scene
+rotation), the private-desktop smokes (rendering import, window
+interaction, runtime UI interaction with the ring's empty middle, path
+travel, the Studio truth matrix) and the widget's template contract:
+**24 of 24 passed** in 1382 s. Every one of the 908 committed files is
+identical in the clone and the workspace.
+
+The owner watched the video of every motion (bars in each light motion,
+everything holographic in Cyan, the side bar, 3D icons turning and
+swaying, free panels turned with the wheel): "it looks good". With this,
+part two of piece 8, the holograms, is closed. Next, before the update:
+two edge bars side by side on one edge as Arch Dock's own windows, Plasma
+widgets inside Arch Dock bars, each bar's own icons, then the package.
