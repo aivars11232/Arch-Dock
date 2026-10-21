@@ -73,6 +73,32 @@ Report `docs/repairs/OWNER-LIST-PIECE-9.md`; step 1 of six, the bar host.
   the bar host entry in `session-startup-metadata-test` and
   `session-startup-diagnostics-test`; the package test's files, licences
   and libraries.
+- **Step 2, hiding**: bars hide as Plasma's panels do, by the rules of
+  `decidePanelVisibility` (now `dodgeAnyWindow` for bars: any shown window
+  over the bar, not only the active one). `ScreenEdgeManager` and
+  `AutoHideEdge` (`src/bars/ScreenEdge.*`, client of
+  `src/bars/protocols/kde-screen-edge-v1.xml`): a bar that hides gets KWin's
+  auto-hide edge for its border once its surface has its layer-shell role
+  (`surfaceRoleCreated`, or exposed; never earlier, which KWin treats as a
+  protocol error), dropped with the role. `BarWindow::setConcealWanted`
+  shows at once and hides 400 ms later; Enter/Leave mark the pointer on the
+  bar; `BarHost` counts popups (visible windows whose transient parent chain
+  reaches the bar, followed by an application event filter on Show/Hide),
+  takes the windows from the backend (`barHostWindowsJson`,
+  `barHostWindowsChanged`, at most every 50 ms and only while there are
+  bars) or `ARCHDOCK_BARS_WINDOWS_FILE`, gives each window the screen it
+  mostly lies on, and decides each bar after every change. The KWin script
+  reports `onCurrentDesktop` (virtual desktop and activity) and resends every
+  window when either changes; `WindowItem::onCurrentDesktop`,
+  `WindowModel::OnCurrentDesktopRole`. `WindowWatcher` keeps Arch Dock's own
+  windows and Spectacle's off the task list but in `untrackedWindows()`,
+  which also cover bars; its report parsing is one helper (`windowItem`).
+  `tests/eis-pointer.py` moves or pushes the pointer of a private test KWin
+  through KWin's EIS input, checking first that the KWin is the test's own.
+  Tests: `PanelVisibilityTest::barsDodgeAnyWindowOverThem`,
+  `PanelWindowCapabilityTest::windowsOffTheTaskListStillCoverBars`,
+  `bar-host-smoke` (17 checks; its KWin keeps global shortcuts, without
+  which KWin's screen edges never take the pointer).
 <!-- LIST_PIECE_9_END -->
 
 <!-- LIST_PIECE_8_BEGIN -->

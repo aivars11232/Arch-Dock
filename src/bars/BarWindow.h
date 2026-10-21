@@ -3,10 +3,16 @@
 
 #include <PlasmaQuick/ContainmentView>
 
+#include <QLoggingCategory>
 #include <QPointer>
 #include <QQuickWindow>
+#include <QTimer>
+
+#include <memory>
 
 class QScreen;
+
+Q_DECLARE_LOGGING_CATEGORY(archdockBars)
 
 namespace LayerShellQt
 {
@@ -15,6 +21,9 @@ class Window;
 
 namespace ArchDock::Bars
 {
+class AutoHideEdge;
+class ScreenEdgeManager;
+
 // One Arch Dock bar on the screen: a window showing the bar's containment, as
 // Plasma shows a panel's, but a layer-shell surface of Arch Dock's own above
 // windows, placed along its edge by the bar host. It keeps no room for itself
@@ -26,6 +35,7 @@ class BarWindow : public PlasmaQuick::ContainmentView
 
 public:
     BarWindow(Plasma::Corona *corona, Plasma::Containment *containment, const QUrl &view);
+    ~BarWindow() override;
 
     // How long the bar's widgets want it to be along its edge.
     [[nodiscard]] int wantedLength() const;
@@ -35,12 +45,39 @@ public:
     // it has no length.
     void place(QScreen *screen, const QString &edge, int start, int length, int thickness, int margin);
 
+    // Whether the bar hides at times (it auto-hides or keeps out of windows'
+    // way): it then has KWin's auto-hide edge along its screen edge, by which
+    // KWin shows it again when the pointer hits that edge, as it shows
+    // Plasma's own panels.
+    void setHides(bool hides, ScreenEdgeManager *edges);
+    // Whether the bar should be hidden now. It shows at once and hides a
+    // moment later, so that the pointer passing between the bar and its
+    // popups does not make it blink.
+    void setConcealWanted(bool conceal);
+    [[nodiscard]] bool concealed() const { return m_concealed; }
+    [[nodiscard]] bool pointerInside() const { return m_pointerInside; }
+
 Q_SIGNALS:
     void wantedLengthChanged();
+    void pointerInsideChanged();
+
+protected:
+    bool event(QEvent *event) override;
 
 private:
+    void attachEdge();
+
     LayerShellQt::Window *m_layer = nullptr;
     QPointer<QScreen> m_screen;
+    QString m_edge;
+    QPointer<ScreenEdgeManager> m_edges;
+    std::unique_ptr<AutoHideEdge> m_autoHide;
+    QTimer m_concealTimer;
+    // The surface has its layer-shell role: only then may it get an edge.
+    bool m_roleReady = false;
+    bool m_hides = false;
+    bool m_concealed = false;
+    bool m_pointerInside = false;
 };
 
 // The room a screen edge's bars take: a see-through strip along the whole

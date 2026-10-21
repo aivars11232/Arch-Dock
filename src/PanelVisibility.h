@@ -82,6 +82,9 @@ struct PanelVisibilityInput
     QList<WindowOcclusion> windows;
     PanelVisibilityLocks locks;
     bool manualHideRequested = false;
+    // Whether any shown window over the panel makes it dodge, as Arch Dock's
+    // own bars do, rather than only the active one.
+    bool dodgeAnyWindow = false;
 };
 
 [[nodiscard]] PanelVisibilityMode panelVisibilityModeFromString(const QString &visibilityMode);

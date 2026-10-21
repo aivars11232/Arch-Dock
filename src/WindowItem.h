@@ -21,6 +21,9 @@ public:
     bool minimized = false;
     bool maximized = false;
     bool fullScreen = false;
+    // On the virtual desktop and activity in use (a window elsewhere covers
+    // nothing on the screen).
+    bool onCurrentDesktop = true;
     bool canActivate = false;
     bool canMinimize = false;
     bool canClose = false;

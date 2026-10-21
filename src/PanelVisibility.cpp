@@ -21,10 +21,15 @@ bool hasConcealmentLock(const PanelVisibilityLocks &locks)
         locks.dragActive || locks.keyboardFocus || locks.editMode;
 }
 
+bool isShownWindow(const WindowOcclusion &window, int panelScreenIndex)
+{
+    return !window.minimized && window.frameGeometry.isValid() &&
+        window.screenIndex == panelScreenIndex;
+}
+
 bool isRelevantWindow(const WindowOcclusion &window, int panelScreenIndex)
 {
-    return window.active && !window.minimized && window.frameGeometry.isValid() &&
-        window.screenIndex == panelScreenIndex;
+    return window.active && isShownWindow(window, panelScreenIndex);
 }
 }
 
@@ -199,8 +204,10 @@ PanelVisibilityDecision decidePanelVisibility(const PanelVisibilityInput &input)
     case PanelVisibilityMode::DodgeActiveWindow:
         for (const WindowOcclusion &window : input.windows)
         {
-            if (isRelevantWindow(window, input.panelScreenIndex) &&
-                window.frameGeometry.intersects(input.panelGeometry))
+            const bool counts = input.dodgeAnyWindow
+                ? isShownWindow(window, input.panelScreenIndex)
+                : isRelevantWindow(window, input.panelScreenIndex);
+            if (counts && window.frameGeometry.intersects(input.panelGeometry))
             {
                 return PanelVisibilityDecision::Conceal;
             }

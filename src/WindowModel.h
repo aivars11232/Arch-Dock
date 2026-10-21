@@ -29,7 +29,8 @@ public:
         FullScreenRole,
         CanActivateRole,
         CanMinimizeRole,
-        CanCloseRole
+        CanCloseRole,
+        OnCurrentDesktopRole
     };
     Q_ENUM(Role)
 

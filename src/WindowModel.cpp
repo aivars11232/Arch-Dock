@@ -80,6 +80,7 @@ bool WindowModel::updateWindow(const WindowItem &window)
         compare(current.canActivate == window.canActivate, CanActivateRole);
         compare(current.canMinimize == window.canMinimize, CanMinimizeRole);
         compare(current.canClose == window.canClose, CanCloseRole);
+        compare(current.onCurrentDesktop == window.onCurrentDesktop, OnCurrentDesktopRole);
         if (changed.isEmpty())
         {
             return true;
@@ -168,6 +169,9 @@ QVariant WindowModel::data(const QModelIndex &index, int role) const
     case CanCloseRole:
         return window.canClose;
 
+    case OnCurrentDesktopRole:
+        return window.onCurrentDesktop;
+
     default:
         return {};
     }
@@ -190,5 +194,6 @@ QHash<int, QByteArray> WindowModel::roleNames() const
         {FullScreenRole, "fullScreen"},
         {CanActivateRole, "canActivate"},
         {CanMinimizeRole, "canMinimize"},
-        {CanCloseRole, "canClose"}};
+        {CanCloseRole, "canClose"},
+        {OnCurrentDesktopRole, "onCurrentDesktop"}};
 }

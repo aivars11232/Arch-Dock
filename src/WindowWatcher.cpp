@@ -129,6 +129,39 @@ namespace
         const int fallbackIndex = state.value(QStringLiteral("screen")).toInt(-1);
         return fallbackIndex >= 0 && fallbackIndex < screens.size() ? fallbackIndex : -1;
     }
+
+    // One window as the KWin script reports it.
+    WindowItem windowItem(const QString &internalId,
+                          const QString &desktopFileName,
+                          const QString &resourceClass,
+                          const QString &resourceName,
+                          const QString &caption,
+                          bool active,
+                          bool minimized,
+                          const QJsonObject &state)
+    {
+        WindowItem window;
+        window.internalId = internalId;
+        window.desktopFileName = desktopFileName;
+        window.iconName = resolveIconName(desktopFileName, resourceClass);
+        window.resourceClass = resourceClass;
+        window.resourceName = resourceName;
+        window.caption = caption;
+        window.frameGeometry = QRect(qRound(state.value(QStringLiteral("x")).toDouble()),
+                                     qRound(state.value(QStringLiteral("y")).toDouble()),
+                                     qMax(0, qRound(state.value(QStringLiteral("width")).toDouble())),
+                                     qMax(0, qRound(state.value(QStringLiteral("height")).toDouble())));
+        window.screenIndex = resolvedScreenIndex(state);
+        window.active = active;
+        window.minimized = minimized;
+        window.maximized = state.value(QStringLiteral("maximized")).toBool();
+        window.fullScreen = state.value(QStringLiteral("fullScreen")).toBool();
+        window.onCurrentDesktop = state.value(QStringLiteral("onCurrentDesktop")).toBool(true);
+        window.canActivate = state.value(QStringLiteral("canActivate")).toBool();
+        window.canMinimize = state.value(QStringLiteral("canMinimize")).toBool();
+        window.canClose = state.value(QStringLiteral("canClose")).toBool();
+        return window;
+    }
 }
 
 WindowWatcher::WindowWatcher(WindowModel &windowModel,
@@ -253,19 +286,24 @@ void WindowWatcher::windowAdded(const QString &internalId,
              << "resourceName:" << resourceName
              << "caption:" << caption;
 
-    // The backend's own windows, and its bar host's: a bar is named after
-    // the program, a bar's popup after its desktop file.
-    if (resourceClass == QStringLiteral("arch-dock") ||
-        resourceClass == QStringLiteral("arch-dock-bars") ||
+    // The bar host's windows: a bar is named after the program, a bar's
+    // popup after its desktop file.
+    if (resourceClass == QStringLiteral("arch-dock-bars") ||
         resourceClass == QStringLiteral("org.archdock.ArchDock.Bars"))
     {
-        qDebug() << "Ignoring Arch Dock's own window:" << internalId;
+        qDebug() << "Ignoring Arch Dock's own bar window:" << internalId;
         return;
     }
 
-    if (resourceClass == QStringLiteral("org.kde.spectacle"))
+    // Arch Dock's own windows (Panel Studio) and Spectacle's stay off the
+    // task list, but still cover a bar that keeps out of windows' way.
+    if (resourceClass == QStringLiteral("arch-dock") ||
+        resourceClass == QStringLiteral("org.kde.spectacle"))
     {
-        qDebug() << "Ignoring Spectacle window:" << internalId;
+        qDebug() << "Keeping window off the task list:" << internalId << resourceClass;
+        m_untrackedWindows.insert(internalId, windowItem(internalId, desktopFileName, resourceClass, resourceName,
+                                                         caption, active, minimized, windowState(stateJson)));
+        emit untrackedWindowsChanged();
         return;
     }
 
@@ -285,33 +323,14 @@ void WindowWatcher::windowAdded(const QString &internalId,
         return;
     }
 
-    WindowItem window;
-    const QJsonObject state = windowState(stateJson);
-    window.internalId = internalId;
-    window.desktopFileName = desktopFileName;
-    window.iconName = resolveIconName(desktopFileName, resourceClass);
-    window.resourceClass = resourceClass;
-    window.resourceName = resourceName;
-    window.caption = caption;
-    window.frameGeometry = QRect(qRound(state.value(QStringLiteral("x")).toDouble()),
-                                 qRound(state.value(QStringLiteral("y")).toDouble()),
-                                 qMax(0, qRound(state.value(QStringLiteral("width")).toDouble())),
-                                 qMax(0, qRound(state.value(QStringLiteral("height")).toDouble())));
-    window.screenIndex = resolvedScreenIndex(state);
-    window.active = active;
-    window.minimized = minimized;
-    window.maximized = state.value(QStringLiteral("maximized")).toBool();
-    window.fullScreen = state.value(QStringLiteral("fullScreen")).toBool();
-    window.canActivate = state.value(QStringLiteral("canActivate")).toBool();
-    window.canMinimize = state.value(QStringLiteral("canMinimize")).toBool();
-    window.canClose = state.value(QStringLiteral("canClose")).toBool();
-
-    m_windowModel.addWindow(window);
+    m_windowModel.addWindow(windowItem(internalId, desktopFileName, resourceClass, resourceName, caption,
+                                       active, minimized, windowState(stateJson)));
 }
 
 void WindowWatcher::windowRemoved(const QString &internalId)
 {
     if (m_nativePanels.remove(internalId)) emit nativePanelsChanged();
+    if (m_untrackedWindows.remove(internalId)) emit untrackedWindowsChanged();
     m_windowModel.removeWindow(internalId);
 }
 
@@ -324,32 +343,20 @@ void WindowWatcher::windowUpdated(const QString &internalId,
                                   bool minimized,
                                   const QString &stateJson)
 {
-    WindowItem window;
     const QJsonObject state = windowState(stateJson);
     if (resourceClass == QStringLiteral("org.kde.plasmashell")
         || resourceClass == QStringLiteral("plasmashell")) {
         observeNativePanel(internalId, state);
         return;
     }
-    window.internalId = internalId;
-    window.desktopFileName = desktopFileName;
-    window.iconName = resolveIconName(desktopFileName, resourceClass);
-    window.resourceClass = resourceClass;
-    window.resourceName = resourceName;
-    window.caption = caption;
-    window.frameGeometry = QRect(qRound(state.value(QStringLiteral("x")).toDouble()),
-                                 qRound(state.value(QStringLiteral("y")).toDouble()),
-                                 qMax(0, qRound(state.value(QStringLiteral("width")).toDouble())),
-                                 qMax(0, qRound(state.value(QStringLiteral("height")).toDouble())));
-    window.screenIndex = resolvedScreenIndex(state);
-    window.active = active;
-    window.minimized = minimized;
-    window.maximized = state.value(QStringLiteral("maximized")).toBool();
-    window.fullScreen = state.value(QStringLiteral("fullScreen")).toBool();
-    window.canActivate = state.value(QStringLiteral("canActivate")).toBool();
-    window.canMinimize = state.value(QStringLiteral("canMinimize")).toBool();
-    window.canClose = state.value(QStringLiteral("canClose")).toBool();
-
+    const WindowItem window = windowItem(internalId, desktopFileName, resourceClass, resourceName, caption,
+                                         active, minimized, state);
+    if (m_untrackedWindows.contains(internalId))
+    {
+        m_untrackedWindows.insert(internalId, window);
+        emit untrackedWindowsChanged();
+        return;
+    }
     m_windowModel.updateWindow(window);
 }
 

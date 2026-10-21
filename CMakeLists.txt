@@ -543,7 +543,7 @@ endif()
 if(NOT DEFINED KDE_INSTALL_METAINFODIR)
   set(KDE_INSTALL_METAINFODIR share/metainfo)
 endif()
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets WaylandClient GuiPrivate)
 find_package(KF6Config REQUIRED)
 find_package(KF6Package REQUIRED)
 find_package(Plasma 6.8 REQUIRED)
@@ -561,16 +561,28 @@ add_executable(
   src/bars/BarHost.cpp
   src/bars/BarWindow.h
   src/bars/BarWindow.cpp
+  src/bars/ScreenEdge.h
+  src/bars/ScreenEdge.cpp
   ${ARCHDOCK_BAR_LOGIC_SOURCES}
+  src/PanelVisibility.h
+  src/PanelVisibility.cpp
   src/ScreenIdentity.h
   src/ScreenIdentity.cpp)
+# KWin's auto-hide screen edges, by which bars that hide come back: the
+# protocol from Plasma's Wayland protocols (MIT-CMU), kept beside the bars.
+# Its generated glue is C.
+enable_language(C)
+qt6_generate_wayland_protocol_client_sources(arch-dock-bars PRIVATE_CODE
+  FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/bars/protocols/kde-screen-edge-v1.xml)
 target_include_directories(arch-dock-bars PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(
   arch-dock-bars
   PRIVATE Qt6::Core
           Qt6::DBus
           Qt6::Gui
+          Qt6::GuiPrivate
           Qt6::Quick
+          Qt6::WaylandClient
           Qt6::Widgets
           KF6::ConfigCore
           KF6::ConfigGui

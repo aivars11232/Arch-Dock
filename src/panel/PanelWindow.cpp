@@ -229,6 +229,14 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     connect(this, &PanelWindow::nativePlacementRevisionChanged, this, &PanelWindow::scheduleBarRecordsUpdate);
     connect(this, &PanelWindow::screenRevisionChanged, this, &PanelWindow::scheduleBarRecordsUpdate);
     scheduleBarRecordsUpdate();
+    m_barWindowsTimer.setSingleShot(true);
+    m_barWindowsTimer.setInterval(50);
+    connect(&m_barWindowsTimer, &QTimer::timeout, this, &PanelWindow::barHostWindowsChanged);
+    connect(&m_windowModel, &QAbstractItemModel::dataChanged, this, &PanelWindow::scheduleBarWindowsUpdate);
+    connect(&m_windowModel, &QAbstractItemModel::rowsInserted, this, &PanelWindow::scheduleBarWindowsUpdate);
+    connect(&m_windowModel, &QAbstractItemModel::rowsRemoved, this, &PanelWindow::scheduleBarWindowsUpdate);
+    connect(&m_windowModel, &QAbstractItemModel::modelReset, this, &PanelWindow::scheduleBarWindowsUpdate);
+    connect(&m_windowWatcher, &WindowWatcher::untrackedWindowsChanged, this, &PanelWindow::scheduleBarWindowsUpdate);
     const auto notifyGlobalVisualChange = [this]
     {
         if (!m_settingsTransactionAdoptionActive)

@@ -211,3 +211,64 @@ job in 1725 s, then the step's tests serially: `bar-host-smoke`,
 workspace. Logs in `build-codex-adrep/evidence/OWNER-LIST-PIECE-9-STEP-1/`.
 
 Next: step 2, hiding.
+
+## Step 2: hiding — Report 1 (2026-10-21)
+
+The owner's rules (2026-10-21): "They must hide if opend window is over it,
+same with maximized and full screen"; "if window is over it or full screen or
+maximized, with hower panel should reaper while howering same as it is in
+native plasma panels"; "if there isn't any window covering the panel, the
+panel should stay visible not hidden"; and all of it "before the update".
+
+### What the owner sees
+
+- **Dodge windows**: a bar stays shown while nothing covers it, and hides
+  while any window lies over it - an ordinary one, a maximised one, a
+  full-screen one, Panel Studio too. It comes back when the window moves
+  away or is minimised. Windows on another virtual desktop cover nothing.
+- **Auto hide**: a bar stays hidden until the pointer goes to it.
+- **Bringing a hidden bar back**: pushing the pointer against the screen edge
+  along the bar brings it back, over the window covering it; it stays while
+  the pointer is on it or one of its popups (a folder, a preview) is open,
+  and hides again a moment after the pointer leaves. With two bars on one
+  edge, each comes back only from its own stretch of the edge.
+- This is KWin's own auto-hide edge, the one Plasma's panels use, so it
+  behaves as they do; over a full-screen window KWin keeps the edge shut, for
+  Plasma's panels too.
+- Each bar has its own setting: two bars on one edge hide on their own.
+
+The owner ticked the video's stills ("Good, good").
+
+### Found on the way, and fixed
+
+1. **No bar ever hid** at first: the window's platform side was made after
+   the bar asked to hear when its surface got its role, so it never heard.
+   The bar now takes the moment it is on the screen.
+2. **A bar kept up by the keyboard**: KWin gave a bar the keyboard at the
+   start, which held it shown; Plasma's panels do not stay up for that, and
+   only popups (which have the keyboard when they need it) keep a bar up now.
+3. **Screen edges never fired in the test sessions** - not for Plasma's own
+   panels either: KWin feeds the pointer to its screen edges only where it
+   supports global shortcuts, and the test compositors were started without
+   them. The tests now start KWin with them (on their private bus).
+4. **Arch Dock's own windows did not count**: the window watcher kept Panel
+   Studio (and Spectacle) off the task list, and so off the bars' windows;
+   they now cover bars and stay off the task list.
+5. **Tied to one Qt version**: the first way of asking for the surface used
+   three of Qt's private symbols, which would have stopped the bars after a
+   Qt update until Arch Dock was rebuilt; only public events are used now.
+
+Video (WebM): `/mnt/F/archdock-audit-2026-10-08/evidence/piece9-bars-step2/bars-hiding.webm`
+(13 steps), stills `bars-hiding-stills.png` in the same folder. All on a
+private Plasma desktop; KWin's permission checks on gave the same 14 results
+(`evidence/bars-step2-checks`).
+
+### Tests
+
+- New: `PanelVisibilityTest::barsDodgeAnyWindowOverThem`,
+  `PanelWindowCapabilityTest::windowsOffTheTaskListStillCoverBars`, and in
+  `bar-host-smoke` eight hiding checks (17 in all, steady over repeated
+  runs): a dodging bar shown and covered, windows beside it, the edge pushed
+  through KWin's input, the pointer gone, uncovered; an auto-hiding bar
+  hidden, brought back and hidden again.
+- Complete serial suite: 130 of 130 passed in 3002 s.

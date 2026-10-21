@@ -114,6 +114,12 @@ public slots:
     // thickness, length, margin, visibility and whether windows keep clear
     // of it). barHostRecordsChanged says when it changes.
     QString barHostRecordsJson() const;
+    // The windows that may cover a bar, for bars that hide from them: those
+    // shown on the virtual desktop in use, Panel Studio's too, as a JSON list (each one's
+    // x, y, width, height, and whether it is active, maximized or full
+    // screen). barHostWindowsChanged says when it changes, while there are
+    // bars.
+    QString barHostWindowsJson() const;
     QVariantMap createFreePanel();
     QVariantMap createFreePanelFromTemplate(int containmentId, const QString &ownershipToken);
     QVariantMap adoptFreePanelApplet(int desktopContainmentId, int dockAppletId);
@@ -314,6 +320,7 @@ signals:
     void presentationRequestRevisionChanged();
     void nativePanelRecoveryFinished();
     void barHostRecordsChanged();
+    void barHostWindowsChanged();
 
 private:
     [[nodiscard]] ArchDock::ProfileApplyTransaction::Operations profileOperations();
@@ -697,6 +704,9 @@ private:
     [[nodiscard]] bool barHosted(const QString &panelId) const;
     void scheduleBarRecordsUpdate();
     void publishBarRecords();
+    // A moving window reports on every frame: the bar host is told of
+    // window changes at most every few frames, and only while there are bars.
+    void scheduleBarWindowsUpdate();
     // A bar's visibility needs nothing from Plasma: what the caller asks to
     // keep is saved, and the bar host shows or hides the bar from it.
     bool persistBarVisibility(const QString &panelId,
@@ -705,4 +715,5 @@ private:
     BarHostSupervisor m_barHost;
     QTimer m_barRecordsTimer;
     QString m_barRecordsJson;
+    QTimer m_barWindowsTimer;
 };

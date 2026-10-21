@@ -37,6 +37,7 @@ private slots:
     void concealmentLocksPreventConcealment_data();
     void concealmentLocksPreventConcealment();
     void dodgeRequiresRelevantOverlap();
+    void barsDodgeAnyWindowOverThem();
     void maximizedModeRequiresRelevantWindowState();
     void invalidTargetsFailVisible();
     void decisionsAreDeterministic();
@@ -329,6 +330,48 @@ void PanelVisibilityTest::dodgeRequiresRelevantOverlap()
     ArchDock::WindowOcclusion minimized = activeWindow();
     minimized.minimized = true;
     input.windows = {minimized};
+    QVERIFY(ArchDock::decidePanelVisibility(input) == PanelVisibilityDecision::Reveal);
+}
+
+void PanelVisibilityTest::barsDodgeAnyWindowOverThem()
+{
+    using ArchDock::PanelVisibilityDecision;
+    using ArchDock::PanelVisibilityMode;
+
+    // Arch Dock's own bars hide from any shown window over them, not only
+    // the active one; minimised windows and other screens' still do not
+    // count, and a window that only touches the bar's edge does not cover it.
+    ArchDock::PanelVisibilityInput input = validInput(PanelVisibilityMode::DodgeActiveWindow);
+    input.dodgeAnyWindow = true;
+    ArchDock::WindowOcclusion behind = activeWindow();
+    behind.active = false;
+    input.windows = {behind};
+    QVERIFY(ArchDock::decidePanelVisibility(input) == PanelVisibilityDecision::Conceal);
+
+    ArchDock::WindowOcclusion minimized = behind;
+    minimized.minimized = true;
+    input.windows = {minimized};
+    QVERIFY(ArchDock::decidePanelVisibility(input) == PanelVisibilityDecision::Reveal);
+
+    ArchDock::WindowOcclusion elsewhere = behind;
+    elsewhere.screenIndex = 1;
+    input.windows = {elsewhere};
+    QVERIFY(ArchDock::decidePanelVisibility(input) == PanelVisibilityDecision::Reveal);
+
+    input.windows = {activeWindow(QRect(0, 0, 1920, 1000))};
+    QVERIFY(ArchDock::decidePanelVisibility(input) == PanelVisibilityDecision::Reveal);
+
+    // A maximised window fills the screen of a bar that keeps no room.
+    ArchDock::WindowOcclusion maximized = activeWindow(QRect(0, 0, 1920, 1080));
+    maximized.maximized = true;
+    input.windows = {maximized};
+    QVERIFY(ArchDock::decidePanelVisibility(input) == PanelVisibilityDecision::Conceal);
+
+    // In use, it stays.
+    input.locks.pointerInside = true;
+    QVERIFY(ArchDock::decidePanelVisibility(input) == PanelVisibilityDecision::Reveal);
+    input.locks.pointerInside = false;
+    input.locks.popupOpen = true;
     QVERIFY(ArchDock::decidePanelVisibility(input) == PanelVisibilityDecision::Reveal);
 }
 

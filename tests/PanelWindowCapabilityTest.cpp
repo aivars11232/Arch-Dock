@@ -302,6 +302,7 @@ private slots:
     void segmentsUseRevisionedTransactionsAndHostAuthority();
     void contentProvidersUseTransactionsAndVisibility();
     void nativePanelObservationsRequireUniqueFrame();
+    void windowsOffTheTaskListStillCoverBars();
     void managedVersionTwoCapabilitiesDriveFallbackAndEditorVisibility();
     void rendererProjectionPreservesConsumedValuesWithoutProtectedState();
     void editorDraftResolutionIsReadOnlyAndCannotAuthorizeHiddenState();
@@ -4382,6 +4383,50 @@ void PanelWindowCapabilityTest::nativePanelObservationsRequireUniqueFrame()
     watcher.windowRemoved("native-1");
     QVERIFY(!watcher.nativePanelState(QRectF(2000, 628, 720, 92)).value("available").toBool());
     QVERIFY(!watcher.nativePanelState({}).value("available").toBool());
+}
+
+void PanelWindowCapabilityTest::windowsOffTheTaskListStillCoverBars()
+{
+    WindowModel model;
+    WindowWatcher watcher(model);
+    QSignalSpy untracked(&watcher, &WindowWatcher::untrackedWindowsChanged);
+    const auto state = [](int x, bool onCurrentDesktop) {
+        return QString::fromUtf8(QJsonDocument::fromVariant(
+            QVariantMap{{"x", x}, {"y", 600}, {"width", 400}, {"height", 300},
+                        {"onCurrentDesktop", onCurrentDesktop}}).toJson(QJsonDocument::Compact));
+    };
+    // An application's window is on the task list; Panel Studio's and
+    // Spectacle's are not, yet are kept as windows that may cover a bar; a
+    // bar's own window is neither.
+    watcher.windowAdded("app", "org.kde.dolphin", "org.kde.dolphin", "dolphin", "Files", true, false, state(0, true));
+    watcher.windowAdded("studio", {}, "arch-dock", "arch-dock", "Arch Dock Panel Studio", false, false, state(100, true));
+    watcher.windowAdded("shot", {}, "org.kde.spectacle", "spectacle", "Spectacle", false, false, state(200, true));
+    watcher.windowAdded("bar", {}, "arch-dock-bars", "arch-dock-bars", {}, false, false, state(300, true));
+    QCOMPARE(model.windows().size(), 1);
+    QCOMPARE(model.windows().first().internalId, QStringLiteral("app"));
+    QCOMPARE(watcher.untrackedWindows().size(), 2);
+    QCOMPARE(untracked.count(), 2);
+
+    // Panel Studio moved: its place follows, the task list is untouched.
+    watcher.windowUpdated("studio", {}, "arch-dock", "arch-dock", "Arch Dock Panel Studio", true, false, state(500, true));
+    QCOMPARE(untracked.count(), 3);
+    const QList<WindowItem> kept = watcher.untrackedWindows();
+    const auto studio = std::find_if(kept.cbegin(), kept.cend(),
+                                     [](const WindowItem &item) { return item.internalId == QStringLiteral("studio"); });
+    QVERIFY(studio != kept.cend());
+    QCOMPARE(studio->frameGeometry.x(), 500);
+    QCOMPARE(model.windows().size(), 1);
+
+    // A window moved to another virtual desktop says so.
+    QSignalSpy changedRoles(&model, &QAbstractItemModel::dataChanged);
+    watcher.windowUpdated("app", "org.kde.dolphin", "org.kde.dolphin", "dolphin", "Files", true, false, state(0, false));
+    QVERIFY(!model.windows().first().onCurrentDesktop);
+    QCOMPARE(changedRoles.count(), 1);
+    QVERIFY(changedRoles.first().at(2).value<QList<int>>().contains(WindowModel::OnCurrentDesktopRole));
+
+    watcher.windowRemoved("studio");
+    watcher.windowRemoved("shot");
+    QVERIFY(watcher.untrackedWindows().isEmpty());
 }
 
 void PanelWindowCapabilityTest::contentProvidersUseTransactionsAndVisibility()

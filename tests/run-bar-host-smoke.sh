@@ -4,14 +4,17 @@
 # Dock's dock, and one on the left edge - each where the list puts it, with
 # one strip per edge keeping a maximised window clear of them. When the list
 # changes, the bars follow: a bar taken off the list goes with what it held,
-# and a middle bar moves aside of a corner bar instead of covering it.
+# and a middle bar moves aside of a corner bar instead of covering it. Bars
+# that hide do so through KWin's own auto-hide edges: a dodging bar while a
+# window covers it, an auto-hiding one unless the pointer is on it; pushing
+# the pointer against the screen edge along a hidden bar brings it back.
 set -euo pipefail
 
 build_dir="${ARCHDOCK_BUILD_DIR:?ARCHDOCK_BUILD_DIR is required}"
 source_dir="${ARCHDOCK_SOURCE_DIR:?ARCHDOCK_SOURCE_DIR is required}"
 
 if [[ "${ARCHDOCK_BAR_SMOKE_INNER:-}" != 1 ]]; then
-    for command in kwin_wayland dbus-run-session gdbus; do
+    for command in kwin_wayland dbus-run-session gdbus setpriv python3; do
         command -v "$command" >/dev/null || { printf 'bar-host-smoke needs %s.\n' "$command" >&2; exit 1; }
     done
     root="$(mktemp -d "${TMPDIR:-/tmp}/archdock-bars.XXXXXX")"
@@ -44,6 +47,8 @@ fi
 
 log_dir="$ARCHDOCK_TEST_LOG_DIR"
 records="$ROOT/bars.json"
+windows="$ROOT/windows.json"
+printf '[]\n' > "$windows"
 # run_kwin_snippet: JavaScript run once in the private KWin.
 source "$source_dir/tests/run-session-startup-smoke.sh"
 
@@ -59,8 +64,12 @@ trap stop_all EXIT
 
 fail() { printf 'bar-host-smoke: %s\n' "$*" >&2; exit 1; }
 
-env QT_LOGGING_RULES='js.debug=true' kwin_wayland --virtual --width 1280 --height 720 --output-count 1 \
-    --socket "$WAYLAND_DISPLAY" --no-global-shortcuts --no-lockscreen >"$log_dir/kwin.log" 2>&1 &
+# KWin feeds pointer motion to its screen edges only where it supports global
+# shortcuts, so this one does (they stay on the private bus). Arch grants
+# KWin a capability that hides its /proc identity, which the pointer helper
+# checks; this test compositor needs none.
+env QT_LOGGING_RULES='js.debug=true' setpriv --no-new-privs kwin_wayland --virtual --width 1280 --height 720 \
+    --output-count 1 --socket "$WAYLAND_DISPLAY" --no-lockscreen >"$log_dir/kwin.log" 2>&1 &
 kwin_pid=$!
 for ((attempt = 0; attempt < 200; ++attempt)); do
     [[ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]] && break
@@ -79,6 +88,16 @@ for (let index = 0; index < windows.length; ++index) {
         report([w.layer, w.frameGeometry.x, w.frameGeometry.y, w.frameGeometry.width, w.frameGeometry.height].join("|"));
 }' | sort
 }
+# Each bar's place along its edge and whether KWin hides it: "x|hidden".
+bar_hiding() {
+    run_kwin_snippet 'const windows = workspace.windowList();
+for (let index = 0; index < windows.length; ++index) {
+    const w = windows[index];
+    if (w.resourceClass === "arch-dock-bars" && w.layer === 3)
+        report(w.frameGeometry.x + "|" + w.hidden);
+}' | sort -n
+}
+pointer() { ARCHDOCK_PRIVATE_KWIN_PID="$kwin_pid" python3 "$source_dir/tests/eis-pointer.py" "$@" >>"$log_dir/pointer.log" 2>&1; }
 test_window() {
     run_kwin_snippet 'const windows = workspace.windowList();
 for (let index = 0; index < windows.length; ++index) {
@@ -111,7 +130,8 @@ write_records '[
   {"id": "bar-c", "type": "empty", "edge": "left", "alignment": "start", "thickness": 50,
    "lengthMode": "fixed", "fixedLength": 300, "offset": 20}
 ]'
-ARCHDOCK_BARS_RECORDS_FILE="$records" "$ARCHDOCK_BUILD_DIR/arch-dock-bars" >"$log_dir/bars.log" 2>&1 &
+ARCHDOCK_BARS_RECORDS_FILE="$records" ARCHDOCK_BARS_WINDOWS_FILE="$windows" \
+    "$ARCHDOCK_BUILD_DIR/arch-dock-bars" >"$log_dir/bars.log" 2>&1 &
 host_pid=$!
 
 # Layer 1 is the bottom layer (the strips), 3 the top one (the bars). The
@@ -161,6 +181,35 @@ write_records '[
 ]'
 expect 'a deeper bar' "$(printf '%s\n' '1|0|719|1280|1' '3|332|660|500|60' '3|840|630|400|90' | sort)" bar_windows
 expect 'the maximised window makes room for the deeper bar' '0|0|1280|630' test_window
+
+# Bars that hide: the left one dodges windows, the right one hides itself.
+pointer 640 300
+write_records '[
+  {"id": "bar-a", "type": "empty", "edge": "bottom", "alignment": "start", "thickness": 60,
+   "lengthMode": "fixed", "fixedLength": 500, "visibilityMode": "dodge"},
+  {"id": "bar-b", "type": "empty", "edge": "bottom", "alignment": "end", "thickness": 60,
+   "lengthMode": "fixed", "fixedLength": 400, "visibilityMode": "auto-hide"}
+]'
+expect 'a dodging bar shows while nothing covers it; an auto-hiding one hides' "$(printf '%s\n' '0|false' '880|true')" bar_hiding
+# Windows that hide nothing: one elsewhere, one only touching the bar.
+printf '[{"x": 600, "y": 100, "width": 400, "height": 300}, {"x": 0, "y": 360, "width": 500, "height": 300}]\n' > "$windows.new"
+mv -f "$windows.new" "$windows"
+expect 'windows not over the bar leave it shown' "$(printf '%s\n' '0|false' '880|true')" bar_hiding
+printf '[{"x": 100, "y": 400, "width": 500, "height": 300}]\n' > "$windows.new"
+mv -f "$windows.new" "$windows"
+expect 'a window over the dodging bar hides it' "$(printf '%s\n' '0|true' '880|true')" bar_hiding
+# Pushing against the screen edge under it, as a hand pushes a mouse.
+pointer push 200 715 0 3 6
+expect 'the edge brings the hidden bar back over the window' "$(printf '%s\n' '0|false' '880|true')" bar_hiding
+pointer 640 300
+expect 'the pointer gone, the covered bar hides again' "$(printf '%s\n' '0|true' '880|true')" bar_hiding
+printf '[]\n' > "$windows.new"
+mv -f "$windows.new" "$windows"
+expect 'uncovered, the dodging bar is back' "$(printf '%s\n' '0|false' '880|true')" bar_hiding
+pointer push 1000 715 0 3 6
+expect 'the edge brings the auto-hiding bar back' "$(printf '%s\n' '0|false' '880|false')" bar_hiding
+pointer 640 300
+expect 'the pointer gone, it hides again' "$(printf '%s\n' '0|false' '880|true')" bar_hiding
 
 # Asked to stop, the bar host stops at once.
 kill -TERM "$host_pid"

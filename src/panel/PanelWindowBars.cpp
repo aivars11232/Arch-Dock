@@ -156,6 +156,34 @@ QString PanelWindow::barHostRecordsJson() const
     return QString::fromUtf8(QJsonDocument(bars).toJson(QJsonDocument::Compact));
 }
 
+QString PanelWindow::barHostWindowsJson() const
+{
+    QJsonArray windows;
+    for (const WindowItem &window : m_windowModel.windows() + m_windowWatcher.untrackedWindows())
+    {
+        if (window.minimized || !window.onCurrentDesktop || !window.frameGeometry.isValid())
+            continue;
+        windows.append(QJsonObject{
+            {QStringLiteral("x"), window.frameGeometry.x()},
+            {QStringLiteral("y"), window.frameGeometry.y()},
+            {QStringLiteral("width"), window.frameGeometry.width()},
+            {QStringLiteral("height"), window.frameGeometry.height()},
+            {QStringLiteral("active"), window.active},
+            {QStringLiteral("maximized"), window.maximized},
+            {QStringLiteral("fullScreen"), window.fullScreen},
+        });
+    }
+    return QString::fromUtf8(QJsonDocument(windows).toJson(QJsonDocument::Compact));
+}
+
+void PanelWindow::scheduleBarWindowsUpdate()
+{
+    if (m_barRecordsJson.isEmpty() || m_barRecordsJson == QLatin1String("[]"))
+        return;
+    if (!m_barWindowsTimer.isActive())
+        m_barWindowsTimer.start();
+}
+
 void PanelWindow::scheduleBarRecordsUpdate()
 {
     if (!m_barRecordsTimer.isActive())

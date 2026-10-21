@@ -4,6 +4,7 @@
 #include "BarCorona.h"
 #include "BarLayout.h"
 #include "BarWindow.h"
+#include "ScreenEdge.h"
 #include "ScreenIdentity.h"
 
 #include <Plasma/Containment>
@@ -16,8 +17,12 @@
 #include <QDebug>
 #include <QFile>
 #include <QGuiApplication>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QScreen>
 #include <QSet>
+#include <QWindow>
 
 #include <algorithm>
 
@@ -35,12 +40,22 @@ BarHost::BarHost(BarCorona *corona, const QUrl &barView, QObject *parent)
     , m_corona(corona)
     , m_barView(barView)
     , m_recordsFile(qEnvironmentVariable("ARCHDOCK_BARS_RECORDS_FILE"))
+    , m_windowsFile(qEnvironmentVariable("ARCHDOCK_BARS_WINDOWS_FILE"))
+    , m_edges(new ScreenEdgeManager(this))
 {
     // Changes come in bursts (a bar's widgets growing one after another, a
     // screen and its geometry): the bars are laid out once after each.
     m_layoutTimer.setSingleShot(true);
     m_layoutTimer.setInterval(0);
     connect(&m_layoutTimer, &QTimer::timeout, this, &BarHost::layoutBars);
+    // Whether each bar hides is decided once after a burst of changes too.
+    m_evaluateTimer.setSingleShot(true);
+    m_evaluateTimer.setInterval(0);
+    connect(&m_evaluateTimer, &QTimer::timeout, this, &BarHost::evaluateBars);
+    // KWin's auto-hide edges may come after the bars do.
+    connect(m_edges, &QWaylandClientExtension::activeChanged, this, &BarHost::scheduleLayout);
+    // A popup opening or closing keeps its bar shown or lets it hide.
+    qGuiApp->installEventFilter(this);
 
     const auto screenChanged = [this](QScreen *screen)
     {
@@ -61,21 +76,33 @@ BarHost::~BarHost()
 
 void BarHost::start()
 {
+    connect(&m_fileWatcher, &QFileSystemWatcher::fileChanged, this, [this](const QString &path)
+    {
+        if (path == m_recordsFile)
+            readRecordsFile();
+        else if (path == m_windowsFile)
+            readWindowsFile();
+    });
     if (!m_recordsFile.isEmpty())
     {
-        connect(&m_fileWatcher, &QFileSystemWatcher::fileChanged, this, &BarHost::readRecordsFile);
         readRecordsFile();
+        if (!m_windowsFile.isEmpty())
+            readWindowsFile();
         return;
     }
 
     QDBusConnection bus = QDBusConnection::sessionBus();
     bus.connect(BackendService, BackendPath, BackendInterface, QStringLiteral("barHostRecordsChanged"),
                 this, SLOT(requestRecords()));
+    bus.connect(BackendService, BackendPath, BackendInterface, QStringLiteral("barHostWindowsChanged"),
+                this, SLOT(requestWindows()));
     // The backend may start after the bars, or start again: each time it
-    // comes it is asked for the list.
+    // comes it is asked for the bars and the windows.
     m_backendWatcher = new QDBusServiceWatcher(BackendService, bus, QDBusServiceWatcher::WatchForRegistration, this);
     connect(m_backendWatcher, &QDBusServiceWatcher::serviceRegistered, this, &BarHost::requestRecords);
+    connect(m_backendWatcher, &QDBusServiceWatcher::serviceRegistered, this, &BarHost::requestWindows);
     requestRecords();
+    requestWindows();
 }
 
 void BarHost::requestRecords()
@@ -121,6 +148,81 @@ void BarHost::requestRecords()
     });
 }
 
+void BarHost::requestWindows()
+{
+    if (!m_windowsFile.isEmpty())
+    {
+        readWindowsFile();
+        return;
+    }
+    if (!m_recordsFile.isEmpty())
+        return;
+    if (m_fetchingWindows)
+    {
+        m_fetchWindowsAgain = true;
+        return;
+    }
+    m_fetchingWindows = true;
+    const QDBusMessage call = QDBusMessage::createMethodCall(
+        BackendService, BackendPath, BackendInterface, QStringLiteral("barHostWindowsJson"));
+    auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(call), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *finished)
+    {
+        finished->deleteLater();
+        m_fetchingWindows = false;
+        const QDBusPendingReply<QString> reply = *finished;
+        if (!reply.isError())
+            applyWindows(reply.value().toUtf8());
+        if (m_fetchWindowsAgain)
+        {
+            m_fetchWindowsAgain = false;
+            requestWindows();
+        }
+    });
+}
+
+void BarHost::readWindowsFile()
+{
+    if (!m_fileWatcher.files().contains(m_windowsFile))
+        m_fileWatcher.addPath(m_windowsFile);
+    QFile file(m_windowsFile);
+    if (file.open(QIODevice::ReadOnly))
+        applyWindows(file.readAll());
+}
+
+void BarHost::applyWindows(const QByteArray &json)
+{
+    // Each window's screen is the one it mostly lies on, so that windows and
+    // bars are counted on the same screens.
+    const QList<QScreen *> screens = QGuiApplication::screens();
+    m_windows.clear();
+    const QJsonArray list = QJsonDocument::fromJson(json).array();
+    for (const QJsonValue &value : list)
+    {
+        const QJsonObject object = value.toObject();
+        ArchDock::WindowOcclusion window;
+        window.frameGeometry = QRect(object.value(QLatin1String("x")).toInt(), object.value(QLatin1String("y")).toInt(),
+                                     object.value(QLatin1String("width")).toInt(),
+                                     object.value(QLatin1String("height")).toInt());
+        window.active = object.value(QLatin1String("active")).toBool();
+        window.maximized = object.value(QLatin1String("maximized")).toBool();
+        window.fullScreen = object.value(QLatin1String("fullScreen")).toBool();
+        qint64 most = 0;
+        for (int index = 0; index < screens.size(); ++index)
+        {
+            const QRect shared = screens.at(index)->geometry().intersected(window.frameGeometry);
+            const qint64 area = qint64(shared.width()) * shared.height();
+            if (area > most)
+            {
+                most = area;
+                window.screenIndex = index;
+            }
+        }
+        m_windows.append(window);
+    }
+    m_evaluateTimer.start();
+}
+
 void BarHost::readRecordsFile()
 {
     // An editor may write the file anew: it is watched again each time.
@@ -158,6 +260,7 @@ void BarHost::applyRecords(const QList<BarRecord> &records)
         {
             bar = new BarWindow(m_corona, containment, m_barView);
             connect(bar, &BarWindow::wantedLengthChanged, this, &BarHost::scheduleLayout);
+            connect(bar, &BarWindow::pointerInsideChanged, this, [this] { m_evaluateTimer.start(); });
         }
     }
 
@@ -255,8 +358,12 @@ void BarHost::layoutBars()
                                              [&](const BarRecord *bar) { return bar->id == placement.id; });
             if (record == edge.bars.cend())
                 continue;
-            m_bars.value(placement.id)->place(edge.screen, edge.edge, placement.start, placement.length,
-                                              (*record)->thickness, (*record)->floatingMargin);
+            BarWindow *bar = m_bars.value(placement.id);
+            bar->place(edge.screen, edge.edge, placement.start, placement.length, (*record)->thickness,
+                       (*record)->floatingMargin);
+            bar->setHides(ArchDock::panelVisibilityModeFromString((*record)->visibilityMode)
+                              != ArchDock::PanelVisibilityMode::AlwaysVisible,
+                          m_edges);
             if ((*record)->reservesSpace && placement.length > 0)
                 depth = std::max(depth, (*record)->thickness + (*record)->floatingMargin);
         }
@@ -286,5 +393,51 @@ void BarHost::layoutBars()
         delete it.value();
         it = m_strips.erase(it);
     }
+    evaluateBars();
+}
+
+void BarHost::evaluateBars()
+{
+    const QList<QScreen *> screens = QGuiApplication::screens();
+    for (const BarRecord &record : std::as_const(m_records))
+    {
+        BarWindow *bar = m_bars.value(record.id);
+        if (!bar || !bar->isVisible())
+            continue;
+        ArchDock::PanelVisibilityInput input;
+        input.mode = ArchDock::panelVisibilityModeFromString(record.visibilityMode);
+        input.panelGeometry = bar->geometry();
+        input.panelScreenIndex = int(screens.indexOf(bar->screen()));
+        input.windows = m_windows;
+        input.dodgeAnyWindow = true;
+        input.locks.pointerInside = bar->pointerInside();
+        input.locks.popupOpen = popupOpen(bar);
+        const bool conceal = ArchDock::decidePanelVisibility(input) == ArchDock::PanelVisibilityDecision::Conceal;
+        qCDebug(archdockBars) << record.id << record.visibilityMode << "conceal" << conceal << "pointer"
+                              << input.locks.pointerInside << "popup" << input.locks.popupOpen << "windows"
+                              << m_windows.size();
+        bar->setConcealWanted(conceal);
+    }
+}
+
+bool BarHost::popupOpen(const BarWindow *bar) const
+{
+    const QWindowList windows = QGuiApplication::topLevelWindows();
+    for (const QWindow *window : windows)
+    {
+        if (window == bar || !window->isVisible())
+            continue;
+        for (const QWindow *parent = window->transientParent(); parent; parent = parent->transientParent())
+            if (parent == bar)
+                return true;
+    }
+    return false;
+}
+
+bool BarHost::eventFilter(QObject *watched, QEvent *event)
+{
+    if ((event->type() == QEvent::Show || event->type() == QEvent::Hide) && watched->isWindowType())
+        m_evaluateTimer.start();
+    return QObject::eventFilter(watched, event);
 }
 }

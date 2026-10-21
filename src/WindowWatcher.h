@@ -6,6 +6,8 @@
 #include <QVariantMap>
 #include <QRectF>
 
+#include "WindowItem.h"
+
 class QJsonObject;
 
 class WindowModel;
@@ -30,6 +32,9 @@ public:
     // Dock's own and any other dock's - in screen coordinates; hidden ones
     // are left out.
     [[nodiscard]] QList<QRectF> dockWindowBounds() const;
+    // Windows kept off the task list (Arch Dock's own, Spectacle's) that may
+    // still cover a bar.
+    [[nodiscard]] QList<WindowItem> untrackedWindows() const { return m_untrackedWindows.values(); }
     // Unloads every KWin watcher instance. The watcher reports each window
     // event to Arch Dock, and a report to a stopped backend activates it.
     static void releaseKWinScripts();
@@ -58,6 +63,7 @@ public slots:
 signals:
     void availableChanged();
     void nativePanelsChanged();
+    void untrackedWindowsChanged();
 
 private:
     bool loadKWinScript();
@@ -66,4 +72,5 @@ private:
     WindowModel &m_windowModel;
     bool m_available = false;
     QHash<QString, QVariantMap> m_nativePanels;
+    QHash<QString, WindowItem> m_untrackedWindows;
 };

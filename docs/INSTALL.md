@@ -47,6 +47,15 @@ layout. Its hidden application entry, `org.archdock.ArchDock.Bars.desktop`,
 names the Wayland interfaces KWin grants it (window lists and live window
 previews), as Plasma's own `plasmawindowed` entry does.
 
+A bar that hides (Auto hide, Dodge windows, or hiding for maximized windows)
+is hidden through KWin's own auto-hide screen edge, as Plasma's panels are:
+pushing the pointer against the screen edge along a hidden bar brings it
+back, over any window, and it hides again once the pointer leaves it and no
+popup of its is open. A dodging bar hides while any window shown on the
+virtual desktop in use lies over it, Panel Studio's included. KWin feeds the
+pointer to its screen edges only where it supports global shortcuts, which a
+desktop session always does.
+
 ## Flat looks in 3D
 
 Turning **Platform presentation** on (Panels > 3D) keeps the design made
