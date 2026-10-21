@@ -360,3 +360,63 @@ Pictures (private Plasma desktop, the owner's files untouched):
   `wayland-hardening-scale200-test`, stopped after 10 s ("containment-missing"
   for Bottom's Plasma panel) while a disk cleanup ran beside the suite; run
   alone on a quiet machine it passed three times out of three (42 s each).
+
+## Step 3 — Report 2 (recheck, 2026-10-21)
+
+A fresh clone of `origin/main` at `24029fd` ("Owner list piece 9, step 3:
+Panel Studio adds bars, profiles and presets take them"), Debug with Quick
+3D, built with one job in 1806 s; then `bar-host-smoke`, `bar-autostart-test`,
+`barlayout-test`, `barrecord-test`, `profile-store-test`,
+`profile-apply-transaction-test`, `profile-manager-test`,
+`panel-registry-test`, `panel-window-capability-test`,
+`plasma-template-contract-test`, `preset-audition-matrix-temporary` and
+`session-startup-metadata-test`: 11 of 12 passed at first. The capability
+test stopped once at 17 s in `studioHologramTabs`, an older Studio test, with
+the crash seen once in step 1: inside Qt's incremental QML garbage collector
+(`GCStateMachine::transition` from `tryForceGCCompletion` while a QML
+property was written), at address 0x10. Run again in the clone it passed
+(507 s), and a run with Qt's own cross-check of the incremental collector
+(`QV4_MM_CROSS_VALIDATE_INCREMENTAL_GC=1`) passed 100 of 100 without a
+complaint (the check may be compiled out of Arch's Qt). All 942 committed
+files are the same in the clone and the workspace. Logs in
+`build-codex-adrep/evidence/OWNER-LIST-PIECE-9-STEP-3/`.
+
+## Step 4: Plasma widgets in bars — plan (2026-10-21)
+
+The owner's rule: Plasma's own widgets (the clock, the application
+launcher, the system tray and the rest) go inside Arch Dock's bars, in the
+Arch Dock look, and Panel Studio adds, removes and orders them. Arch Dock's
+existing edge panels that Plasma still holds move into bars with their
+widgets. The owner's own three edge panels have no Plasma panel and no KDE
+widgets (their record, read 2026-10-21), so the move matters for other
+setups; the widgets matter for the owner.
+
+1. **The list.** Each bar keeps an ordered list of what it holds: Arch
+   Dock's dock (one entry, unless the bar is of the empty type) and Plasma
+   widgets by plugin id, each with a key of its own so its settings stay
+   with it. It is part of the panel's record, so profiles keep it.
+2. **The bar host follows the list**: it makes a missing widget, removes one
+   no longer listed, and orders them along the bar (the containment already
+   gives each widget the length it asks for and the bar's thickness). A
+   widget removed through its own right-click menu is reported back, so the
+   list and the bar never fight.
+3. **Plasma's own handling of a widget**: right-click menu, "Configure…"
+   (its settings window, from plasma-desktop's configuration files,
+   GPL-2.0-or-later, kept beside the bar shell) and its popups, which open
+   from the bar as the dock's own do.
+4. **Panel Studio**: a Widgets page, shown for bars only: the bar's widgets
+   in order, each moved along or removed, and "Add widget…" listing the
+   installed Plasma widgets (name, icon, description, search).
+5. **The look**: a bar holding widgets draws its Arch Dock look along its
+   whole length, and the widgets stand on it; the dock's icons keep their
+   place in the row. A bar holding only the dock stays exactly as now.
+   Shown to the owner as before/after pictures before it is kept.
+6. **Moving Arch Dock's Plasma-held edge panels into bars**, once, with
+   their widgets and those widgets' settings; panels with nothing of them in
+   Plasma are left to Panel Studio, which already brings them back as bars;
+   saved profiles are moved the same way.
+
+Checks: unit tests for the list and the move; bar-host-smoke with a clock
+and the system tray in a bar; Panel Studio's Widgets page; on a private
+Plasma desktop: widgets added, ordered and removed, a widget's popup and
+settings window, hiding with widgets, the look before/after.
